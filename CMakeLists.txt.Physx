@@ -1,56 +1,69 @@
-﻿#下载Physx.7z
-function(DownloadPhysx)
-    MESSAGE("Download physx-4.1.7z")
-    file(DOWNLOAD "https://github.com/ThisisGame/PhysX/releases/download/v6.4/physx-4.1.7z" "../../../template/depends/physx-4.1.7z" SHOW_PROGRESS)
-endfunction()
+# Set paths relative to DSEngine root
+set(PHYSX_ARCHIVE "${CMAKE_SOURCE_DIR}/depends/physx-4.1.7z")
+set(PHYSX_EXTRACT_DIR "${CMAKE_SOURCE_DIR}/depends")
+set(PHYSX_SOURCE_DIR "${CMAKE_SOURCE_DIR}/depends/physx-4.1") # The folder inside zip
+set(PHYSX_TARGET_DIR "${CMAKE_SOURCE_DIR}/depends/physx")
 
-#检测physx.7z是否存在，不存在则下载
-if(EXISTS "../../../template/depends/physx-4.1.7z")
-    MESSAGE("found physx-4.1.7z")
-    file(SIZE "../../../template/depends/physx-4.1.7z" SIZE_PHYSX)
-    MESSAGE("size of physx-4.1.7z: ${SIZE_PHYSX}")
-    #检查大小是否匹配
-    if(${SIZE_PHYSX} EQUAL 46553903)
-        MESSAGE("physx-4.1.7z is valid")
+# Download PhysX.7z
+if(NOT EXISTS ${PHYSX_ARCHIVE})
+    message(STATUS "Downloading PhysX to ${PHYSX_ARCHIVE}...")
+    file(DOWNLOAD "https://github.com/ThisisGame/PhysX/releases/download/v6.4/physx-4.1.7z" ${PHYSX_ARCHIVE} SHOW_PROGRESS)
+endif()
+
+# Check and Extract
+if(EXISTS ${PHYSX_ARCHIVE})
+    # Verify size (approx 44MB)
+    file(SIZE ${PHYSX_ARCHIVE} SIZE_PHYSX)
+    message(STATUS "PhysX archive size: ${SIZE_PHYSX}")
+    
+    if(${SIZE_PHYSX} LESS 1000)
+        message(WARNING "PhysX archive seems too small (download failed?). Deleting to retry next time.")
+        file(REMOVE ${PHYSX_ARCHIVE})
     else()
-        MESSAGE("physx-4.1.7z is invalid")
-        DownloadPhysx()
+        # Extract if headers not found
+        if(NOT EXISTS "${PHYSX_TARGET_DIR}/physx/include/PxPhysicsAPI.h")
+            message(STATUS "Extracting PhysX...")
+            
+            # Check if CMake supports ARCHIVE_EXTRACT (3.18+)
+            if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18")
+                file(ARCHIVE_EXTRACT INPUT ${PHYSX_ARCHIVE} DESTINATION ${PHYSX_EXTRACT_DIR})
+            else()
+                # Fallback for older CMake
+                execute_process(COMMAND ${CMAKE_COMMAND} -E tar xf ${PHYSX_ARCHIVE} WORKING_DIRECTORY ${PHYSX_EXTRACT_DIR})
+            endif()
+            
+            # Rename physx-4.1 to physx if needed
+            if(EXISTS ${PHYSX_SOURCE_DIR} AND NOT EXISTS ${PHYSX_TARGET_DIR})
+                file(RENAME ${PHYSX_SOURCE_DIR} ${PHYSX_TARGET_DIR})
+            elseif(EXISTS ${PHYSX_SOURCE_DIR})
+                # If target already exists, try to merge/copy contents
+                file(COPY ${PHYSX_SOURCE_DIR}/ DESTINATION ${PHYSX_TARGET_DIR})
+                file(REMOVE_RECURSE ${PHYSX_SOURCE_DIR})
+            endif()
+        else()
+            message(STATUS "PhysX already extracted.")
+        endif()
+    endif()
+endif()
+
+# Include Directories
+include_directories("${PHYSX_TARGET_DIR}/physx/include")
+include_directories("${PHYSX_TARGET_DIR}/pxshared/include")
+
+# Link Libraries
+if(MSVC)
+    link_directories("${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug")
+    link_libraries(PhysX_64 PhysXFoundation_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64)
+    
+    # Copy DLLs to executable directory (CMAKE_BINARY_DIR is usually where .exe is built)
+    file(GLOB PHYSX_DLLS "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug/*.dll")
+    if(PHYSX_DLLS)
+        file(COPY ${PHYSX_DLLS} DESTINATION "${CMAKE_BINARY_DIR}")
+        # Also copy to source root for running from there
+        file(COPY ${PHYSX_DLLS} DESTINATION "${CMAKE_SOURCE_DIR}")
     endif()
 else()
-    DownloadPhysx()
-endif()
-
-
-
-#解压physx.7z
-if(EXISTS "../../../template/depends/physx-4.1")
-    MESSAGE("found physx")
-else()
-    MESSAGE("not find physx,extract physx-4.1.7z")
-    file(ARCHIVE_EXTRACT INPUT "../../../template/depends/physx-4.1.7z" DESTINATION "../../../template/depends/" VERBOSE)
-endif()
-
-
-#拷贝
-file(COPY "../../template/depends/physx-4.1/" DESTINATION "../depends/physx/")
-
-#头文件目录
-include_directories("depends/physx/physx/include")
-include_directories("depends/physx/pxshared/include")
-
-#链接目录
-if(MSVC)
-    link_directories("depends/physx/physx/bin/win.x86_64.vc142.mt/debug")
-    #链接lib文件
-    link_libraries(PhysX_64 PhysXFoundation_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64)
-    #拷贝dll到exe目录
-    file(COPY "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXFoundation_64.dll" DESTINATION "./")
-    file(COPY "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXDevice64.dll" DESTINATION "./")
-    file(COPY "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXCooking_64.dll" DESTINATION "./")
-    file(COPY "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXCommon_64.dll" DESTINATION "./")
-    file(COPY "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysX_64.dll" DESTINATION "./")
-else()
-    link_directories("depends/physx/physx/bin/mac.x86_64/debug")
-    #链接lib文件
+    # Mac/Linux placeholder
+    link_directories("${PHYSX_TARGET_DIR}/physx/bin/mac.x86_64/debug")
     link_libraries(PhysX_static_64 PhysXFoundation_static_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64 PhysXCommon_static_64)
 endif()

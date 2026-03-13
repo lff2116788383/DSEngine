@@ -17,7 +17,7 @@ public:
 
     void Update() override;
 
-    void set_color(glm::vec4 color) { color_ = color; }
+    void set_color(const glm::vec4& color) { color_ = color; }
     glm::vec4 color() const { return color_; }
 
     void set_sorting_layer(int layer) { sorting_layer_ = layer; }

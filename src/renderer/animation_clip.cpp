@@ -1,11 +1,11 @@
-﻿//
+//
 // Created by captain on 2021/11/21.
 //
 
 #include "animation_clip.h"
 #include <fstream>
 #include <glm/ext.hpp>
-#include <glm/gtx/string_cast_beauty.hpp>
+#include <gtx/string_cast_beauty.hpp>
 #include "app/application.h"
 #include "utils/debug.h"
 #include "utils/time.h"

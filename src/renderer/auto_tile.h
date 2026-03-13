@@ -25,6 +25,8 @@ public:
     void SetTexture(Texture2D* texture) { texture_ = texture; }
     Texture2D* GetTexture() const { return texture_; }
 
+    bool Load(const std::string& path) override { return true; }
+
 private:
     Texture2D* texture_;
     std::vector<Rule> rules_;

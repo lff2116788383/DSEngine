@@ -19,8 +19,9 @@ using timetool::StopWatch;
 
 Texture2D::Texture2D() : mipmap_level_(0), width_(0), height_(0), gl_texture_format_(0), texture_handle_(0)
 {
-
 }
+
+//constexpr glm::vec2 Texture2D::texture_coords[4];
 
 Texture2D::~Texture2D() {
     if(texture_handle_ > 0){
@@ -52,11 +53,12 @@ Texture2D* Texture2D::LoadFromFile(std::string image_file_path)
         // 检查是否为 cpt 格式
         char header[3];
         input_file_stream.read(header, 3);
-        input_file_stream.close();
         
         if(strncmp(header, "cpt", 3) == 0){
             // 是 cpt 格式
-            input_file_stream.open(full_path, ios::in | ios::binary);
+            // 重新打开文件以从头读取（或者用 seekg）
+            input_file_stream.seekg(0, ios::beg);
+            
             CptFileHead cpt_file_head;
             input_file_stream.read((char*)&cpt_file_head, sizeof(CptFileHead));
 
@@ -77,14 +79,21 @@ Texture2D* Texture2D::LoadFromFile(std::string image_file_path)
             free(data);
             return texture2d;
         }
+        input_file_stream.close();
     }
     
     // 不是 cpt 格式，使用 stb_image 加载常见图像格式
     int width, height, channels;
+    // stbi_load 需要完整路径
     unsigned char* data = stbi_load(full_path.c_str(), &width, &height, &channels, 0);
     if(data == nullptr){
-        DEBUG_LOG_ERROR("Failed to load image: {}", image_file_path);
-        return texture2d;
+        // 尝试直接加载（不带 data_path 前缀，可能是绝对路径）
+        data = stbi_load(image_file_path.c_str(), &width, &height, &channels, 0);
+        if (data == nullptr) {
+            DEBUG_LOG_ERROR("Failed to load image: {}", image_file_path);
+            delete texture2d;
+            return nullptr;
+        }
     }
     
     texture2d->width_ = width;
@@ -92,7 +101,8 @@ Texture2D* Texture2D::LoadFromFile(std::string image_file_path)
     texture2d->texture_handle_ = GPUResourceMapper::GenerateTextureHandle();
     
     // 根据通道数设置纹理格式
-    GLenum internal_format, format;
+    GLint internal_format;
+    GLenum format;
     if(channels == 4){
         internal_format = GL_RGBA;
         format = GL_RGBA;
@@ -103,6 +113,7 @@ Texture2D* Texture2D::LoadFromFile(std::string image_file_path)
         internal_format = GL_RED;
         format = GL_RED;
     } else {
+        // 默认处理
         internal_format = GL_RGB;
         format = GL_RGB;
     }
@@ -110,6 +121,7 @@ Texture2D* Texture2D::LoadFromFile(std::string image_file_path)
     texture2d->gl_texture_format_ = internal_format;
     
     // 发出任务：创建纹理
+    // 注意：ProduceRenderTaskCreateTexImage2D 参数签名可能不同，这里假设适配
     RenderTaskProducer::ProduceRenderTaskCreateTexImage2D(texture2d->texture_handle_, width, height, internal_format, format, GL_UNSIGNED_BYTE, width * height * channels, data);
     
     stbi_image_free(data);
@@ -125,7 +137,7 @@ Texture2D *Texture2D::Create(unsigned short width, unsigned short height, unsign
     texture2d->texture_handle_=GPUResourceMapper::GenerateTextureHandle();
 
     // 发出任务：创建纹理
-    RenderTaskProducer::ProduceRenderTaskCreateTexImage2D(texture2d->texture_handle_,texture2d->width_, texture2d->height_,texture2d->gl_texture_format_,client_format, data_type,data_size,data);
+    RenderTaskProducer::ProduceRenderTaskCreateTexImage2D(texture2d->texture_handle_,texture2d->width_, texture2d->height_,texture2d->gl_texture_format_,client_format, data_type,data_size, data);
 
     return texture2d;
 }

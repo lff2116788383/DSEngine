@@ -6,20 +6,21 @@
 #define INTEGRATE_PHYSX_BOX_COLLIDER_H
 
 #include <rttr/registration>
+#include <rttr/registration_friend.h>
 #include <glm/glm.hpp>
 #include "collider.h"
 
 using namespace rttr;
 
 class BoxCollider : public Collider {
+    RTTR_REGISTRATION_FRIEND
 public:
     BoxCollider();
     ~BoxCollider();
 
-protected:
     void CreateShape() override;
 
-    void set_size(glm::vec3 size);
+    void set_size(const glm::vec3& size);
     glm::vec3 size() const { return size_; }
 
 private:

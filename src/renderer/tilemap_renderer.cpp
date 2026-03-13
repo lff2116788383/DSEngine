@@ -63,7 +63,10 @@ void TilemapRenderer::RebuildMesh() {
     Tilemap* tilemap = game_object()->GetComponent<Tilemap>();
     Grid* grid = game_object()->GetComponent<Grid>();
     if (grid == nullptr && game_object()->parent() != nullptr) {
-        grid = game_object()->parent()->GetComponent<Grid>();
+        GameObject* parent_go = dynamic_cast<GameObject*>(game_object()->parent());
+        if (parent_go != nullptr) {
+            grid = parent_go->GetComponent<Grid>();
+        }
     }
     
     if (tilemap == nullptr || grid == nullptr) return;
@@ -87,8 +90,18 @@ void TilemapRenderer::RebuildMesh() {
 
         MeshBuildData& data = build_map[texture];
 
-        float x = cell_pos.x * (grid->cell_size().x + grid->cell_gap().x);
-        float y = cell_pos.y * (grid->cell_size().y + grid->cell_gap().y);
+        float x = 0.0f;
+        float y = 0.0f;
+        
+        if (grid->cell_layout() == Grid::CellLayout::Isometric) {
+             float half_w = (grid->cell_size().x + grid->cell_gap().x) * 0.5f;
+             float half_h = (grid->cell_size().y + grid->cell_gap().y) * 0.5f;
+             x = (cell_pos.x - cell_pos.y) * half_w;
+             y = -(cell_pos.x + cell_pos.y) * half_h;
+        } else {
+             x = cell_pos.x * (grid->cell_size().x + grid->cell_gap().x);
+             y = cell_pos.y * (grid->cell_size().y + grid->cell_gap().y);
+        }
 
         Sprite::Rect rect = sprite->rect();
         if (rect.width <= 0 || rect.height <= 0) {

@@ -21,9 +21,18 @@ public:
     // Convert world position to cell coordinates
     glm::ivec2 WorldToCell(glm::vec3 world_pos);
 
+    enum class CellLayout {
+        Rectangle,
+        Isometric
+    };
+
+    void set_cell_layout(CellLayout layout) { cell_layout_ = layout; }
+    CellLayout cell_layout() const { return cell_layout_; }
+
 private:
     glm::vec2 cell_size_;
     glm::vec2 cell_gap_;
+    CellLayout cell_layout_ = CellLayout::Rectangle;
 
     RTTR_ENABLE(Component)
 };

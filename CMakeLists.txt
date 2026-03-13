@@ -27,9 +27,20 @@ include(CMakeLists.txt.imgui)
 #头文件目录
 include_directories("depends")
 include_directories("src")
+include_directories("depends/spdlog/include")
+
+include_directories("depends/spscqueue/include")
+include_directories("depends/rttr-0.9.6/src")
+include_directories("depends/luasocket-3.0.0/src")
+include_directories("depends/glm")
+include_directories("depends/glm_ext")
+include_directories("depends/rapidjson")
+include_directories("depends/eventpp/tests")
+include_directories("depends/eventpp/include")
+include_directories("depends/timetool")
 
 file(GLOB_RECURSE engine_cpp src/*.cpp)
-file(GLOB_RECURSE rttr_cpp "depends/rttr/*.cpp")
+file(GLOB_RECURSE rttr_cpp "depends/rttr-0.9.6/src/rttr/*.cpp")
 file(GLOB_RECURSE example_cpp examples/*.cpp)
 
 add_executable(${PROJECT_NAME} ${glfw_sources} ${rttr_cpp} ${freetype_src} ${easy_profiler_core_source} ${lua_src} ${luasocket_c} ${imgui_src}  ${engine_cpp} ${example_cpp})

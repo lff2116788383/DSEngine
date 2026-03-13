@@ -41,6 +41,13 @@ The Apache License, Version 2.0 (the "License");
 **/
 
 #include <easy/details/profiler_public_types.h>
+#ifdef _WIN32
+#include <io.h>
+#define isatty _isatty
+#define filelengthi64 _filelengthi64
+#else
+#include <unistd.h>
+#endif
 
 namespace profiler
 {

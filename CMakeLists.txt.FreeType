@@ -1,5 +1,5 @@
-﻿#拷贝depends目录
-file(COPY "../../template/depends/freetype-2.11.0/" DESTINATION "../depends/freetype/")
+#拷贝depends目录
+#file(COPY "../../template/depends/freetype-2.11.0/" DESTINATION "../depends/freetype/")
 
 add_definitions(-D FT2_BUILD_LIBRARY)
 #add_definitions(-D FT_DEBUG_LEVEL_TRACE)
@@ -11,70 +11,70 @@ elseif (UNIX)
     add_definitions(-D HAVE_FCNTL_H)
 endif ()
 
-include_directories("depends/freetype")
-include_directories("depends/freetype/include")
+include_directories("depends/freetype-2.11.0")
+include_directories("depends/freetype-2.11.0/include")
 
 
-file(GLOB freetype_public_header "depends/freetype/include/ft2build.h" "depends/freetype/include/freetype/*.h")
-file(GLOB freetype_public_config_header "include/freetype/config/*.h")
-file(GLOB freetype_private_header "include/freetype/internal/*.h")
-set(freetype_base_src depends/freetype/src/autofit/autofit.c
-        depends/freetype/src/base/ftbase.c
-        depends/freetype/src/base/ftbbox.c
-        depends/freetype/src/base/ftbdf.c
-        depends/freetype/src/base/ftbitmap.c
-        depends/freetype/src/base/ftcid.c
-        depends/freetype/src/base/ftfstype.c
-        depends/freetype/src/base/ftgasp.c
-        depends/freetype/src/base/ftglyph.c
-        depends/freetype/src/base/ftgxval.c
-        depends/freetype/src/base/ftinit.c
-        depends/freetype/src/base/ftmm.c
-        depends/freetype/src/base/ftotval.c
-        depends/freetype/src/base/ftpatent.c
-        depends/freetype/src/base/ftpfr.c
-        depends/freetype/src/base/ftstroke.c
-        depends/freetype/src/base/ftsynth.c
-        depends/freetype/src/base/fttype1.c
-        depends/freetype/src/base/ftwinfnt.c
-        depends/freetype/src/bdf/bdf.c
-        depends/freetype/src/bzip2/ftbzip2.c
-        depends/freetype/src/cache/ftcache.c
-        depends/freetype/src/cff/cff.c
-        depends/freetype/src/cid/type1cid.c
-        depends/freetype/src/gzip/ftgzip.c
-        depends/freetype/src/lzw/ftlzw.c
-        depends/freetype/src/pcf/pcf.c
-        depends/freetype/src/pfr/pfr.c
-        depends/freetype/src/psaux/psaux.c
-        depends/freetype/src/pshinter/pshinter.c
-        depends/freetype/src/psnames/psnames.c
-        depends/freetype/src/raster/raster.c
-        depends/freetype/src/sdf/sdf.c
-        depends/freetype/src/sfnt/sfnt.c
-        depends/freetype/src/smooth/smooth.c
-        depends/freetype/src/truetype/truetype.c
-        depends/freetype/src/type1/type1.c
-        depends/freetype/src/type42/type42.c
-        depends/freetype/src/winfonts/winfnt.c)
+file(GLOB freetype_public_header "depends/freetype-2.11.0/include/ft2build.h" "depends/freetype-2.11.0/include/freetype/*.h")
+file(GLOB freetype_public_config_header "depends/freetype-2.11.0/include/freetype/config/*.h")
+file(GLOB freetype_private_header "depends/freetype-2.11.0/include/freetype/internal/*.h")
+set(freetype_base_src depends/freetype-2.11.0/src/autofit/autofit.c
+        depends/freetype-2.11.0/src/base/ftbase.c
+        depends/freetype-2.11.0/src/base/ftbbox.c
+        depends/freetype-2.11.0/src/base/ftbdf.c
+        depends/freetype-2.11.0/src/base/ftbitmap.c
+        depends/freetype-2.11.0/src/base/ftcid.c
+        depends/freetype-2.11.0/src/base/ftfstype.c
+        depends/freetype-2.11.0/src/base/ftgasp.c
+        depends/freetype-2.11.0/src/base/ftglyph.c
+        depends/freetype-2.11.0/src/base/ftgxval.c
+        depends/freetype-2.11.0/src/base/ftinit.c
+        depends/freetype-2.11.0/src/base/ftmm.c
+        depends/freetype-2.11.0/src/base/ftotval.c
+        depends/freetype-2.11.0/src/base/ftpatent.c
+        depends/freetype-2.11.0/src/base/ftpfr.c
+        depends/freetype-2.11.0/src/base/ftstroke.c
+        depends/freetype-2.11.0/src/base/ftsynth.c
+        depends/freetype-2.11.0/src/base/fttype1.c
+        depends/freetype-2.11.0/src/base/ftwinfnt.c
+        depends/freetype-2.11.0/src/bdf/bdf.c
+        depends/freetype-2.11.0/src/bzip2/ftbzip2.c
+        depends/freetype-2.11.0/src/cache/ftcache.c
+        depends/freetype-2.11.0/src/cff/cff.c
+        depends/freetype-2.11.0/src/cid/type1cid.c
+        depends/freetype-2.11.0/src/gzip/ftgzip.c
+        depends/freetype-2.11.0/src/lzw/ftlzw.c
+        depends/freetype-2.11.0/src/pcf/pcf.c
+        depends/freetype-2.11.0/src/pfr/pfr.c
+        depends/freetype-2.11.0/src/psaux/psaux.c
+        depends/freetype-2.11.0/src/pshinter/pshinter.c
+        depends/freetype-2.11.0/src/psnames/psnames.c
+        depends/freetype-2.11.0/src/raster/raster.c
+        depends/freetype-2.11.0/src/sdf/sdf.c
+        depends/freetype-2.11.0/src/sfnt/sfnt.c
+        depends/freetype-2.11.0/src/smooth/smooth.c
+        depends/freetype-2.11.0/src/truetype/truetype.c
+        depends/freetype-2.11.0/src/type1/type1.c
+        depends/freetype-2.11.0/src/type42/type42.c
+        depends/freetype-2.11.0/src/winfonts/winfnt.c)
 
 if (UNIX)
-    list(APPEND freetype_base_src "depends/freetype/builds/unix/ftsystem.c")
+    list(APPEND freetype_base_src "depends/freetype-2.11.0/builds/unix/ftsystem.c")
 elseif (WIN32)
-    list(APPEND freetype_base_src "depends/freetype/builds/windows/ftsystem.c")
+    list(APPEND freetype_base_src "depends/freetype-2.11.0/builds/windows/ftsystem.c")
 else ()
-    list(APPEND freetype_base_src "depends/freetype/src/base/ftsystem.c")
+    list(APPEND freetype_base_src "depends/freetype-2.11.0/src/base/ftsystem.c")
 endif ()
 
 
 if (WIN32)
     enable_language(RC)
-    list(APPEND freetype_base_src depends/freetype/builds/windows/ftdebug.c
-            depends/freetype/src/base/ftver.rc)
+    list(APPEND freetype_base_src depends/freetype-2.11.0/builds/windows/ftdebug.c
+            depends/freetype-2.11.0/src/base/ftver.rc)
 elseif (WINCE)
-    list(APPEND freetype_base_src depends/freetype/builds/wince/ftdebug.c)
+    list(APPEND freetype_base_src depends/freetype-2.11.0/builds/wince/ftdebug.c)
 else ()
-    list(APPEND freetype_base_src depends/freetype/src/base/ftdebug.c)
+    list(APPEND freetype_base_src depends/freetype-2.11.0/src/base/ftdebug.c)
 endif ()
 
 set(freetype_src ${freetype_base_src} ${freetype_public_header} ${freetype_public_config_header} ${freetype_private_header})

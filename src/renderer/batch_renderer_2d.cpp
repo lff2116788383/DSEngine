@@ -198,14 +198,14 @@ void BatchRenderer2D::DrawQuad(const glm::mat4& transform, Texture2D* texture, c
         }
     }
 
-    constexpr glm::vec4 quad_vertex_positions[] = {
+    static const glm::vec4 quad_vertex_positions[] = {
         { -0.5f, -0.5f, 0.0f, 1.0f },
         {  0.5f, -0.5f, 0.0f, 1.0f },
         {  0.5f,  0.5f, 0.0f, 1.0f },
         { -0.5f,  0.5f, 0.0f, 1.0f }
     };
 
-    constexpr glm::vec2 texture_coords[] = {
+    static const glm::vec2 texture_coords[] = {
         { 0.0f, 0.0f },
         { 1.0f, 0.0f },
         { 1.0f, 1.0f },

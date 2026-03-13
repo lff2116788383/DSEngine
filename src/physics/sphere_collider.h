@@ -6,18 +6,20 @@
 #define INTEGRATE_PHYSX_SPHERE_COLLIDER_H
 
 #include <rttr/registration>
+#include <rttr/registration_friend.h>
 #include "collider.h"
 
 using namespace rttr;
 
 class SphereCollider : public Collider {
+    RTTR_REGISTRATION_FRIEND
 public:
     SphereCollider();
     ~SphereCollider();
-protected:
+
     void CreateShape() override;
 
-    void set_radius(float radius);
+    void set_radius(float radius) { radius_ = radius; }
     float radius() const { return radius_; }
 
 private:

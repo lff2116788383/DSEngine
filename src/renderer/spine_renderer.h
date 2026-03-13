@@ -18,7 +18,7 @@ public:
     void SetAnimation(const std::string& name, bool loop);
     void Update(float delta_time);
     
-    virtual void OnRender() override;
+    void OnRender();
 
 private:
     spSkeletonData* skeleton_data_;

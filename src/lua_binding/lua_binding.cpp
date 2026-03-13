@@ -6,7 +6,7 @@
 #include <glm/ext.hpp>
 #include <sol/sol.hpp>
 extern "C"{
-#include <luasocket/luasocket.h>
+#include <luasocket.h>
 }
 #include "audio/audio.h"
 #include "audio/studio/audio_studio.h"
@@ -701,12 +701,19 @@ void LuaBinding::BindLua() {
                                              "is_playing", &Animation2D::is_playing
         );
 
+        cpp_ns_table.new_enum<Grid::CellLayout,true>("CellLayout",{
+                {"Rectangle",Grid::CellLayout::Rectangle},
+                {"Isometric",Grid::CellLayout::Isometric}
+        });
+
         cpp_ns_table.new_usertype<Grid>("Grid", sol::call_constructor, sol::constructors<Grid()>(),
                                       sol::base_classes, sol::bases<Component>(),
                                       "set_cell_size", &Grid::set_cell_size,
                                       "cell_size", &Grid::cell_size,
                                       "set_cell_gap", &Grid::set_cell_gap,
                                       "cell_gap", &Grid::cell_gap,
+                                      "set_cell_layout", &Grid::set_cell_layout,
+                                      "cell_layout", &Grid::cell_layout,
                                       "CellToWorld", &Grid::CellToWorld,
                                       "WorldToCell", &Grid::WorldToCell
         );

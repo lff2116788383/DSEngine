@@ -25,9 +25,6 @@ SphereCollider::~SphereCollider() {
 
 void SphereCollider::set_radius(float radius) {
     radius_ = radius;
-    if (px_shape_) {
-        // Similar to BoxCollider, updating runtime shape geometry is tricky without headers.
-    }
 }
 
 void SphereCollider::CreateShape() {

@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captain on 2021/4/5.
 // 图片加载与解析
 //
@@ -10,10 +10,13 @@
 
 #include <iostream>
 #include <glad/gl.h>
+#include <glm/glm.hpp>
+#include <rttr/registration_friend.h>
 
 class Texture2D
 {
-private:
+    RTTR_REGISTRATION_FRIEND
+public:
     Texture2D();
 
 public:
@@ -40,6 +43,14 @@ public:
         int height_;
         int gl_texture_format_;
         int compress_size_;
+    };
+    
+    // Texture coordinates (UV) for the full image (0,0 to 1,1)
+    inline static const glm::vec2 texture_coords[4] = {
+        {0.0f, 0.0f},
+        {1.0f, 0.0f},
+        {1.0f, 1.0f},
+        {0.0f, 1.0f}
     };
 
     int mipmap_level(){return mipmap_level_;}

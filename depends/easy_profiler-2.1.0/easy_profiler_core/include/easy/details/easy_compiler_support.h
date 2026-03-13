@@ -53,13 +53,20 @@
 
 #include <cstddef>
 
-#if defined(_WIN32) && !defined(EASY_PROFILER_STATIC)
-// Visual Studio and MinGW
-# ifdef _BUILD_PROFILER
-#  define PROFILER_API __declspec(dllexport)
+#ifdef _WIN32
+// Windows
+# ifdef EASY_PROFILER_STATIC
+#  define PROFILER_API
 # else
-#  define PROFILER_API __declspec(dllimport)
+#  ifdef _BUILD_PROFILER
+#   define PROFILER_API __declspec(dllexport)
+#  else
+#   define PROFILER_API __declspec(dllimport)
+#  endif
 # endif
+#else
+// Linux/Unix/Mac
+# define PROFILER_API __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus

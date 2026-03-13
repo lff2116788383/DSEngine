@@ -23,7 +23,7 @@ BoxCollider::~BoxCollider() {
 
 }
 
-void BoxCollider::set_size(glm::vec3 size) {
+void BoxCollider::set_size(const glm::vec3& size) {
     size_ = size;
     // If shape exists, we might need to recreate or update it?
     // PhysX shapes are immutable for geometry usually, need to recreate or set geometry

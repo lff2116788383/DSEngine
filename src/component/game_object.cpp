@@ -272,7 +272,7 @@ bool GameObject::LoadScene(const std::string& file_path) {
                 if (!tilemap_renderer) {
                     tilemap_renderer = current->AddComponent<TilemapRenderer>();
                 }
-                tilemap_renderer->set_color(r, g, b, a);
+                tilemap_renderer->set_color(glm::vec4(r, g, b, a));
                 tilemap_renderer->set_sorting_layer(sorting_layer);
                 tilemap_renderer->set_order_in_layer(order_in_layer);
             } else if (type == "RigidDynamic") {
