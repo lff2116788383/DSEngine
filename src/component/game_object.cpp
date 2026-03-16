@@ -239,7 +239,7 @@ bool GameObject::LoadScene(const std::string& file_path) {
                 }
                 sprite_renderer->set_sorting_layer(sorting_layer);
                 sprite_renderer->set_order_in_layer(order_in_layer);
-                sprite_renderer->set_color(r, g, b, a);
+                sprite_renderer->set_color(glm::vec4(r, g, b, a));
                 if (texture_path != "-") {
                     Sprite* sprite = Sprite::CreateFromAtlas(texture_path, rect_x, rect_y, rect_w, rect_h, pivot_x, pivot_y, ppu);
                     if (sprite) {

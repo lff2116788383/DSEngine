@@ -23,10 +23,6 @@ SphereCollider::~SphereCollider() {
 
 }
 
-void SphereCollider::set_radius(float radius) {
-    radius_ = radius;
-}
-
 void SphereCollider::CreateShape() {
     if(px_shape_== nullptr){
         px_shape_=Physics::CreateSphereShape(radius_,px_material_);

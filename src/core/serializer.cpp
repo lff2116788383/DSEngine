@@ -106,8 +106,7 @@ std::string Serializer::SerializeObject(rttr::instance obj) {
     rttr::type t = obj.get_type();
     // If it's a pointer, dereference it
     if (t.is_pointer()) {
-        t = t.get_raw_type();
-        obj = obj.get_wrapped_instance(); 
+        return SerializeObject(obj.get_wrapped_instance());
     }
     
     ss << "{ \"type\": \"" << t.get_name().to_string() << "\"";

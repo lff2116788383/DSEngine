@@ -28,7 +28,7 @@ public:
     float ppu() const { return ppu_; }
 
     void set_texture_path(const std::string& path) { texture_path_ = path; }
-    std::string texture_path() const { return texture_path_; }
+    const std::string& texture_path() const { return texture_path_; }
 
     static Sprite* Create(const std::string& texture_path);
     static Sprite* CreateFromAtlas(const std::string& texture_path, float x, float y, float width, float height);

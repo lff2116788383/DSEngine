@@ -213,7 +213,7 @@ void BatchRenderer2D::DrawQuad(const glm::mat4& transform, Texture2D* texture, c
     };
 
     for (int i = 0; i < 4; i++) {
-        s_Data.vertex_buffer_ptr->position = transform * quad_vertex_positions[i];
+        s_Data.vertex_buffer_ptr->position = glm::vec3(transform * quad_vertex_positions[i]);
         s_Data.vertex_buffer_ptr->color = color;
         s_Data.vertex_buffer_ptr->uv = texture_coords[i];
         s_Data.vertex_buffer_ptr->texture_slot = texture_index;

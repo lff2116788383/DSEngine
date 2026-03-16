@@ -24,7 +24,7 @@ public:
     bool is_looping() const { return is_looping_; }
 
     void set_name(const std::string& name) { name_ = name; }
-    std::string name() const { return name_; }
+    const std::string& name() const { return name_; }
 
 private:
     std::vector<Frame> frames_;

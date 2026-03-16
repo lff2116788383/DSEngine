@@ -60,7 +60,7 @@ void TilemapCollider::RebuildCollider() {
     Tilemap* tilemap = game_object()->GetComponent<Tilemap>();
     Grid* grid = game_object()->GetComponent<Grid>();
     if (!grid && game_object()->parent()) {
-        grid = game_object()->parent()->GetComponent<Grid>();
+        grid = dynamic_cast<GameObject*>(game_object()->parent())->GetComponent<Grid>();
     }
     
     if (!tilemap || !grid) return;

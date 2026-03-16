@@ -21,7 +21,7 @@ public:
     void CreateShape() override;
 
     void set_size(const glm::vec3& size);
-    glm::vec3 size() const { return size_; }
+    const glm::vec3& size() const { return size_; }
 
 private:
     //~zh 碰撞器尺寸

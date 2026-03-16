@@ -70,10 +70,10 @@ void SpriteRenderer::Update() {
         // 2: Top-Right
         // 3: Top-Left
         std::vector<MeshFilter::Vertex> vertex_vector = {
-            { {-pivot_x, -pivot_y, 0.0f}, {color_.r, color_.g, color_.b, color_.a}, {u0, v1}, {0.0f, 0.0f, 1.0f} },
-            { {width - pivot_x, -pivot_y, 0.0f}, {color_.r, color_.g, color_.b, color_.a}, {u1, v1}, {0.0f, 0.0f, 1.0f} },
-            { {width - pivot_x, height - pivot_y, 0.0f}, {color_.r, color_.g, color_.b, color_.a}, {u1, v0}, {0.0f, 0.0f, 1.0f} },
-            { {-pivot_x, height - pivot_y, 0.0f}, {color_.r, color_.g, color_.b, color_.a}, {u0, v0}, {0.0f, 0.0f, 1.0f} }
+            { {-pivot_x, -pivot_y, 0.0f}, color_, {u0, v1}, {0.0f, 0.0f, 1.0f} },
+            { {width - pivot_x, -pivot_y, 0.0f}, color_, {u1, v1}, {0.0f, 0.0f, 1.0f} },
+            { {width - pivot_x, height - pivot_y, 0.0f}, color_, {u1, v0}, {0.0f, 0.0f, 1.0f} },
+            { {-pivot_x, height - pivot_y, 0.0f}, color_, {u0, v0}, {0.0f, 0.0f, 1.0f} }
         };
 
         std::vector<unsigned short> index_vector = {

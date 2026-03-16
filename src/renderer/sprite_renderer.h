@@ -1,6 +1,7 @@
 #ifndef UNTITLED_SPRITE_RENDERER_H
 #define UNTITLED_SPRITE_RENDERER_H
 
+#include <glm/glm.hpp>
 #include "component/component.h"
 #include "sprite.h"
 #include <rttr/registration>
@@ -13,9 +14,8 @@ public:
     void set_sprite(Sprite* sprite);
     Sprite* sprite() const { return sprite_; }
 
-    void set_color(float r, float g, float b, float a) { color_ = {r, g, b, a}; }
-    struct Color { float r, g, b, a; };
-    Color color() const { return color_; }
+    void set_color(const glm::vec4& color) { color_ = color; }
+    const glm::vec4& color() const { return color_; }
 
     void set_sorting_layer(int layer){sorting_layer_=layer;}
     int sorting_layer() const {return sorting_layer_;}
@@ -27,7 +27,7 @@ public:
 
 private:
     Sprite* sprite_ = nullptr;
-    Color color_ = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 color_ = {1.0f, 1.0f, 1.0f, 1.0f};
 
     int sorting_layer_ = 0;
     int order_in_layer_ = 0;
