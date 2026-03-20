@@ -19,8 +19,8 @@ if(WIN32)
     link_libraries(fmod_vc fmodstudio_vc)
 
     #拷贝dll到exe目录
-    file(COPY "depends/fmod/api/core/lib/x64/fmod.dll" DESTINATION "./")
-    file(COPY "depends/fmod/api/studio/lib/x64/fmodstudio.dll" DESTINATION "./")
+    # file(COPY "depends/fmod/api/core/lib/x64/fmod.dll" DESTINATION "./")
+    # file(COPY "depends/fmod/api/studio/lib/x64/fmodstudio.dll" DESTINATION "./")
 else()
     #链接lib文件
     link_libraries(fmod fmodstudio)

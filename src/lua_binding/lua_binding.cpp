@@ -8,14 +8,15 @@
 extern "C"{
 #include <luasocket.h>
 }
-#include "audio/audio.h"
-#include "audio/studio/audio_studio.h"
-#include "audio/studio/audio_studio_event.h"
-#include "component/game_object.h"
-#include "component/transform.h"
+// #include "audio/audio.h"
+// #include "audio/studio/audio_studio.h"
+// #include "audio/studio/audio_studio_event.h"
+// #include "component/game_object.h"
+// #include "component/transform.h"
 #include "control/input.h"
 #include "control/key_code.h"
 #include "renderer/camera.h"
+#include "renderer/font.h"
 #include "renderer/material.h"
 #include "renderer/mesh_filter.h"
 #include "renderer/mesh_renderer.h"
@@ -202,6 +203,7 @@ void LuaBinding::BindLua() {
     auto cpp_ns_table = sol_state_["Cpp"].get_or_create<sol::table>();
     // audio
     {
+        /*
         // FMOD_RESULT
         {
             cpp_ns_table.new_enum<FMOD_RESULT,true>("FMOD_RESULT",{
@@ -312,6 +314,7 @@ void LuaBinding::BindLua() {
                                                   "Stop",&AudioStudioEvent::Stop,
                                                   "Pause",&AudioStudioEvent::Pause
         );
+        */
     }
 
     // component
@@ -325,6 +328,7 @@ void LuaBinding::BindLua() {
                                              "depth",&Tree::Node::depth
         );
 
+        /*
         cpp_ns_table.new_usertype<GameObject>("GameObject",sol::call_constructor,sol::constructors<GameObject(const char*)>(),
                                             sol::base_classes,sol::bases<Tree::Node>(),
                                             "name",&GameObject::name,
@@ -356,6 +360,12 @@ void LuaBinding::BindLua() {
 
         cpp_ns_table.new_usertype<Transform>("Transform",sol::call_constructor,sol::constructors<Transform()>(),
                                            sol::base_classes,sol::bases<Component>(),
+                                            "position", &Transform::position,
+                                            "rotation", &Transform::rotation,
+                                            "scale", &Transform::scale,
+                                            "set_position", &Transform::set_position,
+                                            "set_rotation", &Transform::set_rotation,
+                                            "set_scale", &Transform::set_scale,
                                             "local_position", &Transform::local_position,
                                             "local_rotation", &Transform::local_rotation,
                                             "local_scale", &Transform::local_scale,
@@ -366,6 +376,7 @@ void LuaBinding::BindLua() {
                                              "rotation", &Transform::rotation,
                                              "scale", &Transform::scale
         );
+        */
     }
 
     // control
@@ -565,8 +576,14 @@ void LuaBinding::BindLua() {
                 {"CLEAR_DEPTH_BUFFER",BufferClearFlag::CLEAR_DEPTH_BUFFER}
         });
 
-        cpp_ns_table.new_usertype<UICamera>("UICamera",sol::call_constructor,sol::constructors<UICamera()>(),
-                                          sol::base_classes,sol::bases<Camera,Component>()
+        cpp_ns_table.new_usertype<UIText>("UIText",sol::call_constructor,sol::constructors<UIText()>(),
+                                        sol::base_classes,sol::bases<Component>(),
+                                        "set_font", &UIText::set_font,
+                                        "font", &UIText::font,
+                                        "set_text", &UIText::set_text,
+                                        "text", &UIText::text,
+                                        "set_color", &UIText::set_color,
+                                        "color", &UIText::color
         );
 
         cpp_ns_table.new_usertype<Material>("Material",sol::call_constructor,sol::constructors<Material()>(),
@@ -660,7 +677,10 @@ void LuaBinding::BindLua() {
                                         "pivot", &Sprite::pivot,
                                         "set_ppu", &Sprite::set_ppu,
                                         "ppu", &Sprite::ppu,
-                                        "Create", &Sprite::Create,
+                                        "Create", sol::overload(
+                                            static_cast<Sprite*(*)(const std::string&)>(&Sprite::Create),
+                                            static_cast<Sprite*(*)(Texture2D*)>(&Sprite::Create)
+                                        ),
                                         "CreateFromAtlas", sol::overload(
                                             [] (const std::string& texture_path, float x, float y, float width, float height) {
                                                 return Sprite::CreateFromAtlas(texture_path, x, y, width, height);
@@ -932,8 +952,14 @@ void LuaBinding::RunLuaFile(std::string script_file_path) {
 }
 
 sol::protected_function_result LuaBinding::CallLuaFunction(std::string function_name) {
-    sol::protected_function main_function=sol_state_["main"];
-    sol::protected_function_result result=main_function();
+    sol::protected_function lua_function=sol_state_[function_name];
+    if(!lua_function.valid()){
+        DEBUG_LOG_ERROR("Lua function '{}' not found or invalid", function_name);
+        // Returns a dummy invalid result or maybe we should return a default constructed result which is invalid
+        // But sol::protected_function_result is not default constructible easily to represent error without running.
+        // Let's just proceed to call it, it will return an error result which we can log.
+    }
+    sol::protected_function_result result=lua_function();
     if(result.valid()== false){
         sol::error err = result;
         DEBUG_LOG_ERROR("\n---- RUN LUA_FUNCTION ERROR ----\n{}\n------------------------",err.what());
