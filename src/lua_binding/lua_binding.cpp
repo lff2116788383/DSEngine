@@ -64,6 +64,11 @@ extern "C"{
 #include "renderer/auto_tile.h"
 #include "resource/prefab.h"
 
+// Phase 1 ECS headers
+#include "phase1/ecs/world.h"
+#include "phase1/ecs/components_2d.h"
+#include "audio/audio_system.h"
+
 sol::state LuaBinding::sol_state_;
 
 void LuaBinding::Init(std::string package_path) {
@@ -186,7 +191,7 @@ void LuaBinding::BindLua() {
         );
     }
 
-    //绑定glm函数
+    // 绑定glm函数
     {
         auto glm_ns_table = sol_state_["glm"].get_or_create<sol::table>();
         glm_ns_table.set_function("rotate",sol::overload([] (const glm::mat4* m,const float f,const glm::vec3* v) {return glm::rotate(*m,f,*v);}));
@@ -198,6 +203,177 @@ void LuaBinding::BindLua() {
                 [] (const glm::mat4* m) {return glm::to_string((*m));},
                 [] (const glm::vec3* v) {return glm::to_string((*v));}
         ));
+    }
+
+    // 绑定 Phase 1 ECS
+    {
+        auto ecs_table = sol_state_["ecs"].get_or_create<sol::table>();
+        
+        // Entity is just an uint32_t typedef typically in EnTT, but we can bind the world API
+        ecs_table.new_usertype<Phase1World>("World",
+            "create_entity", &Phase1World::CreateEntity,
+            "destroy_entity", &Phase1World::DestroyEntity,
+            
+            // Component getters for Lua
+            "get_transform", [](Phase1World& world, Entity e) -> TransformComponent* {
+                if (world.registry().all_of<TransformComponent>(e)) {
+                    return &world.registry().get<TransformComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_sprite", [](Phase1World& world, Entity e) -> SpriteRendererComponent* {
+                if (world.registry().all_of<SpriteRendererComponent>(e)) {
+                    return &world.registry().get<SpriteRendererComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_rigidbody2d", [](Phase1World& world, Entity e) -> RigidBody2DComponent* {
+                if (world.registry().all_of<RigidBody2DComponent>(e)) {
+                    return &world.registry().get<RigidBody2DComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_uirenderer", [](Phase1World& world, Entity e) -> UIRendererComponent* {
+                if (world.registry().all_of<UIRendererComponent>(e)) {
+                    return &world.registry().get<UIRendererComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_animator", [](Phase1World& world, Entity e) -> AnimatorComponent* {
+                if (world.registry().all_of<AnimatorComponent>(e)) {
+                    return &world.registry().get<AnimatorComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_audiosource", [](Phase1World& world, Entity e) -> AudioSourceComponent* {
+                if (world.registry().all_of<AudioSourceComponent>(e)) {
+                    return &world.registry().get<AudioSourceComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_boxcollider2d", [](Phase1World& world, Entity e) -> BoxCollider2DComponent* {
+                if (world.registry().all_of<BoxCollider2DComponent>(e)) {
+                    return &world.registry().get<BoxCollider2DComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_particleemitter", [](Phase1World& world, Entity e) -> ParticleEmitterComponent* {
+                if (world.registry().all_of<ParticleEmitterComponent>(e)) {
+                    return &world.registry().get<ParticleEmitterComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_camera", [](Phase1World& world, Entity e) -> CameraComponent* {
+                if (world.registry().all_of<CameraComponent>(e)) {
+                    return &world.registry().get<CameraComponent>(e);
+                }
+                return nullptr;
+            },
+            "get_tilemap", [](Phase1World& world, Entity e) -> TilemapComponent* {
+                if (world.registry().all_of<TilemapComponent>(e)) {
+                    return &world.registry().get<TilemapComponent>(e);
+                }
+                return nullptr;
+            }
+        );
+
+        ecs_table.new_usertype<TransformComponent>("TransformComponent",
+            "position", &TransformComponent::position,
+            "rotation", &TransformComponent::rotation,
+            "scale", &TransformComponent::scale
+        );
+
+        ecs_table.new_usertype<SpriteRendererComponent>("SpriteRendererComponent",
+            "color", &SpriteRendererComponent::color,
+            "sorting_layer", &SpriteRendererComponent::sorting_layer,
+            "order_in_layer", &SpriteRendererComponent::order_in_layer,
+            "visible", &SpriteRendererComponent::visible
+        );
+
+        ecs_table.new_usertype<RigidBody2DComponent>("RigidBody2DComponent",
+            "velocity", &RigidBody2DComponent::velocity,
+            "mass", &RigidBody2DComponent::mass,
+            "gravity_scale", &RigidBody2DComponent::gravity_scale,
+            "fixed_rotation", &RigidBody2DComponent::fixed_rotation,
+            "apply_force", [](RigidBody2DComponent& rb, const glm::vec2& force) {
+                // Requires b2Body to be accessible, simplistic mock logic for now
+                if (rb.runtime_body) {
+                    rb.runtime_body->ApplyForceToCenter(b2Vec2(force.x, force.y), true);
+                }
+            },
+            "apply_linear_impulse", [](RigidBody2DComponent& rb, const glm::vec2& impulse) {
+                if (rb.runtime_body) {
+                    rb.runtime_body->ApplyLinearImpulseToCenter(b2Vec2(impulse.x, impulse.y), true);
+                }
+            },
+            "on_collision_enter", &RigidBody2DComponent::on_collision_enter,
+            "on_collision_exit", &RigidBody2DComponent::on_collision_exit,
+            "on_trigger_enter", &RigidBody2DComponent::on_trigger_enter,
+            "on_trigger_exit", &RigidBody2DComponent::on_trigger_exit
+        );
+
+        ecs_table.new_usertype<UIRendererComponent>("UIRendererComponent",
+            "color", &UIRendererComponent::color,
+            "order", &UIRendererComponent::order,
+            "visible", &UIRendererComponent::visible,
+            "position", &UIRendererComponent::position,
+            "size", &UIRendererComponent::size,
+            "anchor_min", &UIRendererComponent::anchor_min,
+            "anchor_max", &UIRendererComponent::anchor_max,
+            "pivot", &UIRendererComponent::pivot,
+            "interactable", &UIRendererComponent::interactable,
+            "on_click", &UIRendererComponent::on_click,
+            "on_pointer_enter", &UIRendererComponent::on_pointer_enter,
+            "on_pointer_exit", &UIRendererComponent::on_pointer_exit
+        );
+
+        ecs_table.new_usertype<AnimatorComponent>("AnimatorComponent",
+            "current_state", &AnimatorComponent::current_state,
+            "playing", &AnimatorComponent::playing,
+            "SetBool", &AnimatorComponent::SetBool,
+            "SetFloat", &AnimatorComponent::SetFloat
+        );
+
+        ecs_table.new_usertype<AudioSourceComponent>("AudioSourceComponent",
+            "clip_path", &AudioSourceComponent::clip_path,
+            "play_on_awake", &AudioSourceComponent::play_on_awake,
+            "loop", &AudioSourceComponent::loop,
+            "volume", &AudioSourceComponent::volume,
+            "is_playing", &AudioSourceComponent::is_playing
+        );
+
+        ecs_table.new_usertype<BoxCollider2DComponent>("BoxCollider2DComponent",
+            "size", &BoxCollider2DComponent::size,
+            "offset", &BoxCollider2DComponent::offset,
+            "density", &BoxCollider2DComponent::density,
+            "friction", &BoxCollider2DComponent::friction,
+            "restitution", &BoxCollider2DComponent::restitution,
+            "is_trigger", &BoxCollider2DComponent::is_trigger
+        );
+
+        ecs_table.new_usertype<ParticleEmitterComponent>("ParticleEmitterComponent",
+            "max_particles", &ParticleEmitterComponent::max_particles,
+            "emit_rate", &ParticleEmitterComponent::emit_rate,
+            "emitting", &ParticleEmitterComponent::emitting,
+            "start_life_time", &ParticleEmitterComponent::start_life_time,
+            "start_size", &ParticleEmitterComponent::start_size,
+            "start_color", &ParticleEmitterComponent::start_color
+        );
+
+        ecs_table.new_usertype<CameraComponent>("CameraComponent",
+            "orthographic", &CameraComponent::orthographic,
+            "orthographic_size", &CameraComponent::orthographic_size,
+            "near_clip", &CameraComponent::near_clip,
+            "far_clip", &CameraComponent::far_clip
+        );
+
+        ecs_table.new_usertype<TilemapComponent>("TilemapComponent",
+            "width", &TilemapComponent::width,
+            "height", &TilemapComponent::height,
+            "tile_size", &TilemapComponent::tile_size,
+            "tileset_cols", &TilemapComponent::tileset_cols,
+            "tileset_rows", &TilemapComponent::tileset_rows
+        );
     }
 
     auto cpp_ns_table = sol_state_["Cpp"].get_or_create<sol::table>();
@@ -292,6 +468,13 @@ void LuaBinding::BindLua() {
                     {"FMOD_RESULT_FORCEINT",FMOD_RESULT::FMOD_RESULT_FORCEINT}
             });
         }
+
+        cpp_ns_table.new_usertype<AudioSystem>("AudioSystem",
+            "Init", &AudioSystem::Init,
+            "PlaySound", &AudioSystem::PlaySound,
+            "StopAll", &AudioSystem::StopAll,
+            "Shutdown", &AudioSystem::Shutdown
+        );
 
         cpp_ns_table.new_usertype<Audio>("Audio",
                                        "Init",&Audio::Init,

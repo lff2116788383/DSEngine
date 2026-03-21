@@ -1,0 +1,31 @@
+{
+  "targets": [
+    {
+      "target_name": "dsengine_bridge",
+      "sources": [ 
+        "src/bridge/dsengine_bridge.cpp",
+        "../src/phase1/ecs/world.cpp"
+      ],
+      "include_dirs": [
+        "<!@(node -p \"require('node-addon-api').include\")",
+        "../src",
+        "../depends",
+        "../depends/miniaudio",
+        "../build_p1/_deps/entt-src/src",
+        "../depends/glm"
+      ],
+      "dependencies": [
+        "<!(node -p \"require('node-addon-api').gyp\")"
+      ],
+      "cflags!": [ "-fno-exceptions" ],
+      "cflags_cc!": [ "-fno-exceptions", "-std=c++20" ],
+      "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS" ],
+      "msvs_settings": {
+        "VCCLCompilerTool": { 
+          "ExceptionHandling": 1,
+          "AdditionalOptions": [ "/std:c++20" ]
+        }
+      }
+    }
+  ]
+}

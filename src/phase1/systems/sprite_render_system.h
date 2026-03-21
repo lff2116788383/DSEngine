@@ -9,4 +9,9 @@ public:
     void Render(Phase1World& world, CommandBuffer& cmd_buffer);
 };
 
+class UIRenderSystem {
+public:
+    void Render(Phase1World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height);
+};
+
 #endif

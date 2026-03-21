@@ -1,7 +1,11 @@
-# Set paths relative to DSEngine root
+if(NOT DSE_ENABLE_PHYSX)
+    message(STATUS "PhysX disabled")
+    return()
+endif()
+
 set(PHYSX_ARCHIVE "${CMAKE_SOURCE_DIR}/depends/physx-4.1.7z")
 set(PHYSX_EXTRACT_DIR "${CMAKE_SOURCE_DIR}/depends")
-set(PHYSX_SOURCE_DIR "${CMAKE_SOURCE_DIR}/depends/physx-4.1") # The folder inside zip
+set(PHYSX_SOURCE_DIR "${CMAKE_SOURCE_DIR}/depends/physx-4.1")
 set(PHYSX_TARGET_DIR "${CMAKE_SOURCE_DIR}/depends/physx")
 
 # Download PhysX.7z

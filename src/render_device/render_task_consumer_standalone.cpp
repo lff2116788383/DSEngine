@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/2/7.
 //
 
@@ -24,6 +24,10 @@
 #include "utils/screen.h"
 #include "render_device/uniform_buffer_object_manager.h"
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 RenderTaskConsumerStandalone::RenderTaskConsumerStandalone(GLFWwindow* window):RenderTaskConsumerBase(),window_(window) {
 
 }
@@ -36,10 +40,21 @@ void RenderTaskConsumerStandalone::InitGraphicsLibraryFramework() {
     glfwMakeContextCurrent(window_);
     gladLoadGL(glfwGetProcAddress);
 //    glfwSwapInterval(1);
+
+    if (imgui_ctx_) {
+        ImGui::SetCurrentContext(imgui_ctx_);
+    }
+    // ImGui Initialization in Render Thread
+    ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
 void RenderTaskConsumerStandalone::Exit() {
     RenderTaskConsumerBase::Exit();
+
+    // ImGui Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     glfwMakeContextCurrent(nullptr);
     glfwDestroyWindow(window_);

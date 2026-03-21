@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captain on 6/19/2022.
 //
 
@@ -8,6 +8,7 @@
 #include "render_task_type.h"
 #include "render_task_queue.h"
 #include "render_task_producer.h"
+#include <spdlog/fmt/fmt.h>
 
 #define DIRECTIONAL_LIGHT_MAX_NUM 128 //最大方向光数量
 #define POINT_LIGHT_MAX_NUM 128 //最大点光源数量

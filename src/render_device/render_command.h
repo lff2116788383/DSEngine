@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/3/3.
 //
 
@@ -42,6 +42,7 @@ enum RenderCommand {
     FBO_ATTACH_RBO,//FBO附着点指定RBO
     FBO_ATTACH_TEXTURE,//FBO附着点指定Texture
     BLIT_FRAME_BUFFER,//将像素块从读取的帧缓冲区(GL_READ_FRAMEBUFFER)复制到绘制帧缓冲区(GL_DRAW_FRAMEBUFFER)
+    RENDER_IMGUI,//渲染ImGui
     END_FRAME,//帧结束
 };
 

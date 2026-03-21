@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/2/7.
 //
 
@@ -13,6 +13,11 @@
 #include "render_task_queue.h"
 #include "utils/screen.h"
 #include "render_device/uniform_buffer_object_manager.h"
+
+#ifdef DSE_PHASE1_ONLY
+#include <imgui.h>
+#include <imgui_impl_opengl3.h>
+#endif
 
 void RenderTaskConsumerBase::Init() {
     render_thread_ = std::thread(&RenderTaskConsumerBase::ProcessTask,this);
@@ -496,9 +501,16 @@ void RenderTaskConsumerBase::UnBindFBO(RenderTaskBase* task_base){
 
 /// 删除帧缓冲区对象(FBO)
 void RenderTaskConsumerBase::DeleteFBO(RenderTaskBase* task_base){
-    RenderTaskBindFBO* task=dynamic_cast<RenderTaskBindFBO*>(task_base);
+    RenderTaskDeleteFBO* task=dynamic_cast<RenderTaskDeleteFBO*>(task_base);
     GLuint frame_buffer_object_id = GPUResourceMapper::GetFBO(task->fbo_handle_);
     glDeleteFramebuffers(1,&frame_buffer_object_id);
+}
+
+void RenderTaskConsumerBase::RenderImGui(RenderTaskBase* task_base){
+#ifdef DSE_PHASE1_ONLY
+    // Phase1 UI renderer
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 }
 
 /// 结束一帧
@@ -643,6 +655,10 @@ void RenderTaskConsumerBase::ProcessTask() {
                 }
                 case RenderCommand::DELETE_FBO:{
                     DeleteFBO(render_task);
+                    break;
+                }
+                case RenderCommand::RENDER_IMGUI:{
+                    RenderImGui(render_task);
                     break;
                 }
                 case RenderCommand::END_FRAME:{

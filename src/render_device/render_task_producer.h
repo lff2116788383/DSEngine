@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/3/3.
 //
 
@@ -177,6 +177,9 @@ public:
 
     /// 删除帧缓冲区对象(FBO)
     static void ProduceRenderTaskDeleteFBO(int fbo_handle);
+
+    /// 发出特殊任务：渲染 ImGui
+    static void ProduceRenderTaskRenderImGui();
 
     /// 发出特殊任务：渲染结束
     static void ProduceRenderTaskEndFrame();

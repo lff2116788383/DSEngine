@@ -4,6 +4,15 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <memory>
+#include <vector>
+#include <string>
+#include <functional>
+// We use forward declarations or minimal includes for Box2D to keep headers clean
+class b2Body;
+class b2Fixture;
+
+class TextureAsset;
 
 // Forward declaration for Box2D
 class b2Body;
@@ -18,12 +27,42 @@ struct TransformComponent {
 };
 
 struct SpriteRendererComponent {
+    std::shared_ptr<TextureAsset> texture;
     unsigned int texture_handle = 0;
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     int sorting_layer = 0;
     int order_in_layer = 0;
     bool visible = true;
+};
+
+struct UIRendererComponent {
+    std::shared_ptr<TextureAsset> texture;
+    unsigned int texture_handle = 0;
+    glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    int order = 0;
+    bool visible = true;
+    
+    // UI layout params (Anchor & Flex base)
+    glm::vec2 position = glm::vec2(0.0f); // Local offset
+    glm::vec2 size = glm::vec2(100.0f);
+    glm::vec2 anchor_min = glm::vec2(0.5f); // 0-1 percentage of parent
+    glm::vec2 anchor_max = glm::vec2(0.5f);
+    glm::vec2 pivot = glm::vec2(0.5f);
+    
+    // UI Event state
+    bool interactable = true;
+    bool is_hovered = false;
+    bool is_pressed = false;
+
+    // Callbacks for Event Bubbling
+    std::function<void(Entity)> on_click;
+    std::function<void(Entity)> on_pointer_enter;
+    std::function<void(Entity)> on_pointer_exit;
+    
+    // Runtime computed layout
+    glm::mat4 runtime_model = glm::mat4(1.0f);
 };
 
 struct CameraComponent {
@@ -49,6 +88,12 @@ struct RigidBody2DComponent {
     
     // Internal Box2D body pointer
     b2Body* runtime_body = nullptr;
+    
+    // Callbacks for collision events
+    std::function<void(Entity other)> on_collision_enter;
+    std::function<void(Entity other)> on_collision_exit;
+    std::function<void(Entity other)> on_trigger_enter;
+    std::function<void(Entity other)> on_trigger_exit;
 };
 
 struct BoxCollider2DComponent {
@@ -61,6 +106,96 @@ struct BoxCollider2DComponent {
     
     // Internal Box2D fixture pointer
     b2Fixture* runtime_fixture = nullptr;
+};
+
+// --- New Core Systems Components ---
+
+// --- Animation State Machine ---
+struct AnimationState {
+    std::string name;
+    std::vector<std::shared_ptr<TextureAsset>> frames;
+    float frame_rate = 10.0f;
+    bool loop = true;
+};
+
+struct AnimationTransition {
+    std::string to_state;
+    std::string condition_param; // e.g., "is_walking"
+    bool condition_value;        // e.g., true
+};
+
+struct AnimatorComponent {
+    std::unordered_map<std::string, AnimationState> states;
+    std::unordered_map<std::string, std::vector<AnimationTransition>> transitions;
+    std::unordered_map<std::string, bool> bool_params;
+    std::unordered_map<std::string, float> float_params;
+
+    std::string current_state = "";
+    float current_time = 0.0f;
+    int current_frame = 0;
+    bool playing = true;
+    
+    // Add helper to set params
+    void SetBool(const std::string& name, bool value) { bool_params[name] = value; }
+    void SetFloat(const std::string& name, float value) { float_params[name] = value; }
+};
+
+struct Particle2D {
+    glm::vec3 position;
+    glm::vec3 velocity;
+    glm::vec4 color;
+    float life_time;
+    float life_remaining;
+    float size;
+};
+
+struct ParticleEmitterComponent {
+    std::vector<Particle2D> particles;
+    std::shared_ptr<TextureAsset> texture;
+    unsigned int texture_handle = 0;
+    int max_particles = 100;
+    float emit_rate = 10.0f; // particles per second
+    float emit_accumulator = 0.0f;
+    bool emitting = true;
+    
+    // Emission parameters
+    float start_life_time = 2.0f;
+    float start_size = 1.0f;
+    glm::vec4 start_color = glm::vec4(1.0f);
+};
+
+struct AudioSourceComponent {
+    std::string clip_path;
+    bool play_on_awake = true;
+    bool loop = false;
+    float volume = 1.0f;
+    bool is_playing = false;
+    
+    // Internal handle to audio engine (e.g., SoLoud)
+    unsigned int runtime_handle = 0;
+};
+
+struct TilemapComponent {
+    std::vector<int> tiles;
+    int width = 0;
+    int height = 0;
+    float tile_size = 1.0f;
+    std::shared_ptr<TextureAsset> tileset_texture;
+    unsigned int tileset_handle = 0;
+    int tileset_cols = 1;
+    int tileset_rows = 1;
+};
+
+// --- Lua Scripting Component ---
+
+struct LuaScriptComponent {
+    std::string script_path;
+    bool is_initialized = false;
+    
+    // Sol2 table instance representing the script environment for this entity
+    // We use a void pointer or forward declaration here if sol::table is not included
+    // to avoid polluting the ECS header with Lua/Sol2 dependencies.
+    void* script_instance = nullptr; 
 };
 
 #endif

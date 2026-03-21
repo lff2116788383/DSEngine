@@ -5,6 +5,9 @@
 #include <box2d/box2d.h>
 #include <memory>
 
+// Forward declarations
+class PhysicsContactListener;
+
 class Physics2DSystem {
 public:
     Physics2DSystem();
@@ -12,9 +15,13 @@ public:
 
     void Init();
     void FixedUpdate(Phase1World& world, float fixed_delta_time);
+    
+    // Physics Queries
+    bool Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal);
 
 private:
     std::unique_ptr<b2World> physics_world_;
+    std::unique_ptr<PhysicsContactListener> contact_listener_;
     int velocity_iterations_ = 8;
     int position_iterations_ = 3;
 };

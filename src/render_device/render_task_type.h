@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/3/3.
 //
 
@@ -437,10 +437,18 @@ public:
     RenderTaskDeleteFBO(){
         render_command_=RenderCommand::DELETE_FBO;
     }
-    ~RenderTaskDeleteFBO(){
-    }
+    ~RenderTaskDeleteFBO(){}
 public:
     unsigned int fbo_handle_=0;//FBO句柄
+};
+
+/// 渲染 ImGui
+class RenderTaskRenderImGui: public RenderTaskBase{
+public:
+    RenderTaskRenderImGui(){
+        render_command_=RenderCommand::RENDER_IMGUI;
+    }
+    ~RenderTaskRenderImGui(){}
 };
 
 /// 特殊任务：帧结束标志，渲染线程收到这个任务后，刷新缓冲区，设置帧结束。
@@ -451,6 +459,5 @@ public:
     }
     ~RenderTaskEndFrame(){}
 };
-
 
 #endif //UNTITLED_RENDER_TASK_TYPE_H

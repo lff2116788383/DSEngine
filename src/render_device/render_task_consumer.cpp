@@ -1,15 +1,14 @@
-﻿//
+//
 // Created by captainchen on 2022/2/7.
 //
 
 #include "render_task_consumer.h"
 #include "render_task_consumer_base.h"
 
-RenderTaskConsumerBase* RenderTaskConsumer::instance_= nullptr;
-
+RenderTaskConsumerBase* RenderTaskConsumer::instance_=nullptr;
 
 void RenderTaskConsumer::Init(RenderTaskConsumerBase* instance) {
-    instance_ = instance;
+    instance_=instance;
     instance_->Init();
 }
 
@@ -18,5 +17,9 @@ RenderTaskConsumerBase* RenderTaskConsumer::Instance() {
 }
 
 void RenderTaskConsumer::Exit() {
-    instance_->Exit();
+    if(instance_!=nullptr){
+        instance_->Exit();
+        delete instance_;
+        instance_=nullptr;
+    }
 }

@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/2/7.
 //
 
@@ -139,6 +139,8 @@ private:
 
     /// 删除帧缓冲区对象(FBO)
     void DeleteFBO(RenderTaskBase* task_base);
+
+    void RenderImGui(RenderTaskBase* task_base);
 
     /// 结束一帧
     /// \param task_base

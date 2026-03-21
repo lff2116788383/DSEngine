@@ -2,6 +2,7 @@
 #define DSE_PHASE1_WORLD_H
 
 #include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <vector>
 #include <entt/entt.hpp>
@@ -18,11 +19,13 @@ public:
     void Clear();
 
     bool IsAlive(Entity entity) const;
+    size_t EntityCount() const;
 
     entt::registry& registry();
 
 private:
     entt::registry registry_;
+    size_t entity_count_ = 0;
 };
 
 #endif

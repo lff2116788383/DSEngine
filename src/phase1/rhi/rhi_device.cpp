@@ -4,6 +4,7 @@
 #include "utils/screen.h"
 #include <glad/gl.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 
 constexpr size_t MAX_SPRITES = 10000;
 constexpr size_t MAX_VERTICES = MAX_SPRITES * 4;
@@ -85,6 +86,11 @@ void main() {
     initialized_ = true;
 }
 
+void OpenGLCommandBuffer::SetCamera(const glm::mat4& view, const glm::mat4& projection) {
+    view_ = view;
+    projection_ = projection;
+}
+
 void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items) {
     draw_batch_cmds_.push_back({items});
 }
@@ -93,19 +99,15 @@ void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     clear_cmds_.push_back({color});
 }
 
-void OpenGLCommandBuffer::Execute() {
-    auto device = std::dynamic_pointer_cast<OpenGLRhiDevice>(rhi_);
-    if (!device) return;
-
-    // In a real implementation, we would store an ordered list of variants/commands
-    // and execute them in order. For now, we just execute clears then draws.
-    // The actual RhiDevice will handle the real GL calls.
+void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
+    if (!device) {
+        return;
+    }
     for (const auto& cmd : clear_cmds_) {
         device->RealClearColor(cmd.color);
     }
-    
     for (const auto& cmd : draw_batch_cmds_) {
-        device->RealSubmitSpriteBatch(cmd.items);
+        device->RealSubmitSpriteBatch(cmd.items, view_, projection_);
     }
     clear_cmds_.clear();
     draw_batch_cmds_.clear();
@@ -113,6 +115,7 @@ void OpenGLCommandBuffer::Execute() {
 
 void OpenGLRhiDevice::BeginFrame() {
     EnsureInitialized();
+    current_frame_stats_ = {};
 }
 
 std::shared_ptr<CommandBuffer> OpenGLRhiDevice::CreateCommandBuffer() {
@@ -140,21 +143,20 @@ void OpenGLRhiDevice::RealClearColor(const glm::vec4& color) {
     RenderTaskProducer::ProduceRenderTaskSetClearFlagAndClearColorBuffer(GL_COLOR_BUFFER_BIT, color.r, color.g, color.b, color.a);
 }
 
-void OpenGLRhiDevice::RealSubmitSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items) {
+void OpenGLRhiDevice::RealSubmitSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (items.empty()) {
         return;
     }
-    float aspect = Screen::aspect_ratio();
-    if (aspect <= 0.0f) {
-        aspect = 1.0f;
-    }
-    glm::mat4 projection = glm::ortho(-5.0f * aspect, 5.0f * aspect, -5.0f, 5.0f, -1.0f, 1.0f);
+    current_frame_stats_.sprite_count += static_cast<int>(items.size());
+
+    glm::mat4 vp = projection * view;
+    
     RenderTaskProducer::ProduceRenderTaskUseShaderProgram(shader_handle_);
     RenderTaskProducer::ProduceRenderTaskSetEnableState(GL_BLEND, true);
     RenderTaskProducer::ProduceRenderTaskSetBlenderFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     RenderTaskProducer::ProduceRenderTaskSetUniform1i(shader_handle_, "u_texture", 0);
     RenderTaskProducer::ProduceRenderTaskSetUniform3f(shader_handle_, "u_tint", glm::vec3(1.0f, 1.0f, 1.0f));
-    RenderTaskProducer::ProduceRenderTaskSetUniformMatrix4fv(shader_handle_, "u_vp", false, projection);
+    RenderTaskProducer::ProduceRenderTaskSetUniformMatrix4fv(shader_handle_, "u_vp", false, vp);
 
     std::vector<BatchVertex> batch_vertices;
     batch_vertices.reserve(MAX_VERTICES);
@@ -162,7 +164,12 @@ void OpenGLRhiDevice::RealSubmitSpriteBatch(const std::vector<Phase1SpriteDrawIt
     unsigned int current_texture = items[0].texture_handle == 0 ? white_texture_handle_ : items[0].texture_handle;
     
     auto flush_batch = [&]() {
-        if (batch_vertices.empty()) return;
+        if (batch_vertices.empty()) {
+            return;
+        }
+        int batch_sprites = static_cast<int>(batch_vertices.size() / 4);
+        current_frame_stats_.draw_calls += 1;
+        current_frame_stats_.max_batch_sprites = std::max(current_frame_stats_.max_batch_sprites, batch_sprites);
         
         RenderTaskProducer::ProduceRenderTaskUpdateVBOSubData(
             vbo_handle_,
@@ -224,5 +231,10 @@ void OpenGLRhiDevice::RealSubmitSpriteBatch(const std::vector<Phase1SpriteDrawIt
 }
 
 void OpenGLRhiDevice::EndFrame() {
+    last_frame_stats_ = current_frame_stats_;
     RenderTaskProducer::ProduceRenderTaskEndFrame();
+}
+
+const Phase1RenderStats& OpenGLRhiDevice::LastFrameStats() const {
+    return last_frame_stats_;
 }

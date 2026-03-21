@@ -1,5 +1,68 @@
 #include "phase1/systems/physics2d_system.h"
+#include "phase1/ecs/components_2d.h"
 #include <glm/gtx/quaternion.hpp>
+#include <iostream>
+
+// --- Contact Listener ---
+class PhysicsContactListener : public b2ContactListener {
+public:
+    PhysicsContactListener(Phase1World* world) : world_(world) {}
+
+    void BeginContact(b2Contact* contact) override {
+        b2Fixture* fixtureA = contact->GetFixtureA();
+        b2Fixture* fixtureB = contact->GetFixtureB();
+
+        Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
+        Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
+
+        if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
+            auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
+            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+                if (rbA.on_trigger_enter) rbA.on_trigger_enter(entityB);
+            } else {
+                if (rbA.on_collision_enter) rbA.on_collision_enter(entityB);
+            }
+        }
+
+        if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
+            auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
+            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+                if (rbB.on_trigger_enter) rbB.on_trigger_enter(entityA);
+            } else {
+                if (rbB.on_collision_enter) rbB.on_collision_enter(entityA);
+            }
+        }
+    }
+
+    void EndContact(b2Contact* contact) override {
+        b2Fixture* fixtureA = contact->GetFixtureA();
+        b2Fixture* fixtureB = contact->GetFixtureB();
+
+        Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
+        Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
+
+        if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
+            auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
+            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+                if (rbA.on_trigger_exit) rbA.on_trigger_exit(entityB);
+            } else {
+                if (rbA.on_collision_exit) rbA.on_collision_exit(entityB);
+            }
+        }
+
+        if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
+            auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
+            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+                if (rbB.on_trigger_exit) rbB.on_trigger_exit(entityA);
+            } else {
+                if (rbB.on_collision_exit) rbB.on_collision_exit(entityA);
+            }
+        }
+    }
+
+private:
+    Phase1World* world_;
+};
 
 Physics2DSystem::Physics2DSystem() {
 }
@@ -7,9 +70,11 @@ Physics2DSystem::Physics2DSystem() {
 Physics2DSystem::~Physics2DSystem() {
 }
 
-void Physics2DSystem::Init() {
+void Physics2DSystem::Init(Phase1World& world) {
     b2Vec2 gravity(0.0f, -9.81f);
     physics_world_ = std::make_unique<b2World>(gravity);
+    contact_listener_ = std::make_unique<PhysicsContactListener>(&world);
+    physics_world_->SetContactListener(contact_listener_.get());
 }
 
 void Physics2DSystem::FixedUpdate(Phase1World& world, float fixed_delta_time) {
@@ -90,4 +155,40 @@ void Physics2DSystem::FixedUpdate(Phase1World& world, float fixed_delta_time) {
             rb.velocity.y = velocity.y;
         }
     }
+}
+
+// Raycast Callback
+class SimpleRayCastCallback : public b2RayCastCallback {
+public:
+    Entity hit_entity = entt::null;
+    b2Vec2 hit_point;
+    b2Vec2 hit_normal;
+    float fraction = 1.0f;
+    bool hit = false;
+
+    float ReportFixture(b2Fixture* fixture, const b2Vec2& point, const b2Vec2& normal, float fraction) override {
+        this->hit = true;
+        this->hit_entity = (Entity)(uintptr_t)fixture->GetBody()->GetUserData().pointer;
+        this->hit_point = point;
+        this->hit_normal = normal;
+        this->fraction = fraction;
+        
+        // Return fraction to find closest hit
+        return fraction;
+    }
+};
+
+bool Physics2DSystem::Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal) {
+    if (!physics_world_) return false;
+
+    SimpleRayCastCallback callback;
+    physics_world_->RayCast(&callback, b2Vec2(start.x, start.y), b2Vec2(end.x, end.y));
+
+    if (callback.hit) {
+        out_entity = callback.hit_entity;
+        out_point = glm::vec2(callback.hit_point.x, callback.hit_point.y);
+        out_normal = glm::vec2(callback.hit_normal.x, callback.hit_normal.y);
+        return true;
+    }
+    return false;
 }

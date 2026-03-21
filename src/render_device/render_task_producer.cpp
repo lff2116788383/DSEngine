@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by captainchen on 2022/3/3.
 //
 
@@ -337,6 +337,13 @@ void RenderTaskProducer::ProduceRenderTaskDeleteFBO(int fbo_handle){
     CHECK_EXIT_RETURN
     RenderTaskDeleteFBO* task=new RenderTaskDeleteFBO();
     task->fbo_handle_=fbo_handle;
+    RenderTaskQueue::Push(task);
+}
+
+void RenderTaskProducer::ProduceRenderTaskRenderImGui() {
+    EASY_FUNCTION();
+    CHECK_EXIT_RETURN
+    RenderTaskRenderImGui* task=new RenderTaskRenderImGui();
     RenderTaskQueue::Push(task);
 }
 
