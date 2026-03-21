@@ -40,6 +40,14 @@ function createWindow() {
     return dsengine.pickEntity(x, y);
   });
 
+  ipcMain.handle('engine:createEntity', () => {
+    return dsengine.createEntity();
+  });
+
+  ipcMain.handle('engine:deleteEntity', (event, id) => {
+    return dsengine.deleteEntity(id);
+  });
+
   ipcMain.handle('engine:buildProject', (event, target) => {
     // We execute the build script directly from Node.js (main process)
     // rather than doing it in C++, so we can easily stream output if needed.

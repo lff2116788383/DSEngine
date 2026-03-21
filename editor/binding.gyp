@@ -10,8 +10,8 @@
         "<!@(node -p \"require('node-addon-api').include\")",
         "../src",
         "../depends",
+        "../depends/entt",
         "../depends/miniaudio",
-        "../build_p1/_deps/entt-src/src",
         "../depends/glm"
       ],
       "dependencies": [

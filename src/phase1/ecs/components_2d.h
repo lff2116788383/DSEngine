@@ -8,6 +8,10 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <entt/entt.hpp>
+
+using Entity = entt::entity;
+
 // We use forward declarations or minimal includes for Box2D to keep headers clean
 class b2Body;
 class b2Fixture;

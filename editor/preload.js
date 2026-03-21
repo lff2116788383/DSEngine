@@ -19,5 +19,7 @@ window.electronAPI = {
   getEntities: () => ipcRenderer.invoke('engine:getEntities'),
   updateEntityTransform: (id, x, y, z) => ipcRenderer.invoke('engine:updateEntityTransform', id, x, y, z),
   pickEntity: (x, y) => ipcRenderer.invoke('engine:pickEntity', x, y),
+  createEntity: () => ipcRenderer.invoke('engine:createEntity'),
+  deleteEntity: (id) => ipcRenderer.invoke('engine:deleteEntity', id),
   buildProject: (target) => ipcRenderer.invoke('engine:buildProject', target)
 };

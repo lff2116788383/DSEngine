@@ -215,6 +215,36 @@ Napi::Value PickEntity(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, picked_id);
 }
 
+Napi::Value CreateEntity(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!g_world) {
+        return Napi::Number::New(env, -1);
+    }
+    
+    Entity e = g_world->CreateEntity();
+    // Give it a default transform
+    g_world->registry().emplace<TransformComponent>(e, glm::vec3(0, 0, 0));
+    
+    return Napi::Number::New(env, (uint32_t)e);
+}
+
+Napi::Value DeleteEntity(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !g_world) {
+        return Napi::Boolean::New(env, false);
+    }
+    
+    uint32_t id = info[0].As<Napi::Number>().Uint32Value();
+    Entity entity = (Entity)id;
+    
+    if (g_world->registry().valid(entity)) {
+        g_world->DestroyEntity(entity);
+        return Napi::Boolean::New(env, true);
+    }
+    
+    return Napi::Boolean::New(env, false);
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "getVersion"), Napi::Function::New(env, GetEngineVersion));
     exports.Set(Napi::String::New(env, "initEngine"), Napi::Function::New(env, InitEngine));
@@ -222,6 +252,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "getEntities"), Napi::Function::New(env, GetEntities));
     exports.Set(Napi::String::New(env, "updateEntityTransform"), Napi::Function::New(env, UpdateEntityTransform));
     exports.Set(Napi::String::New(env, "pickEntity"), Napi::Function::New(env, PickEntity));
+    exports.Set(Napi::String::New(env, "createEntity"), Napi::Function::New(env, CreateEntity));
+    exports.Set(Napi::String::New(env, "deleteEntity"), Napi::Function::New(env, DeleteEntity));
     exports.Set(Napi::String::New(env, "buildProject"), Napi::Function::New(env, BuildProject));
     return exports;
 }
