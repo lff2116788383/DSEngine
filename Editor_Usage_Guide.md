@@ -1,105 +1,232 @@
-# DSEngine 编辑器使用指南 (Electron + React 架构)
+# DSEngine 编辑器使用指南（Phase 1）
 
-本文档介绍了如何编译、运行和使用 DSEngine 的新版可视化编辑器。新版编辑器抛弃了传统的 ImGui，采用了现代化的 `Electron + React + Node-API(C++)` 架构，支持所见即所得 (WYSIWYG) 的场景编辑和多平台一键打包。
+本文档对应当前主线编辑器实现（`Electron + React + Node-API(C++)`），覆盖运行、功能、发布流水线与常见排障。  
+当前编辑器已与 Phase 1 Runtime 世界打通，不再依赖早期 mock 视口流程。
 
 ---
 
 ## 1. 环境准备
 
-在编译和运行编辑器之前，请确保您的开发环境已安装以下工具：
+- Node.js（推荐 v16+）
+- npm
+- CMake（v3.15+）
+- C++ 编译器
+  - Windows: Visual Studio 2022
+  - macOS: Xcode
+  - Linux: GCC/Clang
+- node-gyp（建议全局安装）
 
-*   **Node.js** (推荐 v16 或更高版本): 用于运行 Electron 和 React 的打包工具。
-*   **npm** (随 Node.js 安装): 用于管理前端和 Node-API 依赖。
-*   **CMake** (v3.15+): 用于构建底层 C++ 引擎代码和 Node-API 桥接层。
-*   **C++ 编译器**:
-    *   Windows: Visual Studio 2022 (MSVC)
-    *   macOS: Xcode (Clang)
-    *   Linux: GCC/Clang
-*   **node-gyp**: 用于编译 C++ Node-API 原生模块。通常可以通过 `npm install -g node-gyp` 全局安装。
+```bash
+npm install -g node-gyp
+```
 
 ---
 
-## 2. 编译与运行
+## 2. 编译与启动
 
-编辑器的所有代码均位于项目根目录的 `editor/` 文件夹下。
+编辑器代码位于 `editor/` 目录。
 
-### 第一步：安装依赖
-
-打开终端，进入 `editor` 目录，安装所需的 npm 依赖包：
+### 2.1 安装依赖
 
 ```bash
 cd editor
 npm install
 ```
-*此步骤会自动安装 Electron, React, Webpack 以及 `node-addon-api` 等依赖。*
 
-### 第二步：编译 C++ 引擎桥接模块 (Node-API)
-
-编辑器需要通过 Node-API 与 DSEngine 的 C++ 核心进行通信。在 `editor` 目录下执行以下命令编译 C++ 原生模块 (`.node` 文件)：
+### 2.2 构建桥接模块（Node-API）
 
 ```bash
 npx node-gyp configure
 npx node-gyp build
 ```
-*编译成功后，会在 `editor/build/Release/` 目录下生成 `dsengine_bridge.node` 文件。*
 
-### 第三步：启动编辑器
+成功后生成：`editor/build/Release/dsengine_bridge.node`。
 
-前端 React 代码使用 Webpack 进行打包，随后由 Electron 加载。您可以通过以下命令一键打包并启动编辑器：
+### 2.3 启动编辑器
 
 ```bash
 npm start
 ```
-*这会先执行 `webpack` 编译 TypeScript/React 代码到 `dist/bundle.js`，然后启动 Electron 窗口。*
+
+该命令会先执行 `webpack`，再启动 Electron。
 
 ---
 
-## 3. 编辑器界面与功能使用
+## 3. 主要功能
 
-启动后，您将看到一个现代化的深色主题界面，主要包含以下几个区域：
+### 3.1 左侧：Scene + FileSystem
 
-### 3.1 层次结构面板 (Hierarchy) - 左侧
-*   **功能**：显示当前场景中所有的实体 (Entity) 列表。
-*   **交互**：点击列表中的任意项，可以选中该实体。选中后，实体会高亮显示，并且可以在中间的视口中对其进行操作。
+- **Scene**
+  - 展示实体列表（Hierarchy）
+  - 支持创建实体（`+ Node` / `+ Instance`）
+  - 支持删除实体（每行 `×`）
+- **FileSystem / 资源**
+  - 导入纹理（`Import Texture`）
+  - 浏览已导入纹理并选择
+  - 材质实例管理
+    - 创建材质实例（名称 + Shader Variant）
+    - 刷新材质列表
+    - 回放材质热更新事件（`Replay Material Hot Updates`）
+    - 编辑材质参数（Tint / UV / Blend）
+    - 应用材质到实体
 
-### 3.2 场景视口 (Viewport) - 中间
-*   **功能**：通过高性能的 C++ 内存共享机制，以 60FPS 实时渲染游戏画面。目前以色块代表实体。
-*   **所见即所得 (WYSIWYG)**：
-    *   **点选 (Picking)**：直接在画布上点击代表实体的色块，即可在左侧 Hierarchy 中自动选中该实体。
-    *   **拖拽 (Gizmo)**：按住鼠标左键并拖拽，可以实时改变实体在世界空间中的坐标 (`TransformComponent.position`)。松开鼠标后，C++ 底层的 ECS 数据会被同步修改。
+### 3.2 中间：Viewport（实时视口）
 
-### 3.3 检查器与工具面板 (Inspector & Tools) - 右侧
-面板包含三个选项卡：
+- 通过桥接层持续拉取帧缓冲并渲染到 `<canvas>`
+- 支持点击拾取（Picking）并同步选中实体
+- 支持拖拽移动实体位置（Transform）
+- 顶部显示帧源与尺寸（`source | width x height`）
+- 视口叠加实时统计
+  - 帧桥接：FrameId、Latency、Copy、Throughput、Dropped
+  - 渲染统计：DrawCalls、MaxBatch、Sprites、Entities、Physics
 
-*   **Inspector (属性面板)**:
-    *   显示当前选中实体的详细信息（ID、名称）。
-    *   可以实时查看和手动修改实体的 `Transform` 坐标 (X, Y, Z)。修改输入框的值会立即同步到视口中。
-*   **Particle (粒子编辑器)**:
-    *   用于调节粒子系统参数的可视化界面。
-    *   目前预留了参数接口，后续可连接至 C++ 的 `ParticleEmitterComponent` 实现特效的实时预览。
-*   **Build (发布流水线)**:
-    *   提供了一键将游戏打包为可执行文件的功能。
-    *   在下拉菜单中选择目标平台（目前支持 `win64`, `mac`, `wasm`）。
-    *   点击 **"Build Now"** 按钮。编辑器会调用后端的 Node.js 脚本 (`scripts/build_pipeline.js`)，自动执行 CMake 编译，并将 `example/data` 下的游戏资产拷贝到生成的 Release 目录中。
-    *   打包完成后，您可以在项目根目录下的 `build_export_win64/Release/` (以 Windows 为例) 中找到独立运行的游戏可执行文件。
+### 3.3 右侧：Inspector / Node / Build
+
+- **Inspector**
+  - 展示实体基础信息与 Transform
+  - 展示 SpriteRenderer 关键字段（Texture / Variant / Blend / Material）
+  - 支持 `Apply To Entity`（贴图）与 `Apply Material`（材质）
+- **Node**
+  - 节点信号示例面板（用于后续节点工作流扩展）
+- **Build**
+  - 选择目标平台（`win64` / `mac` / `wasm`）
+  - 一键导出（`Export Project`）
+  - 后端调用 `editor/scripts/build_pipeline.js`
 
 ---
 
-## 4. 架构简介 (写给开发者)
+## 4. 发布流水线与报告
 
-如果您希望为编辑器贡献代码，请了解以下基础架构：
+编辑器 Build 页与命令行共用同一发布脚本：`editor/scripts/build_pipeline.js`。
 
-*   **前端 UI (`editor/src/components/`)**: 使用 React + TypeScript 编写，负责界面渲染和状态管理。
-*   **IPC 通信 (`editor/preload.js` & `editor/main.js`)**: 采用 Context Isolation 策略，React 前端不能直接调用 C++，而是通过 `window.electronAPI` (在 `preload.js` 中定义) 发送 IPC 消息给 Electron 主进程。
-*   **C++ 桥接层 (`editor/src/bridge/dsengine_bridge.cpp`)**: 使用 `node-addon-api` 编写。它接收来自主进程的调用，操作 `Phase1World` (EnTT ECS 注册表)，并将渲染结果（FrameBuffer）通过共享内存直接传回给 JS 的 `<canvas>` 渲染。
+### 4.1 默认导出
 
-## 5. 常见问题 (FAQ)
+```bash
+npm run pipeline:export:win64
+```
 
-**Q: 运行 `npm start` 报错，提示找不到 `dsengine_bridge.node`？**
-A: 请确保您已经执行了 `npx node-gyp build` 并且没有编译错误。检查 `editor/build/Release/` 目录下是否生成了该文件。
+### 4.2 严格模式导出（含告警阈值）
 
-**Q: 点击 "Build Now" 后没有反应？**
-A: 打包过程是在后台异步执行的。您可以查看启动编辑器的终端控制台，里面会输出详细的 CMake 编译日志和资产拷贝状态。
+```bash
+npm run pipeline:export:win64:strict
+```
 
-**Q: 视口 (Viewport) 是黑屏的？**
-A: 确保 C++ 引擎桥接层成功初始化了 `Phase1World`。目前视口中渲染的是彩色的小方块，如果没有显示，可能是桥接层的 `MockEngineLoop` 线程未正确启动。
+严格模式默认会对迁移失败项做阈值拦截，超阈值即失败退出。
+
+### 4.3 迁移报告产物
+
+导出后在 `build_export_<target>/reports/` 可见：
+
+- `scene_schema_migration_report.json`
+- `scene_schema_migration_trend.json`
+- `scene_schema_migration_report.html`
+- `scene_schema_migration_dashboard.json`
+- `scene_schema_migration_dashboard.md`
+
+---
+
+## 5. 开发者接口摘要
+
+- 前端 UI：`editor/src/components/EditorApp.tsx`
+- IPC 暴露：`editor/preload.js`
+- IPC 主进程转发：`editor/main.js`
+- C++ 桥接：`editor/src/bridge/dsengine_bridge.cpp`
+
+前端通过 `window.electronAPI` 调用核心能力，包括：
+
+- 世界与实体：`initEngine / getEntities / createEntity / deleteEntity / pickEntity / updateEntityTransform / tickEngine`
+- 视口帧：`getFrameBuffer / getFrameInfo / getFrameBridgeStats / pushExternalFrame / clearExternalFrame`
+- 资源与材质：`importTexture / listImportedTextures / applyTextureToEntity / listShaderVariants / createMaterialInstance / listMaterialInstances / updateMaterialInstance / applyMaterialToEntity`
+- 材质热更新：`listMaterialHotUpdateEvents / replayMaterialHotUpdates / clearMaterialHotUpdateEvents`
+- 发布：`buildProject`
+
+---
+
+## 6. QA 验收清单
+
+建议按以下顺序执行，避免前置条件缺失导致误判。
+
+### 6.0 结果记录模板（通过/失败/备注）
+
+每条验收项可按下表记录，建议一项一行：
+
+| 验收项 | 通过 | 失败 | 备注 |
+|---|---|---|---|
+| 示例：在 `editor/` 执行 `npm install` | ☐ | ☐ |  |
+| 示例：视口显示 `source | width x height` | ☐ | ☐ |  |
+| 示例：`Export Project` 成功生成产物 | ☐ | ☐ |  |
+
+复制模板（可重复粘贴）：
+
+| 验收项 | 通过 | 失败 | 备注 |
+|---|---|---|---|
+|  | ☐ | ☐ |  |
+|  | ☐ | ☐ |  |
+|  | ☐ | ☐ |  |
+
+### 6.1 启动与基础连通
+
+- [ ] 在 `editor/` 执行 `npm install`
+- [ ] 在 `editor/` 执行 `npx node-gyp configure && npx node-gyp build`
+- [ ] 在 `editor/` 执行 `npm start` 并成功打开编辑器窗口
+- [ ] 视口左上角能看到 `source | width x height` 信息
+- [ ] Output 面板无持续刷新的错误日志
+
+### 6.2 实体与视口交互
+
+- [ ] 左侧 Scene 列表能显示实体
+- [ ] 点击实体后，Inspector 正确显示该实体信息
+- [ ] 在视口点击实体，Scene 列表跟随切换选中项（Picking 生效）
+- [ ] 在视口拖拽实体后，位置变化可见，且 Inspector 中 Position 同步变化
+- [ ] 使用 `+ Node` 可创建实体，使用行内 `×` 可删除实体
+
+### 6.3 纹理与材质链路
+
+- [ ] `Import Texture` 可导入一张纹理并显示在 Imported Textures 列表
+- [ ] 选中实体后，`Apply To Entity` 可将贴图应用到实体
+- [ ] 可创建材质实例（名称 + Shader Variant）
+- [ ] 材质列表刷新后能看到新建材质
+- [ ] 编辑 Tint / UV / Blend 并执行 `Update Material Params` 后无报错
+- [ ] 执行 `Apply Material` 后实体渲染结果有可见反馈
+- [ ] `Replay Material Hot Updates` 执行成功并输出回放日志
+
+### 6.4 统计与性能观测
+
+- [ ] 视口叠加信息持续刷新：FrameId / Latency / Copy / BW / Drop
+- [ ] 渲染统计可见：DrawCalls / MaxBatch / Sprites / Entities / Physics
+- [ ] 执行实体增删和材质变更后，统计值变化符合预期
+
+### 6.5 发布流水线与报告
+
+- [ ] 在 Build 页选择 `win64` 并执行 `Export Project`
+- [ ] 可在终端看到 `build_pipeline.js` 的构建输出
+- [ ] 生成目录存在：`build_export_win64/Release/`
+- [ ] 报告目录存在：`build_export_win64/reports/`
+- [ ] 报告文件完整：
+  - [ ] `scene_schema_migration_report.json`
+  - [ ] `scene_schema_migration_trend.json`
+  - [ ] `scene_schema_migration_report.html`
+  - [ ] `scene_schema_migration_dashboard.json`
+  - [ ] `scene_schema_migration_dashboard.md`
+
+### 6.6 严格模式（可选）
+
+- [ ] 执行 `npm run pipeline:export:win64:strict`
+- [ ] 在阈值未超限时流程成功退出
+- [ ] 若人为制造失败样例，流程会按阈值策略中断并输出告警
+
+---
+
+## 7. 常见问题
+
+**Q1: 启动时报错找不到 `dsengine_bridge.node`？**  
+A: 在 `editor/` 下先执行 `npx node-gyp configure && npx node-gyp build`，确认 `editor/build/Release/dsengine_bridge.node` 存在。
+
+**Q2: 视口黑屏或无更新？**  
+A: 先检查 `engine:init` 是否成功，再检查桥接接口是否能返回 `getFrameInfo/getFrameBuffer`。若运行时引擎进程未启动，`source` 可能停留在桥接路径或无有效帧。
+
+**Q3: Build 点击后没有可执行产物？**  
+A: 查看 Electron 主进程控制台中 `build_pipeline.js` 输出；确认 CMake 生成器、编译器和目标平台工具链可用。
+
+**Q4: 材质改了但实体没变化？**  
+A: 确认该实体已绑定对应 `material_instance_id`，并检查材质参数是否已 `Update Material Params` 后再 `Apply Material` 到实体。

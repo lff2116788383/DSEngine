@@ -101,6 +101,7 @@ void Physics2DSystem::FixedUpdate(Phase1World& world, float fixed_delta_time) {
             body_def.fixedRotation = rb.fixed_rotation;
             
             b2Body* body = physics_world_->CreateBody(&body_def);
+            body->GetUserData().pointer = static_cast<uintptr_t>(entity);
             rb.runtime_body = body;
 
             // Check if it has a collider

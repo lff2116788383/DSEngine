@@ -9,8 +9,8 @@
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
         "../src",
+        "../build/_deps/entt-src/single_include",
         "../depends",
-        "../depends/entt",
         "../depends/miniaudio",
         "../depends/glm"
       ],

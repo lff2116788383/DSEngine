@@ -7,8 +7,25 @@ declare global {
       getEngineVersion: () => Promise<string>;
       initEngine: () => Promise<any>;
       getFrameBuffer: () => Promise<Uint8Array>;
+      getFrameInfo: () => Promise<{ width: number, height: number, source: string }>;
+      pushExternalFrame: (frameBuffer: Uint8Array, width: number, height: number) => Promise<boolean>;
+      clearExternalFrame: () => Promise<boolean>;
       getEntities: () => Promise<any[]>;
       updateEntityTransform: (id: number, x: number, y: number, z: number) => Promise<boolean>;
+      tickEngine: (deltaTime: number) => Promise<boolean>;
+      importTexture: (filePath: string) => Promise<{ success: boolean, handle?: number, path?: string, error?: string }>;
+      listImportedTextures: () => Promise<TextureAsset[]>;
+      applyTextureToEntity: (entityId: number, textureHandle: number) => Promise<boolean>;
+      listShaderVariants: () => Promise<string[]>;
+      createMaterialInstance: (name: string, shaderVariant: string, textureHandle: number) => Promise<{ success: boolean, id?: number, error?: string }>;
+      listMaterialInstances: () => Promise<MaterialInstance[]>;
+      updateMaterialInstance: (materialId: number, payload: any) => Promise<boolean>;
+      applyMaterialToEntity: (entityId: number, materialId: number) => Promise<boolean>;
+      listMaterialHotUpdateEvents: () => Promise<Array<{ sequence: number, materialId: number, shaderVariant: string, blendMode: number, textureHandle: number }>>;
+      clearMaterialHotUpdateEvents: () => Promise<boolean>;
+      replayMaterialHotUpdates: (maxSequence?: number) => Promise<{ success: boolean, applied: number }>;
+      getFrameBridgeStats: () => Promise<FrameBridgeStats>;
+      pickTextureFile: () => Promise<string>;
       pickEntity: (x: number, y: number) => Promise<number>;
       createEntity: () => Promise<number>;
       deleteEntity: (id: number) => Promise<boolean>;
@@ -21,7 +38,40 @@ interface EntityData {
   id: number;
   name: string;
   position: { x: number, y: number, z: number };
+  textureHandle?: number;
+  materialInstanceId?: number;
+  shaderVariant?: string;
+  blendMode?: number;
+  uv?: [number, number, number, number];
   has_particle?: boolean;
+}
+
+interface TextureAsset {
+  handle: number;
+  path: string;
+}
+
+interface MaterialInstance {
+  id: number;
+  name: string;
+  shaderVariant: string;
+  blendMode: number;
+  textureHandle: number;
+  tint: [number, number, number, number];
+  uv: [number, number, number, number];
+}
+
+interface FrameBridgeStats {
+  copyMs: number;
+  latencyMs: number;
+  throughputMBps: number;
+  frameId: number;
+  droppedFrames: number;
+  drawCalls: number;
+  maxBatchSprites: number;
+  spriteCount: number;
+  entityCount: number;
+  physicsBodies: number;
 }
 
 // Godot-like Theme Constants
@@ -48,10 +98,43 @@ export const EditorApp: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'move' | 'rotate' | 'scale'>('move');
   const [outputLogs, setOutputLogs] = useState<string[]>(['Engine initialized. Bridge connected.']);
+  const [frameInfo, setFrameInfo] = useState<{ width: number, height: number, source: string }>({ width: 800, height: 600, source: 'bridge' });
+  const [importedTextures, setImportedTextures] = useState<TextureAsset[]>([]);
+  const [selectedTextureHandle, setSelectedTextureHandle] = useState<number>(0);
+  const [shaderVariants, setShaderVariants] = useState<string[]>([]);
+  const [materialInstances, setMaterialInstances] = useState<MaterialInstance[]>([]);
+  const [selectedMaterialId, setSelectedMaterialId] = useState<number>(0);
+  const [newMaterialName, setNewMaterialName] = useState<string>('Mat_Instance');
+  const [newMaterialVariant, setNewMaterialVariant] = useState<string>('SPRITE_UNLIT');
+  const [materialTint, setMaterialTint] = useState<[number, number, number, number]>([1, 1, 1, 1]);
+  const [materialUv, setMaterialUv] = useState<[number, number, number, number]>([0, 0, 1, 1]);
+  const [materialBlendMode, setMaterialBlendMode] = useState<number>(0);
+  const [frameStats, setFrameStats] = useState<FrameBridgeStats>({ copyMs: 0, latencyMs: 0, throughputMBps: 0, frameId: 0, droppedFrames: 0, drawCalls: 0, maxBatchSprites: 0, spriteCount: 0, entityCount: 0, physicsBodies: 0 });
 
   // Gizmo State
   const isDragging = useRef(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
+  const isPlayingRef = useRef(isPlaying);
+  const lastFrameTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (selectedEntity?.materialInstanceId) {
+      setSelectedMaterialId(selectedEntity.materialInstanceId);
+    }
+  }, [selectedEntity]);
+
+  useEffect(() => {
+    const mat = materialInstances.find(m => m.id === selectedMaterialId);
+    if (mat) {
+      setMaterialTint([mat.tint[0], mat.tint[1], mat.tint[2], mat.tint[3]]);
+      setMaterialUv([mat.uv[0], mat.uv[1], mat.uv[2], mat.uv[3]]);
+      setMaterialBlendMode(mat.blendMode);
+    }
+  }, [selectedMaterialId, materialInstances]);
 
   useEffect(() => {
     // Check if electronAPI is available and call the C++ Addon
@@ -77,21 +160,64 @@ export const EditorApp: React.FC = () => {
             setOutputLogs(prev => [...prev, `Error loading entities: ${err.message}`]);
           });
         }
+        if (window.electronAPI.listImportedTextures) {
+          window.electronAPI.listImportedTextures().then((textures) => {
+            setImportedTextures(textures);
+            if (textures.length > 0) {
+              setSelectedTextureHandle(textures[0].handle);
+            }
+          });
+        }
+        if (window.electronAPI.listShaderVariants) {
+          window.electronAPI.listShaderVariants().then((variants) => {
+            setShaderVariants(variants);
+            if (variants.length > 0) {
+              setNewMaterialVariant(variants[0]);
+            }
+          });
+        }
+        if (window.electronAPI.listMaterialInstances) {
+          window.electronAPI.listMaterialInstances().then((materials) => {
+            setMaterialInstances(materials);
+            if (materials.length > 0) {
+              setSelectedMaterialId(materials[0].id);
+            }
+          });
+        }
         
         // Start render loop
         let animationFrameId: number;
         
-        const renderLoop = async () => {
+        const renderLoop = async (timestamp?: number) => {
           if (canvasRef.current && window.electronAPI) {
             try {
+              if (isPlayingRef.current && window.electronAPI.tickEngine) {
+                const currentTime = timestamp ?? performance.now();
+                if (lastFrameTimeRef.current === 0) {
+                  lastFrameTimeRef.current = currentTime;
+                }
+                const deltaTime = Math.min(0.05, Math.max(0.0, (currentTime - lastFrameTimeRef.current) / 1000.0));
+                lastFrameTimeRef.current = currentTime;
+                await window.electronAPI.tickEngine(deltaTime);
+              } else if (timestamp) {
+                lastFrameTimeRef.current = timestamp;
+              }
               const buffer = await window.electronAPI.getFrameBuffer();
+              const latestFrameInfo = await window.electronAPI.getFrameInfo();
+              const stats = await window.electronAPI.getFrameBridgeStats();
+              setFrameStats(stats);
+              setFrameInfo(latestFrameInfo);
               const ctx = canvasRef.current.getContext('2d');
               if (ctx && buffer) {
-                // Create ImageData from the Uint8Array buffer
+                const frameView = new Uint8ClampedArray(
+                  buffer.buffer as ArrayBuffer,
+                  buffer.byteOffset,
+                  buffer.byteLength
+                );
                 const imageData = new ImageData(
-                  new Uint8ClampedArray(buffer),
-                  800, // FRAME_WIDTH
-                  600  // FRAME_HEIGHT
+                  frameView,
+                  latestFrameInfo.width,
+                  latestFrameInfo.height
                 );
                 ctx.putImageData(imageData, 0, 0);
               }
@@ -204,6 +330,38 @@ export const EditorApp: React.FC = () => {
       try {
         const data = await window.electronAPI.getEntities();
         setEntities(data);
+        if (selectedEntity) {
+          const latestSelected = data.find((ent: EntityData) => ent.id === selectedEntity.id) || null;
+          setSelectedEntity(latestSelected);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const refreshImportedTextures = async () => {
+    if (window.electronAPI && window.electronAPI.listImportedTextures) {
+      try {
+        const textures = await window.electronAPI.listImportedTextures();
+        setImportedTextures(textures);
+        if (textures.length > 0 && !textures.find(tex => tex.handle === selectedTextureHandle)) {
+          setSelectedTextureHandle(textures[0].handle);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const refreshMaterialInstances = async () => {
+    if (window.electronAPI && window.electronAPI.listMaterialInstances) {
+      try {
+        const materials = await window.electronAPI.listMaterialInstances();
+        setMaterialInstances(materials);
+        if (materials.length > 0 && !materials.find(m => m.id === selectedMaterialId)) {
+          setSelectedMaterialId(materials[0].id);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -256,6 +414,101 @@ export const EditorApp: React.FC = () => {
     const newPlayState = !isPlaying;
     setIsPlaying(newPlayState);
     logMessage(newPlayState ? "Starting game preview..." : "Stopped game preview.");
+  };
+
+  const handleImportTexture = async () => {
+    if (!window.electronAPI) {
+      return;
+    }
+    const filePath = await window.electronAPI.pickTextureFile();
+    if (!filePath) {
+      return;
+    }
+    const result = await window.electronAPI.importTexture(filePath);
+    if (result.success && result.handle) {
+      logMessage(`Imported texture: ${filePath} -> handle ${result.handle}`);
+      await refreshImportedTextures();
+      setSelectedTextureHandle(result.handle);
+    } else {
+      logMessage(`Import texture failed: ${result.error ?? 'unknown_error'}`);
+    }
+  };
+
+  const handleApplyTexture = async () => {
+    if (!selectedEntity || !selectedTextureHandle || !window.electronAPI) {
+      return;
+    }
+    const success = await window.electronAPI.applyTextureToEntity(selectedEntity.id, selectedTextureHandle);
+    if (success) {
+      logMessage(`Applied texture ${selectedTextureHandle} to entity ${selectedEntity.name}`);
+      await refreshEntities();
+    } else {
+      logMessage('Apply texture failed');
+    }
+  };
+
+  const handleCreateMaterial = async () => {
+    if (!window.electronAPI || !newMaterialName.trim()) {
+      return;
+    }
+    const result = await window.electronAPI.createMaterialInstance(newMaterialName.trim(), newMaterialVariant, selectedTextureHandle);
+    if (result.success && result.id) {
+      logMessage(`Created material #${result.id} (${newMaterialVariant})`);
+      await refreshMaterialInstances();
+      setSelectedMaterialId(result.id);
+    } else {
+      logMessage(`Create material failed: ${result.error ?? 'unknown_error'}`);
+    }
+  };
+
+  const handleUpdateMaterial = async () => {
+    if (!selectedMaterialId || !window.electronAPI) {
+      return;
+    }
+    const current = materialInstances.find(m => m.id === selectedMaterialId);
+    if (!current) {
+      return;
+    }
+    const success = await window.electronAPI.updateMaterialInstance(selectedMaterialId, {
+      shaderVariant: current.shaderVariant,
+      textureHandle: current.textureHandle,
+      blendMode: materialBlendMode,
+      tint: materialTint,
+      uv: materialUv
+    });
+    if (success) {
+      logMessage(`Updated material ${selectedMaterialId}`);
+      await refreshMaterialInstances();
+    } else {
+      logMessage(`Update material ${selectedMaterialId} failed`);
+    }
+  };
+
+  const handleApplyMaterial = async () => {
+    if (!selectedEntity || !selectedMaterialId || !window.electronAPI) {
+      return;
+    }
+    const success = await window.electronAPI.applyMaterialToEntity(selectedEntity.id, selectedMaterialId);
+    if (success) {
+      logMessage(`Applied material ${selectedMaterialId} to entity ${selectedEntity.name}`);
+      await refreshEntities();
+    } else {
+      logMessage('Apply material failed');
+    }
+  };
+
+  const handleReplayMaterialHotUpdates = async () => {
+    if (!window.electronAPI || !window.electronAPI.replayMaterialHotUpdates) {
+      return;
+    }
+    const result = await window.electronAPI.replayMaterialHotUpdates();
+    if (result?.success) {
+      logMessage(`Replayed material hot updates: ${result.applied}`);
+      await refreshMaterialInstances();
+      await refreshEntities();
+    } else {
+      logMessage('Replay material hot updates failed');
+    }
   };
 
   return (
@@ -349,6 +602,89 @@ export const EditorApp: React.FC = () => {
               FileSystem
             </div>
             <div style={{ padding: '10px', color: theme.textMuted, overflowY: 'auto', flex: 1 }}>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <button onClick={handleImportTexture} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>Import Texture</button>
+              </div>
+              {importedTextures.length > 0 && (
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ color: theme.textMain, marginBottom: '4px' }}>Imported Textures</div>
+                  {importedTextures.map(texture => (
+                    <div key={texture.handle} style={{ padding: '3px 4px', borderRadius: '3px', background: selectedTextureHandle === texture.handle ? theme.accentHover : 'transparent', cursor: 'pointer', color: selectedTextureHandle === texture.handle ? '#fff' : theme.textMain }} onClick={() => setSelectedTextureHandle(texture.handle)}>
+                      #{texture.handle} {texture.path.split(/[/\\]/).pop()}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ borderTop: `1px solid ${theme.border}`, margin: '8px 0' }}></div>
+              <div style={{ color: theme.textMain, marginBottom: '4px' }}>Material Instances</div>
+              <input
+                type="text"
+                value={newMaterialName}
+                onChange={(e) => setNewMaterialName(e.target.value)}
+                style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
+              />
+              <select
+                value={newMaterialVariant}
+                onChange={(e) => setNewMaterialVariant(e.target.value)}
+                style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
+              >
+                {shaderVariants.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <button onClick={handleCreateMaterial} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Create Material</button>
+              <button onClick={refreshMaterialInstances} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Refresh Materials</button>
+              <button onClick={handleReplayMaterialHotUpdates} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Replay Material Hot Updates</button>
+              {materialInstances.map(mat => (
+                <div key={mat.id} style={{ padding: '3px 4px', borderRadius: '3px', background: selectedMaterialId === mat.id ? theme.accentHover : 'transparent', cursor: 'pointer', color: selectedMaterialId === mat.id ? '#fff' : theme.textMain }} onClick={() => setSelectedMaterialId(mat.id)}>
+                  #{mat.id} {mat.name} ({mat.shaderVariant})
+                </div>
+              ))}
+              {selectedMaterialId > 0 && (
+                <div style={{ marginTop: '8px', borderTop: `1px solid ${theme.border}`, paddingTop: '8px' }}>
+                  <div style={{ color: theme.textMain, marginBottom: '4px' }}>Edit Material #{selectedMaterialId}</div>
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <input
+                        key={`tint-${i}`}
+                        type="number"
+                        step="0.01"
+                        value={materialTint[i]}
+                        onChange={(e) => {
+                          const next: [number, number, number, number] = [...materialTint] as [number, number, number, number];
+                          next[i as 0 | 1 | 2 | 3] = Number(e.target.value);
+                          setMaterialTint(next);
+                        }}
+                        style={{ width: '25%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <input
+                        key={`uv-${i}`}
+                        type="number"
+                        step="0.01"
+                        value={materialUv[i]}
+                        onChange={(e) => {
+                          const next: [number, number, number, number] = [...materialUv] as [number, number, number, number];
+                          next[i as 0 | 1 | 2 | 3] = Number(e.target.value);
+                          setMaterialUv(next);
+                        }}
+                        style={{ width: '25%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}
+                      />
+                    ))}
+                  </div>
+                  <select
+                    value={materialBlendMode}
+                    onChange={(e) => setMaterialBlendMode(Number(e.target.value))}
+                    style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
+                  >
+                    <option value={0}>Alpha</option>
+                    <option value={1}>Additive</option>
+                    <option value={2}>Multiply</option>
+                  </select>
+                  <button onClick={handleUpdateMaterial} style={{ width: '100%', background: theme.accent, color: '#fff', border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>Update Material Params</button>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened res://")}>📁 res://</div>
               <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened scripts folder")}>📁 scripts</div>
               <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened scenes folder")}>📁 scenes</div>
@@ -373,7 +709,13 @@ export const EditorApp: React.FC = () => {
           {/* Viewport Canvas */}
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: 10, left: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '12px', pointerEvents: 'none' }}>
-              Perspective | Top
+              Perspective | Top | {frameInfo.source} | {frameInfo.width}x{frameInfo.height}
+            </div>
+            <div style={{ position: 'absolute', top: 36, left: 10, color: 'rgba(255,255,255,0.8)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', pointerEvents: 'none' }}>
+              Frame#{frameStats.frameId} | Lat {frameStats.latencyMs.toFixed(2)}ms | Copy {frameStats.copyMs.toFixed(2)}ms | BW {frameStats.throughputMBps.toFixed(1)}MB/s | Drop {frameStats.droppedFrames}
+            </div>
+            <div style={{ position: 'absolute', top: 62, left: 10, color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', pointerEvents: 'none' }}>
+              DrawCalls {frameStats.drawCalls} | MaxBatch {frameStats.maxBatchSprites} | Sprites {frameStats.spriteCount} | Entities {frameStats.entityCount} | Physics {frameStats.physicsBodies}
             </div>
             <canvas 
               ref={canvasRef} 
@@ -503,8 +845,7 @@ export const EditorApp: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Mock Sprite Component */}
-                  {selectedEntity.id === 1 && (
+                  {(
                     <>
                       <div style={{ background: theme.headerBg, padding: '5px 10px', fontWeight: 'bold', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '0 -10px' }}>
                         SpriteRenderer
@@ -512,12 +853,42 @@ export const EditorApp: React.FC = () => {
                       <div style={{ padding: '10px 0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
                           <span style={{ width: '80px', color: theme.textMuted }}>Texture</span>
-                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>[ext_resource id=1]</div>
+                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
+                            {selectedEntity.textureHandle ? `handle=${selectedEntity.textureHandle}` : 'none'}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Modulate</span>
-                          <div style={{ flex: 1, background: '#ffffff', border: `1px solid ${theme.border}`, height: '20px', borderRadius: '3px' }}></div>
+                          <span style={{ width: '80px', color: theme.textMuted }}>Variant</span>
+                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
+                            {selectedEntity.shaderVariant ?? 'SPRITE_UNLIT'}
+                          </div>
                         </div>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                          <span style={{ width: '80px', color: theme.textMuted }}>Blend</span>
+                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
+                            {selectedEntity.blendMode === 1 ? 'Additive' : selectedEntity.blendMode === 2 ? 'Multiply' : 'Alpha'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ width: '80px', color: theme.textMuted }}>Material</span>
+                          <select value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(Number(e.target.value))} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}>
+                            <option value={0}>None</option>
+                            {materialInstances.map(mat => (
+                              <option key={mat.id} value={mat.id}>#{mat.id} {mat.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ width: '80px', color: theme.textMuted }}>Assign</span>
+                          <select value={selectedTextureHandle} onChange={(e) => setSelectedTextureHandle(Number(e.target.value))} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}>
+                            <option value={0}>None</option>
+                            {importedTextures.map(tex => (
+                              <option key={tex.handle} value={tex.handle}>#{tex.handle} {tex.path.split(/[/\\]/).pop()}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button onClick={handleApplyTexture} disabled={!selectedTextureHandle} style={{ width: '100%', background: selectedTextureHandle ? theme.accent : theme.bgDark, color: selectedTextureHandle ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '3px', cursor: selectedTextureHandle ? 'pointer' : 'not-allowed' }}>Apply To Entity</button>
+                        <button onClick={handleApplyMaterial} disabled={!selectedMaterialId} style={{ width: '100%', background: selectedMaterialId ? theme.accent : theme.bgDark, color: selectedMaterialId ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '3px', cursor: selectedMaterialId ? 'pointer' : 'not-allowed', marginTop: '6px' }}>Apply Material</button>
                       </div>
                     </>
                   )}

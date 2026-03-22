@@ -13,7 +13,7 @@ public:
     Physics2DSystem();
     ~Physics2DSystem();
 
-    void Init();
+    void Init(Phase1World& world);
     void FixedUpdate(Phase1World& world, float fixed_delta_time);
     
     // Physics Queries

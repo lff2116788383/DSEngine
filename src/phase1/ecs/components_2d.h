@@ -30,9 +30,32 @@ struct TransformComponent {
     bool dirty = true;
 };
 
+struct ParentComponent {
+    Entity parent = entt::null;
+};
+
+enum class SpriteBlendMode {
+    Alpha = 0,
+    Additive = 1,
+    Multiply = 2
+};
+
+struct MaterialInstanceComponent {
+    unsigned int material_id = 0;
+    std::string name;
+    std::string shader_variant = "SPRITE_UNLIT";
+    SpriteBlendMode blend_mode = SpriteBlendMode::Alpha;
+    unsigned int texture_handle = 0;
+    glm::vec4 tint = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    glm::vec4 uv_rect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+};
+
 struct SpriteRendererComponent {
     std::shared_ptr<TextureAsset> texture;
     unsigned int texture_handle = 0;
+    unsigned int material_instance_id = 0;
+    std::string shader_variant = "SPRITE_UNLIT";
+    SpriteBlendMode blend_mode = SpriteBlendMode::Alpha;
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     int sorting_layer = 0;
@@ -76,6 +99,11 @@ struct CameraComponent {
     float far_clip = 1.0f;
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
+};
+
+struct ScriptComponent {
+    std::string script_path;
+    bool enabled = true;
 };
 
 enum class RigidBody2DType {

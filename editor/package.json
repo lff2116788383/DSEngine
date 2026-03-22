@@ -4,7 +4,14 @@
   "main": "main.js",
   "scripts": {
     "build": "webpack",
-    "start": "webpack && electron ."
+    "start": "webpack && electron .",
+    "regress:material-replay": "node scripts/material_replay_regression.js",
+    "regress:scene-schema-migrate": "node scripts/scene_material_schema_migrate.js --self-test",
+    "migrate:scene-schema": "node scripts/scene_material_schema_migrate.js --write",
+    "migrate:scene-schema:report": "node scripts/scene_material_schema_migrate.js --write --report ../build/scene_schema_migration_report.json --trend-file ../build/scene_schema_migration_trend.json --html-report ../build/scene_schema_migration_report.html",
+    "migrate:scene-schema:strict": "node scripts/scene_material_schema_migrate.js --write --report ../build/scene_schema_migration_report.json --trend-file ../build/scene_schema_migration_trend.json --html-report ../build/scene_schema_migration_report.html --fail-on-errors",
+    "pipeline:export:win64": "node scripts/build_pipeline.js win64",
+    "pipeline:export:win64:strict": "cross-env DSENGINE_MIGRATION_MAX_FAILED_TOTAL=0 DSENGINE_MIGRATION_MAX_FAILED_BY_REASON=parse_failed:0,read_failed:0,write_failed:0 DSENGINE_MIGRATION_MAX_FAILED_BY_DIRECTORY=scenes:0 DSENGINE_REQUIRE_MATERIAL_REPLAY=1 node scripts/build_pipeline.js win64"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +26,7 @@
     "typescript": "^5.9.3",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.2",
+    "cross-env": "^10.1.0",
     "yauzl": "^3.2.1"
   },
   "dependencies": {

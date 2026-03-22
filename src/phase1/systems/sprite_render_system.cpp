@@ -1,6 +1,7 @@
 #include "phase1/systems/sprite_render_system.h"
 #include "phase1/ecs/components_2d.h"
 #include <algorithm>
+#include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 
 void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
@@ -16,6 +17,9 @@ void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
         
         Phase1SpriteDrawItem item;
         item.texture_handle = sprite.texture_handle;
+        item.material_instance_id = sprite.material_instance_id;
+        item.shader_variant_key = static_cast<unsigned int>(std::hash<std::string>{}(sprite.shader_variant));
+        item.blend_mode = static_cast<unsigned int>(sprite.blend_mode);
         item.model = transform.local_to_world;
         item.color = sprite.color;
         item.uv = sprite.uv;
@@ -28,9 +32,21 @@ void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
         if (a.sorting_layer != b.sorting_layer) {
             return a.sorting_layer < b.sorting_layer;
         }
+        if (a.shader_variant_key != b.shader_variant_key) {
+            return a.shader_variant_key < b.shader_variant_key;
+        }
+        if (a.material_instance_id != b.material_instance_id) {
+            return a.material_instance_id < b.material_instance_id;
+        }
+        if (a.texture_handle != b.texture_handle) {
+            return a.texture_handle < b.texture_handle;
+        }
+        if (a.blend_mode != b.blend_mode) {
+            return a.blend_mode < b.blend_mode;
+        }
         return a.order_in_layer < b.order_in_layer;
     });
-    cmd_buffer.DrawSpriteBatch(items);
+    cmd_buffer.DrawBatch(items);
 }
 
 void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {
@@ -91,6 +107,9 @@ void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int s
     }
 
     std::sort(items.begin(), items.end(), [](const Phase1SpriteDrawItem& a, const Phase1SpriteDrawItem& b) {
+        if (a.texture_handle != b.texture_handle) {
+            return a.texture_handle < b.texture_handle;
+        }
         return a.order_in_layer < b.order_in_layer;
     });
     
@@ -99,5 +118,5 @@ void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int s
     glm::mat4 view_mat = glm::mat4(1.0f);
     
     cmd_buffer.SetCamera(view_mat, ortho);
-    cmd_buffer.DrawSpriteBatch(items);
+    cmd_buffer.DrawBatch(items);
 }
