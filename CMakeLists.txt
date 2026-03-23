@@ -98,30 +98,12 @@ if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
-set(dse_cpp_business_sources
-    "${CMAKE_SOURCE_DIR}/examples/c++/phase1_demo_logic.cpp"
-)
-
-add_executable(${PROJECT_NAME}
-    "${CMAKE_SOURCE_DIR}/examples/c++/main.cpp"
-    ${dse_cpp_business_sources}
-)
-target_link_libraries(${PROJECT_NAME} PRIVATE dse_engine)
-
-add_executable(dse_example_lua
-    "${CMAKE_SOURCE_DIR}/examples/lua/main.cpp"
-)
-target_link_libraries(dse_example_lua PRIVATE dse_engine)
-
 if(EXISTS "${BOX2D_ROOT}/include")
     target_include_directories(dse_engine PRIVATE "${BOX2D_ROOT}/include")
 endif()
 if(EXISTS "${BOX2D_ROOT}/src")
     target_include_directories(dse_engine PRIVATE "${BOX2D_ROOT}/src")
 endif()
-
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "DSEngine_c++")
-set_target_properties(dse_example_lua PROPERTIES OUTPUT_NAME "DSEngine_lua")
 
 function(dse_apply_config_postfix target_name)
     set_target_properties(${target_name} PROPERTIES
@@ -133,12 +115,9 @@ function(dse_apply_config_postfix target_name)
 endfunction()
 
 dse_apply_config_postfix(dse_engine)
-dse_apply_config_postfix(${PROJECT_NAME})
-dse_apply_config_postfix(dse_example_lua)
+
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET dse_example_lua PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
     add_definitions(-D _DEBUG)
 endif ()
@@ -157,10 +136,10 @@ function(dse_copy_runtime_assets target_name)
     )
 endfunction()
 
-dse_copy_runtime_assets(${PROJECT_NAME})
-dse_copy_runtime_assets(dse_example_lua)
+# 包含示例的业务编译逻辑
+add_subdirectory(examples)
 
-install(TARGETS dse_engine ${PROJECT_NAME} dse_example_lua
+install(TARGETS dse_engine
     EXPORT DSEngineTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
