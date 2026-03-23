@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <unordered_map>
 #include <entt/entt.hpp>
 
 using Entity = entt::entity;
@@ -90,6 +91,33 @@ struct UIRendererComponent {
     
     // Runtime computed layout
     glm::mat4 runtime_model = glm::mat4(1.0f);
+};
+
+struct UIPanelComponent {
+    bool blocks_input = false;
+};
+
+struct UIButtonComponent {
+    glm::vec4 normal_color = glm::vec4(1.0f);
+    glm::vec4 hover_color = glm::vec4(1.1f, 1.1f, 1.1f, 1.0f);
+    glm::vec4 pressed_color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    std::function<void(Entity)> on_click;
+    std::function<void(Entity)> on_pointer_enter;
+    std::function<void(Entity)> on_pointer_exit;
+};
+
+struct UILabelComponent {
+    std::string text;
+    unsigned int font_texture_handle = 0;
+    glm::vec2 glyph_size = glm::vec2(16.0f, 16.0f);
+    glm::vec2 offset = glm::vec2(0.0f);
+    float spacing = 0.0f;
+    int atlas_cols = 16;
+    int atlas_rows = 6;
+    int ascii_start = 32;
+    glm::vec4 color = glm::vec4(1.0f);
+    bool dirty = true;
+    std::vector<Entity> runtime_glyph_entities;
 };
 
 struct CameraComponent {
@@ -216,6 +244,12 @@ struct TilemapComponent {
     unsigned int tileset_handle = 0;
     int tileset_cols = 1;
     int tileset_rows = 1;
+    int sorting_layer = 0;
+    int order_in_layer_base = 0;
+    bool generate_colliders = false;
+    int collider_tile_min = 1;
+    bool dirty = true;
+    std::vector<Entity> runtime_tile_entities;
 };
 
 // --- Lua Scripting Component ---

@@ -12,6 +12,10 @@
 #include "phase1/systems/physics2d_system.h"
 #include "phase1/systems/sprite_render_system.h"
 #include "phase1/systems/camera_system.h"
+#include "phase1/systems/ui_system.h"
+#include "phase1/systems/audio_system.h"
+#include "phase1/systems/tilemap_system.h"
+#include "phase1/systems/animation_system.h"
 class Phase1AssetManager;
 
 enum class Phase1BusinessMode {
@@ -59,6 +63,10 @@ private:
     SpriteRenderSystem sprite_render_system_;
     UIRenderSystem ui_render_system_;
     Physics2DSystem physics2d_system_;
+    AnimationSystem animation_system_;
+    dse::phase1::UISystem ui_logic_system_;
+    dse::phase1::AudioSystem audio_system_;
+    dse::phase1::TilemapSystem tilemap_system_;
     
     bool initialized_ = false;
     float stats_accumulator_ = 0.0f;

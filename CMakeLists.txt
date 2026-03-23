@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 project(DSEngine)
 include(GNUInstallDirs)
 
@@ -53,33 +56,21 @@ include_directories("depends/rapidjson")
 include_directories("depends/eventpp/tests")
 include_directories("depends/eventpp/include")
 include_directories("depends/timetool")
-include(FetchContent)
-FetchContent_Declare(
-    entt
-    URL https://github.com/skypjack/entt/archive/refs/tags/v3.13.0.zip
-)
-FetchContent_MakeAvailable(entt)
-if(entt_SOURCE_DIR)
-    include_directories(BEFORE "${entt_SOURCE_DIR}/single_include")
-endif()
-
+# Use local depends instead of FetchContent
+set(ENTT_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(ENTT_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+add_subdirectory(depends/entt-3.13.0)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    box2d
-    URL https://github.com/erincatto/box2d/archive/refs/tags/v2.4.1.zip
+add_subdirectory(depends/box2d-2.4.1)
+
+# Include directories
+include_directories(
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
+    ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include
 )
-FetchContent_MakeAvailable(box2d)
-set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/../depends/box2d")
-if(box2d_SOURCE_DIR)
-    set(BOX2D_ROOT "${box2d_SOURCE_DIR}")
-endif()
-if(EXISTS "${BOX2D_ROOT}/include")
-    include_directories("${BOX2D_ROOT}/include")
-endif()
-if(EXISTS "${BOX2D_ROOT}/src")
-    include_directories("${BOX2D_ROOT}/src")
-endif()
+set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
 file(GLOB_RECURSE engine_cpp "src/*.cpp")
 file(GLOB_RECURSE box2d_cpp "${BOX2D_ROOT}/src/*.cpp")

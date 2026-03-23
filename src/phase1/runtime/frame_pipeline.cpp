@@ -2,10 +2,12 @@
 #include "utils/debug.h"
 #include "utils/time.h"
 #include "utils/screen.h"
+#include "control/input.h"
 #include "phase1/asset/asset_manager.h"
 #include "phase1/runtime/lua_runtime.h"
 #include "phase1/runtime/cpp_business_runtime.h"
 #include "phase1/ecs/components_2d.h"
+#include "core/event_bus.h"
 #include "scene/scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <filesystem>
@@ -78,6 +80,7 @@ bool Phase1FramePipeline::Init() {
     composite_pipeline_state_ = rhi_device_->CreatePipelineState({false, 0x0302, 0x0303});
     
     physics2d_system_.Init(*world_);
+    audio_system_.Initialize();
 
     bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample("bin/scene_roundtrip_regression.json");
     DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
@@ -110,10 +113,12 @@ bool Phase1FramePipeline::Init() {
     BuildRenderGraph();
 
     initialized_ = true;
+    core::EventBus::Instance().Publish<core::SceneLifecycleEvent>(core::SceneLifecyclePhase::Init);
     return true;
 }
 
 void Phase1FramePipeline::Shutdown() {
+    core::EventBus::Instance().Publish<core::SceneLifecycleEvent>(core::SceneLifecyclePhase::Shutdown);
     auto& asset_manager = ResolveAssetManager(asset_manager_);
     render_graph_passes_.clear();
     if (business_mode_ == Phase1BusinessMode::Lua) {
@@ -121,6 +126,7 @@ void Phase1FramePipeline::Shutdown() {
     } else {
         phase1::runtime::ShutdownCppBusiness();
     }
+    audio_system_.Shutdown();
     asset_manager.SetRhiDevice(nullptr);
     if (rhi_device_) {
         rhi_device_->Shutdown();
@@ -153,8 +159,12 @@ void Phase1FramePipeline::Update(float delta_time) {
         phase1::runtime::TickCppBusiness(*world_, delta_time);
     }
     
+    tilemap_system_.Update(world_->registry());
+    animation_system_.Update(*world_, delta_time);
     transform_system_.Update(*world_);
     camera_system_.Update(*world_, Screen::aspect_ratio());
+    ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
+    audio_system_.Update(world_->registry(), delta_time);
     auto update_end = std::chrono::high_resolution_clock::now();
     update_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(update_end - update_begin).count();
     update_samples_ += 1;
