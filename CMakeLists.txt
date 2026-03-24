@@ -48,8 +48,10 @@ endif()
 
 #头文件目录
 include_directories("depends")
-include_directories("src")
-include_directories("examples")
+include_directories("${CMAKE_SOURCE_DIR}")
+include_directories("engine")
+include_directories("modules")
+include_directories("samples")
 include_directories("depends/spdlog/include")
 
 include_directories("depends/spscqueue/include")
@@ -71,13 +73,19 @@ add_subdirectory(depends/box2d-2.4.1)
 
 # Include directories
 include_directories(
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/engine
+    ${CMAKE_SOURCE_DIR}/modules
+    ${CMAKE_SOURCE_DIR}/samples
     ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
     ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include
 )
 set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
-file(GLOB_RECURSE engine_cpp "src/*.cpp")
+file(GLOB_RECURSE engine_cpp
+    "engine/*.cpp"
+    "modules/*.cpp"
+)
 file(GLOB_RECURSE box2d_cpp "${BOX2D_ROOT}/src/*.cpp")
 
 add_library(dse_engine SHARED
@@ -127,8 +135,8 @@ function(dse_copy_runtime_assets target_name)
         ${CMAKE_SOURCE_DIR}/data
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/examples
-        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples
+        ${CMAKE_SOURCE_DIR}/samples
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/samples
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/script
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/script
@@ -136,8 +144,8 @@ function(dse_copy_runtime_assets target_name)
     )
 endfunction()
 
-# 包含示例的业务编译逻辑
-add_subdirectory(examples)
+# 包含运行时宿主入口
+add_subdirectory(apps/runtime)
 
 install(TARGETS dse_engine
     EXPORT DSEngineTargets
@@ -146,8 +154,13 @@ install(TARGETS dse_engine
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/engine/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/engine
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/modules/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/modules
     FILES_MATCHING PATTERN "*.h"
 )
 
@@ -166,37 +179,86 @@ enable_testing()
 
 find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
 find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
+find_package(Python3 COMPONENTS Interpreter QUIET)
 set(DSE_NPM_CACHE_DIR "${CMAKE_SOURCE_DIR}/.npm-cache")
+set(DSE_ELECTRON_MIRROR "" CACHE STRING "Electron download mirror URL")
+set(DSE_ELECTRON_CACHE_DIR "${CMAKE_SOURCE_DIR}/.cache/electron" CACHE PATH "Electron download cache directory")
+set(DSE_ELECTRON_BUILDER_CACHE_DIR "${CMAKE_SOURCE_DIR}/.cache/electron-builder" CACHE PATH "electron-builder cache directory")
+set(DSE_ELECTRON_CUSTOM_DIR "" CACHE STRING "Custom Electron directory name for mirror/offline dist")
 file(MAKE_DIRECTORY "${DSE_NPM_CACHE_DIR}")
+file(MAKE_DIRECTORY "${DSE_ELECTRON_CACHE_DIR}")
+file(MAKE_DIRECTORY "${DSE_ELECTRON_BUILDER_CACHE_DIR}")
+set(DSE_NODE_BUILD_ENV
+    NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR}
+    ELECTRON_CACHE=${DSE_ELECTRON_CACHE_DIR}
+    ELECTRON_BUILDER_CACHE=${DSE_ELECTRON_BUILDER_CACHE_DIR}
+)
+if(DSE_ELECTRON_MIRROR)
+    list(APPEND DSE_NODE_BUILD_ENV "ELECTRON_MIRROR=${DSE_ELECTRON_MIRROR}")
+endif()
+if(DSE_ELECTRON_CUSTOM_DIR)
+    list(APPEND DSE_NODE_BUILD_ENV "ELECTRON_CUSTOM_DIR=${DSE_ELECTRON_CUSTOM_DIR}")
+endif()
+if(WIN32 AND MSVC)
+    set(DSE_VS_INSTALL_DIR "")
+    if(CMAKE_GENERATOR_INSTANCE)
+        set(DSE_VS_INSTALL_DIR "${CMAKE_GENERATOR_INSTANCE}")
+    endif()
+    if(NOT DSE_VS_INSTALL_DIR AND DEFINED ENV{VSINSTALLDIR})
+        set(DSE_VS_INSTALL_DIR "$ENV{VSINSTALLDIR}")
+    endif()
+    if(DSE_VS_INSTALL_DIR)
+        set(DSE_VS_DEV_CMD "${DSE_VS_INSTALL_DIR}/Common7/Tools/VsDevCmd.bat")
+        if(EXISTS "${DSE_VS_DEV_CMD}")
+            file(TO_NATIVE_PATH "${DSE_VS_DEV_CMD}" DSE_VS_DEV_CMD_NATIVE)
+            file(TO_NATIVE_PATH "${NPX_EXECUTABLE}" DSE_NPX_EXECUTABLE_NATIVE)
+            file(TO_NATIVE_PATH "${NPM_EXECUTABLE}" DSE_NPM_EXECUTABLE_NATIVE)
+            set(DSE_VC_INSTALL_DIR "${DSE_VS_INSTALL_DIR}/VC/")
+            list(APPEND DSE_NODE_BUILD_ENV
+                "VCINSTALLDIR=${DSE_VC_INSTALL_DIR}"
+            )
+        endif()
+    endif()
+endif()
+if(Python3_Interpreter_FOUND)
+    list(APPEND DSE_NODE_BUILD_ENV "npm_config_python=${Python3_EXECUTABLE}")
+endif()
+
+set(DSE_EDITOR_NODE_GYP_COMMAND
+    ${CMAKE_COMMAND} -E env ${DSE_NODE_BUILD_ENV} ${NPX_EXECUTABLE} node-gyp rebuild --msvs_version=2022
+)
+set(DSE_EDITOR_PACKAGE_COMMAND
+    ${CMAKE_COMMAND} -E env ${DSE_NODE_BUILD_ENV} ${NPM_EXECUTABLE} run package:win
+)
 
 if(DSE_BUILD_EDITOR)
     if(NPM_EXECUTABLE AND NPX_EXECUTABLE)
         add_custom_target(dse_editor ALL
-            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} install
-            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPX_EXECUTABLE} node-gyp rebuild
-            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} run build
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+            COMMAND ${CMAKE_COMMAND} -E env ${DSE_NODE_BUILD_ENV} ${NPM_EXECUTABLE} install --ignore-scripts
+            COMMAND ${DSE_EDITOR_NODE_GYP_COMMAND}
+            COMMAND ${CMAKE_COMMAND} -E env ${DSE_NODE_BUILD_ENV} ${NPM_EXECUTABLE} run build
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
         )
         add_custom_target(dse_editor_pack ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bin/editor
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CMAKE_SOURCE_DIR}/editor/main.js
-                ${CMAKE_SOURCE_DIR}/editor/preload.js
-                ${CMAKE_SOURCE_DIR}/editor/index.html
-                ${CMAKE_SOURCE_DIR}/editor/package.json
+                ${CMAKE_SOURCE_DIR}/apps/editor/main.js
+                ${CMAKE_SOURCE_DIR}/apps/editor/preload.js
+                ${CMAKE_SOURCE_DIR}/apps/editor/index.html
+                ${CMAKE_SOURCE_DIR}/apps/editor/package.json
                 ${CMAKE_SOURCE_DIR}/bin/editor
             COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_SOURCE_DIR}/editor/dist
+                ${CMAKE_SOURCE_DIR}/apps/editor/dist
                 ${CMAKE_SOURCE_DIR}/bin/editor/dist
             COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_SOURCE_DIR}/editor/scripts
+                ${CMAKE_SOURCE_DIR}/apps/editor/scripts
                 ${CMAKE_SOURCE_DIR}/bin/editor/scripts
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
         )
         add_dependencies(dse_editor_pack dse_editor)
         add_custom_target(dse_editor_exe
-            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} run package:win
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+            COMMAND ${DSE_EDITOR_PACKAGE_COMMAND}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
         )
         add_dependencies(dse_editor_exe dse_editor)
     else()
@@ -205,8 +267,8 @@ if(DSE_BUILD_EDITOR)
 endif()
 
 if(DSE_BUILD_LAUNCHER)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/launcher/CMakeLists.txt")
-        add_subdirectory(launcher)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/apps/launcher/CMakeLists.txt")
+        add_subdirectory(apps/launcher)
     else()
         add_custom_target(dse_launcher ALL
             COMMAND ${CMAKE_COMMAND} -E echo "launcher_not_implemented"
@@ -218,20 +280,20 @@ if(NPM_EXECUTABLE AND NPX_EXECUTABLE)
     add_test(
         NAME editor_bridge_rebuild
         COMMAND ${NPX_EXECUTABLE} node-gyp rebuild
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
     )
     set_tests_properties(editor_bridge_rebuild PROPERTIES FIXTURES_SETUP editor_bridge_ready)
 
     add_test(
         NAME editor_material_replay_regression
         COMMAND ${NPM_EXECUTABLE} run regress:material-replay
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
     )
     set_tests_properties(editor_material_replay_regression PROPERTIES FIXTURES_REQUIRED editor_bridge_ready)
 
     add_test(
         NAME editor_scene_schema_migrate_regression
         COMMAND ${NPM_EXECUTABLE} run regress:scene-schema-migrate
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
     )
 endif()

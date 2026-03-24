@@ -17,6 +17,10 @@ set BUILD_LAUNCHER=1
 set PACKAGE_EDITOR_EXE=1
 set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
+set "DSE_ELECTRON_MIRROR="
+set "DSE_ELECTRON_CUSTOM_DIR="
+set "DSE_ELECTRON_CACHE_DIR=%CD%\.cache\electron"
+set "DSE_ELECTRON_BUILDER_CACHE_DIR=%CD%\.cache\electron-builder"
 
 :parse_args
 if "%~1"=="" goto parse_done
@@ -76,6 +80,46 @@ if /I "%~1"=="--all" (
     shift
     goto parse_args
 )
+if /I "%~1"=="--electron-mirror" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-mirror requires a URL value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_MIRROR=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--electron-custom-dir" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-custom-dir requires a directory name value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_CUSTOM_DIR=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--electron-cache-dir" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-cache-dir requires a directory path value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_CACHE_DIR=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--electron-builder-cache-dir" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-builder-cache-dir requires a directory path value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_BUILDER_CACHE_DIR=%~2"
+    shift
+    shift
+    goto parse_args
+)
 if /I "%~1"=="-h" goto usage
 if /I "%~1"=="--help" goto usage
 echo [ERROR] Unknown option: %~1
@@ -86,6 +130,10 @@ set CMAKE_EDITOR_OPTION=-DDSE_BUILD_EDITOR=OFF
 if "%BUILD_EDITOR%"=="1" set CMAKE_EDITOR_OPTION=-DDSE_BUILD_EDITOR=ON
 set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=OFF
 if "%BUILD_LAUNCHER%"=="1" set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=ON
+set "CMAKE_ELECTRON_MIRROR_OPTION="
+if defined DSE_ELECTRON_MIRROR set "CMAKE_ELECTRON_MIRROR_OPTION=-DDSE_ELECTRON_MIRROR=%DSE_ELECTRON_MIRROR%"
+set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION="
+if defined DSE_ELECTRON_CUSTOM_DIR set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION=-DDSE_ELECTRON_CUSTOM_DIR=%DSE_ELECTRON_CUSTOM_DIR%"
 
 :: Check Administrator Privileges if we need to package EXE
 if "%PACKAGE_EDITOR_EXE%"=="1" set NEED_ADMIN=1
@@ -159,6 +207,11 @@ if "%BUILD_EDITOR%"=="1" (
         pause
         exit /b 1
     )
+    set "PYTHON_EXE="
+    for /f "delims=" %%I in ('where python') do if not defined PYTHON_EXE set "PYTHON_EXE=%%~fI"
+    if defined PYTHON_EXE set "npm_config_python=!PYTHON_EXE!"
+    call :setup_editor_native_build_env
+    if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 )
 if "%BUILD_LAUNCHER%"=="1" (
     where node >nul 2>&1
@@ -187,6 +240,22 @@ if !ERRORLEVEL! neq 0 (
 )
 del "!NPM_CACHE!\_dse_write_test.tmp" >nul 2>&1
 set NPM_CONFIG_CACHE=!NPM_CACHE!
+if not exist "!DSE_ELECTRON_CACHE_DIR!" mkdir "!DSE_ELECTRON_CACHE_DIR!" >nul 2>&1
+echo write_test > "!DSE_ELECTRON_CACHE_DIR!\_dse_write_test.tmp" 2>nul
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Electron cache directory is not writable: !DSE_ELECTRON_CACHE_DIR!
+    pause
+    exit /b 1
+)
+del "!DSE_ELECTRON_CACHE_DIR!\_dse_write_test.tmp" >nul 2>&1
+if not exist "!DSE_ELECTRON_BUILDER_CACHE_DIR!" mkdir "!DSE_ELECTRON_BUILDER_CACHE_DIR!" >nul 2>&1
+echo write_test > "!DSE_ELECTRON_BUILDER_CACHE_DIR!\_dse_write_test.tmp" 2>nul
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Electron-builder cache directory is not writable: !DSE_ELECTRON_BUILDER_CACHE_DIR!
+    pause
+    exit /b 1
+)
+del "!DSE_ELECTRON_BUILDER_CACHE_DIR!\_dse_write_test.tmp" >nul 2>&1
 
 :: 1. Checking and cleaning old build cache
 echo [1/4] Checking and cleaning old build cache...
@@ -198,7 +267,7 @@ if exist %BUILD_DIR%\CMakeCache.txt (
 :: 2. Configure CMake project
 echo.
 echo [2/4] Configuring CMake project...
-cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION%
+cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
     pause
@@ -217,32 +286,65 @@ if %ERRORLEVEL% neq 0 (
     echo Common reasons:
     echo 1. Missing header files or syntax errors in source code.
     echo 2. Missing third-party tools required by optional submodules.
+    if "%BUILD_EDITOR%"=="1" (
+        echo.
+        echo [HINT] If the failure is from dse_editor / node-gyp / dsengine_bridge:
+        echo   - Check Node.js version and local node-gyp version in apps\editor
+        echo   - Check Python path: npm_config_python or python in PATH
+        echo   - Check Visual Studio 2022 is installed with "Desktop development with C++"
+        echo   - Check VsDevCmd.bat exists under Visual Studio 2022\Common7\Tools
+        echo   - Re-run: cmake --build %BUILD_DIR% --config Debug --target dse_editor -- /v:minimal
+    )
     echo ========================================================
     pause
     exit /b %ERRORLEVEL%
 )
 
-if "%BUILD_EDITOR%"=="1" (
-    cmake -E make_directory .\bin\editor
-    cmake -E copy_if_different .\editor\main.js .\editor\preload.js .\editor\index.html .\editor\package.json .\bin\editor
-    if exist .\editor\dist cmake -E copy_directory .\editor\dist .\bin\editor\dist
-    if exist .\editor\scripts cmake -E copy_directory .\editor\scripts .\bin\editor\scripts
-)
-if "%BUILD_LAUNCHER%"=="1" (
-    cmake -E make_directory .\bin\launcher
-    cmake -E copy_if_different .\launcher\main.js .\launcher\preload.js .\launcher\index.html .\launcher\package.json .\bin\launcher
-    if exist .\launcher\dist cmake -E copy_directory .\launcher\dist .\bin\launcher\dist
-)
+:: Editor / Launcher 资源拷贝已由 CMake 目标负责打包到 .\bin 目录
 if "%PACKAGE_EDITOR_EXE%"=="1" (
     if "%BUILD_EDITOR%"=="1" (
+        echo.
+        echo [*] Packaging Editor EXE...
         cmake --build %BUILD_DIR% --config Debug --target dse_editor_exe
+        set "PACK_EDITOR_RC=!ERRORLEVEL!"
+        if not "!PACK_EDITOR_RC!"=="0" (
+            echo.
+            echo ========================================================
+            echo [ERROR] Editor EXE packaging failed ^(target: dse_editor_exe^).
+            echo [ROOT CAUSE] Check electron-builder / electron-rebuild / node-gyp logs above.
+            echo [HINT] Most common root causes on Windows:
+            echo   1. Visual Studio 2022 missing "Desktop development with C++".
+            echo   2. node-gyp cannot find VS toolchain or Python.
+            echo   3. Environment variables for npm/node-gyp are not initialized correctly.
+            echo [RETRY] cmake --build %BUILD_DIR% --config Debug --target dse_editor_exe -- /v:minimal
+            echo ========================================================
+            pause
+            exit /b !PACK_EDITOR_RC!
+        )
     ) else (
         echo [WARN] Skip dse_editor_exe because BUILD_EDITOR is OFF.
     )
 )
 if "%PACKAGE_LAUNCHER_EXE%"=="1" (
     if "%BUILD_LAUNCHER%"=="1" (
+        echo.
+        echo [*] Packaging Launcher EXE...
         cmake --build %BUILD_DIR% --config Debug --target dse_launcher_exe
+        set "PACK_LAUNCHER_RC=!ERRORLEVEL!"
+        if not "!PACK_LAUNCHER_RC!"=="0" (
+            echo.
+            echo ========================================================
+            echo [ERROR] Launcher EXE packaging failed ^(target: dse_launcher_exe^).
+            echo [ROOT CAUSE] Check electron-builder download/packaging logs above.
+            echo [HINT] Most common root causes on Windows:
+            echo   1. Network timeout when downloading Electron from GitHub.
+            echo   2. Proxy/firewall blocks electron release download.
+            echo   3. Temporary network instability during app-builder download.
+            echo [RETRY] cmake --build %BUILD_DIR% --config Debug --target dse_launcher_exe -- /v:minimal
+            echo ========================================================
+            pause
+            exit /b !PACK_LAUNCHER_RC!
+        )
     ) else (
         echo [WARN] Skip dse_launcher_exe because BUILD_LAUNCHER is OFF.
     )
@@ -269,9 +371,19 @@ echo [*] Running Verification Tests...
 
 set CPP_EXE=.\bin\DSEngine_c++_debug.exe
 if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe
+if not exist "%CPP_EXE%" (
+    echo [ERROR] Cannot find C++ example executable in .\bin
+    pause
+    exit /b 1
+)
 
 set LUA_EXE=.\bin\DSEngine_lua_debug.exe
 if not exist "%LUA_EXE%" set LUA_EXE=.\bin\DSEngine_lua.exe
+if not exist "%LUA_EXE%" (
+    echo [ERROR] Cannot find Lua example executable in .\bin
+    pause
+    exit /b 1
+)
 
 echo -- Running C++ Example --
 "%CPP_EXE%"
@@ -308,11 +420,46 @@ echo   --package-launcher-exe Package launcher executable (default: ON)
 echo   --package-sdk          Install and package C++ SDK (default: ON)
 echo   --no-sdk               Disable SDK packaging
 echo   --all                  Enable editor and launcher build together
+echo   --electron-mirror URL  Electron download mirror URL for electron-builder
+echo   --electron-custom-dir NAME  Optional custom dir name under mirror for Electron zip
+echo   --electron-cache-dir PATH  Electron zip cache directory
+echo   --electron-builder-cache-dir PATH  electron-builder cache directory
 echo   -h, --help             Show this help message
 echo.
 echo Notes:
 echo   1) No arguments: full build + editor/launcher exe packaging + SDK installation.
 echo   2) Multiple options can be combined in one command.
+echo   3) Offline mode: pre-place electron-vXX.Y.Z-win32-x64.zip in --electron-cache-dir.
+exit /b 0
+
+:setup_editor_native_build_env
+set "VSWHERE_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+set "VS_INSTALL_DIR="
+set "VS_DEV_CMD="
+if exist "%VSWHERE_EXE%" (
+    for /f "usebackq delims=" %%I in (`"%VSWHERE_EXE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VS_INSTALL_DIR=%%I"
+)
+if not defined VS_INSTALL_DIR if defined VSINSTALLDIR set "VS_INSTALL_DIR=%VSINSTALLDIR%"
+if defined VS_INSTALL_DIR (
+    set "VS_DEV_CMD=!VS_INSTALL_DIR!\Common7\Tools\VsDevCmd.bat"
+    if not exist "!VS_DEV_CMD!" set "VS_DEV_CMD="
+)
+if not defined VS_DEV_CMD (
+    echo [ERROR] Visual Studio 2022 with "Desktop development with C++" was not found.
+    echo [HINT] Editor native module ^(node-gyp / dsengine_bridge^) requires VS2022 tools.
+    pause
+    exit /b 1
+)
+call "!VS_DEV_CMD!" -arch=%ARCH% -host_arch=%ARCH% >nul
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Failed to initialize Visual Studio 2022 developer environment.
+    echo [HINT] Check VsDevCmd.bat and the installed VC++ workload.
+    pause
+    exit /b !ERRORLEVEL!
+)
+set "npm_config_msvs_version=2022"
+set "GYP_MSVS_VERSION=2022"
+echo [OK] Editor native build environment ready.
 exit /b 0
 
 :usage_error

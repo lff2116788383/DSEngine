@@ -24,26 +24,33 @@ bin/
 *.vcxproj*
 .vscode/
 
-# Electron and Node.js Editor Artifacts
-editor/node_modules/
-launcher/node_modules/
-editor/dist/
-launcher/dist/
-editor/build/
-launcher/build/
-editor/*.log
-launcher/*.log
+# Electron and Node.js App Artifacts
+apps/editor/node_modules/
+apps/launcher/node_modules/
+apps/editor/dist/
+apps/launcher/dist/
+apps/editor/build/
+apps/launcher/build/
+apps/editor/*.log
+apps/launcher/*.log
+apps/editor/release/
+apps/launcher/release/
+apps/editor/out/
+apps/launcher/out/
+bin/editor_pkg/
+bin/launcher_pkg/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
 # Node-GYP Artifacts
-editor/build/Release/
-editor/build/Debug/
-editor/.node-gyp/
+apps/editor/build/Release/
+apps/editor/build/Debug/
+apps/editor/.node-gyp/
 
 # NPM Cache
 .npm-cache/
+.cache/
 
 # Third-party temporary downloads (if any)
 depends/miniaudio/*.tmp

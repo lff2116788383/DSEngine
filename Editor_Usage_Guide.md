@@ -24,12 +24,12 @@ npm install -g node-gyp
 
 ## 2. 编译与启动
 
-编辑器代码位于 `editor/` 目录。
+编辑器代码位于 `apps/editor/` 目录。
 
 ### 2.1 安装依赖
 
 ```bash
-cd editor
+cd apps/editor
 npm install
 ```
 
@@ -40,7 +40,7 @@ npx node-gyp configure
 npx node-gyp build
 ```
 
-成功后生成：`editor/build/Release/dsengine_bridge.node`。
+成功后生成：`apps/editor/build/Release/dsengine_bridge.node`。
 
 ### 2.3 启动编辑器
 
@@ -91,13 +91,13 @@ npm start
 - **Build**
   - 选择目标平台（`win64` / `mac` / `wasm`）
   - 一键导出（`Export Project`）
-  - 后端调用 `editor/scripts/build_pipeline.js`
+  - 后端调用 `apps/editor/scripts/build_pipeline.js`
 
 ---
 
 ## 4. 发布流水线与报告
 
-编辑器 Build 页与命令行共用同一发布脚本：`editor/scripts/build_pipeline.js`。
+编辑器 Build 页与命令行共用同一发布脚本：`apps/editor/scripts/build_pipeline.js`。
 
 ### 4.1 默认导出
 
@@ -127,10 +127,10 @@ npm run pipeline:export:win64:strict
 
 ## 5. 开发者接口摘要
 
-- 前端 UI：`editor/src/components/EditorApp.tsx`
-- IPC 暴露：`editor/preload.js`
-- IPC 主进程转发：`editor/main.js`
-- C++ 桥接：`editor/src/bridge/dsengine_bridge.cpp`
+- 前端 UI：`apps/editor/src/components/EditorApp.tsx`
+- IPC 暴露：`apps/editor/preload.js`
+- IPC 主进程转发：`apps/editor/main.js`
+- C++ 桥接：`apps/editor/src/bridge/dsengine_bridge.cpp`
 
 前端通过 `window.electronAPI` 调用核心能力，包括：
 
@@ -152,7 +152,7 @@ npm run pipeline:export:win64:strict
 
 | 验收项 | 通过 | 失败 | 备注 |
 |---|---|---|---|
-| 示例：在 `editor/` 执行 `npm install` | ☐ | ☐ |  |
+| 示例：在 `apps/editor/` 执行 `npm install` | ☐ | ☐ |  |
 | 示例：视口显示 `source | width x height` | ☐ | ☐ |  |
 | 示例：`Export Project` 成功生成产物 | ☐ | ☐ |  |
 
@@ -166,9 +166,9 @@ npm run pipeline:export:win64:strict
 
 ### 6.1 启动与基础连通
 
-- [ ] 在 `editor/` 执行 `npm install`
-- [ ] 在 `editor/` 执行 `npx node-gyp configure && npx node-gyp build`
-- [ ] 在 `editor/` 执行 `npm start` 并成功打开编辑器窗口
+- [ ] 在 `apps/editor/` 执行 `npm install`
+- [ ] 在 `apps/editor/` 执行 `npx node-gyp configure && npx node-gyp build`
+- [ ] 在 `apps/editor/` 执行 `npm start` 并成功打开编辑器窗口
 - [ ] 视口左上角能看到 `source | width x height` 信息
 - [ ] Output 面板无持续刷新的错误日志
 
@@ -220,7 +220,7 @@ npm run pipeline:export:win64:strict
 ## 7. 常见问题
 
 **Q1: 启动时报错找不到 `dsengine_bridge.node`？**  
-A: 在 `editor/` 下先执行 `npx node-gyp configure && npx node-gyp build`，确认 `editor/build/Release/dsengine_bridge.node` 存在。
+A: 在 `apps/editor/` 下先执行 `npx node-gyp configure && npx node-gyp build`，确认 `apps/editor/build/Release/dsengine_bridge.node` 存在。
 
 **Q2: 视口黑屏或无更新？**  
 A: 先检查 `engine:init` 是否成功，再检查桥接接口是否能返回 `getFrameInfo/getFrameBuffer`。若运行时引擎进程未启动，`source` 可能停留在桥接路径或无有效帧。
