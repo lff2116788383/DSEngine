@@ -38,5 +38,8 @@ editor/build/Release/
 editor/build/Debug/
 editor/.node-gyp/
 
+# NPM Cache
+.npm-cache/
+
 # Third-party temporary downloads (if any)
 depends/miniaudio/*.tmp
