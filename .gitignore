@@ -26,9 +26,13 @@ bin/
 
 # Electron and Node.js Editor Artifacts
 editor/node_modules/
+launcher/node_modules/
 editor/dist/
+launcher/dist/
 editor/build/
+launcher/build/
 editor/*.log
+launcher/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
