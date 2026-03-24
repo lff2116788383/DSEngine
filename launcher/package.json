@@ -1,0 +1,67 @@
+{
+  "name": "dsengine-launcher",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "build": "webpack",
+    "start": "webpack && electron .",
+    "package:win": "webpack && electron-builder --win --x64"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "electron": "^41.0.3",
+    "electron-builder": "^25.1.8",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "webpack": "^5.105.4",
+    "webpack-cli": "^7.0.2"
+  },
+  "build": {
+    "appId": "com.dsengine.launcher",
+    "productName": "DSEngineLauncher",
+    "directories": {
+      "output": "../bin/launcher_pkg"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../bin",
+        "to": "bin",
+        "filter": [
+          "**/*",
+          "!launcher_pkg",
+          "!launcher_pkg/**"
+        ]
+      },
+      {
+        "from": "../data",
+        "to": "data"
+      },
+      {
+        "from": "../examples",
+        "to": "examples"
+      },
+      {
+        "from": "../script",
+        "to": "script"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

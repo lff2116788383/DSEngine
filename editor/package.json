@@ -5,6 +5,7 @@
   "scripts": {
     "build": "webpack",
     "start": "webpack && electron .",
+    "package:win": "webpack && electron-builder --win --x64",
     "regress:material-replay": "node scripts/material_replay_regression.js",
     "regress:scene-schema-migrate": "node scripts/scene_material_schema_migrate.js --self-test",
     "migrate:scene-schema": "node scripts/scene_material_schema_migrate.js --write",
@@ -21,6 +22,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "electron": "^41.0.3",
+    "electron-builder": "^25.1.8",
     "ts-loader": "^9.5.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
@@ -28,6 +30,53 @@
     "webpack-cli": "^7.0.2",
     "cross-env": "^10.1.0",
     "yauzl": "^3.2.1"
+  },
+  "build": {
+    "appId": "com.dsengine.editor",
+    "productName": "DSEngineEditor",
+    "directories": {
+      "output": "../bin/editor_pkg"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "dist/**/*",
+      "scripts/**/*",
+      "build/Release/dsengine_bridge.node",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "build/Release/dsengine_bridge.node"
+    ],
+    "extraResources": [
+      {
+        "from": "../bin",
+        "to": "bin",
+        "filter": [
+          "**/*.exe",
+          "**/*.dll",
+          "!editor_pkg{,/**}"
+        ]
+      },
+      {
+        "from": "../data",
+        "to": "data"
+      },
+      {
+        "from": "../examples",
+        "to": "examples"
+      },
+      {
+        "from": "../script",
+        "to": "script"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   },
   "dependencies": {
     "node-addon-api": "^8.6.0",

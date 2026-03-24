@@ -1,0 +1,115 @@
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+function getProjectRoot() {
+  if (app.isPackaged) {
+    const portableRoot = path.dirname(process.execPath);
+    if (fs.existsSync(path.join(portableRoot, 'bin'))) {
+      return portableRoot;
+    }
+  }
+  return path.resolve(__dirname, '..');
+}
+
+function resolveEngineVersions() {
+  const projectRoot = getProjectRoot();
+  const candidates = [
+    { tag: 'debug', exe: path.join(projectRoot, 'bin', 'DSEngine_debug.exe') },
+    { tag: 'release', exe: path.join(projectRoot, 'bin', 'DSEngine_release.exe') },
+    { tag: 'default', exe: path.join(projectRoot, 'bin', 'DSEngine.exe') }
+  ];
+  return candidates.map((item) => ({
+    tag: item.tag,
+    executable: item.exe,
+    available: fs.existsSync(item.exe)
+  }));
+}
+
+function scanProjectDirectories(rootDir) {
+  if (!rootDir || !fs.existsSync(rootDir)) {
+    return [];
+  }
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  const result = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const fullPath = path.join(rootDir, entry.name);
+    const hasScene = fs.existsSync(path.join(fullPath, 'scenes'));
+    const hasData = fs.existsSync(path.join(fullPath, 'data'));
+    const hasConfig = fs.existsSync(path.join(fullPath, 'project.json')) || fs.existsSync(path.join(fullPath, 'project.dseproj'));
+    if (hasScene || hasData || hasConfig) {
+      result.push({
+        name: entry.name,
+        path: fullPath
+      });
+    }
+  }
+  return result;
+}
+
+function spawnEditor(projectPath) {
+  const editorDir = path.join(getProjectRoot(), 'editor');
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const child = spawn(npmCmd, ['start'], {
+    cwd: editorDir,
+    detached: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      DSE_LAUNCHER_PROJECT_PATH: projectPath || ''
+    }
+  });
+  child.unref();
+}
+
+function createWindow() {
+  const mainWindow = new BrowserWindow({
+    width: 980,
+    height: 660,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  mainWindow.loadFile('index.html');
+}
+
+ipcMain.handle('launcher:getEngineVersions', () => resolveEngineVersions());
+
+ipcMain.handle('launcher:chooseProjectRoot', async () => {
+  const result = await dialog.showOpenDialog({
+    title: '选择项目根目录',
+    properties: ['openDirectory']
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return '';
+  }
+  return result.filePaths[0];
+});
+
+ipcMain.handle('launcher:scanProjects', (event, rootDir) => scanProjectDirectories(rootDir));
+
+ipcMain.handle('launcher:launchEditor', (event, projectPath) => {
+  spawnEditor(projectPath);
+  return { success: true };
+});
+
+app.whenReady().then(() => {
+  createWindow();
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});

@@ -14,6 +14,8 @@ add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件�
 option(DSE_ENABLE_PHYSX "Enable PhysX integration" OFF)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
+option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
+option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 if(DSE_ENABLE_2D)
     add_definitions(-D DSE_ENABLE_2D)
     add_definitions(-D DSE_PHASE1_ONLY)
@@ -164,6 +166,53 @@ enable_testing()
 
 find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
 find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
+set(DSE_NPM_CACHE_DIR "${CMAKE_SOURCE_DIR}/.npm-cache")
+file(MAKE_DIRECTORY "${DSE_NPM_CACHE_DIR}")
+
+if(DSE_BUILD_EDITOR)
+    if(NPM_EXECUTABLE AND NPX_EXECUTABLE)
+        add_custom_target(dse_editor ALL
+            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} install
+            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPX_EXECUTABLE} node-gyp rebuild
+            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} run build
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        )
+        add_custom_target(dse_editor_pack ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bin/editor
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/editor/main.js
+                ${CMAKE_SOURCE_DIR}/editor/preload.js
+                ${CMAKE_SOURCE_DIR}/editor/index.html
+                ${CMAKE_SOURCE_DIR}/editor/package.json
+                ${CMAKE_SOURCE_DIR}/bin/editor
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_SOURCE_DIR}/editor/dist
+                ${CMAKE_SOURCE_DIR}/bin/editor/dist
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_SOURCE_DIR}/editor/scripts
+                ${CMAKE_SOURCE_DIR}/bin/editor/scripts
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        )
+        add_dependencies(dse_editor_pack dse_editor)
+        add_custom_target(dse_editor_exe
+            COMMAND ${CMAKE_COMMAND} -E env NPM_CONFIG_CACHE=${DSE_NPM_CACHE_DIR} ${NPM_EXECUTABLE} run package:win
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor
+        )
+        add_dependencies(dse_editor_exe dse_editor)
+    else()
+        message(FATAL_ERROR "DSE_BUILD_EDITOR requires npm and npx")
+    endif()
+endif()
+
+if(DSE_BUILD_LAUNCHER)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/launcher/CMakeLists.txt")
+        add_subdirectory(launcher)
+    else()
+        add_custom_target(dse_launcher ALL
+            COMMAND ${CMAKE_COMMAND} -E echo "launcher_not_implemented"
+        )
+    endif()
+endif()
 
 if(NPM_EXECUTABLE AND NPX_EXECUTABLE)
     add_test(

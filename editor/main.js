@@ -10,10 +10,23 @@ let runtimeEngineProcess = null;
 const runtimeSharedFrameName = 'DSEngineEditorSharedFrameV1';
 process.env.DSE_EDITOR_FRAME_SHM_NAME = runtimeSharedFrameName;
 
+function resolveProjectRoot() {
+  if (app.isPackaged) {
+    const portableRoot = path.dirname(process.execPath);
+    const devRoot = path.resolve(__dirname, '..');
+    if (fs.existsSync(path.join(portableRoot, 'bin'))) {
+      return portableRoot;
+    }
+    return devRoot;
+  }
+  return path.resolve(__dirname, '..');
+}
+
 function resolveRuntimeEngineExe() {
+  const projectRoot = resolveProjectRoot();
   const candidates = [
-    path.join(__dirname, '..', 'bin', 'DSEngine_debug.exe'),
-    path.join(__dirname, '..', 'bin', 'DSEngine.exe')
+    path.join(projectRoot, 'bin', 'DSEngine_debug.exe'),
+    path.join(projectRoot, 'bin', 'DSEngine.exe')
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) {
@@ -32,7 +45,7 @@ function startRuntimeFrameBridge() {
     return;
   }
   runtimeEngineProcess = spawn(engineExe, [], {
-    cwd: path.join(__dirname, '..'),
+    cwd: resolveProjectRoot(),
     windowsHide: true,
     env: {
       ...process.env,

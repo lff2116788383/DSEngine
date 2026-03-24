@@ -9,6 +9,7 @@
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
         "../src",
+        "../depends/entt-3.13.0/src",
         "../build/_deps/entt-src/single_include",
         "../depends",
         "../depends/miniaudio",
