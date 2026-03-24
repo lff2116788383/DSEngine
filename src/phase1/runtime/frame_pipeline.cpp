@@ -113,12 +113,12 @@ bool Phase1FramePipeline::Init() {
     BuildRenderGraph();
 
     initialized_ = true;
-    core::EventBus::Instance().Publish<core::SceneLifecycleEvent>(core::SceneLifecyclePhase::Init);
+    dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
     return true;
 }
 
 void Phase1FramePipeline::Shutdown() {
-    core::EventBus::Instance().Publish<core::SceneLifecycleEvent>(core::SceneLifecyclePhase::Shutdown);
+    dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     auto& asset_manager = ResolveAssetManager(asset_manager_);
     render_graph_passes_.clear();
     if (business_mode_ == Phase1BusinessMode::Lua) {

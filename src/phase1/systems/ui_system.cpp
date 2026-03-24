@@ -133,7 +133,7 @@ void UISystem::HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos
                 ui.is_pressed = false;
                 if (ui.on_click) ui.on_click(entity);
                 if (button && button->on_click) button->on_click(entity);
-                core::EventBus::Instance().Publish<core::UiClickEvent>(static_cast<std::uint32_t>(entity));
+                dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
             }
         }
 

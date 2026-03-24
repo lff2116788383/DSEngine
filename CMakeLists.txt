@@ -28,9 +28,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin)
 
 if (MSVC)
+    set(CMAKE_VS_GLOBALS "VcpkgApplocalDeps=false")
     add_compile_options(/bigobj)
     add_compile_options(/wd4819)#忽略保存为unicode警告
     add_compile_options(/FS) # 修复多线程编译 PDB 写入冲突 C1041
+    add_compile_options("$<$<CONFIG:Debug>:/Z7>")
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Z7>")
 endif ()
 include(CMakeLists.txt.glfw)
 include(CMakeLists.txt.FreeType)
@@ -115,6 +118,9 @@ endif ()
 
 function(dse_copy_runtime_assets target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${target_name}>
+        $<TARGET_FILE_DIR:${target_name}>
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data
@@ -124,6 +130,7 @@ function(dse_copy_runtime_assets target_name)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/script
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/script
+        COMMAND_EXPAND_LISTS
     )
 endfunction()
 

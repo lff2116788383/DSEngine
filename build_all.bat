@@ -59,7 +59,7 @@ if %ERRORLEVEL% neq 0 (
     echo Please check the error messages above.
     echo Common reasons:
     echo 1. Missing header files or syntax errors in source code.
-    echo 2. Missing third-party tools ^(like PowerShell Core "pwsh.exe" if used by submodules^).
+    echo 2. Missing third-party tools required by optional submodules.
     echo ========================================================
     pause
     exit /b %ERRORLEVEL%
@@ -69,8 +69,14 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo [4/4] Running Verification Tests...
 
+set CPP_EXE=.\bin\DSEngine_c++_debug.exe
+if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe
+
+set LUA_EXE=.\bin\DSEngine_lua_debug.exe
+if not exist "%LUA_EXE%" set LUA_EXE=.\bin\DSEngine_lua.exe
+
 echo -- Running C++ Example --
-.\bin\DSEngine_example_cpp.exe
+"%CPP_EXE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] C++ Example failed with exit code %ERRORLEVEL%!
     pause
@@ -78,7 +84,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo -- Running Lua Example --
-.\bin\DSEngine_lua.exe
+"%LUA_EXE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Lua Example failed with exit code %ERRORLEVEL%!
     pause

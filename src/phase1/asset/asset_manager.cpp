@@ -192,7 +192,7 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
         if (it != textures_.end()) {
             if (auto shared = it->second.lock()) {
                 if (callback) callback(shared);
-                core::EventBus::Instance().Publish<core::ResourceLoadedEvent>(cache_key, true);
+                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(cache_key, true);
                 return;
             }
         }
@@ -212,7 +212,7 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
                     callback(nullptr);
                 });
                 pending_main_thread_callbacks_.push_back([load_path]() {
-                    core::EventBus::Instance().Publish<core::ResourceLoadedEvent>(load_path, false);
+                    dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, false);
                 });
                 pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
                 if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {
@@ -237,7 +237,7 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
                 if (callback) {
                     callback(nullptr);
                 }
-                core::EventBus::Instance().Publish<core::ResourceLoadedEvent>(load_path, false);
+                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, false);
                 return;
             }
             auto tex = std::make_shared<TextureAsset>(load_path, handle, width, height, channels);
@@ -248,7 +248,7 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
             if (callback) {
                 callback(tex);
             }
-            core::EventBus::Instance().Publish<core::ResourceLoadedEvent>(load_path, true);
+            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, true);
         });
         pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
         if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {

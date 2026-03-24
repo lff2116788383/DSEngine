@@ -5,6 +5,9 @@
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
+#ifdef PlaySound
+#undef PlaySound
+#endif
 
 namespace dse {
 namespace phase1 {
@@ -167,14 +170,14 @@ void AudioSystem::PauseBgm() {
     if (!bgm_sound_ptr_) {
         return;
     }
-    ma_sound_set_paused(static_cast<ma_sound*>(bgm_sound_ptr_), MA_TRUE);
+    ma_sound_stop(static_cast<ma_sound*>(bgm_sound_ptr_));
 }
 
 void AudioSystem::ResumeBgm() {
     if (!bgm_sound_ptr_) {
         return;
     }
-    ma_sound_set_paused(static_cast<ma_sound*>(bgm_sound_ptr_), MA_FALSE);
+    ma_sound_start(static_cast<ma_sound*>(bgm_sound_ptr_));
 }
 
 void AudioSystem::StopBgm() {
