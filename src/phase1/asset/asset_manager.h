@@ -77,6 +77,17 @@ private:
     Phase1MaterialBlendMode blend_mode_ = Phase1MaterialBlendMode::Alpha;
 };
 
+class AudioClipAsset {
+public:
+    AudioClipAsset(const std::string& path) : path_(path) {}
+    ~AudioClipAsset() = default;
+
+    const std::string& GetPath() const { return path_; }
+
+private:
+    std::string path_;
+};
+
 class Phase1AssetManager {
 public:
     static Phase1AssetManager& Instance();
@@ -86,6 +97,7 @@ public:
 
     std::shared_ptr<TextureAsset> LoadTexture(const std::string& path);
     std::shared_ptr<ShaderAsset> LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src);
+    std::shared_ptr<AudioClipAsset> LoadAudioClip(const std::string& path);
     
     // Async load texture using JobSystem
     void LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback);
@@ -104,6 +116,7 @@ private:
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
+    std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
     std::unordered_map<unsigned int, std::weak_ptr<Phase1MaterialAsset>> materials_;
     unsigned int next_texture_handle_ = 410000;
     unsigned int next_shader_handle_ = 420000;

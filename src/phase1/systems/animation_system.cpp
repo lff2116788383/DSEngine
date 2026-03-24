@@ -36,7 +36,8 @@ void AnimationSystem::Update(Phase1World& world, float delta_time) {
         if (!animator.playing) continue;
 
         auto& state = animator.states[animator.current_state];
-        if (state.frames.empty()) continue;
+        if (state.frames.empty() && state.frame_handles.empty()) continue;
+        size_t total_frames = state.frames.empty() ? state.frame_handles.size() : state.frames.size();
 
         animator.current_time += delta_time;
         float frame_duration = 1.0f / state.frame_rate;
@@ -45,20 +46,25 @@ void AnimationSystem::Update(Phase1World& world, float delta_time) {
             animator.current_time -= frame_duration;
             animator.current_frame++;
             
-            if (animator.current_frame >= state.frames.size()) {
+            if (animator.current_frame >= total_frames) {
                 if (state.loop) {
                     animator.current_frame = 0;
                 } else {
-                    animator.current_frame = state.frames.size() - 1;
+                    animator.current_frame = total_frames - 1;
                     animator.playing = false;
                 }
             }
             
             // Update the sprite texture
-            auto tex = state.frames[animator.current_frame];
-            sprite.texture = tex;
-            if (tex) {
-                sprite.texture_handle = tex->GetHandle();
+            if (!state.frames.empty()) {
+                auto tex = state.frames[animator.current_frame];
+                sprite.texture = tex;
+                if (tex) {
+                    sprite.texture_handle = tex->GetHandle();
+                }
+            } else if (!state.frame_handles.empty()) {
+                sprite.texture_handle = state.frame_handles[animator.current_frame];
+                sprite.texture = nullptr;
             }
         }
     }

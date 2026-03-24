@@ -108,6 +108,13 @@ public:
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual unsigned int CreatePipelineState(const Phase1PipelineStateDesc& desc) = 0;
+    
+    virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
+    virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
+    virtual void DeleteBuffer(unsigned int handle) = 0;
+    virtual unsigned int CreateVertexArray() = 0;
+    virtual void DeleteVertexArray(unsigned int handle) = 0;
+
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;
     virtual void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) = 0;
     virtual void EndFrame() = 0;
@@ -120,6 +127,13 @@ public:
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const Phase1RenderTargetDesc& desc) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
+    
+    unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index);
+    void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index);
+    void DeleteBuffer(unsigned int handle);
+    unsigned int CreateVertexArray();
+    void DeleteVertexArray(unsigned int handle);
+
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     unsigned int CreatePipelineState(const Phase1PipelineStateDesc& desc) override;

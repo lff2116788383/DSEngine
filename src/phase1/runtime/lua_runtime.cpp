@@ -219,6 +219,186 @@ int LuaDSEAddBoxCollider(lua_State* L) {
     return 0;
 }
 
+int LuaDSEAddAudioSource(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* path = luaL_checkstring(L, 2);
+    bool play_on_awake = lua_toboolean(L, 3);
+    bool loop = lua_toboolean(L, 4);
+    float volume = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    auto& audio = world->registry().emplace_or_replace<AudioSourceComponent>(e);
+    audio.clip = Phase1AssetManager::Instance().LoadAudioClip(path);
+    audio.play_on_awake = play_on_awake;
+    audio.loop = loop;
+    audio.volume = volume;
+    return 0;
+}
+
+int LuaDSEAddUIRenderer(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    unsigned int tex_handle = static_cast<unsigned int>(luaL_optinteger(L, 2, 0));
+    float r = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float a = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    int order = static_cast<int>(luaL_optinteger(L, 7, 0));
+    auto& ui = world->registry().emplace_or_replace<UIRendererComponent>(e);
+    ui.texture_handle = tex_handle;
+    ui.color = glm::vec4(r, g, b, a);
+    ui.order = order;
+    return 0;
+}
+
+int LuaDSEAddUILabel(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* text = luaL_checkstring(L, 2);
+    unsigned int font_tex_handle = static_cast<unsigned int>(luaL_optinteger(L, 3, 0));
+    float r = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    float a = static_cast<float>(luaL_optnumber(L, 7, 1.0));
+    float glyph_w = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    float glyph_h = static_cast<float>(luaL_optnumber(L, 9, 0.0));
+    float spacing = static_cast<float>(luaL_optnumber(L, 10, 0.0));
+    int atlas_cols = static_cast<int>(luaL_optinteger(L, 11, 0));
+    int atlas_rows = static_cast<int>(luaL_optinteger(L, 12, 0));
+    int ascii_start = static_cast<int>(luaL_optinteger(L, 13, 0));
+    float offset_x = static_cast<float>(luaL_optnumber(L, 14, 0.0));
+    float offset_y = static_cast<float>(luaL_optnumber(L, 15, 0.0));
+    auto& label = world->registry().emplace_or_replace<UILabelComponent>(e);
+    label.text = text;
+    label.font_texture_handle = font_tex_handle;
+    label.color = glm::vec4(r, g, b, a);
+    if (glyph_w > 0.0f && glyph_h > 0.0f) {
+        label.glyph_size = glm::vec2(glyph_w, glyph_h);
+    }
+    if (spacing != 0.0f) {
+        label.spacing = spacing;
+    }
+    if (atlas_cols > 0) {
+        label.atlas_cols = atlas_cols;
+    }
+    if (atlas_rows > 0) {
+        label.atlas_rows = atlas_rows;
+    }
+    if (ascii_start > 0) {
+        label.ascii_start = ascii_start;
+    }
+    if (offset_x != 0.0f || offset_y != 0.0f) {
+        label.offset = glm::vec2(offset_x, offset_y);
+    }
+    label.dirty = true;
+    return 0;
+}
+
+int LuaDSEAddTilemap(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int width = static_cast<int>(luaL_checkinteger(L, 2));
+    int height = static_cast<int>(luaL_checkinteger(L, 3));
+    float tile_size = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    unsigned int tex_handle = static_cast<unsigned int>(luaL_optinteger(L, 5, 0));
+    auto& tilemap = world->registry().emplace_or_replace<TilemapComponent>(e);
+    tilemap.width = width;
+    tilemap.height = height;
+    tilemap.tile_size = tile_size;
+    tilemap.tileset_handle = tex_handle;
+    tilemap.tiles.resize(width * height, -1);
+    return 0;
+}
+
+int LuaDSESetTile(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int x = static_cast<int>(luaL_checkinteger(L, 2));
+    int y = static_cast<int>(luaL_checkinteger(L, 3));
+    int tile_id = static_cast<int>(luaL_checkinteger(L, 4));
+    if (world->registry().valid(e) && world->registry().all_of<TilemapComponent>(e)) {
+        auto& tilemap = world->registry().get<TilemapComponent>(e);
+        if (x >= 0 && x < tilemap.width && y >= 0 && y < tilemap.height) {
+            tilemap.tiles[y * tilemap.width + x] = tile_id;
+            tilemap.dirty = true;
+        }
+    }
+    return 0;
+}
+
+int LuaDSEAddAnimator(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    world->registry().emplace_or_replace<AnimatorComponent>(e);
+    return 0;
+}
+
+int LuaDSEAddAnimationState(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* state_name = luaL_checkstring(L, 2);
+    float fps = static_cast<float>(luaL_checknumber(L, 3));
+    bool loop = lua_toboolean(L, 4);
+
+    if (world->registry().valid(e) && world->registry().all_of<AnimatorComponent>(e)) {
+        auto& animator = world->registry().get<AnimatorComponent>(e);
+        AnimationState state;
+        state.name = state_name;
+        state.frame_rate = fps;
+        state.loop = loop;
+        
+        // table at index 5 for textures
+        if (lua_istable(L, 5)) {
+            int len = lua_rawlen(L, 5);
+            for (int i = 1; i <= len; ++i) {
+                lua_rawgeti(L, 5, i);
+                unsigned int handle = static_cast<unsigned int>(lua_tointeger(L, -1));
+                state.frame_handles.push_back(handle);
+                lua_pop(L, 1);
+            }
+        }
+        animator.states[state_name] = state;
+    }
+    return 0;
+}
+
+int LuaDSEPlayAnimation(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* state_name = luaL_checkstring(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<AnimatorComponent>(e)) {
+        auto& animator = world->registry().get<AnimatorComponent>(e);
+        animator.current_state = state_name;
+        animator.current_time = 0.0f;
+        animator.current_frame = 0;
+        animator.playing = true;
+    }
+    return 0;
+}
+
 int LuaDSEGetDrawCalls(lua_State* L) {
     const auto& fn = State().api_context.get_draw_calls;
     lua_pushinteger(L, fn ? fn() : 0);
@@ -247,6 +427,14 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_register(L, "DSE_AddSprite", LuaDSEAddSprite);
     lua_register(L, "DSE_AddRigidBody", LuaDSEAddRigidBody);
     lua_register(L, "DSE_AddBoxCollider", LuaDSEAddBoxCollider);
+    lua_register(L, "DSE_AddAudioSource", LuaDSEAddAudioSource);
+    lua_register(L, "DSE_AddUIRenderer", LuaDSEAddUIRenderer);
+    lua_register(L, "DSE_AddUILabel", LuaDSEAddUILabel);
+    lua_register(L, "DSE_AddTilemap", LuaDSEAddTilemap);
+    lua_register(L, "DSE_SetTile", LuaDSESetTile);
+    lua_register(L, "DSE_AddAnimator", LuaDSEAddAnimator);
+    lua_register(L, "DSE_AddAnimationState", LuaDSEAddAnimationState);
+    lua_register(L, "DSE_PlayAnimation", LuaDSEPlayAnimation);
     lua_register(L, "DSE_GetDrawCalls", LuaDSEGetDrawCalls);
     lua_register(L, "DSE_GetMaxBatchSprites", LuaDSEGetMaxBatchSprites);
     lua_register(L, "DSE_GetSpriteCount", LuaDSEGetSpriteCount);

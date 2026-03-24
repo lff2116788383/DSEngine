@@ -60,6 +60,39 @@ unsigned int CompileShaderProgram(const char* vertex_shader_source, const char* 
 }
 }
 
+unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    unsigned int handle = 0;
+    glGenBuffers(1, &handle);
+    resource_ledger_.buffers_created += 1;
+    unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
+    glBindBuffer(target, handle);
+    glBufferData(target, size, data, is_dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+    return handle;
+}
+
+void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
+    unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
+    glBindBuffer(target, handle);
+    glBufferSubData(target, offset, size, data);
+}
+
+void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
+    glDeleteBuffers(1, &handle);
+    resource_ledger_.buffers_destroyed += 1;
+}
+
+unsigned int OpenGLRhiDevice::CreateVertexArray() {
+    unsigned int handle = 0;
+    glGenVertexArrays(1, &handle);
+    resource_ledger_.vertex_arrays_created += 1;
+    return handle;
+}
+
+void OpenGLRhiDevice::DeleteVertexArray(unsigned int handle) {
+    glDeleteVertexArrays(1, &handle);
+    resource_ledger_.vertex_arrays_destroyed += 1;
+}
+
 void OpenGLRhiDevice::EnsureInitialized() {
     if (initialized_) {
         return;
@@ -109,17 +142,13 @@ void main() {
         indices[j++] = i * 4 + 0;
     }
 
-    glGenVertexArrays(1, &vao_handle_);
-    resource_ledger_.vertex_arrays_created += 1;
+    vao_handle_ = CreateVertexArray();
     glBindVertexArray(vao_handle_);
-    glGenBuffers(1, &vbo_handle_);
-    resource_ledger_.buffers_created += 1;
+    vbo_handle_ = CreateBuffer(vertices.size() * sizeof(BatchVertex), vertices.data(), true, false);
+    ebo_handle_ = CreateBuffer(indices.size() * sizeof(unsigned short), indices.data(), false, true);
+    
     glBindBuffer(GL_ARRAY_BUFFER, vbo_handle_);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(BatchVertex), vertices.data(), GL_DYNAMIC_DRAW);
-    glGenBuffers(1, &ebo_handle_);
-    resource_ledger_.buffers_created += 1;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_handle_);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned short), indices.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<void*>(offsetof(BatchVertex, pos)));
     glEnableVertexAttribArray(1);
@@ -173,18 +202,15 @@ void OpenGLRhiDevice::Shutdown() {
         white_texture_handle_ = 0;
     }
     if (vbo_handle_ != 0) {
-        glDeleteBuffers(1, &vbo_handle_);
-        resource_ledger_.buffers_destroyed += 1;
+        DeleteBuffer(vbo_handle_);
         vbo_handle_ = 0;
     }
     if (ebo_handle_ != 0) {
-        glDeleteBuffers(1, &ebo_handle_);
-        resource_ledger_.buffers_destroyed += 1;
+        DeleteBuffer(ebo_handle_);
         ebo_handle_ = 0;
     }
     if (vao_handle_ != 0) {
-        glDeleteVertexArrays(1, &vao_handle_);
-        resource_ledger_.vertex_arrays_destroyed += 1;
+        DeleteVertexArray(vao_handle_);
         vao_handle_ = 0;
     }
     if (shader_handle_ != 0) {
@@ -469,8 +495,7 @@ void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<Phase1DrawBatchItem>
         current_frame_stats_.draw_calls += 1;
         current_frame_stats_.max_batch_sprites = std::max(current_frame_stats_.max_batch_sprites, batch_sprites);
         
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_handle_);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, batch_vertices.size() * sizeof(BatchVertex), batch_vertices.data());
+        UpdateBuffer(vbo_handle_, 0, batch_vertices.size() * sizeof(BatchVertex), batch_vertices.data(), false);
         
         apply_blend(current_blend_mode, current_shader_variant);
         glActiveTexture(GL_TEXTURE0);

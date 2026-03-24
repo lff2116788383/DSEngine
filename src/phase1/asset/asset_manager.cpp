@@ -182,6 +182,35 @@ std::shared_ptr<ShaderAsset> Phase1AssetManager::LoadShader(const std::string& n
     return shader;
 }
 
+std::shared_ptr<AudioClipAsset> Phase1AssetManager::LoadAudioClip(const std::string& path) {
+    const std::string data_root = GetDataRoot();
+    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string load_path = resolved_path.empty() ? path : resolved_path;
+    if (!std::filesystem::exists(load_path)) {
+        DEBUG_LOG_ERROR("Failed to locate audio clip: {}", path);
+        return nullptr;
+    }
+    const std::string cache_key = NormalizePath(load_path);
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = audio_clips_.find(cache_key);
+        if (it != audio_clips_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    // Since we're not actually decoding here to save complexity, we just store the path
+    auto clip = std::make_shared<AudioClipAsset>(load_path);
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        audio_clips_[cache_key] = clip;
+    }
+    return clip;
+}
+
 void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
@@ -299,6 +328,13 @@ void Phase1AssetManager::UnloadUnused() {
     for (auto it = shaders_.begin(); it != shaders_.end(); ) {
         if (it->second.expired()) {
             it = shaders_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = audio_clips_.begin(); it != audio_clips_.end(); ) {
+        if (it->second.expired()) {
+            it = audio_clips_.erase(it);
         } else {
             ++it;
         }

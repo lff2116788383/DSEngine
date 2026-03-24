@@ -1,5 +1,6 @@
 #include "audio_system.h"
 #include "../ecs/components_2d.h"
+#include "../asset/asset_manager.h"
 #include <iostream>
 #include <algorithm>
 
@@ -61,10 +62,10 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         auto sound_it = entity_sounds_.find(key);
         ma_sound* sound = sound_it != entity_sounds_.end() ? static_cast<ma_sound*>(sound_it->second) : nullptr;
 
-        if (!sound && audio.play_on_awake && !audio.clip_path.empty()) {
+        if (!sound && audio.play_on_awake && audio.clip) {
             ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
             ma_sound* new_sound = new ma_sound;
-            ma_result result = ma_sound_init_from_file(engine, audio.clip_path.c_str(), 0, nullptr, nullptr, new_sound);
+            ma_result result = ma_sound_init_from_file(engine, audio.clip->GetPath().c_str(), 0, nullptr, nullptr, new_sound);
             if (result == MA_SUCCESS) {
                 ma_sound_set_looping(new_sound, audio.loop ? MA_TRUE : MA_FALSE);
                 ma_sound_set_volume(new_sound, audio.volume * sfx_volume_);

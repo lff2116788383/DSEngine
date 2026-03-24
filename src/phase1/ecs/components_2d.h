@@ -174,6 +174,7 @@ struct BoxCollider2DComponent {
 struct AnimationState {
     std::string name;
     std::vector<std::shared_ptr<TextureAsset>> frames;
+    std::vector<unsigned int> frame_handles; // for lua bindings
     float frame_rate = 10.0f;
     bool loop = true;
 };
@@ -224,8 +225,10 @@ struct ParticleEmitterComponent {
     glm::vec4 start_color = glm::vec4(1.0f);
 };
 
+class AudioClipAsset;
+
 struct AudioSourceComponent {
-    std::string clip_path;
+    std::shared_ptr<AudioClipAsset> clip;
     bool play_on_awake = true;
     bool loop = false;
     float volume = 1.0f;
