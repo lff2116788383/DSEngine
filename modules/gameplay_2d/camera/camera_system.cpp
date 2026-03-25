@@ -2,7 +2,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-void CameraSystem::Update(Phase1World& world, float aspect_ratio) {
+void CameraSystem::Update(World& world, float aspect_ratio) {
     if (aspect_ratio <= 0.0f) {
         aspect_ratio = 1.0f;
     }

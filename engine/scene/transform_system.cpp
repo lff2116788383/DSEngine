@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-void TransformSystem::Update(Phase1World& world) {
+void TransformSystem::Update(World& world) {
     auto& registry = world.registry();
     auto view = registry.view<TransformComponent>();
     std::unordered_map<std::uint32_t, unsigned char> visit_state;

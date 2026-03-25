@@ -4,8 +4,8 @@
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 
-void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
-    std::vector<Phase1SpriteDrawItem> items;
+void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+    std::vector<SpriteDrawItem> items;
     auto view = world.registry().view<SpriteRendererComponent, TransformComponent>();
     
     for (auto entity : view) {
@@ -15,7 +15,7 @@ void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
         }
         auto& transform = view.get<TransformComponent>(entity);
         
-        Phase1SpriteDrawItem item;
+        SpriteDrawItem item;
         item.texture_handle = sprite.texture_handle;
         item.material_instance_id = sprite.material_instance_id;
         item.shader_variant_key = static_cast<unsigned int>(std::hash<std::string>{}(sprite.shader_variant));
@@ -28,7 +28,7 @@ void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
         items.push_back(item);
     }
     
-    std::sort(items.begin(), items.end(), [](const Phase1SpriteDrawItem& a, const Phase1SpriteDrawItem& b) {
+    std::sort(items.begin(), items.end(), [](const SpriteDrawItem& a, const SpriteDrawItem& b) {
         if (a.sorting_layer != b.sorting_layer) {
             return a.sorting_layer < b.sorting_layer;
         }
@@ -49,8 +49,8 @@ void SpriteRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
     cmd_buffer.DrawBatch(items);
 }
 
-void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {
-    std::vector<Phase1SpriteDrawItem> items;
+void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {
+    std::vector<SpriteDrawItem> items;
     auto view = world.registry().view<UIRendererComponent>();
     
     for (auto entity : view) {
@@ -59,7 +59,7 @@ void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int s
             continue;
         }
         
-        Phase1SpriteDrawItem item;
+        SpriteDrawItem item;
         item.texture_handle = ui.texture_handle;
         
         // 1. Calculate Anchor Position (assuming parent is screen for now, in a real system we'd traverse a hierarchy)
@@ -106,7 +106,7 @@ void UIRenderSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer, int s
         return;
     }
 
-    std::sort(items.begin(), items.end(), [](const Phase1SpriteDrawItem& a, const Phase1SpriteDrawItem& b) {
+    std::sort(items.begin(), items.end(), [](const SpriteDrawItem& a, const SpriteDrawItem& b) {
         if (a.texture_handle != b.texture_handle) {
             return a.texture_handle < b.texture_handle;
         }

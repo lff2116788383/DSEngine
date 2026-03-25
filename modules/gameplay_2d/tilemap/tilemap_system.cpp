@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 void TilemapSystem::Update(entt::registry& registry) {
     auto view = registry.view<TilemapComponent, TransformComponent>();
@@ -103,5 +103,5 @@ void TilemapSystem::Update(entt::registry& registry) {
     }
 }
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse

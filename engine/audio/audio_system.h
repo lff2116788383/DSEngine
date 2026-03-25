@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_AUDIO_SYSTEM_H
-#define DSE_PHASE1_AUDIO_SYSTEM_H
+#ifndef DSE_AUDIO_SYSTEM_H
+#define DSE_AUDIO_SYSTEM_H
 
 #include <entt/entt.hpp>
 #include <string>
@@ -8,7 +8,7 @@
 #include <cstdint>
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 class AudioSystem {
 public:
@@ -45,7 +45,7 @@ private:
     bool is_initialized = false;
 };
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse
 
-#endif // DSE_PHASE1_AUDIO_SYSTEM_H
+#endif

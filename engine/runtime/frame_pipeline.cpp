@@ -18,25 +18,25 @@
 #include <vector>
 
 namespace {
-Phase1AssetManager& ResolveAssetManager(Phase1AssetManager* asset_manager) {
+AssetManager& ResolveAssetManager(AssetManager* asset_manager) {
     if (asset_manager) {
         return *asset_manager;
     }
-    return Phase1AssetManager::Instance();
+    return AssetManager::Instance();
 }
 }
 
-Phase1FramePipeline& Phase1FramePipeline::Instance() {
-    static Phase1FramePipeline instance;
+FramePipeline& FramePipeline::Instance() {
+    static FramePipeline instance;
     return instance;
 }
 
-bool Phase1FramePipeline::Init() {
+bool FramePipeline::Init() {
     if (initialized_) {
         return true;
     }
     if (!world_) {
-        DEBUG_LOG_ERROR("Phase1FramePipeline init failed: world is not injected");
+        DEBUG_LOG_ERROR("FramePipeline init failed: world is not injected");
         return false;
     }
     auto& asset_manager = ResolveAssetManager(asset_manager_);
@@ -67,7 +67,7 @@ bool Phase1FramePipeline::Init() {
             callback_budget_per_frame_ = static_cast<std::size_t>(budget);
         }
     }
-    DEBUG_LOG_INFO("Phase1 data root: {}", asset_manager.GetDataRoot());
+    DEBUG_LOG_INFO("Runtime data root: {}", asset_manager.GetDataRoot());
     if (Screen::width() <= 0 || Screen::height() <= 0) {
         Screen::set_width_height(1280, 720);
     }
@@ -87,8 +87,8 @@ bool Phase1FramePipeline::Init() {
     bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     
-    if (business_mode_ == Phase1BusinessMode::Lua) {
-        phase1::runtime::ConfigureLuaApiContext({
+    if (business_mode_ == BusinessMode::Lua) {
+        dse::runtime::ConfigureLuaApiContext({
             world_,
             [this](const std::string& title) { SetWindowTitle(title); },
             [this]() { return LastDrawCalls(); },
@@ -96,15 +96,15 @@ bool Phase1FramePipeline::Init() {
             [this]() { return LastSpriteCount(); },
             &asset_manager
         });
-        const bool lua_bootstrap_ok = phase1::runtime::BootstrapLuaRuntime();
-        DEBUG_LOG_INFO("Phase1 lua bootstrap: {}", lua_bootstrap_ok ? "OK" : "FAILED");
+        const bool lua_bootstrap_ok = dse::runtime::BootstrapLuaRuntime();
+        DEBUG_LOG_INFO("Lua bootstrap: {}", lua_bootstrap_ok ? "OK" : "FAILED");
         if (!lua_bootstrap_ok) {
             Shutdown();
             return false;
         }
     } else {
-        const bool cpp_bootstrap_ok = phase1::runtime::BootstrapCppBusiness(*world_);
-        DEBUG_LOG_INFO("Phase1 cpp business mode bootstrap: {}", cpp_bootstrap_ok ? "OK" : "FAILED");
+        const bool cpp_bootstrap_ok = dse::runtime::BootstrapCppBusiness(*world_);
+        DEBUG_LOG_INFO("Cpp business mode bootstrap: {}", cpp_bootstrap_ok ? "OK" : "FAILED");
         if (!cpp_bootstrap_ok) {
             Shutdown();
             return false;
@@ -117,14 +117,14 @@ bool Phase1FramePipeline::Init() {
     return true;
 }
 
-void Phase1FramePipeline::Shutdown() {
+void FramePipeline::Shutdown() {
     dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     auto& asset_manager = ResolveAssetManager(asset_manager_);
     render_graph_passes_.clear();
-    if (business_mode_ == Phase1BusinessMode::Lua) {
-        phase1::runtime::ShutdownLuaRuntime();
+    if (business_mode_ == BusinessMode::Lua) {
+        dse::runtime::ShutdownLuaRuntime();
     } else {
-        phase1::runtime::ShutdownCppBusiness();
+        dse::runtime::ShutdownCppBusiness();
     }
     audio_system_.Shutdown();
     asset_manager.SetRhiDevice(nullptr);
@@ -146,17 +146,17 @@ void Phase1FramePipeline::Shutdown() {
     initialized_ = false;
 }
 
-void Phase1FramePipeline::Update(float delta_time) {
+void FramePipeline::Update(float delta_time) {
     if (!initialized_) {
         return;
     }
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = ResolveAssetManager(asset_manager_);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
-    if (business_mode_ == Phase1BusinessMode::Lua) {
-        phase1::runtime::TickLuaRuntime(delta_time);
+    if (business_mode_ == BusinessMode::Lua) {
+        dse::runtime::TickLuaRuntime(delta_time);
     } else {
-        phase1::runtime::TickCppBusiness(*world_, delta_time);
+        dse::runtime::TickCppBusiness(*world_, delta_time);
     }
     
     tilemap_system_.Update(world_->registry());
@@ -170,7 +170,7 @@ void Phase1FramePipeline::Update(float delta_time) {
     update_samples_ += 1;
 }
 
-void Phase1FramePipeline::FixedUpdate(float fixed_delta_time) {
+void FramePipeline::FixedUpdate(float fixed_delta_time) {
     if (!initialized_) {
         return;
     }
@@ -181,7 +181,7 @@ void Phase1FramePipeline::FixedUpdate(float fixed_delta_time) {
     fixed_samples_ += 1;
 }
 
-void Phase1FramePipeline::Render() {
+void FramePipeline::Render() {
     if (!initialized_) {
         return;
     }
@@ -219,7 +219,7 @@ void Phase1FramePipeline::Render() {
         auto& asset_manager = ResolveAssetManager(asset_manager_);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Phase1 stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
                        stats.draw_calls,
@@ -241,7 +241,7 @@ void Phase1FramePipeline::Render() {
     }
 }
 
-void Phase1FramePipeline::BuildRenderGraph() {
+void FramePipeline::BuildRenderGraph() {
     render_graph_passes_.clear();
     render_graph_passes_.push_back({
         "scene_pass",
@@ -275,12 +275,12 @@ void Phase1FramePipeline::BuildRenderGraph() {
             const unsigned int ui_color = rhi_device_->GetRenderTargetColorTexture(ui_render_target_);
             static bool logged_once = false;
             if (!logged_once) {
-                DEBUG_LOG_INFO("Phase1 render diagnostics: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
+                DEBUG_LOG_INFO("Render diagnostics: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
                                scene_render_target_, ui_render_target_, scene_color, ui_color);
                 logged_once = true;
             }
             if (scene_color == 0 || ui_color == 0) {
-                DEBUG_LOG_ERROR("Phase1 render composite skipped: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
+                DEBUG_LOG_ERROR("Render composite skipped: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
                                 scene_render_target_, ui_render_target_, scene_color, ui_color);
                 return;
             }
@@ -290,7 +290,7 @@ void Phase1FramePipeline::BuildRenderGraph() {
             glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
             cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
 
-            Phase1SpriteDrawItem scene_quad;
+            SpriteDrawItem scene_quad;
             scene_quad.texture_handle = scene_color;
             scene_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
             scene_quad.model = glm::scale(scene_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
@@ -298,7 +298,7 @@ void Phase1FramePipeline::BuildRenderGraph() {
             cmd_buffer.DrawBatch({scene_quad});
 
             cmd_buffer.SetPipelineState(sprite_pipeline_state_);
-            Phase1SpriteDrawItem ui_quad;
+            SpriteDrawItem ui_quad;
             ui_quad.texture_handle = ui_color;
             ui_quad.model = scene_quad.model;
             ui_quad.color = glm::vec4(1.0f);
@@ -308,57 +308,57 @@ void Phase1FramePipeline::BuildRenderGraph() {
     });
 }
 
-void Phase1FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
+void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     for (auto& pass : render_graph_passes_) {
         pass.execute(cmd_buffer);
     }
 }
 
-void Phase1FramePipeline::SetWorld(Phase1World* world) {
+void FramePipeline::SetWorld(World* world) {
     if (initialized_ || !world) {
         return;
     }
     world_ = world;
 }
 
-Phase1World& Phase1FramePipeline::world() {
+World& FramePipeline::world() {
     if (!world_) {
-        throw std::runtime_error("Phase1FramePipeline world is not injected");
+        throw std::runtime_error("FramePipeline world is not injected");
     }
     return *world_;
 }
 
-int Phase1FramePipeline::LastDrawCalls() const {
+int FramePipeline::LastDrawCalls() const {
     return last_draw_calls_;
 }
 
-int Phase1FramePipeline::LastMaxBatchSprites() const {
+int FramePipeline::LastMaxBatchSprites() const {
     return last_max_batch_sprites_;
 }
 
-int Phase1FramePipeline::LastSpriteCount() const {
+int FramePipeline::LastSpriteCount() const {
     return last_sprite_count_;
 }
 
-void Phase1FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {
+void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {
     window_title_setter_ = std::move(setter);
 }
 
-void Phase1FramePipeline::SetWindowTitle(const std::string& title) {
+void FramePipeline::SetWindowTitle(const std::string& title) {
     if (!window_title_setter_) {
         return;
     }
     window_title_setter_(title);
 }
 
-void Phase1FramePipeline::SetBusinessMode(Phase1BusinessMode mode) {
+void FramePipeline::SetBusinessMode(BusinessMode mode) {
     if (initialized_) {
         return;
     }
     business_mode_ = mode;
 }
 
-void Phase1FramePipeline::SetAssetManager(Phase1AssetManager* asset_manager) {
+void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
     if (initialized_) {
         return;
     }

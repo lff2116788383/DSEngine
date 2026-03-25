@@ -1,7 +1,7 @@
 #ifndef DSE_EXAMPLES_CPP_PHASE1_DEMO_CONFIG_H
 #define DSE_EXAMPLES_CPP_PHASE1_DEMO_CONFIG_H
 
-namespace phase1::samples::cpp_demo::config {
+namespace dse::samples::cpp_demo::config {
 
 struct StressSettings {
     int total_boxes;
@@ -15,7 +15,7 @@ struct StressSettings {
 
 inline constexpr const char* kWindowTitle = "DSEngine";
 inline constexpr const char* kDataPath = "data/";
-inline constexpr StressSettings kPhase1_2D = {
+inline constexpr StressSettings kDemo2D = {
     1024,
     64,
     64,

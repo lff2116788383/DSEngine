@@ -11,7 +11,7 @@
 #endif
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 AudioSystem::AudioSystem() {
 }
@@ -250,5 +250,5 @@ void AudioSystem::CleanupFinishedSfx() {
     }
 }
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse

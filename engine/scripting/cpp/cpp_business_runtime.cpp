@@ -2,7 +2,7 @@
 #include "engine/base/debug.h"
 #include <utility>
 
-namespace phase1::runtime {
+namespace dse::runtime {
 namespace {
 CppBusinessHooks& Hooks() {
     static CppBusinessHooks hooks;
@@ -14,17 +14,17 @@ void ConfigureCppBusinessHooks(CppBusinessHooks hooks) {
     Hooks() = std::move(hooks);
 }
 
-bool BootstrapCppBusiness(Phase1World& world) {
+bool BootstrapCppBusiness(World& world) {
     auto& hooks = Hooks();
     if (!hooks.bootstrap || !hooks.tick) {
-        DEBUG_LOG_ERROR("Phase1 cpp business bootstrap failed: hooks are not configured");
+        DEBUG_LOG_ERROR("Cpp business bootstrap failed: hooks are not configured");
         return false;
     }
     hooks.bootstrap(world);
     return true;
 }
 
-void TickCppBusiness(Phase1World& world, float delta_time) {
+void TickCppBusiness(World& world, float delta_time) {
     auto& hooks = Hooks();
     if (!hooks.tick) {
         return;

@@ -3,9 +3,9 @@
 
 #include "engine/ecs/world.h"
 
-namespace phase1::samples::cpp_demo {
-void Bootstrap(Phase1World& world);
-void Tick(Phase1World& world, float delta_time);
+namespace dse::samples::cpp_demo {
+void Bootstrap(World& world);
+void Tick(World& world, float delta_time);
 void Shutdown();
 }
 

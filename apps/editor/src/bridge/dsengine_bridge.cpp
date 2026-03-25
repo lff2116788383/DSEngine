@@ -49,7 +49,7 @@ const std::vector<std::string> g_shader_variants = {
     "SPRITE_TINT",
     "SPRITE_ADDITIVE"
 };
-Phase1World* g_world = nullptr;
+World* g_world = nullptr;
 bool g_engine_initialized = false;
 std::unordered_map<uint32_t, std::string> g_entity_names;
 float g_sim_time = 0.0f;
@@ -241,7 +241,7 @@ void DrawRect(int center_x, int center_y, int half_w, int half_h, unsigned char 
 }
 
 void ResetEditorWorld() {
-    g_world = &Phase1World::Instance();
+    g_world = &World::Instance();
     g_world->Clear();
     g_entity_names.clear();
     g_imported_textures.clear();

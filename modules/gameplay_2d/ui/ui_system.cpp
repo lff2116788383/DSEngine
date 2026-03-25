@@ -4,7 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& screen_size, const glm::vec2& mouse_pos, bool is_mouse_down) {
     (void)dt;
@@ -149,5 +149,5 @@ void UISystem::HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos
     }
 }
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse

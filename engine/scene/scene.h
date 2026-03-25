@@ -25,8 +25,8 @@ public:
     ~Scene();
 
     const std::string& GetName() const { return name_; }
-    Phase1World& GetWorld() { return ActiveWorld(); }
-    void BindWorld(Phase1World* world);
+    World& GetWorld() { return ActiveWorld(); }
+    void BindWorld(World* world);
     void UnbindWorld();
 
     // Real serialization interfaces
@@ -34,18 +34,18 @@ public:
     bool Deserialize(const std::string& filepath);
 
 private:
-    Phase1World& ActiveWorld();
-    const Phase1World& ActiveWorld() const;
+    World& ActiveWorld();
+    const World& ActiveWorld() const;
     std::string name_;
-    Phase1World owned_world_;
-    Phase1World* world_ = nullptr;
+    World owned_world_;
+    World* world_ = nullptr;
 };
 
 bool RunSceneRoundTripRegressionSample(const std::string& filepath);
 bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath);
-bool SaveEntityAsPrefab(Phase1World& world, Entity entity, const std::string& filepath);
-Entity InstantiatePrefab(Phase1World& world, const std::string& filepath);
-Entity InstantiatePrefab(Phase1World& world, const std::string& filepath, const PrefabInstantiateOptions& options);
+bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath);
+Entity InstantiatePrefab(World& world, const std::string& filepath);
+Entity InstantiatePrefab(World& world, const std::string& filepath, const PrefabInstantiateOptions& options);
 
 } // namespace scene
 

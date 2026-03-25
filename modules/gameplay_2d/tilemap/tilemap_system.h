@@ -1,10 +1,10 @@
-#ifndef DSE_PHASE1_TILEMAP_SYSTEM_H
-#define DSE_PHASE1_TILEMAP_SYSTEM_H
+#ifndef DSE_TILEMAP_SYSTEM_H
+#define DSE_TILEMAP_SYSTEM_H
 
 #include <entt/entt.hpp>
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 class TilemapSystem {
 public:
@@ -15,7 +15,7 @@ public:
     void Update(entt::registry& registry);
 };
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse
 
-#endif // DSE_PHASE1_TILEMAP_SYSTEM_H
+#endif

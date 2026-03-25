@@ -230,7 +230,7 @@ void OpenGLCommandBuffer::SetCamera(const glm::mat4& view, const glm::mat4& proj
     projection_ = projection;
 }
 
-void OpenGLCommandBuffer::BeginRenderPass(const Phase1RenderPassDesc& render_pass) {
+void OpenGLCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     begin_render_pass_cmds_.push_back({next_cmd_order_++, render_pass});
 }
 
@@ -242,11 +242,11 @@ void OpenGLCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     set_pipeline_state_cmds_.push_back({next_cmd_order_++, pipeline_state_handle});
 }
 
-void OpenGLCommandBuffer::DrawBatch(const std::vector<Phase1DrawBatchItem>& items) {
+void OpenGLCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
     draw_batch_cmds_.push_back({next_cmd_order_++, items});
 }
 
-void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items) {
+void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
     DrawBatch(items);
 }
 
@@ -305,7 +305,7 @@ void OpenGLRhiDevice::BeginFrame() {
     current_frame_stats_ = {};
 }
 
-unsigned int OpenGLRhiDevice::CreateRenderTarget(const Phase1RenderTargetDesc& desc) {
+unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     unsigned int handle = ++next_render_target_handle_;
     unsigned int color_texture_handle = 0;
     glGenTextures(1, &color_texture_handle);
@@ -372,7 +372,7 @@ unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, c
     return shader_program;
 }
 
-unsigned int OpenGLRhiDevice::CreatePipelineState(const Phase1PipelineStateDesc& desc) {
+unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
     unsigned int handle = ++next_pipeline_state_handle_;
     pipeline_states_[handle] = desc;
     resource_ledger_.pipeline_states_created += 1;
@@ -395,7 +395,7 @@ void OpenGLRhiDevice::RealClearColor(const glm::vec4& color) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void OpenGLRhiDevice::RealBeginRenderPass(const Phase1RenderPassDesc& render_pass) {
+void OpenGLRhiDevice::RealBeginRenderPass(const RenderPassDesc& render_pass) {
     if (render_pass.render_target == 0) {
         if (active_render_target_ != 0) {
             auto active_it = render_targets_.find(active_render_target_);
@@ -446,7 +446,7 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     }
 }
 
-void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<Phase1DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (items.empty()) {
         return;
     }
@@ -566,7 +566,7 @@ void OpenGLRhiDevice::EndFrame() {
     glFlush();
 }
 
-const Phase1RenderStats& OpenGLRhiDevice::LastFrameStats() const {
+const RenderStats& OpenGLRhiDevice::LastFrameStats() const {
     return last_frame_stats_;
 }
 

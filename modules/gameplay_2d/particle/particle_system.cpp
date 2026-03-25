@@ -2,7 +2,7 @@
 #include "engine/ecs/components_2d.h"
 #include <algorithm>
 
-void ParticleSystem::Update(Phase1World& world, float delta_time) {
+void ParticleSystem::Update(World& world, float delta_time) {
     auto view = world.registry().view<ParticleEmitterComponent, TransformComponent>();
     
     for (auto entity : view) {
@@ -42,15 +42,15 @@ void ParticleSystem::Update(Phase1World& world, float delta_time) {
     }
 }
 
-void ParticleSystem::Render(Phase1World& world, CommandBuffer& cmd_buffer) {
+void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     auto view = world.registry().view<ParticleEmitterComponent>();
-    std::vector<Phase1SpriteDrawItem> items;
+    std::vector<SpriteDrawItem> items;
     
     for (auto entity : view) {
         auto& emitter = view.get<ParticleEmitterComponent>(entity);
         
         for (const auto& p : emitter.particles) {
-            Phase1SpriteDrawItem item;
+            SpriteDrawItem item;
             item.texture_handle = emitter.texture_handle;
             
             glm::mat4 model = glm::mat4(1.0f);

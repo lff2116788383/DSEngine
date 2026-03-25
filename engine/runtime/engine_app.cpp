@@ -10,7 +10,7 @@
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 
-namespace phase1::runtime {
+namespace dse::runtime {
 namespace {
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     Input::RecordKey(key, action);
@@ -30,7 +30,7 @@ void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
 }
 
 int RunEngine(const EngineRunConfig& config) {
-    std::cout << "Starting DSEngine Phase 1..." << std::endl;
+    std::cout << "Starting DSEngine Runtime..." << std::endl;
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
         return -1;
@@ -51,7 +51,7 @@ int RunEngine(const EngineRunConfig& config) {
     glfwSetMouseButtonCallback(window, MouseButtonCallback);
     glfwSetScrollCallback(window, ScrollCallback);
     glfwSetCursorPosCallback(window, CursorPositionCallback);
-    Phase1FramePipeline::Instance().SetWindowTitleSetter([window](const std::string& title) {
+    FramePipeline::Instance().SetWindowTitleSetter([window](const std::string& title) {
         glfwSetWindowTitle(window, title.c_str());
     });
 
@@ -59,18 +59,18 @@ int RunEngine(const EngineRunConfig& config) {
     gladLoadGL(glfwGetProcAddress);
     core::JobSystem::Init();
 
-    Phase1World runtime_world;
-    Phase1World* active_world = config.world ? config.world : &runtime_world;
-    Phase1FramePipeline::Instance().SetWorld(active_world);
-    Phase1FramePipeline::Instance().SetAssetManager(config.asset_manager);
-    Phase1FramePipeline::Instance().SetBusinessMode(config.business_mode);
-    if (config.business_mode == Phase1BusinessMode::Lua && !config.startup_lua_script_path.empty()) {
+    World runtime_world;
+    World* active_world = config.world ? config.world : &runtime_world;
+    FramePipeline::Instance().SetWorld(active_world);
+    FramePipeline::Instance().SetAssetManager(config.asset_manager);
+    FramePipeline::Instance().SetBusinessMode(config.business_mode);
+    if (config.business_mode == BusinessMode::Lua && !config.startup_lua_script_path.empty()) {
         SetStartupLuaScriptPath(config.startup_lua_script_path);
     }
-    std::cout << "Business mode: " << (config.business_mode == Phase1BusinessMode::Lua ? "lua" : "cpp") << std::endl;
-    if (!Phase1FramePipeline::Instance().Init()) {
-        std::cerr << "Failed to initialize Phase1FramePipeline\n";
-        Phase1FramePipeline::Instance().Shutdown();
+    std::cout << "Business mode: " << (config.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
+    if (!FramePipeline::Instance().Init()) {
+        std::cerr << "Failed to initialize FramePipeline\n";
+        FramePipeline::Instance().Shutdown();
         core::JobSystem::Shutdown();
         glfwTerminate();
         return -1;
@@ -91,16 +91,16 @@ int RunEngine(const EngineRunConfig& config) {
 
         accumulator += dt;
         while (accumulator >= fixed_time_step) {
-            Phase1FramePipeline::Instance().FixedUpdate(fixed_time_step);
+            FramePipeline::Instance().FixedUpdate(fixed_time_step);
             accumulator -= fixed_time_step;
         }
 
-        Phase1FramePipeline::Instance().Update(dt);
-        Phase1FramePipeline::Instance().Render();
+        FramePipeline::Instance().Update(dt);
+        FramePipeline::Instance().Render();
         glfwSwapBuffers(window);
         Input::Update();
     }
-    Phase1FramePipeline::Instance().Shutdown();
+    FramePipeline::Instance().Shutdown();
     core::JobSystem::Shutdown();
     glfwTerminate();
     return 0;

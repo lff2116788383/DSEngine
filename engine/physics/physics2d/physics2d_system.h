@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_PHYSICS2D_SYSTEM_H
-#define DSE_PHASE1_PHYSICS2D_SYSTEM_H
+#ifndef DSE_PHYSICS2D_SYSTEM_H
+#define DSE_PHYSICS2D_SYSTEM_H
 
 #include "engine/ecs/world.h"
 #include <box2d/box2d.h>
@@ -13,8 +13,8 @@ public:
     Physics2DSystem();
     ~Physics2DSystem();
 
-    void Init(Phase1World& world);
-    void FixedUpdate(Phase1World& world, float fixed_delta_time);
+    void Init(World& world);
+    void FixedUpdate(World& world, float fixed_delta_time);
     
     // Physics Queries
     bool Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal);

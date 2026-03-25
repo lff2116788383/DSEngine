@@ -2,7 +2,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"
 
-void AnimationSystem::Update(Phase1World& world, float delta_time) {
+void AnimationSystem::Update(World& world, float delta_time) {
     auto view = world.registry().view<AnimatorComponent, SpriteRendererComponent>();
     
     for (auto entity : view) {

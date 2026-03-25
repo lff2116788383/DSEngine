@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_WORLD_H
-#define DSE_PHASE1_WORLD_H
+#ifndef DSE_WORLD_H
+#define DSE_WORLD_H
 
 #include <cstdint>
 #include <cstddef>
@@ -10,9 +10,9 @@
 
 using Entity = entt::entity;
 
-class Phase1World {
+class World {
 public:
-    static Phase1World& Instance();
+    static World& Instance();
 
     Entity CreateEntity();
     void DestroyEntity(Entity entity);

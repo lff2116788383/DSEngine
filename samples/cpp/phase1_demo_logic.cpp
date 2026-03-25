@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace phase1::samples::cpp_demo {
+namespace dse::samples::cpp_demo {
 namespace {
 struct DemoState {
     bool initialized = false;
@@ -15,7 +15,7 @@ struct DemoState {
     unsigned int texture_handle = 0;
     Entity camera = entt::null;
     Entity ground = entt::null;
-    config::StressSettings settings = config::kPhase1_2D;
+    config::StressSettings settings = config::kDemo2D;
 };
 
 DemoState& State() {
@@ -23,7 +23,7 @@ DemoState& State() {
     return state;
 }
 
-Entity SpawnBox(Phase1World& world, int index, const DemoState& state) {
+Entity SpawnBox(World& world, int index, const DemoState& state) {
     const float start_x = -0.5f * static_cast<float>(state.settings.columns - 1) * state.settings.spacing;
     const float x = start_x + static_cast<float>(index % state.settings.columns) * state.settings.spacing;
     const float y = state.settings.start_y + static_cast<float>(index / state.settings.columns) * state.settings.spacing;
@@ -54,10 +54,10 @@ Entity SpawnBox(Phase1World& world, int index, const DemoState& state) {
 }
 }
 
-void Bootstrap(Phase1World& world) {
+void Bootstrap(World& world) {
     auto& state = State();
     state = {};
-    state.settings = config::kPhase1_2D;
+    state.settings = config::kDemo2D;
     if (state.initialized) {
         return;
     }
@@ -70,9 +70,9 @@ void Bootstrap(Phase1World& world) {
     camera.orthographic = true;
     camera.orthographic_size = state.settings.camera_ortho_size;
 
-    auto texture = Phase1AssetManager::Instance().LoadTexture("mirror_assets/Resources/item/1.png");
+    auto texture = AssetManager::Instance().LoadTexture("mirror_assets/Resources/item/1.png");
     if (!texture) {
-        texture = Phase1AssetManager::Instance().LoadTexture("data/mirror_assets/Resources/item/1.png");
+        texture = AssetManager::Instance().LoadTexture("data/mirror_assets/Resources/item/1.png");
     }
     state.texture_handle = texture ? texture->GetHandle() : 0;
 
@@ -101,11 +101,11 @@ void Bootstrap(Phase1World& world) {
     state.spawn_index = 0;
     state.frame_counter = 0;
     state.initialized = true;
-    std::cout << "[Phase1-2D-Test][CPP] setup started: total_boxes=" << state.settings.total_boxes
+    std::cout << "[2D-Test][CPP] setup started: total_boxes=" << state.settings.total_boxes
               << " spawn_per_frame=" << state.settings.spawn_per_frame << std::endl;
 }
 
-void Tick(Phase1World& world, float delta_time) {
+void Tick(World& world, float delta_time) {
     (void)delta_time;
     auto& state = State();
     if (!state.initialized) {
@@ -119,7 +119,7 @@ void Tick(Phase1World& world, float delta_time) {
             state.spawn_index += 1;
         }
         if (state.spawn_index == state.settings.total_boxes) {
-            std::cout << "[Phase1-2D-Test][CPP] setup finished: boxes=" << state.settings.total_boxes << std::endl;
+            std::cout << "[2D-Test][CPP] setup finished: boxes=" << state.settings.total_boxes << std::endl;
         }
     }
 
@@ -128,11 +128,11 @@ void Tick(Phase1World& world, float delta_time) {
         return;
     }
 
-    const int draw_calls = Phase1FramePipeline::Instance().LastDrawCalls();
-    const int max_batch = Phase1FramePipeline::Instance().LastMaxBatchSprites();
-    const int sprite_count = Phase1FramePipeline::Instance().LastSpriteCount();
+    const int draw_calls = FramePipeline::Instance().LastDrawCalls();
+    const int max_batch = FramePipeline::Instance().LastMaxBatchSprites();
+    const int sprite_count = FramePipeline::Instance().LastSpriteCount();
     const char* status = draw_calls > 9 ? "FAIL" : "PASS";
-    std::cout << "[Phase1-2D-Test][CPP] draw_calls=" << draw_calls
+    std::cout << "[2D-Test][CPP] draw_calls=" << draw_calls
               << " max_batch=" << max_batch
               << " sprites=" << sprite_count
               << " spawned=" << state.spawn_index << "/" << state.settings.total_boxes

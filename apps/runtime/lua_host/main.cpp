@@ -15,11 +15,11 @@ int main(int argc, char** argv) {
         }
     } catch (...) {
     }
-    return phase1::runtime::RunEngine({
+    return dse::runtime::RunEngine({
         800,
         600,
         "DSEngine Lua Demo",
-        Phase1BusinessMode::Lua,
+        BusinessMode::Lua,
         startup_script
     });
 }

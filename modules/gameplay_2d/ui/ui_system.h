@@ -1,11 +1,11 @@
-#ifndef DSE_PHASE1_UI_SYSTEM_H
-#define DSE_PHASE1_UI_SYSTEM_H
+#ifndef DSE_UI_SYSTEM_H
+#define DSE_UI_SYSTEM_H
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
 namespace dse {
-namespace phase1 {
+namespace gameplay2d {
 
 class UISystem {
 public:
@@ -21,7 +21,7 @@ private:
     void HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos, bool is_mouse_down);
 };
 
-} // namespace phase1
+} // namespace gameplay2d
 } // namespace dse
 
-#endif // DSE_PHASE1_UI_SYSTEM_H
+#endif

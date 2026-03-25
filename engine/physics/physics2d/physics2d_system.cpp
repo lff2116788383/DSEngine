@@ -6,7 +6,7 @@
 // --- Contact Listener ---
 class PhysicsContactListener : public b2ContactListener {
 public:
-    PhysicsContactListener(Phase1World* world) : world_(world) {}
+    PhysicsContactListener(World* world) : world_(world) {}
 
     void BeginContact(b2Contact* contact) override {
         b2Fixture* fixtureA = contact->GetFixtureA();
@@ -61,7 +61,7 @@ public:
     }
 
 private:
-    Phase1World* world_;
+    World* world_;
 };
 
 Physics2DSystem::Physics2DSystem() {
@@ -70,14 +70,14 @@ Physics2DSystem::Physics2DSystem() {
 Physics2DSystem::~Physics2DSystem() {
 }
 
-void Physics2DSystem::Init(Phase1World& world) {
+void Physics2DSystem::Init(World& world) {
     b2Vec2 gravity(0.0f, -9.81f);
     physics_world_ = std::make_unique<b2World>(gravity);
     contact_listener_ = std::make_unique<PhysicsContactListener>(&world);
     physics_world_->SetContactListener(contact_listener_.get());
 }
 
-void Physics2DSystem::FixedUpdate(Phase1World& world, float fixed_delta_time) {
+void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
     if (!physics_world_) return;
 
     for (b2Body* body = physics_world_->GetBodyList(); body != nullptr;) {

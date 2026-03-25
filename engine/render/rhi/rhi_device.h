@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_RHI_DEVICE_H
-#define DSE_PHASE1_RHI_DEVICE_H
+#ifndef DSE_RHI_DEVICE_H
+#define DSE_RHI_DEVICE_H
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-struct Phase1SpriteDrawItem {
+struct SpriteDrawItem {
     unsigned int texture_handle = 0;
     unsigned int material_instance_id = 0;
     unsigned int shader_variant_key = 0;
@@ -20,28 +20,28 @@ struct Phase1SpriteDrawItem {
     int order_in_layer = 0;
 };
 
-using Phase1DrawBatchItem = Phase1SpriteDrawItem;
+using DrawBatchItem = SpriteDrawItem;
 
-struct Phase1RenderStats {
+struct RenderStats {
     int sprite_count = 0;
     int draw_calls = 0;
     int max_batch_sprites = 0;
     int render_passes = 0;
 };
 
-struct Phase1RenderTargetDesc {
+struct RenderTargetDesc {
     int width = 0;
     int height = 0;
     bool has_depth = false;
 };
 
-struct Phase1RenderPassDesc {
+struct RenderPassDesc {
     unsigned int render_target = 0;
     glm::vec4 clear_color = glm::vec4(0.0f);
     bool clear_color_enabled = false;
 };
 
-struct Phase1PipelineStateDesc {
+struct PipelineStateDesc {
     bool blend_enabled = true;
     unsigned int blend_src = 0x0302;
     unsigned int blend_dst = 0x0303;
@@ -54,23 +54,23 @@ class CommandBuffer {
 public:
     virtual ~CommandBuffer() = default;
     
-    virtual void BeginRenderPass(const Phase1RenderPassDesc& render_pass) = 0;
+    virtual void BeginRenderPass(const RenderPassDesc& render_pass) = 0;
     virtual void EndRenderPass() = 0;
     virtual void SetPipelineState(unsigned int pipeline_state_handle) = 0;
     virtual void SetCamera(const glm::mat4& view, const glm::mat4& projection) = 0;
-    virtual void DrawBatch(const std::vector<Phase1DrawBatchItem>& items) = 0;
-    virtual void DrawSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items) = 0;
+    virtual void DrawBatch(const std::vector<DrawBatchItem>& items) = 0;
+    virtual void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) = 0;
     virtual void ClearColor(const glm::vec4& color) = 0;
 };
 
 class OpenGLCommandBuffer final : public CommandBuffer {
 public:
-    void BeginRenderPass(const Phase1RenderPassDesc& render_pass) override;
+    void BeginRenderPass(const RenderPassDesc& render_pass) override;
     void EndRenderPass() override;
     void SetPipelineState(unsigned int pipeline_state_handle) override;
     void SetCamera(const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawBatch(const std::vector<Phase1DrawBatchItem>& items) override;
-    void DrawSpriteBatch(const std::vector<Phase1SpriteDrawItem>& items) override;
+    void DrawBatch(const std::vector<DrawBatchItem>& items) override;
+    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
     
     // For internal use by OpenGLRhiDevice
@@ -78,10 +78,10 @@ public:
     
 private:
     struct ClearCmd { uint64_t order; glm::vec4 color; };
-    struct BeginRenderPassCmd { uint64_t order; Phase1RenderPassDesc render_pass; };
+    struct BeginRenderPassCmd { uint64_t order; RenderPassDesc render_pass; };
     struct EndRenderPassCmd { uint64_t order; };
     struct SetPipelineStateCmd { uint64_t order; unsigned int pipeline_state_handle; };
-    struct DrawBatchCmd { uint64_t order; std::vector<Phase1SpriteDrawItem> items; };
+    struct DrawBatchCmd { uint64_t order; std::vector<SpriteDrawItem> items; };
     struct CommandRef {
         uint64_t order = 0;
         int type = 0;
@@ -103,11 +103,11 @@ public:
     virtual ~RhiDevice() = default;
     virtual void Shutdown() = 0;
     virtual void BeginFrame() = 0;
-    virtual unsigned int CreateRenderTarget(const Phase1RenderTargetDesc& desc) = 0;
+    virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
-    virtual unsigned int CreatePipelineState(const Phase1PipelineStateDesc& desc) = 0;
+    virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
     
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
@@ -118,14 +118,14 @@ public:
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;
     virtual void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) = 0;
     virtual void EndFrame() = 0;
-    virtual const Phase1RenderStats& LastFrameStats() const = 0;
+    virtual const RenderStats& LastFrameStats() const = 0;
 };
 
 class OpenGLRhiDevice final : public RhiDevice {
 public:
     void Shutdown() override;
     void BeginFrame() override;
-    unsigned int CreateRenderTarget(const Phase1RenderTargetDesc& desc) override;
+    unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index);
@@ -136,18 +136,18 @@ public:
 
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
-    unsigned int CreatePipelineState(const Phase1PipelineStateDesc& desc) override;
+    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
-    const Phase1RenderStats& LastFrameStats() const override;
+    const RenderStats& LastFrameStats() const override;
     
     // These are kept public temporarily for the OpenGLCommandBuffer to use
-    void RealBeginRenderPass(const Phase1RenderPassDesc& render_pass);
+    void RealBeginRenderPass(const RenderPassDesc& render_pass);
     void RealEndRenderPass();
     void RealSetPipelineState(unsigned int pipeline_state_handle);
     void RealClearColor(const glm::vec4& color);
-    void RealSubmitDrawBatch(const std::vector<Phase1DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection);
     
 private:
     struct ResourceLedger {
@@ -168,8 +168,8 @@ private:
     };
 
     void LogResourceLedger() const;
-    struct Phase1RenderTargetResource {
-        Phase1RenderTargetDesc desc;
+    struct RenderTargetResource {
+        RenderTargetDesc desc;
         unsigned int fbo_handle = 0;
         unsigned int color_texture_handle = 0;
         unsigned int depth_texture_handle = 0;
@@ -180,8 +180,8 @@ private:
     unsigned int next_texture_handle_ = 340000;
     unsigned int next_fbo_handle_ = 350000;
     unsigned int next_pipeline_state_handle_ = 330000;
-    std::unordered_map<unsigned int, Phase1RenderTargetResource> render_targets_;
-    std::unordered_map<unsigned int, Phase1PipelineStateDesc> pipeline_states_;
+    std::unordered_map<unsigned int, RenderTargetResource> render_targets_;
+    std::unordered_map<unsigned int, PipelineStateDesc> pipeline_states_;
     unsigned int active_pipeline_state_ = 0;
     unsigned int active_render_target_ = 0;
     unsigned int shader_handle_ = 0;
@@ -193,9 +193,10 @@ private:
     int uniform_tint_loc_ = -1;
     int uniform_vp_loc_ = -1;
     bool initialized_ = false;
-    Phase1RenderStats current_frame_stats_;
-    Phase1RenderStats last_frame_stats_;
+    RenderStats current_frame_stats_;
+    RenderStats last_frame_stats_;
     ResourceLedger resource_ledger_;
 };
+
 
 #endif

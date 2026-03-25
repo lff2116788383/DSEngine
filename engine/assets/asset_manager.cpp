@@ -77,21 +77,21 @@ ShaderAsset::ShaderAsset(const std::string& name, unsigned int handle)
 ShaderAsset::~ShaderAsset() {
 }
 
-Phase1MaterialAsset::Phase1MaterialAsset(unsigned int id, const std::string& name)
+MaterialAsset::MaterialAsset(unsigned int id, const std::string& name)
     : id_(id), name_(name) {
 }
 
-Phase1AssetManager& Phase1AssetManager::Instance() {
-    static Phase1AssetManager instance;
+AssetManager& AssetManager::Instance() {
+    static AssetManager instance;
     return instance;
 }
 
-void Phase1AssetManager::SetRhiDevice(RhiDevice* rhi_device) {
+void AssetManager::SetRhiDevice(RhiDevice* rhi_device) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     rhi_device_ = rhi_device;
 }
 
-void Phase1AssetManager::ConfigureDataRoot(const std::string& data_root) {
+void AssetManager::ConfigureDataRoot(const std::string& data_root) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     if (data_root.empty()) {
         return;
@@ -99,12 +99,12 @@ void Phase1AssetManager::ConfigureDataRoot(const std::string& data_root) {
     data_root_ = NormalizePath(data_root);
 }
 
-std::string Phase1AssetManager::GetDataRoot() {
+std::string AssetManager::GetDataRoot() {
     std::lock_guard<std::mutex> lock(config_mutex_);
     return data_root_;
 }
 
-std::shared_ptr<TextureAsset> Phase1AssetManager::LoadTexture(const std::string& path) {
+std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
     const std::string cache_key = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
@@ -151,7 +151,7 @@ std::shared_ptr<TextureAsset> Phase1AssetManager::LoadTexture(const std::string&
     return tex;
 }
 
-std::shared_ptr<ShaderAsset> Phase1AssetManager::LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src) {
+std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = shaders_.find(name);
@@ -182,7 +182,7 @@ std::shared_ptr<ShaderAsset> Phase1AssetManager::LoadShader(const std::string& n
     return shader;
 }
 
-std::shared_ptr<AudioClipAsset> Phase1AssetManager::LoadAudioClip(const std::string& path) {
+std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& path) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
@@ -211,7 +211,7 @@ std::shared_ptr<AudioClipAsset> Phase1AssetManager::LoadAudioClip(const std::str
     return clip;
 }
 
-void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
+void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
     const std::string cache_key = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
@@ -246,7 +246,7 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
                 pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
                 if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {
                     callback_backlog_warned_ = true;
-                    DEBUG_LOG_WARN("Phase1 async callback backlog is high: {}", pending_main_thread_callbacks_.size());
+                    DEBUG_LOG_WARN("Async callback backlog is high: {}", pending_main_thread_callbacks_.size());
                 }
             }
             return;
@@ -282,20 +282,20 @@ void Phase1AssetManager::LoadTextureAsync(const std::string& path, std::function
         pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
         if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {
             callback_backlog_warned_ = true;
-            DEBUG_LOG_WARN("Phase1 async callback backlog is high: {}", pending_main_thread_callbacks_.size());
+            DEBUG_LOG_WARN("Async callback backlog is high: {}", pending_main_thread_callbacks_.size());
         }
     });
 }
 
-std::shared_ptr<Phase1MaterialAsset> Phase1AssetManager::CreateMaterialInstance(const std::string& name) {
+std::shared_ptr<MaterialAsset> AssetManager::CreateMaterialInstance(const std::string& name) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     unsigned int material_id = next_material_id_++;
-    auto material = std::make_shared<Phase1MaterialAsset>(material_id, name);
+    auto material = std::make_shared<MaterialAsset>(material_id, name);
     materials_[material_id] = material;
     return material;
 }
 
-std::shared_ptr<Phase1MaterialAsset> Phase1AssetManager::GetMaterialInstance(unsigned int material_id) {
+std::shared_ptr<MaterialAsset> AssetManager::GetMaterialInstance(unsigned int material_id) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = materials_.find(material_id);
     if (it == materials_.end()) {
@@ -304,7 +304,7 @@ std::shared_ptr<Phase1MaterialAsset> Phase1AssetManager::GetMaterialInstance(uns
     return it->second.lock();
 }
 
-std::vector<unsigned int> Phase1AssetManager::ListMaterialInstanceIds() {
+std::vector<unsigned int> AssetManager::ListMaterialInstanceIds() {
     std::vector<unsigned int> ids;
     std::lock_guard<std::mutex> lock(cache_mutex_);
     ids.reserve(materials_.size());
@@ -316,7 +316,7 @@ std::vector<unsigned int> Phase1AssetManager::ListMaterialInstanceIds() {
     return ids;
 }
 
-void Phase1AssetManager::UnloadUnused() {
+void AssetManager::UnloadUnused() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (auto it = textures_.begin(); it != textures_.end(); ) {
         if (it->second.expired()) {
@@ -348,7 +348,7 @@ void Phase1AssetManager::UnloadUnused() {
     }
 }
 
-void Phase1AssetManager::PumpMainThreadCallbacks(std::size_t max_callbacks) {
+void AssetManager::PumpMainThreadCallbacks(std::size_t max_callbacks) {
     std::vector<std::function<void()>> callbacks;
     {
         std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -367,12 +367,12 @@ void Phase1AssetManager::PumpMainThreadCallbacks(std::size_t max_callbacks) {
     }
 }
 
-std::size_t Phase1AssetManager::PendingMainThreadCallbacks() {
+std::size_t AssetManager::PendingMainThreadCallbacks() {
     std::lock_guard<std::mutex> lock(callback_mutex_);
     return pending_main_thread_callbacks_.size();
 }
 
-std::size_t Phase1AssetManager::PendingMainThreadCallbacksHighWatermark() {
+std::size_t AssetManager::PendingMainThreadCallbacksHighWatermark() {
     std::lock_guard<std::mutex> lock(callback_mutex_);
     return pending_callbacks_high_watermark_;
 }

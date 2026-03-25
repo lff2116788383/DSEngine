@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_ASSET_MANAGER_H
-#define DSE_PHASE1_ASSET_MANAGER_H
+#ifndef DSE_ASSET_MANAGER_H
+#define DSE_ASSET_MANAGER_H
 
 #include <string>
 #include <unordered_map>
@@ -42,15 +42,15 @@ private:
     unsigned int handle_;
 };
 
-enum class Phase1MaterialBlendMode {
+enum class MaterialBlendMode {
     Alpha = 0,
     Additive = 1,
     Multiply = 2
 };
 
-class Phase1MaterialAsset {
+class MaterialAsset {
 public:
-    Phase1MaterialAsset(unsigned int id, const std::string& name);
+    MaterialAsset(unsigned int id, const std::string& name);
 
     unsigned int GetId() const { return id_; }
     const std::string& GetName() const { return name_; }
@@ -58,14 +58,14 @@ public:
     unsigned int GetTextureHandle() const { return texture_handle_; }
     const glm::vec4& GetTint() const { return tint_; }
     const glm::vec4& GetUvRect() const { return uv_rect_; }
-    Phase1MaterialBlendMode GetBlendMode() const { return blend_mode_; }
+    MaterialBlendMode GetBlendMode() const { return blend_mode_; }
 
     void SetName(const std::string& name) { name_ = name; }
     void SetShaderVariant(const std::string& shader_variant) { shader_variant_ = shader_variant; }
     void SetTextureHandle(unsigned int texture_handle) { texture_handle_ = texture_handle; }
     void SetTint(const glm::vec4& tint) { tint_ = tint; }
     void SetUvRect(const glm::vec4& uv_rect) { uv_rect_ = uv_rect; }
-    void SetBlendMode(Phase1MaterialBlendMode blend_mode) { blend_mode_ = blend_mode; }
+    void SetBlendMode(MaterialBlendMode blend_mode) { blend_mode_ = blend_mode; }
 
 private:
     unsigned int id_ = 0;
@@ -74,7 +74,7 @@ private:
     unsigned int texture_handle_ = 0;
     glm::vec4 tint_ = glm::vec4(1.0f);
     glm::vec4 uv_rect_ = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    Phase1MaterialBlendMode blend_mode_ = Phase1MaterialBlendMode::Alpha;
+    MaterialBlendMode blend_mode_ = MaterialBlendMode::Alpha;
 };
 
 class AudioClipAsset {
@@ -88,9 +88,9 @@ private:
     std::string path_;
 };
 
-class Phase1AssetManager {
+class AssetManager {
 public:
-    static Phase1AssetManager& Instance();
+    static AssetManager& Instance();
     void SetRhiDevice(RhiDevice* rhi_device);
     void ConfigureDataRoot(const std::string& data_root);
     std::string GetDataRoot();
@@ -104,20 +104,20 @@ public:
     void PumpMainThreadCallbacks(std::size_t max_callbacks = static_cast<std::size_t>(-1));
     std::size_t PendingMainThreadCallbacks();
     std::size_t PendingMainThreadCallbacksHighWatermark();
-    std::shared_ptr<Phase1MaterialAsset> CreateMaterialInstance(const std::string& name);
-    std::shared_ptr<Phase1MaterialAsset> GetMaterialInstance(unsigned int material_id);
+    std::shared_ptr<MaterialAsset> CreateMaterialInstance(const std::string& name);
+    std::shared_ptr<MaterialAsset> GetMaterialInstance(unsigned int material_id);
     std::vector<unsigned int> ListMaterialInstanceIds();
 
     void UnloadUnused();
 
 private:
-    Phase1AssetManager() = default;
-    ~Phase1AssetManager() = default;
+    AssetManager() = default;
+    ~AssetManager() = default;
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
-    std::unordered_map<unsigned int, std::weak_ptr<Phase1MaterialAsset>> materials_;
+    std::unordered_map<unsigned int, std::weak_ptr<MaterialAsset>> materials_;
     unsigned int next_texture_handle_ = 410000;
     unsigned int next_shader_handle_ = 420000;
     unsigned int next_material_id_ = 430000;

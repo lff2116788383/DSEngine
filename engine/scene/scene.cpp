@@ -21,7 +21,7 @@ Scene::Scene(const std::string& name) : name_(name), world_(&owned_world_) {
 Scene::~Scene() {
 }
 
-void Scene::BindWorld(Phase1World* world) {
+void Scene::BindWorld(World* world) {
     if (world) {
         world_ = world;
     }
@@ -31,11 +31,11 @@ void Scene::UnbindWorld() {
     world_ = &owned_world_;
 }
 
-Phase1World& Scene::ActiveWorld() {
+World& Scene::ActiveWorld() {
     return world_ ? *world_ : owned_world_;
 }
 
-const Phase1World& Scene::ActiveWorld() const {
+const World& Scene::ActiveWorld() const {
     return world_ ? *world_ : owned_world_;
 }
 
@@ -577,7 +577,7 @@ bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) 
     return transform_ok && sprite_ok && materials_ok;
 }
 
-bool SaveEntityAsPrefab(Phase1World& world, Entity entity, const std::string& filepath) {
+bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath) {
     if (!world.IsAlive(entity) || !world.registry().all_of<TransformComponent>(entity)) {
         return false;
     }
@@ -630,7 +630,7 @@ bool SaveEntityAsPrefab(Phase1World& world, Entity entity, const std::string& fi
     return true;
 }
 
-Entity InstantiatePrefab(Phase1World& world, const std::string& filepath, const PrefabInstantiateOptions& options) {
+Entity InstantiatePrefab(World& world, const std::string& filepath, const PrefabInstantiateOptions& options) {
     std::ifstream in(filepath);
     if (!in.is_open()) {
         return entt::null;
@@ -710,7 +710,7 @@ Entity InstantiatePrefab(Phase1World& world, const std::string& filepath, const 
     return entity;
 }
 
-Entity InstantiatePrefab(Phase1World& world, const std::string& filepath) {
+Entity InstantiatePrefab(World& world, const std::string& filepath) {
     return InstantiatePrefab(world, filepath, PrefabInstantiateOptions{});
 }
 

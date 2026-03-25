@@ -1,5 +1,5 @@
-#ifndef DSE_PHASE1_COMPONENTS_2D_H
-#define DSE_PHASE1_COMPONENTS_2D_H
+#ifndef DSE_COMPONENTS_2D_H
+#define DSE_COMPONENTS_2D_H
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
