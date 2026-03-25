@@ -18,7 +18,7 @@ public:
 private:
     void SyncLabels(entt::registry& registry);
     void UpdateLayout(entt::registry& registry, const glm::vec2& screen_size);
-    void HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos, bool is_mouse_down);
+    void HandleEvents(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down);
 };
 
 } // namespace gameplay2d

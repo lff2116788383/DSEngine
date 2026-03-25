@@ -161,6 +161,7 @@ void FramePipeline::Update(float delta_time) {
     
     tilemap_system_.Update(world_->registry());
     animation_system_.Update(*world_, delta_time);
+    particle_system_.Update(*world_, delta_time);
     transform_system_.Update(*world_);
     camera_system_.Update(*world_, Screen::aspect_ratio());
     ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
@@ -213,19 +214,30 @@ void FramePipeline::Render() {
             (void)entity;
             ++physics_bodies;
         }
+        size_t particle_emitters = 0;
+        size_t active_particles = 0;
+        auto particle_view = world_->registry().view<ParticleEmitterComponent>();
+        for (auto emitter_entity : particle_view) {
+            auto& emitter = particle_view.get<ParticleEmitterComponent>(emitter_entity);
+            (void)emitter_entity;
+            ++particle_emitters;
+            active_particles += emitter.particles.size();
+        }
         float avg_update_ms = update_samples_ > 0 ? update_time_accumulator_ms_ / static_cast<float>(update_samples_) : 0.0f;
         float avg_fixed_ms = fixed_samples_ > 0 ? fixed_time_accumulator_ms_ / static_cast<float>(fixed_samples_) : 0.0f;
         float avg_render_ms = render_samples_ > 0 ? render_time_accumulator_ms_ / static_cast<float>(render_samples_) : 0.0f;
         auto& asset_manager = ResolveAssetManager(asset_manager_);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
                        stats.draw_calls,
                        stats.max_batch_sprites,
                        stats.render_passes,
                        physics_bodies,
+                       particle_emitters,
+                       active_particles,
                        avg_update_ms,
                        avg_fixed_ms,
                        avg_render_ms,
@@ -254,6 +266,7 @@ void FramePipeline::BuildRenderGraph() {
                 cmd_buffer.SetCamera(camera.view, camera.projection);
             }
             sprite_render_system_.Render(*world_, cmd_buffer);
+            particle_system_.Render(*world_, cmd_buffer);
             cmd_buffer.EndRenderPass();
         }
     });

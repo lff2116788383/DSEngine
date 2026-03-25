@@ -70,6 +70,23 @@ int L_AudioSetVolume(lua_State* L) {
     }
     return 0;
 }
+
+int L_AudioSetPitch(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float pitch = static_cast<float>(luaL_checknumber(L, 2));
+    if (pitch <= 0.01f) {
+        pitch = 0.01f;
+    }
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        auto& audio = world->registry().get<AudioSourceComponent>(e);
+        audio.pitch = pitch;
+    }
+    return 0;
+}
 }
 
 void RegisterAudioBindings(lua_State* L) {
@@ -83,6 +100,7 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("set_playing", L_AudioSetPlaying);
     set_fn("set_loop", L_AudioSetLoop);
     set_fn("set_volume", L_AudioSetVolume);
+    set_fn("set_pitch", L_AudioSetPitch);
 }
 
 }

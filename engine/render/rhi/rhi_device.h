@@ -81,7 +81,12 @@ private:
     struct BeginRenderPassCmd { uint64_t order; RenderPassDesc render_pass; };
     struct EndRenderPassCmd { uint64_t order; };
     struct SetPipelineStateCmd { uint64_t order; unsigned int pipeline_state_handle; };
-    struct DrawBatchCmd { uint64_t order; std::vector<SpriteDrawItem> items; };
+    struct DrawBatchCmd {
+        uint64_t order;
+        std::vector<SpriteDrawItem> items;
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+    };
     struct CommandRef {
         uint64_t order = 0;
         int type = 0;

@@ -243,7 +243,12 @@ void OpenGLCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
 }
 
 void OpenGLCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
-    draw_batch_cmds_.push_back({next_cmd_order_++, items});
+    DrawBatchCmd cmd;
+    cmd.order = next_cmd_order_++;
+    cmd.items = items;
+    cmd.view = view_;
+    cmd.projection = projection_;
+    draw_batch_cmds_.push_back(std::move(cmd));
 }
 
 void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
@@ -287,7 +292,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
         } else if (cmd.type == 2) {
             device->RealClearColor(clear_cmds_[cmd.index].color);
         } else if (cmd.type == 3) {
-            device->RealSubmitDrawBatch(draw_batch_cmds_[cmd.index].items, view_, projection_);
+            device->RealSubmitDrawBatch(draw_batch_cmds_[cmd.index].items, draw_batch_cmds_[cmd.index].view, draw_batch_cmds_[cmd.index].projection);
         } else {
             device->RealEndRenderPass();
         }
@@ -540,10 +545,13 @@ void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& item
         // If uv.z and uv.w are 0, we fallback to default [0,1]
         glm::vec2 uvs[4];
         if (item.uv.z > 0.0f && item.uv.w > 0.0f) {
+            const bool use_max_uv = item.uv.z > item.uv.x && item.uv.w > item.uv.y;
+            const float u1 = use_max_uv ? item.uv.z : (item.uv.x + item.uv.z);
+            const float v1 = use_max_uv ? item.uv.w : (item.uv.y + item.uv.w);
             uvs[0] = {item.uv.x, item.uv.y};
-            uvs[1] = {item.uv.x + item.uv.z, item.uv.y};
-            uvs[2] = {item.uv.x + item.uv.z, item.uv.y + item.uv.w};
-            uvs[3] = {item.uv.x, item.uv.y + item.uv.w};
+            uvs[1] = {u1, item.uv.y};
+            uvs[2] = {u1, v1};
+            uvs[3] = {item.uv.x, v1};
         } else {
             for (int i = 0; i < 4; ++i) uvs[i] = quad_uvs[i];
         }

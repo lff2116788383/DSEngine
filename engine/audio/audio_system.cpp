@@ -3,6 +3,7 @@
 #include "engine/assets/asset_manager.h"
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
@@ -69,6 +70,7 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
             if (result == MA_SUCCESS) {
                 ma_sound_set_looping(new_sound, audio.loop ? MA_TRUE : MA_FALSE);
                 ma_sound_set_volume(new_sound, audio.volume * sfx_volume_);
+                ma_sound_set_pitch(new_sound, audio.pitch);
                 ma_sound_start(new_sound);
                 entity_sounds_[key] = new_sound;
                 sound = new_sound;
@@ -84,6 +86,7 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         ma_sound_set_looping(sound, audio.loop ? MA_TRUE : MA_FALSE);
         ma_sound_set_volume(sound, audio.volume * sfx_volume_);
+        ma_sound_set_pitch(sound, audio.pitch);
         const bool should_play = audio.is_playing || audio.play_on_awake;
         const bool now_playing_before = ma_sound_is_playing(sound) == MA_TRUE;
 
@@ -120,6 +123,9 @@ void AudioSystem::Shutdown() {
         DestroySound(pair.second);
     }
     entity_sounds_.clear();
+    active_sfx_per_clip_.clear();
+    sfx_clip_lookup_.clear();
+    sfx_last_trigger_ms_.clear();
     if (!is_initialized || !ma_engine_ptr) {
         return;
     }
@@ -138,6 +144,19 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
     if (!is_initialized || !ma_engine_ptr || filepath.empty()) {
         return;
     }
+    const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+    auto last_it = sfx_last_trigger_ms_.find(filepath);
+    if (last_it != sfx_last_trigger_ms_.end()) {
+        std::uint64_t elapsed = now_ms >= last_it->second ? now_ms - last_it->second : 0;
+        if (elapsed < sfx_trigger_cooldown_ms_) {
+            return;
+        }
+    }
+    auto active_it = active_sfx_per_clip_.find(filepath);
+    if (active_it != active_sfx_per_clip_.end() && active_it->second >= max_concurrent_sfx_per_clip_) {
+        return;
+    }
     ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
     ma_sound* sound = new ma_sound;
     ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), 0, nullptr, nullptr, sound);
@@ -149,6 +168,9 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
     ma_sound_set_volume(sound, volume * sfx_volume_);
     ma_sound_start(sound);
     active_sfx_.push_back(sound);
+    active_sfx_per_clip_[filepath] += 1;
+    sfx_clip_lookup_[sound] = filepath;
+    sfx_last_trigger_ms_[filepath] = now_ms;
 }
 
 bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) {
@@ -197,6 +219,8 @@ void AudioSystem::StopAllSfx() {
         DestroySound(sound_ptr);
     }
     active_sfx_.clear();
+    active_sfx_per_clip_.clear();
+    sfx_clip_lookup_.clear();
 }
 
 void AudioSystem::SetMasterVolume(float volume) {
@@ -214,6 +238,25 @@ void AudioSystem::SetBgmVolume(float volume) {
 void AudioSystem::SetSfxVolume(float volume) {
     sfx_volume_ = std::clamp(volume, 0.0f, 1.0f);
     ApplyAllVolumes();
+}
+
+void AudioSystem::SetEntityPitch(std::uint32_t entity, float pitch) {
+    if (pitch <= 0.01f) {
+        pitch = 0.01f;
+    }
+    auto it = entity_sounds_.find(entity);
+    if (it == entity_sounds_.end()) {
+        return;
+    }
+    ma_sound_set_pitch(static_cast<ma_sound*>(it->second), pitch);
+}
+
+void AudioSystem::SetMaxConcurrentSfxPerClip(std::size_t max_instances) {
+    max_concurrent_sfx_per_clip_ = max_instances == 0 ? 1 : max_instances;
+}
+
+void AudioSystem::SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms) {
+    sfx_trigger_cooldown_ms_ = cooldown_ms;
 }
 
 void AudioSystem::DestroySound(void* sound_ptr) {
@@ -244,6 +287,17 @@ void AudioSystem::CleanupFinishedSfx() {
         if (ma_sound_is_playing(sound) == MA_TRUE) {
             ++it;
             continue;
+        }
+        auto clip_it = sfx_clip_lookup_.find(sound);
+        if (clip_it != sfx_clip_lookup_.end()) {
+            auto count_it = active_sfx_per_clip_.find(clip_it->second);
+            if (count_it != active_sfx_per_clip_.end() && count_it->second > 0) {
+                count_it->second -= 1;
+                if (count_it->second == 0) {
+                    active_sfx_per_clip_.erase(count_it);
+                }
+            }
+            sfx_clip_lookup_.erase(clip_it);
         }
         DestroySound(sound);
         it = active_sfx_.erase(it);

@@ -23,6 +23,7 @@ int L_UiAddRenderer(lua_State* L) {
     ui.texture_handle = tex_handle;
     ui.color = glm::vec4(r, g, b, a);
     ui.order = order;
+    ui.size = glm::vec2(1.0f, 1.0f);
     return 0;
 }
 
@@ -106,6 +107,56 @@ int L_UiAddButton(lua_State* L) {
     }
     return 0;
 }
+
+int L_UiSetLabelText(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* text = luaL_checkstring(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<UILabelComponent>(e)) {
+        auto& label = world->registry().get<UILabelComponent>(e);
+        label.numeric_mode = false;
+        label.text = text;
+        label.dirty = true;
+    }
+    return 0;
+}
+
+int L_UiSetLabelNumber(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    long long number = static_cast<long long>(luaL_checkinteger(L, 2));
+    if (world->registry().valid(e) && world->registry().all_of<UILabelComponent>(e)) {
+        auto& label = world->registry().get<UILabelComponent>(e);
+        label.numeric_mode = true;
+        label.number_value = number;
+        label.dirty = true;
+    }
+    return 0;
+}
+
+int L_UiSetButtonScale(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float hover_scale = static_cast<float>(luaL_optnumber(L, 2, 1.08));
+    float pressed_scale = static_cast<float>(luaL_optnumber(L, 3, 0.94));
+    float lerp_speed = static_cast<float>(luaL_optnumber(L, 4, 12.0));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.hover_scale = hover_scale;
+        ui.pressed_scale = pressed_scale;
+        ui.scale_lerp_speed = lerp_speed;
+    }
+    return 0;
+}
 }
 
 void RegisterUiBindings(lua_State* L) {
@@ -117,8 +168,11 @@ void RegisterUiBindings(lua_State* L) {
     lua_newtable(L);
     set_fn("add_renderer", L_UiAddRenderer);
     set_fn("add_label", L_UiAddLabel);
+    set_fn("set_label_text", L_UiSetLabelText);
+    set_fn("set_label_number", L_UiSetLabelNumber);
     set_fn("add_panel", L_UiAddPanel);
     set_fn("add_button", L_UiAddButton);
+    set_fn("set_button_scale", L_UiSetButtonScale);
 }
 
 }

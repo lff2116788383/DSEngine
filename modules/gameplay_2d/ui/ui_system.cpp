@@ -2,15 +2,15 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <string>
 
 namespace dse {
 namespace gameplay2d {
 
 void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& screen_size, const glm::vec2& mouse_pos, bool is_mouse_down) {
-    (void)dt;
     SyncLabels(registry);
+    HandleEvents(registry, dt, mouse_pos, is_mouse_down);
     UpdateLayout(registry, screen_size);
-    HandleEvents(registry, mouse_pos, is_mouse_down);
 }
 
 void UISystem::SyncLabels(entt::registry& registry) {
@@ -20,6 +20,9 @@ void UISystem::SyncLabels(entt::registry& registry) {
         auto& ui = view.get<UIRendererComponent>(entity);
         if (!label.dirty) {
             continue;
+        }
+        if (label.numeric_mode) {
+            label.text = std::to_string(label.number_value);
         }
 
         for (auto glyph_entity : label.runtime_glyph_entities) {
@@ -91,11 +94,11 @@ void UISystem::UpdateLayout(entt::registry& registry, const glm::vec2& screen_si
 
         // Create runtime model matrix
         ui.runtime_model = glm::translate(glm::mat4(1.0f), glm::vec3(final_pos, 0.0f));
-        ui.runtime_model = glm::scale(ui.runtime_model, glm::vec3(ui.size, 1.0f));
+        ui.runtime_model = glm::scale(ui.runtime_model, glm::vec3(ui.size * ui.scale, 1.0f));
     }
 }
 
-void UISystem::HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos, bool is_mouse_down) {
+void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down) {
     auto view = registry.view<UIRendererComponent>();
     for (auto entity : view) {
         auto& ui = view.get<UIRendererComponent>(entity);
@@ -146,6 +149,20 @@ void UISystem::HandleEvents(entt::registry& registry, const glm::vec2& mouse_pos
                 ui.color = button->normal_color;
             }
         }
+        float target_scale = 1.0f;
+        if (ui.is_pressed) {
+            target_scale = ui.pressed_scale;
+        } else if (ui.is_hovered) {
+            target_scale = ui.hover_scale;
+        }
+        float speed = ui.scale_lerp_speed * dt;
+        if (speed < 0.0f) {
+            speed = 0.0f;
+        }
+        if (speed > 1.0f) {
+            speed = 1.0f;
+        }
+        ui.scale += (target_scale - ui.scale) * speed;
     }
 }
 

@@ -3,6 +3,8 @@
 #include <string>
 
 int main(int argc, char** argv) {
+    constexpr int window_width = 800;
+    constexpr int window_height = 600;
     std::string startup_script = "samples/lua/main.lua";
     try {
         std::filesystem::path exe_path = argc > 0 ? std::filesystem::absolute(std::filesystem::path(argv[0])) : std::filesystem::path();
@@ -16,8 +18,8 @@ int main(int argc, char** argv) {
     } catch (...) {
     }
     return dse::runtime::RunEngine({
-        800,
-        600,
+        window_width,
+        window_height,
         "DSEngine Lua Demo",
         BusinessMode::Lua,
         startup_script

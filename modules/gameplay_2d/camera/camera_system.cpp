@@ -11,6 +11,27 @@ void CameraSystem::Update(World& world, float aspect_ratio) {
     for (auto entity : view) {
         auto& camera = view.get<CameraComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
+        auto* follow = world.registry().try_get<CameraFollowComponent>(entity);
+        if (follow && follow->enabled && follow->target != entt::null && world.registry().valid(follow->target) && world.registry().all_of<TransformComponent>(follow->target)) {
+            const auto& target_tf = world.registry().get<TransformComponent>(follow->target);
+            glm::vec3 desired = target_tf.position + follow->offset;
+            glm::vec3 delta = desired - transform.position;
+            if (!follow->follow_x || glm::abs(delta.x) <= follow->dead_zone.x) {
+                delta.x = 0.0f;
+            }
+            if (!follow->follow_y || glm::abs(delta.y) <= follow->dead_zone.y) {
+                delta.y = 0.0f;
+            }
+            float smoothing = follow->damping;
+            if (smoothing < 0.0f) {
+                smoothing = 0.0f;
+            }
+            if (smoothing > 1.0f) {
+                smoothing = 1.0f;
+            }
+            transform.position += delta * smoothing;
+            transform.dirty = true;
+        }
 
         if (camera.orthographic) {
             float half_height = camera.orthographic_size;

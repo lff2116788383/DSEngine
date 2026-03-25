@@ -16,6 +16,7 @@
 #include "engine/audio/audio_system.h"
 #include "modules/gameplay_2d/tilemap/tilemap_system.h"
 #include "modules/gameplay_2d/animation/animation_system.h"
+#include "modules/gameplay_2d/particle/particle_system.h"
 class AssetManager;
 
 enum class BusinessMode {
@@ -64,6 +65,7 @@ private:
     UIRenderSystem ui_render_system_;
     Physics2DSystem physics2d_system_;
     AnimationSystem animation_system_;
+    ParticleSystem particle_system_;
     dse::gameplay2d::UISystem ui_logic_system_;
     dse::gameplay2d::AudioSystem audio_system_;
     dse::gameplay2d::TilemapSystem tilemap_system_;

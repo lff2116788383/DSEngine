@@ -1,5 +1,6 @@
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/base/time.h"
 #include <algorithm>
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
@@ -22,7 +23,10 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.blend_mode = static_cast<unsigned int>(sprite.blend_mode);
         item.model = transform.local_to_world;
         item.color = sprite.color;
+        sprite.uv_offset += sprite.uv_scroll_speed * Time::delta_time();
         item.uv = sprite.uv;
+        item.uv.x += sprite.uv_offset.x;
+        item.uv.y += sprite.uv_offset.y;
         item.sorting_layer = sprite.sorting_layer;
         item.order_in_layer = sprite.order_in_layer;
         items.push_back(item);

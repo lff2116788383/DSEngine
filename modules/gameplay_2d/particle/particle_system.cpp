@@ -23,7 +23,11 @@ void ParticleSystem::Update(World& world, float delta_time) {
         // Emit new particles
         if (emitter.emitting) {
             emitter.emit_accumulator += delta_time;
-            float emit_interval = 1.0f / emitter.emit_rate;
+            float actual_emit_rate = emitter.emit_rate * emitter.emit_rate_scale;
+            if (actual_emit_rate < 0.01f) {
+                actual_emit_rate = 0.01f;
+            }
+            float emit_interval = 1.0f / actual_emit_rate;
             
             while (emitter.emit_accumulator >= emit_interval && emitter.particles.size() < emitter.max_particles) {
                 emitter.emit_accumulator -= emit_interval;
@@ -38,6 +42,20 @@ void ParticleSystem::Update(World& world, float delta_time) {
                 
                 emitter.particles.push_back(p);
             }
+        }
+        while (emitter.pending_burst > 0 && emitter.particles.size() < emitter.max_particles) {
+            Particle2D p;
+            p.position = transform.position;
+            p.velocity = glm::vec3(0.0f, 1.0f, 0.0f);
+            p.color = emitter.start_color;
+            p.life_time = emitter.start_life_time;
+            p.life_remaining = emitter.start_life_time;
+            p.size = emitter.start_size;
+            emitter.particles.push_back(p);
+            emitter.pending_burst -= 1;
+        }
+        if (emitter.pending_burst < 0) {
+            emitter.pending_burst = 0;
         }
     }
 }

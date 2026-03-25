@@ -59,6 +59,8 @@ struct SpriteRendererComponent {
     SpriteBlendMode blend_mode = SpriteBlendMode::Alpha;
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    glm::vec2 uv_offset = glm::vec2(0.0f, 0.0f);
+    glm::vec2 uv_scroll_speed = glm::vec2(0.0f, 0.0f);
     int sorting_layer = 0;
     int order_in_layer = 0;
     bool visible = true;
@@ -71,6 +73,10 @@ struct UIRendererComponent {
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     int order = 0;
     bool visible = true;
+    float scale = 1.0f;
+    float hover_scale = 1.08f;
+    float pressed_scale = 0.94f;
+    float scale_lerp_speed = 12.0f;
     
     // UI layout params (Anchor & Flex base)
     glm::vec2 position = glm::vec2(0.0f); // Local offset
@@ -108,6 +114,8 @@ struct UIButtonComponent {
 
 struct UILabelComponent {
     std::string text;
+    long long number_value = 0;
+    bool numeric_mode = false;
     unsigned int font_texture_handle = 0;
     glm::vec2 glyph_size = glm::vec2(16.0f, 16.0f);
     glm::vec2 offset = glm::vec2(0.0f);
@@ -127,6 +135,16 @@ struct CameraComponent {
     float far_clip = 1.0f;
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
+};
+
+struct CameraFollowComponent {
+    Entity target = entt::null;
+    glm::vec3 offset = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec2 dead_zone = glm::vec2(0.0f, 0.0f);
+    float damping = 0.12f;
+    bool follow_x = true;
+    bool follow_y = true;
+    bool enabled = true;
 };
 
 struct ScriptComponent {
@@ -175,6 +193,8 @@ struct AnimationState {
     std::string name;
     std::vector<std::shared_ptr<TextureAsset>> frames;
     std::vector<unsigned int> frame_handles; // for lua bindings
+    std::vector<std::pair<float, std::string>> events;
+    std::vector<std::pair<int, int>> segments;
     float frame_rate = 10.0f;
     bool loop = true;
 };
@@ -194,11 +214,23 @@ struct AnimatorComponent {
     std::string current_state = "";
     float current_time = 0.0f;
     int current_frame = 0;
+    int segment_start_frame = 0;
+    int segment_end_frame = -1;
+    bool segment_loop = true;
     bool playing = true;
+    std::vector<std::string> fired_events;
     
     // Add helper to set params
     void SetBool(const std::string& name, bool value) { bool_params[name] = value; }
     void SetFloat(const std::string& name, float value) { float_params[name] = value; }
+    void PlaySegment(int start_frame, int end_frame, bool loop_segment) {
+        segment_start_frame = start_frame < 0 ? 0 : start_frame;
+        segment_end_frame = end_frame;
+        segment_loop = loop_segment;
+        current_time = 0.0f;
+        current_frame = segment_start_frame;
+        playing = true;
+    }
 };
 
 struct Particle2D {
@@ -216,8 +248,10 @@ struct ParticleEmitterComponent {
     unsigned int texture_handle = 0;
     int max_particles = 100;
     float emit_rate = 10.0f; // particles per second
+    float emit_rate_scale = 1.0f;
     float emit_accumulator = 0.0f;
     bool emitting = true;
+    int pending_burst = 0;
     
     // Emission parameters
     float start_life_time = 2.0f;
@@ -232,10 +266,20 @@ struct AudioSourceComponent {
     bool play_on_awake = true;
     bool loop = false;
     float volume = 1.0f;
+    float pitch = 1.0f;
     bool is_playing = false;
     
     // Internal handle to audio engine (e.g., SoLoud)
     unsigned int runtime_handle = 0;
+};
+
+struct GameplayTuningComponent {
+    float leaf_min_distance = 80.0f;
+    float leaf_move_left = 140.0f;
+    float leaf_move_right = 410.0f;
+    float jump_speed_scale = 15.0f;
+    float jump_speed_max = 18.0f;
+    float camera_follow_damping = 0.02f;
 };
 
 struct TilemapComponent {

@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstdint>
+#include <deque>
 
 namespace dse {
 namespace gameplay2d {
@@ -29,6 +30,9 @@ public:
     void SetMasterVolume(float volume);
     void SetBgmVolume(float volume);
     void SetSfxVolume(float volume);
+    void SetEntityPitch(std::uint32_t entity, float pitch);
+    void SetMaxConcurrentSfxPerClip(std::size_t max_instances);
+    void SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms);
 
 private:
     void DestroySound(void* sound_ptr);
@@ -39,9 +43,14 @@ private:
     void* bgm_sound_ptr_ = nullptr;
     std::vector<void*> active_sfx_;
     std::unordered_map<std::uint32_t, void*> entity_sounds_;
+    std::unordered_map<std::string, std::size_t> active_sfx_per_clip_;
+    std::unordered_map<void*, std::string> sfx_clip_lookup_;
+    std::unordered_map<std::string, std::uint64_t> sfx_last_trigger_ms_;
     float master_volume_ = 1.0f;
     float bgm_volume_ = 1.0f;
     float sfx_volume_ = 1.0f;
+    std::size_t max_concurrent_sfx_per_clip_ = 4;
+    std::uint32_t sfx_trigger_cooldown_ms_ = 20;
     bool is_initialized = false;
 };
 
