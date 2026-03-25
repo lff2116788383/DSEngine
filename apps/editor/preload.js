@@ -39,5 +39,8 @@ window.electronAPI = {
   pickEntity: (x, y) => ipcRenderer.invoke('engine:pickEntity', x, y),
   createEntity: () => ipcRenderer.invoke('engine:createEntity'),
   deleteEntity: (id) => ipcRenderer.invoke('engine:deleteEntity', id),
-  buildProject: (target) => ipcRenderer.invoke('engine:buildProject', target)
+  buildProject: (target) => ipcRenderer.invoke('engine:buildProject', target),
+  getLaunchContext: () => ipcRenderer.invoke('engine:getLaunchContext'),
+  setRuntimePlay: (enabled) => ipcRenderer.invoke('engine:setRuntimePlay', enabled),
+  getRuntimePlayState: () => ipcRenderer.invoke('engine:getRuntimePlayState')
 };

@@ -30,6 +30,9 @@ declare global {
       createEntity: () => Promise<number>;
       deleteEntity: (id: number) => Promise<boolean>;
       buildProject: (target: string) => Promise<any>;
+      getLaunchContext: () => Promise<{ projectPath: string, engineVersion: string }>;
+      setRuntimePlay: (enabled: boolean) => Promise<{ running: boolean }>;
+      getRuntimePlayState: () => Promise<{ running: boolean }>;
     };
   }
 }
@@ -149,6 +152,11 @@ export const EditorApp: React.FC = () => {
       window.electronAPI.initEngine().then((res) => {
         console.log("Engine init response:", res);
         setOutputLogs(prev => [...prev, "Engine initialization success."]);
+        if (window.electronAPI.getLaunchContext) {
+          window.electronAPI.getLaunchContext().then((ctx) => {
+            setOutputLogs(prev => [...prev, `Launch context => project: ${ctx.projectPath || '<none>'}, version: ${ctx.engineVersion || 'debug'}`]);
+          }).catch(() => undefined);
+        }
         
         // Fetch initial entities
         if (window.electronAPI.getEntities) {
@@ -413,6 +421,14 @@ export const EditorApp: React.FC = () => {
   const handlePlayToggle = () => {
     const newPlayState = !isPlaying;
     setIsPlaying(newPlayState);
+    if (window.electronAPI?.setRuntimePlay) {
+      window.electronAPI.setRuntimePlay(newPlayState).then((runtimeState) => {
+        logMessage(newPlayState ? `Starting game preview... runtime=${runtimeState.running}` : `Stopped game preview. runtime=${runtimeState.running}`);
+      }).catch(() => {
+        logMessage(newPlayState ? "Starting game preview..." : "Stopped game preview.");
+      });
+      return;
+    }
     logMessage(newPlayState ? "Starting game preview..." : "Stopped game preview.");
   };
 

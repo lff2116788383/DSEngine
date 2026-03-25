@@ -302,6 +302,86 @@ int LuaDSEAddUILabel(lua_State* L) {
     return 0;
 }
 
+int LuaDSEAddUIPanel(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool blocks_input = lua_toboolean(L, 2);
+    auto& panel = world->registry().emplace_or_replace<UIPanelComponent>(e);
+    panel.blocks_input = blocks_input;
+    return 0;
+}
+
+int LuaDSEAddUIButton(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    auto& button = world->registry().emplace_or_replace<UIButtonComponent>(e);
+    if (lua_gettop(L) >= 5) {
+        button.normal_color = glm::vec4(
+            static_cast<float>(luaL_optnumber(L, 2, 1.0)),
+            static_cast<float>(luaL_optnumber(L, 3, 1.0)),
+            static_cast<float>(luaL_optnumber(L, 4, 1.0)),
+            static_cast<float>(luaL_optnumber(L, 5, 1.0))
+        );
+        button.hover_color = button.normal_color * glm::vec4(1.1f, 1.1f, 1.1f, 1.0f);
+        button.pressed_color = button.normal_color * glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    }
+    if (world->registry().valid(e) && !world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+int LuaDSESetAudioPlaying(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool playing = lua_toboolean(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        auto& audio = world->registry().get<AudioSourceComponent>(e);
+        audio.is_playing = playing;
+        if (playing) {
+            audio.play_on_awake = true;
+        }
+    }
+    return 0;
+}
+
+int LuaDSESetAudioLoop(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool loop = lua_toboolean(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        auto& audio = world->registry().get<AudioSourceComponent>(e);
+        audio.loop = loop;
+    }
+    return 0;
+}
+
+int LuaDSESetAudioVolume(lua_State* L) {
+    Phase1World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float volume = static_cast<float>(luaL_checknumber(L, 2));
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        auto& audio = world->registry().get<AudioSourceComponent>(e);
+        audio.volume = volume;
+    }
+    return 0;
+}
+
 int LuaDSEAddTilemap(lua_State* L) {
     Phase1World* world = GetWorld();
     if (!world) {
@@ -430,6 +510,11 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_register(L, "DSE_AddAudioSource", LuaDSEAddAudioSource);
     lua_register(L, "DSE_AddUIRenderer", LuaDSEAddUIRenderer);
     lua_register(L, "DSE_AddUILabel", LuaDSEAddUILabel);
+    lua_register(L, "DSE_AddUIPanel", LuaDSEAddUIPanel);
+    lua_register(L, "DSE_AddUIButton", LuaDSEAddUIButton);
+    lua_register(L, "DSE_SetAudioPlaying", LuaDSESetAudioPlaying);
+    lua_register(L, "DSE_SetAudioLoop", LuaDSESetAudioLoop);
+    lua_register(L, "DSE_SetAudioVolume", LuaDSESetAudioVolume);
     lua_register(L, "DSE_AddTilemap", LuaDSEAddTilemap);
     lua_register(L, "DSE_SetTile", LuaDSESetTile);
     lua_register(L, "DSE_AddAnimator", LuaDSEAddAnimator);

@@ -80,6 +80,15 @@ void Physics2DSystem::Init(Phase1World& world) {
 void Physics2DSystem::FixedUpdate(Phase1World& world, float fixed_delta_time) {
     if (!physics_world_) return;
 
+    for (b2Body* body = physics_world_->GetBodyList(); body != nullptr;) {
+        b2Body* next = body->GetNext();
+        Entity entity = static_cast<Entity>(body->GetUserData().pointer);
+        if (!world.registry().valid(entity) || !world.registry().all_of<RigidBody2DComponent>(entity)) {
+            physics_world_->DestroyBody(body);
+        }
+        body = next;
+    }
+
     // 1. Create Box2D bodies for new entities or update existing ones
     auto view = world.registry().view<RigidBody2DComponent, TransformComponent>();
     for (auto entity : view) {

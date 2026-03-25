@@ -2,6 +2,7 @@ local Phase1MVP = {}
 
 local initialized = false
 local box_entity = 0
+local audio_entity = 0
 local frame_counter = 0
 
 function Phase1MVP.Setup(config)
@@ -23,6 +24,7 @@ function Phase1MVP.Setup(config)
     if ui_tex == 0 then ui_tex = DSE_LoadTexture("data/mirror_assets/Resources/ui/1.png") end
     local font_tex = DSE_LoadTexture("font/bitmap_font.png")
     if font_tex == 0 then font_tex = DSE_LoadTexture("data/font/bitmap_font.png") end
+    local bgm_path = "audio/phase1_bgm.wav"
 
     -- 2. Tilemap (Ground)
     local tilemap = DSE_CreateEntity()
@@ -51,6 +53,14 @@ function Phase1MVP.Setup(config)
     DSE_AddTransform(ui_entity, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
     DSE_AddUIRenderer(ui_entity, ui_tex, 0.2, 0.2, 0.8, 0.5, 100)
     DSE_AddUILabel(ui_entity, "Phase 1 MVP", font_tex, 1.0, 1.0, 1.0, 1.0, 8.0, 12.0, 0.0, 16, 6, 32, 0.0, 0.0)
+    DSE_AddUIPanel(ui_entity, true)
+    DSE_AddUIButton(ui_entity, 0.2, 0.2, 0.8, 1.0)
+
+    audio_entity = DSE_CreateEntity()
+    DSE_AddTransform(audio_entity, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+    DSE_AddAudioSource(audio_entity, bgm_path, true, true, 0.5)
+    DSE_SetAudioPlaying(audio_entity, true)
+    print(string.format("[Phase1-MVP] audio source initialized: %s", bgm_path))
 
     -- 5. Animation
     local anim_entity = DSE_CreateEntity()
@@ -70,7 +80,7 @@ function Phase1MVP.Update(delta_time)
     if frame_counter % 60 == 0 then
         local dc = DSE_GetDrawCalls()
         local sprites = DSE_GetSpriteCount()
-        print(string.format("[Phase1-MVP] Update running... draw_calls=%d sprites=%d", dc, sprites))
+        print(string.format("[Phase1-MVP] Update running... draw_calls=%d sprites=%d audio_entity=%d", dc, sprites, audio_entity))
     end
 end
 

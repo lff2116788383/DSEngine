@@ -428,6 +428,19 @@ if !ERRORLEVEL! neq 0 (
     exit /b !VERIFY_RC!
 )
 
+if "%BUILD_EDITOR%"=="1" (
+    echo -- Running Editor Smoke Regression --
+    pushd ".\apps\editor" >nul
+    call npm run regress:editor-smoke
+    set "EDITOR_SMOKE_RC=!ERRORLEVEL!"
+    popd >nul
+    if not "!EDITOR_SMOKE_RC!"=="0" (
+        echo [ERROR] Editor smoke regression failed with exit code !EDITOR_SMOKE_RC!!
+        pause
+        exit /b !EDITOR_SMOKE_RC!
+    )
+)
+
 echo.
 echo ========================================================
 echo        [SUCCESS] All builds and verifications passed!

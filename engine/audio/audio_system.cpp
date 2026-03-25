@@ -62,7 +62,7 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         auto sound_it = entity_sounds_.find(key);
         ma_sound* sound = sound_it != entity_sounds_.end() ? static_cast<ma_sound*>(sound_it->second) : nullptr;
 
-        if (!sound && audio.play_on_awake && audio.clip) {
+        if (!sound && audio.clip && (audio.play_on_awake || audio.is_playing)) {
             ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
             ma_sound* new_sound = new ma_sound;
             ma_result result = ma_sound_init_from_file(engine, audio.clip->GetPath().c_str(), 0, nullptr, nullptr, new_sound);
@@ -84,27 +84,30 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         ma_sound_set_looping(sound, audio.loop ? MA_TRUE : MA_FALSE);
         ma_sound_set_volume(sound, audio.volume * sfx_volume_);
-        const bool now_playing = ma_sound_is_playing(sound) == MA_TRUE;
+        const bool should_play = audio.is_playing || audio.play_on_awake;
+        const bool now_playing_before = ma_sound_is_playing(sound) == MA_TRUE;
 
-        if (audio.is_playing && !now_playing) {
+        if (should_play && !now_playing_before) {
             ma_sound_start(sound);
-        } else if (!audio.is_playing && now_playing) {
+        } else if (!should_play && now_playing_before) {
             ma_sound_stop(sound);
         }
 
-        if (!audio.loop && !now_playing && !audio.is_playing) {
+        audio.play_on_awake = false;
+        const bool now_playing = ma_sound_is_playing(sound) == MA_TRUE;
+
+        if (!audio.loop && !now_playing) {
             DestroySound(sound);
             entity_sounds_.erase(key);
             audio.runtime_handle = 0;
+            audio.is_playing = false;
             continue;
         }
 
-        if (ma_sound_is_playing(sound) == MA_TRUE) {
-            audio.is_playing = true;
+        if (now_playing) {
             audio.runtime_handle = static_cast<unsigned int>(key);
-        } else if (!audio.loop) {
-            audio.is_playing = false;
         }
+        audio.is_playing = now_playing;
     }
 
     CleanupFinishedSfx();

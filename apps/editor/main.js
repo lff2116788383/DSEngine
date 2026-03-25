@@ -9,6 +9,10 @@ const dsengine = require('./build/Release/dsengine_bridge.node');
 let runtimeEngineProcess = null;
 const runtimeSharedFrameName = 'DSEngineEditorSharedFrameV1';
 process.env.DSE_EDITOR_FRAME_SHM_NAME = runtimeSharedFrameName;
+const launchContext = {
+  projectPath: process.env.DSE_LAUNCHER_PROJECT_PATH || '',
+  engineVersion: process.env.DSE_LAUNCHER_ENGINE_VERSION || 'debug'
+};
 
 function resolveProjectRoot() {
   if (app.isPackaged) {
@@ -24,10 +28,11 @@ function resolveProjectRoot() {
 
 function resolveRuntimeEngineExe() {
   const projectRoot = resolveProjectRoot();
-  const candidates = [
-    path.join(projectRoot, 'bin', 'DSEngine_debug.exe'),
-    path.join(projectRoot, 'bin', 'DSEngine.exe')
-  ];
+  const preferred = String(launchContext.engineVersion || 'debug').toLowerCase();
+  const preferredCandidates = preferred === 'release'
+    ? ['DSEngine_release.exe', 'DSEngine.exe', 'DSEngine_debug.exe']
+    : ['DSEngine_debug.exe', 'DSEngine.exe', 'DSEngine_release.exe'];
+  const candidates = preferredCandidates.map((name) => path.join(projectRoot, 'bin', name));
   for (const p of candidates) {
     if (fs.existsSync(p)) {
       return p;
@@ -56,13 +61,16 @@ function startRuntimeFrameBridge() {
   runtimeEngineProcess.on('exit', () => {
     runtimeEngineProcess = null;
   });
+  return true;
 }
 
 function stopRuntimeFrameBridge() {
   if (runtimeEngineProcess) {
     runtimeEngineProcess.kill();
     runtimeEngineProcess = null;
+    return true;
   }
+  return false;
 }
 
 function createWindow() {
@@ -199,6 +207,23 @@ function createWindow() {
     });
 
     return dsengine.buildProject(target);
+  });
+
+  ipcMain.handle('engine:getLaunchContext', () => {
+    return launchContext;
+  });
+
+  ipcMain.handle('engine:setRuntimePlay', (event, enabled) => {
+    if (enabled) {
+      startRuntimeFrameBridge();
+    } else {
+      stopRuntimeFrameBridge();
+    }
+    return { running: !!runtimeEngineProcess };
+  });
+
+  ipcMain.handle('engine:getRuntimePlayState', () => {
+    return { running: !!runtimeEngineProcess };
   });
 
   mainWindow.loadFile('index.html');

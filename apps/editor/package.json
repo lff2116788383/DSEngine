@@ -7,6 +7,7 @@
     "start": "webpack && electron .",
     "package:win": "webpack && electron-builder --win --x64",
     "regress:material-replay": "node scripts/material_replay_regression.js",
+    "regress:editor-smoke": "node scripts/editor_smoke_check.js",
     "regress:scene-schema-migrate": "node scripts/scene_material_schema_migrate.js --self-test",
     "migrate:scene-schema": "node scripts/scene_material_schema_migrate.js --write",
     "migrate:scene-schema:report": "node scripts/scene_material_schema_migrate.js --write --report ../../build/scene_schema_migration_report.json --trend-file ../../build/scene_schema_migration_trend.json --html-report ../../build/scene_schema_migration_report.html",

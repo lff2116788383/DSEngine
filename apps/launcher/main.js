@@ -51,17 +51,44 @@ function scanProjectDirectories(rootDir) {
   return result;
 }
 
-function spawnEditor(projectPath) {
+function resolveEditorExecutable() {
+  const projectRoot = getProjectRoot();
+  const candidates = [
+    path.join(projectRoot, 'bin', 'editor_pkg', 'win-unpacked', 'DSEngineEditor.exe'),
+    path.join(projectRoot, 'bin', 'DSEngineEditor.exe')
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+function spawnEditor(projectPath, versionTag) {
+  const launchEnv = {
+    ...process.env,
+    DSE_LAUNCHER_PROJECT_PATH: projectPath || '',
+    DSE_LAUNCHER_ENGINE_VERSION: versionTag || 'debug'
+  };
+  const editorExe = resolveEditorExecutable();
+  if (editorExe) {
+    const child = spawn(editorExe, [], {
+      cwd: path.dirname(editorExe),
+      detached: true,
+      stdio: 'ignore',
+      env: launchEnv
+    });
+    child.unref();
+    return;
+  }
   const editorDir = path.join(getProjectRoot(), 'apps', 'editor');
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const child = spawn(npmCmd, ['start'], {
     cwd: editorDir,
     detached: true,
     stdio: 'ignore',
-    env: {
-      ...process.env,
-      DSE_LAUNCHER_PROJECT_PATH: projectPath || ''
-    }
+    env: launchEnv
   });
   child.unref();
 }
@@ -94,8 +121,8 @@ ipcMain.handle('launcher:chooseProjectRoot', async () => {
 
 ipcMain.handle('launcher:scanProjects', (event, rootDir) => scanProjectDirectories(rootDir));
 
-ipcMain.handle('launcher:launchEditor', (event, projectPath) => {
-  spawnEditor(projectPath);
+ipcMain.handle('launcher:launchEditor', (event, projectPath, versionTag) => {
+  spawnEditor(projectPath, versionTag);
   return { success: true };
 });
 
