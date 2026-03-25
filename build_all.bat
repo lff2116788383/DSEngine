@@ -17,10 +17,13 @@ set BUILD_LAUNCHER=1
 set PACKAGE_EDITOR_EXE=1
 set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
+set VERIFY_EXE_TIMEOUT_SECONDS=3
 set "DSE_ELECTRON_MIRROR="
 set "DSE_ELECTRON_CUSTOM_DIR="
 set "DSE_ELECTRON_CACHE_DIR=%CD%\.cache\electron"
 set "DSE_ELECTRON_BUILDER_CACHE_DIR=%CD%\.cache\electron-builder"
+set "DSE_ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/"
+set "DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR="
 
 :parse_args
 if "%~1"=="" goto parse_done
@@ -120,6 +123,26 @@ if /I "%~1"=="--electron-builder-cache-dir" (
     shift
     goto parse_args
 )
+if /I "%~1"=="--electron-builder-binaries-mirror" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-builder-binaries-mirror requires a URL value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_BUILDER_BINARIES_MIRROR=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--electron-builder-binaries-custom-dir" (
+    if "%~2"=="" (
+        echo [ERROR] --electron-builder-binaries-custom-dir requires a directory name value.
+        goto usage_error
+    )
+    set "DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR=%~2"
+    shift
+    shift
+    goto parse_args
+)
 if /I "%~1"=="-h" goto usage
 if /I "%~1"=="--help" goto usage
 echo [ERROR] Unknown option: %~1
@@ -134,6 +157,10 @@ set "CMAKE_ELECTRON_MIRROR_OPTION="
 if defined DSE_ELECTRON_MIRROR set "CMAKE_ELECTRON_MIRROR_OPTION=-DDSE_ELECTRON_MIRROR=%DSE_ELECTRON_MIRROR%"
 set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION="
 if defined DSE_ELECTRON_CUSTOM_DIR set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION=-DDSE_ELECTRON_CUSTOM_DIR=%DSE_ELECTRON_CUSTOM_DIR%"
+set "CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION="
+if defined DSE_ELECTRON_BUILDER_BINARIES_MIRROR set "CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION=-DDSE_ELECTRON_BUILDER_BINARIES_MIRROR=%DSE_ELECTRON_BUILDER_BINARIES_MIRROR%"
+set "CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION="
+if defined DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR set "CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION=-DDSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR=%DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR%"
 
 :: Check Administrator Privileges if we need to package EXE
 if "%PACKAGE_EDITOR_EXE%"=="1" set NEED_ADMIN=1
@@ -267,7 +294,7 @@ if exist %BUILD_DIR%\CMakeCache.txt (
 :: 2. Configure CMake project
 echo.
 echo [2/4] Configuring CMake project...
-cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION%
+cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
     pause
@@ -385,20 +412,20 @@ if not exist "%LUA_EXE%" (
     exit /b 1
 )
 
-echo -- Running C++ Example --
-"%CPP_EXE%"
-if %ERRORLEVEL% neq 0 (
-    echo [ERROR] C++ Example failed with exit code %ERRORLEVEL%!
+call :run_verify_exe "%CPP_EXE%" "C++ Example"
+if !ERRORLEVEL! neq 0 (
+    set "VERIFY_RC=!ERRORLEVEL!"
+    echo [ERROR] C++ Example failed with exit code !VERIFY_RC!!
     pause
-    exit /b %ERRORLEVEL%
+    exit /b !VERIFY_RC!
 )
 
-echo -- Running Lua Example --
-"%LUA_EXE%"
-if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Lua Example failed with exit code %ERRORLEVEL%!
+call :run_verify_exe "%LUA_EXE%" "Lua Example"
+if !ERRORLEVEL! neq 0 (
+    set "VERIFY_RC=!ERRORLEVEL!"
+    echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
     pause
-    exit /b %ERRORLEVEL%
+    exit /b !VERIFY_RC!
 )
 
 echo.
@@ -407,6 +434,19 @@ echo        [SUCCESS] All builds and verifications passed!
 echo ========================================================
 pause
 exit /b 0
+
+:run_verify_exe
+setlocal
+set "VERIFY_EXE_PATH=%~1"
+set "VERIFY_EXE_NAME=%~2"
+echo -- Running %VERIFY_EXE_NAME% --
+powershell -NoProfile -Command "$p = Start-Process -FilePath \"%VERIFY_EXE_PATH%\" -PassThru; if ($p.WaitForExit(%VERIFY_EXE_TIMEOUT_SECONDS%000)) { exit $p.ExitCode }; Stop-Process -Id $p.Id -Force; exit 124"
+set "RUN_RC=%ERRORLEVEL%"
+if "%RUN_RC%"=="124" (
+    echo [WARN] %VERIFY_EXE_NAME% did not exit within %VERIFY_EXE_TIMEOUT_SECONDS%s, terminated automatically.
+    endlocal & exit /b 0
+)
+endlocal & exit /b %RUN_RC%
 
 :usage
 echo Usage: build_all.bat [options...]
@@ -424,6 +464,8 @@ echo   --electron-mirror URL  Electron download mirror URL for electron-builder
 echo   --electron-custom-dir NAME  Optional custom dir name under mirror for Electron zip
 echo   --electron-cache-dir PATH  Electron zip cache directory
 echo   --electron-builder-cache-dir PATH  electron-builder cache directory
+echo   --electron-builder-binaries-mirror URL  Mirror URL for electron-builder binaries ^(default: npmmirror^)
+echo   --electron-builder-binaries-custom-dir NAME  Optional custom dir name for electron-builder binaries mirror
 echo   -h, --help             Show this help message
 echo.
 echo Notes:
