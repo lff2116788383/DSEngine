@@ -128,3 +128,12 @@ npm run pipeline:export:win64:strict
 ## 路线图
 
 查看 [DSEngine_新引擎演进步骤方案_2026版.md](DSEngine_新引擎演进步骤方案_2026版.md) 了解后续演进计划。
+
+
+## 实现目标Demo
+2D Demo：
+1.ARPG 无双割草小游戏
+2.AVG 视觉小游戏
+
+3D Demo：
+1.RPG 烽火与炊烟版经营模拟小游戏

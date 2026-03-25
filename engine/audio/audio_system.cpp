@@ -74,6 +74,7 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
                 ma_sound_start(new_sound);
                 entity_sounds_[key] = new_sound;
                 sound = new_sound;
+                audio.restart_requested = false;
             } else {
                 delete new_sound;
             }
@@ -81,12 +82,21 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         if (!sound) {
             audio.is_playing = false;
+            audio.restart_requested = false;
             continue;
         }
 
         ma_sound_set_looping(sound, audio.loop ? MA_TRUE : MA_FALSE);
         ma_sound_set_volume(sound, audio.volume * sfx_volume_);
         ma_sound_set_pitch(sound, audio.pitch);
+        if (audio.restart_requested) {
+            ma_sound_stop(sound);
+            ma_sound_seek_to_pcm_frame(sound, 0);
+            if (audio.is_playing || audio.play_on_awake) {
+                ma_sound_start(sound);
+            }
+            audio.restart_requested = false;
+        }
         const bool should_play = audio.is_playing || audio.play_on_awake;
         const bool now_playing_before = ma_sound_is_playing(sound) == MA_TRUE;
 
@@ -104,6 +114,7 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
             entity_sounds_.erase(key);
             audio.runtime_handle = 0;
             audio.is_playing = false;
+            audio.restart_requested = false;
             continue;
         }
 

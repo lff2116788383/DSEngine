@@ -268,6 +268,7 @@ struct AudioSourceComponent {
     float volume = 1.0f;
     float pitch = 1.0f;
     bool is_playing = false;
+    bool restart_requested = false;
     
     // Internal handle to audio engine (e.g., SoLoud)
     unsigned int runtime_handle = 0;

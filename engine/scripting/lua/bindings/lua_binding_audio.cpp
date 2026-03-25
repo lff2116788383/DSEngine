@@ -36,9 +36,23 @@ int L_AudioSetPlaying(lua_State* L) {
     if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
         auto& audio = world->registry().get<AudioSourceComponent>(e);
         audio.is_playing = playing;
-        if (playing) {
-            audio.play_on_awake = true;
+        if (!playing) {
+            audio.restart_requested = false;
         }
+    }
+    return 0;
+}
+
+int L_AudioRestart(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        auto& audio = world->registry().get<AudioSourceComponent>(e);
+        audio.is_playing = true;
+        audio.restart_requested = true;
     }
     return 0;
 }
@@ -98,6 +112,7 @@ void RegisterAudioBindings(lua_State* L) {
     lua_newtable(L);
     set_fn("add_source", L_AudioAddSource);
     set_fn("set_playing", L_AudioSetPlaying);
+    set_fn("restart", L_AudioRestart);
     set_fn("set_loop", L_AudioSetLoop);
     set_fn("set_volume", L_AudioSetVolume);
     set_fn("set_pitch", L_AudioSetPitch);

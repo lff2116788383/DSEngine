@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Folder, Cpu, Settings, Play, Activity, Box, Globe, Plus, Search, MonitorPlay, Terminal, Zap, Radio, User, ShoppingCart, BookOpen, Download, MoreVertical, Bell, Cloud, Star, ChevronRight, CheckCircle2, MousePointer2, Move, RotateCw, Scaling, Pause, AlignLeft, Layers, PaintBucket, Hammer, Wrench, Trash2, Import, Image as ImageIcon } from 'lucide-react';
 
 // Declare the electron API we injected via preload
 declare global {
@@ -79,15 +81,19 @@ interface FrameBridgeStats {
 
 // Godot-like Theme Constants
 const theme = {
-  bgBase: '#202531',
-  bgPanel: '#1a1e27',
-  bgDark: '#14171f',
-  textMain: '#cccccc',
-  textMuted: '#888888',
-  accent: '#478cbf',
-  accentHover: '#416b8c',
-  border: '#11141a',
-  headerBg: '#242a35'
+  bg: '#fdf6e3', // 宣纸底色
+  sidebar: '#f5ebdb', // 稍深的宣纸色
+  card: '#fffbf0', // 卡片底色
+  cardHover: '#f0e4d3',
+  primary: '#8c3a3a', // 故宫红/朱砂红
+  primaryDim: 'rgba(140, 58, 58, 0.1)',
+  textMain: '#2c2c2c', // 墨黑
+  textMuted: '#6b5d50', // 枯叶褐
+  border: '#d4c4b7', // 边框褐
+  success: '#4a7a5b', // 黛绿
+  danger: '#a64036', // 胭脂红
+  warning: '#b8860b', // 藤黄
+  headerBg: '#f5ebdb'
 };
 
 export const EditorApp: React.FC = () => {
@@ -528,443 +534,323 @@ export const EditorApp: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: theme.bgBase, color: theme.textMain, fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', fontSize: '13px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: theme.bg, color: theme.textMain, fontFamily: '"STKaiti", "KaiTi", serif', overflow: 'hidden', backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.8\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100\' height=\'100\' filter=\'url(%23noise)\' opacity=\'0.08\'/%3E%3C/svg%3E")' }}>
       
       {/* Top Menu Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: '30px', background: theme.headerBg, borderBottom: `1px solid ${theme.border}` }}>
-        <div style={{ display: 'flex', gap: '15px' }}>
-          <span style={{ cursor: 'pointer' }}>Scene</span>
-          <span style={{ cursor: 'pointer' }}>Project</span>
-          <span style={{ cursor: 'pointer' }}>Debug</span>
-          <span style={{ cursor: 'pointer' }}>Editor</span>
-          <span style={{ cursor: 'pointer' }}>Help</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '48px', background: theme.sidebar, borderBottom: `2px solid ${theme.primary}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: theme.primary, fontWeight: 'bold', fontSize: '18px', letterSpacing: '2px' }}>
+            <Activity size={20} />
+            <span>天工开物 (DSEngine)</span>
+          </div>
+          <div style={{ width: '1px', height: '24px', background: theme.border, margin: '0 8px' }}></div>
+          <button style={{ background: 'transparent', border: 'none', color: theme.textMain, cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>卷宗 (File)</button>
+          <button style={{ background: 'transparent', border: 'none', color: theme.textMain, cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>修真 (Edit)</button>
+          <button style={{ background: 'transparent', border: 'none', color: theme.textMain, cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>天道 (Window)</button>
         </div>
-        <div style={{ margin: '0 auto', display: 'flex', gap: '5px' }}>
-          {['2D', '3D', 'Script', 'AssetLib'].map(ws => (
-            <button 
-              key={ws}
-              onClick={() => setWorkspace(ws as any)}
-              style={{
-                background: workspace === ws ? theme.bgPanel : 'transparent',
-                color: workspace === ws ? theme.accent : theme.textMain,
-                border: 'none',
-                padding: '4px 12px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: workspace === ws ? 'bold' : 'normal'
-              }}
-            >
-              {ws}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={handlePlayToggle} style={{ background: 'transparent', border: 'none', color: isPlaying ? '#4caf50' : theme.textMain, cursor: 'pointer', fontSize: '16px' }}>
-            {isPlaying ? '⏹' : '▶'}
+        
+        {/* Play Toolbar */}
+        <div style={{ display: 'flex', gap: '8px', background: theme.card, padding: '4px 8px', borderRadius: '4px', border: `1px solid ${theme.border}` }}>
+          <button onClick={() => setIsPlaying(!isPlaying)} style={{ background: isPlaying ? theme.danger : 'transparent', color: isPlaying ? '#fff' : theme.success, border: 'none', borderRadius: '4px', padding: '4px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit' }}>
+            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            {isPlaying ? '暂停推演' : '开启阵法'}
           </button>
-          <button onClick={() => logMessage("Pause clicked")} style={{ background: 'transparent', border: 'none', color: theme.textMain, cursor: 'pointer', fontSize: '16px' }}>⏸</button>
+        </div>
+
+        <div style={{ fontSize: '12px', color: theme.textMuted }}>
+          版本: {engineVersion} | 帧率: {frameStats.droppedFrames === 0 ? '平稳' : '波动'}
         </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         
-        {/* Left Panel: Scene & FileSystem */}
-        <div style={{ width: '280px', display: 'flex', flexDirection: 'column', background: theme.bgPanel, borderRight: `1px solid ${theme.border}` }}>
-          {/* Scene Tree */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderBottom: `1px solid ${theme.border}` }}>
-            <div style={{ padding: '6px 10px', background: theme.headerBg, fontWeight: 'bold', borderBottom: `1px solid ${theme.border}` }}>
-              Scene
-            </div>
-            <div style={{ padding: '5px', display: 'flex', gap: '5px', borderBottom: `1px solid ${theme.border}` }}>
-              <button onClick={handleAddNode} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>+ Node</button>
-              <button onClick={handleAddInstance} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>+ Instance</button>
-            </div>
-            <ul style={{ listStyle: 'none', padding: '5px', margin: 0, overflowY: 'auto', flex: 1 }}>
-              {entities.map(ent => (
-                <li 
-                  key={ent.id} 
-                  style={{ 
-                    padding: '4px 8px', 
-                    cursor: 'pointer', 
-                    background: selectedEntity?.id === ent.id ? theme.accentHover : 'transparent',
-                    color: selectedEntity?.id === ent.id ? '#fff' : theme.textMain,
-                    borderRadius: '3px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '8px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }} onClick={() => setSelectedEntity(ent)}>
-                    <span style={{ color: theme.accent }}>{ent.name.includes('Camera') ? '🎥' : '⬜'}</span>
-                    {ent.name}
-                  </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleDeleteNode(ent.id); }}
-                    style={{ background: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', padding: '0 5px', opacity: selectedEntity?.id === ent.id ? 1 : 0.3 }}
-                    title="Delete Node"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-              {entities.length === 0 && <li style={{ color: theme.textMuted, padding: '10px', textAlign: 'center' }}>No entities</li>}
-            </ul>
+        {/* Left Panel: Hierarchy */}
+        <div style={{ width: '280px', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: theme.sidebar }}>
+          <div style={{ padding: '8px 12px', background: theme.cardHover, borderBottom: `1px solid ${theme.border}`, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Layers size={16} color={theme.primary} />
+            <span>法阵层级 (Hierarchy)</span>
           </div>
-
-          {/* FileSystem */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '6px 10px', background: theme.headerBg, fontWeight: 'bold', borderBottom: `1px solid ${theme.border}` }}>
-              FileSystem
-            </div>
-            <div style={{ padding: '10px', color: theme.textMuted, overflowY: 'auto', flex: 1 }}>
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                <button onClick={handleImportTexture} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>Import Texture</button>
-              </div>
-              {importedTextures.length > 0 && (
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ color: theme.textMain, marginBottom: '4px' }}>Imported Textures</div>
-                  {importedTextures.map(texture => (
-                    <div key={texture.handle} style={{ padding: '3px 4px', borderRadius: '3px', background: selectedTextureHandle === texture.handle ? theme.accentHover : 'transparent', cursor: 'pointer', color: selectedTextureHandle === texture.handle ? '#fff' : theme.textMain }} onClick={() => setSelectedTextureHandle(texture.handle)}>
-                      #{texture.handle} {texture.path.split(/[/\\]/).pop()}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{ borderTop: `1px solid ${theme.border}`, margin: '8px 0' }}></div>
-              <div style={{ color: theme.textMain, marginBottom: '4px' }}>Material Instances</div>
-              <input
-                type="text"
-                value={newMaterialName}
-                onChange={(e) => setNewMaterialName(e.target.value)}
-                style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
-              />
-              <select
-                value={newMaterialVariant}
-                onChange={(e) => setNewMaterialVariant(e.target.value)}
-                style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
+          <div style={{ padding: '8px', borderBottom: `1px dashed ${theme.border}` }}>
+            <button onClick={handleAddNode} style={{ width: '100%', padding: '6px', background: '#fff', border: `1px solid ${theme.border}`, borderRadius: '4px', color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}>
+              <Plus size={14} /> 凝聚新灵体
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+            {entities.map(ent => (
+              <div 
+                key={ent.id} 
+                onClick={() => setSelectedEntity(ent)}
+                style={{
+                  padding: '6px 8px', 
+                  marginBottom: '4px',
+                  borderRadius: '4px',
+                  background: selectedEntity?.id === ent.id ? theme.primaryDim : 'transparent',
+                  border: `1px solid ${selectedEntity?.id === ent.id ? theme.primary : 'transparent'}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  color: selectedEntity?.id === ent.id ? theme.primary : theme.textMain
+                }}
               >
-                {shaderVariants.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-              <button onClick={handleCreateMaterial} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Create Material</button>
-              <button onClick={refreshMaterialInstances} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Refresh Materials</button>
-              <button onClick={handleReplayMaterialHotUpdates} style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer', marginBottom: '6px' }}>Replay Material Hot Updates</button>
-              {materialInstances.map(mat => (
-                <div key={mat.id} style={{ padding: '3px 4px', borderRadius: '3px', background: selectedMaterialId === mat.id ? theme.accentHover : 'transparent', cursor: 'pointer', color: selectedMaterialId === mat.id ? '#fff' : theme.textMain }} onClick={() => setSelectedMaterialId(mat.id)}>
-                  #{mat.id} {mat.name} ({mat.shaderVariant})
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {ent.name.includes('Camera') ? <MonitorPlay size={14} /> : <Box size={14} />}
+                  <span style={{ fontSize: '14px' }}>{ent.name}</span>
                 </div>
-              ))}
-              {selectedMaterialId > 0 && (
-                <div style={{ marginTop: '8px', borderTop: `1px solid ${theme.border}`, paddingTop: '8px' }}>
-                  <div style={{ color: theme.textMain, marginBottom: '4px' }}>Edit Material #{selectedMaterialId}</div>
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <input
-                        key={`tint-${i}`}
-                        type="number"
-                        step="0.01"
-                        value={materialTint[i]}
-                        onChange={(e) => {
-                          const next: [number, number, number, number] = [...materialTint] as [number, number, number, number];
-                          next[i as 0 | 1 | 2 | 3] = Number(e.target.value);
-                          setMaterialTint(next);
-                        }}
-                        style={{ width: '25%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}
-                      />
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <input
-                        key={`uv-${i}`}
-                        type="number"
-                        step="0.01"
-                        value={materialUv[i]}
-                        onChange={(e) => {
-                          const next: [number, number, number, number] = [...materialUv] as [number, number, number, number];
-                          next[i as 0 | 1 | 2 | 3] = Number(e.target.value);
-                          setMaterialUv(next);
-                        }}
-                        style={{ width: '25%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}
-                      />
-                    ))}
-                  </div>
-                  <select
-                    value={materialBlendMode}
-                    onChange={(e) => setMaterialBlendMode(Number(e.target.value))}
-                    style={{ width: '100%', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '4px', marginBottom: '6px' }}
-                  >
-                    <option value={0}>Alpha</option>
-                    <option value={1}>Additive</option>
-                    <option value={2}>Multiply</option>
-                  </select>
-                  <button onClick={handleUpdateMaterial} style={{ width: '100%', background: theme.accent, color: '#fff', border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', cursor: 'pointer' }}>Update Material Params</button>
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened res://")}>📁 res://</div>
-              <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened scripts folder")}>📁 scripts</div>
-              <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer' }} onClick={() => logMessage("Opened scenes folder")}>📁 scenes</div>
-              <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer', color: theme.textMain }} onDoubleClick={() => logMessage("Loading scene: main.tscn")}>📄 main.tscn</div>
-              <div style={{ paddingLeft: '15px', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', cursor: 'pointer', color: theme.textMain }} onDoubleClick={() => logMessage("Opened script: player.lua")}>📄 player.lua</div>
-            </div>
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteNode(ent.id); }} style={{ background: 'transparent', border: 'none', color: theme.danger, cursor: 'pointer' }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
-        
-        {/* Center Panel: Viewport & Bottom Dock */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bgDark }}>
+
+        {/* Center: Viewport & Bottom Panel */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg }}>
           {/* Viewport Toolbar */}
-          <div style={{ display: 'flex', padding: '4px 10px', background: theme.bgPanel, borderBottom: `1px solid ${theme.border}`, gap: '10px' }}>
-            <button onClick={() => { setActiveTool('select'); logMessage("Tool changed to Select"); }} style={{ background: 'transparent', border: 'none', color: activeTool === 'select' ? theme.accent : theme.textMain, cursor: 'pointer' }}>👆 Select</button>
-            <button onClick={() => { setActiveTool('move'); logMessage("Tool changed to Move"); }} style={{ background: 'transparent', border: 'none', color: activeTool === 'move' ? theme.accent : theme.textMain, cursor: 'pointer' }}>✛ Move</button>
-            <button onClick={() => { setActiveTool('rotate'); logMessage("Tool changed to Rotate"); }} style={{ background: 'transparent', border: 'none', color: activeTool === 'rotate' ? theme.accent : theme.textMain, cursor: 'pointer' }}>↻ Rotate</button>
-            <button onClick={() => { setActiveTool('scale'); logMessage("Tool changed to Scale"); }} style={{ background: 'transparent', border: 'none', color: activeTool === 'scale' ? theme.accent : theme.textMain, cursor: 'pointer' }}>⤢ Scale</button>
-            <div style={{ borderLeft: `1px solid ${theme.border}`, margin: '0 5px' }}></div>
-            <button onClick={() => logMessage("Toggled Grid Snap")} style={{ background: 'transparent', border: 'none', color: theme.textMain, cursor: 'pointer' }}># Grid Snap</button>
-          </div>
-
-          {/* Viewport Canvas */}
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 10, left: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '12px', pointerEvents: 'none' }}>
-              Perspective | Top | {frameInfo.source} | {frameInfo.width}x{frameInfo.height}
-            </div>
-            <div style={{ position: 'absolute', top: 36, left: 10, color: 'rgba(255,255,255,0.8)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', pointerEvents: 'none' }}>
-              Frame#{frameStats.frameId} | Lat {frameStats.latencyMs.toFixed(2)}ms | Copy {frameStats.copyMs.toFixed(2)}ms | BW {frameStats.throughputMBps.toFixed(1)}MB/s | Drop {frameStats.droppedFrames}
-            </div>
-            <div style={{ position: 'absolute', top: 62, left: 10, color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', pointerEvents: 'none' }}>
-              DrawCalls {frameStats.drawCalls} | MaxBatch {frameStats.maxBatchSprites} | Sprites {frameStats.spriteCount} | Entities {frameStats.entityCount} | Physics {frameStats.physicsBodies}
-            </div>
-            <canvas 
-              ref={canvasRef} 
-              width={800} 
-              height={600} 
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              style={{ 
-                border: `1px solid ${theme.border}`, 
-                boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
-                cursor: isDragging.current ? 'grabbing' : 'crosshair',
-                background: '#2d3340'
-              }}
-            />
-          </div>
-
-          {/* Bottom Dock */}
-          <div style={{ height: '150px', background: theme.bgPanel, borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', background: theme.headerBg, borderBottom: `1px solid ${theme.border}` }}>
-              {['output', 'debugger', 'audio', 'animation'].map(tab => (
+          <div style={{ height: '36px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 12px', gap: '16px', background: theme.cardHover }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {[
+                { id: 'select', icon: MousePointer2, label: '点选' },
+                { id: 'move', icon: Move, label: '挪移' },
+                { id: 'rotate', icon: RotateCw, label: '周转' },
+                { id: 'scale', icon: Scaling, label: '伸缩' }
+              ].map(tool => (
                 <button 
-                  key={tab}
-                  onClick={() => setBottomTab(tab as any)}
-                  style={{ 
-                    padding: '6px 15px', 
-                    background: bottomTab === tab ? theme.bgPanel : 'transparent', 
-                    color: bottomTab === tab ? theme.textMain : theme.textMuted, 
-                    border: 'none', 
-                    borderTop: bottomTab === tab ? `2px solid ${theme.accent}` : '2px solid transparent',
-                    cursor: 'pointer' 
-                  }}>
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  key={tool.id}
+                  onClick={() => setActiveTool(tool.id as any)}
+                  title={tool.label}
+                  style={{
+                    padding: '4px 8px',
+                    background: activeTool === tool.id ? theme.primary : 'transparent',
+                    color: activeTool === tool.id ? '#fff' : theme.textMuted,
+                    border: `1px solid ${activeTool === tool.id ? theme.primary : 'transparent'}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <tool.icon size={16} />
                 </button>
               ))}
             </div>
-            <div style={{ padding: '10px', flex: 1, overflowY: 'auto', fontFamily: 'monospace', fontSize: '12px' }}>
-              {bottomTab === 'output' && (
-                <>
-                  <div style={{ color: theme.textMuted }}>--- DSEngine Debug Output ---</div>
-                  {outputLogs.map((log, index) => (
-                    <div key={index} style={{ color: log.includes('Error') ? '#ff6b6b' : (log.includes('success') ? '#4caf50' : theme.textMain) }}>
-                      {log}
-                    </div>
-                  ))}
-                </>
+            <div style={{ width: '1px', height: '16px', background: theme.border }}></div>
+            <div style={{ display: 'flex', gap: '8px', fontSize: '12px', color: theme.textMuted }}>
+              <span>视界: {workspace === '2D' ? '两仪(2D)' : '三才(3D)'}</span>
+              <span>尺寸: {frameInfo.width}x{frameInfo.height}</span>
+            </div>
+          </div>
+          
+          {/* Viewport Canvas */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div style={{ 
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)', 
+              border: `4px solid ${theme.border}`,
+              background: '#000',
+              borderRadius: '4px',
+              overflow: 'hidden'
+            }}>
+              <canvas 
+                ref={canvasRef}
+                width={frameInfo.width} 
+                height={frameInfo.height}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{ display: 'block', cursor: activeTool === 'move' ? 'move' : 'default' }}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Panel */}
+          <div style={{ height: '200px', borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', background: theme.sidebar }}>
+            <div style={{ display: 'flex', background: theme.cardHover, borderBottom: `1px solid ${theme.border}` }}>
+              {[
+                { id: 'output', label: '推演日志 (Output)', icon: Terminal },
+                { id: 'debugger', label: '神念探查 (Debugger)', icon: Activity },
+                { id: 'audio', label: '音律 (Audio)', icon: Radio }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setBottomTab(tab.id as any)}
+                  style={{
+                    padding: '8px 16px',
+                    background: bottomTab === tab.id ? '#fff' : 'transparent',
+                    border: 'none',
+                    borderRight: `1px solid ${theme.border}`,
+                    borderTop: `2px solid ${bottomTab === tab.id ? theme.primary : 'transparent'}`,
+                    color: bottomTab === tab.id ? theme.primary : theme.textMuted,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontFamily: 'inherit',
+                    fontWeight: bottomTab === tab.id ? 'bold' : 'normal'
+                  }}
+                >
+                  <tab.icon size={14} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px', background: '#fff', color: theme.textMain, fontSize: '13px', fontFamily: 'monospace' }}>
+              {bottomTab === 'output' && outputLogs.map((log, i) => (
+                <div key={i} style={{ padding: '2px 0', borderBottom: '1px dashed #eee' }}>{log}</div>
+              ))}
+              {bottomTab === 'debugger' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', color: theme.textMuted }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px', color: theme.primary }}>阵法开销 (Frame Stats)</div>
+                    <div>绘制咒令 (Draw Calls): {frameStats.drawCalls}</div>
+                    <div>同源显化 (Max Batch Sprites): {frameStats.maxBatchSprites}</div>
+                    <div>灵体总数 (Entity Count): {frameStats.entityCount}</div>
+                    <div>物理真身 (Physics Bodies): {frameStats.physicsBodies}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px', color: theme.primary }}>桥接脉络 (Bridge Stats)</div>
+                    <div>延迟 (Latency): {frameStats.latencyMs.toFixed(2)} ms</div>
+                    <div>拷贝耗时 (Copy): {frameStats.copyMs.toFixed(2)} ms</div>
+                    <div>吞吐 (Throughput): {frameStats.throughputMBps.toFixed(2)} MB/s</div>
+                  </div>
+                </div>
               )}
-              {bottomTab !== 'output' && <div style={{ color: theme.textMuted }}>No data for {bottomTab}.</div>}
             </div>
           </div>
         </div>
 
-        {/* Right Panel: Inspector & Node */}
-        <div style={{ width: '300px', background: theme.bgPanel, borderLeft: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column' }}>
-          
-          {/* Tabs */}
-          <div style={{ display: 'flex', background: theme.headerBg, borderBottom: `1px solid ${theme.border}` }}>
+        {/* Right Panel: Inspector & Assets */}
+        <div style={{ width: '320px', display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${theme.border}`, background: theme.sidebar }}>
+          <div style={{ display: 'flex', background: theme.cardHover, borderBottom: `1px solid ${theme.border}` }}>
             <button 
               onClick={() => setActiveTab('inspector')}
-              style={{ flex: 1, padding: '8px', background: activeTab === 'inspector' ? theme.bgPanel : 'transparent', color: activeTab === 'inspector' ? theme.textMain : theme.textMuted, border: 'none' }}>
-              Inspector
+              style={{ flex: 1, padding: '10px', background: activeTab === 'inspector' ? '#fff' : 'transparent', color: activeTab === 'inspector' ? theme.primary : theme.textMuted, border: 'none', borderTop: `2px solid ${activeTab === 'inspector' ? theme.primary : 'transparent'}`, fontWeight: activeTab === 'inspector' ? 'bold' : 'normal', fontFamily: 'inherit', cursor: 'pointer' }}>
+              灵力波动 (Inspector)
             </button>
             <button 
               onClick={() => setActiveTab('node')}
-              style={{ flex: 1, padding: '8px', background: activeTab === 'node' ? theme.bgPanel : 'transparent', color: activeTab === 'node' ? theme.textMain : theme.textMuted, border: 'none' }}>
-              Node
+              style={{ flex: 1, padding: '10px', background: activeTab === 'node' ? '#fff' : 'transparent', color: activeTab === 'node' ? theme.primary : theme.textMuted, border: 'none', borderTop: `2px solid ${activeTab === 'node' ? theme.primary : 'transparent'}`, fontWeight: activeTab === 'node' ? 'bold' : 'normal', fontFamily: 'inherit', cursor: 'pointer' }}>
+              经脉 (Node)
             </button>
             <button 
               onClick={() => setActiveTab('build')}
-              style={{ flex: 1, padding: '8px', background: activeTab === 'build' ? theme.bgPanel : 'transparent', color: activeTab === 'build' ? theme.textMain : theme.textMuted, border: 'none' }}>
-              Build
+              style={{ flex: 1, padding: '10px', background: activeTab === 'build' ? '#fff' : 'transparent', color: activeTab === 'build' ? theme.primary : theme.textMuted, border: 'none', borderTop: `2px solid ${activeTab === 'build' ? theme.primary : 'transparent'}`, fontWeight: activeTab === 'build' ? 'bold' : 'normal', fontFamily: 'inherit', cursor: 'pointer' }}>
+              飞升 (Build)
             </button>
           </div>
 
-          <div style={{ padding: '0', flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
             {activeTab === 'inspector' && (
               selectedEntity ? (
-                <div style={{ padding: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px', gap: '10px' }}>
-                    <span style={{ fontSize: '20px', color: theme.accent }}>{selectedEntity.name.includes('Camera') ? '🎥' : '⬜'}</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px', gap: '8px' }}>
+                    <div style={{ width: '32px', height: '32px', background: theme.primary, color: '#fff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {selectedEntity.name.includes('Camera') ? <MonitorPlay size={18} /> : <Box size={18} />}
+                    </div>
                     <input 
                       type="text" 
                       value={selectedEntity.name} 
                       readOnly 
-                      style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px 8px', borderRadius: '3px' }} 
+                      style={{ flex: 1, background: '#fff', color: theme.textMain, border: `1px solid ${theme.border}`, padding: '6px 8px', borderRadius: '4px', fontFamily: 'inherit', fontSize: '14px' }} 
                     />
                   </div>
                   
                   {/* Transform Section */}
-                  <div style={{ background: theme.headerBg, padding: '5px 10px', fontWeight: 'bold', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '0 -10px' }}>
-                    Transform2D
+                  <div style={{ background: theme.cardHover, padding: '6px 12px', fontWeight: 'bold', border: `1px solid ${theme.border}`, borderRadius: '4px 4px 0 0', display: 'flex', alignItems: 'center', gap: '6px', color: theme.primary }}>
+                    <Move size={14} /> 遁法位置 (Transform2D)
                   </div>
-                  <div style={{ padding: '10px 0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                      <span style={{ width: '80px', color: theme.textMuted }}>Position</span>
-                      <div style={{ display: 'flex', flex: 1, gap: '5px' }}>
-                        <div style={{ flex: 1, display: 'flex', background: theme.bgDark, border: `1px solid ${theme.border}`, borderRadius: '3px', overflow: 'hidden' }}>
-                          <span style={{ padding: '2px 5px', background: '#3b2d2d', color: '#ff6b6b' }}>x</span>
-                          <input type="text" value={selectedEntity.position.x.toFixed(2)} readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 5px' }} />
+                  <div style={{ padding: '12px', background: '#fff', border: `1px solid ${theme.border}`, borderTop: 'none', borderRadius: '0 0 4px 4px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ width: '60px', color: theme.textMuted, fontSize: '13px' }}>位移</span>
+                      <div style={{ display: 'flex', flex: 1, gap: '8px' }}>
+                        <div style={{ flex: 1, display: 'flex', background: theme.cardHover, border: `1px solid ${theme.border}`, borderRadius: '4px', overflow: 'hidden' }}>
+                          <span style={{ padding: '4px 8px', background: theme.danger, color: '#fff', fontSize: '12px' }}>X</span>
+                          <input type="text" value={selectedEntity.position.x.toFixed(2)} readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 8px', fontFamily: 'monospace' }} />
                         </div>
-                        <div style={{ flex: 1, display: 'flex', background: theme.bgDark, border: `1px solid ${theme.border}`, borderRadius: '3px', overflow: 'hidden' }}>
-                          <span style={{ padding: '2px 5px', background: '#2d3b2d', color: '#6bff6b' }}>y</span>
-                          <input type="text" value={selectedEntity.position.y.toFixed(2)} readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 5px' }} />
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                      <span style={{ width: '80px', color: theme.textMuted }}>Rotation</span>
-                      <div style={{ display: 'flex', flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, borderRadius: '3px', overflow: 'hidden' }}>
-                        <span style={{ padding: '2px 5px', background: '#2d2d3b', color: '#6b6bff' }}>d</span>
-                        <input type="text" value="0.00" readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 5px' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                      <span style={{ width: '80px', color: theme.textMuted }}>Scale</span>
-                      <div style={{ display: 'flex', flex: 1, gap: '5px' }}>
-                        <div style={{ flex: 1, display: 'flex', background: theme.bgDark, border: `1px solid ${theme.border}`, borderRadius: '3px', overflow: 'hidden' }}>
-                          <span style={{ padding: '2px 5px', background: '#3b2d2d', color: '#ff6b6b' }}>x</span>
-                          <input type="text" value="1.00" readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 5px' }} />
-                        </div>
-                        <div style={{ flex: 1, display: 'flex', background: theme.bgDark, border: `1px solid ${theme.border}`, borderRadius: '3px', overflow: 'hidden' }}>
-                          <span style={{ padding: '2px 5px', background: '#2d3b2d', color: '#6bff6b' }}>y</span>
-                          <input type="text" value="1.00" readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 5px' }} />
+                        <div style={{ flex: 1, display: 'flex', background: theme.cardHover, border: `1px solid ${theme.border}`, borderRadius: '4px', overflow: 'hidden' }}>
+                          <span style={{ padding: '4px 8px', background: theme.success, color: '#fff', fontSize: '12px' }}>Y</span>
+                          <input type="text" value={selectedEntity.position.y.toFixed(2)} readOnly style={{ width: '100%', background: 'transparent', border: 'none', color: theme.textMain, padding: '0 8px', fontFamily: 'monospace' }} />
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {(
-                    <>
-                      <div style={{ background: theme.headerBg, padding: '5px 10px', fontWeight: 'bold', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '0 -10px' }}>
-                        SpriteRenderer
+                  <div style={{ background: theme.cardHover, padding: '6px 12px', fontWeight: 'bold', border: `1px solid ${theme.border}`, borderRadius: '4px 4px 0 0', display: 'flex', alignItems: 'center', gap: '6px', color: theme.primary }}>
+                    <ImageIcon size={14} /> 幻象显化 (SpriteRenderer)
+                  </div>
+                  <div style={{ padding: '12px', background: '#fff', border: `1px solid ${theme.border}`, borderTop: 'none', borderRadius: '0 0 4px 4px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ width: '60px', color: theme.textMuted }}>灵纹(Tex)</span>
+                      <div style={{ flex: 1, background: theme.cardHover, border: `1px solid ${theme.border}`, padding: '4px 8px', borderRadius: '4px', color: theme.primary, fontFamily: 'monospace' }}>
+                        {selectedEntity.textureHandle ? `卷轴编号: ${selectedEntity.textureHandle}` : '未附灵'}
                       </div>
-                      <div style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Texture</span>
-                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
-                            {selectedEntity.textureHandle ? `handle=${selectedEntity.textureHandle}` : 'none'}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Variant</span>
-                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
-                            {selectedEntity.shaderVariant ?? 'SPRITE_UNLIT'}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Blend</span>
-                          <div style={{ flex: 1, background: theme.bgDark, border: `1px solid ${theme.border}`, padding: '4px', borderRadius: '3px', color: theme.accent }}>
-                            {selectedEntity.blendMode === 1 ? 'Additive' : selectedEntity.blendMode === 2 ? 'Multiply' : 'Alpha'}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Material</span>
-                          <select value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(Number(e.target.value))} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}>
-                            <option value={0}>None</option>
-                            {materialInstances.map(mat => (
-                              <option key={mat.id} value={mat.id}>#{mat.id} {mat.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ width: '80px', color: theme.textMuted }}>Assign</span>
-                          <select value={selectedTextureHandle} onChange={(e) => setSelectedTextureHandle(Number(e.target.value))} style={{ flex: 1, background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px', padding: '3px' }}>
-                            <option value={0}>None</option>
-                            {importedTextures.map(tex => (
-                              <option key={tex.handle} value={tex.handle}>#{tex.handle} {tex.path.split(/[/\\]/).pop()}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <button onClick={handleApplyTexture} disabled={!selectedTextureHandle} style={{ width: '100%', background: selectedTextureHandle ? theme.accent : theme.bgDark, color: selectedTextureHandle ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '3px', cursor: selectedTextureHandle ? 'pointer' : 'not-allowed' }}>Apply To Entity</button>
-                        <button onClick={handleApplyMaterial} disabled={!selectedMaterialId} style={{ width: '100%', background: selectedMaterialId ? theme.accent : theme.bgDark, color: selectedMaterialId ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '3px', cursor: selectedMaterialId ? 'pointer' : 'not-allowed', marginTop: '6px' }}>Apply Material</button>
-                      </div>
-                    </>
-                  )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ width: '60px', color: theme.textMuted }}>法诀(Mat)</span>
+                      <select value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(Number(e.target.value))} style={{ flex: 1, background: '#fff', color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '4px', fontFamily: 'inherit' }}>
+                        <option value={0}>无 (None)</option>
+                        {materialInstances.map(mat => (
+                          <option key={mat.id} value={mat.id}>法诀#{mat.id} {mat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ width: '60px', color: theme.textMuted }}>赋灵纹</span>
+                      <select value={selectedTextureHandle} onChange={(e) => setSelectedTextureHandle(Number(e.target.value))} style={{ flex: 1, background: '#fff', color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '4px', fontFamily: 'inherit' }}>
+                        <option value={0}>无 (None)</option>
+                        {importedTextures.map(tex => (
+                          <option key={tex.handle} value={tex.handle}>卷轴#{tex.handle} {tex.path.split(/[\\/]/).pop()}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={handleApplyTexture} disabled={!selectedTextureHandle} style={{ flex: 1, background: selectedTextureHandle ? theme.primary : theme.cardHover, color: selectedTextureHandle ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '4px', cursor: selectedTextureHandle ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>注入灵纹</button>
+                      <button onClick={handleApplyMaterial} disabled={!selectedMaterialId} style={{ flex: 1, background: selectedMaterialId ? theme.primary : theme.cardHover, color: selectedMaterialId ? '#fff' : theme.textMuted, border: `1px solid ${theme.border}`, padding: '6px', borderRadius: '4px', cursor: selectedMaterialId ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>施加法诀</button>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div style={{ color: theme.textMuted, textAlign: 'center', marginTop: '40px' }}>Select a node to edit its properties.</div>
+                <div style={{ color: theme.textMuted, textAlign: 'center', marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <Zap size={32} color={theme.border} />
+                  <span>请先选择一个灵体节点</span>
+                </div>
               )
             )}
 
             {activeTab === 'node' && (
-              <div style={{ padding: '10px' }}>
-                <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-                  <button style={{ flex: 1, background: theme.bgPanel, color: theme.textMain, border: `1px solid ${theme.border}`, padding: '4px' }}>Signals</button>
-                  <button style={{ flex: 1, background: theme.bgDark, color: theme.textMuted, border: `1px solid ${theme.border}`, padding: '4px' }}>Groups</button>
-                </div>
-                {selectedEntity ? (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    <li style={{ padding: '5px 0', borderBottom: `1px solid ${theme.border}` }}>
-                      <div style={{ color: theme.textMuted, marginBottom: '4px' }}>Node2D</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ color: '#ffb74d' }}>⚡</span> tree_entered()</div>
-                    </li>
-                    <li style={{ padding: '5px 0', borderBottom: `1px solid ${theme.border}` }}>
-                      <div style={{ color: theme.textMuted, marginBottom: '4px' }}>CanvasItem</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ color: '#ffb74d' }}>⚡</span> draw()</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ color: '#ffb74d' }}>⚡</span> visibility_changed()</div>
-                    </li>
-                  </ul>
-                ) : (
-                  <div style={{ color: theme.textMuted, textAlign: 'center', marginTop: '20px' }}>Select a node to connect signals.</div>
-                )}
+              <div style={{ color: theme.textMuted, textAlign: 'center', marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <Cloud size={32} color={theme.border} />
+                <span>经脉系统暂未开放</span>
               </div>
             )}
 
             {activeTab === 'build' && (
-              <div style={{ padding: '15px' }}>
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', color: theme.textMuted, marginBottom: '5px' }}>Target Platform</label>
-                  <select id="buildTarget" style={{ width: '100%', padding: '6px', background: theme.bgDark, color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '3px' }}>
-                    <option value="win64">Windows Desktop</option>
-                    <option value="mac">macOS</option>
-                    <option value="wasm">HTML5 (WebAssembly)</option>
+              <div style={{ padding: '4px' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', color: theme.textMuted, marginBottom: '8px', fontWeight: 'bold' }}>飞升目标界域 (Platform)</label>
+                  <select id="buildTarget" style={{ width: '100%', padding: '8px', background: '#fff', color: theme.textMain, border: `1px solid ${theme.border}`, borderRadius: '4px', fontFamily: 'inherit' }}>
+                    <option value="win64">凡界 (Windows Desktop)</option>
+                    <option value="mac">灵界 (macOS)</option>
+                    <option value="wasm">虚空 (HTML5 WebAssembly)</option>
                   </select>
                 </div>
                 <button 
                   onClick={() => {
-                    if (window.electronAPI.buildProject) {
+                    if (window.electronAPI && window.electronAPI.buildProject) {
                       const target = (document.getElementById('buildTarget') as HTMLSelectElement).value;
                       window.electronAPI.buildProject(target).then(res => {
                         alert(res.message);
                       });
                     }
                   }}
-                  style={{ width: '100%', padding: '8px', background: theme.accent, color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}
+                  style={{ width: '100%', padding: '10px', background: theme.primary, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontFamily: 'inherit' }}
                 >
-                  Export Project
+                  <Star size={18} /> 开始飞升 (Export Project)
                 </button>
               </div>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

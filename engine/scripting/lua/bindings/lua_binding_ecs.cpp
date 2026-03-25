@@ -108,6 +108,21 @@ int L_EcsSetSpriteUvScroll(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetSpriteUvOffset(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float offset_x = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    float offset_y = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    if (world->registry().valid(e) && world->registry().all_of<SpriteRendererComponent>(e)) {
+        auto& sprite = world->registry().get<SpriteRendererComponent>(e);
+        sprite.uv_offset = glm::vec2(offset_x, offset_y);
+    }
+    return 0;
+}
+
 int L_EcsAddRigidBody(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -392,6 +407,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_camera_follow", L_EcsSetCameraFollow);
     set_fn("add_sprite", L_EcsAddSprite);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
+    set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);
     set_fn("add_box_collider", L_EcsAddBoxCollider);
     set_fn("add_tilemap", L_EcsAddTilemap);

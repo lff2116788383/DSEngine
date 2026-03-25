@@ -50,11 +50,12 @@ void AnimationSystem::Update(World& world, float delta_time) {
         animator.current_time += delta_time;
         float frame_duration = 1.0f / state.frame_rate;
         
-        if (animator.current_time >= frame_duration) {
+        while (animator.current_time >= frame_duration && animator.playing) {
             int previous_frame = animator.current_frame;
             animator.current_time -= frame_duration;
             animator.current_frame++;
             
+            bool just_stopped = false;
             if (animator.current_frame > segment_end) {
                 if (animator.segment_end_frame >= 0) {
                     if (animator.segment_loop) {
@@ -62,6 +63,7 @@ void AnimationSystem::Update(World& world, float delta_time) {
                     } else {
                         animator.current_frame = segment_end;
                         animator.playing = false;
+                        just_stopped = true;
                     }
                 } else {
                     if (state.loop) {
@@ -69,6 +71,7 @@ void AnimationSystem::Update(World& world, float delta_time) {
                     } else {
                         animator.current_frame = static_cast<int>(total_frames) - 1;
                         animator.playing = false;
+                        just_stopped = true;
                     }
                 }
             }
@@ -76,6 +79,12 @@ void AnimationSystem::Update(World& world, float delta_time) {
             if (!state.events.empty() && total_frames > 1) {
                 float previous_normalized = static_cast<float>(previous_frame) / static_cast<float>(total_frames - 1);
                 float current_normalized = static_cast<float>(animator.current_frame) / static_cast<float>(total_frames - 1);
+                
+                // If the animation just stopped at the last frame, ensure current_normalized is 1.0
+                if (just_stopped) {
+                    current_normalized = 1.0f;
+                }
+                
                 bool wrapped = current_normalized < previous_normalized;
                 for (const auto& event_item : state.events) {
                     bool crossed = false;

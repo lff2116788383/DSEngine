@@ -97,12 +97,17 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 980,
     height: 660,
+    autoHideMenuBar: true, // Hide the default menu bar
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
+  
+  // Alternatively, you can completely remove the menu
+  mainWindow.setMenu(null);
+  
   mainWindow.loadFile('index.html');
 }
 
