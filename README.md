@@ -94,7 +94,7 @@ npx node-gyp build
 npm start
 ```
 
-更多编辑器使用说明见 [Editor_Usage_Guide.md](Editor_Usage_Guide.md)。
+更多编辑器使用说明见 [Editor_Usage_Guide.md](doc/Editor_Usage_Guide.md)。
 
 ## 发布流水线（可选）
 
@@ -127,7 +127,7 @@ npm run pipeline:export:win64:strict
 
 ## 路线图
 
-查看 [DSEngine_新引擎演进步骤方案_2026版.md](DSEngine_新引擎演进步骤方案_2026版.md) 了解后续演进计划。
+查看 [DSEngine_新引擎演进步骤方案_2026版.md](doc/DSEngine_新引擎演进步骤方案_2026版.md) 了解后续演进计划。
 
 
 ## 实现目标Demo

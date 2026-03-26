@@ -12,11 +12,11 @@ echo.
 set BUILD_DIR=build_vs2022
 set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
-set BUILD_EDITOR=0
-set BUILD_LAUNCHER=0
+set BUILD_EDITOR=1
+set BUILD_LAUNCHER=1
 set BUILD_ENGINE_TESTS=1
-set PACKAGE_EDITOR_EXE=0
-set PACKAGE_LAUNCHER_EXE=0
+set PACKAGE_EDITOR_EXE=1
+set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
 set VERIFY_EXECUTABLES=0
 set VERIFY_EXE_TIMEOUT_SECONDS=3
@@ -472,6 +472,7 @@ if "%BUILD_EDITOR%"=="1" (
 if "%BUILD_ENGINE_TESTS%"=="1" (
     echo.
     echo [*] Running CTest ^(engine unit^)...
+    if not exist "%BUILD_DIR%\Testing\Temporary" mkdir "%BUILD_DIR%\Testing\Temporary"
     set "ENGINE_TEST_LOG=%BUILD_DIR%\Testing\Temporary\engine_ctest_output.log"
     ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure --verbose -L engine > "!ENGINE_TEST_LOG!" 2>&1
     set "ENGINE_TEST_RC=!ERRORLEVEL!"
