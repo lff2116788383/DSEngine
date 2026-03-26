@@ -106,7 +106,7 @@ export const EditorApp: React.FC = () => {
   const [entities, setEntities] = useState<EntityData[]>([]);
   const [selectedEntity, setSelectedEntity] = useState<EntityData | null>(null);
   const [activeTab, setActiveTab] = useState<'inspector' | 'node' | 'build'>('inspector');
-  const [bottomTab, setBottomTab] = useState<'output' | 'debugger' | 'audio'>('output');
+  const [bottomTab, setBottomTab] = useState<'project' | 'output' | 'debugger' | 'audio'>('output');
   const [workspace, setWorkspace] = useState<'2D' | '3D' | 'Script' | 'AssetLib'>('2D');
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'move' | 'rotate' | 'scale'>('move');
@@ -568,101 +568,109 @@ export const EditorApp: React.FC = () => {
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         
-        {/* Left Panel: Hierarchy */}
-        <div style={{ width: '280px', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: theme.sidebar }}>
-          <div style={{ padding: '8px 12px', background: theme.cardHover, borderBottom: `1px solid ${theme.border}`, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={16} color={theme.primary} />
-            <span>法阵层级 (Hierarchy)</span>
-          </div>
-          <div style={{ padding: '8px', borderBottom: `1px dashed ${theme.border}` }}>
-            <button onClick={handleAddNode} style={{ width: '100%', padding: '6px', background: '#fff', border: `1px solid ${theme.border}`, borderRadius: '4px', color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}>
-              <Plus size={14} /> 凝聚新灵体
-            </button>
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-            {entities.map(ent => (
-              <div 
-                key={ent.id} 
-                onClick={() => setSelectedEntity(ent)}
-                style={{
-                  padding: '6px 8px', 
-                  marginBottom: '4px',
-                  borderRadius: '4px',
-                  background: selectedEntity?.id === ent.id ? theme.primaryDim : 'transparent',
-                  border: `1px solid ${selectedEntity?.id === ent.id ? theme.primary : 'transparent'}`,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  color: selectedEntity?.id === ent.id ? theme.primary : theme.textMain
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {ent.name.includes('Camera') ? <MonitorPlay size={14} /> : <Box size={14} />}
-                  <span style={{ fontSize: '14px' }}>{ent.name}</span>
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); handleDeleteNode(ent.id); }} style={{ background: 'transparent', border: 'none', color: theme.danger, cursor: 'pointer' }}>
-                  <Trash2 size={14} />
+        {/* Main Left Area (Hierarchy + Viewport + Bottom Panel) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          
+          {/* Top Section: Hierarchy + Viewport */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            
+            {/* Left Panel: Hierarchy */}
+            <div style={{ width: '280px', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: theme.sidebar }}>
+              <div style={{ padding: '8px 12px', background: theme.cardHover, borderBottom: `1px solid ${theme.border}`, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={16} color={theme.primary} />
+                <span>法阵层级 (Hierarchy)</span>
+              </div>
+              <div style={{ padding: '8px', borderBottom: `1px dashed ${theme.border}` }}>
+                <button onClick={handleAddNode} style={{ width: '100%', padding: '6px', background: '#fff', border: `1px solid ${theme.border}`, borderRadius: '4px', color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}>
+                  <Plus size={14} /> 凝聚新灵体
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+                {entities.map(ent => (
+                  <div 
+                    key={ent.id} 
+                    onClick={() => setSelectedEntity(ent)}
+                    style={{
+                      padding: '6px 8px', 
+                      marginBottom: '4px',
+                      borderRadius: '4px',
+                      background: selectedEntity?.id === ent.id ? theme.primaryDim : 'transparent',
+                      border: `1px solid ${selectedEntity?.id === ent.id ? theme.primary : 'transparent'}`,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      color: selectedEntity?.id === ent.id ? theme.primary : theme.textMain
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {ent.name.includes('Camera') ? <MonitorPlay size={14} /> : <Box size={14} />}
+                      <span style={{ fontSize: '14px' }}>{ent.name}</span>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteNode(ent.id); }} style={{ background: 'transparent', border: 'none', color: theme.danger, cursor: 'pointer' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        {/* Center: Viewport & Bottom Panel */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg }}>
-          {/* Viewport Toolbar */}
-          <div style={{ height: '36px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 12px', gap: '16px', background: theme.cardHover }}>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {[
-                { id: 'select', icon: MousePointer2, label: '点选' },
-                { id: 'move', icon: Move, label: '挪移' },
-                { id: 'rotate', icon: RotateCw, label: '周转' },
-                { id: 'scale', icon: Scaling, label: '伸缩' }
-              ].map(tool => (
-                <button 
-                  key={tool.id}
-                  onClick={() => setActiveTool(tool.id as any)}
-                  title={tool.label}
-                  style={{
-                    padding: '4px 8px',
-                    background: activeTool === tool.id ? theme.primary : 'transparent',
-                    color: activeTool === tool.id ? '#fff' : theme.textMuted,
-                    border: `1px solid ${activeTool === tool.id ? theme.primary : 'transparent'}`,
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <tool.icon size={16} />
-                </button>
-              ))}
-            </div>
-            <div style={{ width: '1px', height: '16px', background: theme.border }}></div>
-            <div style={{ display: 'flex', gap: '8px', fontSize: '12px', color: theme.textMuted }}>
-              <span>视界: {workspace === '2D' ? '两仪(2D)' : '三才(3D)'}</span>
-              <span>尺寸: {frameInfo.width}x{frameInfo.height}</span>
-            </div>
-          </div>
-          
-          {/* Viewport Canvas */}
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <div style={{ 
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)', 
-              border: `4px solid ${theme.border}`,
-              background: '#000',
-              borderRadius: '4px',
-              overflow: 'hidden'
-            }}>
-              <canvas 
-                ref={canvasRef}
-                width={frameInfo.width} 
-                height={frameInfo.height}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                style={{ display: 'block', cursor: activeTool === 'move' ? 'move' : 'default' }}
-              />
+            {/* Center: Viewport */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg }}>
+              {/* Viewport Toolbar */}
+              <div style={{ height: '36px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 12px', gap: '16px', background: theme.cardHover }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[
+                    { id: 'select', icon: MousePointer2, label: '点选' },
+                    { id: 'move', icon: Move, label: '挪移' },
+                    { id: 'rotate', icon: RotateCw, label: '周转' },
+                    { id: 'scale', icon: Scaling, label: '伸缩' }
+                  ].map(tool => (
+                    <button 
+                      key={tool.id}
+                      onClick={() => setActiveTool(tool.id as any)}
+                      title={tool.label}
+                      style={{
+                        padding: '4px 8px',
+                        background: activeTool === tool.id ? theme.primary : 'transparent',
+                        color: activeTool === tool.id ? '#fff' : theme.textMuted,
+                        border: `1px solid ${activeTool === tool.id ? theme.primary : 'transparent'}`,
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <tool.icon size={16} />
+                    </button>
+                  ))}
+                </div>
+                <div style={{ width: '1px', height: '16px', background: theme.border }}></div>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '12px', color: theme.textMuted }}>
+                  <span>视界: {workspace === '2D' ? '两仪(2D)' : '三才(3D)'}</span>
+                  <span>尺寸: {frameInfo.width}x{frameInfo.height}</span>
+                </div>
+              </div>
+              
+              {/* Viewport Canvas */}
+              <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ 
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.1)', 
+                  border: `4px solid ${theme.border}`,
+                  background: '#000',
+                  borderRadius: '4px',
+                  overflow: 'hidden'
+                }}>
+                  <canvas 
+                    ref={canvasRef}
+                    width={frameInfo.width} 
+                    height={frameInfo.height}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    style={{ display: 'block', cursor: activeTool === 'move' ? 'move' : 'default' }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -670,6 +678,7 @@ export const EditorApp: React.FC = () => {
           <div style={{ height: '200px', borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', background: theme.sidebar }}>
             <div style={{ display: 'flex', background: theme.cardHover, borderBottom: `1px solid ${theme.border}` }}>
               {[
+                { id: 'project', label: '藏经阁 (Project)', icon: Folder },
                 { id: 'output', label: '推演日志 (Output)', icon: Terminal },
                 { id: 'debugger', label: '神念探查 (Debugger)', icon: Activity },
                 { id: 'audio', label: '音律 (Audio)', icon: Radio }
@@ -698,6 +707,22 @@ export const EditorApp: React.FC = () => {
               ))}
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px', background: '#fff', color: theme.textMain, fontSize: '13px', fontFamily: 'monospace' }}>
+              {bottomTab === 'project' && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', padding: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px', borderRadius: '4px', border: `1px solid transparent` }} onMouseOver={e => e.currentTarget.style.border = `1px solid ${theme.border}`} onMouseOut={e => e.currentTarget.style.border = `1px solid transparent`}>
+                    <Folder size={32} color={theme.primary} />
+                    <span>Assets</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px', borderRadius: '4px', border: `1px solid transparent` }} onMouseOver={e => e.currentTarget.style.border = `1px solid ${theme.border}`} onMouseOut={e => e.currentTarget.style.border = `1px solid transparent`}>
+                    <Folder size={32} color={theme.primary} />
+                    <span>Scenes</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px', borderRadius: '4px', border: `1px solid transparent` }} onMouseOver={e => e.currentTarget.style.border = `1px solid ${theme.border}`} onMouseOut={e => e.currentTarget.style.border = `1px solid transparent`}>
+                    <Folder size={32} color={theme.primary} />
+                    <span>Scripts</span>
+                  </div>
+                </div>
+              )}
               {bottomTab === 'output' && outputLogs.map((log, i) => (
                 <div key={i} style={{ padding: '2px 0', borderBottom: '1px dashed #eee' }}>{log}</div>
               ))}
