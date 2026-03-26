@@ -5,17 +5,26 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
+#include "engine/scripting/lua/bindings/lua_binding_context.h"
 
 namespace dse::runtime::lua_binding {
 
 void RegisterPhase1LuaApi(lua_State* L) {
     lua_newtable(L);
+    lua_setglobal(L, "dse");
+
+    RegisterContextBindings(L);
+
+    lua_getglobal(L, "dse");
 
     RegisterEcsBindings(L);
     lua_setfield(L, -2, "ecs");
 
     RegisterAudioBindings(L);
     lua_setfield(L, -2, "audio");
+
+    RegisterSpineBindings(L);
+    lua_setfield(L, -2, "spine");
 
     RegisterUiBindings(L);
     lua_setfield(L, -2, "ui");

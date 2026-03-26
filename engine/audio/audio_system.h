@@ -159,9 +159,11 @@ private:
     float master_volume_ = 1.0f;
     float bgm_volume_ = 1.0f;
     float sfx_volume_ = 1.0f;
+    
     std::size_t max_concurrent_sfx_per_clip_ = 4;
     std::uint32_t sfx_trigger_cooldown_ms_ = 20;
     bool is_initialized = false;
+    void* ma_resource_manager_ptr = nullptr;
 };
 
 } // namespace gameplay2d

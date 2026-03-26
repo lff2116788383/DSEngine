@@ -34,6 +34,25 @@ void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
 }
 }
 
+EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config) {
+    if (!config_.world) {
+        default_world_ = std::make_unique<World>();
+        config_.world = default_world_.get();
+    }
+    if (!config_.asset_manager) {
+        // Since AssetManager is still a singleton globally, we use it for now, 
+        // but mark the path to instance-based in Phase 2
+        config_.asset_manager = &AssetManager::Instance();
+    }
+    pipeline_ = std::make_unique<FramePipeline>();
+}
+
+EngineInstance::~EngineInstance() = default;
+
+int EngineInstance::Run() {
+    return RunEngine(config_); // Delegating to the original loop for now
+}
+
 int RunEngine(const EngineRunConfig& config) {
     std::cout << "Starting DSEngine Runtime..." << std::endl;
     if (!glfwInit()) {
@@ -56,7 +75,8 @@ int RunEngine(const EngineRunConfig& config) {
     glfwSetMouseButtonCallback(window, MouseButtonCallback);
     glfwSetScrollCallback(window, ScrollCallback);
     glfwSetCursorPosCallback(window, CursorPositionCallback);
-    FramePipeline::Instance().SetWindowTitleSetter([window](const std::string& title) {
+    FramePipeline pipeline;
+    pipeline.SetWindowTitleSetter([window](const std::string& title) {
         glfwSetWindowTitle(window, title.c_str());
     });
 
@@ -66,16 +86,16 @@ int RunEngine(const EngineRunConfig& config) {
 
     World runtime_world;
     World* active_world = config.world ? config.world : &runtime_world;
-    FramePipeline::Instance().SetWorld(active_world);
-    FramePipeline::Instance().SetAssetManager(config.asset_manager);
-    FramePipeline::Instance().SetBusinessMode(config.business_mode);
+    pipeline.SetWorld(active_world);
+    pipeline.SetAssetManager(config.asset_manager);
+    pipeline.SetBusinessMode(config.business_mode);
     if (config.business_mode == BusinessMode::Lua && !config.startup_lua_script_path.empty()) {
         SetStartupLuaScriptPath(config.startup_lua_script_path);
     }
     std::cout << "Business mode: " << (config.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
-    if (!FramePipeline::Instance().Init()) {
+    if (!pipeline.Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
-        FramePipeline::Instance().Shutdown();
+        pipeline.Shutdown();
         core::JobSystem::Shutdown();
         glfwTerminate();
         return -1;
@@ -96,16 +116,16 @@ int RunEngine(const EngineRunConfig& config) {
 
         accumulator += dt;
         while (accumulator >= fixed_time_step) {
-            FramePipeline::Instance().FixedUpdate(fixed_time_step);
+            pipeline.FixedUpdate(fixed_time_step);
             accumulator -= fixed_time_step;
         }
 
-        FramePipeline::Instance().Update(dt);
-        FramePipeline::Instance().Render();
+        pipeline.Update(dt);
+        pipeline.Render();
         glfwSwapBuffers(window);
         Input::Update();
     }
-    FramePipeline::Instance().Shutdown();
+    pipeline.Shutdown();
     core::JobSystem::Shutdown();
     glfwTerminate();
     return 0;

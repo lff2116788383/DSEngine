@@ -55,6 +55,8 @@ void TickLuaRuntime(float delta_time);
  */
 void ShutdownLuaRuntime();
 
+size_t GetLuaMemoryUsage();
+
 }
 
 #endif

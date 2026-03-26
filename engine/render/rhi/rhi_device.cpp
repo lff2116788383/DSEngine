@@ -8,6 +8,7 @@
 #include "engine/platform/screen.h"
 #include <glad/gl.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cstddef>
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -15,14 +16,6 @@
 constexpr size_t MAX_SPRITES = 10000;
 constexpr size_t MAX_VERTICES = MAX_SPRITES * 4;
 constexpr size_t MAX_INDICES = MAX_SPRITES * 6;
-constexpr unsigned int GL_SRC_ALPHA_CONST = 0x0302;
-constexpr unsigned int GL_ONE_MINUS_SRC_ALPHA_CONST = 0x0303;
-
-struct BatchVertex {
-    glm::vec3 pos;
-    glm::vec4 color;
-    glm::vec2 uv;
-};
 
 namespace {
 unsigned int CompileShaderProgram(const char* vertex_shader_source, const char* fragment_shader_source) {
@@ -155,11 +148,25 @@ void main() {
     glBindBuffer(GL_ARRAY_BUFFER, vbo_handle_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_handle_);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<void*>(offsetof(BatchVertex, pos)));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, pos)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<void*>(offsetof(BatchVertex, color)));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, color)));
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<void*>(offsetof(BatchVertex, uv)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, uv)));
+    glBindVertexArray(0);
+
+    mesh_vbo_handle_ = CreateBuffer(MAX_VERTICES * sizeof(BatchVertex), nullptr, true, false);
+    mesh_ibo_handle_ = CreateBuffer(MAX_INDICES * sizeof(unsigned short), nullptr, true, true);
+    mesh_vao_handle_ = CreateVertexArray();
+    glBindVertexArray(mesh_vao_handle_);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh_vbo_handle_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, pos)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, color)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, uv)));
     glBindVertexArray(0);
 
     unsigned char white_texture[] = {255, 255, 255, 255};
@@ -256,6 +263,11 @@ void OpenGLCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
     draw_batch_cmds_.push_back(std::move(cmd));
 }
 
+void OpenGLCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
+    if (items.empty()) return;
+    draw_mesh_batch_cmds_.push_back({next_cmd_order_++, items, view_, projection_});
+}
+
 void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
     DrawBatch(items);
 }
@@ -269,7 +281,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
         return;
     }
     std::vector<CommandRef> commands;
-    commands.reserve(begin_render_pass_cmds_.size() + set_pipeline_state_cmds_.size() + clear_cmds_.size() + draw_batch_cmds_.size() + end_render_pass_cmds_.size());
+    commands.reserve(begin_render_pass_cmds_.size() + set_pipeline_state_cmds_.size() + clear_cmds_.size() + draw_batch_cmds_.size() + draw_mesh_batch_cmds_.size() + end_render_pass_cmds_.size());
     for (size_t i = 0; i < begin_render_pass_cmds_.size(); ++i) {
         commands.push_back({begin_render_pass_cmds_[i].order, 0, i});
     }
@@ -285,6 +297,9 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     for (size_t i = 0; i < end_render_pass_cmds_.size(); ++i) {
         commands.push_back({end_render_pass_cmds_[i].order, 4, i});
     }
+    for (size_t i = 0; i < draw_mesh_batch_cmds_.size(); ++i) {
+        commands.push_back({draw_mesh_batch_cmds_[i].order, 5, i});
+    }
     std::sort(commands.begin(), commands.end(), [](const CommandRef& a, const CommandRef& b) {
         return a.order < b.order;
     });
@@ -298,8 +313,10 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealClearColor(clear_cmds_[cmd.index].color);
         } else if (cmd.type == 3) {
             device->RealSubmitDrawBatch(draw_batch_cmds_[cmd.index].items, draw_batch_cmds_[cmd.index].view, draw_batch_cmds_[cmd.index].projection);
-        } else {
+        } else if (cmd.type == 4) {
             device->RealEndRenderPass();
+        } else if (cmd.type == 5) {
+            device->RealSubmitDrawMeshBatch(draw_mesh_batch_cmds_[cmd.index].items, draw_mesh_batch_cmds_[cmd.index].view, draw_mesh_batch_cmds_[cmd.index].projection);
         }
     }
     begin_render_pass_cmds_.clear();
@@ -307,6 +324,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     set_pipeline_state_cmds_.clear();
     clear_cmds_.clear();
     draw_batch_cmds_.clear();
+    draw_mesh_batch_cmds_.clear();
     next_cmd_order_ = 0;
 }
 
@@ -443,7 +461,7 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     auto it = pipeline_states_.find(pipeline_state_handle);
     if (it == pipeline_states_.end()) {
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA_CONST, GL_ONE_MINUS_SRC_ALPHA_CONST);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         return;
     }
     if (it->second.blend_enabled) {
@@ -453,6 +471,41 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     }
     if (it->second.blend_enabled) {
         glBlendFunc(it->second.blend_src, it->second.blend_dst);
+    }
+}
+
+void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (items.empty()) return;
+    current_frame_stats_.sprite_count += static_cast<int>(items.size());
+
+    glm::mat4 vp = projection * view;
+    
+    glUseProgram(shader_handle_);
+    if (active_pipeline_state_ != 0) {
+        RealSetPipelineState(active_pipeline_state_);
+    } else {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    glUniform1i(uniform_texture_loc_, 0);
+    glUniform3f(uniform_tint_loc_, 1.0f, 1.0f, 1.0f);
+    glUniformMatrix4fv(uniform_vp_loc_, 1, GL_FALSE, &vp[0][0]);
+
+    for (const auto& item : items) {
+        if (item.vertices.empty() || item.indices.empty()) continue;
+
+        unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        UpdateBuffer(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
+        UpdateBuffer(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
+
+        glBindVertexArray(mesh_vao_handle_);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_SHORT, nullptr);
+        glBindVertexArray(0);
+
+        current_frame_stats_.draw_calls += 1;
     }
 }
 
@@ -511,7 +564,7 @@ void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& item
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, current_texture);
         glBindVertexArray(vao_handle_);
-        glDrawElements(GL_TRIANGLES, static_cast<int>((batch_vertices.size() / 4) * 6), GL_UNSIGNED_SHORT, nullptr);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>((batch_vertices.size() / 4) * 6), GL_UNSIGNED_SHORT, nullptr);
         glBindVertexArray(0);
         
         batch_vertices.clear();
@@ -562,12 +615,12 @@ void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& item
         }
 
         for (int i = 0; i < 4; ++i) {
-            BatchVertex v;
+            BatchVertex vertex;
             glm::vec4 world_pos = item.model * quad_positions[i];
-            v.pos = glm::vec3(world_pos.x, world_pos.y, world_pos.z);
-            v.color = item.color;
-            v.uv = uvs[i];
-            batch_vertices.push_back(v);
+            vertex.pos = glm::vec3(world_pos.x, world_pos.y, world_pos.z);
+            vertex.color = item.color;
+            vertex.uv = uvs[i];
+            batch_vertices.push_back(vertex);
         }
     }
     

@@ -168,6 +168,7 @@ void FramePipeline::Update(float delta_time) {
     tilemap_system_.Update(world_->registry());
     animation_system_.Update(*world_, delta_time);
     particle_system_.Update(*world_, delta_time);
+    spine_system_.Update(world_->registry(), delta_time);
     transform_system_.Update(*world_);
     camera_system_.Update(*world_, Screen::aspect_ratio());
     ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
@@ -272,6 +273,7 @@ void FramePipeline::BuildRenderGraph() {
                 cmd_buffer.SetCamera(camera.view, camera.projection);
             }
             sprite_render_system_.Render(*world_, cmd_buffer);
+            spine_system_.Render(*world_, cmd_buffer);
             particle_system_.Render(*world_, cmd_buffer);
             cmd_buffer.EndRenderPass();
         }

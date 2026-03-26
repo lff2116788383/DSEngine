@@ -10,6 +10,11 @@
 #include "engine/core/event_bus.h"
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
+#include "bundle/bundle.h"
+extern "C" {
+#include "aes.h"
+}
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
@@ -109,6 +114,108 @@ std::string AssetManager::GetDataRoot() {
     return data_root_;
 }
 
+bool AssetManager::PackBundle(const std::string& input_dir, const std::string& output_bundle, const std::string& aes_key) {
+    if (!std::filesystem::exists(input_dir)) return false;
+    bundle::archive pak;
+    int idx = 0;
+    for (auto const& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
+        if (entry.is_regular_file()) {
+            std::ifstream file(entry.path(), std::ios::binary | std::ios::ate);
+            if (!file) continue;
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            std::string content(size, '\0');
+            if (file.read(&content[0], size)) {
+                pak.resize(idx + 1);
+                std::string rel_path = std::filesystem::relative(entry.path(), input_dir).generic_string();
+                std::replace(rel_path.begin(), rel_path.end(), '\\', '/');
+                pak[idx]["name"] = rel_path;
+                pak[idx]["data"] = content;
+                idx++;
+            }
+        }
+    }
+    
+    std::string bin = pak.zip(60); // level 60
+    
+    if (!aes_key.empty() && aes_key.size() >= 16) {
+        struct AES_ctx ctx;
+        uint8_t iv[16] = {0}; // Fixed IV for simplicity
+        AES_init_ctx_iv(&ctx, (const uint8_t*)aes_key.c_str(), iv);
+        AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)bin.data(), bin.size());
+    }
+    
+    std::ofstream out(output_bundle, std::ios::binary);
+    if (!out) return false;
+    out.write(bin.data(), bin.size());
+    return true;
+}
+
+bool AssetManager::MountBundle(const std::string& bundle_path, const std::string& aes_key) {
+    std::ifstream file(bundle_path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        DEBUG_LOG_ERROR("Failed to open bundle: {}", bundle_path);
+        return false;
+    }
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::string bin(size, '\0');
+    if (!file.read(&bin[0], size)) return false;
+    
+    if (!aes_key.empty() && aes_key.size() >= 16) {
+        struct AES_ctx ctx;
+        uint8_t iv[16] = {0};
+        AES_init_ctx_iv(&ctx, (const uint8_t*)aes_key.c_str(), iv);
+        AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)bin.data(), bin.size());
+    }
+    
+    bundle::archive pak;
+    pak.zip(bin);
+    
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    for (size_t i = 0; i < pak.size(); ++i) {
+        const std::string& name = pak[i]["name"];
+        const std::string& data = pak[i]["data"];
+        vfs_files_[name] = std::vector<uint8_t>(data.begin(), data.end());
+    }
+    DEBUG_LOG_INFO("Mounted bundle: {} with {} files", bundle_path, pak.size());
+    return true;
+}
+
+bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t>& out_data) {
+    const std::string data_root = GetDataRoot();
+    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string search_path = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
+    
+    // Convert to generic relative path for VFS check
+    std::string vfs_key = search_path;
+    std::replace(vfs_key.begin(), vfs_key.end(), '\\', '/');
+    auto pos = vfs_key.find("data/");
+    if (pos != std::string::npos) {
+        vfs_key = vfs_key.substr(pos + 5); // strip "data/"
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = vfs_files_.find(vfs_key);
+        if (it != vfs_files_.end()) {
+            out_data = it->second;
+            return true;
+        }
+    }
+    
+    const std::string load_path = resolved_path.empty() ? path : resolved_path;
+    std::ifstream file(load_path, std::ios::binary | std::ios::ate);
+    if (!file) return false;
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    out_data.resize(size);
+    if (file.read((char*)out_data.data(), size)) {
+        return true;
+    }
+    return false;
+}
+
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
@@ -123,13 +230,18 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         }
     }
 
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read texture file: {}", path);
+        return nullptr;
+    }
+
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
-    const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    unsigned char* data = stbi_load(load_path.c_str(), &width, &height, &channels, 4);
+    unsigned char* data = stbi_load_from_memory(file_data.data(), file_data.size(), &width, &height, &channels, 4);
     
     if (!data) {
-        DEBUG_LOG_ERROR("Failed to load texture: {}, resolved: {}", path, load_path);
+        DEBUG_LOG_ERROR("Failed to decode texture: {}", path);
         return nullptr;
     }
 
@@ -142,13 +254,13 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     }
     if (handle == 0) {
         stbi_image_free(data);
-        DEBUG_LOG_ERROR("Failed to create texture via RHI: {}", load_path);
+        DEBUG_LOG_ERROR("Failed to create texture via RHI: {}", path);
         return nullptr;
     }
 
     stbi_image_free(data);
 
-    auto tex = std::make_shared<TextureAsset>(load_path, handle, width, height, channels);
+    auto tex = std::make_shared<TextureAsset>(path, handle, width, height, channels);
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         textures_[cache_key] = tex;
@@ -191,10 +303,6 @@ std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& p
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    if (!std::filesystem::exists(load_path)) {
-        DEBUG_LOG_ERROR("Failed to locate audio clip: {}", path);
-        return nullptr;
-    }
     const std::string cache_key = NormalizePath(load_path);
 
     {
@@ -207,8 +315,13 @@ std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& p
         }
     }
 
-    // Since we're not actually decoding here to save complexity, we just store the path
-    auto clip = std::make_shared<AudioClipAsset>(load_path);
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read audio file: {}", path);
+        return nullptr;
+    }
+
+    auto clip = std::make_shared<AudioClipAsset>(load_path, std::move(file_data));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         audio_clips_[cache_key] = clip;
@@ -233,20 +346,30 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
     }
 
     core::JobSystem::Execute([this, path, resolved_path, cache_key, callback]() {
+        std::vector<uint8_t> file_data;
+        if (!LoadFileToMemory(path, file_data)) {
+            DEBUG_LOG_ERROR("Failed to read texture file async: {}", path);
+            if (callback) {
+                std::lock_guard<std::mutex> lock(callback_mutex_);
+                pending_main_thread_callbacks_.push_back([callback]() { callback(nullptr); });
+            }
+            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(cache_key, false);
+            return;
+        }
+
         int width, height, channels;
         stbi_set_flip_vertically_on_load(true);
-        const std::string load_path = resolved_path.empty() ? path : resolved_path;
-        unsigned char* data = stbi_load(load_path.c_str(), &width, &height, &channels, 4);
+        unsigned char* data = stbi_load_from_memory(file_data.data(), file_data.size(), &width, &height, &channels, 4);
         
         if (!data) {
-            DEBUG_LOG_ERROR("Failed to async load texture: {}, resolved: {}", path, load_path);
+            DEBUG_LOG_ERROR("Failed to async load texture: {}, resolved: {}", path, resolved_path);
             if (callback) {
                 std::lock_guard<std::mutex> callback_lock(callback_mutex_);
                 pending_main_thread_callbacks_.push_back([callback]() {
                     callback(nullptr);
                 });
-                pending_main_thread_callbacks_.push_back([load_path]() {
-                    dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, false);
+                pending_main_thread_callbacks_.push_back([resolved_path]() {
+                    dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, false);
                 });
                 pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
                 if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {
@@ -258,7 +381,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         }
 
         std::lock_guard<std::mutex> callback_lock(callback_mutex_);
-        pending_main_thread_callbacks_.push_back([this, callback, cache_key, load_path, width, height, channels, data]() {
+        pending_main_thread_callbacks_.push_back([this, callback, cache_key, resolved_path, width, height, channels, data]() {
             unsigned int handle = 0;
             {
                 std::lock_guard<std::mutex> config_lock(config_mutex_);
@@ -271,10 +394,10 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
                 if (callback) {
                     callback(nullptr);
                 }
-                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, false);
+                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, false);
                 return;
             }
-            auto tex = std::make_shared<TextureAsset>(load_path, handle, width, height, channels);
+            auto tex = std::make_shared<TextureAsset>(resolved_path, handle, width, height, channels);
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 textures_[cache_key] = tex;
@@ -282,7 +405,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
             if (callback) {
                 callback(tex);
             }
-            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(load_path, true);
+            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, true);
         });
         pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
         if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {

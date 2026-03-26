@@ -35,11 +35,33 @@ struct RuntimeState {
     std::string startup_script_override;
     LuaApiContext api_context;
     std::unordered_map<std::uint32_t, ScriptInstance> script_instances;
+    size_t lua_memory_usage = 0;
 };
 
 RuntimeState& State() {
     static RuntimeState state;
     return state;
+}
+
+static void* LuaMemoryAllocator(void* ud, void* ptr, size_t osize, size_t nsize) {
+    auto& state = State();
+    if (nsize == 0) {
+        if (ptr) {
+            state.lua_memory_usage -= osize;
+            std::free(ptr);
+        }
+        return nullptr;
+    } else {
+        void* new_ptr = std::realloc(ptr, nsize);
+        if (new_ptr) {
+            if (ptr) {
+                state.lua_memory_usage = state.lua_memory_usage - osize + nsize;
+            } else {
+                state.lua_memory_usage += nsize;
+            }
+        }
+        return new_ptr;
+    }
 }
 
 std::string ResolveStartupLuaScript() {
@@ -321,9 +343,9 @@ bool BootstrapLuaRuntime() {
         DEBUG_LOG_ERROR("Lua init failed: LuaApiContext.world is null");
         return false;
     }
-    state.state = luaL_newstate();
+    state.state = lua_newstate(LuaMemoryAllocator, nullptr);
     if (!state.state) {
-        DEBUG_LOG_ERROR("Lua init failed: luaL_newstate returned nullptr");
+        DEBUG_LOG_ERROR("Lua init failed: lua_newstate returned nullptr");
         return false;
     }
     state.startup_script_path = ResolveStartupLuaScript();
@@ -370,6 +392,18 @@ void TickLuaRuntime(float delta_time) {
         lua_pop(state.state, 1);
     }
     UpdateScriptComponents(delta_time);
+}
+
+void BroadcastLuaEvent(const char* event_name) {
+    auto& state = State();
+    if (!state.state) return;
+    for (auto& pair : state.script_instances) {
+        CallScriptTableMethod(state.state, pair.second.table_ref, event_name, static_cast<int>(pair.first), 0.0f, false);
+    }
+}
+
+size_t GetLuaMemoryUsage() {
+    return State().lua_memory_usage;
 }
 
 }

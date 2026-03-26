@@ -16,9 +16,16 @@
 - **脚本与宿主**：C++ / Lua 双宿主行为一致，并完成基础接口绑定。
 - **开发工具**：基础的 Editor（基于 React + Node-API）打通渲染视口，具备实体创建与属性编辑能力。
 
-### 阶段 2：2D 商业版本
-- **引擎内核进阶**：引入 Spine 2D 动画、Prefab 预制体系统、Asset Bundle 资源加密打包、多实例运行时解耦。
-- **Lua 脚本增强**：实现 Lua 热重载机制、内存检测机制与业务状态机框架。
+### 阶段 2：2D 商业版本（引擎能力已闭合，编辑器/启动器待完善）
+*   **引擎内核进阶**：
+    *   **Spine 2D 动画**：引入官方 spine-cpp，完成运行时解析与多网格批处理渲染。
+    *   **Prefab 系统**：支持节点树与组件属性的 JSON 序列化，并支持嵌套层级实例化。
+    *   **Asset Bundle**：集成 bundle 归档与 tiny-AES-c 加密，实现基于 VFS 的内存挂载机制。
+    *   **多实例解耦**：Runtime 主循环切换到实例化 FramePipeline 路径，EngineInstance 可独立承载世界与渲染管线。
+*   **Lua 脚本增强**：
+    *   **热重载机制**：基于 `OnSerializeState`/`OnDeserializeState` 与文件监控实现运行时替换。
+    *   **内存检测**：接管 `lua_newstate` 分配器，暴露 `get_memory_usage_kb` API。
+    *   **业务状态机**：提供 `dse.fsm` 轻量级表驱动状态机框架。
 - **编辑器增强**：完善左侧 FileSystem（资源 UUID 管理）、实时材质热更预览、性能剖析器 (Profiler) 及打包流水线（一键导出）。
 - **启动器 (Launcher) 落地**：接入账号体系、实现 Chunk-based 引擎热更新与云端同步模板。
 

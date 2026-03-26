@@ -10,6 +10,7 @@
 #include <sstream>
 #include <cmath>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
@@ -586,43 +587,104 @@ bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath
     if (!world.IsAlive(entity) || !world.registry().all_of<TransformComponent>(entity)) {
         return false;
     }
+    auto parent_view = world.registry().view<ParentComponent>();
+    std::vector<Entity> stack;
+    std::vector<Entity> ordered_entities;
+    std::unordered_set<uint32_t> visited;
+    stack.push_back(entity);
+    while (!stack.empty()) {
+        Entity current = stack.back();
+        stack.pop_back();
+        uint32_t current_id = static_cast<uint32_t>(current);
+        if (!visited.emplace(current_id).second) {
+            continue;
+        }
+        ordered_entities.push_back(current);
+        for (auto child : parent_view) {
+            const auto& parent = parent_view.get<ParentComponent>(child);
+            if (parent.parent == current) {
+                stack.push_back(child);
+            }
+        }
+    }
+
     rapidjson::Document doc;
     doc.SetObject();
     auto& allocator = doc.GetAllocator();
     doc.AddMember("type", "prefab", allocator);
     doc.AddMember("prefab_schema_version", kCurrentPrefabSchemaVersion, allocator);
-    rapidjson::Value components(rapidjson::kObjectType);
-    const auto& transform = world.registry().get<TransformComponent>(entity);
-    rapidjson::Value transform_json(rapidjson::kObjectType);
-    rapidjson::Value position(rapidjson::kArrayType);
-    position.PushBack(transform.position.x, allocator).PushBack(transform.position.y, allocator).PushBack(transform.position.z, allocator);
-    transform_json.AddMember("position", position, allocator);
-    rapidjson::Value rotation(rapidjson::kArrayType);
-    rotation.PushBack(transform.rotation.x, allocator).PushBack(transform.rotation.y, allocator).PushBack(transform.rotation.z, allocator).PushBack(transform.rotation.w, allocator);
-    transform_json.AddMember("rotation", rotation, allocator);
-    rapidjson::Value scale(rapidjson::kArrayType);
-    scale.PushBack(transform.scale.x, allocator).PushBack(transform.scale.y, allocator).PushBack(transform.scale.z, allocator);
-    transform_json.AddMember("scale", scale, allocator);
-    components.AddMember("TransformComponent", transform_json, allocator);
-    if (world.registry().all_of<SpriteRendererComponent>(entity)) {
-        const auto& sprite = world.registry().get<SpriteRendererComponent>(entity);
-        rapidjson::Value sprite_json(rapidjson::kObjectType);
-        sprite_json.AddMember("texture_handle", sprite.texture_handle, allocator);
-        sprite_json.AddMember("material_instance_id", sprite.material_instance_id, allocator);
-        sprite_json.AddMember("shader_variant", rapidjson::Value(sprite.shader_variant.c_str(), allocator), allocator);
-        sprite_json.AddMember("blend_mode", static_cast<int>(sprite.blend_mode), allocator);
-        rapidjson::Value color(rapidjson::kArrayType);
-        color.PushBack(sprite.color.r, allocator).PushBack(sprite.color.g, allocator).PushBack(sprite.color.b, allocator).PushBack(sprite.color.a, allocator);
-        sprite_json.AddMember("color", color, allocator);
-        rapidjson::Value uv(rapidjson::kArrayType);
-        uv.PushBack(sprite.uv.x, allocator).PushBack(sprite.uv.y, allocator).PushBack(sprite.uv.z, allocator).PushBack(sprite.uv.w, allocator);
-        sprite_json.AddMember("uv", uv, allocator);
-        sprite_json.AddMember("sorting_layer", sprite.sorting_layer, allocator);
-        sprite_json.AddMember("order_in_layer", sprite.order_in_layer, allocator);
-        sprite_json.AddMember("visible", sprite.visible, allocator);
-        components.AddMember("SpriteRendererComponent", sprite_json, allocator);
+    doc.AddMember("root_id", static_cast<uint32_t>(entity), allocator);
+    rapidjson::Value entities_json(rapidjson::kArrayType);
+    for (Entity current : ordered_entities) {
+        rapidjson::Value entity_json(rapidjson::kObjectType);
+        entity_json.AddMember("id", static_cast<uint32_t>(current), allocator);
+        if (world.registry().all_of<ParentComponent>(current)) {
+            const auto& parent = world.registry().get<ParentComponent>(current);
+            uint32_t parent_id = static_cast<uint32_t>(parent.parent);
+            if (visited.find(parent_id) != visited.end()) {
+                entity_json.AddMember("parent_id", parent_id, allocator);
+            }
+        }
+
+        rapidjson::Value components(rapidjson::kObjectType);
+        const auto& transform = world.registry().get<TransformComponent>(current);
+        rapidjson::Value transform_json(rapidjson::kObjectType);
+        rapidjson::Value position(rapidjson::kArrayType);
+        position.PushBack(transform.position.x, allocator).PushBack(transform.position.y, allocator).PushBack(transform.position.z, allocator);
+        transform_json.AddMember("position", position, allocator);
+        rapidjson::Value rotation(rapidjson::kArrayType);
+        rotation.PushBack(transform.rotation.x, allocator).PushBack(transform.rotation.y, allocator).PushBack(transform.rotation.z, allocator).PushBack(transform.rotation.w, allocator);
+        transform_json.AddMember("rotation", rotation, allocator);
+        rapidjson::Value scale(rapidjson::kArrayType);
+        scale.PushBack(transform.scale.x, allocator).PushBack(transform.scale.y, allocator).PushBack(transform.scale.z, allocator);
+        transform_json.AddMember("scale", scale, allocator);
+        components.AddMember("TransformComponent", transform_json, allocator);
+
+        if (world.registry().all_of<SpriteRendererComponent>(current)) {
+            const auto& sprite = world.registry().get<SpriteRendererComponent>(current);
+            rapidjson::Value sprite_json(rapidjson::kObjectType);
+            sprite_json.AddMember("texture_handle", sprite.texture_handle, allocator);
+            sprite_json.AddMember("material_instance_id", sprite.material_instance_id, allocator);
+            sprite_json.AddMember("shader_variant", rapidjson::Value(sprite.shader_variant.c_str(), allocator), allocator);
+            sprite_json.AddMember("blend_mode", static_cast<int>(sprite.blend_mode), allocator);
+            rapidjson::Value color(rapidjson::kArrayType);
+            color.PushBack(sprite.color.r, allocator).PushBack(sprite.color.g, allocator).PushBack(sprite.color.b, allocator).PushBack(sprite.color.a, allocator);
+            sprite_json.AddMember("color", color, allocator);
+            rapidjson::Value uv(rapidjson::kArrayType);
+            uv.PushBack(sprite.uv.x, allocator).PushBack(sprite.uv.y, allocator).PushBack(sprite.uv.z, allocator).PushBack(sprite.uv.w, allocator);
+            sprite_json.AddMember("uv", uv, allocator);
+            sprite_json.AddMember("sorting_layer", sprite.sorting_layer, allocator);
+            sprite_json.AddMember("order_in_layer", sprite.order_in_layer, allocator);
+            sprite_json.AddMember("visible", sprite.visible, allocator);
+            components.AddMember("SpriteRendererComponent", sprite_json, allocator);
+        }
+
+        if (world.registry().all_of<ScriptComponent>(current)) {
+            const auto& script = world.registry().get<ScriptComponent>(current);
+            rapidjson::Value script_json(rapidjson::kObjectType);
+            script_json.AddMember("script_path", rapidjson::Value(script.script_path.c_str(), allocator), allocator);
+            script_json.AddMember("enabled", script.enabled, allocator);
+            components.AddMember("ScriptComponent", script_json, allocator);
+        }
+
+        if (world.registry().all_of<SpineRendererComponent>(current)) {
+            const auto& spine = world.registry().get<SpineRendererComponent>(current);
+            rapidjson::Value spine_json(rapidjson::kObjectType);
+            spine_json.AddMember("skeleton_data_path", rapidjson::Value(spine.skeleton_data_path.c_str(), allocator), allocator);
+            spine_json.AddMember("atlas_path", rapidjson::Value(spine.atlas_path.c_str(), allocator), allocator);
+            spine_json.AddMember("sorting_layer", spine.sorting_layer, allocator);
+            spine_json.AddMember("order_in_layer", spine.order_in_layer, allocator);
+            spine_json.AddMember("visible", spine.visible, allocator);
+            spine_json.AddMember("time_scale", spine.time_scale, allocator);
+            spine_json.AddMember("current_animation", rapidjson::Value(spine.current_animation.c_str(), allocator), allocator);
+            spine_json.AddMember("loop", spine.loop, allocator);
+            components.AddMember("SpineRendererComponent", spine_json, allocator);
+        }
+
+        entity_json.AddMember("components", components, allocator);
+        entities_json.PushBack(entity_json, allocator);
     }
-    doc.AddMember("components", components, allocator);
+    doc.AddMember("entities", entities_json, allocator);
     rapidjson::StringBuffer buffer;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
@@ -646,13 +708,10 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
     if (doc.Parse(buffer.str().c_str()).HasParseError() || !doc.IsObject()) {
         return entt::null;
     }
-    if (!doc.HasMember("components") || !doc["components"].IsObject()) {
-        return entt::null;
-    }
-    const auto& components = doc["components"];
-    Entity entity = world.CreateEntity();
-    TransformComponent transform;
-    if (components.HasMember("TransformComponent") && components["TransformComponent"].IsObject()) {
+    auto parse_transform = [](const rapidjson::Value& components, TransformComponent& transform) {
+        if (!components.HasMember("TransformComponent") || !components["TransformComponent"].IsObject()) {
+            return;
+        }
         const auto& transform_json = components["TransformComponent"];
         if (transform_json.HasMember("position") && transform_json["position"].IsArray() && transform_json["position"].Size() == 3) {
             const auto& p = transform_json["position"].GetArray();
@@ -666,21 +725,12 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
             const auto& s = transform_json["scale"].GetArray();
             transform.scale = glm::vec3(s[0].GetFloat(), s[1].GetFloat(), s[2].GetFloat());
         }
-    }
-    transform.dirty = true;
-    if (options.override_position) {
-        transform.position = options.position;
-    }
-    if (options.override_rotation) {
-        transform.rotation = options.rotation;
-    }
-    if (options.override_scale) {
-        transform.scale = options.scale;
-    }
-    world.registry().emplace<TransformComponent>(entity, transform);
-    if (components.HasMember("SpriteRendererComponent") && components["SpriteRendererComponent"].IsObject()) {
+    };
+    auto parse_sprite = [](const rapidjson::Value& components, SpriteRendererComponent& sprite) {
+        if (!components.HasMember("SpriteRendererComponent") || !components["SpriteRendererComponent"].IsObject()) {
+            return false;
+        }
         const auto& sprite_json = components["SpriteRendererComponent"];
-        SpriteRendererComponent sprite;
         if (sprite_json.HasMember("texture_handle") && sprite_json["texture_handle"].IsUint()) {
             sprite.texture_handle = sprite_json["texture_handle"].GetUint();
         }
@@ -710,7 +760,160 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
         if (sprite_json.HasMember("visible") && sprite_json["visible"].IsBool()) {
             sprite.visible = sprite_json["visible"].GetBool();
         }
+        return true;
+    };
+    auto parse_script = [](const rapidjson::Value& components, ScriptComponent& script) {
+        if (!components.HasMember("ScriptComponent") || !components["ScriptComponent"].IsObject()) {
+            return false;
+        }
+        const auto& script_json = components["ScriptComponent"];
+        if (script_json.HasMember("script_path") && script_json["script_path"].IsString()) {
+            script.script_path = script_json["script_path"].GetString();
+        }
+        if (script_json.HasMember("enabled") && script_json["enabled"].IsBool()) {
+            script.enabled = script_json["enabled"].GetBool();
+        }
+        return true;
+    };
+    auto parse_spine = [](const rapidjson::Value& components, SpineRendererComponent& spine) {
+        if (!components.HasMember("SpineRendererComponent") || !components["SpineRendererComponent"].IsObject()) {
+            return false;
+        }
+        const auto& spine_json = components["SpineRendererComponent"];
+        if (spine_json.HasMember("skeleton_data_path") && spine_json["skeleton_data_path"].IsString()) {
+            spine.skeleton_data_path = spine_json["skeleton_data_path"].GetString();
+        }
+        if (spine_json.HasMember("atlas_path") && spine_json["atlas_path"].IsString()) {
+            spine.atlas_path = spine_json["atlas_path"].GetString();
+        }
+        if (spine_json.HasMember("sorting_layer") && spine_json["sorting_layer"].IsInt()) {
+            spine.sorting_layer = spine_json["sorting_layer"].GetInt();
+        }
+        if (spine_json.HasMember("order_in_layer") && spine_json["order_in_layer"].IsInt()) {
+            spine.order_in_layer = spine_json["order_in_layer"].GetInt();
+        }
+        if (spine_json.HasMember("visible") && spine_json["visible"].IsBool()) {
+            spine.visible = spine_json["visible"].GetBool();
+        }
+        if (spine_json.HasMember("time_scale") && spine_json["time_scale"].IsNumber()) {
+            spine.time_scale = spine_json["time_scale"].GetFloat();
+        }
+        if (spine_json.HasMember("current_animation") && spine_json["current_animation"].IsString()) {
+            spine.current_animation = spine_json["current_animation"].GetString();
+            spine.dirty_animation = !spine.current_animation.empty();
+        }
+        if (spine_json.HasMember("loop") && spine_json["loop"].IsBool()) {
+            spine.loop = spine_json["loop"].GetBool();
+        }
+        return true;
+    };
+
+    if (doc.HasMember("entities") && doc["entities"].IsArray() && doc["entities"].Size() > 0) {
+        const auto& entities = doc["entities"].GetArray();
+        std::unordered_map<uint32_t, Entity> id_map;
+        std::vector<std::pair<Entity, uint32_t>> pending_parents;
+        for (const auto& entity_json : entities) {
+            if (!entity_json.IsObject() || !entity_json.HasMember("id") || !entity_json["id"].IsUint()) {
+                continue;
+            }
+            id_map[entity_json["id"].GetUint()] = world.CreateEntity();
+        }
+        if (id_map.empty()) {
+            return entt::null;
+        }
+
+        uint32_t root_id = entities[0]["id"].GetUint();
+        if (doc.HasMember("root_id") && doc["root_id"].IsUint()) {
+            root_id = doc["root_id"].GetUint();
+        }
+
+        for (const auto& entity_json : entities) {
+            if (!entity_json.IsObject() || !entity_json.HasMember("id") || !entity_json["id"].IsUint()) {
+                continue;
+            }
+            auto id_it = id_map.find(entity_json["id"].GetUint());
+            if (id_it == id_map.end()) {
+                continue;
+            }
+            Entity instance = id_it->second;
+            TransformComponent transform;
+            if (entity_json.HasMember("components") && entity_json["components"].IsObject()) {
+                const auto& components = entity_json["components"];
+                parse_transform(components, transform);
+                SpriteRendererComponent sprite;
+                if (parse_sprite(components, sprite)) {
+                    world.registry().emplace<SpriteRendererComponent>(instance, sprite);
+                }
+                ScriptComponent script;
+                if (parse_script(components, script)) {
+                    world.registry().emplace<ScriptComponent>(instance, script);
+                }
+                SpineRendererComponent spine;
+                if (parse_spine(components, spine)) {
+                    world.registry().emplace<SpineRendererComponent>(instance, spine);
+                }
+            }
+            transform.dirty = true;
+            world.registry().emplace<TransformComponent>(instance, transform);
+            if (entity_json.HasMember("parent_id") && entity_json["parent_id"].IsUint()) {
+                pending_parents.emplace_back(instance, entity_json["parent_id"].GetUint());
+            }
+        }
+
+        for (const auto& pending : pending_parents) {
+            auto it = id_map.find(pending.second);
+            if (it != id_map.end()) {
+                world.registry().emplace_or_replace<ParentComponent>(pending.first, ParentComponent{it->second});
+            }
+        }
+
+        auto root_it = id_map.find(root_id);
+        Entity root_entity = root_it != id_map.end() ? root_it->second : id_map.begin()->second;
+        if (world.registry().all_of<TransformComponent>(root_entity)) {
+            auto& root_transform = world.registry().get<TransformComponent>(root_entity);
+            if (options.override_position) {
+                root_transform.position = options.position;
+            }
+            if (options.override_rotation) {
+                root_transform.rotation = options.rotation;
+            }
+            if (options.override_scale) {
+                root_transform.scale = options.scale;
+            }
+            root_transform.dirty = true;
+        }
+        return root_entity;
+    }
+
+    if (!doc.HasMember("components") || !doc["components"].IsObject()) {
+        return entt::null;
+    }
+    const auto& components = doc["components"];
+    Entity entity = world.CreateEntity();
+    TransformComponent transform;
+    parse_transform(components, transform);
+    transform.dirty = true;
+    if (options.override_position) {
+        transform.position = options.position;
+    }
+    if (options.override_rotation) {
+        transform.rotation = options.rotation;
+    }
+    if (options.override_scale) {
+        transform.scale = options.scale;
+    }
+    world.registry().emplace<TransformComponent>(entity, transform);
+    SpriteRendererComponent sprite;
+    if (parse_sprite(components, sprite)) {
         world.registry().emplace<SpriteRendererComponent>(entity, sprite);
+    }
+    ScriptComponent script;
+    if (parse_script(components, script)) {
+        world.registry().emplace<ScriptComponent>(entity, script);
+    }
+    SpineRendererComponent spine;
+    if (parse_spine(components, spine)) {
+        world.registry().emplace<SpineRendererComponent>(entity, spine);
     }
     return entity;
 }

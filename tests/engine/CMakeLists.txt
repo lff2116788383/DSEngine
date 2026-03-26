@@ -9,6 +9,8 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     core/job_system_test.cpp
     ecs/world_test.cpp
     scene/transform_system_test.cpp
+    scene/prefab_test.cpp
+    runtime/runtime_access_test.cpp
     scripting/cpp_business_runtime_test.cpp
     ../modules/gameplay_2d/camera/camera_system_test.cpp
     ../modules/gameplay_2d/animation/animation_system_test.cpp
@@ -16,9 +18,11 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/time.cpp
+    ${CMAKE_SOURCE_DIR}/engine/base/debug.cpp
     ${CMAKE_SOURCE_DIR}/engine/input/input.cpp
     ${CMAKE_SOURCE_DIR}/engine/core/job_system.cpp
     ${CMAKE_SOURCE_DIR}/engine/ecs/world.cpp
+    ${CMAKE_SOURCE_DIR}/engine/scene/scene.cpp
     ${CMAKE_SOURCE_DIR}/engine/scene/transform_system.cpp
     ${CMAKE_SOURCE_DIR}/engine/scripting/cpp/cpp_business_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/camera/camera_system.cpp

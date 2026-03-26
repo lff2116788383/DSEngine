@@ -19,6 +19,88 @@
 namespace dse {
 namespace gameplay2d {
 
+struct CustomVFSFile {
+    std::vector<uint8_t> data;
+    size_t cursor = 0;
+};
+
+static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
+    if ((openMode & MA_OPEN_MODE_READ) == 0) return MA_ERROR;
+    std::vector<uint8_t> data;
+    if (!AssetManager::Instance().LoadFileToMemory(pFilePath, data)) {
+        return MA_DOES_NOT_EXIST;
+    }
+    CustomVFSFile* f = new CustomVFSFile();
+    f->data = std::move(data);
+    f->cursor = 0;
+    *pFile = (ma_vfs_file)f;
+    return MA_SUCCESS;
+}
+
+static ma_result CustomVFS_OpenW(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
+    return MA_NOT_IMPLEMENTED;
+}
+
+static ma_result CustomVFS_Close(ma_vfs* pVFS, ma_vfs_file file) {
+    CustomVFSFile* f = (CustomVFSFile*)file;
+    delete f;
+    return MA_SUCCESS;
+}
+
+static ma_result CustomVFS_Read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead) {
+    CustomVFSFile* f = (CustomVFSFile*)file;
+    size_t remaining = f->data.size() - f->cursor;
+    size_t to_read = sizeInBytes < remaining ? sizeInBytes : remaining;
+    if (to_read > 0) {
+        memcpy(pDst, f->data.data() + f->cursor, to_read);
+        f->cursor += to_read;
+    }
+    if (pBytesRead) *pBytesRead = to_read;
+    return MA_SUCCESS;
+}
+
+static ma_result CustomVFS_Write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten) {
+    return MA_NOT_IMPLEMENTED;
+}
+
+static ma_result CustomVFS_Seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin) {
+    CustomVFSFile* f = (CustomVFSFile*)file;
+    if (origin == ma_seek_origin_start) {
+        f->cursor = offset;
+    } else if (origin == ma_seek_origin_current) {
+        f->cursor += offset;
+    } else if (origin == ma_seek_origin_end) {
+        f->cursor = f->data.size() + offset;
+    }
+    if (f->cursor > f->data.size()) f->cursor = f->data.size();
+    return MA_SUCCESS;
+}
+
+static ma_result CustomVFS_Tell(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor) {
+    CustomVFSFile* f = (CustomVFSFile*)file;
+    if (pCursor) *pCursor = f->cursor;
+    return MA_SUCCESS;
+}
+
+static ma_result CustomVFS_Info(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo) {
+    CustomVFSFile* f = (CustomVFSFile*)file;
+    if (pInfo) {
+        pInfo->sizeInBytes = f->data.size();
+    }
+    return MA_SUCCESS;
+}
+
+static ma_vfs_callbacks g_custom_vfs_callbacks = {
+    CustomVFS_Open,
+    CustomVFS_OpenW,
+    CustomVFS_Close,
+    CustomVFS_Read,
+    CustomVFS_Write,
+    CustomVFS_Seek,
+    CustomVFS_Tell,
+    CustomVFS_Info
+};
+
 AudioSystem::AudioSystem() {
 }
 
@@ -32,7 +114,19 @@ bool AudioSystem::Initialize() {
     }
 
     auto engine = std::make_unique<ma_engine>();
-    ma_result result = ma_engine_init(nullptr, engine.get());
+    ma_engine_config config = ma_engine_config_init();
+    
+    ma_resource_manager_config rmConfig = ma_resource_manager_config_init();
+    rmConfig.pVFS = &g_custom_vfs_callbacks;
+    
+    ma_resource_manager* pResourceManager = new ma_resource_manager();
+    ma_result rmResult = ma_resource_manager_init(&rmConfig, pResourceManager);
+    if (rmResult == MA_SUCCESS) {
+        config.pResourceManager = pResourceManager;
+        ma_resource_manager_ptr = pResourceManager;
+    }
+
+    ma_result result = ma_engine_init(&config, engine.get());
     if (result != MA_SUCCESS) {
         std::cerr << "Failed to initialize audio engine." << std::endl;
         return false;
@@ -145,6 +239,14 @@ void AudioSystem::Shutdown() {
     ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
     ma_engine_uninit(engine);
     std::unique_ptr<ma_engine> engine_deleter(engine);
+    
+    if (ma_resource_manager_ptr) {
+        ma_resource_manager* rm = static_cast<ma_resource_manager*>(ma_resource_manager_ptr);
+        ma_resource_manager_uninit(rm);
+        delete rm;
+        ma_resource_manager_ptr = nullptr;
+    }
+    
     ma_engine_ptr = nullptr;
     is_initialized = false;
 }

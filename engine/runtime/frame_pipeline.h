@@ -22,6 +22,7 @@
 #include "modules/gameplay_2d/tilemap/tilemap_system.h"
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
+#include "modules/gameplay_2d/spine/spine_system.h"
 class AssetManager;
 
 enum class BusinessMode {
@@ -36,6 +37,9 @@ enum class BusinessMode {
 class FramePipeline {
 public:
     static FramePipeline& Instance();
+
+    FramePipeline() = default;
+    ~FramePipeline() = default;
 
     /**
      * @brief 初始化流水线及内部子系统
@@ -126,8 +130,6 @@ private:
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
-    FramePipeline() = default;
-    ~FramePipeline() = default;
 
     World* world_ = nullptr;
     std::unique_ptr<RhiDevice> rhi_device_;
@@ -139,6 +141,7 @@ private:
     Physics2DSystem physics2d_system_;
     AnimationSystem animation_system_;
     ParticleSystem particle_system_;
+    dse::gameplay2d::SpineSystem spine_system_;
     dse::gameplay2d::UISystem ui_logic_system_;
     dse::gameplay2d::AudioSystem audio_system_;
     dse::gameplay2d::TilemapSystem tilemap_system_;

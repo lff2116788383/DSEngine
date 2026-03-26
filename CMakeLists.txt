@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.17)
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
-project(DSEngine)
+project(DSEngine C CXX)
 include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -79,6 +79,8 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/samples
     ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
     ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/include
+    ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c
 )
 set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
@@ -87,6 +89,9 @@ file(GLOB_RECURSE engine_cpp
     "modules/*.cpp"
 )
 file(GLOB_RECURSE box2d_cpp "${BOX2D_ROOT}/src/*.cpp")
+file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
+file(GLOB_RECURSE tiny_aes_c "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/*.c")
+file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
 
 add_library(dse_engine SHARED
     ${glfw_sources}
@@ -95,6 +100,10 @@ add_library(dse_engine SHARED
     ${lua_src}
     ${luasocket_c}
     ${box2d_cpp}
+    ${spine_cpp}
+    ${tiny_aes_c}
+    ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
+    ${bundle_cpp}
     ${engine_cpp}
 )
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")

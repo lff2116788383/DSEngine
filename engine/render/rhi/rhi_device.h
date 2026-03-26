@@ -25,6 +25,22 @@ struct SpriteDrawItem {
     int order_in_layer = 0;
 };
 
+struct BatchVertex {
+    glm::vec3 pos;
+    glm::vec4 color;
+    glm::vec2 uv;
+};
+
+struct MeshDrawItem {
+    unsigned int texture_handle = 0;
+    unsigned int blend_mode = 0;
+    glm::mat4 model = glm::mat4(1.0f);
+    std::vector<BatchVertex> vertices;
+    std::vector<unsigned short> indices;
+    int sorting_layer = 0;
+    int order_in_layer = 0;
+};
+
 using DrawBatchItem = SpriteDrawItem;
 
 struct RenderStats {
@@ -92,6 +108,8 @@ public:
      * @param items 待渲染的批次元素集合
      */
     virtual void DrawBatch(const std::vector<DrawBatchItem>& items) = 0;
+
+    virtual void DrawMeshBatch(const std::vector<MeshDrawItem>& items) = 0;
     
     /**
      * @brief 提交一个 2D 精灵图的渲染批次
@@ -142,6 +160,8 @@ public:
      */
     void DrawBatch(const std::vector<DrawBatchItem>& items) override;
 
+    void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
+
     /**
      * @brief 记录精灵批次绘制的指令
      * @param items 精灵渲染项列表
@@ -172,6 +192,12 @@ private:
         glm::mat4 view = glm::mat4(1.0f);
         glm::mat4 projection = glm::mat4(1.0f);
     };
+    struct DrawMeshBatchCmd {
+        uint64_t order;
+        std::vector<MeshDrawItem> items;
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+    };
     struct CommandRef {
         uint64_t order = 0;
         int type = 0;
@@ -186,6 +212,7 @@ private:
     std::vector<SetPipelineStateCmd> set_pipeline_state_cmds_;
     std::vector<ClearCmd> clear_cmds_;
     std::vector<DrawBatchCmd> draw_batch_cmds_;
+    std::vector<DrawMeshBatchCmd> draw_mesh_batch_cmds_;
 };
 
 /**
@@ -403,6 +430,7 @@ public:
      * @param projection 投影矩阵
      */
     void RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     
 private:
     struct ResourceLedger {
@@ -444,6 +472,10 @@ private:
     unsigned int next_pipeline_state_handle_ = 330000;
     std::unordered_map<unsigned int, RenderTargetResource> render_targets_;
     std::unordered_map<unsigned int, PipelineStateDesc> pipeline_states_;
+    unsigned int mesh_vbo_handle_ = 0;
+    unsigned int mesh_ibo_handle_ = 0;
+    unsigned int mesh_vao_handle_ = 0;
+    
     unsigned int active_pipeline_state_ = 0;
     unsigned int active_render_target_ = 0;
     unsigned int shader_handle_ = 0;

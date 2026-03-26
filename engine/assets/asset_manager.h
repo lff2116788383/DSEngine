@@ -148,7 +148,7 @@ private:
  */
 class AudioClipAsset {
 public:
-    AudioClipAsset(const std::string& path) : path_(path) {}
+    AudioClipAsset(const std::string& path, std::vector<uint8_t> data) : path_(path), data_(std::move(data)) {}
     ~AudioClipAsset() = default;
 
     /**
@@ -157,8 +157,11 @@ public:
      */
     const std::string& GetPath() const { return path_; }
 
+    const std::vector<uint8_t>& GetData() const { return data_; }
+
 private:
     std::string path_;
+    std::vector<uint8_t> data_;
 };
 
 /**
@@ -215,6 +218,29 @@ public:
      */
     std::shared_ptr<AudioClipAsset> LoadAudioClip(const std::string& path);
     
+    // Asset Bundle API
+    /**
+     * @brief Pack a directory into an encrypted asset bundle (.bun)
+     * @param input_dir Directory containing assets to pack
+     * @param output_bundle Output bundle file path
+     * @param aes_key 16-byte AES encryption key (empty for no encryption)
+     * @return true if successful
+     */
+    bool PackBundle(const std::string& input_dir, const std::string& output_bundle, const std::string& aes_key);
+
+    /**
+     * @brief Mount an asset bundle to the VFS
+     * @param bundle_path Path to the .bun file
+     * @param aes_key 16-byte AES encryption key used during packing
+     * @return true if successful
+     */
+    bool MountBundle(const std::string& bundle_path, const std::string& aes_key);
+
+    /**
+     * @brief Load a file into memory, checking mounted bundles first, then disk
+     */
+    bool LoadFileToMemory(const std::string& path, std::vector<uint8_t>& out_data);
+
     // Async load texture using JobSystem
     /**
      * @brief 执行 LoadTextureAsync 操作
@@ -260,14 +286,19 @@ public:
      */
     void UnloadUnused();
 
+    ~AssetManager() = default;
+
 private:
     AssetManager() = default;
-    ~AssetManager() = default;
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
     std::unordered_map<unsigned int, std::weak_ptr<MaterialAsset>> materials_;
+    
+    // Virtual File System for Bundles
+    std::unordered_map<std::string, std::vector<uint8_t>> vfs_files_;
+
     unsigned int next_texture_handle_ = 410000;
     unsigned int next_shader_handle_ = 420000;
     unsigned int next_material_id_ = 430000;

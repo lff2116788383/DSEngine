@@ -17,6 +17,7 @@ class AssetManager;
 namespace dse::runtime::lua_binding {
 
 void ConfigureBindingContext(const LuaApiContext& context);
+void RegisterContextBindings(lua_State* L);
 const LuaApiContext& GetBindingContext();
 World* GetWorld();
 AssetManager& GetAssetManager();
