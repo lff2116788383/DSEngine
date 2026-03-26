@@ -1,3 +1,8 @@
+/**
+ * @file camera_system.cpp
+ * @brief 摄像机系统，管理视图矩阵、投影矩阵和屏幕视口映射
+ */
+
 #include "modules/gameplay_2d/camera/camera_system.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>

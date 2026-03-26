@@ -1,16 +1,29 @@
-﻿//
+/**
+ * @file key_code.h
+ * @brief 输入系统键码定义，映射键盘和鼠标按钮
+ */
+
+//
 // Created by captain on 2021/6/20.
 //
 
 #ifndef UNTITLED_KEYCODE_H
 #define UNTITLED_KEYCODE_H
 
+/**
+ * @enum KeyAction
+ * @brief 键盘/鼠标按键动作状态枚举
+ */
 typedef enum KeyAction{
-    KEY_ACTION_UP=0,
-    KEY_ACTION_DOWN=1,
-    KEY_ACTION_REPEAT=2
+    KEY_ACTION_UP=0,     ///< 按键松开
+    KEY_ACTION_DOWN=1,   ///< 按键按下
+    KEY_ACTION_REPEAT=2  ///< 按键持续按下
 }KeyAction;
 
+/**
+ * @enum KeyCode
+ * @brief 全局统一的输入键码枚举，涵盖鼠标按钮和键盘按键
+ */
 typedef enum KeyCode{
     KEY_CODE_UNKNOWN=-1,
     MOUSE_BUTTON_1=0,

@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file debug.h
+ * @brief 调试与日志系统，提供日志记录、断言和基础的调试工具
+ */
+
+//
 // Created by captainchen on 2021/8/23.
 //
 
@@ -20,10 +25,20 @@
         }\
     }
 
+/**
+ * @class Debug
+ * @brief 调试类，提供日志系统的初始化和资源释放管理
+ */
 class Debug {
 public:
+    /**
+     * @brief 初始化日志系统，配置控制台和文件多路输出
+     */
     static void Init();
 
+    /**
+     * @brief 关闭并释放日志系统资源
+     */
     static void ShutDown();
 
 public:

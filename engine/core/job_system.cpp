@@ -1,3 +1,8 @@
+/**
+ * @file job_system.cpp
+ * @brief 引擎核心模块，提供基础功能支持
+ */
+
 #include "engine/core/job_system.h"
 #include <algorithm>
 

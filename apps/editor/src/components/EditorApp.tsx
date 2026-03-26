@@ -1,3 +1,7 @@
+/**
+ * EditorApp.tsx 组件/功能描述
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Folder, Cpu, Settings, Play, Activity, Box, Globe, Plus, Search, MonitorPlay, Terminal, Zap, Radio, User, ShoppingCart, BookOpen, Download, MoreVertical, Bell, Cloud, Star, ChevronRight, CheckCircle2, MousePointer2, Move, RotateCw, Scaling, Pause, AlignLeft, Layers, PaintBucket, Hammer, Wrench, Trash2, Import, Image as ImageIcon } from 'lucide-react';

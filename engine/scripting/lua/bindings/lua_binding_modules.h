@@ -1,3 +1,8 @@
+/**
+ * @file lua_binding_modules.h
+ * @brief Lua 脚本绑定与运行时管理，处理 C++ 与 Lua 的交互边界
+ */
+
 #ifndef DSE_LUA_BINDING_MODULES_H
 #define DSE_LUA_BINDING_MODULES_H
 

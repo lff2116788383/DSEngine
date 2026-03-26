@@ -1,3 +1,8 @@
+/**
+ * @file audio_system.cpp
+ * @brief 音频系统管理，封装底层音频库，提供音效和背景音乐的播放控制
+ */
+
 #include "audio_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"
@@ -26,15 +31,14 @@ bool AudioSystem::Initialize() {
         return true;
     }
 
-    ma_engine* engine = new ma_engine;
-    ma_result result = ma_engine_init(nullptr, engine);
+    auto engine = std::make_unique<ma_engine>();
+    ma_result result = ma_engine_init(nullptr, engine.get());
     if (result != MA_SUCCESS) {
         std::cerr << "Failed to initialize audio engine." << std::endl;
-        delete engine;
         return false;
     }
 
-    ma_engine_ptr = engine;
+    ma_engine_ptr = engine.release();
     SetMasterVolume(master_volume_);
     is_initialized = true;
     return true;
@@ -65,18 +69,16 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         if (!sound && audio.clip && (audio.play_on_awake || audio.is_playing)) {
             ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-            ma_sound* new_sound = new ma_sound;
-            ma_result result = ma_sound_init_from_file(engine, audio.clip->GetPath().c_str(), 0, nullptr, nullptr, new_sound);
+            auto new_sound = std::make_unique<ma_sound>();
+            ma_result result = ma_sound_init_from_file(engine, audio.clip->GetPath().c_str(), 0, nullptr, nullptr, new_sound.get());
             if (result == MA_SUCCESS) {
-                ma_sound_set_looping(new_sound, audio.loop ? MA_TRUE : MA_FALSE);
-                ma_sound_set_volume(new_sound, audio.volume * sfx_volume_);
-                ma_sound_set_pitch(new_sound, audio.pitch);
-                ma_sound_start(new_sound);
-                entity_sounds_[key] = new_sound;
-                sound = new_sound;
+                ma_sound_set_looping(new_sound.get(), audio.loop ? MA_TRUE : MA_FALSE);
+                ma_sound_set_volume(new_sound.get(), audio.volume * sfx_volume_);
+                ma_sound_set_pitch(new_sound.get(), audio.pitch);
+                ma_sound_start(new_sound.get());
+                entity_sounds_[key] = new_sound.get();
+                sound = new_sound.release();
                 audio.restart_requested = false;
-            } else {
-                delete new_sound;
             }
         }
 
@@ -142,7 +144,7 @@ void AudioSystem::Shutdown() {
     }
     ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
     ma_engine_uninit(engine);
-    delete engine;
+    std::unique_ptr<ma_engine> engine_deleter(engine);
     ma_engine_ptr = nullptr;
     is_initialized = false;
 }
@@ -169,12 +171,12 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
         return;
     }
     ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-    ma_sound* sound = new ma_sound;
-    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), 0, nullptr, nullptr, sound);
+    auto new_sound = std::make_unique<ma_sound>();
+    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), 0, nullptr, nullptr, new_sound.get());
     if (result != MA_SUCCESS) {
-        delete sound;
         return;
     }
+    ma_sound* sound = new_sound.release();
     ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
     ma_sound_set_volume(sound, volume * sfx_volume_);
     ma_sound_start(sound);
@@ -190,12 +192,12 @@ bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) 
     }
     StopBgm();
     ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-    ma_sound* sound = new ma_sound;
-    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, sound);
+    auto new_sound = std::make_unique<ma_sound>();
+    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, new_sound.get());
     if (result != MA_SUCCESS) {
-        delete sound;
         return false;
     }
+    ma_sound* sound = new_sound.release();
     bgm_sound_ptr_ = sound;
     ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
     ma_sound_set_volume(sound, volume * bgm_volume_);
@@ -277,7 +279,7 @@ void AudioSystem::DestroySound(void* sound_ptr) {
     ma_sound* sound = static_cast<ma_sound*>(sound_ptr);
     ma_sound_stop(sound);
     ma_sound_uninit(sound);
-    delete sound;
+    std::unique_ptr<ma_sound> sound_deleter(sound);
 }
 
 void AudioSystem::ApplyAllVolumes() {

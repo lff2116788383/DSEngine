@@ -1,3 +1,8 @@
+/**
+ * @file scene.cpp
+ * @brief 场景管理系统，处理场景图(Scene Graph)、节点变换和空间划分
+ */
+
 #include "engine/scene/scene.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/base/debug.h"

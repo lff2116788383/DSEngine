@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file input.h
+ * @brief 输入系统，处理键盘、鼠标和控制器的输入事件映射
+ */
+
+//
 // Created by captain on 2021/6/20.
 //
 
@@ -8,60 +13,100 @@
 #include <unordered_map>
 #include "glm/glm.hpp"
 
+/**
+ * @class Input
+ * @brief 全局输入管理类，提供键盘和鼠标的输入状态查询。
+ */
 class Input {
 public:
-    /// 记录按键事件，键盘按下记录数+1，键盘弹起记录数-1，当记录数为0，说明此时没有按键。
-    /// \param key_code
-    /// \param action 0松手 1按下 2持续按下
+    /**
+     * @brief 记录按键事件，键盘按下记录数+1，键盘弹起记录数-1，当记录数为0，说明此时没有按键。
+     * @param key_code 键盘按键的枚举值或键码
+     * @param key_action 0松手 1按下 2持续按下
+     */
     static void RecordKey(unsigned short key_code,unsigned short key_action);
 
-    /// 判断当前帧 键盘按键是否按下
-    /// \param key_code
-    /// \return
+    /**
+     * @brief 判断当前帧，指定的键盘按键是否处于被按下的状态
+     * @param key_code 键盘按键码
+     * @return 如果按下返回 true，否则返回 false
+     */
     static bool GetKey(unsigned short key_code);
 
-    /// 判断当前帧 键盘按键是否处于按下状态
-    /// \param key_code
-    /// \return
+    /**
+     * @brief 判断当前帧，指定的键盘按键是否在这一帧刚刚被按下（按下瞬间）
+     * @param key_code 键盘按键码
+     * @return 如果刚刚按下返回 true
+     */
     static bool GetKeyDown(unsigned short key_code);
 
-    /// 判断当前帧 键盘按键是否按下并松开
-    /// \param key_code
-    /// \return
+    /**
+     * @brief 判断当前帧，指定的键盘按键是否在这一帧刚刚被松开（松开瞬间）
+     * @param key_code 键盘按键码
+     * @return 如果刚刚松开返回 true
+     */
     static bool GetKeyUp(unsigned short key_code);
 
-    /// 刷帧
+    /**
+     * @brief 在每帧结束时调用，用于重置本帧的输入状态标志（清理Down和Up状态）
+     */
     static void Update();
 
-    /// 判断是否按了鼠标某个按钮
-    /// \param mouse_button_index   0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
-    /// \return
+    /**
+     * @brief 判断是否按了鼠标某个按钮（持续按下状态）
+     * @param mouse_button_index 0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
+     * @return 如果按下返回 true
+     */
     static bool GetMouseButton(unsigned short mouse_button_index);
 
-    /// 指定鼠标按键是否处于按下的状态
-    /// \param mouse_button_index   0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
-    /// \return
+    /**
+     * @brief 指定鼠标按键是否在当前帧刚刚被按下
+     * @param mouse_button_index 0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
+     * @return 如果刚刚按下返回 true
+     */
     static bool GetMouseButtonDown(unsigned short mouse_button_index);
 
-    /// 鼠标按钮是否松开
-    /// \param mouse_button_index   0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
-    /// \return
+    /**
+     * @brief 鼠标按钮是否在当前帧刚刚被松开
+     * @param mouse_button_index 0 表示主按钮（通常为左按钮），1 表示副按钮，2 表示中间按钮。
+     * @return 如果刚刚松开返回 true
+     */
     static bool GetMouseButtonUp(unsigned short mouse_button_index);
 
+    /**
+     * @brief 获取当前鼠标在屏幕上的坐标
+     * @return 包含鼠标 x, y 坐标的二维向量
+     */
     static glm::vec2 mousePosition(){return mouse_position_;}
-    /// 设置鼠标位置
-    /// \param x
-    /// \param y
-    static void set_mousePosition(float x,float y){ mouse_position_.x=x;mouse_position_.y=y;}
 
-    static short mouse_scroll(){return mouse_scroll_;}
-    /// 记录鼠标滚轮事件
-    /// \param mouse_scroll
-    static void RecordScroll(short mouse_scroll){mouse_scroll_+=mouse_scroll;}
+    /**
+     * @brief 记录鼠标在屏幕上的位置
+     * @param x 鼠标的横坐标
+     * @param y 鼠标的纵坐标
+     */
+    static void RecordMousePosition(float x,float y){mouse_position_.x=x;mouse_position_.y=y;}
+
+    /**
+     * @brief 获取当前鼠标滚轮的滚动值
+     * @return 鼠标滚轮的值
+     */
+    static float mouseScroll(){return mouse_scroll_;}
+
+    /**
+     * @brief 记录鼠标滚轮的滚动值
+     * @param scroll 滚轮的滚动量
+     */
+    static void RecordMouseScroll(float scroll){mouse_scroll_=scroll;}
+
 private:
-    static std::unordered_map<unsigned short,unsigned short> key_event_map_;//按键状态 奇数按下 偶数弹起 0表示没有记录
+    static std::unordered_map<unsigned short,unsigned short> key_event_map_;//存储按键状态，0松手 1按下 2持续按下
+
+    static std::unordered_map<unsigned short,unsigned short> key_event_map_current_frame_;//存储当前帧按键状态，0无 1按下 2松手
+
     static glm::vec2 mouse_position_;//鼠标位置
-    static short mouse_scroll_;//鼠标滚轮值
+
+    static float mouse_scroll_;//鼠标滚轮
+
 };
 
 

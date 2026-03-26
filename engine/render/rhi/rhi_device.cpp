@@ -1,3 +1,8 @@
+/**
+ * @file rhi_device.cpp
+ * @brief 渲染硬件接口(RHI)抽象层，提供跨图形API的底层渲染命令封装
+ */
+
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"

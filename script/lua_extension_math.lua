@@ -1,3 +1,5 @@
+--- @module lua_extension_math
+
 local floor = math.floor
 local abs = math.abs
 

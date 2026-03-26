@@ -1,3 +1,8 @@
+/**
+ * @file physics2d_system.cpp
+ * @brief 物理系统，封装 2D/3D 物理引擎(如 Box2D/PhysX)，处理碰撞和刚体模拟
+ */
+
 #include "engine/physics/physics2d/physics2d_system.h"
 #include "engine/ecs/components_2d.h"
 #include <glm/gtx/quaternion.hpp>

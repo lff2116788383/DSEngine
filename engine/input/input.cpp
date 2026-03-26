@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file input.cpp
+ * @brief 输入系统，处理键盘、鼠标和控制器的输入事件映射
+ */
+
+//
 // Created by captain on 2021/6/20.
 //
 
@@ -8,7 +13,7 @@
 
 std::unordered_map<unsigned short,unsigned short> Input::key_event_map_;
 glm::vec2 Input::mouse_position_={0,0};
-short Input::mouse_scroll_=0;
+float Input::mouse_scroll_=0.0f;
 
 bool Input::GetKey(unsigned short key_code) {
     return key_event_map_.count(key_code)>0;

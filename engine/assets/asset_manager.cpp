@@ -1,3 +1,8 @@
+/**
+ * @file asset_manager.cpp
+ * @brief 资产管理器，负责加载、缓存和生命周期管理(如纹理、音频、预制体)
+ */
+
 #include "engine/assets/asset_manager.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"

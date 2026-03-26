@@ -1,3 +1,7 @@
+/**
+ * launcher_app.tsx 组件/功能描述
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

@@ -1,3 +1,8 @@
+/**
+ * @file frame_pipeline.cpp
+ * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
+ */
+
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/base/debug.h"
 #include "engine/base/time.h"
@@ -13,6 +18,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <stdexcept>
+#include <cassert>
 #include <chrono>
 #include <utility>
 #include <vector>
@@ -335,9 +341,7 @@ void FramePipeline::SetWorld(World* world) {
 }
 
 World& FramePipeline::world() {
-    if (!world_) {
-        throw std::runtime_error("FramePipeline world is not injected");
-    }
+    assert(world_ && "FramePipeline world is not injected");
     return *world_;
 }
 

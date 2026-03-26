@@ -1,3 +1,8 @@
+/**
+ * @file lua_binding_registry.cpp
+ * @brief Lua 脚本绑定与运行时管理，处理 C++ 与 Lua 的交互边界
+ */
+
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 

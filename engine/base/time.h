@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file time.h
+ * @brief 时间管理系统，提供高精度计时器、增量时间(Delta Time)计算
+ */
+
+//
 // Created by captain on 2021/8/5.
 //
 
@@ -9,27 +14,48 @@
 #include <string>
 #include <chrono>
 
+/**
+ * @class Time
+ * @brief 全局时间管理类，负责记录游戏运行时间、帧增量时间及固定更新时间。
+ */
 class Time
 {
 public:
     Time();
     ~Time();
 
-    //初始化
+    /**
+     * @brief 初始化时间系统，记录引擎启动时的初始时间点
+     */
     static void Init();
 
+    /**
+     * @brief 每帧更新，计算距离上一帧经过的增量时间
+     */
     static void Update();
 
-    //~zh 获取游戏运行时间
-    //~en Get the game running time
+    /**
+     * @brief 获取自引擎启动以来的总运行时间
+     * @return 运行时间（秒）
+     */
     static float TimeSinceStartup();
 
+    /**
+     * @brief 获取上一帧到当前帧的增量时间（Delta Time）
+     * @return 增量时间（秒）
+     */
     static float delta_time(){return delta_time_;}
 
+    /**
+     * @brief 获取固定的物理更新步长
+     * @return 固定更新时间（秒）
+     */
     static float fixed_update_time(){return fixed_update_time_;}
 
-    //~zh 设置固定更新时间
-    //~en Set fixed update time
+    /**
+     * @brief 设置固定的物理更新步长
+     * @param time 设定的时间步长（秒）
+     */
     static void set_fixed_update_time(float time){fixed_update_time_ = time;}
 
 private:

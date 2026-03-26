@@ -1,3 +1,8 @@
+/**
+ * @file engine_app.h
+ * @brief 引擎核心模块，提供基础功能支持
+ */
+
 #ifndef DSE_ENGINE_APP_H
 #define DSE_ENGINE_APP_H
 

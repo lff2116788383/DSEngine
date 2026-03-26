@@ -1,3 +1,8 @@
+/**
+ * @file particle_system.cpp
+ * @brief 粒子系统，管理粒子发射器、生命周期和渲染批处理
+ */
+
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "engine/ecs/components_2d.h"
 #include <algorithm>

@@ -1,3 +1,8 @@
+/**
+ * @file sprite_render_system.cpp
+ * @brief 渲染硬件接口(RHI)抽象层，提供跨图形API的底层渲染命令封装
+ */
+
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/base/time.h"

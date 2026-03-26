@@ -1,3 +1,8 @@
+/**
+ * @file transform_system.cpp
+ * @brief 引擎核心模块，提供基础功能支持
+ */
+
 #include "engine/scene/transform_system.h"
 #include <glm/gtx/quaternion.hpp>
 #include <cstdint>

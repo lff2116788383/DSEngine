@@ -1,3 +1,8 @@
+/**
+ * @file lua_binding_audio.cpp
+ * @brief 音频系统管理，封装底层音频库，提供音效和背景音乐的播放控制
+ */
+
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/assets/asset_manager.h"

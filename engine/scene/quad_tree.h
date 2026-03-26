@@ -1,3 +1,8 @@
+/**
+ * @file quad_tree.h
+ * @brief 2D 空间划分结构(四叉树)，用于加速二维空间内的碰撞检测和视锥体剔除
+ */
+
 #ifndef DSE_SCENE_QUAD_TREE_H
 #define DSE_SCENE_QUAD_TREE_H
 
@@ -30,11 +35,19 @@ struct QuadTreeData {
     Rect bounds;
 };
 
+/**
+ * @class QuadTree
+ * @brief 四叉树节点结构，管理指定空间范围内的实体数据，并在超出容量时自动细分
+ */
 class QuadTree {
 public:
     QuadTree(const Rect& bounds, int capacity = 4, int max_depth = 5, int depth = 0)
         : bounds_(bounds), capacity_(capacity), max_depth_(max_depth), depth_(depth) {}
 
+    /**
+     * @brief 插入实体数据到四叉树中
+     * @param data 包含实体和其包围盒的数据
+     */
     void Insert(const QuadTreeData& data) {
         if (!bounds_.Intersects(data.bounds)) {
             return;
@@ -62,6 +75,11 @@ public:
         }
     }
 
+    /**
+     * @brief 查询与指定范围相交的所有实体
+     * @param range 查询包围盒
+     * @param found 存放查询结果的数组
+     */
     void Query(const Rect& range, std::vector<QuadTreeData>& found) const {
         if (!bounds_.Intersects(range)) {
             return;
@@ -81,6 +99,9 @@ public:
         }
     }
 
+    /**
+     * @brief 执行 Clear 操作
+     */
     void Clear() {
         elements_.clear();
         divided_ = false;
@@ -91,6 +112,9 @@ public:
     }
 
 private:
+    /**
+     * @brief 执行 Subdivide 操作
+     */
     void Subdivide() {
         float x = bounds_.x;
         float y = bounds_.y;

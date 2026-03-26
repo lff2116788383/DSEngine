@@ -1,3 +1,8 @@
+/**
+ * @file lua_runtime.cpp
+ * @brief 时间管理系统，提供高精度计时器、增量时间(Delta Time)计算
+ */
+
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"

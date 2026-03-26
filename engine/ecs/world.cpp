@@ -1,3 +1,8 @@
+/**
+ * @file world.cpp
+ * @brief 实体组件系统(ECS)核心，管理实体、组件生命周期和系统调度
+ */
+
 #include "engine/ecs/world.h"
 
 World& World::Instance() {

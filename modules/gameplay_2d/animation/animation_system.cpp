@@ -1,3 +1,8 @@
+/**
+ * @file animation_system.cpp
+ * @brief 动画系统，处理精灵帧动画和骨骼动画的播放与状态机控制
+ */
+
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"

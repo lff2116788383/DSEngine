@@ -1,3 +1,8 @@
+/**
+ * @file ui_system.cpp
+ * @brief 用户界面(UI)系统，管理 UI 元素的布局、事件响应和渲染
+ */
+
 #include "ui_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"

@@ -1,3 +1,8 @@
+/**
+ * @file engine_app.cpp
+ * @brief 引擎核心模块，提供基础功能支持
+ */
+
 #define GLFW_INCLUDE_NONE
 #include "engine/runtime/engine_app.h"
 #include "engine/scripting/lua/lua_runtime.h"
@@ -21,11 +26,11 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 }
 
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
-    Input::RecordScroll(yoffset);
+    Input::RecordMouseScroll(yoffset);
 }
 
 void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
-    Input::set_mousePosition(xpos, ypos);
+    Input::RecordMousePosition(xpos, ypos);
 }
 }
 

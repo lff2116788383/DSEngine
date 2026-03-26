@@ -1,3 +1,7 @@
+/**
+ * index.tsx 组件/功能描述
+ */
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { LauncherApp } from './launcher_app';

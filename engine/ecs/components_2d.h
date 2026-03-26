@@ -1,3 +1,8 @@
+/**
+ * @file components_2d.h
+ * @brief 2D 游戏引擎的所有 ECS 数据组件定义 (纯数据结构, POD 优先)
+ */
+
 #ifndef DSE_COMPONENTS_2D_H
 #define DSE_COMPONENTS_2D_H
 
@@ -13,34 +18,46 @@
 
 using Entity = entt::entity;
 
-// We use forward declarations or minimal includes for Box2D to keep headers clean
-class b2Body;
-class b2Fixture;
-
 class TextureAsset;
 
 // Forward declaration for Box2D
 class b2Body;
 class b2Fixture;
 
+/**
+ * @struct TransformComponent
+ * @brief 空间变换组件，定义实体在世界中的位置、旋转和缩放
+ */
 struct TransformComponent {
-    glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
-    glm::mat4 local_to_world = glm::mat4(1.0f);
-    bool dirty = true;
+    glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);    ///< 本地坐标
+    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); ///< 本地旋转(四元数)
+    glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);       ///< 本地缩放
+    glm::mat4 local_to_world = glm::mat4(1.0f);          ///< 缓存的模型矩阵(世界坐标)
+    bool dirty = true;                                   ///< 标记是否需要重新计算模型矩阵
 };
 
+/**
+ * @struct ParentComponent
+ * @brief 场景层级组件，指明当前实体的父节点
+ */
 struct ParentComponent {
-    Entity parent = entt::null;
+    Entity parent = entt::null; ///< 父实体的 ID
 };
 
+/**
+ * @enum SpriteBlendMode
+ * @brief 渲染混合模式枚举
+ */
 enum class SpriteBlendMode {
-    Alpha = 0,
-    Additive = 1,
-    Multiply = 2
+    Alpha = 0,    ///< 传统的 Alpha 透明度混合
+    Additive = 1, ///< 叠加混合（发光效果）
+    Multiply = 2  ///< 正片叠底混合（阴影/加深效果）
 };
 
+/**
+ * @struct MaterialInstanceComponent
+ * @brief 材质实例组件，覆盖全局材质的属性
+ */
 struct MaterialInstanceComponent {
     unsigned int material_id = 0;
     std::string name;
@@ -51,178 +68,243 @@ struct MaterialInstanceComponent {
     glm::vec4 uv_rect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 };
 
+/**
+ * @struct SpriteRendererComponent
+ * @brief 2D 精灵图渲染组件，负责在场景中绘制纹理切片
+ */
 struct SpriteRendererComponent {
-    std::shared_ptr<TextureAsset> texture;
-    unsigned int texture_handle = 0;
-    unsigned int material_instance_id = 0;
-    std::string shader_variant = "SPRITE_UNLIT";
-    SpriteBlendMode blend_mode = SpriteBlendMode::Alpha;
-    glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    glm::vec2 uv_offset = glm::vec2(0.0f, 0.0f);
-    glm::vec2 uv_scroll_speed = glm::vec2(0.0f, 0.0f);
-    int sorting_layer = 0;
-    int order_in_layer = 0;
-    bool visible = true;
+    std::shared_ptr<TextureAsset> texture;               ///< 持有的纹理资产引用
+    unsigned int texture_handle = 0;                     ///< RHI 层的纹理句柄
+    unsigned int material_instance_id = 0;               ///< 绑定的材质实例 ID
+    std::string shader_variant = "SPRITE_UNLIT";         ///< 使用的着色器变体
+    SpriteBlendMode blend_mode = SpriteBlendMode::Alpha; ///< 混合模式
+    glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); ///< 顶点颜色/染色
+    glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);    ///< 纹理的采样区域 (x,y,w,h)
+    glm::vec2 uv_offset = glm::vec2(0.0f, 0.0f);         ///< UV 滚动的当前偏移量
+    glm::vec2 uv_scroll_speed = glm::vec2(0.0f, 0.0f);   ///< UV 滚动的速度 (x, y)
+    int sorting_layer = 0;                               ///< 渲染层级(大类)
+    int order_in_layer = 0;                              ///< 层级内的渲染顺序(小类)
+    bool visible = true;                                 ///< 是否可见
 };
 
+/**
+ * @struct UIRendererComponent
+ * @brief UI 渲染与交互组件，处理屏幕空间的 UI 绘制及鼠标事件
+ */
 struct UIRendererComponent {
     std::shared_ptr<TextureAsset> texture;
     unsigned int texture_handle = 0;
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    int order = 0;
+    int order = 0;                                       ///< UI 遮挡排序层级
     bool visible = true;
-    float scale = 1.0f;
-    float hover_scale = 1.08f;
-    float pressed_scale = 0.94f;
-    float scale_lerp_speed = 12.0f;
+    float scale = 1.0f;                                  ///< 当前动态缩放值
+    float hover_scale = 1.08f;                           ///< 鼠标悬停时的目标缩放值
+    float pressed_scale = 0.94f;                         ///< 鼠标按下时的目标缩放值
+    float scale_lerp_speed = 12.0f;                      ///< 缩放补间的缓动速度
     
     // UI layout params (Anchor & Flex base)
-    glm::vec2 position = glm::vec2(0.0f); // Local offset
-    glm::vec2 size = glm::vec2(100.0f);
-    glm::vec2 anchor_min = glm::vec2(0.5f); // 0-1 percentage of parent
-    glm::vec2 anchor_max = glm::vec2(0.5f);
-    glm::vec2 pivot = glm::vec2(0.5f);
+    glm::vec2 position = glm::vec2(0.0f);                ///< 相对锚点的本地像素偏移
+    glm::vec2 size = glm::vec2(100.0f);                  ///< UI 元素的绝对尺寸
+    glm::vec2 anchor_min = glm::vec2(0.5f);              ///< 锚点最小百分比 (0-1)
+    glm::vec2 anchor_max = glm::vec2(0.5f);              ///< 锚点最大百分比 (0-1)
+    glm::vec2 pivot = glm::vec2(0.5f);                   ///< UI 元素自身的轴心点 (0-1)
     
     // UI Event state
-    bool interactable = true;
-    bool is_hovered = false;
-    bool is_pressed = false;
+    bool interactable = true;                            ///< 是否响应交互事件
+    bool is_hovered = false;                             ///< 当前是否被鼠标悬停
+    bool is_pressed = false;                             ///< 当前是否被鼠标按下
 
     // Callbacks for Event Bubbling
-    std::function<void(Entity)> on_click;
-    std::function<void(Entity)> on_pointer_enter;
-    std::function<void(Entity)> on_pointer_exit;
+    std::function<void(Entity)> on_click;                ///< C++ 层的点击回调
+    std::function<void(Entity)> on_pointer_enter;        ///< C++ 层的指针移入回调
+    std::function<void(Entity)> on_pointer_exit;         ///< C++ 层的指针移出回调
     
     // Runtime computed layout
-    glm::mat4 runtime_model = glm::mat4(1.0f);
+    glm::mat4 runtime_model = glm::mat4(1.0f);           ///< 运行时计算出的绝对变换矩阵
 };
 
+/**
+ * @struct UIPanelComponent
+ * @brief UI 容器面板组件，可用于拦截背后的输入事件
+ */
 struct UIPanelComponent {
-    bool blocks_input = false;
+    bool blocks_input = false; ///< 是否阻挡射线穿透面板
 };
 
+/**
+ * @struct UIButtonComponent
+ * @brief 按钮组件扩展，提供不同状态下的颜色染色，并可绑定回调
+ */
 struct UIButtonComponent {
-    glm::vec4 normal_color = glm::vec4(1.0f);
-    glm::vec4 hover_color = glm::vec4(1.1f, 1.1f, 1.1f, 1.0f);
-    glm::vec4 pressed_color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    glm::vec4 normal_color = glm::vec4(1.0f);                   ///< 常态颜色
+    glm::vec4 hover_color = glm::vec4(1.1f, 1.1f, 1.1f, 1.0f);  ///< 悬停颜色
+    glm::vec4 pressed_color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);///< 按下颜色
     std::function<void(Entity)> on_click;
     std::function<void(Entity)> on_pointer_enter;
     std::function<void(Entity)> on_pointer_exit;
 };
 
+/**
+ * @struct UILabelComponent
+ * @brief 位图字体标签组件，支持普通字符串和高性能数字模式的渲染
+ */
 struct UILabelComponent {
-    std::string text;
-    long long number_value = 0;
-    bool numeric_mode = false;
-    unsigned int font_texture_handle = 0;
-    glm::vec2 glyph_size = glm::vec2(16.0f, 16.0f);
-    glm::vec2 offset = glm::vec2(0.0f);
-    float spacing = 0.0f;
-    int atlas_cols = 16;
-    int atlas_rows = 6;
-    int ascii_start = 32;
-    glm::vec4 color = glm::vec4(1.0f);
-    bool dirty = true;
-    std::vector<Entity> runtime_glyph_entities;
+    std::string text;                                    ///< 显示的文本
+    long long number_value = 0;                          ///< 数字模式下的值
+    bool numeric_mode = false;                           ///< 开启数字模式可避免字符串分配开销
+    unsigned int font_texture_handle = 0;                ///< 位图字体图集句柄
+    glm::vec2 glyph_size = glm::vec2(16.0f, 16.0f);      ///< 单个字符的基础尺寸
+    glm::vec2 offset = glm::vec2(0.0f);                  ///< 整体偏移
+    float spacing = 0.0f;                                ///< 字间距
+    int atlas_cols = 16;                                 ///< 图集的列数
+    int atlas_rows = 6;                                  ///< 图集的行数
+    int ascii_start = 32;                                ///< 图集第一个字符对应的 ASCII 码（默认空格）
+    glm::vec4 color = glm::vec4(1.0f);                   ///< 文本染色
+    bool dirty = true;                                   ///< 数据是否变更，需重构子实体
+    std::vector<Entity> runtime_glyph_entities;          ///< 运行时管理的用于显示单个字符的子实体
 };
 
+/**
+ * @struct CameraComponent
+ * @brief 摄像机组件，提供投影和视图矩阵的计算参数
+ */
 struct CameraComponent {
-    bool orthographic = true;
-    float orthographic_size = 5.0f;
-    float near_clip = -1.0f;
-    float far_clip = 1.0f;
-    glm::mat4 view = glm::mat4(1.0f);
-    glm::mat4 projection = glm::mat4(1.0f);
+    bool orthographic = true;            ///< 是否为正交投影
+    float orthographic_size = 5.0f;      ///< 正交模式下摄像机垂直视野的一半大小
+    float near_clip = -1.0f;             ///< 近裁剪面
+    float far_clip = 1.0f;               ///< 远裁剪面
+    glm::mat4 view = glm::mat4(1.0f);    ///< 缓存的视图矩阵
+    glm::mat4 projection = glm::mat4(1.0f);///< 缓存的投影矩阵
 };
 
+/**
+ * @struct CameraFollowComponent
+ * @brief 摄像机跟随组件，使实体平滑追踪目标
+ */
 struct CameraFollowComponent {
-    Entity target = entt::null;
-    glm::vec3 offset = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec2 dead_zone = glm::vec2(0.0f, 0.0f);
-    float damping = 0.12f;
-    bool follow_x = true;
-    bool follow_y = true;
-    bool enabled = true;
+    Entity target = entt::null;                      ///< 追踪的目标实体
+    glm::vec3 offset = glm::vec3(0.0f, 0.0f, 0.0f);  ///< 跟随目标的相对偏移
+    glm::vec2 dead_zone = glm::vec2(0.0f, 0.0f);     ///< 死区，在此区域内摄像机不移动
+    float damping = 0.12f;                           ///< 缓动阻尼系数 (0 瞬间到达, 值越大越平滑)
+    bool follow_x = true;                            ///< 是否在 X 轴上追踪
+    bool follow_y = true;                            ///< 是否在 Y 轴上追踪
+    bool enabled = true;                             ///< 是否激活
 };
 
+/**
+ * @struct ScriptComponent
+ * @brief Lua 脚本挂载组件，指向实体绑定的 Lua 业务逻辑
+ */
 struct ScriptComponent {
-    std::string script_path;
-    bool enabled = true;
+    std::string script_path;  ///< Lua 脚本的资源路径
+    bool enabled = true;      ///< 是否执行脚本的生命周期函数
 };
 
+/**
+ * @enum RigidBody2DType
+ * @brief 2D 刚体类型，与 Box2D (b2BodyType) 的语义对应
+ */
 enum class RigidBody2DType {
-    Static,
-    Kinematic,
-    Dynamic
+    Static,    ///< 静态物体，不受力，零质量
+    Kinematic, ///< 运动学物体，不受力，但可通过代码控制速度
+    Dynamic    ///< 动态物体，完全受物理引擎的力与重力模拟
 };
 
+/**
+ * @struct RigidBody2DComponent
+ * @brief 2D 刚体组件，封装物理状态与速度
+ */
 struct RigidBody2DComponent {
     RigidBody2DType type = RigidBody2DType::Dynamic;
-    glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
-    float gravity_scale = 1.0f;
-    bool fixed_rotation = false;
+    glm::vec2 velocity = glm::vec2(0.0f, 0.0f);          ///< 线性速度
+    float gravity_scale = 1.0f;                          ///< 重力缩放倍数
+    bool fixed_rotation = false;                         ///< 是否锁定旋转
     
     // Internal Box2D body pointer
-    b2Body* runtime_body = nullptr;
+    b2Body* runtime_body = nullptr;                      ///< 运行时绑定的 Box2D 刚体实例
     
     // Callbacks for collision events
-    std::function<void(Entity other)> on_collision_enter;
-    std::function<void(Entity other)> on_collision_exit;
-    std::function<void(Entity other)> on_trigger_enter;
-    std::function<void(Entity other)> on_trigger_exit;
+    std::function<void(Entity other)> on_collision_enter;///< 物理碰撞进入回调
+    std::function<void(Entity other)> on_collision_exit; ///< 物理碰撞离开回调
+    std::function<void(Entity other)> on_trigger_enter;  ///< 触发器进入回调
+    std::function<void(Entity other)> on_trigger_exit;   ///< 触发器离开回调
 };
 
+/**
+ * @struct BoxCollider2DComponent
+ * @brief 2D 矩形碰撞体组件，定义物理形状和材质属性
+ */
 struct BoxCollider2DComponent {
-    glm::vec2 size = glm::vec2(1.0f, 1.0f);
-    glm::vec2 offset = glm::vec2(0.0f, 0.0f);
-    float density = 1.0f;
-    float friction = 0.3f;
-    float restitution = 0.0f;
-    bool is_trigger = false;
+    glm::vec2 size = glm::vec2(1.0f, 1.0f);              ///< 碰撞体尺寸
+    glm::vec2 offset = glm::vec2(0.0f, 0.0f);            ///< 相对实体的偏移
+    float density = 1.0f;                                ///< 密度 (影响质量)
+    float friction = 0.3f;                               ///< 摩擦系数
+    float restitution = 0.0f;                            ///< 恢复系数 (弹性)
+    bool is_trigger = false;                             ///< 是否为触发器 (仅检测不产生物理力)
     
     // Internal Box2D fixture pointer
-    b2Fixture* runtime_fixture = nullptr;
+    b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
 };
 
 // --- New Core Systems Components ---
 
 // --- Animation State Machine ---
+/**
+ * @struct AnimationState
+ * @brief 动画状态，包含一组序列帧和关键帧事件
+ */
 struct AnimationState {
-    std::string name;
-    std::vector<std::shared_ptr<TextureAsset>> frames;
-    std::vector<unsigned int> frame_handles; // for lua bindings
-    std::vector<std::pair<float, std::string>> events;
-    std::vector<std::pair<int, int>> segments;
-    float frame_rate = 10.0f;
-    bool loop = true;
+    std::string name;                                    ///< 状态名称
+    std::vector<std::shared_ptr<TextureAsset>> frames;   ///< 帧纹理列表
+    std::vector<unsigned int> frame_handles;             ///< 帧句柄列表 (用于 Lua 绑定优化)
+    std::vector<std::pair<float, std::string>> events;   ///< 时间点触发的事件列表
+    std::vector<std::pair<int, int>> segments;           ///< 动画片段区间
+    float frame_rate = 10.0f;                            ///< 播放帧率
+    bool loop = true;                                    ///< 是否循环播放
 };
 
+/**
+ * @struct AnimationTransition
+ * @brief 动画状态转换条件
+ */
 struct AnimationTransition {
-    std::string to_state;
-    std::string condition_param; // e.g., "is_walking"
-    bool condition_value;        // e.g., true
+    std::string to_state;                                ///< 目标状态名称
+    std::string condition_param;                         ///< 条件参数名 (如 "is_walking")
+    bool condition_value;                                ///< 触发转换所需的条件值
 };
 
+/**
+ * @struct AnimatorComponent
+ * @brief 动画状态机组件，控制多状态的帧动画播放与切换
+ */
 struct AnimatorComponent {
-    std::unordered_map<std::string, AnimationState> states;
-    std::unordered_map<std::string, std::vector<AnimationTransition>> transitions;
-    std::unordered_map<std::string, bool> bool_params;
-    std::unordered_map<std::string, float> float_params;
+    std::unordered_map<std::string, AnimationState> states;              ///< 所有可用状态
+    std::unordered_map<std::string, std::vector<AnimationTransition>> transitions; ///< 状态间转换规则
+    std::unordered_map<std::string, bool> bool_params;                   ///< 布尔型控制参数
+    std::unordered_map<std::string, float> float_params;                 ///< 浮点型控制参数
 
-    std::string current_state = "";
-    float current_time = 0.0f;
-    int current_frame = 0;
-    int segment_start_frame = 0;
-    int segment_end_frame = -1;
-    bool segment_loop = true;
-    bool playing = true;
-    std::vector<std::string> fired_events;
+    std::string current_state = "";                      ///< 当前处于的状态
+    float current_time = 0.0f;                           ///< 当前状态已播放的时间
+    int current_frame = 0;                               ///< 当前显示的帧索引
+    int segment_start_frame = 0;                         ///< 分段播放的起始帧
+    int segment_end_frame = -1;                          ///< 分段播放的结束帧
+    bool segment_loop = true;                            ///< 分段是否循环
+    bool playing = true;                                 ///< 是否正在播放
+    std::vector<std::string> fired_events;               ///< 当前帧触发的事件列表
     
     // Add helper to set params
+    /**
+     * @brief 设置布尔参数以驱动状态机
+     */
     void SetBool(const std::string& name, bool value) { bool_params[name] = value; }
+    /**
+     * @brief 设置浮点参数以驱动状态机
+     */
     void SetFloat(const std::string& name, float value) { float_params[name] = value; }
+    /**
+     * @brief 指定播放当前状态的某个分段
+     */
     void PlaySegment(int start_frame, int end_frame, bool loop_segment) {
         segment_start_frame = start_frame < 0 ? 0 : start_frame;
         segment_end_frame = end_frame;
@@ -233,63 +315,83 @@ struct AnimatorComponent {
     }
 };
 
+/**
+ * @struct Particle2D
+ * @brief 单个粒子的运行时数据结构
+ */
 struct Particle2D {
-    glm::vec3 position;
-    glm::vec3 velocity;
-    glm::vec4 color;
-    float life_time;
-    float life_remaining;
-    float size;
+    glm::vec3 position;         ///< 粒子当前的世界坐标
+    glm::vec3 velocity;         ///< 粒子的运动速度
+    glm::vec4 color;            ///< 粒子的当前颜色
+    float life_time;            ///< 粒子的总生命周期(秒)
+    float life_remaining;       ///< 粒子的剩余生命周期(秒)
+    float size;                 ///< 粒子的当前尺寸
 };
 
+/**
+ * @struct ParticleEmitterComponent
+ * @brief 粒子发射器组件，控制粒子的生成规则和渲染材质
+ */
 struct ParticleEmitterComponent {
-    std::vector<Particle2D> particles;
-    std::shared_ptr<TextureAsset> texture;
-    unsigned int texture_handle = 0;
-    int max_particles = 100;
-    float emit_rate = 10.0f; // particles per second
-    float emit_rate_scale = 1.0f;
-    float emit_accumulator = 0.0f;
-    bool emitting = true;
-    int pending_burst = 0;
+    std::vector<Particle2D> particles;                   ///< 活跃的粒子池
+    std::shared_ptr<TextureAsset> texture;               ///< 粒子的贴图资产
+    unsigned int texture_handle = 0;                     ///< 粒子的渲染纹理句柄
+    int max_particles = 100;                             ///< 允许的最大粒子数量
+    float emit_rate = 10.0f;                             ///< 每秒发射的粒子数
+    float emit_rate_scale = 1.0f;                        ///< 发射率缩放倍数
+    float emit_accumulator = 0.0f;                       ///< 发射计时累加器
+    bool emitting = true;                                ///< 是否持续发射中
+    int pending_burst = 0;                               ///< 等待爆发(一次性生成)的粒子数
     
     // Emission parameters
-    float start_life_time = 2.0f;
-    float start_size = 1.0f;
-    glm::vec4 start_color = glm::vec4(1.0f);
+    float start_life_time = 2.0f;                        ///< 新粒子的初始生命周期
+    float start_size = 1.0f;                             ///< 新粒子的初始尺寸
+    glm::vec4 start_color = glm::vec4(1.0f);             ///< 新粒子的初始颜色
 };
 
 class AudioClipAsset;
 
+/**
+ * @struct AudioSourceComponent
+ * @brief 音频源组件，挂载在实体上用于播放 3D/2D 空间音效
+ */
 struct AudioSourceComponent {
-    std::shared_ptr<AudioClipAsset> clip;
-    bool play_on_awake = true;
-    bool loop = false;
-    float volume = 1.0f;
-    float pitch = 1.0f;
-    bool is_playing = false;
-    bool restart_requested = false;
+    std::shared_ptr<AudioClipAsset> clip;                ///< 引用的音频片段资产
+    bool play_on_awake = true;                           ///< 是否在组件创建时自动播放
+    bool loop = false;                                   ///< 是否循环播放
+    float volume = 1.0f;                                 ///< 音量大小 (0.0 - 1.0)
+    float pitch = 1.0f;                                  ///< 音高倍数 (1.0 为原始音高)
+    bool is_playing = false;                             ///< 当前是否正在播放
+    bool restart_requested = false;                      ///< 是否请求重新开始播放
     
-    // Internal handle to audio engine (e.g., SoLoud)
-    unsigned int runtime_handle = 0;
+    // Internal handle to audio engine (e.g., miniaudio)
+    unsigned int runtime_handle = 0;                     ///< 引擎底层的音频句柄
 };
 
+/**
+ * @struct GameplayTuningComponent
+ * @brief 全局/关卡级别的玩法微调参数组件
+ */
 struct GameplayTuningComponent {
-    float leaf_min_distance = 80.0f;
-    float leaf_move_left = 140.0f;
-    float leaf_move_right = 410.0f;
-    float jump_speed_scale = 15.0f;
-    float jump_speed_max = 18.0f;
-    float camera_follow_damping = 0.02f;
+    float leaf_min_distance = 80.0f;                     ///< 树叶的最小判定距离
+    float leaf_move_left = 140.0f;                       ///< 树叶向左移动的阈值
+    float leaf_move_right = 410.0f;                      ///< 树叶向右移动的阈值
+    float jump_speed_scale = 15.0f;                      ///< 跳跃速度的缩放系数
+    float jump_speed_max = 18.0f;                        ///< 允许的最大跳跃速度
+    float camera_follow_damping = 0.02f;                 ///< 摄像机跟随的默认阻尼
 };
 
+/**
+ * @struct TilemapComponent
+ * @brief 瓦片地图组件，管理网格地图数据和渲染图集
+ */
 struct TilemapComponent {
-    std::vector<int> tiles;
-    int width = 0;
-    int height = 0;
-    float tile_size = 1.0f;
-    std::shared_ptr<TextureAsset> tileset_texture;
-    unsigned int tileset_handle = 0;
+    std::vector<int> tiles;                              ///< 一维数组存储的瓦片 ID (0 为空)
+    int width = 0;                                       ///< 地图的列数
+    int height = 0;                                      ///< 地图的行数
+    float tile_size = 1.0f;                              ///< 单个瓦片的物理/渲染尺寸
+    std::shared_ptr<TextureAsset> tileset_texture;       ///< 引用的瓦片图集纹理
+    unsigned int tileset_handle = 0;                     ///< 图集的 RHI 渲染句柄
     int tileset_cols = 1;
     int tileset_rows = 1;
     int sorting_layer = 0;

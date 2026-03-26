@@ -1,3 +1,8 @@
+/**
+ * @file cpp_business_runtime.cpp
+ * @brief 时间管理系统，提供高精度计时器、增量时间(Delta Time)计算
+ */
+
 #include "engine/scripting/cpp/cpp_business_runtime.h"
 #include "engine/base/debug.h"
 #include <utility>

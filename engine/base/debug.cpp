@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file debug.cpp
+ * @brief 调试与日志系统，提供日志记录、断言和基础的调试工具
+ */
+
+//
 // Created by captainchen on 2021/8/23.
 //
 
@@ -10,27 +15,18 @@
 bool Debug::bInited_=false;
 
 void Debug::Init() {
-    try
-    {
-        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        console_sink->set_level(spdlog::level::trace);
-//        console_sink->set_pattern("[source %g] [function %!] [line %#] [%^%l%$] %v");
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    console_sink->set_level(spdlog::level::trace);
 
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs/multisink.txt", true);
-        file_sink->set_level(spdlog::level::trace);
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs/multisink.txt", true);
+    file_sink->set_level(spdlog::level::trace);
 
-        // you can even set multi_sink logger as default logger
-        spdlog::set_default_logger(std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list({console_sink, file_sink})));
-        spdlog::set_pattern("[source %s] [function %!] [line %#] [%^%l%$] %v");
-        spdlog::flush_on(spdlog::level::trace);// flush on every log call.
+    spdlog::set_default_logger(std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list({console_sink, file_sink})));
+    spdlog::set_pattern("[source %s] [function %!] [line %#] [%^%l%$] %v");
+    spdlog::flush_on(spdlog::level::trace);
 
-        bInited_=true;
-        DEBUG_LOG_INFO("spdlog init success");
-    }
-    catch (const spdlog::spdlog_ex& ex)
-    {
-        std::cout << "Log initialization failed: " << ex.what() << std::endl;
-    }
+    bInited_=true;
+    DEBUG_LOG_INFO("spdlog init success");
 }
 
 void Debug::ShutDown() {

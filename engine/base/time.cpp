@@ -1,4 +1,9 @@
-﻿//
+/**
+ * @file time.cpp
+ * @brief 时间管理系统，提供高精度计时器、增量时间(Delta Time)计算
+ */
+
+//
 // Created by captain on 2021/8/5.
 //
 

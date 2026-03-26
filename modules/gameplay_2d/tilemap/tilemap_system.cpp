@@ -1,3 +1,8 @@
+/**
+ * @file tilemap_system.cpp
+ * @brief 瓦片地图系统，处理 2D 网格地图的加载、解析和高效渲染
+ */
+
 #include "tilemap_system.h"
 #include "engine/ecs/components_2d.h"
 #include <glm/glm.hpp>
