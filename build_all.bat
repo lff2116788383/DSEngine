@@ -14,9 +14,11 @@ set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
 set BUILD_EDITOR=0
 set BUILD_LAUNCHER=0
+set BUILD_ENGINE_TESTS=1
 set PACKAGE_EDITOR_EXE=0
 set PACKAGE_LAUNCHER_EXE=0
 set PACKAGE_SDK=1
+set VERIFY_EXECUTABLES=0
 set VERIFY_EXE_TIMEOUT_SECONDS=3
 set "DSE_ELECTRON_MIRROR="
 set "DSE_ELECTRON_CUSTOM_DIR="
@@ -57,6 +59,16 @@ if /I "%~1"=="--no-launcher" (
     shift
     goto parse_args
 )
+if /I "%~1"=="--with-tests" (
+    set BUILD_ENGINE_TESTS=1
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--no-tests" (
+    set BUILD_ENGINE_TESTS=0
+    shift
+    goto parse_args
+)
 if /I "%~1"=="--package-editor-exe" (
     set PACKAGE_EDITOR_EXE=1
     shift
@@ -74,6 +86,16 @@ if /I "%~1"=="--package-sdk" (
 )
 if /I "%~1"=="--no-sdk" (
     set PACKAGE_SDK=0
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--with-verify-exe" (
+    set VERIFY_EXECUTABLES=1
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--no-verify-exe" (
+    set VERIFY_EXECUTABLES=0
     shift
     goto parse_args
 )
@@ -153,6 +175,8 @@ set CMAKE_EDITOR_OPTION=-DDSE_BUILD_EDITOR=OFF
 if "%BUILD_EDITOR%"=="1" set CMAKE_EDITOR_OPTION=-DDSE_BUILD_EDITOR=ON
 set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=OFF
 if "%BUILD_LAUNCHER%"=="1" set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=ON
+set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=OFF
+if "%BUILD_ENGINE_TESTS%"=="1" set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=ON
 set "CMAKE_ELECTRON_MIRROR_OPTION="
 if defined DSE_ELECTRON_MIRROR set "CMAKE_ELECTRON_MIRROR_OPTION=-DDSE_ELECTRON_MIRROR=%DSE_ELECTRON_MIRROR%"
 set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION="
@@ -294,7 +318,7 @@ if exist %BUILD_DIR%\CMakeCache.txt (
 :: 2. Configure CMake project
 echo.
 echo [2/4] Configuring CMake project...
-cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION%
+cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
     pause
@@ -394,38 +418,42 @@ if "%PACKAGE_SDK%"=="1" (
 
 :: 5. Verify Execution
 echo.
-echo [*] Running Verification Tests...
+if "%VERIFY_EXECUTABLES%"=="1" (
+    echo [*] Running Verification Tests...
 
-set CPP_EXE=.\bin\DSEngine_c++_debug.exe
-if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe
-if not exist "%CPP_EXE%" (
-    echo [ERROR] Cannot find C++ example executable in .\bin
-    pause
-    exit /b 1
-)
+    set CPP_EXE=.\bin\DSEngine_c++_debug.exe
+    if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe
+    if not exist "%CPP_EXE%" (
+        echo [ERROR] Cannot find C++ example executable in .\bin
+        pause
+        exit /b 1
+    )
 
-set LUA_EXE=.\bin\DSEngine_lua_debug.exe
-if not exist "%LUA_EXE%" set LUA_EXE=.\bin\DSEngine_lua.exe
-if not exist "%LUA_EXE%" (
-    echo [ERROR] Cannot find Lua example executable in .\bin
-    pause
-    exit /b 1
-)
+    set LUA_EXE=.\bin\DSEngine_lua_debug.exe
+    if not exist "%LUA_EXE%" set LUA_EXE=.\bin\DSEngine_lua.exe
+    if not exist "%LUA_EXE%" (
+        echo [ERROR] Cannot find Lua example executable in .\bin
+        pause
+        exit /b 1
+    )
 
-call :run_verify_exe "%CPP_EXE%" "C++ Example"
-if !ERRORLEVEL! neq 0 (
-    set "VERIFY_RC=!ERRORLEVEL!"
-    echo [ERROR] C++ Example failed with exit code !VERIFY_RC!!
-    pause
-    exit /b !VERIFY_RC!
-)
+    call :run_verify_exe "%CPP_EXE%" "C++ Example"
+    if !ERRORLEVEL! neq 0 (
+        set "VERIFY_RC=!ERRORLEVEL!"
+        echo [ERROR] C++ Example failed with exit code !VERIFY_RC!!
+        pause
+        exit /b !VERIFY_RC!
+    )
 
-call :run_verify_exe "%LUA_EXE%" "Lua Example"
-if !ERRORLEVEL! neq 0 (
-    set "VERIFY_RC=!ERRORLEVEL!"
-    echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
-    pause
-    exit /b !VERIFY_RC!
+    call :run_verify_exe "%LUA_EXE%" "Lua Example"
+    if !ERRORLEVEL! neq 0 (
+        set "VERIFY_RC=!ERRORLEVEL!"
+        echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
+        pause
+        exit /b !VERIFY_RC!
+    )
+) else (
+    echo [WARN] Skip executable verification because VERIFY_EXECUTABLES is OFF.
 )
 
 if "%BUILD_EDITOR%"=="1" (
@@ -438,6 +466,24 @@ if "%BUILD_EDITOR%"=="1" (
         echo [ERROR] Editor smoke regression failed with exit code !EDITOR_SMOKE_RC!!
         pause
         exit /b !EDITOR_SMOKE_RC!
+    )
+)
+
+if "%BUILD_ENGINE_TESTS%"=="1" (
+    echo.
+    echo [*] Running CTest ^(engine unit^)...
+    set "ENGINE_TEST_LOG=%BUILD_DIR%\Testing\Temporary\engine_ctest_output.log"
+    ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure --verbose -L engine > "!ENGINE_TEST_LOG!" 2>&1
+    set "ENGINE_TEST_RC=!ERRORLEVEL!"
+    type "!ENGINE_TEST_LOG!"
+    powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; $rc = [int]'!ENGINE_TEST_RC!'; $total = 0; $failed = 0; $found = $false; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $allPassed = [regex]::Match($raw, '(?im)All tests passed \(\d+ assertions in (\d+) test cases\)'); if ($allPassed.Success) { $total = [int]$allPassed.Groups[1].Value; $found = $true } else { $caseLine = [regex]::Match($raw, '(?im)^\s*test cases:\s*(\d+)(.*?)$'); if ($caseLine.Success) { $total = [int]$caseLine.Groups[1].Value; $failedMatch = [regex]::Match($caseLine.Groups[2].Value, '(\d+)\s*failed'); if ($failedMatch.Success) { $failed = [int]$failedMatch.Groups[1].Value }; $found = $true } } }; $passed = [Math]::Max(0, $total - $failed); $color = if ($rc -eq 0) { 'Green' } else { 'Red' }; Write-Host ('[TEST_CASE] Total: ' + $total + ', Passed: ' + $passed + ', Failed: ' + $failed) -ForegroundColor $color; if (-not $found) { Write-Host '[WARN] Catch2 summary not found in log. TEST_CASE stats may be incomplete.' -ForegroundColor Yellow }"
+    if "!ENGINE_TEST_RC!"=="0" (
+        powershell -NoProfile -Command "Write-Host '[PASS] Engine CTest passed.' -ForegroundColor Green"
+    ) else (
+        powershell -NoProfile -Command "Write-Host '[FAIL] Engine CTest failed. See output above.' -ForegroundColor Red"
+        powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $pattern = '(?ms)^-{5,}\r?\n(?<name>[^\r\n]+)\r?\n-{5,}\r?\n(?<file>[^\r\n]+\.cpp):(?<line>\d+)'; $matches = [regex]::Matches($raw, $pattern); if ($matches.Count -gt 0) { Write-Host '[FAIL] Failed test cases:' -ForegroundColor Red; $seen = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($m in $matches) { $item = '- ' + $m.Groups['name'].Value.Trim() + ' (' + $m.Groups['file'].Value + ':' + $m.Groups['line'].Value + ')'; if ($seen.Add($item)) { Write-Host $item -ForegroundColor Red } } } else { Write-Host '[WARN] No failed testcase name/file matched in CTest log.' -ForegroundColor Yellow } } else { Write-Host '[WARN] CTest log file not found for failure parsing.' -ForegroundColor Yellow }"
+        pause
+        exit /b !ENGINE_TEST_RC!
     )
 )
 
@@ -468,10 +514,14 @@ echo   --with-editor          Enable editor build (default: ON)
 echo   --no-editor            Disable editor build
 echo   --with-launcher        Enable launcher build (default: ON)
 echo   --no-launcher          Disable launcher build
+echo   --with-tests           Enable engine unit tests via CTest (default: OFF)
+echo   --no-tests             Disable engine unit tests
 echo   --package-editor-exe   Package editor executable (default: ON)
 echo   --package-launcher-exe Package launcher executable (default: ON)
 echo   --package-sdk          Install and package C++ SDK (default: ON)
 echo   --no-sdk               Disable SDK packaging
+echo   --with-verify-exe      Enable executable verification (default: ON)
+echo   --no-verify-exe        Disable executable verification
 echo   --all                  Enable editor and launcher build together
 echo   --electron-mirror URL  Electron download mirror URL for electron-builder
 echo   --electron-custom-dir NAME  Optional custom dir name under mirror for Electron zip

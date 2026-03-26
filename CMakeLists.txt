@@ -16,6 +16,7 @@ option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
+option(DSE_BUILD_ENGINE_TESTS "Build engine unit test targets" OFF)
 if(DSE_ENABLE_2D)
     add_definitions(-D DSE_ENABLE_2D)
 endif()
@@ -175,6 +176,10 @@ install(EXPORT DSEngineTargets
 )
 
 enable_testing()
+
+if(DSE_BUILD_ENGINE_TESTS)
+    add_subdirectory(tests)
+endif()
 
 find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
 find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
