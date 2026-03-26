@@ -125,9 +125,14 @@ npm run pipeline:export:win64:strict
 2. 打开工程目录
 3. 使用 CMake Tools 配置并构建运行
 
-## 路线图
+## 核心文档指南
 
-查看 [DSEngine_新引擎演进步骤方案_2026版.md](doc/DSEngine_新引擎演进步骤方案_2026版.md) 了解后续演进计划。
+项目的核心架构与演进规划均在 `doc/` 目录下进行维护：
+
+- **[架构说明](doc/Architecture.md)**：包含现代全栈引擎的分层模型与核心设计原则。
+- **[后续演进与发展规划](doc/Roadmap_and_Evolution_2026.md)**：记录了从 2D MVP 迈向全栈 3D 商业版引擎的完整路线图，以及 Launcher 和 Editor 的发展计划。
+- **[编辑器使用指南](doc/Editor_Usage_Guide.md)**：记录如何使用 React + Electron 编写的编辑器工具。
+- **[测试指南](doc/TESTING_CTEST_GUIDE.md)**：引擎单元测试与回归测试的说明。
 
 
 ## 实现目标Demo
