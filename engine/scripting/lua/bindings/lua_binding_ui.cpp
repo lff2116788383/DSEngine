@@ -162,6 +162,160 @@ int L_UiSetButtonScale(lua_State* L) {
     }
     return 0;
 }
+
+/**
+ * @brief Lua 绑定：给实体添加 UI 遮罩组件
+ * @param L Lua 状态机，参数为 (实体 ID, width, height, offset_x, offset_y, block_outside)
+ * @return 无
+ * @example ui.add_mask(entity, 200, 200, 0, 0, true)
+ */
+int L_UiAddMask(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float width = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    float height = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    float offset_x = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    float offset_y = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    bool block_outside = lua_gettop(L) >= 6 ? lua_toboolean(L, 6) != 0 : true;
+    auto& mask = world->registry().emplace_or_replace<UIMaskComponent>(e);
+    mask.size = glm::vec2(width, height);
+    mask.offset = glm::vec2(offset_x, offset_y);
+    mask.block_outside_input = block_outside;
+    mask.enabled = true;
+    return 0;
+}
+
+/**
+ * @brief Lua 绑定：给实体添加 UI 富文本组件
+ * @param L Lua 状态机，参数为 (实体 ID, text, r, g, b, a, shadow, outline)
+ * @return 无
+ * @example ui.add_rich_text(entity, "<color=#ff0000>Hello</color>", 1, 1, 1, 1, true, false)
+ */
+int L_UiAddRichText(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* text = luaL_optstring(L, 2, "");
+    float r = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float a = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    bool shadow = lua_gettop(L) >= 7 ? lua_toboolean(L, 7) != 0 : false;
+    bool outline = lua_gettop(L) >= 8 ? lua_toboolean(L, 8) != 0 : false;
+    auto& rich = world->registry().emplace_or_replace<UIRichTextComponent>(e);
+    rich.text = text;
+    rich.default_color = glm::vec4(r, g, b, a);
+    rich.enable_shadow = shadow;
+    rich.enable_outline = outline;
+    rich.dirty = true;
+    if (!world->registry().all_of<UILabelComponent>(e)) {
+        world->registry().emplace<UILabelComponent>(e);
+    }
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    auto& label = world->registry().get<UILabelComponent>(e);
+    label.dirty = true;
+    return 0;
+}
+
+/**
+ * @brief Lua 绑定：修改富文本组件的内容
+ * @param L Lua 状态机，参数为 (实体 ID, text)
+ * @return 无
+ * @example ui.set_rich_text(entity, "New Text")
+ */
+int L_UiSetRichText(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* text = luaL_optstring(L, 2, "");
+    if (world->registry().valid(e) && world->registry().all_of<UIRichTextComponent>(e)) {
+        auto& rich = world->registry().get<UIRichTextComponent>(e);
+        rich.text = text;
+        rich.dirty = true;
+        if (world->registry().all_of<UILabelComponent>(e)) {
+            world->registry().get<UILabelComponent>(e).dirty = true;
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief Lua 绑定：给实体添加 UI 虚拟摇杆组件
+ * @param L Lua 状态机，参数为 (实体 ID, max_radius, follow_pointer, reset_on_release)
+ * @return 无
+ * @example ui.add_joystick(entity, 64.0, true, true)
+ */
+int L_UiAddJoystick(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float max_radius = static_cast<float>(luaL_optnumber(L, 2, 64.0));
+    bool follow_pointer = lua_gettop(L) >= 3 ? lua_toboolean(L, 3) != 0 : true;
+    bool reset_on_release = lua_gettop(L) >= 4 ? lua_toboolean(L, 4) != 0 : true;
+    auto& joystick = world->registry().emplace_or_replace<UIJoystickComponent>(e);
+    joystick.max_radius = max_radius;
+    joystick.follow_pointer = follow_pointer;
+    joystick.reset_on_release = reset_on_release;
+    joystick.direction = glm::vec2(0.0f);
+    joystick.is_dragging = false;
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+/**
+ * @brief Lua 绑定：获取摇杆的 X 轴输入方向
+ * @param L Lua 状态机，参数为 (实体 ID)
+ * @return 压入一个数字，表示摇杆 X 轴标准化方向 (-1 到 1)
+ * @example local x = ui.get_joystick_x(entity)
+ */
+int L_UiGetJoystickX(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushnumber(L, 0.0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIJoystickComponent>(e)) {
+        lua_pushnumber(L, static_cast<lua_Number>(world->registry().get<UIJoystickComponent>(e).direction.x));
+    } else {
+        lua_pushnumber(L, 0.0);
+    }
+    return 1;
+}
+
+/**
+ * @brief Lua 绑定：获取摇杆的 Y 轴输入方向
+ * @param L Lua 状态机，参数为 (实体 ID)
+ * @return 压入一个数字，表示摇杆 Y 轴标准化方向 (-1 到 1)
+ * @example local y = ui.get_joystick_y(entity)
+ */
+int L_UiGetJoystickY(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushnumber(L, 0.0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIJoystickComponent>(e)) {
+        lua_pushnumber(L, static_cast<lua_Number>(world->registry().get<UIJoystickComponent>(e).direction.y));
+    } else {
+        lua_pushnumber(L, 0.0);
+    }
+    return 1;
+}
 }
 
 void RegisterUiBindings(lua_State* L) {
@@ -178,6 +332,12 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("add_panel", L_UiAddPanel);
     set_fn("add_button", L_UiAddButton);
     set_fn("set_button_scale", L_UiSetButtonScale);
+    set_fn("add_mask", L_UiAddMask);
+    set_fn("add_rich_text", L_UiAddRichText);
+    set_fn("set_rich_text", L_UiSetRichText);
+    set_fn("add_joystick", L_UiAddJoystick);
+    set_fn("get_joystick_x", L_UiGetJoystickX);
+    set_fn("get_joystick_y", L_UiGetJoystickY);
 }
 
 }

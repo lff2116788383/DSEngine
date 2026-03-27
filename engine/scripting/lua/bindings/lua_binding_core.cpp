@@ -81,6 +81,62 @@ int L_AppGetMouseRightUp(lua_State* L) {
     return 1;
 }
 
+/**
+ * @brief Lua 绑定：获取鼠标左键当前帧是否触发了双击
+ * @param L Lua 状态机
+ * @return 压入一个布尔值，表示是否双击
+ * @example if app.get_mouse_left_double_click() then print("double click") end
+ */
+int L_AppGetMouseLeftDoubleClick(lua_State* L) {
+    lua_pushboolean(L, Input::GetDoubleClick(MOUSE_BUTTON_LEFT));
+    return 1;
+}
+
+/**
+ * @brief Lua 绑定：获取鼠标左键是否长按超过指定时间
+ * @param L Lua 状态机，参数 1 可选为长按判定时间（默认 0.5 秒）
+ * @return 压入一个布尔值，表示是否处于长按状态
+ * @example if app.get_mouse_left_long_press(1.0) then print("long press") end
+ */
+int L_AppGetMouseLeftLongPress(lua_State* L) {
+    float duration = static_cast<float>(luaL_optnumber(L, 1, 0.5));
+    lua_pushboolean(L, Input::GetLongPress(MOUSE_BUTTON_LEFT, duration));
+    return 1;
+}
+
+/**
+ * @brief Lua 绑定：获取当前帧滑动/拖拽在 X 轴上的增量
+ * @param L Lua 状态机
+ * @return 压入一个数字，表示滑动 X 轴增量（像素）
+ * @example local dx = app.get_mouse_swipe_dx()
+ */
+int L_AppGetMouseSwipeDeltaX(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Input::GetSwipeDelta().x));
+    return 1;
+}
+
+/**
+ * @brief Lua 绑定：获取当前帧滑动/拖拽在 Y 轴上的增量
+ * @param L Lua 状态机
+ * @return 压入一个数字，表示滑动 Y 轴增量（像素）
+ * @example local dy = app.get_mouse_swipe_dy()
+ */
+int L_AppGetMouseSwipeDeltaY(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Input::GetSwipeDelta().y));
+    return 1;
+}
+
+/**
+ * @brief Lua 绑定：检测设备是否处于摇晃状态
+ * @param L Lua 状态机
+ * @return 压入一个布尔值，表示是否在摇晃
+ * @example if app.get_device_shake() then print("shake") end
+ */
+int L_AppGetShake(lua_State* L) {
+    lua_pushboolean(L, Input::IsDeviceShaking());
+    return 1;
+}
+
 int L_AppGetTimeSinceStartup(lua_State* L) {
     lua_pushnumber(L, static_cast<lua_Number>(Time::TimeSinceStartup()));
     return 1;
@@ -140,6 +196,11 @@ void RegisterAppBindings(lua_State* L) {
     set_fn("get_mouse_right", L_AppGetMouseRight);
     set_fn("get_mouse_right_down", L_AppGetMouseRightDown);
     set_fn("get_mouse_right_up", L_AppGetMouseRightUp);
+    set_fn("get_mouse_left_double_click", L_AppGetMouseLeftDoubleClick);
+    set_fn("get_mouse_left_long_press", L_AppGetMouseLeftLongPress);
+    set_fn("get_mouse_swipe_dx", L_AppGetMouseSwipeDeltaX);
+    set_fn("get_mouse_swipe_dy", L_AppGetMouseSwipeDeltaY);
+    set_fn("get_device_shake", L_AppGetShake);
     set_fn("time_since_startup", L_AppGetTimeSinceStartup);
     set_fn("get_screen_width", L_AppGetScreenWidth);
     set_fn("get_screen_height", L_AppGetScreenHeight);

@@ -438,4 +438,44 @@ struct LuaScriptComponent {
     void* script_instance = nullptr; 
 };
 
+/**
+ * @struct UIMaskComponent
+ * @brief UI 遮罩组件，用于裁剪超出指定区域的子 UI 元素并拦截输入
+ */
+struct UIMaskComponent {
+    bool enabled = true;                     ///< 是否启用遮罩功能
+    glm::vec2 size = glm::vec2(0.0f);        ///< 遮罩的绝对尺寸（为 0 时尝试继承渲染尺寸）
+    glm::vec2 offset = glm::vec2(0.0f);      ///< 相对当前实体位置的中心偏移
+    bool block_outside_input = true;         ///< 是否拦截遮罩区域外的所有 UI 输入事件
+};
+
+/**
+ * @struct UIRichTextComponent
+ * @brief UI 富文本组件，支持颜色标签、阴影和描边等复杂文本渲染
+ */
+struct UIRichTextComponent {
+    std::string text;                                            ///< 包含颜色标签（如 <color=#ff0000>）的富文本字符串
+    glm::vec4 default_color = glm::vec4(1.0f);                   ///< 文本的默认颜色
+    bool enable_shadow = false;                                  ///< 是否启用文本阴影效果
+    glm::vec2 shadow_offset = glm::vec2(1.0f, -1.0f);            ///< 阴影在 X/Y 轴上的像素偏移
+    glm::vec4 shadow_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.75f); ///< 阴影的颜色及透明度
+    bool enable_outline = false;                                 ///< 是否启用文本描边效果
+    glm::vec4 outline_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f); ///< 描边的颜色及透明度
+    float outline_width = 1.0f;                                  ///< 描边的宽度（像素）
+    bool dirty = true;                                           ///< 标记文本或样式发生变化，需要重新生成渲染实体
+};
+
+/**
+ * @struct UIJoystickComponent
+ * @brief UI 虚拟摇杆组件，处理玩家屏幕拖拽输入并输出二维方向向量
+ */
+struct UIJoystickComponent {
+    glm::vec2 direction = glm::vec2(0.0f);   ///< 当前摇杆的标准化方向向量（输出值）
+    float max_radius = 64.0f;                ///< 摇杆可拖拽的最大可视半径
+    bool follow_pointer = true;              ///< 拖拽起始点是否跟随鼠标/触摸点
+    bool reset_on_release = true;            ///< 松开后是否自动将方向重置为 (0,0)
+    bool is_dragging = false;                ///< 当前是否正处于拖拽状态中
+    glm::vec2 drag_anchor = glm::vec2(0.0f); ///< 记录本次拖拽的起始锚点屏幕坐标
+};
+
 #endif

@@ -84,7 +84,7 @@ public:
      * @param x 鼠标的横坐标
      * @param y 鼠标的纵坐标
      */
-    static void RecordMousePosition(float x,float y){mouse_position_.x=x;mouse_position_.y=y;}
+    static void RecordMousePosition(float x,float y);
 
     /**
      * @brief 获取当前鼠标滚轮的滚动值
@@ -98,14 +98,53 @@ public:
      */
     static void RecordMouseScroll(float scroll){mouse_scroll_=scroll;}
 
+    /**
+     * @brief 判断指定的按键或鼠标按钮是否在当前帧触发了双击
+     * @param key_code 键盘或鼠标的按键码
+     * @return 如果触发双击返回 true
+     * @example if (Input::GetDoubleClick(MOUSE_BUTTON_LEFT)) { ... }
+     */
+    static bool GetDoubleClick(unsigned short key_code);
+
+    /**
+     * @brief 判断指定的按键或鼠标按钮是否处于长按状态
+     * @param key_code 键盘或鼠标的按键码
+     * @param duration_seconds 触发长按所需的最小持续时间（秒）
+     * @return 如果长按时间达到阈值且当前仍未松开，返回 true
+     * @example if (Input::GetLongPress(MOUSE_BUTTON_LEFT, 1.5f)) { ... }
+     */
+    static bool GetLongPress(unsigned short key_code, float duration_seconds = 1.0f);
+
+    /**
+     * @brief 获取当前帧鼠标或触摸的滑动增量（像素）
+     * @return 滑动在 X 和 Y 轴上的增量向量
+     * @example glm::vec2 delta = Input::GetSwipeDelta();
+     */
+    static glm::vec2 GetSwipeDelta();
+
+    /**
+     * @brief 检测设备当前是否处于摇晃状态（基于输入位移加速度的简单模拟）
+     * @return 如果加速度超过阈值判定为摇晃，返回 true
+     * @example if (Input::IsDeviceShaking()) { ... }
+     */
+    static bool IsDeviceShaking();
+
 private:
-    static std::unordered_map<unsigned short,unsigned short> key_event_map_;//存储按键状态，0松手 1按下 2持续按下
+    static std::unordered_map<unsigned short,unsigned short> key_event_map_; ///< 存储按键状态，0松手 1按下 2持续按下
 
-    static std::unordered_map<unsigned short,unsigned short> key_event_map_current_frame_;//存储当前帧按键状态，0无 1按下 2松手
+    static std::unordered_map<unsigned short,unsigned short> key_event_map_current_frame_; ///< 存储当前帧按键状态，0无 1按下 2松手
 
-    static glm::vec2 mouse_position_;//鼠标位置
+    static std::unordered_map<unsigned short, float> key_down_timestamp_;      ///< 记录按键按下的时间戳
+    static std::unordered_map<unsigned short, float> key_last_click_timestamp_;///< 记录按键上一次触发点击（松开）的时间戳
+    static std::unordered_map<unsigned short, bool> key_double_click_frame_;   ///< 记录当前帧各按键是否触发了双击
 
-    static float mouse_scroll_;//鼠标滚轮
+    static glm::vec2 mouse_position_;          ///< 鼠标或触摸的当前位置
+    static glm::vec2 previous_mouse_position_; ///< 上一帧记录的鼠标或触摸位置
+    static glm::vec2 swipe_delta_;             ///< 当前帧计算出的滑动增量
+    static glm::vec2 previous_swipe_delta_;    ///< 上一帧的滑动增量，用于计算加速度
+
+    static float mouse_scroll_; ///< 鼠标滚轮滚动值
+    static bool device_shaking_; ///< 当前帧是否触发摇晃判定
 
 };
 

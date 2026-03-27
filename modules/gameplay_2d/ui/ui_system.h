@@ -8,6 +8,8 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <string>
+#include <vector>
 
 namespace dse {
 namespace gameplay2d {
@@ -35,10 +37,45 @@ public:
 
 private:
     /**
+     * @struct RichGlyph
+     * @brief 存储富文本单个字符及其解析后颜色的结构体
+     */
+    struct RichGlyph {
+        char ch;            ///< 字符
+        glm::vec4 color;    ///< 该字符的颜色
+    };
+
+    /**
      * @brief 同步文本标签组件的数据到渲染格式
      * @param registry ECS 注册表
      */
     void SyncLabels(entt::registry& registry);
+
+    /**
+     * @brief 解析富文本字符串并构建带有颜色信息的字符序列
+     * @param text 包含颜色标签的原始字符串
+     * @param default_color 默认文本颜色
+     * @return 解析后的富文本字符序列
+     */
+    std::vector<RichGlyph> BuildRichGlyphs(const std::string& text, const glm::vec4& default_color) const;
+
+    /**
+     * @brief 检查给定点是否位于指定 UI 实体的渲染矩形内
+     * @param registry ECS 注册表
+     * @param entity UI 实体
+     * @param point 待检测的点坐标
+     * @return 如果在内部则返回 true
+     */
+    bool IsPointInsideUIRect(entt::registry& registry, entt::entity entity, const glm::vec2& point) const;
+
+    /**
+     * @brief 检查给定点的交互是否被任何父级遮罩阻挡
+     * @param registry ECS 注册表
+     * @param entity UI 实体
+     * @param point 待检测的点坐标
+     * @return 如果被遮罩拦截则返回 true
+     */
+    bool IsBlockedByMask(entt::registry& registry, entt::entity entity, const glm::vec2& point) const;
     
     /**
      * @brief 基于锚点和父子层级关系，计算并更新 UI 元素的绝对屏幕矩形
