@@ -1,0 +1,6 @@
+[submodule "depends/spine-runtimes"]
+	path = depends/spine-runtimes
+	url = https://github.com/EsotericSoftware/spine-runtimes.git
+[submodule "depends/tiny-AES-c"]
+	path = depends/tiny-AES-c
+	url = https://github.com/kokke/tiny-AES-c.git
