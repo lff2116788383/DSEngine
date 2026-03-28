@@ -39,6 +39,41 @@ DSEngine
 - 扩展更自然：`engine/core / base / platform / input` 明确基础设施边界，`modules/gameplay_2d` 也为后续 3D 或更多玩法模块预留了扩展位
 - 工程化更友好：目录结构更接近产品化仓库形态，便于构建、打包、SDK 导出、CI 与多人协作
 
+## 已实现功能清单
+
+### 引擎内核与基础设施 (engine/)
+- **核心框架 (core & base)**：EnTT ECS 架构、事件总线 (EventBus)、作业系统 (JobSystem)、时间与补间工具 (Tween)、内存池与对象池。
+- **渲染硬件接口 (RHI)**：基于 OpenGL 的跨平台 RHI 抽象，支持 Render Target、Pipeline State、Shader 与 Texture 管理。
+- **资源系统 (assets)**：支持 Assimp 导入（模型、骨骼动画）、stb_image 纹理加载，基于缓存的 AssetManager。
+- **场景系统 (scene)**：Transform 层级关系处理、Prefab（预制体）序列化与反序列化、Octree（八叉树）/ QuadTree（四叉树）空间划分。
+- **跨语言脚本 (scripting)**：支持 C++ 与 Lua 双语业务运行时，提供完善的 Lua 绑定（ECS、UI、物理、音效等）。
+
+### 2D 游戏性模块 (modules/gameplay_2d/)
+- **Sprite 渲染**：支持 Batch 渲染优化。
+- **2D 摄像机**：正交投影、屏幕适配与跟随逻辑。
+- **物理系统**：集成 Box2D，支持刚体、碰撞体与物理步进。
+- **动画系统**：帧动画 (Sprite Animation) 和 Spine 骨骼动画集成。
+- **Tilemap 系统**：支持瓦片地图解析与渲染。
+- **粒子系统**：基础 2D 粒子发射与更新。
+- **UI 系统**：按钮点击、文本渲染、悬停等交互逻辑。
+
+### 3D 游戏性模块 (modules/gameplay_3d/)
+- **PBR 渲染管线**：支持金属粗糙度工作流 (Metallic-Roughness)、IBL 贴图与 HDR 色调映射。
+- **高级光影**：
+  - Directional Light 与 CSM (Cascaded Shadow Maps) 级联阴影。
+  - Point Light (点光源) 与 Spot Light (聚光灯) 多光源支持及衰减逻辑。
+- **3D 摄像机**：透视投影、自由漫游视角 (Free Camera Controller)。
+- **高级模型与动画**：
+  - 骨骼蒙皮动画 (Skeletal Animation) 并在 GPU 端计算。
+  - 动画混合树 (AnimTree) 基础框架。
+  - Morph Target (Blend Shapes) 形变动画数据结构与 GPU 更新。
+- **大世界基建**：
+  - 地形系统 (TerrainSystem)：支持高度图解析与连续/离散动态 LOD。
+  - 视锥体剔除 (FrustumCullingSystem)：基于 Octree 优化的 O(logN) 层次包围盒剔除。
+  - PreZ Pass 深度预渲染基础。
+- **AI 行为与导航**：
+  - 转向行为算法 (SteeringSystem)：包含 Seek(寻找)、Flee(逃离)、Arrive(抵达) 等基础寻路与避障底层逻辑。
+
 ## 环境要求
 
 ### 引擎（C++）

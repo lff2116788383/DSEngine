@@ -14,6 +14,13 @@
 #include "engine/base/time.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+#include <vector>
+#include <filesystem>
+
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
+#include <stb_image_write.h>
 
 namespace dse::runtime {
 namespace {
@@ -122,6 +129,46 @@ int RunEngine(const EngineRunConfig& config) {
 
         pipeline.Update(dt);
         pipeline.Render();
+
+#if !defined(NDEBUG) || defined(_DEBUG) || defined(DEBUG)
+        if (Time::TimeSinceStartup() >= 3.0f) {
+            static bool screenshot_taken = false;
+            if (!screenshot_taken) {
+                screenshot_taken = true;
+                
+                std::string prefix = (config.business_mode == BusinessMode::Lua) ? "DSEngine_lua_debug" : "DSEngine_c++_debug";
+                std::string dir_path = "screenshot";
+                std::string file_path = dir_path + "/" + prefix + "_screenshot_3s.png";
+                
+                std::cout << "Taking automatic 3s debug screenshot (" << prefix << ")..." << std::endl;
+                
+                std::error_code ec;
+                std::filesystem::create_directories(dir_path, ec);
+                
+                int width = Screen::width();
+                int height = Screen::height();
+                std::vector<uint8_t> pixels(width * height * 4); // RGBA
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                
+                // OpenGL reads bottom-to-top, stb_image_write expects top-to-bottom
+                // Manually flip vertically to avoid missing stbi_flip_vertically_on_write in some older stb_image_write headers
+                std::vector<uint8_t> flipped_pixels(pixels.size());
+                int row_size = width * 4;
+                for (int y = 0; y < height; ++y) {
+                    std::copy(pixels.begin() + y * row_size, 
+                              pixels.begin() + (y + 1) * row_size, 
+                              flipped_pixels.begin() + (height - 1 - y) * row_size);
+                }
+
+                if (stbi_write_png(file_path.c_str(), width, height, 4, flipped_pixels.data(), width * 4)) {
+                    std::cout << "Saved " << file_path << " successfully." << std::endl;
+                } else {
+                    std::cerr << "Failed to save " << file_path << "." << std::endl;
+                }
+            }
+        }
+#endif
+
         glfwSwapBuffers(window);
         Input::Update();
     }

@@ -12,6 +12,8 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scripting/cpp/cpp_business_runtime.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
+#include "modules/gameplay_3d/animation/animator_system.h"
 #include "engine/core/event_bus.h"
 #include "engine/scene/scene.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -22,6 +24,8 @@
 #include <chrono>
 #include <utility>
 #include <vector>
+#include <limits>
+#include <cstdint>
 
 namespace {
 AssetManager& ResolveAssetManager(AssetManager* asset_manager) {
@@ -80,9 +84,50 @@ bool FramePipeline::Init() {
     const int render_width = Screen::width();
     const int render_height = Screen::height();
     main_render_target_ = 0;
-    scene_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false});
-    ui_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false});
+    // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
+    scene_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
+    ui_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
+    prez_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
+    
+    for (int i = 0; i < 3; ++i) {
+        shadow_render_target_[i] = rhi_device_->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
+    }
+
+    if (pp_bloom_extract_rt_ == 0) {
+        pp_bloom_extract_rt_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, false});
+    }
+    if (pp_bloom_blur_h_rt_ == 0) {
+        pp_bloom_blur_h_rt_ = rhi_device_->CreateRenderTarget({render_width / 2, render_height / 2, false, false});
+    }
+    if (pp_bloom_blur_v_rt_ == 0) {
+        pp_bloom_blur_v_rt_ = rhi_device_->CreateRenderTarget({render_width / 2, render_height / 2, false, false});
+    }
+
     sprite_pipeline_state_ = rhi_device_->CreatePipelineState({true, 0x0302, 0x0303});
+    
+    PipelineStateDesc mesh_desc;
+    mesh_desc.blend_enabled = false;
+    mesh_desc.depth_test_enabled = true;
+    mesh_desc.depth_write_enabled = true;
+    mesh_desc.culling_enabled = true;
+    mesh_pipeline_state_ = rhi_device_->CreatePipelineState(mesh_desc);
+
+    PipelineStateDesc prez_desc;
+    prez_desc.blend_enabled = false;
+    prez_desc.depth_test_enabled = true;
+    prez_desc.depth_write_enabled = true;
+    prez_desc.culling_enabled = true;
+    // In a real engine we disable color write, but for now we'll just write to a depth-only FBO
+    prez_pipeline_state_ = rhi_device_->CreatePipelineState(prez_desc);
+
+    PipelineStateDesc shadow_desc;
+    shadow_desc.blend_enabled = false;
+    shadow_desc.depth_test_enabled = true;
+    shadow_desc.depth_write_enabled = true;
+    shadow_desc.culling_enabled = true;
+    shadow_desc.cull_face = 0x0404; // GL_FRONT to avoid peter-panning
+    shadow_pipeline_state_ = rhi_device_->CreatePipelineState(shadow_desc);
+    
     composite_pipeline_state_ = rhi_device_->CreatePipelineState({false, 0x0302, 0x0303});
     
     physics2d_system_.Init(*world_);
@@ -142,6 +187,7 @@ void FramePipeline::Shutdown() {
     scene_render_target_ = 0;
     ui_render_target_ = 0;
     sprite_pipeline_state_ = 0;
+    mesh_pipeline_state_ = 0;
     composite_pipeline_state_ = 0;
     update_time_accumulator_ms_ = 0.0f;
     fixed_time_accumulator_ms_ = 0.0f;
@@ -169,7 +215,11 @@ void FramePipeline::Update(float delta_time) {
     animation_system_.Update(*world_, delta_time);
     particle_system_.Update(*world_, delta_time);
     spine_system_.Update(world_->registry(), delta_time);
+    free_camera_controller_system_.Update(*world_, delta_time);
+    animator_system_.Update(*world_, delta_time);
+    steering_system_.Update(*world_, delta_time);
     transform_system_.Update(*world_);
+    frustum_culling_system_.Update(*world_);
     camera_system_.Update(*world_, Screen::aspect_ratio());
     ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
     audio_system_.Update(world_->registry(), delta_time);
@@ -197,6 +247,14 @@ void FramePipeline::Render() {
     rhi_device_->BeginFrame();
     
     auto cmd_buffer = rhi_device_->CreateCommandBuffer();
+    
+    // Set global shadow maps early (they might be accessed in the scene pass)
+    for (int i = 0; i < 3; ++i) {
+        if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
+            device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(shadow_render_target_[i]));
+        }
+    }
+
     ExecuteRenderGraph(*cmd_buffer);
     
     rhi_device_->Submit(cmd_buffer);
@@ -262,20 +320,214 @@ void FramePipeline::Render() {
 
 void FramePipeline::BuildRenderGraph() {
     render_graph_passes_.clear();
+    
+    // 0. PreZ Pass
+    render_graph_passes_.push_back({
+        "prez_pass",
+        [this](CommandBuffer& cmd_buffer) {
+            cmd_buffer.BeginRenderPass({prez_render_target_, glm::vec4(0.0f), true});
+            auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
+            entt::entity selected_camera3d = entt::null;
+            int selected_priority3d = std::numeric_limits<int>::min();
+            for (auto entity : camera3d_view) {
+                auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+                if (camera.enabled && camera.priority > selected_priority3d) {
+                    selected_camera3d = entity;
+                    selected_priority3d = camera.priority;
+                }
+            }
+            if (selected_camera3d != entt::null) {
+                auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
+                glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
+                                                        static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                                                        camera.near_clip, camera.far_clip);
+                glm::mat4 view = glm::mat4(1.0f);
+                if (world_->registry().all_of<TransformComponent>(selected_camera3d)) {
+                    auto& transform = world_->registry().get<TransformComponent>(selected_camera3d);
+                    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                    view = glm::lookAt(transform.position, transform.position + front, up);
+                }
+                cmd_buffer.SetCamera(view, projection);
+                cmd_buffer.SetPipelineState(prez_pipeline_state_);
+                terrain_system_.Render(*world_, cmd_buffer);
+                mesh_render_system_.Render(*world_, cmd_buffer);
+            }
+            cmd_buffer.EndRenderPass();
+        }
+    });
+
+    // 1. Shadow Map Pass
+    render_graph_passes_.push_back({
+        "shadow_pass",
+        [this](CommandBuffer& cmd_buffer) {
+            auto light_view = world_->registry().view<dse::DirectionalLight3DComponent>();
+            if (light_view.begin() == light_view.end()) return;
+            auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
+            if (!light.enabled || !light.cast_shadow) return;
+
+            std::vector<glm::mat4> light_space_matrices(3);
+            std::vector<float> cascade_splits(3);
+
+            for (int i = 0; i < 3; ++i) {
+                cmd_buffer.BeginRenderPass({shadow_render_target_[i], glm::vec4(1.0f), true}); // Clear depth to 1.0
+                
+                // Simple ortho projection for cascades (in a full implementation, this should bound the view frustum splits)
+                // Here we just scale up the orthographic size based on the cascade level
+                float size = 20.0f * std::pow(2.0f, static_cast<float>(i));
+                glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, 200.0f);
+                glm::vec3 light_pos = -glm::normalize(light.direction) * 100.0f;
+                glm::mat4 light_view_mat = glm::lookAt(light_pos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                
+                light_space_matrices[i] = light_proj * light_view_mat;
+                cascade_splits[i] = light.cascade_splits[i];
+
+                cmd_buffer.SetCamera(light_view_mat, light_proj);
+                cmd_buffer.SetPipelineState(shadow_pipeline_state_);
+                
+                terrain_system_.Render(*world_, cmd_buffer);
+                mesh_render_system_.Render(*world_, cmd_buffer);
+                
+                cmd_buffer.EndRenderPass();
+            }
+
+            cmd_buffer.SetGlobalMat4Array("u_light_space_matrices", light_space_matrices);
+            cmd_buffer.SetGlobalFloatArray("u_cascade_splits", cascade_splits);
+
+            for (int i = 0; i < CSM_CASCADES; ++i) {
+                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
+                    device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(shadow_render_target_[i]));
+                }
+            }
+        }
+    });
+
+    // 2. Main Scene Pass
     render_graph_passes_.push_back({
         "scene_pass",
         [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.SetPipelineState(sprite_pipeline_state_);
             cmd_buffer.BeginRenderPass({scene_render_target_, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
-            auto camera_view = world_->registry().view<CameraComponent>();
-            if (!camera_view.empty()) {
-                auto& camera = camera_view.get<CameraComponent>(camera_view.front());
-                cmd_buffer.SetCamera(camera.view, camera.projection);
+            
+            auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
+            entt::entity selected_camera3d = entt::null;
+            int selected_priority3d = std::numeric_limits<int>::min();
+            std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
+            for (auto entity : camera3d_view) {
+                auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+                if (!camera.enabled) {
+                    continue;
+                }
+                const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
+                if (selected_camera3d == entt::null ||
+                    camera.priority > selected_priority3d ||
+                    (camera.priority == selected_priority3d && entity_id < selected_id3d)) {
+                    selected_camera3d = entity;
+                    selected_priority3d = camera.priority;
+                    selected_id3d = entity_id;
+                }
             }
+
+            if (selected_camera3d != entt::null) {
+                auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
+                glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
+                                                        static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                                                        camera.near_clip, camera.far_clip);
+                glm::mat4 view = glm::mat4(1.0f);
+                if (world_->registry().all_of<TransformComponent>(selected_camera3d)) {
+                    auto& transform = world_->registry().get<TransformComponent>(selected_camera3d);
+                    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                    view = glm::lookAt(transform.position, transform.position + front, up);
+                }
+                cmd_buffer.SetCamera(view, projection);
+                
+                // Draw Skybox
+                auto skybox_view = world_->registry().view<dse::SkyboxComponent>();
+                for (auto sky_entity : skybox_view) {
+                    auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
+                    if (skybox.enabled) {
+                        // Use the cubemap_handle directly
+                        cmd_buffer.DrawSkybox(skybox.cubemap_handle);
+                        break;
+                    }
+                }
+            } else {
+                auto camera_view = world_->registry().view<CameraComponent>();
+                entt::entity selected_camera = entt::null;
+                int selected_priority = std::numeric_limits<int>::min();
+                std::uint32_t selected_id = std::numeric_limits<std::uint32_t>::max();
+                for (auto entity : camera_view) {
+                    auto& camera = camera_view.get<CameraComponent>(entity);
+                    if (!camera.enabled) {
+                        continue;
+                    }
+                    const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
+                    if (selected_camera == entt::null ||
+                        camera.priority > selected_priority ||
+                        (camera.priority == selected_priority && entity_id < selected_id)) {
+                        selected_camera = entity;
+                        selected_priority = camera.priority;
+                        selected_id = entity_id;
+                    }
+                }
+                if (selected_camera != entt::null) {
+                    auto& camera = camera_view.get<CameraComponent>(selected_camera);
+                    cmd_buffer.SetCamera(camera.view, camera.projection);
+                }
+            }
+            
+            // 3D Mesh rendering
+            cmd_buffer.SetPipelineState(mesh_pipeline_state_);
+            terrain_system_.Render(*world_, cmd_buffer);
+            mesh_render_system_.Render(*world_, cmd_buffer);
+            
+            // 2D Sprite/Particle/Spine rendering
+            cmd_buffer.SetPipelineState(sprite_pipeline_state_);
             sprite_render_system_.Render(*world_, cmd_buffer);
             spine_system_.Render(*world_, cmd_buffer);
             particle_system_.Render(*world_, cmd_buffer);
             cmd_buffer.EndRenderPass();
+        }
+    });
+
+    render_graph_passes_.push_back({
+        "post_process_pass",
+        [this](CommandBuffer& cmd_buffer) {
+            auto pp_view = world_->registry().view<dse::PostProcessComponent>();
+            bool pp_enabled = false;
+            dse::PostProcessComponent pp_config;
+            for (auto entity : pp_view) {
+                if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
+                    pp_enabled = true;
+                    pp_config = pp_view.get<dse::PostProcessComponent>(entity);
+                    break;
+                }
+            }
+
+            if (!pp_enabled || !pp_config.bloom_enabled) {
+                return; // 只有在启用后处理时才执行
+            }
+
+            // Bloom Extract
+            cmd_buffer.SetPipelineState(composite_pipeline_state_);
+            cmd_buffer.BeginRenderPass({pp_bloom_extract_rt_, glm::vec4(0.0f), false});
+            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
+            cmd_buffer.DrawPostProcess(scene_color, "bloom_extract", {pp_config.bloom_threshold});
+            cmd_buffer.EndRenderPass();
+
+            // Bloom Blur H
+            cmd_buffer.BeginRenderPass({pp_bloom_blur_h_rt_, glm::vec4(0.0f), false});
+            const unsigned int extract_color = rhi_device_->GetRenderTargetColorTexture(pp_bloom_extract_rt_);
+            cmd_buffer.DrawPostProcess(extract_color, "bloom_blur_h", {});
+            cmd_buffer.EndRenderPass();
+
+            // Bloom Blur V
+            cmd_buffer.BeginRenderPass({pp_bloom_blur_v_rt_, glm::vec4(0.0f), false});
+            const unsigned int blur_h_color = rhi_device_->GetRenderTargetColorTexture(pp_bloom_blur_h_rt_);
+            cmd_buffer.DrawPostProcess(blur_h_color, "bloom_blur_v", {});
+            cmd_buffer.EndRenderPass();
+
+            // We will do the composite step in the composite_pass
         }
     });
 
@@ -294,16 +546,16 @@ void FramePipeline::BuildRenderGraph() {
         [this](CommandBuffer& cmd_buffer) {
             const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
             const unsigned int ui_color = rhi_device_->GetRenderTargetColorTexture(ui_render_target_);
-            static bool logged_once = false;
-            if (!logged_once) {
-                DEBUG_LOG_INFO("Render diagnostics: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
-                               scene_render_target_, ui_render_target_, scene_color, ui_color);
-                logged_once = true;
-            }
-            if (scene_color == 0 || ui_color == 0) {
-                DEBUG_LOG_ERROR("Render composite skipped: scene_render_target={}, ui_render_target={}, scene_color={}, ui_color={}",
-                                scene_render_target_, ui_render_target_, scene_color, ui_color);
-                return;
+            
+            auto pp_view = world_->registry().view<dse::PostProcessComponent>();
+            bool pp_enabled = false;
+            dse::PostProcessComponent pp_config;
+            for (auto entity : pp_view) {
+                if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
+                    pp_enabled = true;
+                    pp_config = pp_view.get<dse::PostProcessComponent>(entity);
+                    break;
+                }
             }
 
             cmd_buffer.SetPipelineState(composite_pipeline_state_);
@@ -311,17 +563,23 @@ void FramePipeline::BuildRenderGraph() {
             glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
             cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
 
-            SpriteDrawItem scene_quad;
-            scene_quad.texture_handle = scene_color;
-            scene_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
-            scene_quad.model = glm::scale(scene_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
-            scene_quad.color = glm::vec4(1.0f);
-            cmd_buffer.DrawBatch({scene_quad});
+            if (pp_enabled && pp_config.bloom_enabled) {
+                const unsigned int blur_v_color = rhi_device_->GetRenderTargetColorTexture(pp_bloom_blur_v_rt_);
+                cmd_buffer.DrawPostProcess(scene_color, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
+            } else {
+                SpriteDrawItem scene_quad;
+                scene_quad.texture_handle = scene_color;
+                scene_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
+                scene_quad.model = glm::scale(scene_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
+                scene_quad.color = glm::vec4(1.0f);
+                cmd_buffer.DrawBatch({scene_quad});
+            }
 
             cmd_buffer.SetPipelineState(sprite_pipeline_state_);
             SpriteDrawItem ui_quad;
             ui_quad.texture_handle = ui_color;
-            ui_quad.model = scene_quad.model;
+            ui_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
+            ui_quad.model = glm::scale(ui_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
             ui_quad.color = glm::vec4(1.0f);
             cmd_buffer.DrawBatch({ui_quad});
             cmd_buffer.EndRenderPass();

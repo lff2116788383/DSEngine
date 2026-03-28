@@ -50,6 +50,23 @@
 
 为了实现您的“RPG 烽火与炊烟版经营模拟小游戏”的 3D 演进目标，建议采取以下三步走的路线：
 
-1. **第一阶段（基础 3D 引入）**：翻阅 `cpp-game-engine-book-main` 的代码，为 `DSEngine` 的 RHI 补充 3D 的 Depth Test、MVP 矩阵传递，实现简单的 3D Camera 和静态 Mesh 渲染组件。
-2. **第二阶段（资源管线）**：参考 `KF_ModelAnalyzer`（或 `cpp-game-engine-book` 的模型加载部分），在您的 Editor 侧或 `assets` 模块中实现 FBX 模型的解析与转换。
-3. **第三阶段（玩法与高级特性）**：为了实现 RPG 目标，需要复杂的地形和动画。此时翻阅 `VSEngine2.1-main`，将它的地形算法（如 ROAM 或 QuadTree）和骨骼动画混合逻辑（AnimTree）移植到 `DSEngine` 的现代 C++ 框架中，包装为 ECS 的 System。
+1. **第一阶段（基础 3D 引入）**：翻阅 `cpp-game-engine-book-main` 的代码，为 `DSEngine` 的 RHI 补充 3D 的 Depth Test、MVP 矩阵传递，实现简单的 3D Camera 和静态 Mesh 渲染组件。**（✅ 已完成）**
+2. **第二阶段（资源管线）**：参考 `KF_ModelAnalyzer`（或 `cpp-game-engine-book` 的模型加载部分），在您的 Editor 侧或 `assets` 模块中实现 FBX 模型的解析与转换。**（✅ 已完成：基于 Assimp 实现了 .dmesh, .danim, .dskel 等自定义资产格式）**
+3. **第三阶段（玩法与高级特性）**：为了实现 RPG 目标，需要复杂的地形和动画。此时翻阅 `VSEngine2.1-main`，将它的地形算法（如 ROAM 或 QuadTree）和骨骼动画混合逻辑（AnimTree）移植到 `DSEngine` 的现代 C++ 框架中，包装为 ECS 的 System。**（✅ 已部分完成：实现了基础 Terrain, AnimTree 动画融合, CSM 级联阴影，以及基于 Debug 模式的自动截图功能验证）**
+
+---
+
+## 实施状态与代码审查总结 (截至当前)
+
+根据上述演进路线，我们已经成功将核心的 3D 基础设施和部分高级特性集成到 `DSEngine` 的 ECS 架构中：
+
+### 1. 已实现的核心特性
+- **AnimTree (骨骼动画混合树)**：将原本只能单向播放的 `AnimatorSystem` 升级，支持多节点动画融合（`AnimBlendNode`）。
+- **Terrain System (地形系统与动态LOD)**：引入了 `TerrainComponent`，实现了基于高度图（Heightmap）的动态地形网格生成。并提取了 `VSEngine2.1` 中 `VSQuadTerrainGeometry` 的思想，引入了基于相机距离的动态四边形步长 LOD 算法，大幅优化了远景网格的面数。
+- **CSM (级联阴影贴图)**：升级了 RHI 的 RenderGraph，引入了正交矩阵的视锥体切分（Frustum Split）与多深度纹理数组，大幅缓解了大型场景的阴影锯齿问题。
+- **Frustum Culling (视锥体剔除)**：提取了 `VSEngine2.1` 中的 `VSCuller` 裁剪算法，引入了 `BoundingBoxComponent` 与 `FrustumCullingSystem`，基于六面体视锥测试有效剔除了不可见物体，为大世界地形优化打下了坚实基础。
+- **Post-Processing (后处理特效)**：提取了 `VSEngine2.1` 中的 `VSPostEffectPass` 概念，在引擎的 `RenderGraph` 中加入了基于 `PostProcessComponent` 的多 Pass 后处理流，目前已实现工业级的 **Bloom (泛光)** 提取与多级高斯模糊，以及 **Tone Mapping (色调映射)** 和 Gamma 校正。
+- **Debug 自动截图分析工具**：在 `engine_app.cpp` 的主循环中植入钩子，在 Debug 模式下程序启动 3 秒后，自动利用 `glReadPixels` 与 `stb_image_write.h` 抓取并垂直翻转后备缓冲像素，保存为区分 C++ 与 Lua 环境前缀的截图（例如 `screenshot/DSEngine_c++_debug_screenshot_3s.png`），极大地方便了 AI 对渲染结果的视觉回归测试。
+
+### 2. 后续迭代方向
+后续我们将继续深入挖掘 `VSEngine2.1-main` 的剩余价值，详见 `DSEngine_Advanced3D_Design.md` 中的“未来高级特性探索”。

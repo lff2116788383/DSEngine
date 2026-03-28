@@ -51,6 +51,35 @@ apps/editor/.node-gyp/
 # NPM Cache
 .npm-cache/
 .cache/
+.eslintcache
+.stylelintcache
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Trae/AI temporary files
+.trae/*
+!.trae/rules/
+.cline/
+.cursor/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Third-party temporary downloads (if any)
 depends/miniaudio/*.tmp
+
+# Reference and documentation drafts (Do not track external engine source references)
+ref/

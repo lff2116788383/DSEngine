@@ -12,6 +12,7 @@
 #include <vector>
 #include <entt/entt.hpp>
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
 
 using Entity = entt::entity;
 

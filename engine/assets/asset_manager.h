@@ -75,6 +75,57 @@ private:
     unsigned int handle_;
 };
 
+/**
+ * @class DmeshAsset
+ * @brief 运行时 Mesh 资产，对应 .dmesh 二进制数据
+ */
+class DmeshAsset {
+public:
+    DmeshAsset(const std::string& path, std::vector<uint8_t> data) 
+        : path_(path), data_(std::move(data)) {}
+    
+    const std::string& GetPath() const { return path_; }
+    const std::vector<uint8_t>& GetData() const { return data_; }
+
+private:
+    std::string path_;
+    std::vector<uint8_t> data_;
+};
+
+/**
+ * @class DanimAsset
+ * @brief 运行时动画资产，对应 .danim 二进制数据
+ */
+class DanimAsset {
+public:
+    DanimAsset(const std::string& path, std::vector<uint8_t> data) 
+        : path_(path), data_(std::move(data)) {}
+    
+    const std::string& GetPath() const { return path_; }
+    const std::vector<uint8_t>& GetData() const { return data_; }
+
+private:
+    std::string path_;
+    std::vector<uint8_t> data_;
+};
+
+/**
+ * @class DskelAsset
+ * @brief 运行时骨架资产，对应 .dskel 二进制数据
+ */
+class DskelAsset {
+public:
+    DskelAsset(const std::string& path, std::vector<uint8_t> data) 
+        : path_(path), data_(std::move(data)) {}
+    
+    const std::string& GetPath() const { return path_; }
+    const std::vector<uint8_t>& GetData() const { return data_; }
+
+private:
+    std::string path_;
+    std::vector<uint8_t> data_;
+};
+
 enum class MaterialBlendMode {
     Alpha = 0,
     Additive = 1,
@@ -218,6 +269,24 @@ public:
      */
     std::shared_ptr<AudioClipAsset> LoadAudioClip(const std::string& path);
     
+    /**
+     * @brief 加载 .dmesh 资产
+     * @param path dmesh 文件路径
+     */
+    std::shared_ptr<DmeshAsset> LoadDmesh(const std::string& path);
+
+    /**
+     * @brief 加载 .danim 动画资产
+     * @param path danim 文件路径
+     */
+    std::shared_ptr<DanimAsset> LoadDanim(const std::string& path);
+
+    /**
+     * @brief 加载 .dskel 骨架资产
+     * @param path dskel 文件路径
+     */
+    std::shared_ptr<DskelAsset> LoadDskel(const std::string& path);
+    
     // Asset Bundle API
     /**
      * @brief Pack a directory into an encrypted asset bundle (.bun)
@@ -294,6 +363,9 @@ private:
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
+    std::unordered_map<std::string, std::weak_ptr<DmeshAsset>> dmeshes_;
+    std::unordered_map<std::string, std::weak_ptr<DanimAsset>> danims_;
+    std::unordered_map<std::string, std::weak_ptr<DskelAsset>> dskels_;
     std::unordered_map<unsigned int, std::weak_ptr<MaterialAsset>> materials_;
     
     // Virtual File System for Bundles

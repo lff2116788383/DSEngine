@@ -3,6 +3,7 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
 #include <algorithm>
 #include <iostream>
 
@@ -13,8 +14,10 @@ struct DemoState {
     int frame_counter = 0;
     int spawn_index = 0;
     unsigned int texture_handle = 0;
+    unsigned int normal_handle = 0;
     Entity camera = entt::null;
     Entity ground = entt::null;
+    Entity dlight = entt::null;
     config::StressSettings settings = config::kDemo2D;
 };
 
@@ -34,22 +37,15 @@ Entity SpawnBox(World& world, int index, const DemoState& state) {
     transform.scale = glm::vec3(state.settings.box_scale, state.settings.box_scale, 1.0f);
     transform.dirty = true;
 
-    auto& sprite = world.registry().emplace<SpriteRendererComponent>(entity);
-    sprite.color = glm::vec4(0.9f, 0.95f, 1.0f, 1.0f);
-    sprite.order_in_layer = index;
-    sprite.texture_handle = state.texture_handle;
-    sprite.visible = true;
+    auto& mesh = world.registry().emplace<MeshRendererComponent>(entity);
+    mesh.mesh_path = "models/cube.dmesh";
+    mesh.color = glm::vec4(1.0f);
+    mesh.shader_variant = "MESH_PBR";
+    mesh.metallic = 0.1f;
+    mesh.roughness = 0.5f;
+    mesh.receive_shadow = true;
+    mesh.visible = true;
 
-    auto& rb = world.registry().emplace<RigidBody2DComponent>(entity);
-    rb.type = RigidBody2DType::Dynamic;
-    rb.gravity_scale = 1.0f;
-    rb.fixed_rotation = false;
-
-    auto& collider = world.registry().emplace<BoxCollider2DComponent>(entity);
-    collider.size = glm::vec2(state.settings.box_scale, state.settings.box_scale);
-    collider.density = 1.0f;
-    collider.friction = 0.3f;
-    collider.restitution = 0.5f;
     return entity;
 }
 }
@@ -58,45 +54,52 @@ void Bootstrap(World& world) {
     auto& state = State();
     state = {};
     state.settings = config::kDemo2D;
+    state.settings.columns = 10;
+    state.settings.total_boxes = 100;
+    state.settings.spawn_per_frame = 10;
     if (state.initialized) {
         return;
     }
 
     state.camera = world.CreateEntity();
     auto& camera_transform = world.registry().emplace<TransformComponent>(state.camera);
-    camera_transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    camera_transform.position = glm::vec3(0.0f, 5.0f, 15.0f);
     camera_transform.dirty = true;
-    auto& camera = world.registry().emplace<CameraComponent>(state.camera);
-    camera.orthographic = true;
-    camera.orthographic_size = state.settings.camera_ortho_size;
+    auto& camera = world.registry().emplace<Camera3DComponent>(state.camera);
+    camera.fov = 60.0f;
+    camera.near_clip = 0.1f;
+    camera.far_clip = 1000.0f;
+    
+    auto& free_cam = world.registry().emplace<FreeCameraControllerComponent>(state.camera);
+    free_cam.move_speed = 10.0f;
 
-    auto texture = AssetManager::Instance().LoadTexture("mirror_assets/Resources/item/1.png");
+    auto texture = AssetManager::Instance().LoadTexture("models/CesiumLogoFlat.png");
     if (!texture) {
-        texture = AssetManager::Instance().LoadTexture("data/mirror_assets/Resources/item/1.png");
+        texture = AssetManager::Instance().LoadTexture("data/models/CesiumLogoFlat.png");
     }
     state.texture_handle = texture ? texture->GetHandle() : 0;
 
+    state.dlight = world.CreateEntity();
+    auto& light = world.registry().emplace<DirectionalLight3DComponent>(state.dlight);
+    light.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.5f));
+    light.color = glm::vec3(1.0f, 0.9f, 0.8f);
+    light.intensity = 2.0f;
+    light.cast_shadow = true;
+
     state.ground = world.CreateEntity();
     auto& ground_transform = world.registry().emplace<TransformComponent>(state.ground);
-    ground_transform.position = glm::vec3(0.0f, -5.0f, 0.0f);
-    ground_transform.scale = glm::vec3(40.0f, 1.0f, 1.0f);
+    ground_transform.position = glm::vec3(0.0f, -2.0f, 0.0f);
+    ground_transform.scale = glm::vec3(40.0f, 1.0f, 40.0f);
     ground_transform.dirty = true;
 
-    auto& ground_sprite = world.registry().emplace<SpriteRendererComponent>(state.ground);
-    ground_sprite.color = glm::vec4(0.3f, 0.8f, 0.3f, 1.0f);
-    ground_sprite.texture_handle = state.texture_handle;
-    ground_sprite.visible = true;
-
-    auto& ground_rb = world.registry().emplace<RigidBody2DComponent>(state.ground);
-    ground_rb.type = RigidBody2DType::Static;
-    ground_rb.gravity_scale = 0.0f;
-    ground_rb.fixed_rotation = true;
-
-    auto& ground_collider = world.registry().emplace<BoxCollider2DComponent>(state.ground);
-    ground_collider.size = glm::vec2(40.0f, 1.0f);
-    ground_collider.density = 1.0f;
-    ground_collider.friction = 0.4f;
-    ground_collider.restitution = 0.0f;
+    auto& ground_mesh = world.registry().emplace<MeshRendererComponent>(state.ground);
+    ground_mesh.mesh_path = "models/cube.dmesh";
+    ground_mesh.color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    ground_mesh.shader_variant = "MESH_PBR";
+    ground_mesh.metallic = 0.0f;
+    ground_mesh.roughness = 0.9f;
+    ground_mesh.receive_shadow = true;
+    ground_mesh.visible = true;
 
     state.spawn_index = 0;
     state.frame_counter = 0;

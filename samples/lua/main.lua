@@ -5,11 +5,13 @@ if type(Config) ~= "table" then
 end
 
 local RuntimeEntry = nil
-local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase1_2d_mvp"
+local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase2_3d_mvp"
 if game_entry == "frog_jump" then
     RuntimeEntry = require("frog_jump")
-else
+elseif game_entry == "phase1_2d_mvp" then
     RuntimeEntry = require("phase1_2d_mvp")
+else
+    RuntimeEntry = require("phase2_3d_mvp")
 end
 
 function Awake()
@@ -21,8 +23,10 @@ function Awake()
     end
     if game_entry == "frog_jump" then
         RuntimeEntry.Setup(Config.frog_jump or {})
-    else
+    elseif game_entry == "phase1_2d_mvp" then
         RuntimeEntry.Setup(Config.phase1_2d)
+    else
+        RuntimeEntry.Setup(Config.phase2_3d)
     end
 end
 

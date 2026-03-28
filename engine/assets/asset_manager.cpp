@@ -329,6 +329,96 @@ std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& p
     return clip;
 }
 
+std::shared_ptr<DmeshAsset> AssetManager::LoadDmesh(const std::string& path) {
+    const std::string data_root = GetDataRoot();
+    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string load_path = resolved_path.empty() ? path : resolved_path;
+    const std::string cache_key = NormalizePath(load_path);
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = dmeshes_.find(cache_key);
+        if (it != dmeshes_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read dmesh file: {}", path);
+        return nullptr;
+    }
+
+    auto dmesh = std::make_shared<DmeshAsset>(load_path, std::move(file_data));
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        dmeshes_[cache_key] = dmesh;
+    }
+    return dmesh;
+}
+
+std::shared_ptr<DanimAsset> AssetManager::LoadDanim(const std::string& path) {
+    const std::string data_root = GetDataRoot();
+    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string load_path = resolved_path.empty() ? path : resolved_path;
+    const std::string cache_key = NormalizePath(load_path);
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = danims_.find(cache_key);
+        if (it != danims_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read danim file: {}", path);
+        return nullptr;
+    }
+
+    auto danim = std::make_shared<DanimAsset>(load_path, std::move(file_data));
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        danims_[cache_key] = danim;
+    }
+    return danim;
+}
+
+std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
+    const std::string data_root = GetDataRoot();
+    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string load_path = resolved_path.empty() ? path : resolved_path;
+    const std::string cache_key = NormalizePath(load_path);
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = dskels_.find(cache_key);
+        if (it != dskels_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read dskel file: {}", path);
+        return nullptr;
+    }
+
+    auto dskel = std::make_shared<DskelAsset>(load_path, std::move(file_data));
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        dskels_[cache_key] = dskel;
+    }
+    return dskel;
+}
+
 void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
     const std::string data_root = GetDataRoot();
     const std::string resolved_path = ResolveTexturePath(path, data_root);
@@ -463,6 +553,20 @@ void AssetManager::UnloadUnused() {
     for (auto it = audio_clips_.begin(); it != audio_clips_.end(); ) {
         if (it->second.expired()) {
             it = audio_clips_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = dmeshes_.begin(); it != dmeshes_.end(); ) {
+        if (it->second.expired()) {
+            it = dmeshes_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = danims_.begin(); it != danims_.end(); ) {
+        if (it->second.expired()) {
+            it = danims_.erase(it);
         } else {
             ++it;
         }

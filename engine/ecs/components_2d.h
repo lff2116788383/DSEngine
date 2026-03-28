@@ -195,7 +195,11 @@ struct UILabelComponent {
  */
 struct CameraComponent {
     bool orthographic = true;            ///< 是否为正交投影
+    bool enabled = true;
+    int priority = 0;
     float orthographic_size = 5.0f;      ///< 正交模式下摄像机垂直视野的一半大小
+    float fov = 60.0f;                   ///< 透视投影的视场角 (度)
+    float aspect_ratio = 1.333f;         ///< 透视投影的宽高比 (width / height)
     float near_clip = -1.0f;             ///< 近裁剪面
     float far_clip = 1.0f;               ///< 远裁剪面
     glm::mat4 view = glm::mat4(1.0f);    ///< 缓存的视图矩阵

@@ -23,6 +23,12 @@
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "modules/gameplay_2d/spine/spine_system.h"
+#include "modules/gameplay_3d/rendering/mesh_render_system.h"
+#include "modules/gameplay_3d/rendering/terrain_system.h"
+#include "modules/gameplay_3d/rendering/frustum_culling_system.h"
+#include "modules/gameplay_3d/animation/animator_system.h"
+#include "modules/gameplay_3d/camera/free_camera_controller_system.h"
+#include "modules/gameplay_3d/ai/steering_system.h"
 class AssetManager;
 
 enum class BusinessMode {
@@ -145,6 +151,12 @@ private:
     dse::gameplay2d::UISystem ui_logic_system_;
     dse::gameplay2d::AudioSystem audio_system_;
     dse::gameplay2d::TilemapSystem tilemap_system_;
+    dse::gameplay3d::MeshRenderSystem mesh_render_system_;
+    dse::gameplay3d::TerrainSystem terrain_system_;
+    dse::gameplay3d::FrustumCullingSystem frustum_culling_system_;
+    dse::gameplay3d::AnimatorSystem animator_system_;
+    dse::gameplay3d::FreeCameraControllerSystem free_camera_controller_system_;
+    dse::gameplay3d::SteeringSystem steering_system_;
     
     bool initialized_ = false;
     float stats_accumulator_ = 0.0f;
@@ -163,8 +175,16 @@ private:
     unsigned int main_render_target_ = 0;
     unsigned int scene_render_target_ = 0;
     unsigned int ui_render_target_ = 0;
+    unsigned int prez_render_target_ = 0;
+    unsigned int pp_bloom_extract_rt_ = 0;
+    unsigned int pp_bloom_blur_h_rt_ = 0;
+    unsigned int pp_bloom_blur_v_rt_ = 0;
     unsigned int sprite_pipeline_state_ = 0;
+    unsigned int mesh_pipeline_state_ = 0;
+    unsigned int prez_pipeline_state_ = 0;
     unsigned int composite_pipeline_state_ = 0;
+    unsigned int shadow_render_target_[3];
+    unsigned int shadow_pipeline_state_ = 0;
     std::vector<RenderGraphPass> render_graph_passes_;
     AssetManager* asset_manager_ = nullptr;
 };

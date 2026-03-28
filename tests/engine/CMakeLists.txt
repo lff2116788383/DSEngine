@@ -10,6 +10,7 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ecs/world_test.cpp
     scene/transform_system_test.cpp
     scene/prefab_test.cpp
+    scene/octree_test.cpp
     runtime/runtime_access_test.cpp
     scripting/cpp_business_runtime_test.cpp
     ../modules/gameplay_2d/camera/camera_system_test.cpp
@@ -17,6 +18,15 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
+    ../modules/gameplay_3d/animation/animator_system_test.cpp
+    ../modules/gameplay_3d/rendering/terrain_system_test.cpp
+    ../modules/gameplay_3d/rendering/csm_test.cpp
+    ../modules/gameplay_3d/rendering/mesh_renderer_test.cpp
+    ../modules/gameplay_3d/rendering/camera_3d_test.cpp
+    ../modules/gameplay_3d/rendering/skybox_test.cpp
+    ../modules/gameplay_3d/rendering/frustum_culling_test.cpp
+    ../modules/gameplay_3d/rendering/advanced_3d_components_test.cpp
+    ../modules/gameplay_3d/ai/steering_system_test.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/time.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/debug.cpp
     ${CMAKE_SOURCE_DIR}/engine/input/input.cpp
@@ -30,6 +40,8 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/particle/particle_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/tilemap/tilemap_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/ai/steering_system.cpp
 )
 
 target_include_directories(${DSE_ENGINE_TEST_TARGET}

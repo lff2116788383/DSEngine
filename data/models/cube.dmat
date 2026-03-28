@@ -1,0 +1,14 @@
+{
+  "materials": [
+    {
+      "name": "Texture",
+      "base_color": [1, 1, 1, 1],
+      "metallic": 0,
+      "roughness": 1,
+      "emissive": [0, 0, 0],
+      "base_color_texture": "CesiumLogoFlat.png",
+      "normal_texture": "",
+      "metallic_roughness_texture": ""
+    }
+  ]
+}

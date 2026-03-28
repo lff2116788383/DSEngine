@@ -29,17 +29,70 @@ struct BatchVertex {
     glm::vec3 pos;
     glm::vec4 color;
     glm::vec2 uv;
+    glm::vec3 normal = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec3 tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec4 weights = glm::vec4(0.0f);
+    glm::vec4 joints = glm::vec4(0.0f);
 };
 
 struct MeshDrawItem {
+    unsigned int vao_override = 0; // If > 0, use this VAO directly instead of client memory (vertices/indices)
+    unsigned int index_count_override = 0;
+    
     unsigned int texture_handle = 0;
+    unsigned int normal_map_handle = 0;
     unsigned int blend_mode = 0;
     glm::mat4 model = glm::mat4(1.0f);
+    glm::vec4 color = glm::vec4(1.0f);
     std::vector<BatchVertex> vertices;
     std::vector<unsigned short> indices;
     int sorting_layer = 0;
     int order_in_layer = 0;
+
+    bool lighting_enabled = false;
+    glm::vec3 material_albedo = glm::vec3(1.0f);
+    float material_metallic = 0.0f;
+    float material_roughness = 1.0f;
+    float material_ao = 1.0f;
+    glm::vec3 material_emissive = glm::vec3(0.0f);
+    float material_normal_strength = 1.0f;
+    bool receive_shadow = true;
+
+    glm::vec3 light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color = glm::vec3(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.2f;
+    float shadow_strength = 0.5f;
+    
+    // Multiple lights
+    struct PointLightData {
+        glm::vec3 color;
+        glm::vec3 position;
+        float intensity;
+        float radius;
+    };
+    std::vector<PointLightData> point_lights;
+    
+    struct SpotLightData {
+        glm::vec3 color;
+        glm::vec3 position;
+        glm::vec3 direction;
+        float intensity;
+        float radius;
+        float inner_cone;
+        float outer_cone;
+    };
+    std::vector<SpotLightData> spot_lights;
+
+    bool skinned = false;
+    std::vector<glm::mat4> bone_matrices;
+    
+    // Morph targets
+    bool morph_enabled = false;
+    std::vector<float> morph_weights;
 };
+
+#define CSM_CASCADES 3
 
 using DrawBatchItem = SpriteDrawItem;
 
@@ -53,6 +106,7 @@ struct RenderStats {
 struct RenderTargetDesc {
     int width = 0;
     int height = 0;
+    bool has_color = true;
     bool has_depth = false;
 };
 
@@ -66,6 +120,10 @@ struct PipelineStateDesc {
     bool blend_enabled = true;
     unsigned int blend_src = 0x0302;
     unsigned int blend_dst = 0x0303;
+    bool depth_test_enabled = true;
+    bool depth_write_enabled = true;
+    bool culling_enabled = true;
+    unsigned int cull_face = 0x0405; // GL_BACK
 };
 
 class OpenGLRhiDevice;
@@ -122,6 +180,28 @@ public:
      * @param color 用于清屏的 RGBA 颜色向量
      */
     virtual void ClearColor(const glm::vec4& color) = 0;
+
+    virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
+    
+    /**
+     * @brief 设置全局矩阵数组参数（主要用于传递 CSM 的多级矩阵）
+     */
+    virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
+    
+    /**
+     * @brief 设置全局浮点数组参数（主要用于传递 CSM 的分割距离）
+     */
+    virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
+
+    virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
+
+    /**
+     * @brief 提交一个全屏后处理绘制批次
+     * @param source_texture 输入纹理
+     * @param shader_variant_key 后处理类型 (e.g. bloom, ssao, color_grading)
+     * @param params 附加参数
+     */
+    virtual void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) = 0;
 };
 
 /**
@@ -174,6 +254,12 @@ public:
      */
     void ClearColor(const glm::vec4& color) override;
     
+    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override;
+    void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override;
+    void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
+    void DrawSkybox(unsigned int cubemap_texture_handle) override;
+    void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
+
     // For internal use by OpenGLRhiDevice
     /**
      * @brief 执行所有已记录的渲染命令
@@ -198,6 +284,34 @@ private:
         glm::mat4 view = glm::mat4(1.0f);
         glm::mat4 projection = glm::mat4(1.0f);
     };
+    struct SetGlobalMat4Cmd {
+        uint64_t order;
+        std::string name;
+        glm::mat4 value;
+    };
+    struct SetGlobalMat4ArrayCmd {
+        uint64_t order;
+        std::string name;
+        std::vector<glm::mat4> values;
+    };
+    struct SetGlobalFloatArrayCmd {
+        uint64_t order;
+        std::string name;
+        std::vector<float> values;
+    };
+    struct DrawSkyboxCmd {
+        uint64_t order;
+        unsigned int cubemap_texture_handle;
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+    };
+    struct DrawPostProcessCmd {
+        uint64_t order;
+        unsigned int source_texture;
+        std::string effect_name;
+        std::vector<float> params;
+    };
+    
     struct CommandRef {
         uint64_t order = 0;
         int type = 0;
@@ -210,9 +324,14 @@ private:
     std::vector<BeginRenderPassCmd> begin_render_pass_cmds_;
     std::vector<EndRenderPassCmd> end_render_pass_cmds_;
     std::vector<SetPipelineStateCmd> set_pipeline_state_cmds_;
+    std::vector<SetGlobalMat4Cmd> set_global_mat4_cmds_;
+    std::vector<SetGlobalMat4ArrayCmd> set_global_mat4_array_cmds_;
+    std::vector<SetGlobalFloatArrayCmd> set_global_float_array_cmds_;
     std::vector<ClearCmd> clear_cmds_;
     std::vector<DrawBatchCmd> draw_batch_cmds_;
     std::vector<DrawMeshBatchCmd> draw_mesh_batch_cmds_;
+    std::vector<DrawSkyboxCmd> draw_skybox_cmds_;
+    std::vector<DrawPostProcessCmd> draw_post_process_cmds_;
 };
 
 /**
@@ -234,6 +353,7 @@ public:
     virtual void BeginFrame() = 0;
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
+    virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
@@ -312,6 +432,7 @@ public:
      * @return 颜色纹理句柄
      */
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
+    unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     
     /**
      * @brief 创建 VBO 或 EBO 数据缓冲
@@ -398,6 +519,16 @@ public:
      * @return 统计数据结构体
      */
     const RenderStats& LastFrameStats() const override;
+
+    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { 
+        if (index < 3) global_shadow_map_[index] = handle; 
+    }
+    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { 
+        if (index < 3) global_light_space_matrix_[index] = mat; 
+    }
+    void SetGlobalCascadeSplit(unsigned int index, float split) {
+        if (index < 3) global_cascade_splits_[index] = split;
+    }
     
     // These are kept public temporarily for the OpenGLCommandBuffer to use
     /**
@@ -431,6 +562,8 @@ public:
      */
     void RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params);
     
 private:
     struct ResourceLedger {
@@ -475,7 +608,7 @@ private:
     unsigned int mesh_vbo_handle_ = 0;
     unsigned int mesh_ibo_handle_ = 0;
     unsigned int mesh_vao_handle_ = 0;
-    
+
     unsigned int active_pipeline_state_ = 0;
     unsigned int active_render_target_ = 0;
     unsigned int shader_handle_ = 0;
@@ -486,6 +619,46 @@ private:
     int uniform_texture_loc_ = -1;
     int uniform_tint_loc_ = -1;
     int uniform_vp_loc_ = -1;
+
+    int uniform_camera_pos_loc_ = -1;
+    int uniform_light_space_matrix_loc_[3];
+    int uniform_cascade_splits_loc_ = -1;
+    int uniform_shadow_map_loc_[3];
+    int uniform_normal_map_loc_ = -1;
+    int uniform_has_normal_map_loc_ = -1;
+    int uniform_lighting_enabled_loc_ = -1;
+    int uniform_light_direction_loc_ = -1;
+    int uniform_light_color_loc_ = -1;
+    int uniform_light_intensity_loc_ = -1;
+    int uniform_ambient_intensity_loc_ = -1;
+    int uniform_shadow_strength_loc_ = -1;
+    int uniform_material_albedo_loc_ = -1;
+    int uniform_material_metallic_loc_ = -1;
+    int uniform_material_roughness_loc_ = -1;
+    int uniform_material_ao_loc_ = -1;
+    int uniform_material_emissive_loc_ = -1;
+    int uniform_material_normal_strength_loc_ = -1;
+    int uniform_receive_shadow_loc_ = -1;
+    int uniform_skinned_loc_ = -1;
+    int uniform_bone_matrices_loc_ = -1;
+
+    int uniform_morph_enabled_loc_ = -1;
+    int uniform_morph_weights_loc_ = -1;
+
+    int uniform_point_light_count_loc_ = -1;
+    struct PointLightLoc {
+        int color, position, intensity, radius;
+    } uniform_point_lights_loc_[4];
+
+    int uniform_spot_light_count_loc_ = -1;
+    struct SpotLightLoc {
+        int color, position, direction, intensity, radius, inner_cone, outer_cone;
+    } uniform_spot_lights_loc_[4];
+
+    glm::mat4 global_light_space_matrix_[3];
+    float global_cascade_splits_[3];
+    unsigned int global_shadow_map_[3];
+
     bool initialized_ = false;
     RenderStats current_frame_stats_;
     RenderStats last_frame_stats_;

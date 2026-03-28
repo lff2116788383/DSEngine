@@ -6,11 +6,17 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
+#include <limits>
 extern "C" {
 #include <lauxlib.h>
 }
 
+#include "engine/assets/asset_manager.h"
+#include <rapidjson/document.h>
+
 namespace dse::runtime::lua_binding {
+
 namespace {
 int L_EcsCreateEntity(lua_State* L) {
     World* world = GetWorld();
@@ -49,9 +55,65 @@ int L_EcsAddCamera(lua_State* L) {
     }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     float ortho_size = static_cast<float>(luaL_optnumber(L, 2, 10.0));
+    int priority = static_cast<int>(luaL_optinteger(L, 3, 0));
     auto& camera = world->registry().emplace_or_replace<CameraComponent>(e);
+    camera.enabled = true;
+    camera.priority = priority;
     camera.orthographic = true;
     camera.orthographic_size = ortho_size;
+    return 0;
+}
+
+int L_EcsAddCamera3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float fov = static_cast<float>(luaL_optnumber(L, 2, 60.0));
+    int priority = static_cast<int>(luaL_optinteger(L, 3, 0));
+    auto& camera = world->registry().emplace_or_replace<Camera3DComponent>(e);
+    camera.enabled = true;
+    camera.priority = priority;
+    camera.fov = fov;
+    camera.near_clip = 0.1f;
+    camera.far_clip = 1000.0f;
+    return 0;
+}
+
+int L_EcsSetCameraPriority(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int priority = static_cast<int>(luaL_checkinteger(L, 2));
+    if (world->registry().valid(e) && world->registry().all_of<Camera3DComponent>(e)) {
+        auto& camera = world->registry().get<Camera3DComponent>(e);
+        camera.priority = priority;
+    }
+    if (world->registry().valid(e) && world->registry().all_of<CameraComponent>(e)) {
+        auto& camera = world->registry().get<CameraComponent>(e);
+        camera.priority = priority;
+    }
+    return 0;
+}
+
+int L_EcsSetCameraEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool enabled = lua_toboolean(L, 2) != 0;
+    if (world->registry().valid(e) && world->registry().all_of<Camera3DComponent>(e)) {
+        auto& camera = world->registry().get<Camera3DComponent>(e);
+        camera.enabled = enabled;
+    }
+    if (world->registry().valid(e) && world->registry().all_of<CameraComponent>(e)) {
+        auto& camera = world->registry().get<CameraComponent>(e);
+        camera.enabled = enabled;
+    }
     return 0;
 }
 
@@ -397,6 +459,272 @@ int L_EcsPlayAnimation(lua_State* L) {
     }
     return 0;
 }
+int L_EcsAddMeshRenderer(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float r = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float a = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    
+    auto& mesh = world->registry().emplace_or_replace<MeshRendererComponent>(e);
+    mesh.mesh_path.clear();
+    mesh.color = glm::vec4(r, g, b, a);
+    mesh.temp_vertices.clear();
+    mesh.temp_indices.clear();
+    
+    if (lua_istable(L, 6)) {
+        int v_len = lua_rawlen(L, 6);
+        for (int i = 1; i <= v_len; ++i) {
+            lua_rawgeti(L, 6, i);
+            mesh.temp_vertices.push_back(static_cast<float>(luaL_checknumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    const std::size_t vertex_count = mesh.temp_vertices.size() / 3;
+    if (lua_istable(L, 7)) {
+        int i_len = lua_rawlen(L, 7);
+        for (int i = 1; i <= i_len; ++i) {
+            lua_rawgeti(L, 7, i);
+            const lua_Integer raw_index = luaL_checkinteger(L, -1);
+            if (raw_index >= 0 &&
+                static_cast<std::size_t>(raw_index) < vertex_count &&
+                raw_index <= static_cast<lua_Integer>(std::numeric_limits<unsigned short>::max())) {
+                mesh.temp_indices.push_back(static_cast<unsigned short>(raw_index));
+            }
+            lua_pop(L, 1);
+        }
+    }
+    
+    return 0;
+}
+
+int L_EcsSetMeshPath(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* mesh_path = luaL_checkstring(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        mesh.mesh_path = mesh_path;
+        mesh.temp_vertices.clear();
+        mesh.temp_indices.clear();
+    }
+    return 0;
+}
+
+int L_EcsSetMeshMaterial(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        
+        // Check if second argument is a string (dmat path)
+        if (lua_type(L, 2) == LUA_TSTRING) {
+            std::string dmat_path = lua_tostring(L, 2);
+            // We will just read the file using AssetManager here directly as it's simple JSON
+            std::vector<uint8_t> file_data;
+            if (AssetManager::Instance().LoadFileToMemory(dmat_path, file_data)) {
+                std::string text(reinterpret_cast<const char*>(file_data.data()), file_data.size());
+                rapidjson::Document doc;
+                doc.Parse(text.c_str());
+                if (!doc.HasParseError() && doc.HasMember("materials") && doc["materials"].IsArray() && doc["materials"].Size() > 0) {
+                    const auto& mat = doc["materials"][0];
+                    if (mat.HasMember("base_color") && mat["base_color"].IsArray()) {
+                        mesh.color = glm::vec4(
+                            mat["base_color"][0].GetFloat(),
+                            mat["base_color"][1].GetFloat(),
+                            mat["base_color"][2].GetFloat(),
+                            mat["base_color"][3].GetFloat()
+                        );
+                    }
+                    if (mat.HasMember("emissive") && mat["emissive"].IsArray()) {
+                        mesh.emissive = glm::vec3(
+                            mat["emissive"][0].GetFloat(),
+                            mat["emissive"][1].GetFloat(),
+                            mat["emissive"][2].GetFloat()
+                        );
+                    }
+                    if (mat.HasMember("metallic")) mesh.metallic = mat["metallic"].GetFloat();
+                    if (mat.HasMember("roughness")) mesh.roughness = mat["roughness"].GetFloat();
+                }
+            }
+            return 0;
+        }
+
+        mesh.metallic = static_cast<float>(luaL_optnumber(L, 2, mesh.metallic));
+        mesh.roughness = static_cast<float>(luaL_optnumber(L, 3, mesh.roughness));
+        mesh.ao = static_cast<float>(luaL_optnumber(L, 4, mesh.ao));
+        float er = static_cast<float>(luaL_optnumber(L, 5, mesh.emissive.r));
+        float eg = static_cast<float>(luaL_optnumber(L, 6, mesh.emissive.g));
+        float eb = static_cast<float>(luaL_optnumber(L, 7, mesh.emissive.b));
+        mesh.emissive = glm::vec3(er, eg, eb);
+        mesh.normal_strength = static_cast<float>(luaL_optnumber(L, 8, mesh.normal_strength));
+        if (lua_gettop(L) >= 9) {
+            mesh.receive_shadow = lua_toboolean(L, 9) != 0;
+        }
+    }
+    return 0;
+}
+
+int L_EcsSetMeshShaderVariant(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* shader_variant = luaL_checkstring(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        mesh.shader_variant = shader_variant;
+    }
+    return 0;
+}
+
+int L_EcsAddDirectionalLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float dir_x = static_cast<float>(luaL_optnumber(L, 2, -0.4));
+    float dir_y = static_cast<float>(luaL_optnumber(L, 3, -1.0));
+    float dir_z = static_cast<float>(luaL_optnumber(L, 4, -0.3));
+    float r = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 7, 1.0));
+    float intensity = static_cast<float>(luaL_optnumber(L, 8, 1.0));
+    float ambient_intensity = static_cast<float>(luaL_optnumber(L, 9, 0.2));
+    float shadow_strength = static_cast<float>(luaL_optnumber(L, 10, 0.35));
+    auto& light = world->registry().emplace_or_replace<DirectionalLight3DComponent>(e);
+    light.enabled = true;
+    light.direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+    light.color = glm::vec3(r, g, b);
+    light.intensity = intensity;
+    light.ambient_intensity = ambient_intensity;
+    light.shadow_strength = shadow_strength;
+    return 0;
+}
+
+int L_EcsSetDirectionalLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<DirectionalLight3DComponent>(e)) {
+        auto& light = world->registry().get<DirectionalLight3DComponent>(e);
+        if (lua_gettop(L) >= 2) {
+            light.enabled = lua_toboolean(L, 2) != 0;
+        }
+        float dir_x = static_cast<float>(luaL_optnumber(L, 3, light.direction.x));
+        float dir_y = static_cast<float>(luaL_optnumber(L, 4, light.direction.y));
+        float dir_z = static_cast<float>(luaL_optnumber(L, 5, light.direction.z));
+        light.direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+        light.color.r = static_cast<float>(luaL_optnumber(L, 6, light.color.r));
+        light.color.g = static_cast<float>(luaL_optnumber(L, 7, light.color.g));
+        light.color.b = static_cast<float>(luaL_optnumber(L, 8, light.color.b));
+        light.intensity = static_cast<float>(luaL_optnumber(L, 9, light.intensity));
+        light.ambient_intensity = static_cast<float>(luaL_optnumber(L, 10, light.ambient_intensity));
+        light.shadow_strength = static_cast<float>(luaL_optnumber(L, 11, light.shadow_strength));
+    }
+    return 0;
+}
+
+int L_EcsSetTransformRotation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float x = static_cast<float>(luaL_checknumber(L, 2));
+    float y = static_cast<float>(luaL_checknumber(L, 3));
+    float z = static_cast<float>(luaL_checknumber(L, 4));
+    
+    if (world->registry().valid(e) && world->registry().all_of<TransformComponent>(e)) {
+        auto& transform = world->registry().get<TransformComponent>(e);
+        glm::vec3 euler_angles(glm::radians(x), glm::radians(y), glm::radians(z));
+        transform.rotation = glm::quat(euler_angles);
+        transform.dirty = true;
+    }
+    return 0;
+}
+
+int L_EcsAddAnimator3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* danim_path = luaL_optstring(L, 2, "");
+    const char* dskel_path = luaL_optstring(L, 3, "");
+    auto& animator = world->registry().emplace_or_replace<Animator3DComponent>(e);
+    animator.danim_path = danim_path;
+    animator.dskel_path = dskel_path;
+    animator.enabled = true;
+    animator.current_time = 0.0f;
+    animator.speed = 1.0f;
+    animator.loop = true;
+    return 0;
+}
+
+int L_EcsSetAnimator3DState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        if (lua_gettop(L) >= 2) {
+            if (lua_isstring(L, 2)) {
+                animator.danim_path = lua_tostring(L, 2);
+            }
+        }
+        if (lua_gettop(L) >= 3) {
+            animator.speed = static_cast<float>(luaL_checknumber(L, 3));
+        }
+        if (lua_gettop(L) >= 4) {
+            animator.loop = lua_toboolean(L, 4) != 0;
+        }
+    }
+    return 0;
+}
+
+int L_EcsAddSkybox(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* cubemap_path = luaL_optstring(L, 2, "");
+    auto& skybox = world->registry().emplace_or_replace<SkyboxComponent>(e);
+    skybox.cubemap_path = cubemap_path;
+    skybox.enabled = true;
+    return 0;
+}
+
+int L_EcsAddFreeCameraController(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    auto& controller = world->registry().emplace_or_replace<FreeCameraControllerComponent>(e);
+    controller.enabled = true;
+    controller.move_speed = static_cast<float>(luaL_optnumber(L, 2, 5.0));
+    controller.mouse_sensitivity = static_cast<float>(luaL_optnumber(L, 3, 0.1));
+    return 0;
+}
+
 }
 
 void RegisterEcsBindings(lua_State* L) {
@@ -408,9 +736,23 @@ void RegisterEcsBindings(lua_State* L) {
     lua_newtable(L);
     set_fn("create_entity", L_EcsCreateEntity);
     set_fn("add_transform", L_EcsAddTransform);
+    set_fn("set_transform_rotation", L_EcsSetTransformRotation);
     set_fn("add_camera", L_EcsAddCamera);
+    set_fn("add_camera_3d", L_EcsAddCamera3D);
+    set_fn("set_camera_priority", L_EcsSetCameraPriority);
+    set_fn("set_camera_enabled", L_EcsSetCameraEnabled);
     set_fn("set_camera_follow", L_EcsSetCameraFollow);
     set_fn("add_sprite", L_EcsAddSprite);
+    set_fn("add_mesh_renderer", L_EcsAddMeshRenderer);
+    set_fn("set_mesh_path", L_EcsSetMeshPath);
+    set_fn("set_mesh_material", L_EcsSetMeshMaterial);
+    set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
+    set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);
+    set_fn("set_directional_light_3d", L_EcsSetDirectionalLight3D);
+    set_fn("add_animator_3d", L_EcsAddAnimator3D);
+    set_fn("set_animator_3d_state", L_EcsSetAnimator3DState);
+    set_fn("add_skybox", L_EcsAddSkybox);
+    set_fn("add_free_camera_controller", L_EcsAddFreeCameraController);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
     set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);

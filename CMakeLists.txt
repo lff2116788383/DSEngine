@@ -63,6 +63,9 @@ include_directories("depends/rapidjson")
 include_directories("depends/eventpp/tests")
 include_directories("depends/eventpp/include")
 include_directories("depends/timetool")
+include_directories("depends/tinygltf")
+include_directories("depends/assimp/include")
+
 # Use local depends instead of FetchContent
 set(ENTT_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(ENTT_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -70,6 +73,10 @@ add_subdirectory(depends/entt-3.13.0)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/box2d-2.4.1)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+add_subdirectory(depends/assimp)
 
 # Include directories
 include_directories(
@@ -106,6 +113,7 @@ add_library(dse_engine SHARED
     ${bundle_cpp}
     ${engine_cpp}
 )
+target_link_libraries(dse_engine PRIVATE assimp)
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -155,6 +163,13 @@ endfunction()
 
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
+
+# 工具链：AssetBuilder
+add_executable(AssetBuilder 
+    apps/tools/asset_builder/main.cpp
+    engine/assets/compiler/importer.cpp
+)
+target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
 
 install(TARGETS dse_engine
     EXPORT DSEngineTargets
