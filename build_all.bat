@@ -9,14 +9,25 @@ echo         DSEngine Full Build and Verification Script
 echo ========================================================
 echo.
 
+:: 记录开始时间
+set "START_TIME=%TIME%"
+set "START_H=%START_TIME:~0,2%"
+set "START_M=%START_TIME:~3,2%"
+set "START_S=%START_TIME:~6,2%"
+set "START_MS=%START_TIME:~9,2%"
+:: 处理小时的前导空格
+if "%START_H:~0,1%"==" " set "START_H=0%START_H:~1,1%"
+:: 将时间转换为厘秒（1/100秒）以便于计算
+set /a START_TOTAL_CS=1%START_H%*360000 + 1%START_M%*6000 + 1%START_S%*100 + 1%START_MS% - 36610100
+
 set BUILD_DIR=build_vs2022
 set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
 set BUILD_EDITOR=0
-set BUILD_LAUNCHER=0
+set BUILD_LAUNCHER=1
 set BUILD_ENGINE_TESTS=1
 set PACKAGE_EDITOR_EXE=0
-set PACKAGE_LAUNCHER_EXE=0
+set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
 set VERIFY_EXECUTABLES=0
 set VERIFY_EXE_TIMEOUT_SECONDS=3
@@ -279,6 +290,28 @@ if "%BUILD_LAUNCHER%"=="1" (
         pause
         exit /b 1
     )
+    :: 检查 Rust 和 Cargo 是否存在
+    where cargo >nul 2>&1
+    if !ERRORLEVEL! neq 0 (
+        if exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
+            set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+            echo [OK] Found Cargo in USERPROFILE, added to PATH temporarily.
+        ) else (
+            echo [WARN] Rust / Cargo is not installed or not in PATH!
+            echo [*] Downloading and installing Rust toolchain automatically...
+            powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'"
+            if exist "rustup-init.exe" (
+                .\rustup-init.exe -y --default-toolchain stable --profile minimal
+                del /f /q "rustup-init.exe"
+                set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+                echo [OK] Rust toolchain installed successfully.
+            ) else (
+                echo [ERROR] Failed to download rustup-init.exe. Please install Rust manually from https://rustup.rs/
+                pause
+                exit /b 1
+            )
+        )
+    )
 )
 set NPM_CACHE=%CD%\.npm-cache
 if not exist "!NPM_CACHE!" mkdir "!NPM_CACHE!" >nul 2>&1
@@ -379,25 +412,43 @@ if "%PACKAGE_EDITOR_EXE%"=="1" (
 if "%PACKAGE_LAUNCHER_EXE%"=="1" (
     if "%BUILD_LAUNCHER%"=="1" (
         echo.
-        echo [*] Packaging Launcher EXE...
-        cmake --build %BUILD_DIR% --config Debug --target dse_launcher_exe
+        echo [*] Packaging Tauri Launcher EXE...
+        pushd apps\launcher_tauri
+        
+        :: 确保 NPM 依赖已安装
+        if not exist "node_modules" (
+            echo [*] Installing NPM dependencies for Launcher...
+            call npm install
+            if not "!ERRORLEVEL!"=="0" (
+                echo [ERROR] Failed to install NPM dependencies for Launcher.
+                popd
+                pause
+                exit /b 1
+            )
+        )
+
+        :: 确保 Rust / Cargo 在 PATH 中 (兼容刚才修复的本地环境)
+        set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+        
+        call npm run tauri build
         set "PACK_LAUNCHER_RC=!ERRORLEVEL!"
+        popd
         if not "!PACK_LAUNCHER_RC!"=="0" (
             echo.
             echo ========================================================
-            echo [ERROR] Launcher EXE packaging failed ^(target: dse_launcher_exe^).
-            echo [ROOT CAUSE] Check electron-builder download/packaging logs above.
-            echo [HINT] Most common root causes on Windows:
-            echo   1. Network timeout when downloading Electron from GitHub.
-            echo   2. Proxy/firewall blocks electron release download.
-            echo   3. Temporary network instability during app-builder download.
-            echo [RETRY] cmake --build %BUILD_DIR% --config Debug --target dse_launcher_exe -- /v:minimal
+            echo [ERROR] Tauri Launcher EXE packaging failed.
+            echo [ROOT CAUSE] Check tauri build logs above.
+            echo [HINT] Ensure Rust toolchain and webview2 dependencies are installed.
             echo ========================================================
             pause
             exit /b !PACK_LAUNCHER_RC!
         )
+        :: Copy the built executable to bin directory
+        if not exist ".\bin" mkdir ".\bin" >nul 2>&1
+        copy /Y "apps\launcher_tauri\src-tauri\target\release\dsengine-launcher.exe" ".\bin\" >nul
+        echo [OK] Tauri Launcher EXE copied to bin directory.
     ) else (
-        echo [WARN] Skip dse_launcher_exe because BUILD_LAUNCHER is OFF.
+        echo [WARN] Skip launcher build because BUILD_LAUNCHER is OFF.
     )
 )
 
@@ -488,10 +539,32 @@ if "%BUILD_ENGINE_TESTS%"=="1" (
     )
 )
 
+:: 计算并打印总耗时
+set "END_TIME=%TIME%"
+set "END_H=%END_TIME:~0,2%"
+set "END_M=%END_TIME:~3,2%"
+set "END_S=%END_TIME:~6,2%"
+set "END_MS=%END_TIME:~9,2%"
+if "%END_H:~0,1%"==" " set "END_H=0%END_H:~1,1%"
+
+set /a END_TOTAL_CS=1%END_H%*360000 + 1%END_M%*6000 + 1%END_S%*100 + 1%END_MS% - 36610100
+
+:: 处理跨天的情况
+if %END_TOTAL_CS% lss %START_TOTAL_CS% set /a END_TOTAL_CS+=8640000
+
+set /a DIFF_CS=%END_TOTAL_CS% - %START_TOTAL_CS%
+set /a DIFF_S=%DIFF_CS% / 100
+set /a DIFF_M=%DIFF_S% / 60
+set /a DIFF_S=%DIFF_S% %% 60
+set /a DIFF_H=%DIFF_M% / 60
+set /a DIFF_M=%DIFF_M% %% 60
+
 echo.
 echo ========================================================
 echo        [SUCCESS] All builds and verifications passed!
+echo        [*] Total Build Time: %DIFF_H%h %DIFF_M%m %DIFF_S%s
 echo ========================================================
+popd
 pause
 exit /b 0
 

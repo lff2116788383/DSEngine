@@ -24,15 +24,20 @@ bin/
 *.vcxproj*
 .vscode/
 
-# Electron and Node.js App Artifacts
+# Electron, Node.js and Tauri App Artifacts
 apps/editor/node_modules/
 apps/launcher/node_modules/
+apps/launcher_tauri/node_modules/
 apps/editor/dist/
 apps/launcher/dist/
+apps/launcher_tauri/dist/
 apps/editor/build/
 apps/launcher/build/
+apps/launcher_tauri/src-tauri/target/
+apps/launcher_tauri/src-tauri/gen/
 apps/editor/*.log
 apps/launcher/*.log
+apps/launcher_tauri/*.log
 apps/editor/release/
 apps/launcher/release/
 apps/editor/out/
