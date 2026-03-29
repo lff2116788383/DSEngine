@@ -73,6 +73,11 @@ public:
     void Render();
 
     /**
+     * @brief 设置是否启用编辑器模式 (在Init前调用)
+     */
+    void EnableEditorMode(bool enable);
+
+    /**
      * @brief 注入当前激活的实体世界
      * @param world 世界对象指针
      */
@@ -127,12 +132,25 @@ public:
      */
     void SetAssetManager(AssetManager* asset_manager);
 
+    /**
+     * @brief 获取渲染管线中场景纹理的句柄 (用于编辑器集成)
+     * @return 纹理 ID
+     */
+    unsigned int GetSceneTextureId() const;
+
+    /**
+     * @brief 获取渲染管线中游戏视图（最终合成）的纹理句柄 (用于编辑器集成)
+     * @return 纹理 ID
+     */
+    unsigned int GetMainTextureId() const;
+
 private:
     struct RenderGraphPass {
         std::string name;
         std::function<void(CommandBuffer&)> execute;
     };
 
+private:
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
@@ -187,6 +205,7 @@ private:
     unsigned int shadow_pipeline_state_ = 0;
     std::vector<RenderGraphPass> render_graph_passes_;
     AssetManager* asset_manager_ = nullptr;
+    bool editor_mode_ = false;
 };
 
 #endif

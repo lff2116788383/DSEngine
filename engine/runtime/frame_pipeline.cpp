@@ -17,6 +17,7 @@
 #include "engine/core/event_bus.h"
 #include "engine/scene/scene.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 #include <filesystem>
 #include <cstdlib>
 #include <stdexcept>
@@ -83,7 +84,14 @@ bool FramePipeline::Init() {
     }
     const int render_width = Screen::width();
     const int render_height = Screen::height();
-    main_render_target_ = 0;
+    
+    if (editor_mode_) {
+        // 在编辑器模式下，将最终合成结果输出到一个纹理中，而不是直接输出到屏幕
+        main_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, false});
+    } else {
+        main_render_target_ = 0;
+    }
+    
     // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
     scene_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
     ui_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
@@ -593,6 +601,12 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     }
 }
 
+void FramePipeline::EnableEditorMode(bool enable) {
+    if (!initialized_) {
+        editor_mode_ = enable;
+    }
+}
+
 void FramePipeline::SetWorld(World* world) {
     if (initialized_ || !world) {
         return;
@@ -615,6 +629,16 @@ int FramePipeline::LastMaxBatchSprites() const {
 
 int FramePipeline::LastSpriteCount() const {
     return last_sprite_count_;
+}
+
+unsigned int FramePipeline::GetSceneTextureId() const {
+    if (!rhi_device_ || scene_render_target_ == 0) return 0;
+    return rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
+}
+
+unsigned int FramePipeline::GetMainTextureId() const {
+    if (!rhi_device_ || main_render_target_ == 0) return 0;
+    return rhi_device_->GetRenderTargetColorTexture(main_render_target_);
 }
 
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {

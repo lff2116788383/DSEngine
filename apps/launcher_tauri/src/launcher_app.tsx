@@ -243,11 +243,6 @@ export function LauncherApp() {
     const loadVersions = async () => {
       if (!window.launcherAPI) return;
       const data = await window.launcherAPI.getEngineVersions();
-      // Mock some commercial states for demo
-      if (data.length > 0) {
-        data.push({ tag: 'v1.3.0-beta', executable: '', available: false, downloading: true, progress: 45 });
-        data.push({ tag: 'v1.1.5-lts', executable: '', available: false });
-      }
       setVersions(data);
       const available = data.find((item) => item.available);
       if (available) {

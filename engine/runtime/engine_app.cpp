@@ -54,62 +54,128 @@ EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config) 
     pipeline_ = std::make_unique<FramePipeline>();
 }
 
-EngineInstance::~EngineInstance() = default;
-
-int EngineInstance::Run() {
-    return RunEngine(config_); // Delegating to the original loop for now
+EngineInstance::~EngineInstance() {
+    Shutdown();
 }
 
-int RunEngine(const EngineRunConfig& config) {
-    std::cout << "Starting DSEngine Runtime..." << std::endl;
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW\n";
-        return -1;
+bool EngineInstance::Init() {
+    if (is_initialized_) return true;
+
+    // 如果未启用编辑器模式，则初始化系统环境
+    if (!config_.enable_editor) {
+        if (!glfwInit()) {
+            std::cerr << "Failed to initialize GLFW\n";
+            return false;
+        }
+
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        GLFWwindow* window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
+        if (!window) {
+            std::cerr << "Failed to create GLFW window\n";
+            glfwTerminate();
+            return false;
+        }
+
+        glfwMakeContextCurrent(window);
+        gladLoadGL(glfwGetProcAddress);
+    } else {
+        // 在编辑器模式下，gladLoadGL 通常已经在编辑器主程序中初始化过了，
+        // 但由于引擎是 DLL，exe 中的 glad 初始化不会影响 DLL 中的 glad 函数指针，
+        // 所以我们必须在 DLL 中再次调用 gladLoadGL。
+        gladLoadGL(glfwGetProcAddress);
+        
+        // 确保 Screen 大小被正确初始化
+        Screen::set_width_height(config_.window_width, config_.window_height);
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window = glfwCreateWindow(config.window_width, config.window_height, config.window_title.c_str(), nullptr, nullptr);
-    if (!window) {
-        std::cerr << "Failed to create GLFW window\n";
-        glfwTerminate();
-        return -1;
+    GLFWwindow* current_window = glfwGetCurrentContext();
+    if (current_window) {
+        if (!config_.enable_editor) {
+            glfwSetKeyCallback(current_window, KeyCallback);
+            glfwSetMouseButtonCallback(current_window, MouseButtonCallback);
+            glfwSetScrollCallback(current_window, ScrollCallback);
+            glfwSetCursorPosCallback(current_window, CursorPositionCallback);
+            
+            pipeline_->SetWindowTitleSetter([current_window](const std::string& title) {
+                glfwSetWindowTitle(current_window, title.c_str());
+            });
+        } else {
+            // 在编辑器模式下，忽略来自业务逻辑（Lua/C++）对窗口标题的修改，
+            // 保持编辑器窗口自身的标题不受干扰
+            pipeline_->SetWindowTitleSetter([](const std::string&) {
+                // Do nothing
+            });
+        }
     }
 
-    glfwSetKeyCallback(window, KeyCallback);
-    glfwSetMouseButtonCallback(window, MouseButtonCallback);
-    glfwSetScrollCallback(window, ScrollCallback);
-    glfwSetCursorPosCallback(window, CursorPositionCallback);
-    FramePipeline pipeline;
-    pipeline.SetWindowTitleSetter([window](const std::string& title) {
-        glfwSetWindowTitle(window, title.c_str());
-    });
-
-    glfwMakeContextCurrent(window);
-    gladLoadGL(glfwGetProcAddress);
     core::JobSystem::Init();
 
-    World runtime_world;
-    World* active_world = config.world ? config.world : &runtime_world;
-    pipeline.SetWorld(active_world);
-    pipeline.SetAssetManager(config.asset_manager);
-    pipeline.SetBusinessMode(config.business_mode);
-    if (config.business_mode == BusinessMode::Lua && !config.startup_lua_script_path.empty()) {
-        SetStartupLuaScriptPath(config.startup_lua_script_path);
+    World* active_world = config_.world ? config_.world : default_world_.get();
+    pipeline_->EnableEditorMode(config_.enable_editor);
+    pipeline_->SetWorld(active_world);
+    pipeline_->SetAssetManager(config_.asset_manager);
+    pipeline_->SetBusinessMode(config_.business_mode);
+    
+    if (config_.business_mode == BusinessMode::Lua && !config_.startup_lua_script_path.empty()) {
+        SetStartupLuaScriptPath(config_.startup_lua_script_path);
     }
-    std::cout << "Business mode: " << (config.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
-    if (!pipeline.Init()) {
+    
+    std::cout << "Business mode: " << (config_.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
+    
+    if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
-        pipeline.Shutdown();
+        pipeline_->Shutdown();
         core::JobSystem::Shutdown();
+        if (!config_.enable_editor) glfwTerminate();
+        return false;
+    }
+
+    is_initialized_ = true;
+    return true;
+}
+
+void EngineInstance::Tick() {
+    if (!is_initialized_) return;
+
+    Time::Update();
+    float dt = Time::delta_time();
+
+    accumulator_ += dt;
+    while (accumulator_ >= fixed_time_step_) {
+        pipeline_->FixedUpdate(fixed_time_step_);
+        accumulator_ -= fixed_time_step_;
+    }
+
+    pipeline_->Update(dt);
+    pipeline_->Render();
+    Input::Update();
+}
+
+void EngineInstance::Shutdown() {
+    if (!is_initialized_) return;
+    
+    pipeline_->Shutdown();
+    core::JobSystem::Shutdown();
+    
+    if (!config_.enable_editor) {
         glfwTerminate();
+    }
+    
+    is_initialized_ = false;
+}
+
+int EngineInstance::Run() {
+    if (!Init()) return -1;
+
+    GLFWwindow* window = glfwGetCurrentContext();
+    if (!window) {
+        std::cerr << "No current GLFW context found\n";
         return -1;
     }
 
-    float fixed_time_step = 0.02f;
-    float accumulator = 0.0f;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -118,63 +184,18 @@ int RunEngine(const EngineRunConfig& config) {
         glfwGetFramebufferSize(window, &width, &height);
         Screen::set_width_height(width, height);
 
-        Time::Update();
-        float dt = Time::delta_time();
-
-        accumulator += dt;
-        while (accumulator >= fixed_time_step) {
-            pipeline.FixedUpdate(fixed_time_step);
-            accumulator -= fixed_time_step;
-        }
-
-        pipeline.Update(dt);
-        pipeline.Render();
-
-#if !defined(NDEBUG) || defined(_DEBUG) || defined(DEBUG)
-        if (Time::TimeSinceStartup() >= 3.0f) {
-            static bool screenshot_taken = false;
-            if (!screenshot_taken) {
-                screenshot_taken = true;
-                
-                std::string prefix = (config.business_mode == BusinessMode::Lua) ? "DSEngine_lua_debug" : "DSEngine_c++_debug";
-                std::string dir_path = "screenshot";
-                std::string file_path = dir_path + "/" + prefix + "_screenshot_3s.png";
-                
-                std::cout << "Taking automatic 3s debug screenshot (" << prefix << ")..." << std::endl;
-                
-                std::error_code ec;
-                std::filesystem::create_directories(dir_path, ec);
-                
-                int width = Screen::width();
-                int height = Screen::height();
-                std::vector<uint8_t> pixels(width * height * 4); // RGBA
-                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-                
-                // OpenGL reads bottom-to-top, stb_image_write expects top-to-bottom
-                // Manually flip vertically to avoid missing stbi_flip_vertically_on_write in some older stb_image_write headers
-                std::vector<uint8_t> flipped_pixels(pixels.size());
-                int row_size = width * 4;
-                for (int y = 0; y < height; ++y) {
-                    std::copy(pixels.begin() + y * row_size, 
-                              pixels.begin() + (y + 1) * row_size, 
-                              flipped_pixels.begin() + (height - 1 - y) * row_size);
-                }
-
-                if (stbi_write_png(file_path.c_str(), width, height, 4, flipped_pixels.data(), width * 4)) {
-                    std::cout << "Saved " << file_path << " successfully." << std::endl;
-                } else {
-                    std::cerr << "Failed to save " << file_path << "." << std::endl;
-                }
-            }
-        }
-#endif
+        Tick();
 
         glfwSwapBuffers(window);
-        Input::Update();
     }
-    pipeline.Shutdown();
-    core::JobSystem::Shutdown();
-    glfwTerminate();
+
+    Shutdown();
     return 0;
+}
+
+int RunEngine(const EngineRunConfig& config) {
+    std::cout << "Starting DSEngine Runtime..." << std::endl;
+    EngineInstance instance(config);
+    return instance.Run();
 }
 }

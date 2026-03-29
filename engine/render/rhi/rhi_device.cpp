@@ -860,6 +860,10 @@ void OpenGLRhiDevice::RealBeginRenderPass(const RenderPassDesc& render_pass) {
 }
 
 void OpenGLRhiDevice::RealEndRenderPass() {
+    if (active_render_target_ != 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        active_render_target_ = 0;
+    }
 }
 
 void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {

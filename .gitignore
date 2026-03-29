@@ -50,6 +50,7 @@ apps/editor/build/
 apps/launcher/build/
 apps/launcher_tauri/src-tauri/target/
 apps/launcher_tauri/src-tauri/gen/
+apps/launcher_tauri/src-tauri/2.0.0-rc
 apps/editor/*.log
 apps/launcher/*.log
 apps/launcher_tauri/*.log
@@ -100,6 +101,16 @@ screenshots/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# Project Data & Editor Temp
+scene.json
+bin/scene.json
+bin/samples/lua/data/NewFolder*
+bin/samples/lua/data/NewScript*.lua
+bin/samples/lua/data/NewMaterial*.mat
+samples/lua/data/NewFolder*
+samples/lua/data/NewScript*.lua
+samples/lua/data/NewMaterial*.mat
 
 # Script cache
 *.pyc

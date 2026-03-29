@@ -23,7 +23,7 @@ set /a START_TOTAL_CS=1%START_H%*360000 + 1%START_M%*6000 + 1%START_S%*100 + 1%S
 set BUILD_DIR=build_vs2022
 set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
-set BUILD_EDITOR=0
+set BUILD_EDITOR=1
 set BUILD_LAUNCHER=1
 set BUILD_ENGINE_TESTS=1
 set PACKAGE_EDITOR_EXE=0
@@ -31,12 +31,6 @@ set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
 set VERIFY_EXECUTABLES=0
 set VERIFY_EXE_TIMEOUT_SECONDS=3
-set "DSE_ELECTRON_MIRROR="
-set "DSE_ELECTRON_CUSTOM_DIR="
-set "DSE_ELECTRON_CACHE_DIR=%CD%\.cache\electron"
-set "DSE_ELECTRON_BUILDER_CACHE_DIR=%CD%\.cache\electron-builder"
-set "DSE_ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/"
-set "DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR="
 
 :parse_args
 if "%~1"=="" goto parse_done
@@ -116,66 +110,6 @@ if /I "%~1"=="--all" (
     shift
     goto parse_args
 )
-if /I "%~1"=="--electron-mirror" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-mirror requires a URL value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_MIRROR=%~2"
-    shift
-    shift
-    goto parse_args
-)
-if /I "%~1"=="--electron-custom-dir" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-custom-dir requires a directory name value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_CUSTOM_DIR=%~2"
-    shift
-    shift
-    goto parse_args
-)
-if /I "%~1"=="--electron-cache-dir" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-cache-dir requires a directory path value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_CACHE_DIR=%~2"
-    shift
-    shift
-    goto parse_args
-)
-if /I "%~1"=="--electron-builder-cache-dir" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-builder-cache-dir requires a directory path value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_BUILDER_CACHE_DIR=%~2"
-    shift
-    shift
-    goto parse_args
-)
-if /I "%~1"=="--electron-builder-binaries-mirror" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-builder-binaries-mirror requires a URL value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_BUILDER_BINARIES_MIRROR=%~2"
-    shift
-    shift
-    goto parse_args
-)
-if /I "%~1"=="--electron-builder-binaries-custom-dir" (
-    if "%~2"=="" (
-        echo [ERROR] --electron-builder-binaries-custom-dir requires a directory name value.
-        goto usage_error
-    )
-    set "DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR=%~2"
-    shift
-    shift
-    goto parse_args
-)
 if /I "%~1"=="-h" goto usage
 if /I "%~1"=="--help" goto usage
 echo [ERROR] Unknown option: %~1
@@ -188,14 +122,6 @@ set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=OFF
 if "%BUILD_LAUNCHER%"=="1" set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=ON
 set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=OFF
 if "%BUILD_ENGINE_TESTS%"=="1" set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=ON
-set "CMAKE_ELECTRON_MIRROR_OPTION="
-if defined DSE_ELECTRON_MIRROR set "CMAKE_ELECTRON_MIRROR_OPTION=-DDSE_ELECTRON_MIRROR=%DSE_ELECTRON_MIRROR%"
-set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION="
-if defined DSE_ELECTRON_CUSTOM_DIR set "CMAKE_ELECTRON_CUSTOM_DIR_OPTION=-DDSE_ELECTRON_CUSTOM_DIR=%DSE_ELECTRON_CUSTOM_DIR%"
-set "CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION="
-if defined DSE_ELECTRON_BUILDER_BINARIES_MIRROR set "CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION=-DDSE_ELECTRON_BUILDER_BINARIES_MIRROR=%DSE_ELECTRON_BUILDER_BINARIES_MIRROR%"
-set "CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION="
-if defined DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR set "CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION=-DDSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR=%DSE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR%"
 
 :: Check Administrator Privileges if we need to package EXE
 if "%PACKAGE_EDITOR_EXE%"=="1" set NEED_ADMIN=1
@@ -324,22 +250,6 @@ if !ERRORLEVEL! neq 0 (
 )
 del "!NPM_CACHE!\_dse_write_test.tmp" >nul 2>&1
 set NPM_CONFIG_CACHE=!NPM_CACHE!
-if not exist "!DSE_ELECTRON_CACHE_DIR!" mkdir "!DSE_ELECTRON_CACHE_DIR!" >nul 2>&1
-echo write_test > "!DSE_ELECTRON_CACHE_DIR!\_dse_write_test.tmp" 2>nul
-if !ERRORLEVEL! neq 0 (
-    echo [ERROR] Electron cache directory is not writable: !DSE_ELECTRON_CACHE_DIR!
-    pause
-    exit /b 1
-)
-del "!DSE_ELECTRON_CACHE_DIR!\_dse_write_test.tmp" >nul 2>&1
-if not exist "!DSE_ELECTRON_BUILDER_CACHE_DIR!" mkdir "!DSE_ELECTRON_BUILDER_CACHE_DIR!" >nul 2>&1
-echo write_test > "!DSE_ELECTRON_BUILDER_CACHE_DIR!\_dse_write_test.tmp" 2>nul
-if !ERRORLEVEL! neq 0 (
-    echo [ERROR] Electron-builder cache directory is not writable: !DSE_ELECTRON_BUILDER_CACHE_DIR!
-    pause
-    exit /b 1
-)
-del "!DSE_ELECTRON_BUILDER_CACHE_DIR!\_dse_write_test.tmp" >nul 2>&1
 
 :: 1. Checking and cleaning old build cache
 echo [1/4] Checking and cleaning old build cache...
@@ -351,7 +261,7 @@ if exist %BUILD_DIR%\CMakeCache.txt (
 :: 2. Configure CMake project
 echo.
 echo [2/4] Configuring CMake project...
-cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% "-DDSE_ELECTRON_CACHE_DIR=%DSE_ELECTRON_CACHE_DIR%" "-DDSE_ELECTRON_BUILDER_CACHE_DIR=%DSE_ELECTRON_BUILDER_CACHE_DIR%" %CMAKE_ELECTRON_MIRROR_OPTION% %CMAKE_ELECTRON_CUSTOM_DIR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_MIRROR_OPTION% %CMAKE_ELECTRON_BUILDER_BINARIES_CUSTOM_DIR_OPTION%
+cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
     pause
@@ -372,43 +282,14 @@ if %ERRORLEVEL% neq 0 (
     echo 2. Missing third-party tools required by optional submodules.
     if "%BUILD_EDITOR%"=="1" (
         echo.
-        echo [HINT] If the failure is from dse_editor / node-gyp / dsengine_bridge:
-        echo   - Check Node.js version and local node-gyp version in apps\editor
-        echo   - Check Python path: npm_config_python or python in PATH
-        echo   - Check Visual Studio 2022 is installed with "Desktop development with C++"
-        echo   - Check VsDevCmd.bat exists under Visual Studio 2022\Common7\Tools
-        echo   - Re-run: cmake --build %BUILD_DIR% --config Debug --target dse_editor -- /v:minimal
+        echo [HINT] Check if Visual Studio 2022 is installed with "Desktop development with C++"
+        echo   - Re-run: cmake --build %BUILD_DIR% --config Debug --target dse_editor_cpp
     )
     echo ========================================================
     pause
     exit /b %ERRORLEVEL%
 )
 
-:: Editor / Launcher 资源拷贝已由 CMake 目标负责打包到 .\bin 目录
-if "%PACKAGE_EDITOR_EXE%"=="1" (
-    if "%BUILD_EDITOR%"=="1" (
-        echo.
-        echo [*] Packaging Editor EXE...
-        cmake --build %BUILD_DIR% --config Debug --target dse_editor_exe
-        set "PACK_EDITOR_RC=!ERRORLEVEL!"
-        if not "!PACK_EDITOR_RC!"=="0" (
-            echo.
-            echo ========================================================
-            echo [ERROR] Editor EXE packaging failed ^(target: dse_editor_exe^).
-            echo [ROOT CAUSE] Check electron-builder / electron-rebuild / node-gyp logs above.
-            echo [HINT] Most common root causes on Windows:
-            echo   1. Visual Studio 2022 missing "Desktop development with C++".
-            echo   2. node-gyp cannot find VS toolchain or Python.
-            echo   3. Environment variables for npm/node-gyp are not initialized correctly.
-            echo [RETRY] cmake --build %BUILD_DIR% --config Debug --target dse_editor_exe -- /v:minimal
-            echo ========================================================
-            pause
-            exit /b !PACK_EDITOR_RC!
-        )
-    ) else (
-        echo [WARN] Skip dse_editor_exe because BUILD_EDITOR is OFF.
-    )
-)
 if "%PACKAGE_LAUNCHER_EXE%"=="1" (
     if "%BUILD_LAUNCHER%"=="1" (
         echo.
@@ -505,19 +386,6 @@ if "%VERIFY_EXECUTABLES%"=="1" (
     )
 ) else (
     echo [WARN] Skip executable verification because VERIFY_EXECUTABLES is OFF.
-)
-
-if "%BUILD_EDITOR%"=="1" (
-    echo -- Running Editor Smoke Regression --
-    pushd ".\apps\editor" >nul
-    call npm run regress:editor-smoke
-    set "EDITOR_SMOKE_RC=!ERRORLEVEL!"
-    popd >nul
-    if not "!EDITOR_SMOKE_RC!"=="0" (
-        echo [ERROR] Editor smoke regression failed with exit code !EDITOR_SMOKE_RC!!
-        pause
-        exit /b !EDITOR_SMOKE_RC!
-    )
 )
 
 if "%BUILD_ENGINE_TESTS%"=="1" (

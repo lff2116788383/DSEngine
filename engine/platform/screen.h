@@ -10,7 +10,6 @@
 #ifndef UNTITLED_SCREEN_H
 #define UNTITLED_SCREEN_H
 
-
 /**
  * @class Screen
  * @brief 屏幕状态管理类，提供全局的屏幕尺寸和宽高比访问

@@ -4,7 +4,17 @@
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { invoke } from '@tauri-apps/api/core';
 import { LauncherApp } from './launcher_app';
+
+// Set up the launcher API bridge to Rust backend
+window.launcherAPI = {
+  getEngineVersions: () => invoke('get_engine_versions'),
+  chooseProjectRoot: () => invoke('choose_project_root'),
+  scanProjects: (rootDir: string) => invoke('scan_projects', { rootDir }),
+  launchEditor: (projectPath: string, executable: string) => 
+    invoke('launch_editor', { projectPath, executable }),
+};
 
 // Global style reset for Tech Dark UI
 const style = document.createElement('style');
