@@ -88,6 +88,8 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include
     ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/include
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c
+    ${CMAKE_SOURCE_DIR}/depends/imgui
+    ${CMAKE_SOURCE_DIR}/depends/imgui/backends
 )
 set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
@@ -100,6 +102,15 @@ file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cp
 file(GLOB_RECURSE tiny_aes_c "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/*.c")
 file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
 
+set(imgui_src
+    "${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp"
+    "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp"
+    "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_tables.cpp"
+    "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_widgets.cpp"
+    "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp"
+    "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp"
+)
+
 add_library(dse_engine SHARED
     ${glfw_sources}
     ${freetype_src}
@@ -111,6 +122,7 @@ add_library(dse_engine SHARED
     ${tiny_aes_c}
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
     ${bundle_cpp}
+    ${imgui_src}
     ${engine_cpp}
 )
 target_link_libraries(dse_engine PRIVATE assimp)
@@ -163,6 +175,7 @@ endfunction()
 
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
+add_subdirectory(apps/editor_cpp)
 
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 

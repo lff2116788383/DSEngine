@@ -18,6 +18,7 @@ struct EngineRunConfig {
     int window_height = 600;
     std::string window_title = "DSEngine Phase 2";
     BusinessMode business_mode = BusinessMode::Lua;
+    bool enable_editor = false;
     std::string startup_lua_script_path;
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;

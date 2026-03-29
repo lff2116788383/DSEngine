@@ -29,6 +29,7 @@ int main() {
         600,
         dse::samples::cpp_demo::config::kWindowTitle,
         BusinessMode::Cpp,
+        false,
         ""
     });
 }

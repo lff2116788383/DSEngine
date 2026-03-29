@@ -10,3 +10,7 @@
 [submodule "depends/assimp"]
 	path = depends/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "depends/imgui"]
+	path = depends/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking

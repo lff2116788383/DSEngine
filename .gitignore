@@ -14,6 +14,19 @@ bin/
 *.so
 *.dylib
 *.pdb
+imgui.ini
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+CMakeUserPresets.json
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+Testing/
 
 # IDE and Editor Files
 .idea/
@@ -23,6 +36,8 @@ bin/
 *.sln
 *.vcxproj*
 .vscode/
+*.VC.db
+*.opendb
 
 # Electron, Node.js and Tauri App Artifacts
 apps/editor/node_modules/
@@ -59,7 +74,7 @@ apps/editor/.node-gyp/
 .eslintcache
 .stylelintcache
 
-# Logs
+# Logs and outputs
 logs/
 *.log
 npm-debug.log*
@@ -67,6 +82,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+screenshot/
+screenshots/
 
 # Trae/AI temporary files
 .trae/*
@@ -82,6 +99,12 @@ lerna-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# Script cache
+*.pyc
+__pycache__/
+*.luac
 
 # Third-party temporary downloads (if any)
 depends/miniaudio/*.tmp

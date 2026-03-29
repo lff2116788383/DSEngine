@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
         window_height,
         "DSEngine Lua Demo",
         BusinessMode::Lua,
+        false,
         startup_script
     });
 }
