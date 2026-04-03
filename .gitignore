@@ -122,3 +122,12 @@ depends/miniaudio/*.tmp
 
 # Reference and documentation drafts (Do not track external engine source references)
 ref/
+
+# Local temporary/build artifacts
+build_*/
+*.tmp
+*.cache
+.tmp/
+.temp/
+tmp/
+temp/
