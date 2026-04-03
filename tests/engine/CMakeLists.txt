@@ -21,6 +21,9 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ../modules/gameplay_2d/ui/ui_layout_test.cpp
     ../modules/gameplay_2d/ui/ui_animation_test.cpp
+    ../modules/gameplay_2d/ui/ui_advanced_test.cpp
+    ../modules/gameplay_2d/physics/physics2d_advanced_test.cpp
+    ../modules/gameplay_2d/tilemap/tilemap_advanced_test.cpp
     profiler/cpu_profiler_test.cpp
     profiler/memory_profiler_test.cpp
     profiler/render_profiler_test.cpp
