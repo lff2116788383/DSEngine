@@ -354,6 +354,8 @@ struct Particle2D {
     float life_time;            ///< 粒子的总生命周期(秒)
     float life_remaining;       ///< 粒子的剩余生命周期(秒)
     float size;                 ///< 粒子的当前尺寸
+    float rotation = 0.0f;      ///< 粒子旋转角度(弧度)
+    float angular_velocity = 0.0f; ///< 角速度(弧度/秒)
 };
 
 /**
@@ -375,6 +377,38 @@ struct ParticleEmitterComponent {
     float start_life_time = 2.0f;                        ///< 新粒子的初始生命周期
     float start_size = 1.0f;                             ///< 新粒子的初始尺寸
     glm::vec4 start_color = glm::vec4(1.0f);             ///< 新粒子的初始颜色
+
+    // --- Advanced: Randomization ---
+    glm::vec3 velocity_min = glm::vec3(-1.0f, 0.5f, 0.0f);  ///< 随机速度下限
+    glm::vec3 velocity_max = glm::vec3(1.0f, 2.0f, 0.0f);   ///< 随机速度上限
+    float life_time_min = 1.0f;                              ///< 随机生命周期下限
+    float life_time_max = 3.0f;                              ///< 随机生命周期上限
+    float size_min = 0.5f;                                   ///< 随机尺寸下限
+    float size_max = 1.5f;                                   ///< 随机尺寸上限
+    float rotation_min = 0.0f;                               ///< 随机初始旋转下限(弧度)
+    float rotation_max = 6.2832f;                            ///< 随机初始旋转上限(弧度)
+    float angular_velocity_min = -1.0f;                      ///< 随机角速度下限
+    float angular_velocity_max = 1.0f;                       ///< 随机角速度上限
+    bool use_random_params = false;                          ///< 是否启用随机参数
+
+    // --- Advanced: Lifetime Curves ---
+    bool use_size_curve = false;                             ///< 是否启用尺寸曲线
+    float size_curve_end = 0.0f;                             ///< 生命末期尺寸
+    bool use_alpha_curve = false;                            ///< 是否启用透明度曲线
+    float alpha_curve_end = 0.0f;                            ///< 生命末期透明度
+    bool use_color_curve = false;                            ///< 是否启用颜色曲线
+    glm::vec4 color_curve_end = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f); ///< 生命末期颜色
+    bool use_speed_curve = false;                            ///< 是否启用速度曲线
+    float speed_curve_end_scale = 0.0f;                      ///< 生命末期速度缩放
+
+    // --- Advanced: Gravity & Collision ---
+    glm::vec3 gravity = glm::vec3(0.0f, 0.0f, 0.0f);        ///< 粒子重力加速度
+    bool enable_collision = false;                           ///< 是否启用碰撞检测
+    float collision_bounce = 0.5f;                           ///< 碰撞反弹系数
+    float collision_friction = 0.1f;                         ///< 碰撞摩擦系数
+    float collision_life_loss = 0.0f;                        ///< 碰撞时生命损失
+    float ground_y = 0.0f;                                   ///< 简易地面碰撞Y坐标
+    bool use_ground_collision = false;                       ///< 是否启用简易地面碰撞
 };
 
 class AudioClipAsset;

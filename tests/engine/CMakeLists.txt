@@ -16,6 +16,7 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/camera/camera_system_test.cpp
     ../modules/gameplay_2d/animation/animation_system_test.cpp
     ../modules/gameplay_2d/particle/particle_system_test.cpp
+    ../modules/gameplay_2d/particle/particle_advanced_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ../modules/gameplay_2d/ui/ui_layout_test.cpp
