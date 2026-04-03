@@ -1,6 +1,6 @@
 # Dark Soul Engine (DSEngine)
 
-DSEngine 是一个面向现代化 2D/3D 演进的 C++ 引擎工程，当前主线已完成第一阶段 2D 基建落地（ECS、RHI 抽象、资源与编辑器联动）。
+DSEngine 是一个面向现代化 2D/3D 演进的 C++ 引擎工程。**当前代码主线**以 `runtime + editor_cpp + launcher_tauri` 为准：运行时采用 C++ / Lua 双宿主，编辑器采用纯 C++ + Dear ImGui，启动器采用 Tauri + React。
 
 ## 目录结构
 
@@ -10,8 +10,8 @@ DSEngine
 │  ├─ runtime                  运行时宿主
 │  │  ├─ cpp_host              C++ 运行时入口
 │  │  └─ lua_host              Lua 运行时入口
-│  ├─ editor                   Electron + React + Node-API 编辑器
-│  └─ launcher                 项目启动器
+│  ├─ editor_cpp               C++ + Dear ImGui 编辑器
+│  └─ launcher_tauri           Tauri + React 启动器
 ├─ engine                      引擎内核与基础设施
 │  ├─ core                     事件总线、任务系统、内存池
 │  ├─ base                     调试、时间、补间等通用工具
@@ -39,19 +39,24 @@ DSEngine
 - 扩展更自然：`engine/core / base / platform / input` 明确基础设施边界，`modules/gameplay_2d` 也为后续 3D 或更多玩法模块预留了扩展位
 - 工程化更友好：目录结构更接近产品化仓库形态，便于构建、打包、SDK 导出、CI 与多人协作
 
-## 架构演进计划（轻量化与高性能重构）
+## 当前主线说明
 
-当前 `apps` 目录下的应用前端（基于 Electron + React）正面临构建耗时和可执行体积过大的瓶颈，违背了 DSEngine 作为轻量级高性能引擎的初衷。为此，项目已确立以下架构升级计划：
+当前仓库以以下应用层组合为主线：
 
-1. **启动器 (Launcher) 迁移至 Tauri**：
-   - **现状**：Electron 打包体积 >150MB，内存占用高。
-   - **目标**：采用 `Tauri` (系统原生 WebView2) 替代 Electron，前端保留 React 资产。
-   - **预期效果**：体积缩减至 10MB 内，大幅降低内存开销，保留现代化 UI 体验。
+1. **Runtime (`apps/runtime/`)**
+   - 提供 `cpp_host` 与 `lua_host` 双宿主。
+   - 作为引擎运行时入口，负责加载样例、脚本与资源。
 
-2. **编辑器 (Editor) 迁移至纯 C++ + Dear ImGui**：
-   - **现状**：N-API 桥接与共享内存通信机制复杂，渲染存在跨进程拷贝延迟。
-   - **目标**：废弃 Electron，直接在 `engine` 核心层嵌入 `Dear ImGui` 实现场景树、属性面板与渲染视口。
-   - **预期效果**：实现真正的“零开销、零拷贝”视口渲染，极速启动，大幅精简代码库。
+2. **Editor (`apps/editor_cpp/`)**
+   - 采用 **纯 C++ + Dear ImGui + GLFW + OpenGL**。
+   - 直接链接 `dse_engine`，避免旧版跨进程桥接与共享内存拷贝。
+   - 当前是仓库内的编辑器主实现。
+
+3. **Launcher (`apps/launcher_tauri/`)**
+   - 采用 **Tauri + React + TypeScript**。
+   - 当前是仓库内的启动器主实现。
+
+> 说明：文档中若提到基于 Electron / Node-API 的旧编辑器方案，均应视为历史方案或规划背景，不代表当前代码主线。
 
 ## 已实现功能清单
 
@@ -95,10 +100,14 @@ DSEngine
 - C++17 编译器
 - Windows 推荐 Visual Studio 2022
 
-### 编辑器（可选）
-- Node.js 16+
+### 启动器（可选）
+- Node.js 18+（建议）
 - npm
-- node-gyp
+- Rust / Cargo（Tauri 所需）
+
+### 编辑器（C++）
+- GLFW / OpenGL 可用开发环境
+- Windows 推荐 Visual Studio 2022
 
 ## 引擎编译运行流程（Windows）
 
@@ -114,7 +123,27 @@ cmake --install build_vs2022 --config Debug --prefix install
 
 不同构建模式都会带模式后缀，例如 Debug 产物为 `bin\DSEngine_debug.dll`，两个宿主可执行也会分别生成 `*_debug.exe`。
 
-如果需要构建 editor，优先使用 `build_all.bat`，它会自动准备 node-gyp 所需的 VS2022 / Python 环境。
+## 测试与回归验证
+
+如需启用引擎单测与 Lua 运行时回归：
+
+```bash
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_ENGINE_TESTS=ON
+cmake --build build_vs2022 --config Debug --target dse_engine_unit_tests dse_lua_runtime_tests
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.unit|engine.lua_runtime"
+```
+
+也可以直接使用仓库脚本：
+
+```bat
+build_all.bat --with-tests --no-editor --no-launcher --no-sdk --no-verify-exe
+```
+
+其中：
+- `engine.unit`：引擎基础单元测试
+- `engine.lua_runtime`：Lua 运行时专项回归测试，覆盖启动失败清理、脚本更新链路、异常场景状态复位等问题
+
+如需构建当前主线编辑器，可直接构建 `dse_editor_cpp` 目标。
 
 运行 C++ Demo：
 
@@ -134,33 +163,34 @@ bin\DSEngine_lua_debug.exe
 
 ## 编辑器编译运行流程（可选）
 
-在 `apps/editor/` 目录执行：
+当前主线编辑器为 `apps/editor_cpp/`，通过顶层 CMake 一并生成。
 
 ```bash
-npm install
-npx node-gyp configure
-npx node-gyp build
-npm start
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+cmake --build build_vs2022 --config Debug --target dse_editor_cpp
+bin\dsengine-editor_debug.exe
 ```
 
 更多编辑器使用说明见 [Editor_Usage_Guide.md](doc/Editor_Usage_Guide.md)。
 
-## 发布流水线（可选）
+## 启动器编译运行流程（可选）
 
-在 `apps/editor/` 目录可执行：
+当前主线启动器位于 `apps/launcher_tauri/`。
 
 ```bash
-npm run pipeline:export:win64
-npm run pipeline:export:win64:strict
+cd apps/launcher_tauri
+npm install
+npm run dev
 ```
 
-流水线会生成：
-- `build_export_win64/reports/release_manifest.json`（发布包文件清单 + SHA256）
-- `build_export_win64/reports/scene_schema_migration_dashboard.json`
-- `build_export_win64/reports/quality_dashboard.json`
-- `build_export_win64/reports/quality_dashboard.md`
+如需打包 Tauri 应用，可进一步执行：
 
-严格模式会启用迁移失败阈值与材质回放回归门禁（失败即中断发布）。
+```bash
+cd apps/launcher_tauri
+npm run tauri build
+```
+
+具体环境还取决于本机 Tauri / Rust 工具链是否已安装完成。
 
 ## 常用开发方式
 
@@ -180,7 +210,7 @@ npm run pipeline:export:win64:strict
 
 - **[架构说明](doc/Architecture.md)**：包含现代全栈引擎的分层模型与核心设计原则。
 - **[后续演进与发展规划](doc/Roadmap_and_Evolution_2026.md)**：记录了从 2D MVP 迈向全栈 3D 商业版引擎的完整路线图，以及 Launcher 和 Editor 的发展计划。
-- **[编辑器使用指南](doc/Editor_Usage_Guide.md)**：记录如何使用 React + Electron 编写的编辑器工具。
+- **[编辑器使用指南](doc/Editor_Usage_Guide.md)**：记录当前 `editor_cpp` 编辑器的构建、运行与使用方式。
 - **[测试指南](doc/TESTING_CTEST_GUIDE.md)**：引擎单元测试与回归测试的说明。
 
 

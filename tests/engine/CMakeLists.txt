@@ -70,3 +70,37 @@ add_test(
 )
 
 set_tests_properties(engine.unit PROPERTIES LABELS "engine;unit")
+
+set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
+
+add_executable(${DSE_LUA_RUNTIME_TEST_TARGET}
+    main.cpp
+    scripting/lua_runtime_test.cpp
+)
+
+target_include_directories(${DSE_LUA_RUNTIME_TEST_TARGET}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/depends
+)
+
+target_compile_features(${DSE_LUA_RUNTIME_TEST_TARGET} PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(${DSE_LUA_RUNTIME_TEST_TARGET} PRIVATE /utf-8)
+endif()
+
+target_link_libraries(${DSE_LUA_RUNTIME_TEST_TARGET}
+    PRIVATE
+        dse_engine
+)
+
+add_test(
+    NAME engine.lua_runtime
+    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET}
+)
+
+set_tests_properties(engine.lua_runtime PROPERTIES
+    LABELS "engine;unit;lua_runtime"
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)

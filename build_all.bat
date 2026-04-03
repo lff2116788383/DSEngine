@@ -390,7 +390,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
 
 if "%BUILD_ENGINE_TESTS%"=="1" (
     echo.
-    echo [*] Running CTest ^(engine unit^)...
+    echo [*] Running CTest ^(engine.unit + engine.lua_runtime + engine.spine^)...
     if not exist "%BUILD_DIR%\Testing\Temporary" mkdir "%BUILD_DIR%\Testing\Temporary"
     set "ENGINE_TEST_LOG=%BUILD_DIR%\Testing\Temporary\engine_ctest_output.log"
     ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure --verbose -L engine > "!ENGINE_TEST_LOG!" 2>&1
@@ -398,7 +398,7 @@ if "%BUILD_ENGINE_TESTS%"=="1" (
     type "!ENGINE_TEST_LOG!"
     powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; $rc = [int]'!ENGINE_TEST_RC!'; $total = 0; $failed = 0; $found = $false; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $allPassed = [regex]::Match($raw, '(?im)All tests passed \(\d+ assertions in (\d+) test cases\)'); if ($allPassed.Success) { $total = [int]$allPassed.Groups[1].Value; $found = $true } else { $caseLine = [regex]::Match($raw, '(?im)^\s*test cases:\s*(\d+)(.*?)$'); if ($caseLine.Success) { $total = [int]$caseLine.Groups[1].Value; $failedMatch = [regex]::Match($caseLine.Groups[2].Value, '(\d+)\s*failed'); if ($failedMatch.Success) { $failed = [int]$failedMatch.Groups[1].Value }; $found = $true } } }; $passed = [Math]::Max(0, $total - $failed); $color = if ($rc -eq 0) { 'Green' } else { 'Red' }; Write-Host ('[TEST_CASE] Total: ' + $total + ', Passed: ' + $passed + ', Failed: ' + $failed) -ForegroundColor $color; if (-not $found) { Write-Host '[WARN] Catch2 summary not found in log. TEST_CASE stats may be incomplete.' -ForegroundColor Yellow }"
     if "!ENGINE_TEST_RC!"=="0" (
-        powershell -NoProfile -Command "Write-Host '[PASS] Engine CTest passed.' -ForegroundColor Green"
+        powershell -NoProfile -Command "Write-Host '[PASS] Engine CTest passed ^(engine.unit + engine.lua_runtime + engine.spine^).' -ForegroundColor Green"
     ) else (
         powershell -NoProfile -Command "Write-Host '[FAIL] Engine CTest failed. See output above.' -ForegroundColor Red"
         powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $pattern = '(?ms)^-{5,}\r?\n(?<name>[^\r\n]+)\r?\n-{5,}\r?\n(?<file>[^\r\n]+\.cpp):(?<line>\d+)'; $matches = [regex]::Matches($raw, $pattern); if ($matches.Count -gt 0) { Write-Host '[FAIL] Failed test cases:' -ForegroundColor Red; $seen = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($m in $matches) { $item = '- ' + $m.Groups['name'].Value.Trim() + ' (' + $m.Groups['file'].Value + ':' + $m.Groups['line'].Value + ')'; if ($seen.Add($item)) { Write-Host $item -ForegroundColor Red } } } else { Write-Host '[WARN] No failed testcase name/file matched in CTest log.' -ForegroundColor Yellow } } else { Write-Host '[WARN] CTest log file not found for failure parsing.' -ForegroundColor Yellow }"
@@ -456,7 +456,7 @@ echo   --with-editor          Enable editor build (default: ON)
 echo   --no-editor            Disable editor build
 echo   --with-launcher        Enable launcher build (default: ON)
 echo   --no-launcher          Disable launcher build
-echo   --with-tests           Enable engine unit tests via CTest (default: OFF)
+echo   --with-tests           Enable engine regression tests via CTest ^(engine.unit + engine.lua_runtime + engine.spine^)
 echo   --no-tests             Disable engine unit tests
 echo   --package-editor-exe   Package editor executable (default: ON)
 echo   --package-launcher-exe Package launcher executable (default: ON)

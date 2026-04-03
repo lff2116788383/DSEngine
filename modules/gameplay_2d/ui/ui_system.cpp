@@ -43,8 +43,8 @@ glm::vec4 ParseHexColor(const std::string& hex, const glm::vec4& fallback) {
 
 void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& screen_size, const glm::vec2& mouse_pos, bool is_mouse_down) {
     SyncLabels(registry);
-    HandleEvents(registry, dt, mouse_pos, is_mouse_down);
     UpdateLayout(registry, screen_size);
+    HandleEvents(registry, dt, mouse_pos, is_mouse_down);
 }
 
 void UISystem::SyncLabels(entt::registry& registry) {

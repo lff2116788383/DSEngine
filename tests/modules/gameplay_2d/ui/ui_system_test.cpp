@@ -68,3 +68,66 @@ TEST_CASE("Given_NonInteractableUI_When_MouseOver_Then_HoverAndPressRemainFalse"
     REQUIRE_FALSE(ui.is_hovered);
     REQUIRE_FALSE(ui.is_pressed);
 }
+
+// 回归测试：布局在同一帧刚计算出来时，点击命中应基于最新 runtime_model，而不是上一帧残留值。
+TEST_CASE("Given_AnchoredUI_When_ClickOnFirstUpdate_Then_ClickUsesFreshLayout", "[engine][unit][ui]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& ui = world.registry().emplace<UIRendererComponent>(entity);
+    ui.anchor_min = glm::vec2(1.0f, 1.0f);
+    ui.anchor_max = glm::vec2(1.0f, 1.0f);
+    ui.pivot = glm::vec2(0.5f, 0.5f);
+    ui.position = glm::vec2(-50.0f, -30.0f);
+    ui.size = glm::vec2(100.0f, 60.0f);
+    ui.visible = true;
+    ui.interactable = true;
+
+    int click_count = 0;
+    ui.on_click = [&](Entity) { ++click_count; };
+
+    UISystem system;
+    const glm::vec2 screen_size(800.0f, 600.0f);
+    const glm::vec2 expected_center(350.0f, 270.0f);
+    system.Update(world.registry(), 0.016f, screen_size, expected_center, true);
+    system.Update(world.registry(), 0.016f, screen_size, expected_center, false);
+
+    REQUIRE(click_count == 1);
+    REQUIRE(ui.is_hovered);
+}
+
+// 回归测试：当父级遮罩启用且鼠标位于遮罩外时，子按钮不应收到点击。
+TEST_CASE("Given_MaskedChildUI_When_PointerOutsideMask_Then_ClickIsBlocked", "[engine][unit][ui]") {
+    World world;
+
+    auto mask_entity = world.CreateEntity();
+    auto& mask_ui = world.registry().emplace<UIRendererComponent>(mask_entity);
+    mask_ui.position = glm::vec2(0.0f, 0.0f);
+    mask_ui.size = glm::vec2(100.0f, 100.0f);
+    mask_ui.visible = true;
+    mask_ui.interactable = false;
+    auto& mask = world.registry().emplace<UIMaskComponent>(mask_entity);
+    mask.enabled = true;
+    mask.block_outside_input = true;
+    mask.size = glm::vec2(100.0f, 100.0f);
+
+    auto child = world.CreateEntity();
+    auto& child_ui = world.registry().emplace<UIRendererComponent>(child);
+    child_ui.position = glm::vec2(0.0f, 0.0f);
+    child_ui.size = glm::vec2(80.0f, 40.0f);
+    child_ui.visible = true;
+    child_ui.interactable = true;
+    world.registry().emplace<ParentComponent>(child).parent = mask_entity;
+
+    int click_count = 0;
+    child_ui.on_click = [&](Entity) { ++click_count; };
+
+    UISystem system;
+    const glm::vec2 screen_size(800.0f, 600.0f);
+    const glm::vec2 outside_mask_point(120.0f, 0.0f);
+    system.Update(world.registry(), 0.016f, screen_size, outside_mask_point, true);
+    system.Update(world.registry(), 0.016f, screen_size, outside_mask_point, false);
+
+    REQUIRE(click_count == 0);
+    REQUIRE_FALSE(child_ui.is_hovered);
+    REQUIRE_FALSE(child_ui.is_pressed);
+}

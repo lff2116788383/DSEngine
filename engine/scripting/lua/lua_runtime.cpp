@@ -332,6 +332,7 @@ void ShutdownLuaRuntime() {
         lua_close(state.state);
         state.state = nullptr;
     }
+    state.lua_memory_usage = 0;
     state.awake_called = false;
     state.startup_script_path.clear();
 }
@@ -351,6 +352,9 @@ bool BootstrapLuaRuntime() {
     state.startup_script_path = ResolveStartupLuaScript();
     if (state.startup_script_path.empty()) {
         DEBUG_LOG_ERROR("Lua startup script not found, set by SetStartupLuaScriptPath or DSE_STARTUP_LUA");
+        lua_close(state.state);
+        state.state = nullptr;
+        state.lua_memory_usage = 0;
         return false;
     }
     luaL_openlibs(state.state);
@@ -359,6 +363,9 @@ bool BootstrapLuaRuntime() {
     if (luaL_dofile(state.state, state.startup_script_path.c_str()) != LUA_OK) {
         DEBUG_LOG_ERROR("Lua startup load failed: {}", lua_tostring(state.state, -1));
         lua_pop(state.state, 1);
+        lua_close(state.state);
+        state.state = nullptr;
+        state.lua_memory_usage = 0;
         return false;
     }
     lua_getglobal(state.state, "Awake");
@@ -366,6 +373,9 @@ bool BootstrapLuaRuntime() {
         if (lua_pcall(state.state, 0, 0, 0) != LUA_OK) {
             DEBUG_LOG_ERROR("Lua Awake failed: {}", lua_tostring(state.state, -1));
             lua_pop(state.state, 1);
+            lua_close(state.state);
+            state.state = nullptr;
+            state.lua_memory_usage = 0;
             return false;
         }
         state.awake_called = true;
@@ -384,12 +394,12 @@ void TickLuaRuntime(float delta_time) {
     lua_getglobal(state.state, "Update");
     if (!lua_isfunction(state.state, -1)) {
         lua_pop(state.state, 1);
-        return;
-    }
-    lua_pushnumber(state.state, delta_time);
-    if (lua_pcall(state.state, 1, 0, 0) != LUA_OK) {
-        DEBUG_LOG_ERROR("Lua Update failed: {}", lua_tostring(state.state, -1));
-        lua_pop(state.state, 1);
+    } else {
+        lua_pushnumber(state.state, delta_time);
+        if (lua_pcall(state.state, 1, 0, 0) != LUA_OK) {
+            DEBUG_LOG_ERROR("Lua Update failed: {}", lua_tostring(state.state, -1));
+            lua_pop(state.state, 1);
+        }
     }
     UpdateScriptComponents(delta_time);
 }

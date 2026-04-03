@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.17)
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
+if(POLICY CMP0175)
+    cmake_policy(SET CMP0175 OLD)
+endif()
 project(DSEngine C CXX)
 include(GNUInstallDirs)
 
@@ -36,6 +39,7 @@ if (MSVC)
     add_compile_options(/FS) # 修复多线程编译 PDB 写入冲突 C1041
     add_compile_options("$<$<CONFIG:Debug>:/Z7>")
     add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Z7>")
+    add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
 endif ()
 include(cmake/CMakeLists.txt.glfw)
 include(cmake/CMakeLists.txt.FreeType)
@@ -70,6 +74,12 @@ include_directories("depends/assimp/include")
 set(ENTT_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(ENTT_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/entt-3.13.0)
+
+set(DSE_PREV_CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED})
+set(DSE_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+set(CMAKE_WARN_DEPRECATED OFF)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
+
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/box2d-2.4.1)
@@ -77,6 +87,9 @@ set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 add_subdirectory(depends/assimp)
+
+set(CMAKE_WARN_DEPRECATED ${DSE_PREV_CMAKE_WARN_DEPRECATED})
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
 
 # Include directories
 include_directories(
@@ -130,6 +143,9 @@ set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
+if(MSVC)
+    target_compile_options(dse_engine PRIVATE /wd5033 /wd4834)
+endif()
 
 if(EXISTS "${BOX2D_ROOT}/include")
     target_include_directories(dse_engine PRIVATE "${BOX2D_ROOT}/include")
@@ -175,7 +191,10 @@ endfunction()
 
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
-add_subdirectory(apps/editor_cpp)
+
+if(DSE_BUILD_EDITOR)
+    add_subdirectory(apps/editor_cpp)
+endif()
 
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
@@ -222,6 +241,12 @@ find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
 find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
+set(DSE_LEGACY_EDITOR_DIR "${CMAKE_SOURCE_DIR}/apps/editor")
+set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE OFF)
+if(EXISTS "${DSE_LEGACY_EDITOR_DIR}/package.json" AND EXISTS "${DSE_LEGACY_EDITOR_DIR}/binding.gyp")
+    set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE ON)
+endif()
+
 if(DSE_BUILD_LAUNCHER)
     if(EXISTS "${CMAKE_SOURCE_DIR}/apps/launcher/CMakeLists.txt")
         add_subdirectory(apps/launcher)
@@ -232,24 +257,24 @@ if(DSE_BUILD_LAUNCHER)
     endif()
 endif()
 
-if(NPM_EXECUTABLE AND NPX_EXECUTABLE)
+if(NPM_EXECUTABLE AND NPX_EXECUTABLE AND DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE)
     add_test(
         NAME editor_bridge_rebuild
         COMMAND ${NPX_EXECUTABLE} node-gyp rebuild
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
+        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
     )
     set_tests_properties(editor_bridge_rebuild PROPERTIES FIXTURES_SETUP editor_bridge_ready)
 
     add_test(
         NAME editor_material_replay_regression
         COMMAND ${NPM_EXECUTABLE} run regress:material-replay
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
+        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
     )
     set_tests_properties(editor_material_replay_regression PROPERTIES FIXTURES_REQUIRED editor_bridge_ready)
 
     add_test(
         NAME editor_scene_schema_migrate_regression
         COMMAND ${NPM_EXECUTABLE} run regress:scene-schema-migrate
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/editor
+        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
     )
 endif()

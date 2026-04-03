@@ -62,3 +62,60 @@ TEST_CASE("Given_MismatchedTileData_When_Update_Then_SystemSkipsGeneration", "[e
     REQUIRE(tilemap.runtime_tile_entities.empty());
     REQUIRE(tilemap.dirty);
 }
+
+// 回归测试：开启 generate_colliders 时，符合条件的瓦片应生成静态刚体与碰撞体。
+TEST_CASE("Given_ColliderTilemap_When_Update_Then_RuntimeTilesContainStaticColliders", "[engine][unit][tilemap]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
+    auto& tf = world.registry().emplace<TransformComponent>(entity);
+    tf.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    tilemap.width = 2;
+    tilemap.height = 1;
+    tilemap.tile_size = 1.0f;
+    tilemap.tiles = {0, 2};
+    tilemap.generate_colliders = true;
+    tilemap.collider_tile_min = 1;
+    tilemap.dirty = true;
+
+    TilemapSystem system;
+    system.Update(world.registry());
+
+    REQUIRE(tilemap.runtime_tile_entities.size() == 2);
+
+    const auto collider_entity = tilemap.runtime_tile_entities[1];
+    REQUIRE(world.registry().all_of<RigidBody2DComponent>(collider_entity));
+    REQUIRE(world.registry().all_of<BoxCollider2DComponent>(collider_entity));
+    const auto& rb = world.registry().get<RigidBody2DComponent>(collider_entity);
+    REQUIRE(rb.type == RigidBody2DType::Static);
+}
+
+// 回归测试：dirty 重建时应销毁旧运行时瓦片，并按最新 tiles 重新生成。
+TEST_CASE("Given_DirtyTilemapRefresh_When_UpdateAgain_Then_RuntimeTilesAreRebuilt", "[engine][unit][tilemap]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
+    auto& tf = world.registry().emplace<TransformComponent>(entity);
+    tf.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    tf.dirty = false;
+    tilemap.width = 2;
+    tilemap.height = 1;
+    tilemap.tile_size = 1.0f;
+    tilemap.tiles = {1, -1};
+    tilemap.dirty = true;
+
+    TilemapSystem system;
+    system.Update(world.registry());
+
+    REQUIRE(tilemap.runtime_tile_entities.size() == 1);
+    const auto first_runtime = tilemap.runtime_tile_entities.front();
+    REQUIRE(world.registry().valid(first_runtime));
+
+    tilemap.tiles = {-1, 3};
+    tilemap.dirty = true;
+    system.Update(world.registry());
+
+    REQUIRE(tilemap.runtime_tile_entities.size() == 1);
+    REQUIRE_FALSE(world.registry().valid(first_runtime));
+    REQUIRE(world.registry().valid(tilemap.runtime_tile_entities.front()));
+}
