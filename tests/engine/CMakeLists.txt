@@ -18,6 +18,8 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
+    ../modules/gameplay_2d/ui/ui_layout_test.cpp
+    ../modules/gameplay_2d/ui/ui_animation_test.cpp
     ../modules/gameplay_2d/physics/physics2d_system_test.cpp
     ../modules/gameplay_3d/animation/animator_system_test.cpp
     ../modules/gameplay_3d/rendering/terrain_system_test.cpp
@@ -41,6 +43,7 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/particle/particle_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/tilemap/tilemap_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_layout.cpp
     ${CMAKE_SOURCE_DIR}/engine/physics/physics2d/physics2d_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/ai/steering_system.cpp

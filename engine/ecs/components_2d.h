@@ -482,4 +482,74 @@ struct UIJoystickComponent {
     glm::vec2 drag_anchor = glm::vec2(0.0f); ///< 记录本次拖拽的起始锚点屏幕坐标
 };
 
+// --- Advanced UI Layout Components ---
+
+/**
+ * @struct UIAnchorComponent
+ * @brief UI 锚点组件，定义元素相对于屏幕/父容器的定位方式
+ */
+struct UIAnchorComponent {
+    int anchor = 5;                          ///< 锚点类型 (对应 UIAnchor 枚举: 0=TopLeft...9=Stretch)
+    glm::vec2 offset = glm::vec2(0.0f);      ///< 相对锚点的偏移
+};
+
+/**
+ * @struct UIGridLayoutComponent
+ * @brief UI 网格布局组件，自动排列子元素
+ */
+struct UIGridLayoutComponent {
+    int columns = 1;                           ///< 列数
+    int rows = 0;                              ///< 行数（0 表示自动）
+    glm::vec2 cell_size = glm::vec2(100.0f);   ///< 单元格大小
+    glm::vec2 spacing = glm::vec2(10.0f);      ///< 单元格间距
+    int alignment = 0;                         ///< 对齐方式 (对应 GridLayoutAlignment 枚举)
+};
+
+/**
+ * @struct UICanvasScalerComponent
+ * @brief Canvas 缩放组件，处理多分辨率自适应
+ */
+struct UICanvasScalerComponent {
+    glm::vec2 reference_resolution = glm::vec2(1920.0f, 1080.0f);  ///< 参考分辨率
+    float scale_factor = 1.0f;                                      ///< 缩放因子
+    bool match_width_or_height = true;                              ///< true=宽高平均, false=仅宽度
+};
+
+/**
+ * @struct UIAnimationComponent
+ * @brief UI 动画组件，基于 Tween 驱动位置、缩放、透明度、颜色动画
+ */
+struct UIAnimationComponent {
+    // Target properties
+    glm::vec2 target_position = glm::vec2(0.0f);
+    glm::vec2 target_scale = glm::vec2(1.0f);
+    float target_alpha = 1.0f;
+    glm::vec4 target_color = glm::vec4(1.0f);
+
+    // Current animation state
+    bool animate_position = false;
+    bool animate_scale = false;
+    bool animate_alpha = false;
+    bool animate_color = false;
+
+    // Animation parameters
+    float duration = 0.3f;          ///< 动画持续时间（秒）
+    float elapsed = 0.0f;           ///< 已经过的时间
+    float delay = 0.0f;             ///< 延迟开始时间
+    float delay_remaining = 0.0f;   ///< 剩余延迟时间
+    bool loop = false;              ///< 是否循环
+    bool ping_pong = false;         ///< 是否来回播放
+    bool playing = false;           ///< 是否正在播放
+    bool reverse = false;           ///< 当前是否在反向播放（ping_pong 用）
+
+    // Easing (0=linear, 1=ease-in, 2=ease-out, 3=ease-in-out)
+    int easing = 0;
+
+    // Snapshot of start values (set when animation begins)
+    glm::vec2 start_position = glm::vec2(0.0f);
+    glm::vec2 start_scale = glm::vec2(1.0f);
+    float start_alpha = 1.0f;
+    glm::vec4 start_color = glm::vec4(1.0f);
+};
+
 #endif
