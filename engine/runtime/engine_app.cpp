@@ -80,7 +80,12 @@ bool EngineInstance::Init() {
         }
 
         glfwMakeContextCurrent(window);
-        gladLoadGL(glfwGetProcAddress);
+        if (!gladLoadGL(glfwGetProcAddress)) {
+            std::cerr << "Failed to initialize OpenGL (glad)\n";
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return false;
+        }
     } else {
         // 在编辑器模式下，gladLoadGL 通常已经在编辑器主程序中初始化过了，
         // 但由于引擎是 DLL，exe 中的 glad 初始化不会影响 DLL 中的 glad 函数指针，
@@ -143,7 +148,13 @@ void EngineInstance::Tick() {
     Time::Update();
     float dt = Time::delta_time();
 
+    // Clamp accumulator to prevent spiral-of-death when dt is very large
+    // (e.g. after a loading stall or breakpoint). Allow at most 10 fixed steps per frame.
+    constexpr float kMaxAccumulator = 0.2f; // 10 * 0.02s
     accumulator_ += dt;
+    if (accumulator_ > kMaxAccumulator) {
+        accumulator_ = kMaxAccumulator;
+    }
     while (accumulator_ >= fixed_time_step_) {
         pipeline_->FixedUpdate(fixed_time_step_);
         accumulator_ -= fixed_time_step_;

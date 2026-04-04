@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 #include <memory>
 #include <vector>
 #include <string>
@@ -97,6 +98,7 @@ struct SpineRendererComponent {
     void* skeleton_data = nullptr;                       ///< spine::SkeletonData*
     void* atlas = nullptr;                               ///< spine::Atlas*
     void* skeleton = nullptr;                            ///< spine::Skeleton*
+    void* animation_state_data = nullptr;                ///< spine::AnimationStateData*
     void* animation_state = nullptr;                     ///< spine::AnimationState*
     std::vector<std::shared_ptr<TextureAsset>> textures; ///< 持有的纹理资产
     int sorting_layer = 0;
@@ -175,6 +177,10 @@ struct UIButtonComponent {
  */
 struct UILabelComponent {
     std::string text;                                    ///< 显示的文本
+    bool use_localization = false;                       ///< 是否启用本地化文本绑定
+    std::string localization_key;                        ///< 本地化键，如 ui.button.ok
+    std::string fallback_text;                           ///< 本地化缺失时使用的回退文本
+    std::unordered_map<std::string, std::string> localization_params; ///< 本地化参数表
     long long number_value = 0;                          ///< 数字模式下的值
     bool numeric_mode = false;                           ///< 开启数字模式可避免字符串分配开销
     unsigned int font_texture_handle = 0;                ///< 位图字体图集句柄
@@ -359,6 +365,63 @@ struct Particle2D {
 };
 
 /**
+ * @enum ParticleCurveType
+ * @brief 粒子曲线类型，用于驱动生命周期参数插值
+ */
+enum class ParticleCurveType {
+    Linear,     ///< 线性插值
+    EaseIn,     ///< 缓入
+    EaseOut,    ///< 缓出
+    EaseInOut   ///< 缓入缓出
+};
+
+/**
+ * @struct ParticleCurve
+ * @brief 标量粒子曲线，适用于尺寸、透明度、速度缩放等生命周期参数
+ */
+struct ParticleCurve {
+    bool enabled = false;                               ///< 是否启用曲线
+    ParticleCurveType type = ParticleCurveType::Linear; ///< 曲线类型
+    float start_value = 1.0f;                           ///< 生命周期起始值
+    float end_value = 0.0f;                             ///< 生命周期结束值
+
+    float Evaluate(float t) const {
+        t = std::clamp(t, 0.0f, 1.0f);
+        float shaped_t = t;
+        switch (type) {
+        case ParticleCurveType::Linear:
+            shaped_t = t;
+            break;
+        case ParticleCurveType::EaseIn:
+            shaped_t = t * t;
+            break;
+        case ParticleCurveType::EaseOut:
+            shaped_t = 1.0f - (1.0f - t) * (1.0f - t);
+            break;
+        case ParticleCurveType::EaseInOut:
+            if (t < 0.5f) {
+                shaped_t = 2.0f * t * t;
+            } else {
+                const float k = -2.0f * t + 2.0f;
+                shaped_t = 1.0f - (k * k) * 0.5f;
+            }
+            break;
+        }
+        return glm::mix(start_value, end_value, shaped_t);
+    }
+};
+
+/**
+ * @enum ParticleCollisionMode
+ * @brief 粒子碰撞模式，便于从简易地面碰撞逐步扩展到更正式的碰撞系统
+ */
+enum class ParticleCollisionMode {
+    None,        ///< 不启用碰撞
+    GroundPlane, ///< 与简易地面平面碰撞
+    Box2D        ///< 预留给 Box2D 集成
+};
+
+/**
  * @struct ParticleEmitterComponent
  * @brief 粒子发射器组件，控制粒子的生成规则和渲染材质
  */
@@ -392,18 +455,22 @@ struct ParticleEmitterComponent {
     bool use_random_params = false;                          ///< 是否启用随机参数
 
     // --- Advanced: Lifetime Curves ---
-    bool use_size_curve = false;                             ///< 是否启用尺寸曲线
-    float size_curve_end = 0.0f;                             ///< 生命末期尺寸
-    bool use_alpha_curve = false;                            ///< 是否启用透明度曲线
-    float alpha_curve_end = 0.0f;                            ///< 生命末期透明度
+    bool use_size_curve = false;                             ///< 是否启用尺寸曲线（兼容旧字段）
+    float size_curve_end = 0.0f;                             ///< 生命末期尺寸（兼容旧字段）
+    bool use_alpha_curve = false;                            ///< 是否启用透明度曲线（兼容旧字段）
+    float alpha_curve_end = 0.0f;                            ///< 生命末期透明度（兼容旧字段）
     bool use_color_curve = false;                            ///< 是否启用颜色曲线
     glm::vec4 color_curve_end = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f); ///< 生命末期颜色
-    bool use_speed_curve = false;                            ///< 是否启用速度曲线
-    float speed_curve_end_scale = 0.0f;                      ///< 生命末期速度缩放
+    bool use_speed_curve = false;                            ///< 是否启用速度曲线（兼容旧字段）
+    float speed_curve_end_scale = 0.0f;                      ///< 生命末期速度缩放（兼容旧字段）
+    ParticleCurve size_curve = {false, ParticleCurveType::Linear, 1.0f, 0.0f};   ///< 正式尺寸曲线
+    ParticleCurve alpha_curve = {false, ParticleCurveType::Linear, 1.0f, 0.0f};  ///< 正式透明度曲线
+    ParticleCurve speed_curve = {false, ParticleCurveType::Linear, 1.0f, 0.0f};  ///< 正式速度曲线
 
     // --- Advanced: Gravity & Collision ---
     glm::vec3 gravity = glm::vec3(0.0f, 0.0f, 0.0f);        ///< 粒子重力加速度
     bool enable_collision = false;                           ///< 是否启用碰撞检测
+    ParticleCollisionMode collision_mode = ParticleCollisionMode::None; ///< 碰撞模式
     float collision_bounce = 0.5f;                           ///< 碰撞反弹系数
     float collision_friction = 0.1f;                         ///< 碰撞摩擦系数
     float collision_life_loss = 0.0f;                        ///< 碰撞时生命损失

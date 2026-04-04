@@ -8,7 +8,7 @@ set_target_properties(DSEngine_example_cpp PROPERTIES OUTPUT_NAME "DSEngine_c++"
 dse_apply_config_postfix(DSEngine_example_cpp)
 
 if (MSVC)
-    set_property(TARGET DSEngine_example_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET DSEngine_example_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 dse_copy_runtime_assets(DSEngine_example_cpp)

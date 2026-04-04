@@ -580,6 +580,44 @@ void AssetManager::UnloadUnused() {
     }
 }
 
+void AssetManager::ReleaseGpuResources() {
+    std::lock_guard<std::mutex> cache_lock(cache_mutex_);
+
+    RhiDevice* device = nullptr;
+    {
+        std::lock_guard<std::mutex> config_lock(config_mutex_);
+        device = rhi_device_;
+    }
+
+    if (!device) {
+        textures_.clear();
+        shaders_.clear();
+        materials_.clear();
+        return;
+    }
+
+    for (auto it = textures_.begin(); it != textures_.end(); ++it) {
+        if (auto texture = it->second.lock()) {
+            const unsigned int handle = texture->GetHandle();
+            if (handle != 0) {
+                device->DeleteTexture(handle);
+            }
+        }
+    }
+    textures_.clear();
+
+    for (auto it = shaders_.begin(); it != shaders_.end(); ++it) {
+        if (auto shader = it->second.lock()) {
+            const unsigned int handle = shader->GetHandle();
+            if (handle != 0) {
+                device->DeleteShaderProgram(handle);
+            }
+        }
+    }
+    shaders_.clear();
+    materials_.clear();
+}
+
 void AssetManager::PumpMainThreadCallbacks(std::size_t max_callbacks) {
     std::vector<std::function<void()>> callbacks;
     {

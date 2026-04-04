@@ -354,6 +354,7 @@ public:
      * @brief 执行 UnloadUnused 操作
      */
     void UnloadUnused();
+    void ReleaseGpuResources();
 
     ~AssetManager() = default;
 

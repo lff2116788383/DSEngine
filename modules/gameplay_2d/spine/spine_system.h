@@ -30,6 +30,11 @@ public:
     void Update(entt::registry& registry, float dt);
 
     void Render(World& world, CommandBuffer& cmd_buffer);
+
+    void Shutdown(entt::registry& registry);
+
+private:
+    void CleanupComponent(SpineRendererComponent& comp);
 };
 
 } // namespace gameplay2d

@@ -3,14 +3,12 @@
  * @brief UIAnimationComponent 单元测试
  */
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include "catch/catch.hpp"
 #include "gameplay_2d/ui/ui_system.h"
 #include "engine/ecs/components_2d.h"
 #include <entt/entt.hpp>
 
 using namespace dse::gameplay2d;
-using Catch::Matchers::WithinAbs;
 
 // ─── Helper ──────────────────────────────────────────────────────────────
 static entt::entity MakeAnimatedUI(entt::registry& reg, glm::vec2 pos) {
@@ -42,8 +40,8 @@ TEST_CASE("UIAnimation - position animation interpolates", "[ui][animation]") {
     sys.Update(reg, 0.5f, {800, 600}, {0, 0}, false);
 
     auto& ui = reg.get<UIRendererComponent>(e);
-    REQUIRE_THAT(ui.position.x, WithinAbs(50.0, 1.0));
-    REQUIRE_THAT(ui.position.y, WithinAbs(100.0, 1.0));
+    REQUIRE(ui.position.x == Approx(50.0f).margin(1.0f));
+    REQUIRE(ui.position.y == Approx(100.0f).margin(1.0f));
 }
 
 TEST_CASE("UIAnimation - animation completes and stops", "[ui][animation]") {
@@ -63,7 +61,7 @@ TEST_CASE("UIAnimation - animation completes and stops", "[ui][animation]") {
     sys.Update(reg, 1.0f, {800, 600}, {0, 0}, false);
 
     REQUIRE_FALSE(anim.playing);
-    REQUIRE_THAT(reg.get<UIRendererComponent>(e).position.x, WithinAbs(100.0, 0.1));
+    REQUIRE(reg.get<UIRendererComponent>(e).position.x == Approx(100.0f).margin(0.1f));
 }
 
 // ─── Alpha Animation ────────────────────────────────────────────────────
@@ -83,7 +81,7 @@ TEST_CASE("UIAnimation - alpha fade out", "[ui][animation]") {
 
     sys.Update(reg, 0.5f, {800, 600}, {0, 0}, false);
 
-    REQUIRE_THAT(reg.get<UIRendererComponent>(e).color.a, WithinAbs(0.5, 0.05));
+    REQUIRE(reg.get<UIRendererComponent>(e).color.a == Approx(0.5f).margin(0.05f));
 }
 
 // ─── Loop ────────────────────────────────────────────────────────────────
@@ -150,7 +148,7 @@ TEST_CASE("UIAnimation - delay prevents animation start", "[ui][animation]") {
 
     // Advance 0.3s (still in delay)
     sys.Update(reg, 0.3f, {800, 600}, {0, 0}, false);
-    REQUIRE_THAT(reg.get<UIRendererComponent>(e).position.x, WithinAbs(0.0, 0.1));
+    REQUIRE(reg.get<UIRendererComponent>(e).position.x == Approx(0.0f).margin(0.1f));
 
     // Advance 0.3s more (delay over, 0.1s into animation)
     sys.Update(reg, 0.3f, {800, 600}, {0, 0}, false);
@@ -174,7 +172,7 @@ TEST_CASE("UIAnimation - ease-in starts slow", "[ui][animation]") {
     sys.Update(reg, 0.5f, {800, 600}, {0, 0}, false);
 
     // Ease-in at t=0.5: eased = 0.25, so position should be ~25
-    REQUIRE_THAT(reg.get<UIRendererComponent>(e).position.x, WithinAbs(25.0, 2.0));
+    REQUIRE(reg.get<UIRendererComponent>(e).position.x == Approx(25.0f).margin(2.0f));
 }
 
 TEST_CASE("UIAnimation - ease-out starts fast", "[ui][animation]") {
@@ -193,5 +191,5 @@ TEST_CASE("UIAnimation - ease-out starts fast", "[ui][animation]") {
     sys.Update(reg, 0.5f, {800, 600}, {0, 0}, false);
 
     // Ease-out at t=0.5: eased = 0.75, so position should be ~75
-    REQUIRE_THAT(reg.get<UIRendererComponent>(e).position.x, WithinAbs(75.0, 2.0));
+    REQUIRE(reg.get<UIRendererComponent>(e).position.x == Approx(75.0f).margin(2.0f));
 }

@@ -50,7 +50,7 @@ void TilemapSystem::Update(entt::registry& registry) {
             for (int x = 0; x < tilemap.width; ++x) {
                 const int index = y * tilemap.width + x;
                 const int tile_id = tilemap.tiles[index];
-                if (tile_id < 0) {
+                if (tile_id <= 0) {
                     continue;
                 }
 

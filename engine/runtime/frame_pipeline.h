@@ -201,7 +201,7 @@ private:
     unsigned int mesh_pipeline_state_ = 0;
     unsigned int prez_pipeline_state_ = 0;
     unsigned int composite_pipeline_state_ = 0;
-    unsigned int shadow_render_target_[3];
+    unsigned int shadow_render_target_[CSM_CASCADES] = {0, 0, 0};
     unsigned int shadow_pipeline_state_ = 0;
     std::vector<RenderGraphPass> render_graph_passes_;
     AssetManager* asset_manager_ = nullptr;

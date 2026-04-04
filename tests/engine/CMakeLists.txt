@@ -15,6 +15,8 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     scripting/cpp_business_runtime_test.cpp
     ../modules/gameplay_2d/camera/camera_system_test.cpp
     ../modules/gameplay_2d/animation/animation_system_test.cpp
+    ../modules/gameplay_2d/localization/localization_system_test.cpp
+    ../modules/gameplay_2d/localization/font_manager_test.cpp
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/particle/particle_advanced_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
@@ -47,6 +49,8 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/engine/scripting/cpp/cpp_business_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/camera/camera_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/animation/animation_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/localization/localization_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/localization/font_manager.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/particle/particle_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/tilemap/tilemap_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_system.cpp
@@ -83,6 +87,48 @@ add_test(
 )
 
 set_tests_properties(engine.unit PROPERTIES LABELS "engine;unit")
+
+add_test(
+    NAME engine.2d.ui
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[ui]"
+)
+set_tests_properties(engine.2d.ui PROPERTIES LABELS "engine;unit;2d;ui;smoke")
+
+add_test(
+    NAME engine.2d.tilemap
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[tilemap]"
+)
+set_tests_properties(engine.2d.tilemap PROPERTIES LABELS "engine;unit;2d;tilemap;smoke")
+
+add_test(
+    NAME engine.2d.particle
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[particle]"
+)
+set_tests_properties(engine.2d.particle PROPERTIES LABELS "engine;unit;2d;particle;smoke")
+
+add_test(
+    NAME engine.2d.physics2d
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[physics2d]"
+)
+set_tests_properties(engine.2d.physics2d PROPERTIES LABELS "engine;unit;2d;physics2d;smoke")
+
+add_test(
+    NAME engine.2d.localization
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[localization]"
+)
+set_tests_properties(engine.2d.localization PROPERTIES LABELS "engine;unit;2d;localization;smoke")
+
+add_test(
+    NAME engine.2d.animation
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[animation]"
+)
+set_tests_properties(engine.2d.animation PROPERTIES LABELS "engine;unit;2d;animation;smoke")
+
+add_test(
+    NAME engine.2d.camera
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[camera]"
+)
+set_tests_properties(engine.2d.camera PROPERTIES LABELS "engine;unit;2d;camera;smoke")
 
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
 

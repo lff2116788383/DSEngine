@@ -52,6 +52,13 @@ private:
     void SyncLabels(entt::registry& registry);
 
     /**
+     * @brief 更新 UI 动画组件并回写到渲染组件
+     * @param registry ECS 注册表
+     * @param dt 增量时间
+     */
+    void UpdateAnimations(entt::registry& registry, float dt);
+
+    /**
      * @brief 解析富文本字符串并构建带有颜色信息的字符序列
      * @param text 包含颜色标签的原始字符串
      * @param default_color 默认文本颜色

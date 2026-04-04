@@ -2,8 +2,15 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <array>
+#include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -18,6 +25,10 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/profiler/cpu_profiler.h"
+#include "engine/profiler/memory_profiler.h"
+#include "engine/profiler/render_profiler.h"
+#include "modules/gameplay_2d/localization/localization_system.h"
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -110,16 +121,276 @@ enum class EditorState {
 
 static EditorState g_editor_state = EditorState::Edit;
 static std::unique_ptr<entt::registry> g_backup_registry;
+static dse::profiler::CPUProfiler g_cpu_profiler;
+static dse::profiler::MemoryProfiler g_memory_profiler;
+static dse::profiler::RenderProfiler g_render_profiler;
+static std::vector<float> g_cpu_frame_history;
+static std::vector<float> g_fps_history;
+static std::vector<float> g_render_draw_call_history;
+static std::vector<float> g_memory_usage_history;
+static int g_last_profiled_frame = -1;
+static std::string g_profiler_export_status;
+static std::vector<std::string> g_editor_languages;
+static int g_editor_language_index = 0;
+
+namespace {
+
+constexpr int kProfilerHistoryMaxSamples = 180;
+
+std::filesystem::path GetProjectRootPath() {
+    std::filesystem::path path;
+#if defined(_WIN32)
+    std::wstring module_path(MAX_PATH, L'\0');
+    const DWORD size = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
+    if (size > 0) {
+        module_path.resize(size);
+        path = std::filesystem::path(module_path).parent_path();
+    }
+#endif
+    if (path.empty()) {
+        path = std::filesystem::current_path();
+    }
+    if (path.filename() == "bin" || path.filename() == "build_vs2022") {
+        path = path.parent_path();
+    }
+    return path.lexically_normal();
+}
+
+std::filesystem::path GetEditorBinPath() {
+    const std::filesystem::path path = GetProjectRootPath() / "bin";
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+void PushHistorySample(std::vector<float>& history, float value) {
+    history.push_back(value);
+    if (static_cast<int>(history.size()) > kProfilerHistoryMaxSamples) {
+        history.erase(history.begin(), history.begin() + (history.size() - kProfilerHistoryMaxSamples));
+    }
+}
+
+void MarkAllUILabelsDirty(entt::registry& registry) {
+    auto view = registry.view<UILabelComponent>();
+    for (auto entity : view) {
+        view.get<UILabelComponent>(entity).dirty = true;
+    }
+}
+
+std::filesystem::path GetEditorExportDirectory() {
+    std::filesystem::path path = GetEditorBinPath() / "editor_exports";
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+void ExportTextFile(const std::filesystem::path& path, const std::string& content) {
+    std::ofstream ofs(path, std::ios::trunc);
+    if (ofs.is_open()) {
+        ofs << content;
+    }
+}
+
+void EnsureEditorLocalizationData() {
+    auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
+    localization.Clear();
+
+    const std::filesystem::path dir = GetEditorBinPath() / "editor_localization";
+    std::filesystem::create_directories(dir);
+
+    const std::array<std::pair<const char*, const char*>, 3> seeds = {{
+        {"en", R"({"editor":{"preview":{"title":"Editor Preview","status":"Language: {lang}","selection":"Selected: {entity}"}}})"},
+        {"zh", R"({"editor":{"preview":{"title":"\u7f16\u8f91\u5668\u9884\u89c8","status":"\u5f53\u524d\u8bed\u8a00\uff1a{lang}","selection":"\u5f53\u524d\u9009\u4e2d\uff1a{entity}"}}})"},
+        {"ja", R"({"editor":{"preview":{"title":"\u30a8\u30c7\u30a3\u30bf\u30fc\u30d7\u30ec\u30d3\u30e5\u30fc","status":"\u73fe\u5728\u306e\u8a00\u8a9e: {lang}","selection":"\u9078\u629e\u4e2d: {entity}"}}})"}
+    }};
+
+    g_editor_languages.clear();
+    for (const auto& seed : seeds) {
+        const std::filesystem::path file_path = dir / (std::string(seed.first) + ".json");
+        ExportTextFile(file_path, seed.second);
+        if (localization.LoadLanguage(seed.first, file_path.string())) {
+            g_editor_languages.emplace_back(seed.first);
+        }
+    }
+
+    if (!g_editor_languages.empty()) {
+        localization.SetCurrentLanguage(g_editor_languages.front());
+        g_editor_language_index = 0;
+    }
+}
+
+} // namespace
+
+void DrawProfilerPanel() {
+    ImGui::Begin("Profiler");
+
+    if (ImGui::Button("Reset Profilers")) {
+        g_cpu_profiler.Reset();
+        g_memory_profiler.Reset();
+        g_render_profiler.Reset();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Editor-side runtime metrics preview");
+
+    const auto& frame = g_cpu_profiler.GetFrameStats();
+    const auto& cpu_stats = g_cpu_profiler.GetStats();
+    const auto& cpu_samples = g_cpu_profiler.GetCurrentFrameSamples();
+    const auto memory_snapshot = g_memory_profiler.GetSnapshot();
+    const auto& memory_categories = g_memory_profiler.GetCategoryStats();
+    const auto memory_leaks = g_memory_profiler.DetectLeaks();
+    const auto& render_frame = g_render_profiler.GetCurrentFrameStats();
+    const auto& render_acc = g_render_profiler.GetAccumulatedStats();
+
+    if (frame.frame_count != g_last_profiled_frame) {
+        g_last_profiled_frame = frame.frame_count;
+        PushHistorySample(g_cpu_frame_history, static_cast<float>(frame.frame_time_ms));
+        PushHistorySample(g_fps_history, static_cast<float>(frame.fps));
+        PushHistorySample(g_render_draw_call_history, static_cast<float>(render_frame.draw_calls));
+        PushHistorySample(g_memory_usage_history, static_cast<float>(memory_snapshot.current_usage / 1024.0));
+    }
+
+    if (ImGui::Button("Export CPU CSV")) {
+        const auto dir = GetEditorExportDirectory();
+        ExportTextFile(dir / "cpu_profiler.csv", g_cpu_profiler.ExportCSV());
+        ExportTextFile(dir / "cpu_profiler.json", g_cpu_profiler.ExportJSON());
+        g_profiler_export_status = "Exported CPU profiler to bin/editor_exports";
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Export Memory CSV")) {
+        const auto dir = GetEditorExportDirectory();
+        ExportTextFile(dir / "memory_profiler.csv", g_memory_profiler.ExportCSV());
+        g_profiler_export_status = "Exported memory profiler to bin/editor_exports";
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Export Render CSV")) {
+        const auto dir = GetEditorExportDirectory();
+        ExportTextFile(dir / "render_profiler.csv", g_render_profiler.ExportCSV());
+        g_profiler_export_status = "Exported render profiler to bin/editor_exports";
+    }
+    if (!g_profiler_export_status.empty()) {
+        ImGui::TextDisabled("%s", g_profiler_export_status.c_str());
+    }
+
+    if (ImGui::CollapsingHeader("CPU", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Frame Time: %.3f ms", frame.frame_time_ms);
+        ImGui::Text("Average Frame Time: %.3f ms", frame.avg_frame_time_ms);
+        ImGui::Text("FPS: %.1f", frame.fps);
+        ImGui::Text("Average FPS: %.1f", frame.avg_fps);
+        ImGui::Text("Frame Count: %d", frame.frame_count);
+        if (!g_cpu_frame_history.empty()) {
+            ImGui::PlotLines("Frame Time History", g_cpu_frame_history.data(), static_cast<int>(g_cpu_frame_history.size()), 0, nullptr, 0.0f, 40.0f, ImVec2(0, 70));
+            ImGui::PlotLines("FPS History", g_fps_history.data(), static_cast<int>(g_fps_history.size()), 0, nullptr, 0.0f, 240.0f, ImVec2(0, 70));
+        }
+
+        if (ImGui::TreeNode("Current Frame Samples")) {
+            for (const auto& sample : cpu_samples) {
+                ImGui::Indent(sample.depth * 12.0f);
+                ImGui::BulletText("%s - %.3f ms", sample.name.c_str(), sample.duration_ms);
+                ImGui::Unindent(sample.depth * 12.0f);
+            }
+            if (cpu_samples.empty()) {
+                ImGui::TextDisabled("No CPU samples recorded yet.");
+            }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Accumulated CPU Stats")) {
+            if (ImGui::BeginTable("cpu_stats_table", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Name");
+                ImGui::TableSetupColumn("Calls");
+                ImGui::TableSetupColumn("Avg ms");
+                ImGui::TableSetupColumn("Min ms");
+                ImGui::TableSetupColumn("Max ms");
+                ImGui::TableSetupColumn("Total ms");
+                ImGui::TableHeadersRow();
+
+                for (const auto& [name, stat] : cpu_stats) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(name.c_str());
+                    ImGui::TableSetColumnIndex(1); ImGui::Text("%d", stat.call_count);
+                    ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", stat.avg_ms);
+                    ImGui::TableSetColumnIndex(3); ImGui::Text("%.3f", stat.min_ms);
+                    ImGui::TableSetColumnIndex(4); ImGui::Text("%.3f", stat.max_ms);
+                    ImGui::TableSetColumnIndex(5); ImGui::Text("%.3f", stat.total_ms);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::TreePop();
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Memory", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Current Usage: %.2f KB", memory_snapshot.current_usage / 1024.0f);
+        ImGui::Text("Peak Usage: %.2f KB", memory_snapshot.peak_usage / 1024.0f);
+        ImGui::Text("Total Allocated: %.2f KB", memory_snapshot.total_allocated / 1024.0f);
+        ImGui::Text("Total Freed: %.2f KB", memory_snapshot.total_freed / 1024.0f);
+        ImGui::Text("Active Allocations: %d", memory_snapshot.active_allocations);
+        if (!g_memory_usage_history.empty()) {
+            ImGui::PlotLines("Usage History (KB)", g_memory_usage_history.data(), static_cast<int>(g_memory_usage_history.size()), 0, nullptr, 0.0f, *std::max_element(g_memory_usage_history.begin(), g_memory_usage_history.end()) + 1.0f, ImVec2(0, 70));
+        }
+
+        if (!memory_leaks.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "Potential Leaks: %d", static_cast<int>(memory_leaks.size()));
+            for (const auto& leak : memory_leaks) {
+                ImGui::BulletText("%s", leak.c_str());
+            }
+        }
+
+        if (ImGui::BeginTable("memory_stats_table", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Tag");
+            ImGui::TableSetupColumn("Current KB");
+            ImGui::TableSetupColumn("Peak KB");
+            ImGui::TableSetupColumn("Allocated KB");
+            ImGui::TableSetupColumn("Freed KB");
+            ImGui::TableHeadersRow();
+
+            for (const auto& [tag, stat] : memory_categories) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(tag.c_str());
+                ImGui::TableSetColumnIndex(1); ImGui::Text("%.2f", stat.current_bytes / 1024.0f);
+                ImGui::TableSetColumnIndex(2); ImGui::Text("%.2f", stat.peak_bytes / 1024.0f);
+                ImGui::TableSetColumnIndex(3); ImGui::Text("%.2f", stat.total_allocated / 1024.0f);
+                ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", stat.total_freed / 1024.0f);
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Draw Calls: %d", render_frame.draw_calls);
+        ImGui::Text("Triangles: %d", render_frame.triangle_count);
+        ImGui::Text("Vertices: %d", render_frame.vertex_count);
+        ImGui::Text("Sprites: %d", render_frame.sprite_count);
+        ImGui::Text("Batches: %d", render_frame.batch_count);
+        ImGui::Text("Texture Binds: %d", render_frame.texture_binds);
+        ImGui::Text("Shader Switches: %d", render_frame.shader_switches);
+        ImGui::Text("Texture Memory: %.2f KB", render_frame.texture_memory / 1024.0f);
+        ImGui::Separator();
+        ImGui::Text("Avg Draw Calls: %.2f", render_acc.avg_draw_calls);
+        ImGui::Text("Avg Triangles: %.2f", render_acc.avg_triangles);
+        ImGui::Text("Avg Vertices: %.2f", render_acc.avg_vertices);
+        ImGui::Text("Peak Draw Calls: %d", render_acc.peak_draw_calls);
+        ImGui::Text("Peak Triangles: %d", render_acc.peak_triangles);
+        ImGui::Text("Peak Vertices: %d", render_acc.peak_vertices);
+        ImGui::Text("Profiled Frames: %d", render_acc.frame_count);
+        if (!g_render_draw_call_history.empty()) {
+            ImGui::PlotLines("Draw Call History", g_render_draw_call_history.data(), static_cast<int>(g_render_draw_call_history.size()), 0, nullptr, 0.0f, *std::max_element(g_render_draw_call_history.begin(), g_render_draw_call_history.end()) + 1.0f, ImVec2(0, 70));
+        }
+    }
+
+    ImGui::End();
+}
 
 void CopyRegistry(entt::registry& dst, entt::registry& src) {
     dst.clear();
     for (auto entity : src.storage<entt::entity>()) {
+        if (!src.valid(entity)) continue; // Skip destroyed/recycled entities
         auto new_ent = dst.create(entity);
         
         if (src.all_of<EditorNameComponent>(entity)) dst.emplace<EditorNameComponent>(new_ent, src.get<EditorNameComponent>(entity));
         if (src.all_of<TransformComponent>(entity)) dst.emplace<TransformComponent>(new_ent, src.get<TransformComponent>(entity));
         if (src.all_of<SpriteRendererComponent>(entity)) dst.emplace<SpriteRendererComponent>(new_ent, src.get<SpriteRendererComponent>(entity));
+        if (src.all_of<UILabelComponent>(entity)) dst.emplace<UILabelComponent>(new_ent, src.get<UILabelComponent>(entity));
         if (src.all_of<RigidBody2DComponent>(entity)) dst.emplace<RigidBody2DComponent>(new_ent, src.get<RigidBody2DComponent>(entity));
+        if (src.all_of<ParticleEmitterComponent>(entity)) dst.emplace<ParticleEmitterComponent>(new_ent, src.get<ParticleEmitterComponent>(entity));
     }
 }
 
@@ -129,6 +400,7 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
     rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
 
     for (auto entity : registry.storage<entt::entity>()) {
+        if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
         rapidjson::Value ent_obj(rapidjson::kObjectType);
         ent_obj.AddMember("id", static_cast<uint32_t>(entity), allocator);
 
@@ -236,12 +508,16 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
 
 void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_texture, unsigned int game_texture) {
     static entt::entity selected_entity = entt::null;
+    World& world = engine.pipeline()->world();
+    auto& registry = world.registry();
     
     static bool inspector_active = true;
     static bool inspector_static = false;
     static bool sprite_flip_x = false;
     static bool sprite_flip_y = false;
     static bool collider_is_trigger = false;
+    static char localization_preview_key[128] = "editor.preview.status";
+    static char localization_preview_fallback[128] = "Language: {lang}";
     // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
     // because it would be confusing to have two docking targets within each others.
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
@@ -295,6 +571,7 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
             ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Animation", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("Profiler", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Tile Palette", dock_id_bottom); // New 2D panel
             ImGui::DockBuilderDockWindow("Scene", dock_id_main);
             ImGui::DockBuilderDockWindow("Game", dock_id_main);
@@ -312,14 +589,14 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New Scene")) {
-                World::Instance().registry().clear();
+                registry.clear();
             }
             if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
-                LoadScene(World::Instance().registry(), "scene.json");
+                LoadScene(registry, "scene.json");
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
-                SaveScene(World::Instance().registry(), "scene.json");
+                SaveScene(registry, "scene.json");
             }
             if (ImGui::MenuItem("Save As...")) {}
             ImGui::Separator();
@@ -383,13 +660,13 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
         if (ImGui::Button(">", ImVec2(32, 24))) { // Play
             g_editor_state = EditorState::Play;
             g_backup_registry = std::make_unique<entt::registry>();
-            CopyRegistry(*g_backup_registry, World::Instance().registry());
+            CopyRegistry(*g_backup_registry, registry);
         }
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
         if (ImGui::Button("[]", ImVec2(32, 24))) { // Stop
             g_editor_state = EditorState::Edit;
-            CopyRegistry(World::Instance().registry(), *g_backup_registry);
+            CopyRegistry(registry, *g_backup_registry);
             g_backup_registry.reset();
             selected_entity = entt::null;
         }
@@ -403,7 +680,21 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
 
     // Account/Settings (Right)
     ImGui::SameLine();
-    ImGui::SetCursorPosX(avail_width - 130);
+    ImGui::SetCursorPosX(avail_width - 320);
+    if (!g_editor_languages.empty()) {
+        std::vector<const char*> language_items;
+        language_items.reserve(g_editor_languages.size());
+        for (const auto& lang : g_editor_languages) {
+            language_items.push_back(lang.c_str());
+        }
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::Combo("##LanguagePreview", &g_editor_language_index, language_items.data(), static_cast<int>(language_items.size()))) {
+            auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
+            localization.SetCurrentLanguage(g_editor_languages[g_editor_language_index]);
+            MarkAllUILabelsDirty(registry);
+        }
+        ImGui::SameLine();
+    }
     ImGui::Button("Collab", ImVec2(60, 24));
     ImGui::SameLine();
     ImGui::Button("Layers", ImVec2(60, 24));
@@ -413,11 +704,10 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
 
     // Panels (Unity-style layout)
     ImGui::Begin("Hierarchy");
-    World& world = World::Instance();
-    auto& registry = world.registry();
     
     if (ImGui::TreeNodeEx("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
         for (auto entity : registry.storage<entt::entity>()) {
+            if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
             std::string entity_name = "Entity " + std::to_string(static_cast<uint32_t>(entity));
             if (registry.all_of<EditorNameComponent>(entity)) {
                 entity_name = registry.get<EditorNameComponent>(entity).name;
@@ -578,6 +868,85 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
             }
         }
 
+        if (registry.all_of<UILabelComponent>(selected_entity)) {
+            auto& label = registry.get<UILabelComponent>(selected_entity);
+            if (ImGui::CollapsingHeader("UI Label", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Columns(2, "uilabel_cols", false);
+                ImGui::SetColumnWidth(0, 110.0f);
+
+                char text_buf[256] = {};
+                std::strncpy(text_buf, label.text.c_str(), sizeof(text_buf) - 1);
+                INSPECTOR_PROPERTY("Text", if (ImGui::InputText("##label_text", text_buf, sizeof(text_buf))) {
+                    label.text = text_buf;
+                    label.dirty = true;
+                });
+
+                INSPECTOR_PROPERTY("Localized", if (ImGui::Checkbox("##use_loc", &label.use_localization)) {
+                    label.dirty = true;
+                });
+
+                char key_buf[128] = {};
+                std::strncpy(key_buf, label.localization_key.c_str(), sizeof(key_buf) - 1);
+                INSPECTOR_PROPERTY("Loc Key", if (ImGui::InputText("##loc_key", key_buf, sizeof(key_buf))) {
+                    label.localization_key = key_buf;
+                    label.dirty = true;
+                });
+
+                char fallback_buf[256] = {};
+                std::strncpy(fallback_buf, label.fallback_text.c_str(), sizeof(fallback_buf) - 1);
+                INSPECTOR_PROPERTY("Fallback", if (ImGui::InputText("##fallback_text", fallback_buf, sizeof(fallback_buf))) {
+                    label.fallback_text = fallback_buf;
+                    label.dirty = true;
+                });
+
+                char param_name[64] = "name";
+                char param_value[128] = "Player";
+                INSPECTOR_PROPERTY("Param", ImGui::InputText("##param_name", param_name, sizeof(param_name)););
+                INSPECTOR_PROPERTY("Value", ImGui::InputText("##param_value", param_value, sizeof(param_value)););
+                INSPECTOR_PROPERTY("Apply Param", if (ImGui::Button("Set/Update Param", ImVec2(-1, 0))) {
+                    label.localization_params[param_name] = param_value;
+                    label.dirty = true;
+                });
+
+                ImGui::Columns(1);
+            }
+        }
+
+        if (registry.all_of<ParticleEmitterComponent>(selected_entity)) {
+            auto& emitter = registry.get<ParticleEmitterComponent>(selected_entity);
+            if (ImGui::CollapsingHeader("Particle Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Columns(2, "particle_cols", false);
+                ImGui::SetColumnWidth(0, 110.0f);
+
+                INSPECTOR_PROPERTY("Emitting", ImGui::Checkbox("##emitting", &emitter.emitting));
+                INSPECTOR_PROPERTY("Max Particles", ImGui::DragInt("##max_particles", &emitter.max_particles, 1.0f, 1, 5000));
+                INSPECTOR_PROPERTY("Emit Rate", ImGui::DragFloat("##emit_rate", &emitter.emit_rate, 0.1f, 0.0f, 1000.0f));
+                INSPECTOR_PROPERTY("Burst", if (ImGui::Button("Emit 10", ImVec2(-1, 0))) { emitter.pending_burst += 10; });
+                INSPECTOR_PROPERTY("Life Time", ImGui::DragFloat("##life_time", &emitter.start_life_time, 0.05f, 0.05f, 30.0f));
+                INSPECTOR_PROPERTY("Start Size", ImGui::DragFloat("##start_size", &emitter.start_size, 0.05f, 0.01f, 100.0f));
+                INSPECTOR_PROPERTY("Start Color", ImGui::ColorEdit4("##start_color", glm::value_ptr(emitter.start_color)));
+                INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat3("##gravity", glm::value_ptr(emitter.gravity), 0.05f));
+                INSPECTOR_PROPERTY("Random Params", ImGui::Checkbox("##random_params", &emitter.use_random_params));
+                INSPECTOR_PROPERTY("Size Curve", ImGui::Checkbox("##size_curve_enabled", &emitter.size_curve.enabled));
+                INSPECTOR_PROPERTY("Size End", ImGui::DragFloat("##size_curve_end", &emitter.size_curve.end_value, 0.05f, 0.0f, 100.0f));
+                INSPECTOR_PROPERTY("Alpha Curve", ImGui::Checkbox("##alpha_curve_enabled", &emitter.alpha_curve.enabled));
+                INSPECTOR_PROPERTY("Alpha End", ImGui::DragFloat("##alpha_curve_end", &emitter.alpha_curve.end_value, 0.01f, 0.0f, 1.0f));
+                INSPECTOR_PROPERTY("Speed Curve", ImGui::Checkbox("##speed_curve_enabled", &emitter.speed_curve.enabled));
+                INSPECTOR_PROPERTY("Speed End", ImGui::DragFloat("##speed_curve_end", &emitter.speed_curve.end_value, 0.05f, 0.0f, 10.0f));
+
+                const char* collision_modes[] = { "None", "GroundPlane", "Box2D" };
+                int collision_mode = static_cast<int>(emitter.collision_mode);
+                INSPECTOR_PROPERTY("Collision", if (ImGui::Combo("##collision_mode", &collision_mode, collision_modes, IM_ARRAYSIZE(collision_modes))) {
+                    emitter.collision_mode = static_cast<ParticleCollisionMode>(collision_mode);
+                });
+                INSPECTOR_PROPERTY("Bounce", ImGui::DragFloat("##collision_bounce", &emitter.collision_bounce, 0.01f, 0.0f, 1.0f));
+                INSPECTOR_PROPERTY("Ground Y", ImGui::DragFloat("##ground_y", &emitter.ground_y, 0.05f));
+
+                ImGui::Columns(1);
+                ImGui::TextDisabled("Active Particles: %d", static_cast<int>(emitter.particles.size()));
+            }
+        }
+
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
@@ -606,6 +975,18 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
                 registry.emplace<RigidBody2DComponent>(selected_entity);
             }
         }
+        if (ImGui::MenuItem("UI Label")) {
+            if (!registry.all_of<UILabelComponent>(selected_entity)) {
+                auto& label = registry.emplace<UILabelComponent>(selected_entity);
+                label.text = "Label";
+                label.fallback_text = "Label";
+            }
+        }
+        if (ImGui::MenuItem("Particle Emitter")) {
+            if (!registry.all_of<ParticleEmitterComponent>(selected_entity)) {
+                registry.emplace<ParticleEmitterComponent>(selected_entity);
+            }
+        }
         // More components can be added here
         ImGui::EndPopup();
     }
@@ -623,12 +1004,8 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     // Simple file browser
     // Since the executable runs from the bin/ directory or project root, we need to find the correct data path
     static std::filesystem::path base_data_path = []() {
-        std::filesystem::path p = std::filesystem::current_path();
-        // Check if we are in bin directory, if so go up one level
-        if (p.filename() == "bin" || p.filename() == "build_vs2022") {
-            p = p.parent_path();
-        }
-        
+        std::filesystem::path p = GetProjectRootPath();
+
         std::filesystem::path target_path = p / "samples" / "lua" / "data";
         
         // If data folder doesn't exist, try creating it or fallback to root
@@ -681,25 +1058,29 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
             ImGui::Separator();
         }
         
-        for (const auto& entry : std::filesystem::directory_iterator(current_path)) {
-            const auto& path = entry.path();
-            auto filename = path.filename().string();
-            
-            if (entry.is_directory()) {
-                if (ImGui::Selectable((std::string("[DIR] ") + filename).c_str())) {
-                    current_path /= path.filename();
-                }
-            } else {
-                ImGui::Selectable((std::string("[FILE] ") + filename).c_str());
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(current_path)) {
+                const auto& path = entry.path();
+                auto filename = path.filename().string();
                 
-                // Support Drag and Drop
-                if (ImGui::BeginDragDropSource()) {
-                    std::string relative_path = std::filesystem::relative(path, base_data_path).string();
-                    ImGui::SetDragDropPayload("ASSET_PATH", relative_path.c_str(), relative_path.size() + 1);
-                    ImGui::Text("%s", filename.c_str());
-                    ImGui::EndDragDropSource();
+                if (entry.is_directory()) {
+                    if (ImGui::Selectable((std::string("[DIR] ") + filename).c_str())) {
+                        current_path /= path.filename();
+                    }
+                } else {
+                    ImGui::Selectable((std::string("[FILE] ") + filename).c_str());
+                    
+                    // Support Drag and Drop
+                    if (ImGui::BeginDragDropSource()) {
+                        std::string relative_path = std::filesystem::relative(path, base_data_path).string();
+                        ImGui::SetDragDropPayload("ASSET_PATH", relative_path.c_str(), relative_path.size() + 1);
+                        ImGui::Text("%s", filename.c_str());
+                        ImGui::EndDragDropSource();
+                    }
                 }
             }
+        } catch (const std::filesystem::filesystem_error& e) {
+            ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "Error reading directory: %s", e.what());
         }
     }
     ImGui::End();
@@ -710,6 +1091,33 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[Warning] Missing texture 'skybox_diffuse'.");
     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "[Error] Failed to load shader 'standard_pbr.glsl'.");
     ImGui::End();
+
+    ImGui::Begin("Localization Preview");
+    auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
+    ImGui::Text("Current Language: %s", localization.GetCurrentLanguage().c_str());
+    ImGui::InputText("Preview Key", localization_preview_key, sizeof(localization_preview_key));
+    ImGui::InputText("Fallback", localization_preview_fallback, sizeof(localization_preview_fallback));
+    std::unordered_map<std::string, std::string> preview_params;
+    preview_params["lang"] = localization.GetCurrentLanguage();
+    preview_params["entity"] = selected_entity == entt::null ? std::string("None") : std::to_string(static_cast<uint32_t>(selected_entity));
+    const std::string preview_text = localization.GetTextWithParams(localization_preview_key, preview_params, localization_preview_fallback);
+    ImGui::Separator();
+    ImGui::TextWrapped("%s", preview_text.c_str());
+    if (selected_entity != entt::null && registry.valid(selected_entity) && registry.all_of<UILabelComponent>(selected_entity)) {
+        if (ImGui::Button("Apply To Selected UILabel")) {
+            auto& label = registry.get<UILabelComponent>(selected_entity);
+            label.use_localization = true;
+            label.localization_key = localization_preview_key;
+            label.fallback_text = localization_preview_fallback;
+            label.localization_params = preview_params;
+            label.dirty = true;
+        }
+    } else {
+        ImGui::TextDisabled("Select a UILabel entity to apply preview settings.");
+    }
+    ImGui::End();
+
+    DrawProfilerPanel();
     
     ImGui::Begin("Animation");
     ImGui::Text("No animated object selected.");
@@ -758,6 +1166,7 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
         float min_dist = 10000.0f;
         entt::entity picked = entt::null;
         for (auto entity : registry.storage<entt::entity>()) {
+            if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
             if (registry.all_of<TransformComponent>(entity)) {
                 auto& t = registry.get<TransformComponent>(entity);
                 // Mock coordinate mapping
@@ -816,8 +1225,19 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
 }
 
 int main() {
-    if (!glfwInit())
+    // Allocate a console for WIN32 app so we can see crash output
+    #if defined(_WIN32)
+    AllocConsole();
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+    #endif
+    
+    std::cerr << "[Editor] Starting..." << std::endl;
+    
+    if (!glfwInit()) {
+        std::cerr << "[Editor] glfwInit() failed!" << std::endl;
         return -1;
+    }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -836,6 +1256,9 @@ int main() {
     glfwSwapInterval(1); // Enable vsync
 
     if (!gladLoadGL(glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize OpenGL (gladLoadGL) in Editor." << std::endl;
+        glfwDestroyWindow(window);
+        glfwTerminate();
         return -1;
     }
 
@@ -845,10 +1268,14 @@ int main() {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+    // NOTE: Multi-viewport on this editor build has been causing CRT heap assertions
+    // on Windows during runtime/teardown. Keep docking enabled, but disable platform
+    // viewports for stability until the backend lifetime issue is fully resolved.
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     
     // Redirect imgui.ini to bin folder so it doesn't clutter the project root
-    io.IniFilename = "bin/editor_layout.ini";
+    static std::string imgui_ini_path = (GetEditorBinPath() / "editor_layout.ini").string();
+    io.IniFilename = imgui_ini_path.c_str();
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -877,63 +1304,111 @@ int main() {
     // We need to set DSE_DATA_ROOT before initializing the engine
     if (std::getenv("DSE_DATA_ROOT") == nullptr) {
 #if defined(_WIN32)
-        _putenv_s("DSE_DATA_ROOT", "samples/lua/data"); // Default or maybe we can hardcode for editor?
+        const std::string data_root = (GetProjectRootPath() / "samples" / "lua" / "data").string();
+        _putenv_s("DSE_DATA_ROOT", data_root.c_str());
 #else
-        setenv("DSE_DATA_ROOT", "samples/lua/data", 1);
+        const std::string data_root = (GetProjectRootPath() / "samples" / "lua" / "data").string();
+        setenv("DSE_DATA_ROOT", data_root.c_str(), 1);
 #endif
     }
 
-    dse::runtime::EngineInstance engine_instance(engine_config);
-    if (!engine_instance.Init()) {
-        std::cerr << "Failed to initialize DSEngine in Editor." << std::endl;
-        return -1;
-    }
-
-    std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
-
-    // Main loop
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        // Tick Engine
-        engine_instance.Tick();
-
-        unsigned int scene_texture = engine_instance.pipeline()->GetSceneTextureId();
-        unsigned int game_texture = engine_instance.pipeline()->GetMainTextureId();
-
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // Draw Editor UI
-        DrawEditorUI(engine_instance, scene_texture, game_texture);
-
-        // Rendering
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        // Update and Render additional Platform Windows
-        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-            GLFWwindow* backup_current_context = glfwGetCurrentContext();
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(backup_current_context);
+    {
+        dse::runtime::EngineInstance engine_instance(engine_config);
+        if (!engine_instance.Init()) {
+            std::cerr << "Failed to initialize DSEngine in Editor." << std::endl;
+            return -1;
         }
 
-        glfwSwapBuffers(window);
+        EnsureEditorLocalizationData();
+
+        std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
+
+        // Main loop
+        while (!glfwWindowShouldClose(window)) {
+            g_cpu_profiler.BeginFrame();
+            g_render_profiler.BeginFrame();
+            g_memory_profiler.Reset();
+
+            glfwPollEvents();
+
+            // Tick Engine
+            {
+                dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EngineTick");
+                engine_instance.Tick();
+            }
+
+            unsigned int scene_texture = engine_instance.pipeline()->GetSceneTextureId();
+            unsigned int game_texture = engine_instance.pipeline()->GetMainTextureId();
+
+            {
+                dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EditorMetrics");
+                World& profiler_world = engine_instance.pipeline()->world();
+                auto& profiler_registry = profiler_world.registry();
+                const int entity_count = static_cast<int>(profiler_registry.storage<entt::entity>().size());
+                auto sprite_view = profiler_registry.view<SpriteRendererComponent>();
+                const int sprite_count = static_cast<int>(std::distance(sprite_view.begin(), sprite_view.end()));
+
+                g_memory_profiler.RecordAlloc("World.Entities", static_cast<size_t>(std::max(entity_count, 0)) * sizeof(entt::entity));
+                g_memory_profiler.RecordAlloc("Render.SceneTexture", static_cast<size_t>(1280 * 720 * 4));
+                g_memory_profiler.RecordAlloc("Render.GameTexture", static_cast<size_t>(1280 * 720 * 4));
+                g_memory_profiler.RecordAlloc("UI.ImGui", static_cast<size_t>(256 * 1024));
+
+                g_render_profiler.RecordSpriteBatch(std::max(sprite_count, 0));
+                g_render_profiler.RecordDrawCall(6, 2);
+                g_render_profiler.RecordTextureBind();
+                g_render_profiler.RecordShaderSwitch();
+                g_render_profiler.SetTextureMemory(static_cast<size_t>(1280 * 720 * 4 * 2));
+            }
+
+            // Start the Dear ImGui frame
+            {
+                dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "ImGuiFrame");
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+            }
+
+            // Draw Editor UI
+            {
+                dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "DrawEditorUI");
+                DrawEditorUI(engine_instance, scene_texture, game_texture);
+            }
+
+            // Rendering
+            int display_w, display_h;
+            glfwGetFramebufferSize(window, &display_w, &display_h);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, display_w, display_h);
+            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            {
+                dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "ImGuiRender");
+                ImGui::Render();
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            }
+
+            // Update and Render additional Platform Windows
+            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+                GLFWwindow* backup_current_context = glfwGetCurrentContext();
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+                glfwMakeContextCurrent(backup_current_context);
+            }
+
+            glfwSwapBuffers(window);
+
+            g_render_profiler.EndFrame();
+            g_cpu_profiler.EndFrame();
+        }
+
+        engine_instance.Shutdown();
     }
 
-    engine_instance.Shutdown();
-
     // Cleanup
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::DestroyPlatformWindows();
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

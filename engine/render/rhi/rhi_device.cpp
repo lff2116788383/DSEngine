@@ -544,6 +544,18 @@ void OpenGLRhiDevice::Shutdown() {
         resource_ledger_.textures_destroyed += 1;
         white_texture_handle_ = 0;
     }
+    if (mesh_vbo_handle_ != 0) {
+        DeleteBuffer(mesh_vbo_handle_);
+        mesh_vbo_handle_ = 0;
+    }
+    if (mesh_ibo_handle_ != 0) {
+        DeleteBuffer(mesh_ibo_handle_);
+        mesh_ibo_handle_ = 0;
+    }
+    if (mesh_vao_handle_ != 0) {
+        DeleteVertexArray(mesh_vao_handle_);
+        mesh_vao_handle_ = 0;
+    }
     if (vbo_handle_ != 0) {
         DeleteBuffer(vbo_handle_);
         vbo_handle_ = 0;
@@ -561,6 +573,21 @@ void OpenGLRhiDevice::Shutdown() {
         resource_ledger_.shader_programs_destroyed += 1;
         shader_handle_ = 0;
     }
+    if (skybox_vbo_handle_ != 0) {
+        DeleteBuffer(skybox_vbo_handle_);
+        skybox_vbo_handle_ = 0;
+    }
+    if (skybox_vao_handle_ != 0) {
+        DeleteVertexArray(skybox_vao_handle_);
+        skybox_vao_handle_ = 0;
+    }
+    if (skybox_shader_handle_ != 0) {
+        DeleteShaderProgram(skybox_shader_handle_);
+        skybox_shader_handle_ = 0;
+    }
+    skybox_view_loc_ = -1;
+    skybox_proj_loc_ = -1;
+    skybox_tex_loc_ = -1;
     uniform_texture_loc_ = -1;
     uniform_tint_loc_ = -1;
     uniform_vp_loc_ = -1;
@@ -800,10 +827,26 @@ unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsig
     return texture_handle;
 }
 
+void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
+    if (texture_handle == 0) {
+        return;
+    }
+    glDeleteTextures(1, &texture_handle);
+    resource_ledger_.textures_destroyed += 1;
+}
+
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int shader_program = CompileShaderProgram(vert_src.c_str(), frag_src.c_str());
     resource_ledger_.shader_programs_created += 1;
     return shader_program;
+}
+
+void OpenGLRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
+    if (program_handle == 0) {
+        return;
+    }
+    glDeleteProgram(program_handle);
+    resource_ledger_.shader_programs_destroyed += 1;
 }
 
 unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
@@ -1027,16 +1070,8 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
 
 void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection) {
     if (cubemap_texture_handle == 0) return;
-    
-    // Create skybox shader if not exists
-    static unsigned int skybox_shader = 0;
-    static unsigned int skybox_vao = 0;
-    static unsigned int skybox_vbo = 0;
-    static int skybox_view_loc = -1;
-    static int skybox_proj_loc = -1;
-    static int skybox_tex_loc = -1;
-    
-    if (skybox_shader == 0) {
+
+    if (skybox_shader_handle_ == 0) {
         const char* vs_src = R"(
             #version 330 core
             layout (location = 0) in vec3 aPos;
@@ -1064,16 +1099,17 @@ void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, 
         unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fs, 1, &fs_src, nullptr);
         glCompileShader(fs);
-        skybox_shader = glCreateProgram();
-        glAttachShader(skybox_shader, vs);
-        glAttachShader(skybox_shader, fs);
-        glLinkProgram(skybox_shader);
+        skybox_shader_handle_ = glCreateProgram();
+        resource_ledger_.shader_programs_created += 1;
+        glAttachShader(skybox_shader_handle_, vs);
+        glAttachShader(skybox_shader_handle_, fs);
+        glLinkProgram(skybox_shader_handle_);
         glDeleteShader(vs);
         glDeleteShader(fs);
         
-        skybox_view_loc = glGetUniformLocation(skybox_shader, "view");
-        skybox_proj_loc = glGetUniformLocation(skybox_shader, "projection");
-        skybox_tex_loc = glGetUniformLocation(skybox_shader, "skybox");
+        skybox_view_loc_ = glGetUniformLocation(skybox_shader_handle_, "view");
+        skybox_proj_loc_ = glGetUniformLocation(skybox_shader_handle_, "projection");
+        skybox_tex_loc_ = glGetUniformLocation(skybox_shader_handle_, "skybox");
         
         float skyboxVertices[] = {
             -1.0f,  1.0f, -1.0f,
@@ -1118,26 +1154,25 @@ void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, 
             -1.0f, -1.0f,  1.0f,
              1.0f, -1.0f,  1.0f
         };
-        glGenVertexArrays(1, &skybox_vao);
-        glGenBuffers(1, &skybox_vbo);
-        glBindVertexArray(skybox_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+        skybox_vao_handle_ = CreateVertexArray();
+        skybox_vbo_handle_ = CreateBuffer(sizeof(skyboxVertices), skyboxVertices, false, false);
+        glBindVertexArray(skybox_vao_handle_);
+        glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo_handle_);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
         glBindVertexArray(0);
     }
     
     glDepthFunc(GL_LEQUAL);
-    glUseProgram(skybox_shader);
+    glUseProgram(skybox_shader_handle_);
     glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
-    glUniformMatrix4fv(skybox_view_loc, 1, GL_FALSE, glm::value_ptr(skybox_view));
-    glUniformMatrix4fv(skybox_proj_loc, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(skybox_view_loc_, 1, GL_FALSE, glm::value_ptr(skybox_view));
+    glUniformMatrix4fv(skybox_proj_loc_, 1, GL_FALSE, glm::value_ptr(projection));
     
-    glBindVertexArray(skybox_vao);
+    glBindVertexArray(skybox_vao_handle_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_texture_handle);
-    glUniform1i(skybox_tex_loc, 0);
+    glUniform1i(skybox_tex_loc_, 0);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
     glDepthFunc(GL_LESS);

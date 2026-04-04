@@ -7,7 +7,7 @@ set_target_properties(dse_example_lua PROPERTIES OUTPUT_NAME "DSEngine_lua")
 dse_apply_config_postfix(dse_example_lua)
 
 if (MSVC)
-    set_property(TARGET dse_example_lua PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET dse_example_lua PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 dse_copy_runtime_assets(dse_example_lua)

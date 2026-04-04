@@ -5,6 +5,8 @@ add_executable(dse_editor_cpp WIN32
 
 if(MSVC)
     set_target_properties(dse_editor_cpp PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
+    target_compile_options(dse_editor_cpp PRIVATE /utf-8)
+    set_property(TARGET dse_editor_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 target_include_directories(dse_editor_cpp PRIVATE 

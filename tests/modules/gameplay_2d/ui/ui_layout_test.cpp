@@ -3,14 +3,12 @@
  * @brief UILayoutSystem 单元测试
  */
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "gameplay_2d/ui/ui_layout.h"
+#include "catch/catch.hpp"
+#include "modules/gameplay_2d/ui/ui_layout.h"
 #include "engine/ecs/components_2d.h"
 #include <entt/entt.hpp>
 
 using namespace dse::gameplay2d;
-using Catch::Matchers::WithinAbs;
 
 // ─── Canvas Scaler ───────────────────────────────────────────────────────
 TEST_CASE("UILayoutSystem - canvas scaler adjusts positions", "[ui][layout]") {
@@ -37,8 +35,8 @@ TEST_CASE("UILayoutSystem - canvas scaler adjusts positions", "[ui][layout]") {
 
     // Scale factor should be 0.5 (average of 0.5 and 0.5)
     // Position = (0, 0) + (50, 30) * 0.5 = (25, 15)
-    REQUIRE_THAT(ui.position.x, WithinAbs(25.0, 0.5));
-    REQUIRE_THAT(ui.position.y, WithinAbs(15.0, 0.5));
+    REQUIRE(ui.position.x == Approx(25.0f).margin(0.5f));
+    REQUIRE(ui.position.y == Approx(15.0f).margin(0.5f));
 }
 
 TEST_CASE("UILayoutSystem - canvas scaler width-only mode", "[ui][layout]") {
@@ -63,8 +61,8 @@ TEST_CASE("UILayoutSystem - canvas scaler width-only mode", "[ui][layout]") {
 
     // Scale = 960/1920 = 0.5
     // Position = (480, 540) + (100, 0) * 0.5 = (530, 540)
-    REQUIRE_THAT(ui.position.x, WithinAbs(530.0, 0.5));
-    REQUIRE_THAT(ui.position.y, WithinAbs(540.0, 0.5));
+    REQUIRE(ui.position.x == Approx(530.0f).margin(0.5f));
+    REQUIRE(ui.position.y == Approx(540.0f).margin(0.5f));
 }
 
 // ─── Anchor Positions ────────────────────────────────────────────────────
@@ -80,8 +78,8 @@ TEST_CASE("UILayoutSystem - anchor positions without scaler", "[ui][layout]") {
         a.offset = glm::vec2(10.0f, 20.0f);
         auto& ui = reg.emplace<UIRendererComponent>(e);
         layout_sys.Update(reg, screen);
-        REQUIRE_THAT(ui.position.x, WithinAbs(10.0, 0.1));
-        REQUIRE_THAT(ui.position.y, WithinAbs(20.0, 0.1));
+        REQUIRE(ui.position.x == Approx(10.0f).margin(0.1f));
+        REQUIRE(ui.position.y == Approx(20.0f).margin(0.1f));
     }
 
     SECTION("MiddleCenter") {
@@ -91,8 +89,8 @@ TEST_CASE("UILayoutSystem - anchor positions without scaler", "[ui][layout]") {
         a.offset = glm::vec2(0.0f, 0.0f);
         auto& ui = reg.emplace<UIRendererComponent>(e);
         layout_sys.Update(reg, screen);
-        REQUIRE_THAT(ui.position.x, WithinAbs(400.0, 0.1));
-        REQUIRE_THAT(ui.position.y, WithinAbs(300.0, 0.1));
+        REQUIRE(ui.position.x == Approx(400.0f).margin(0.1f));
+        REQUIRE(ui.position.y == Approx(300.0f).margin(0.1f));
     }
 
     SECTION("BottomRight") {
@@ -102,8 +100,8 @@ TEST_CASE("UILayoutSystem - anchor positions without scaler", "[ui][layout]") {
         a.offset = glm::vec2(-10.0f, -10.0f);
         auto& ui = reg.emplace<UIRendererComponent>(e);
         layout_sys.Update(reg, screen);
-        REQUIRE_THAT(ui.position.x, WithinAbs(790.0, 0.1));
-        REQUIRE_THAT(ui.position.y, WithinAbs(590.0, 0.1));
+        REQUIRE(ui.position.x == Approx(790.0f).margin(0.1f));
+        REQUIRE(ui.position.y == Approx(590.0f).margin(0.1f));
     }
 }
 
@@ -139,8 +137,8 @@ TEST_CASE("UILayoutSystem - grid layout arranges children", "[ui][layout]") {
     for (auto child : children) {
         auto& ui = reg.get<UIRendererComponent>(child);
         // Size should match cell_size (scaled by 1.0 since no scaler)
-        REQUIRE_THAT(ui.size.x, WithinAbs(50.0, 0.1));
-        REQUIRE_THAT(ui.size.y, WithinAbs(50.0, 0.1));
+        REQUIRE(ui.size.x == Approx(50.0f).margin(0.1f));
+        REQUIRE(ui.size.y == Approx(50.0f).margin(0.1f));
     }
 
     // Children should be in different positions
@@ -148,7 +146,7 @@ TEST_CASE("UILayoutSystem - grid layout arranges children", "[ui][layout]") {
     auto& c1 = reg.get<UIRendererComponent>(children[1]);
     auto& c2 = reg.get<UIRendererComponent>(children[2]);
     REQUIRE(c1.position.x > c0.position.x);  // col 1 > col 0
-    REQUIRE_THAT(c2.position.y - c0.position.y, !WithinAbs(0.0, 0.1));  // different row
+    REQUIRE(std::abs(c2.position.y - c0.position.y) > 0.1f);  // different row
 }
 
 TEST_CASE("UILayoutSystem - grid layout respects row limit", "[ui][layout]") {
@@ -188,6 +186,6 @@ TEST_CASE("UILayoutSystem - grid layout respects row limit", "[ui][layout]") {
     REQUIRE(children.size() == 4);
     REQUIRE(reg.get<UIRendererComponent>(children[0]).position.x != -999.0f);
     REQUIRE(reg.get<UIRendererComponent>(children[1]).position.x != -999.0f);
-    REQUIRE_THAT(reg.get<UIRendererComponent>(children[2]).position.x, WithinAbs(-999.0, 0.1));
-    REQUIRE_THAT(reg.get<UIRendererComponent>(children[3]).position.x, WithinAbs(-999.0, 0.1));
+    REQUIRE(reg.get<UIRendererComponent>(children[2]).position.x == Approx(-999.0f).margin(0.1f));
+    REQUIRE(reg.get<UIRendererComponent>(children[3]).position.x == Approx(-999.0f).margin(0.1f));
 }

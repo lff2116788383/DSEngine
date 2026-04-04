@@ -47,7 +47,13 @@ static void* LuaMemoryAllocator(void* ud, void* ptr, size_t osize, size_t nsize)
     auto& state = State();
     if (nsize == 0) {
         if (ptr) {
-            state.lua_memory_usage -= osize;
+            // Guard against underflow: osize should never exceed lua_memory_usage,
+            // but protect against corrupted bookkeeping to avoid size_t wrap-around.
+            if (osize <= state.lua_memory_usage) {
+                state.lua_memory_usage -= osize;
+            } else {
+                state.lua_memory_usage = 0;
+            }
             std::free(ptr);
         }
         return nullptr;
@@ -55,7 +61,12 @@ static void* LuaMemoryAllocator(void* ud, void* ptr, size_t osize, size_t nsize)
         void* new_ptr = std::realloc(ptr, nsize);
         if (new_ptr) {
             if (ptr) {
-                state.lua_memory_usage = state.lua_memory_usage - osize + nsize;
+                // Safe arithmetic: subtract first only if it won't underflow
+                if (osize <= state.lua_memory_usage) {
+                    state.lua_memory_usage = state.lua_memory_usage - osize + nsize;
+                } else {
+                    state.lua_memory_usage = nsize;
+                }
             } else {
                 state.lua_memory_usage += nsize;
             }

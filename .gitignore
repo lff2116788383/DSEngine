@@ -105,6 +105,10 @@ desktop.ini
 # Project Data & Editor Temp
 scene.json
 bin/scene.json
+editor_layout.ini
+bin/editor_layout.ini
+bin/editor_exports/
+bin/editor_localization/
 bin/samples/lua/data/NewFolder*
 bin/samples/lua/data/NewScript*.lua
 bin/samples/lua/data/NewMaterial*.mat

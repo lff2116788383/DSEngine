@@ -6,11 +6,13 @@
 #include "ui_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"
+#include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <limits>
 
 namespace dse {
 namespace gameplay2d {
@@ -39,12 +41,90 @@ glm::vec4 ParseHexColor(const std::string& hex, const glm::vec4& fallback) {
     }
     return color;
 }
+
+float ApplyEasing(float t, int easing) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    switch (easing) {
+        case 1: return t * t;                         // ease-in
+        case 2: return 1.0f - (1.0f - t) * (1.0f - t); // ease-out
+        case 3:
+            return (t < 0.5f)
+                ? (2.0f * t * t)
+                : (1.0f - 2.0f * (1.0f - t) * (1.0f - t));
+        case 0:
+        default:
+            return t;
+    }
+}
 }
 
 void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& screen_size, const glm::vec2& mouse_pos, bool is_mouse_down) {
     SyncLabels(registry);
+    UpdateAnimations(registry, dt);
     UpdateLayout(registry, screen_size);
     HandleEvents(registry, dt, mouse_pos, is_mouse_down);
+}
+
+void UISystem::UpdateAnimations(entt::registry& registry, float dt) {
+    auto view = registry.view<UIAnimationComponent, UIRendererComponent>();
+    for (auto entity : view) {
+        auto& anim = view.get<UIAnimationComponent>(entity);
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!anim.playing) {
+            continue;
+        }
+
+        float remaining_dt = std::max(0.0f, dt);
+        if (anim.delay_remaining > 0.0f) {
+            const float consumed = std::min(anim.delay_remaining, remaining_dt);
+            anim.delay_remaining -= consumed;
+            remaining_dt -= consumed;
+            if (remaining_dt <= 0.0f) {
+                continue;
+            }
+        }
+
+        const float duration = anim.duration > 0.0f ? anim.duration : 0.0001f;
+        anim.elapsed += remaining_dt;
+        float normalized = std::clamp(anim.elapsed / duration, 0.0f, 1.0f);
+        if (anim.reverse) {
+            normalized = 1.0f - normalized;
+        }
+        const float eased = ApplyEasing(normalized, anim.easing);
+
+        if (anim.animate_position) {
+            ui.position = glm::mix(anim.start_position, anim.target_position, eased);
+        }
+        if (anim.animate_alpha) {
+            ui.color.a = anim.start_alpha + (anim.target_alpha - anim.start_alpha) * eased;
+        }
+        if (anim.animate_color) {
+            ui.color = glm::mix(anim.start_color, anim.target_color, eased);
+        }
+        if (anim.animate_scale) {
+            const glm::vec2 scale2 = glm::mix(anim.start_scale, anim.target_scale, eased);
+            ui.scale = (scale2.x + scale2.y) * 0.5f;
+        }
+
+        if (anim.elapsed < duration) {
+            continue;
+        }
+
+        if (anim.ping_pong) {
+            anim.reverse = !anim.reverse;
+            if (anim.loop) {
+                anim.elapsed = std::fmod(anim.elapsed, duration);
+            } else {
+                anim.elapsed = 0.0f;
+                anim.playing = false;
+            }
+        } else if (anim.loop) {
+            anim.elapsed = std::fmod(anim.elapsed, duration);
+        } else {
+            anim.elapsed = duration;
+            anim.playing = false;
+        }
+    }
 }
 
 void UISystem::SyncLabels(entt::registry& registry) {
@@ -53,14 +133,31 @@ void UISystem::SyncLabels(entt::registry& registry) {
         auto& label = view.get<UILabelComponent>(entity);
         auto& ui = view.get<UIRendererComponent>(entity);
         auto* rich = registry.try_get<UIRichTextComponent>(entity);
+
+        if (label.use_localization && !label.localization_key.empty() && !label.numeric_mode) {
+            const std::string localized_text = LocalizationSystem::GetInstance().GetTextWithParams(
+                label.localization_key,
+                label.localization_params,
+                label.fallback_text.empty() ? label.text : label.fallback_text);
+            if (label.text != localized_text) {
+                label.text = localized_text;
+                label.dirty = true;
+            }
+        }
+
+        if (label.numeric_mode && !rich) {
+            const std::string numeric_text = std::to_string(label.number_value);
+            if (label.text != numeric_text) {
+                label.text = numeric_text;
+                label.dirty = true;
+            }
+        }
+
         if (rich && rich->dirty) {
             label.dirty = true;
         }
         if (!label.dirty) {
             continue;
-        }
-        if (label.numeric_mode && !rich) {
-            label.text = std::to_string(label.number_value);
         }
 
         for (auto glyph_entity : label.runtime_glyph_entities) {
@@ -173,6 +270,28 @@ void UISystem::UpdateLayout(entt::registry& registry, const glm::vec2& screen_si
 
 void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down) {
     auto view = registry.view<UIRendererComponent>();
+    entt::entity top_hovered = entt::null;
+    int top_order = std::numeric_limits<int>::min();
+
+    for (auto entity : view) {
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!ui.visible || !ui.interactable) continue;
+        if (IsBlockedByMask(registry, entity, mouse_pos)) continue;
+
+        glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
+        glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
+                                    glm::length(glm::vec3(ui.runtime_model[1])),
+                                    glm::length(glm::vec3(ui.runtime_model[2])));
+        float half_w = scale.x / 2.0f;
+        float half_h = scale.y / 2.0f;
+        const bool hovering = (mouse_pos.x >= pos.x - half_w && mouse_pos.x <= pos.x + half_w &&
+                               mouse_pos.y >= pos.y - half_h && mouse_pos.y <= pos.y + half_h);
+        if (hovering && ui.order >= top_order) {
+            top_order = ui.order;
+            top_hovered = entity;
+        }
+    }
+
     for (auto entity : view) {
         auto& ui = view.get<UIRendererComponent>(entity);
         if (!ui.visible || !ui.interactable) continue;
@@ -235,7 +354,7 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
             if (button && button->on_pointer_exit) button->on_pointer_exit(entity);
         }
 
-        if (ui.is_hovered) {
+        if (ui.is_hovered && entity == top_hovered) {
             if (is_mouse_down && !ui.is_pressed) {
                 ui.is_pressed = true;
             } else if (!is_mouse_down && ui.is_pressed) {

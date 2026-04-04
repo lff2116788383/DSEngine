@@ -42,6 +42,39 @@ static EngineTextureLoader g_spine_texture_loader;
 SpineSystem::~SpineSystem() {
 }
 
+void SpineSystem::CleanupComponent(SpineRendererComponent& comp) {
+    if (comp.animation_state) {
+        delete static_cast<spine::AnimationState*>(comp.animation_state);
+        comp.animation_state = nullptr;
+    }
+    if (comp.animation_state_data) {
+        delete static_cast<spine::AnimationStateData*>(comp.animation_state_data);
+        comp.animation_state_data = nullptr;
+    }
+    if (comp.skeleton) {
+        delete static_cast<spine::Skeleton*>(comp.skeleton);
+        comp.skeleton = nullptr;
+    }
+    if (comp.skeleton_data) {
+        delete static_cast<spine::SkeletonData*>(comp.skeleton_data);
+        comp.skeleton_data = nullptr;
+    }
+    if (comp.atlas) {
+        delete static_cast<spine::Atlas*>(comp.atlas);
+        comp.atlas = nullptr;
+    }
+    comp.textures.clear();
+    comp.dirty_animation = false;
+}
+
+void SpineSystem::Shutdown(entt::registry& registry) {
+    auto view = registry.view<SpineRendererComponent>();
+    for (auto entity : view) {
+        auto& comp = view.get<SpineRendererComponent>(entity);
+        CleanupComponent(comp);
+    }
+}
+
 void SpineSystem::Update(entt::registry& registry, float dt) {
     auto view = registry.view<SpineRendererComponent>();
     for (auto entity : view) {
@@ -74,9 +107,15 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
                         comp.skeleton_data = skeletonData;
                         comp.skeleton = new spine::Skeleton(skeletonData);
                         spine::AnimationStateData* stateData = new spine::AnimationStateData(skeletonData);
+                        comp.animation_state_data = stateData;
                         comp.animation_state = new spine::AnimationState(stateData);
                     } else {
                         DEBUG_LOG_ERROR("Failed to read Spine skeleton data: {}", comp.skeleton_data_path);
+                        if (comp.atlas) {
+                            delete static_cast<spine::Atlas*>(comp.atlas);
+                            comp.atlas = nullptr;
+                        }
+                        comp.textures.clear();
                     }
                 }
             }

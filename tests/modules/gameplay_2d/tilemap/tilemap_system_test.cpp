@@ -81,9 +81,10 @@ TEST_CASE("Given_ColliderTilemap_When_Update_Then_RuntimeTilesContainStaticColli
     TilemapSystem system;
     system.Update(world.registry());
 
-    REQUIRE(tilemap.runtime_tile_entities.size() == 2);
+    // tile_id == 0 视为空瓦片，不应生成运行时实体
+    REQUIRE(tilemap.runtime_tile_entities.size() == 1);
 
-    const auto collider_entity = tilemap.runtime_tile_entities[1];
+    const auto collider_entity = tilemap.runtime_tile_entities[0];
     REQUIRE(world.registry().all_of<RigidBody2DComponent>(collider_entity));
     REQUIRE(world.registry().all_of<BoxCollider2DComponent>(collider_entity));
     const auto& rb = world.registry().get<RigidBody2DComponent>(collider_entity);

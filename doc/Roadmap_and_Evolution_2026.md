@@ -22,6 +22,13 @@
 > 2. **P1：2D 商业化工程能力**
 > 3. **P2：3D MVP**
 > 4. **P3：3D 商业版与生态化**
+>
+> 为避免 P0 刚收尾后再次陷入“方向正确但执行发散”，当前已补充一份可直接落地的短周期计划：
+> - **`doc/P0_5_P1_TWO_WEEK_EXECUTION_PLAN.md`**
+>
+> 建议执行顺序为：
+> - 先做 **P0.5 稳定化**（自动化验证、性能基线、editor_cpp 基础可用性）
+> - 再做 **P1 起步能力**（粒子 / UI / Localization / Profiler 的编辑器化接入）
 
 ### 阶段 1：2D MVP 版本（当前主线已完成）
 - **引擎内核**：基于 Job System 的任务调度、RHI 接口抽象、全维度数学库支撑的 2D 变换；集成 EnTT 形成纯 ECS 架构。
@@ -65,6 +72,20 @@
   - `engine.unit` + `engine.lua_runtime` 进入 CI
   - 关键 2D 子系统引入 smoke/integration 标签
   - Debug/Release 双配置持续构建
+
+#### 阶段 2 的短周期执行建议（当前采用）
+
+- **Week 1 / P0.5 稳定化**
+  - 一键构建与回归入口
+  - 2D / Editor / Profiler 基线数据
+  - editor_cpp 基础编辑闭环增强
+- **Week 2 / P1 起步**
+  - 粒子参数面板第一版
+  - UI 布局可视化编辑第一版
+  - Localization × UI 第一版绑定
+  - Profiler 历史曲线与导出增强
+
+详细拆解见：`doc/P0_5_P1_TWO_WEEK_EXECUTION_PLAN.md`
 
 ### 阶段 3：3D MVP 版本
 - **引擎扩展**：以可插拔形式引入 `MeshRendererComponent`、`Camera3D` 及基础 3D 渲染管线（前向渲染），接入 Jolt/PhysX 物理库进行 3D 碰撞验证。

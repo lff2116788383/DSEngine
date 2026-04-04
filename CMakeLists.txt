@@ -166,7 +166,7 @@ endfunction()
 dse_apply_config_postfix(dse_engine)
 
 if (MSVC)
-    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 else()
     add_definitions(-D _DEBUG)
 endif ()

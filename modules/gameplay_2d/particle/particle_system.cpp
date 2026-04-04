@@ -5,18 +5,21 @@
 
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/physics/physics2d/physics2d_system.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
 
 namespace {
 
-// 线程局部随机数生成器
-thread_local std::mt19937 g_rng(std::random_device{}());
+std::mt19937& GlobalParticleRng() {
+    thread_local std::mt19937 rng(std::random_device{}());
+    return rng;
+}
 
 float RandomRange(float min_val, float max_val) {
     std::uniform_real_distribution<float> dist(min_val, max_val);
-    return dist(g_rng);
+    return dist(GlobalParticleRng());
 }
 
 glm::vec3 RandomVec3Range(const glm::vec3& min_val, const glm::vec3& max_val) {
@@ -27,9 +30,65 @@ glm::vec3 RandomVec3Range(const glm::vec3& min_val, const glm::vec3& max_val) {
     );
 }
 
+ParticleCollisionMode ResolveCollisionMode(const ParticleEmitterComponent& emitter) {
+    if (emitter.collision_mode != ParticleCollisionMode::None) {
+        return emitter.collision_mode;
+    }
+    if (emitter.use_ground_collision || emitter.enable_collision) {
+        return ParticleCollisionMode::GroundPlane;
+    }
+    return ParticleCollisionMode::None;
+}
+
+float EvaluateSize(const ParticleEmitterComponent& emitter, float life_t) {
+    if (emitter.size_curve.enabled) {
+        return emitter.size_curve.Evaluate(life_t);
+    }
+    if (emitter.use_size_curve) {
+        return glm::mix(emitter.start_size, emitter.size_curve_end, life_t);
+    }
+    return emitter.start_size;
+}
+
+float EvaluateAlpha(const ParticleEmitterComponent& emitter, float life_t) {
+    if (emitter.alpha_curve.enabled) {
+        return emitter.alpha_curve.Evaluate(life_t);
+    }
+    if (emitter.use_alpha_curve) {
+        return glm::mix(emitter.start_color.a, emitter.alpha_curve_end, life_t);
+    }
+    return emitter.start_color.a;
+}
+
+float EvaluateSpeedScale(const ParticleEmitterComponent& emitter, float life_t) {
+    if (emitter.speed_curve.enabled) {
+        return emitter.speed_curve.Evaluate(life_t);
+    }
+    if (emitter.use_speed_curve) {
+        return glm::mix(1.0f, emitter.speed_curve_end_scale, life_t);
+    }
+    return 1.0f;
+}
+
+glm::vec3 ReflectVelocityAgainstNormal(const glm::vec3& velocity,
+                                       const glm::vec2& normal,
+                                       float bounce,
+                                       float friction) {
+    if (glm::dot(normal, normal) < 0.000001f) {
+        return velocity;
+    }
+    glm::vec2 n = glm::normalize(normal);
+
+    glm::vec2 v2(velocity.x, velocity.y);
+    const glm::vec2 normal_component = glm::dot(v2, n) * n;
+    const glm::vec2 tangent_component = v2 - normal_component;
+    const glm::vec2 reflected = (-normal_component * bounce) + (tangent_component * (1.0f - friction));
+    return glm::vec3(reflected.x, reflected.y, velocity.z * (1.0f - friction));
+}
+
 } // anonymous namespace
 
-void ParticleSystem::Update(World& world, float delta_time) {
+void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* physics_system) {
     auto view = world.registry().view<ParticleEmitterComponent, TransformComponent>();
     
     for (auto entity : view) {
@@ -52,25 +111,23 @@ void ParticleSystem::Update(World& world, float delta_time) {
             // Apply gravity
             it->velocity += emitter.gravity * delta_time;
 
+            const glm::vec3 previous_position = it->position;
+
             // Apply speed curve
-            if (emitter.use_speed_curve) {
-                const float speed_scale = glm::mix(1.0f, emitter.speed_curve_end_scale, life_t);
-                it->position += it->velocity * delta_time * speed_scale;
-            } else {
-                it->position += it->velocity * delta_time;
-            }
+            const float speed_scale = EvaluateSpeedScale(emitter, life_t);
+            it->position += it->velocity * delta_time * speed_scale;
 
             // Apply rotation
             it->rotation += it->angular_velocity * delta_time;
 
             // Apply size curve
-            if (emitter.use_size_curve) {
-                it->size = glm::mix(emitter.start_size, emitter.size_curve_end, life_t);
+            if (emitter.size_curve.enabled || emitter.use_size_curve) {
+                it->size = EvaluateSize(emitter, life_t);
             }
 
             // Apply alpha curve
-            if (emitter.use_alpha_curve) {
-                it->color.a = glm::mix(emitter.start_color.a, emitter.alpha_curve_end, life_t);
+            if (emitter.alpha_curve.enabled || emitter.use_alpha_curve) {
+                it->color.a = EvaluateAlpha(emitter, life_t);
             }
 
             // Apply color curve
@@ -78,8 +135,28 @@ void ParticleSystem::Update(World& world, float delta_time) {
                 it->color = glm::mix(emitter.start_color, emitter.color_curve_end, life_t);
             }
 
-            // Simple ground collision
-            if (emitter.use_ground_collision && it->position.y <= emitter.ground_y) {
+            if (ResolveCollisionMode(emitter) == ParticleCollisionMode::Box2D && physics_system != nullptr) {
+                Entity hit_entity = entt::null;
+                glm::vec2 hit_point(0.0f);
+                glm::vec2 hit_normal(0.0f);
+                if (physics_system->Raycast(glm::vec2(previous_position.x, previous_position.y),
+                                            glm::vec2(it->position.x, it->position.y),
+                                            hit_entity,
+                                            hit_point,
+                                            hit_normal)) {
+                    it->position.x = hit_point.x + hit_normal.x * 0.01f;
+                    it->position.y = hit_point.y + hit_normal.y * 0.01f;
+                    it->velocity = ReflectVelocityAgainstNormal(it->velocity,
+                                                                hit_normal,
+                                                                emitter.collision_bounce,
+                                                                emitter.collision_friction);
+                    it->life_remaining -= emitter.collision_life_loss;
+                }
+            }
+
+            // Collision handling
+            if (ResolveCollisionMode(emitter) == ParticleCollisionMode::GroundPlane &&
+                it->position.y <= emitter.ground_y) {
                 it->position.y = emitter.ground_y;
                 it->velocity.y = -it->velocity.y * emitter.collision_bounce;
                 it->velocity.x *= (1.0f - emitter.collision_friction);
@@ -114,6 +191,12 @@ void ParticleSystem::Update(World& world, float delta_time) {
             }
 
             p.color = emitter.start_color;
+            if (emitter.size_curve.enabled) {
+                p.size = emitter.size_curve.start_value;
+            }
+            if (emitter.alpha_curve.enabled) {
+                p.color.a = emitter.alpha_curve.start_value;
+            }
             return p;
         };
 

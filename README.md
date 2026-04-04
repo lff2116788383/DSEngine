@@ -73,8 +73,9 @@ DSEngine
 - **物理系统**：集成 Box2D，支持刚体、碰撞体与物理步进。
 - **动画系统**：帧动画 (Sprite Animation) 和 Spine 骨骼动画集成。
 - **Tilemap 系统**：支持瓦片地图解析与渲染。
-- **粒子系统**：基础 2D 粒子发射与更新。
-- **UI 系统**：按钮点击、文本渲染、悬停等交互逻辑。
+- **粒子系统**：已具备基础 2D 粒子发射、随机参数、生命周期曲线、统一碰撞语义与 Box2D 最小可用碰撞处理能力，P0 范围已完成收口。
+- **UI 系统**：已支持按钮交互、文本渲染、CanvasScaler、Anchor、GridLayout 与 UI 动画。
+- **性能分析工具**：提供 CPU / Memory / Render Profiler，支持统计与 CSV/JSON 导出。
 
 ### 3D 游戏性模块 (modules/gameplay_3d/)
 - **PBR 渲染管线**：支持金属粗糙度工作流 (Metallic-Roughness)、IBL 贴图与 HDR 色调映射。
@@ -143,7 +144,7 @@ build_all.bat --with-tests --no-editor --no-launcher --no-sdk --no-verify-exe
 - `engine.unit`：引擎基础单元测试
 - `engine.lua_runtime`：Lua 运行时专项回归测试，覆盖启动失败清理、脚本更新链路、异常场景状态复位等问题
 
-如需构建当前主线编辑器，可直接构建 `dse_editor_cpp` 目标。
+如需构建当前主线编辑器，需要在 **CMake 生成阶段显式开启** `DSE_BUILD_EDITOR=ON`，否则顶层默认不会生成 `dse_editor_cpp` 目标。
 
 运行 C++ Demo：
 
@@ -166,10 +167,12 @@ bin\DSEngine_lua_debug.exe
 当前主线编辑器为 `apps/editor_cpp/`，通过顶层 CMake 一并生成。
 
 ```bash
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=ON
 cmake --build build_vs2022 --config Debug --target dse_editor_cpp
-bin\dsengine-editor_debug.exe
+bin\dsengine-editor.exe
 ```
+
+如果 `build_vs2022/` 是旧配置目录，请先重新执行一遍上述 `cmake -S ... -B ...` 配置命令，确保 `DSE_BUILD_EDITOR` 已写入缓存。
 
 更多编辑器使用说明见 [Editor_Usage_Guide.md](doc/Editor_Usage_Guide.md)。
 
@@ -211,7 +214,12 @@ npm run tauri build
 - **[架构说明](doc/Architecture.md)**：包含现代全栈引擎的分层模型与核心设计原则。
 - **[后续演进与发展规划](doc/Roadmap_and_Evolution_2026.md)**：记录了从 2D MVP 迈向全栈 3D 商业版引擎的完整路线图，以及 Launcher 和 Editor 的发展计划。
 - **[编辑器使用指南](doc/Editor_Usage_Guide.md)**：记录当前 `editor_cpp` 编辑器的构建、运行与使用方式。
+- **[UI 系统指南](doc/UI_SYSTEM_GUIDE.md)**：记录当前 2D UI 渲染、布局、动画与测试覆盖情况。
 - **[测试指南](doc/TESTING_CTEST_GUIDE.md)**：引擎单元测试与回归测试的说明。
+- **[国际化指南](doc/LOCALIZATION_GUIDE.md)**：多语言、字体管理与 RTL 文本支持说明。
+- **[粒子系统指南](doc/PARTICLE_SYSTEM_GUIDE.md)**：粒子发射、随机参数、生命周期曲线与碰撞模式说明。
+- **[性能分析工具指南](doc/PROFILER_GUIDE.md)**：CPU / Memory / Render Profiler 的接入与导出说明。
+- **[P0.5 / P1 两周执行计划](doc/P0_5_P1_TWO_WEEK_EXECUTION_PLAN.md)**：P0 收尾后的短周期落地计划，覆盖稳定化、编辑器增强与 P1 起步任务。
 
 
 ## 实现目标Demo

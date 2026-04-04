@@ -355,7 +355,9 @@ public:
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
+    virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
     virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
     
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
@@ -481,6 +483,7 @@ public:
      * @return 纹理句柄
      */
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    void DeleteTexture(unsigned int texture_handle) override;
 
     /**
      * @brief 编译并链接着色器程序
@@ -489,6 +492,7 @@ public:
      * @return Shader Program 句柄
      */
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
+    void DeleteShaderProgram(unsigned int program_handle) override;
 
     /**
      * @brief 缓存并记录一种管线状态（主要是混合模式）
@@ -616,6 +620,12 @@ private:
     unsigned int vbo_handle_ = 0;
     unsigned int ebo_handle_ = 0;
     unsigned int white_texture_handle_ = 0;
+    unsigned int skybox_shader_handle_ = 0;
+    unsigned int skybox_vao_handle_ = 0;
+    unsigned int skybox_vbo_handle_ = 0;
+    int skybox_view_loc_ = -1;
+    int skybox_proj_loc_ = -1;
+    int skybox_tex_loc_ = -1;
     int uniform_texture_loc_ = -1;
     int uniform_tint_loc_ = -1;
     int uniform_vp_loc_ = -1;

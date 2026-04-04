@@ -26,10 +26,10 @@ set ARCH=x64
 set BUILD_EDITOR=1
 set BUILD_LAUNCHER=1
 set BUILD_ENGINE_TESTS=1
-set PACKAGE_EDITOR_EXE=0
+set PACKAGE_EDITOR_EXE=1
 set PACKAGE_LAUNCHER_EXE=1
 set PACKAGE_SDK=1
-set VERIFY_EXECUTABLES=0
+set VERIFY_EXECUTABLES=1
 set VERIFY_EXE_TIMEOUT_SECONDS=3
 
 :parse_args
@@ -161,36 +161,9 @@ if %ERRORLEVEL% neq 0 (
 echo [OK] CMake found.
 
 if "%BUILD_EDITOR%"=="1" (
-    echo Checking editor build environment...
-)
-if "%BUILD_LAUNCHER%"=="1" (
-    echo Checking launcher build environment...
-)
-if "%BUILD_EDITOR%"=="1" (
-    where node >nul 2>&1
-    if !ERRORLEVEL! neq 0 (
-        echo [ERROR] Node.js is not installed or not in PATH!
-        echo Please install Node.js 16+ from https://nodejs.org/
-        pause
-        exit /b 1
-    )
-    where npm >nul 2>&1
-    if !ERRORLEVEL! neq 0 (
-        echo [ERROR] npm is not available in PATH!
-        echo Please reinstall Node.js to include npm.
-        pause
-        exit /b 1
-    )
-    where npx >nul 2>&1
-    if !ERRORLEVEL! neq 0 (
-        echo [ERROR] npx is not available in PATH!
-        echo Please reinstall Node.js to include npx.
-        pause
-        exit /b 1
-    )
     where python >nul 2>&1
     if !ERRORLEVEL! neq 0 (
-        echo [ERROR] Python is not installed or not in PATH!
+        echo [ERROR] Python is not installed or not in PATH.
         echo Please install Python 3 and ensure python is in PATH.
         pause
         exit /b 1
@@ -352,6 +325,23 @@ if "%PACKAGE_SDK%"=="1" (
 echo.
 if "%VERIFY_EXECUTABLES%"=="1" (
     echo [*] Running Verification Tests...
+
+    if "%BUILD_EDITOR%"=="1" (
+        set "EDITOR_EXE=.\bin\dsengine-editor.exe"
+        if not exist "!EDITOR_EXE!" (
+            echo [ERROR] Cannot find editor executable in .\bin
+            pause
+            exit /b 1
+        )
+
+        call :run_verify_exe "!EDITOR_EXE!" "Editor"
+        if !ERRORLEVEL! neq 0 (
+            set "VERIFY_RC=!ERRORLEVEL!"
+            echo [ERROR] Editor failed with exit code !VERIFY_RC!!
+            pause
+            exit /b !VERIFY_RC!
+        )
+    )
 
     set CPP_EXE=.\bin\DSEngine_c++_debug.exe
     if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe

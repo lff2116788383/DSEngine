@@ -1,10 +1,25 @@
 #include "catch/catch.hpp"
 #include "modules/gameplay_2d/ui/ui_system.h"
+#include "modules/gameplay_2d/localization/localization_system.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"
+#include <algorithm>
+#include <fstream>
 
 using dse::gameplay2d::UISystem;
+
+namespace {
+std::size_t CountRenderableGlyphs(const UILabelComponent& label, const std::string& text) {
+    const int atlas_cols = label.atlas_cols > 0 ? label.atlas_cols : 1;
+    const int atlas_rows = label.atlas_rows > 0 ? label.atlas_rows : 1;
+    const int capacity = atlas_cols * atlas_rows;
+    return static_cast<std::size_t>(std::count_if(text.begin(), text.end(), [&](char ch) {
+        const int glyph_code = static_cast<unsigned char>(ch) - label.ascii_start;
+        return glyph_code >= 0 && glyph_code < capacity;
+    }));
+}
+}
 
 // 正向测试：鼠标按下再抬起时应触发按钮点击回调与事件总线点击事件。
 TEST_CASE("Given_ClickableUI_When_MousePressRelease_Then_ClickCallbacksAreFired", "[engine][unit][ui]") {
@@ -130,4 +145,78 @@ TEST_CASE("Given_MaskedChildUI_When_PointerOutsideMask_Then_ClickIsBlocked", "[e
     REQUIRE(click_count == 0);
     REQUIRE_FALSE(child_ui.is_hovered);
     REQUIRE_FALSE(child_ui.is_pressed);
+}
+
+TEST_CASE("Given_LocalizedUILabel_When_LanguageChanges_Then_TextAndGlyphsRefresh", "[engine][unit][ui][localization]") {
+    using dse::gameplay2d::LocalizationSystem;
+
+    const std::string en_path = "ui_localization_test_en.json";
+    const std::string zh_path = "ui_localization_test_zh.json";
+    {
+        std::ofstream en(en_path, std::ios::trunc);
+        en << R"({"ui":{"greeting":"Hello {name}"}})";
+    }
+    {
+        std::ofstream zh(zh_path, std::ios::trunc);
+        zh << R"({"ui":{"greeting":"你好，{name}"}})";
+    }
+
+    LocalizationSystem& loc = LocalizationSystem::GetInstance();
+    loc.Clear();
+    REQUIRE(loc.LoadLanguage("en", en_path));
+    REQUIRE(loc.LoadLanguage("zh", zh_path));
+    REQUIRE(loc.SetCurrentLanguage("en"));
+
+    World world;
+    auto entity = world.CreateEntity();
+    auto& ui = world.registry().emplace<UIRendererComponent>(entity);
+    ui.visible = true;
+    auto& label = world.registry().emplace<UILabelComponent>(entity);
+    label.use_localization = true;
+    label.localization_key = "ui.greeting";
+    label.fallback_text = "Fallback {name}";
+    label.localization_params = {{"name", "Alice"}};
+    label.dirty = true;
+
+    UISystem system;
+    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(9999.0f), false);
+
+    REQUIRE(label.text == "Hello Alice");
+    REQUIRE(label.runtime_glyph_entities.size() == CountRenderableGlyphs(label, label.text));
+
+    REQUIRE(loc.SetCurrentLanguage("zh"));
+    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(9999.0f), false);
+
+    REQUIRE(label.text == "你好，Alice");
+    REQUIRE(label.runtime_glyph_entities.size() == CountRenderableGlyphs(label, label.text));
+
+    std::remove(en_path.c_str());
+    std::remove(zh_path.c_str());
+    loc.Clear();
+}
+
+TEST_CASE("Given_LocalizedUILabel_When_KeyMissing_Then_FallbackTextIsUsed", "[engine][unit][ui][localization]") {
+    using dse::gameplay2d::LocalizationSystem;
+
+    LocalizationSystem& loc = LocalizationSystem::GetInstance();
+    loc.Clear();
+
+    World world;
+    auto entity = world.CreateEntity();
+    auto& ui = world.registry().emplace<UIRendererComponent>(entity);
+    ui.visible = true;
+    auto& label = world.registry().emplace<UILabelComponent>(entity);
+    label.use_localization = true;
+    label.localization_key = "ui.missing";
+    label.fallback_text = "Fallback {name}";
+    label.localization_params = {{"name", "Bob"}};
+    label.dirty = true;
+
+    UISystem system;
+    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(9999.0f), false);
+
+    REQUIRE(label.text == "Fallback Bob");
+    REQUIRE(label.runtime_glyph_entities.size() == CountRenderableGlyphs(label, label.text));
+
+    loc.Clear();
 }

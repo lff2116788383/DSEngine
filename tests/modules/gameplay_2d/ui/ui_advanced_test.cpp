@@ -5,7 +5,7 @@
 
 #include "catch/catch.hpp"
 #include "modules/gameplay_2d/ui/ui_system.h"
-#include "gameplay_2d/ui/ui_layout.h"
+#include "modules/gameplay_2d/ui/ui_layout.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"

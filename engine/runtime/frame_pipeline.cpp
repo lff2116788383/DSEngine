@@ -97,7 +97,7 @@ bool FramePipeline::Init() {
     ui_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
     prez_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
     
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < CSM_CASCADES; ++i) {
         shadow_render_target_[i] = rhi_device_->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
     }
 
@@ -177,6 +177,9 @@ bool FramePipeline::Init() {
 }
 
 void FramePipeline::Shutdown() {
+    if (!initialized_) {
+        return;
+    }
     dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     auto& asset_manager = ResolveAssetManager(asset_manager_);
     render_graph_passes_.clear();
@@ -186,16 +189,27 @@ void FramePipeline::Shutdown() {
         dse::runtime::ShutdownCppBusiness();
     }
     audio_system_.Shutdown();
-    asset_manager.SetRhiDevice(nullptr);
+    spine_system_.Shutdown(world_->registry());
+    asset_manager.ReleaseGpuResources();
     if (rhi_device_) {
         rhi_device_->Shutdown();
         rhi_device_.reset();
     }
+    asset_manager.SetRhiDevice(nullptr);
     main_render_target_ = 0;
     scene_render_target_ = 0;
     ui_render_target_ = 0;
+    prez_render_target_ = 0;
+    for (int i = 0; i < CSM_CASCADES; ++i) {
+        shadow_render_target_[i] = 0;
+    }
+    pp_bloom_extract_rt_ = 0;
+    pp_bloom_blur_h_rt_ = 0;
+    pp_bloom_blur_v_rt_ = 0;
     sprite_pipeline_state_ = 0;
     mesh_pipeline_state_ = 0;
+    prez_pipeline_state_ = 0;
+    shadow_pipeline_state_ = 0;
     composite_pipeline_state_ = 0;
     update_time_accumulator_ms_ = 0.0f;
     fixed_time_accumulator_ms_ = 0.0f;
@@ -257,7 +271,7 @@ void FramePipeline::Render() {
     auto cmd_buffer = rhi_device_->CreateCommandBuffer();
     
     // Set global shadow maps early (they might be accessed in the scene pass)
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < CSM_CASCADES; ++i) {
         if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
             device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(shadow_render_target_[i]));
         }
@@ -374,10 +388,10 @@ void FramePipeline::BuildRenderGraph() {
             auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
             if (!light.enabled || !light.cast_shadow) return;
 
-            std::vector<glm::mat4> light_space_matrices(3);
-            std::vector<float> cascade_splits(3);
+            std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
+            std::vector<float> cascade_splits(CSM_CASCADES);
 
-            for (int i = 0; i < 3; ++i) {
+            for (int i = 0; i < CSM_CASCADES; ++i) {
                 cmd_buffer.BeginRenderPass({shadow_render_target_[i], glm::vec4(1.0f), true}); // Clear depth to 1.0
                 
                 // Simple ortho projection for cascades (in a full implementation, this should bound the view frustum splits)
