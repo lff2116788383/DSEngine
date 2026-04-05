@@ -15,7 +15,7 @@ add_executable(dse_editor_cpp WIN32
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_widgets.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp
-    ${CMAKE_SOURCE_DIR}/depends/imgui/ImGuizmo.cpp
+    ${CMAKE_SOURCE_DIR}/third_party/imguizmo/ImGuizmo.cpp
 )
 
 if(MSVC)
@@ -34,6 +34,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps
     ${CMAKE_SOURCE_DIR}/depends/imgui
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends
+    ${CMAKE_SOURCE_DIR}/third_party/imguizmo
     ${CMAKE_SOURCE_DIR}/depends/glm
     ${CMAKE_SOURCE_DIR}/depends/glm_ext
     ${CMAKE_SOURCE_DIR}/depends/spdlog/include
