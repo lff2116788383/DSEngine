@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/assets/asset_manager.h"
+#include <stdexcept>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -47,7 +48,7 @@ AssetManager& GetAssetManager() {
     if (g_binding_context.asset_manager) {
         return *g_binding_context.asset_manager;
     }
-    return AssetManager::Instance();
+    throw std::runtime_error("Lua binding context requires an injected AssetManager");
 }
 
 Entity LuaEntityFromInteger(lua_Integer value) {

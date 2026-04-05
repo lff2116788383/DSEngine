@@ -9,6 +9,7 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <stdexcept>
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
@@ -24,10 +25,22 @@ struct CustomVFSFile {
     size_t cursor = 0;
 };
 
+namespace {
+AssetManager& RequireAssetManager(AssetManager* asset_manager) {
+    if (asset_manager != nullptr) {
+        return *asset_manager;
+    }
+    throw std::runtime_error("AudioSystem requires an injected AssetManager");
+}
+}
+
+static AssetManager* g_audio_asset_manager = nullptr;
+
 static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
     if ((openMode & MA_OPEN_MODE_READ) == 0) return MA_ERROR;
+    (void)pVFS;
     std::vector<uint8_t> data;
-    if (!AssetManager::Instance().LoadFileToMemory(pFilePath, data)) {
+    if (!RequireAssetManager(g_audio_asset_manager).LoadFileToMemory(pFilePath, data)) {
         return MA_DOES_NOT_EXIST;
     }
     CustomVFSFile* f = new CustomVFSFile();
@@ -108,11 +121,16 @@ AudioSystem::~AudioSystem() {
     Shutdown();
 }
 
-bool AudioSystem::Initialize() {
+bool AudioSystem::Initialize(AssetManager* asset_manager) {
     if (is_initialized) {
         return true;
     }
 
+    asset_manager_ = asset_manager;
+    if (!asset_manager_) {
+        throw std::runtime_error("AudioSystem::Initialize requires an injected AssetManager");
+    }
+    g_audio_asset_manager = asset_manager_;
     auto engine = std::make_unique<ma_engine>();
     ma_engine_config config = ma_engine_config_init();
     
@@ -129,6 +147,14 @@ bool AudioSystem::Initialize() {
     ma_result result = ma_engine_init(&config, engine.get());
     if (result != MA_SUCCESS) {
         std::cerr << "Failed to initialize audio engine." << std::endl;
+        if (ma_resource_manager_ptr) {
+            ma_resource_manager* rm = static_cast<ma_resource_manager*>(ma_resource_manager_ptr);
+            ma_resource_manager_uninit(rm);
+            delete rm;
+            ma_resource_manager_ptr = nullptr;
+        }
+        g_audio_asset_manager = nullptr;
+        asset_manager_ = nullptr;
         return false;
     }
 
@@ -246,6 +272,9 @@ void AudioSystem::Shutdown() {
         delete rm;
         ma_resource_manager_ptr = nullptr;
     }
+
+    g_audio_asset_manager = nullptr;
+    asset_manager_ = nullptr;
     
     ma_engine_ptr = nullptr;
     is_initialized = false;

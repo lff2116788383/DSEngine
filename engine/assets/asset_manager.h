@@ -222,11 +222,6 @@ private:
 class AssetManager {
 public:
     /**
-     * @brief 获取 AssetManager 单例
-     * @return AssetManager 实例引用
-     */
-    static AssetManager& Instance();
-    /**
      * @brief 注入 RhiDevice 实例，用于底层硬件资源的分配
      * @param rhi_device 渲染硬件接口实例
      */
@@ -240,7 +235,7 @@ public:
      * @brief 获取当前的数据根目录
      * @return 数据根目录路径
      */
-    std::string GetDataRoot();
+    std::string GetDataRoot() const;
 
     /**
      * @brief 执行 LoadTexture 操作
@@ -306,6 +301,20 @@ public:
     bool MountBundle(const std::string& bundle_path, const std::string& aes_key);
 
     /**
+     * @brief 将资源路径规范化为相对于 data root 的逻辑路径
+     * @param path 原始路径，可为逻辑路径、带 data/ 前缀路径或绝对路径
+     * @return 规范化后的逻辑路径；失败时返回空字符串
+     */
+    std::string NormalizeAssetPath(const std::string& path) const;
+
+    /**
+     * @brief 解析资源到磁盘绝对/相对可访问路径
+     * @param path 原始路径，可为逻辑路径、带 data/ 前缀路径或绝对路径
+     * @return 可访问的磁盘路径；失败时返回空字符串
+     */
+    std::string ResolveAssetPath(const std::string& path) const;
+
+    /**
      * @brief Load a file into memory, checking mounted bundles first, then disk
      */
     bool LoadFileToMemory(const std::string& path, std::vector<uint8_t>& out_data);
@@ -356,10 +365,10 @@ public:
     void UnloadUnused();
     void ReleaseGpuResources();
 
+    AssetManager() = default;
     ~AssetManager() = default;
 
 private:
-    AssetManager() = default;
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
@@ -378,7 +387,7 @@ private:
     std::string data_root_ = "data";
     std::mutex cache_mutex_;
     std::mutex callback_mutex_;
-    std::mutex config_mutex_;
+    mutable std::mutex config_mutex_;
     RhiDevice* rhi_device_ = nullptr;
     std::deque<std::function<void()>> pending_main_thread_callbacks_;
     std::size_t pending_callbacks_high_watermark_ = 0;

@@ -2,6 +2,7 @@
 #include "modules/gameplay_2d/spine/spine_system.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/assets/asset_manager.h"
 
 using dse::gameplay2d::SpineSystem;
 
@@ -34,7 +35,11 @@ TEST_CASE("Given_MissingSpineAssets_When_Update_Then_RuntimeObjectsRemainNull", 
     spine.current_animation = "idle";
     spine.dirty_animation = true;
 
+    AssetManager asset_manager;
+    asset_manager.ConfigureDataRoot("data");
+
     SpineSystem system;
+    system.SetAssetManager(&asset_manager);
     system.Update(world.registry(), 1.0f / 60.0f);
 
     REQUIRE(spine.atlas == nullptr);

@@ -50,7 +50,7 @@ Entity SpawnBox(World& world, int index, const DemoState& state) {
 }
 }
 
-void Bootstrap(World& world) {
+void Bootstrap(World& world, AssetManager& asset_manager) {
     auto& state = State();
     state = {};
     state.settings = config::kDemo2D;
@@ -73,10 +73,7 @@ void Bootstrap(World& world) {
     auto& free_cam = world.registry().emplace<FreeCameraControllerComponent>(state.camera);
     free_cam.move_speed = 10.0f;
 
-    auto texture = AssetManager::Instance().LoadTexture("models/CesiumLogoFlat.png");
-    if (!texture) {
-        texture = AssetManager::Instance().LoadTexture("data/models/CesiumLogoFlat.png");
-    }
+    auto texture = asset_manager.LoadTexture("models/CesiumLogoFlat.png");
     state.texture_handle = texture ? texture->GetHandle() : 0;
 
     state.dlight = world.CreateEntity();
@@ -104,7 +101,7 @@ void Bootstrap(World& world) {
     state.spawn_index = 0;
     state.frame_counter = 0;
     state.initialized = true;
-    std::cout << "[2D-Test][CPP] setup started: total_boxes=" << state.settings.total_boxes
+    std::cout << "[3D-Smoke][CPP] bootstrap_ok camera=1 light=1 ground=1 total_boxes=" << state.settings.total_boxes
               << " spawn_per_frame=" << state.settings.spawn_per_frame << std::endl;
 }
 
@@ -122,7 +119,7 @@ void Tick(World& world, float delta_time) {
             state.spawn_index += 1;
         }
         if (state.spawn_index == state.settings.total_boxes) {
-            std::cout << "[2D-Test][CPP] setup finished: boxes=" << state.settings.total_boxes << std::endl;
+            std::cout << "[3D-Smoke][CPP] setup_finished boxes=" << state.settings.total_boxes << std::endl;
         }
     }
 
@@ -135,7 +132,7 @@ void Tick(World& world, float delta_time) {
     const int max_batch = FramePipeline::Instance().LastMaxBatchSprites();
     const int sprite_count = FramePipeline::Instance().LastSpriteCount();
     const char* status = draw_calls > 9 ? "FAIL" : "PASS";
-    std::cout << "[2D-Test][CPP] draw_calls=" << draw_calls
+    std::cout << "[3D-Smoke][CPP] draw_calls=" << draw_calls
               << " max_batch=" << max_batch
               << " sprites=" << sprite_count
               << " spawned=" << state.spawn_index << "/" << state.settings.total_boxes

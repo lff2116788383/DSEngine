@@ -24,11 +24,10 @@
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "modules/gameplay_2d/spine/spine_system.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
-#include "modules/gameplay_3d/rendering/terrain_system.h"
-#include "modules/gameplay_3d/rendering/frustum_culling_system.h"
-#include "modules/gameplay_3d/animation/animator_system.h"
-#include "modules/gameplay_3d/camera/free_camera_controller_system.h"
-#include "modules/gameplay_3d/ai/steering_system.h"
+#include "engine/core/module.h"
+#include "engine/core/dynamic_library.h"
+#include "engine/runtime/runtime_frame_ops.h"
+
 class AssetManager;
 
 enum class BusinessMode {
@@ -150,7 +149,19 @@ private:
         std::function<void(CommandBuffer&)> execute;
     };
 
+    friend void dse::runtime::RunFrameUpdate(FramePipeline& pipeline, float delta_time);
+    friend void dse::runtime::RunFrameFixedUpdate(FramePipeline& pipeline, float fixed_delta_time);
+    friend void dse::runtime::RunFrameRender(FramePipeline& pipeline);
+    friend void dse::runtime::BuildFrameRenderGraph(FramePipeline& pipeline);
+    friend void dse::runtime::ExecuteFrameRenderGraph(FramePipeline& pipeline, CommandBuffer& cmd_buffer);
+
 private:
+    void RunUpdateInternal(float delta_time);
+    void RunFixedUpdateInternal(float fixed_delta_time);
+    void RunRenderInternal();
+    void BuildRenderGraphInternal();
+    void ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer);
+
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
@@ -170,11 +181,15 @@ private:
     dse::gameplay2d::AudioSystem audio_system_;
     dse::gameplay2d::TilemapSystem tilemap_system_;
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
-    dse::gameplay3d::TerrainSystem terrain_system_;
-    dse::gameplay3d::FrustumCullingSystem frustum_culling_system_;
-    dse::gameplay3d::AnimatorSystem animator_system_;
-    dse::gameplay3d::FreeCameraControllerSystem free_camera_controller_system_;
-    dse::gameplay3d::SteeringSystem steering_system_;
+    
+    // 动态模块化架构：不再直接实例化 3D 相关系统
+    struct LoadedModule {
+        std::unique_ptr<dse::core::DynamicLibrary> lib;
+        dse::core::IModule* instance = nullptr;
+        using DestroyModuleFunc = void(*)(dse::core::IModule*);
+        DestroyModuleFunc destroy = nullptr;
+    };
+    std::vector<LoadedModule> modules_;
     
     bool initialized_ = false;
     float stats_accumulator_ = 0.0f;
@@ -194,9 +209,11 @@ private:
     unsigned int scene_render_target_ = 0;
     unsigned int ui_render_target_ = 0;
     unsigned int prez_render_target_ = 0;
+    
+    // PBR Bloom RTs
     unsigned int pp_bloom_extract_rt_ = 0;
-    unsigned int pp_bloom_blur_h_rt_ = 0;
-    unsigned int pp_bloom_blur_v_rt_ = 0;
+    std::vector<unsigned int> pp_bloom_mip_rts_; // 5 mip levels
+    
     unsigned int sprite_pipeline_state_ = 0;
     unsigned int mesh_pipeline_state_ = 0;
     unsigned int prez_pipeline_state_ = 0;

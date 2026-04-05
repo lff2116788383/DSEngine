@@ -103,6 +103,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     if (initialized_) {
         return;
     }
+    // ... vertex shader ...
     const char* vertex_shader = R"(
         #version 330 core
         layout (location = 0) in vec3 aPos;
@@ -143,7 +144,6 @@ void OpenGLRhiDevice::EnsureInitialized() {
             vec3 morphedPos = aPos;
             vec3 morphedNormal = aNormal;
             if (u_morph_enabled) {
-                // Dummy morphing logic (in a real engine, we'd sample a texture or use SSBO for morph deltas)
                 morphedPos += vec3(0.01) * u_morph_weights[0]; 
             }
             
@@ -159,7 +159,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
             mat3 normalMatrix = transpose(inverse(mat3(u_model * boneTransform)));
             vec3 T = normalize(normalMatrix * aTangent);
             vec3 N = normalize(normalMatrix * morphedNormal);
-            T = normalize(T - dot(T, N) * N); // Gram-Schmidt
+            T = normalize(T - dot(T, N) * N);
             vec3 B = cross(N, T);
             TBN = mat3(T, B, N);
             Normal = N;
@@ -274,20 +274,21 @@ void OpenGLRhiDevice::EnsureInitialized() {
             projCoords = projCoords * 0.5 + 0.5;
             
             if(projCoords.z > 1.0) return 0.0;
+            if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
 
             float currentDepth = projCoords.z;
             float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
             
             float shadow = 0.0;
-            vec2 texelSize = 1.0 / textureSize(u_shadow_maps[cascadeIndex], 0);
-            for(int x = -1; x <= 1; ++x) {
-                for(int y = -1; y <= 1; ++y) {
+            vec2 texelSize = 1.0 / vec2(textureSize(u_shadow_maps[cascadeIndex], 0));
+            for (int x = -1; x <= 1; ++x) {
+                for (int y = -1; y <= 1; ++y) {
                     float pcfDepth = texture(u_shadow_maps[cascadeIndex], projCoords.xy + vec2(x, y) * texelSize).r;
-                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+                    shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
                 }
             }
             shadow /= 9.0;
-            return shadow * u_shadow_strength;
+            return clamp(shadow * u_shadow_strength, 0.0, 1.0);
         }
 
         void main() {
@@ -364,37 +365,21 @@ void OpenGLRhiDevice::EnsureInitialized() {
                 Lo += (kD * albedo / PI + specular) * radiance * NdotL;
             }
             
-            // Spot Lights
-            for(int i = 0; i < u_spot_light_count; ++i) {
-                vec3 L = normalize(u_spot_lights[i].position - FragPos);
-                vec3 H = normalize(V + L);
-                float distance = length(u_spot_lights[i].position - FragPos);
-                float attenuation = clamp(1.0 - (distance*distance)/(u_spot_lights[i].radius*u_spot_lights[i].radius), 0.0, 1.0);
-                attenuation *= attenuation;
-                
-                float theta = dot(L, normalize(-u_spot_lights[i].direction)); 
-                float epsilon = cos(radians(u_spot_lights[i].inner_cone)) - cos(radians(u_spot_lights[i].outer_cone));
-                float intensity = clamp((theta - cos(radians(u_spot_lights[i].outer_cone))) / epsilon, 0.0, 1.0);
-                
-                vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * attenuation * intensity;
-
-                float NDF = DistributionGGX(N, H, u_material_roughness);
-                float G   = GeometrySmith(N, V, L, u_material_roughness);
-                vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-                vec3 numerator    = NDF * G * F;
-                float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-                vec3 specular     = numerator / denominator;
-
-                vec3 kS = F;
-                vec3 kD = vec3(1.0) - kS;
-                kD *= 1.0 - u_material_metallic;
-
-                float NdotL = max(dot(N, L), 0.0);
-                Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-            }
-
-            vec3 ambient = vec3(u_ambient_intensity) * albedo * u_material_ao;
+            // Ambient lighting (Placeholder for IBL Irradiance/Specular)
+            // To prevent pure metals from being completely black when not directly lit,
+            // we use a simple ambient approximation until true IBL cubemap sampling is integrated.
+            vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
+            vec3 kS_ambient = F;
+            vec3 kD_ambient = 1.0 - kS_ambient;
+            kD_ambient *= 1.0 - u_material_metallic;
+            
+            // Simple constant ambient light for now
+            vec3 irradiance = vec3(u_ambient_intensity);
+            vec3 diffuse_ambient = irradiance * albedo;
+            // Fake specular ambient based on roughness
+            vec3 specular_ambient = irradiance * F0 * (1.0 - u_material_roughness);
+            
+            vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * u_material_ao;
             vec3 color = ambient + Lo + u_material_emissive;
 
             color = color / (color + vec3(1.0));
@@ -657,6 +642,11 @@ void OpenGLCommandBuffer::DrawPostProcess(unsigned int source_texture, const std
     draw_post_process_cmds_.push_back({next_cmd_order_++, source_texture, effect_name, params});
 }
 
+void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (items.empty()) return;
+    draw_particles3d_cmds_.push_back({next_cmd_order_++, items, view, projection});
+}
+
 void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     if (!device) {
         return;
@@ -695,6 +685,9 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     }
     for (size_t i = 0; i < draw_post_process_cmds_.size(); ++i) {
         commands.push_back({draw_post_process_cmds_[i].order, 11, i});
+    }
+    for (size_t i = 0; i < draw_particles3d_cmds_.size(); ++i) {
+        commands.push_back({draw_particles3d_cmds_[i].order, 12, i});
     }
     std::sort(commands.begin(), commands.end(), [](const CommandRef& a, const CommandRef& b) {
         return a.order < b.order;
@@ -736,6 +729,8 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealSubmitDrawSkybox(draw_skybox_cmds_[cmd.index].cubemap_texture_handle, draw_skybox_cmds_[cmd.index].view, draw_skybox_cmds_[cmd.index].projection);
         } else if (cmd.type == 11) {
             device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].source_texture, draw_post_process_cmds_[cmd.index].effect_name, draw_post_process_cmds_[cmd.index].params);
+        } else if (cmd.type == 12) {
+            device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
         }
     }
     begin_render_pass_cmds_.clear();
@@ -749,6 +744,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     draw_mesh_batch_cmds_.clear();
     draw_skybox_cmds_.clear();
     draw_post_process_cmds_.clear();
+    draw_particles3d_cmds_.clear();
     next_cmd_order_ = 0;
 }
 
@@ -771,11 +767,26 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glGenFramebuffers(1, &fbo_handle);
     resource_ledger_.framebuffers_created += 1;
     glBindTexture(GL_TEXTURE_2D, color_texture_handle);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    // Support Phase 2 HDR and mipmaps
+    GLint internal_format = desc.has_color ? GL_RGBA16F : GL_RGBA;
+    GLenum type = desc.has_color ? GL_FLOAT : GL_UNSIGNED_BYTE;
+    
+    if (desc.generate_mipmaps) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    } else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, desc.width, desc.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, desc.width, desc.height, 0, GL_RGBA, type, nullptr);
+    
+    if (desc.generate_mipmaps) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
     if (desc.has_depth) {
         glBindTexture(GL_TEXTURE_2D, depth_texture_handle);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -873,6 +884,7 @@ void OpenGLRhiDevice::RealClearColor(const glm::vec4& color) {
 }
 
 void OpenGLRhiDevice::RealBeginRenderPass(const RenderPassDesc& render_pass) {
+    bool has_depth = false;
     if (render_pass.render_target == 0) {
         if (active_render_target_ != 0) {
             auto active_it = render_targets_.find(active_render_target_);
@@ -894,11 +906,17 @@ void OpenGLRhiDevice::RealBeginRenderPass(const RenderPassDesc& render_pass) {
             glBindFramebuffer(GL_FRAMEBUFFER, it->second.fbo_handle);
             glViewport(0, 0, it->second.desc.width, it->second.desc.height);
             active_render_target_ = render_pass.render_target;
+            has_depth = it->second.desc.has_depth;
         }
     }
     current_frame_stats_.render_passes += 1;
     if (render_pass.clear_color_enabled) {
-        RealClearColor(render_pass.clear_color);
+        glClearColor(render_pass.clear_color.r, render_pass.clear_color.g, render_pass.clear_color.b, render_pass.clear_color.a);
+        glClearDepth(1.0);
+        glClear(has_depth ? (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) : GL_COLOR_BUFFER_BIT);
+    } else if (has_depth) {
+        glClearDepth(1.0);
+        glClear(GL_DEPTH_BUFFER_BIT);
     }
 }
 
@@ -1222,7 +1240,81 @@ void OpenGLRhiDevice::RealSubmitDrawPostProcess(unsigned int source_texture, con
 
         std::string fs_src = "#version 330 core\nout vec4 FragColor;\nin vec2 TexCoords;\nuniform sampler2D screenTexture;\n";
         
-        if (effect_name == "bloom_extract") {
+        if (effect_name == "bloom_downsample") {
+            fs_src += R"(
+                uniform vec2 srcResolution;
+                void main() {
+                    vec2 srcTexelSize = 1.0 / srcResolution;
+                    float x = srcTexelSize.x;
+                    float y = srcTexelSize.y;
+
+                    // Take 13 samples around current texel:
+                    // a - b - c
+                    // - j - k -
+                    // d - e - f
+                    // - l - m -
+                    // g - h - i
+                    vec3 a = texture(screenTexture, vec2(TexCoords.x - 2*x, TexCoords.y + 2*y)).rgb;
+                    vec3 b = texture(screenTexture, vec2(TexCoords.x,       TexCoords.y + 2*y)).rgb;
+                    vec3 c = texture(screenTexture, vec2(TexCoords.x + 2*x, TexCoords.y + 2*y)).rgb;
+
+                    vec3 d = texture(screenTexture, vec2(TexCoords.x - 2*x, TexCoords.y)).rgb;
+                    vec3 e = texture(screenTexture, vec2(TexCoords.x,       TexCoords.y)).rgb;
+                    vec3 f = texture(screenTexture, vec2(TexCoords.x + 2*x, TexCoords.y)).rgb;
+
+                    vec3 g = texture(screenTexture, vec2(TexCoords.x - 2*x, TexCoords.y - 2*y)).rgb;
+                    vec3 h = texture(screenTexture, vec2(TexCoords.x,       TexCoords.y - 2*y)).rgb;
+                    vec3 i = texture(screenTexture, vec2(TexCoords.x + 2*x, TexCoords.y - 2*y)).rgb;
+
+                    vec3 j = texture(screenTexture, vec2(TexCoords.x - x, TexCoords.y + y)).rgb;
+                    vec3 k = texture(screenTexture, vec2(TexCoords.x + x, TexCoords.y + y)).rgb;
+                    vec3 l = texture(screenTexture, vec2(TexCoords.x - x, TexCoords.y - y)).rgb;
+                    vec3 m = texture(screenTexture, vec2(TexCoords.x + x, TexCoords.y - y)).rgb;
+
+                    // Apply weights
+                    vec3 downsample = e*0.125;
+                    downsample += (a+c+g+i)*0.03125;
+                    downsample += (b+d+f+h)*0.0625;
+                    downsample += (j+k+l+m)*0.125;
+                    
+                    // Anti-flicker: max clamp or Karis average can be applied here for the first pass if needed
+
+                    FragColor = vec4(downsample, 1.0);
+                }
+            )";
+        } else if (effect_name == "bloom_upsample") {
+            fs_src += R"(
+                uniform float filterRadius;
+                void main() {
+                    float x = filterRadius;
+                    float y = filterRadius;
+
+                    // Take 9 samples around current texel:
+                    // a - b - c
+                    // d - e - f
+                    // g - h - i
+                    // === and apply tent filter ===
+                    vec3 a = texture(screenTexture, vec2(TexCoords.x - x, TexCoords.y + y)).rgb;
+                    vec3 b = texture(screenTexture, vec2(TexCoords.x,     TexCoords.y + y)).rgb;
+                    vec3 c = texture(screenTexture, vec2(TexCoords.x + x, TexCoords.y + y)).rgb;
+
+                    vec3 d = texture(screenTexture, vec2(TexCoords.x - x, TexCoords.y)).rgb;
+                    vec3 e = texture(screenTexture, vec2(TexCoords.x,     TexCoords.y)).rgb;
+                    vec3 f = texture(screenTexture, vec2(TexCoords.x + x, TexCoords.y)).rgb;
+
+                    vec3 g = texture(screenTexture, vec2(TexCoords.x - x, TexCoords.y - y)).rgb;
+                    vec3 h = texture(screenTexture, vec2(TexCoords.x,     TexCoords.y - y)).rgb;
+                    vec3 i = texture(screenTexture, vec2(TexCoords.x + x, TexCoords.y - y)).rgb;
+
+                    vec3 upsample = e*4.0;
+                    upsample += (b+d+f+h)*2.0;
+                    upsample += (a+c+g+i);
+                    upsample *= 1.0 / 16.0;
+
+                    FragColor = vec4(upsample, 1.0);
+                }
+            )";
+        } else if (effect_name == "bloom_extract") {
             fs_src += R"(
                 uniform float threshold;
                 void main() {
@@ -1313,6 +1405,10 @@ void OpenGLRhiDevice::RealSubmitDrawPostProcess(unsigned int source_texture, con
 
     if (effect_name == "bloom_extract" && params.size() >= 1) {
         glUniform1f(glGetUniformLocation(shader, "threshold"), params[0]);
+    } else if (effect_name == "bloom_downsample" && params.size() >= 2) {
+        glUniform2f(glGetUniformLocation(shader, "srcResolution"), params[0], params[1]);
+    } else if (effect_name == "bloom_upsample" && params.size() >= 1) {
+        glUniform1f(glGetUniformLocation(shader, "filterRadius"), params[0]);
     } else if (effect_name == "bloom_composite") {
         if (params.size() >= 1) {
             glActiveTexture(GL_TEXTURE1);
@@ -1454,6 +1550,140 @@ void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& item
     }
     
     flush_batch();
+}
+
+void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (items.empty()) return;
+
+    if (particle_shader_handle_ == 0) {
+        const char* vs_src = R"(
+            #version 330 core
+            // Per-vertex attributes (Quad)
+            layout (location = 0) in vec3 aPos;
+            layout (location = 1) in vec2 aTexCoord;
+
+            // Per-instance attributes (from SSBO or Instanced VBO)
+            // For OpenGL 3.3, we use Instanced VBO. Layout 2: pos, 3: color, 4: size
+            layout (location = 2) in vec3 iPos;
+            layout (location = 3) in vec4 iColor;
+            layout (location = 4) in float iSize;
+
+            out vec4 ParticleColor;
+            out vec2 TexCoord;
+
+            uniform mat4 u_vp;
+            uniform vec3 u_camera_right;
+            uniform vec3 u_camera_up;
+
+            void main() {
+                // Billboard calculation
+                vec3 vertexPosition_worldspace = iPos 
+                    + u_camera_right * aPos.x * iSize 
+                    + u_camera_up * aPos.y * iSize;
+
+                gl_Position = u_vp * vec4(vertexPosition_worldspace, 1.0);
+                
+                ParticleColor = iColor;
+                TexCoord = aTexCoord;
+            }
+        )";
+        const char* fs_src = R"(
+            #version 330 core
+            out vec4 FragColor;
+            in vec4 ParticleColor;
+            in vec2 TexCoord;
+            uniform sampler2D u_texture;
+
+            void main() {
+                vec4 texColor = texture(u_texture, TexCoord);
+                FragColor = texColor * ParticleColor;
+            }
+        )";
+        particle_shader_handle_ = CompileShaderProgram(vs_src, fs_src);
+        resource_ledger_.shader_programs_created += 1;
+        particle_uniform_vp_loc_ = glGetUniformLocation(particle_shader_handle_, "u_vp");
+        particle_uniform_texture_loc_ = glGetUniformLocation(particle_shader_handle_, "u_texture");
+    }
+
+    // Shared Quad VAO
+    static unsigned int quad_vao = 0;
+    static unsigned int quad_vbo = 0;
+    if (quad_vao == 0) {
+        float quad_vertices[] = {
+             -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
+              0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
+              0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
+             -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
+              0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
+             -0.5f,  0.5f, 0.0f,  0.0f, 1.0f
+        };
+        glGenVertexArrays(1, &quad_vao);
+        glGenBuffers(1, &quad_vbo);
+        glBindVertexArray(quad_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        glBindVertexArray(0);
+    }
+
+    glUseProgram(particle_shader_handle_);
+    glm::mat4 vp = projection * view;
+    glUniformMatrix4fv(particle_uniform_vp_loc_, 1, GL_FALSE, glm::value_ptr(vp));
+    glUniform1i(particle_uniform_texture_loc_, 0);
+
+    // Extract camera right and up vectors for billboarding
+    glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
+    glm::vec3 camera_up = glm::vec3(view[0][1], view[1][1], view[2][1]);
+    glUniform3fv(glGetUniformLocation(particle_shader_handle_, "u_camera_right"), 1, glm::value_ptr(camera_right));
+    glUniform3fv(glGetUniformLocation(particle_shader_handle_, "u_camera_up"), 1, glm::value_ptr(camera_up));
+
+    // Disable depth write for particles, enable additive blending
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive
+
+    for (const auto& item : items) {
+        if (item.particle_count == 0 || item.instance_vbo == 0) continue;
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle);
+
+        glBindVertexArray(quad_vao);
+        
+        // Bind instance VBO
+        glBindBuffer(GL_ARRAY_BUFFER, item.instance_vbo);
+        
+        // Layout: pos(vec3), color(vec4), size(float) -> total 8 floats = 32 bytes
+        size_t stride = 8 * sizeof(float);
+        
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glVertexAttribDivisor(2, 1); // Tell OpenGL this is an instanced attribute
+
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        glVertexAttribDivisor(3, 1);
+
+        glEnableVertexAttribArray(4);
+        glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
+        glVertexAttribDivisor(4, 1);
+
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, item.particle_count);
+        current_frame_stats_.draw_calls += 1;
+
+        // Reset divisors
+        glVertexAttribDivisor(2, 0);
+        glVertexAttribDivisor(3, 0);
+        glVertexAttribDivisor(4, 0);
+        glBindVertexArray(0);
+    }
+
+    // Restore state
+    glDepthMask(GL_TRUE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void OpenGLRhiDevice::EndFrame() {

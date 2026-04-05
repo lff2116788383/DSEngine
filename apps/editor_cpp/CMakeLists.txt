@@ -1,6 +1,21 @@
 add_executable(dse_editor_cpp WIN32
     src/main.cpp
+    src/editor_aux_panels.cpp
+    src/editor_hierarchy_panel.cpp
+    src/editor_inspector_panel.cpp
+    src/editor_profiler_panel.cpp
+    src/editor_scene_io.cpp
+    src/editor_shell.cpp
+    src/editor_toolbar.cpp
+    src/editor_viewport_panel.cpp
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c
+    ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_tables.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_widgets.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp
+    ${CMAKE_SOURCE_DIR}/depends/imgui/ImGuizmo.cpp
 )
 
 if(MSVC)

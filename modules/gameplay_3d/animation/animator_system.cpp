@@ -4,11 +4,19 @@
 #include "engine/assets/compiler/raw_scene_data.h"
 #include <glm/gtx/quaternion.hpp>
 #include <algorithm>
+#include <stdexcept>
 
 namespace dse {
 namespace gameplay3d {
 
 namespace {
+
+AssetManager& RequireAssetManager(AssetManager* asset_manager) {
+    if (asset_manager != nullptr) {
+        return *asset_manager;
+    }
+    throw std::runtime_error("AnimatorSystem requires an injected AssetManager");
+}
 
 template<typename T>
 T Interpolate(const std::vector<float>& times, const std::vector<T>& values, float current_time) {
@@ -39,16 +47,23 @@ T Interpolate(const std::vector<float>& times, const std::vector<T>& values, flo
 
 }
 
+AssetManager* AnimatorSystem::asset_manager_ = nullptr;
+
+void AnimatorSystem::SetAssetManager(AssetManager* asset_manager) {
+    asset_manager_ = asset_manager;
+}
+
 void AnimatorSystem::Update(World& world, float delta_time) {
+    auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = world.registry().view<Animator3DComponent>();
     
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
-        if (!animator.enabled || animator.danim_path.empty()) {
+        if (!animator.enabled) {
             continue;
         }
         
-        auto dskel = AssetManager::Instance().LoadDskel(animator.dskel_path);
+        auto dskel = asset_manager.LoadDskel(animator.dskel_path);
         if (!dskel || dskel->GetData().empty()) {
             continue;
         }
@@ -71,11 +86,146 @@ void AnimatorSystem::Update(World& world, float delta_time) {
         for (uint32_t i = 0; i < bone_count; ++i) {
             local_transforms[i] = bones[i].local_transform;
         }
+        
+        auto EvaluateClip = [&](const std::string& anim_path, float current_time, std::vector<glm::vec3>& pos, std::vector<glm::quat>& rot, std::vector<glm::vec3>& scale, float& out_duration) -> bool {
+            auto danim = asset_manager.LoadDanim(anim_path);
+            if (!danim || danim->GetData().empty()) return false;
+            
+            const uint8_t* data = danim->GetData().data();
+            const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
+            out_duration = header->duration;
+            
+            const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
+            for (uint32_t i = 0; i < header->channel_count; ++i) {
+                const auto& ch = channels[i];
+                if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
+                
+                std::vector<float> times(reinterpret_cast<const float*>(data + ch.time_offset), reinterpret_cast<const float*>(data + ch.time_offset) + ch.position_key_count);
+                std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
+                std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
+                std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
+                
+                pos[ch.target_node_index] = Interpolate<glm::vec3>(times, positions, current_time);
+                rot[ch.target_node_index] = Interpolate<glm::quat>(times, rotations, current_time);
+                scale[ch.target_node_index] = Interpolate<glm::vec3>(times, scales, current_time);
+            }
+            return true;
+        };
 
-        if (!animator.use_anim_tree) {
-            // Legacy single animation
+        if (animator.state_machine) {
+            // --- STATE MACHINE PATH ---
+            auto& fsm = *animator.state_machine;
+            if (animator.current_state_name.empty()) {
+                animator.current_state_name = fsm.GetDefaultState();
+                animator.state_time = 0.0f;
+            }
+            
+            const auto& states = fsm.GetStates();
+            auto it = states.find(animator.current_state_name);
+            if (it != states.end()) {
+                const AnimState& current_state = it->second;
+                
+                // 1. Evaluate transitions
+                if (!animator.is_transitioning) {
+                    for (const auto& trans : current_state.transitions) {
+                        if (fsm.EvaluateTransition(trans, animator.normalized_time)) {
+                            // Start transition
+                            animator.is_transitioning = true;
+                            animator.next_state_name = trans.target_state;
+                            animator.transition_duration = trans.transition_duration;
+                            animator.transition_progress = 0.0f;
+                            animator.next_state_time = 0.0f;
+                            
+                            // Reset triggers that fired this transition
+                            for (const auto& cond : trans.conditions) {
+                                auto param_it = fsm.GetParameters().find(cond.parameter_name);
+                                if (param_it != fsm.GetParameters().end() && param_it->second.type == AnimParamType::Trigger) {
+                                    fsm.ResetTrigger(cond.parameter_name);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                // 2. Advance time
+                animator.state_time += delta_time * current_state.speed;
+                if (animator.is_transitioning) {
+                    animator.transition_progress += delta_time / animator.transition_duration;
+                    
+                    auto next_it = states.find(animator.next_state_name);
+                    if (next_it != states.end()) {
+                        animator.next_state_time += delta_time * next_it->second.speed;
+                    }
+                    
+                    if (animator.transition_progress >= 1.0f) {
+                        // Finish transition
+                        animator.current_state_name = animator.next_state_name;
+                        animator.state_time = animator.next_state_time;
+                        animator.is_transitioning = false;
+                        
+                        it = states.find(animator.current_state_name);
+                        if (it == states.end()) continue; // Safety check
+                    }
+                }
+                
+                // 3. Evaluate animation logic (current state)
+                float current_duration = 1.0f;
+                std::vector<glm::vec3> p0(bone_count, glm::vec3(0.0f));
+                std::vector<glm::quat> r0(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+                std::vector<glm::vec3> s0(bone_count, glm::vec3(1.0f));
+                
+                if (!current_state.is_blend_tree) {
+                    if (EvaluateClip(current_state.danim_path, animator.state_time, p0, r0, s0, current_duration)) {
+                        if (animator.state_time > current_duration) {
+                            if (current_state.loop) animator.state_time = std::fmod(animator.state_time, current_duration);
+                            else animator.state_time = current_duration;
+                        }
+                        animator.normalized_time = animator.state_time / current_duration;
+                    }
+                } else {
+                    // TODO: Evaluate 1D Blend Tree for current state
+                }
+                
+                // 4. Evaluate and Blend Next State (Crossfade)
+                if (animator.is_transitioning) {
+                    auto next_it = states.find(animator.next_state_name);
+                    if (next_it != states.end()) {
+                        const AnimState& next_state = next_it->second;
+                        float next_duration = 1.0f;
+                        std::vector<glm::vec3> p1(bone_count, glm::vec3(0.0f));
+                        std::vector<glm::quat> r1(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+                        std::vector<glm::vec3> s1(bone_count, glm::vec3(1.0f));
+                        
+                        if (!next_state.is_blend_tree) {
+                            if (EvaluateClip(next_state.danim_path, animator.next_state_time, p1, r1, s1, next_duration)) {
+                                if (animator.next_state_time > next_duration) {
+                                    if (next_state.loop) animator.next_state_time = std::fmod(animator.next_state_time, next_duration);
+                                    else animator.next_state_time = next_duration;
+                                }
+                            }
+                        }
+                        
+                        // Crossfade blend
+                        float t = std::clamp(animator.transition_progress, 0.0f, 1.0f);
+                        for (uint32_t i = 0; i < bone_count; ++i) {
+                            glm::vec3 final_p = glm::mix(p0[i], p1[i], t);
+                            glm::quat final_r = glm::slerp(r0[i], r1[i], t);
+                            glm::vec3 final_s = glm::mix(s0[i], s1[i], t);
+                            local_transforms[i] = glm::translate(glm::mat4(1.0f), final_p) * glm::mat4_cast(final_r) * glm::scale(glm::mat4(1.0f), final_s);
+                        }
+                    }
+                } else {
+                    // Apply single state
+                    for (uint32_t i = 0; i < bone_count; ++i) {
+                        local_transforms[i] = glm::translate(glm::mat4(1.0f), p0[i]) * glm::mat4_cast(r0[i]) * glm::scale(glm::mat4(1.0f), s0[i]);
+                    }
+                }
+            }
+        } else if (!animator.use_anim_tree) {
+            // --- LEGACY SINGLE ANIMATION PATH ---
             if (animator.danim_path.empty()) continue;
-            auto danim = AssetManager::Instance().LoadDanim(animator.danim_path);
+            auto danim = asset_manager.LoadDanim(animator.danim_path);
             if (!danim || danim->GetData().empty()) continue;
             const uint8_t* data = danim->GetData().data();
             const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
@@ -105,7 +255,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 local_transforms[ch.target_node_index] = glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
             }
         } else {
-            // AnimTree blending (1D blend example)
+            // --- LEGACY ANIM TREE (1D Blend) PATH ---
             std::vector<glm::vec3> blended_positions(bone_count, glm::vec3(0.0f));
             std::vector<glm::quat> blended_rotations(bone_count, glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
             std::vector<glm::vec3> blended_scales(bone_count, glm::vec3(0.0f));
@@ -114,7 +264,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             float total_weight = 0.0f;
             for (auto& node : animator.blend_nodes) {
                 if (node.weight <= 0.0f) continue;
-                auto danim = AssetManager::Instance().LoadDanim(node.danim_path);
+                auto danim = asset_manager.LoadDanim(node.danim_path);
                 if (!danim || danim->GetData().empty()) continue;
                 
                 total_weight += node.weight;

@@ -1,97 +1,122 @@
-# DSEngine CTest 与引擎单测骨架
+# TESTING_CTEST_GUIDE
 
-## 目标
+本文档用于固化当前 Windows 本地最小测试门禁、资源系统去全局态回归入口，以及 [`CTest`](tests/CMakeLists.txt) / 脚本 / 文档三者之间的统一口径。
 
-本方案为仓库提供可长期扩展的测试结构，采用：
+## 1. 目标
 
-- CTest 作为统一测试编排入口
-- Catch 单文件框架作为 C++ 断言实现
-- `DSE_BUILD_ENGINE_TESTS` 作为测试构建开关（默认关闭）
+当前测试体系不再只停留在“可以手动跑一些测试”，而是明确区分：
 
-## 当前落地内容
+- 完整回归入口
+- 最小日常门禁入口
+- 资源系统去全局态专项回归入口
 
-- 顶层 CMake 增加选项 `DSE_BUILD_ENGINE_TESTS`，默认 `OFF`
-- 新增 `tests/` 测试子工程入口
-- 新增 `tests/engine/` 引擎单测目标 `dse_engine_unit_tests`
-- 新增 `tests/engine/` Lua 运行时专项目标 `dse_lua_runtime_tests`
-- 新增 `tests/spine/` Spine 专项目标 `dse_spine_tests`
-- 注册 CTest 用例 `engine.unit`，并标记标签 `engine;unit`
-- 注册 CTest 用例 `engine.lua_runtime`，并标记标签 `engine;unit;lua_runtime`
-- 注册 CTest 用例 `engine.spine`，并标记标签 `engine;unit;spine`
-- 提供示例测试：`Tween::Evaluate` 与 `Tween::Lerp`
-- 已补充 Lua 运行时回归：启动脚本缺失/异常、无全局 `Update`、脚本组件隔离更新、Shutdown 内存归零
-- 已补充 2D UI 回归：修复并覆盖 `UISystem` 首帧/布局变更时，事件命中使用过期 `runtime_model` 的问题
-- `build_all.bat` 接入测试开关：
-  - `--with-tests`：开启并执行引擎单测
-  - `--no-tests`：关闭引擎单测（默认）
+本轮重点不是补正式 CI，而是先把本地可执行门禁固化下来。
 
-## 目录结构
+## 2. 前置开关
 
-```text
-tests/
-  CMakeLists.txt
-  engine/
-    CMakeLists.txt
-    main.cpp
-    base/
-      tween_test.cpp
+顶层 [`CMakeLists.txt`](CMakeLists.txt) 中测试仍由 [`DSE_BUILD_ENGINE_TESTS`](CMakeLists.txt:22) 控制。
+
+典型配置命令：
+
+```bat
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF -DDSE_BUILD_ENGINE_TESTS=ON
 ```
 
-## 本地使用
+## 3. 当前最小门禁集合
 
-### 方式一：直接用 CMake + CTest
+建议将以下用例作为当前日常最小门禁：
 
-```bash
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_ENGINE_TESTS=ON
-cmake --build build_vs2022 --config Debug --target dse_engine_unit_tests dse_lua_runtime_tests dse_spine_tests
+- `engine.unit`
+- `engine.lua_runtime`
+- `engine.cpp_runtime`
+- `engine.resource_injection`
+- `engine.spine`
+- `engine.2d.ui`
+- `engine.2d.physics2d`
+- `engine.2d.particle`
+- `engine.2d.localization`
+
+其中：
+
+- `engine.unit` 负责主体单元回归
+- `engine.lua_runtime` 负责 Lua 运行时专项
+- `engine.cpp_runtime` 负责 C++ business runtime 生命周期与注入链路
+- `engine.resource_injection` 负责资源系统去全局态后的 Lua 注入回归
+- `engine.spine` 覆盖 2D 资源消费链中的 Spine 入口
+
+上述入口已在 [`tests/engine/CMakeLists.txt`](tests/engine/CMakeLists.txt) 与 [`tests/spine/CMakeLists.txt`](tests/spine/CMakeLists.txt) 中注册。
+
+## 4. 资源系统去全局态专项验证
+
+当前已确认工程内测试代码不再命中以下旧模式：
+
+- [`AssetManager::Instance()`](engine/runtime/engine_app.cpp:53)
+- `ConfigureLuaApiContext(... nullptr)`
+- `Initialize(nullptr)`
+
+资源系统去全局态后的关键验证入口为：
+
+- [`engine.lua_runtime`](tests/engine/CMakeLists.txt:173)
+- [`engine.resource_injection`](tests/engine/CMakeLists.txt:185)
+- [`engine.cpp_runtime`](tests/engine/CMakeLists.txt:197)
+- [`engine.spine`](tests/spine/CMakeLists.txt:25)
+
+它们分别覆盖：
+
+- Lua API context 必须显式注入 [`AssetManager`](engine/assets/asset_manager.h)
+- C++ business runtime bootstrap 必须显式接收 [`AssetManager&`](engine/scripting/cpp/cpp_business_runtime.h:20)
+- Spine 资源访问必须通过注入式 [`SetAssetManager(...)`](modules/gameplay_2d/spine/spine_system.h)
+
+## 5. 推荐执行方式
+
+### 5.1 快速构建并跑最小门禁
+
+直接运行：
+
+```bat
+build_fast_tests.bat
+```
+
+该脚本现在会：
+
+1. 配置测试构建
+2. 只构建最关键测试目标
+3. 运行最小门禁集合
+4. 在终端输出失败信息
+
+脚本文件见 [`build_fast_tests.bat`](build_fast_tests.bat)。
+
+### 5.2 手动运行最小门禁
+
+```bat
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.unit|engine.lua_runtime|engine.cpp_runtime|engine.resource_injection|engine.spine|engine.2d.ui|engine.2d.physics2d|engine.2d.particle|engine.2d.localization"
+```
+
+### 5.3 手动运行完整 engine 标签集合
+
+```bat
 ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine
-
-# 仅执行 Lua 运行时专项回归
-ctest --test-dir build_vs2022 -C Debug -R engine.lua_runtime -V
-
-# 仅执行 Spine 专项回归
-ctest --test-dir build_vs2022 -C Debug -R engine.spine -V
 ```
 
-### 方式二：通过 build_all.bat
+## 6. 与其他文档的关系
 
-```bat
-build_all.bat --with-tests
-```
+- [`doc/DOC-02_BUILD_AND_RUN.md`](doc/DOC-02_BUILD_AND_RUN.md) 负责总体构建与运行说明
+- [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md) 负责测试体系全貌与回归建议
+- 本文档只负责把“当前可执行的最小门禁”写清楚
 
-默认行为仍为关闭测试构建：
+## 7. 当前边界
 
-```bat
-build_all.bat
-```
+当前这套门禁补齐的是：
 
-## 扩展约定
+- 本地最小 CTest 基线
+- 资源系统去全局态后的关键回归入口
+- 脚本 / CTest / 文档口径统一
 
-新增测试时遵循以下约定，保证长期可维护：
+当前仍未补齐的是：
 
-1. 按被测模块分目录：`tests/engine/<module>/xxx_test.cpp`
-2. 测试名称格式：`模块_行为_预期`
-3. 每个测试文件聚焦一个模块，不跨多系统
-4. 标签分层：
-   - `engine`：引擎层
-   - `unit`：纯单元测试
-   - 后续可扩展 `integration`、`smoke`
-5. 所有新增测试必须可由 `ctest` 直接执行
+- 正式 CI 工作流
+- Debug / Release 双配置持续化门禁
+- 性能基线自动比对
+- 3D 默认主线门禁
 
-## 新增单测流程
-
-1. 在 `tests/engine/` 下新增 `*_test.cpp`
-2. 在 `tests/engine/CMakeLists.txt` 注册源文件
-3. 本地执行：
-   - 构建：`cmake --build ... --target dse_engine_unit_tests dse_lua_runtime_tests dse_spine_tests`
-   - 运行：`ctest --test-dir ... -L engine`
-   - Lua 专项：`ctest --test-dir ... -R engine.lua_runtime -V`
-   - Spine 专项：`ctest --test-dir ... -R engine.spine -V`
-4. 通过后再提交代码
-
-## 后续建议
-
-- 在 CI 中增加 `ctest --output-on-failure -L engine` 与 `ctest -R engine.lua_runtime` 作为合并门禁
-- 逐步覆盖纯函数模块、资源解析、ECS 关键行为
-- 引入 `integration` 标签，将脚本绑定与运行时组合行为纳入自动回归
-- 2D 闭环建议优先继续补齐：UI 遮罩/层级事件、Tilemap 大地图更新、Physics2D 触发器/碰撞回调、Spine 资源异常与动画切换
+因此，本轮结果应理解为“测试门禁开始收紧并具备稳定入口”，而不是“完整 CI 体系已经建成”。

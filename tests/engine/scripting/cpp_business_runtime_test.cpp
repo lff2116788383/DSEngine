@@ -32,8 +32,10 @@ TEST_CASE("Given_ConfiguredHooks_When_RunLifecycle_Then_AllCallbacksAreInvoked",
     int shutdown_count = 0;
     float observed_dt = 0.0f;
 
+    AssetManager asset_manager;
+
     ConfigureCppBusinessHooks(CppBusinessHooks{
-        [&](World&) { ++bootstrap_count; },
+        [&](World&, AssetManager&) { ++bootstrap_count; },
         [&](World&, float dt) {
             ++tick_count;
             observed_dt = dt;
@@ -41,7 +43,7 @@ TEST_CASE("Given_ConfiguredHooks_When_RunLifecycle_Then_AllCallbacksAreInvoked",
         [&]() { ++shutdown_count; }
     });
 
-    REQUIRE(BootstrapCppBusiness(world));
+    REQUIRE(BootstrapCppBusiness(world, asset_manager));
     TickCppBusiness(world, 0.016f);
     ShutdownCppBusiness();
 
@@ -72,9 +74,11 @@ TEST_CASE("Given_MissingRequiredHooks_When_Bootstrap_Then_ReturnFalse", "[engine
     World world;
     ScopedSpdlogLevel mute_errors(spdlog::level::off);
 
-    ConfigureCppBusinessHooks(CppBusinessHooks{nullptr, nullptr, nullptr});
-    REQUIRE_FALSE(BootstrapCppBusiness(world));
+    AssetManager asset_manager;
 
-    ConfigureCppBusinessHooks(CppBusinessHooks{[](World&) {}, nullptr, nullptr});
-    REQUIRE_FALSE(BootstrapCppBusiness(world));
+    ConfigureCppBusinessHooks(CppBusinessHooks{nullptr, nullptr, nullptr});
+    REQUIRE_FALSE(BootstrapCppBusiness(world, asset_manager));
+
+    ConfigureCppBusinessHooks(CppBusinessHooks{[](World&, AssetManager&) {}, nullptr, nullptr});
+    REQUIRE_FALSE(BootstrapCppBusiness(world, asset_manager));
 }

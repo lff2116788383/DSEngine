@@ -20,17 +20,23 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "imgui_internal.h"
+#include "ImGuizmo.h"
 
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_physics.h"
+#include "modules/gameplay_3d/rendering/mesh_render_system.h"
+#include "modules/gameplay_3d/camera/free_camera_controller_system.h"
+#include "modules/gameplay_3d/animation/animator_system.h"
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 #include "engine/profiler/render_profiler.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -39,11 +45,16 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/prettywriter.h>
 
-// Helper component for editor to display names in Hierarchy
-struct EditorNameComponent {
-    std::string name;
-};
+#include "editor_aux_panels.h"
+#include "editor_hierarchy_panel.h"
+#include "editor_inspector_panel.h"
+#include "editor_profiler_panel.h"
+#include "editor_scene_io.h"
+#include "editor_shell.h"
+#include "editor_toolbar.h"
+#include "editor_viewport_panel.h"
 
+#include "editor_shared_components.h"
 
 void SetupImGuiStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -119,23 +130,18 @@ enum class EditorState {
     Play
 };
 
-static EditorState g_editor_state = EditorState::Edit;
-static std::unique_ptr<entt::registry> g_backup_registry;
-static dse::profiler::CPUProfiler g_cpu_profiler;
-static dse::profiler::MemoryProfiler g_memory_profiler;
-static dse::profiler::RenderProfiler g_render_profiler;
-static std::vector<float> g_cpu_frame_history;
-static std::vector<float> g_fps_history;
-static std::vector<float> g_render_draw_call_history;
-static std::vector<float> g_memory_usage_history;
-static int g_last_profiled_frame = -1;
-static std::string g_profiler_export_status;
-static std::vector<std::string> g_editor_languages;
-static int g_editor_language_index = 0;
+extern std::vector<std::string> g_editor_languages;
+extern int g_editor_language_index;
+extern int g_current_gizmo_operation;
+extern int g_current_gizmo_mode;
 
-namespace {
+dse::profiler::CPUProfiler g_cpu_profiler;
+dse::profiler::MemoryProfiler g_memory_profiler;
+dse::profiler::RenderProfiler g_render_profiler;
 
 constexpr int kProfilerHistoryMaxSamples = 180;
+
+namespace {
 
 std::filesystem::path GetProjectRootPath() {
     std::filesystem::path path;
@@ -169,11 +175,68 @@ void PushHistorySample(std::vector<float>& history, float value) {
     }
 }
 
-void MarkAllUILabelsDirty(entt::registry& registry) {
-    auto view = registry.view<UILabelComponent>();
-    for (auto entity : view) {
-        view.get<UILabelComponent>(entity).dirty = true;
+bool BuildActiveCameraMatrices(entt::registry& registry, float aspect_ratio, glm::mat4& out_view, glm::mat4& out_proj) {
+    entt::entity selected_camera3d = entt::null;
+    int selected_priority = -2147483647;
+    std::uint32_t selected_id = 0xFFFFFFFFu;
+    auto camera3d_view = registry.view<dse::Camera3DComponent>();
+    for (auto entity : camera3d_view) {
+        const auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+        if (!camera.enabled) {
+            continue;
+        }
+        const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
+        if (selected_camera3d == entt::null ||
+            camera.priority > selected_priority ||
+            (camera.priority == selected_priority && entity_id < selected_id)) {
+            selected_camera3d = entity;
+            selected_priority = camera.priority;
+            selected_id = entity_id;
+        }
     }
+
+    if (selected_camera3d != entt::null) {
+        const auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
+        const float near_clip = std::max(0.001f, camera.near_clip);
+        const float far_clip = std::max(near_clip + 0.001f, camera.far_clip);
+        const float safe_aspect = std::max(0.001f, aspect_ratio);
+        out_proj = glm::perspective(glm::radians(camera.fov), safe_aspect, near_clip, far_clip);
+        if (registry.all_of<TransformComponent>(selected_camera3d)) {
+            const auto& transform = registry.get<TransformComponent>(selected_camera3d);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            out_view = glm::lookAt(transform.position, transform.position + front, up);
+        } else {
+            out_view = glm::mat4(1.0f);
+        }
+        return true;
+    }
+
+    auto camera2d_view = registry.view<CameraComponent>();
+    entt::entity selected_camera2d = entt::null;
+    selected_priority = -2147483647;
+    selected_id = 0xFFFFFFFFu;
+    for (auto entity : camera2d_view) {
+        const auto& camera = camera2d_view.get<CameraComponent>(entity);
+        if (!camera.enabled) {
+            continue;
+        }
+        const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
+        if (selected_camera2d == entt::null ||
+            camera.priority > selected_priority ||
+            (camera.priority == selected_priority && entity_id < selected_id)) {
+            selected_camera2d = entity;
+            selected_priority = camera.priority;
+            selected_id = entity_id;
+        }
+    }
+    if (selected_camera2d != entt::null) {
+        const auto& camera = camera2d_view.get<CameraComponent>(selected_camera2d);
+        out_view = camera.view;
+        out_proj = camera.projection;
+        return true;
+    }
+    return false;
 }
 
 std::filesystem::path GetEditorExportDirectory() {
@@ -219,289 +282,143 @@ void EnsureEditorLocalizationData() {
 
 } // namespace
 
-void DrawProfilerPanel() {
-    ImGui::Begin("Profiler");
 
-    if (ImGui::Button("Reset Profilers")) {
-        g_cpu_profiler.Reset();
-        g_memory_profiler.Reset();
-        g_render_profiler.Reset();
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("Editor-side runtime metrics preview");
-
-    const auto& frame = g_cpu_profiler.GetFrameStats();
-    const auto& cpu_stats = g_cpu_profiler.GetStats();
-    const auto& cpu_samples = g_cpu_profiler.GetCurrentFrameSamples();
-    const auto memory_snapshot = g_memory_profiler.GetSnapshot();
-    const auto& memory_categories = g_memory_profiler.GetCategoryStats();
-    const auto memory_leaks = g_memory_profiler.DetectLeaks();
-    const auto& render_frame = g_render_profiler.GetCurrentFrameStats();
-    const auto& render_acc = g_render_profiler.GetAccumulatedStats();
-
-    if (frame.frame_count != g_last_profiled_frame) {
-        g_last_profiled_frame = frame.frame_count;
-        PushHistorySample(g_cpu_frame_history, static_cast<float>(frame.frame_time_ms));
-        PushHistorySample(g_fps_history, static_cast<float>(frame.fps));
-        PushHistorySample(g_render_draw_call_history, static_cast<float>(render_frame.draw_calls));
-        PushHistorySample(g_memory_usage_history, static_cast<float>(memory_snapshot.current_usage / 1024.0));
-    }
-
-    if (ImGui::Button("Export CPU CSV")) {
-        const auto dir = GetEditorExportDirectory();
-        ExportTextFile(dir / "cpu_profiler.csv", g_cpu_profiler.ExportCSV());
-        ExportTextFile(dir / "cpu_profiler.json", g_cpu_profiler.ExportJSON());
-        g_profiler_export_status = "Exported CPU profiler to bin/editor_exports";
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Export Memory CSV")) {
-        const auto dir = GetEditorExportDirectory();
-        ExportTextFile(dir / "memory_profiler.csv", g_memory_profiler.ExportCSV());
-        g_profiler_export_status = "Exported memory profiler to bin/editor_exports";
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Export Render CSV")) {
-        const auto dir = GetEditorExportDirectory();
-        ExportTextFile(dir / "render_profiler.csv", g_render_profiler.ExportCSV());
-        g_profiler_export_status = "Exported render profiler to bin/editor_exports";
-    }
-    if (!g_profiler_export_status.empty()) {
-        ImGui::TextDisabled("%s", g_profiler_export_status.c_str());
-    }
-
-    if (ImGui::CollapsingHeader("CPU", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Frame Time: %.3f ms", frame.frame_time_ms);
-        ImGui::Text("Average Frame Time: %.3f ms", frame.avg_frame_time_ms);
-        ImGui::Text("FPS: %.1f", frame.fps);
-        ImGui::Text("Average FPS: %.1f", frame.avg_fps);
-        ImGui::Text("Frame Count: %d", frame.frame_count);
-        if (!g_cpu_frame_history.empty()) {
-            ImGui::PlotLines("Frame Time History", g_cpu_frame_history.data(), static_cast<int>(g_cpu_frame_history.size()), 0, nullptr, 0.0f, 40.0f, ImVec2(0, 70));
-            ImGui::PlotLines("FPS History", g_fps_history.data(), static_cast<int>(g_fps_history.size()), 0, nullptr, 0.0f, 240.0f, ImVec2(0, 70));
-        }
-
-        if (ImGui::TreeNode("Current Frame Samples")) {
-            for (const auto& sample : cpu_samples) {
-                ImGui::Indent(sample.depth * 12.0f);
-                ImGui::BulletText("%s - %.3f ms", sample.name.c_str(), sample.duration_ms);
-                ImGui::Unindent(sample.depth * 12.0f);
+void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
+    if (registry.all_of<UIAnchorComponent>(entity)) {
+        if (ImGui::CollapsingHeader("UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& anchor = registry.get<UIAnchorComponent>(entity);
+            const char* anchor_types[] = {
+                "Center", "TopLeft", "TopCenter", "TopRight",
+                "MiddleLeft", "MiddleRight", "BottomLeft", "BottomCenter",
+                "BottomRight", "StretchAll", "StretchHorizontal", "StretchVertical"
+            };
+            int current_anchor = static_cast<int>(anchor.anchor);
+            if (ImGui::Combo("Anchor Preset", &current_anchor, anchor_types, IM_ARRAYSIZE(anchor_types))) {
+                anchor.anchor = current_anchor;
             }
-            if (cpu_samples.empty()) {
-                ImGui::TextDisabled("No CPU samples recorded yet.");
+            ImGui::DragFloat2("Offset", glm::value_ptr(anchor.offset), 1.0f);
+            
+            if (ImGui::Button("Remove UI Anchor", ImVec2(-1, 0))) {
+                registry.remove<UIAnchorComponent>(entity);
             }
-            ImGui::TreePop();
         }
+    } else {
+        if (ImGui::Button("Add UI Anchor", ImVec2(-1, 0))) {
+            registry.emplace<UIAnchorComponent>(entity);
+        }
+    }
 
-        if (ImGui::TreeNode("Accumulated CPU Stats")) {
-            if (ImGui::BeginTable("cpu_stats_table", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                ImGui::TableSetupColumn("Name");
-                ImGui::TableSetupColumn("Calls");
-                ImGui::TableSetupColumn("Avg ms");
-                ImGui::TableSetupColumn("Min ms");
-                ImGui::TableSetupColumn("Max ms");
-                ImGui::TableSetupColumn("Total ms");
-                ImGui::TableHeadersRow();
+    if (registry.all_of<UIGridLayoutComponent>(entity)) {
+        if (ImGui::CollapsingHeader("UI Grid Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& grid = registry.get<UIGridLayoutComponent>(entity);
+            ImGui::DragInt("Columns", &grid.columns, 0.1f, 0, 100);
+            ImGui::DragInt("Rows", &grid.rows, 0.1f, 0, 100);
+            ImGui::DragFloat2("Cell Size", glm::value_ptr(grid.cell_size), 1.0f);
+            ImGui::DragFloat2("Spacing", glm::value_ptr(grid.spacing), 1.0f);
+            
+            const char* align_types[] = {
+                "TopLeft", "TopCenter", "TopRight",
+                "MiddleLeft", "MiddleCenter", "MiddleRight",
+                "BottomLeft", "BottomCenter", "BottomRight"
+            };
+            int current_align = static_cast<int>(grid.alignment);
+            if (ImGui::Combo("Alignment", &current_align, align_types, IM_ARRAYSIZE(align_types))) {
+                grid.alignment = current_align;
+            }
 
-                for (const auto& [name, stat] : cpu_stats) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(name.c_str());
-                    ImGui::TableSetColumnIndex(1); ImGui::Text("%d", stat.call_count);
-                    ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", stat.avg_ms);
-                    ImGui::TableSetColumnIndex(3); ImGui::Text("%.3f", stat.min_ms);
-                    ImGui::TableSetColumnIndex(4); ImGui::Text("%.3f", stat.max_ms);
-                    ImGui::TableSetColumnIndex(5); ImGui::Text("%.3f", stat.total_ms);
+            if (ImGui::Button("Remove UI Grid Layout", ImVec2(-1, 0))) {
+                registry.remove<UIGridLayoutComponent>(entity);
+            }
+        }
+    } else {
+        if (ImGui::Button("Add UI Grid Layout", ImVec2(-1, 0))) {
+            registry.emplace<UIGridLayoutComponent>(entity);
+        }
+    }
+
+    if (registry.all_of<UICanvasScalerComponent>(entity)) {
+        if (ImGui::CollapsingHeader("UI Canvas Scaler", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& scaler = registry.get<UICanvasScalerComponent>(entity);
+            ImGui::DragFloat2("Reference Resolution", glm::value_ptr(scaler.reference_resolution), 1.0f);
+            ImGui::Checkbox("Match Width Or Height", &scaler.match_width_or_height);
+            if (scaler.match_width_or_height) {
+                ImGui::SliderFloat("Match (0=Width, 1=Height)", &scaler.scale_factor, 0.0f, 1.0f);
+            }
+            
+            if (ImGui::Button("Remove UI Canvas Scaler", ImVec2(-1, 0))) {
+                registry.remove<UICanvasScalerComponent>(entity);
+            }
+        }
+    } else {
+        if (ImGui::Button("Add UI Canvas Scaler", ImVec2(-1, 0))) {
+            registry.emplace<UICanvasScalerComponent>(entity);
+        }
+    }
+
+    if (registry.all_of<UIAnimationComponent>(entity)) {
+        if (ImGui::CollapsingHeader("UI Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& anim = registry.get<UIAnimationComponent>(entity);
+            
+            // Playback controls
+            if (anim.playing) {
+                if (ImGui::Button("Stop##UIAnim", ImVec2(-1, 0))) anim.playing = false;
+            } else {
+                if (ImGui::Button("Play##UIAnim", ImVec2(-1, 0))) {
+                    anim.playing = true;
+                    anim.elapsed = 0.0f;
+                    anim.delay_remaining = anim.delay;
+                    anim.reverse = false;
                 }
-                ImGui::EndTable();
             }
-            ImGui::TreePop();
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Memory", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Current Usage: %.2f KB", memory_snapshot.current_usage / 1024.0f);
-        ImGui::Text("Peak Usage: %.2f KB", memory_snapshot.peak_usage / 1024.0f);
-        ImGui::Text("Total Allocated: %.2f KB", memory_snapshot.total_allocated / 1024.0f);
-        ImGui::Text("Total Freed: %.2f KB", memory_snapshot.total_freed / 1024.0f);
-        ImGui::Text("Active Allocations: %d", memory_snapshot.active_allocations);
-        if (!g_memory_usage_history.empty()) {
-            ImGui::PlotLines("Usage History (KB)", g_memory_usage_history.data(), static_cast<int>(g_memory_usage_history.size()), 0, nullptr, 0.0f, *std::max_element(g_memory_usage_history.begin(), g_memory_usage_history.end()) + 1.0f, ImVec2(0, 70));
-        }
-
-        if (!memory_leaks.empty()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "Potential Leaks: %d", static_cast<int>(memory_leaks.size()));
-            for (const auto& leak : memory_leaks) {
-                ImGui::BulletText("%s", leak.c_str());
-            }
-        }
-
-        if (ImGui::BeginTable("memory_stats_table", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-            ImGui::TableSetupColumn("Tag");
-            ImGui::TableSetupColumn("Current KB");
-            ImGui::TableSetupColumn("Peak KB");
-            ImGui::TableSetupColumn("Allocated KB");
-            ImGui::TableSetupColumn("Freed KB");
-            ImGui::TableHeadersRow();
-
-            for (const auto& [tag, stat] : memory_categories) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(tag.c_str());
-                ImGui::TableSetColumnIndex(1); ImGui::Text("%.2f", stat.current_bytes / 1024.0f);
-                ImGui::TableSetColumnIndex(2); ImGui::Text("%.2f", stat.peak_bytes / 1024.0f);
-                ImGui::TableSetColumnIndex(3); ImGui::Text("%.2f", stat.total_allocated / 1024.0f);
-                ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", stat.total_freed / 1024.0f);
-            }
-            ImGui::EndTable();
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Draw Calls: %d", render_frame.draw_calls);
-        ImGui::Text("Triangles: %d", render_frame.triangle_count);
-        ImGui::Text("Vertices: %d", render_frame.vertex_count);
-        ImGui::Text("Sprites: %d", render_frame.sprite_count);
-        ImGui::Text("Batches: %d", render_frame.batch_count);
-        ImGui::Text("Texture Binds: %d", render_frame.texture_binds);
-        ImGui::Text("Shader Switches: %d", render_frame.shader_switches);
-        ImGui::Text("Texture Memory: %.2f KB", render_frame.texture_memory / 1024.0f);
-        ImGui::Separator();
-        ImGui::Text("Avg Draw Calls: %.2f", render_acc.avg_draw_calls);
-        ImGui::Text("Avg Triangles: %.2f", render_acc.avg_triangles);
-        ImGui::Text("Avg Vertices: %.2f", render_acc.avg_vertices);
-        ImGui::Text("Peak Draw Calls: %d", render_acc.peak_draw_calls);
-        ImGui::Text("Peak Triangles: %d", render_acc.peak_triangles);
-        ImGui::Text("Peak Vertices: %d", render_acc.peak_vertices);
-        ImGui::Text("Profiled Frames: %d", render_acc.frame_count);
-        if (!g_render_draw_call_history.empty()) {
-            ImGui::PlotLines("Draw Call History", g_render_draw_call_history.data(), static_cast<int>(g_render_draw_call_history.size()), 0, nullptr, 0.0f, *std::max_element(g_render_draw_call_history.begin(), g_render_draw_call_history.end()) + 1.0f, ImVec2(0, 70));
-        }
-    }
-
-    ImGui::End();
-}
-
-void CopyRegistry(entt::registry& dst, entt::registry& src) {
-    dst.clear();
-    for (auto entity : src.storage<entt::entity>()) {
-        if (!src.valid(entity)) continue; // Skip destroyed/recycled entities
-        auto new_ent = dst.create(entity);
-        
-        if (src.all_of<EditorNameComponent>(entity)) dst.emplace<EditorNameComponent>(new_ent, src.get<EditorNameComponent>(entity));
-        if (src.all_of<TransformComponent>(entity)) dst.emplace<TransformComponent>(new_ent, src.get<TransformComponent>(entity));
-        if (src.all_of<SpriteRendererComponent>(entity)) dst.emplace<SpriteRendererComponent>(new_ent, src.get<SpriteRendererComponent>(entity));
-        if (src.all_of<UILabelComponent>(entity)) dst.emplace<UILabelComponent>(new_ent, src.get<UILabelComponent>(entity));
-        if (src.all_of<RigidBody2DComponent>(entity)) dst.emplace<RigidBody2DComponent>(new_ent, src.get<RigidBody2DComponent>(entity));
-        if (src.all_of<ParticleEmitterComponent>(entity)) dst.emplace<ParticleEmitterComponent>(new_ent, src.get<ParticleEmitterComponent>(entity));
-    }
-}
-
-void SaveScene(entt::registry& registry, const std::string& filepath) {
-    rapidjson::Document doc;
-    doc.SetArray();
-    rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
-
-    for (auto entity : registry.storage<entt::entity>()) {
-        if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
-        rapidjson::Value ent_obj(rapidjson::kObjectType);
-        ent_obj.AddMember("id", static_cast<uint32_t>(entity), allocator);
-
-        if (registry.all_of<EditorNameComponent>(entity)) {
-            rapidjson::Value name_val;
-            name_val.SetString(registry.get<EditorNameComponent>(entity).name.c_str(), allocator);
-            ent_obj.AddMember("name", name_val, allocator);
-        }
-
-        if (registry.all_of<TransformComponent>(entity)) {
-            auto& t = registry.get<TransformComponent>(entity);
-            rapidjson::Value t_obj(rapidjson::kObjectType);
             
-            rapidjson::Value pos(rapidjson::kArrayType);
-            pos.PushBack(t.position.x, allocator).PushBack(t.position.y, allocator).PushBack(t.position.z, allocator);
-            t_obj.AddMember("position", pos, allocator);
+            ImGui::Separator();
+            ImGui::Text("Animation Properties");
             
-            rapidjson::Value rot(rapidjson::kArrayType);
-            rot.PushBack(t.rotation.x, allocator).PushBack(t.rotation.y, allocator).PushBack(t.rotation.z, allocator).PushBack(t.rotation.w, allocator);
-            t_obj.AddMember("rotation", rot, allocator);
+            // Time and Flow
+            ImGui::DragFloat("Duration (s)", &anim.duration, 0.01f, 0.0f, 10.0f);
+            ImGui::DragFloat("Delay (s)", &anim.delay, 0.01f, 0.0f, 10.0f);
             
-            rapidjson::Value scale(rapidjson::kArrayType);
-            scale.PushBack(t.scale.x, allocator).PushBack(t.scale.y, allocator).PushBack(t.scale.z, allocator);
-            t_obj.AddMember("scale", scale, allocator);
+            ImGui::Checkbox("Loop", &anim.loop);
+            ImGui::SameLine();
+            ImGui::Checkbox("Ping Pong", &anim.ping_pong);
             
-            ent_obj.AddMember("transform", t_obj, allocator);
-        }
-        
-        if (registry.all_of<SpriteRendererComponent>(entity)) {
-            auto& s = registry.get<SpriteRendererComponent>(entity);
-            rapidjson::Value s_obj(rapidjson::kObjectType);
+            const char* easing_types[] = { "Linear", "Ease-In", "Ease-Out", "Ease-In-Out" };
+            ImGui::Combo("Easing", &anim.easing, easing_types, IM_ARRAYSIZE(easing_types));
             
-            rapidjson::Value path_val;
-            path_val.SetString(s.shader_variant.c_str(), allocator);
-            s_obj.AddMember("path", path_val, allocator);
+            ImGui::Separator();
+            ImGui::Text("Targets (Enable to animate)");
             
-            rapidjson::Value color(rapidjson::kArrayType);
-            color.PushBack(s.color.r, allocator).PushBack(s.color.g, allocator).PushBack(s.color.b, allocator).PushBack(s.color.a, allocator);
-            s_obj.AddMember("color", color, allocator);
+            // Position
+            ImGui::Checkbox("##anim_pos", &anim.animate_position); ImGui::SameLine();
+            if (anim.animate_position) {
+                ImGui::DragFloat2("Target Position", glm::value_ptr(anim.target_position), 1.0f);
+            } else { ImGui::TextDisabled("Target Position"); }
             
-            ent_obj.AddMember("sprite", s_obj, allocator);
-        }
+            // Scale
+            ImGui::Checkbox("##anim_scale", &anim.animate_scale); ImGui::SameLine();
+            if (anim.animate_scale) {
+                ImGui::DragFloat2("Target Scale", glm::value_ptr(anim.target_scale), 0.05f);
+            } else { ImGui::TextDisabled("Target Scale"); }
+            
+            // Alpha
+            ImGui::Checkbox("##anim_alpha", &anim.animate_alpha); ImGui::SameLine();
+            if (anim.animate_alpha) {
+                ImGui::DragFloat("Target Alpha", &anim.target_alpha, 0.05f, 0.0f, 1.0f);
+            } else { ImGui::TextDisabled("Target Alpha"); }
+            
+            // Color
+            ImGui::Checkbox("##anim_color", &anim.animate_color); ImGui::SameLine();
+            if (anim.animate_color) {
+                ImGui::ColorEdit4("Target Color", glm::value_ptr(anim.target_color));
+            } else { ImGui::TextDisabled("Target Color"); }
 
-        doc.PushBack(ent_obj, allocator);
-    }
-
-    rapidjson::StringBuffer buffer;
-    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-    doc.Accept(writer);
-
-    std::ofstream ofs(filepath);
-    if (ofs.is_open()) {
-        ofs << buffer.GetString();
-    }
-}
-
-void LoadScene(entt::registry& registry, const std::string& filepath) {
-    std::ifstream ifs(filepath);
-    if (!ifs.is_open()) return;
-
-    std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    rapidjson::Document doc;
-    doc.Parse(content.c_str());
-
-    if (!doc.IsArray()) return;
-
-    registry.clear();
-    for (auto& v : doc.GetArray()) {
-        auto entity = registry.create();
-        
-        if (v.HasMember("name") && v["name"].IsString()) {
-            registry.emplace<EditorNameComponent>(entity, v["name"].GetString());
-        }
-
-        if (v.HasMember("transform") && v["transform"].IsObject()) {
-            auto& t_obj = v["transform"];
-            auto& t = registry.emplace<TransformComponent>(entity);
-            if (t_obj.HasMember("position") && t_obj["position"].IsArray()) {
-                auto pos = t_obj["position"].GetArray();
-                if (pos.Size() >= 3) t.position = glm::vec3(pos[0].GetFloat(), pos[1].GetFloat(), pos[2].GetFloat());
-            }
-            if (t_obj.HasMember("rotation") && t_obj["rotation"].IsArray()) {
-                auto rot = t_obj["rotation"].GetArray();
-                if (rot.Size() >= 4) t.rotation = glm::quat(rot[3].GetFloat(), rot[0].GetFloat(), rot[1].GetFloat(), rot[2].GetFloat());
-            }
-            if (t_obj.HasMember("scale") && t_obj["scale"].IsArray()) {
-                auto scale = t_obj["scale"].GetArray();
-                if (scale.Size() >= 3) t.scale = glm::vec3(scale[0].GetFloat(), scale[1].GetFloat(), scale[2].GetFloat());
+            if (ImGui::Button("Remove UI Animation", ImVec2(-1, 0))) {
+                registry.remove<UIAnimationComponent>(entity);
             }
         }
-        
-        if (v.HasMember("sprite") && v["sprite"].IsObject()) {
-            auto& s_obj = v["sprite"];
-            auto& s = registry.emplace<SpriteRendererComponent>(entity);
-            if (s_obj.HasMember("path") && s_obj["path"].IsString()) {
-                s.shader_variant = s_obj["path"].GetString();
-            }
-            if (s_obj.HasMember("color") && s_obj["color"].IsArray()) {
-                auto color = s_obj["color"].GetArray();
-                if (color.Size() >= 4) s.color = glm::vec4(color[0].GetFloat(), color[1].GetFloat(), color[2].GetFloat(), color[3].GetFloat());
-            }
+    } else {
+        if (ImGui::Button("Add UI Animation", ImVec2(-1, 0))) {
+            registry.emplace<UIAnimationComponent>(entity);
         }
     }
 }
@@ -510,7 +427,8 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     static entt::entity selected_entity = entt::null;
     World& world = engine.pipeline()->world();
     auto& registry = world.registry();
-    
+    static bool is2D = false;
+
     static bool inspector_active = true;
     static bool inspector_static = false;
     static bool sprite_flip_x = false;
@@ -518,710 +436,49 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     static bool collider_is_trigger = false;
     static char localization_preview_key[128] = "editor.preview.status";
     static char localization_preview_fallback[128] = "Language: {lang}";
-    // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
-    // because it would be confusing to have two docking targets within each others.
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->Pos);
-    ImGui::SetNextWindowSize(viewport->Size);
-    ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+    dse::editor::BeginEditorShell();
+    dse::editor::EditorShellContext shell_context{engine, registry, selected_entity};
+    dse::editor::DrawEditorMainMenu(shell_context);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("DockSpace Demo", nullptr, window_flags);
-    ImGui::PopStyleVar();
-    ImGui::PopStyleVar(2);
-
-    // DockSpace
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-
-        static bool first_time = true;
-        if (first_time) {
-            first_time = false;
-
-            ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
-            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-            ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
-
-            // Split the dockspace into nodes -- Unity Style
-            auto dock_id_main = dockspace_id;
-            
-            // 1. Split top for toolbar
-            auto dock_id_top = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up, 0.05f, nullptr, &dock_id_main);
-            
-            // 2. Split bottom for Project/Console/Animation
-            auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.30f, nullptr, &dock_id_main);
-            
-            // 3. Split left for Hierarchy
-            auto dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, nullptr, &dock_id_main);
-            
-            // 4. Split right for Inspector
-            auto dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, nullptr, &dock_id_main);
-
-            // We now dock our windows into the docking node we made above
-            ImGui::DockBuilderDockWindow("Toolbar", dock_id_top);
-            ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
-            ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
-            ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("Animation", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("Profiler", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("Tile Palette", dock_id_bottom); // New 2D panel
-            ImGui::DockBuilderDockWindow("Scene", dock_id_main);
-            ImGui::DockBuilderDockWindow("Game", dock_id_main);
-            
-            // Set some nodes to hide their tab bar if needed (e.g., Toolbar)
-            ImGuiDockNode* node = ImGui::DockBuilderGetNode(dock_id_top);
-            if (node) {
-                node->LocalFlags |= ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoResizeY;
-            }
-            
-            ImGui::DockBuilderFinish(dockspace_id);
-        }
-    }
-
-    if (ImGui::BeginMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New Scene")) {
-                registry.clear();
-            }
-            if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
-                LoadScene(registry, "scene.json");
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Save", "Ctrl+S")) {
-                SaveScene(registry, "scene.json");
-            }
-            if (ImGui::MenuItem("Save As...")) {}
-            ImGui::Separator();
-            if (ImGui::MenuItem("Exit", "Alt+F4")) {}
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Edit")) {
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Window")) {
-            ImGui::EndMenu();
-        }
-        ImGui::EndMenuBar();
-    }
-
-    // Toolbar Panel
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 4));
-    ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);
-    float avail_width = ImGui::GetContentRegionAvail().x;
-    
-    // Tools (Left)
-    static int current_gizmo_operation = 0; // 0: Translate
-    ImGui::SetCursorPosX(10);
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, current_gizmo_operation == -1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[H]", ImVec2(32, 24))) { current_gizmo_operation = -1; } // Hand
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, current_gizmo_operation == 0 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[M]", ImVec2(32, 24))) { current_gizmo_operation = 0; } // Move
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, current_gizmo_operation == 1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[R]", ImVec2(32, 24))) { current_gizmo_operation = 1; } // Rotate
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, current_gizmo_operation == 2 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[S]", ImVec2(32, 24))) { current_gizmo_operation = 2; } // Scale
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    
-    // 2D/3D Toggle
-    ImGui::SetCursorPosX(10 + 4 * 36 + 20); // Spacing after transform tools
-    static bool is2D = false;
-    if (is2D) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-    }
-    if (ImGui::Button("2D", ImVec2(32, 24))) { is2D = !is2D; }
-    if (is2D) {
-        ImGui::PopStyleColor();
-    }
-
-    // Play Controls (Center)
-    ImGui::SameLine();
-    ImGui::SetCursorPosX((avail_width / 2.0f) - 60);
-    
-    if (g_editor_state == EditorState::Edit) {
-        if (ImGui::Button(">", ImVec2(32, 24))) { // Play
-            g_editor_state = EditorState::Play;
-            g_backup_registry = std::make_unique<entt::registry>();
-            CopyRegistry(*g_backup_registry, registry);
-        }
-    } else {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-        if (ImGui::Button("[]", ImVec2(32, 24))) { // Stop
-            g_editor_state = EditorState::Edit;
-            CopyRegistry(registry, *g_backup_registry);
-            g_backup_registry.reset();
-            selected_entity = entt::null;
-        }
-        ImGui::PopStyleColor();
-    }
-    
-    ImGui::SameLine();
-    if (ImGui::Button("||", ImVec2(32, 24))) {} // Pause
-    ImGui::SameLine();
-    if (ImGui::Button(">|", ImVec2(32, 24))) {} // Step
-
-    // Account/Settings (Right)
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(avail_width - 320);
-    if (!g_editor_languages.empty()) {
-        std::vector<const char*> language_items;
-        language_items.reserve(g_editor_languages.size());
-        for (const auto& lang : g_editor_languages) {
-            language_items.push_back(lang.c_str());
-        }
-        ImGui::SetNextItemWidth(110.0f);
-        if (ImGui::Combo("##LanguagePreview", &g_editor_language_index, language_items.data(), static_cast<int>(language_items.size()))) {
-            auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
-            localization.SetCurrentLanguage(g_editor_languages[g_editor_language_index]);
-            MarkAllUILabelsDirty(registry);
-        }
-        ImGui::SameLine();
-    }
-    ImGui::Button("Collab", ImVec2(60, 24));
-    ImGui::SameLine();
-    ImGui::Button("Layers", ImVec2(60, 24));
-
-    ImGui::End();
-    ImGui::PopStyleVar();
+    DrawEditorToolbar(engine, registry, selected_entity);
 
     // Panels (Unity-style layout)
-    ImGui::Begin("Hierarchy");
-    
-    if (ImGui::TreeNodeEx("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (auto entity : registry.storage<entt::entity>()) {
-            if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
-            std::string entity_name = "Entity " + std::to_string(static_cast<uint32_t>(entity));
-            if (registry.all_of<EditorNameComponent>(entity)) {
-                entity_name = registry.get<EditorNameComponent>(entity).name;
-            }
-            
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-            if (selected_entity == entity) {
-                flags |= ImGuiTreeNodeFlags_Selected;
-            }
-            
-            ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", entity_name.c_str());
-            if (ImGui::IsItemClicked()) {
-                selected_entity = entity;
-            }
-        }
-        ImGui::TreePop();
-    }
-    
-    // Right click menu for Hierarchy
-    if (ImGui::BeginPopupContextWindow()) {
-        if (ImGui::MenuItem("Create Empty Entity")) {
-            auto new_ent = world.CreateEntity();
-            registry.emplace<EditorNameComponent>(new_ent, "New Entity");
-            selected_entity = new_ent;
-        }
-        if (selected_entity != entt::null && ImGui::MenuItem("Delete Entity")) {
-            world.DestroyEntity(selected_entity);
-            selected_entity = entt::null;
-        }
-        ImGui::EndPopup();
-    }
-    
-    ImGui::End();
+    dse::editor::EditorHierarchyPanelContext hierarchy_context{world, registry, selected_entity};
+    dse::editor::DrawHierarchyPanel(hierarchy_context);
 
-    ImGui::Begin("Inspector");
-    
-    if (selected_entity != entt::null && registry.valid(selected_entity)) {
-        // Header component
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.18f, 0.18f, 0.22f, 1.0f));
-        ImGui::AlignTextToFramePadding();
-        ImGui::Checkbox("##Active", &inspector_active); ImGui::SameLine();
-        
-        char nameBuf[64] = "";
-        if (registry.all_of<EditorNameComponent>(selected_entity)) {
-            strncpy(nameBuf, registry.get<EditorNameComponent>(selected_entity).name.c_str(), sizeof(nameBuf) - 1);
-        } else {
-            strncpy(nameBuf, "Entity", sizeof(nameBuf) - 1);
-        }
-        
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - 70);
-        if (ImGui::InputText("##Name", nameBuf, sizeof(nameBuf))) {
-            if (registry.all_of<EditorNameComponent>(selected_entity)) {
-                registry.get<EditorNameComponent>(selected_entity).name = nameBuf;
-            } else {
-                registry.emplace<EditorNameComponent>(selected_entity, nameBuf);
-            }
-        }
-        ImGui::PopItemWidth();
-        
-        ImGui::SameLine();
-        ImGui::Checkbox("Static", &inspector_static);
-        ImGui::Separator();
+    dse::editor::EditorInspectorPanelContext inspector_context{
+        registry,
+        selected_entity,
+        is2D,
+        inspector_active,
+        inspector_static
+    };
+    dse::editor::DrawInspectorPanel(inspector_context, DrawUILayoutInspector);
 
-        // Helper macro for left-aligned labels in Inspector
-        #define INSPECTOR_PROPERTY(label, code) \
-            ImGui::AlignTextToFramePadding(); \
-            ImGui::Text(label); \
-            ImGui::NextColumn(); \
-            ImGui::SetNextItemWidth(-1); \
-            code; \
-            ImGui::NextColumn();
+    dse::editor::DrawProjectPanel();
+    dse::editor::DrawConsolePanel();
 
-        if (registry.all_of<TransformComponent>(selected_entity)) {
-            auto& transform = registry.get<TransformComponent>(selected_entity);
-            if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Columns(2, "transform_cols", false);
-                ImGui::SetColumnWidth(0, 80.0f);
-                
-                float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
-                INSPECTOR_PROPERTY("Position", if (ImGui::DragFloat3("##pos", pos, 0.1f)) {
-                    transform.position = glm::vec3(pos[0], pos[1], pos[2]);
-                });
-                
-                // transform.rotation is a glm::quat, we might want to convert to Euler angles for editing, but for now we will just use a dummy logic or simple representation.
-                glm::vec3 euler = glm::degrees(glm::eulerAngles(transform.rotation));
-                float rot[3] = {euler.x, euler.y, euler.z};
-                if (is2D) {
-                    INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
-                        euler.z = rot[2];
-                        transform.rotation = glm::quat(glm::radians(euler));
-                    });
-                } else {
-                    INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat3("##rot", rot, 0.1f)) {
-                        euler = glm::vec3(rot[0], rot[1], rot[2]);
-                        transform.rotation = glm::quat(glm::radians(euler));
-                    });
-                }
-                
-                float scale[3] = {transform.scale.x, transform.scale.y, transform.scale.z};
-                INSPECTOR_PROPERTY("Scale", if (ImGui::DragFloat3("##scale", scale, 0.1f)) {
-                    transform.scale = glm::vec3(scale[0], scale[1], scale[2]);
-                });
-                
-                ImGui::Columns(1);
-            }
-        }
-        
-        if (registry.all_of<SpriteRendererComponent>(selected_entity)) {
-            auto& sprite = registry.get<SpriteRendererComponent>(selected_entity);
-            if (ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Columns(2, "spriterenderer_cols", false);
-                ImGui::SetColumnWidth(0, 80.0f);
-                
-                // Asset drop target
-                ImGui::AlignTextToFramePadding();
-                ImGui::Text("Sprite");
-                ImGui::NextColumn();
-                ImGui::SetNextItemWidth(-1);
-                ImGui::Button(sprite.shader_variant.empty() ? "None (Texture)" : "Texture Set", ImVec2(-1, 0));
-                if (ImGui::BeginDragDropTarget()) {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        const char* path = (const char*)payload->Data;
-                        sprite.shader_variant = path; // Mocking setting texture path
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-                ImGui::NextColumn();
-                
-                float color[4] = {sprite.color.r, sprite.color.g, sprite.color.b, sprite.color.a};
-                INSPECTOR_PROPERTY("Color", if (ImGui::ColorEdit4("##color", color)) {
-                    sprite.color = glm::vec4(color[0], color[1], color[2], color[3]);
-                });
-                
-                ImGui::Columns(1);
-            }
-        }
+    dse::editor::EditorAuxPanelsContext aux_panels_context{
+        registry,
+        selected_entity,
+        is2D,
+        localization_preview_key,
+        sizeof(localization_preview_key),
+        localization_preview_fallback,
+        sizeof(localization_preview_fallback)
+    };
+    dse::editor::DrawLocalizationPreviewPanel(aux_panels_context);
 
-        if (registry.all_of<RigidBody2DComponent>(selected_entity)) {
-            auto& rb2d = registry.get<RigidBody2DComponent>(selected_entity);
-            if (ImGui::CollapsingHeader("RigidBody 2D", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Columns(2, "rb2d_cols", false);
-                ImGui::SetColumnWidth(0, 80.0f);
-                
-                const char* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
-                int currentType = static_cast<int>(rb2d.type);
-                INSPECTOR_PROPERTY("Body Type", if (ImGui::Combo("##type", &currentType, bodyTypes, IM_ARRAYSIZE(bodyTypes))) {
-                    rb2d.type = static_cast<RigidBody2DType>(currentType);
-                });
-                
-                float vel[2] = {rb2d.velocity.x, rb2d.velocity.y};
-                INSPECTOR_PROPERTY("Velocity", if (ImGui::DragFloat2("##vel", vel, 0.1f)) {
-                    rb2d.velocity = glm::vec2(vel[0], vel[1]);
-                });
-                
-                INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat("##grav", &rb2d.gravity_scale, 0.1f));
-                
-                ImGui::Columns(1);
-            }
-        }
+    dse::editor::EditorProfilerContext profiler_context{g_cpu_profiler, g_memory_profiler, g_render_profiler};
+    dse::editor::DrawProfilerPanel(profiler_context);
+    dse::editor::DrawAnimationPanel();
+    dse::editor::DrawTilePalettePanel(aux_panels_context);
 
-        if (registry.all_of<UILabelComponent>(selected_entity)) {
-            auto& label = registry.get<UILabelComponent>(selected_entity);
-            if (ImGui::CollapsingHeader("UI Label", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Columns(2, "uilabel_cols", false);
-                ImGui::SetColumnWidth(0, 110.0f);
+    dse::editor::EditorViewportPanelContext scene_viewport_context{registry, selected_entity, scene_texture};
+    dse::editor::DrawSceneViewportPanel(scene_viewport_context, g_current_gizmo_operation, g_current_gizmo_mode, BuildActiveCameraMatrices);
+    dse::editor::DrawGameViewportPanel(game_texture);
 
-                char text_buf[256] = {};
-                std::strncpy(text_buf, label.text.c_str(), sizeof(text_buf) - 1);
-                INSPECTOR_PROPERTY("Text", if (ImGui::InputText("##label_text", text_buf, sizeof(text_buf))) {
-                    label.text = text_buf;
-                    label.dirty = true;
-                });
-
-                INSPECTOR_PROPERTY("Localized", if (ImGui::Checkbox("##use_loc", &label.use_localization)) {
-                    label.dirty = true;
-                });
-
-                char key_buf[128] = {};
-                std::strncpy(key_buf, label.localization_key.c_str(), sizeof(key_buf) - 1);
-                INSPECTOR_PROPERTY("Loc Key", if (ImGui::InputText("##loc_key", key_buf, sizeof(key_buf))) {
-                    label.localization_key = key_buf;
-                    label.dirty = true;
-                });
-
-                char fallback_buf[256] = {};
-                std::strncpy(fallback_buf, label.fallback_text.c_str(), sizeof(fallback_buf) - 1);
-                INSPECTOR_PROPERTY("Fallback", if (ImGui::InputText("##fallback_text", fallback_buf, sizeof(fallback_buf))) {
-                    label.fallback_text = fallback_buf;
-                    label.dirty = true;
-                });
-
-                char param_name[64] = "name";
-                char param_value[128] = "Player";
-                INSPECTOR_PROPERTY("Param", ImGui::InputText("##param_name", param_name, sizeof(param_name)););
-                INSPECTOR_PROPERTY("Value", ImGui::InputText("##param_value", param_value, sizeof(param_value)););
-                INSPECTOR_PROPERTY("Apply Param", if (ImGui::Button("Set/Update Param", ImVec2(-1, 0))) {
-                    label.localization_params[param_name] = param_value;
-                    label.dirty = true;
-                });
-
-                ImGui::Columns(1);
-            }
-        }
-
-        if (registry.all_of<ParticleEmitterComponent>(selected_entity)) {
-            auto& emitter = registry.get<ParticleEmitterComponent>(selected_entity);
-            if (ImGui::CollapsingHeader("Particle Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Columns(2, "particle_cols", false);
-                ImGui::SetColumnWidth(0, 110.0f);
-
-                INSPECTOR_PROPERTY("Emitting", ImGui::Checkbox("##emitting", &emitter.emitting));
-                INSPECTOR_PROPERTY("Max Particles", ImGui::DragInt("##max_particles", &emitter.max_particles, 1.0f, 1, 5000));
-                INSPECTOR_PROPERTY("Emit Rate", ImGui::DragFloat("##emit_rate", &emitter.emit_rate, 0.1f, 0.0f, 1000.0f));
-                INSPECTOR_PROPERTY("Burst", if (ImGui::Button("Emit 10", ImVec2(-1, 0))) { emitter.pending_burst += 10; });
-                INSPECTOR_PROPERTY("Life Time", ImGui::DragFloat("##life_time", &emitter.start_life_time, 0.05f, 0.05f, 30.0f));
-                INSPECTOR_PROPERTY("Start Size", ImGui::DragFloat("##start_size", &emitter.start_size, 0.05f, 0.01f, 100.0f));
-                INSPECTOR_PROPERTY("Start Color", ImGui::ColorEdit4("##start_color", glm::value_ptr(emitter.start_color)));
-                INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat3("##gravity", glm::value_ptr(emitter.gravity), 0.05f));
-                INSPECTOR_PROPERTY("Random Params", ImGui::Checkbox("##random_params", &emitter.use_random_params));
-                INSPECTOR_PROPERTY("Size Curve", ImGui::Checkbox("##size_curve_enabled", &emitter.size_curve.enabled));
-                INSPECTOR_PROPERTY("Size End", ImGui::DragFloat("##size_curve_end", &emitter.size_curve.end_value, 0.05f, 0.0f, 100.0f));
-                INSPECTOR_PROPERTY("Alpha Curve", ImGui::Checkbox("##alpha_curve_enabled", &emitter.alpha_curve.enabled));
-                INSPECTOR_PROPERTY("Alpha End", ImGui::DragFloat("##alpha_curve_end", &emitter.alpha_curve.end_value, 0.01f, 0.0f, 1.0f));
-                INSPECTOR_PROPERTY("Speed Curve", ImGui::Checkbox("##speed_curve_enabled", &emitter.speed_curve.enabled));
-                INSPECTOR_PROPERTY("Speed End", ImGui::DragFloat("##speed_curve_end", &emitter.speed_curve.end_value, 0.05f, 0.0f, 10.0f));
-
-                const char* collision_modes[] = { "None", "GroundPlane", "Box2D" };
-                int collision_mode = static_cast<int>(emitter.collision_mode);
-                INSPECTOR_PROPERTY("Collision", if (ImGui::Combo("##collision_mode", &collision_mode, collision_modes, IM_ARRAYSIZE(collision_modes))) {
-                    emitter.collision_mode = static_cast<ParticleCollisionMode>(collision_mode);
-                });
-                INSPECTOR_PROPERTY("Bounce", ImGui::DragFloat("##collision_bounce", &emitter.collision_bounce, 0.01f, 0.0f, 1.0f));
-                INSPECTOR_PROPERTY("Ground Y", ImGui::DragFloat("##ground_y", &emitter.ground_y, 0.05f));
-
-                ImGui::Columns(1);
-                ImGui::TextDisabled("Active Particles: %d", static_cast<int>(emitter.particles.size()));
-            }
-        }
-
-    ImGui::Separator();
-    ImGui::Spacing();
-    ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
-    if (ImGui::Button("Add Component", ImVec2(120, 30))) {
-        ImGui::OpenPopup("AddComponentPopup");
-    }
-    
-    if (ImGui::BeginPopup("AddComponentPopup")) {
-        if (ImGui::MenuItem("Transform")) {
-            if (!registry.all_of<TransformComponent>(selected_entity)) {
-                registry.emplace<TransformComponent>(selected_entity);
-            }
-        }
-        if (ImGui::MenuItem("Name")) {
-            if (!registry.all_of<EditorNameComponent>(selected_entity)) {
-                registry.emplace<EditorNameComponent>(selected_entity, "New Component");
-            }
-        }
-        if (ImGui::MenuItem("Sprite Renderer")) {
-            if (!registry.all_of<SpriteRendererComponent>(selected_entity)) {
-                registry.emplace<SpriteRendererComponent>(selected_entity);
-            }
-        }
-        if (ImGui::MenuItem("RigidBody 2D")) {
-            if (!registry.all_of<RigidBody2DComponent>(selected_entity)) {
-                registry.emplace<RigidBody2DComponent>(selected_entity);
-            }
-        }
-        if (ImGui::MenuItem("UI Label")) {
-            if (!registry.all_of<UILabelComponent>(selected_entity)) {
-                auto& label = registry.emplace<UILabelComponent>(selected_entity);
-                label.text = "Label";
-                label.fallback_text = "Label";
-            }
-        }
-        if (ImGui::MenuItem("Particle Emitter")) {
-            if (!registry.all_of<ParticleEmitterComponent>(selected_entity)) {
-                registry.emplace<ParticleEmitterComponent>(selected_entity);
-            }
-        }
-        // More components can be added here
-        ImGui::EndPopup();
-    }
-    
-    ImGui::PopStyleColor();
-    } else {
-        ImGui::TextDisabled("No Entity Selected");
-    }
-    ImGui::End();
-
-    ImGui::Begin("Project");
-    ImGui::Text("Assets");
-    ImGui::Separator();
-    
-    // Simple file browser
-    // Since the executable runs from the bin/ directory or project root, we need to find the correct data path
-    static std::filesystem::path base_data_path = []() {
-        std::filesystem::path p = GetProjectRootPath();
-
-        std::filesystem::path target_path = p / "samples" / "lua" / "data";
-        
-        // If data folder doesn't exist, try creating it or fallback to root
-        if (!std::filesystem::exists(target_path)) {
-            try {
-                std::filesystem::create_directories(target_path);
-            } catch (...) {
-                return p;
-            }
-        }
-        return target_path;
-    }();
-    
-    static std::filesystem::path current_path = base_data_path;
-    
-    if (ImGui::BeginPopupContextWindow("ProjectContextMenu")) {
-        if (ImGui::BeginMenu("Create")) {
-            if (ImGui::MenuItem("Folder")) {
-                std::string new_folder = (current_path / "NewFolder").string();
-                std::filesystem::create_directory(new_folder);
-            }
-            if (ImGui::MenuItem("Lua Script")) {
-                std::string new_script = (current_path / "NewScript.lua").string();
-                std::ofstream ofs(new_script);
-                if (ofs.is_open()) {
-                    ofs << "-- New Lua Script\n";
-                    ofs.close();
-                }
-            }
-            if (ImGui::MenuItem("Material")) {
-                std::string new_mat = (current_path / "NewMaterial.mat").string();
-                std::ofstream ofs(new_mat);
-                if (ofs.is_open()) {
-                    ofs << "{\n  \"shader\": \"default\",\n  \"color\": [1,1,1,1]\n}\n";
-                    ofs.close();
-                }
-            }
-            ImGui::EndMenu();
-        }
-        ImGui::EndPopup();
-    }
-    
-    if (!std::filesystem::exists(current_path)) {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Data path not found: %s", current_path.string().c_str());
-    } else {
-        if (current_path != base_data_path) {
-            if (ImGui::Button("<- Back")) {
-                current_path = current_path.parent_path();
-            }
-            ImGui::Separator();
-        }
-        
-        try {
-            for (const auto& entry : std::filesystem::directory_iterator(current_path)) {
-                const auto& path = entry.path();
-                auto filename = path.filename().string();
-                
-                if (entry.is_directory()) {
-                    if (ImGui::Selectable((std::string("[DIR] ") + filename).c_str())) {
-                        current_path /= path.filename();
-                    }
-                } else {
-                    ImGui::Selectable((std::string("[FILE] ") + filename).c_str());
-                    
-                    // Support Drag and Drop
-                    if (ImGui::BeginDragDropSource()) {
-                        std::string relative_path = std::filesystem::relative(path, base_data_path).string();
-                        ImGui::SetDragDropPayload("ASSET_PATH", relative_path.c_str(), relative_path.size() + 1);
-                        ImGui::Text("%s", filename.c_str());
-                        ImGui::EndDragDropSource();
-                    }
-                }
-            }
-        } catch (const std::filesystem::filesystem_error& e) {
-            ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "Error reading directory: %s", e.what());
-        }
-    }
-    ImGui::End();
-
-    ImGui::Begin("Console");
-    ImGui::Text("[Info] Engine initialized successfully.");
-    ImGui::Text("[Info] Loaded default scene.");
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[Warning] Missing texture 'skybox_diffuse'.");
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "[Error] Failed to load shader 'standard_pbr.glsl'.");
-    ImGui::End();
-
-    ImGui::Begin("Localization Preview");
-    auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
-    ImGui::Text("Current Language: %s", localization.GetCurrentLanguage().c_str());
-    ImGui::InputText("Preview Key", localization_preview_key, sizeof(localization_preview_key));
-    ImGui::InputText("Fallback", localization_preview_fallback, sizeof(localization_preview_fallback));
-    std::unordered_map<std::string, std::string> preview_params;
-    preview_params["lang"] = localization.GetCurrentLanguage();
-    preview_params["entity"] = selected_entity == entt::null ? std::string("None") : std::to_string(static_cast<uint32_t>(selected_entity));
-    const std::string preview_text = localization.GetTextWithParams(localization_preview_key, preview_params, localization_preview_fallback);
-    ImGui::Separator();
-    ImGui::TextWrapped("%s", preview_text.c_str());
-    if (selected_entity != entt::null && registry.valid(selected_entity) && registry.all_of<UILabelComponent>(selected_entity)) {
-        if (ImGui::Button("Apply To Selected UILabel")) {
-            auto& label = registry.get<UILabelComponent>(selected_entity);
-            label.use_localization = true;
-            label.localization_key = localization_preview_key;
-            label.fallback_text = localization_preview_fallback;
-            label.localization_params = preview_params;
-            label.dirty = true;
-        }
-    } else {
-        ImGui::TextDisabled("Select a UILabel entity to apply preview settings.");
-    }
-    ImGui::End();
-
-    DrawProfilerPanel();
-    
-    ImGui::Begin("Animation");
-    ImGui::Text("No animated object selected.");
-    ImGui::End();
-
-    ImGui::Begin("Tile Palette");
-    if (!is2D) {
-        ImGui::TextDisabled("Tile Palette is only available in 2D mode.");
-    } else {
-        ImGui::Button("Active Brush", ImVec2(120, 24)); ImGui::SameLine();
-        ImGui::Button("Paint", ImVec2(60, 24)); ImGui::SameLine();
-        ImGui::Button("Erase", ImVec2(60, 24));
-        
-        ImGui::Separator();
-        ImGui::Text("Select a tilemap to start painting.");
-        
-        // Mock tile palette grid
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        for (int y = 0; y < 4; y++) {
-            for (int x = 0; x < 6; x++) {
-                draw_list->AddRectFilled(
-                    ImVec2(p.x + x * 32, p.y + y * 32), 
-                    ImVec2(p.x + x * 32 + 30, p.y + y * 32 + 30), 
-                    IM_COL32(80 + (x+y)*10, 100 + x*10, 120 + y*10, 255)
-                );
-            }
-        }
-    }
-    ImGui::End();
-
-    // The Scene Viewport Panel (Where engine editor rendering would happen)
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("Scene");
-    ImVec2 scenePanelSize = ImGui::GetContentRegionAvail();
-    
-    // Process Picking
-    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        ImVec2 mouse_pos = ImGui::GetMousePos();
-        ImVec2 window_pos = ImGui::GetWindowPos();
-        // Just a mock for picking logic - would normally use real world coordinates from engine camera
-        float x = (mouse_pos.x - window_pos.x) - scenePanelSize.x / 2.0f;
-        float y = (mouse_pos.y - window_pos.y) - scenePanelSize.y / 2.0f;
-        
-        // Simple distance check
-        float min_dist = 10000.0f;
-        entt::entity picked = entt::null;
-        for (auto entity : registry.storage<entt::entity>()) {
-            if (!registry.valid(entity)) continue; // Skip destroyed/recycled entities
-            if (registry.all_of<TransformComponent>(entity)) {
-                auto& t = registry.get<TransformComponent>(entity);
-                // Mock coordinate mapping
-                float dx = (t.position.x * 50.0f) - x;
-                float dy = (-t.position.y * 50.0f) - y;
-                float dist = dx*dx + dy*dy;
-                if (dist < 2500.0f && dist < min_dist) { // 50 pixel radius
-                    min_dist = dist;
-                    picked = entity;
-                }
-            }
-        }
-        if (picked != entt::null) {
-            selected_entity = picked;
-        }
-    }
-
-    if (scene_texture != 0) {
-        // Render engine FBO texture, note UVs are flipped vertically because OpenGL textures are bottom-up
-        ImGui::Image((ImTextureID)(intptr_t)scene_texture, scenePanelSize, ImVec2(0, 1), ImVec2(1, 0));
-        
-    } else {
-        // Fallback placeholder
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2 p_min = ImGui::GetCursorScreenPos();
-        ImVec2 p_max = ImVec2(p_min.x + scenePanelSize.x, p_min.y + scenePanelSize.y);
-        draw_list->AddRectFilled(p_min, p_max, IM_COL32(40, 40, 40, 255));
-        for (float i = 0; i < scenePanelSize.x; i += 50) {
-            draw_list->AddLine(ImVec2(p_min.x + i, p_min.y), ImVec2(p_min.x + i, p_max.y), IM_COL32(60, 60, 60, 255));
-        }
-        for (float i = 0; i < scenePanelSize.y; i += 50) {
-            draw_list->AddLine(ImVec2(p_min.x, p_min.y + i), ImVec2(p_max.x, p_min.y + i), IM_COL32(60, 60, 60, 255));
-        }
-        draw_list->AddText(ImVec2(p_min.x + scenePanelSize.x/2 - 50, p_min.y + scenePanelSize.y/2), IM_COL32(200, 200, 200, 255), "Scene View");
-    }
-    ImGui::End();
-    ImGui::PopStyleVar();
-
-    // The Game Viewport Panel (Independent Game Camera view)
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("Game");
-    ImVec2 gamePanelSize = ImGui::GetContentRegionAvail();
-    if (game_texture != 0) {
-        ImGui::Image((ImTextureID)(intptr_t)game_texture, gamePanelSize, ImVec2(0, 1), ImVec2(1, 0));
-    } else {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2 p_min = ImGui::GetCursorScreenPos();
-        ImVec2 p_max = ImVec2(p_min.x + gamePanelSize.x, p_min.y + gamePanelSize.y);
-        draw_list->AddRectFilled(p_min, p_max, IM_COL32(20, 20, 20, 255));
-        draw_list->AddText(ImVec2(p_min.x + gamePanelSize.x/2 - 40, p_min.y + gamePanelSize.y/2), IM_COL32(150, 150, 150, 255), "Game View");
-    }
-    ImGui::End();
-    ImGui::PopStyleVar();
-
-    ImGui::End(); // End DockSpace window
+    dse::editor::EndEditorShell();
 }
 
 int main() {
@@ -1366,6 +623,7 @@ int main() {
                 ImGui_ImplOpenGL3_NewFrame();
                 ImGui_ImplGlfw_NewFrame();
                 ImGui::NewFrame();
+                ImGuizmo::BeginFrame();
             }
 
             // Draw Editor UI

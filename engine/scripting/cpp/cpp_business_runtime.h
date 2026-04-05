@@ -9,6 +9,8 @@
 #include <functional>
 #include "engine/ecs/world.h"
 
+class AssetManager;
+
 namespace dse::runtime {
 
 /**
@@ -16,9 +18,9 @@ namespace dse::runtime {
  * @brief C++ 业务层注入的回调函数集
  */
 struct CppBusinessHooks {
-    std::function<void(World&)> bootstrap;             ///< 引擎初始化完毕时调用
-    std::function<void(World&, float)> tick;           ///< 引擎每帧更新时调用
-    std::function<void()> shutdown;                    ///< 引擎关停前调用
+    std::function<void(World&, AssetManager&)> bootstrap; ///< 引擎初始化完毕时调用
+    std::function<void(World&, float)> tick;              ///< 引擎每帧更新时调用
+    std::function<void()> shutdown;                       ///< 引擎关停前调用
 };
 
 /**
@@ -30,9 +32,10 @@ void ConfigureCppBusinessHooks(CppBusinessHooks hooks);
 /**
  * @brief 触发 C++ 业务层的初始化逻辑
  * @param world 实体世界引用
+ * @param asset_manager 资源管理器引用
  * @return 成功返回 true
  */
-bool BootstrapCppBusiness(World& world);
+bool BootstrapCppBusiness(World& world, AssetManager& asset_manager);
 
 /**
  * @brief 触发 C++ 业务层的每帧更新逻辑

@@ -14,7 +14,7 @@ add_definitions(-D GLM_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.x
 
 add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
 
-option(DSE_ENABLE_PHYSX "Enable PhysX integration" OFF)
+option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
@@ -108,8 +108,44 @@ set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
 file(GLOB_RECURSE engine_cpp
     "engine/*.cpp"
-    "modules/*.cpp"
+    "modules/gameplay_2d/*.cpp"
 )
+
+if(NOT DSE_ENABLE_3D)
+    list(APPEND engine_cpp
+        "modules/gameplay_3d/rendering/mesh_render_system.cpp"
+        "modules/gameplay_3d/animation/animation_state_machine.cpp"
+    )
+endif()
+
+if(DSE_ENABLE_3D)
+    file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
+    
+    add_library(DSE_Gameplay3D SHARED ${gameplay_3d_cpp})
+    target_include_directories(DSE_Gameplay3D PRIVATE 
+        ${CMAKE_SOURCE_DIR} 
+        ${CMAKE_SOURCE_DIR}/engine 
+        ${CMAKE_SOURCE_DIR}/modules
+        ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
+        ${CMAKE_SOURCE_DIR}/depends/glm
+    )
+    
+    target_compile_definitions(DSE_Gameplay3D PRIVATE DSE_GAMEPLAY3D_EXPORTS)
+
+    if(DSE_ENABLE_PHYSX)
+        target_link_libraries(DSE_Gameplay3D PRIVATE dse_physx)
+    endif()
+    set_target_properties(DSE_Gameplay3D PROPERTIES OUTPUT_NAME "DSE_Gameplay3D")
+    
+    if(WIN32)
+        set_target_properties(DSE_Gameplay3D PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
+    
+    if (MSVC)
+        set_property(TARGET DSE_Gameplay3D PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()
+
 file(GLOB_RECURSE box2d_cpp "${BOX2D_ROOT}/src/*.cpp")
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
 file(GLOB_RECURSE tiny_aes_c "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/*.c")
@@ -137,6 +173,7 @@ add_library(dse_engine SHARED
     ${bundle_cpp}
     ${imgui_src}
     ${engine_cpp}
+    engine/runtime/runtime_frame_ops.cpp
 )
 target_link_libraries(dse_engine PRIVATE assimp)
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
@@ -145,6 +182,10 @@ if(WIN32)
 endif()
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /wd5033 /wd4834)
+endif()
+
+if(DSE_ENABLE_3D)
+    target_link_libraries(DSE_Gameplay3D PRIVATE dse_engine)
 endif()
 
 if(EXISTS "${BOX2D_ROOT}/include")
@@ -166,10 +207,19 @@ endfunction()
 dse_apply_config_postfix(dse_engine)
 
 if (MSVC)
-    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
     add_definitions(-D _DEBUG)
 endif ()
+
+if(DSE_ENABLE_3D)
+    dse_apply_config_postfix(DSE_Gameplay3D)
+    install(TARGETS DSE_Gameplay3D
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+endif()
 
 function(dse_copy_runtime_assets target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD

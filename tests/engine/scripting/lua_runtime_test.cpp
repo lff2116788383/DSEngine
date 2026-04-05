@@ -2,6 +2,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/assets/asset_manager.h"
 
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/null_sink.h"
@@ -55,7 +56,8 @@ TEST_CASE("Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageRes
     spdlog::set_default_logger(null_logger);
 
     World world;
-    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, nullptr});
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(MakeTempPath("missing_startup.lua"));
 
     REQUIRE_FALSE(BootstrapLuaRuntime());
@@ -90,12 +92,13 @@ TEST_CASE("Given_NoGlobalUpdate_When_TickLuaRuntime_Then_ScriptComponentStillUpd
         "}\n");
 
     World world;
+    AssetManager asset_manager;
     Entity entity = world.CreateEntity();
     auto& script = world.registry().emplace<ScriptComponent>(entity);
     script.script_path = component_script_path;
     script.enabled = true;
 
-    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, nullptr});
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(startup_path);
 
     REQUIRE(BootstrapLuaRuntime());
@@ -112,7 +115,8 @@ TEST_CASE("Given_BootstrappedRuntime_When_Shutdown_Then_LuaMemoryUsageResetsToZe
     WriteTextFile(startup_path, "Awake = function() end\n");
 
     World world;
-    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, nullptr});
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(startup_path);
 
     REQUIRE(BootstrapLuaRuntime());
@@ -129,7 +133,8 @@ TEST_CASE("Given_StartupAwakeFailure_When_BootstrapLuaRuntime_Then_StateIsCleane
     WriteTextFile(startup_path, "Awake = function() error('boom') end\n");
 
     World world;
-    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, nullptr});
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(startup_path);
 
     REQUIRE_FALSE(BootstrapLuaRuntime());
@@ -164,6 +169,7 @@ TEST_CASE("Given_OneBrokenScriptComponent_When_TickLuaRuntime_Then_OtherScriptsS
     WriteTextFile(bad_script_path, "return 'invalid'\n");
 
     World world;
+    AssetManager asset_manager;
     Entity good_entity = world.CreateEntity();
     auto& good_script = world.registry().emplace<ScriptComponent>(good_entity);
     good_script.script_path = good_script_path;
@@ -174,7 +180,7 @@ TEST_CASE("Given_OneBrokenScriptComponent_When_TickLuaRuntime_Then_OtherScriptsS
     bad_script.script_path = bad_script_path;
     bad_script.enabled = true;
 
-    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, nullptr});
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(startup_path);
 
     REQUIRE(BootstrapLuaRuntime());

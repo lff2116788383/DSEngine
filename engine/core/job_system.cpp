@@ -6,6 +6,7 @@
 #include "engine/core/job_system.h"
 #include <algorithm>
 
+namespace dse {
 namespace core {
 
 std::vector<std::thread> JobSystem::workers_;
@@ -93,3 +94,4 @@ void JobSystem::Execute(const std::function<void()>& job) {
 }
 
 } // namespace core
+} // namespace dse

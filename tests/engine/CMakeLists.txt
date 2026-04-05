@@ -130,6 +130,22 @@ add_test(
 )
 set_tests_properties(engine.2d.camera PROPERTIES LABELS "engine;unit;2d;camera;smoke")
 
+add_test(
+    NAME engine.3d.unit
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[mesh_renderer],[terrain],[csm],[camera_3d],[animator3d],[steering],[culling]"
+)
+set_tests_properties(engine.3d.unit PROPERTIES LABELS "engine;unit;3d")
+
+add_test(
+    NAME engine.3d.smoke
+    COMMAND $<TARGET_FILE:DSEngine_example_cpp>
+)
+set_tests_properties(engine.3d.smoke PROPERTIES
+    LABELS "engine;smoke;3d"
+    ENVIRONMENT "DSE_MAX_FRAMES=120"
+    PASS_REGULAR_EXPRESSION "\\[3D-Smoke\\]\\[CPP\\] bootstrap_ok"
+)
+
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
 
 add_executable(${DSE_LUA_RUNTIME_TEST_TARGET}
@@ -160,6 +176,32 @@ add_test(
 )
 
 set_tests_properties(engine.lua_runtime PROPERTIES
-    LABELS "engine;unit;lua_runtime"
+    LABELS "engine;unit;lua_runtime;resource_injection;gate"
+    PASS_REGULAR_EXPRESSION "All tests passed"
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    TIMEOUT 15
+)
+
+add_test(
+    NAME engine.resource_injection
+    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "[lua_runtime]"
+)
+
+set_tests_properties(engine.resource_injection PROPERTIES
+    LABELS "engine;unit;resource_injection;gate"
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    TIMEOUT 15
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
+
+add_test(
+    NAME engine.cpp_runtime
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[cpp_runtime]"
+)
+
+set_tests_properties(engine.cpp_runtime PROPERTIES
+    LABELS "engine;unit;cpp_runtime;resource_injection;gate"
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )

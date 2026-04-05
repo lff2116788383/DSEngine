@@ -9,6 +9,7 @@
 #include <entt/entt.hpp>
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/ecs/world.h"
+class AssetManager;
 
 namespace dse {
 namespace gameplay2d {
@@ -32,9 +33,11 @@ public:
     void Render(World& world, CommandBuffer& cmd_buffer);
 
     void Shutdown(entt::registry& registry);
+    void SetAssetManager(AssetManager* asset_manager);
 
 private:
     void CleanupComponent(SpineRendererComponent& comp);
+    AssetManager* asset_manager_ = nullptr;
 };
 
 } // namespace gameplay2d

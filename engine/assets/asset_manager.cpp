@@ -25,7 +25,7 @@ std::string NormalizePath(const std::string& path) {
     return p.make_preferred().lexically_normal().string();
 }
 
-std::string ResolveTexturePath(const std::string& path, const std::string& data_root) {
+std::string ResolveAssetPathImpl(const std::string& path, const std::string& data_root) {
     std::filesystem::path input(path);
     if (input.is_absolute()) {
         if (std::filesystem::exists(input)) {
@@ -91,11 +91,6 @@ MaterialAsset::MaterialAsset(unsigned int id, const std::string& name)
     : id_(id), name_(name) {
 }
 
-AssetManager& AssetManager::Instance() {
-    static AssetManager instance;
-    return instance;
-}
-
 void AssetManager::SetRhiDevice(RhiDevice* rhi_device) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     rhi_device_ = rhi_device;
@@ -109,9 +104,61 @@ void AssetManager::ConfigureDataRoot(const std::string& data_root) {
     data_root_ = NormalizePath(data_root);
 }
 
-std::string AssetManager::GetDataRoot() {
+std::string AssetManager::GetDataRoot() const {
     std::lock_guard<std::mutex> lock(config_mutex_);
     return data_root_;
+}
+
+std::string AssetManager::NormalizeAssetPath(const std::string& path) const {
+    if (path.empty()) {
+        return "";
+    }
+
+    std::filesystem::path normalized = std::filesystem::path(path).lexically_normal();
+    if (normalized.empty()) {
+        return "";
+    }
+
+    const std::filesystem::path data_root = GetDataRoot();
+    if (normalized.is_absolute()) {
+        if (!data_root.empty()) {
+            const std::filesystem::path normalized_data_root = std::filesystem::path(data_root).lexically_normal();
+            std::error_code ec;
+            const std::filesystem::path relative = normalized.lexically_relative(normalized_data_root);
+            const std::wstring relative_native = relative.native();
+            if (!relative.empty() && relative_native.rfind(L"..", 0) != 0) {
+                std::string logical = relative.generic_string();
+                return logical == "." ? "" : logical;
+            }
+        }
+        return normalized.generic_string();
+    }
+
+    const std::filesystem::path data_prefix = std::filesystem::path("data");
+    const std::filesystem::path bin_data_prefix = std::filesystem::path("bin") / "data";
+    auto starts_with = [](const std::filesystem::path& value, const std::filesystem::path& prefix) {
+        auto it_value = value.begin();
+        auto it_prefix = prefix.begin();
+        for (; it_prefix != prefix.end(); ++it_prefix, ++it_value) {
+            if (it_value == value.end() || *it_value != *it_prefix) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if (starts_with(normalized, data_prefix)) {
+        normalized = normalized.lexically_relative(data_prefix);
+    } else if (starts_with(normalized, bin_data_prefix)) {
+        normalized = normalized.lexically_relative(bin_data_prefix);
+    }
+
+    const std::string logical = normalized.generic_string();
+    return logical == "." ? "" : logical;
+}
+
+std::string AssetManager::ResolveAssetPath(const std::string& path) const {
+    return ResolveAssetPathImpl(path, GetDataRoot());
 }
 
 bool AssetManager::PackBundle(const std::string& input_dir, const std::string& output_bundle, const std::string& aes_key) {
@@ -183,17 +230,13 @@ bool AssetManager::MountBundle(const std::string& bundle_path, const std::string
 }
 
 bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t>& out_data) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
     const std::string search_path = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
-    
+
     // Convert to generic relative path for VFS check
-    std::string vfs_key = search_path;
+    std::string vfs_key = logical_path.empty() ? search_path : logical_path;
     std::replace(vfs_key.begin(), vfs_key.end(), '\\', '/');
-    auto pos = vfs_key.find("data/");
-    if (pos != std::string::npos) {
-        vfs_key = vfs_key.substr(pos + 5); // strip "data/"
-    }
     
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -217,9 +260,9 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
 }
 
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
-    const std::string cache_key = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
+    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
@@ -300,10 +343,10 @@ std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, c
 }
 
 std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& path) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    const std::string cache_key = NormalizePath(load_path);
+    const std::string cache_key = logical_path.empty() ? NormalizePath(load_path) : logical_path;
 
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -330,10 +373,10 @@ std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& p
 }
 
 std::shared_ptr<DmeshAsset> AssetManager::LoadDmesh(const std::string& path) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    const std::string cache_key = NormalizePath(load_path);
+    const std::string cache_key = logical_path.empty() ? NormalizePath(load_path) : logical_path;
 
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -360,10 +403,10 @@ std::shared_ptr<DmeshAsset> AssetManager::LoadDmesh(const std::string& path) {
 }
 
 std::shared_ptr<DanimAsset> AssetManager::LoadDanim(const std::string& path) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    const std::string cache_key = NormalizePath(load_path);
+    const std::string cache_key = logical_path.empty() ? NormalizePath(load_path) : logical_path;
 
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -390,10 +433,10 @@ std::shared_ptr<DanimAsset> AssetManager::LoadDanim(const std::string& path) {
 }
 
 std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
-    const std::string cache_key = NormalizePath(load_path);
+    const std::string cache_key = logical_path.empty() ? NormalizePath(load_path) : logical_path;
 
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -420,9 +463,9 @@ std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
 }
 
 void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
-    const std::string data_root = GetDataRoot();
-    const std::string resolved_path = ResolveTexturePath(path, data_root);
-    const std::string cache_key = resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path);
+    const std::string logical_path = NormalizeAssetPath(path);
+    const std::string resolved_path = ResolveAssetPath(path);
+    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
@@ -435,7 +478,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         }
     }
 
-    core::JobSystem::Execute([this, path, resolved_path, cache_key, callback]() {
+    dse::core::JobSystem::Execute([this, path, resolved_path, cache_key, callback]() {
         std::vector<uint8_t> file_data;
         if (!LoadFileToMemory(path, file_data)) {
             DEBUG_LOG_ERROR("Failed to read texture file async: {}", path);

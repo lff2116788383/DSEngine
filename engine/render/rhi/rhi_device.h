@@ -92,6 +92,15 @@ struct MeshDrawItem {
     std::vector<float> morph_weights;
 };
 
+struct Particle3DDrawItem {
+    unsigned int texture_handle = 0;
+    unsigned int material_instance_id = 0;
+    unsigned int shader_variant_key = 0;
+    unsigned int blend_mode = 0;
+    int particle_count = 0;
+    unsigned int instance_vbo = 0; // Contains instance transforms/colors
+};
+
 #define CSM_CASCADES 3
 
 using DrawBatchItem = SpriteDrawItem;
@@ -108,6 +117,7 @@ struct RenderTargetDesc {
     int height = 0;
     bool has_color = true;
     bool has_depth = false;
+    bool generate_mipmaps = false; // Phase 2: Bloom Downsample requires mipmaps
 };
 
 struct RenderPassDesc {
@@ -202,6 +212,8 @@ public:
      * @param params 附加参数
      */
     virtual void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) = 0;
+
+    virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 };
 
 /**
@@ -259,6 +271,7 @@ public:
     void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
     void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
+    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
 
     // For internal use by OpenGLRhiDevice
     /**
@@ -312,6 +325,13 @@ private:
         std::vector<float> params;
     };
     
+    struct DrawParticles3DCmd {
+        uint64_t order;
+        std::vector<Particle3DDrawItem> items;
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+    };
+    
     struct CommandRef {
         uint64_t order = 0;
         int type = 0;
@@ -332,6 +352,7 @@ private:
     std::vector<DrawMeshBatchCmd> draw_mesh_batch_cmds_;
     std::vector<DrawSkyboxCmd> draw_skybox_cmds_;
     std::vector<DrawPostProcessCmd> draw_post_process_cmds_;
+    std::vector<DrawParticles3DCmd> draw_particles3d_cmds_;
 };
 
 /**
@@ -568,6 +589,7 @@ public:
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params);
+    void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     
 private:
     struct ResourceLedger {
@@ -664,6 +686,11 @@ private:
     struct SpotLightLoc {
         int color, position, direction, intensity, radius, inner_cone, outer_cone;
     } uniform_spot_lights_loc_[4];
+
+    // Particle 3D support
+    unsigned int particle_shader_handle_ = 0;
+    int particle_uniform_vp_loc_ = -1;
+    int particle_uniform_texture_loc_ = -1;
 
     glm::mat4 global_light_space_matrix_[3];
     float global_cascade_splits_[3];

@@ -14,6 +14,7 @@
 #include "engine/base/time.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+#include <cstdlib>
 #include <vector>
 #include <filesystem>
 
@@ -47,9 +48,8 @@ EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config) 
         config_.world = default_world_.get();
     }
     if (!config_.asset_manager) {
-        // Since AssetManager is still a singleton globally, we use it for now, 
-        // but mark the path to instance-based in Phase 2
-        config_.asset_manager = &AssetManager::Instance();
+        default_asset_manager_ = std::make_unique<AssetManager>();
+        config_.asset_manager = default_asset_manager_.get();
     }
     pipeline_ = std::make_unique<FramePipeline>();
 }
@@ -187,6 +187,11 @@ int EngineInstance::Run() {
         return -1;
     }
 
+    int max_frames = 0;
+    if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
+        max_frames = std::max(0, std::atoi(env_max_frames));
+    }
+    int frame_counter = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -198,6 +203,11 @@ int EngineInstance::Run() {
         Tick();
 
         glfwSwapBuffers(window);
+        frame_counter += 1;
+        if (max_frames > 0 && frame_counter >= max_frames) {
+            std::cout << "DSE_MAX_FRAMES reached: " << frame_counter << std::endl;
+            break;
+        }
     }
 
     Shutdown();

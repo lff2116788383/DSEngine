@@ -1,4 +1,4 @@
-#include "catch/catch.hpp"
+e#include "catch/catch.hpp"
 #include "modules/gameplay_2d/ui/ui_system.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "engine/ecs/world.h"

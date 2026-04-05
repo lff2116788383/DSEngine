@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include "modules/gameplay_3d/animation/animation_state_machine.h"
 
 namespace dse {
 
@@ -144,6 +145,19 @@ struct Animator3DComponent {
     bool use_anim_tree = false;
     std::vector<AnimBlendNode> blend_nodes; // Simple 1D blend for now
     
+    // Animation State Machine support
+    std::shared_ptr<gameplay3d::AnimationStateMachine> state_machine;
+    std::string current_state_name;
+    float state_time = 0.0f;
+    float normalized_time = 0.0f;
+    
+    // Transition crossfade state
+    bool is_transitioning = false;
+    std::string next_state_name;
+    float transition_progress = 0.0f;
+    float transition_duration = 0.0f;
+    float next_state_time = 0.0f;
+
     std::vector<glm::mat4> final_bone_matrices; // Palette uploaded to GPU
 };
 

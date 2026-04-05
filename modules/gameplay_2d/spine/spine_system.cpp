@@ -9,19 +9,30 @@
 #include "engine/base/debug.h"
 #include <spine/spine.h>
 #include <spine/Extension.h>
+#include <stdexcept>
 
 using namespace spine;
 
 namespace dse {
 namespace gameplay2d {
 
+namespace {
+AssetManager& RequireAssetManager(AssetManager* asset_manager) {
+    if (asset_manager) {
+        return *asset_manager;
+    }
+    throw std::runtime_error("SpineSystem requires an injected AssetManager");
+}
+}
+
 class EngineTextureLoader : public TextureLoader {
 public:
     std::vector<std::shared_ptr<TextureAsset>>* current_textures = nullptr;
+    AssetManager* asset_manager = nullptr;
 
     void load(AtlasPage& page, const String& path) override {
         if (!current_textures) return;
-        auto tex = AssetManager::Instance().LoadTexture(path.buffer());
+        auto tex = RequireAssetManager(asset_manager).LoadTexture(path.buffer());
         if (tex) {
             page.texture = (void*)(uintptr_t)tex->GetHandle();
             page.width = tex->GetWidth();
@@ -75,7 +86,12 @@ void SpineSystem::Shutdown(entt::registry& registry) {
     }
 }
 
+void SpineSystem::SetAssetManager(AssetManager* asset_manager) {
+    asset_manager_ = asset_manager;
+}
+
 void SpineSystem::Update(entt::registry& registry, float dt) {
+    auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = registry.view<SpineRendererComponent>();
     for (auto entity : view) {
         auto& comp = view.get<SpineRendererComponent>(entity);
@@ -83,16 +99,17 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
         // Initialize if needed
         if (!comp.skeleton_data && !comp.skeleton_data_path.empty() && !comp.atlas_path.empty()) {
             g_spine_texture_loader.current_textures = &comp.textures;
+            g_spine_texture_loader.asset_manager = &asset_manager;
             
             // Load atlas
             std::vector<uint8_t> atlas_data;
-            if (AssetManager::Instance().LoadFileToMemory(comp.atlas_path, atlas_data)) {
+            if (asset_manager.LoadFileToMemory(comp.atlas_path, atlas_data)) {
                 String atlas_str((const char*)atlas_data.data(), atlas_data.size());
                 Atlas* atlas = new Atlas(atlas_str, &g_spine_texture_loader, true);
                 comp.atlas = atlas;
 
                 std::vector<uint8_t> skel_data;
-                if (AssetManager::Instance().LoadFileToMemory(comp.skeleton_data_path, skel_data)) {
+                if (asset_manager.LoadFileToMemory(comp.skeleton_data_path, skel_data)) {
                     bool is_binary = comp.skeleton_data_path.find(".skel") != std::string::npos;
                     SkeletonData* skeletonData = nullptr;
                     if (is_binary) {
@@ -120,6 +137,7 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
                 }
             }
             g_spine_texture_loader.current_textures = nullptr;
+            g_spine_texture_loader.asset_manager = nullptr;
         }
 
         if (comp.animation_state && comp.skeleton) {

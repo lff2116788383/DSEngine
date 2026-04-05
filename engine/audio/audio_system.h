@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <deque>
 
+class AssetManager;
+
 namespace dse {
 namespace gameplay2d {
 
@@ -29,9 +31,10 @@ public:
 
     /**
      * @brief 初始化音频引擎
+     * @param asset_manager 已注入的资源管理器，不能为空
      * @return 成功返回 true，否则返回 false
      */
-    bool Initialize();
+    bool Initialize(AssetManager* asset_manager);
 
     /**
      * @brief 更新 ECS 实体的音频组件状态
@@ -164,6 +167,7 @@ private:
     std::uint32_t sfx_trigger_cooldown_ms_ = 20;
     bool is_initialized = false;
     void* ma_resource_manager_ptr = nullptr;
+    AssetManager* asset_manager_ = nullptr;
 };
 
 } // namespace gameplay2d

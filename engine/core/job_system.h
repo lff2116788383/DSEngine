@@ -14,6 +14,7 @@
 #include <mutex>
 #include <condition_variable>
 
+namespace dse {
 namespace core {
 
 /**
@@ -47,5 +48,6 @@ private:
 };
 
 } // namespace core
+} // namespace dse
 
 #endif // DSE_CORE_JOB_SYSTEM_H

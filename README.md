@@ -1,170 +1,132 @@
 # Dark Soul Engine (DSEngine)
 
-DSEngine 是一个面向现代化 2D/3D 演进的 C++ 引擎工程。**当前代码主线**以 `runtime + editor_cpp + launcher_tauri` 为准：运行时采用 C++ / Lua 双宿主，编辑器采用纯 C++ + Dear ImGui，启动器采用 Tauri + React。
+DSEngine 是一个面向**个人独立开发者**与**中小型工作室**的轻量级高性能 C++ 游戏引擎。当前主线聚焦：
 
-## 目录结构
+- **2D Runtime**
+- **Lua / C++ 双业务宿主**
+- **原生 C++ 编辑器 (`apps/editor_cpp/`)**
+- **Windows + CMake + Visual Studio 2022** 开发环境
 
-```
-DSEngine
-├─ apps                        应用层入口
-│  ├─ runtime                  运行时宿主
-│  │  ├─ cpp_host              C++ 运行时入口
-│  │  └─ lua_host              Lua 运行时入口
-│  ├─ editor_cpp               C++ + Dear ImGui 编辑器
-│  └─ launcher_tauri           Tauri + React 启动器
-├─ engine                      引擎内核与基础设施
-│  ├─ core                     事件总线、任务系统、内存池
-│  ├─ base                     调试、时间、补间等通用工具
-│  ├─ platform                 屏幕等平台相关抽象
-│  ├─ input                    输入系统
-│  ├─ ecs                      ECS 数据层
-│  ├─ assets                   资源管理
-│  ├─ runtime                  帧调度与主循环
-│  ├─ render                   渲染抽象与设备实现
-│  ├─ scene                    场景对象与 Transform 系统
-│  └─ scripting                Lua / C++ 业务运行时
-├─ modules                     面向玩法域的模块层
-│  └─ gameplay_2d              2D 摄像机、动画、粒子、UI、Tilemap、渲染等系统
-├─ samples                     样例逻辑与样例脚本
-│  ├─ cpp                      C++ Demo 业务样例
-│  └─ lua                      Lua Demo 启动与场景样例
-├─ script                      引擎提供给 Lua 的封装脚本接口
-├─ data                        资源目录
-└─ depends                     第三方依赖
-```
+当前最准确的定位是：**2D 主线已基本成型，编辑器基础可用，测试体系已建立，3D 已接入但不是默认稳定主线。**
 
-## 新组织方式的优点
+## 当前项目定位
 
-- 分层更清晰：`apps / engine / modules / samples` 将应用入口、引擎内核、玩法模块与样例回归拆开，降低跨层耦合
-- 扩展更自然：`engine/core / base / platform / input` 明确基础设施边界，`modules/gameplay_2d` 也为后续 3D 或更多玩法模块预留了扩展位
-- 工程化更友好：目录结构更接近产品化仓库形态，便于构建、打包、SDK 导出、CI 与多人协作
+DSEngine 不是“大而全”的通用商业引擎。当前更适合以下目标：
 
-## 当前主线说明
+- 2D 游戏原型开发
+- 小型到中小体量 2D 项目开发
+- Lua 驱动的快速玩法迭代
+- 需要 C++ 性能与轻量工作流的团队
 
-当前仓库以以下应用层组合为主线：
+当前不建议对外表述为：
+
+- 完整商用品质 3D 引擎
+- 完整资源数据库 / UUID / meta 工作流引擎
+- 完整大型团队协作编辑器平台
+
+## 当前主线
+
+当前仓库主线由三部分组成：
 
 1. **Runtime (`apps/runtime/`)**
-   - 提供 `cpp_host` 与 `lua_host` 双宿主。
-   - 作为引擎运行时入口，负责加载样例、脚本与资源。
+   - 提供 `cpp_host` 与 `lua_host`
+   - 是当前运行时实际入口
 
 2. **Editor (`apps/editor_cpp/`)**
-   - 采用 **纯 C++ + Dear ImGui + GLFW + OpenGL**。
-   - 直接链接 `dse_engine`，避免旧版跨进程桥接与共享内存拷贝。
-   - 当前是仓库内的编辑器主实现。
+   - 采用 **C++ + Dear ImGui + GLFW + OpenGL**
+   - 直接链接 `dse_engine`
+   - 当前是仓库内唯一主线编辑器实现
 
 3. **Launcher (`apps/launcher_tauri/`)**
-   - 采用 **Tauri + React + TypeScript**。
-   - 当前是仓库内的启动器主实现。
+   - 采用 **Tauri + React + TypeScript**
+   - 当前属于辅助入口与后续整合方向
 
-> 说明：文档中若提到基于 Electron / Node-API 的旧编辑器方案，均应视为历史方案或规划背景，不代表当前代码主线。
+## 当前已可用能力
 
-## 已实现功能清单
+### Runtime 与基础设施
+- C++ / Lua 双业务宿主
+- 主循环、固定步长更新、基础帧流水线
+- OpenGL-first 渲染后端
+- 资源根目录配置、基础 Bundle / VFS 能力
+- Lua 启动脚本、实例生命周期、基础热重载状态恢复
 
-### 引擎内核与基础设施 (engine/)
-- **核心框架 (core & base)**：EnTT ECS 架构、事件总线 (EventBus)、作业系统 (JobSystem)、时间与补间工具 (Tween)、内存池与对象池。
-- **渲染硬件接口 (RHI)**：基于 OpenGL 的跨平台 RHI 抽象，支持 Render Target、Pipeline State、Shader 与 Texture 管理。
-- **资源系统 (assets)**：支持 Assimp 导入（模型、骨骼动画）、stb_image 纹理加载，基于缓存的 AssetManager。
-- **场景系统 (scene)**：Transform 层级关系处理、Prefab（预制体）序列化与反序列化、Octree（八叉树）/ QuadTree（四叉树）空间划分。
-- **跨语言脚本 (scripting)**：支持 C++ 与 Lua 双语业务运行时，提供完善的 Lua 绑定（ECS、UI、物理、音效等）。
+### 2D 主线模块
+- Sprite 渲染
+- 2D Camera
+- Box2D 物理
+- Animation
+- Spine 集成
+- Tilemap
+- UI（按钮、文本、布局、Anchor、CanvasScaler、动画）
+- Localization（语言切换、字体映射、回退）
+- Particle（发射器、曲线、随机参数、最小可用碰撞语义）
+- CPU / Memory / Render Profiler
 
-### 2D 游戏性模块 (modules/gameplay_2d/)
-- **Sprite 渲染**：支持 Batch 渲染优化。
-- **2D 摄像机**：正交投影、屏幕适配与跟随逻辑。
-- **物理系统**：集成 Box2D，支持刚体、碰撞体与物理步进。
-- **动画系统**：帧动画 (Sprite Animation) 和 Spine 骨骼动画集成。
-- **Tilemap 系统**：支持瓦片地图解析与渲染。
-- **粒子系统**：已具备基础 2D 粒子发射、随机参数、生命周期曲线、统一碰撞语义与 Box2D 最小可用碰撞处理能力，P0 范围已完成收口。
-- **UI 系统**：已支持按钮交互、文本渲染、CanvasScaler、Anchor、GridLayout 与 UI 动画。
-- **性能分析工具**：提供 CPU / Memory / Render Profiler，支持统计与 CSV/JSON 导出。
+### Editor 当前能力
+- 基础 DockSpace 编辑器框架
+- Hierarchy / Inspector / Scene / Game / Profiler 面板
+- 基础实体创建、删除、选中
+- 基础 Transform 编辑
+- 场景保存 / 加载
+- ImGuizmo 基础操作
+- Profiler 曲线与导出入口
 
-### 3D 游戏性模块 (modules/gameplay_3d/)
-- **PBR 渲染管线**：支持金属粗糙度工作流 (Metallic-Roughness)、IBL 贴图与 HDR 色调映射。
-- **高级光影**：
-  - Directional Light 与 CSM (Cascaded Shadow Maps) 级联阴影。
-  - Point Light (点光源) 与 Spot Light (聚光灯) 多光源支持及衰减逻辑。
-- **3D 摄像机**：透视投影、自由漫游视角 (Free Camera Controller)。
-- **高级模型与动画**：
-  - 骨骼蒙皮动画 (Skeletal Animation) 并在 GPU 端计算。
-  - 动画混合树 (AnimTree) 基础框架。
-  - Morph Target (Blend Shapes) 形变动画数据结构与 GPU 更新。
-- **大世界基建**：
-  - 地形系统 (TerrainSystem)：支持高度图解析与连续/离散动态 LOD。
-  - 视锥体剔除 (FrustumCullingSystem)：基于 Octree 优化的 O(logN) 层次包围盒剔除。
-  - PreZ Pass 深度预渲染基础。
-- **AI 行为与导航**：
-  - 转向行为算法 (SteeringSystem)：包含 Seek(寻找)、Flee(逃离)、Arrive(抵达) 等基础寻路与避障底层逻辑。
+### 测试
+- CTest 统一入口
+- `engine.unit`
+- `engine.lua_runtime`
+- `engine.spine`
+- 若干 2D smoke 测试标签
+- 部分 3D 组件与冒烟测试入口
 
-## 环境要求
+## 当前边界
 
-### 引擎（C++）
-- CMake 3.17+
-- C++17 编译器
-- Windows 推荐 Visual Studio 2022
+以下能力**不应**被表述为当前已经稳定完成：
 
-### 启动器（可选）
-- Node.js 18+（建议）
-- npm
-- Rust / Cargo（Tauri 所需）
+- 完整 3D 商用品质闭环
+- 完整 Prefab 工作流
+- 完整 Undo / Redo 指令体系
+- 完整 Play In Editor 隔离
+- 完整资源数据库与 UUID / meta 体系
+- 完整性能基线平台与 CI 性能门禁
 
-### 编辑器（C++）
-- GLFW / OpenGL 可用开发环境
-- Windows 推荐 Visual Studio 2022
+## 3D 当前状态
 
-## 引擎编译运行流程（Windows）
+3D 相关代码、组件、样例和测试入口已经存在，但当前状态更准确地应描述为：
 
-在项目根目录执行：
+- **已接入**：组件层、部分渲染路径、编辑器部分检视能力、部分测试入口
+- **未收口**：默认构建、资源工作流、编辑器闭环、稳定性门禁、最小 MVP 验证流程
+
+因此：
+
+- 3D **不是**当前默认稳定主线
+- 3D 当前更适合作为 **MVP 收口中的能力方向**，而不是对外承诺的成熟产品能力
+
+## 快速开始（Windows）
+
+### 1. 构建 Runtime
 
 ```bash
 cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
 cmake --build build_vs2022 --config Debug --target dse_engine
-cmake --build build_vs2022 --config Debug --target DSEngine_example_cpp
-cmake --build build_vs2022 --config Debug --target dse_example_lua
-cmake --install build_vs2022 --config Debug --prefix install
+cmake --build build_vs2022 --config Debug --target DSEngine_c++ DSEngine_lua
 ```
 
-不同构建模式都会带模式后缀，例如 Debug 产物为 `bin\DSEngine_debug.dll`，两个宿主可执行也会分别生成 `*_debug.exe`。
-
-## 测试与回归验证
-
-如需启用引擎单测与 Lua 运行时回归：
-
-```bash
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_ENGINE_TESTS=ON
-cmake --build build_vs2022 --config Debug --target dse_engine_unit_tests dse_lua_runtime_tests
-ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.unit|engine.lua_runtime"
-```
-
-也可以直接使用仓库脚本：
-
-```bat
-build_all.bat --with-tests --no-editor --no-launcher --no-sdk --no-verify-exe
-```
-
-其中：
-- `engine.unit`：引擎基础单元测试
-- `engine.lua_runtime`：Lua 运行时专项回归测试，覆盖启动失败清理、脚本更新链路、异常场景状态复位等问题
-
-如需构建当前主线编辑器，需要在 **CMake 生成阶段显式开启** `DSE_BUILD_EDITOR=ON`，否则顶层默认不会生成 `dse_editor_cpp` 目标。
-
-运行 C++ Demo：
-
-```bash
-bin\DSEngine_c++_debug.exe
-```
-
-运行 Lua Demo：
+### 2. 运行 Lua Host
 
 ```bash
 bin\DSEngine_lua_debug.exe
 ```
 
-运行时会自动探测 `script/`、`samples/`、`data/` 路径。
+### 3. 开启测试
 
-默认 Lua 启动脚本为 `samples/lua/main.lua`。
+```bash
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_ENGINE_TESTS=ON
+cmake --build build_vs2022 --config Debug --target dse_engine_unit_tests dse_lua_runtime_tests dse_spine_tests
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine
+```
 
-## 编辑器编译运行流程（可选）
-
-当前主线编辑器为 `apps/editor_cpp/`，通过顶层 CMake 一并生成。
+### 4. 构建编辑器
 
 ```bash
 cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=ON
@@ -172,60 +134,29 @@ cmake --build build_vs2022 --config Debug --target dse_editor_cpp
 bin\dsengine-editor.exe
 ```
 
-如果 `build_vs2022/` 是旧配置目录，请先重新执行一遍上述 `cmake -S ... -B ...` 配置命令，确保 `DSE_BUILD_EDITOR` 已写入缓存。
+## 推荐阅读顺序
 
-更多编辑器使用说明见 [Editor_Usage_Guide.md](doc/Editor_Usage_Guide.md)。
+- `doc/DOC-00_INDEX.md`
+- `doc/DOC-01_ARCHITECTURE.md`
+- `doc/DOC-02_BUILD_AND_RUN.md`
+- `doc/DOC-03_EDITOR.md`
+- `doc/DOC-04_TESTING.md`
+- `doc/DOC-07_ROADMAP.md`
 
-## 启动器编译运行流程（可选）
+专题文档按需阅读：
 
-当前主线启动器位于 `apps/launcher_tauri/`。
+- `doc/DOC-05_UI_LOCALIZATION.md`
+- `doc/DOC-06_PARTICLE_PROFILER.md`
 
-```bash
-cd apps/launcher_tauri
-npm install
-npm run dev
-```
+## 后续方向
 
-如需打包 Tauri 应用，可进一步执行：
+DSEngine 后续不会继续追求“功能面越铺越宽”，而会坚持以下路线：
 
-```bash
-cd apps/launcher_tauri
-npm run tauri build
-```
+1. 先把 **2D 主线**做成更稳的可交付闭环
+2. 再把 **Editor** 做成更高频可用的开发工具
+3. 再把 **资源链路、测试门禁、性能基线**做扎实
+4. 最后把 **3D** 从“已接入”推进到“最小可验证 MVP”
 
-具体环境还取决于本机 Tauri / Rust 工具链是否已安装完成。
+## 文档索引
 
-## 常用开发方式
-
-### CLion
-1. 直接打开 `DSEngine` 根目录
-2. 等待 CMake 加载
-3. 选择目标并运行
-
-### VS Code
-1. 安装 C/C++ 与 CMake Tools 插件
-2. 打开工程目录
-3. 使用 CMake Tools 配置并构建运行
-
-## 核心文档指南
-
-项目的核心架构与演进规划均在 `doc/` 目录下进行维护：
-
-- **[架构说明](doc/Architecture.md)**：包含现代全栈引擎的分层模型与核心设计原则。
-- **[后续演进与发展规划](doc/Roadmap_and_Evolution_2026.md)**：记录了从 2D MVP 迈向全栈 3D 商业版引擎的完整路线图，以及 Launcher 和 Editor 的发展计划。
-- **[编辑器使用指南](doc/Editor_Usage_Guide.md)**：记录当前 `editor_cpp` 编辑器的构建、运行与使用方式。
-- **[UI 系统指南](doc/UI_SYSTEM_GUIDE.md)**：记录当前 2D UI 渲染、布局、动画与测试覆盖情况。
-- **[测试指南](doc/TESTING_CTEST_GUIDE.md)**：引擎单元测试与回归测试的说明。
-- **[国际化指南](doc/LOCALIZATION_GUIDE.md)**：多语言、字体管理与 RTL 文本支持说明。
-- **[粒子系统指南](doc/PARTICLE_SYSTEM_GUIDE.md)**：粒子发射、随机参数、生命周期曲线与碰撞模式说明。
-- **[性能分析工具指南](doc/PROFILER_GUIDE.md)**：CPU / Memory / Render Profiler 的接入与导出说明。
-- **[P0.5 / P1 两周执行计划](doc/P0_5_P1_TWO_WEEK_EXECUTION_PLAN.md)**：P0 收尾后的短周期落地计划，覆盖稳定化、编辑器增强与 P1 起步任务。
-
-
-## 实现目标Demo
-2D Demo：
-1.ARPG 无双割草小游戏
-2.AVG 视觉小游戏
-
-3D Demo：
-1.RPG 烽火与炊烟版经营模拟小游戏
+完整文档入口见：`doc/DOC-00_INDEX.md`

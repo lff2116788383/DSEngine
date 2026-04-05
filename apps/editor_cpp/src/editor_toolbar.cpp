@@ -1,0 +1,131 @@
+#include "editor_toolbar.h"
+
+#include <memory>
+#include <vector>
+
+#include "imgui.h"
+#include "engine/runtime/engine_app.h"
+#include "engine/ecs/components_2d.h"
+#include "engine/ecs/world.h"
+#include "modules/gameplay_2d/localization/localization_system.h"
+#include "editor_scene_io.h"
+
+int g_current_gizmo_operation = 0;
+int g_current_gizmo_mode = 0;
+std::vector<std::string> g_editor_languages;
+int g_editor_language_index = 0;
+std::unique_ptr<entt::registry> g_backup_registry;
+
+void MarkAllUILabelsDirty(entt::registry& registry) {
+    auto view = registry.view<UILabelComponent>();
+    for (auto entity : view) {
+        view.get<UILabelComponent>(entity).dirty = true;
+    }
+}
+
+enum class EditorState {
+    Edit,
+    Play,
+    Pause
+};
+EditorState g_editor_state = EditorState::Edit;
+
+void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
+                       entt::registry& registry,
+                       entt::entity& selected_entity) {
+    (void)engine;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 4));
+    ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);
+    float avail_width = ImGui::GetContentRegionAvail().x;
+
+    ImGui::SetCursorPosX(10);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == -1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+    if (ImGui::Button("[H]", ImVec2(32, 24))) { g_current_gizmo_operation = -1; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hand Tool (H)");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 0 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+    if (ImGui::Button("[M]", ImVec2(32, 24))) { g_current_gizmo_operation = 0; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Translate Tool (W)");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+    if (ImGui::Button("[R]", ImVec2(32, 24))) { g_current_gizmo_operation = 1; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rotate Tool (E)");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 2 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+    if (ImGui::Button("[S]", ImVec2(32, 24))) { g_current_gizmo_operation = 2; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scale Tool (R)");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
+    if (ImGui::Button(g_current_gizmo_mode == 0 ? "Local" : "World", ImVec2(48, 24))) { g_current_gizmo_mode = 1 - g_current_gizmo_mode; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Gizmo Coordinate Space");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::SetCursorPosX(10 + 4 * 36 + 20);
+    static bool is2D = false;
+    if (is2D) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
+    }
+    if (ImGui::Button("2D", ImVec2(32, 24))) { is2D = !is2D; }
+    if (is2D) {
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX((avail_width / 2.0f) - 60);
+
+    if (g_editor_state == EditorState::Edit) {
+        if (ImGui::Button(">", ImVec2(32, 24))) {
+            g_editor_state = EditorState::Play;
+            g_backup_registry = std::make_unique<entt::registry>();
+            CopyRegistry(*g_backup_registry, registry);
+        }
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("[]", ImVec2(32, 24))) {
+            g_editor_state = EditorState::Edit;
+            CopyRegistry(registry, *g_backup_registry);
+            g_backup_registry.reset();
+            selected_entity = entt::null;
+        }
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("||", ImVec2(32, 24))) {}
+    ImGui::SameLine();
+    if (ImGui::Button(">|", ImVec2(32, 24))) {}
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(avail_width - 320);
+    if (!g_editor_languages.empty()) {
+        std::vector<const char*> language_items;
+        language_items.reserve(g_editor_languages.size());
+        for (const auto& lang : g_editor_languages) {
+            language_items.push_back(lang.c_str());
+        }
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::Combo("##LanguagePreview", &g_editor_language_index, language_items.data(), static_cast<int>(language_items.size()))) {
+            auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
+            localization.SetCurrentLanguage(g_editor_languages[g_editor_language_index]);
+            MarkAllUILabelsDirty(registry);
+        }
+        ImGui::SameLine();
+    }
+    ImGui::Button("Collab", ImVec2(60, 24));
+    ImGui::SameLine();
+    ImGui::Button("Layers", ImVec2(60, 24));
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}

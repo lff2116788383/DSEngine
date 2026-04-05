@@ -7,6 +7,10 @@
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/world.h"
+#include "engine/physics/physics3d/physics3d_system.h"
 #include <limits>
 extern "C" {
 #include <lauxlib.h>
@@ -16,8 +20,166 @@ extern "C" {
 #include <rapidjson/document.h>
 
 namespace dse::runtime::lua_binding {
-
 namespace {
+
+int L_EcsAddParticleSystem3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int max_particles = static_cast<int>(luaL_optinteger(L, 2, 1000));
+    float emission_rate = static_cast<float>(luaL_optnumber(L, 3, 100.0));
+    
+    auto& ps = world->registry().emplace_or_replace<ParticleSystem3DComponent>(e);
+    ps.max_particles = max_particles;
+    ps.emission_rate = emission_rate;
+    return 0;
+}
+
+int L_EcsGetTransformPosition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<TransformComponent>(e)) {
+        auto& transform = world->registry().get<TransformComponent>(e);
+        lua_pushnumber(L, transform.position.x);
+        lua_pushnumber(L, transform.position.y);
+        lua_pushnumber(L, transform.position.z);
+        return 3;
+    }
+    return 0;
+}
+
+int L_EcsSetTransformPosition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float x = static_cast<float>(luaL_checknumber(L, 2));
+    float y = static_cast<float>(luaL_checknumber(L, 3));
+    float z = static_cast<float>(luaL_checknumber(L, 4));
+    if (world->registry().valid(e) && world->registry().all_of<TransformComponent>(e)) {
+        auto& transform = world->registry().get<TransformComponent>(e);
+        transform.position = glm::vec3(x, y, z);
+        transform.dirty = true;
+    }
+    return 0;
+}
+
+int L_EcsAddPointLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float r = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float intensity = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float radius = static_cast<float>(luaL_optnumber(L, 6, 10.0));
+    auto& light = world->registry().emplace_or_replace<PointLightComponent>(e);
+    light.enabled = true;
+    light.color = glm::vec3(r, g, b);
+    light.intensity = intensity;
+    light.radius = radius;
+    return 0;
+}
+
+int L_EcsAddSpotLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float dir_x = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    float dir_y = static_cast<float>(luaL_optnumber(L, 3, -1.0));
+    float dir_z = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    float r = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 7, 1.0));
+    float intensity = static_cast<float>(luaL_optnumber(L, 8, 1.0));
+    float radius = static_cast<float>(luaL_optnumber(L, 9, 20.0));
+    float inner_angle = static_cast<float>(luaL_optnumber(L, 10, 12.5));
+    float outer_angle = static_cast<float>(luaL_optnumber(L, 11, 17.5));
+    auto& light = world->registry().emplace_or_replace<SpotLightComponent>(e);
+    light.enabled = true;
+    light.direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+    light.color = glm::vec3(r, g, b);
+    light.intensity = intensity;
+    light.radius = radius;
+    light.inner_cone_angle = inner_angle;
+    light.outer_cone_angle = outer_angle;
+    return 0;
+}
+
+int L_EcsAddTerrain(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* heightmap_path = luaL_optstring(L, 2, "");
+    float width = static_cast<float>(luaL_optnumber(L, 3, 100.0));
+    float depth = static_cast<float>(luaL_optnumber(L, 4, 100.0));
+    float max_height = static_cast<float>(luaL_optnumber(L, 5, 20.0));
+    auto& terrain = world->registry().emplace_or_replace<TerrainComponent>(e);
+    terrain.enabled = true;
+    terrain.heightmap_path = heightmap_path;
+    terrain.width = width;
+    terrain.depth = depth;
+    terrain.max_height = max_height;
+    terrain.is_dirty = true;
+    return 0;
+}
+
+int L_EcsAddSteering(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float max_vel = static_cast<float>(luaL_optnumber(L, 2, 5.0));
+    float max_force = static_cast<float>(luaL_optnumber(L, 3, 10.0));
+    float mass = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    auto& steering = world->registry().emplace_or_replace<SteeringComponent>(e);
+    steering.enabled = true;
+    steering.max_velocity = max_vel;
+    steering.max_force = max_force;
+    steering.mass = mass;
+    return 0;
+}
+
+int L_EcsSetSteeringTarget(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* behavior = luaL_checkstring(L, 2);
+    float tx = static_cast<float>(luaL_checknumber(L, 3));
+    float ty = static_cast<float>(luaL_checknumber(L, 4));
+    float tz = static_cast<float>(luaL_checknumber(L, 5));
+    if (world->registry().valid(e) && world->registry().all_of<SteeringComponent>(e)) {
+        auto& steering = world->registry().get<SteeringComponent>(e);
+        std::string b = behavior;
+        if (b == "seek") {
+            steering.seek_enabled = true;
+            steering.seek_target = glm::vec3(tx, ty, tz);
+        } else if (b == "flee") {
+            steering.flee_enabled = true;
+            steering.flee_target = glm::vec3(tx, ty, tz);
+        } else if (b == "arrive") {
+            steering.arrive_enabled = true;
+            steering.arrive_target = glm::vec3(tx, ty, tz);
+        }
+    }
+    return 0;
+}
+
 int L_EcsCreateEntity(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -530,9 +692,9 @@ int L_EcsSetMeshMaterial(lua_State* L) {
         // Check if second argument is a string (dmat path)
         if (lua_type(L, 2) == LUA_TSTRING) {
             std::string dmat_path = lua_tostring(L, 2);
-            // We will just read the file using AssetManager here directly as it's simple JSON
+            // Material json 仍通过绑定上下文中的 AssetManager 读取
             std::vector<uint8_t> file_data;
-            if (AssetManager::Instance().LoadFileToMemory(dmat_path, file_data)) {
+            if (GetAssetManager().LoadFileToMemory(dmat_path, file_data)) {
                 std::string text(reinterpret_cast<const char*>(file_data.data()), file_data.size());
                 rapidjson::Document doc;
                 doc.Parse(text.c_str());
@@ -684,9 +846,18 @@ int L_EcsSetAnimator3DState(lua_State* L) {
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
         auto& animator = world->registry().get<Animator3DComponent>(e);
-        if (lua_gettop(L) >= 2) {
-            if (lua_isstring(L, 2)) {
-                animator.danim_path = lua_tostring(L, 2);
+        if (lua_gettop(L) >= 2 && lua_isstring(L, 2)) {
+            const char* state_name = lua_tostring(L, 2);
+            if (animator.state_machine) {
+                // If using state machine, just set a trigger or force state
+                // This is a simplified interface; usually we drive it by setting parameters.
+                // For direct override:
+                animator.current_state_name = state_name;
+                animator.state_time = 0.0f;
+                animator.is_transitioning = false;
+            } else {
+                // Legacy
+                animator.danim_path = state_name;
             }
         }
         if (lua_gettop(L) >= 3) {
@@ -694,6 +865,137 @@ int L_EcsSetAnimator3DState(lua_State* L) {
         }
         if (lua_gettop(L) >= 4) {
             animator.loop = lua_toboolean(L, 4) != 0;
+        }
+    }
+    return 0;
+}
+
+int L_EcsInitAnimator3DStateMachine(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        animator.state_machine = std::make_shared<gameplay3d::AnimationStateMachine>();
+    }
+    return 0;
+}
+
+int L_EcsAddAnimator3DState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* state_name = luaL_checkstring(L, 2);
+    const char* danim_path = luaL_checkstring(L, 3);
+    bool loop = lua_toboolean(L, 4) != 0;
+    float speed = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        if (animator.state_machine) {
+            gameplay3d::AnimState state;
+            state.name = state_name;
+            state.danim_path = danim_path;
+            state.loop = loop;
+            state.speed = speed;
+            state.is_blend_tree = false;
+            animator.state_machine->AddState(state);
+        }
+    }
+    return 0;
+}
+
+int L_EcsAddAnimator3DTransition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* from_state = luaL_checkstring(L, 2);
+    const char* to_state = luaL_checkstring(L, 3);
+    float transition_duration = static_cast<float>(luaL_optnumber(L, 4, 0.25));
+    bool has_exit_time = lua_toboolean(L, 5) != 0;
+    float exit_time = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        if (animator.state_machine) {
+            // Note: In a real implementation we would look up the from_state by reference,
+            // but here we modify the copy in the map.
+            // Since we need to modify it, let's add a helper method to StateMachine or modify it directly.
+            // For now we'll do a hacky const_cast since we know it's local.
+            auto& fsm = *animator.state_machine;
+            auto states = const_cast<std::unordered_map<std::string, gameplay3d::AnimState>&>(fsm.GetStates());
+            auto it = states.find(from_state);
+            if (it != states.end()) {
+                gameplay3d::AnimTransition trans;
+                trans.target_state = to_state;
+                trans.transition_duration = transition_duration;
+                trans.has_exit_time = has_exit_time;
+                trans.exit_time = exit_time;
+                
+                // Read conditions from table if provided (Arg 7)
+                if (lua_istable(L, 7)) {
+                    lua_pushnil(L);
+                    while (lua_next(L, 7) != 0) {
+                        // value is a condition table {param, mode, threshold/int_val}
+                        if (lua_istable(L, -1)) {
+                            gameplay3d::AnimTransitionCondition cond;
+                            lua_rawgeti(L, -1, 1); cond.parameter_name = lua_tostring(L, -1); lua_pop(L, 1);
+                            lua_rawgeti(L, -1, 2); int mode = lua_tointeger(L, -1); lua_pop(L, 1);
+                            cond.mode = static_cast<gameplay3d::AnimConditionMode>(mode);
+                            
+                            lua_rawgeti(L, -1, 3);
+                            if (lua_isnumber(L, -1)) {
+                                cond.threshold = static_cast<float>(lua_tonumber(L, -1));
+                                cond.int_value = static_cast<int>(lua_tointeger(L, -1));
+                            }
+                            lua_pop(L, 1);
+                            
+                            trans.conditions.push_back(cond);
+                        }
+                        lua_pop(L, 1);
+                    }
+                }
+                
+                it->second.transitions.push_back(trans);
+            }
+        }
+    }
+    return 0;
+}
+
+int L_EcsSetAnimator3DParamFloat(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* param_name = luaL_checkstring(L, 2);
+    float value = static_cast<float>(luaL_checknumber(L, 3));
+    
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        if (animator.state_machine) {
+            // Auto add parameter if not exists
+            if (animator.state_machine->GetParameters().find(param_name) == animator.state_machine->GetParameters().end()) {
+                animator.state_machine->AddParameter(param_name, gameplay3d::AnimParamType::Float, 0.0f);
+            }
+            animator.state_machine->SetFloat(param_name, value);
+        }
+    }
+    return 0;
+}
+
+int L_EcsSetAnimator3DParamTrigger(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* param_name = luaL_checkstring(L, 2);
+    
+    if (world->registry().valid(e) && world->registry().all_of<Animator3DComponent>(e)) {
+        auto& animator = world->registry().get<Animator3DComponent>(e);
+        if (animator.state_machine) {
+            if (animator.state_machine->GetParameters().find(param_name) == animator.state_machine->GetParameters().end()) {
+                animator.state_machine->AddTrigger(param_name);
+            }
+            animator.state_machine->SetTrigger(param_name);
         }
     }
     return 0;
@@ -725,6 +1027,93 @@ int L_EcsAddFreeCameraController(lua_State* L) {
     return 0;
 }
 
+int L_EcsAddRigidBody3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int type = static_cast<int>(luaL_optinteger(L, 2, 2)); // 0: Static, 1: Kinematic, 2: Dynamic
+    float mass = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    auto& rb = world->registry().emplace_or_replace<RigidBody3DComponent>(e);
+    rb.type = static_cast<RigidBody3DType>(type);
+    rb.mass = mass;
+    return 0;
+}
+
+int L_EcsAddBoxCollider3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float x = static_cast<float>(luaL_checknumber(L, 2));
+    float y = static_cast<float>(luaL_checknumber(L, 3));
+    float z = static_cast<float>(luaL_checknumber(L, 4));
+    auto& collider = world->registry().emplace_or_replace<BoxCollider3DComponent>(e);
+    collider.size = glm::vec3(x, y, z);
+    return 0;
+}
+
+int L_EcsAddSphereCollider3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float radius = static_cast<float>(luaL_checknumber(L, 2));
+    auto& collider = world->registry().emplace_or_replace<SphereCollider3DComponent>(e);
+    collider.radius = radius;
+    return 0;
+}
+
+int L_EcsAddPostProcess(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    auto& pp = world->registry().emplace_or_replace<PostProcessComponent>(e);
+    pp.enabled = true;
+    pp.bloom_enabled = lua_toboolean(L, 2) != 0;
+    pp.bloom_threshold = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    pp.bloom_intensity = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    return 0;
+}
+
+int L_Physics3DRaycast(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    // We assume Physics3DSystem is globally accessible or accessible via world context
+    // For now, we will just return a dummy result as Physics3DSystem is not directly accessible here yet
+    // In a real scenario, we'd fetch the system from the world or a global locator
+    
+    // Read origin
+    float ox = static_cast<float>(luaL_checknumber(L, 1));
+    float oy = static_cast<float>(luaL_checknumber(L, 2));
+    float oz = static_cast<float>(luaL_checknumber(L, 3));
+    
+    // Read direction
+    float dx = static_cast<float>(luaL_checknumber(L, 4));
+    float dy = static_cast<float>(luaL_checknumber(L, 5));
+    float dz = static_cast<float>(luaL_checknumber(L, 6));
+    
+    // Read max distance
+    float max_dist = static_cast<float>(luaL_optnumber(L, 7, 1000.0));
+
+    // TODO: Actually call physics3d::Physics3DSystem::Raycast
+    // For now, mock the return
+    bool hit = false;
+    
+    lua_newtable(L);
+    lua_pushboolean(L, hit);
+    lua_setfield(L, -2, "hit");
+    
+    return 1;
+}
+
 }
 
 void RegisterEcsBindings(lua_State* L) {
@@ -736,6 +1125,8 @@ void RegisterEcsBindings(lua_State* L) {
     lua_newtable(L);
     set_fn("create_entity", L_EcsCreateEntity);
     set_fn("add_transform", L_EcsAddTransform);
+    set_fn("get_transform_position", L_EcsGetTransformPosition);
+    set_fn("set_transform_position", L_EcsSetTransformPosition);
     set_fn("set_transform_rotation", L_EcsSetTransformRotation);
     set_fn("add_camera", L_EcsAddCamera);
     set_fn("add_camera_3d", L_EcsAddCamera3D);
@@ -749,10 +1140,25 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
     set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);
     set_fn("set_directional_light_3d", L_EcsSetDirectionalLight3D);
+    set_fn("add_point_light_3d", L_EcsAddPointLight3D);
+    set_fn("add_spot_light_3d", L_EcsAddSpotLight3D);
     set_fn("add_animator_3d", L_EcsAddAnimator3D);
     set_fn("set_animator_3d_state", L_EcsSetAnimator3DState);
+    set_fn("init_animator_3d_fsm", L_EcsInitAnimator3DStateMachine);
+    set_fn("add_animator_3d_state", L_EcsAddAnimator3DState);
+    set_fn("add_animator_3d_transition", L_EcsAddAnimator3DTransition);
+    set_fn("set_animator_3d_param_float", L_EcsSetAnimator3DParamFloat);
+    set_fn("set_animator_3d_param_trigger", L_EcsSetAnimator3DParamTrigger);
     set_fn("add_skybox", L_EcsAddSkybox);
+    set_fn("add_terrain", L_EcsAddTerrain);
+    set_fn("add_steering", L_EcsAddSteering);
+    set_fn("set_steering_target", L_EcsSetSteeringTarget);
     set_fn("add_free_camera_controller", L_EcsAddFreeCameraController);
+    set_fn("add_rigidbody_3d", L_EcsAddRigidBody3D);
+    set_fn("add_box_collider_3d", L_EcsAddBoxCollider3D);
+    set_fn("add_sphere_collider_3d", L_EcsAddSphereCollider3D);
+    set_fn("add_particle_system_3d", L_EcsAddParticleSystem3D);
+    set_fn("add_post_process", L_EcsAddPostProcess);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
     set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);
@@ -770,6 +1176,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("particle_burst", L_EcsParticleBurst);
     set_fn("add_gameplay_tuning", L_EcsAddGameplayTuning);
     set_fn("set_gameplay_tuning", L_EcsSetGameplayTuning);
+    set_fn("physics_3d_raycast", L_Physics3DRaycast);
 }
 
 }

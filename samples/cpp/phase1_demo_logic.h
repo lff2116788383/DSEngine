@@ -3,8 +3,10 @@
 
 #include "engine/ecs/world.h"
 
+class AssetManager;
+
 namespace dse::samples::cpp_demo {
-void Bootstrap(World& world);
+void Bootstrap(World& world, AssetManager& asset_manager);
 void Tick(World& world, float delta_time);
 void Shutdown();
 }

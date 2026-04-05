@@ -8,6 +8,7 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+class AssetManager;
 
 namespace dse {
 namespace gameplay3d {
@@ -27,6 +28,9 @@ public:
      * @param cmd_buffer 渲染命令缓冲
      */
     void Render(World& world, CommandBuffer& cmd_buffer);
+    void SetAssetManager(AssetManager* asset_manager);
+private:
+    AssetManager* asset_manager_ = nullptr;
 };
 
 } // namespace gameplay3d

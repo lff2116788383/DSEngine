@@ -19,13 +19,13 @@ void ConfigureCppBusinessHooks(CppBusinessHooks hooks) {
     Hooks() = std::move(hooks);
 }
 
-bool BootstrapCppBusiness(World& world) {
+bool BootstrapCppBusiness(World& world, AssetManager& asset_manager) {
     auto& hooks = Hooks();
     if (!hooks.bootstrap || !hooks.tick) {
         DEBUG_LOG_ERROR("Cpp business bootstrap failed: hooks are not configured");
         return false;
     }
-    hooks.bootstrap(world);
+    hooks.bootstrap(world, asset_manager);
     return true;
 }
 

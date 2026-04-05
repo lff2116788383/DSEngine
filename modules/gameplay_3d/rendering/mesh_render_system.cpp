@@ -2,6 +2,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
+#include <stdexcept>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -20,7 +21,17 @@
 namespace dse {
 namespace gameplay3d {
 
+void MeshRenderSystem::SetAssetManager(AssetManager* asset_manager) {
+    asset_manager_ = asset_manager;
+}
+
 namespace {
+AssetManager& RequireAssetManager(AssetManager* asset_manager) {
+    if (asset_manager) {
+        return *asset_manager;
+    }
+    throw std::runtime_error("MeshRenderSystem requires an injected AssetManager");
+}
 
 struct RawMeshData {
     std::vector<float> vertices;
@@ -34,9 +45,9 @@ std::string ToLower(std::string value) {
     return value;
 }
 
-bool LoadTextFile(const std::string& path, std::string& out_text) {
+bool LoadTextFile(AssetManager& asset_manager, const std::string& path, std::string& out_text) {
     std::vector<uint8_t> bytes;
-    if (!AssetManager::Instance().LoadFileToMemory(path, bytes)) {
+    if (!asset_manager.LoadFileToMemory(path, bytes)) {
         return false;
     }
     out_text.assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -151,7 +162,7 @@ bool Base64Decode(const std::string& input, std::vector<uint8_t>& output) {
     return !output.empty();
 }
 
-bool LoadGltfBuffer(const std::string& gltf_path, const std::string& uri, std::vector<uint8_t>& out_data) {
+bool LoadGltfBuffer(AssetManager& asset_manager, const std::string& gltf_path, const std::string& uri, std::vector<uint8_t>& out_data) {
     if (uri.rfind("data:", 0) == 0) {
         std::size_t comma = uri.find(',');
         if (comma == std::string::npos) {
@@ -162,10 +173,10 @@ bool LoadGltfBuffer(const std::string& gltf_path, const std::string& uri, std::v
     }
     std::filesystem::path base = std::filesystem::path(gltf_path).parent_path();
     std::filesystem::path full = base / uri;
-    return AssetManager::Instance().LoadFileToMemory(full.string(), out_data);
+    return asset_manager.LoadFileToMemory(full.string(), out_data);
 }
 
-bool ParseGltfMesh(const std::string& gltf_path, const std::string& text, RawMeshData& out_mesh) {
+bool ParseGltfMesh(AssetManager& asset_manager, const std::string& gltf_path, const std::string& text, RawMeshData& out_mesh) {
     rapidjson::Document doc;
     doc.Parse(text.c_str(), text.size());
     if (doc.HasParseError() || !doc.IsObject()) {
@@ -190,7 +201,7 @@ bool ParseGltfMesh(const std::string& gltf_path, const std::string& text, RawMes
         if (!buffer.IsObject() || !buffer.HasMember("uri") || !buffer["uri"].IsString()) {
             return false;
         }
-        if (!LoadGltfBuffer(gltf_path, buffer["uri"].GetString(), buffers[i])) {
+        if (!LoadGltfBuffer(asset_manager, gltf_path, buffer["uri"].GetString(), buffers[i])) {
             return false;
         }
     }
@@ -392,23 +403,23 @@ bool ParseFbxMesh(const std::string& text, RawMeshData& out_mesh) {
     return !out_mesh.vertices.empty() && !out_mesh.indices.empty();
 }
 
-bool LoadMeshByPath(const std::string& mesh_path, RawMeshData& out_mesh) {
+bool LoadMeshByPath(AssetManager& asset_manager, const std::string& mesh_path, RawMeshData& out_mesh) {
     std::string extension = ToLower(std::filesystem::path(mesh_path).extension().string());
     std::string text;
     if (extension == ".obj") {
-        if (!LoadTextFile(mesh_path, text)) {
+        if (!LoadTextFile(asset_manager, mesh_path, text)) {
             return false;
         }
         return ParseObjMesh(text, out_mesh);
     }
     if (extension == ".gltf") {
-        if (!LoadTextFile(mesh_path, text)) {
+        if (!LoadTextFile(asset_manager, mesh_path, text)) {
             return false;
         }
-        return ParseGltfMesh(mesh_path, text, out_mesh);
+        return ParseGltfMesh(asset_manager, mesh_path, text, out_mesh);
     }
     if (extension == ".fbx") {
-        if (!LoadTextFile(mesh_path, text)) {
+        if (!LoadTextFile(asset_manager, mesh_path, text)) {
             return false;
         }
         return ParseFbxMesh(text, out_mesh);
@@ -416,7 +427,7 @@ bool LoadMeshByPath(const std::string& mesh_path, RawMeshData& out_mesh) {
     return false;
 }
 
-void EnsureMeshPathDataLoaded(World& world, entt::entity entity, MeshRendererComponent& mesh_renderer) {
+void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::entity entity, MeshRendererComponent& mesh_renderer) {
     if (mesh_renderer.mesh_path.empty()) {
         return;
     }
@@ -446,7 +457,7 @@ void EnsureMeshPathDataLoaded(World& world, entt::entity entity, MeshRendererCom
 
     // Fast path: Check if it's a compiled .dmesh
     if (mesh_renderer.mesh_path.find(".dmesh") != std::string::npos) {
-        auto dmesh = AssetManager::Instance().LoadDmesh(mesh_renderer.mesh_path);
+        auto dmesh = asset_manager.LoadDmesh(mesh_renderer.mesh_path);
         if (dmesh && !dmesh->GetData().empty()) {
             const uint8_t* data = dmesh->GetData().data();
             const dse::asset::compiler::MeshHeader* header = reinterpret_cast<const dse::asset::compiler::MeshHeader*>(data);
@@ -488,7 +499,7 @@ void EnsureMeshPathDataLoaded(World& world, entt::entity entity, MeshRendererCom
         return;
     }
     RawMeshData mesh;
-    if (LoadMeshByPath(mesh_renderer.mesh_path, mesh)) {
+    if (LoadMeshByPath(asset_manager, mesh_renderer.mesh_path, mesh)) {
         cache.emplace(mesh_renderer.mesh_path, mesh);
         mesh_renderer.temp_vertices = mesh.vertices;
         mesh_renderer.temp_indices = mesh.indices;
@@ -499,6 +510,7 @@ void EnsureMeshPathDataLoaded(World& world, entt::entity entity, MeshRendererCom
 }
 
 void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+    auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = world.registry().view<TransformComponent, MeshRendererComponent>();
     auto light_view = world.registry().view<DirectionalLight3DComponent>();
     DirectionalLight3DComponent light_data;
@@ -517,6 +529,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     std::vector<MeshDrawItem::PointLightData> point_lights;
     auto point_light_view = world.registry().view<TransformComponent, PointLightComponent>();
     for (auto entity : point_light_view) {
+        if (point_lights.size() >= 4) break; // MAX_POINT_LIGHTS = 4
         auto& transform = point_light_view.get<TransformComponent>(entity);
         auto& light = point_light_view.get<PointLightComponent>(entity);
         if (light.enabled) {
@@ -543,7 +556,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         auto& transform = view.get<TransformComponent>(entity);
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
         
-        EnsureMeshPathDataLoaded(world, entity, mesh_renderer);
+        EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
         if (!mesh_renderer.visible) continue;
         
         MeshDrawItem item;
@@ -574,15 +587,38 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             }
         }
         
-        item.material_albedo = glm::vec3(mesh_renderer.color.r, mesh_renderer.color.g, mesh_renderer.color.b);
+        item.texture_handle = 0;
+        item.material_albedo = glm::vec3(mesh_renderer.color);
         item.material_metallic = mesh_renderer.metallic;
         item.material_roughness = mesh_renderer.roughness;
         item.material_ao = mesh_renderer.ao;
-        item.material_emissive = mesh_renderer.emissive;
         item.material_normal_strength = mesh_renderer.normal_strength;
+        item.material_emissive = mesh_renderer.emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;
-        item.point_lights = point_lights;
-        item.spot_lights = spot_lights;
+        
+        item.point_lights.clear();
+        for (const auto& pt_data : point_lights) {
+            MeshDrawItem::PointLightData pld;
+            pld.color = pt_data.color;
+            pld.position = pt_data.position;
+            pld.intensity = pt_data.intensity;
+            pld.radius = pt_data.radius;
+            item.point_lights.push_back(pld);
+        }
+        
+        item.spot_lights.clear();
+        for (const auto& sp_data : spot_lights) {
+            MeshDrawItem::SpotLightData sld;
+            sld.color = sp_data.color;
+            sld.position = sp_data.position;
+            sld.direction = sp_data.direction;
+            sld.intensity = sp_data.intensity;
+            sld.radius = sp_data.radius;
+            sld.inner_cone = sp_data.inner_cone;
+            sld.outer_cone = sp_data.outer_cone;
+            item.spot_lights.push_back(sld);
+        }
+        
         if (has_light) {
             item.light_direction = light_data.direction;
             item.light_color = light_data.color;
@@ -638,7 +674,10 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 );
                 bv.pos = item.skinned ? local_positions[i] : glm::vec3(world_pos);
                 bv.color = mesh_renderer.color;
+                
+                glm::vec3 normal;
                 if (is_dmesh_format) {
+                    normal = glm::vec3(mesh_renderer.temp_vertices[i * stride + 3], mesh_renderer.temp_vertices[i * stride + 4], mesh_renderer.temp_vertices[i * stride + 5]);
                     bv.uv = glm::vec2(mesh_renderer.temp_vertices[i * stride + 6], mesh_renderer.temp_vertices[i * stride + 7]);
                     bv.weights = glm::vec4(
                         mesh_renderer.temp_vertices[i * stride + 8],
@@ -646,13 +685,15 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                         mesh_renderer.temp_vertices[i * stride + 10],
                         mesh_renderer.temp_vertices[i * stride + 11]
                     );
-                    // store as float in temp, reconstruct as vec4 in shader
-                    bv.joints = glm::vec4(
-                        *reinterpret_cast<const int*>(&mesh_renderer.temp_vertices[i * stride + 12]),
-                        *reinterpret_cast<const int*>(&mesh_renderer.temp_vertices[i * stride + 13]),
-                        *reinterpret_cast<const int*>(&mesh_renderer.temp_vertices[i * stride + 14]),
-                        *reinterpret_cast<const int*>(&mesh_renderer.temp_vertices[i * stride + 15])
-                    );
+                    
+                    // Interpret floats as ints for bone indices
+                    int j0, j1, j2, j3;
+                    std::memcpy(&j0, &mesh_renderer.temp_vertices[i * stride + 12], sizeof(float));
+                    std::memcpy(&j1, &mesh_renderer.temp_vertices[i * stride + 13], sizeof(float));
+                    std::memcpy(&j2, &mesh_renderer.temp_vertices[i * stride + 14], sizeof(float));
+                    std::memcpy(&j3, &mesh_renderer.temp_vertices[i * stride + 15], sizeof(float));
+                    bv.joints = glm::vec4(static_cast<float>(j0), static_cast<float>(j1), static_cast<float>(j2), static_cast<float>(j3));
+                    
                     if (stride >= 20) {
                         bv.tangent = glm::vec3(
                             mesh_renderer.temp_vertices[i * stride + 16],
@@ -663,12 +704,13 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                         bv.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
                     }
                 } else {
+                    normal = local_normals[i];
                     bv.uv = glm::vec2(0.0f, 0.0f);
                     bv.weights = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
                     bv.joints = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
                     bv.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
                 }
-                glm::vec3 normal = is_dmesh_format ? glm::vec3(mesh_renderer.temp_vertices[i * stride + 3], mesh_renderer.temp_vertices[i * stride + 4], mesh_renderer.temp_vertices[i * stride + 5]) : local_normals[i];
+                
                 if (glm::length(normal) < 1e-6f) {
                     normal = glm::vec3(0.0f, 0.0f, 1.0f);
                 } else {
