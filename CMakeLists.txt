@@ -111,6 +111,11 @@ file(GLOB_RECURSE engine_cpp
     "modules/gameplay_2d/*.cpp"
 )
 
+# PhysX 禁用时排除 physics3d 相关源文件
+if(NOT DSE_ENABLE_PHYSX)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
+endif()
+
 if(NOT DSE_ENABLE_3D)
     list(APPEND engine_cpp
         "modules/gameplay_3d/rendering/mesh_render_system.cpp"
