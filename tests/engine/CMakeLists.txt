@@ -20,6 +20,7 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/particle/particle_advanced_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
+    ../modules/gameplay_2d/smoke_snapshot_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ../modules/gameplay_2d/ui/ui_layout_test.cpp
     ../modules/gameplay_2d/ui/ui_animation_test.cpp
@@ -90,27 +91,27 @@ set_tests_properties(engine.unit PROPERTIES LABELS "engine;unit")
 
 add_test(
     NAME engine.2d.ui
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[ui]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[ui],[smoke][snapshot][ui]"
 )
-set_tests_properties(engine.2d.ui PROPERTIES LABELS "engine;unit;2d;ui;smoke")
+set_tests_properties(engine.2d.ui PROPERTIES LABELS "engine;unit;2d;ui;smoke;snapshot")
 
 add_test(
     NAME engine.2d.tilemap
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[tilemap]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[tilemap],[smoke][snapshot][tilemap]"
 )
-set_tests_properties(engine.2d.tilemap PROPERTIES LABELS "engine;unit;2d;tilemap;smoke")
+set_tests_properties(engine.2d.tilemap PROPERTIES LABELS "engine;unit;2d;tilemap;smoke;snapshot")
 
 add_test(
     NAME engine.2d.particle
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[particle]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[particle],[smoke][snapshot][particle]"
 )
-set_tests_properties(engine.2d.particle PROPERTIES LABELS "engine;unit;2d;particle;smoke")
+set_tests_properties(engine.2d.particle PROPERTIES LABELS "engine;unit;2d;particle;smoke;snapshot")
 
 add_test(
     NAME engine.2d.physics2d
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[physics2d]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[physics2d],[smoke][snapshot][physics2d]"
 )
-set_tests_properties(engine.2d.physics2d PROPERTIES LABELS "engine;unit;2d;physics2d;smoke")
+set_tests_properties(engine.2d.physics2d PROPERTIES LABELS "engine;unit;2d;physics2d;smoke;snapshot")
 
 add_test(
     NAME engine.2d.localization
@@ -146,11 +147,14 @@ set_tests_properties(engine.3d.smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "\\[3D-Smoke\\]\\[CPP\\] bootstrap_ok"
 )
 
+add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp)
+
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
 
 add_executable(${DSE_LUA_RUNTIME_TEST_TARGET}
     main.cpp
     scripting/lua_runtime_test.cpp
+    runtime_smoke_snapshot_test.cpp
 )
 
 target_include_directories(${DSE_LUA_RUNTIME_TEST_TARGET}
@@ -183,8 +187,21 @@ set_tests_properties(engine.lua_runtime PROPERTIES
 )
 
 add_test(
+    NAME engine.lua_runtime.smoke
+    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "[engine][smoke][snapshot][lua_runtime]"
+)
+
+set_tests_properties(engine.lua_runtime.smoke PROPERTIES
+    LABELS "engine;smoke;snapshot;lua_runtime"
+    PASS_REGULAR_EXPRESSION "All tests passed"
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    TIMEOUT 15
+)
+
+
+add_test(
     NAME engine.resource_injection
-    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "[lua_runtime]"
+    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero"
 )
 
 set_tests_properties(engine.resource_injection PROPERTIES
@@ -205,3 +222,6 @@ set_tests_properties(engine.cpp_runtime PROPERTIES
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
+
+dse_copy_runtime_dlls(${DSE_ENGINE_TEST_TARGET})
+dse_copy_runtime_dlls(${DSE_LUA_RUNTIME_TEST_TARGET})

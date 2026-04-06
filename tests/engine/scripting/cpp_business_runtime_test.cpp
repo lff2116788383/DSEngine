@@ -1,5 +1,6 @@
 #include "catch/catch.hpp"
 #include "engine/scripting/cpp/cpp_business_runtime.h"
+#include "engine/assets/asset_manager.h"
 #include "spdlog/spdlog.h"
 
 using dse::runtime::CppBusinessHooks;

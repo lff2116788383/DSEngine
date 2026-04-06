@@ -31,6 +31,7 @@ struct RuntimeState {
     };
     lua_State* state = nullptr;
     bool awake_called = false;
+    bool shutting_down = false;
     std::string startup_script_path;
     std::string startup_script_override;
     LuaApiContext api_context;
@@ -44,35 +45,36 @@ RuntimeState& State() {
 }
 
 static void* LuaMemoryAllocator(void* ud, void* ptr, size_t osize, size_t nsize) {
+    (void)ud;
     auto& state = State();
+
     if (nsize == 0) {
         if (ptr) {
-            // Guard against underflow: osize should never exceed lua_memory_usage,
-            // but protect against corrupted bookkeeping to avoid size_t wrap-around.
-            if (osize <= state.lua_memory_usage) {
-                state.lua_memory_usage -= osize;
-            } else {
-                state.lua_memory_usage = 0;
-            }
-            std::free(ptr);
+            state.lua_memory_usage = (osize <= state.lua_memory_usage)
+                ? (state.lua_memory_usage - osize)
+                : 0;
         }
+        std::free(ptr);
         return nullptr;
-    } else {
-        void* new_ptr = std::realloc(ptr, nsize);
-        if (new_ptr) {
-            if (ptr) {
-                // Safe arithmetic: subtract first only if it won't underflow
-                if (osize <= state.lua_memory_usage) {
-                    state.lua_memory_usage = state.lua_memory_usage - osize + nsize;
-                } else {
-                    state.lua_memory_usage = nsize;
-                }
-            } else {
-                state.lua_memory_usage += nsize;
-            }
-        }
-        return new_ptr;
     }
+
+    void* new_ptr = std::realloc(ptr, nsize);
+    if (!new_ptr) {
+        return nullptr;
+    }
+
+    if (!ptr) {
+        state.lua_memory_usage += nsize;
+    } else if (nsize >= osize) {
+        state.lua_memory_usage += (nsize - osize);
+    } else {
+        const size_t shrink = osize - nsize;
+        state.lua_memory_usage = (shrink <= state.lua_memory_usage)
+            ? (state.lua_memory_usage - shrink)
+            : 0;
+    }
+
+    return new_ptr;
 }
 
 std::string ResolveStartupLuaScript() {
@@ -214,16 +216,31 @@ void RestoreScriptState(lua_State* L, int table_ref, int entity_id, int state_re
 
 void DestroyScriptInstance(lua_State* L, int entity_id, RuntimeState::ScriptInstance& instance, bool call_destroy = true) {
     if (instance.table_ref == LUA_NOREF) {
+        DEBUG_LOG_INFO("[LuaRuntime] DestroyScriptInstance skipped entity={} ref=LUA_NOREF", entity_id);
         return;
     }
-    if (call_destroy && instance.awake_called) {
+
+    auto& runtime_state = State();
+    DEBUG_LOG_INFO("[LuaRuntime] DestroyScriptInstance begin entity={} ref={} awake_called={} call_destroy={} shutting_down={} state={}",
+                   entity_id,
+                   instance.table_ref,
+                   instance.awake_called ? 1 : 0,
+                   call_destroy ? 1 : 0,
+                   runtime_state.shutting_down ? 1 : 0,
+                   static_cast<void*>(L));
+    if (call_destroy && instance.awake_called && !runtime_state.shutting_down) {
+        DEBUG_LOG_INFO("[LuaRuntime] invoking OnDestroy entity={} ref={}", entity_id, instance.table_ref);
         CallScriptTableMethod(L, instance.table_ref, "OnDestroy", entity_id, 0.0f, false);
     }
+
+    DEBUG_LOG_INFO("[LuaRuntime] luaL_unref entity={} ref={}", entity_id, instance.table_ref);
     luaL_unref(L, LUA_REGISTRYINDEX, instance.table_ref);
     instance.table_ref = LUA_NOREF;
     instance.awake_called = false;
+    instance.script_path.clear();
     instance.has_last_write_time = false;
     instance.last_write_time = std::filesystem::file_time_type::min();
+    DEBUG_LOG_INFO("[LuaRuntime] DestroyScriptInstance end entity={}", entity_id);
 }
 
 bool EnsureScriptInstanceLoaded(lua_State* L, int entity_id, const std::string& script_path, RuntimeState::ScriptInstance& instance) {
@@ -335,17 +352,25 @@ void SetStartupLuaScriptPath(std::string script_path) {
 
 void ShutdownLuaRuntime() {
     auto& state = State();
+    DEBUG_LOG_INFO("[LuaRuntime] Shutdown begin state={} script_instances={} lua_memory_usage={} awake_called={}",
+                   static_cast<void*>(state.state),
+                   state.script_instances.size(),
+                   state.lua_memory_usage,
+                   state.awake_called ? 1 : 0);
+    state.shutting_down = true;
     if (state.state) {
-        for (auto& pair : state.script_instances) {
-            DestroyScriptInstance(state.state, static_cast<int>(pair.first), pair.second);
-        }
+        DEBUG_LOG_INFO("[LuaRuntime] diagnostic mode: skip DestroyScriptInstance loop and close Lua state directly");
         state.script_instances.clear();
+        DEBUG_LOG_INFO("[LuaRuntime] lua_close state={}", static_cast<void*>(state.state));
         lua_close(state.state);
         state.state = nullptr;
+        DEBUG_LOG_INFO("[LuaRuntime] lua_close complete");
     }
     state.lua_memory_usage = 0;
     state.awake_called = false;
     state.startup_script_path.clear();
+    state.shutting_down = false;
+    DEBUG_LOG_INFO("[LuaRuntime] Shutdown end");
 }
 
 bool BootstrapLuaRuntime() {

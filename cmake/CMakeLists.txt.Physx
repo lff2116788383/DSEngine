@@ -56,16 +56,18 @@ include_directories("${PHYSX_TARGET_DIR}/pxshared/include")
 
 # Link Libraries
 if(MSVC)
-    link_directories("${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug")
+    set(PHYSX_DLL_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug")
+    set(PHYSX_DLL_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/release")
+
+    link_directories("${PHYSX_DLL_DIR_DEBUG}")
     link_libraries(PhysX_64 PhysXFoundation_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64 PhysXCommon_64 PhysXCooking_64)
-    
-    # Copy DLLs to executable directory (CMAKE_BINARY_DIR is usually where .exe is built)
-    # file(GLOB PHYSX_DLLS "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug/*.dll")
-    # if(PHYSX_DLLS)
-    #     file(COPY ${PHYSX_DLLS} DESTINATION "${CMAKE_BINARY_DIR}")
-    #     # Also copy to source root for running from there
-    #     file(COPY ${PHYSX_DLLS} DESTINATION "${CMAKE_SOURCE_DIR}")
-    # endif()
+
+    if(EXISTS "${PHYSX_DLL_DIR_DEBUG}")
+        file(GLOB PHYSX_DLLS_DEBUG "${PHYSX_DLL_DIR_DEBUG}/*.dll")
+    endif()
+    if(EXISTS "${PHYSX_DLL_DIR_RELEASE}")
+        file(GLOB PHYSX_DLLS_RELEASE "${PHYSX_DLL_DIR_RELEASE}/*.dll")
+    endif()
 else()
     # Mac/Linux placeholder
     link_directories("${PHYSX_TARGET_DIR}/physx/bin/mac.x86_64/debug")

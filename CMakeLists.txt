@@ -239,6 +239,34 @@ function(dse_copy_runtime_assets target_name)
     )
 endfunction()
 
+function(dse_copy_runtime_dlls target_name)
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${target_name}>
+        $<TARGET_FILE_DIR:${target_name}>
+        COMMAND_EXPAND_LISTS
+    )
+
+    if(MSVC AND DSE_ENABLE_PHYSX)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(_dse_physx_dlls ${PHYSX_DLLS_DEBUG})
+        elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(_dse_physx_dlls ${PHYSX_DLLS_RELEASE})
+        else()
+            set(_dse_physx_dlls ${PHYSX_DLLS_DEBUG} ${PHYSX_DLLS_RELEASE})
+        endif()
+
+        if(_dse_physx_dlls)
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_dse_physx_dlls}
+                $<TARGET_FILE_DIR:${target_name}>
+                COMMAND_EXPAND_LISTS
+            )
+        endif()
+    endif()
+endfunction()
+
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
 

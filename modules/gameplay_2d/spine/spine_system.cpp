@@ -54,28 +54,35 @@ SpineSystem::~SpineSystem() {
 }
 
 void SpineSystem::CleanupComponent(SpineRendererComponent& comp) {
+    DEBUG_LOG_INFO("[SpineCleanup] begin comp={} anim_state={} anim_state_data={} skeleton={} skeleton_data={} atlas={} textures={}",
+                   static_cast<const void*>(&comp),
+                   comp.animation_state,
+                   comp.animation_state_data,
+                   comp.skeleton,
+                   comp.skeleton_data,
+                   comp.atlas,
+                   comp.textures.size());
+
     if (comp.animation_state) {
+        DEBUG_LOG_INFO("[SpineCleanup] deleting AnimationState ptr={}", comp.animation_state);
         delete static_cast<spine::AnimationState*>(comp.animation_state);
         comp.animation_state = nullptr;
+        DEBUG_LOG_INFO("[SpineCleanup] deleted AnimationState");
     }
     if (comp.animation_state_data) {
+        DEBUG_LOG_INFO("[SpineCleanup] deleting AnimationStateData ptr={}", comp.animation_state_data);
         delete static_cast<spine::AnimationStateData*>(comp.animation_state_data);
         comp.animation_state_data = nullptr;
+        DEBUG_LOG_INFO("[SpineCleanup] deleted AnimationStateData");
     }
-    if (comp.skeleton) {
-        delete static_cast<spine::Skeleton*>(comp.skeleton);
-        comp.skeleton = nullptr;
-    }
-    if (comp.skeleton_data) {
-        delete static_cast<spine::SkeletonData*>(comp.skeleton_data);
-        comp.skeleton_data = nullptr;
-    }
-    if (comp.atlas) {
-        delete static_cast<spine::Atlas*>(comp.atlas);
-        comp.atlas = nullptr;
-    }
+
+    DEBUG_LOG_INFO("[SpineCleanup] skip deleting Skeleton/SkeletonData/Atlas in diagnostic mode to isolate heap corruption path");
+    comp.skeleton = nullptr;
+    comp.skeleton_data = nullptr;
+    comp.atlas = nullptr;
     comp.textures.clear();
     comp.dirty_animation = false;
+    DEBUG_LOG_INFO("[SpineCleanup] end comp={}", static_cast<const void*>(&comp));
 }
 
 void SpineSystem::Shutdown(entt::registry& registry) {
@@ -91,13 +98,13 @@ void SpineSystem::SetAssetManager(AssetManager* asset_manager) {
 }
 
 void SpineSystem::Update(entt::registry& registry, float dt) {
-    auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = registry.view<SpineRendererComponent>();
     for (auto entity : view) {
         auto& comp = view.get<SpineRendererComponent>(entity);
 
-        // Initialize if needed
-        if (!comp.skeleton_data && !comp.skeleton_data_path.empty() && !comp.atlas_path.empty()) {
+        const bool needs_spine_assets = !comp.skeleton_data && !comp.skeleton_data_path.empty() && !comp.atlas_path.empty();
+        if (needs_spine_assets) {
+            auto& asset_manager = RequireAssetManager(asset_manager_);
             g_spine_texture_loader.current_textures = &comp.textures;
             g_spine_texture_loader.asset_manager = &asset_manager;
             

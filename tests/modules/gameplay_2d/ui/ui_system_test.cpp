@@ -1,13 +1,18 @@
-e#include "catch/catch.hpp"
+#include "catch/catch.hpp"
 #include "modules/gameplay_2d/ui/ui_system.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
+#include "modules/gameplay_2d/tilemap/tilemap_system.h"
+#include "modules/gameplay_2d/particle/particle_system.h"
+#include "engine/physics/physics2d/physics2d_system.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/core/event_bus.h"
+#include "box2d/box2d.h"
 #include <algorithm>
 #include <fstream>
 
 using dse::gameplay2d::UISystem;
+using dse::gameplay2d::TilemapSystem;
 
 namespace {
 std::size_t CountRenderableGlyphs(const UILabelComponent& label, const std::string& text) {
@@ -219,4 +224,158 @@ TEST_CASE("Given_LocalizedUILabel_When_KeyMissing_Then_FallbackTextIsUsed", "[en
     REQUIRE(label.runtime_glyph_entities.size() == CountRenderableGlyphs(label, label.text));
 
     loc.Clear();
+}
+
+TEST_CASE("Given_PressedUI_When_PointerLeavesBeforeRelease_Then_ClickIsCancelled", "[engine][unit][ui]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& ui = world.registry().emplace<UIRendererComponent>(entity);
+    ui.position = glm::vec2(0.0f, 0.0f);
+    ui.size = glm::vec2(120.0f, 60.0f);
+    ui.visible = true;
+    ui.interactable = true;
+    world.registry().emplace<UIButtonComponent>(entity);
+
+    int click_count = 0;
+    ui.on_click = [&](Entity) { ++click_count; };
+
+    UISystem system;
+    const glm::vec2 screen_size(800.0f, 600.0f);
+    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(0.0f, 0.0f), true);
+    REQUIRE(ui.is_hovered);
+    REQUIRE(ui.is_pressed);
+
+    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(400.0f, 300.0f), true);
+    REQUIRE_FALSE(ui.is_hovered);
+    REQUIRE_FALSE(ui.is_pressed);
+
+    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(400.0f, 300.0f), false);
+
+    REQUIRE(click_count == 0);
+}
+
+TEST_CASE("Given_TransformDirtyTilemap_When_Update_Then_RuntimeTilesRebuildUsingNewOrigin", "[engine][unit][tilemap]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
+    auto& transform = world.registry().emplace<TransformComponent>(entity);
+    transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    transform.dirty = true;
+    tilemap.width = 2;
+    tilemap.height = 1;
+    tilemap.tile_size = 2.0f;
+    tilemap.tiles = {1, 1};
+    tilemap.dirty = false;
+
+    TilemapSystem system;
+    system.Update(world.registry());
+
+    REQUIRE(tilemap.runtime_tile_entities.size() == 2);
+    const Entity first_before = tilemap.runtime_tile_entities.front();
+    REQUIRE(world.registry().valid(first_before));
+    const auto first_before_pos = world.registry().get<TransformComponent>(first_before).position;
+    REQUIRE(first_before_pos.x == Approx(-1.0f));
+
+    transform.position = glm::vec3(10.0f, 5.0f, 0.0f);
+    transform.dirty = true;
+    system.Update(world.registry());
+
+    REQUIRE(tilemap.runtime_tile_entities.size() == 2);
+    REQUIRE_FALSE(world.registry().valid(first_before));
+    const Entity first_after = tilemap.runtime_tile_entities.front();
+    const auto first_after_pos = world.registry().get<TransformComponent>(first_after).position;
+    REQUIRE(first_after_pos.x == Approx(9.0f));
+    REQUIRE(first_after_pos.y == Approx(5.0f));
+    REQUIRE_FALSE(tilemap.dirty);
+}
+
+TEST_CASE("Given_ParticleEmitterAtCapacity_When_BurstRequested_Then_NewParticlesAreNotAdded", "[engine][unit][particle]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& emitter = world.registry().emplace<ParticleEmitterComponent>(entity);
+    world.registry().emplace<TransformComponent>(entity);
+    emitter.emitting = false;
+    emitter.max_particles = 2;
+    emitter.start_life_time = 3.0f;
+    emitter.particles.resize(2);
+    emitter.particles[0].life_time = 3.0f;
+    emitter.particles[0].life_remaining = 3.0f;
+    emitter.particles[1].life_time = 3.0f;
+    emitter.particles[1].life_remaining = 3.0f;
+    emitter.pending_burst = 3;
+
+    ParticleSystem system;
+    system.Update(world, 0.0f);
+
+    REQUIRE(emitter.particles.size() == 2);
+    REQUIRE(emitter.pending_burst == 3);
+}
+
+TEST_CASE("Given_ParticleWithExpiredLife_When_Update_Then_ExpiredParticleIsRemovedBeforeBurstSpawn", "[engine][unit][particle]") {
+    World world;
+    auto entity = world.CreateEntity();
+    auto& emitter = world.registry().emplace<ParticleEmitterComponent>(entity);
+    world.registry().emplace<TransformComponent>(entity);
+    emitter.emitting = false;
+    emitter.max_particles = 1;
+    emitter.start_life_time = 2.0f;
+    emitter.pending_burst = 1;
+
+    Particle2D stale_particle;
+    stale_particle.life_time = 1.0f;
+    stale_particle.life_remaining = 0.0f;
+    emitter.particles.push_back(stale_particle);
+
+    ParticleSystem system;
+    system.Update(world, 0.0f);
+
+    REQUIRE(emitter.particles.size() == 1);
+    REQUIRE(emitter.pending_burst == 0);
+    REQUIRE(emitter.particles.front().life_time == Approx(2.0f));
+    REQUIRE(emitter.particles.front().life_remaining == Approx(2.0f));
+}
+
+TEST_CASE("Given_TriggerBodies_When_TheySeparate_Then_TriggerExitCallbackFires", "[engine][unit][physics2d]") {
+    World world;
+    Physics2DSystem physics_system;
+    physics_system.Init(world);
+
+    auto trigger = world.CreateEntity();
+    auto& trigger_tf = world.registry().emplace<TransformComponent>(trigger);
+    trigger_tf.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    auto& trigger_rb = world.registry().emplace<RigidBody2DComponent>(trigger);
+    trigger_rb.type = RigidBody2DType::Static;
+    auto& trigger_box = world.registry().emplace<BoxCollider2DComponent>(trigger);
+    trigger_box.size = glm::vec2(4.0f, 4.0f);
+    trigger_box.is_trigger = true;
+
+    auto mover = world.CreateEntity();
+    auto& mover_tf = world.registry().emplace<TransformComponent>(mover);
+    mover_tf.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    auto& mover_rb = world.registry().emplace<RigidBody2DComponent>(mover);
+    mover_rb.type = RigidBody2DType::Dynamic;
+    mover_rb.gravity_scale = 0.0f;
+    auto& mover_box = world.registry().emplace<BoxCollider2DComponent>(mover);
+    mover_box.size = glm::vec2(1.0f, 1.0f);
+
+    int enter_count = 0;
+    int exit_count = 0;
+    mover_rb.on_trigger_enter = [&](Entity other) {
+        if (other == trigger) {
+            ++enter_count;
+        }
+    };
+    mover_rb.on_trigger_exit = [&](Entity other) {
+        if (other == trigger) {
+            ++exit_count;
+        }
+    };
+
+    physics_system.FixedUpdate(world, 1.0f / 60.0f);
+    REQUIRE(enter_count >= 1);
+
+    mover_rb.runtime_body->SetTransform(b2Vec2(10.0f, 0.0f), 0.0f);
+    physics_system.FixedUpdate(world, 1.0f / 60.0f);
+
+    REQUIRE(exit_count >= 1);
 }

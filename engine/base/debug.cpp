@@ -14,6 +14,10 @@
 
 bool Debug::bInited_=false;
 
+bool Debug::CanLog() {
+    return bInited_ && spdlog::default_logger() != nullptr;
+}
+
 void Debug::Init() {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     console_sink->set_level(spdlog::level::trace);
@@ -30,6 +34,9 @@ void Debug::Init() {
 }
 
 void Debug::ShutDown() {
-    spdlog::shutdown();
     bInited_=false;
+    if (spdlog::default_logger()) {
+        spdlog::set_default_logger(nullptr);
+    }
+    spdlog::shutdown();
 }

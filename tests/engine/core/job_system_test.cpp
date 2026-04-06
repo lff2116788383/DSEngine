@@ -4,7 +4,7 @@
 #include <future>
 #include <chrono>
 
-using core::JobSystem;
+using dse::core::JobSystem;
 
 // 正向测试：初始化后提交任务应被执行，并在合理时间内完成。
 TEST_CASE("Given_InitializedJobSystem_When_ExecuteJob_Then_JobRunsSuccessfully", "[engine][unit][job_system]") {

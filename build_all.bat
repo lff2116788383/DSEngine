@@ -343,17 +343,15 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         )
     )
 
-    set CPP_EXE=.\bin\DSEngine_c++_debug.exe
-    if not exist "%CPP_EXE%" set CPP_EXE=.\bin\DSEngine_example_cpp.exe
-    if not exist "%CPP_EXE%" (
+    call :resolve_first_existing_exe CPP_EXE ".\bin\DSEngine_c++_debug.exe" ".\bin\DSEngine_c++.exe" ".\bin\DSEngine_example_cpp.exe"
+    if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find C++ example executable in .\bin
         pause
         exit /b 1
     )
 
-    set LUA_EXE=.\bin\DSEngine_lua_debug.exe
-    if not exist "%LUA_EXE%" set LUA_EXE=.\bin\DSEngine_lua.exe
-    if not exist "%LUA_EXE%" (
+    call :resolve_first_existing_exe LUA_EXE ".\bin\DSEngine_lua_debug.exe" ".\bin\DSEngine_lua.exe"
+    if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find Lua example executable in .\bin
         pause
         exit /b 1
@@ -438,6 +436,20 @@ if "%RUN_RC%"=="124" (
     endlocal & exit /b 0
 )
 endlocal & exit /b %RUN_RC%
+
+:resolve_first_existing_exe
+setlocal enabledelayedexpansion
+set "OUT_VAR=%~1"
+shift
+:resolve_first_existing_exe_loop
+if "%~1"=="" (
+    endlocal & exit /b 1
+)
+if exist "%~1" (
+    endlocal & set "%OUT_VAR%=%~1" & exit /b 0
+)
+shift
+goto resolve_first_existing_exe_loop
 
 :usage
 echo Usage: build_all.bat [options...]
