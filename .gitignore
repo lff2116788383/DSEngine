@@ -142,3 +142,7 @@ cache/
 logs/
 *.log
 .roo_probe_*.cpp
+.history
+ui_debug_log.txt
+cmd-*.txt
+*.stackdump
