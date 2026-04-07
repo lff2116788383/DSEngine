@@ -2,6 +2,7 @@
 #include "engine/physics/physics2d/physics2d_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/world.h"
+#include <cstdio>
 
 // 正向测试：物理世界初始化后，Dynamic 刚体在重力作用下位置应发生变化。
 TEST_CASE("Given_DynamicBody_When_PhysicsUpdate_Then_PositionChangesByGravity", "[engine][unit][physics2d]") {

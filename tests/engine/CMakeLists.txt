@@ -21,13 +21,18 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/particle/particle_advanced_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
+    ../modules/gameplay_2d/spine/spine_system_test.cpp
     ../modules/gameplay_2d/smoke_snapshot_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ../modules/gameplay_2d/ui/ui_layout_test.cpp
     ../modules/gameplay_2d/ui/ui_animation_test.cpp
     ../modules/gameplay_2d/ui/ui_advanced_test.cpp
     ../modules/gameplay_2d/physics/physics2d_advanced_test.cpp
+    ../modules/gameplay_2d/rendering/sprite_render_system_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_advanced_test.cpp
+    assets/asset_manager_test.cpp
+    render/command_buffer_test.cpp
+    render/rhi_device_test.cpp
     profiler/cpu_profiler_test.cpp
     profiler/memory_profiler_test.cpp
     profiler/render_profiler_test.cpp
@@ -55,12 +60,24 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/localization/font_manager.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/particle/particle_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/tilemap/tilemap_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/rendering/sprite_render_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/spine/spine_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_layout.cpp
+    ${CMAKE_SOURCE_DIR}/engine/assets/asset_manager.cpp
     ${CMAKE_SOURCE_DIR}/engine/profiler/cpu_profiler.cpp
     ${CMAKE_SOURCE_DIR}/engine/profiler/memory_profiler.cpp
     ${CMAKE_SOURCE_DIR}/engine/profiler/render_profiler.cpp
     ${CMAKE_SOURCE_DIR}/engine/physics/physics2d/physics2d_system.cpp
+    ${CMAKE_SOURCE_DIR}/engine/platform/screen.cpp
+    ${CMAKE_SOURCE_DIR}/engine/render/rhi/rhi_device.cpp
+    ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/Attachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/VertexAttachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/MeshAttachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/RegionAttachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
+    ${CMAKE_SOURCE_DIR}/depends/bundle/bundle.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/ai/steering_system.cpp
 )
@@ -80,6 +97,8 @@ endif()
 target_link_libraries(${DSE_ENGINE_TEST_TARGET}
     PRIVATE
         box2d
+        dse_engine
+        opengl32
 )
 
 if(DSE_HAS_ASSIMP)
@@ -119,6 +138,12 @@ add_test(
     COMMAND ${DSE_ENGINE_TEST_TARGET} "[physics2d],[smoke][snapshot][physics2d]"
 )
 set_tests_properties(engine.2d.physics2d PROPERTIES LABELS "engine;unit;2d;physics2d;smoke;snapshot")
+
+add_test(
+    NAME engine.2d.spine
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[spine]"
+)
+set_tests_properties(engine.2d.spine PROPERTIES LABELS "engine;unit;2d;spine;smoke;snapshot")
 
 add_test(
     NAME engine.2d.localization

@@ -10,7 +10,7 @@ echo ========================================================
 echo.
 
 set BUILD_DIR=build_vs2022
-set GATE_REGEX=engine.unit|engine.lua_runtime|engine.cpp_runtime|engine.resource_injection|engine.spine|engine.2d.ui|engine.2d.tilemap|engine.2d.physics2d|engine.2d.particle|engine.2d.localization|engine.2d.animation|engine.2d.camera
+set GATE_REGEX=engine.unit|engine.lua_runtime|engine.cpp_runtime|engine.resource_injection|engine.spine|engine.2d.spine|engine.2d.ui|engine.2d.tilemap|engine.2d.physics2d|engine.2d.particle|engine.2d.localization|engine.2d.animation|engine.2d.camera
 
 if not exist "%BUILD_DIR%\CMakeCache.txt" (
     echo [INFO] CMakeCache.txt not found. Running initial configure...
@@ -45,7 +45,7 @@ if !ERRORLEVEL! neq 0 (
 
 echo.
 echo [OK] Minimal regression gate passed.
-echo [OK] Gate set: engine.unit, engine.lua_runtime, engine.cpp_runtime, engine.resource_injection, engine.spine, engine.2d.ui, engine.2d.tilemap, engine.2d.physics2d, engine.2d.particle, engine.2d.localization, engine.2d.animation, engine.2d.camera
+echo [OK] Gate set: engine.unit, engine.lua_runtime, engine.cpp_runtime, engine.resource_injection, engine.spine, engine.2d.spine, engine.2d.ui, engine.2d.tilemap, engine.2d.physics2d, engine.2d.particle, engine.2d.localization, engine.2d.animation, engine.2d.camera
 
 echo.
 echo [HINT] Run full engine label suite with:

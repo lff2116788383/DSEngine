@@ -9,6 +9,8 @@
 #include "engine/ecs/world.h"
 #include <box2d/box2d.h>
 #include <memory>
+#include <set>
+#include <tuple>
 
 // Forward declarations
 class PhysicsContactListener;
@@ -56,8 +58,13 @@ public:
     bool Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal);
 
 private:
+    using ContactPair = std::tuple<Entity, Entity, bool>;
+
+    friend class PhysicsContactListener;
+
     std::unique_ptr<b2World> physics_world_;
     std::unique_ptr<PhysicsContactListener> contact_listener_;
+    std::set<ContactPair> active_contact_pairs_;
     int velocity_iterations_ = 8;
     int position_iterations_ = 3;
 };

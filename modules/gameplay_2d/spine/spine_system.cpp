@@ -48,8 +48,6 @@ public:
     }
 };
 
-static EngineTextureLoader g_spine_texture_loader;
-
 SpineSystem::~SpineSystem() {
 }
 
@@ -105,14 +103,15 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
         const bool needs_spine_assets = !comp.skeleton_data && !comp.skeleton_data_path.empty() && !comp.atlas_path.empty();
         if (needs_spine_assets) {
             auto& asset_manager = RequireAssetManager(asset_manager_);
-            g_spine_texture_loader.current_textures = &comp.textures;
-            g_spine_texture_loader.asset_manager = &asset_manager;
-            
+            EngineTextureLoader texture_loader;
+            texture_loader.current_textures = &comp.textures;
+            texture_loader.asset_manager = &asset_manager;
+
             // Load atlas
             std::vector<uint8_t> atlas_data;
             if (asset_manager.LoadFileToMemory(comp.atlas_path, atlas_data)) {
                 String atlas_str((const char*)atlas_data.data(), atlas_data.size());
-                Atlas* atlas = new Atlas(atlas_str, &g_spine_texture_loader, true);
+                Atlas* atlas = new Atlas(atlas_str, &texture_loader, true);
                 comp.atlas = atlas;
 
                 std::vector<uint8_t> skel_data;
@@ -126,7 +125,7 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
                         SkeletonJson json(atlas);
                         skeletonData = json.readSkeletonData((const char*)skel_data.data());
                     }
-                    
+
                     if (skeletonData) {
                         comp.skeleton_data = skeletonData;
                         comp.skeleton = new spine::Skeleton(skeletonData);
@@ -143,8 +142,6 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
                     }
                 }
             }
-            g_spine_texture_loader.current_textures = nullptr;
-            g_spine_texture_loader.asset_manager = nullptr;
         }
 
         if (comp.animation_state && comp.skeleton) {

@@ -46,8 +46,16 @@ void PauseOnFailureIfNeeded(int result) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    std::fputs("[test-main] before session construct\n", stdout);
+    std::fflush(stdout);
     Catch::Session session;
+    std::fputs("[test-main] before session.run\n", stdout);
+    std::fflush(stdout);
     const int result = session.run(argc, argv);
+    std::fputs("[test-main] after session.run\n", stdout);
+    std::fflush(stdout);
     PauseOnFailureIfNeeded(result);
+    std::fputs("[test-main] after pause check\n", stdout);
+    std::fflush(stdout);
     return result;
 }

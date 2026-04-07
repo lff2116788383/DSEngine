@@ -7,12 +7,11 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/base/debug.h"
 #include <glm/gtx/quaternion.hpp>
-#include <iostream>
 
 // --- Contact Listener ---
 class PhysicsContactListener : public b2ContactListener {
 public:
-    PhysicsContactListener(World* world) : world_(world) {}
+    PhysicsContactListener(World* world, Physics2DSystem* system) : world_(world), system_(system) {}
 
     void BeginContact(b2Contact* contact) override {
         b2Fixture* fixtureA = contact->GetFixtureA();
@@ -20,10 +19,18 @@ public:
 
         Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
         Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
+        const bool is_trigger = fixtureA->IsSensor() || fixtureB->IsSensor();
+
+        Entity orderedA = entityA;
+        Entity orderedB = entityB;
+        if (orderedB < orderedA) {
+            std::swap(orderedA, orderedB);
+        }
+        system_->active_contact_pairs_.emplace(orderedA, orderedB, is_trigger);
 
         if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
             auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
-            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+            if (is_trigger) {
                 if (rbA.on_trigger_enter) rbA.on_trigger_enter(entityB);
             } else {
                 if (rbA.on_collision_enter) rbA.on_collision_enter(entityB);
@@ -32,7 +39,7 @@ public:
 
         if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
             auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
-            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+            if (is_trigger) {
                 if (rbB.on_trigger_enter) rbB.on_trigger_enter(entityA);
             } else {
                 if (rbB.on_collision_enter) rbB.on_collision_enter(entityA);
@@ -46,10 +53,18 @@ public:
 
         Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
         Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
+        const bool is_trigger = fixtureA->IsSensor() || fixtureB->IsSensor();
+
+        Entity orderedA = entityA;
+        Entity orderedB = entityB;
+        if (orderedB < orderedA) {
+            std::swap(orderedA, orderedB);
+        }
+        system_->active_contact_pairs_.erase(std::make_tuple(orderedA, orderedB, is_trigger));
 
         if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
             auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
-            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+            if (is_trigger) {
                 if (rbA.on_trigger_exit) rbA.on_trigger_exit(entityB);
             } else {
                 if (rbA.on_collision_exit) rbA.on_collision_exit(entityB);
@@ -58,7 +73,7 @@ public:
 
         if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
             auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
-            if (fixtureA->IsSensor() || fixtureB->IsSensor()) {
+            if (is_trigger) {
                 if (rbB.on_trigger_exit) rbB.on_trigger_exit(entityA);
             } else {
                 if (rbB.on_collision_exit) rbB.on_collision_exit(entityA);
@@ -68,6 +83,7 @@ public:
 
 private:
     World* world_;
+    Physics2DSystem* system_;
 };
 
 Physics2DSystem::Physics2DSystem() {
@@ -80,14 +96,16 @@ void Physics2DSystem::Init(World& world) {
     Shutdown();
     b2Vec2 gravity(0.0f, -9.81f);
     physics_world_ = std::make_unique<b2World>(gravity);
-    contact_listener_ = std::make_unique<PhysicsContactListener>(&world);
+    contact_listener_ = std::make_unique<PhysicsContactListener>(&world, this);
     physics_world_->SetContactListener(contact_listener_.get());
 }
 
 void Physics2DSystem::Shutdown() {
+    active_contact_pairs_.clear();
     contact_listener_.reset();
     physics_world_.reset();
 }
+
 
 void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
     if (!physics_world_) return;
@@ -111,6 +129,8 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         auto& rb = world.registry().get<RigidBody2DComponent>(entity);
         if (rb.runtime_body == nullptr) {
             collider.runtime_fixture = nullptr;
+        } else if (collider.runtime_fixture != nullptr) {
+            collider.runtime_fixture->Refilter();
         }
     }
 
@@ -182,40 +202,43 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         } else {
             const b2Vec2 body_position = rb.runtime_body->GetPosition();
             const float body_angle = rb.runtime_body->GetAngle();
-            const float target_angle = glm::roll(transform.rotation);
+            const float ecs_angle = glm::roll(transform.rotation);
             const bool transform_mismatch = std::abs(body_position.x - transform.position.x) > 0.0001f ||
                                             std::abs(body_position.y - transform.position.y) > 0.0001f ||
-                                            std::abs(body_angle - target_angle) > 0.0001f;
-            if (transform.dirty || (rb.type != RigidBody2DType::Dynamic && transform_mismatch)) {
-                DEBUG_LOG_INFO("[Physics2DSystem] sync transform entity={} pos=({}, {}) velocity=({}, {}) body_type={} dirty={} mismatch={}",
-                    static_cast<std::uint32_t>(entity),
-                    transform.position.x,
-                    transform.position.y,
-                    rb.velocity.x,
-                    rb.velocity.y,
-                    static_cast<int>(rb.type),
-                    transform.dirty ? 1 : 0,
-                    transform_mismatch ? 1 : 0);
-                rb.runtime_body->SetTransform(b2Vec2(transform.position.x, transform.position.y), target_angle);
-                if (rb.type == RigidBody2DType::Dynamic) {
+                                            std::abs(body_angle - ecs_angle) > 0.0001f;
+            if (rb.type == RigidBody2DType::Dynamic) {
+                if (transform.dirty) {
+                    rb.runtime_body->SetTransform(b2Vec2(transform.position.x, transform.position.y), ecs_angle);
                     rb.runtime_body->SetLinearVelocity(b2Vec2(rb.velocity.x, rb.velocity.y));
                     rb.runtime_body->SetAwake(true);
+                    transform.dirty = false;
+                } else if (transform_mismatch) {
+                    transform.position.x = body_position.x;
+                    transform.position.y = body_position.y;
+                    transform.rotation = glm::angleAxis(body_angle, glm::vec3(0.0f, 0.0f, 1.0f));
+                    transform.dirty = false;
                 }
-                transform.dirty = false;
-            } else if (rb.type == RigidBody2DType::Dynamic && transform_mismatch) {
-                transform.position.x = body_position.x;
-                transform.position.y = body_position.y;
-                transform.rotation = glm::angleAxis(body_angle, glm::vec3(0.0f, 0.0f, 1.0f));
-                transform.dirty = false;
-            }
-            if (rb.type == RigidBody2DType::Kinematic) {
-                rb.runtime_body->SetLinearVelocity(b2Vec2(rb.velocity.x, rb.velocity.y));
+            } else {
+                if (transform.dirty) {
+                    rb.runtime_body->SetTransform(b2Vec2(transform.position.x, transform.position.y), ecs_angle);
+                    transform.dirty = false;
+                } else if (transform_mismatch) {
+                    transform.position.x = body_position.x;
+                    transform.position.y = body_position.y;
+                    transform.rotation = glm::angleAxis(body_angle, glm::vec3(0.0f, 0.0f, 1.0f));
+                    transform.dirty = false;
+                }
+
+                if (rb.type == RigidBody2DType::Kinematic) {
+                    rb.runtime_body->SetLinearVelocity(b2Vec2(rb.velocity.x, rb.velocity.y));
+                }
             }
         }
     }
 
     // 2. Step the physics world
     physics_world_->Step(fixed_delta_time, velocity_iterations_, position_iterations_);
+
 
     // 3. Sync Box2D transforms back to ECS
     for (auto entity : view) {
@@ -228,17 +251,9 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
 
             transform.position.x = position.x;
             transform.position.y = position.y;
-            // Assuming Z remains unchanged
-            
-            // Set rotation around Z axis
             transform.rotation = glm::angleAxis(angle, glm::vec3(0.0f, 0.0f, 1.0f));
-            transform.dirty = true;
-            DEBUG_LOG_INFO("[Physics2DSystem] write back dynamic body entity={} pos=({}, {}) angle={} ",
-                static_cast<std::uint32_t>(entity),
-                transform.position.x,
-                transform.position.y,
-                angle);
-            
+            transform.dirty = false;
+
             b2Vec2 velocity = rb.runtime_body->GetLinearVelocity();
             rb.velocity.x = velocity.x;
             rb.velocity.y = velocity.y;

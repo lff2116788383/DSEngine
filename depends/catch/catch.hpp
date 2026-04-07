@@ -12722,7 +12722,11 @@ namespace Catch {
     }
 
     RunContext::~RunContext() {
+        std::fputs("[catch-runcontext] before testRunEnded\n", stdout);
+        std::fflush(stdout);
         m_reporter->testRunEnded(TestRunStats(m_runInfo, m_totals, aborting()));
+        std::fputs("[catch-runcontext] after testRunEnded\n", stdout);
+        std::fflush(stdout);
     }
 
     void RunContext::testGroupStarting(std::string const& testSpec, std::size_t groupIndex, std::size_t groupsCount) {
@@ -12749,11 +12753,23 @@ namespace Catch {
         assert(rootTracker.isSectionTracker());
         static_cast<SectionTracker&>(rootTracker).addInitialFilters(m_config->getSectionsToRun());
         do {
+            std::fputs("[catch-runTest] before startCycle\n", stdout);
+            std::fflush(stdout);
             m_trackerContext.startCycle();
+            std::fputs("[catch-runTest] after startCycle\n", stdout);
+            std::fflush(stdout);
             m_testCaseTracker = &SectionTracker::acquire(m_trackerContext, TestCaseTracking::NameAndLocation(testInfo.name, testInfo.lineInfo));
+            std::fputs("[catch-runTest] after acquire tracker\n", stdout);
+            std::fflush(stdout);
             runCurrentTest(redirectedCout, redirectedCerr);
+            std::fputs("[catch-runTest] after runCurrentTest\n", stdout);
+            std::fflush(stdout);
+            std::fputs(m_testCaseTracker->isSuccessfullyCompleted() ? "[catch-runTest] tracker complete\n" : "[catch-runTest] tracker incomplete\n", stdout);
+            std::fflush(stdout);
         } while (!m_testCaseTracker->isSuccessfullyCompleted() && !aborting());
 
+        std::fputs("[catch-runTest] before deltaTotals\n", stdout);
+        std::fflush(stdout);
         Totals deltaTotals = m_totals.delta(prevTotals);
         if (testInfo.expectedToFail() && deltaTotals.testCases.passed > 0) {
             deltaTotals.assertions.failed++;
@@ -12761,11 +12777,15 @@ namespace Catch {
             deltaTotals.testCases.failed++;
         }
         m_totals.testCases += deltaTotals.testCases;
+        std::fputs("[catch-runTest] before testCaseEnded\n", stdout);
+        std::fflush(stdout);
         m_reporter->testCaseEnded(TestCaseStats(testInfo,
-                                  deltaTotals,
-                                  redirectedCout,
-                                  redirectedCerr,
-                                  aborting()));
+                          deltaTotals,
+                          redirectedCout,
+                          redirectedCerr,
+                          aborting()));
+        std::fputs("[catch-runTest] after testCaseEnded\n", stdout);
+        std::fflush(stdout);
 
         m_activeTestCase = nullptr;
         m_testCaseTracker = nullptr;
@@ -12967,7 +12987,11 @@ namespace Catch {
     void RunContext::runCurrentTest(std::string & redirectedCout, std::string & redirectedCerr) {
         auto const& testCaseInfo = m_activeTestCase->getTestCaseInfo();
         SectionInfo testCaseSection(testCaseInfo.lineInfo, testCaseInfo.name);
+        std::fputs("[catch-runCurrentTest] before sectionStarting\n", stdout);
+        std::fflush(stdout);
         m_reporter->sectionStarting(testCaseSection);
+        std::fputs("[catch-runCurrentTest] after sectionStarting\n", stdout);
+        std::fflush(stdout);
         Counts prevAssertions = m_totals.assertions;
         double duration = 0;
         m_shouldReportUnexpected = true;
@@ -12981,21 +13005,39 @@ namespace Catch {
 #if !defined(CATCH_CONFIG_EXPERIMENTAL_REDIRECT)
                 RedirectedStreams redirectedStreams(redirectedCout, redirectedCerr);
 
+                std::fputs("[catch-runCurrentTest] before invokeActiveTestCase redirected\n", stdout);
+                std::fflush(stdout);
                 timer.start();
                 invokeActiveTestCase();
+                std::fputs("[catch-runCurrentTest] after invokeActiveTestCase redirected\n", stdout);
+                std::fflush(stdout);
 #else
                 OutputRedirect r(redirectedCout, redirectedCerr);
+                std::fputs("[catch-runCurrentTest] before invokeActiveTestCase redirected\n", stdout);
+                std::fflush(stdout);
                 timer.start();
                 invokeActiveTestCase();
+                std::fputs("[catch-runCurrentTest] after invokeActiveTestCase redirected\n", stdout);
+                std::fflush(stdout);
 #endif
             } else {
+                std::fputs("[catch-runCurrentTest] before invokeActiveTestCase\n", stdout);
+                std::fflush(stdout);
                 timer.start();
                 invokeActiveTestCase();
+                std::fputs("[catch-runCurrentTest] after invokeActiveTestCase\n", stdout);
+                std::fflush(stdout);
             }
             duration = timer.getElapsedSeconds();
+            std::fputs("[catch-runCurrentTest] after getElapsedSeconds\n", stdout);
+            std::fflush(stdout);
         } CATCH_CATCH_ANON (TestFailureException&) {
+            std::fputs("[catch-runCurrentTest] caught TestFailureException\n", stdout);
+            std::fflush(stdout);
             // This just means the test was aborted due to failure
         } CATCH_CATCH_ALL {
+            std::fputs("[catch-runCurrentTest] caught unexpected exception\n", stdout);
+            std::fflush(stdout);
             // Under CATCH_CONFIG_FAST_COMPILE, unexpected exceptions under REQUIRE assertions
             // are reported without translation at the point of origin.
             if( m_shouldReportUnexpected ) {
@@ -13003,21 +13045,41 @@ namespace Catch {
                 handleUnexpectedInflightException( m_lastAssertionInfo, translateActiveException(), dummyReaction );
             }
         }
+        std::fputs("[catch-runCurrentTest] before assertions delta\n", stdout);
+        std::fflush(stdout);
         Counts assertions = m_totals.assertions - prevAssertions;
         bool missingAssertions = testForMissingAssertions(assertions);
 
+        std::fputs("[catch-runCurrentTest] before tracker close\n", stdout);
+        std::fflush(stdout);
         m_testCaseTracker->close();
+        std::fputs("[catch-runCurrentTest] after tracker close\n", stdout);
+        std::fflush(stdout);
+        std::fputs("[catch-runCurrentTest] before handleUnfinishedSections\n", stdout);
+        std::fflush(stdout);
         handleUnfinishedSections();
+        std::fputs("[catch-runCurrentTest] after handleUnfinishedSections\n", stdout);
+        std::fflush(stdout);
         m_messages.clear();
         m_messageScopes.clear();
 
         SectionStats testCaseSectionStats(testCaseSection, assertions, duration, missingAssertions);
+        std::fputs("[catch-runCurrentTest] before sectionEnded\n", stdout);
+        std::fflush(stdout);
         m_reporter->sectionEnded(testCaseSectionStats);
+        std::fputs("[catch-runCurrentTest] after sectionEnded\n", stdout);
+        std::fflush(stdout);
     }
 
     void RunContext::invokeActiveTestCase() {
+        std::fputs("[catch-invoke] before fatal guard\n", stdout);
+        std::fflush(stdout);
         FatalConditionHandlerGuard _(&m_fatalConditionhandler);
+        std::fputs("[catch-invoke] before activeTestCase invoke\n", stdout);
+        std::fflush(stdout);
         m_activeTestCase->invoke();
+        std::fputs("[catch-invoke] after activeTestCase invoke\n", stdout);
+        std::fflush(stdout);
     }
 
     void RunContext::handleUnfinishedSections() {
@@ -13341,14 +13403,26 @@ namespace Catch {
             Totals execute() {
                 auto const& invalidArgs = m_config->testSpec().getInvalidArgs();
                 Totals totals;
+                std::fputs("[catch-testgroup] before testGroupStarting\n", stdout);
+                std::fflush(stdout);
                 m_context.testGroupStarting(m_config->name(), 1, 1);
+                std::fputs("[catch-testgroup] after testGroupStarting\n", stdout);
+                std::fflush(stdout);
                 for (auto const& testCase : m_tests) {
-                    if (!m_context.aborting())
+                    if (!m_context.aborting()) {
+                        std::fputs("[catch-testgroup] before runTest\n", stdout);
+                        std::fflush(stdout);
                         totals += m_context.runTest(*testCase);
-                    else
+                        std::fputs("[catch-testgroup] after runTest\n", stdout);
+                        std::fflush(stdout);
+                    }
+                    else {
                         m_context.reporter().skipTest(*testCase);
+                    }
                 }
 
+                std::fputs("[catch-testgroup] before noMatching loop\n", stdout);
+                std::fflush(stdout);
                 for (auto const& match : m_matches) {
                     if (match.tests.empty()) {
                         m_context.reporter().noMatchingTestCases(match.name);
@@ -13356,12 +13430,18 @@ namespace Catch {
                     }
                 }
 
+                std::fputs("[catch-testgroup] before invalidArgs loop\n", stdout);
+                std::fflush(stdout);
                 if (!invalidArgs.empty()) {
                     for (auto const& invalidArg: invalidArgs)
                          m_context.reporter().reportInvalidArguments(invalidArg);
                 }
 
+                std::fputs("[catch-testgroup] before testGroupEnded\n", stdout);
+                std::fflush(stdout);
                 m_context.testGroupEnded(m_config->name(), totals, 1, 1);
+                std::fputs("[catch-testgroup] after testGroupEnded\n", stdout);
+                std::fflush(stdout);
                 return totals;
             }
 

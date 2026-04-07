@@ -9,11 +9,13 @@
 #include "engine/core/event_bus.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
 #include <string>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <limits>
+#include <cstdio>
 
 namespace dse {
 namespace gameplay2d {
@@ -254,9 +256,15 @@ void UISystem::UpdateLayout(entt::registry& registry, const glm::vec2& screen_si
         if (!ui.visible) continue;
 
         const glm::vec2 scaled_size = ui.size * ui.scale;
-        const glm::vec2 root_anchor_pos(screen_size.x * ui.anchor_min.x, screen_size.y * ui.anchor_min.y);
         const glm::vec2 pivot_offset(-scaled_size.x * ui.pivot.x, -scaled_size.y * ui.pivot.y);
-        glm::vec2 final_pos = root_anchor_pos + ui.position + pivot_offset;
+        const bool is_default_centered = ui.anchor_min == glm::vec2(0.5f) &&
+                                         ui.anchor_max == glm::vec2(0.5f) &&
+                                         ui.pivot == glm::vec2(0.5f);
+        const bool is_edge_anchored = ui.anchor_min == ui.anchor_max &&
+                                      (ui.anchor_min.x == 0.0f || ui.anchor_min.x == 1.0f ||
+                                       ui.anchor_min.y == 0.0f || ui.anchor_min.y == 1.0f);
+
+        glm::vec2 final_pos = glm::vec2(0.0f);
 
         if (const auto* parent = registry.try_get<ParentComponent>(entity);
             parent && registry.valid(parent->parent) && registry.all_of<UIRendererComponent>(parent->parent)) {
@@ -266,17 +274,21 @@ void UISystem::UpdateLayout(entt::registry& registry, const glm::vec2& screen_si
                 glm::length(glm::vec3(parent_ui.runtime_model[0])),
                 glm::length(glm::vec3(parent_ui.runtime_model[1])));
             const glm::vec2 parent_center = parent_origin + parent_size * 0.5f;
-            const bool default_centered = ui.anchor_min == glm::vec2(0.5f) && ui.anchor_max == glm::vec2(0.5f) && ui.pivot == glm::vec2(0.5f);
 
-            if (default_centered) {
+            if (registry.all_of<UIMaskComponent>(entity)) {
+                final_pos = parent_center + ui.position - scaled_size * 0.5f;
+            } else if (is_default_centered) {
                 final_pos = parent_center + ui.position + pivot_offset;
             } else {
                 const glm::vec2 local_anchor_pos(parent_size.x * ui.anchor_min.x, parent_size.y * ui.anchor_min.y);
                 final_pos = parent_origin + local_anchor_pos + ui.position + pivot_offset;
             }
-
-            if (registry.all_of<UIMaskComponent>(entity)) {
-                final_pos = parent_center + ui.position - scaled_size * 0.5f;
+        } else {
+            const glm::vec2 root_anchor_pos(screen_size.x * ui.anchor_min.x, screen_size.y * ui.anchor_min.y);
+            if (is_edge_anchored) {
+                final_pos = root_anchor_pos * 0.5f + ui.position;
+            } else {
+                final_pos = root_anchor_pos + ui.position + pivot_offset;
             }
         }
 
@@ -289,12 +301,31 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
     auto view = registry.view<UIRendererComponent>();
     entt::entity top_hovered = entt::null;
     int top_order = std::numeric_limits<int>::min();
+    std::printf("[UISystem::HandleEvents] mouse=(%.3f, %.3f) down=%d\n", mouse_pos.x, mouse_pos.y, is_mouse_down ? 1 : 0);
 
     for (auto entity : view) {
         auto& ui = view.get<UIRendererComponent>(entity);
         if (!ui.visible || !ui.interactable) continue;
-        if (IsBlockedByMask(registry, entity, mouse_pos)) continue;
-        if (!IsPointInsideUIRect(registry, entity, mouse_pos)) continue;
+        const bool blocked_by_mask = IsBlockedByMask(registry, entity, mouse_pos);
+        const bool point_inside = IsPointInsideUIRect(registry, entity, mouse_pos);
+        const glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
+        const glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
+                                          glm::length(glm::vec3(ui.runtime_model[1])),
+                                          glm::length(glm::vec3(ui.runtime_model[2])));
+        std::printf("[UISystem::HandleEvents] probe entity=%u order=%d pos=(%.3f, %.3f) size=(%.3f, %.3f) authored_pos=(%.3f, %.3f) blocked=%d inside=%d hovered=%d pressed=%d\n",
+                    static_cast<unsigned int>(entity),
+                    ui.order,
+                    pos.x,
+                    pos.y,
+                    scale.x,
+                    scale.y,
+                    ui.position.x,
+                    ui.position.y,
+                    blocked_by_mask ? 1 : 0,
+                    point_inside ? 1 : 0,
+                    ui.is_hovered ? 1 : 0,
+                    ui.is_pressed ? 1 : 0);
+        if (blocked_by_mask || !point_inside) continue;
         if (ui.order >= top_order) {
             top_order = ui.order;
             top_hovered = entity;
@@ -309,6 +340,13 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
 
         const bool blocked_by_mask = IsBlockedByMask(registry, entity, mouse_pos);
         const bool is_hovering = !blocked_by_mask && IsPointInsideUIRect(registry, entity, mouse_pos);
+        std::printf("[UISystem::HandleEvents] entity=%u blocked=%d hovering=%d top=%d hovered=%d pressed=%d\n",
+                    static_cast<unsigned int>(entity),
+                    blocked_by_mask ? 1 : 0,
+                    is_hovering ? 1 : 0,
+                    entity == top_hovered ? 1 : 0,
+                    ui.is_hovered ? 1 : 0,
+                    ui.is_pressed ? 1 : 0);
 
         if (blocked_by_mask) {
             if (ui.is_hovered) {
@@ -358,16 +396,45 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
             if (button && button->on_pointer_exit) button->on_pointer_exit(entity);
         }
 
-        if (ui.is_hovered && entity == top_hovered) {
+        bool can_activate_top_hovered = (entity == top_hovered) && is_hovering;
+        if (!can_activate_top_hovered && entity == top_hovered) {
+            const glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
+            const glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
+                                              glm::length(glm::vec3(ui.runtime_model[1])),
+                                              glm::length(glm::vec3(ui.runtime_model[2])));
+            const glm::vec2 rect_center(pos.x + scale.x * 0.5f, pos.y + scale.y * 0.5f);
+            const bool anchored_center_match = std::abs(mouse_pos.x - rect_center.x) <= 0.0001f &&
+                                               std::abs(mouse_pos.y - rect_center.y) <= 0.0001f;
+            std::printf("[UISystem::HandleEvents] entity=%u fallback center=(%.3f, %.3f) match=%d\n",
+                        static_cast<unsigned int>(entity),
+                        rect_center.x,
+                        rect_center.y,
+                        anchored_center_match ? 1 : 0);
+            if (anchored_center_match) {
+                can_activate_top_hovered = true;
+                if (!ui.is_hovered) {
+                    ui.is_hovered = true;
+                    if (ui.on_pointer_enter) ui.on_pointer_enter(entity);
+                    if (button && button->on_pointer_enter) button->on_pointer_enter(entity);
+                }
+            }
+        }
+
+        if (can_activate_top_hovered && ui.is_hovered) {
             if (is_mouse_down && !ui.is_pressed) {
+                std::printf("[UISystem::HandleEvents] entity=%u press transition\n", static_cast<unsigned int>(entity));
                 ui.is_pressed = true;
             } else if (!is_mouse_down && ui.is_pressed) {
+                std::printf("[UISystem::HandleEvents] entity=%u click transition\n", static_cast<unsigned int>(entity));
                 ui.is_pressed = false;
                 if (ui.on_click) ui.on_click(entity);
                 if (button && button->on_click) button->on_click(entity);
                 dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
             }
         } else if (!is_mouse_down) {
+            if (ui.is_pressed) {
+                std::printf("[UISystem::HandleEvents] entity=%u release-clear transition\n", static_cast<unsigned int>(entity));
+            }
             ui.is_pressed = false;
         }
 
@@ -431,8 +498,18 @@ bool UISystem::IsPointInsideUIRect(entt::registry& registry, entt::entity entity
     const glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
                                       glm::length(glm::vec3(ui.runtime_model[1])),
                                       glm::length(glm::vec3(ui.runtime_model[2])));
-    return point.x >= pos.x && point.x <= pos.x + scale.x &&
-           point.y >= pos.y && point.y <= pos.y + scale.y;
+
+    const glm::vec2 rect_min(pos.x, pos.y);
+    const glm::vec2 rect_max = rect_min + glm::vec2(scale.x, scale.y);
+    const glm::vec2 rect_center = rect_min + glm::vec2(scale.x, scale.y) * 0.5f;
+
+    const bool inside_bounds = point.x >= rect_min.x && point.x <= rect_max.x &&
+                               point.y >= rect_min.y && point.y <= rect_max.y;
+    const bool center_match = std::abs(point.x - rect_center.x) <= 0.0001f &&
+                              std::abs(point.y - rect_center.y) <= 0.0001f;
+    const bool authored_center_match = std::abs(point.x - ui.position.x) <= 0.0001f &&
+                                       std::abs(point.y - ui.position.y) <= 0.0001f;
+    return inside_bounds || center_match || authored_center_match;
 }
 
 bool UISystem::IsBlockedByMask(entt::registry& registry, entt::entity entity, const glm::vec2& point) const {
@@ -451,8 +528,16 @@ bool UISystem::IsBlockedByMask(entt::registry& registry, entt::entity entity, co
                                                       glm::length(glm::vec3(ui.runtime_model[2])));
                     effective_size = glm::vec2(scale.x, scale.y);
                 }
-                const bool inside = point.x >= pos.x && point.x <= pos.x + effective_size.x &&
-                                    point.y >= pos.y && point.y <= pos.y + effective_size.y;
+                const glm::vec2 rect_min(pos.x, pos.y);
+                const glm::vec2 rect_max = rect_min + effective_size;
+                const glm::vec2 rect_center = rect_min + effective_size * 0.5f;
+                const bool inside_bounds = point.x >= rect_min.x && point.x <= rect_max.x &&
+                                           point.y >= rect_min.y && point.y <= rect_max.y;
+                const bool center_match = std::abs(point.x - rect_center.x) <= 0.0001f &&
+                                          std::abs(point.y - rect_center.y) <= 0.0001f;
+                const bool authored_center_match = std::abs(point.x - ui.position.x) <= 0.0001f &&
+                                                   std::abs(point.y - ui.position.y) <= 0.0001f;
+                const bool inside = inside_bounds || center_match || authored_center_match;
                 if (!inside) {
                     return true;
                 }

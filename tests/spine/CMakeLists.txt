@@ -6,6 +6,13 @@ add_executable(${DSE_SPINE_TEST_TARGET}
     ../modules/gameplay_2d/runtime_smoke_snapshot_test.cpp
 )
 
+if(WIN32)
+    target_link_libraries(${DSE_SPINE_TEST_TARGET}
+        PRIVATE
+            dbghelp
+    )
+endif()
+
 target_include_directories(${DSE_SPINE_TEST_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
@@ -31,6 +38,7 @@ add_test(
 set_tests_properties(engine.spine PROPERTIES
     LABELS "engine;unit;spine"
     WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    ENVIRONMENT "DSE_NO_TEST_PAUSE=1"
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
@@ -43,6 +51,7 @@ add_test(
 set_tests_properties(engine.spine.smoke PROPERTIES
     LABELS "engine;smoke;snapshot;spine"
     WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    ENVIRONMENT "DSE_NO_TEST_PAUSE=1"
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
