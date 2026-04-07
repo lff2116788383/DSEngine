@@ -19,6 +19,8 @@
 
 - `DOC-05_UI_LOCALIZATION.md`：2D UI 与国际化能力说明
 - `DOC-06_PARTICLE_PROFILER.md`：粒子系统与 Profiler 能力说明
+- `DOC-12_DEBUG_CASE_STUDY_UI_AND_PHYSICS2D.md`：Anchored UI 首帧点击与 Physics2D Trigger Exit 调试复盘
+- `DOC-13_DEBUG_CASE_STUDY_SPINE_HANG.md`：Spine 独立测试目标多用例组合挂起调试复盘
 
 ## 3. 不再推荐作为主线文档的内容
 
