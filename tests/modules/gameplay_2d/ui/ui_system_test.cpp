@@ -24,6 +24,14 @@ std::size_t CountRenderableGlyphs(const UILabelComponent& label, const std::stri
         return glyph_code >= 0 && glyph_code < capacity;
     }));
 }
+
+glm::vec2 ComputeUiCenter(const UIRendererComponent& ui, const glm::vec2& screen_size) {
+    const glm::vec2 anchor_pos(screen_size.x * ui.anchor_min.x, screen_size.y * ui.anchor_min.y);
+    const glm::vec2 scaled_size = ui.size * ui.scale;
+    const glm::vec2 pivot_offset(-scaled_size.x * ui.pivot.x, -scaled_size.y * ui.pivot.y);
+    const glm::vec2 final_pos = anchor_pos + ui.position + pivot_offset;
+    return final_pos + scaled_size * 0.5f;
+}
 }
 
 // 正向测试：鼠标按下再抬起时应触发按钮点击回调与事件总线点击事件。
@@ -46,8 +54,10 @@ TEST_CASE("Given_ClickableUI_When_MousePressRelease_Then_ClickCallbacksAreFired"
     });
 
     UISystem system;
-    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(0.0f, 0.0f), true);
-    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(0.0f, 0.0f), false);
+    const glm::vec2 screen_size(800.0f, 600.0f);
+    const glm::vec2 click_point = ComputeUiCenter(ui, screen_size);
+    system.Update(world.registry(), 0.016f, screen_size, click_point, true);
+    system.Update(world.registry(), 0.016f, screen_size, click_point, false);
 
     REQUIRE(click_count == 1);
     REQUIRE(bus_click_count == 1);
@@ -83,7 +93,9 @@ TEST_CASE("Given_NonInteractableUI_When_MouseOver_Then_HoverAndPressRemainFalse"
     ui.interactable = false;
 
     UISystem system;
-    system.Update(world.registry(), 0.016f, glm::vec2(800.0f, 600.0f), glm::vec2(0.0f, 0.0f), true);
+    const glm::vec2 screen_size(800.0f, 600.0f);
+    const glm::vec2 hover_point = ComputeUiCenter(ui, screen_size);
+    system.Update(world.registry(), 0.016f, screen_size, hover_point, true);
 
     REQUIRE_FALSE(ui.is_hovered);
     REQUIRE_FALSE(ui.is_pressed);
@@ -121,7 +133,7 @@ TEST_CASE("Given_MaskedChildUI_When_PointerOutsideMask_Then_ClickIsBlocked", "[e
 
     auto mask_entity = world.CreateEntity();
     auto& mask_ui = world.registry().emplace<UIRendererComponent>(mask_entity);
-    mask_ui.position = glm::vec2(0.0f, 0.0f);
+    mask_ui.position = glm::vec2(-50.0f, -50.0f);
     mask_ui.size = glm::vec2(100.0f, 100.0f);
     mask_ui.visible = true;
     mask_ui.interactable = false;
@@ -132,7 +144,7 @@ TEST_CASE("Given_MaskedChildUI_When_PointerOutsideMask_Then_ClickIsBlocked", "[e
 
     auto child = world.CreateEntity();
     auto& child_ui = world.registry().emplace<UIRendererComponent>(child);
-    child_ui.position = glm::vec2(0.0f, 0.0f);
+    child_ui.position = glm::vec2(-40.0f, -20.0f);
     child_ui.size = glm::vec2(80.0f, 40.0f);
     child_ui.visible = true;
     child_ui.interactable = true;
@@ -143,7 +155,7 @@ TEST_CASE("Given_MaskedChildUI_When_PointerOutsideMask_Then_ClickIsBlocked", "[e
 
     UISystem system;
     const glm::vec2 screen_size(800.0f, 600.0f);
-    const glm::vec2 outside_mask_point(120.0f, 0.0f);
+    const glm::vec2 outside_mask_point(620.0f, 320.0f);
     system.Update(world.registry(), 0.016f, screen_size, outside_mask_point, true);
     system.Update(world.registry(), 0.016f, screen_size, outside_mask_point, false);
 
@@ -241,15 +253,16 @@ TEST_CASE("Given_PressedUI_When_PointerLeavesBeforeRelease_Then_ClickIsCancelled
 
     UISystem system;
     const glm::vec2 screen_size(800.0f, 600.0f);
-    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(0.0f, 0.0f), true);
+    const glm::vec2 press_point = ComputeUiCenter(ui, screen_size);
+    system.Update(world.registry(), 0.016f, screen_size, press_point, true);
     REQUIRE(ui.is_hovered);
     REQUIRE(ui.is_pressed);
 
-    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(400.0f, 300.0f), true);
+    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(10.0f, 10.0f), true);
     REQUIRE_FALSE(ui.is_hovered);
     REQUIRE_FALSE(ui.is_pressed);
 
-    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(400.0f, 300.0f), false);
+    system.Update(world.registry(), 0.016f, screen_size, glm::vec2(10.0f, 10.0f), false);
 
     REQUIRE(click_count == 0);
 }

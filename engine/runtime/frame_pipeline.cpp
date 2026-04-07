@@ -256,6 +256,7 @@ void FramePipeline::Shutdown() {
         dse::runtime::ShutdownCppBusiness();
     }
     audio_system_.Shutdown();
+    physics2d_system_.Shutdown();
     spine_system_.Shutdown(world_->registry());
     spine_system_.SetAssetManager(nullptr);
     mesh_render_system_.SetAssetManager(nullptr);
@@ -332,11 +333,11 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     
     tilemap_system_.Update(world_->registry());
     animation_system_.Update(*world_, delta_time);
-    particle_system_.Update(*world_, delta_time);
+    particle_system_.Update(*world_, delta_time, &physics2d_system_);
     spine_system_.Update(world_->registry(), delta_time);
     transform_system_.Update(*world_);
-    camera_system_.Update(*world_, Screen::aspect_ratio());
     ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
+    camera_system_.Update(*world_, Screen::aspect_ratio());
     audio_system_.Update(world_->registry(), delta_time);
     
     // 分发模块更新事件

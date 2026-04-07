@@ -51,16 +51,47 @@ if(EXISTS ${PHYSX_ARCHIVE})
 endif()
 
 # Include Directories
-include_directories("${PHYSX_TARGET_DIR}/physx/include")
-include_directories("${PHYSX_TARGET_DIR}/pxshared/include")
+set(PHYSX_INCLUDE_DIR "${PHYSX_TARGET_DIR}/physx/include")
+set(PXSHARED_INCLUDE_DIR "${PHYSX_TARGET_DIR}/pxshared/include")
 
 # Link Libraries
 if(MSVC)
-    set(PHYSX_DLL_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/debug")
-    set(PHYSX_DLL_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/win.x86_64.vc142.mt/release")
+    set(_PHYSX_MSVC_VARIANTS
+        win.x86_64.vc143.mt
+        win.x86_64.vc142.mt
+    )
 
-    link_directories("${PHYSX_DLL_DIR_DEBUG}")
-    link_libraries(PhysX_64 PhysXFoundation_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64 PhysXCommon_64 PhysXCooking_64)
+    set(PHYSX_DLL_DIR_DEBUG "")
+    set(PHYSX_DLL_DIR_RELEASE "")
+    set(PHYSX_LIB_DIR_DEBUG "")
+    set(PHYSX_LIB_DIR_RELEASE "")
+
+    foreach(_physx_variant IN LISTS _PHYSX_MSVC_VARIANTS)
+        if(NOT PHYSX_DLL_DIR_DEBUG AND EXISTS "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/debug")
+            set(PHYSX_DLL_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/debug")
+        endif()
+        if(NOT PHYSX_DLL_DIR_RELEASE AND EXISTS "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
+            set(PHYSX_DLL_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
+        endif()
+        if(NOT PHYSX_LIB_DIR_DEBUG AND EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
+            set(PHYSX_LIB_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
+        endif()
+        if(NOT PHYSX_LIB_DIR_RELEASE AND EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
+            set(PHYSX_LIB_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
+        endif()
+    endforeach()
+
+    if(PHYSX_LIB_DIR_DEBUG)
+        file(GLOB _PHYSX_LIB_FILES_DEBUG "${PHYSX_LIB_DIR_DEBUG}/*.lib")
+    endif()
+    if(PHYSX_LIB_DIR_RELEASE)
+        file(GLOB _PHYSX_LIB_FILES_RELEASE "${PHYSX_LIB_DIR_RELEASE}/*.lib")
+    endif()
+
+    set(PHYSX_LIBS
+        "$<$<CONFIG:Debug>:${_PHYSX_LIB_FILES_DEBUG}>"
+        "$<$<NOT:$<CONFIG:Debug>>:${_PHYSX_LIB_FILES_RELEASE}>"
+    )
 
     if(EXISTS "${PHYSX_DLL_DIR_DEBUG}")
         file(GLOB PHYSX_DLLS_DEBUG "${PHYSX_DLL_DIR_DEBUG}/*.dll")
@@ -68,8 +99,19 @@ if(MSVC)
     if(EXISTS "${PHYSX_DLL_DIR_RELEASE}")
         file(GLOB PHYSX_DLLS_RELEASE "${PHYSX_DLL_DIR_RELEASE}/*.dll")
     endif()
+
+    if(NOT PHYSX_LIB_DIR_DEBUG AND NOT PHYSX_LIB_DIR_RELEASE)
+        message(WARNING "PhysX libraries were not found under ${PHYSX_TARGET_DIR}/physx/lib. Set DSE_ENABLE_PHYSX=OFF to build without PhysX.")
+    endif()
 else()
     # Mac/Linux placeholder
-    link_directories("${PHYSX_TARGET_DIR}/physx/bin/mac.x86_64/debug")
-    link_libraries(PhysX_static_64 PhysXFoundation_static_64 PhysXExtensions_static_64 PhysXPvdSDK_static_64 PhysXCommon_static_64)
+    set(PHYSX_DLL_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/bin/mac.x86_64/debug")
+    set(PHYSX_DLL_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/mac.x86_64/release")
+    set(PHYSX_LIBS
+        PhysX_static_64
+        PhysXFoundation_static_64
+        PhysXExtensions_static_64
+        PhysXPvdSDK_static_64
+        PhysXCommon_static_64
+    )
 endif()

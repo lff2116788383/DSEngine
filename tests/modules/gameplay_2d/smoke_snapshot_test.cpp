@@ -66,6 +66,7 @@ struct TilemapSmokeSnapshot {
     std::size_t runtime_tile_count = 0;
     std::size_t collider_tile_count = 0;
     bool first_runtime_tile_valid = false;
+    bool collider_size_matches_tile_size = false;
 
     std::string ToDebugString() const {
         std::ostringstream oss;
@@ -74,6 +75,7 @@ struct TilemapSmokeSnapshot {
         oss << ", runtime_tile_count=" << runtime_tile_count;
         oss << ", collider_tile_count=" << collider_tile_count;
         oss << ", first_runtime_tile_valid=" << first_runtime_tile_valid;
+        oss << ", collider_size_matches_tile_size=" << collider_size_matches_tile_size;
         oss << "}";
         return oss.str();
     }
@@ -231,18 +233,25 @@ TEST_CASE("Smoke Snapshot - Tilemap runtime tiles and colliders remain determini
     TilemapSmokeSnapshot snapshot;
     snapshot.dirty_after_update = tilemap.dirty;
     snapshot.runtime_tile_count = tilemap.runtime_tile_entities.size();
+    bool all_collider_sizes_match = true;
     for (Entity runtime_tile : tilemap.runtime_tile_entities) {
         if (world.registry().all_of<RigidBody2DComponent, BoxCollider2DComponent>(runtime_tile)) {
             ++snapshot.collider_tile_count;
+            const auto& collider = world.registry().get<BoxCollider2DComponent>(runtime_tile);
+            all_collider_sizes_match = all_collider_sizes_match &&
+                std::fabs(collider.size.x - tilemap.tile_size) < 0.001f &&
+                std::fabs(collider.size.y - tilemap.tile_size) < 0.001f;
         }
     }
     snapshot.first_runtime_tile_valid = !tilemap.runtime_tile_entities.empty() && world.registry().valid(tilemap.runtime_tile_entities.front());
+    snapshot.collider_size_matches_tile_size = all_collider_sizes_match;
 
     INFO(snapshot.ToDebugString());
     REQUIRE_FALSE(snapshot.dirty_after_update);
     REQUIRE(snapshot.runtime_tile_count == 2);
     REQUIRE(snapshot.collider_tile_count == 2);
     REQUIRE(snapshot.first_runtime_tile_valid);
+    REQUIRE(snapshot.collider_size_matches_tile_size);
 }
 
 TEST_CASE("Smoke Snapshot - Particle emitter lifecycle remains deterministic", "[engine][smoke][snapshot][particle]") {

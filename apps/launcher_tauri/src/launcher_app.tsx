@@ -256,29 +256,47 @@ export function LauncherApp() {
 
   const chooseRoot = async () => {
     if (!window.launcherAPI) return;
-    const selected = await window.launcherAPI.chooseProjectRoot();
-    if (!selected) return;
-    setProjectRoot(selected);
-    const items = await window.launcherAPI.scanProjects(selected);
-    setProjects(items);
-    if (items.length > 0) {
-      setSelectedProjectPath(items[0].path);
-    } else {
-      setSelectedProjectPath('');
+    try {
+      const selected = await window.launcherAPI.chooseProjectRoot();
+      if (!selected) return;
+      setProjectRoot(selected);
+      const items = await window.launcherAPI.scanProjects(selected);
+      setProjects(items);
+      const nextSelectedPath = items.find((item) => item.path === selectedProjectPath)?.path ?? items[0]?.path ?? '';
+      setSelectedProjectPath(nextSelectedPath);
+      setStatus(`Scanned ${items.length} projects`);
+    } catch (err) {
+      setStatus(`Failed to scan projects: ${String(err)}`);
     }
-    setStatus(`Scanned ${items.length} projects`);
   };
 
   const launch = async () => {
     if (!window.launcherAPI || !canLaunch) return;
     setStatus('Initializing launch sequence...');
-    const result = await window.launcherAPI.launchEditor(selectedProjectPath, selectedVersion);
-    setStatus(result.success ? 'Editor deployed successfully' : 'Launch sequence failed');
+    try {
+      const result = await window.launcherAPI.launchEditor(selectedProjectPath, selectedVersion);
+      setStatus(result.success ? 'Editor deployed successfully' : 'Launch sequence failed');
+    } catch (err) {
+      setStatus(`Launch sequence failed: ${String(err)}`);
+    }
   };
 
-  const filteredProjects = projects.filter(p => 
+  const filteredProjects = projects.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  useEffect(() => {
+    if (filteredProjects.length === 0) {
+      if (!projects.some((project) => project.path === selectedProjectPath)) {
+        setSelectedProjectPath('');
+      }
+      return;
+    }
+
+    if (!filteredProjects.some((project) => project.path === selectedProjectPath)) {
+      setSelectedProjectPath(filteredProjects[0].path);
+    }
+  }, [filteredProjects, projects, selectedProjectPath]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', background: theme.bg, color: theme.textMain, fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', overflow: 'hidden' }}>

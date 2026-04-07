@@ -139,6 +139,9 @@ if "%NEED_ADMIN%"=="1" (
     )
 )
 
+set "VERIFY_EDITOR_EXE=0"
+if "%BUILD_EDITOR%"=="1" if "%VERIFY_EXECUTABLES%"=="1" set "VERIFY_EDITOR_EXE=1"
+
 :: 0. Environment Check
 echo [0/4] Checking build environment...
 
@@ -326,7 +329,7 @@ echo.
 if "%VERIFY_EXECUTABLES%"=="1" (
     echo [*] Running Verification Tests...
 
-    if "%BUILD_EDITOR%"=="1" (
+    if "%VERIFY_EDITOR_EXE%"=="1" (
         set "EDITOR_EXE=.\bin\dsengine-editor.exe"
         if not exist "!EDITOR_EXE!" (
             echo [ERROR] Cannot find editor executable in .\bin
@@ -338,6 +341,9 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         if !ERRORLEVEL! neq 0 (
             set "VERIFY_RC=!ERRORLEVEL!"
             echo [ERROR] Editor failed with exit code !VERIFY_RC!!
+            echo [WARN] Auto verification is only checking process startup within %VERIFY_EXE_TIMEOUT_SECONDS%s.
+            echo [WARN] The editor may require a graphics context, assets, or manual interaction in some environments.
+            echo [WARN] Use --no-verify-exe if you only want to complete the build/package stage.
             pause
             exit /b !VERIFY_RC!
         )
@@ -357,7 +363,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         exit /b 1
     )
 
-    call :run_verify_exe "%CPP_EXE%" "C++ Example"
+    call :run_verify_exe "!CPP_EXE!" "C++ Example"
     if !ERRORLEVEL! neq 0 (
         set "VERIFY_RC=!ERRORLEVEL!"
         echo [ERROR] C++ Example failed with exit code !VERIFY_RC!!
@@ -365,7 +371,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         exit /b !VERIFY_RC!
     )
 
-    call :run_verify_exe "%LUA_EXE%" "Lua Example"
+    call :run_verify_exe "!LUA_EXE!" "Lua Example"
     if !ERRORLEVEL! neq 0 (
         set "VERIFY_RC=!ERRORLEVEL!"
         echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
@@ -378,18 +384,18 @@ if "%VERIFY_EXECUTABLES%"=="1" (
 
 if "%BUILD_ENGINE_TESTS%"=="1" (
     echo.
-    echo [*] Running CTest ^(engine.unit + engine.lua_runtime + engine.spine^)...
+    echo [*] Running CTest ^(-L engine; full engine-labeled suite^) ...
     if not exist "%BUILD_DIR%\Testing\Temporary" mkdir "%BUILD_DIR%\Testing\Temporary"
     set "ENGINE_TEST_LOG=%BUILD_DIR%\Testing\Temporary\engine_ctest_output.log"
     ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure --verbose -L engine > "!ENGINE_TEST_LOG!" 2>&1
     set "ENGINE_TEST_RC=!ERRORLEVEL!"
     type "!ENGINE_TEST_LOG!"
-    powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; $rc = [int]'!ENGINE_TEST_RC!'; $total = 0; $failed = 0; $found = $false; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $allPassed = [regex]::Match($raw, '(?im)All tests passed \(\d+ assertions in (\d+) test cases\)'); if ($allPassed.Success) { $total = [int]$allPassed.Groups[1].Value; $found = $true } else { $caseLine = [regex]::Match($raw, '(?im)^\s*test cases:\s*(\d+)(.*?)$'); if ($caseLine.Success) { $total = [int]$caseLine.Groups[1].Value; $failedMatch = [regex]::Match($caseLine.Groups[2].Value, '(\d+)\s*failed'); if ($failedMatch.Success) { $failed = [int]$failedMatch.Groups[1].Value }; $found = $true } } }; $passed = [Math]::Max(0, $total - $failed); $color = if ($rc -eq 0) { 'Green' } else { 'Red' }; Write-Host ('[TEST_CASE] Total: ' + $total + ', Passed: ' + $passed + ', Failed: ' + $failed) -ForegroundColor $color; if (-not $found) { Write-Host '[WARN] Catch2 summary not found in log. TEST_CASE stats may be incomplete.' -ForegroundColor Yellow }"
+    powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; $rc = [int]'!ENGINE_TEST_RC!'; $total = 0; $passed = 0; $failed = 0; $found = $false; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $summaryMatches = [regex]::Matches($raw, '(?im)^\s*test cases:\s*(\d+)\s*\|\s*(\d+)\s*passed\s*\|\s*(\d+)\s*failed\s*$'); if ($summaryMatches.Count -gt 0) { $last = $summaryMatches[$summaryMatches.Count - 1]; $total = [int]$last.Groups[1].Value; $passed = [int]$last.Groups[2].Value; $failed = [int]$last.Groups[3].Value; $found = $true } else { $allPassedMatches = [regex]::Matches($raw, '(?im)^\s*All tests passed\s*\(\d+ assertions in (\d+) test cases\)\s*$'); if ($allPassedMatches.Count -gt 0) { $last = $allPassedMatches[$allPassedMatches.Count - 1]; $total = [int]$last.Groups[1].Value; $passed = $total; $failed = 0; $found = $true } } }; $color = if ($rc -eq 0) { 'Green' } else { 'Red' }; Write-Host ('[TEST_CASE] Total: ' + $total + ', Passed: ' + $passed + ', Failed: ' + $failed) -ForegroundColor $color; if (-not $found) { Write-Host '[WARN] Catch2 summary not found in log. TEST_CASE stats may be incomplete.' -ForegroundColor Yellow }"
     if "!ENGINE_TEST_RC!"=="0" (
-        powershell -NoProfile -Command "Write-Host '[PASS] Engine CTest passed ^(engine.unit + engine.lua_runtime + engine.spine^).' -ForegroundColor Green"
+        powershell -NoProfile -Command "Write-Host '[PASS] Engine CTest passed ^(-L engine full suite^).' -ForegroundColor Green"
     ) else (
         powershell -NoProfile -Command "Write-Host '[FAIL] Engine CTest failed. See output above.' -ForegroundColor Red"
-        powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $pattern = '(?ms)^-{5,}\r?\n(?<name>[^\r\n]+)\r?\n-{5,}\r?\n(?<file>[^\r\n]+\.cpp):(?<line>\d+)'; $matches = [regex]::Matches($raw, $pattern); if ($matches.Count -gt 0) { Write-Host '[FAIL] Failed test cases:' -ForegroundColor Red; $seen = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($m in $matches) { $item = '- ' + $m.Groups['name'].Value.Trim() + ' (' + $m.Groups['file'].Value + ':' + $m.Groups['line'].Value + ')'; if ($seen.Add($item)) { Write-Host $item -ForegroundColor Red } } } else { Write-Host '[WARN] No failed testcase name/file matched in CTest log.' -ForegroundColor Yellow } } else { Write-Host '[WARN] CTest log file not found for failure parsing.' -ForegroundColor Yellow }"
+        powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $pattern = '(?ms)^-{5,}\r?\n(?<name>[^\r\n]+)\r?\n-{5,}\r?\n(?<location>[^\r\n]+\.cpp)\((?<line>\d+)\)\r?\n.*?\r?\n\s*[^\r\n]+\.cpp\((?<failLine>\d+)\): FAILED:'; $matches = [regex]::Matches($raw, $pattern); if ($matches.Count -gt 0) { Write-Host '[FAIL] Failed test cases:' -ForegroundColor Red; $seen = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($m in $matches) { $line = if ($m.Groups['failLine'].Success) { $m.Groups['failLine'].Value } else { $m.Groups['line'].Value }; $item = '- ' + $m.Groups['name'].Value.Trim() + ' (' + $m.Groups['location'].Value + ':' + $line + ')'; if ($seen.Add($item)) { Write-Host $item -ForegroundColor Red } } } else { Write-Host '[WARN] No failed testcase name/file matched in CTest log.' -ForegroundColor Yellow } } else { Write-Host '[WARN] CTest log file not found for failure parsing.' -ForegroundColor Yellow }"
         pause
         exit /b !ENGINE_TEST_RC!
     )

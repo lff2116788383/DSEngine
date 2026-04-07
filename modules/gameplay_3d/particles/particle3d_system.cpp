@@ -18,7 +18,7 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
 }
 
 static float RandomFloat(float min, float max) {
-    static std::mt19random_device rd;
+    static std::random_device rd;
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(min, max);
     return dis(gen);
@@ -58,8 +58,17 @@ void Particle3DSystem::Shutdown(World& world) {
 }
 
 void Particle3DSystem::EmitParticle(ParticleSystem3DComponent& ps, const TransformComponent& transform) {
-    if (ps.active_particle_count >= ps.max_particles) {
-        return; // Find dead particle instead? Yes, let's recycle
+    if (ps.max_particles <= 0) {
+        return;
+    }
+
+    if (static_cast<int>(ps.particles.size()) < ps.max_particles) {
+        ps.particles.resize(ps.max_particles);
+        for (auto& particle : ps.particles) {
+            if (particle.life == 0.0f) {
+                particle.life = -1.0f;
+            }
+        }
     }
 
     // Find first dead particle (life <= 0)

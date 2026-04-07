@@ -5,6 +5,7 @@
 
 #include "ui_system.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/base/debug.h"
 #include "engine/core/event_bus.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -252,19 +253,35 @@ void UISystem::UpdateLayout(entt::registry& registry, const glm::vec2& screen_si
         auto& ui = view.get<UIRendererComponent>(entity);
         if (!ui.visible) continue;
 
-        // Calculate absolute position based on anchors and screen size
-        // Assuming orthographic projection where 0,0 is bottom-left or center
-        // Let's assume 0,0 is center for this simple implementation
-        glm::vec2 anchor_pos = screen_size * (ui.anchor_min - glm::vec2(0.5f));
-        glm::vec2 final_pos = anchor_pos + ui.position;
-        
-        // Pivot offset
-        glm::vec2 pivot_offset = ui.size * (ui.pivot - glm::vec2(0.5f));
-        final_pos -= pivot_offset;
+        const glm::vec2 scaled_size = ui.size * ui.scale;
+        const glm::vec2 root_anchor_pos(screen_size.x * ui.anchor_min.x, screen_size.y * ui.anchor_min.y);
+        const glm::vec2 pivot_offset(-scaled_size.x * ui.pivot.x, -scaled_size.y * ui.pivot.y);
+        glm::vec2 final_pos = root_anchor_pos + ui.position + pivot_offset;
 
-        // Create runtime model matrix
+        if (const auto* parent = registry.try_get<ParentComponent>(entity);
+            parent && registry.valid(parent->parent) && registry.all_of<UIRendererComponent>(parent->parent)) {
+            const auto& parent_ui = registry.get<UIRendererComponent>(parent->parent);
+            const glm::vec2 parent_origin = glm::vec2(parent_ui.runtime_model[3]);
+            const glm::vec2 parent_size(
+                glm::length(glm::vec3(parent_ui.runtime_model[0])),
+                glm::length(glm::vec3(parent_ui.runtime_model[1])));
+            const glm::vec2 parent_center = parent_origin + parent_size * 0.5f;
+            const bool default_centered = ui.anchor_min == glm::vec2(0.5f) && ui.anchor_max == glm::vec2(0.5f) && ui.pivot == glm::vec2(0.5f);
+
+            if (default_centered) {
+                final_pos = parent_center + ui.position + pivot_offset;
+            } else {
+                const glm::vec2 local_anchor_pos(parent_size.x * ui.anchor_min.x, parent_size.y * ui.anchor_min.y);
+                final_pos = parent_origin + local_anchor_pos + ui.position + pivot_offset;
+            }
+
+            if (registry.all_of<UIMaskComponent>(entity)) {
+                final_pos = parent_center + ui.position - scaled_size * 0.5f;
+            }
+        }
+
         ui.runtime_model = glm::translate(glm::mat4(1.0f), glm::vec3(final_pos, 0.0f));
-        ui.runtime_model = glm::scale(ui.runtime_model, glm::vec3(ui.size * ui.scale, 1.0f));
+        ui.runtime_model = glm::scale(ui.runtime_model, glm::vec3(scaled_size, 1.0f));
     }
 }
 
@@ -277,16 +294,8 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
         auto& ui = view.get<UIRendererComponent>(entity);
         if (!ui.visible || !ui.interactable) continue;
         if (IsBlockedByMask(registry, entity, mouse_pos)) continue;
-
-        glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
-        glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
-                                    glm::length(glm::vec3(ui.runtime_model[1])),
-                                    glm::length(glm::vec3(ui.runtime_model[2])));
-        float half_w = scale.x / 2.0f;
-        float half_h = scale.y / 2.0f;
-        const bool hovering = (mouse_pos.x >= pos.x - half_w && mouse_pos.x <= pos.x + half_w &&
-                               mouse_pos.y >= pos.y - half_h && mouse_pos.y <= pos.y + half_h);
-        if (hovering && ui.order >= top_order) {
+        if (!IsPointInsideUIRect(registry, entity, mouse_pos)) continue;
+        if (ui.order >= top_order) {
             top_order = ui.order;
             top_hovered = entity;
         }
@@ -297,28 +306,23 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
         if (!ui.visible || !ui.interactable) continue;
         auto* button = registry.try_get<UIButtonComponent>(entity);
         auto* joystick = registry.try_get<UIJoystickComponent>(entity);
-        if (IsBlockedByMask(registry, entity, mouse_pos)) {
-            ui.is_hovered = false;
+
+        const bool blocked_by_mask = IsBlockedByMask(registry, entity, mouse_pos);
+        const bool is_hovering = !blocked_by_mask && IsPointInsideUIRect(registry, entity, mouse_pos);
+
+        if (blocked_by_mask) {
+            if (ui.is_hovered) {
+                ui.is_hovered = false;
+                if (ui.on_pointer_exit) ui.on_pointer_exit(entity);
+                if (button && button->on_pointer_exit) button->on_pointer_exit(entity);
+            }
             ui.is_pressed = false;
             if (joystick && joystick->reset_on_release) {
                 joystick->is_dragging = false;
                 joystick->direction = glm::vec2(0.0f);
             }
-            continue;
-        }
-
-        glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
-        glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])), 
-                                    glm::length(glm::vec3(ui.runtime_model[1])), 
-                                    glm::length(glm::vec3(ui.runtime_model[2])));
-
-        float half_w = scale.x / 2.0f;
-        float half_h = scale.y / 2.0f;
-
-        bool is_hovering = (mouse_pos.x >= pos.x - half_w && mouse_pos.x <= pos.x + half_w &&
-                            mouse_pos.y >= pos.y - half_h && mouse_pos.y <= pos.y + half_h);
-
-        if (joystick) {
+        } else if (joystick) {
+            const glm::vec3 pos = glm::vec3(ui.runtime_model[3]);
             if (is_mouse_down && is_hovering && !joystick->is_dragging) {
                 joystick->is_dragging = true;
                 joystick->drag_anchor = joystick->follow_pointer ? mouse_pos : glm::vec2(pos.x, pos.y);
@@ -363,6 +367,8 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
                 if (button && button->on_click) button->on_click(entity);
                 dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
             }
+        } else if (!is_mouse_down) {
+            ui.is_pressed = false;
         }
 
         if (button) {
@@ -425,10 +431,8 @@ bool UISystem::IsPointInsideUIRect(entt::registry& registry, entt::entity entity
     const glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
                                       glm::length(glm::vec3(ui.runtime_model[1])),
                                       glm::length(glm::vec3(ui.runtime_model[2])));
-    const float half_w = scale.x * 0.5f;
-    const float half_h = scale.y * 0.5f;
-    return point.x >= pos.x - half_w && point.x <= pos.x + half_w &&
-           point.y >= pos.y - half_h && point.y <= pos.y + half_h;
+    return point.x >= pos.x && point.x <= pos.x + scale.x &&
+           point.y >= pos.y && point.y <= pos.y + scale.y;
 }
 
 bool UISystem::IsBlockedByMask(entt::registry& registry, entt::entity entity, const glm::vec2& point) const {
@@ -447,10 +451,8 @@ bool UISystem::IsBlockedByMask(entt::registry& registry, entt::entity entity, co
                                                       glm::length(glm::vec3(ui.runtime_model[2])));
                     effective_size = glm::vec2(scale.x, scale.y);
                 }
-                const float half_w = effective_size.x * 0.5f;
-                const float half_h = effective_size.y * 0.5f;
-                const bool inside = point.x >= pos.x - half_w && point.x <= pos.x + half_w &&
-                                    point.y >= pos.y - half_h && point.y <= pos.y + half_h;
+                const bool inside = point.x >= pos.x && point.x <= pos.x + effective_size.x &&
+                                    point.y >= pos.y && point.y <= pos.y + effective_size.y;
                 if (!inside) {
                     return true;
                 }

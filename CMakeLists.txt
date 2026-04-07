@@ -68,7 +68,11 @@ include_directories("depends/eventpp/tests")
 include_directories("depends/eventpp/include")
 include_directories("depends/timetool")
 include_directories("depends/tinygltf")
-include_directories("depends/assimp/include")
+set(DSE_HAS_ASSIMP OFF)
+if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt")
+    include_directories("depends/assimp/include")
+    set(DSE_HAS_ASSIMP ON)
+endif()
 
 # Use local depends instead of FetchContent
 set(ENTT_BUILD_TESTING OFF CACHE BOOL "" FORCE)
@@ -83,10 +87,12 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/box2d-2.4.1)
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
-add_subdirectory(depends/assimp)
+if(DSE_HAS_ASSIMP)
+    set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+    add_subdirectory(depends/assimp)
+endif()
 
 set(CMAKE_WARN_DEPRECATED ${DSE_PREV_CMAKE_WARN_DEPRECATED})
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
@@ -114,6 +120,9 @@ file(GLOB_RECURSE engine_cpp
 # PhysX 禁用时排除 physics3d 相关源文件
 if(NOT DSE_ENABLE_PHYSX)
     list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
+elseif(MSVC AND NOT EXISTS "${PHYSX_TARGET_DIR}/physx/lib")
+    message(WARNING "PhysX headers exist but libraries are missing; excluding physics3d sources for this build.")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
 endif()
 
 if(NOT DSE_ENABLE_3D)
@@ -127,9 +136,9 @@ if(DSE_ENABLE_3D)
     file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
     
     add_library(DSE_Gameplay3D SHARED ${gameplay_3d_cpp})
-    target_include_directories(DSE_Gameplay3D PRIVATE 
-        ${CMAKE_SOURCE_DIR} 
-        ${CMAKE_SOURCE_DIR}/engine 
+    target_include_directories(DSE_Gameplay3D PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/modules
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
         ${CMAKE_SOURCE_DIR}/depends/glm
@@ -138,7 +147,9 @@ if(DSE_ENABLE_3D)
     target_compile_definitions(DSE_Gameplay3D PRIVATE DSE_GAMEPLAY3D_EXPORTS)
 
     if(DSE_ENABLE_PHYSX)
-        target_link_libraries(DSE_Gameplay3D PRIVATE dse_physx)
+        target_include_directories(DSE_Gameplay3D PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
+        target_link_directories(DSE_Gameplay3D PRIVATE ${PHYSX_DLL_DIR_DEBUG})
+        target_link_libraries(DSE_Gameplay3D PRIVATE ${PHYSX_LIBS})
     endif()
     set_target_properties(DSE_Gameplay3D PROPERTIES OUTPUT_NAME "DSE_Gameplay3D")
     
@@ -180,7 +191,14 @@ add_library(dse_engine SHARED
     ${engine_cpp}
     engine/runtime/runtime_frame_ops.cpp
 )
-target_link_libraries(dse_engine PRIVATE assimp)
+if(DSE_HAS_ASSIMP)
+    target_link_libraries(dse_engine PRIVATE assimp)
+endif()
+if(DSE_ENABLE_PHYSX)
+    target_include_directories(dse_engine PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
+    target_link_directories(dse_engine PRIVATE ${PHYSX_DLL_DIR_DEBUG})
+    target_link_libraries(dse_engine PRIVATE ${PHYSX_LIBS})
+endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -245,31 +263,6 @@ function(dse_copy_runtime_assets target_name)
 endfunction()
 
 function(dse_copy_runtime_dlls target_name)
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_RUNTIME_DLLS:${target_name}>
-        $<TARGET_FILE_DIR:${target_name}>
-        COMMAND_EXPAND_LISTS
-    )
-
-    if(MSVC AND DSE_ENABLE_PHYSX)
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(_dse_physx_dlls ${PHYSX_DLLS_DEBUG})
-        elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(_dse_physx_dlls ${PHYSX_DLLS_RELEASE})
-        else()
-            set(_dse_physx_dlls ${PHYSX_DLLS_DEBUG} ${PHYSX_DLLS_RELEASE})
-        endif()
-
-        if(_dse_physx_dlls)
-            add_custom_command(TARGET ${target_name} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_dse_physx_dlls}
-                $<TARGET_FILE_DIR:${target_name}>
-                COMMAND_EXPAND_LISTS
-            )
-        endif()
-    endif()
 endfunction()
 
 # 包含运行时宿主入口

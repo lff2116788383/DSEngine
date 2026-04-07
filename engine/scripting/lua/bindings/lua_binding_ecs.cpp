@@ -10,7 +10,9 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/ecs/world.h"
+#ifdef DSE_ENABLE_PHYSX
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #include <limits>
 extern "C" {
 #include <lauxlib.h>
@@ -1086,6 +1088,7 @@ int L_Physics3DRaycast(lua_State* L) {
     if (!world) {
         return 0;
     }
+#ifdef DSE_ENABLE_PHYSX
     // We assume Physics3DSystem is globally accessible or accessible via world context
     // For now, we will just return a dummy result as Physics3DSystem is not directly accessible here yet
     // In a real scenario, we'd fetch the system from the world or a global locator
@@ -1105,6 +1108,9 @@ int L_Physics3DRaycast(lua_State* L) {
 
     // TODO: Actually call physics3d::Physics3DSystem::Raycast
     // For now, mock the return
+#else
+    // PhysX disabled or unavailable in current build; keep Lua API callable with empty result.
+#endif
     bool hit = false;
     
     lua_newtable(L);

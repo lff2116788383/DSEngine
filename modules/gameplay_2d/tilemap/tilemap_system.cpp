@@ -74,8 +74,9 @@ void TilemapSystem::Update(entt::registry& registry) {
 
                 int safe_cols = tilemap.tileset_cols > 0 ? tilemap.tileset_cols : 1;
                 int safe_rows = tilemap.tileset_rows > 0 ? tilemap.tileset_rows : 1;
-                int col = tile_id % safe_cols;
-                int row = tile_id / safe_cols;
+                int tile_index = tile_id - 1;
+                int col = tile_index % safe_cols;
+                int row = tile_index / safe_cols;
                 if (row >= safe_rows) {
                     row = safe_rows - 1;
                 }
@@ -94,7 +95,7 @@ void TilemapSystem::Update(entt::registry& registry) {
                     rb.fixed_rotation = true;
 
                     auto& collider = registry.emplace<BoxCollider2DComponent>(tile_entity);
-                    collider.size = glm::vec2(1.0f, 1.0f);
+                    collider.size = glm::vec2(tilemap.tile_size, tilemap.tile_size);
                     collider.density = 1.0f;
                     collider.friction = 0.4f;
                     collider.restitution = 0.0f;

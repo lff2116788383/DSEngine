@@ -12,6 +12,7 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     scene/prefab_test.cpp
     scene/octree_test.cpp
     runtime/runtime_access_test.cpp
+    runtime/frame_pipeline_static_regression_test.cpp
     scripting/cpp_business_runtime_test.cpp
     ../modules/gameplay_2d/camera/camera_system_test.cpp
     ../modules/gameplay_2d/animation/animation_system_test.cpp
@@ -79,8 +80,14 @@ endif()
 target_link_libraries(${DSE_ENGINE_TEST_TARGET}
     PRIVATE
         box2d
-        assimp
 )
+
+if(DSE_HAS_ASSIMP)
+    target_link_libraries(${DSE_ENGINE_TEST_TARGET}
+        PRIVATE
+            assimp
+    )
+endif()
 
 add_test(
     NAME engine.unit

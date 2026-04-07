@@ -29,6 +29,11 @@ public:
      * // physics_system.Init(world);
      */
     void Init(World& world);
+
+    /**
+     * @brief 显式释放 2D 物理世界与监听器，清空运行时状态
+     */
+    void Shutdown();
     
     /**
      * @brief 固定步长更新物理模拟，并将物理运算结果同步回实体的 Transform 组件

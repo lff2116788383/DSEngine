@@ -70,6 +70,7 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
     float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
     INSPECTOR_PROPERTY("Position", if (ImGui::DragFloat3("##pos", pos, 0.1f)) {
         transform.position = glm::vec3(pos[0], pos[1], pos[2]);
+        transform.dirty = true;
     });
 
     glm::vec3 euler = glm::degrees(glm::eulerAngles(transform.rotation));
@@ -78,17 +79,20 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
         INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
             euler.z = rot[2];
             transform.rotation = glm::quat(glm::radians(euler));
+            transform.dirty = true;
         });
     } else {
         INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat3("##rot", rot, 0.1f)) {
             euler = glm::vec3(rot[0], rot[1], rot[2]);
             transform.rotation = glm::quat(glm::radians(euler));
+            transform.dirty = true;
         });
     }
 
     float scale[3] = {transform.scale.x, transform.scale.y, transform.scale.z};
     INSPECTOR_PROPERTY("Scale", if (ImGui::DragFloat3("##scale", scale, 0.1f)) {
         transform.scale = glm::vec3(scale[0], scale[1], scale[2]);
+        transform.dirty = true;
     });
 
     ImGui::Columns(1);

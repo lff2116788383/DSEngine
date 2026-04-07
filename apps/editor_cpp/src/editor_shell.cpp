@@ -1,5 +1,7 @@
 #include "editor_shell.h"
 
+#include <cstdlib>
+
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -86,15 +88,18 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
             LoadScene(context.registry, "scene.json");
+            context.selected_entity = entt::null;
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S")) {
             SaveScene(context.registry, "scene.json");
         }
         if (ImGui::MenuItem("Save As...")) {
+            SaveScene(context.registry, "scene.json");
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {
+            std::exit(0);
         }
         ImGui::EndMenu();
     }

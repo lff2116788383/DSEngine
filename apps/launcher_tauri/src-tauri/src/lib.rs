@@ -83,7 +83,10 @@ async fn choose_project_root(app: tauri::AppHandle) -> Result<Option<String>, St
     let file_path = app.dialog().file().blocking_pick_folder();
     
     if let Some(path) = file_path {
-        Ok(Some(path.into_path().unwrap().to_string_lossy().to_string()))
+        match path.into_path() {
+            Ok(real_path) => Ok(Some(real_path.to_string_lossy().to_string())),
+            Err(_) => Err("Failed to convert selected folder path".to_string()),
+        }
     } else {
         Ok(None)
     }
@@ -124,9 +127,14 @@ fn launch_editor(project_path: String, executable: String) -> Result<serde_json:
     if !exe_path.exists() {
         return Err("Engine executable not found".to_string());
     }
+
+    let project_dir = Path::new(&project_path);
+    if !project_dir.exists() || !project_dir.is_dir() {
+        return Err("Project directory not found".to_string());
+    }
     
-    let mut cmd = Command::new(executable);
-    cmd.current_dir(project_path); // Set the working directory to the project root
+    let mut cmd = Command::new(exe_path);
+    cmd.current_dir(project_dir); // Set the working directory to the project root
     
     match cmd.spawn() {
         Ok(_) => {

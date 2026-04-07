@@ -21,28 +21,50 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
 template<typename T>
 T Interpolate(const std::vector<float>& times, const std::vector<T>& values, float current_time) {
     if (times.empty() || values.empty()) return T();
-    if (times.size() == 1) return values[0];
-    
-    // Find keyframes
-    size_t p0 = 0;
-    for (size_t i = 0; i < times.size() - 1; ++i) {
+
+    const size_t key_count = std::min(times.size(), values.size());
+    if (key_count == 0) return T();
+    if (key_count == 1) return values[0];
+
+    if (current_time <= times[0]) {
+        return values[0];
+    }
+    if (current_time >= times[key_count - 1]) {
+        return values[key_count - 1];
+    }
+
+    size_t p0 = key_count - 2;
+    for (size_t i = 0; i + 1 < key_count; ++i) {
         if (current_time < times[i + 1]) {
             p0 = i;
             break;
         }
     }
-    size_t p1 = p0 + 1;
-    
-    float t0 = times[p0];
-    float t1 = times[p1];
+    const size_t p1 = p0 + 1;
+
+    const float t0 = times[p0];
+    const float t1 = times[p1];
+    if (std::abs(t1 - t0) <= 1e-6f) {
+        return values[p0];
+    }
+
     float factor = (current_time - t0) / (t1 - t0);
     factor = std::clamp(factor, 0.0f, 1.0f);
-    
+
     if constexpr (std::is_same_v<T, glm::quat>) {
         return glm::slerp(values[p0], values[p1], factor);
     } else {
         return glm::mix(values[p0], values[p1], factor);
     }
+}
+
+std::vector<float> BuildKeyTimes(const uint8_t* data, const asset::compiler::AnimChannelDesc& ch, uint32_t key_count) {
+    if (key_count == 0) {
+        return {};
+    }
+
+    const float* all_times = reinterpret_cast<const float*>(data + ch.time_offset);
+    return std::vector<float>(all_times, all_times + key_count);
 }
 
 }
@@ -100,14 +122,22 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 const auto& ch = channels[i];
                 if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
                 
-                std::vector<float> times(reinterpret_cast<const float*>(data + ch.time_offset), reinterpret_cast<const float*>(data + ch.time_offset) + ch.position_key_count);
+                std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
+                std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
+                std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
                 std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
                 std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
                 std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
                 
-                pos[ch.target_node_index] = Interpolate<glm::vec3>(times, positions, current_time);
-                rot[ch.target_node_index] = Interpolate<glm::quat>(times, rotations, current_time);
-                scale[ch.target_node_index] = Interpolate<glm::vec3>(times, scales, current_time);
+                if (!position_times.empty() && !positions.empty()) {
+                    pos[ch.target_node_index] = Interpolate<glm::vec3>(position_times, positions, current_time);
+                }
+                if (!rotation_times.empty() && !rotations.empty()) {
+                    rot[ch.target_node_index] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
+                }
+                if (!scale_times.empty() && !scales.empty()) {
+                    scale[ch.target_node_index] = Interpolate<glm::vec3>(scale_times, scales, current_time);
+                }
             }
             return true;
         };
@@ -151,7 +181,11 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 // 2. Advance time
                 animator.state_time += delta_time * current_state.speed;
                 if (animator.is_transitioning) {
-                    animator.transition_progress += delta_time / animator.transition_duration;
+                    if (animator.transition_duration <= 0.0f) {
+                        animator.transition_progress = 1.0f;
+                    } else {
+                        animator.transition_progress += delta_time / animator.transition_duration;
+                    }
                     
                     auto next_it = states.find(animator.next_state_name);
                     if (next_it != states.end()) {
@@ -243,14 +277,22 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 const auto& ch = channels[i];
                 if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
                 
-                std::vector<float> times(reinterpret_cast<const float*>(data + ch.time_offset), reinterpret_cast<const float*>(data + ch.time_offset) + ch.position_key_count);
+                std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
+                std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
+                std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
                 std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
                 std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
                 std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
                 
-                glm::vec3 p = Interpolate<glm::vec3>(times, positions, current_time);
-                glm::quat r = Interpolate<glm::quat>(times, rotations, current_time);
-                glm::vec3 s = Interpolate<glm::vec3>(times, scales, current_time);
+                glm::vec3 p = !position_times.empty() && !positions.empty()
+                    ? Interpolate<glm::vec3>(position_times, positions, current_time)
+                    : glm::vec3(0.0f);
+                glm::quat r = !rotation_times.empty() && !rotations.empty()
+                    ? Interpolate<glm::quat>(rotation_times, rotations, current_time)
+                    : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                glm::vec3 s = !scale_times.empty() && !scales.empty()
+                    ? Interpolate<glm::vec3>(scale_times, scales, current_time)
+                    : glm::vec3(1.0f);
                 
                 local_transforms[ch.target_node_index] = glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
             }
@@ -282,14 +324,22 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                     const auto& ch = channels[i];
                     if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
                     
-                    std::vector<float> times(reinterpret_cast<const float*>(data + ch.time_offset), reinterpret_cast<const float*>(data + ch.time_offset) + ch.position_key_count);
+                    std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
+                    std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
+                    std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
                     std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
                     std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
                     std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
                     
-                    glm::vec3 p = Interpolate<glm::vec3>(times, positions, node.current_time);
-                    glm::quat r = Interpolate<glm::quat>(times, rotations, node.current_time);
-                    glm::vec3 s = Interpolate<glm::vec3>(times, scales, node.current_time);
+                    glm::vec3 p = !position_times.empty() && !positions.empty()
+                        ? Interpolate<glm::vec3>(position_times, positions, node.current_time)
+                        : glm::vec3(0.0f);
+                    glm::quat r = !rotation_times.empty() && !rotations.empty()
+                        ? Interpolate<glm::quat>(rotation_times, rotations, node.current_time)
+                        : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                    glm::vec3 s = !scale_times.empty() && !scales.empty()
+                        ? Interpolate<glm::vec3>(scale_times, scales, node.current_time)
+                        : glm::vec3(1.0f);
                     
                     if (!has_anim[ch.target_node_index]) {
                         blended_positions[ch.target_node_index] = p * node.weight;

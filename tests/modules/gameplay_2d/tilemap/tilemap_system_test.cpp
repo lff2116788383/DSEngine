@@ -88,7 +88,10 @@ TEST_CASE("Given_ColliderTilemap_When_Update_Then_RuntimeTilesContainStaticColli
     REQUIRE(world.registry().all_of<RigidBody2DComponent>(collider_entity));
     REQUIRE(world.registry().all_of<BoxCollider2DComponent>(collider_entity));
     const auto& rb = world.registry().get<RigidBody2DComponent>(collider_entity);
+    const auto& collider = world.registry().get<BoxCollider2DComponent>(collider_entity);
     REQUIRE(rb.type == RigidBody2DType::Static);
+    REQUIRE(collider.size.x == Approx(tilemap.tile_size));
+    REQUIRE(collider.size.y == Approx(tilemap.tile_size));
 }
 
 // 回归测试：dirty 重建时应销毁旧运行时瓦片，并按最新 tiles 重新生成。

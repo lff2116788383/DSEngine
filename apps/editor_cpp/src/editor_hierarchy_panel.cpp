@@ -117,16 +117,82 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             context.selected_entity = entt::null;
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity")) {
+            const entt::entity source = context.selected_entity;
             auto new_ent = context.world.CreateEntity();
-            if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
-                context.registry.emplace<EditorNameComponent>(
-                    new_ent,
-                    context.registry.get<EditorNameComponent>(context.selected_entity).name + " (Copy)");
+            auto copy_component = [&](auto type_tag) {
+                using Component = decltype(type_tag);
+                if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
+                    context.registry.emplace<Component>(new_ent, context.registry.get<Component>(source));
+                }
+            };
+            auto copy_runtime_reset_component = [&](auto type_tag, auto reset_runtime) {
+                using Component = decltype(type_tag);
+                if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
+                    auto component = context.registry.get<Component>(source);
+                    reset_runtime(component);
+                    context.registry.emplace<Component>(new_ent, std::move(component));
+                }
+            };
+
+            copy_component(EditorNameComponent{});
+            if (context.registry.all_of<EditorNameComponent>(new_ent)) {
+                context.registry.get<EditorNameComponent>(new_ent).name += " (Copy)";
             }
-            if (context.registry.all_of<TransformComponent>(context.selected_entity)) {
-                context.registry.emplace<TransformComponent>(
-                    new_ent,
-                    context.registry.get<TransformComponent>(context.selected_entity));
+
+            copy_component(TransformComponent{});
+            copy_component(SpriteRendererComponent{});
+            copy_runtime_reset_component(UIRendererComponent{}, [](UIRendererComponent& ui) {
+                ui.is_hovered = false;
+                ui.is_pressed = false;
+                ui.runtime_model = glm::mat4(1.0f);
+            });
+            copy_runtime_reset_component(UILabelComponent{}, [](UILabelComponent& label) {
+                label.runtime_glyph_entities.clear();
+                label.dirty = true;
+            });
+            copy_component(UIAnchorComponent{});
+            copy_component(UIGridLayoutComponent{});
+            copy_component(UICanvasScalerComponent{});
+            copy_component(UIAnimationComponent{});
+            copy_runtime_reset_component(UIRichTextComponent{}, [](UIRichTextComponent& rich) {
+                rich.dirty = true;
+            });
+            copy_runtime_reset_component(RigidBody2DComponent{}, [](RigidBody2DComponent& rigidbody) {
+                rigidbody.runtime_body = nullptr;
+            });
+            copy_runtime_reset_component(ParticleEmitterComponent{}, [](ParticleEmitterComponent& emitter) {
+                emitter.particles.clear();
+                emitter.emit_accumulator = 0.0f;
+                emitter.pending_burst = 0;
+            });
+            copy_component(dse::Camera3DComponent{});
+            copy_component(dse::DirectionalLight3DComponent{});
+            copy_component(dse::PointLightComponent{});
+            copy_component(dse::MeshRendererComponent{});
+            copy_component(dse::Animator3DComponent{});
+            copy_component(dse::FreeCameraControllerComponent{});
+            copy_component(dse::TerrainComponent{});
+            copy_runtime_reset_component(dse::RigidBody3DComponent{}, [](dse::RigidBody3DComponent& rigidbody) {
+                rigidbody.runtime_body = nullptr;
+            });
+            copy_runtime_reset_component(dse::BoxCollider3DComponent{}, [](dse::BoxCollider3DComponent& collider) {
+                collider.runtime_shape = nullptr;
+            });
+            copy_runtime_reset_component(dse::SphereCollider3DComponent{}, [](dse::SphereCollider3DComponent& collider) {
+                collider.runtime_shape = nullptr;
+            });
+            copy_runtime_reset_component(dse::ParticleSystem3DComponent{}, [](dse::ParticleSystem3DComponent& particle_system) {
+                particle_system.particles.clear();
+                particle_system.emission_accumulator = 0.0f;
+                particle_system.active_particle_count = 0;
+                particle_system.instance_vbo = 0;
+                particle_system.texture_handle = 0;
+                particle_system.initialized = false;
+            });
+            copy_component(dse::PostProcessComponent{});
+
+            if (context.registry.all_of<TransformComponent>(new_ent)) {
+                context.registry.get<TransformComponent>(new_ent).dirty = true;
             }
             context.selected_entity = new_ent;
         }
