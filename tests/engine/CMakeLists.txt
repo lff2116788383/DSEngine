@@ -1,16 +1,20 @@
 set(DSE_ENGINE_TEST_TARGET dse_engine_unit_tests)
 
-add_executable(${DSE_ENGINE_TEST_TARGET}
+set(DSE_ENGINE_TEST_SOURCES
     main.cpp
     base/tween_test.cpp
     base/time_test.cpp
     input/input_test.cpp
+    core/dynamic_library_test.cpp
     core/event_bus_test.cpp
     core/job_system_test.cpp
+    core/memory_pool_test.cpp
+    core/object_pool_test.cpp
     ecs/world_test.cpp
     scene/transform_system_test.cpp
     scene/prefab_test.cpp
     scene/octree_test.cpp
+    scene/scene_flow_test.cpp
     runtime/runtime_access_test.cpp
     runtime/frame_pipeline_static_regression_test.cpp
     scripting/cpp_business_runtime_test.cpp
@@ -21,7 +25,6 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/particle/particle_system_test.cpp
     ../modules/gameplay_2d/particle/particle_advanced_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_system_test.cpp
-    ../modules/gameplay_2d/spine/spine_system_test.cpp
     ../modules/gameplay_2d/smoke_snapshot_test.cpp
     ../modules/gameplay_2d/ui/ui_system_test.cpp
     ../modules/gameplay_2d/ui/ui_layout_test.cpp
@@ -30,12 +33,17 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ../modules/gameplay_2d/physics/physics2d_advanced_test.cpp
     ../modules/gameplay_2d/rendering/sprite_render_system_test.cpp
     ../modules/gameplay_2d/tilemap/tilemap_advanced_test.cpp
+    ../modules/gameplay_2d/ui/ui_deep_state_test.cpp
     assets/asset_manager_test.cpp
+    assets/importer_cooker_test.cpp
+    audio/audio_system_test.cpp
     render/command_buffer_test.cpp
     render/rhi_device_test.cpp
+    render/ui_render_system_test.cpp
     profiler/cpu_profiler_test.cpp
     profiler/memory_profiler_test.cpp
     profiler/render_profiler_test.cpp
+    platform/screen_test.cpp
     ../modules/gameplay_2d/physics/physics2d_system_test.cpp
     ../modules/gameplay_3d/animation/animator_system_test.cpp
     ../modules/gameplay_3d/rendering/terrain_system_test.cpp
@@ -61,7 +69,6 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/particle/particle_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/tilemap/tilemap_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/rendering/sprite_render_system.cpp
-    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/spine/spine_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/ui/ui_layout.cpp
     ${CMAKE_SOURCE_DIR}/engine/assets/asset_manager.cpp
@@ -72,15 +79,25 @@ add_executable(${DSE_ENGINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/engine/platform/screen.cpp
     ${CMAKE_SOURCE_DIR}/engine/render/rhi/rhi_device.cpp
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c
-    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/Attachment.cpp
-    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/VertexAttachment.cpp
-    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/MeshAttachment.cpp
-    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/RegionAttachment.cpp
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
     ${CMAKE_SOURCE_DIR}/depends/bundle/bundle.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/ai/steering_system.cpp
 )
+
+if(DSE_ENABLE_SPINE)
+    list(APPEND DSE_ENGINE_TEST_SOURCES
+        ../modules/gameplay_2d/spine/spine_system_test.cpp
+        ../modules/gameplay_2d/spine/spine_system_more_test.cpp
+        ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/spine/spine_system.cpp
+        ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/Attachment.cpp
+        ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/VertexAttachment.cpp
+        ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/MeshAttachment.cpp
+        ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/RegionAttachment.cpp
+    )
+endif()
+
+add_executable(${DSE_ENGINE_TEST_TARGET} ${DSE_ENGINE_TEST_SOURCES})
 
 target_include_directories(${DSE_ENGINE_TEST_TARGET}
     PRIVATE

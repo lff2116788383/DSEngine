@@ -8,8 +8,18 @@
 #include "engine/ecs/components_2d.h"
 #include "modules/gameplay_2d/spine/spine_system.h"
 #include <stdexcept>
+#include <cstdio>
 
 using dse::gameplay2d::SpineSystem;
+
+namespace {
+
+void PrintSpineTestDiag(const char* label) {
+    std::printf("[spine-test] %s\n", label ? label : "(null)");
+    std::fflush(stdout);
+}
+
+} // namespace
 
 // Note: SpineSystem depends on spine-cpp runtime which requires actual .skel/.atlas files.
 // These tests validate the ECS component state machine behavior without loading real Spine data.
@@ -21,10 +31,7 @@ TEST_CASE("Spine - default component state is valid", "[spine]") {
     auto entity = world.CreateEntity();
     auto& spine = world.registry().emplace<SpineRendererComponent>(entity);
 
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
+    REQUIRE_FALSE(spine.runtime);
     REQUIRE(spine.visible == true);
     REQUIRE(spine.loop == true);
     REQUIRE(spine.time_scale == Approx(1.0f));
@@ -143,17 +150,11 @@ TEST_CASE("Spine - shutdown clears runtime state and keeps configuration", "[spi
     spine.loop = false;
     spine.time_scale = 1.5f;
     spine.dirty_animation = true;
-    spine.skeleton_data = reinterpret_cast<void*>(0x1);
-    spine.atlas = reinterpret_cast<void*>(0x2);
 
     SpineSystem system;
     system.Shutdown(world.registry());
 
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
-    REQUIRE(spine.animation_state_data == nullptr);
+    REQUIRE_FALSE(spine.runtime);
     REQUIRE(spine.textures.empty());
     REQUIRE_FALSE(spine.dirty_animation);
     REQUIRE(spine.skeleton_data_path == "assets/characters/hero.skel");
@@ -164,25 +165,45 @@ TEST_CASE("Spine - shutdown clears runtime state and keeps configuration", "[spi
 }
 
 TEST_CASE("Spine - update without asset paths leaves component unchanged", "[spine]") {
-    World world;
-    auto entity = world.CreateEntity();
-    auto& spine = world.registry().emplace<SpineRendererComponent>(entity);
+    PrintSpineTestDiag("case1 scope begin :: probe_v2_unique");
+    {
+        World world;
+        auto entity = world.CreateEntity();
+        auto& spine = world.registry().emplace<SpineRendererComponent>(entity);
 
-    spine.current_animation = "idle";
-    spine.dirty_animation = true;
-    spine.visible = false;
+        spine.current_animation = "idle";
+        spine.dirty_animation = true;
+        spine.visible = false;
 
-    SpineSystem system;
-    system.Update(world.registry(), 1.0f / 60.0f);
+        PrintSpineTestDiag("case1 before system construct");
+        SpineSystem system;
+        PrintSpineTestDiag("case1 after system construct");
+        system.Update(world.registry(), 1.0f / 60.0f);
+        PrintSpineTestDiag("case1 after update");
 
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
-    REQUIRE(spine.animation_state_data == nullptr);
-    REQUIRE(spine.current_animation == "idle");
-    REQUIRE(spine.dirty_animation);
-    REQUIRE_FALSE(spine.visible);
+        const bool runtime_null = !spine.runtime;
+        const bool animation_idle = spine.current_animation == "idle";
+        const bool dirty_animation = spine.dirty_animation;
+        const bool visible_false = !spine.visible;
+        PrintSpineTestDiag("case1 after bool snapshots");
+        if (!runtime_null) {
+            FAIL("runtime should remain null");
+        }
+        if (!animation_idle) {
+            FAIL("current_animation should remain idle");
+        }
+        if (!dirty_animation) {
+            FAIL("dirty_animation should remain true");
+        }
+        if (!visible_false) {
+            FAIL("visible should remain false");
+        }
+        PrintSpineTestDiag("case1 before explicit component remove");
+        world.registry().remove<SpineRendererComponent>(entity);
+        PrintSpineTestDiag("case1 after explicit component remove");
+        PrintSpineTestDiag("case1 before inner scope end");
+    }
+    PrintSpineTestDiag("case1 after inner scope end");
 }
 
 TEST_CASE("Spine - update with partial asset paths does not require asset manager", "[spine]") {
@@ -203,11 +224,7 @@ TEST_CASE("Spine - update with partial asset paths does not require asset manage
     }
 
     REQUIRE_NOTHROW(system.Update(world.registry(), 1.0f / 60.0f));
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
-    REQUIRE(spine.animation_state_data == nullptr);
+    REQUIRE_FALSE(spine.runtime);
     REQUIRE(spine.textures.empty());
 }
 
@@ -222,11 +239,7 @@ TEST_CASE("Spine - update with configured asset paths but no asset manager throw
     SpineSystem system;
 
     REQUIRE_THROWS_AS(system.Update(world.registry(), 1.0f / 60.0f), std::runtime_error);
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
-    REQUIRE(spine.animation_state_data == nullptr);
+    REQUIRE_FALSE(spine.runtime);
     REQUIRE(spine.textures.empty());
 }
 
@@ -245,11 +258,7 @@ TEST_CASE("Spine - shutdown is idempotent for cleared runtime state", "[spine]")
     system.Shutdown(world.registry());
     REQUIRE_NOTHROW(system.Shutdown(world.registry()));
 
-    REQUIRE(spine.skeleton_data == nullptr);
-    REQUIRE(spine.atlas == nullptr);
-    REQUIRE(spine.skeleton == nullptr);
-    REQUIRE(spine.animation_state == nullptr);
-    REQUIRE(spine.animation_state_data == nullptr);
+    REQUIRE_FALSE(spine.runtime);
     REQUIRE(spine.textures.empty());
     REQUIRE_FALSE(spine.dirty_animation);
     REQUIRE_FALSE(spine.visible);

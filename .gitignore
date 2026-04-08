@@ -130,6 +130,7 @@ ref/
 
 # Local temporary/build artifacts
 build_*/
+artifacts/
 *.tmp
 *.temp
 *.cache
@@ -142,7 +143,7 @@ cache/
 logs/
 *.log
 .roo_probe_*.cpp
-.history
+.history/
 ui_debug_log.txt
 cmd-*.txt
 *.stackdump
@@ -150,3 +151,10 @@ cmd-*.txt
 *.dmp
 *.ilk
 *.exp
+*.obj
+*.idb
+*.ipch
+*.tlog
+*.lastbuildstate
+*.recipe
+*.log.json
