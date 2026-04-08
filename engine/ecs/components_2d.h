@@ -93,13 +93,13 @@ struct SpriteRendererComponent {
  * @brief Spine 2D 骨骼动画渲染组件
  */
 struct SpineRendererComponent {
+    struct RuntimeHandle {
+        virtual ~RuntimeHandle() = default;
+    };
+
     std::string skeleton_data_path;                      ///< 骨骼数据路径 (.skel / .json)
     std::string atlas_path;                              ///< 图集路径 (.atlas)
-    void* skeleton_data = nullptr;                       ///< spine::SkeletonData*
-    void* atlas = nullptr;                               ///< spine::Atlas*
-    void* skeleton = nullptr;                            ///< spine::Skeleton*
-    void* animation_state_data = nullptr;                ///< spine::AnimationStateData*
-    void* animation_state = nullptr;                     ///< spine::AnimationState*
+    std::shared_ptr<RuntimeHandle> runtime;              ///< Spine runtime 统一句柄
     std::vector<std::shared_ptr<TextureAsset>> textures; ///< 持有的纹理资产
     int sorting_layer = 0;
     int order_in_layer = 0;
@@ -108,9 +108,6 @@ struct SpineRendererComponent {
     std::string current_animation = "";                  ///< 当前播放的动画名
     bool loop = true;                                    ///< 是否循环
     bool dirty_animation = false;                        ///< 标记是否需要应用新动画
-
-    // NOTE: Memory management is handled by SpineSystem on destruction.
-    // In a production setup, consider unique_ptr with custom deleters.
 };
 
 /**

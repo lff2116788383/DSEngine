@@ -17,6 +17,7 @@ add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件�
 option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
+option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_ENGINE_TESTS "Build engine unit test targets" OFF)
@@ -116,6 +117,10 @@ file(GLOB_RECURSE engine_cpp
     "engine/*.cpp"
     "modules/gameplay_2d/*.cpp"
 )
+
+if(NOT DSE_ENABLE_SPINE)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
+endif()
 
 # PhysX 禁用时排除 physics3d 相关源文件
 if(NOT DSE_ENABLE_PHYSX)

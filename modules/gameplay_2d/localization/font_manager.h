@@ -19,11 +19,15 @@ namespace gameplay2d {
  * @brief 字体资产结构
  */
 struct FontAsset {
-    std::string font_id;           ///< 字体唯一标识
-    std::string font_path;         ///< 字体文件路径
-    int font_size = 32;            ///< 字体大小（像素）
-    bool is_loaded = false;        ///< 是否已加载
-    void* font_data = nullptr;     ///< 字体数据指针（由具体渲染后端管理）
+    struct FontDataHandle {
+        virtual ~FontDataHandle() = default;
+    };
+
+    std::string font_id;                                       ///< 字体唯一标识
+    std::string font_path;                                     ///< 字体文件路径
+    int font_size = 32;                                        ///< 字体大小（像素）
+    bool is_loaded = false;                                    ///< 是否已加载
+    std::shared_ptr<FontDataHandle> font_data;                 ///< 字体数据句柄（由具体渲染后端管理）
 };
 
 /**

@@ -53,10 +53,10 @@ TEST_CASE("Smoke Snapshot - Spine missing assets remain safe and deterministic",
     system.Update(world.registry(), 1.0f / 60.0f);
 
     SpineSmokeSnapshot snapshot;
-    snapshot.atlas_loaded = (spine.atlas != nullptr);
-    snapshot.skeleton_data_loaded = (spine.skeleton_data != nullptr);
-    snapshot.skeleton_created = (spine.skeleton != nullptr);
-    snapshot.animation_state_created = (spine.animation_state != nullptr);
+    snapshot.atlas_loaded = static_cast<bool>(spine.runtime);
+    snapshot.skeleton_data_loaded = static_cast<bool>(spine.runtime);
+    snapshot.skeleton_created = static_cast<bool>(spine.runtime);
+    snapshot.animation_state_created = static_cast<bool>(spine.runtime);
     snapshot.dirty_animation_preserved = spine.dirty_animation;
     snapshot.visible = spine.visible;
 

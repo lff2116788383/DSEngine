@@ -1,2 +1,4 @@
 add_subdirectory(engine)
-add_subdirectory(spine)
+if(DSE_ENABLE_SPINE)
+    add_subdirectory(spine)
+endif()

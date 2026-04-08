@@ -47,6 +47,8 @@ public:
      */
     void Clear();
 
+    ~World();
+
     /**
      * @brief 检查实体是否存活（未被销毁）
      * @param entity 实体 ID

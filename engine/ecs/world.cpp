@@ -4,6 +4,7 @@
  */
 
 #include "engine/ecs/world.h"
+#include <cstdio>
 
 World& World::Instance() {
     static World instance;
@@ -26,8 +27,20 @@ void World::DestroyEntity(Entity entity) {
 }
 
 void World::Clear() {
+    std::printf("[world] Clear begin this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
+    std::fflush(stdout);
     registry_.clear();
     entity_count_ = 0;
+    std::printf("[world] Clear end this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
+    std::fflush(stdout);
+}
+
+World::~World() {
+    std::printf("[world] ~World begin this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
+    std::fflush(stdout);
+    Clear();
+    std::printf("[world] ~World end this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
+    std::fflush(stdout);
 }
 
 bool World::IsAlive(Entity entity) const {

@@ -13027,6 +13027,8 @@ namespace Catch {
                 invokeActiveTestCase();
                 std::fputs("[catch-runCurrentTest] after invokeActiveTestCase\n", stdout);
                 std::fflush(stdout);
+                std::fputs("[catch-runCurrentTest] after invokeActiveTestCase before getElapsedSeconds\n", stdout);
+                std::fflush(stdout);
             }
             duration = timer.getElapsedSeconds();
             std::fputs("[catch-runCurrentTest] after getElapsedSeconds\n", stdout);

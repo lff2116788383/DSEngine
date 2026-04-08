@@ -25,7 +25,7 @@ bool FontManager::RegisterFont(const std::string& font_id, const std::string& fo
     font_asset.font_path = font_path;
     font_asset.font_size = font_size;
     font_asset.is_loaded = false;
-    font_asset.font_data = nullptr;
+    font_asset.font_data.reset();
     
     fonts_[font_id] = font_asset;
     
@@ -70,7 +70,7 @@ void FontManager::UnloadFont(const std::string& font_id) {
     
     // TODO: 实际的字体卸载逻辑应该由具体的渲染后端实现
     font.is_loaded = false;
-    font.font_data = nullptr;
+    font.font_data.reset();
     
     spdlog::info("Font unloaded: {}", font_id);
 }

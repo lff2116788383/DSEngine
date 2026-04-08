@@ -51,6 +51,8 @@ int main(int argc, char* argv[]) {
     Catch::Session session;
     std::fputs("[test-main] before session.run\n", stdout);
     std::fflush(stdout);
+    std::fputs("[test-main] before session.run call\n", stdout);
+    std::fflush(stdout);
     const int result = session.run(argc, argv);
     std::fputs("[test-main] after session.run\n", stdout);
     std::fflush(stdout);

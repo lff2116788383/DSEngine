@@ -43,7 +43,7 @@ static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 o
     if (!RequireAssetManager(g_audio_asset_manager).LoadFileToMemory(pFilePath, data)) {
         return MA_DOES_NOT_EXIST;
     }
-    CustomVFSFile* f = new CustomVFSFile();
+    auto* f = new CustomVFSFile();
     f->data = std::move(data);
     f->cursor = 0;
     *pFile = (ma_vfs_file)f;
@@ -51,19 +51,25 @@ static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 o
 }
 
 static ma_result CustomVFS_OpenW(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
+    (void)pVFS;
+    (void)pFilePath;
+    (void)openMode;
+    (void)pFile;
     return MA_NOT_IMPLEMENTED;
 }
 
 static ma_result CustomVFS_Close(ma_vfs* pVFS, ma_vfs_file file) {
-    CustomVFSFile* f = (CustomVFSFile*)file;
+    (void)pVFS;
+    auto* f = static_cast<CustomVFSFile*>(file);
     delete f;
     return MA_SUCCESS;
 }
 
 static ma_result CustomVFS_Read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead) {
-    CustomVFSFile* f = (CustomVFSFile*)file;
-    size_t remaining = f->data.size() - f->cursor;
-    size_t to_read = sizeInBytes < remaining ? sizeInBytes : remaining;
+    (void)pVFS;
+    auto* f = static_cast<CustomVFSFile*>(file);
+    const size_t remaining = f->data.size() - f->cursor;
+    const size_t to_read = sizeInBytes < remaining ? sizeInBytes : remaining;
     if (to_read > 0) {
         memcpy(pDst, f->data.data() + f->cursor, to_read);
         f->cursor += to_read;
@@ -73,30 +79,38 @@ static ma_result CustomVFS_Read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size
 }
 
 static ma_result CustomVFS_Write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten) {
+    (void)pVFS;
+    (void)file;
+    (void)pSrc;
+    (void)sizeInBytes;
+    (void)pBytesWritten;
     return MA_NOT_IMPLEMENTED;
 }
 
 static ma_result CustomVFS_Seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin) {
-    CustomVFSFile* f = (CustomVFSFile*)file;
+    (void)pVFS;
+    auto* f = static_cast<CustomVFSFile*>(file);
     if (origin == ma_seek_origin_start) {
-        f->cursor = offset;
+        f->cursor = static_cast<size_t>(offset);
     } else if (origin == ma_seek_origin_current) {
-        f->cursor += offset;
+        f->cursor += static_cast<size_t>(offset);
     } else if (origin == ma_seek_origin_end) {
-        f->cursor = f->data.size() + offset;
+        f->cursor = f->data.size() + static_cast<size_t>(offset);
     }
     if (f->cursor > f->data.size()) f->cursor = f->data.size();
     return MA_SUCCESS;
 }
 
 static ma_result CustomVFS_Tell(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor) {
-    CustomVFSFile* f = (CustomVFSFile*)file;
-    if (pCursor) *pCursor = f->cursor;
+    (void)pVFS;
+    auto* f = static_cast<CustomVFSFile*>(file);
+    if (pCursor) *pCursor = static_cast<ma_int64>(f->cursor);
     return MA_SUCCESS;
 }
 
 static ma_result CustomVFS_Info(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo) {
-    CustomVFSFile* f = (CustomVFSFile*)file;
+    (void)pVFS;
+    auto* f = static_cast<CustomVFSFile*>(file);
     if (pInfo) {
         pInfo->sizeInBytes = f->data.size();
     }
@@ -112,6 +126,60 @@ static ma_vfs_callbacks g_custom_vfs_callbacks = {
     CustomVFS_Seek,
     CustomVFS_Tell,
     CustomVFS_Info
+};
+
+struct AudioSystem::EngineHandle {
+    ma_engine value{};
+    bool initialized = false;
+
+    ~EngineHandle() {
+        if (initialized) {
+            ma_engine_uninit(&value);
+        }
+    }
+
+    ma_engine* get() {
+        return initialized ? &value : nullptr;
+    }
+
+    const ma_engine* get() const {
+        return initialized ? &value : nullptr;
+    }
+};
+
+struct AudioSystem::ResourceManagerHandle {
+    ma_resource_manager value{};
+    bool initialized = false;
+
+    ~ResourceManagerHandle() {
+        if (initialized) {
+            ma_resource_manager_uninit(&value);
+        }
+    }
+
+    ma_resource_manager* get() {
+        return initialized ? &value : nullptr;
+    }
+};
+
+struct AudioSystem::SoundHandle {
+    ma_sound value{};
+    bool initialized = false;
+
+    ~SoundHandle() {
+        if (initialized) {
+            ma_sound_stop(&value);
+            ma_sound_uninit(&value);
+        }
+    }
+
+    ma_sound* get() {
+        return initialized ? &value : nullptr;
+    }
+
+    const ma_sound* get() const {
+        return initialized ? &value : nullptr;
+    }
 };
 
 AudioSystem::AudioSystem() {
@@ -130,35 +198,33 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
     if (!asset_manager_) {
         throw std::runtime_error("AudioSystem::Initialize requires an injected AssetManager");
     }
+
     g_audio_asset_manager = asset_manager_;
-    auto engine = std::make_unique<ma_engine>();
-    ma_engine_config config = ma_engine_config_init();
-    
-    ma_resource_manager_config rmConfig = ma_resource_manager_config_init();
-    rmConfig.pVFS = &g_custom_vfs_callbacks;
-    
-    ma_resource_manager* pResourceManager = new ma_resource_manager();
-    ma_result rmResult = ma_resource_manager_init(&rmConfig, pResourceManager);
-    if (rmResult == MA_SUCCESS) {
-        config.pResourceManager = pResourceManager;
-        ma_resource_manager_ptr = pResourceManager;
+
+    auto resource_manager = std::make_unique<ResourceManagerHandle>();
+    ma_resource_manager_config rm_config = ma_resource_manager_config_init();
+    rm_config.pVFS = &g_custom_vfs_callbacks;
+    if (ma_resource_manager_init(&rm_config, &resource_manager->value) == MA_SUCCESS) {
+        resource_manager->initialized = true;
     }
 
-    ma_result result = ma_engine_init(&config, engine.get());
+    auto engine = std::make_unique<EngineHandle>();
+    ma_engine_config config = ma_engine_config_init();
+    if (resource_manager->initialized) {
+        config.pResourceManager = resource_manager->get();
+    }
+
+    const ma_result result = ma_engine_init(&config, &engine->value);
     if (result != MA_SUCCESS) {
         std::cerr << "Failed to initialize audio engine." << std::endl;
-        if (ma_resource_manager_ptr) {
-            ma_resource_manager* rm = static_cast<ma_resource_manager*>(ma_resource_manager_ptr);
-            ma_resource_manager_uninit(rm);
-            delete rm;
-            ma_resource_manager_ptr = nullptr;
-        }
         g_audio_asset_manager = nullptr;
         asset_manager_ = nullptr;
         return false;
     }
 
-    ma_engine_ptr = engine.release();
+    engine->initialized = true;
+    resource_manager_handle_ = std::move(resource_manager);
+    engine_handle_ = std::move(engine);
     SetMasterVolume(master_volume_);
     is_initialized = true;
     return true;
@@ -166,14 +232,13 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
 
 void AudioSystem::Update(entt::registry& registry, float dt) {
     (void)dt;
-    if (!is_initialized || !ma_engine_ptr) {
+    if (!is_initialized || !engine_handle_ || !engine_handle_->get()) {
         return;
     }
 
     for (auto it = entity_sounds_.begin(); it != entity_sounds_.end();) {
         Entity entity = static_cast<Entity>(it->first);
         if (!registry.valid(entity) || !registry.all_of<AudioSourceComponent>(entity)) {
-            DestroySound(it->second);
             it = entity_sounds_.erase(it);
         } else {
             ++it;
@@ -185,24 +250,33 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         auto& audio = view.get<AudioSourceComponent>(entity);
         const std::uint32_t key = static_cast<std::uint32_t>(entity);
         auto sound_it = entity_sounds_.find(key);
-        ma_sound* sound = sound_it != entity_sounds_.end() ? static_cast<ma_sound*>(sound_it->second) : nullptr;
+        SoundHandle* sound_handle = sound_it != entity_sounds_.end() ? sound_it->second.get() : nullptr;
+        ma_sound* sound = sound_handle ? sound_handle->get() : nullptr;
 
         if (!sound && audio.clip && (audio.play_on_awake || audio.is_playing)) {
-            ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-            auto new_sound = std::make_unique<ma_sound>();
-            ma_result result = ma_sound_init_from_file(engine, audio.clip->GetPath().c_str(), 0, nullptr, nullptr, new_sound.get());
+            auto new_sound = std::make_unique<SoundHandle>();
+            const ma_result result = ma_sound_init_from_file(
+                engine_handle_->get(),
+                audio.clip->GetPath().c_str(),
+                0,
+                nullptr,
+                nullptr,
+                &new_sound->value);
             if (result == MA_SUCCESS) {
-                ma_sound_set_looping(new_sound.get(), audio.loop ? MA_TRUE : MA_FALSE);
-                ma_sound_set_volume(new_sound.get(), audio.volume * sfx_volume_);
-                ma_sound_set_pitch(new_sound.get(), audio.pitch);
-                ma_sound_start(new_sound.get());
-                entity_sounds_[key] = new_sound.get();
-                sound = new_sound.release();
+                new_sound->initialized = true;
+                ma_sound_set_looping(&new_sound->value, audio.loop ? MA_TRUE : MA_FALSE);
+                ma_sound_set_volume(&new_sound->value, audio.volume * sfx_volume_);
+                ma_sound_set_pitch(&new_sound->value, audio.pitch);
+                ma_sound_start(&new_sound->value);
+                sound = new_sound->get();
+                sound_handle = new_sound.get();
+                entity_sounds_[key] = std::move(new_sound);
                 audio.restart_requested = false;
             }
         }
 
         if (!sound) {
+            audio.runtime_handle = 0;
             audio.is_playing = false;
             audio.restart_requested = false;
             continue;
@@ -232,7 +306,6 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         const bool now_playing = ma_sound_is_playing(sound) == MA_TRUE;
 
         if (!audio.loop && !now_playing) {
-            DestroySound(sound);
             entity_sounds_.erase(key);
             audio.runtime_handle = 0;
             audio.is_playing = false;
@@ -242,6 +315,8 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         if (now_playing) {
             audio.runtime_handle = static_cast<unsigned int>(key);
+        } else {
+            audio.runtime_handle = 0;
         }
         audio.is_playing = now_playing;
     }
@@ -252,31 +327,14 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 void AudioSystem::Shutdown() {
     StopBgm();
     StopAllSfx();
-    for (auto& pair : entity_sounds_) {
-        DestroySound(pair.second);
-    }
     entity_sounds_.clear();
     active_sfx_per_clip_.clear();
     sfx_clip_lookup_.clear();
     sfx_last_trigger_ms_.clear();
-    if (!is_initialized || !ma_engine_ptr) {
-        return;
-    }
-    ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-    ma_engine_uninit(engine);
-    std::unique_ptr<ma_engine> engine_deleter(engine);
-    
-    if (ma_resource_manager_ptr) {
-        ma_resource_manager* rm = static_cast<ma_resource_manager*>(ma_resource_manager_ptr);
-        ma_resource_manager_uninit(rm);
-        delete rm;
-        ma_resource_manager_ptr = nullptr;
-    }
-
+    resource_manager_handle_.reset();
+    engine_handle_.reset();
     g_audio_asset_manager = nullptr;
     asset_manager_ = nullptr;
-    
-    ma_engine_ptr = nullptr;
     is_initialized = false;
 }
 
@@ -285,7 +343,7 @@ void AudioSystem::PlaySound(const std::string& filepath, float volume) {
 }
 
 void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) {
-    if (!is_initialized || !ma_engine_ptr || filepath.empty()) {
+    if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
         return;
     }
     const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -301,67 +359,76 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
     if (active_it != active_sfx_per_clip_.end() && active_it->second >= max_concurrent_sfx_per_clip_) {
         return;
     }
-    ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-    auto new_sound = std::make_unique<ma_sound>();
-    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), 0, nullptr, nullptr, new_sound.get());
+
+    auto new_sound = std::make_unique<SoundHandle>();
+    const ma_result result = ma_sound_init_from_file(
+        engine_handle_->get(),
+        filepath.c_str(),
+        0,
+        nullptr,
+        nullptr,
+        &new_sound->value);
     if (result != MA_SUCCESS) {
         return;
     }
-    ma_sound* sound = new_sound.release();
-    ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
-    ma_sound_set_volume(sound, volume * sfx_volume_);
-    ma_sound_start(sound);
-    active_sfx_.push_back(sound);
+
+    new_sound->initialized = true;
+    ma_sound_set_looping(&new_sound->value, loop ? MA_TRUE : MA_FALSE);
+    ma_sound_set_volume(&new_sound->value, volume * sfx_volume_);
+    ma_sound_start(&new_sound->value);
+
+    const SoundHandle* sound_key = new_sound.get();
+    active_sfx_.push_back(std::move(new_sound));
     active_sfx_per_clip_[filepath] += 1;
-    sfx_clip_lookup_[sound] = filepath;
+    sfx_clip_lookup_[sound_key] = filepath;
     sfx_last_trigger_ms_[filepath] = now_ms;
 }
 
 bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) {
-    if (!is_initialized || !ma_engine_ptr || filepath.empty()) {
+    if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
         return false;
     }
+
     StopBgm();
-    ma_engine* engine = static_cast<ma_engine*>(ma_engine_ptr);
-    auto new_sound = std::make_unique<ma_sound>();
-    ma_result result = ma_sound_init_from_file(engine, filepath.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, new_sound.get());
+    auto new_sound = std::make_unique<SoundHandle>();
+    const ma_result result = ma_sound_init_from_file(
+        engine_handle_->get(),
+        filepath.c_str(),
+        MA_SOUND_FLAG_STREAM,
+        nullptr,
+        nullptr,
+        &new_sound->value);
     if (result != MA_SUCCESS) {
         return false;
     }
-    ma_sound* sound = new_sound.release();
-    bgm_sound_ptr_ = sound;
-    ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
-    ma_sound_set_volume(sound, volume * bgm_volume_);
-    ma_sound_start(sound);
+
+    new_sound->initialized = true;
+    ma_sound_set_looping(&new_sound->value, loop ? MA_TRUE : MA_FALSE);
+    ma_sound_set_volume(&new_sound->value, volume * bgm_volume_);
+    ma_sound_start(&new_sound->value);
+    bgm_sound_ = std::move(new_sound);
     return true;
 }
 
 void AudioSystem::PauseBgm() {
-    if (!bgm_sound_ptr_) {
+    if (!bgm_sound_ || !bgm_sound_->get()) {
         return;
     }
-    ma_sound_stop(static_cast<ma_sound*>(bgm_sound_ptr_));
+    ma_sound_stop(bgm_sound_->get());
 }
 
 void AudioSystem::ResumeBgm() {
-    if (!bgm_sound_ptr_) {
+    if (!bgm_sound_ || !bgm_sound_->get()) {
         return;
     }
-    ma_sound_start(static_cast<ma_sound*>(bgm_sound_ptr_));
+    ma_sound_start(bgm_sound_->get());
 }
 
 void AudioSystem::StopBgm() {
-    if (!bgm_sound_ptr_) {
-        return;
-    }
-    DestroySound(bgm_sound_ptr_);
-    bgm_sound_ptr_ = nullptr;
+    bgm_sound_.reset();
 }
 
 void AudioSystem::StopAllSfx() {
-    for (auto* sound_ptr : active_sfx_) {
-        DestroySound(sound_ptr);
-    }
     active_sfx_.clear();
     active_sfx_per_clip_.clear();
     sfx_clip_lookup_.clear();
@@ -369,8 +436,8 @@ void AudioSystem::StopAllSfx() {
 
 void AudioSystem::SetMasterVolume(float volume) {
     master_volume_ = std::clamp(volume, 0.0f, 1.0f);
-    if (is_initialized && ma_engine_ptr) {
-        ma_engine_set_volume(static_cast<ma_engine*>(ma_engine_ptr), master_volume_);
+    if (is_initialized && engine_handle_ && engine_handle_->get()) {
+        ma_engine_set_volume(engine_handle_->get(), master_volume_);
     }
 }
 
@@ -389,10 +456,10 @@ void AudioSystem::SetEntityPitch(std::uint32_t entity, float pitch) {
         pitch = 0.01f;
     }
     auto it = entity_sounds_.find(entity);
-    if (it == entity_sounds_.end()) {
+    if (it == entity_sounds_.end() || !it->second || !it->second->get()) {
         return;
     }
-    ma_sound_set_pitch(static_cast<ma_sound*>(it->second), pitch);
+    ma_sound_set_pitch(it->second->get(), pitch);
 }
 
 void AudioSystem::SetMaxConcurrentSfxPerClip(std::size_t max_instances) {
@@ -403,36 +470,37 @@ void AudioSystem::SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms) {
     sfx_trigger_cooldown_ms_ = cooldown_ms;
 }
 
-void AudioSystem::DestroySound(void* sound_ptr) {
-    if (!sound_ptr) {
-        return;
-    }
-    ma_sound* sound = static_cast<ma_sound*>(sound_ptr);
-    ma_sound_stop(sound);
-    ma_sound_uninit(sound);
-    std::unique_ptr<ma_sound> sound_deleter(sound);
-}
-
 void AudioSystem::ApplyAllVolumes() {
-    if (bgm_sound_ptr_) {
-        ma_sound_set_volume(static_cast<ma_sound*>(bgm_sound_ptr_), bgm_volume_);
+    if (bgm_sound_ && bgm_sound_->get()) {
+        ma_sound_set_volume(bgm_sound_->get(), bgm_volume_);
     }
-    for (auto* sound_ptr : active_sfx_) {
-        ma_sound_set_volume(static_cast<ma_sound*>(sound_ptr), sfx_volume_);
+    for (auto& sound_ptr : active_sfx_) {
+        if (sound_ptr && sound_ptr->get()) {
+            ma_sound_set_volume(sound_ptr->get(), sfx_volume_);
+        }
     }
     for (auto& pair : entity_sounds_) {
-        ma_sound_set_volume(static_cast<ma_sound*>(pair.second), sfx_volume_);
+        if (pair.second && pair.second->get()) {
+            ma_sound_set_volume(pair.second->get(), sfx_volume_);
+        }
     }
 }
 
 void AudioSystem::CleanupFinishedSfx() {
     for (auto it = active_sfx_.begin(); it != active_sfx_.end();) {
-        ma_sound* sound = static_cast<ma_sound*>(*it);
+        if (!(*it) || !(*it)->get()) {
+            it = active_sfx_.erase(it);
+            continue;
+        }
+
+        const SoundHandle* sound_key = it->get();
+        ma_sound* sound = (*it)->get();
         if (ma_sound_is_playing(sound) == MA_TRUE) {
             ++it;
             continue;
         }
-        auto clip_it = sfx_clip_lookup_.find(sound);
+
+        auto clip_it = sfx_clip_lookup_.find(sound_key);
         if (clip_it != sfx_clip_lookup_.end()) {
             auto count_it = active_sfx_per_clip_.find(clip_it->second);
             if (count_it != active_sfx_per_clip_.end() && count_it->second > 0) {
@@ -443,7 +511,6 @@ void AudioSystem::CleanupFinishedSfx() {
             }
             sfx_clip_lookup_.erase(clip_it);
         }
-        DestroySound(sound);
         it = active_sfx_.erase(it);
     }
 }

@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <deque>
+#include <memory>
 
 class AssetManager;
 
@@ -136,11 +137,9 @@ public:
     void SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms);
 
 private:
-    /**
-     * @brief 内部方法：安全销毁 miniaudio 的 ma_sound 实例
-     * @param sound_ptr 转换为 void* 的 ma_sound 指针
-     */
-    void DestroySound(void* sound_ptr);
+    struct EngineHandle;
+    struct ResourceManagerHandle;
+    struct SoundHandle;
 
     /**
      * @brief 内部方法：应用当前所有的音量设置到对应的播放实例上
@@ -152,12 +151,13 @@ private:
      */
     void CleanupFinishedSfx();
 
-    void* ma_engine_ptr = nullptr;
-    void* bgm_sound_ptr_ = nullptr;
-    std::vector<void*> active_sfx_;
-    std::unordered_map<std::uint32_t, void*> entity_sounds_;
+    std::unique_ptr<EngineHandle> engine_handle_;
+    std::unique_ptr<ResourceManagerHandle> resource_manager_handle_;
+    std::unique_ptr<SoundHandle> bgm_sound_;
+    std::vector<std::unique_ptr<SoundHandle>> active_sfx_;
+    std::unordered_map<std::uint32_t, std::unique_ptr<SoundHandle>> entity_sounds_;
     std::unordered_map<std::string, std::size_t> active_sfx_per_clip_;
-    std::unordered_map<void*, std::string> sfx_clip_lookup_;
+    std::unordered_map<const SoundHandle*, std::string> sfx_clip_lookup_;
     std::unordered_map<std::string, std::uint64_t> sfx_last_trigger_ms_;
     float master_volume_ = 1.0f;
     float bgm_volume_ = 1.0f;
@@ -166,7 +166,6 @@ private:
     std::size_t max_concurrent_sfx_per_clip_ = 4;
     std::uint32_t sfx_trigger_cooldown_ms_ = 20;
     bool is_initialized = false;
-    void* ma_resource_manager_ptr = nullptr;
     AssetManager* asset_manager_ = nullptr;
 };
 
