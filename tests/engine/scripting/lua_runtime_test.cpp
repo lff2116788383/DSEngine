@@ -4,8 +4,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"
 
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/null_sink.h"
+#include "engine/base/debug.h"
 
 #include <filesystem>
 #include <fstream>
@@ -21,24 +20,22 @@ using dse::runtime::TickLuaRuntime;
 
 namespace {
 
-class ScopedDefaultLogger {
+class ScopedLogLevel {
 public:
-    explicit ScopedDefaultLogger(std::shared_ptr<spdlog::logger> replacement)
-        : previous_(spdlog::default_logger()) {
-        spdlog::set_default_logger(std::move(replacement));
+    explicit ScopedLogLevel(dse::debug::LogLevel level)
+        : previous_level_(dse::debug::GetLogLevel()) {
+        dse::debug::SetLogLevel(level);
     }
 
-    ~ScopedDefaultLogger() {
-        if (previous_) {
-            spdlog::set_default_logger(previous_);
-        }
+    ~ScopedLogLevel() {
+        dse::debug::SetLogLevel(previous_level_);
     }
 
-    ScopedDefaultLogger(const ScopedDefaultLogger&) = delete;
-    ScopedDefaultLogger& operator=(const ScopedDefaultLogger&) = delete;
+    ScopedLogLevel(const ScopedLogLevel&) = delete;
+    ScopedLogLevel& operator=(const ScopedLogLevel&) = delete;
 
 private:
-    std::shared_ptr<spdlog::logger> previous_;
+    dse::debug::LogLevel previous_level_;
 };
 
 std::string MakeTempPath(const char* name) {
@@ -80,9 +77,7 @@ public:
 // 回归用例：启动脚本缺失时 Bootstrap 失败后不应遗留 Lua 内存统计脏值。
 TEST_CASE("Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero", "[engine][unit][lua_runtime][diagnostic_single]") {
     ScopedLuaApiContextReset scoped_context_reset;
-    ScopedDefaultLogger scoped_logger(std::make_shared<spdlog::logger>(
-        "lua_runtime_test_null",
-        std::make_shared<spdlog::sinks::null_sink_mt>()));
+    ScopedLogLevel scoped_logger(dse::debug::LogLevel::Off);
 
     World world;
     AssetManager asset_manager;

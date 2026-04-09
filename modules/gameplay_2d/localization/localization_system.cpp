@@ -10,7 +10,7 @@
 #include <cctype>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
-#include <spdlog/spdlog.h>
+#include "engine/base/debug.h"
 
 namespace dse {
 namespace gameplay2d {
@@ -19,7 +19,7 @@ bool LocalizationSystem::LoadLanguage(const std::string& language_code, const st
     try {
         std::ifstream file(config_path);
         if (!file.is_open()) {
-            spdlog::error("Failed to open localization file: {}", config_path);
+            DEBUG_LOG_ERROR("Failed to open localization file: {}", config_path);
             return false;
         }
         
@@ -28,12 +28,12 @@ bool LocalizationSystem::LoadLanguage(const std::string& language_code, const st
         document.ParseStream(isw);
         
         if (document.HasParseError()) {
-            spdlog::error("Failed to parse localization JSON: {}", config_path);
+            DEBUG_LOG_ERROR("Failed to parse localization JSON: {}", config_path);
             return false;
         }
         
         if (!document.IsObject()) {
-            spdlog::error("Localization JSON root must be an object: {}", config_path);
+            DEBUG_LOG_ERROR("Localization JSON root must be an object: {}", config_path);
             return false;
         }
         
@@ -56,19 +56,19 @@ bool LocalizationSystem::LoadLanguage(const std::string& language_code, const st
         
         load_recursive(document, "");
         
-        spdlog::info("Loaded localization for language: {} ({} entries)", 
-                     language_code, language_data_[language_code].size());
+        DEBUG_LOG_INFO("Loaded localization for language: {} ({} entries)",
+                       language_code, language_data_[language_code].size());
         return true;
         
     } catch (const std::exception& e) {
-        spdlog::error("Exception while loading localization: {}", e.what());
+        DEBUG_LOG_ERROR("Exception while loading localization: {}", e.what());
         return false;
     }
 }
 
 bool LocalizationSystem::SetCurrentLanguage(const std::string& language_code) {
     if (language_data_.find(language_code) == language_data_.end()) {
-        spdlog::warn("Language not loaded: {}", language_code);
+        DEBUG_LOG_WARN("Language not loaded: {}", language_code);
         return false;
     }
     
@@ -82,7 +82,7 @@ bool LocalizationSystem::SetCurrentLanguage(const std::string& language_code) {
             }
         }
         
-        spdlog::info("Language changed to: {}", language_code);
+        DEBUG_LOG_INFO("Language changed to: {}", language_code);
     }
     
     return true;
@@ -104,7 +104,7 @@ std::string LocalizationSystem::GetText(const std::string& key, const std::strin
     
     auto text_it = it->second.find(key);
     if (text_it == it->second.end()) {
-        spdlog::warn("Localization key not found: {} (language: {})", key, current_language_);
+        DEBUG_LOG_WARN("Localization key not found: {} (language: {})", key, current_language_);
         return default_text;
     }
     

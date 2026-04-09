@@ -1,7 +1,7 @@
 #include "catch/catch.hpp"
 #include "engine/scripting/cpp/cpp_business_runtime.h"
 #include "engine/assets/asset_manager.h"
-#include "spdlog/spdlog.h"
+#include "engine/base/debug.h"
 
 using dse::runtime::CppBusinessHooks;
 using dse::runtime::ConfigureCppBusinessHooks;
@@ -10,18 +10,18 @@ using dse::runtime::TickCppBusiness;
 using dse::runtime::ShutdownCppBusiness;
 
 namespace {
-class ScopedSpdlogLevel {
+class ScopedLogLevel {
 public:
-    explicit ScopedSpdlogLevel(spdlog::level::level_enum level)
-        : previous_level_(spdlog::get_level()) {
-        spdlog::set_level(level);
+    explicit ScopedLogLevel(dse::debug::LogLevel level)
+        : previous_level_(dse::debug::GetLogLevel()) {
+        dse::debug::SetLogLevel(level);
     }
-    ~ScopedSpdlogLevel() {
-        spdlog::set_level(previous_level_);
+    ~ScopedLogLevel() {
+        dse::debug::SetLogLevel(previous_level_);
     }
 
 private:
-    spdlog::level::level_enum previous_level_;
+    dse::debug::LogLevel previous_level_;
 };
 }
 
@@ -73,7 +73,7 @@ TEST_CASE("Given_PartialHooks_When_TickAndShutdown_Then_BehaviorRemainsSafe", "[
 // 反向测试：缺失 bootstrap 或 tick 配置时，Bootstrap 应返回失败。
 TEST_CASE("Given_MissingRequiredHooks_When_Bootstrap_Then_ReturnFalse", "[engine][unit][cpp_runtime]") {
     World world;
-    ScopedSpdlogLevel mute_errors(spdlog::level::off);
+    ScopedLogLevel mute_errors(dse::debug::LogLevel::Off);
 
     AssetManager asset_manager;
 

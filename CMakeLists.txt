@@ -8,9 +8,11 @@ endif()
 project(DSEngine C CXX)
 include(GNUInstallDirs)
 
+
 set(CMAKE_CXX_STANDARD 17)
 
 add_definitions(-D GLM_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
+add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
 
 add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
 
@@ -41,6 +43,9 @@ if (MSVC)
     add_compile_options("$<$<CONFIG:Debug>:/Z7>")
     add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Z7>")
     add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+    add_compile_definitions(_CRT_STDIO_ISO_WIDE_SPECIFIERS=1)
+    add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
+    add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
 include(cmake/CMakeLists.txt.glfw)
 include(cmake/CMakeLists.txt.FreeType)
@@ -64,7 +69,7 @@ include_directories("depends/rttr-0.9.6/src")
 include_directories("depends/luasocket-3.0.0/src")
 include_directories("depends/glm")
 include_directories("depends/glm_ext")
-include_directories("depends/rapidjson")
+include_directories("depends/rapidjson/include")
 include_directories("depends/eventpp/tests")
 include_directories("depends/eventpp/include")
 include_directories("depends/timetool")
@@ -92,6 +97,7 @@ if(DSE_HAS_ASSIMP)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+    set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
     add_subdirectory(depends/assimp)
 endif()
 
@@ -185,7 +191,6 @@ add_library(dse_engine SHARED
     ${glfw_sources}
     ${freetype_src}
     ${easy_profiler_core_source}
-    ${lua_src}
     ${luasocket_c}
     ${box2d_cpp}
     ${spine_cpp}
@@ -206,7 +211,7 @@ if(DSE_ENABLE_PHYSX)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
-    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 endif()
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /wd5033 /wd4834)
@@ -268,6 +273,12 @@ function(dse_copy_runtime_assets target_name)
 endfunction()
 
 function(dse_copy_runtime_dlls target_name)
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${target_name}>
+        $<TARGET_FILE_DIR:${target_name}>
+        COMMAND_EXPAND_LISTS
+    )
 endfunction()
 
 # 包含运行时宿主入口

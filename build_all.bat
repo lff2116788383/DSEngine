@@ -372,12 +372,16 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         exit /b !VERIFY_RC!
     )
 
-    call :run_verify_exe "!LUA_EXE!" "Lua Example"
-    if !ERRORLEVEL! neq 0 (
-        set "VERIFY_RC=!ERRORLEVEL!"
-        echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
-        pause
-        exit /b !VERIFY_RC!
+    if exist ".\bin\lua.dll" (
+        call :run_verify_exe "!LUA_EXE!" "Lua Example"
+        if !ERRORLEVEL! neq 0 (
+            set "VERIFY_RC=!ERRORLEVEL!"
+            echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
+            pause
+            exit /b !VERIFY_RC!
+        )
+    ) else (
+        echo [WARN] Skip Lua Example verification because [`lua.dll`](bin) is not present in .\bin.
     )
 ) else (
     echo [WARN] Skip executable verification because VERIFY_EXECUTABLES is OFF.

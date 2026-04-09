@@ -129,12 +129,7 @@ message(STATUS "")
 #################################################
 # 设置easy_profile_core所在目录
 set(EASY_PROFILE_CORE_SOURCE_DIR depends/easy_profiler-2.1.0/easy_profiler_core)
-
-# Add source files:
-include_directories("${EASY_PROFILE_CORE_SOURCE_DIR}/include")
-include_directories("${EASY_PROFILE_CORE_SOURCE_DIR}")
-
-set(easy_profiler_core_source
+set(EASY_PROFILER_CORE_REQUIRED_FILES
         ${EASY_PROFILE_CORE_SOURCE_DIR}/base_block_descriptor.cpp
         ${EASY_PROFILE_CORE_SOURCE_DIR}/block.cpp
         ${EASY_PROFILE_CORE_SOURCE_DIR}/block_descriptor.cpp
@@ -147,13 +142,36 @@ set(easy_profiler_core_source
         ${EASY_PROFILE_CORE_SOURCE_DIR}/serialized_block.cpp
         ${EASY_PROFILE_CORE_SOURCE_DIR}/thread_storage.cpp
         ${EASY_PROFILE_CORE_SOURCE_DIR}/writer.cpp
-        )
+)
+
+set(easy_profiler_core_source)
+set(DSE_ENABLE_EASY_PROFILER OFF)
+set(_dse_easy_profiler_missing_file "")
+foreach(_dse_easy_profiler_file IN LISTS EASY_PROFILER_CORE_REQUIRED_FILES)
+    if(EXISTS "${_dse_easy_profiler_file}")
+        list(APPEND easy_profiler_core_source "${_dse_easy_profiler_file}")
+    else()
+        set(_dse_easy_profiler_missing_file "${_dse_easy_profiler_file}")
+        break()
+    endif()
+endforeach()
+
+if(_dse_easy_profiler_missing_file STREQUAL "")
+    set(DSE_ENABLE_EASY_PROFILER ON)
+    include_directories("${EASY_PROFILE_CORE_SOURCE_DIR}/include")
+    include_directories("${EASY_PROFILE_CORE_SOURCE_DIR}")
+    add_definitions(-D _BUILD_PROFILER)
+    add_definitions(-D BUILD_WITH_EASY_PROFILER)#开启easy_profiler
+    message(STATUS "easy_profiler enabled from ${EASY_PROFILE_CORE_SOURCE_DIR}")
+else()
+    set(easy_profiler_core_source)
+    message(WARNING "easy_profiler source is incomplete or missing: ${_dse_easy_profiler_missing_file}")
+    message(WARNING "Profiling integration will be disabled for this configure step.")
+endif()
 
 #add_library(easy_profiler ${SOURCES} resources.rc)
 # End adding source files.
 #################################################
-add_definitions(-D _BUILD_PROFILER)
-add_definitions(-D BUILD_WITH_EASY_PROFILER)#开启easy_profiler
 
 #
 #target_include_directories(easy_profiler PUBLIC

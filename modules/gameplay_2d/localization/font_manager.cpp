@@ -4,7 +4,7 @@
  */
 
 #include "font_manager.h"
-#include <spdlog/spdlog.h>
+#include "engine/base/debug.h"
 #include <algorithm>
 
 namespace dse {
@@ -16,7 +16,7 @@ FontManager::~FontManager() {
 
 bool FontManager::RegisterFont(const std::string& font_id, const std::string& font_path, int font_size) {
     if (fonts_.find(font_id) != fonts_.end()) {
-        spdlog::warn("Font already registered: {}", font_id);
+        DEBUG_LOG_WARN("Font already registered: {}", font_id);
         return false;
     }
     
@@ -29,21 +29,21 @@ bool FontManager::RegisterFont(const std::string& font_id, const std::string& fo
     
     fonts_[font_id] = font_asset;
     
-    spdlog::info("Font registered: {} (path: {}, size: {})", font_id, font_path, font_size);
+    DEBUG_LOG_INFO("Font registered: {} (path: {}, size: {})", font_id, font_path, font_size);
     return true;
 }
 
 bool FontManager::LoadFont(const std::string& font_id) {
     auto it = fonts_.find(font_id);
     if (it == fonts_.end()) {
-        spdlog::error("Font not found: {}", font_id);
+        DEBUG_LOG_ERROR("Font not found: {}", font_id);
         return false;
     }
     
     FontAsset& font = it->second;
     
     if (font.is_loaded) {
-        spdlog::warn("Font already loaded: {}", font_id);
+        DEBUG_LOG_WARN("Font already loaded: {}", font_id);
         return true;
     }
     
@@ -51,14 +51,14 @@ bool FontManager::LoadFont(const std::string& font_id) {
     // 这里只是标记为已加载
     font.is_loaded = true;
     
-    spdlog::info("Font loaded: {}", font_id);
+    DEBUG_LOG_INFO("Font loaded: {}", font_id);
     return true;
 }
 
 void FontManager::UnloadFont(const std::string& font_id) {
     auto it = fonts_.find(font_id);
     if (it == fonts_.end()) {
-        spdlog::warn("Font not found: {}", font_id);
+        DEBUG_LOG_WARN("Font not found: {}", font_id);
         return;
     }
     
@@ -72,7 +72,7 @@ void FontManager::UnloadFont(const std::string& font_id) {
     font.is_loaded = false;
     font.font_data.reset();
     
-    spdlog::info("Font unloaded: {}", font_id);
+    DEBUG_LOG_INFO("Font unloaded: {}", font_id);
 }
 
 FontAsset* FontManager::GetFont(const std::string& font_id) {
@@ -80,10 +80,10 @@ FontAsset* FontManager::GetFont(const std::string& font_id) {
     if (it == fonts_.end()) {
         // 如果字体不存在，尝试使用默认字体
         if (font_id != default_font_id_) {
-            spdlog::warn("Font not found: {}, using default font", font_id);
+            DEBUG_LOG_WARN("Font not found: {}, using default font", font_id);
             return GetFont(default_font_id_);
         }
-        spdlog::error("Font not found: {}", font_id);
+        DEBUG_LOG_ERROR("Font not found: {}", font_id);
         return nullptr;
     }
     
@@ -102,10 +102,10 @@ const FontAsset* FontManager::GetFont(const std::string& font_id) const {
     if (it == fonts_.end()) {
         // 如果字体不存在，尝试使用默认字体
         if (font_id != default_font_id_) {
-            spdlog::warn("Font not found: {}, using default font", font_id);
+            DEBUG_LOG_WARN("Font not found: {}, using default font", font_id);
             return GetFont(default_font_id_);
         }
-        spdlog::error("Font not found: {}", font_id);
+        DEBUG_LOG_ERROR("Font not found: {}", font_id);
         return nullptr;
     }
     
@@ -114,23 +114,23 @@ const FontAsset* FontManager::GetFont(const std::string& font_id) const {
 
 bool FontManager::SetDefaultFont(const std::string& font_id) {
     if (fonts_.find(font_id) == fonts_.end()) {
-        spdlog::error("Font not found: {}", font_id);
+        DEBUG_LOG_ERROR("Font not found: {}", font_id);
         return false;
     }
     
     default_font_id_ = font_id;
-    spdlog::info("Default font set to: {}", font_id);
+    DEBUG_LOG_INFO("Default font set to: {}", font_id);
     return true;
 }
 
 bool FontManager::SetFontForLanguage(const std::string& language_code, const std::string& font_id) {
     if (fonts_.find(font_id) == fonts_.end()) {
-        spdlog::error("Font not found: {}", font_id);
+        DEBUG_LOG_ERROR("Font not found: {}", font_id);
         return false;
     }
     
     language_font_map_[language_code] = font_id;
-    spdlog::info("Font set for language {}: {}", language_code, font_id);
+    DEBUG_LOG_INFO("Font set for language {}: {}", language_code, font_id);
     return true;
 }
 
@@ -146,19 +146,19 @@ std::string FontManager::GetFontForLanguage(const std::string& language_code) co
 
 void FontManager::AddFontFallback(const std::string& primary_font_id, const std::string& fallback_font_id) {
     if (fonts_.find(primary_font_id) == fonts_.end()) {
-        spdlog::error("Primary font not found: {}", primary_font_id);
+        DEBUG_LOG_ERROR("Primary font not found: {}", primary_font_id);
         return;
     }
     
     if (fonts_.find(fallback_font_id) == fonts_.end()) {
-        spdlog::error("Fallback font not found: {}", fallback_font_id);
+        DEBUG_LOG_ERROR("Fallback font not found: {}", fallback_font_id);
         return;
     }
     
     auto& fallbacks = font_fallbacks_[primary_font_id];
     if (std::find(fallbacks.begin(), fallbacks.end(), fallback_font_id) == fallbacks.end()) {
         fallbacks.push_back(fallback_font_id);
-        spdlog::info("Font fallback added: {} -> {}", primary_font_id, fallback_font_id);
+        DEBUG_LOG_INFO("Font fallback added: {} -> {}", primary_font_id, fallback_font_id);
     }
 }
 

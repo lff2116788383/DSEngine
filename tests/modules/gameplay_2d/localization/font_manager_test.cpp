@@ -5,8 +5,6 @@
 
 #include "catch/catch.hpp"
 #include "modules/gameplay_2d/localization/font_manager.h"
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 
 using namespace dse::gameplay2d;
 

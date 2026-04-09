@@ -10,13 +10,60 @@
 #ifndef UNTITLED_DEBUG_H
 #define UNTITLED_DEBUG_H
 
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-#include "spdlog/spdlog.h"
+#include <cstring>
+#include <sstream>
+#include <string>
+#include <utility>
 
-/// 输出文件名
-#define DEBUG_LOG_INFO(...) do { if(Debug::CanLog()) { SPDLOG_INFO(__VA_ARGS__); } } while(0)
-#define DEBUG_LOG_WARN(...) do { if(Debug::CanLog()) { SPDLOG_WARN(__VA_ARGS__); } } while(0)
-#define DEBUG_LOG_ERROR(...) do { if(Debug::CanLog()) { SPDLOG_ERROR(__VA_ARGS__); } } while(0)
+namespace dse::debug {
+
+enum class LogLevel {
+    Trace = 0,
+    Info,
+    Warn,
+    Error,
+    Off
+};
+
+void LogMessage(LogLevel level, const std::string& message);
+void SetLogLevel(LogLevel level);
+LogLevel GetLogLevel();
+
+inline void AppendFormatted(std::ostringstream& oss, const char* format) {
+    if (format) {
+        oss << format;
+    }
+}
+
+template <typename T, typename... Rest>
+void AppendFormatted(std::ostringstream& oss, const char* format, T&& value, Rest&&... rest) {
+    if (!format) {
+        return;
+    }
+
+    const char* placeholder = std::strstr(format, "{}");
+    if (!placeholder) {
+        oss << format;
+        return;
+    }
+
+    oss.write(format, static_cast<std::streamsize>(placeholder - format));
+    oss << std::forward<T>(value);
+    AppendFormatted(oss, placeholder + 2, std::forward<Rest>(rest)...);
+}
+
+template <typename... Args>
+std::string Format(const char* format, Args&&... args) {
+    std::ostringstream oss;
+    AppendFormatted(oss, format, std::forward<Args>(args)...);
+    return oss.str();
+}
+
+} // namespace dse::debug
+
+#define DEBUG_LOG_INFO(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Info, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DEBUG_LOG_WARN(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Warn, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DEBUG_LOG_ERROR(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Error, dse::debug::Format(__VA_ARGS__)); } } while(0)
 
 #define __CHECK_GL_ERROR__ { \
         auto gl_error_code=glGetError();\
@@ -46,6 +93,5 @@ public:
 public:
     static bool bInited_;
 };
-
 
 #endif //UNTITLED_DEBUG_H

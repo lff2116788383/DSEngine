@@ -380,7 +380,7 @@ bool BootstrapLuaRuntime() {
         DEBUG_LOG_ERROR("Lua init failed: LuaApiContext.world is null");
         return false;
     }
-    state.state = lua_newstate(LuaMemoryAllocator, nullptr);
+    state.state = luaL_newstate();
     if (!state.state) {
         DEBUG_LOG_ERROR("Lua init failed: lua_newstate returned nullptr");
         return false;

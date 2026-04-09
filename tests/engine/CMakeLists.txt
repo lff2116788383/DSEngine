@@ -104,6 +104,7 @@ target_include_directories(${DSE_ENGINE_TEST_TARGET}
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
 )
 
 target_compile_features(${DSE_ENGINE_TEST_TARGET} PRIVATE cxx_std_17)
@@ -211,6 +212,7 @@ target_include_directories(${DSE_LUA_RUNTIME_TEST_TARGET}
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
 )
 
 target_compile_features(${DSE_LUA_RUNTIME_TEST_TARGET} PRIVATE cxx_std_17)

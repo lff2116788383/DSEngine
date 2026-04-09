@@ -4,6 +4,9 @@ add_executable(${DSE_SPINE_TEST_TARGET}
     ../engine/main.cpp
     spine_system_test.cpp
     ../modules/gameplay_2d/runtime_smoke_snapshot_test.cpp
+    ${CMAKE_SOURCE_DIR}/engine/ecs/world.cpp
+    ${CMAKE_SOURCE_DIR}/engine/assets/asset_manager.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/spine/spine_system.cpp
 )
 
 if(WIN32)
@@ -18,6 +21,7 @@ target_include_directories(${DSE_SPINE_TEST_TARGET}
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
 )
 
 target_compile_features(${DSE_SPINE_TEST_TARGET} PRIVATE cxx_std_17)

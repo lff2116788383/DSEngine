@@ -6,4 +6,37 @@ include_directories("depends/lua/src")
 include_directories("depends/sol2-3.2.2/include")
 
 #源文件
-file(GLOB_RECURSE lua_src depends/lua/src/*.c)
+set(lua_src
+    depends/lua/lapi.c
+    depends/lua/lauxlib.c
+    depends/lua/lbaselib.c
+    depends/lua/lcode.c
+    depends/lua/lcorolib.c
+    depends/lua/lctype.c
+    depends/lua/ldblib.c
+    depends/lua/ldebug.c
+    depends/lua/ldo.c
+    depends/lua/ldump.c
+    depends/lua/lfunc.c
+    depends/lua/lgc.c
+    depends/lua/linit.c
+    depends/lua/liolib.c
+    depends/lua/llex.c
+    depends/lua/lmathlib.c
+    depends/lua/lmem.c
+    depends/lua/loadlib.c
+    depends/lua/lobject.c
+    depends/lua/lopcodes.c
+    depends/lua/loslib.c
+    depends/lua/lparser.c
+    depends/lua/lstate.c
+    depends/lua/lstring.c
+    depends/lua/lstrlib.c
+    depends/lua/ltable.c
+    depends/lua/ltablib.c
+    depends/lua/ltm.c
+    depends/lua/lundump.c
+    depends/lua/lutf8lib.c
+    depends/lua/lvm.c
+    depends/lua/lzio.c
+)

@@ -8,35 +8,109 @@
 //
 
 #include "debug.h"
-#include <iostream>
-#include "spdlog/sinks/stdout_color_sinks.h"
-#include "spdlog/sinks/basic_file_sink.h"
 
-bool Debug::bInited_=false;
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <sstream>
+
+#include "spdlog/fmt/bundled/format.h"
+
+namespace {
+std::mutex& LogMutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::ofstream& LogFile() {
+    static std::ofstream file;
+    return file;
+}
+
+dse::debug::LogLevel& CurrentLogLevel() {
+    static dse::debug::LogLevel level = dse::debug::LogLevel::Info;
+    return level;
+}
+
+const char* ToLabel(dse::debug::LogLevel level) {
+    switch (level) {
+        case dse::debug::LogLevel::Trace: return "TRACE";
+        case dse::debug::LogLevel::Info: return "INFO";
+        case dse::debug::LogLevel::Warn: return "WARN";
+        case dse::debug::LogLevel::Error: return "ERROR";
+        case dse::debug::LogLevel::Off: return "OFF";
+        default: return "UNKNOWN";
+    }
+}
+
+bool ShouldLog(dse::debug::LogLevel level) {
+    return level >= CurrentLogLevel() && CurrentLogLevel() != dse::debug::LogLevel::Off;
+}
+}
+
+bool Debug::bInited_ = false;
+
+namespace dse::debug {
+
+void LogMessage(LogLevel level, const std::string& message) {
+    if (!Debug::CanLog() || !ShouldLog(level)) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(LogMutex());
+    std::ostringstream oss;
+    oss << "[" << ToLabel(level) << "] " << message;
+    const std::string line = oss.str();
+
+    if (level == LogLevel::Error || level == LogLevel::Warn) {
+        std::cerr << line << std::endl;
+    } else {
+        std::cout << line << std::endl;
+    }
+
+    auto& file = LogFile();
+    if (file.is_open()) {
+        file << line << std::endl;
+        file.flush();
+    }
+}
+
+void SetLogLevel(LogLevel level) {
+    CurrentLogLevel() = level;
+}
+
+LogLevel GetLogLevel() {
+    return CurrentLogLevel();
+}
+
+} // namespace dse::debug
 
 bool Debug::CanLog() {
-    return bInited_ && spdlog::default_logger() != nullptr;
+    return bInited_;
 }
 
 void Debug::Init() {
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    console_sink->set_level(spdlog::level::trace);
+    std::error_code ec;
+    std::filesystem::create_directories("logs", ec);
 
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs/multisink.txt", true);
-    file_sink->set_level(spdlog::level::trace);
+    auto& file = LogFile();
+    if (!file.is_open()) {
+        file.open("logs/multisink.txt", std::ios::out | std::ios::app);
+    }
 
-    spdlog::set_default_logger(std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list({console_sink, file_sink})));
-    spdlog::set_pattern("[source %s] [function %!] [line %#] [%^%l%$] %v");
-    spdlog::flush_on(spdlog::level::trace);
-
-    bInited_=true;
-    DEBUG_LOG_INFO("spdlog init success");
+    dse::debug::SetLogLevel(dse::debug::LogLevel::Info);
+    bInited_ = true;
+    DEBUG_LOG_INFO("debug logger init success");
 }
 
 void Debug::ShutDown() {
-    bInited_=false;
-    if (spdlog::default_logger()) {
-        spdlog::set_default_logger(nullptr);
+    DEBUG_LOG_INFO("debug logger shutdown");
+    bInited_ = false;
+
+    auto& file = LogFile();
+    if (file.is_open()) {
+        file.flush();
+        file.close();
     }
-    spdlog::shutdown();
 }

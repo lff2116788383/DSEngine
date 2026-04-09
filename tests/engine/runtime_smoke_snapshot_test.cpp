@@ -4,8 +4,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"
 
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/null_sink.h"
+#include "engine/base/debug.h"
 
 #include <filesystem>
 #include <fstream>
@@ -22,24 +21,22 @@ using dse::runtime::TickLuaRuntime;
 
 namespace {
 
-class ScopedDefaultLogger {
+class ScopedLogLevel {
 public:
-    explicit ScopedDefaultLogger(std::shared_ptr<spdlog::logger> replacement)
-        : previous_(spdlog::default_logger()) {
-        spdlog::set_default_logger(std::move(replacement));
+    explicit ScopedLogLevel(dse::debug::LogLevel level)
+        : previous_level_(dse::debug::GetLogLevel()) {
+        dse::debug::SetLogLevel(level);
     }
 
-    ~ScopedDefaultLogger() {
-        if (previous_) {
-            spdlog::set_default_logger(previous_);
-        }
+    ~ScopedLogLevel() {
+        dse::debug::SetLogLevel(previous_level_);
     }
 
-    ScopedDefaultLogger(const ScopedDefaultLogger&) = delete;
-    ScopedDefaultLogger& operator=(const ScopedDefaultLogger&) = delete;
+    ScopedLogLevel(const ScopedLogLevel&) = delete;
+    ScopedLogLevel& operator=(const ScopedLogLevel&) = delete;
 
 private:
-    std::shared_ptr<spdlog::logger> previous_;
+    dse::debug::LogLevel previous_level_;
 };
 
 std::string MakeTempPath(const char* name) {
@@ -98,9 +95,7 @@ struct LuaRuntimeSmokeSnapshot {
 
 TEST_CASE("Smoke Snapshot - Lua runtime bootstrap update and cleanup remain deterministic", "[engine][smoke][snapshot][lua_runtime]") {
     ScopedLuaApiContextReset scoped_context_reset;
-    ScopedDefaultLogger scoped_logger(std::make_shared<spdlog::logger>(
-        "lua_runtime_smoke_null",
-        std::make_shared<spdlog::sinks::null_sink_mt>()));
+    ScopedLogLevel scoped_logger(dse::debug::LogLevel::Off);
 
     const std::string startup_path = MakeTempPath("runtime_smoke_startup.lua");
     const std::string component_script_path = MakeTempPath("runtime_smoke_component.lua");
