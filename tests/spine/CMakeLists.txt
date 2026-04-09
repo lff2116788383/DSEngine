@@ -7,6 +7,10 @@ add_executable(${DSE_SPINE_TEST_TARGET}
     ${CMAKE_SOURCE_DIR}/engine/ecs/world.cpp
     ${CMAKE_SOURCE_DIR}/engine/assets/asset_manager.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/spine/spine_system.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/Attachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/VertexAttachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/MeshAttachment.cpp
+    ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/RegionAttachment.cpp
 )
 
 if(WIN32)

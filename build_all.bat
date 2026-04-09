@@ -23,7 +23,7 @@ set /a START_TOTAL_CS=1%START_H%*360000 + 1%START_M%*6000 + 1%START_S%*100 + 1%S
 set BUILD_DIR=build_vs2022
 set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
-set BUILD_EDITOR=0
+set BUILD_EDITOR=1
 set BUILD_LAUNCHER=1
 set BUILD_ENGINE_TESTS=1
 set PACKAGE_EDITOR_EXE=1
@@ -113,7 +113,11 @@ if /I "%~1"=="--all" (
 if /I "%~1"=="-h" goto usage
 if /I "%~1"=="--help" goto usage
 echo [ERROR] Unknown option: %~1
-goto usage_error
+echo Usage: build_all.bat [options...]
+echo Use --help to list all options.
+popd
+pause
+exit /b 1
 
 :parse_done
 set CMAKE_EDITOR_OPTION=-DDSE_BUILD_EDITOR=OFF
@@ -151,6 +155,7 @@ where cmake >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake is not installed or not in PATH!
     echo Please install CMake from https://cmake.org/download/
+    popd
     pause
     exit /b 1
 )
@@ -159,6 +164,7 @@ if %ERRORLEVEL% neq 0 (
 cmake --version | findstr /C:"cmake version" >nul
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake execution failed!
+    popd
     pause
     exit /b 1
 )
@@ -169,6 +175,7 @@ if "%BUILD_EDITOR%"=="1" (
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Python is not installed or not in PATH.
         echo Please install Python 3 and ensure python is in PATH.
+        popd
         pause
         exit /b 1
     )
@@ -176,13 +183,19 @@ if "%BUILD_EDITOR%"=="1" (
     for /f "delims=" %%I in ('where python') do if not defined PYTHON_EXE set "PYTHON_EXE=%%~fI"
     if defined PYTHON_EXE set "npm_config_python=!PYTHON_EXE!"
     call :setup_editor_native_build_env
-    if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
+    if !ERRORLEVEL! neq 0 (
+        set "SETUP_RC=!ERRORLEVEL!"
+        popd
+        pause
+        exit /b !SETUP_RC!
+    )
 )
 if "%BUILD_LAUNCHER%"=="1" (
     where node >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Node.js is not installed or not in PATH!
         echo Please install Node.js 16+ from https://nodejs.org/
+        popd
         pause
         exit /b 1
     )
@@ -190,10 +203,11 @@ if "%BUILD_LAUNCHER%"=="1" (
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] npm is not available in PATH!
         echo Please reinstall Node.js to include npm.
+        popd
         pause
         exit /b 1
     )
-    :: 检查 Rust 和 Cargo 是否存在
+    :: 检查 Rust 与 Cargo 是否存在
     where cargo >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         if exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
@@ -210,6 +224,7 @@ if "%BUILD_LAUNCHER%"=="1" (
                 echo [OK] Rust toolchain installed successfully.
             ) else (
                 echo [ERROR] Failed to download rustup-init.exe. Please install Rust manually from https://rustup.rs/
+                popd
                 pause
                 exit /b 1
             )
@@ -222,6 +237,7 @@ echo write_test > "!NPM_CACHE!\_dse_write_test.tmp" 2>nul
 if !ERRORLEVEL! neq 0 (
     echo [ERROR] npm cache directory is not writable: !NPM_CACHE!
     echo Please ensure the directory is writable or run the script in a writable workspace.
+    popd
     pause
     exit /b 1
 )
@@ -241,6 +257,7 @@ echo [2/4] Configuring CMake project...
 cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% %CMAKE_SPINE_OPTION%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
+    popd
     pause
     exit /b %ERRORLEVEL%
 )
@@ -263,6 +280,7 @@ if %ERRORLEVEL% neq 0 (
         echo   - Re-run: cmake --build %BUILD_DIR% --config Debug --target dse_editor_cpp
     )
     echo ========================================================
+    popd
     pause
     exit /b %ERRORLEVEL%
 )
@@ -280,12 +298,13 @@ if "%PACKAGE_LAUNCHER_EXE%"=="1" (
             if not "!ERRORLEVEL!"=="0" (
                 echo [ERROR] Failed to install NPM dependencies for Launcher.
                 popd
+                popd
                 pause
                 exit /b 1
             )
         )
 
-        :: 确保 Rust / Cargo 在 PATH 中 (兼容刚才修复的本地环境)
+        :: 确保 Rust / Cargo 在 PATH 中（兼容刚才修复的本地环境）
         set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
         
         call npm run tauri build
@@ -298,6 +317,7 @@ if "%PACKAGE_LAUNCHER_EXE%"=="1" (
             echo [ROOT CAUSE] Check tauri build logs above.
             echo [HINT] Ensure Rust toolchain and webview2 dependencies are installed.
             echo ========================================================
+            popd
             pause
             exit /b !PACK_LAUNCHER_RC!
         )
@@ -317,6 +337,7 @@ if "%PACKAGE_SDK%"=="1" (
     cmake --install %BUILD_DIR% --config Debug --prefix ".\bin\sdk"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] SDK Installation failed!
+        popd
         pause
         exit /b !ERRORLEVEL!
     )
@@ -334,6 +355,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         set "EDITOR_EXE=.\bin\dsengine-editor.exe"
         if not exist "!EDITOR_EXE!" (
             echo [ERROR] Cannot find editor executable in .\bin
+            popd
             pause
             exit /b 1
         )
@@ -345,6 +367,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
             echo [WARN] Auto verification is only checking process startup within %VERIFY_EXE_TIMEOUT_SECONDS%s.
             echo [WARN] The editor may require a graphics context, assets, or manual interaction in some environments.
             echo [WARN] Use --no-verify-exe if you only want to complete the build/package stage.
+            popd
             pause
             exit /b !VERIFY_RC!
         )
@@ -353,6 +376,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
     call :resolve_first_existing_exe CPP_EXE ".\bin\DSEngine_c++_debug.exe" ".\bin\DSEngine_c++.exe" ".\bin\DSEngine_example_cpp.exe"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find C++ example executable in .\bin
+        popd
         pause
         exit /b 1
     )
@@ -360,6 +384,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
     call :resolve_first_existing_exe LUA_EXE ".\bin\DSEngine_lua_debug.exe" ".\bin\DSEngine_lua.exe"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find Lua example executable in .\bin
+        popd
         pause
         exit /b 1
     )
@@ -368,6 +393,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
     if !ERRORLEVEL! neq 0 (
         set "VERIFY_RC=!ERRORLEVEL!"
         echo [ERROR] C++ Example failed with exit code !VERIFY_RC!!
+        popd
         pause
         exit /b !VERIFY_RC!
     )
@@ -377,11 +403,12 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         if !ERRORLEVEL! neq 0 (
             set "VERIFY_RC=!ERRORLEVEL!"
             echo [ERROR] Lua Example failed with exit code !VERIFY_RC!!
+            popd
             pause
             exit /b !VERIFY_RC!
         )
     ) else (
-        echo [WARN] Skip Lua Example verification because [`lua.dll`](bin) is not present in .\bin.
+        echo [WARN] Skip Lua Example verification because lua.dll is not present in .\bin.
     )
 ) else (
     echo [WARN] Skip executable verification because VERIFY_EXECUTABLES is OFF.
@@ -401,6 +428,7 @@ if "%BUILD_ENGINE_TESTS%"=="1" (
     ) else (
         powershell -NoProfile -Command "Write-Host '[FAIL] Engine CTest failed. See output above.' -ForegroundColor Red"
         powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $pattern = '(?ms)^-{5,}\r?\n(?<name>[^\r\n]+)\r?\n-{5,}\r?\n(?<location>[^\r\n]+\.cpp)\((?<line>\d+)\)\r?\n.*?\r?\n\s*[^\r\n]+\.cpp\((?<failLine>\d+)\): FAILED:'; $matches = [regex]::Matches($raw, $pattern); if ($matches.Count -gt 0) { Write-Host '[FAIL] Failed test cases:' -ForegroundColor Red; $seen = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($m in $matches) { $line = if ($m.Groups['failLine'].Success) { $m.Groups['failLine'].Value } else { $m.Groups['line'].Value }; $item = '- ' + $m.Groups['name'].Value.Trim() + ' (' + $m.Groups['location'].Value + ':' + $line + ')'; if ($seen.Add($item)) { Write-Host $item -ForegroundColor Red } } } else { Write-Host '[WARN] No failed testcase name/file matched in CTest log.' -ForegroundColor Yellow } } else { Write-Host '[WARN] CTest log file not found for failure parsing.' -ForegroundColor Yellow }"
+        popd
         pause
         exit /b !ENGINE_TEST_RC!
     )
@@ -490,6 +518,8 @@ echo Notes:
 echo   1) No arguments: full build + editor/launcher exe packaging + SDK installation.
 echo   2) Multiple options can be combined in one command.
 echo   3) Offline mode: pre-place electron-vXX.Y.Z-win32-x64.zip in --electron-cache-dir.
+popd
+pause
 exit /b 0
 
 :setup_editor_native_build_env
@@ -507,14 +537,12 @@ if defined VS_INSTALL_DIR (
 if not defined VS_DEV_CMD (
     echo [ERROR] Visual Studio 2022 with "Desktop development with C++" was not found.
     echo [HINT] Editor native module ^(node-gyp / dsengine_bridge^) requires VS2022 tools.
-    pause
     exit /b 1
 )
 call "!VS_DEV_CMD!" -arch=%ARCH% -host_arch=%ARCH% >nul
 if !ERRORLEVEL! neq 0 (
     echo [ERROR] Failed to initialize Visual Studio 2022 developer environment.
     echo [HINT] Check VsDevCmd.bat and the installed VC++ workload.
-    pause
     exit /b !ERRORLEVEL!
 )
 set "npm_config_msvs_version=2022"
@@ -525,4 +553,6 @@ exit /b 0
 :usage_error
 echo Usage: build_all.bat [options...]
 echo Use --help to list all options.
+popd
+pause
 exit /b 1

@@ -48,6 +48,7 @@ apps/launcher/dist/
 apps/launcher_tauri/dist/
 apps/editor/build/
 apps/launcher/build/
+apps/launcher_tauri/.webpack/
 apps/launcher_tauri/src-tauri/target/
 apps/launcher_tauri/src-tauri/gen/
 apps/launcher_tauri/src-tauri/2.0.0-rc
@@ -158,3 +159,19 @@ cmd-*.txt
 *.lastbuildstate
 *.recipe
 *.log.json
+
+# Batch / packaging generated artifacts
+rustup-init.exe
+build_all.log
+build_fast_*.log
+*.7z
+*.zip
+*.pch
+*.iobj
+*.ipdb
+*.rsp
+*.sbr
+*.bsc
+*.ncb
+*.aps
+*.pch

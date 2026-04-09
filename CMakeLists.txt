@@ -66,7 +66,6 @@ include_directories("depends/spdlog/include")
 
 include_directories("depends/spscqueue/include")
 include_directories("depends/rttr-0.9.6/src")
-include_directories("depends/luasocket-3.0.0/src")
 include_directories("depends/glm")
 include_directories("depends/glm_ext")
 include_directories("depends/rapidjson/include")
@@ -98,6 +97,10 @@ if(DSE_HAS_ASSIMP)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
     set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+    set(CMAKE_C_STANDARD_INCLUDE_DIRECTORIES
+        ${CMAKE_C_STANDARD_INCLUDE_DIRECTORIES}
+        ${CMAKE_SOURCE_DIR}/depends/lua
+    )
     add_subdirectory(depends/assimp)
 endif()
 
@@ -191,6 +194,7 @@ add_library(dse_engine SHARED
     ${glfw_sources}
     ${freetype_src}
     ${easy_profiler_core_source}
+    ${lua_src}
     ${luasocket_c}
     ${box2d_cpp}
     ${spine_cpp}
@@ -211,11 +215,16 @@ if(DSE_ENABLE_PHYSX)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
-    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /wd5033 /wd4834)
 endif()
+
+target_include_directories(dse_engine PRIVATE
+    ${CMAKE_SOURCE_DIR}/depends/lua
+    ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
+)
 
 if(DSE_ENABLE_3D)
     target_link_libraries(DSE_Gameplay3D PRIVATE dse_engine)
