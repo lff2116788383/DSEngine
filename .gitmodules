@@ -14,3 +14,12 @@
 	path = depends/imgui
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
+[submodule "depends/entt-3.13.0"]
+	path = depends/entt-3.13.0
+	url = https://github.com/skypjack/entt.git
+[submodule "depends/box2d-2.4.1"]
+	path = depends/box2d-2.4.1
+	url = https://github.com/erincatto/box2d.git
+[submodule "depends/glfw-3.3-3.4"]
+	path = depends/glfw-3.3-3.4
+	url = https://github.com/glfw/glfw.git
