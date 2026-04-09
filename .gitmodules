@@ -23,3 +23,24 @@
 [submodule "depends/glfw-3.3-3.4"]
 	path = depends/glfw-3.3-3.4
 	url = https://github.com/glfw/glfw.git
+[submodule "depends/glm"]
+	path = depends/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "depends/rapidjson"]
+	path = depends/rapidjson
+	url = https://github.com/Tencent/rapidjson.git
+[submodule "depends/spdlog"]
+	path = depends/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "depends/eventpp"]
+	path = depends/eventpp
+	url = https://github.com/wqking/eventpp.git
+[submodule "depends/stb"]
+	path = depends/stb
+	url = https://github.com/nothings/stb.git
+[submodule "depends/lua"]
+	path = depends/lua
+	url = https://github.com/lua/lua.git
+[submodule "depends/luasocket-3.0.0"]
+	path = depends/luasocket-3.0.0
+	url = https://github.com/lunarmodules/luasocket.git
