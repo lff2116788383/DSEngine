@@ -86,6 +86,7 @@ exit /b 0
 set "TARGET=%~1"
 set "URL=%~2"
 set "REF=%~3"
+set "ACTUAL_REF="
 
 echo.
 echo ==================================================
@@ -157,6 +158,28 @@ if /I not "!REF!"=="master" (
     )
 ) else (
     echo [INFO] Keeping the current commit on the default branch as the pinned commit: !TARGET!
+)
+
+REM Resolve actual checked out ref for validation
+for /f "usebackq delims=" %%R in (`git -C "!TARGET!" describe --tags --exact-match 2^>nul`) do set "ACTUAL_REF=%%R"
+if not defined ACTUAL_REF (
+    for /f "usebackq delims=" %%R in (`git -C "!TARGET!" symbolic-ref --short HEAD 2^>nul`) do set "ACTUAL_REF=%%R"
+)
+if not defined ACTUAL_REF (
+    for /f "usebackq delims=" %%R in (`git -C "!TARGET!" rev-parse --short HEAD 2^>nul`) do set "ACTUAL_REF=%%R"
+)
+
+echo [INFO] Actual resolved ref: !ACTUAL_REF!
+
+if /I not "!REF!"=="master" (
+    if /I not "!ACTUAL_REF!"=="!REF!" (
+        echo [ERROR] Ref validation failed for !TARGET!
+        echo [ERROR] Expected ref: !REF!
+        echo [ERROR] Actual ref:   !ACTUAL_REF!
+        echo [ERROR] The repository may use a different tag naming scheme. Please verify the correct tag first.
+        pause
+        exit /b 1
+    )
 )
 
 REM Stage the submodule entry and .gitmodules
