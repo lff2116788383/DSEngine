@@ -42,15 +42,27 @@ void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
 }
 }
 
-EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config) {
-    if (!config_.world) {
+EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config), services_(config.services) {
+    if (services_.world == nullptr && config_.world != nullptr) {
+        services_.world = config_.world;
+    }
+    if (services_.asset_manager == nullptr && config_.asset_manager != nullptr) {
+        services_.asset_manager = config_.asset_manager;
+    }
+    if (services_.world == nullptr) {
         default_world_ = std::make_unique<World>();
-        config_.world = default_world_.get();
+        services_.world = default_world_.get();
     }
-    if (!config_.asset_manager) {
+    if (services_.asset_manager == nullptr) {
         default_asset_manager_ = std::make_unique<AssetManager>();
-        config_.asset_manager = default_asset_manager_.get();
+        services_.asset_manager = default_asset_manager_.get();
     }
+
+    // Keep backward-compatible mirrors in sync for older call sites.
+    config_.world = services_.world;
+    config_.asset_manager = services_.asset_manager;
+    config_.services = services_;
+
     pipeline_ = std::make_unique<FramePipeline>();
 }
 
@@ -118,10 +130,9 @@ bool EngineInstance::Init() {
 
     core::JobSystem::Init();
 
-    World* active_world = config_.world ? config_.world : default_world_.get();
     pipeline_->EnableEditorMode(config_.enable_editor);
-    pipeline_->SetWorld(active_world);
-    pipeline_->SetAssetManager(config_.asset_manager);
+    pipeline_->SetWorld(services_.world);
+    pipeline_->SetAssetManager(services_.asset_manager);
     pipeline_->SetBusinessMode(config_.business_mode);
     
     if (config_.business_mode == BusinessMode::Lua && !config_.startup_lua_script_path.empty()) {

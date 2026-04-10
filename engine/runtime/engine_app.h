@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/runtime_services.h"
 #include "engine/assets/asset_manager.h"
 
 namespace dse::runtime {
@@ -20,6 +21,8 @@ struct EngineRunConfig {
     BusinessMode business_mode = BusinessMode::Lua;
     bool enable_editor = false;
     std::string startup_lua_script_path;
+    RuntimeServices services{};
+    // Backward-compatible aliases; EngineInstance will fold them into services.
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
 };
@@ -62,6 +65,7 @@ public:
 
 private:
     EngineRunConfig config_;
+    RuntimeServices services_{};
     std::unique_ptr<World> default_world_;
     std::unique_ptr<AssetManager> default_asset_manager_;
     std::unique_ptr<FramePipeline> pipeline_;
