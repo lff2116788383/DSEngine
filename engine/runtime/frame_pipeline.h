@@ -28,13 +28,9 @@
 #include "engine/core/dynamic_library.h"
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/runtime/render_pipeline_resources.h"
+#include "engine/runtime/runtime_context.h"
 
 class AssetManager;
-
-enum class BusinessMode {
-    Lua = 0,
-    Cpp = 1
-};
 
 /**
  * @class FramePipeline
@@ -167,8 +163,7 @@ private:
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
 
-    World* world_ = nullptr;
-    std::unique_ptr<RhiDevice> rhi_device_;
+    dse::runtime::RuntimeContext runtime_context_{};
     
     TransformSystem transform_system_;
     CameraSystem camera_system_;
@@ -204,12 +199,8 @@ private:
     int update_samples_ = 0;
     int fixed_samples_ = 0;
     int render_samples_ = 0;
-    std::function<void(const std::string&)> window_title_setter_;
-    BusinessMode business_mode_ = BusinessMode::Lua;
     dse::runtime::RenderPipelineResources render_resources_;
     std::vector<RenderGraphPass> render_graph_passes_;
-    AssetManager* asset_manager_ = nullptr;
-    bool editor_mode_ = false;
 };
 
 #endif

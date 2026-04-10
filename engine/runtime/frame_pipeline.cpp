@@ -65,13 +65,13 @@ bool FramePipeline::Init() {
     if (initialized_) {
         return true;
     }
-    if (!world_) {
+    if (!runtime_context_.world) {
         DEBUG_LOG_ERROR("FramePipeline init failed: world is not injected");
         return false;
     }
-    auto& asset_manager = RequireAssetManager(asset_manager_);
-    rhi_device_ = std::make_unique<OpenGLRhiDevice>();
-    asset_manager.SetRhiDevice(rhi_device_.get());
+    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
+    runtime_context_.rhi_device = std::make_unique<OpenGLRhiDevice>();
+    asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
         if (env_data_root[0] != '\0') {
@@ -104,24 +104,24 @@ bool FramePipeline::Init() {
     const int render_width = Screen::width();
     const int render_height = Screen::height();
     
-    if (editor_mode_) {
+    if (runtime_context_.editor_mode) {
         // 在编辑器模式下，将最终合成结果输出到一个纹理中，而不是直接输出到屏幕
-        render_resources_.main_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, false, false});
+        render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, false});
     } else {
         render_resources_.main_render_target = 0;
     }
     
     // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
-    render_resources_.scene_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
-    render_resources_.ui_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
-    render_resources_.prez_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
+    render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
+    render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
+    render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
     
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        render_resources_.shadow_render_target[i] = rhi_device_->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
+        render_resources_.shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
     }
 
     if (render_resources_.pp_bloom_extract_rt == 0) {
-        render_resources_.pp_bloom_extract_rt = rhi_device_->CreateRenderTarget({render_width, render_height, true, false, false});
+        render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     }
     
     // Create mip chain for Dual Filter Bloom (5 levels)
@@ -129,7 +129,7 @@ bool FramePipeline::Init() {
         int mip_width = render_width / 2;
         int mip_height = render_height / 2;
         for (int i = 0; i < 5; ++i) {
-            render_resources_.pp_bloom_mip_rts.push_back(rhi_device_->CreateRenderTarget({mip_width, mip_height, true, false, false}));
+            render_resources_.pp_bloom_mip_rts.push_back(runtime_context_.rhi_device->CreateRenderTarget({mip_width, mip_height, true, false, false}));
             mip_width /= 2;
             mip_height /= 2;
             if (mip_width < 1) mip_width = 1;
@@ -137,14 +137,14 @@ bool FramePipeline::Init() {
         }
     }
 
-    render_resources_.sprite_pipeline_state = rhi_device_->CreatePipelineState({true, 0x0302, 0x0303});
+    render_resources_.sprite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({true, 0x0302, 0x0303});
     
     PipelineStateDesc mesh_desc;
     mesh_desc.blend_enabled = false;
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
     mesh_desc.culling_enabled = true;
-    render_resources_.mesh_pipeline_state = rhi_device_->CreatePipelineState(mesh_desc);
+    render_resources_.mesh_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(mesh_desc);
 
     PipelineStateDesc prez_desc;
     prez_desc.blend_enabled = false;
@@ -152,7 +152,7 @@ bool FramePipeline::Init() {
     prez_desc.depth_write_enabled = true;
     prez_desc.culling_enabled = true;
     // In a real engine we disable color write, but for now we'll just write to a depth-only FBO
-    render_resources_.prez_pipeline_state = rhi_device_->CreatePipelineState(prez_desc);
+    render_resources_.prez_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(prez_desc);
 
     PipelineStateDesc shadow_desc;
     shadow_desc.blend_enabled = false;
@@ -160,11 +160,11 @@ bool FramePipeline::Init() {
     shadow_desc.depth_write_enabled = true;
     shadow_desc.culling_enabled = true;
     shadow_desc.cull_face = 0x0404; // GL_FRONT to avoid peter-panning
-    render_resources_.shadow_pipeline_state = rhi_device_->CreatePipelineState(shadow_desc);
+    render_resources_.shadow_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(shadow_desc);
     
-    render_resources_.composite_pipeline_state = rhi_device_->CreatePipelineState({false, 0x0302, 0x0303});
+    render_resources_.composite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({false, 0x0302, 0x0303});
     
-    physics2d_system_.Init(*world_);
+    physics2d_system_.Init(*runtime_context_.world);
     spine_system_.SetAssetManager(&asset_manager);
     audio_system_.Initialize(&asset_manager);
     mesh_render_system_.SetAssetManager(&asset_manager);
@@ -197,7 +197,7 @@ bool FramePipeline::Init() {
             if (create_func && destroy_func) {
                 dse::core::IModule* module_instance = create_func();
                 if (module_instance) {
-                    if (!module_instance->OnInit(*world_, rhi_device_.get(), &asset_manager)) {
+                    if (!module_instance->OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
                         destroy_func(module_instance);
                     } else {
                         modules_.push_back({std::move(lib_3d), module_instance, destroy_func});
@@ -213,9 +213,9 @@ bool FramePipeline::Init() {
     bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     
-    if (business_mode_ == BusinessMode::Lua) {
+    if (runtime_context_.business_mode == BusinessMode::Lua) {
         dse::runtime::ConfigureLuaApiContext({
-            world_,
+            runtime_context_.world,
             [this](const std::string& title) { SetWindowTitle(title); },
             [this]() { return LastDrawCalls(); },
             [this]() { return LastMaxBatchSprites(); },
@@ -229,7 +229,7 @@ bool FramePipeline::Init() {
             return false;
         }
     } else {
-        const bool cpp_bootstrap_ok = dse::runtime::BootstrapCppBusiness(*world_, asset_manager);
+        const bool cpp_bootstrap_ok = dse::runtime::BootstrapCppBusiness(*runtime_context_.world, asset_manager);
         DEBUG_LOG_INFO("Cpp business mode bootstrap: {}", cpp_bootstrap_ok ? "OK" : "FAILED");
         if (!cpp_bootstrap_ok) {
             Shutdown();
@@ -248,23 +248,23 @@ void FramePipeline::Shutdown() {
         return;
     }
     dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
-    auto& asset_manager = RequireAssetManager(asset_manager_);
+    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_passes_.clear();
-    if (business_mode_ == BusinessMode::Lua) {
+    if (runtime_context_.business_mode == BusinessMode::Lua) {
         dse::runtime::ShutdownLuaRuntime();
     } else {
         dse::runtime::ShutdownCppBusiness();
     }
     audio_system_.Shutdown();
     physics2d_system_.Shutdown();
-    spine_system_.Shutdown(world_->registry());
+    spine_system_.Shutdown(runtime_context_.world->registry());
     spine_system_.SetAssetManager(nullptr);
     mesh_render_system_.SetAssetManager(nullptr);
     asset_manager.ReleaseGpuResources();
     
     for (auto& mod : modules_) {
         if (mod.instance) {
-            mod.instance->OnShutdown(*world_);
+            mod.instance->OnShutdown(*runtime_context_.world);
             if (mod.destroy) {
                 mod.destroy(mod.instance);
             }
@@ -272,9 +272,9 @@ void FramePipeline::Shutdown() {
     }
     modules_.clear();
 
-    if (rhi_device_) {
-        rhi_device_->Shutdown();
-        rhi_device_.reset();
+    if (runtime_context_.rhi_device) {
+        runtime_context_.rhi_device->Shutdown();
+        runtime_context_.rhi_device.reset();
     }
     asset_manager.SetRhiDevice(nullptr);
     render_resources_.Reset();
@@ -310,27 +310,27 @@ void FramePipeline::Render() {
 
 void FramePipeline::RunUpdateInternal(float delta_time) {
     auto update_begin = std::chrono::high_resolution_clock::now();
-    auto& asset_manager = RequireAssetManager(asset_manager_);
+    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
-    if (business_mode_ == BusinessMode::Lua) {
+    if (runtime_context_.business_mode == BusinessMode::Lua) {
         dse::runtime::TickLuaRuntime(delta_time);
     } else {
-        dse::runtime::TickCppBusiness(*world_, delta_time);
+        dse::runtime::TickCppBusiness(*runtime_context_.world, delta_time);
     }
     
-    tilemap_system_.Update(world_->registry());
-    animation_system_.Update(*world_, delta_time);
-    particle_system_.Update(*world_, delta_time, &physics2d_system_);
-    spine_system_.Update(world_->registry(), delta_time);
-    transform_system_.Update(*world_);
-    ui_logic_system_.Update(world_->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
-    camera_system_.Update(*world_, Screen::aspect_ratio());
-    audio_system_.Update(world_->registry(), delta_time);
+    tilemap_system_.Update(runtime_context_.world->registry());
+    animation_system_.Update(*runtime_context_.world, delta_time);
+    particle_system_.Update(*runtime_context_.world, delta_time, &physics2d_system_);
+    spine_system_.Update(runtime_context_.world->registry(), delta_time);
+    transform_system_.Update(*runtime_context_.world);
+    ui_logic_system_.Update(runtime_context_.world->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
+    camera_system_.Update(*runtime_context_.world, Screen::aspect_ratio());
+    audio_system_.Update(runtime_context_.world->registry(), delta_time);
     
     // 分发模块更新事件
     for (auto& mod : modules_) {
         if (mod.instance) {
-            mod.instance->OnUpdate(*world_, delta_time);
+            mod.instance->OnUpdate(*runtime_context_.world, delta_time);
         }
     }
     
@@ -341,12 +341,12 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
     auto fixed_begin = std::chrono::high_resolution_clock::now();
-    physics2d_system_.FixedUpdate(*world_, fixed_delta_time);
+    physics2d_system_.FixedUpdate(*runtime_context_.world, fixed_delta_time);
     
     // 分发模块固定更新事件
     for (auto& mod : modules_) {
         if (mod.instance) {
-            mod.instance->OnFixedUpdate(*world_, fixed_delta_time);
+            mod.instance->OnFixedUpdate(*runtime_context_.world, fixed_delta_time);
         }
     }
     
@@ -357,23 +357,23 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
 
 void FramePipeline::RunRenderInternal() {
     auto render_begin = std::chrono::high_resolution_clock::now();
-    rhi_device_->BeginFrame();
+    runtime_context_.rhi_device->BeginFrame();
     
-    auto cmd_buffer = rhi_device_->CreateCommandBuffer();
+    auto cmd_buffer = runtime_context_.rhi_device->CreateCommandBuffer();
     
     // Set global shadow maps early (they might be accessed in the scene pass)
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
-            device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
+        if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
+            device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
         }
     }
 
     ExecuteRenderGraph(*cmd_buffer);
     
-    rhi_device_->Submit(cmd_buffer);
+    runtime_context_.rhi_device->Submit(cmd_buffer);
     
-    rhi_device_->EndFrame();
-    const auto& frame_stats = rhi_device_->LastFrameStats();
+    runtime_context_.rhi_device->EndFrame();
+    const auto& frame_stats = runtime_context_.rhi_device->LastFrameStats();
     last_draw_calls_ = static_cast<int>(frame_stats.draw_calls);
     last_max_batch_sprites_ = static_cast<int>(frame_stats.max_batch_sprites);
     last_sprite_count_ = static_cast<int>(frame_stats.sprite_count);
@@ -385,16 +385,16 @@ void FramePipeline::RunRenderInternal() {
     if (stats_accumulator_ >= 1.0f) {
         stats_accumulator_ = 0.0f;
         const auto& stats = frame_stats;
-        size_t entity_count = world_->EntityCount();
+        size_t entity_count = runtime_context_.world->EntityCount();
         size_t physics_bodies = 0;
-        auto physics_view = world_->registry().view<RigidBody2DComponent>();
+        auto physics_view = runtime_context_.world->registry().view<RigidBody2DComponent>();
         for (auto entity : physics_view) {
             (void)entity;
             ++physics_bodies;
         }
         size_t particle_emitters = 0;
         size_t active_particles = 0;
-        auto particle_view = world_->registry().view<ParticleEmitterComponent>();
+        auto particle_view = runtime_context_.world->registry().view<ParticleEmitterComponent>();
         for (auto emitter_entity : particle_view) {
             auto& emitter = particle_view.get<ParticleEmitterComponent>(emitter_entity);
             (void)emitter_entity;
@@ -404,7 +404,7 @@ void FramePipeline::RunRenderInternal() {
         float avg_update_ms = update_samples_ > 0 ? update_time_accumulator_ms_ / static_cast<float>(update_samples_) : 0.0f;
         float avg_fixed_ms = fixed_samples_ > 0 ? fixed_time_accumulator_ms_ / static_cast<float>(fixed_samples_) : 0.0f;
         float avg_render_ms = render_samples_ > 0 ? render_time_accumulator_ms_ / static_cast<float>(render_samples_) : 0.0f;
-        auto& asset_manager = RequireAssetManager(asset_manager_);
+        auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
         DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
@@ -443,7 +443,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         "prez_pass",
         [this](CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({render_resources_.prez_render_target, glm::vec4(0.0f), true});
-            auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
+            auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
             int selected_priority3d = std::numeric_limits<int>::min();
             for (auto entity : camera3d_view) {
@@ -459,8 +459,8 @@ void FramePipeline::BuildRenderGraphInternal() {
                                                         static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                         camera.near_clip, camera.far_clip);
                 glm::mat4 view = glm::mat4(1.0f);
-                if (world_->registry().all_of<TransformComponent>(selected_camera3d)) {
-                    auto& transform = world_->registry().get<TransformComponent>(selected_camera3d);
+                if (runtime_context_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
+                    auto& transform = runtime_context_.world->registry().get<TransformComponent>(selected_camera3d);
                     glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                     glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                     view = glm::lookAt(transform.position, transform.position + front, up);
@@ -471,7 +471,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 // 分发 PreZ 渲染事件
                 for (auto& mod : modules_) {
                     if (mod.instance) {
-                        mod.instance->OnRenderPreZ(*world_, cmd_buffer);
+                        mod.instance->OnRenderPreZ(*runtime_context_.world, cmd_buffer);
                     }
                 }
             }
@@ -483,7 +483,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "shadow_pass",
         [this](CommandBuffer& cmd_buffer) {
-            auto light_view = world_->registry().view<dse::DirectionalLight3DComponent>();
+            auto light_view = runtime_context_.world->registry().view<dse::DirectionalLight3DComponent>();
             if (light_view.begin() == light_view.end()) return;
             auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
             if (!light.enabled || !light.cast_shadow) return;
@@ -510,7 +510,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 // 分发 Shadow 渲染事件
                 for (auto& mod : modules_) {
                     if (mod.instance) {
-                        mod.instance->OnRenderShadow(*world_, cmd_buffer, i, light_view_mat, light_proj);
+                        mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, i, light_view_mat, light_proj);
                     }
                 }
                 
@@ -521,8 +521,8 @@ void FramePipeline::BuildRenderGraphInternal() {
             cmd_buffer.SetGlobalFloatArray("u_cascade_splits", cascade_splits);
 
             for (int i = 0; i < CSM_CASCADES; ++i) {
-                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
-                    device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
+                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
+                    device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
                 }
             }
         }
@@ -534,7 +534,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         [this](CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({render_resources_.scene_render_target, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
             
-            auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
+            auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
             int selected_priority3d = std::numeric_limits<int>::min();
             std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
@@ -559,8 +559,8 @@ void FramePipeline::BuildRenderGraphInternal() {
                                                         static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                         camera.near_clip, camera.far_clip);
                 glm::mat4 view = glm::mat4(1.0f);
-                if (world_->registry().all_of<TransformComponent>(selected_camera3d)) {
-                    auto& transform = world_->registry().get<TransformComponent>(selected_camera3d);
+                if (runtime_context_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
+                    auto& transform = runtime_context_.world->registry().get<TransformComponent>(selected_camera3d);
                     glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                     glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                     view = glm::lookAt(transform.position, transform.position + front, up);
@@ -568,7 +568,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cmd_buffer.SetCamera(view, projection);
                 
                 // Draw Skybox
-                auto skybox_view = world_->registry().view<dse::SkyboxComponent>();
+                auto skybox_view = runtime_context_.world->registry().view<dse::SkyboxComponent>();
                 for (auto sky_entity : skybox_view) {
                     auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
                     if (skybox.enabled) {
@@ -578,7 +578,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                     }
                 }
             } else {
-                auto camera_view = world_->registry().view<CameraComponent>();
+                auto camera_view = runtime_context_.world->registry().view<CameraComponent>();
                 entt::entity selected_camera = entt::null;
                 int selected_priority = std::numeric_limits<int>::min();
                 std::uint32_t selected_id = std::numeric_limits<std::uint32_t>::max();
@@ -608,15 +608,15 @@ void FramePipeline::BuildRenderGraphInternal() {
             // 分发 Scene 渲染事件
             for (auto& mod : modules_) {
                 if (mod.instance) {
-                    mod.instance->OnRenderScene(*world_, cmd_buffer);
+                    mod.instance->OnRenderScene(*runtime_context_.world, cmd_buffer);
                 }
             }
             
             // 2D Sprite/Particle/Spine rendering
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
-            sprite_render_system_.Render(*world_, cmd_buffer);
-            spine_system_.Render(*world_, cmd_buffer);
-            particle_system_.Render(*world_, cmd_buffer);
+            sprite_render_system_.Render(*runtime_context_.world, cmd_buffer);
+            spine_system_.Render(*runtime_context_.world, cmd_buffer);
+            particle_system_.Render(*runtime_context_.world, cmd_buffer);
             cmd_buffer.EndRenderPass();
         }
     });
@@ -624,7 +624,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "post_process_pass",
         [this](CommandBuffer& cmd_buffer) {
-            auto pp_view = world_->registry().view<dse::PostProcessComponent>();
+            auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
             bool pp_enabled = false;
             dse::PostProcessComponent pp_config;
             for (auto entity : pp_view) {
@@ -642,19 +642,19 @@ void FramePipeline::BuildRenderGraphInternal() {
             // Bloom Extract
             cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
             cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_extract_rt, glm::vec4(0.0f), false});
-            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+            const unsigned int scene_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
             cmd_buffer.DrawPostProcess(scene_color, "bloom_extract", {pp_config.bloom_threshold});
             cmd_buffer.EndRenderPass();
 
             // Downsample Pass (Dual Filter)
-            unsigned int current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_extract_rt);
+            unsigned int current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_extract_rt);
             int mip_w = Screen::width() / 2;
             int mip_h = Screen::height() / 2;
             for (size_t i = 0; i < render_resources_.pp_bloom_mip_rts.size(); ++i) {
                 cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_mip_rts[i], glm::vec4(0.0f), false});
                 cmd_buffer.DrawPostProcess(current_src, "bloom_downsample", {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)});
                 cmd_buffer.EndRenderPass();
-                current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
+                current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
                 mip_w /= 2;
                 mip_h /= 2;
                 if (mip_w < 1) mip_w = 1;
@@ -665,7 +665,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             // We go backwards from the smallest mip
             for (int i = static_cast<int>(render_resources_.pp_bloom_mip_rts.size()) - 1; i > 0; --i) {
                 unsigned int target_rt = render_resources_.pp_bloom_mip_rts[i - 1];
-                current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
+                current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
                 cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
                 // Note: To implement additive blending correctly for PBR bloom upsample, we might need a specific blend state.
                 // For simplicity in Phase 2, we just use the tent filter directly and rely on composite later, or add blend.
@@ -685,7 +685,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         [this](CommandBuffer& cmd_buffer) {
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             cmd_buffer.BeginRenderPass({render_resources_.ui_render_target, glm::vec4(0.0f), true});
-            ui_render_system_.Render(*world_, cmd_buffer, Screen::width(), Screen::height());
+            ui_render_system_.Render(*runtime_context_.world, cmd_buffer, Screen::width(), Screen::height());
             cmd_buffer.EndRenderPass();
         }
     });
@@ -693,10 +693,10 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "composite_pass",
         [this](CommandBuffer& cmd_buffer) {
-            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
-            const unsigned int ui_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.ui_render_target);
+            const unsigned int scene_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+            const unsigned int ui_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.ui_render_target);
             
-            auto pp_view = world_->registry().view<dse::PostProcessComponent>();
+            auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
             bool pp_enabled = false;
             dse::PostProcessComponent pp_config;
             for (auto entity : pp_view) {
@@ -713,7 +713,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
 
             if (pp_enabled && pp_config.bloom_enabled) {
-                const unsigned int blur_v_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
+                const unsigned int blur_v_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
                 cmd_buffer.DrawPostProcess(scene_color, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
             } else {
                 SpriteDrawItem scene_quad;
@@ -748,7 +748,7 @@ void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
 
 void FramePipeline::EnableEditorMode(bool enable) {
     if (!initialized_) {
-        editor_mode_ = enable;
+        runtime_context_.editor_mode = enable;
     }
 }
 
@@ -756,12 +756,12 @@ void FramePipeline::SetWorld(World* world) {
     if (initialized_ || !world) {
         return;
     }
-    world_ = world;
+    runtime_context_.world = world;
 }
 
 World& FramePipeline::world() {
-    assert(world_ && "FramePipeline world is not injected");
-    return *world_;
+    assert(runtime_context_.world && "FramePipeline world is not injected");
+    return *runtime_context_.world;
 }
 
 int FramePipeline::LastDrawCalls() const {
@@ -777,36 +777,36 @@ int FramePipeline::LastSpriteCount() const {
 }
 
 unsigned int FramePipeline::GetSceneTextureId() const {
-    if (!rhi_device_ || render_resources_.scene_render_target == 0) return 0;
-    return rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) return 0;
+    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
 }
 
 unsigned int FramePipeline::GetMainTextureId() const {
-    if (!rhi_device_ || render_resources_.main_render_target == 0) return 0;
-    return rhi_device_->GetRenderTargetColorTexture(render_resources_.main_render_target);
+    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) return 0;
+    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
 }
 
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {
-    window_title_setter_ = std::move(setter);
+    runtime_context_.window_title_setter = std::move(setter);
 }
 
 void FramePipeline::SetWindowTitle(const std::string& title) {
-    if (!window_title_setter_) {
+    if (!runtime_context_.window_title_setter) {
         return;
     }
-    window_title_setter_(title);
+    runtime_context_.window_title_setter(title);
 }
 
 void FramePipeline::SetBusinessMode(BusinessMode mode) {
     if (initialized_) {
         return;
     }
-    business_mode_ = mode;
+    runtime_context_.business_mode = mode;
 }
 
 void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
     if (initialized_) {
         return;
     }
-    asset_manager_ = asset_manager;
+    runtime_context_.asset_manager = asset_manager;
 }
