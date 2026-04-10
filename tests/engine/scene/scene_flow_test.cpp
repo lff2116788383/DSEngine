@@ -305,6 +305,19 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_terrain.visible);
 }
 
+TEST_CASE("Given_CheckedInMinimal3DMvpScene_When_Deserialized_Then_Core3DComponentsArePresent", "[engine][unit][scene][3d][mvp]") {
+    scene::Scene loaded("3d-mvp-sample");
+    REQUIRE(loaded.Deserialize("assets/scenes/3d_mvp_minimal.scene.json"));
+    REQUIRE(loaded.GetName() == "3d_mvp_minimal");
+
+    REQUIRE(loaded.GetWorld().registry().view<dse::MeshRendererComponent>().begin() != loaded.GetWorld().registry().view<dse::MeshRendererComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::PointLightComponent>().begin() != loaded.GetWorld().registry().view<dse::PointLightComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::TerrainComponent>().begin() != loaded.GetWorld().registry().view<dse::TerrainComponent>().end());
+}
+
 TEST_CASE("Given_SceneRegressionHelpers_When_Executed_Then_ReturnTrue", "[engine][unit][scene]") {
     const std::string roundtrip_path = MakeSceneTempPath("scene_regression_roundtrip.json");
     const std::string backward_path = MakeSceneTempPath("scene_regression_backward.json");
