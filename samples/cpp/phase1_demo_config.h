@@ -15,6 +15,8 @@ struct StressSettings {
 
 inline constexpr const char* kWindowTitle = "DSEngine";
 inline constexpr const char* kDataPath = "data/";
+inline constexpr const char* kStartupSceneEnv = "DSE_STARTUP_SCENE";
+inline constexpr const char* kDefault3DMvpScene = "assets/scenes/3d_mvp_minimal.scene.json";
 inline constexpr StressSettings kDemo2D = {
     1024,
     64,

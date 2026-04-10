@@ -2,9 +2,11 @@
 #include "samples/cpp/phase1_demo_config.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/scene/scene.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 
 namespace dse::samples::cpp_demo {
@@ -24,6 +26,72 @@ struct DemoState {
 DemoState& State() {
     static DemoState state;
     return state;
+}
+
+const char* ResolveStartupScenePath() {
+    if (const char* env = std::getenv(config::kStartupSceneEnv)) {
+        return env;
+    }
+    return nullptr;
+}
+
+bool TryBootstrapFromStartupScene(World& world) {
+    const char* startup_scene = ResolveStartupScenePath();
+    std::cout << "[3D-Smoke][CPP] startup_scene_env=" << (startup_scene ? startup_scene : "<null>") << std::endl;
+    if (startup_scene == nullptr || startup_scene[0] == '\0') {
+        return false;
+    }
+
+    scene::Scene startup("cpp-startup-scene");
+    if (!startup.Deserialize(startup_scene)) {
+        std::cout << "[3D-Smoke][CPP] startup_scene_failed path=" << startup_scene << std::endl;
+        return false;
+    }
+
+    world.Clear();
+    for (auto entity : startup.GetWorld().registry().storage<entt::entity>()) {
+        if (!startup.GetWorld().registry().valid(entity)) continue;
+        const auto new_ent = world.CreateEntity();
+        if (startup.GetWorld().registry().all_of<TransformComponent>(entity)) {
+            world.registry().emplace<TransformComponent>(new_ent, startup.GetWorld().registry().get<TransformComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<MeshRendererComponent>(entity)) {
+            world.registry().emplace<MeshRendererComponent>(new_ent, startup.GetWorld().registry().get<MeshRendererComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<Camera3DComponent>(entity)) {
+            world.registry().emplace<Camera3DComponent>(new_ent, startup.GetWorld().registry().get<Camera3DComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<DirectionalLight3DComponent>(entity)) {
+            world.registry().emplace<DirectionalLight3DComponent>(new_ent, startup.GetWorld().registry().get<DirectionalLight3DComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<PointLightComponent>(entity)) {
+            world.registry().emplace<PointLightComponent>(new_ent, startup.GetWorld().registry().get<PointLightComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<SkyboxComponent>(entity)) {
+            world.registry().emplace<SkyboxComponent>(new_ent, startup.GetWorld().registry().get<SkyboxComponent>(entity));
+        }
+        if (startup.GetWorld().registry().all_of<Animator3DComponent>(entity)) {
+            auto animator = startup.GetWorld().registry().get<Animator3DComponent>(entity);
+            animator.state_machine.reset();
+            animator.final_bone_matrices.clear();
+            world.registry().emplace<Animator3DComponent>(new_ent, std::move(animator));
+        }
+        if (startup.GetWorld().registry().all_of<TerrainComponent>(entity)) {
+            auto terrain = startup.GetWorld().registry().get<TerrainComponent>(entity);
+            terrain.is_dirty = true;
+            world.registry().emplace<TerrainComponent>(new_ent, std::move(terrain));
+        }
+    }
+
+    auto& state = State();
+    state.initialized = true;
+    state.spawn_index = 0;
+    state.frame_counter = 0;
+    state.settings.total_boxes = 0;
+    state.settings.spawn_per_frame = 0;
+    state.settings.columns = 0;
+    std::cout << "[3D-Smoke][CPP] startup_scene_loaded path=" << startup_scene << std::endl;
+    return true;
 }
 
 Entity SpawnBox(World& world, int index, const DemoState& state) {
@@ -58,6 +126,10 @@ void Bootstrap(World& world, AssetManager& asset_manager) {
     state.settings.total_boxes = 100;
     state.settings.spawn_per_frame = 10;
     if (state.initialized) {
+        return;
+    }
+
+    if (TryBootstrapFromStartupScene(world)) {
         return;
     }
 
