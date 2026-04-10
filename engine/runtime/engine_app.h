@@ -25,6 +25,11 @@ struct EngineRunConfig {
     // Backward-compatible aliases; EngineInstance will fold them into services.
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
+
+    EngineRunConfig& WithServices(RuntimeServices runtime_services) {
+        services = runtime_services;
+        return *this;
+    }
 };
 
 /**
