@@ -7,6 +7,7 @@
 #include "engine/ecs/components_3d.h"
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 
 namespace dse::samples::cpp_demo {
@@ -33,6 +34,32 @@ const char* ResolveStartupScenePath() {
         return env;
     }
     return nullptr;
+}
+
+void ReportMvpResourceDiagnostics(World& world) {
+    auto mesh_view = world.registry().view<MeshRendererComponent>();
+    for (auto entity : mesh_view) {
+        const auto& mesh = mesh_view.get<MeshRendererComponent>(entity);
+        if (!mesh.mesh_path.empty() && !std::filesystem::exists(mesh.mesh_path)) {
+            std::cout << "[3D-Smoke][CPP] mvp_resource_missing type=mesh path=" << mesh.mesh_path << std::endl;
+        }
+    }
+
+    auto skybox_view = world.registry().view<SkyboxComponent>();
+    for (auto entity : skybox_view) {
+        const auto& skybox = skybox_view.get<SkyboxComponent>(entity);
+        if (!skybox.cubemap_path.empty() && !std::filesystem::exists(skybox.cubemap_path)) {
+            std::cout << "[3D-Smoke][CPP] mvp_resource_missing type=skybox path=" << skybox.cubemap_path << std::endl;
+        }
+    }
+
+    auto terrain_view = world.registry().view<TerrainComponent>();
+    for (auto entity : terrain_view) {
+        const auto& terrain = terrain_view.get<TerrainComponent>(entity);
+        if (!terrain.heightmap_path.empty() && !std::filesystem::exists(terrain.heightmap_path)) {
+            std::cout << "[3D-Smoke][CPP] mvp_resource_missing type=terrain_heightmap path=" << terrain.heightmap_path << std::endl;
+        }
+    }
 }
 
 bool TryBootstrapFromStartupScene(World& world) {
@@ -91,6 +118,7 @@ bool TryBootstrapFromStartupScene(World& world) {
     state.settings.spawn_per_frame = 0;
     state.settings.columns = 0;
     std::cout << "[3D-Smoke][CPP] startup_scene_loaded path=" << startup_scene << std::endl;
+    ReportMvpResourceDiagnostics(world);
     return true;
 }
 

@@ -80,5 +80,8 @@ TEST_CASE("Given_ValidStartupScene_When_RuntimeStarts_Then_SceneModeLoadsAndLega
     INFO(output);
     REQUIRE(output.find("startup_scene_env=assets/scenes/3d_mvp_minimal.scene.json") != std::string::npos);
     REQUIRE(output.find("startup_scene_loaded path=assets/scenes/3d_mvp_minimal.scene.json") != std::string::npos);
+    REQUIRE(output.find("mvp_resource_missing type=mesh path=assets/meshes/mvp_cube.fbx") != std::string::npos);
+    REQUIRE(output.find("mvp_resource_missing type=skybox path=assets/skyboxes/default_sky") != std::string::npos);
+    REQUIRE(output.find("mvp_resource_missing type=terrain_heightmap path=assets/terrain/height.png") != std::string::npos);
     REQUIRE(output.find("spawned=0/0") != std::string::npos);
 }
