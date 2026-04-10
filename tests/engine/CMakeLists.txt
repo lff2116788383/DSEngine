@@ -212,6 +212,18 @@ set_tests_properties(engine.3d.smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "\\[3D-Smoke\\]\\[CPP\\] bootstrap_ok"
 )
 
+add_test(
+    NAME engine.3d.runtime_mvp_smoke
+    COMMAND $<TARGET_FILE:DSEngine_example_cpp>
+)
+set_tests_properties(engine.3d.runtime_mvp_smoke PROPERTIES
+    LABELS "engine;smoke;3d;runtime;mvp;gate"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "DSE_STARTUP_SCENE=assets/scenes/3d_mvp_minimal.scene.json;DSE_MAX_FRAMES=120"
+    PASS_REGULAR_EXPRESSION "\\[3D-Smoke\\]\\[CPP\\] startup_scene_loaded path=assets/scenes/3d_mvp_minimal.scene.json"
+    TIMEOUT 20
+)
+
 add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp)
 
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
