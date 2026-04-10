@@ -5,6 +5,7 @@
 
 #include "engine/scene/scene.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
 #include "engine/base/debug.h"
 #include <fstream>
 #include <sstream>
@@ -136,6 +137,70 @@ bool Scene::Serialize(const std::string& filepath) {
             script_json.AddMember("script_path", rapidjson::Value(script.script_path.c_str(), allocator), allocator);
             script_json.AddMember("enabled", script.enabled, allocator);
             components.AddMember("ScriptComponent", script_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::MeshRendererComponent>(entity)) {
+            const auto& mesh = world.registry().get<dse::MeshRendererComponent>(entity);
+            rapidjson::Value mesh_json(rapidjson::kObjectType);
+            mesh_json.AddMember("mesh_path", rapidjson::Value(mesh.mesh_path.c_str(), allocator), allocator);
+            mesh_json.AddMember("material_instance_id", mesh.material_instance_id, allocator);
+            mesh_json.AddMember("shader_variant", rapidjson::Value(mesh.shader_variant.c_str(), allocator), allocator);
+            rapidjson::Value color(rapidjson::kArrayType);
+            color.PushBack(mesh.color.r, allocator).PushBack(mesh.color.g, allocator).PushBack(mesh.color.b, allocator).PushBack(mesh.color.a, allocator);
+            mesh_json.AddMember("color", color, allocator);
+            rapidjson::Value emissive(rapidjson::kArrayType);
+            emissive.PushBack(mesh.emissive.x, allocator).PushBack(mesh.emissive.y, allocator).PushBack(mesh.emissive.z, allocator);
+            mesh_json.AddMember("emissive", emissive, allocator);
+            mesh_json.AddMember("metallic", mesh.metallic, allocator);
+            mesh_json.AddMember("roughness", mesh.roughness, allocator);
+            mesh_json.AddMember("ao", mesh.ao, allocator);
+            mesh_json.AddMember("normal_strength", mesh.normal_strength, allocator);
+            mesh_json.AddMember("receive_shadow", mesh.receive_shadow, allocator);
+            mesh_json.AddMember("visible", mesh.visible, allocator);
+            components.AddMember("MeshRendererComponent", mesh_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::Camera3DComponent>(entity)) {
+            const auto& camera = world.registry().get<dse::Camera3DComponent>(entity);
+            rapidjson::Value camera_json(rapidjson::kObjectType);
+            camera_json.AddMember("enabled", camera.enabled, allocator);
+            camera_json.AddMember("priority", camera.priority, allocator);
+            camera_json.AddMember("fov", camera.fov, allocator);
+            camera_json.AddMember("aspect_ratio", camera.aspect_ratio, allocator);
+            camera_json.AddMember("near_clip", camera.near_clip, allocator);
+            camera_json.AddMember("far_clip", camera.far_clip, allocator);
+            components.AddMember("Camera3DComponent", camera_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::DirectionalLight3DComponent>(entity)) {
+            const auto& light = world.registry().get<dse::DirectionalLight3DComponent>(entity);
+            rapidjson::Value light_json(rapidjson::kObjectType);
+            light_json.AddMember("enabled", light.enabled, allocator);
+            rapidjson::Value direction(rapidjson::kArrayType);
+            direction.PushBack(light.direction.x, allocator).PushBack(light.direction.y, allocator).PushBack(light.direction.z, allocator);
+            light_json.AddMember("direction", direction, allocator);
+            rapidjson::Value color(rapidjson::kArrayType);
+            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
+            light_json.AddMember("color", color, allocator);
+            light_json.AddMember("intensity", light.intensity, allocator);
+            light_json.AddMember("ambient_intensity", light.ambient_intensity, allocator);
+            light_json.AddMember("shadow_strength", light.shadow_strength, allocator);
+            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
+            rapidjson::Value cascade_splits(rapidjson::kArrayType);
+            for (int i = 0; i < CSM_CASCADES; ++i) {
+                cascade_splits.PushBack(light.cascade_splits[i], allocator);
+            }
+            light_json.AddMember("cascade_splits", cascade_splits, allocator);
+            components.AddMember("DirectionalLight3DComponent", light_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::SkyboxComponent>(entity)) {
+            const auto& skybox = world.registry().get<dse::SkyboxComponent>(entity);
+            rapidjson::Value skybox_json(rapidjson::kObjectType);
+            skybox_json.AddMember("enabled", skybox.enabled, allocator);
+            skybox_json.AddMember("cubemap_handle", skybox.cubemap_handle, allocator);
+            skybox_json.AddMember("cubemap_path", rapidjson::Value(skybox.cubemap_path.c_str(), allocator), allocator);
+            components.AddMember("SkyboxComponent", skybox_json, allocator);
         }
 
         entity_json.AddMember("components", components, allocator);
@@ -328,6 +393,121 @@ bool Scene::Deserialize(const std::string& filepath) {
                 script.enabled = script_json["enabled"].GetBool();
             }
             world.registry().emplace<ScriptComponent>(entity, script);
+        }
+
+        if (components.HasMember("MeshRendererComponent") && components["MeshRendererComponent"].IsObject()) {
+            const auto& mesh_json = components["MeshRendererComponent"];
+            dse::MeshRendererComponent mesh;
+            if (mesh_json.HasMember("mesh_path") && mesh_json["mesh_path"].IsString()) {
+                mesh.mesh_path = mesh_json["mesh_path"].GetString();
+            }
+            if (mesh_json.HasMember("material_instance_id") && mesh_json["material_instance_id"].IsUint()) {
+                mesh.material_instance_id = mesh_json["material_instance_id"].GetUint();
+            }
+            if (mesh_json.HasMember("shader_variant") && mesh_json["shader_variant"].IsString()) {
+                mesh.shader_variant = mesh_json["shader_variant"].GetString();
+            }
+            if (mesh_json.HasMember("color") && mesh_json["color"].IsArray() && mesh_json["color"].Size() == 4) {
+                const auto& c = mesh_json["color"].GetArray();
+                mesh.color = glm::vec4(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat(), c[3].GetFloat());
+            }
+            if (mesh_json.HasMember("emissive") && mesh_json["emissive"].IsArray() && mesh_json["emissive"].Size() == 3) {
+                const auto& e = mesh_json["emissive"].GetArray();
+                mesh.emissive = glm::vec3(e[0].GetFloat(), e[1].GetFloat(), e[2].GetFloat());
+            }
+            if (mesh_json.HasMember("metallic") && mesh_json["metallic"].IsNumber()) {
+                mesh.metallic = mesh_json["metallic"].GetFloat();
+            }
+            if (mesh_json.HasMember("roughness") && mesh_json["roughness"].IsNumber()) {
+                mesh.roughness = mesh_json["roughness"].GetFloat();
+            }
+            if (mesh_json.HasMember("ao") && mesh_json["ao"].IsNumber()) {
+                mesh.ao = mesh_json["ao"].GetFloat();
+            }
+            if (mesh_json.HasMember("normal_strength") && mesh_json["normal_strength"].IsNumber()) {
+                mesh.normal_strength = mesh_json["normal_strength"].GetFloat();
+            }
+            if (mesh_json.HasMember("receive_shadow") && mesh_json["receive_shadow"].IsBool()) {
+                mesh.receive_shadow = mesh_json["receive_shadow"].GetBool();
+            }
+            if (mesh_json.HasMember("visible") && mesh_json["visible"].IsBool()) {
+                mesh.visible = mesh_json["visible"].GetBool();
+            }
+            world.registry().emplace<dse::MeshRendererComponent>(entity, mesh);
+        }
+
+        if (components.HasMember("Camera3DComponent") && components["Camera3DComponent"].IsObject()) {
+            const auto& camera_json = components["Camera3DComponent"];
+            dse::Camera3DComponent camera;
+            if (camera_json.HasMember("enabled") && camera_json["enabled"].IsBool()) {
+                camera.enabled = camera_json["enabled"].GetBool();
+            }
+            if (camera_json.HasMember("priority") && camera_json["priority"].IsInt()) {
+                camera.priority = camera_json["priority"].GetInt();
+            }
+            if (camera_json.HasMember("fov") && camera_json["fov"].IsNumber()) {
+                camera.fov = camera_json["fov"].GetFloat();
+            }
+            if (camera_json.HasMember("aspect_ratio") && camera_json["aspect_ratio"].IsNumber()) {
+                camera.aspect_ratio = camera_json["aspect_ratio"].GetFloat();
+            }
+            if (camera_json.HasMember("near_clip") && camera_json["near_clip"].IsNumber()) {
+                camera.near_clip = camera_json["near_clip"].GetFloat();
+            }
+            if (camera_json.HasMember("far_clip") && camera_json["far_clip"].IsNumber()) {
+                camera.far_clip = camera_json["far_clip"].GetFloat();
+            }
+            world.registry().emplace<dse::Camera3DComponent>(entity, camera);
+        }
+
+        if (components.HasMember("DirectionalLight3DComponent") && components["DirectionalLight3DComponent"].IsObject()) {
+            const auto& light_json = components["DirectionalLight3DComponent"];
+            dse::DirectionalLight3DComponent light;
+            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
+                light.enabled = light_json["enabled"].GetBool();
+            }
+            if (light_json.HasMember("direction") && light_json["direction"].IsArray() && light_json["direction"].Size() == 3) {
+                const auto& d = light_json["direction"].GetArray();
+                light.direction = glm::vec3(d[0].GetFloat(), d[1].GetFloat(), d[2].GetFloat());
+            }
+            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
+                const auto& c = light_json["color"].GetArray();
+                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
+            }
+            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
+                light.intensity = light_json["intensity"].GetFloat();
+            }
+            if (light_json.HasMember("ambient_intensity") && light_json["ambient_intensity"].IsNumber()) {
+                light.ambient_intensity = light_json["ambient_intensity"].GetFloat();
+            }
+            if (light_json.HasMember("shadow_strength") && light_json["shadow_strength"].IsNumber()) {
+                light.shadow_strength = light_json["shadow_strength"].GetFloat();
+            }
+            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
+                light.cast_shadow = light_json["cast_shadow"].GetBool();
+            }
+            if (light_json.HasMember("cascade_splits") && light_json["cascade_splits"].IsArray()) {
+                const auto& splits = light_json["cascade_splits"].GetArray();
+                for (rapidjson::SizeType i = 0; i < splits.Size() && i < CSM_CASCADES; ++i) {
+                    light.cascade_splits[i] = splits[i].GetFloat();
+                }
+            }
+            world.registry().emplace<dse::DirectionalLight3DComponent>(entity, light);
+        }
+
+        if (components.HasMember("SkyboxComponent") && components["SkyboxComponent"].IsObject()) {
+            const auto& skybox_json = components["SkyboxComponent"];
+            dse::SkyboxComponent skybox;
+            if (skybox_json.HasMember("enabled") && skybox_json["enabled"].IsBool()) {
+                skybox.enabled = skybox_json["enabled"].GetBool();
+            }
+            if (skybox_json.HasMember("cubemap_handle") && skybox_json["cubemap_handle"].IsUint()) {
+                skybox.cubemap_handle = skybox_json["cubemap_handle"].GetUint();
+            }
+            if (skybox_json.HasMember("cubemap_path") && skybox_json["cubemap_path"].IsString()) {
+                skybox.cubemap_path = skybox_json["cubemap_path"].GetString();
+            }
+            world.registry().emplace<dse::SkyboxComponent>(entity, skybox);
         }
     }
 
