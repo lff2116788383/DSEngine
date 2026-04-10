@@ -114,6 +114,35 @@ void CopyRegistry(entt::registry& dst, entt::registry& src) {
             emitter.pending_burst = 0;
             dst.emplace<ParticleEmitterComponent>(new_ent, std::move(emitter));
         }
+
+        if (src.all_of<dse::MeshRendererComponent>(entity)) {
+            dst.emplace<dse::MeshRendererComponent>(new_ent, src.get<dse::MeshRendererComponent>(entity));
+        }
+        if (src.all_of<dse::Camera3DComponent>(entity)) {
+            dst.emplace<dse::Camera3DComponent>(new_ent, src.get<dse::Camera3DComponent>(entity));
+        }
+        if (src.all_of<dse::DirectionalLight3DComponent>(entity)) {
+            dst.emplace<dse::DirectionalLight3DComponent>(new_ent, src.get<dse::DirectionalLight3DComponent>(entity));
+        }
+        if (src.all_of<dse::PointLightComponent>(entity)) {
+            dst.emplace<dse::PointLightComponent>(new_ent, src.get<dse::PointLightComponent>(entity));
+        }
+        if (src.all_of<dse::SkyboxComponent>(entity)) {
+            dst.emplace<dse::SkyboxComponent>(new_ent, src.get<dse::SkyboxComponent>(entity));
+        }
+        if (src.all_of<dse::Animator3DComponent>(entity)) {
+            auto animator = src.get<dse::Animator3DComponent>(entity);
+            animator.state_machine.reset();
+            animator.final_bone_matrices.clear();
+            animator.transition_progress = 0.0f;
+            animator.current_time = 0.0f;
+            dst.emplace<dse::Animator3DComponent>(new_ent, std::move(animator));
+        }
+        if (src.all_of<dse::TerrainComponent>(entity)) {
+            auto terrain = src.get<dse::TerrainComponent>(entity);
+            terrain.is_dirty = true;
+            dst.emplace<dse::TerrainComponent>(new_ent, std::move(terrain));
+        }
     }
 }
 
@@ -353,6 +382,56 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             mesh_obj.AddMember("receive_shadow", mesh.receive_shadow, allocator);
             mesh_obj.AddMember("mesh_path", rapidjson::Value(mesh.mesh_path.c_str(), allocator).Move(), allocator);
             ent_obj.AddMember("mesh_renderer", mesh_obj, allocator);
+        }
+
+        if (registry.all_of<dse::PointLightComponent>(entity)) {
+            auto& light = registry.get<dse::PointLightComponent>(entity);
+            rapidjson::Value light_obj(rapidjson::kObjectType);
+            light_obj.AddMember("enabled", light.enabled, allocator);
+            WriteVec3(light_obj, "color", light.color, allocator);
+            light_obj.AddMember("intensity", light.intensity, allocator);
+            light_obj.AddMember("radius", light.radius, allocator);
+            light_obj.AddMember("cast_shadow", light.cast_shadow, allocator);
+            ent_obj.AddMember("point_light", light_obj, allocator);
+        }
+
+        if (registry.all_of<dse::SkyboxComponent>(entity)) {
+            auto& skybox = registry.get<dse::SkyboxComponent>(entity);
+            rapidjson::Value skybox_obj(rapidjson::kObjectType);
+            skybox_obj.AddMember("enabled", skybox.enabled, allocator);
+            skybox_obj.AddMember("cubemap_handle", skybox.cubemap_handle, allocator);
+            skybox_obj.AddMember("cubemap_path", rapidjson::Value(skybox.cubemap_path.c_str(), allocator).Move(), allocator);
+            ent_obj.AddMember("skybox", skybox_obj, allocator);
+        }
+
+        if (registry.all_of<dse::Animator3DComponent>(entity)) {
+            auto& animator = registry.get<dse::Animator3DComponent>(entity);
+            rapidjson::Value animator_obj(rapidjson::kObjectType);
+            animator_obj.AddMember("enabled", animator.enabled, allocator);
+            animator_obj.AddMember("dskel_path", rapidjson::Value(animator.dskel_path.c_str(), allocator).Move(), allocator);
+            animator_obj.AddMember("danim_path", rapidjson::Value(animator.danim_path.c_str(), allocator).Move(), allocator);
+            animator_obj.AddMember("speed", animator.speed, allocator);
+            animator_obj.AddMember("loop", animator.loop, allocator);
+            animator_obj.AddMember("use_anim_tree", animator.use_anim_tree, allocator);
+            ent_obj.AddMember("animator3d", animator_obj, allocator);
+        }
+
+        if (registry.all_of<dse::TerrainComponent>(entity)) {
+            auto& terrain = registry.get<dse::TerrainComponent>(entity);
+            rapidjson::Value terrain_obj(rapidjson::kObjectType);
+            terrain_obj.AddMember("enabled", terrain.enabled, allocator);
+            terrain_obj.AddMember("heightmap_path", rapidjson::Value(terrain.heightmap_path.c_str(), allocator).Move(), allocator);
+            terrain_obj.AddMember("texture_handle", terrain.texture_handle, allocator);
+            terrain_obj.AddMember("width", terrain.width, allocator);
+            terrain_obj.AddMember("depth", terrain.depth, allocator);
+            terrain_obj.AddMember("max_height", terrain.max_height, allocator);
+            terrain_obj.AddMember("resolution_x", terrain.resolution_x, allocator);
+            terrain_obj.AddMember("resolution_z", terrain.resolution_z, allocator);
+            terrain_obj.AddMember("use_dynamic_lod", terrain.use_dynamic_lod, allocator);
+            terrain_obj.AddMember("max_lod_levels", terrain.max_lod_levels, allocator);
+            terrain_obj.AddMember("lod_distance_factor", terrain.lod_distance_factor, allocator);
+            terrain_obj.AddMember("visible", terrain.visible, allocator);
+            ent_obj.AddMember("terrain", terrain_obj, allocator);
         }
 
         if (registry.all_of<dse::RigidBody3DComponent>(entity)) {
@@ -616,6 +695,55 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             if (mesh_obj.HasMember("visible") && mesh_obj["visible"].IsBool()) mesh.visible = mesh_obj["visible"].GetBool();
             if (mesh_obj.HasMember("receive_shadow") && mesh_obj["receive_shadow"].IsBool()) mesh.receive_shadow = mesh_obj["receive_shadow"].GetBool();
             if (mesh_obj.HasMember("mesh_path") && mesh_obj["mesh_path"].IsString()) mesh.mesh_path = mesh_obj["mesh_path"].GetString();
+        }
+
+        if (v.HasMember("point_light") && v["point_light"].IsObject()) {
+            auto& light_obj = v["point_light"];
+            auto& light = registry.emplace<dse::PointLightComponent>(entity);
+            if (light_obj.HasMember("enabled") && light_obj["enabled"].IsBool()) light.enabled = light_obj["enabled"].GetBool();
+            ReadVec3(light_obj, "color", light.color);
+            if (light_obj.HasMember("intensity") && light_obj["intensity"].IsNumber()) light.intensity = light_obj["intensity"].GetFloat();
+            if (light_obj.HasMember("radius") && light_obj["radius"].IsNumber()) light.radius = light_obj["radius"].GetFloat();
+            if (light_obj.HasMember("cast_shadow") && light_obj["cast_shadow"].IsBool()) light.cast_shadow = light_obj["cast_shadow"].GetBool();
+        }
+
+        if (v.HasMember("skybox") && v["skybox"].IsObject()) {
+            auto& skybox_obj = v["skybox"];
+            auto& skybox = registry.emplace<dse::SkyboxComponent>(entity);
+            if (skybox_obj.HasMember("enabled") && skybox_obj["enabled"].IsBool()) skybox.enabled = skybox_obj["enabled"].GetBool();
+            if (skybox_obj.HasMember("cubemap_handle") && skybox_obj["cubemap_handle"].IsUint()) skybox.cubemap_handle = skybox_obj["cubemap_handle"].GetUint();
+            if (skybox_obj.HasMember("cubemap_path") && skybox_obj["cubemap_path"].IsString()) skybox.cubemap_path = skybox_obj["cubemap_path"].GetString();
+        }
+
+        if (v.HasMember("animator3d") && v["animator3d"].IsObject()) {
+            auto& animator_obj = v["animator3d"];
+            auto& animator = registry.emplace<dse::Animator3DComponent>(entity);
+            if (animator_obj.HasMember("enabled") && animator_obj["enabled"].IsBool()) animator.enabled = animator_obj["enabled"].GetBool();
+            if (animator_obj.HasMember("dskel_path") && animator_obj["dskel_path"].IsString()) animator.dskel_path = animator_obj["dskel_path"].GetString();
+            if (animator_obj.HasMember("danim_path") && animator_obj["danim_path"].IsString()) animator.danim_path = animator_obj["danim_path"].GetString();
+            if (animator_obj.HasMember("speed") && animator_obj["speed"].IsNumber()) animator.speed = animator_obj["speed"].GetFloat();
+            if (animator_obj.HasMember("loop") && animator_obj["loop"].IsBool()) animator.loop = animator_obj["loop"].GetBool();
+            if (animator_obj.HasMember("use_anim_tree") && animator_obj["use_anim_tree"].IsBool()) animator.use_anim_tree = animator_obj["use_anim_tree"].GetBool();
+            animator.state_machine.reset();
+            animator.final_bone_matrices.clear();
+        }
+
+        if (v.HasMember("terrain") && v["terrain"].IsObject()) {
+            auto& terrain_obj = v["terrain"];
+            auto& terrain = registry.emplace<dse::TerrainComponent>(entity);
+            if (terrain_obj.HasMember("enabled") && terrain_obj["enabled"].IsBool()) terrain.enabled = terrain_obj["enabled"].GetBool();
+            if (terrain_obj.HasMember("heightmap_path") && terrain_obj["heightmap_path"].IsString()) terrain.heightmap_path = terrain_obj["heightmap_path"].GetString();
+            if (terrain_obj.HasMember("texture_handle") && terrain_obj["texture_handle"].IsUint()) terrain.texture_handle = terrain_obj["texture_handle"].GetUint();
+            if (terrain_obj.HasMember("width") && terrain_obj["width"].IsNumber()) terrain.width = terrain_obj["width"].GetFloat();
+            if (terrain_obj.HasMember("depth") && terrain_obj["depth"].IsNumber()) terrain.depth = terrain_obj["depth"].GetFloat();
+            if (terrain_obj.HasMember("max_height") && terrain_obj["max_height"].IsNumber()) terrain.max_height = terrain_obj["max_height"].GetFloat();
+            if (terrain_obj.HasMember("resolution_x") && terrain_obj["resolution_x"].IsInt()) terrain.resolution_x = terrain_obj["resolution_x"].GetInt();
+            if (terrain_obj.HasMember("resolution_z") && terrain_obj["resolution_z"].IsInt()) terrain.resolution_z = terrain_obj["resolution_z"].GetInt();
+            if (terrain_obj.HasMember("use_dynamic_lod") && terrain_obj["use_dynamic_lod"].IsBool()) terrain.use_dynamic_lod = terrain_obj["use_dynamic_lod"].GetBool();
+            if (terrain_obj.HasMember("max_lod_levels") && terrain_obj["max_lod_levels"].IsInt()) terrain.max_lod_levels = terrain_obj["max_lod_levels"].GetInt();
+            if (terrain_obj.HasMember("lod_distance_factor") && terrain_obj["lod_distance_factor"].IsNumber()) terrain.lod_distance_factor = terrain_obj["lod_distance_factor"].GetFloat();
+            if (terrain_obj.HasMember("visible") && terrain_obj["visible"].IsBool()) terrain.visible = terrain_obj["visible"].GetBool();
+            terrain.is_dirty = true;
         }
 
         if (v.HasMember("rigidbody3d") && v["rigidbody3d"].IsObject()) {

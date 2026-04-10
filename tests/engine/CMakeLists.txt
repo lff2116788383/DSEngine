@@ -15,6 +15,7 @@ set(DSE_ENGINE_TEST_SOURCES
     scene/prefab_test.cpp
     scene/octree_test.cpp
     scene/scene_flow_test.cpp
+    scene/editor_scene_io_bridge_test.cpp
     runtime/runtime_access_test.cpp
     runtime/frame_pipeline_static_regression_test.cpp
     scripting/cpp_business_runtime_test.cpp
@@ -63,6 +64,7 @@ set(DSE_ENGINE_TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/engine/ecs/world.cpp
     ${CMAKE_SOURCE_DIR}/engine/scene/scene.cpp
     ${CMAKE_SOURCE_DIR}/engine/scene/transform_system.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_io.cpp
     ${CMAKE_SOURCE_DIR}/engine/scripting/cpp/cpp_business_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/camera/camera_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_2d/animation/animation_system.cpp
