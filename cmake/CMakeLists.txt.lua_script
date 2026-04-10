@@ -2,7 +2,10 @@
 #file(COPY "../../template/depends/sol2-3.2.2/include/sol/" DESTINATION "../depends/sol/")
 
 #头文件目录
-include_directories("depends/lua/src")
+# Lua 实际源码位于 depends/lua/，不是 depends/lua/src。
+# 之前这里误写为 depends/lua/src，会导致编译器在找不到项目内头文件时，
+# 回退到环境或其它路径中的 Lua 头/库配置，进而在链接阶段把外部 lua.lib 带进来。
+include_directories("depends/lua")
 include_directories("depends/sol2-3.2.2/include")
 
 #源文件

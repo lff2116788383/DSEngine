@@ -16,6 +16,13 @@ add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
 
 add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
 
+# 注意：当前工程会把 vcpkg 的整个 lib 目录以通配方式拼进 MSVC 链接命令，
+# 其中如果存在 lua.lib，就会与源码内置 Lua 重复链接。
+# 这里显式忽略 Lua 默认库名，作为针对该项目链接命令的最小修复。
+if(MSVC)
+    add_link_options(/NODEFAULTLIB:lua.lib /NODEFAULTLIB:lua5.1.lib /NODEFAULTLIB:lua51.lib /NODEFAULTLIB:lua53.lib /NODEFAULTLIB:lua54.lib)
+endif()
+
 option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
@@ -35,8 +42,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin)
 
+# 本项目主要依赖仓库内置 depends 源码，不希望 MSVC 的 vcpkg 自动把
+# installed/<triplet>/lib/*.lib 注入到每个 target 的链接命令中。
+# 注意：vcpkg 的 MSBuild 集成要求使用字符串 "false" 才会命中其条件判断。
+set(VcpkgAutoLink "false" CACHE STRING "Disable MSBuild vcpkg auto-link wildcard injection" FORCE)
+
 if (MSVC)
-    set(CMAKE_VS_GLOBALS "VcpkgApplocalDeps=false")
+    set(CMAKE_VS_GLOBALS
+        "VcpkgApplocalDeps=false"
+        "VcpkgAutoLink=false"
+    )
     add_compile_options(/bigobj)
     add_compile_options(/wd4819)#忽略保存为unicode警告
     add_compile_options(/FS) # 修复多线程编译 PDB 写入冲突 C1041

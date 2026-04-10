@@ -393,7 +393,26 @@ bool BootstrapLuaRuntime() {
         state.lua_memory_usage = 0;
         return false;
     }
-    luaL_openlibs(state.state);
+    luaL_requiref(state.state, LUA_GNAME, luaopen_base, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_LOADLIBNAME, luaopen_package, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_COLIBNAME, luaopen_coroutine, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_TABLIBNAME, luaopen_table, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_IOLIBNAME, luaopen_io, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_OSLIBNAME, luaopen_os, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_STRLIBNAME, luaopen_string, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_MATHLIBNAME, luaopen_math, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_UTF8LIBNAME, luaopen_utf8, 1);
+    lua_pop(state.state, 1);
+    luaL_requiref(state.state, LUA_DBLIBNAME, luaopen_debug, 1);
+    lua_pop(state.state, 1);
     SetupLuaPackagePath(state.state, state.startup_script_path);
     lua_binding::RegisterPhase1LuaApi(state.state);
     if (luaL_dofile(state.state, state.startup_script_path.c_str()) != LUA_OK) {
