@@ -1,0 +1,45 @@
+#ifndef DSE_RENDER_PIPELINE_RESOURCES_H
+#define DSE_RENDER_PIPELINE_RESOURCES_H
+
+#include <vector>
+#include "engine/render/rhi/rhi_device.h"
+
+namespace dse::runtime {
+
+struct RenderPipelineResources {
+    unsigned int main_render_target = 0;
+    unsigned int scene_render_target = 0;
+    unsigned int ui_render_target = 0;
+    unsigned int prez_render_target = 0;
+
+    unsigned int pp_bloom_extract_rt = 0;
+    std::vector<unsigned int> pp_bloom_mip_rts;
+
+    unsigned int sprite_pipeline_state = 0;
+    unsigned int mesh_pipeline_state = 0;
+    unsigned int prez_pipeline_state = 0;
+    unsigned int composite_pipeline_state = 0;
+    unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
+    unsigned int shadow_pipeline_state = 0;
+
+    void Reset() {
+        main_render_target = 0;
+        scene_render_target = 0;
+        ui_render_target = 0;
+        prez_render_target = 0;
+        for (int i = 0; i < CSM_CASCADES; ++i) {
+            shadow_render_target[i] = 0;
+        }
+        pp_bloom_extract_rt = 0;
+        pp_bloom_mip_rts.clear();
+        sprite_pipeline_state = 0;
+        mesh_pipeline_state = 0;
+        prez_pipeline_state = 0;
+        composite_pipeline_state = 0;
+        shadow_pipeline_state = 0;
+    }
+};
+
+} // namespace dse::runtime
+
+#endif

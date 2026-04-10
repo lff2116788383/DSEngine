@@ -27,6 +27,7 @@
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
 #include "engine/runtime/runtime_frame_ops.h"
+#include "engine/runtime/render_pipeline_resources.h"
 
 class AssetManager;
 
@@ -205,21 +206,7 @@ private:
     int render_samples_ = 0;
     std::function<void(const std::string&)> window_title_setter_;
     BusinessMode business_mode_ = BusinessMode::Lua;
-    unsigned int main_render_target_ = 0;
-    unsigned int scene_render_target_ = 0;
-    unsigned int ui_render_target_ = 0;
-    unsigned int prez_render_target_ = 0;
-    
-    // PBR Bloom RTs
-    unsigned int pp_bloom_extract_rt_ = 0;
-    std::vector<unsigned int> pp_bloom_mip_rts_; // 5 mip levels
-    
-    unsigned int sprite_pipeline_state_ = 0;
-    unsigned int mesh_pipeline_state_ = 0;
-    unsigned int prez_pipeline_state_ = 0;
-    unsigned int composite_pipeline_state_ = 0;
-    unsigned int shadow_render_target_[CSM_CASCADES] = {0, 0, 0};
-    unsigned int shadow_pipeline_state_ = 0;
+    dse::runtime::RenderPipelineResources render_resources_;
     std::vector<RenderGraphPass> render_graph_passes_;
     AssetManager* asset_manager_ = nullptr;
     bool editor_mode_ = false;

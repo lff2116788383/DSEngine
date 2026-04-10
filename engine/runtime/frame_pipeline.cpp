@@ -106,30 +106,30 @@ bool FramePipeline::Init() {
     
     if (editor_mode_) {
         // 在编辑器模式下，将最终合成结果输出到一个纹理中，而不是直接输出到屏幕
-        main_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, false});
+        render_resources_.main_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, false, false});
     } else {
-        main_render_target_ = 0;
+        render_resources_.main_render_target = 0;
     }
     
     // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
-    scene_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
-    ui_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
-    prez_render_target_ = rhi_device_->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
+    render_resources_.scene_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
+    render_resources_.ui_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, true, false});
+    render_resources_.prez_render_target = rhi_device_->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
     
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        shadow_render_target_[i] = rhi_device_->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
+        render_resources_.shadow_render_target[i] = rhi_device_->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
     }
 
-    if (pp_bloom_extract_rt_ == 0) {
-        pp_bloom_extract_rt_ = rhi_device_->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_bloom_extract_rt == 0) {
+        render_resources_.pp_bloom_extract_rt = rhi_device_->CreateRenderTarget({render_width, render_height, true, false, false});
     }
     
     // Create mip chain for Dual Filter Bloom (5 levels)
-    if (pp_bloom_mip_rts_.empty()) {
+    if (render_resources_.pp_bloom_mip_rts.empty()) {
         int mip_width = render_width / 2;
         int mip_height = render_height / 2;
         for (int i = 0; i < 5; ++i) {
-            pp_bloom_mip_rts_.push_back(rhi_device_->CreateRenderTarget({mip_width, mip_height, true, false, false}));
+            render_resources_.pp_bloom_mip_rts.push_back(rhi_device_->CreateRenderTarget({mip_width, mip_height, true, false, false}));
             mip_width /= 2;
             mip_height /= 2;
             if (mip_width < 1) mip_width = 1;
@@ -137,14 +137,14 @@ bool FramePipeline::Init() {
         }
     }
 
-    sprite_pipeline_state_ = rhi_device_->CreatePipelineState({true, 0x0302, 0x0303});
+    render_resources_.sprite_pipeline_state = rhi_device_->CreatePipelineState({true, 0x0302, 0x0303});
     
     PipelineStateDesc mesh_desc;
     mesh_desc.blend_enabled = false;
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
     mesh_desc.culling_enabled = true;
-    mesh_pipeline_state_ = rhi_device_->CreatePipelineState(mesh_desc);
+    render_resources_.mesh_pipeline_state = rhi_device_->CreatePipelineState(mesh_desc);
 
     PipelineStateDesc prez_desc;
     prez_desc.blend_enabled = false;
@@ -152,7 +152,7 @@ bool FramePipeline::Init() {
     prez_desc.depth_write_enabled = true;
     prez_desc.culling_enabled = true;
     // In a real engine we disable color write, but for now we'll just write to a depth-only FBO
-    prez_pipeline_state_ = rhi_device_->CreatePipelineState(prez_desc);
+    render_resources_.prez_pipeline_state = rhi_device_->CreatePipelineState(prez_desc);
 
     PipelineStateDesc shadow_desc;
     shadow_desc.blend_enabled = false;
@@ -160,9 +160,9 @@ bool FramePipeline::Init() {
     shadow_desc.depth_write_enabled = true;
     shadow_desc.culling_enabled = true;
     shadow_desc.cull_face = 0x0404; // GL_FRONT to avoid peter-panning
-    shadow_pipeline_state_ = rhi_device_->CreatePipelineState(shadow_desc);
+    render_resources_.shadow_pipeline_state = rhi_device_->CreatePipelineState(shadow_desc);
     
-    composite_pipeline_state_ = rhi_device_->CreatePipelineState({false, 0x0302, 0x0303});
+    render_resources_.composite_pipeline_state = rhi_device_->CreatePipelineState({false, 0x0302, 0x0303});
     
     physics2d_system_.Init(*world_);
     spine_system_.SetAssetManager(&asset_manager);
@@ -277,20 +277,7 @@ void FramePipeline::Shutdown() {
         rhi_device_.reset();
     }
     asset_manager.SetRhiDevice(nullptr);
-    main_render_target_ = 0;
-    scene_render_target_ = 0;
-    ui_render_target_ = 0;
-    prez_render_target_ = 0;
-    for (int i = 0; i < CSM_CASCADES; ++i) {
-        shadow_render_target_[i] = 0;
-    }
-    pp_bloom_extract_rt_ = 0;
-    pp_bloom_mip_rts_.clear();
-    sprite_pipeline_state_ = 0;
-    mesh_pipeline_state_ = 0;
-    prez_pipeline_state_ = 0;
-    shadow_pipeline_state_ = 0;
-    composite_pipeline_state_ = 0;
+    render_resources_.Reset();
     update_time_accumulator_ms_ = 0.0f;
     fixed_time_accumulator_ms_ = 0.0f;
     render_time_accumulator_ms_ = 0.0f;
@@ -377,7 +364,7 @@ void FramePipeline::RunRenderInternal() {
     // Set global shadow maps early (they might be accessed in the scene pass)
     for (int i = 0; i < CSM_CASCADES; ++i) {
         if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
-            device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(shadow_render_target_[i]));
+            device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
         }
     }
 
@@ -455,7 +442,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "prez_pass",
         [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.BeginRenderPass({prez_render_target_, glm::vec4(0.0f), true});
+            cmd_buffer.BeginRenderPass({render_resources_.prez_render_target, glm::vec4(0.0f), true});
             auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
             int selected_priority3d = std::numeric_limits<int>::min();
@@ -479,7 +466,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                     view = glm::lookAt(transform.position, transform.position + front, up);
                 }
                 cmd_buffer.SetCamera(view, projection);
-                cmd_buffer.SetPipelineState(prez_pipeline_state_);
+                cmd_buffer.SetPipelineState(render_resources_.prez_pipeline_state);
                 
                 // 分发 PreZ 渲染事件
                 for (auto& mod : modules_) {
@@ -505,7 +492,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             std::vector<float> cascade_splits(CSM_CASCADES);
 
             for (int i = 0; i < CSM_CASCADES; ++i) {
-                cmd_buffer.BeginRenderPass({shadow_render_target_[i], glm::vec4(1.0f), true}); // Clear depth to 1.0
+                cmd_buffer.BeginRenderPass({render_resources_.shadow_render_target[i], glm::vec4(1.0f), true}); // Clear depth to 1.0
                 
                 // Simple ortho projection for cascades (in a full implementation, this should bound the view frustum splits)
                 // Here we just scale up the orthographic size based on the cascade level
@@ -518,7 +505,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cascade_splits[i] = light.cascade_splits[i];
 
                 cmd_buffer.SetCamera(light_view_mat, light_proj);
-                cmd_buffer.SetPipelineState(shadow_pipeline_state_);
+                cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
                 
                 // 分发 Shadow 渲染事件
                 for (auto& mod : modules_) {
@@ -535,7 +522,7 @@ void FramePipeline::BuildRenderGraphInternal() {
 
             for (int i = 0; i < CSM_CASCADES; ++i) {
                 if (auto* device = dynamic_cast<OpenGLRhiDevice*>(rhi_device_.get())) {
-                    device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(shadow_render_target_[i]));
+                    device->SetGlobalShadowMap(i, rhi_device_->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
                 }
             }
         }
@@ -545,7 +532,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "scene_pass",
         [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.BeginRenderPass({scene_render_target_, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
+            cmd_buffer.BeginRenderPass({render_resources_.scene_render_target, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
             
             auto camera3d_view = world_->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
@@ -616,7 +603,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
             
             // 3D Mesh & Particle rendering
-            cmd_buffer.SetPipelineState(mesh_pipeline_state_);
+            cmd_buffer.SetPipelineState(render_resources_.mesh_pipeline_state);
             
             // 分发 Scene 渲染事件
             for (auto& mod : modules_) {
@@ -626,7 +613,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
             
             // 2D Sprite/Particle/Spine rendering
-            cmd_buffer.SetPipelineState(sprite_pipeline_state_);
+            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             sprite_render_system_.Render(*world_, cmd_buffer);
             spine_system_.Render(*world_, cmd_buffer);
             particle_system_.Render(*world_, cmd_buffer);
@@ -653,21 +640,21 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
 
             // Bloom Extract
-            cmd_buffer.SetPipelineState(composite_pipeline_state_);
-            cmd_buffer.BeginRenderPass({pp_bloom_extract_rt_, glm::vec4(0.0f), false});
-            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
+            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
+            cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_extract_rt, glm::vec4(0.0f), false});
+            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
             cmd_buffer.DrawPostProcess(scene_color, "bloom_extract", {pp_config.bloom_threshold});
             cmd_buffer.EndRenderPass();
 
             // Downsample Pass (Dual Filter)
-            unsigned int current_src = rhi_device_->GetRenderTargetColorTexture(pp_bloom_extract_rt_);
+            unsigned int current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_extract_rt);
             int mip_w = Screen::width() / 2;
             int mip_h = Screen::height() / 2;
-            for (size_t i = 0; i < pp_bloom_mip_rts_.size(); ++i) {
-                cmd_buffer.BeginRenderPass({pp_bloom_mip_rts_[i], glm::vec4(0.0f), false});
+            for (size_t i = 0; i < render_resources_.pp_bloom_mip_rts.size(); ++i) {
+                cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_mip_rts[i], glm::vec4(0.0f), false});
                 cmd_buffer.DrawPostProcess(current_src, "bloom_downsample", {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)});
                 cmd_buffer.EndRenderPass();
-                current_src = rhi_device_->GetRenderTargetColorTexture(pp_bloom_mip_rts_[i]);
+                current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
                 mip_w /= 2;
                 mip_h /= 2;
                 if (mip_w < 1) mip_w = 1;
@@ -676,9 +663,9 @@ void FramePipeline::BuildRenderGraphInternal() {
 
             // Upsample Pass (Dual Filter Tent)
             // We go backwards from the smallest mip
-            for (int i = static_cast<int>(pp_bloom_mip_rts_.size()) - 1; i > 0; --i) {
-                unsigned int target_rt = pp_bloom_mip_rts_[i - 1];
-                current_src = rhi_device_->GetRenderTargetColorTexture(pp_bloom_mip_rts_[i]);
+            for (int i = static_cast<int>(render_resources_.pp_bloom_mip_rts.size()) - 1; i > 0; --i) {
+                unsigned int target_rt = render_resources_.pp_bloom_mip_rts[i - 1];
+                current_src = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
                 cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
                 // Note: To implement additive blending correctly for PBR bloom upsample, we might need a specific blend state.
                 // For simplicity in Phase 2, we just use the tent filter directly and rely on composite later, or add blend.
@@ -689,15 +676,15 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cmd_buffer.EndRenderPass();
             }
 
-            // Final result is in pp_bloom_mip_rts_[0]
+            // Final result is in render_resources_.pp_bloom_mip_rts[0]
         }
     });
 
     render_graph_passes_.push_back({
         "ui_pass",
         [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.SetPipelineState(sprite_pipeline_state_);
-            cmd_buffer.BeginRenderPass({ui_render_target_, glm::vec4(0.0f), true});
+            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
+            cmd_buffer.BeginRenderPass({render_resources_.ui_render_target, glm::vec4(0.0f), true});
             ui_render_system_.Render(*world_, cmd_buffer, Screen::width(), Screen::height());
             cmd_buffer.EndRenderPass();
         }
@@ -706,8 +693,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_passes_.push_back({
         "composite_pass",
         [this](CommandBuffer& cmd_buffer) {
-            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
-            const unsigned int ui_color = rhi_device_->GetRenderTargetColorTexture(ui_render_target_);
+            const unsigned int scene_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+            const unsigned int ui_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.ui_render_target);
             
             auto pp_view = world_->registry().view<dse::PostProcessComponent>();
             bool pp_enabled = false;
@@ -720,13 +707,13 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
             }
 
-            cmd_buffer.SetPipelineState(composite_pipeline_state_);
-            cmd_buffer.BeginRenderPass({main_render_target_, glm::vec4(0.0f), false});
+            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
+            cmd_buffer.BeginRenderPass({render_resources_.main_render_target, glm::vec4(0.0f), false});
             glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
             cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
 
             if (pp_enabled && pp_config.bloom_enabled) {
-                const unsigned int blur_v_color = rhi_device_->GetRenderTargetColorTexture(pp_bloom_mip_rts_.empty() ? 0 : pp_bloom_mip_rts_[0]);
+                const unsigned int blur_v_color = rhi_device_->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
                 cmd_buffer.DrawPostProcess(scene_color, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
             } else {
                 SpriteDrawItem scene_quad;
@@ -737,7 +724,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cmd_buffer.DrawBatch({scene_quad});
             }
 
-            cmd_buffer.SetPipelineState(sprite_pipeline_state_);
+            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             SpriteDrawItem ui_quad;
             ui_quad.texture_handle = ui_color;
             ui_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
@@ -790,13 +777,13 @@ int FramePipeline::LastSpriteCount() const {
 }
 
 unsigned int FramePipeline::GetSceneTextureId() const {
-    if (!rhi_device_ || scene_render_target_ == 0) return 0;
-    return rhi_device_->GetRenderTargetColorTexture(scene_render_target_);
+    if (!rhi_device_ || render_resources_.scene_render_target == 0) return 0;
+    return rhi_device_->GetRenderTargetColorTexture(render_resources_.scene_render_target);
 }
 
 unsigned int FramePipeline::GetMainTextureId() const {
-    if (!rhi_device_ || main_render_target_ == 0) return 0;
-    return rhi_device_->GetRenderTargetColorTexture(main_render_target_);
+    if (!rhi_device_ || render_resources_.main_render_target == 0) return 0;
+    return rhi_device_->GetRenderTargetColorTexture(render_resources_.main_render_target);
 }
 
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {
