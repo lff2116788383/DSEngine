@@ -4,12 +4,25 @@
 
 namespace dse::runtime {
 
+void BeginRuntimeRenderFrame(::FramePipeline& pipeline) {
+    pipeline.runtime_context_.rhi_device->BeginFrame();
+}
+
+std::shared_ptr<CommandBuffer> CreateRuntimeRenderCommandBuffer(::FramePipeline& pipeline) {
+    return pipeline.runtime_context_.rhi_device->CreateCommandBuffer();
+}
+
 void BindRuntimeShadowMaps(::FramePipeline& pipeline) {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         if (auto* device = dynamic_cast<OpenGLRhiDevice*>(pipeline.runtime_context_.rhi_device.get())) {
             device->SetGlobalShadowMap(i, pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.shadow_render_target[i]));
         }
     }
+}
+
+void SubmitAndEndRuntimeRenderFrame(::FramePipeline& pipeline, std::shared_ptr<CommandBuffer> cmd_buffer) {
+    pipeline.runtime_context_.rhi_device->Submit(cmd_buffer);
+    pipeline.runtime_context_.rhi_device->EndFrame();
 }
 
 void FinalizeRuntimeRenderFrame(::FramePipeline& pipeline) {

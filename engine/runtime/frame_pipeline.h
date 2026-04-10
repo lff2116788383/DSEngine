@@ -156,7 +156,10 @@ private:
     friend void dse::runtime::ExecuteFrameRenderGraph(FramePipeline& pipeline, CommandBuffer& cmd_buffer);
     friend void dse::runtime::RunRuntimeUpdateGraph(FramePipeline& pipeline, float delta_time);
     friend void dse::runtime::RunRuntimeFixedUpdateGraph(FramePipeline& pipeline, float fixed_delta_time);
+    friend void dse::runtime::BeginRuntimeRenderFrame(FramePipeline& pipeline);
+    friend std::shared_ptr<CommandBuffer> dse::runtime::CreateRuntimeRenderCommandBuffer(FramePipeline& pipeline);
     friend void dse::runtime::BindRuntimeShadowMaps(FramePipeline& pipeline);
+    friend void dse::runtime::SubmitAndEndRuntimeRenderFrame(FramePipeline& pipeline, std::shared_ptr<CommandBuffer> cmd_buffer);
     friend void dse::runtime::FinalizeRuntimeRenderFrame(FramePipeline& pipeline);
 
 private:

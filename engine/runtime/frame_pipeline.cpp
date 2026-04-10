@@ -315,17 +315,15 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
 
 void FramePipeline::RunRenderInternal() {
     auto render_begin = std::chrono::high_resolution_clock::now();
-    runtime_context_.rhi_device->BeginFrame();
+    dse::runtime::BeginRuntimeRenderFrame(*this);
     
-    auto cmd_buffer = runtime_context_.rhi_device->CreateCommandBuffer();
+    auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
     
     dse::runtime::BindRuntimeShadowMaps(*this);
 
     ExecuteRenderGraph(*cmd_buffer);
     
-    runtime_context_.rhi_device->Submit(cmd_buffer);
-    
-    runtime_context_.rhi_device->EndFrame();
+    dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
     const auto& frame_stats = runtime_context_.rhi_device->LastFrameStats();
     auto render_end = std::chrono::high_resolution_clock::now();
