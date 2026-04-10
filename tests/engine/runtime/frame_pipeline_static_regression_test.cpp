@@ -29,5 +29,5 @@ std::string ReadTextFile(const std::string& path) {
 
 TEST_CASE("Given_FramePipelineSource_When_CheckParticleUpdateCall_Then_Physics2DPointerIsExplicitlyPassed", "[engine][unit][runtime][static]") {
     const std::string source = ReadTextFile("engine/runtime/frame_pipeline.cpp");
-    REQUIRE(source.find("particle_system_.Update(*world_, delta_time, &physics2d_system_);") != std::string::npos);
+    REQUIRE(source.find("particle_system_.Update(*runtime_context_.world, delta_time, &physics2d_system_);") != std::string::npos);
 }

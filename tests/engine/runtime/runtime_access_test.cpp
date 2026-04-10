@@ -27,3 +27,20 @@ TEST_CASE("Given_RuntimeServices_When_BuildingEngineRunConfig_Then_NewAndLegacyI
     REQUIRE(config.world == &explicit_world);
     REQUIRE(config.asset_manager == &explicit_asset_manager);
 }
+
+TEST_CASE("Given_EngineRunConfig_When_WithServicesIsUsed_Then_ServicesPathBecomesThePreferredInjectionSurface", "[engine][unit][runtime]") {
+    World service_world;
+    AssetManager service_asset_manager;
+    World legacy_world;
+    AssetManager legacy_asset_manager;
+
+    dse::runtime::EngineRunConfig config;
+    config.world = &legacy_world;
+    config.asset_manager = &legacy_asset_manager;
+    config.WithServices({&service_world, &service_asset_manager});
+
+    REQUIRE(config.services.world == &service_world);
+    REQUIRE(config.services.asset_manager == &service_asset_manager);
+    REQUIRE(config.world == &legacy_world);
+    REQUIRE(config.asset_manager == &legacy_asset_manager);
+}
