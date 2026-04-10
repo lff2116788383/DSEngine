@@ -29,6 +29,7 @@
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/runtime/render_pipeline_resources.h"
 #include "engine/runtime/runtime_context.h"
+#include "engine/runtime/business_runtime_bridge.h"
 
 class AssetManager;
 

@@ -10,8 +10,6 @@
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 #include "engine/assets/asset_manager.h"
-#include "engine/scripting/lua/lua_runtime.h"
-#include "engine/scripting/cpp/cpp_business_runtime.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/core/event_bus.h"
@@ -213,28 +211,17 @@ bool FramePipeline::Init() {
     bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     
-    if (runtime_context_.business_mode == BusinessMode::Lua) {
-        dse::runtime::ConfigureLuaApiContext({
-            runtime_context_.world,
-            [this](const std::string& title) { SetWindowTitle(title); },
-            [this]() { return LastDrawCalls(); },
-            [this]() { return LastMaxBatchSprites(); },
-            [this]() { return LastSpriteCount(); },
-            &asset_manager
-        });
-        const bool lua_bootstrap_ok = dse::runtime::BootstrapLuaRuntime();
-        DEBUG_LOG_INFO("Lua bootstrap: {}", lua_bootstrap_ok ? "OK" : "FAILED");
-        if (!lua_bootstrap_ok) {
-            Shutdown();
-            return false;
-        }
-    } else {
-        const bool cpp_bootstrap_ok = dse::runtime::BootstrapCppBusiness(*runtime_context_.world, asset_manager);
-        DEBUG_LOG_INFO("Cpp business mode bootstrap: {}", cpp_bootstrap_ok ? "OK" : "FAILED");
-        if (!cpp_bootstrap_ok) {
-            Shutdown();
-            return false;
-        }
+    const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
+        [this]() { return LastDrawCalls(); },
+        [this]() { return LastMaxBatchSprites(); },
+        [this]() { return LastSpriteCount(); }
+    });
+    DEBUG_LOG_INFO("{} business mode bootstrap: {}",
+                   runtime_context_.business_mode == BusinessMode::Lua ? "Lua" : "Cpp",
+                   business_bootstrap_ok ? "OK" : "FAILED");
+    if (!business_bootstrap_ok) {
+        Shutdown();
+        return false;
     }
     BuildRenderGraph();
 
@@ -250,11 +237,7 @@ void FramePipeline::Shutdown() {
     dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_passes_.clear();
-    if (runtime_context_.business_mode == BusinessMode::Lua) {
-        dse::runtime::ShutdownLuaRuntime();
-    } else {
-        dse::runtime::ShutdownCppBusiness();
-    }
+    dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     audio_system_.Shutdown();
     physics2d_system_.Shutdown();
     spine_system_.Shutdown(runtime_context_.world->registry());
@@ -312,11 +295,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
-    if (runtime_context_.business_mode == BusinessMode::Lua) {
-        dse::runtime::TickLuaRuntime(delta_time);
-    } else {
-        dse::runtime::TickCppBusiness(*runtime_context_.world, delta_time);
-    }
+    dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
     
     tilemap_system_.Update(runtime_context_.world->registry());
     animation_system_.Update(*runtime_context_.world, delta_time);
