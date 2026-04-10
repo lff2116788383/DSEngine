@@ -319,22 +319,15 @@ void FramePipeline::RunRenderInternal() {
     
     auto cmd_buffer = runtime_context_.rhi_device->CreateCommandBuffer();
     
-    // Set global shadow maps early (they might be accessed in the scene pass)
-    for (int i = 0; i < CSM_CASCADES; ++i) {
-        if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
-            device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
-        }
-    }
+    dse::runtime::BindRuntimeShadowMaps(*this);
 
     ExecuteRenderGraph(*cmd_buffer);
     
     runtime_context_.rhi_device->Submit(cmd_buffer);
     
     runtime_context_.rhi_device->EndFrame();
+    dse::runtime::FinalizeRuntimeRenderFrame(*this);
     const auto& frame_stats = runtime_context_.rhi_device->LastFrameStats();
-    last_draw_calls_ = static_cast<int>(frame_stats.draw_calls);
-    last_max_batch_sprites_ = static_cast<int>(frame_stats.max_batch_sprites);
-    last_sprite_count_ = static_cast<int>(frame_stats.sprite_count);
     auto render_end = std::chrono::high_resolution_clock::now();
     render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
     render_samples_ += 1;

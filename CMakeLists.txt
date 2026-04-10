@@ -220,6 +220,7 @@ add_library(dse_engine SHARED
     ${engine_cpp}
     engine/runtime/runtime_frame_ops.cpp
     engine/runtime/runtime_update_graph.cpp
+    engine/runtime/runtime_render_shell.cpp
     engine/runtime/business_runtime_bridge.cpp
 )
 if(DSE_HAS_ASSIMP)
