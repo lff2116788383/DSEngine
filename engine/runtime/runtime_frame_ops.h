@@ -5,6 +5,9 @@ class CommandBuffer;
 
 namespace dse::runtime {
 
+void RunRuntimeUpdateGraph(FramePipeline& pipeline, float delta_time);
+void RunRuntimeFixedUpdateGraph(FramePipeline& pipeline, float fixed_delta_time);
+
 void RunFrameUpdate(FramePipeline& pipeline, float delta_time);
 void RunFrameFixedUpdate(FramePipeline& pipeline, float fixed_delta_time);
 void RunFrameRender(FramePipeline& pipeline);

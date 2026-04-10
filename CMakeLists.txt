@@ -219,6 +219,7 @@ add_library(dse_engine SHARED
     ${imgui_src}
     ${engine_cpp}
     engine/runtime/runtime_frame_ops.cpp
+    engine/runtime/runtime_update_graph.cpp
     engine/runtime/business_runtime_bridge.cpp
 )
 if(DSE_HAS_ASSIMP)

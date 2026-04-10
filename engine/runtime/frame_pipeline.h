@@ -27,6 +27,7 @@
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
 #include "engine/runtime/runtime_frame_ops.h"
+#include "engine/runtime/runtime_update_graph.h"
 #include "engine/runtime/render_pipeline_resources.h"
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/business_runtime_bridge.h"
@@ -152,6 +153,8 @@ private:
     friend void dse::runtime::RunFrameRender(FramePipeline& pipeline);
     friend void dse::runtime::BuildFrameRenderGraph(FramePipeline& pipeline);
     friend void dse::runtime::ExecuteFrameRenderGraph(FramePipeline& pipeline, CommandBuffer& cmd_buffer);
+    friend void dse::runtime::RunRuntimeUpdateGraph(FramePipeline& pipeline, float delta_time);
+    friend void dse::runtime::RunRuntimeFixedUpdateGraph(FramePipeline& pipeline, float fixed_delta_time);
 
 private:
     void RunUpdateInternal(float delta_time);

@@ -297,21 +297,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
     
-    tilemap_system_.Update(runtime_context_.world->registry());
-    animation_system_.Update(*runtime_context_.world, delta_time);
-    particle_system_.Update(*runtime_context_.world, delta_time, &physics2d_system_);
-    spine_system_.Update(runtime_context_.world->registry(), delta_time);
-    transform_system_.Update(*runtime_context_.world);
-    ui_logic_system_.Update(runtime_context_.world->registry(), delta_time, glm::vec2(Screen::width(), Screen::height()), Input::mousePosition(), Input::GetMouseButton(0));
-    camera_system_.Update(*runtime_context_.world, Screen::aspect_ratio());
-    audio_system_.Update(runtime_context_.world->registry(), delta_time);
-    
-    // 分发模块更新事件
-    for (auto& mod : modules_) {
-        if (mod.instance) {
-            mod.instance->OnUpdate(*runtime_context_.world, delta_time);
-        }
-    }
+    dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);
     
     auto update_end = std::chrono::high_resolution_clock::now();
     update_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(update_end - update_begin).count();
@@ -320,14 +306,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
     auto fixed_begin = std::chrono::high_resolution_clock::now();
-    physics2d_system_.FixedUpdate(*runtime_context_.world, fixed_delta_time);
-    
-    // 分发模块固定更新事件
-    for (auto& mod : modules_) {
-        if (mod.instance) {
-            mod.instance->OnFixedUpdate(*runtime_context_.world, fixed_delta_time);
-        }
-    }
+    dse::runtime::RunRuntimeFixedUpdateGraph(*this, fixed_delta_time);
     
     auto fixed_end = std::chrono::high_resolution_clock::now();
     fixed_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(fixed_end - fixed_begin).count();
