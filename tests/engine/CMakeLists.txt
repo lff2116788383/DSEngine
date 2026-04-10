@@ -190,6 +190,17 @@ add_test(
 set_tests_properties(engine.3d.unit PROPERTIES LABELS "engine;unit;3d")
 
 add_test(
+    NAME engine.3d.scene_mvp
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[scene][3d][mvp]"
+)
+set_tests_properties(engine.3d.scene_mvp PROPERTIES
+    LABELS "engine;unit;3d;scene;mvp;gate"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    TIMEOUT 15
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
+
+add_test(
     NAME engine.3d.smoke
     COMMAND $<TARGET_FILE:DSEngine_example_cpp>
 )
