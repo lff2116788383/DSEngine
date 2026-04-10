@@ -647,10 +647,27 @@ void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>&
     draw_particles3d_cmds_.push_back({next_cmd_order_++, items, view, projection});
 }
 
+void OpenGLCommandBuffer::Reset() {
+    begin_render_pass_cmds_.clear();
+    end_render_pass_cmds_.clear();
+    set_pipeline_state_cmds_.clear();
+    set_global_mat4_cmds_.clear();
+    set_global_mat4_array_cmds_.clear();
+    set_global_float_array_cmds_.clear();
+    clear_cmds_.clear();
+    draw_batch_cmds_.clear();
+    draw_mesh_batch_cmds_.clear();
+    draw_skybox_cmds_.clear();
+    draw_post_process_cmds_.clear();
+    draw_particles3d_cmds_.clear();
+    next_cmd_order_ = 0;
+}
+
 void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     if (!device) {
         return;
     }
+
     std::vector<CommandRef> commands;
     commands.reserve(begin_render_pass_cmds_.size() + set_pipeline_state_cmds_.size() + clear_cmds_.size() + draw_batch_cmds_.size() + draw_mesh_batch_cmds_.size() + end_render_pass_cmds_.size());
     for (size_t i = 0; i < begin_render_pass_cmds_.size(); ++i) {
@@ -733,19 +750,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
         }
     }
-    begin_render_pass_cmds_.clear();
-    end_render_pass_cmds_.clear();
-    set_pipeline_state_cmds_.clear();
-    set_global_mat4_cmds_.clear();
-    set_global_mat4_array_cmds_.clear();
-    set_global_float_array_cmds_.clear();
-    clear_cmds_.clear();
-    draw_batch_cmds_.clear();
-    draw_mesh_batch_cmds_.clear();
-    draw_skybox_cmds_.clear();
-    draw_post_process_cmds_.clear();
-    draw_particles3d_cmds_.clear();
-    next_cmd_order_ = 0;
+    Reset();
 }
 
 void OpenGLRhiDevice::BeginFrame() {

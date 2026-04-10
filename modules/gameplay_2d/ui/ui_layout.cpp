@@ -114,10 +114,13 @@ void UILayoutSystem::UpdateGridLayout(
     const int total_items = static_cast<int>(children.size());
     const int actual_rows = grid.rows > 0 ? grid.rows : (total_items + columns - 1) / columns;
 
-    const float total_width = static_cast<float>(columns) * grid.cell_size.x
-        + static_cast<float>(std::max(columns - 1, 0)) * grid.spacing.x;
-    const float total_height = static_cast<float>(actual_rows) * grid.cell_size.y
-        + static_cast<float>(std::max(actual_rows - 1, 0)) * grid.spacing.y;
+    const glm::vec2 scaled_cell_size = grid.cell_size * scale_factor;
+    const glm::vec2 scaled_spacing = grid.spacing * scale_factor;
+
+    const float total_width = static_cast<float>(columns) * scaled_cell_size.x
+        + static_cast<float>(std::max(columns - 1, 0)) * scaled_spacing.x;
+    const float total_height = static_cast<float>(actual_rows) * scaled_cell_size.y
+        + static_cast<float>(std::max(actual_rows - 1, 0)) * scaled_spacing.y;
 
     glm::vec2 grid_origin(0.0f, 0.0f);
 
@@ -157,9 +160,7 @@ void UILayoutSystem::UpdateGridLayout(
             break;
     }
 
-    const glm::vec2 scaled_cell_size = grid.cell_size * scale_factor;
-    const glm::vec2 scaled_spacing = grid.spacing * scale_factor;
-    const glm::vec2 scaled_origin = grid_origin * scale_factor;
+    const glm::vec2 scaled_origin = grid_origin;
 
     for (int index = 0; index < total_items; ++index) {
         const int col = index % columns;
@@ -183,6 +184,7 @@ void UILayoutSystem::UpdateGridLayout(
             auto& renderer = registry.get<UIRendererComponent>(child);
             renderer.position = final_pos;
             renderer.size = scaled_cell_size;
+            renderer.scale = scale_factor;
         }
     }
 }

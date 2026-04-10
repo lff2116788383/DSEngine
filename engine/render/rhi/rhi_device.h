@@ -279,6 +279,7 @@ public:
      * @param device 实际执行图形调用的 OpenGL RHI 设备指针
      */
     void Execute(OpenGLRhiDevice* device);
+    void Reset();
     
 private:
     struct ClearCmd { uint64_t order; glm::vec4 color; };
