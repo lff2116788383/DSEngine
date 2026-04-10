@@ -316,6 +316,7 @@ TEST_CASE("Given_CheckedInMinimal3DMvpScene_When_Deserialized_Then_Core3DCompone
     REQUIRE(loaded.GetWorld().registry().view<dse::PointLightComponent>().begin() != loaded.GetWorld().registry().view<dse::PointLightComponent>().end());
     REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
     REQUIRE(loaded.GetWorld().registry().view<dse::TerrainComponent>().begin() != loaded.GetWorld().registry().view<dse::TerrainComponent>().end());
+    REQUIRE(scene::RunMinimal3DMvpSceneRegressionSample("assets/scenes/3d_mvp_minimal.scene.json"));
 }
 
 TEST_CASE("Given_SceneRegressionHelpers_When_Executed_Then_ReturnTrue", "[engine][unit][scene]") {

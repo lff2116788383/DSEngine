@@ -90,6 +90,13 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath);
 bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath);
 
 /**
+ * @brief 运行仓库内置最小 3D MVP 场景回归样例
+ * @param filepath 已签入的场景文件路径
+ * @return 样例通过返回 true
+ */
+bool RunMinimal3DMvpSceneRegressionSample(const std::string& filepath);
+
+/**
  * @brief 将指定实体保存为预制体
  * @param world 实体所在的世界
  * @param entity 要保存的实体

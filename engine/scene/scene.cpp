@@ -801,6 +801,27 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
     return transform_ok && sprite_ok && material_ok;
 }
 
+bool RunMinimal3DMvpSceneRegressionSample(const std::string& filepath) {
+    Scene loaded("3d_mvp_smoke");
+    if (!loaded.Deserialize(filepath)) {
+        return false;
+    }
+
+    auto mesh_view = loaded.GetWorld().registry().view<dse::MeshRendererComponent>();
+    auto camera_view = loaded.GetWorld().registry().view<dse::Camera3DComponent>();
+    auto dir_light_view = loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>();
+    auto point_light_view = loaded.GetWorld().registry().view<dse::PointLightComponent>();
+    auto skybox_view = loaded.GetWorld().registry().view<dse::SkyboxComponent>();
+    auto terrain_view = loaded.GetWorld().registry().view<dse::TerrainComponent>();
+
+    return mesh_view.begin() != mesh_view.end() &&
+           camera_view.begin() != camera_view.end() &&
+           dir_light_view.begin() != dir_light_view.end() &&
+           point_light_view.begin() != point_light_view.end() &&
+           skybox_view.begin() != skybox_view.end() &&
+           terrain_view.begin() != terrain_view.end();
+}
+
 bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) {
     const std::string legacy_json =
         "{\n"
