@@ -36,6 +36,8 @@ set(DSE_ENGINE_TEST_SOURCES
     ../modules/gameplay_2d/ui/ui_deep_state_test.cpp
     assets/asset_manager_test.cpp
     assets/importer_cooker_test.cpp
+    build_generation_guard_test.cpp
+    runtime_host_integration_test.cpp
     audio/audio_system_test.cpp
     render/command_buffer_test.cpp
     render/rhi_device_test.cpp
@@ -254,10 +256,21 @@ add_test(
     NAME engine.resource_injection
     COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero"
 )
-
 set_tests_properties(engine.resource_injection PROPERTIES
     LABELS "engine;unit;resource_injection;gate"
     WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    TIMEOUT 15
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
+
+add_test(
+    NAME engine.build_generation
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[build_generation]"
+)
+
+set_tests_properties(engine.build_generation PROPERTIES
+    LABELS "engine;unit;build_generation;vcpkg;gate"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
@@ -273,6 +286,20 @@ set_tests_properties(engine.cpp_runtime PROPERTIES
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
+
+add_test(
+    NAME engine.runtime_host.integration
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[runtime_host]"
+)
+
+set_tests_properties(engine.runtime_host.integration PROPERTIES
+    LABELS "engine;smoke;integration;runtime_host;gate"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    TIMEOUT 30
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
+
+add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp dse_example_lua)
 
 dse_copy_runtime_dlls(${DSE_ENGINE_TEST_TARGET})
 dse_copy_runtime_dlls(${DSE_LUA_RUNTIME_TEST_TARGET})

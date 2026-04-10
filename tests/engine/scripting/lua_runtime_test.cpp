@@ -275,3 +275,40 @@ TEST_CASE("Given_DisabledScriptComponent_When_TickLuaRuntime_Then_OnUpdateIsSkip
 
     REQUIRE_FALSE(std::filesystem::exists(output_path));
 }
+
+TEST_CASE("Given_StandardLuaLibraries_When_BootstrapLuaRuntime_Then_BaseStringTableMathAndPackageApisAreAvailable", "[engine][unit][lua_runtime][regression]") {
+    ScopedLuaApiContextReset scoped_context_reset;
+    const std::string startup_path = MakeTempPath("startup_stdlibs_regression.lua");
+    const std::string output_path = MakeTempPath("startup_stdlibs_regression.txt");
+    ScopedTempFile startup_file(startup_path);
+    ScopedTempFile output_file(output_path);
+
+    WriteTextFile(
+        startup_path,
+        "Awake = function()\n"
+        "  assert(type(print) == 'function')\n"
+        "  assert(string.upper('lua') == 'LUA')\n"
+        "  assert(table.concat({'d','s','e'}, '') == 'dse')\n"
+        "  assert(math.floor(3.8) == 3)\n"
+        "  assert(type(package.path) == 'string')\n"
+        "  local f = io.open('" + ToLuaPath(output_path) + "', 'w')\n"
+        "  assert(f ~= nil)\n"
+        "  f:write(string.format('%s|%s|%d|%d', string.upper('lua'), table.concat({'d','s','e'}, ''), math.floor(3.8), type(package.path) == 'string' and 1 or 0))\n"
+        "  f:close()\n"
+        "end\n");
+
+    World world;
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
+    SetStartupLuaScriptPath(startup_path);
+
+    REQUIRE(BootstrapLuaRuntime());
+    ShutdownLuaRuntime();
+
+    REQUIRE(std::filesystem::exists(output_path));
+    std::ifstream in(output_path);
+    REQUIRE(in.is_open());
+    std::string content;
+    std::getline(in, content);
+    REQUIRE(content == "LUA|dse|3|1");
+}
