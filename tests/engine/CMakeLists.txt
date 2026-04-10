@@ -20,6 +20,7 @@ set(DSE_ENGINE_TEST_SOURCES
     runtime/frame_pipeline_static_regression_test.cpp
     cpp_runtime_startup_scene_test.cpp
     mesh_material_desc_test.cpp
+    mesh_render_material_desc_static_test.cpp
     scripting/cpp_business_runtime_test.cpp
     ../modules/gameplay_2d/camera/camera_system_test.cpp
     ../modules/gameplay_2d/animation/animation_system_test.cpp

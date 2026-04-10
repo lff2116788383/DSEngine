@@ -1,4 +1,4 @@
-#include "modules/gameplay_3d/rendering/mesh_render_system.h"
+﻿#include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
@@ -743,3 +743,4 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
 } // namespace gameplay3d
 } // namespace dse
+
