@@ -169,6 +169,41 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     skybox.cubemap_handle = 77;
     skybox.cubemap_path = "assets/skyboxes/default_sky";
 
+    auto point_light_entity = source.GetWorld().CreateEntity();
+    source.GetWorld().registry().emplace<TransformComponent>(point_light_entity);
+    auto& point_light = source.GetWorld().registry().emplace<dse::PointLightComponent>(point_light_entity);
+    point_light.enabled = true;
+    point_light.color = glm::vec3(0.8f, 0.7f, 1.0f);
+    point_light.intensity = 3.0f;
+    point_light.radius = 12.5f;
+    point_light.cast_shadow = false;
+
+    auto animator_entity = source.GetWorld().CreateEntity();
+    source.GetWorld().registry().emplace<TransformComponent>(animator_entity);
+    auto& animator = source.GetWorld().registry().emplace<dse::Animator3DComponent>(animator_entity);
+    animator.enabled = true;
+    animator.dskel_path = "assets/anims/hero.dskel";
+    animator.danim_path = "assets/anims/hero_idle.danim";
+    animator.speed = 1.1f;
+    animator.loop = true;
+    animator.use_anim_tree = false;
+
+    auto terrain_entity = source.GetWorld().CreateEntity();
+    source.GetWorld().registry().emplace<TransformComponent>(terrain_entity);
+    auto& terrain = source.GetWorld().registry().emplace<dse::TerrainComponent>(terrain_entity);
+    terrain.enabled = true;
+    terrain.heightmap_path = "assets/terrain/height.png";
+    terrain.texture_handle = 88;
+    terrain.width = 256.0f;
+    terrain.depth = 256.0f;
+    terrain.max_height = 32.0f;
+    terrain.resolution_x = 128;
+    terrain.resolution_z = 128;
+    terrain.use_dynamic_lod = true;
+    terrain.max_lod_levels = 5;
+    terrain.lod_distance_factor = 80.0f;
+    terrain.visible = true;
+
     REQUIRE(source.Serialize(path));
 
     scene::Scene loaded("loaded-3d-scene");
@@ -228,6 +263,46 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_skybox.enabled);
     REQUIRE(loaded_skybox.cubemap_handle == 77);
     REQUIRE(loaded_skybox.cubemap_path == "assets/skyboxes/default_sky");
+
+    auto point_light_view = loaded.GetWorld().registry().view<dse::PointLightComponent>();
+    REQUIRE(point_light_view.begin() != point_light_view.end());
+    const auto loaded_point_light_entity = *point_light_view.begin();
+    const auto& loaded_point_light = point_light_view.get<dse::PointLightComponent>(loaded_point_light_entity);
+    REQUIRE(loaded_point_light.enabled);
+    REQUIRE(loaded_point_light.color.x == Approx(0.8f));
+    REQUIRE(loaded_point_light.color.y == Approx(0.7f));
+    REQUIRE(loaded_point_light.color.z == Approx(1.0f));
+    REQUIRE(loaded_point_light.intensity == Approx(3.0f));
+    REQUIRE(loaded_point_light.radius == Approx(12.5f));
+    REQUIRE_FALSE(loaded_point_light.cast_shadow);
+
+    auto animator_view = loaded.GetWorld().registry().view<dse::Animator3DComponent>();
+    REQUIRE(animator_view.begin() != animator_view.end());
+    const auto loaded_animator_entity = *animator_view.begin();
+    const auto& loaded_animator = animator_view.get<dse::Animator3DComponent>(loaded_animator_entity);
+    REQUIRE(loaded_animator.enabled);
+    REQUIRE(loaded_animator.dskel_path == "assets/anims/hero.dskel");
+    REQUIRE(loaded_animator.danim_path == "assets/anims/hero_idle.danim");
+    REQUIRE(loaded_animator.speed == Approx(1.1f));
+    REQUIRE(loaded_animator.loop);
+    REQUIRE_FALSE(loaded_animator.use_anim_tree);
+
+    auto terrain_view = loaded.GetWorld().registry().view<dse::TerrainComponent>();
+    REQUIRE(terrain_view.begin() != terrain_view.end());
+    const auto loaded_terrain_entity = *terrain_view.begin();
+    const auto& loaded_terrain = terrain_view.get<dse::TerrainComponent>(loaded_terrain_entity);
+    REQUIRE(loaded_terrain.enabled);
+    REQUIRE(loaded_terrain.heightmap_path == "assets/terrain/height.png");
+    REQUIRE(loaded_terrain.texture_handle == 88);
+    REQUIRE(loaded_terrain.width == Approx(256.0f));
+    REQUIRE(loaded_terrain.depth == Approx(256.0f));
+    REQUIRE(loaded_terrain.max_height == Approx(32.0f));
+    REQUIRE(loaded_terrain.resolution_x == 128);
+    REQUIRE(loaded_terrain.resolution_z == 128);
+    REQUIRE(loaded_terrain.use_dynamic_lod);
+    REQUIRE(loaded_terrain.max_lod_levels == 5);
+    REQUIRE(loaded_terrain.lod_distance_factor == Approx(80.0f));
+    REQUIRE(loaded_terrain.visible);
 }
 
 TEST_CASE("Given_SceneRegressionHelpers_When_Executed_Then_ReturnTrue", "[engine][unit][scene]") {

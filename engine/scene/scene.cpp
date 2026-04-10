@@ -203,6 +203,49 @@ bool Scene::Serialize(const std::string& filepath) {
             components.AddMember("SkyboxComponent", skybox_json, allocator);
         }
 
+        if (world.registry().all_of<dse::PointLightComponent>(entity)) {
+            const auto& light = world.registry().get<dse::PointLightComponent>(entity);
+            rapidjson::Value light_json(rapidjson::kObjectType);
+            light_json.AddMember("enabled", light.enabled, allocator);
+            rapidjson::Value color(rapidjson::kArrayType);
+            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
+            light_json.AddMember("color", color, allocator);
+            light_json.AddMember("intensity", light.intensity, allocator);
+            light_json.AddMember("radius", light.radius, allocator);
+            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
+            components.AddMember("PointLightComponent", light_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::Animator3DComponent>(entity)) {
+            const auto& animator = world.registry().get<dse::Animator3DComponent>(entity);
+            rapidjson::Value animator_json(rapidjson::kObjectType);
+            animator_json.AddMember("enabled", animator.enabled, allocator);
+            animator_json.AddMember("dskel_path", rapidjson::Value(animator.dskel_path.c_str(), allocator), allocator);
+            animator_json.AddMember("danim_path", rapidjson::Value(animator.danim_path.c_str(), allocator), allocator);
+            animator_json.AddMember("speed", animator.speed, allocator);
+            animator_json.AddMember("loop", animator.loop, allocator);
+            animator_json.AddMember("use_anim_tree", animator.use_anim_tree, allocator);
+            components.AddMember("Animator3DComponent", animator_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::TerrainComponent>(entity)) {
+            const auto& terrain = world.registry().get<dse::TerrainComponent>(entity);
+            rapidjson::Value terrain_json(rapidjson::kObjectType);
+            terrain_json.AddMember("enabled", terrain.enabled, allocator);
+            terrain_json.AddMember("heightmap_path", rapidjson::Value(terrain.heightmap_path.c_str(), allocator), allocator);
+            terrain_json.AddMember("texture_handle", terrain.texture_handle, allocator);
+            terrain_json.AddMember("width", terrain.width, allocator);
+            terrain_json.AddMember("depth", terrain.depth, allocator);
+            terrain_json.AddMember("max_height", terrain.max_height, allocator);
+            terrain_json.AddMember("resolution_x", terrain.resolution_x, allocator);
+            terrain_json.AddMember("resolution_z", terrain.resolution_z, allocator);
+            terrain_json.AddMember("use_dynamic_lod", terrain.use_dynamic_lod, allocator);
+            terrain_json.AddMember("max_lod_levels", terrain.max_lod_levels, allocator);
+            terrain_json.AddMember("lod_distance_factor", terrain.lod_distance_factor, allocator);
+            terrain_json.AddMember("visible", terrain.visible, allocator);
+            components.AddMember("TerrainComponent", terrain_json, allocator);
+        }
+
         entity_json.AddMember("components", components, allocator);
         entities.PushBack(entity_json, allocator);
     }
@@ -508,6 +551,95 @@ bool Scene::Deserialize(const std::string& filepath) {
                 skybox.cubemap_path = skybox_json["cubemap_path"].GetString();
             }
             world.registry().emplace<dse::SkyboxComponent>(entity, skybox);
+        }
+
+        if (components.HasMember("PointLightComponent") && components["PointLightComponent"].IsObject()) {
+            const auto& light_json = components["PointLightComponent"];
+            dse::PointLightComponent light;
+            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
+                light.enabled = light_json["enabled"].GetBool();
+            }
+            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
+                const auto& c = light_json["color"].GetArray();
+                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
+            }
+            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
+                light.intensity = light_json["intensity"].GetFloat();
+            }
+            if (light_json.HasMember("radius") && light_json["radius"].IsNumber()) {
+                light.radius = light_json["radius"].GetFloat();
+            }
+            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
+                light.cast_shadow = light_json["cast_shadow"].GetBool();
+            }
+            world.registry().emplace<dse::PointLightComponent>(entity, light);
+        }
+
+        if (components.HasMember("Animator3DComponent") && components["Animator3DComponent"].IsObject()) {
+            const auto& animator_json = components["Animator3DComponent"];
+            dse::Animator3DComponent animator;
+            if (animator_json.HasMember("enabled") && animator_json["enabled"].IsBool()) {
+                animator.enabled = animator_json["enabled"].GetBool();
+            }
+            if (animator_json.HasMember("dskel_path") && animator_json["dskel_path"].IsString()) {
+                animator.dskel_path = animator_json["dskel_path"].GetString();
+            }
+            if (animator_json.HasMember("danim_path") && animator_json["danim_path"].IsString()) {
+                animator.danim_path = animator_json["danim_path"].GetString();
+            }
+            if (animator_json.HasMember("speed") && animator_json["speed"].IsNumber()) {
+                animator.speed = animator_json["speed"].GetFloat();
+            }
+            if (animator_json.HasMember("loop") && animator_json["loop"].IsBool()) {
+                animator.loop = animator_json["loop"].GetBool();
+            }
+            if (animator_json.HasMember("use_anim_tree") && animator_json["use_anim_tree"].IsBool()) {
+                animator.use_anim_tree = animator_json["use_anim_tree"].GetBool();
+            }
+            world.registry().emplace<dse::Animator3DComponent>(entity, std::move(animator));
+        }
+
+        if (components.HasMember("TerrainComponent") && components["TerrainComponent"].IsObject()) {
+            const auto& terrain_json = components["TerrainComponent"];
+            dse::TerrainComponent terrain;
+            if (terrain_json.HasMember("enabled") && terrain_json["enabled"].IsBool()) {
+                terrain.enabled = terrain_json["enabled"].GetBool();
+            }
+            if (terrain_json.HasMember("heightmap_path") && terrain_json["heightmap_path"].IsString()) {
+                terrain.heightmap_path = terrain_json["heightmap_path"].GetString();
+            }
+            if (terrain_json.HasMember("texture_handle") && terrain_json["texture_handle"].IsUint()) {
+                terrain.texture_handle = terrain_json["texture_handle"].GetUint();
+            }
+            if (terrain_json.HasMember("width") && terrain_json["width"].IsNumber()) {
+                terrain.width = terrain_json["width"].GetFloat();
+            }
+            if (terrain_json.HasMember("depth") && terrain_json["depth"].IsNumber()) {
+                terrain.depth = terrain_json["depth"].GetFloat();
+            }
+            if (terrain_json.HasMember("max_height") && terrain_json["max_height"].IsNumber()) {
+                terrain.max_height = terrain_json["max_height"].GetFloat();
+            }
+            if (terrain_json.HasMember("resolution_x") && terrain_json["resolution_x"].IsInt()) {
+                terrain.resolution_x = terrain_json["resolution_x"].GetInt();
+            }
+            if (terrain_json.HasMember("resolution_z") && terrain_json["resolution_z"].IsInt()) {
+                terrain.resolution_z = terrain_json["resolution_z"].GetInt();
+            }
+            if (terrain_json.HasMember("use_dynamic_lod") && terrain_json["use_dynamic_lod"].IsBool()) {
+                terrain.use_dynamic_lod = terrain_json["use_dynamic_lod"].GetBool();
+            }
+            if (terrain_json.HasMember("max_lod_levels") && terrain_json["max_lod_levels"].IsInt()) {
+                terrain.max_lod_levels = terrain_json["max_lod_levels"].GetInt();
+            }
+            if (terrain_json.HasMember("lod_distance_factor") && terrain_json["lod_distance_factor"].IsNumber()) {
+                terrain.lod_distance_factor = terrain_json["lod_distance_factor"].GetFloat();
+            }
+            if (terrain_json.HasMember("visible") && terrain_json["visible"].IsBool()) {
+                terrain.visible = terrain_json["visible"].GetBool();
+            }
+            terrain.is_dirty = true;
+            world.registry().emplace<dse::TerrainComponent>(entity, std::move(terrain));
         }
     }
 
