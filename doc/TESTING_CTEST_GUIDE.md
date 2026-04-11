@@ -104,12 +104,102 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine
 - [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md) 负责测试体系全貌与回归建议
 - 本文档只负责把“当前可执行的最小门禁”写清楚
 
+### 5.4 3D MVP 最小场景门禁
+
+当前已新增一个明确的 3D 最小场景基线：
+
+- 场景文件：`assets/scenes/3d_mvp_minimal.scene.json`
+- 对应 gate：`engine.3d.scene_mvp`
+
+推荐单独执行：
+
+```bat
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.scene_mvp"
+```
+
+该 gate 的定位不是覆盖完整 3D 运行时，而是兜底以下最小闭环：
+
+- Engine 级 scene 反序列化主链可用
+- `MeshRenderer / Camera3D / DirectionalLight3D / PointLight / Skybox / Terrain` 基础组件可被样例场景稳定加载
+- 已签入的最小 3D MVP 场景仍然有效，未被后续改动静默破坏
+
+建议后续凡是修改以下任一方向，都优先补跑该 gate：
+
+- `engine/scene/scene.cpp`
+- 3D 组件序列化字段
+- 最小 3D 场景结构
+- 3D MVP 相关测试与样例场景路径
+
+### 5.5 3D MVP Runtime Smoke 门禁
+
+当前 C++ sample/runtime 已支持通过环境变量加载最小 3D MVP 场景：
+
+- 环境变量：`DSE_STARTUP_SCENE`
+- 推荐值：`assets/scenes/3d_mvp_minimal.scene.json`
+- 对应 gate：`engine.3d.runtime_mvp_smoke`
+
+推荐单独执行：
+
+```bat
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.runtime_mvp_smoke"
+```
+
+该 gate 的定位是验证：
+
+- C++ sample/runtime 能识别 `DSE_STARTUP_SCENE`
+- Runtime 能成功加载已签入的最小 3D MVP 场景
+- 旧硬编码 demo 不会继续污染 startup scene 模式
+
+它不是完整渲染正确性测试，但能兜底“runtime 入口是否真的切进 3D MVP scene”。
+
+## 6.1 Windows + Catch + Lua 单测挂起排查结论
+
+本地 Windows 调试过程中，曾出现以下 Lua 单测在 `session.run()` 返回前无输出超时的现象：
+
+- `engine.lua_runtime`
+- `engine.lua_runtime.smoke`
+- `engine.resource_injection`
+
+当前已确认两类稳定规避方式：
+
+1. Lua runtime 注入/配置接口避免使用传值签名承接临时对象
+   - `ConfigureLuaApiContext(const LuaApiContext&)`
+   - `SetStartupLuaScriptPath(const std::string&)`
+2. 对易触发卡住的断言表达式，优先采用“先求值到局部变量，再断言”的写法，而不是将表达式直接放进 `REQUIRE(...)`
+
+已验证会触发/放大问题的写法形态包括：
+
+- `REQUIRE(std::filesystem::exists(path))`
+- `REQUIRE_FALSE(BootstrapLuaRuntime())`
+- `REQUIRE(GetLuaMemoryUsage() == 0)`
+
+推荐改写为：
+
+```cpp
+const bool output_exists = std::filesystem::exists(path);
+INFO("path=" << path);
+REQUIRE(output_exists);
+```
+
+以及：
+
+```cpp
+const bool bootstrap_ok = BootstrapLuaRuntime();
+const auto lua_memory_usage = GetLuaMemoryUsage();
+REQUIRE_FALSE(bootstrap_ok);
+REQUIRE(lua_memory_usage == 0);
+```
+
+这不是对 Catch 的通用规则，而是当前工程在 Windows 本地、Lua runtime single-test 目标下验证过的稳定写法。后续如新增类似单测，优先沿用上述模式，避免重新引入“测试逻辑已执行完但 `session.run()` 不返回”的假性超时。
+
 ## 7. 当前边界
 
 当前这套门禁补齐的是：
 
 - 本地最小 CTest 基线
 - 资源系统去全局态后的关键回归入口
+- 3D 最小 MVP 场景门禁入口
+- 3D MVP runtime smoke 门禁入口
 - 脚本 / CTest / 文档口径统一
 
 当前仍未补齐的是：
@@ -117,6 +207,7 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine
 - 正式 CI 工作流
 - Debug / Release 双配置持续化门禁
 - 性能基线自动比对
-- 3D 默认主线门禁
+- 更高层 editor runtime 联动 smoke
+- 资源真实可渲染性的自动验证
 
 因此，本轮结果应理解为“测试门禁开始收紧并具备稳定入口”，而不是“完整 CI 体系已经建成”。
