@@ -30,13 +30,13 @@ struct LuaApiContext {
  * @brief 配置 Lua 运行时所需的上下文环境
  * @param context 填充了具体系统指针的上下文结构体
  */
-void ConfigureLuaApiContext(LuaApiContext context);
+void ConfigureLuaApiContext(const LuaApiContext& context);
 
 /**
  * @brief 设置引擎启动时加载的入口 Lua 脚本路径
  * @param script_path 脚本路径（如 "script/main.lua"）
  */
-void SetStartupLuaScriptPath(std::string script_path);
+void SetStartupLuaScriptPath(const std::string& script_path);
 
 /**
  * @brief 初始化 Lua 虚拟机并加载所有绑定的 C++ API

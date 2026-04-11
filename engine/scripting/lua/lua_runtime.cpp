@@ -341,13 +341,13 @@ void UpdateScriptComponents(float delta_time) {
 }
 }
 
-void ConfigureLuaApiContext(LuaApiContext context) {
-    State().api_context = std::move(context);
+void ConfigureLuaApiContext(const LuaApiContext& context) {
+    State().api_context = context;
     lua_binding::ConfigureBindingContext(State().api_context);
 }
 
-void SetStartupLuaScriptPath(std::string script_path) {
-    State().startup_script_override = std::move(script_path);
+void SetStartupLuaScriptPath(const std::string& script_path) {
+    State().startup_script_override = script_path;
 }
 
 void ShutdownLuaRuntime() {
@@ -359,7 +359,9 @@ void ShutdownLuaRuntime() {
                    state.awake_called ? 1 : 0);
     state.shutting_down = true;
     if (state.state) {
-        DEBUG_LOG_INFO("[LuaRuntime] diagnostic mode: skip DestroyScriptInstance loop and close Lua state directly");
+        for (auto& pair : state.script_instances) {
+            DestroyScriptInstance(state.state, static_cast<int>(pair.first), pair.second, false);
+        }
         state.script_instances.clear();
         DEBUG_LOG_INFO("[LuaRuntime] lua_close state={}", static_cast<void*>(state.state));
         lua_close(state.state);

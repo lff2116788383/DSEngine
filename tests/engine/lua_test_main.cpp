@@ -49,16 +49,13 @@ void PauseOnFailureIfNeeded(int result) {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    std::fputs("[lua-test-main] before session construct\n", stdout);
-    std::fflush(stdout);
     Catch::Session session;
-    std::fputs("[lua-test-main] before session.run\n", stdout);
-    std::fflush(stdout);
-    const int result = session.run(argc, argv);
-    std::fputs("[lua-test-main] after session.run\n", stdout);
-    std::fflush(stdout);
+    const int cli_result = session.applyCommandLine(argc, argv);
+    if (cli_result != 0) {
+        std::quick_exit(cli_result);
+    }
+
+    const int result = session.run();
     PauseOnFailureIfNeeded(result);
-    std::fputs("[lua-test-main] before quick_exit\n", stdout);
-    std::fflush(stdout);
     std::quick_exit(result);
 }

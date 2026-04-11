@@ -1,9 +1,9 @@
 #include "catch/catch.hpp"
+#include "engine/base/debug.h"
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/assets/asset_manager.h"
-#include "engine/base/debug.h"
 
 #include <filesystem>
 #include <fstream>
@@ -11,7 +11,6 @@
 
 using dse::runtime::BootstrapLuaRuntime;
 using dse::runtime::ConfigureLuaApiContext;
-using dse::runtime::GetLuaMemoryUsage;
 using dse::runtime::LuaApiContext;
 using dse::runtime::SetStartupLuaScriptPath;
 using dse::runtime::ShutdownLuaRuntime;
@@ -33,18 +32,9 @@ void WriteTextFile(const std::string& path, const std::string& content) {
     REQUIRE(out.is_open());
     out << content;
 }
-
-class ScopedLuaApiContextReset {
-public:
-    ~ScopedLuaApiContextReset() {
-        ConfigureLuaApiContext(LuaApiContext{});
-        SetStartupLuaScriptPath("");
-    }
-};
 }
 
 TEST_CASE("Given_NoGlobalUpdate_When_TickLuaRuntime_Then_ScriptComponentStillUpdates", "[engine][unit][lua_runtime]") {
-    ScopedLuaApiContextReset scoped_context_reset;
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
     const std::string startup_path = MakeTempPath("startup_no_global_update_single.lua");
@@ -77,5 +67,8 @@ TEST_CASE("Given_NoGlobalUpdate_When_TickLuaRuntime_Then_ScriptComponentStillUpd
     REQUIRE(BootstrapLuaRuntime());
     TickLuaRuntime(0.016f);
     ShutdownLuaRuntime();
-    REQUIRE(std::filesystem::exists(output_path));
+    ConfigureLuaApiContext(LuaApiContext{});
+    const bool output_exists = std::filesystem::exists(output_path);
+    INFO("output_path=" << output_path);
+    REQUIRE(output_exists);
 }

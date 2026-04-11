@@ -35,17 +35,9 @@ void WriteTextFile(const std::string& path, const std::string& content) {
     out << content;
 }
 
-class ScopedLuaApiContextReset {
-public:
-    ~ScopedLuaApiContextReset() {
-        ConfigureLuaApiContext(LuaApiContext{});
-        SetStartupLuaScriptPath("");
-    }
-};
 }
 
 TEST_CASE("Smoke Snapshot - Lua runtime bootstrap update and cleanup remain deterministic", "[engine][smoke][snapshot][lua_runtime]") {
-    ScopedLuaApiContextReset scoped_context_reset;
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
     const std::string startup_path = MakeTempPath("runtime_smoke_startup_single.lua");
@@ -78,7 +70,11 @@ TEST_CASE("Smoke Snapshot - Lua runtime bootstrap update and cleanup remain dete
     REQUIRE(BootstrapLuaRuntime());
     REQUIRE(GetLuaMemoryUsage() > 0);
     TickLuaRuntime(0.016f);
-    REQUIRE(std::filesystem::exists(output_path));
+    const bool output_exists = std::filesystem::exists(output_path);
+    INFO("output_path=" << output_path);
+    REQUIRE(output_exists);
     ShutdownLuaRuntime();
+    ConfigureLuaApiContext(LuaApiContext{});
+    SetStartupLuaScriptPath("");
     REQUIRE(GetLuaMemoryUsage() == 0);
 }

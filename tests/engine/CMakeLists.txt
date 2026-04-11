@@ -260,7 +260,7 @@ target_link_libraries(${DSE_LUA_RUNTIME_TEST_TARGET}
 
 set(DSE_LUA_RUNTIME_CORE_SINGLE_TARGET dse_lua_runtime_core_single_test)
 add_executable(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
-    main.cpp
+    lua_test_main.cpp
     lua_runtime_core_single_test.cpp
 )
 target_include_directories(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
@@ -278,7 +278,7 @@ target_link_libraries(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE dse_engine)
 
 set(DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET dse_lua_runtime_smoke_single_test)
 add_executable(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
-    main.cpp
+    lua_test_main.cpp
     lua_runtime_smoke_single_test.cpp
 )
 target_include_directories(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
@@ -296,7 +296,7 @@ target_link_libraries(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} PRIVATE dse_engine)
 
 set(DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET dse_lua_resource_injection_single_test)
 add_executable(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
-    main.cpp
+    lua_test_main.cpp
     lua_resource_injection_test.cpp
 )
 target_include_directories(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}

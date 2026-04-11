@@ -21,17 +21,9 @@ std::string MakeTempPath(const char* name) {
     return (base / name).string();
 }
 
-class ScopedLuaApiContextReset {
-public:
-    ~ScopedLuaApiContextReset() {
-        ConfigureLuaApiContext(LuaApiContext{});
-        SetStartupLuaScriptPath("");
-    }
-};
 }
 
 TEST_CASE("Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero", "[engine][unit][resource_injection][lua_runtime]") {
-    ScopedLuaApiContextReset scoped_context_reset;
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
     World world;
@@ -39,8 +31,13 @@ TEST_CASE("Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageRes
     ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(MakeTempPath("missing_startup.lua"));
 
-    REQUIRE_FALSE(BootstrapLuaRuntime());
-    REQUIRE(GetLuaMemoryUsage() == 0);
+    const bool bootstrap_ok = BootstrapLuaRuntime();
+    const auto lua_memory_usage = GetLuaMemoryUsage();
+    INFO("startup_path_missing_test memory=" << lua_memory_usage);
+    REQUIRE_FALSE(bootstrap_ok);
+    REQUIRE(lua_memory_usage == 0);
 
     ShutdownLuaRuntime();
+    ConfigureLuaApiContext(LuaApiContext{});
+    SetStartupLuaScriptPath("");
 }
