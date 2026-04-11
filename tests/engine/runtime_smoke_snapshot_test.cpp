@@ -92,7 +92,6 @@ struct LuaRuntimeSmokeSnapshot {
 
 TEST_CASE("Smoke Snapshot - Lua runtime bootstrap update and cleanup remain deterministic", "[engine][smoke][snapshot][lua_runtime]") {
     ScopedLuaApiContextReset scoped_context_reset;
-    ScopedLogLevel scoped_logger(dse::debug::LogLevel::Off);
 
     const std::string startup_path = MakeTempPath("runtime_smoke_startup.lua");
     const std::string component_script_path = MakeTempPath("runtime_smoke_component.lua");

@@ -233,6 +233,22 @@
 - 名义存在但不稳定/不可重复
 - 仍然缺失
 
+当前已落地的最小基线包括：
+
+- 已签入场景：`assets/scenes/3d_mvp_minimal.scene.json`
+- Engine 回归 helper：`RunMinimal3DMvpSceneRegressionSample(...)`
+- 独立 gate：`engine.3d.scene_mvp`
+
+这意味着 P0-3 不再停留在“需要做”，而是已经完成第一步：
+
+> **最小 3D MVP 场景已经有了明确的回归样例与独立测试入口。**
+
+后续需要继续补的是：
+
+- 更高层的 runtime smoke
+- editor 打开 / 保存 / 再加载链路验证
+- 更完整的 3D scene 资源有效性检查
+
 ### P0-4 3D 构建路径收口
 
 重点确认：

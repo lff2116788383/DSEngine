@@ -8,7 +8,6 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/world.h"
 #include "engine/scripting/lua/lua_runtime.h"
-#include "engine/audio/audio_system.h"
 #include "engine/base/time.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "editor_scene_io.h"
@@ -39,9 +38,6 @@ void ResetPlayModeRuntimeState() {
     dse::runtime::ShutdownLuaRuntime();
     dse::runtime::ConfigureLuaApiContext(dse::runtime::LuaApiContext{});
     dse::runtime::SetStartupLuaScriptPath("");
-    dse::gameplay2d::AudioSystem audio_system;
-    audio_system.StopBgm();
-    audio_system.StopAllSfx();
     Time::Init();
 }
 
