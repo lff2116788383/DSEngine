@@ -74,15 +74,17 @@ public:
 // 回归用例：启动脚本缺失时 Bootstrap 失败后不应遗留 Lua 内存统计脏值。
 TEST_CASE("Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero", "[engine][unit][lua_runtime][diagnostic_single]") {
     ScopedLuaApiContextReset scoped_context_reset;
-    ScopedLogLevel scoped_logger(dse::debug::LogLevel::Off);
 
     World world;
     AssetManager asset_manager;
     ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(MakeTempPath("missing_startup.lua"));
 
-    REQUIRE_FALSE(BootstrapLuaRuntime());
-    REQUIRE(GetLuaMemoryUsage() == 0);
+    const bool bootstrap_ok = BootstrapLuaRuntime();
+    const auto lua_memory_usage = GetLuaMemoryUsage();
+    INFO("missing_startup memory=" << lua_memory_usage);
+    REQUIRE_FALSE(bootstrap_ok);
+    REQUIRE(lua_memory_usage == 0);
 
     ShutdownLuaRuntime();
 }
@@ -124,7 +126,9 @@ TEST_CASE("Given_NoGlobalUpdate_When_TickLuaRuntime_Then_ScriptComponentStillUpd
     TickLuaRuntime(0.016f);
     ShutdownLuaRuntime();
 
-    REQUIRE(std::filesystem::exists(output_path));
+    const bool output_exists = std::filesystem::exists(output_path);
+    INFO("output_path=" << output_path);
+    REQUIRE(output_exists);
 }
 
 // 回归用例：正常关闭 Lua 运行时后，Lua 内存统计应复位为 0。
@@ -270,7 +274,9 @@ TEST_CASE("Given_DisabledScriptComponent_When_TickLuaRuntime_Then_OnUpdateIsSkip
     TickLuaRuntime(0.016f);
     ShutdownLuaRuntime();
 
-    REQUIRE_FALSE(std::filesystem::exists(output_path));
+    const bool output_exists = std::filesystem::exists(output_path);
+    INFO("output_path=" << output_path);
+    REQUIRE_FALSE(output_exists);
 }
 
 TEST_CASE("Given_StandardLuaLibraries_When_BootstrapLuaRuntime_Then_BaseStringTableMathAndPackageApisAreAvailable", "[engine][unit][lua_runtime][regression]") {
@@ -302,7 +308,9 @@ TEST_CASE("Given_StandardLuaLibraries_When_BootstrapLuaRuntime_Then_BaseStringTa
     REQUIRE(BootstrapLuaRuntime());
     ShutdownLuaRuntime();
 
-    REQUIRE(std::filesystem::exists(output_path));
+    const bool output_exists = std::filesystem::exists(output_path);
+    INFO("output_path=" << output_path);
+    REQUIRE(output_exists);
     std::ifstream in(output_path);
     REQUIRE(in.is_open());
     std::string content;
