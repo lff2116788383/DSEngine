@@ -138,7 +138,10 @@ add_test(
     COMMAND ${DSE_ENGINE_TEST_TARGET}
 )
 
-set_tests_properties(engine.unit PROPERTIES LABELS "engine;unit")
+set_tests_properties(engine.unit PROPERTIES
+    LABELS "engine;unit"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
 
 add_test(
     NAME engine.2d.ui
@@ -232,7 +235,7 @@ add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp)
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
 
 add_executable(${DSE_LUA_RUNTIME_TEST_TARGET}
-    main.cpp
+    lua_test_main.cpp
     scripting/lua_runtime_test.cpp
     runtime_smoke_snapshot_test.cpp
 )

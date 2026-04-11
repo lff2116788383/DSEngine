@@ -50,10 +50,7 @@ std::string ToLuaPath(const std::string& path) {
 
 struct ScopedTempFile {
     explicit ScopedTempFile(std::string p) : path(std::move(p)) {}
-    ~ScopedTempFile() {
-        std::error_code ec;
-        std::filesystem::remove(path, ec);
-    }
+    ~ScopedTempFile() = default;
 
     std::string path;
 };

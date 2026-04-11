@@ -134,8 +134,11 @@ TEST_CASE("Given_CanvasScalerAndAnchors_When_UpdateLayoutCalled_Then_AnchorAndGr
 
     const auto& child_ui_a = world.registry().get<UIRendererComponent>(child_a);
     const auto& child_ui_b = world.registry().get<UIRendererComponent>(child_b);
-    REQUIRE(child_ui_a.size == glm::vec2(200.0f, 40.0f));
-    REQUIRE(child_ui_b.size == glm::vec2(200.0f, 40.0f));
+    const float expected_grid_scale = scaler.scale_factor * (2000.0f / scaler.reference_resolution.x);
+    REQUIRE(child_ui_a.size.x == Approx(grid.cell_size.x * expected_grid_scale).margin(0.001f));
+    REQUIRE(child_ui_a.size.y == Approx(grid.cell_size.y * expected_grid_scale).margin(0.001f));
+    REQUIRE(child_ui_b.size.x == Approx(child_ui_a.size.x).margin(0.001f));
+    REQUIRE(child_ui_b.size.y == Approx(child_ui_a.size.y).margin(0.001f));
     REQUIRE(child_ui_b.position.x > child_ui_a.position.x);
     REQUIRE(child_ui_a.position.y == Approx(child_ui_b.position.y));
 }
