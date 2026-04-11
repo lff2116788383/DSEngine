@@ -26,6 +26,29 @@ cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=
 
 建议将以下用例作为当前日常最小门禁：
 
+### 3.1 当前常用 2D 主线门禁清单
+
+当目标是维持 2D 主线稳定、并避免 Lua / runtime / 资源注入链路回归时，建议优先执行以下组合：
+
+- `engine.unit`
+- `engine.lua_runtime`
+- `engine.lua_runtime.smoke`
+- `engine.resource_injection`
+- `engine.cpp_runtime`
+- `engine.2d.ui`
+- `engine.2d.physics2d`
+- `engine.2d.particle`
+- `engine.2d.localization`
+- `engine.spine`
+- `engine.spine.smoke`
+
+这组门禁的定位不是“覆盖整个仓库”，而是：
+
+- 覆盖 2D 主线最常用运行链路
+- 覆盖 Lua / C++ runtime 双宿主
+- 覆盖资源注入与若干高频 2D 子系统
+- 作为当前 2D Stable 阶段的本地常用回归组合
+
 - `engine.unit`
 - `engine.lua_runtime`
 - `engine.cpp_runtime`

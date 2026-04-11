@@ -7,6 +7,9 @@
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/world.h"
+#include "engine/scripting/lua/lua_runtime.h"
+#include "engine/audio/audio_system.h"
+#include "engine/base/time.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "editor_scene_io.h"
 
@@ -29,6 +32,43 @@ enum class EditorState {
     Pause
 };
 EditorState g_editor_state = EditorState::Edit;
+
+namespace {
+
+void ResetPlayModeRuntimeState() {
+    dse::runtime::ShutdownLuaRuntime();
+    dse::runtime::ConfigureLuaApiContext(dse::runtime::LuaApiContext{});
+    dse::runtime::SetStartupLuaScriptPath("");
+    dse::gameplay2d::AudioSystem audio_system;
+    audio_system.StopBgm();
+    audio_system.StopAllSfx();
+    Time::Init();
+}
+
+void EnterPlayMode(entt::registry& registry) {
+    if (g_editor_state != EditorState::Edit) {
+        return;
+    }
+    g_backup_registry = std::make_unique<entt::registry>();
+    CopyRegistry(*g_backup_registry, registry);
+    ResetPlayModeRuntimeState();
+    g_editor_state = EditorState::Play;
+}
+
+void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
+    if (g_editor_state == EditorState::Edit) {
+        return;
+    }
+    ResetPlayModeRuntimeState();
+    if (g_backup_registry) {
+        CopyRegistry(registry, *g_backup_registry);
+        g_backup_registry.reset();
+    }
+    selected_entity = entt::null;
+    g_editor_state = EditorState::Edit;
+}
+
+} // namespace
 
 void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
                        entt::registry& registry,
@@ -86,17 +126,12 @@ void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
 
     if (g_editor_state == EditorState::Edit) {
         if (ImGui::Button(">", ImVec2(32, 24))) {
-            g_editor_state = EditorState::Play;
-            g_backup_registry = std::make_unique<entt::registry>();
-            CopyRegistry(*g_backup_registry, registry);
+            EnterPlayMode(registry);
         }
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
         if (ImGui::Button("[]", ImVec2(32, 24))) {
-            g_editor_state = EditorState::Edit;
-            CopyRegistry(registry, *g_backup_registry);
-            g_backup_registry.reset();
-            selected_entity = entt::null;
+            ExitPlayMode(registry, selected_entity);
         }
         ImGui::PopStyleColor();
     }
