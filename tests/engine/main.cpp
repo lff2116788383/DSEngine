@@ -1,5 +1,6 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch/catch.hpp"
+#include "engine/base/debug.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -46,6 +47,8 @@ void PauseOnFailureIfNeeded(int result) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+    Debug::ShutDown();
     std::fputs("[test-main] before session construct\n", stdout);
     std::fflush(stdout);
     Catch::Session session;
@@ -54,6 +57,7 @@ int main(int argc, char* argv[]) {
     std::fputs("[test-main] before session.run call\n", stdout);
     std::fflush(stdout);
     const int result = session.run(argc, argv);
+    Debug::ShutDown();
     std::fputs("[test-main] after session.run\n", stdout);
     std::fflush(stdout);
     PauseOnFailureIfNeeded(result);

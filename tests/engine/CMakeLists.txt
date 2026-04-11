@@ -235,7 +235,7 @@ add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp)
 set(DSE_LUA_RUNTIME_TEST_TARGET dse_lua_runtime_tests)
 
 add_executable(${DSE_LUA_RUNTIME_TEST_TARGET}
-    lua_test_main.cpp
+    main.cpp
     scripting/lua_runtime_test.cpp
     runtime_smoke_snapshot_test.cpp
 )
@@ -258,13 +258,66 @@ target_link_libraries(${DSE_LUA_RUNTIME_TEST_TARGET}
         dse_engine
 )
 
+set(DSE_LUA_RUNTIME_CORE_SINGLE_TARGET dse_lua_runtime_core_single_test)
+add_executable(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
+    main.cpp
+    lua_runtime_core_single_test.cpp
+)
+target_include_directories(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
+)
+target_compile_features(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE /utf-8)
+endif()
+target_link_libraries(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE dse_engine)
+
+set(DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET dse_lua_runtime_smoke_single_test)
+add_executable(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
+    main.cpp
+    lua_runtime_smoke_single_test.cpp
+)
+target_include_directories(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
+)
+target_compile_features(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} PRIVATE /utf-8)
+endif()
+target_link_libraries(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} PRIVATE dse_engine)
+
+set(DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET dse_lua_resource_injection_single_test)
+add_executable(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
+    main.cpp
+    lua_resource_injection_test.cpp
+)
+target_include_directories(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/tests
+)
+target_compile_features(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PRIVATE /utf-8)
+endif()
+target_link_libraries(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PRIVATE dse_engine)
+
 add_test(
     NAME engine.lua_runtime
-    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET}
+    COMMAND ${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
 )
-
 set_tests_properties(engine.lua_runtime PROPERTIES
-    LABELS "engine;unit;lua_runtime;resource_injection;gate"
+    LABELS "engine;unit;lua_runtime;gate"
     PASS_REGULAR_EXPRESSION "All tests passed"
     WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     TIMEOUT 15
@@ -272,9 +325,8 @@ set_tests_properties(engine.lua_runtime PROPERTIES
 
 add_test(
     NAME engine.lua_runtime.smoke
-    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "[engine][smoke][snapshot][lua_runtime]"
+    COMMAND ${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
 )
-
 set_tests_properties(engine.lua_runtime.smoke PROPERTIES
     LABELS "engine;smoke;snapshot;lua_runtime"
     PASS_REGULAR_EXPRESSION "All tests passed"
@@ -282,10 +334,9 @@ set_tests_properties(engine.lua_runtime.smoke PROPERTIES
     TIMEOUT 15
 )
 
-
 add_test(
     NAME engine.resource_injection
-    COMMAND ${DSE_LUA_RUNTIME_TEST_TARGET} "Given_MissingStartupScript_When_BootstrapFails_Then_LuaMemoryUsageResetsToZero"
+    COMMAND ${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
 )
 set_tests_properties(engine.resource_injection PROPERTIES
     LABELS "engine;unit;resource_injection;gate"
