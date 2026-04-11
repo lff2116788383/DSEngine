@@ -16,11 +16,12 @@ std::string ReadAllText(const std::string& path) {
 
 } // namespace
 
-TEST_CASE("Given_MeshRenderSystemSource_When_RenderingMeshMaterials_Then_RuntimeReadsFlowThroughMaterialDesc", "[engine][unit][3d][material][static]") {
+TEST_CASE("Given_MeshRenderSystemSource_When_RenderingMeshMaterials_Then_RuntimeReadsDirectlyFromMeshRendererComponent", "[engine][unit][3d][material][static]") {
     const std::string source = ReadAllText("modules/gameplay_3d/rendering/mesh_render_system.cpp");
-    REQUIRE(source.find("const auto material = mesh.MaterialDesc();") != std::string::npos);
-    REQUIRE(source.find("material.material_instance_id") != std::string::npos);
-    REQUIRE(source.find("material.shader_variant") != std::string::npos);
-    REQUIRE(source.find("material.metallic") != std::string::npos);
-    REQUIRE(source.find("material.roughness") != std::string::npos);
+    REQUIRE(source.find("material_instance_id") != std::string::npos);
+    REQUIRE(source.find("shader_variant") != std::string::npos);
+    REQUIRE(source.find("metallic") != std::string::npos);
+    REQUIRE(source.find("roughness") != std::string::npos);
+    REQUIRE(source.find("mesh.") != std::string::npos);
+    REQUIRE(source.find("MaterialDesc()") == std::string::npos);
 }

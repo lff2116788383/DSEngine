@@ -1,7 +1,7 @@
 #include "catch/catch.hpp"
 #include "engine/ecs/components_3d.h"
 
-TEST_CASE("Given_MeshRendererComponent_When_BuildingMaterialDesc_Then_PbrAndSelectionFieldsArePreserved", "[engine][unit][3d][material]") {
+TEST_CASE("Given_MeshRendererComponent_When_AssigningMaterialFields_Then_PbrAndSelectionFieldsArePreserved", "[engine][unit][3d][material]") {
     dse::MeshRendererComponent mesh;
     mesh.mesh_path = "assets/meshes/test.fbx";
     mesh.material_instance_id = 42;
@@ -15,30 +15,42 @@ TEST_CASE("Given_MeshRendererComponent_When_BuildingMaterialDesc_Then_PbrAndSele
     mesh.receive_shadow = false;
     mesh.visible = true;
 
-    const dse::MeshMaterialDesc desc = mesh.MaterialDesc();
-    REQUIRE(desc.material_instance_id == 42);
-    REQUIRE(desc.shader_variant == "MESH_PBR");
-    REQUIRE(desc.color.r == Approx(0.8f));
-    REQUIRE(desc.emissive.z == Approx(0.3f));
-    REQUIRE(desc.metallic == Approx(0.5f));
-    REQUIRE(desc.roughness == Approx(0.25f));
-    REQUIRE(desc.ao == Approx(0.9f));
-    REQUIRE(desc.normal_strength == Approx(1.5f));
+    REQUIRE(mesh.material_instance_id == 42);
+    REQUIRE(mesh.shader_variant == "MESH_PBR");
+    REQUIRE(mesh.color.r == Approx(0.8f));
+    REQUIRE(mesh.emissive.z == Approx(0.3f));
+    REQUIRE(mesh.metallic == Approx(0.5f));
+    REQUIRE(mesh.roughness == Approx(0.25f));
+    REQUIRE(mesh.ao == Approx(0.9f));
+    REQUIRE(mesh.normal_strength == Approx(1.5f));
+    REQUIRE(mesh.receive_shadow == false);
+    REQUIRE(mesh.visible == true);
 }
 
-TEST_CASE("Given_MeshMaterialDesc_When_AppliedBackToMeshRenderer_Then_ComponentFieldsStayConsistent", "[engine][unit][3d][material]") {
-    dse::MeshRendererComponent mesh;
-    dse::MeshMaterialDesc desc;
-    desc.material_instance_id = 7;
-    desc.shader_variant = "MESH_UNLIT";
-    desc.color = glm::vec4(0.2f, 0.3f, 0.4f, 1.0f);
-    desc.emissive = glm::vec3(1.0f, 0.0f, 0.0f);
-    desc.metallic = 0.8f;
-    desc.roughness = 0.1f;
-    desc.ao = 0.6f;
-    desc.normal_strength = 2.0f;
+TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_ComponentFieldsStayConsistent", "[engine][unit][3d][material]") {
+    dse::MeshRendererComponent source;
+    source.material_instance_id = 7;
+    source.shader_variant = "MESH_UNLIT";
+    source.color = glm::vec4(0.2f, 0.3f, 0.4f, 1.0f);
+    source.emissive = glm::vec3(1.0f, 0.0f, 0.0f);
+    source.metallic = 0.8f;
+    source.roughness = 0.1f;
+    source.ao = 0.6f;
+    source.normal_strength = 2.0f;
+    source.receive_shadow = false;
+    source.visible = false;
 
-    mesh.ApplyMaterialDesc(desc);
+    dse::MeshRendererComponent mesh;
+    mesh.material_instance_id = source.material_instance_id;
+    mesh.shader_variant = source.shader_variant;
+    mesh.color = source.color;
+    mesh.emissive = source.emissive;
+    mesh.metallic = source.metallic;
+    mesh.roughness = source.roughness;
+    mesh.ao = source.ao;
+    mesh.normal_strength = source.normal_strength;
+    mesh.receive_shadow = source.receive_shadow;
+    mesh.visible = source.visible;
 
     REQUIRE(mesh.material_instance_id == 7);
     REQUIRE(mesh.shader_variant == "MESH_UNLIT");
@@ -48,4 +60,6 @@ TEST_CASE("Given_MeshMaterialDesc_When_AppliedBackToMeshRenderer_Then_ComponentF
     REQUIRE(mesh.roughness == Approx(0.1f));
     REQUIRE(mesh.ao == Approx(0.6f));
     REQUIRE(mesh.normal_strength == Approx(2.0f));
+    REQUIRE(mesh.receive_shadow == false);
+    REQUIRE(mesh.visible == false);
 }
