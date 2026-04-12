@@ -81,6 +81,8 @@ struct MeshDrawItem {
         float radius;
         float inner_cone;
         float outer_cone;
+        bool cast_shadow = false;
+        int shadow_index = -1;
     };
     std::vector<SpotLightData> spot_lights;
 
@@ -107,9 +109,12 @@ using DrawBatchItem = SpriteDrawItem;
 
 struct RenderStats {
     int sprite_count = 0;
+    int mesh_count = 0;
     int draw_calls = 0;
+    int material_switches = 0;
     int max_batch_sprites = 0;
     int render_passes = 0;
+    int shadow_passes = 0;
 };
 
 struct RenderTargetDesc {
@@ -546,14 +551,26 @@ public:
      */
     const RenderStats& LastFrameStats() const override;
 
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { 
-        if (index < 3) global_shadow_map_[index] = handle; 
+    void SetGlobalShadowMap(unsigned int index, unsigned int handle) {
+        if (index < 3) global_shadow_map_[index] = handle;
     }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { 
-        if (index < 3) global_light_space_matrix_[index] = mat; 
+    void SetGlobalSpotShadowMap(unsigned int handle) {
+        SetGlobalSpotShadowMap(0, handle);
+    }
+    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
+        if (index < 4) global_spot_shadow_map_[index] = handle;
+    }
+    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
+        if (index < 3) global_light_space_matrix_[index] = mat;
     }
     void SetGlobalCascadeSplit(unsigned int index, float split) {
         if (index < 3) global_cascade_splits_[index] = split;
+    }
+    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) {
+        SetGlobalSpotLightSpaceMatrix(0, mat);
+    }
+    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
+        if (index < 4) global_spot_light_space_matrix_[index] = mat;
     }
     
     // These are kept public temporarily for the OpenGLCommandBuffer to use
@@ -685,8 +702,10 @@ private:
 
     int uniform_spot_light_count_loc_ = -1;
     struct SpotLightLoc {
-        int color, position, direction, intensity, radius, inner_cone, outer_cone;
+        int color, position, direction, intensity, radius, inner_cone, outer_cone, cast_shadow, shadow_index;
     } uniform_spot_lights_loc_[4];
+    int uniform_spot_shadow_map_loc_[4] = {-1, -1, -1, -1};
+    int uniform_spot_light_space_matrix_loc_[4] = {-1, -1, -1, -1};
 
     // Particle 3D support
     unsigned int particle_shader_handle_ = 0;
@@ -694,8 +713,12 @@ private:
     int particle_uniform_texture_loc_ = -1;
 
     glm::mat4 global_light_space_matrix_[3];
+    glm::mat4 global_spot_light_space_matrix_[4] = {
+        glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)
+    };
     float global_cascade_splits_[3];
     unsigned int global_shadow_map_[3];
+    unsigned int global_spot_shadow_map_[4] = {0, 0, 0, 0};
 
     bool initialized_ = false;
     RenderStats current_frame_stats_;

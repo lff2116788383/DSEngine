@@ -10,14 +10,24 @@
 #include <filesystem>
 #include <iostream>
 
+#include "engine/input/input.h"
+#include "engine/input/key_code.h"
+
 namespace dse::samples::cpp_demo {
 namespace {
 struct DemoState {
     bool initialized = false;
+    bool reference_demo_15_9_mode = false;
+    bool reference_demo_15_9_materials_initialized = false;
+    AssetManager* runtime_asset_manager = nullptr;
     int frame_counter = 0;
     int spawn_index = 0;
     unsigned int texture_handle = 0;
     unsigned int normal_handle = 0;
+    unsigned int reference_material0_id = 430001;
+    unsigned int reference_material1_id = 430002;
+    float reference_specular_pow0 = 8.0f;
+    float reference_specular_pow1 = 4.0f;
     Entity camera = entt::null;
     Entity ground = entt::null;
     Entity dlight = entt::null;
@@ -34,6 +44,107 @@ const char* ResolveStartupScenePath() {
         return env;
     }
     return nullptr;
+}
+
+float Clamp01(float value) {
+    return std::max(0.0f, std::min(1.0f, value));
+}
+
+float MapSpecularPowToRoughness(float specular_pow) {
+    const float normalized = Clamp01((specular_pow - 1.0f) / 16.0f);
+    return 1.0f - normalized;
+}
+
+float MapSpecularPowToEmissive(float specular_pow) {
+    const float normalized = Clamp01((specular_pow - 1.0f) / 16.0f);
+    return 0.02f + normalized * 0.18f;
+}
+
+void EnsureReferenceDemo159Materials(AssetManager& asset_manager) {
+    auto& state = State();
+    if (state.reference_demo_15_9_materials_initialized) {
+        return;
+    }
+
+    auto material0 = asset_manager.GetMaterialInstance(state.reference_material0_id);
+    if (!material0) {
+        material0 = asset_manager.CreateMaterialInstance("reference_demo_15_9_mesh_0");
+    }
+    auto material1 = asset_manager.GetMaterialInstance(state.reference_material1_id);
+    if (!material1) {
+        material1 = asset_manager.CreateMaterialInstance("reference_demo_15_9_mesh_1");
+    }
+
+    if (material0) {
+        material0->SetShaderVariant("MESH_PBR");
+        material0->SetBlendMode(MaterialBlendMode::Opaque);
+        material0->SetBaseColor(glm::vec4(0.95f, 0.95f, 1.0f, 1.0f));
+    }
+    if (material1) {
+        material1->SetShaderVariant("MESH_PBR");
+        material1->SetBlendMode(MaterialBlendMode::Opaque);
+        material1->SetBaseColor(glm::vec4(1.0f, 0.9f, 0.85f, 1.0f));
+    }
+
+    state.reference_material0_id = material0 ? material0->GetId() : state.reference_material0_id;
+    state.reference_material1_id = material1 ? material1->GetId() : state.reference_material1_id;
+    state.reference_demo_15_9_materials_initialized = material0 != nullptr && material1 != nullptr;
+}
+
+void ApplyReferenceDemo159MaterialParameters(AssetManager& asset_manager) {
+    auto& state = State();
+    auto material0 = asset_manager.GetMaterialInstance(state.reference_material0_id);
+    auto material1 = asset_manager.GetMaterialInstance(state.reference_material1_id);
+    if (!material0 || !material1) {
+        return;
+    }
+
+    MaterialAsset::ScalarOverrides scalars0 = material0->GetScalarOverrides();
+    scalars0.metallic = 0.08f;
+    scalars0.roughness = MapSpecularPowToRoughness(state.reference_specular_pow0);
+    scalars0.ao = 1.0f;
+    scalars0.normal_strength = 1.0f;
+    material0->SetScalarOverrides(scalars0);
+    material0->SetEmissiveColor(glm::vec3(0.0f, 0.02f, MapSpecularPowToEmissive(state.reference_specular_pow0)));
+
+    MaterialAsset::ScalarOverrides scalars1 = material1->GetScalarOverrides();
+    scalars1.metallic = 0.12f;
+    scalars1.roughness = MapSpecularPowToRoughness(state.reference_specular_pow1);
+    scalars1.ao = 1.0f;
+    scalars1.normal_strength = 1.0f;
+    material1->SetScalarOverrides(scalars1);
+    material1->SetEmissiveColor(glm::vec3(MapSpecularPowToEmissive(state.reference_specular_pow1), 0.01f, 0.0f));
+}
+
+void HandleReferenceDemo159Input(AssetManager& asset_manager) {
+    auto& state = State();
+    bool changed = false;
+    if (Input::GetKeyDown(KEY_CODE_MINUS)) {
+        state.reference_specular_pow0 = std::max(1.0f, state.reference_specular_pow0 - 0.1f);
+        changed = true;
+    }
+    if (Input::GetKeyDown(KEY_CODE_EQUAL)) {
+        state.reference_specular_pow0 = std::min(32.0f, state.reference_specular_pow0 + 0.1f);
+        changed = true;
+    }
+    if (Input::GetKeyDown(KEY_CODE_LEFT_BRACKET)) {
+        state.reference_specular_pow1 = std::max(1.0f, state.reference_specular_pow1 - 0.1f);
+        changed = true;
+    }
+    if (Input::GetKeyDown(KEY_CODE_RIGHT_BRACKET)) {
+        state.reference_specular_pow1 = std::min(32.0f, state.reference_specular_pow1 + 0.1f);
+        changed = true;
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    ApplyReferenceDemo159MaterialParameters(asset_manager);
+    std::cout << "[3D-Smoke][CPP] reference_demo_15_9_material_update spec0=" << state.reference_specular_pow0
+              << " roughness0=" << MapSpecularPowToRoughness(state.reference_specular_pow0)
+              << " spec1=" << state.reference_specular_pow1
+              << " roughness1=" << MapSpecularPowToRoughness(state.reference_specular_pow1) << std::endl;
 }
 
 void ReportMvpResourceDiagnostics(World& world) {
@@ -62,7 +173,7 @@ void ReportMvpResourceDiagnostics(World& world) {
     }
 }
 
-bool TryBootstrapFromStartupScene(World& world) {
+bool TryBootstrapFromStartupScene(World& world, AssetManager& asset_manager) {
     const char* startup_scene = ResolveStartupScenePath();
     std::cout << "[3D-Smoke][CPP] startup_scene_env=" << (startup_scene ? startup_scene : "<null>") << std::endl;
     if (startup_scene == nullptr || startup_scene[0] == '\0') {
@@ -112,11 +223,30 @@ bool TryBootstrapFromStartupScene(World& world) {
 
     auto& state = State();
     state.initialized = true;
+    state.runtime_asset_manager = &asset_manager;
     state.spawn_index = 0;
     state.frame_counter = 0;
     state.settings.total_boxes = 0;
     state.settings.spawn_per_frame = 0;
     state.settings.columns = 0;
+    state.reference_demo_15_9_mode = std::string(startup_scene) == "assets/scenes/reference_demo_15_9.scene.json";
+    if (state.reference_demo_15_9_mode) {
+        EnsureReferenceDemo159Materials(asset_manager);
+        ApplyReferenceDemo159MaterialParameters(asset_manager);
+        auto mesh_view = world.registry().view<MeshRendererComponent>();
+        size_t reference_mesh_index = 0;
+        for (auto entity : mesh_view) {
+            auto& mesh = mesh_view.get<MeshRendererComponent>(entity);
+            if (mesh.material_instance_id == 430001 || mesh.material_instance_id == 430002) {
+                mesh.material_instance_id = reference_mesh_index == 0 ? state.reference_material0_id : state.reference_material1_id;
+                ++reference_mesh_index;
+            }
+        }
+        std::cout << "[3D-Smoke][CPP] reference_demo_15_9_material_bootstrap material0=" << state.reference_material0_id
+                  << " spec0=" << state.reference_specular_pow0
+                  << " material1=" << state.reference_material1_id
+                  << " spec1=" << state.reference_specular_pow1 << std::endl;
+    }
     std::cout << "[3D-Smoke][CPP] startup_scene_loaded path=" << startup_scene << std::endl;
     ReportMvpResourceDiagnostics(world);
     return true;
@@ -157,7 +287,7 @@ void Bootstrap(World& world, AssetManager& asset_manager) {
         return;
     }
 
-    if (TryBootstrapFromStartupScene(world)) {
+    if (TryBootstrapFromStartupScene(world, asset_manager)) {
         return;
     }
 
@@ -200,17 +330,21 @@ void Bootstrap(World& world, AssetManager& asset_manager) {
 
     state.spawn_index = 0;
     state.frame_counter = 0;
+    state.runtime_asset_manager = &asset_manager;
     state.initialized = true;
     std::cout << "[3D-Smoke][CPP] bootstrap_ok camera=1 light=1 ground=1 total_boxes=" << state.settings.total_boxes
               << " spawn_per_frame=" << state.settings.spawn_per_frame << std::endl;
 }
 
 void Tick(World& world, float delta_time) {
-    (void)delta_time;
     auto& state = State();
     if (!state.initialized) {
         return;
     }
+    if (state.reference_demo_15_9_mode && state.runtime_asset_manager != nullptr) {
+        HandleReferenceDemo159Input(*state.runtime_asset_manager);
+    }
+
     if (state.spawn_index < state.settings.total_boxes) {
         const int remaining = state.settings.total_boxes - state.spawn_index;
         const int batch = std::min(state.settings.spawn_per_frame, remaining);

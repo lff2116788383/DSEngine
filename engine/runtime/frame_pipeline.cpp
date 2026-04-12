@@ -117,6 +117,9 @@ bool FramePipeline::Init() {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         render_resources_.shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
     }
+    for (int i = 0; i < 4; ++i) {
+        render_resources_.spot_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true});
+    }
 
     if (render_resources_.pp_bloom_extract_rt == 0) {
         render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
@@ -393,10 +396,13 @@ void FramePipeline::RunRenderInternal() {
         auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, draw_calls={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
+                       stats.mesh_count,
                        stats.draw_calls,
+                       stats.material_switches,
+                       stats.shadow_passes,
                        stats.max_batch_sprites,
                        stats.render_passes,
                        physics_bodies,
@@ -511,6 +517,46 @@ void FramePipeline::BuildRenderGraphInternal() {
                     device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
                 }
             }
+        }
+    });
+
+    render_graph_passes_.push_back({
+        "spot_shadow_pass",
+        [this](CommandBuffer& cmd_buffer) {
+            auto spot_light_view = runtime_context_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
+            std::vector<glm::mat4> spot_light_space_matrices;
+            spot_light_space_matrices.reserve(4);
+            int shadow_slot = 0;
+            for (auto entity : spot_light_view) {
+                auto& light = spot_light_view.get<dse::SpotLightComponent>(entity);
+                if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || render_resources_.spot_shadow_render_target[shadow_slot] == 0) {
+                    continue;
+                }
+
+                auto& transform = spot_light_view.get<TransformComponent>(entity);
+                const glm::vec3 forward = glm::normalize(transform.rotation * light.direction);
+                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                if (std::abs(glm::dot(forward, up)) > 0.98f) {
+                    up = glm::vec3(0.0f, 0.0f, 1.0f);
+                }
+                const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + forward, up);
+                const glm::mat4 light_proj = glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+                cmd_buffer.BeginRenderPass({render_resources_.spot_shadow_render_target[shadow_slot], glm::vec4(1.0f), true});
+                cmd_buffer.SetCamera(light_view_mat, light_proj);
+                cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
+                for (auto& mod : modules_) {
+                    if (mod.instance) {
+                        mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, CSM_CASCADES, light_view_mat, light_proj);
+                    }
+                }
+                cmd_buffer.EndRenderPass();
+                spot_light_space_matrices.push_back(light_proj * light_view_mat);
+                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
+                    device->SetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.spot_shadow_render_target[shadow_slot]));
+                }
+                ++shadow_slot;
+            }
+            cmd_buffer.SetGlobalMat4Array("u_spot_light_space_matrices", spot_light_space_matrices);
         }
     });
 
@@ -752,6 +798,10 @@ World& FramePipeline::world() {
 
 int FramePipeline::LastDrawCalls() const {
     return last_draw_calls_;
+}
+
+int FramePipeline::LastMaterialSwitches() const {
+    return last_material_switches_;
 }
 
 int FramePipeline::LastMaxBatchSprites() const {

@@ -155,6 +155,11 @@ bool Scene::Serialize(const std::string& filepath) {
             mesh_json.AddMember("roughness", mesh.roughness, allocator);
             mesh_json.AddMember("ao", mesh.ao, allocator);
             mesh_json.AddMember("normal_strength", mesh.normal_strength, allocator);
+            mesh_json.AddMember("albedo_texture_handle", mesh.albedo_texture_handle, allocator);
+            mesh_json.AddMember("normal_texture_handle", mesh.normal_texture_handle, allocator);
+            mesh_json.AddMember("metallic_roughness_texture_handle", mesh.metallic_roughness_texture_handle, allocator);
+            mesh_json.AddMember("emissive_texture_handle", mesh.emissive_texture_handle, allocator);
+            mesh_json.AddMember("occlusion_texture_handle", mesh.occlusion_texture_handle, allocator);
             mesh_json.AddMember("receive_shadow", mesh.receive_shadow, allocator);
             mesh_json.AddMember("visible", mesh.visible, allocator);
             components.AddMember("MeshRendererComponent", mesh_json, allocator);
@@ -212,8 +217,42 @@ bool Scene::Serialize(const std::string& filepath) {
             light_json.AddMember("color", color, allocator);
             light_json.AddMember("intensity", light.intensity, allocator);
             light_json.AddMember("radius", light.radius, allocator);
+            light_json.AddMember("falloff", light.falloff, allocator);
             light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
             components.AddMember("PointLightComponent", light_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::SpotLightComponent>(entity)) {
+            const auto& light = world.registry().get<dse::SpotLightComponent>(entity);
+            rapidjson::Value light_json(rapidjson::kObjectType);
+            light_json.AddMember("enabled", light.enabled, allocator);
+            rapidjson::Value direction(rapidjson::kArrayType);
+            direction.PushBack(light.direction.x, allocator).PushBack(light.direction.y, allocator).PushBack(light.direction.z, allocator);
+            light_json.AddMember("direction", direction, allocator);
+            rapidjson::Value color(rapidjson::kArrayType);
+            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
+            light_json.AddMember("color", color, allocator);
+            light_json.AddMember("intensity", light.intensity, allocator);
+            light_json.AddMember("radius", light.radius, allocator);
+            light_json.AddMember("falloff", light.falloff, allocator);
+            light_json.AddMember("inner_cone_angle", light.inner_cone_angle, allocator);
+            light_json.AddMember("outer_cone_angle", light.outer_cone_angle, allocator);
+            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
+            components.AddMember("SpotLightComponent", light_json, allocator);
+        }
+
+        if (world.registry().all_of<dse::SkyLightComponent>(entity)) {
+            const auto& light = world.registry().get<dse::SkyLightComponent>(entity);
+            rapidjson::Value light_json(rapidjson::kObjectType);
+            light_json.AddMember("enabled", light.enabled, allocator);
+            rapidjson::Value up_color(rapidjson::kArrayType);
+            up_color.PushBack(light.up_color.x, allocator).PushBack(light.up_color.y, allocator).PushBack(light.up_color.z, allocator);
+            light_json.AddMember("up_color", up_color, allocator);
+            rapidjson::Value down_color(rapidjson::kArrayType);
+            down_color.PushBack(light.down_color.x, allocator).PushBack(light.down_color.y, allocator).PushBack(light.down_color.z, allocator);
+            light_json.AddMember("down_color", down_color, allocator);
+            light_json.AddMember("intensity", light.intensity, allocator);
+            components.AddMember("SkyLightComponent", light_json, allocator);
         }
 
         if (world.registry().all_of<dse::Animator3DComponent>(entity)) {
@@ -225,6 +264,18 @@ bool Scene::Serialize(const std::string& filepath) {
             animator_json.AddMember("speed", animator.speed, allocator);
             animator_json.AddMember("loop", animator.loop, allocator);
             animator_json.AddMember("use_anim_tree", animator.use_anim_tree, allocator);
+            animator_json.AddMember("blend_parameter", rapidjson::Value(animator.blend_parameter.c_str(), allocator), allocator);
+            animator_json.AddMember("blend_parameter_value", animator.blend_parameter_value, allocator);
+            rapidjson::Value blend_nodes(rapidjson::kArrayType);
+            for (const auto& node : animator.blend_nodes) {
+                rapidjson::Value node_json(rapidjson::kObjectType);
+                node_json.AddMember("name", rapidjson::Value(node.name.c_str(), allocator), allocator);
+                node_json.AddMember("danim_path", rapidjson::Value(node.danim_path.c_str(), allocator), allocator);
+                node_json.AddMember("weight", node.weight, allocator);
+                node_json.AddMember("threshold", node.threshold, allocator);
+                blend_nodes.PushBack(node_json, allocator);
+            }
+            animator_json.AddMember("blend_nodes", blend_nodes, allocator);
             components.AddMember("Animator3DComponent", animator_json, allocator);
         }
 
@@ -470,6 +521,21 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (mesh_json.HasMember("normal_strength") && mesh_json["normal_strength"].IsNumber()) {
                 mesh.normal_strength = mesh_json["normal_strength"].GetFloat();
             }
+            if (mesh_json.HasMember("albedo_texture_handle") && mesh_json["albedo_texture_handle"].IsUint()) {
+                mesh.albedo_texture_handle = mesh_json["albedo_texture_handle"].GetUint();
+            }
+            if (mesh_json.HasMember("normal_texture_handle") && mesh_json["normal_texture_handle"].IsUint()) {
+                mesh.normal_texture_handle = mesh_json["normal_texture_handle"].GetUint();
+            }
+            if (mesh_json.HasMember("metallic_roughness_texture_handle") && mesh_json["metallic_roughness_texture_handle"].IsUint()) {
+                mesh.metallic_roughness_texture_handle = mesh_json["metallic_roughness_texture_handle"].GetUint();
+            }
+            if (mesh_json.HasMember("emissive_texture_handle") && mesh_json["emissive_texture_handle"].IsUint()) {
+                mesh.emissive_texture_handle = mesh_json["emissive_texture_handle"].GetUint();
+            }
+            if (mesh_json.HasMember("occlusion_texture_handle") && mesh_json["occlusion_texture_handle"].IsUint()) {
+                mesh.occlusion_texture_handle = mesh_json["occlusion_texture_handle"].GetUint();
+            }
             if (mesh_json.HasMember("receive_shadow") && mesh_json["receive_shadow"].IsBool()) {
                 mesh.receive_shadow = mesh_json["receive_shadow"].GetBool();
             }
@@ -569,10 +635,68 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (light_json.HasMember("radius") && light_json["radius"].IsNumber()) {
                 light.radius = light_json["radius"].GetFloat();
             }
+            if (light_json.HasMember("falloff") && light_json["falloff"].IsNumber()) {
+                light.falloff = light_json["falloff"].GetFloat();
+            }
             if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
                 light.cast_shadow = light_json["cast_shadow"].GetBool();
             }
             world.registry().emplace<dse::PointLightComponent>(entity, light);
+        }
+
+        if (components.HasMember("SpotLightComponent") && components["SpotLightComponent"].IsObject()) {
+            const auto& light_json = components["SpotLightComponent"];
+            dse::SpotLightComponent light;
+            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
+                light.enabled = light_json["enabled"].GetBool();
+            }
+            if (light_json.HasMember("direction") && light_json["direction"].IsArray() && light_json["direction"].Size() == 3) {
+                const auto& d = light_json["direction"].GetArray();
+                light.direction = glm::vec3(d[0].GetFloat(), d[1].GetFloat(), d[2].GetFloat());
+            }
+            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
+                const auto& c = light_json["color"].GetArray();
+                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
+            }
+            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
+                light.intensity = light_json["intensity"].GetFloat();
+            }
+            if (light_json.HasMember("radius") && light_json["radius"].IsNumber()) {
+                light.radius = light_json["radius"].GetFloat();
+            }
+            if (light_json.HasMember("falloff") && light_json["falloff"].IsNumber()) {
+                light.falloff = light_json["falloff"].GetFloat();
+            }
+            if (light_json.HasMember("inner_cone_angle") && light_json["inner_cone_angle"].IsNumber()) {
+                light.inner_cone_angle = light_json["inner_cone_angle"].GetFloat();
+            }
+            if (light_json.HasMember("outer_cone_angle") && light_json["outer_cone_angle"].IsNumber()) {
+                light.outer_cone_angle = light_json["outer_cone_angle"].GetFloat();
+            }
+            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
+                light.cast_shadow = light_json["cast_shadow"].GetBool();
+            }
+            world.registry().emplace<dse::SpotLightComponent>(entity, light);
+        }
+
+        if (components.HasMember("SkyLightComponent") && components["SkyLightComponent"].IsObject()) {
+            const auto& light_json = components["SkyLightComponent"];
+            dse::SkyLightComponent light;
+            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
+                light.enabled = light_json["enabled"].GetBool();
+            }
+            if (light_json.HasMember("up_color") && light_json["up_color"].IsArray() && light_json["up_color"].Size() == 3) {
+                const auto& c = light_json["up_color"].GetArray();
+                light.up_color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
+            }
+            if (light_json.HasMember("down_color") && light_json["down_color"].IsArray() && light_json["down_color"].Size() == 3) {
+                const auto& c = light_json["down_color"].GetArray();
+                light.down_color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
+            }
+            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
+                light.intensity = light_json["intensity"].GetFloat();
+            }
+            world.registry().emplace<dse::SkyLightComponent>(entity, light);
         }
 
         if (components.HasMember("Animator3DComponent") && components["Animator3DComponent"].IsObject()) {
@@ -595,6 +719,33 @@ bool Scene::Deserialize(const std::string& filepath) {
             }
             if (animator_json.HasMember("use_anim_tree") && animator_json["use_anim_tree"].IsBool()) {
                 animator.use_anim_tree = animator_json["use_anim_tree"].GetBool();
+            }
+            if (animator_json.HasMember("blend_parameter") && animator_json["blend_parameter"].IsString()) {
+                animator.blend_parameter = animator_json["blend_parameter"].GetString();
+            }
+            if (animator_json.HasMember("blend_parameter_value") && animator_json["blend_parameter_value"].IsNumber()) {
+                animator.blend_parameter_value = animator_json["blend_parameter_value"].GetFloat();
+            }
+            if (animator_json.HasMember("blend_nodes") && animator_json["blend_nodes"].IsArray()) {
+                for (const auto& node_json : animator_json["blend_nodes"].GetArray()) {
+                    if (!node_json.IsObject()) {
+                        continue;
+                    }
+                    dse::AnimBlendNode node;
+                    if (node_json.HasMember("name") && node_json["name"].IsString()) {
+                        node.name = node_json["name"].GetString();
+                    }
+                    if (node_json.HasMember("danim_path") && node_json["danim_path"].IsString()) {
+                        node.danim_path = node_json["danim_path"].GetString();
+                    }
+                    if (node_json.HasMember("weight") && node_json["weight"].IsNumber()) {
+                        node.weight = node_json["weight"].GetFloat();
+                    }
+                    if (node_json.HasMember("threshold") && node_json["threshold"].IsNumber()) {
+                        node.threshold = node_json["threshold"].GetFloat();
+                    }
+                    animator.blend_nodes.push_back(std::move(node));
+                }
             }
             world.registry().emplace<dse::Animator3DComponent>(entity, std::move(animator));
         }

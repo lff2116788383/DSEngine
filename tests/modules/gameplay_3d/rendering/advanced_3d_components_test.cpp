@@ -4,19 +4,31 @@
 
 using namespace dse;
 
-// 正向测试：点光源和聚光灯组件的默认值
+// 正向测试：点光源、聚光灯和天光组件的默认值
 TEST_CASE("Given_AdvancedLightComponents_When_Created_Then_DefaultValuesAreSet", "[engine][unit][rendering]") {
     PointLightComponent point_light;
     REQUIRE(point_light.enabled == true);
     REQUIRE(point_light.intensity == 1.0f);
     REQUIRE(point_light.radius == 10.0f);
+    REQUIRE(point_light.falloff == 1.0f);
     REQUIRE(point_light.cast_shadow == false);
 
     SpotLightComponent spot_light;
     REQUIRE(spot_light.enabled == true);
     REQUIRE(spot_light.radius == 20.0f);
+    REQUIRE(spot_light.falloff == 1.0f);
     REQUIRE(spot_light.inner_cone_angle == 12.5f);
     REQUIRE(spot_light.outer_cone_angle == 17.5f);
+
+    SkyLightComponent sky_light;
+    REQUIRE(sky_light.enabled == true);
+    REQUIRE(sky_light.up_color.x == Approx(0.2f));
+    REQUIRE(sky_light.up_color.y == Approx(0.2f));
+    REQUIRE(sky_light.up_color.z == Approx(0.2f));
+    REQUIRE(sky_light.down_color.x == Approx(0.0f));
+    REQUIRE(sky_light.down_color.y == Approx(0.0f));
+    REQUIRE(sky_light.down_color.z == Approx(0.5f));
+    REQUIRE(sky_light.intensity == 1.0f);
 }
 
 // 边界测试：修改灯光组件参数并在 ECS 中正常存储
@@ -26,17 +38,33 @@ TEST_CASE("Given_World_When_AddingLightComponents_Then_DataIsRetained", "[engine
 
     auto& p_light = world.registry().emplace<PointLightComponent>(entity);
     p_light.radius = 100.0f;
+    p_light.falloff = 2.0f;
     p_light.color = glm::vec3(1.0f, 0.0f, 0.0f);
 
     auto& s_light = world.registry().emplace<SpotLightComponent>(entity);
+    s_light.falloff = 3.0f;
     s_light.outer_cone_angle = 45.0f;
+
+    auto& sky_light = world.registry().emplace<SkyLightComponent>(entity);
+    sky_light.up_color = glm::vec3(0.9f, 0.8f, 0.7f);
+    sky_light.down_color = glm::vec3(0.1f, 0.2f, 0.3f);
+    sky_light.intensity = 1.8f;
 
     auto& retrieved_p = world.registry().get<PointLightComponent>(entity);
     REQUIRE(retrieved_p.radius == 100.0f);
+    REQUIRE(retrieved_p.falloff == 2.0f);
     REQUIRE(retrieved_p.color.x == 1.0f);
 
     auto& retrieved_s = world.registry().get<SpotLightComponent>(entity);
+    REQUIRE(retrieved_s.falloff == 3.0f);
     REQUIRE(retrieved_s.outer_cone_angle == 45.0f);
+
+    auto& retrieved_sky = world.registry().get<SkyLightComponent>(entity);
+    REQUIRE(retrieved_sky.up_color.x == Approx(0.9f));
+    REQUIRE(retrieved_sky.up_color.y == Approx(0.8f));
+    REQUIRE(retrieved_sky.up_color.z == Approx(0.7f));
+    REQUIRE(retrieved_sky.down_color.z == Approx(0.3f));
+    REQUIRE(retrieved_sky.intensity == Approx(1.8f));
 }
 
 // 正向测试：MorphComponent 数据结构测试

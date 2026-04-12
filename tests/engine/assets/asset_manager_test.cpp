@@ -107,3 +107,85 @@ TEST_CASE("Given_MaterialInstances_When_ListGetAndUnloadUnused_Then_OnlyLiveEntr
     ids = asset_manager.ListMaterialInstanceIds();
     REQUIRE(ids == std::vector<unsigned int>{live_id});
 }
+
+TEST_CASE("Given_MeshPbrMaterial_When_Configured_Then_PbrOverridesAreStored", "[engine][assets][material]") {
+    AssetManager asset_manager;
+    auto material = asset_manager.CreateMaterialInstance("mesh_pbr_master");
+
+    REQUIRE(material != nullptr);
+    REQUIRE(material->GetShaderVariant() == "MESH_PBR");
+    REQUIRE(material->GetBlendMode() == MaterialBlendMode::Opaque);
+
+    MaterialAsset::TextureSlots slots;
+    slots.albedo = 11;
+    slots.normal = 12;
+    slots.metallic_roughness = 13;
+    slots.emissive = 14;
+    slots.occlusion = 15;
+    material->SetTextureSlots(slots);
+
+    MaterialAsset::ScalarOverrides scalars;
+    scalars.metallic = 0.85f;
+    scalars.roughness = 0.2f;
+    scalars.ao = 0.9f;
+    scalars.normal_strength = 1.5f;
+    scalars.alpha_cutoff = 0.33f;
+    material->SetScalarOverrides(scalars);
+    material->SetBaseColor(glm::vec4(0.8f, 0.7f, 0.6f, 1.0f));
+    material->SetEmissiveColor(glm::vec3(0.1f, 0.2f, 0.3f));
+
+    REQUIRE(material->GetTextureSlots().albedo == 11);
+    REQUIRE(material->GetTextureSlots().normal == 12);
+    REQUIRE(material->GetTextureSlots().metallic_roughness == 13);
+    REQUIRE(material->GetTextureSlots().emissive == 14);
+    REQUIRE(material->GetTextureSlots().occlusion == 15);
+    REQUIRE(material->GetScalarOverrides().metallic == Approx(0.85f));
+    REQUIRE(material->GetScalarOverrides().roughness == Approx(0.2f));
+    REQUIRE(material->GetScalarOverrides().ao == Approx(0.9f));
+    REQUIRE(material->GetScalarOverrides().normal_strength == Approx(1.5f));
+    REQUIRE(material->GetScalarOverrides().alpha_cutoff == Approx(0.33f));
+    REQUIRE(material->GetBaseColor().x == Approx(0.8f));
+    REQUIRE(material->GetBaseColor().y == Approx(0.7f));
+    REQUIRE(material->GetBaseColor().z == Approx(0.6f));
+    REQUIRE(material->GetEmissiveColor().x == Approx(0.1f));
+    REQUIRE(material->GetEmissiveColor().y == Approx(0.2f));
+    REQUIRE(material->GetEmissiveColor().z == Approx(0.3f));
+}
+
+TEST_CASE("Given_ReferenceDemo159StyleMaterials_When_RecreatedByIdAndUpdated_Then_MaterialInstanceHandlesRemainAddressable", "[engine][assets][material][reference_demo]") {
+    AssetManager asset_manager;
+
+    auto material0 = asset_manager.CreateMaterialInstance("reference_demo_15_9_mesh_0");
+    auto material1 = asset_manager.CreateMaterialInstance("reference_demo_15_9_mesh_1");
+
+    REQUIRE(material0 != nullptr);
+    REQUIRE(material1 != nullptr);
+    REQUIRE(material0->GetId() != material1->GetId());
+    REQUIRE(material0->GetShaderVariant() == "MESH_PBR");
+    REQUIRE(material1->GetShaderVariant() == "MESH_PBR");
+    REQUIRE(material0->GetBlendMode() == MaterialBlendMode::Opaque);
+    REQUIRE(material1->GetBlendMode() == MaterialBlendMode::Opaque);
+
+    MaterialAsset::ScalarOverrides scalars0 = material0->GetScalarOverrides();
+    scalars0.metallic = 0.08f;
+    scalars0.roughness = 0.56f;
+    material0->SetScalarOverrides(scalars0);
+    material0->SetEmissiveColor(glm::vec3(0.0f, 0.02f, 0.12f));
+
+    MaterialAsset::ScalarOverrides scalars1 = material1->GetScalarOverrides();
+    scalars1.metallic = 0.12f;
+    scalars1.roughness = 0.78f;
+    material1->SetScalarOverrides(scalars1);
+    material1->SetEmissiveColor(glm::vec3(0.1f, 0.01f, 0.0f));
+
+    auto fetched0 = asset_manager.GetMaterialInstance(material0->GetId());
+    auto fetched1 = asset_manager.GetMaterialInstance(material1->GetId());
+    REQUIRE(fetched0 == material0);
+    REQUIRE(fetched1 == material1);
+    REQUIRE(fetched0->GetScalarOverrides().metallic == Approx(0.08f));
+    REQUIRE(fetched0->GetScalarOverrides().roughness == Approx(0.56f));
+    REQUIRE(fetched0->GetEmissiveColor().z == Approx(0.12f));
+    REQUIRE(fetched1->GetScalarOverrides().metallic == Approx(0.12f));
+    REQUIRE(fetched1->GetScalarOverrides().roughness == Approx(0.78f));
+    REQUIRE(fetched1->GetEmissiveColor().x == Approx(0.1f));
+}

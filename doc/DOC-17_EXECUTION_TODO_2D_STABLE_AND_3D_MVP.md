@@ -155,11 +155,11 @@
 
 ## D. 第 3~4 周 TODO（3D MVP 收口）
 
-- [ ] 固定最小 3D MVP 场景定义
-- [ ] 明确 3D MVP 完成定义
-- [ ] 整理当前 3D 能力为三类：必须保留 / 暂不纳入 / 暂缓
-- [ ] 核实 `engine.3d.scene_mvp` 与 `engine.3d.runtime_mvp_smoke` 的当前有效性
-- [ ] 检查最小 3D 场景 save/load 主链
+- [x] 固定最小 3D MVP 场景定义（已签入 [`assets/scenes/3d_mvp_minimal.scene.json`](assets/scenes/3d_mvp_minimal.scene.json:1)、[`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1)、[`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1)）
+- [x] 明确 3D MVP 完成定义（已写入 [`doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
+- [x] 整理当前 3D 能力为三类：必须保留 / 暂不纳入 / 暂缓（已写入 [`doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
+- [x] 核实 `engine.3d.scene_mvp` 与 `engine.3d.runtime_mvp_smoke` 的当前有效性（当前 3D 主链已围绕 [`tests/engine/CMakeLists.txt`](tests/engine/CMakeLists.txt:201) 中的 `engine.3d.scene_mvp` / `engine.3d.smoke` 与相关 scene/test 继续收口）
+- [x] 检查最小 3D 场景 save/load 主链（已由 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:1)、[`tests/engine/scene/editor_scene_io_bridge_test.cpp`](tests/engine/scene/editor_scene_io_bridge_test.cpp:1)、[`engine/scene/scene.cpp`](engine/scene/scene.cpp:850) 相关回归覆盖）
 - [ ] 检查关键 3D 组件 Inspector 主链（MeshRenderer / Camera3D / DirectionalLight / Skybox）
 
 ---
@@ -167,7 +167,7 @@
 ## E. 第 5~6 周 TODO（性能与对外表述）
 
 - [ ] 建立最小 2D baseline（startup / scene load / draw calls / frame update）
-- [ ] 建立最小 3D MVP baseline（draw calls / shadow cost / scene load / frame timing）
+- [x] 建立最小 3D MVP baseline（已完成 scene load / draw calls / shadow pass / material switch / frame timing 的首版 scene+smoke+runtime profiling 收口，后续补固定截图基线即可）
 - [ ] 输出一版正式能力口径：稳定主线 / MVP / 不承诺项
 - [ ] 在后续阶段三选一：2D 稳定版准备 / 3D MVP 深化 / 编辑器可用性强化
 

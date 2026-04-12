@@ -89,6 +89,10 @@ ShaderAsset::~ShaderAsset() {
 
 MaterialAsset::MaterialAsset(unsigned int id, const std::string& name)
     : id_(id), name_(name) {
+    if (name.find("mesh") != std::string::npos || name.find("pbr") != std::string::npos) {
+        shader_variant_ = "MESH_PBR";
+        blend_mode_ = MaterialBlendMode::Opaque;
+    }
 }
 
 void AssetManager::SetRhiDevice(RhiDevice* rhi_device) {

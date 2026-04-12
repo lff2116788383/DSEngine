@@ -302,35 +302,70 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             std::vector<glm::quat> blended_rotations(bone_count, glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
             std::vector<glm::vec3> blended_scales(bone_count, glm::vec3(0.0f));
             std::vector<bool> has_anim(bone_count, false);
-            
+
+            std::vector<float> evaluated_weights(animator.blend_nodes.size(), 0.0f);
+            const bool use_threshold_blend = animator.blend_nodes.size() >= 2;
+            if (use_threshold_blend) {
+                size_t lower_index = 0;
+                size_t upper_index = 0;
+                float lower_threshold = animator.blend_nodes.front().threshold;
+                float upper_threshold = animator.blend_nodes.back().threshold;
+                for (size_t i = 0; i < animator.blend_nodes.size(); ++i) {
+                    const float threshold = animator.blend_nodes[i].threshold;
+                    if (threshold <= animator.blend_parameter_value) {
+                        lower_index = i;
+                        lower_threshold = threshold;
+                    }
+                    if (threshold >= animator.blend_parameter_value) {
+                        upper_index = i;
+                        upper_threshold = threshold;
+                        break;
+                    }
+                }
+                if (lower_index == upper_index || std::abs(upper_threshold - lower_threshold) <= 0.0001f) {
+                    evaluated_weights[lower_index] = 1.0f;
+                } else {
+                    const float range = upper_threshold - lower_threshold;
+                    const float t = std::clamp((animator.blend_parameter_value - lower_threshold) / range, 0.0f, 1.0f);
+                    evaluated_weights[lower_index] = 1.0f - t;
+                    evaluated_weights[upper_index] = t;
+                }
+            } else if (!animator.blend_nodes.empty()) {
+                evaluated_weights[0] = 1.0f;
+            }
+
             float total_weight = 0.0f;
-            for (auto& node : animator.blend_nodes) {
-                if (node.weight <= 0.0f) continue;
+            for (size_t node_index = 0; node_index < animator.blend_nodes.size(); ++node_index) {
+                auto& node = animator.blend_nodes[node_index];
+                const float evaluated_weight = use_threshold_blend
+                    ? evaluated_weights[node_index]
+                    : node.weight;
+                if (evaluated_weight <= 0.0f) continue;
                 auto danim = asset_manager.LoadDanim(node.danim_path);
                 if (!danim || danim->GetData().empty()) continue;
-                
-                total_weight += node.weight;
+
+                total_weight += evaluated_weight;
                 const uint8_t* data = danim->GetData().data();
                 const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
-                
+
                 node.current_time += delta_time * node.speed;
                 if (node.current_time > header->duration) {
                     if (node.loop) node.current_time = std::fmod(node.current_time, header->duration);
                     else node.current_time = header->duration;
                 }
-                
+
                 const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
                 for (uint32_t i = 0; i < header->channel_count; ++i) {
                     const auto& ch = channels[i];
                     if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
-                    
+
                     std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
                     std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
                     std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
                     std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
                     std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
                     std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
-                    
+
                     glm::vec3 p = !position_times.empty() && !positions.empty()
                         ? Interpolate<glm::vec3>(position_times, positions, node.current_time)
                         : glm::vec3(0.0f);
@@ -340,25 +375,25 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                     glm::vec3 s = !scale_times.empty() && !scales.empty()
                         ? Interpolate<glm::vec3>(scale_times, scales, node.current_time)
                         : glm::vec3(1.0f);
-                    
+
                     if (!has_anim[ch.target_node_index]) {
-                        blended_positions[ch.target_node_index] = p * node.weight;
-                        blended_rotations[ch.target_node_index] = r * node.weight;
-                        blended_scales[ch.target_node_index] = s * node.weight;
+                        blended_positions[ch.target_node_index] = p * evaluated_weight;
+                        blended_rotations[ch.target_node_index] = r * evaluated_weight;
+                        blended_scales[ch.target_node_index] = s * evaluated_weight;
                         has_anim[ch.target_node_index] = true;
                     } else {
-                        blended_positions[ch.target_node_index] += p * node.weight;
-                        blended_rotations[ch.target_node_index] += r * node.weight;
-                        blended_scales[ch.target_node_index] += s * node.weight;
+                        blended_positions[ch.target_node_index] += p * evaluated_weight;
+                        blended_rotations[ch.target_node_index] += r * evaluated_weight;
+                        blended_scales[ch.target_node_index] += s * evaluated_weight;
                     }
                 }
             }
-            
+
             if (total_weight > 0.0f) {
                 for (uint32_t i = 0; i < bone_count; ++i) {
                     if (has_anim[i]) {
                         glm::vec3 p = blended_positions[i] / total_weight;
-                        glm::quat r = glm::normalize(blended_rotations[i]); // Approximate quaternion blending
+                        glm::quat r = glm::normalize(blended_rotations[i]);
                         glm::vec3 s = blended_scales[i] / total_weight;
                         local_transforms[i] = glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
                     }

@@ -70,6 +70,81 @@ TEST_CASE("Given_Engine3DMvpScene_When_CopiedIntoEditorRegistry_Then_EditorScene
     REQUIRE(light.cast_shadow);
 }
 
+TEST_CASE("Given_ReferenceDemo158Scene_When_CopiedIntoEditorRegistry_Then_EditorSceneIoRoundTripKeepsReferenceBaseline", "[engine][unit][scene][3d][editor][reference_demo]") {
+    scene::Scene runtime_scene("runtime-reference-demo-15-8");
+    REQUIRE(runtime_scene.Deserialize("assets/scenes/reference_demo_15_8.scene.json"));
+
+    entt::registry editor_registry;
+    CopyRegistry(editor_registry, runtime_scene.GetWorld().registry());
+
+    const std::string path = MakeEditorSceneTempPath("editor_scene_reference_demo_15_8_bridge.json");
+    ScopedTempPath cleanup(path);
+
+    SaveScene(editor_registry, path);
+
+    entt::registry loaded_registry;
+    LoadScene(loaded_registry, path);
+
+    auto mesh_view = loaded_registry.view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    for (auto it = mesh_view.begin(); it != mesh_view.end(); ++it) {
+        ++mesh_count;
+    }
+    REQUIRE(mesh_count >= 2);
+    REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
+    REQUIRE(loaded_registry.view<dse::Animator3DComponent>().begin() != loaded_registry.view<dse::Animator3DComponent>().end());
+
+    const auto mesh_entity = *mesh_view.begin();
+    const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(mesh_entity);
+    REQUIRE(mesh.visible);
+}
+
+TEST_CASE("Given_ReferenceDemo159Scene_When_CopiedIntoEditorRegistry_Then_EditorSceneIoRoundTripKeepsMaterialInteractionBaseline", "[engine][unit][scene][3d][editor][reference_demo]") {
+    scene::Scene runtime_scene("runtime-reference-demo-15-9");
+    REQUIRE(runtime_scene.Deserialize("assets/scenes/reference_demo_15_9.scene.json"));
+
+    entt::registry editor_registry;
+    CopyRegistry(editor_registry, runtime_scene.GetWorld().registry());
+
+    const std::string path = MakeEditorSceneTempPath("editor_scene_reference_demo_15_9_bridge.json");
+    ScopedTempPath cleanup(path);
+
+    SaveScene(editor_registry, path);
+
+    entt::registry loaded_registry;
+    LoadScene(loaded_registry, path);
+
+    auto mesh_view = loaded_registry.view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    size_t interactive_material_mesh_count = 0;
+    for (auto entity : mesh_view) {
+        ++mesh_count;
+        const auto& loaded_mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (loaded_mesh.material_instance_id == 430001 || loaded_mesh.material_instance_id == 430002) {
+            ++interactive_material_mesh_count;
+        }
+    }
+    REQUIRE(mesh_count >= 3);
+    REQUIRE(interactive_material_mesh_count == 2);
+    REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
+
+    auto animator_view = loaded_registry.view<dse::Animator3DComponent>();
+    size_t animator_count = 0;
+    for (auto entity : animator_view) {
+        (void)entity;
+        ++animator_count;
+    }
+    REQUIRE(animator_count == 2);
+}
+
 TEST_CASE("Given_RuntimeOnly2DState_When_CopiedBetweenRegistries_Then_RuntimeFieldsAreResetForPlayExitRestore", "[engine][unit][scene][editor][copy_registry]") {
     entt::registry runtime_registry;
     const auto entity = runtime_registry.create();

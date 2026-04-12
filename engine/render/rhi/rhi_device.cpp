@@ -185,6 +185,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform sampler2D u_shadow_maps[CSM_CASCADES];
         uniform mat4 u_light_space_matrices[CSM_CASCADES];
         uniform float u_cascade_splits[CSM_CASCADES];
+        uniform sampler2D u_spot_shadow_maps[4];
+        uniform mat4 u_spot_light_space_matrices[4];
 
         uniform vec3 u_camera_pos;
         uniform bool u_lighting_enabled;
@@ -213,6 +215,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
             float radius;
             float inner_cone;
             float outer_cone;
+            bool cast_shadow;
+            int shadow_index;
         };
         #define MAX_SPOT_LIGHTS 4
         uniform int u_spot_light_count;
@@ -284,6 +288,27 @@ void OpenGLRhiDevice::EnsureInitialized() {
             for (int x = -1; x <= 1; ++x) {
                 for (int y = -1; y <= 1; ++y) {
                     float pcfDepth = texture(u_shadow_maps[cascadeIndex], projCoords.xy + vec2(x, y) * texelSize).r;
+                    shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
+                }
+            }
+            shadow /= 9.0;
+            return clamp(shadow * u_shadow_strength, 0.0, 1.0);
+        }
+
+        float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {
+            if (shadowIndex < 0 || shadowIndex >= 4) return 0.0;
+            vec4 fragPosLightSpace = u_spot_light_space_matrices[shadowIndex] * vec4(fragPosWorldSpace, 1.0);
+            vec3 projCoords = fragPosLightSpace.xyz / max(fragPosLightSpace.w, 0.0001);
+            projCoords = projCoords * 0.5 + 0.5;
+            if (projCoords.z > 1.0) return 0.0;
+            if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+            float currentDepth = projCoords.z;
+            float bias = max(0.003 * (1.0 - dot(normal, lightDir)), 0.0005);
+            float shadow = 0.0;
+            vec2 texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[shadowIndex], 0));
+            for (int x = -1; x <= 1; ++x) {
+                for (int y = -1; y <= 1; ++y) {
+                    float pcfDepth = texture(u_spot_shadow_maps[shadowIndex], projCoords.xy + vec2(x, y) * texelSize).r;
                     shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
                 }
             }
@@ -364,6 +389,45 @@ void OpenGLRhiDevice::EnsureInitialized() {
                 float NdotL = max(dot(N, L), 0.0);
                 Lo += (kD * albedo / PI + specular) * radiance * NdotL;
             }
+
+            // Spot Lights
+            for(int i = 0; i < u_spot_light_count; ++i) {
+                vec3 L = normalize(u_spot_lights[i].position - FragPos);
+                vec3 H = normalize(V + L);
+                float distance = length(u_spot_lights[i].position - FragPos);
+                float attenuation = clamp(1.0 - (distance * distance) / (u_spot_lights[i].radius * u_spot_lights[i].radius), 0.0, 1.0);
+                attenuation *= attenuation;
+
+                vec3 spotDir = normalize(-u_spot_lights[i].direction);
+                float theta = dot(L, spotDir);
+                float outerCos = cos(radians(u_spot_lights[i].outer_cone));
+                float innerCos = cos(radians(u_spot_lights[i].inner_cone));
+                float epsilon = max(innerCos - outerCos, 0.0001);
+                float cone = clamp((theta - outerCos) / epsilon, 0.0, 1.0);
+                if (cone <= 0.0) {
+                    continue;
+                }
+
+                vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * attenuation * cone;
+                float NDF = DistributionGGX(N, H, u_material_roughness);
+                float G   = GeometrySmith(N, V, L, u_material_roughness);
+                vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+                vec3 numerator    = NDF * G * F;
+                float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+                vec3 specular     = numerator / denominator;
+
+                vec3 kS = F;
+                vec3 kD = vec3(1.0) - kS;
+                kD *= 1.0 - u_material_metallic;
+
+                float NdotL = max(dot(N, L), 0.0);
+                float spot_shadow = 0.0;
+                if (u_spot_lights[i].cast_shadow) {
+                    spot_shadow = SpotShadowCalculation(u_spot_lights[i].shadow_index, FragPos, N, L);
+                }
+                Lo += (kD * albedo / PI + specular) * radiance * NdotL * (1.0 - spot_shadow);
+            }
             
             // Ambient lighting (Placeholder for IBL Irradiance/Specular)
             // To prevent pure metals from being completely black when not directly lit,
@@ -434,6 +498,10 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
     uniform_spot_light_count_loc_ = glGetUniformLocation(shader_handle_, "u_spot_light_count");
     for (int i = 0; i < 4; ++i) {
+        std::string shadow_name = "u_spot_shadow_maps[" + std::to_string(i) + "]";
+        uniform_spot_shadow_map_loc_[i] = glGetUniformLocation(shader_handle_, shadow_name.c_str());
+        std::string matrix_name = "u_spot_light_space_matrices[" + std::to_string(i) + "]";
+        uniform_spot_light_space_matrix_loc_[i] = glGetUniformLocation(shader_handle_, matrix_name.c_str());
         std::string base = "u_spot_lights[" + std::to_string(i) + "].";
         uniform_spot_lights_loc_[i].color = glGetUniformLocation(shader_handle_, (base + "color").c_str());
         uniform_spot_lights_loc_[i].position = glGetUniformLocation(shader_handle_, (base + "position").c_str());
@@ -442,6 +510,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform_spot_lights_loc_[i].radius = glGetUniformLocation(shader_handle_, (base + "radius").c_str());
         uniform_spot_lights_loc_[i].inner_cone = glGetUniformLocation(shader_handle_, (base + "inner_cone").c_str());
         uniform_spot_lights_loc_[i].outer_cone = glGetUniformLocation(shader_handle_, (base + "outer_cone").c_str());
+        uniform_spot_lights_loc_[i].cast_shadow = glGetUniformLocation(shader_handle_, (base + "cast_shadow").c_str());
+        uniform_spot_lights_loc_[i].shadow_index = glGetUniformLocation(shader_handle_, (base + "shadow_index").c_str());
     }
 
     std::vector<BatchVertex> vertices(MAX_VERTICES);
@@ -717,21 +787,27 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealSetPipelineState(set_pipeline_state_cmds_[cmd.index].pipeline_state_handle);
         } else if (cmd.type == 8) {
             const auto& mat_cmd = set_global_mat4_cmds_[cmd.index];
-            if (mat_cmd.name == "u_light_space_matrix") {
+            if (mat_cmd.name == "u_spot_light_space_matrix") {
+                device->SetGlobalSpotLightSpaceMatrix(mat_cmd.value);
+            } else if (mat_cmd.name == "u_light_space_matrix") {
                 device->SetGlobalLightSpaceMatrix(0, mat_cmd.value);
             }
         } else if (cmd.type == 9) {
             const auto& mat_cmd = set_global_mat4_array_cmds_[cmd.index];
             if (mat_cmd.name == "u_light_space_matrices") {
                 for(size_t j=0; j<3 && j<mat_cmd.values.size(); ++j) {
-                    device->SetGlobalLightSpaceMatrix(j, mat_cmd.values[j]);
+                    device->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(j), mat_cmd.values[j]);
+                }
+            } else if (mat_cmd.name == "u_spot_light_space_matrices") {
+                for(size_t j=0; j<4 && j<mat_cmd.values.size(); ++j) {
+                    device->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(j), mat_cmd.values[j]);
                 }
             }
         } else if (cmd.type == 10) {
             const auto& mat_cmd = set_global_float_array_cmds_[cmd.index];
             if (mat_cmd.name == "u_cascade_splits") {
                 for(size_t j=0; j<3 && j<mat_cmd.values.size(); ++j) {
-                    device->SetGlobalCascadeSplit(j, mat_cmd.values[j]);
+                    device->SetGlobalCascadeSplit(static_cast<unsigned int>(j), mat_cmd.values[j]);
                 }
             }
         } else if (cmd.type == 2) {
@@ -966,6 +1042,12 @@ void OpenGLRhiDevice::RealBeginRenderPass(const RenderPassDesc& render_pass) {
         }
     }
     current_frame_stats_.render_passes += 1;
+    if (render_pass.render_target != 0) {
+        auto stat_it = render_targets_.find(render_pass.render_target);
+        if (stat_it != render_targets_.end() && !stat_it->second.desc.has_color && stat_it->second.desc.has_depth) {
+            current_frame_stats_.shadow_passes += 1;
+        }
+    }
     if (render_pass.clear_color_enabled) {
         glClearColor(render_pass.clear_color.r, render_pass.clear_color.g, render_pass.clear_color.b, render_pass.clear_color.a);
         glClearDepth(1.0);
@@ -1015,7 +1097,7 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
 
 void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (items.empty()) return;
-    current_frame_stats_.sprite_count += static_cast<int>(items.size());
+    current_frame_stats_.mesh_count += static_cast<int>(items.size());
 
     glm::mat4 vp = projection * view;
     
@@ -1042,12 +1124,29 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
     // glActiveTexture(GL_TEXTURE2);
     // glBindTexture(GL_TEXTURE_2D, shadow_map);
 
+    unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();
+    unsigned int last_normal_map_handle = std::numeric_limits<unsigned int>::max();
+    unsigned int last_blend_mode = std::numeric_limits<unsigned int>::max();
+
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
 
         unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
+        if (last_texture_handle != tex) {
+            if (last_texture_handle != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_texture_handle = tex;
+        }
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, tex);
+
+        if (last_normal_map_handle != item.normal_map_handle) {
+            if (last_normal_map_handle != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_normal_map_handle = item.normal_map_handle;
+        }
 
         if (item.normal_map_handle != 0) {
             glActiveTexture(GL_TEXTURE1);
@@ -1086,6 +1185,8 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
             glUniform1f(uniform_spot_lights_loc_[i].radius, item.spot_lights[i].radius);
             glUniform1f(uniform_spot_lights_loc_[i].inner_cone, item.spot_lights[i].inner_cone);
             glUniform1f(uniform_spot_lights_loc_[i].outer_cone, item.spot_lights[i].outer_cone);
+            if (uniform_spot_lights_loc_[i].cast_shadow != -1) glUniform1i(uniform_spot_lights_loc_[i].cast_shadow, item.spot_lights[i].cast_shadow ? 1 : 0);
+            if (uniform_spot_lights_loc_[i].shadow_index != -1) glUniform1i(uniform_spot_lights_loc_[i].shadow_index, item.spot_lights[i].shadow_index);
         }
 
         for (int i = 0; i < 3; ++i) {
@@ -1101,6 +1202,23 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
         }
         if (uniform_cascade_splits_loc_ != -1) {
             glUniform1fv(uniform_cascade_splits_loc_, 3, global_cascade_splits_);
+        }
+        for (int i = 0; i < 4; ++i) {
+            if (uniform_spot_light_space_matrix_loc_[i] != -1) {
+                glUniformMatrix4fv(uniform_spot_light_space_matrix_loc_[i], 1, GL_FALSE, glm::value_ptr(global_spot_light_space_matrix_[i]));
+            }
+            if (uniform_spot_shadow_map_loc_[i] != -1) {
+                glActiveTexture(GL_TEXTURE5 + i);
+                glBindTexture(GL_TEXTURE_2D, global_spot_shadow_map_[i]);
+                glUniform1i(uniform_spot_shadow_map_loc_[i], 5 + i);
+            }
+        }
+
+        if (last_blend_mode != item.blend_mode) {
+            if (last_blend_mode != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_blend_mode = item.blend_mode;
         }
 
         glUniform3f(uniform_material_albedo_loc_, item.material_albedo.r, item.material_albedo.g, item.material_albedo.b);

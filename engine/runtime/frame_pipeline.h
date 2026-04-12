@@ -96,6 +96,12 @@ public:
     int LastDrawCalls() const;
 
     /**
+     * @brief 获取上一帧中的材质切换次数
+     * @return 材质状态切换总数
+     */
+    int LastMaterialSwitches() const;
+
+    /**
      * @brief 获取上一帧中最大的精灵图批处理数量
      * @return 单个批次内包含的最大精灵数
      */
@@ -200,6 +206,7 @@ private:
     bool initialized_ = false;
     float stats_accumulator_ = 0.0f;
     int last_draw_calls_ = 0;
+    int last_material_switches_ = 0;
     int last_max_batch_sprites_ = 0;
     int last_sprite_count_ = 0;
     std::size_t callback_budget_per_frame_ = 16;

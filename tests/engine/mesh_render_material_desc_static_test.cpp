@@ -16,13 +16,13 @@ std::string ReadAllText(const std::string& path) {
 
 } // namespace
 
-TEST_CASE("Given_MeshRenderSystemSource_When_RenderingMeshMaterials_Then_RuntimeReadsDirectlyFromMeshRendererComponent", "[engine][unit][3d][material][static]") {
+TEST_CASE("Given_MeshRenderSystemSource_When_RenderingMeshMaterials_Then_RuntimePrefersMaterialInstanceData", "[engine][unit][3d][material][static]") {
     const std::string source = ReadAllText("modules/gameplay_3d/rendering/mesh_render_system.cpp");
-    REQUIRE(source.find("mesh_renderer.shader_variant") != std::string::npos);
-    REQUIRE(source.find("mesh_renderer.color") != std::string::npos);
-    REQUIRE(source.find("mesh_renderer.metallic") != std::string::npos);
-    REQUIRE(source.find("mesh_renderer.roughness") != std::string::npos);
-    REQUIRE(source.find("mesh_renderer.normal_strength") != std::string::npos);
-    REQUIRE(source.find("mesh_renderer.emissive") != std::string::npos);
+    REQUIRE(source.find("GetMaterialInstance(mesh_renderer.material_instance_id)") != std::string::npos);
+    REQUIRE(source.find("resolved_shader_variant") != std::string::npos);
+    REQUIRE(source.find("resolved_base_color") != std::string::npos);
+    REQUIRE(source.find("resolved_texture_slots") != std::string::npos);
+    REQUIRE(source.find("resolved_scalars") != std::string::npos);
+    REQUIRE(source.find("item.normal_map_handle = resolved_texture_slots.normal") != std::string::npos);
     REQUIRE(source.find("MaterialDesc()") == std::string::npos);
 }

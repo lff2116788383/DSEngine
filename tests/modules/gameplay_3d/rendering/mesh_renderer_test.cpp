@@ -16,6 +16,11 @@ TEST_CASE("Given_DefaultMeshRendererComponent_When_Created_Then_PBRParametersAre
     REQUIRE(mesh_renderer.roughness == 0.5f);
     REQUIRE(mesh_renderer.ao == 1.0f);
     REQUIRE(mesh_renderer.normal_strength == 1.0f);
+    REQUIRE(mesh_renderer.albedo_texture_handle == 0);
+    REQUIRE(mesh_renderer.normal_texture_handle == 0);
+    REQUIRE(mesh_renderer.metallic_roughness_texture_handle == 0);
+    REQUIRE(mesh_renderer.emissive_texture_handle == 0);
+    REQUIRE(mesh_renderer.occlusion_texture_handle == 0);
     REQUIRE(mesh_renderer.receive_shadow == true);
     REQUIRE(mesh_renderer.visible == true);
 }
@@ -27,10 +32,14 @@ TEST_CASE("Given_MeshRendererComponent_When_ModifyingPBRParameters_Then_ValuesAr
     mesh_renderer.metallic = 1.0f;
     mesh_renderer.roughness = 0.0f;
     mesh_renderer.emissive = glm::vec3(100.0f, 100.0f, 100.0f); // 高强度自发光
+    mesh_renderer.albedo_texture_handle = 301;
+    mesh_renderer.normal_texture_handle = 302;
     
     REQUIRE(mesh_renderer.metallic == 1.0f);
     REQUIRE(mesh_renderer.roughness == 0.0f);
     REQUIRE(mesh_renderer.emissive.x == 100.0f);
+    REQUIRE(mesh_renderer.albedo_texture_handle == 301);
+    REQUIRE(mesh_renderer.normal_texture_handle == 302);
 }
 
 // 反向测试：测试异常属性赋值的安全保持

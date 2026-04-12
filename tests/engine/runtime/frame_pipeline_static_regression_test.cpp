@@ -46,3 +46,14 @@ TEST_CASE("Given_FramePipelineSource_When_RenderShellIsExtracted_Then_RenderLife
     REQUIRE(frame_pipeline_source.find("dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));") != std::string::npos);
     REQUIRE(frame_pipeline_source.find("dse::runtime::FinalizeRuntimeRenderFrame(*this);") != std::string::npos);
 }
+
+TEST_CASE("Given_FramePipelineSource_When_MultiSpotShadowRuntimeIsEnabled_Then_MultiSpotShadowPassAndTargetsArePresent", "[engine][unit][runtime][static]") {
+    const std::string frame_pipeline_source = ReadTextFile("engine/runtime/frame_pipeline.cpp");
+    const std::string render_resources_source = ReadTextFile("engine/runtime/render_pipeline_resources.h");
+    const std::string render_shell_source = ReadTextFile("engine/runtime/runtime_render_shell.cpp");
+    REQUIRE(frame_pipeline_source.find("\"spot_shadow_pass\"") != std::string::npos);
+    REQUIRE(frame_pipeline_source.find("spot_shadow_render_target[shadow_slot]") != std::string::npos);
+    REQUIRE(frame_pipeline_source.find("u_spot_light_space_matrices") != std::string::npos);
+    REQUIRE(render_resources_source.find("spot_shadow_render_target[4]") != std::string::npos);
+    REQUIRE(render_shell_source.find("SetGlobalSpotShadowMap(static_cast<unsigned int>(i)") != std::string::npos);
+}

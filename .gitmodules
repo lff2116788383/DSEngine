@@ -44,3 +44,6 @@
 [submodule "depends/luasocket-3.0.0"]
 	path = depends/luasocket-3.0.0
 	url = https://github.com/lunarmodules/luasocket.git
+[submodule "reference/VSEngine2.1"]
+	path = reference/VSEngine2.1
+	url = https://github.com/79134054/VSEngine2.1.git

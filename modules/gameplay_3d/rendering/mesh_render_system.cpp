@@ -533,9 +533,26 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         auto& transform = point_light_view.get<TransformComponent>(entity);
         auto& light = point_light_view.get<PointLightComponent>(entity);
         if (light.enabled) {
-            point_lights.push_back({light.color, transform.position, light.intensity, light.radius});
+            const float effective_radius = light.radius * std::max(0.1f, light.falloff);
+            point_lights.push_back({light.color, transform.position, light.intensity, effective_radius});
         }
     }
+
+    glm::vec3 skylight_up_color(0.0f);
+    glm::vec3 skylight_down_color(0.0f);
+    float skylight_intensity = 0.0f;
+    auto sky_light_view = world.registry().view<SkyLightComponent>();
+    for (auto entity : sky_light_view) {
+        const auto& light = sky_light_view.get<SkyLightComponent>(entity);
+        if (!light.enabled) {
+            continue;
+        }
+        skylight_up_color = light.up_color;
+        skylight_down_color = light.down_color;
+        skylight_intensity = light.intensity;
+        break;
+    }
+    const glm::vec3 skylight_ambient = glm::mix(skylight_down_color, skylight_up_color, 0.5f) * skylight_intensity;
     
     // Collect Spot Lights
     std::vector<MeshDrawItem::SpotLightData> spot_lights;
@@ -544,8 +561,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         auto& transform = spot_light_view.get<TransformComponent>(entity);
         auto& light = spot_light_view.get<SpotLightComponent>(entity);
         if (light.enabled) {
-            glm::vec3 forward = transform.rotation * light.direction;
-            spot_lights.push_back({light.color, transform.position, forward, light.intensity, light.radius, light.inner_cone_angle, light.outer_cone_angle});
+            glm::vec3 forward = glm::normalize(transform.rotation * light.direction);
+            const float effective_radius = light.radius * std::max(0.1f, light.falloff);
+            spot_lights.push_back({light.color, transform.position, forward, light.intensity, effective_radius, light.inner_cone_angle, light.outer_cone_angle, light.cast_shadow, -1});
         }
     }
     
@@ -559,12 +577,48 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
         if (!mesh_renderer.visible) continue;
         
+        std::shared_ptr<MaterialAsset> material_instance;
+        if (mesh_renderer.material_instance_id != 0) {
+            material_instance = asset_manager.GetMaterialInstance(mesh_renderer.material_instance_id);
+        }
+
+        const std::string& resolved_shader_variant = material_instance
+            ? material_instance->GetShaderVariant()
+            : mesh_renderer.shader_variant;
+        const glm::vec4 resolved_base_color = material_instance
+            ? material_instance->GetBaseColor()
+            : mesh_renderer.color;
+        const glm::vec3 resolved_emissive = material_instance
+            ? material_instance->GetEmissiveColor()
+            : mesh_renderer.emissive;
+        const MaterialAsset::TextureSlots resolved_texture_slots = material_instance
+            ? material_instance->GetTextureSlots()
+            : MaterialAsset::TextureSlots{
+                mesh_renderer.albedo_texture_handle,
+                mesh_renderer.normal_texture_handle,
+                mesh_renderer.metallic_roughness_texture_handle,
+                mesh_renderer.emissive_texture_handle,
+                mesh_renderer.occlusion_texture_handle
+            };
+        const MaterialAsset::ScalarOverrides resolved_scalars = material_instance
+            ? material_instance->GetScalarOverrides()
+            : MaterialAsset::ScalarOverrides{
+                mesh_renderer.metallic,
+                mesh_renderer.roughness,
+                mesh_renderer.ao,
+                mesh_renderer.normal_strength,
+                0.5f
+            };
+        const MaterialBlendMode resolved_blend_mode = material_instance
+            ? material_instance->GetBlendMode()
+            : MaterialBlendMode::Opaque;
+        
         MeshDrawItem item;
         item.model = transform.local_to_world;
-        item.blend_mode = 0; 
+        item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
         item.order_in_layer = mesh_renderer.order_in_layer;
-        item.lighting_enabled = mesh_renderer.shader_variant != "MESH_UNLIT";
+        item.lighting_enabled = resolved_shader_variant != "MESH_UNLIT";
         
         if (world.registry().all_of<Animator3DComponent>(entity)) {
             const auto& animator = world.registry().get<Animator3DComponent>(entity);
@@ -587,13 +641,16 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             }
         }
         
-        item.texture_handle = 0;
-        item.material_albedo = glm::vec3(mesh_renderer.color);
-        item.material_metallic = mesh_renderer.metallic;
-        item.material_roughness = mesh_renderer.roughness;
-        item.material_ao = mesh_renderer.ao;
-        item.material_normal_strength = mesh_renderer.normal_strength;
-        item.material_emissive = mesh_renderer.emissive;
+        item.texture_handle = resolved_texture_slots.albedo != 0
+            ? resolved_texture_slots.albedo
+            : (material_instance ? material_instance->GetTextureHandle() : 0);
+        item.normal_map_handle = resolved_texture_slots.normal;
+        item.material_albedo = glm::vec3(resolved_base_color);
+        item.material_metallic = resolved_scalars.metallic;
+        item.material_roughness = resolved_scalars.roughness;
+        item.material_ao = resolved_scalars.ao;
+        item.material_normal_strength = resolved_scalars.normal_strength;
+        item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;
         
         item.point_lights.clear();
@@ -616,6 +673,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             sld.radius = sp_data.radius;
             sld.inner_cone = sp_data.inner_cone;
             sld.outer_cone = sp_data.outer_cone;
+            sld.cast_shadow = sp_data.cast_shadow;
+            sld.shadow_index = sp_data.shadow_index;
             item.spot_lights.push_back(sld);
         }
         
@@ -623,8 +682,12 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.light_direction = light_data.direction;
             item.light_color = light_data.color;
             item.light_intensity = light_data.intensity;
-            item.ambient_intensity = light_data.ambient_intensity;
+            item.ambient_intensity = light_data.ambient_intensity + skylight_intensity;
             item.shadow_strength = light_data.shadow_strength;
+            item.material_emissive += skylight_ambient * 0.05f;
+        } else if (skylight_intensity > 0.0f) {
+            item.ambient_intensity = skylight_intensity;
+            item.material_emissive += skylight_ambient * 0.05f;
         }
 
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {

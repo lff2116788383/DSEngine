@@ -12,6 +12,11 @@ TEST_CASE("Given_MeshRendererComponent_When_AssigningMaterialFields_Then_PbrAndS
     mesh.roughness = 0.25f;
     mesh.ao = 0.9f;
     mesh.normal_strength = 1.5f;
+    mesh.albedo_texture_handle = 101;
+    mesh.normal_texture_handle = 102;
+    mesh.metallic_roughness_texture_handle = 103;
+    mesh.emissive_texture_handle = 104;
+    mesh.occlusion_texture_handle = 105;
     mesh.receive_shadow = false;
     mesh.visible = true;
 
@@ -23,6 +28,11 @@ TEST_CASE("Given_MeshRendererComponent_When_AssigningMaterialFields_Then_PbrAndS
     REQUIRE(mesh.roughness == Approx(0.25f));
     REQUIRE(mesh.ao == Approx(0.9f));
     REQUIRE(mesh.normal_strength == Approx(1.5f));
+    REQUIRE(mesh.albedo_texture_handle == 101);
+    REQUIRE(mesh.normal_texture_handle == 102);
+    REQUIRE(mesh.metallic_roughness_texture_handle == 103);
+    REQUIRE(mesh.emissive_texture_handle == 104);
+    REQUIRE(mesh.occlusion_texture_handle == 105);
     REQUIRE(mesh.receive_shadow == false);
     REQUIRE(mesh.visible == true);
 }
@@ -37,6 +47,11 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     source.roughness = 0.1f;
     source.ao = 0.6f;
     source.normal_strength = 2.0f;
+    source.albedo_texture_handle = 201;
+    source.normal_texture_handle = 202;
+    source.metallic_roughness_texture_handle = 203;
+    source.emissive_texture_handle = 204;
+    source.occlusion_texture_handle = 205;
     source.receive_shadow = false;
     source.visible = false;
 
@@ -49,6 +64,11 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     mesh.roughness = source.roughness;
     mesh.ao = source.ao;
     mesh.normal_strength = source.normal_strength;
+    mesh.albedo_texture_handle = source.albedo_texture_handle;
+    mesh.normal_texture_handle = source.normal_texture_handle;
+    mesh.metallic_roughness_texture_handle = source.metallic_roughness_texture_handle;
+    mesh.emissive_texture_handle = source.emissive_texture_handle;
+    mesh.occlusion_texture_handle = source.occlusion_texture_handle;
     mesh.receive_shadow = source.receive_shadow;
     mesh.visible = source.visible;
 
@@ -60,6 +80,11 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     REQUIRE(mesh.roughness == Approx(0.1f));
     REQUIRE(mesh.ao == Approx(0.6f));
     REQUIRE(mesh.normal_strength == Approx(2.0f));
+    REQUIRE(mesh.albedo_texture_handle == 201);
+    REQUIRE(mesh.normal_texture_handle == 202);
+    REQUIRE(mesh.metallic_roughness_texture_handle == 203);
+    REQUIRE(mesh.emissive_texture_handle == 204);
+    REQUIRE(mesh.occlusion_texture_handle == 205);
     REQUIRE(mesh.receive_shadow == false);
     REQUIRE(mesh.visible == false);
 }

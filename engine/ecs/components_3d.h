@@ -19,6 +19,11 @@ struct MeshRendererComponent {
     float roughness = 0.5f;
     float ao = 1.0f;
     float normal_strength = 1.0f;
+    unsigned int albedo_texture_handle = 0;
+    unsigned int normal_texture_handle = 0;
+    unsigned int metallic_roughness_texture_handle = 0;
+    unsigned int emissive_texture_handle = 0;
+    unsigned int occlusion_texture_handle = 0;
     bool receive_shadow = true;
     bool visible = true;
     int sorting_layer = 0;
@@ -92,6 +97,7 @@ struct PointLightComponent {
     glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
     float intensity = 1.0f;
     float radius = 10.0f; // Attenuation radius
+    float falloff = 1.0f;
     bool cast_shadow = false;
     unsigned int shadow_map_handle = 0; // Omnidirectional shadow map
 };
@@ -102,21 +108,31 @@ struct SpotLightComponent {
     glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f);
     float intensity = 1.0f;
     float radius = 20.0f;
+    float falloff = 1.0f;
     float inner_cone_angle = 12.5f; // degrees
     float outer_cone_angle = 17.5f; // degrees
     bool cast_shadow = false;
     unsigned int shadow_map_handle = 0;
 };
 
+struct SkyLightComponent {
+    bool enabled = true;
+    glm::vec3 up_color = glm::vec3(0.2f, 0.2f, 0.2f);
+    glm::vec3 down_color = glm::vec3(0.0f, 0.0f, 0.5f);
+    float intensity = 1.0f;
+};
+
 #define MAX_BONE_INFLUENCE 4
 #define MAX_BONES 100
 
 struct AnimBlendNode {
+    std::string name;
     std::string danim_path;
     float current_time = 0.0f;
     float speed = 1.0f;
     bool loop = true;
     float weight = 1.0f; // For blend tree
+    float threshold = 0.0f;
 };
 
 struct MorphTarget {
@@ -144,6 +160,8 @@ struct Animator3DComponent {
     // Advanced AnimTree support
     bool use_anim_tree = false;
     std::vector<AnimBlendNode> blend_nodes; // Simple 1D blend for now
+    std::string blend_parameter = "speed";
+    float blend_parameter_value = 0.0f;
     
     // Animation State Machine support
     std::shared_ptr<gameplay3d::AnimationStateMachine> state_machine;

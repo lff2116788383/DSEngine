@@ -20,6 +20,7 @@ struct RenderPipelineResources {
     unsigned int prez_pipeline_state = 0;
     unsigned int composite_pipeline_state = 0;
     unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
+    unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int shadow_pipeline_state = 0;
 
     void Reset() {
@@ -29,6 +30,9 @@ struct RenderPipelineResources {
         prez_render_target = 0;
         for (int i = 0; i < CSM_CASCADES; ++i) {
             shadow_render_target[i] = 0;
+        }
+        for (int i = 0; i < 4; ++i) {
+            spot_shadow_render_target[i] = 0;
         }
         pp_bloom_extract_rt = 0;
         pp_bloom_mip_rts.clear();

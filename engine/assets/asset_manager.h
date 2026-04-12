@@ -129,7 +129,8 @@ private:
 enum class MaterialBlendMode {
     Alpha = 0,
     Additive = 1,
-    Multiply = 2
+    Multiply = 2,
+    Opaque = 3
 };
 
 /**
@@ -138,6 +139,22 @@ enum class MaterialBlendMode {
  */
 class MaterialAsset {
 public:
+    struct TextureSlots {
+        unsigned int albedo = 0;
+        unsigned int normal = 0;
+        unsigned int metallic_roughness = 0;
+        unsigned int emissive = 0;
+        unsigned int occlusion = 0;
+    };
+
+    struct ScalarOverrides {
+        float metallic = 0.0f;
+        float roughness = 0.5f;
+        float ao = 1.0f;
+        float normal_strength = 1.0f;
+        float alpha_cutoff = 0.5f;
+    };
+
     MaterialAsset(unsigned int id, const std::string& name);
 
     unsigned int GetId() const { return id_; }
@@ -146,6 +163,10 @@ public:
     unsigned int GetTextureHandle() const { return texture_handle_; }
     const glm::vec4& GetTint() const { return tint_; }
     const glm::vec4& GetUvRect() const { return uv_rect_; }
+    const glm::vec4& GetBaseColor() const { return base_color_; }
+    const glm::vec3& GetEmissiveColor() const { return emissive_color_; }
+    const TextureSlots& GetTextureSlots() const { return texture_slots_; }
+    const ScalarOverrides& GetScalarOverrides() const { return scalar_overrides_; }
     /**
      * @brief 获取混合模式
      * @return 材质当前的混合模式枚举
@@ -177,6 +198,10 @@ public:
      * @param uv_rect UV 矩形区域 (x, y, w, h)
      */
     void SetUvRect(const glm::vec4& uv_rect) { uv_rect_ = uv_rect; }
+    void SetBaseColor(const glm::vec4& base_color) { base_color_ = base_color; }
+    void SetEmissiveColor(const glm::vec3& emissive_color) { emissive_color_ = emissive_color; }
+    void SetTextureSlots(const TextureSlots& texture_slots) { texture_slots_ = texture_slots; }
+    void SetScalarOverrides(const ScalarOverrides& scalar_overrides) { scalar_overrides_ = scalar_overrides; }
     /**
      * @brief 设置混合模式
      * @param blend_mode 混合模式枚举
@@ -190,6 +215,10 @@ private:
     unsigned int texture_handle_ = 0;
     glm::vec4 tint_ = glm::vec4(1.0f);
     glm::vec4 uv_rect_ = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    glm::vec4 base_color_ = glm::vec4(1.0f);
+    glm::vec3 emissive_color_ = glm::vec3(0.0f);
+    TextureSlots texture_slots_;
+    ScalarOverrides scalar_overrides_;
     MaterialBlendMode blend_mode_ = MaterialBlendMode::Alpha;
 };
 

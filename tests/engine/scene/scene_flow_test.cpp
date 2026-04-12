@@ -135,6 +135,11 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     mesh.roughness = 0.35f;
     mesh.ao = 0.8f;
     mesh.normal_strength = 1.25f;
+    mesh.albedo_texture_handle = 1001;
+    mesh.normal_texture_handle = 1002;
+    mesh.metallic_roughness_texture_handle = 1003;
+    mesh.emissive_texture_handle = 1004;
+    mesh.occlusion_texture_handle = 1005;
     mesh.receive_shadow = true;
     mesh.visible = true;
 
@@ -176,7 +181,29 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     point_light.color = glm::vec3(0.8f, 0.7f, 1.0f);
     point_light.intensity = 3.0f;
     point_light.radius = 12.5f;
+    point_light.falloff = 2.25f;
     point_light.cast_shadow = false;
+
+    auto spot_light_entity = source.GetWorld().CreateEntity();
+    source.GetWorld().registry().emplace<TransformComponent>(spot_light_entity);
+    auto& spot_light = source.GetWorld().registry().emplace<dse::SpotLightComponent>(spot_light_entity);
+    spot_light.enabled = true;
+    spot_light.direction = glm::vec3(0.2f, -1.0f, -0.1f);
+    spot_light.color = glm::vec3(1.0f, 0.85f, 0.6f);
+    spot_light.intensity = 5.0f;
+    spot_light.radius = 18.0f;
+    spot_light.falloff = 1.75f;
+    spot_light.inner_cone_angle = 18.0f;
+    spot_light.outer_cone_angle = 27.5f;
+    spot_light.cast_shadow = true;
+
+    auto sky_light_entity = source.GetWorld().CreateEntity();
+    source.GetWorld().registry().emplace<TransformComponent>(sky_light_entity);
+    auto& sky_light = source.GetWorld().registry().emplace<dse::SkyLightComponent>(sky_light_entity);
+    sky_light.enabled = true;
+    sky_light.up_color = glm::vec3(0.45f, 0.55f, 0.8f);
+    sky_light.down_color = glm::vec3(0.08f, 0.09f, 0.12f);
+    sky_light.intensity = 1.35f;
 
     auto animator_entity = source.GetWorld().CreateEntity();
     source.GetWorld().registry().emplace<TransformComponent>(animator_entity);
@@ -186,7 +213,11 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     animator.danim_path = "assets/anims/hero_idle.danim";
     animator.speed = 1.1f;
     animator.loop = true;
-    animator.use_anim_tree = false;
+    animator.use_anim_tree = true;
+    animator.blend_parameter = "speed";
+    animator.blend_parameter_value = 3.5f;
+    animator.blend_nodes.push_back({"idle", "assets/anims/hero_idle.danim", 0.25f, 0.0f});
+    animator.blend_nodes.push_back({"run", "assets/anims/hero_run.danim", 0.75f, 4.0f});
 
     auto terrain_entity = source.GetWorld().CreateEntity();
     source.GetWorld().registry().emplace<TransformComponent>(terrain_entity);
@@ -227,6 +258,11 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_mesh.roughness == Approx(0.35f));
     REQUIRE(loaded_mesh.ao == Approx(0.8f));
     REQUIRE(loaded_mesh.normal_strength == Approx(1.25f));
+    REQUIRE(loaded_mesh.albedo_texture_handle == 1001);
+    REQUIRE(loaded_mesh.normal_texture_handle == 1002);
+    REQUIRE(loaded_mesh.metallic_roughness_texture_handle == 1003);
+    REQUIRE(loaded_mesh.emissive_texture_handle == 1004);
+    REQUIRE(loaded_mesh.occlusion_texture_handle == 1005);
     REQUIRE(loaded_mesh.receive_shadow);
     REQUIRE(loaded_mesh.visible);
 
@@ -274,7 +310,37 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_point_light.color.z == Approx(1.0f));
     REQUIRE(loaded_point_light.intensity == Approx(3.0f));
     REQUIRE(loaded_point_light.radius == Approx(12.5f));
+    REQUIRE(loaded_point_light.falloff == Approx(2.25f));
     REQUIRE_FALSE(loaded_point_light.cast_shadow);
+
+    auto spot_light_view = loaded.GetWorld().registry().view<dse::SpotLightComponent>();
+    REQUIRE(spot_light_view.begin() != spot_light_view.end());
+    const auto loaded_spot_light_entity = *spot_light_view.begin();
+    const auto& loaded_spot_light = spot_light_view.get<dse::SpotLightComponent>(loaded_spot_light_entity);
+    REQUIRE(loaded_spot_light.enabled);
+    REQUIRE(loaded_spot_light.direction.x == Approx(0.2f));
+    REQUIRE(loaded_spot_light.direction.y == Approx(-1.0f));
+    REQUIRE(loaded_spot_light.direction.z == Approx(-0.1f));
+    REQUIRE(loaded_spot_light.color.y == Approx(0.85f));
+    REQUIRE(loaded_spot_light.intensity == Approx(5.0f));
+    REQUIRE(loaded_spot_light.radius == Approx(18.0f));
+    REQUIRE(loaded_spot_light.falloff == Approx(1.75f));
+    REQUIRE(loaded_spot_light.inner_cone_angle == Approx(18.0f));
+    REQUIRE(loaded_spot_light.outer_cone_angle == Approx(27.5f));
+    REQUIRE(loaded_spot_light.cast_shadow);
+
+    auto sky_light_view = loaded.GetWorld().registry().view<dse::SkyLightComponent>();
+    REQUIRE(sky_light_view.begin() != sky_light_view.end());
+    const auto loaded_sky_light_entity = *sky_light_view.begin();
+    const auto& loaded_sky_light = sky_light_view.get<dse::SkyLightComponent>(loaded_sky_light_entity);
+    REQUIRE(loaded_sky_light.enabled);
+    REQUIRE(loaded_sky_light.up_color.x == Approx(0.45f));
+    REQUIRE(loaded_sky_light.up_color.y == Approx(0.55f));
+    REQUIRE(loaded_sky_light.up_color.z == Approx(0.8f));
+    REQUIRE(loaded_sky_light.down_color.x == Approx(0.08f));
+    REQUIRE(loaded_sky_light.down_color.y == Approx(0.09f));
+    REQUIRE(loaded_sky_light.down_color.z == Approx(0.12f));
+    REQUIRE(loaded_sky_light.intensity == Approx(1.35f));
 
     auto animator_view = loaded.GetWorld().registry().view<dse::Animator3DComponent>();
     REQUIRE(animator_view.begin() != animator_view.end());
@@ -285,7 +351,18 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_animator.danim_path == "assets/anims/hero_idle.danim");
     REQUIRE(loaded_animator.speed == Approx(1.1f));
     REQUIRE(loaded_animator.loop);
-    REQUIRE_FALSE(loaded_animator.use_anim_tree);
+    REQUIRE(loaded_animator.use_anim_tree);
+    REQUIRE(loaded_animator.blend_parameter == "speed");
+    REQUIRE(loaded_animator.blend_parameter_value == Approx(3.5f));
+    REQUIRE(loaded_animator.blend_nodes.size() == 2);
+    REQUIRE(loaded_animator.blend_nodes[0].name == "idle");
+    REQUIRE(loaded_animator.blend_nodes[0].danim_path == "assets/anims/hero_idle.danim");
+    REQUIRE(loaded_animator.blend_nodes[0].weight == Approx(0.25f));
+    REQUIRE(loaded_animator.blend_nodes[0].threshold == Approx(0.0f));
+    REQUIRE(loaded_animator.blend_nodes[1].name == "run");
+    REQUIRE(loaded_animator.blend_nodes[1].danim_path == "assets/anims/hero_run.danim");
+    REQUIRE(loaded_animator.blend_nodes[1].weight == Approx(0.75f));
+    REQUIRE(loaded_animator.blend_nodes[1].threshold == Approx(4.0f));
 
     auto terrain_view = loaded.GetWorld().registry().view<dse::TerrainComponent>();
     REQUIRE(terrain_view.begin() != terrain_view.end());
@@ -317,6 +394,59 @@ TEST_CASE("Given_CheckedInMinimal3DMvpScene_When_Deserialized_Then_Core3DCompone
     REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
     REQUIRE(loaded.GetWorld().registry().view<dse::TerrainComponent>().begin() != loaded.GetWorld().registry().view<dse::TerrainComponent>().end());
     REQUIRE(scene::RunMinimal3DMvpSceneRegressionSample("assets/scenes/3d_mvp_minimal.scene.json"));
+}
+
+TEST_CASE("Given_CheckedInReferenceDemo158Scene_When_Deserialized_Then_ReferenceDemoBaselineComponentsArePresent", "[engine][unit][scene][3d][reference_demo]") {
+    scene::Scene loaded("reference-demo-15-8");
+    REQUIRE(loaded.Deserialize("assets/scenes/reference_demo_15_8.scene.json"));
+    REQUIRE(loaded.GetName() == "reference_demo_15_8");
+
+    auto mesh_view = loaded.GetWorld().registry().view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    for (auto it = mesh_view.begin(); it != mesh_view.end(); ++it) {
+        ++mesh_count;
+    }
+    REQUIRE(mesh_count >= 2);
+
+    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyLightComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::Animator3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Animator3DComponent>().end());
+}
+
+TEST_CASE("Given_CheckedInReferenceDemo159Scene_When_Deserialized_Then_MaterialInteractionBaselineComponentsArePresent", "[engine][unit][scene][3d][reference_demo]") {
+    scene::Scene loaded("reference-demo-15-9");
+    REQUIRE(loaded.Deserialize("assets/scenes/reference_demo_15_9.scene.json"));
+    REQUIRE(loaded.GetName() == "reference_demo_15_9");
+
+    auto mesh_view = loaded.GetWorld().registry().view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    size_t interactive_material_mesh_count = 0;
+    for (auto entity : mesh_view) {
+        ++mesh_count;
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (mesh.material_instance_id == 430001 || mesh.material_instance_id == 430002) {
+            ++interactive_material_mesh_count;
+        }
+    }
+    REQUIRE(mesh_count >= 3);
+    REQUIRE(interactive_material_mesh_count == 2);
+
+    auto animator_view = loaded.GetWorld().registry().view<dse::Animator3DComponent>();
+    size_t animator_count = 0;
+    for (auto entity : animator_view) {
+        (void)entity;
+        ++animator_count;
+    }
+    REQUIRE(animator_count == 2);
+
+    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyLightComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
 }
 
 TEST_CASE("Given_SceneRegressionHelpers_When_Executed_Then_ReturnTrue", "[engine][unit][scene]") {
