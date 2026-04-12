@@ -105,3 +105,71 @@ TEST_CASE("Given_NoActiveCamera_When_CullingUpdated_Then_StateUnchanged", "[engi
     // 没有相机的情况下，不会进行计算，状态保持 true
     REQUIRE(world.registry().get<MeshRendererComponent>(obj_entity).visible == true);
 }
+
+TEST_CASE("Given_TerrainAabbInFrustum_When_CullingUpdated_Then_TerrainVisibilityIsTrue", "[engine][unit][culling][terrain]") {
+    World world;
+
+    auto camera_entity = world.CreateEntity();
+    auto& cam = world.registry().emplace<Camera3DComponent>(camera_entity);
+    cam.enabled = true;
+    cam.priority = 1;
+    cam.fov = 60.0f;
+    cam.aspect_ratio = 16.0f / 9.0f;
+    cam.near_clip = 0.1f;
+    cam.far_clip = 100.0f;
+
+    auto& cam_transform = world.registry().emplace<TransformComponent>(camera_entity);
+    cam_transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    cam_transform.local_to_world = glm::translate(glm::mat4(1.0f), cam_transform.position);
+
+    auto terrain_entity = world.CreateEntity();
+    auto& terrain_transform = world.registry().emplace<TransformComponent>(terrain_entity);
+    terrain_transform.position = glm::vec3(0.0f, 0.0f, -20.0f);
+    terrain_transform.local_to_world = glm::translate(glm::mat4(1.0f), terrain_transform.position);
+
+    auto& bbox = world.registry().emplace<BoundingBoxComponent>(terrain_entity);
+    bbox.min_extents = glm::vec3(-5.0f, 0.0f, -5.0f);
+    bbox.max_extents = glm::vec3(5.0f, 2.0f, 5.0f);
+
+    auto& terrain = world.registry().emplace<TerrainComponent>(terrain_entity);
+    terrain.visible = false;
+
+    FrustumCullingSystem system;
+    system.Update(world);
+
+    REQUIRE(world.registry().get<TerrainComponent>(terrain_entity).visible == true);
+}
+
+TEST_CASE("Given_TerrainAabbOutsideFrustum_When_CullingUpdated_Then_TerrainVisibilityIsFalse", "[engine][unit][culling][terrain]") {
+    World world;
+
+    auto camera_entity = world.CreateEntity();
+    auto& cam = world.registry().emplace<Camera3DComponent>(camera_entity);
+    cam.enabled = true;
+    cam.priority = 1;
+    cam.fov = 60.0f;
+    cam.aspect_ratio = 16.0f / 9.0f;
+    cam.near_clip = 0.1f;
+    cam.far_clip = 100.0f;
+
+    auto& cam_transform = world.registry().emplace<TransformComponent>(camera_entity);
+    cam_transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    cam_transform.local_to_world = glm::translate(glm::mat4(1.0f), cam_transform.position);
+
+    auto terrain_entity = world.CreateEntity();
+    auto& terrain_transform = world.registry().emplace<TransformComponent>(terrain_entity);
+    terrain_transform.position = glm::vec3(0.0f, 0.0f, 20.0f);
+    terrain_transform.local_to_world = glm::translate(glm::mat4(1.0f), terrain_transform.position);
+
+    auto& bbox = world.registry().emplace<BoundingBoxComponent>(terrain_entity);
+    bbox.min_extents = glm::vec3(-5.0f, 0.0f, -5.0f);
+    bbox.max_extents = glm::vec3(5.0f, 2.0f, 5.0f);
+
+    auto& terrain = world.registry().emplace<TerrainComponent>(terrain_entity);
+    terrain.visible = true;
+
+    FrustumCullingSystem system;
+    system.Update(world);
+
+    REQUIRE(world.registry().get<TerrainComponent>(terrain_entity).visible == false);
+}

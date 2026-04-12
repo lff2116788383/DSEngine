@@ -2,6 +2,8 @@
 #define DSE_PARTICLE3D_SYSTEM_H
 
 #include "engine/ecs/world.h"
+#include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d_particle.h"
 #include "engine/render/rhi/rhi_device.h"
 #include <memory>
 
@@ -25,7 +27,7 @@ private:
     AssetManager* asset_manager_ = nullptr;
     
     // Internal helper
-    void EmitParticle(struct ParticleSystem3DComponent& ps, const struct TransformComponent& transform);
+    void EmitParticle(ParticleSystem3DComponent& ps, const TransformComponent& transform);
 };
 
 } // namespace gameplay3d

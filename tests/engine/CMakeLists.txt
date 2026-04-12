@@ -61,6 +61,7 @@ set(DSE_ENGINE_TEST_SOURCES
     ../modules/gameplay_3d/rendering/frustum_culling_test.cpp
     ../modules/gameplay_3d/rendering/advanced_3d_components_test.cpp
     ../modules/gameplay_3d/ai/steering_system_test.cpp
+    ../modules/gameplay_3d/particles/particle3d_system_test.cpp
     ../modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/time.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/debug.cpp
@@ -91,7 +92,10 @@ set(DSE_ENGINE_TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
     ${CMAKE_SOURCE_DIR}/depends/bundle/bundle.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/terrain_system.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/ai/steering_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/particles/particle3d_system.cpp
+    ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/animation/animator_system.cpp
 )
 
 if(DSE_ENABLE_SPINE)
@@ -195,7 +199,7 @@ set_tests_properties(engine.2d.camera PROPERTIES LABELS "engine;unit;2d;camera;s
 
 add_test(
     NAME engine.3d.unit
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[mesh_renderer],[terrain],[csm],[camera_3d],[animator3d],[steering],[culling]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[mesh_renderer],[terrain],[csm],[camera_3d],[animator3d],[steering],[culling],[particle3d]"
 )
 set_tests_properties(engine.3d.unit PROPERTIES LABELS "engine;unit;3d")
 

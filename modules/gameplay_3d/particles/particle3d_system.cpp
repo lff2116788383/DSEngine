@@ -161,8 +161,8 @@ void Particle3DSystem::Update(World& world, float delta_time) {
 
         // 4. Resolve Texture
         if (ps.texture_handle == 0 && !ps.texture_path.empty()) {
-            auto tex = asset_manager.LoadTexture2D(ps.texture_path);
-            if (tex) ps.texture_handle = tex->GetRhiHandle();
+            auto tex = asset_manager.LoadTexture(ps.texture_path);
+            if (tex) ps.texture_handle = tex->GetHandle();
         }
     }
 }
