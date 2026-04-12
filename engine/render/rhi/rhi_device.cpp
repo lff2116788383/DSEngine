@@ -187,6 +187,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform float u_cascade_splits[CSM_CASCADES];
         uniform sampler2D u_spot_shadow_maps[4];
         uniform mat4 u_spot_light_space_matrices[4];
+        uniform samplerCube u_point_shadow_maps[4];
 
         uniform vec3 u_camera_pos;
         uniform bool u_lighting_enabled;
@@ -202,6 +203,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
             vec3 position;
             float intensity;
             float radius;
+            bool cast_shadow;
+            int shadow_index;
         };
         #define MAX_POINT_LIGHTS 4
         uniform int u_point_light_count;
@@ -317,6 +320,16 @@ void OpenGLRhiDevice::EnsureInitialized() {
             return clamp(shadow * u_shadow_strength, 0.0, 1.0);
         }
 
+        float PointShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 lightPos, float lightRadius) {
+            if (shadowIndex < 0 || shadowIndex >= 4) return 0.0;
+            vec3 fragToLight = fragPosWorldSpace - lightPos;
+            float currentDepth = length(fragToLight);
+            if (currentDepth >= lightRadius) return 0.0;
+            float closestDepth = texture(u_point_shadow_maps[shadowIndex], fragToLight).r * lightRadius;
+            float bias = 0.05;
+            return (currentDepth - bias) > closestDepth ? u_shadow_strength : 0.0;
+        }
+
         void main() {
             vec4 texColor = texture(u_texture, TexCoord);
             if (texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
@@ -388,7 +401,11 @@ void OpenGLRhiDevice::EnsureInitialized() {
                 kD *= 1.0 - u_material_metallic;
 
                 float NdotL = max(dot(N, L), 0.0);
-                Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+                float point_shadow = 0.0;
+                if (u_point_lights[i].cast_shadow) {
+                    point_shadow = PointShadowCalculation(u_point_lights[i].shadow_index, FragPos, u_point_lights[i].position, u_point_lights[i].radius);
+                }
+                Lo += (kD * albedo / PI + specular) * radiance * NdotL * (1.0 - point_shadow);
             }
 
             // Spot Lights
@@ -496,6 +513,13 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform_point_lights_loc_[i].position = glGetUniformLocation(shader_handle_, (base + "position").c_str());
         uniform_point_lights_loc_[i].intensity = glGetUniformLocation(shader_handle_, (base + "intensity").c_str());
         uniform_point_lights_loc_[i].radius = glGetUniformLocation(shader_handle_, (base + "radius").c_str());
+        uniform_point_lights_loc_[i].cast_shadow = glGetUniformLocation(shader_handle_, (base + "cast_shadow").c_str());
+        uniform_point_lights_loc_[i].shadow_index = glGetUniformLocation(shader_handle_, (base + "shadow_index").c_str());
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        std::string point_shadow_name = "u_point_shadow_maps[" + std::to_string(i) + "]";
+        glGetUniformLocation(shader_handle_, point_shadow_name.c_str());
     }
 
     uniform_spot_light_count_loc_ = glGetUniformLocation(shader_handle_, "u_spot_light_count");
@@ -860,20 +884,22 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         }
     };
 
-    glGenTextures(1, &color_texture_handle);
-    resource_ledger_.textures_created += 1;
-    if (color_texture_handle == 0) {
-        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment ({}x{}, color={}, depth={}, mipmaps={})",
-            desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
-        return 0;
+    if (desc.has_color) {
+        glGenTextures(1, &color_texture_handle);
+        resource_ledger_.textures_created += 1;
+        if (color_texture_handle == 0) {
+            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
+                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
+            return 0;
+        }
     }
 
     if (desc.has_depth) {
         glGenTextures(1, &depth_texture_handle);
         resource_ledger_.textures_created += 1;
         if (depth_texture_handle == 0) {
-            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{}, color={}, depth={}, mipmaps={})",
-                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
+                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
             cleanup_failed_rt();
             return 0;
         }
@@ -888,54 +914,77 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         return 0;
     }
 
-    glBindTexture(GL_TEXTURE_2D, color_texture_handle);
+    if (desc.has_color) {
+        glBindTexture(GL_TEXTURE_2D, color_texture_handle);
 
-    // Support Phase 2 HDR and mipmaps
-    GLint internal_format = desc.has_color ? GL_RGBA16F : GL_RGBA;
-    GLenum type = desc.has_color ? GL_FLOAT : GL_UNSIGNED_BYTE;
+        GLint internal_format = GL_RGBA16F;
+        GLenum type = GL_FLOAT;
 
-    if (desc.generate_mipmaps) {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    } else {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    }
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, desc.width, desc.height, 0, GL_RGBA, type, nullptr);
+        if (desc.generate_mipmaps) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        } else {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        }
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, desc.width, desc.height, 0, GL_RGBA, type, nullptr);
 
-    if (desc.generate_mipmaps) {
-        glGenerateMipmap(GL_TEXTURE_2D);
+        if (desc.generate_mipmaps) {
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
     }
 
     if (desc.has_depth) {
-        glBindTexture(GL_TEXTURE_2D, depth_texture_handle);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+        if (desc.cube_map) {
+            glBindTexture(GL_TEXTURE_CUBE_MAP, depth_texture_handle);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            for (int face = 0; face < 6; ++face) {
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+            }
+        } else {
+            glBindTexture(GL_TEXTURE_2D, depth_texture_handle);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+        }
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_handle);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texture_handle, 0);
+    if (desc.has_color) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texture_handle, 0);
+    }
     if (desc.has_depth) {
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture_handle, 0);
+        if (desc.cube_map) {
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture_handle, 0);
+            glDrawBuffer(GL_NONE);
+            glReadBuffer(GL_NONE);
+        } else {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture_handle, 0);
+        }
     }
 
     const GLenum framebuffer_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (framebuffer_status != GL_FRAMEBUFFER_COMPLETE) {
-        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{:X} ({}x{}, color={}, depth={}, mipmaps={})",
-            static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{:X} ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
+            static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
         cleanup_failed_rt();
         return 0;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     render_targets_[handle] = {desc, fbo_handle, color_texture_handle, depth_texture_handle};
     resource_ledger_.render_targets_created += 1;
     return handle;
@@ -952,6 +1001,14 @@ unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_ta
 unsigned int OpenGLRhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {
     auto it = render_targets_.find(render_target_handle);
     if (it == render_targets_.end()) {
+        return 0;
+    }
+    return it->second.depth_texture_handle;
+}
+
+unsigned int OpenGLRhiDevice::GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const {
+    auto it = render_targets_.find(render_target_handle);
+    if (it == render_targets_.end() || face >= 6 || !it->second.desc.cube_map) {
         return 0;
     }
     return it->second.depth_texture_handle;
@@ -1174,6 +1231,16 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
             glUniform3f(uniform_point_lights_loc_[i].position, item.point_lights[i].position.x, item.point_lights[i].position.y, item.point_lights[i].position.z);
             glUniform1f(uniform_point_lights_loc_[i].intensity, item.point_lights[i].intensity);
             glUniform1f(uniform_point_lights_loc_[i].radius, item.point_lights[i].radius);
+            if (uniform_point_lights_loc_[i].cast_shadow != -1) glUniform1i(uniform_point_lights_loc_[i].cast_shadow, item.point_lights[i].cast_shadow ? 1 : 0);
+            if (uniform_point_lights_loc_[i].shadow_index != -1) glUniform1i(uniform_point_lights_loc_[i].shadow_index, item.point_lights[i].shadow_index);
+        }
+        for (int i = 0; i < 4; ++i) {
+            const int location = glGetUniformLocation(shader_handle_, ("u_point_shadow_maps[" + std::to_string(i) + "]").c_str());
+            if (location != -1) {
+                glActiveTexture(GL_TEXTURE9 + i);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, global_point_shadow_map_[i]);
+                glUniform1i(location, 9 + i);
+            }
         }
 
         // Spot lights

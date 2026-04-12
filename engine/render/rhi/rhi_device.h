@@ -72,6 +72,8 @@ struct MeshDrawItem {
         glm::vec3 position;
         float intensity;
         float radius;
+        bool cast_shadow = false;
+        int shadow_index = -1;
     };
     std::vector<PointLightData> point_lights;
     
@@ -125,6 +127,7 @@ struct RenderTargetDesc {
     bool has_color = true;
     bool has_depth = false;
     bool generate_mipmaps = false; // Phase 2: Bloom Downsample requires mipmaps
+    bool cube_map = false;
 };
 
 struct RenderPassDesc {
@@ -383,6 +386,7 @@ public:
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
+    virtual unsigned int GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
@@ -464,6 +468,7 @@ public:
      */
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
+    unsigned int GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const override;
     
     /**
      * @brief 创建 VBO 或 EBO 数据缓冲
@@ -561,6 +566,9 @@ public:
     }
     void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
         if (index < 4) global_spot_shadow_map_[index] = handle;
+    }
+    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) {
+        if (index < 4) global_point_shadow_map_[index] = handle;
     }
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
         if (index < 3) global_light_space_matrix_[index] = mat;
@@ -700,7 +708,7 @@ private:
 
     int uniform_point_light_count_loc_ = -1;
     struct PointLightLoc {
-        int color, position, intensity, radius;
+        int color, position, intensity, radius, cast_shadow, shadow_index;
     } uniform_point_lights_loc_[4];
 
     int uniform_spot_light_count_loc_ = -1;
@@ -722,6 +730,7 @@ private:
     float global_cascade_splits_[3];
     unsigned int global_shadow_map_[3];
     unsigned int global_spot_shadow_map_[4] = {0, 0, 0, 0};
+    unsigned int global_point_shadow_map_[4] = {0, 0, 0, 0};
 
     bool initialized_ = false;
     RenderStats current_frame_stats_;

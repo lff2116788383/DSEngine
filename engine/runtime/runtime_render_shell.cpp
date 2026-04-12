@@ -19,6 +19,7 @@ void BindRuntimeShadowMaps(::FramePipeline& pipeline) {
         }
         for (int i = 0; i < 4; ++i) {
             device->SetGlobalSpotShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.spot_shadow_render_target[i]));
+            device->SetGlobalPointShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.point_shadow_render_target[i]));
         }
     }
 }

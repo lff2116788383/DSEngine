@@ -1,5 +1,7 @@
 #include "catch/catch.hpp"
 
+#include <algorithm>
+
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/components_2d.h"
@@ -152,4 +154,150 @@ TEST_CASE("Given_MeshRendererPrefersMaterialInstance_When_Rendering_Then_Materia
     REQUIRE(item.material_normal_strength == Approx(1.8f));
     REQUIRE(item.material_alpha_cutoff == Approx(0.27f));
     REQUIRE(item.lighting_enabled);
+}
+
+TEST_CASE("Given_MultipleLightTypes_When_RenderingMesh_Then_DrawItemCollectsDirectionalPointSpotAndSkyContributions", "[engine][unit][3d][lighting][mesh_render_system]") {
+    World world;
+    dse::gameplay3d::MeshRenderSystem system;
+    RecordingCommandBuffer cmd;
+    AssetManager asset_manager;
+    system.SetAssetManager(&asset_manager);
+
+    const auto mesh_entity = world.CreateEntity();
+    auto& mesh_transform = world.registry().emplace<TransformComponent>(mesh_entity);
+    mesh_transform.local_to_world = glm::mat4(1.0f);
+    auto& mesh = world.registry().emplace<dse::MeshRendererComponent>(mesh_entity);
+    mesh.visible = true;
+    mesh.shader_variant = "MESH_PBR";
+    mesh.emissive = glm::vec3(0.2f, 0.3f, 0.4f);
+    AttachMinimalRenderableMesh(world, mesh_entity);
+
+    const auto directional_entity = world.CreateEntity();
+    auto& directional = world.registry().emplace<dse::DirectionalLight3DComponent>(directional_entity);
+    directional.direction = glm::vec3(-0.2f, -1.0f, -0.4f);
+    directional.color = glm::vec3(0.9f, 0.8f, 0.7f);
+    directional.intensity = 2.5f;
+    directional.ambient_intensity = 0.15f;
+    directional.shadow_strength = 0.65f;
+
+    const auto point_a_entity = world.CreateEntity();
+    auto& point_a_transform = world.registry().emplace<TransformComponent>(point_a_entity);
+    point_a_transform.position = glm::vec3(1.0f, 2.0f, 3.0f);
+    auto& point_a = world.registry().emplace<dse::PointLightComponent>(point_a_entity);
+    point_a.color = glm::vec3(1.0f, 0.2f, 0.1f);
+    point_a.intensity = 3.0f;
+    point_a.radius = 8.0f;
+    point_a.falloff = 1.5f;
+    point_a.cast_shadow = true;
+
+    const auto point_b_entity = world.CreateEntity();
+    auto& point_b_transform = world.registry().emplace<TransformComponent>(point_b_entity);
+    point_b_transform.position = glm::vec3(-4.0f, 1.0f, 0.5f);
+    auto& point_b = world.registry().emplace<dse::PointLightComponent>(point_b_entity);
+    point_b.color = glm::vec3(0.3f, 0.4f, 1.0f);
+    point_b.intensity = 1.5f;
+    point_b.radius = 6.0f;
+    point_b.falloff = 0.05f;
+
+    const auto disabled_point_entity = world.CreateEntity();
+    auto& disabled_point_transform = world.registry().emplace<TransformComponent>(disabled_point_entity);
+    disabled_point_transform.position = glm::vec3(9.0f, 9.0f, 9.0f);
+    auto& disabled_point = world.registry().emplace<dse::PointLightComponent>(disabled_point_entity);
+    disabled_point.enabled = false;
+    disabled_point.intensity = 99.0f;
+
+    const auto sky_entity = world.CreateEntity();
+    auto& sky = world.registry().emplace<dse::SkyLightComponent>(sky_entity);
+    sky.up_color = glm::vec3(0.6f, 0.8f, 1.0f);
+    sky.down_color = glm::vec3(0.2f, 0.1f, 0.0f);
+    sky.intensity = 0.75f;
+
+    const auto spot_entity = world.CreateEntity();
+    auto& spot_transform = world.registry().emplace<TransformComponent>(spot_entity);
+    spot_transform.position = glm::vec3(5.0f, 6.0f, 7.0f);
+    spot_transform.rotation = glm::mat4(1.0f);
+    auto& spot = world.registry().emplace<dse::SpotLightComponent>(spot_entity);
+    spot.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    spot.color = glm::vec3(0.7f, 0.6f, 0.2f);
+    spot.intensity = 4.0f;
+    spot.radius = 10.0f;
+    spot.falloff = 2.0f;
+    spot.inner_cone_angle = 11.0f;
+    spot.outer_cone_angle = 24.0f;
+    spot.cast_shadow = true;
+
+    const auto non_shadow_spot_entity = world.CreateEntity();
+    auto& non_shadow_spot_transform = world.registry().emplace<TransformComponent>(non_shadow_spot_entity);
+    non_shadow_spot_transform.position = glm::vec3(-2.0f, 3.0f, 4.0f);
+    non_shadow_spot_transform.rotation = glm::mat4(1.0f);
+    auto& non_shadow_spot = world.registry().emplace<dse::SpotLightComponent>(non_shadow_spot_entity);
+    non_shadow_spot.direction = glm::vec3(1.0f, 0.0f, 0.0f);
+    non_shadow_spot.color = glm::vec3(0.1f, 0.9f, 0.4f);
+    non_shadow_spot.intensity = 1.25f;
+    non_shadow_spot.radius = 9.0f;
+    non_shadow_spot.falloff = 1.0f;
+    non_shadow_spot.inner_cone_angle = 8.0f;
+    non_shadow_spot.outer_cone_angle = 18.0f;
+    non_shadow_spot.cast_shadow = false;
+
+    system.Render(world, cmd);
+
+    REQUIRE(cmd.draw_mesh_batch_calls == 1);
+    REQUIRE(cmd.last_mesh_batch.size() == 1);
+    const auto& item = cmd.last_mesh_batch.front();
+    REQUIRE(item.lighting_enabled);
+    REQUIRE(item.light_direction.x == Approx(-0.2f));
+    REQUIRE(item.light_direction.y == Approx(-1.0f));
+    REQUIRE(item.light_direction.z == Approx(-0.4f));
+    REQUIRE(item.light_color.r == Approx(0.9f));
+    REQUIRE(item.light_intensity == Approx(2.5f));
+    REQUIRE(item.shadow_strength == Approx(0.65f));
+    REQUIRE(item.ambient_intensity == Approx(0.9f));
+    REQUIRE(item.material_emissive.x == Approx(0.215f));
+    REQUIRE(item.material_emissive.y == Approx(0.316875f));
+    REQUIRE(item.material_emissive.z == Approx(0.41875f));
+
+    REQUIRE(item.point_lights.size() == 2);
+    const auto first_point_it = std::find_if(item.point_lights.begin(), item.point_lights.end(), [](const MeshDrawItem::PointLightData& light) {
+        return light.position.x == Approx(1.0f) && light.position.y == Approx(2.0f) && light.position.z == Approx(3.0f);
+    });
+    REQUIRE(first_point_it != item.point_lights.end());
+    REQUIRE(first_point_it->color.r == Approx(1.0f));
+    REQUIRE(first_point_it->intensity == Approx(3.0f));
+    REQUIRE(first_point_it->radius == Approx(12.0f));
+    REQUIRE(first_point_it->cast_shadow);
+    REQUIRE(first_point_it->shadow_index == 0);
+
+    const auto second_point_it = std::find_if(item.point_lights.begin(), item.point_lights.end(), [](const MeshDrawItem::PointLightData& light) {
+        return light.position.x == Approx(-4.0f) && light.position.y == Approx(1.0f) && light.position.z == Approx(0.5f);
+    });
+    REQUIRE(second_point_it != item.point_lights.end());
+    REQUIRE(second_point_it->color.b == Approx(1.0f));
+    REQUIRE(second_point_it->intensity == Approx(1.5f));
+    REQUIRE(second_point_it->radius == Approx(0.6f));
+    REQUIRE_FALSE(second_point_it->cast_shadow);
+    REQUIRE(second_point_it->shadow_index == -1);
+
+    REQUIRE(item.spot_lights.size() == 2);
+    const auto shadow_spot_it = std::find_if(item.spot_lights.begin(), item.spot_lights.end(), [](const MeshDrawItem::SpotLightData& light) {
+        return light.position.x == Approx(5.0f) && light.position.y == Approx(6.0f) && light.position.z == Approx(7.0f);
+    });
+    REQUIRE(shadow_spot_it != item.spot_lights.end());
+    REQUIRE(shadow_spot_it->direction.x == Approx(0.0f));
+    REQUIRE(shadow_spot_it->direction.y == Approx(-1.0f));
+    REQUIRE(shadow_spot_it->direction.z == Approx(0.0f));
+    REQUIRE(shadow_spot_it->color.r == Approx(0.7f));
+    REQUIRE(shadow_spot_it->intensity == Approx(4.0f));
+    REQUIRE(shadow_spot_it->radius == Approx(20.0f));
+    REQUIRE(shadow_spot_it->inner_cone == Approx(11.0f));
+    REQUIRE(shadow_spot_it->outer_cone == Approx(24.0f));
+    REQUIRE(shadow_spot_it->cast_shadow);
+    REQUIRE(shadow_spot_it->shadow_index == 0);
+
+    const auto non_shadow_spot_it = std::find_if(item.spot_lights.begin(), item.spot_lights.end(), [](const MeshDrawItem::SpotLightData& light) {
+        return light.position.x == Approx(-2.0f) && light.position.y == Approx(3.0f) && light.position.z == Approx(4.0f);
+    });
+    REQUIRE(non_shadow_spot_it != item.spot_lights.end());
+    REQUIRE_FALSE(non_shadow_spot_it->cast_shadow);
+    REQUIRE(non_shadow_spot_it->shadow_index == -1);
 }

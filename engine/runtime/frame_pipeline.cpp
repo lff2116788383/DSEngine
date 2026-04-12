@@ -119,6 +119,7 @@ bool FramePipeline::Init() {
     }
     for (int i = 0; i < 4; ++i) {
         render_resources_.spot_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true});
+        render_resources_.point_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true, false, true});
     }
 
     if (render_resources_.pp_bloom_extract_rt == 0) {
@@ -560,6 +561,57 @@ void FramePipeline::BuildRenderGraphInternal() {
         }
     });
 
+    render_graph_passes_.push_back({
+        "point_shadow_pass",
+        [this](CommandBuffer& cmd_buffer) {
+            auto point_light_view = runtime_context_.world->registry().view<TransformComponent, dse::PointLightComponent>();
+            int shadow_slot = 0;
+            for (auto entity : point_light_view) {
+                auto& light = point_light_view.get<dse::PointLightComponent>(entity);
+                if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || render_resources_.point_shadow_render_target[shadow_slot] == 0) {
+                    continue;
+                }
+
+                auto& transform = point_light_view.get<TransformComponent>(entity);
+                const glm::mat4 light_proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+                static const glm::vec3 face_directions[6] = {
+                    glm::vec3(1.0f, 0.0f, 0.0f),
+                    glm::vec3(-1.0f, 0.0f, 0.0f),
+                    glm::vec3(0.0f, 1.0f, 0.0f),
+                    glm::vec3(0.0f, -1.0f, 0.0f),
+                    glm::vec3(0.0f, 0.0f, 1.0f),
+                    glm::vec3(0.0f, 0.0f, -1.0f)
+                };
+                static const glm::vec3 face_ups[6] = {
+                    glm::vec3(0.0f, -1.0f, 0.0f),
+                    glm::vec3(0.0f, -1.0f, 0.0f),
+                    glm::vec3(0.0f, 0.0f, 1.0f),
+                    glm::vec3(0.0f, 0.0f, -1.0f),
+                    glm::vec3(0.0f, -1.0f, 0.0f),
+                    glm::vec3(0.0f, -1.0f, 0.0f)
+                };
+
+                for (int face = 0; face < 6; ++face) {
+                    const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + face_directions[face], face_ups[face]);
+                    cmd_buffer.BeginRenderPass({render_resources_.point_shadow_render_target[shadow_slot], glm::vec4(1.0f), true});
+                    cmd_buffer.SetCamera(light_view_mat, light_proj);
+                    cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
+                    for (auto& mod : modules_) {
+                        if (mod.instance) {
+                            mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, CSM_CASCADES + 1 + face, light_view_mat, light_proj);
+                        }
+                    }
+                    cmd_buffer.EndRenderPass();
+                }
+
+                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
+                    device->SetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.point_shadow_render_target[shadow_slot]));
+                }
+                ++shadow_slot;
+            }
+        }
+    });
+ 
     // 2. Main Scene Pass
     render_graph_passes_.push_back({
         "scene_pass",

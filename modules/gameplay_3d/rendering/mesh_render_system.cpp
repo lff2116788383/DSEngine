@@ -528,13 +528,19 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     // Collect Point Lights
     std::vector<MeshDrawItem::PointLightData> point_lights;
     auto point_light_view = world.registry().view<TransformComponent, PointLightComponent>();
+    int next_point_shadow_index = 0;
     for (auto entity : point_light_view) {
         if (point_lights.size() >= 4) break; // MAX_POINT_LIGHTS = 4
         auto& transform = point_light_view.get<TransformComponent>(entity);
         auto& light = point_light_view.get<PointLightComponent>(entity);
         if (light.enabled) {
             const float effective_radius = light.radius * std::max(0.1f, light.falloff);
-            point_lights.push_back({light.color, transform.position, light.intensity, effective_radius});
+            int shadow_index = -1;
+            if (light.cast_shadow && next_point_shadow_index < 4) {
+                shadow_index = next_point_shadow_index;
+                ++next_point_shadow_index;
+            }
+            point_lights.push_back({light.color, transform.position, light.intensity, effective_radius, light.cast_shadow && shadow_index >= 0, shadow_index});
         }
     }
 
@@ -557,13 +563,19 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     // Collect Spot Lights
     std::vector<MeshDrawItem::SpotLightData> spot_lights;
     auto spot_light_view = world.registry().view<TransformComponent, SpotLightComponent>();
+    int next_spot_shadow_index = 0;
     for (auto entity : spot_light_view) {
         auto& transform = spot_light_view.get<TransformComponent>(entity);
         auto& light = spot_light_view.get<SpotLightComponent>(entity);
         if (light.enabled) {
             glm::vec3 forward = glm::normalize(transform.rotation * light.direction);
             const float effective_radius = light.radius * std::max(0.1f, light.falloff);
-            spot_lights.push_back({light.color, transform.position, forward, light.intensity, effective_radius, light.inner_cone_angle, light.outer_cone_angle, light.cast_shadow, -1});
+            int shadow_index = -1;
+            if (light.cast_shadow && next_spot_shadow_index < 4) {
+                shadow_index = next_spot_shadow_index;
+                ++next_spot_shadow_index;
+            }
+            spot_lights.push_back({light.color, transform.position, forward, light.intensity, effective_radius, light.inner_cone_angle, light.outer_cone_angle, light.cast_shadow && shadow_index >= 0, shadow_index});
         }
     }
     
@@ -666,6 +678,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             pld.position = pt_data.position;
             pld.intensity = pt_data.intensity;
             pld.radius = pt_data.radius;
+            pld.cast_shadow = pt_data.cast_shadow;
+            pld.shadow_index = pt_data.shadow_index;
             item.point_lights.push_back(pld);
         }
         

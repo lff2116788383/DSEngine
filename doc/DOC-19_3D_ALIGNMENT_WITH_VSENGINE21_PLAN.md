@@ -133,7 +133,21 @@
 - [x] [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38) 已承载 [`material_alpha_cutoff`](engine/render/rhi/rhi_device.h:59) 与实例数据来源标记。
 - [x] [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 与内置 fragment shader 已真实消费 alpha cutoff，不再是仅数据占位。
 - [x] 已补充 [`mesh_material_desc_test.cpp`](tests/engine/mesh_material_desc_test.cpp)、[`scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp)、[`mesh_renderer_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_renderer_test.cpp)、[`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp) 覆盖 scene / runtime / draw item 解析链路。
-- [ ] 尚未在确认可用的 CMake build 目录中完成一次真实编译与测试执行。
+- [x] 已在可用的 CMake build 目录完成 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 构建，并通过 [`engine.3d.unit`](tests/engine/CMakeLists.txt) 验证材质 / 网格 / 动画 / 剔除 / 粒子等 3D runtime 回归入口。
+
+**材质字段支持矩阵（当前 runtime）**
+- **已真实参与渲染 / draw item 提交：**
+  - `shader_variant`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:589) 决定 `lighting_enabled` 与材质解析路径；
+  - `color` / `emissive` / `metallic` / `roughness` / `ao` / `normal_strength` / `material_alpha_cutoff`：由 [`MeshRendererComponent`](engine/ecs/components_3d.h:21) 映射到 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:52)，并由 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1166) 上传；
+  - `albedo_texture_handle` / `normal_texture_handle`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:648) 解析为 `texture_handle` / `normal_map_handle`；
+  - `receive_shadow`：由 [`MeshRendererComponent`](engine/ecs/components_3d.h:33) 写入 [`MeshDrawItem::receive_shadow`](engine/render/rhi/rhi_device.h:61)，并由 shader uniform `u_receive_shadow` 消费；
+  - `material_data_source` / `material_instance_id`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 控制 component fallback 与 material instance 优先级。
+- **已纳入 scene / runtime / test 一致性，但消费仍有边界说明：**
+  - `metallic_roughness_texture_handle` / `emissive_texture_handle` / `occlusion_texture_handle`：已存在于 [`MeshRendererComponent`](engine/ecs/components_3d.h:30) 与材质描述链路中，但当前 P1 文档仍应以“字段已承载，实际消费路径待继续细化”表述；
+  - `visible` / `sorting_layer` / `order_in_layer`：已参与 runtime 提交筛选与排序语义，但属于渲染调度字段，不属于 PBR 材质参数本身。
+- **正式约束说明：**
+  - 当前优先级为 `MaterialInstance > ComponentFallback`，并由 [`material_data_source`](engine/ecs/components_3d.h:37) 显式控制，不再依赖隐式规则；
+  - 文档与测试基线以 [`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp) 为准。
 
 ### 4.2 动画系统最小工作流对齐
 
@@ -147,7 +161,7 @@
 - [x] [`SaveScene()`](apps/editor_cpp/src/editor_scene_io.cpp:149) / [`LoadScene()`](apps/editor_cpp/src/editor_scene_io.cpp:463) 已补齐 editor scene 对 [`Animator3DComponent`](engine/ecs/components_3d.h:157) 的 blend 参数与节点数组存取，避免 editor 桥接丢字段。
 - [x] [`AnimatorSystem::Update()`](modules/gameplay_3d/animation/animator_system.cpp:124) 已补齐 runtime 侧 clip 校验、统一采样缓存、legacy 单动画路径收口，以及 legacy 1D blend tree 的空节点 / 单节点 / 阈值夹取行为。
 - [x] [`AnimatorSystem::Update()`](modules/gameplay_3d/animation/animator_system.cpp:124) 已把 state machine 路径中的 blend tree 采样接入 [`final_bone_matrices`](engine/ecs/components_3d.h:186) 更新链路，填补此前 blend tree TODO 缺口。
-- [ ] 尚未补上面向 [`AnimatorSystem`](modules/gameplay_3d/animation/animator_system.cpp:124) 的运行时 blend 边界测试与空资源行为测试。
+- [x] [`animator_system_test.cpp`](tests/modules/gameplay_3d/animation/animator_system_test.cpp) 已补齐空资源、单动画、双节点 blend 与阈值夹取等运行时边界测试，并已纳入 [`engine.3d.unit`](tests/engine/CMakeLists.txt)。
 
 **本周期任务：**
 - 稳定 `dskel` / `danim` / blend 参数的运行时边界。
@@ -170,7 +184,23 @@
 - [x] [`Scene`](engine/scene/scene.cpp:248) 已覆盖 [`PointLightComponent`](engine/ecs/components_3d.h:102)、[`SpotLightComponent`](engine/ecs/components_3d.h:112)、[`SkyLightComponent`](engine/ecs/components_3d.h:125) 的 scene 存档 / 读档。
 - [x] [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:311) 已对 point / spot / sky 三类灯光的 roundtrip 字段做回归。
 - [x] [`SaveScene()`](apps/editor_cpp/src/editor_scene_io.cpp:149) / [`LoadScene()`](apps/editor_cpp/src/editor_scene_io.cpp:463) 已补齐 editor scene 对 point falloff、spot 全字段、sky light 参数的桥接。
-- [ ] 尚未把多灯运行时表现、阴影开关语义和参数说明矩阵文档化到统一收口材料。
+- [x] [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:514) 已具备 Directional / Point / Spot / Sky 四类灯光的 runtime 收集与 draw item 写入路径。
+- [x] [`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp) 已补齐多灯运行时回归，覆盖 directional、point、spot、sky 叠加与 disabled light 过滤行为。
+- [x] 已形成统一参数语义矩阵：Directional = `direction / color / intensity / ambient_intensity / shadow_strength / cast_shadow`；Point = `color / intensity / radius / falloff / cast_shadow`；Spot = `direction / color / intensity / radius / falloff / inner_cone_angle / outer_cone_angle / cast_shadow`；Sky = `up_color / down_color / intensity`。
+
+**灯光参数语义矩阵（当前 runtime）**
+- **Directional Light**
+  - 核心字段：[`direction`](engine/ecs/components_3d.h:91)、[`color`](engine/ecs/components_3d.h:92)、[`intensity`](engine/ecs/components_3d.h:93)、[`ambient_intensity`](engine/ecs/components_3d.h:94)、[`shadow_strength`](engine/ecs/components_3d.h:95)、[`cast_shadow`](engine/ecs/components_3d.h:96)
+  - runtime 语义：作为主方向光写入 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:63) 的主光照参数，并影响 ambient / shadow 强度；阴影路径由 [`shadow_pass`](engine/runtime/frame_pipeline.cpp:475) 负责。
+- **Point Light**
+  - 核心字段：[`color`](engine/ecs/components_3d.h:104)、[`intensity`](engine/ecs/components_3d.h:105)、[`radius`](engine/ecs/components_3d.h:106)、[`falloff`](engine/ecs/components_3d.h:107)、[`cast_shadow`](engine/ecs/components_3d.h:108)
+  - runtime 语义：进入 [`point_lights`](modules/gameplay_3d/rendering/mesh_render_system.cpp:529) 集合，当前有效半径按 `radius * max(0.1f, falloff)` 计算；启用阴影时会分配最多 4 个 shadow slot，并写入 [`MeshDrawItem::PointLightData`](engine/render/rhi/rhi_device.h:70) 的 `cast_shadow / shadow_index`。
+- **Spot Light**
+  - 核心字段：[`direction`](engine/ecs/components_3d.h:115)、[`color`](engine/ecs/components_3d.h:114)、[`intensity`](engine/ecs/components_3d.h:116)、[`radius`](engine/ecs/components_3d.h:117)、[`falloff`](engine/ecs/components_3d.h:118)、[`inner_cone_angle`](engine/ecs/components_3d.h:119)、[`outer_cone_angle`](engine/ecs/components_3d.h:120)、[`cast_shadow`](engine/ecs/components_3d.h:121)
+  - runtime 语义：进入 [`spot_lights`](modules/gameplay_3d/rendering/mesh_render_system.cpp:558) 集合，方向取 `transform.rotation * light.direction`，半径同样按 `radius * max(0.1f, falloff)` 计算；`cast_shadow` 会继续透传到 [`MeshDrawItem::SpotLightData`](engine/render/rhi/rhi_device.h:78)。
+- **Sky Light**
+  - 核心字段：[`up_color`](engine/ecs/components_3d.h:127)、[`down_color`](engine/ecs/components_3d.h:128)、[`intensity`](engine/ecs/components_3d.h:129)
+  - runtime 语义：在 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:541) 中混合得到 sky ambient，并叠加到 `ambient_intensity` 与 `material_emissive`。
 
 **本周期任务：**
 - 固定 Directional / Point / Spot / Sky 的字段边界。
@@ -188,16 +218,58 @@
 **当前基础：**
 - 当前主线仍以 `Directional + CSM` 为主。
 
+**当前进度（2026-04-12）：**
+- [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:475) 已存在 `shadow_pass`，并对 [`DirectionalLight3DComponent`](engine/ecs/components_3d.h:89) 的 `cast_shadow` 与 `cascade_splits` 做主线路径处理。
+- [x] [`csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp) 已对 Directional + CSM 默认值、级联分割修改，以及当前 shadow path / shadow stats 矩阵归类做回归断言，并通过 [`engine.3d.unit`](tests/engine/CMakeLists.txt:201) 作为 3D runtime gate 的一部分持续执行。
+- [x] [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 已补充 runtime static regression，对 `spot_shadow_pass`、`spot_shadow_render_target[4]` 与 `u_spot_light_space_matrices` 的源码存在性做门禁约束。
+- [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:523) 已存在 `spot_shadow_pass`，并通过 [`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 预绑定 spot shadow depth texture。
+- [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:565) 已新增 `point_shadow_pass`，为启用阴影的 point light 建立 cubemap shadow render target 与 6 个朝向的 runtime shadow 提交路径。
+- [x] [`render_pipeline_resources.h`](engine/runtime/render_pipeline_resources.h:22) 已新增 `point_shadow_render_target[4]`，[`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 也已补齐 [`SetGlobalPointShadowMap()`](engine/render/rhi/rhi_device.h:165) 绑定。
+- [x] [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:528) 已为 point light 分配 `shadow_index`，并将 `cast_shadow / shadow_index` 写入 [`MeshDrawItem::PointLightData`](engine/render/rhi/rhi_device.h:70)。
+- [x] [`rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:1046) 已将 depth-only render pass 计入 [`RenderStats::shadow_passes`](engine/render/rhi/rhi_device.h:119)，可用于阴影收口统计。
+- [x] 当前支持矩阵可明确归类为：Directional + CSM = 已支持；Spot Shadow = 已支持；Point Shadow = 已支持。
+
+**当前支持矩阵：**
+- **已支持：Directional + CSM**
+  - 依据：[`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:475) 已存在 `shadow_pass`，会为每级 cascade 建立 depth pass，并通过 [`SetGlobalMat4Array()`](engine/render/rhi/rhi_device.h:283) / [`SetGlobalFloatArray()`](engine/render/rhi/rhi_device.h:284) 提交 `u_light_space_matrices` 与 `u_cascade_splits`。
+  - shader 消费：[`rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:185) 已消费 `u_shadow_maps`、`u_light_space_matrices`、`u_cascade_splits`。
+  - 当前限制：仍以单个方向光主线为准，尚未扩展到多方向光阴影调度。
+- **已支持：Spot Shadow**
+  - 依据：[`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:523) 已存在 `spot_shadow_pass`，并通过 [`SetGlobalSpotShadowMap()`](engine/render/rhi/rhi_device.h:566) 与 `u_spot_light_space_matrices` 接入 runtime / shader。
+  - shader 消费：[`rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:188) 已消费 `u_spot_shadow_maps` 与 `u_spot_light_space_matrices`，且 [`MeshDrawItem::SpotLightData`](engine/render/rhi/rhi_device.h:78) 已承载 `cast_shadow` / `shadow_index`。
+  - 运行时绑定：[`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 会在每帧渲染开始阶段预绑定 4 个 spot shadow depth texture，与 [`spot_shadow_pass`](engine/runtime/frame_pipeline.cpp:523) 的运行时写入形成前后衔接。
+  - 当前边界：shadow slot 上限为 4，并继续依赖 [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 固定结构存在性。
+- **已支持：Point Shadow**
+  - 依据：[`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:565) 已存在 `point_shadow_pass`，并通过 [`point_shadow_render_target[4]`](engine/runtime/render_pipeline_resources.h:24) 建立 point light cubemap shadow render target。
+  - shader 消费：[`rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:189) 已消费 `u_point_shadow_maps`，且 point light 着色路径已通过 cubemap 深度采样参与阴影计算。
+  - runtime 绑定：[`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 已补齐 [`SetGlobalPointShadowMap()`](engine/render/rhi/rhi_device.h:165)，[`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:528) 会为启用阴影的 point light 分配 `shadow_index`。
+  - 当前边界：当前以每光源 6 次朝向渲染的 cubemap pass 实现，shadow slot 上限为 4，尚未进一步收口 layered rendering、PCF 与更细的静态回归门禁。
+
+**影子收口验收拆分（当前建议）：**
+- **Directional + CSM（主线验收）**
+  - 保持至少 1 条稳定 gate：当前以 [`csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp) 验证 `shadow_pass`、`u_light_space_matrices`、`u_cascade_splits` 与 [`RenderStats::shadow_passes`](engine/render/rhi/rhi_device.h:112) 统计语义，并经由 [`engine.3d.unit`](tests/engine/CMakeLists.txt:201) 持续纳入 3D runtime 门禁；
+  - 后续若增加更贴近运行时的集成回归，应优先围绕单主方向光、3 级 cascade 与 depth-only pass 统计展开，避免先扩展多方向光。
+- **Spot Shadow（已支持路径继续收口）**
+  - 维持 shadow slot 上限为 4 的明确约束，并在后续继续补更强的运行时回归；
+  - 补齐 `cast_shadow`、`shadow_index`、`u_spot_light_space_matrices` 的参数语义与性能边界说明。
+- **Point Shadow（已支持路径继续收口）**
+  - 当前已完成 point light shadow cubemap render target、six-pass runtime path、shader uniform 采样与 draw item 绑定模型；
+  - 后续重点转为补更强的 static / runtime regression、优化统计口径，以及评估 layered rendering / PCF 等质量项。
+- **静态回归协同约束**
+  - 当前阴影主线除 [`csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp) 外，还可依赖 [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 固定 runtime 渲染壳层中的 spot shadow 结构存在性；
+  - 后续若继续拆分 [`FramePipeline`](engine/runtime/frame_pipeline.h:42) 渲染流程，应同步维护上述 static regression，避免 shadow path 在重构中静默丢失。
+
 **本周期任务：**
 - 明确当前真正支持的 shadow path。
 - 列出 `已支持 / 部分支持 / 未支持` 矩阵。
 - 补齐 spot shadow 与 point shadow 的实现任务清单。
-- 保证 `RenderStats`、shadow pass 统计可以用来做收口判断。
+- 保证 [`RenderStats`](engine/render/rhi/rhi_device.h:112) 中的 [`shadow_passes`](engine/render/rhi/rhi_device.h:119)、shadow pass 统计与 [`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 这类运行时绑定点可以共同用于收口判断。
 
 **验收标准：**
 - 阴影支持矩阵明确。
-- 至少一条稳定的方向光阴影回归。
-- 后续 spot / point shadow 的分解任务准备完成。
+- 至少一条稳定的方向光阴影回归；当前可落地 gate 已由 [`csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp) 覆盖 `shadow_pass` / `shadow stats` 语义，并纳入 [`engine.3d.unit`](tests/engine/CMakeLists.txt:201)，其统计口径最终落到 [`RenderStats::shadow_passes`](engine/render/rhi/rhi_device.h:119)。
+- Spot Shadow 至少要有一条静态结构门禁；当前已由 [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 与 [`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 共同固定 pass / target / 绑定点存在性，并与 [`RenderStats::shadow_passes`](engine/render/rhi/rhi_device.h:119) 一起组成阴影收口的基础观察面。
+- Point Shadow 已完成最小主线路径实现，并已通过 [`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp:159) 的点光 shadow slot 回归与 [`dse_engine_unit_tests`](bin/dse_engine_unit_tests.exe) 构建验证；后续重点转为增加更强的 shadow path 静态 / 运行时门禁。
 
 ### 4.5 地形、剔除、粒子等 3D 子系统边界对齐
 
@@ -206,6 +278,13 @@
 - [`TerrainSystem`](modules/gameplay_3d/rendering/terrain_system.h:10)
 - [`FrustumCullingSystem`](modules/gameplay_3d/rendering/frustum_culling_system.h:15)
 - [`Particle3DSystem`](modules/gameplay_3d/particles/particle3d_system.h:13)
+
+**当前进度（2026-04-12）：**
+- [x] [`terrain_system_test.cpp`](tests/modules/gameplay_3d/rendering/terrain_system_test.cpp) 已补齐 dirty terrain 重建、bbox 生成、draw batch 提交与动态 LOD 边界测试。
+- [x] [`frustum_culling_test.cpp`](tests/modules/gameplay_3d/rendering/frustum_culling_test.cpp) 已覆盖 terrain 可见 / 不可见时 [`TerrainComponent::visible`](engine/ecs/components_3d.h:230) 的写回行为。
+- [x] [`particle3d_system_test.cpp`](tests/modules/gameplay_3d/particles/particle3d_system_test.cpp) 已补齐 emitter 初始化、发射上传、disabled emitter 与 shutdown 释放的最小运行时验证。
+- [x] [`tests/engine/CMakeLists.txt`](tests/engine/CMakeLists.txt) 已将 [`terrain_system.cpp`](modules/gameplay_3d/rendering/terrain_system.cpp)、[`particle3d_system.cpp`](modules/gameplay_3d/particles/particle3d_system.cpp) 及 `[particle3d]` 测试过滤器纳入 [`engine.3d.unit`](tests/engine/CMakeLists.txt)。
+- [x] 已在可用构建目录完成 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 编译，并通过 `engine.3d.unit` 回归验证地形 / 剔除 / 粒子入口。
 
 **本周期任务：**
 - 明确这些系统属于“已接入主线”还是“实验性骨架”。
@@ -407,11 +486,11 @@ demo 周期不再承担底层功能发明职责，底层缺口原则上应在 `P
 
 ## P1：3D 运行时功能全面对齐
 
-- [~] 材质与网格渲染链路对齐（scene / runtime / draw item / OpenGL shader 已打通，待真实构建验证与材质字段支持矩阵文档补全）
-- [~] 动画系统最小工作流对齐（scene / editor 桥接已补齐 blend 参数与节点数组，待 runtime blend 边界测试收口）
-- [~] 灯光模型全面对齐（scene / editor 桥接已补齐 point / spot / sky 字段，待多灯 runtime 与参数矩阵文档收口）
-- [ ] 阴影能力主线对齐
-- [ ] 地形 / 剔除 / 粒子等子系统状态归类与验证入口补齐
+- [x] 材质与网格渲染链路对齐（scene / runtime / draw item / OpenGL shader 已打通，真实构建验证与材质字段支持矩阵文档已补齐）
+- [x] 动画系统最小工作流对齐（scene / editor 桥接与 runtime blend 边界测试已补齐，并已纳入 [`engine.3d.unit`](tests/engine/CMakeLists.txt)）
+- [x] 灯光模型全面对齐（scene / editor 桥接、多灯 runtime 回归与参数语义矩阵文档已补齐）
+- [x] 阴影能力主线对齐（Directional + CSM、Spot Shadow、Point Shadow 三条 shadow path 已接入 runtime / shader / draw item 主线，且已完成最小构建与点光 shadow slot 回归验证）
+- [x] 地形 / 剔除 / 粒子等子系统状态归类与验证入口补齐（terrain / culling / particle3d 已补最小回归入口，并通过 [`engine.3d.unit`](tests/engine/CMakeLists.txt)）
 
 ## P2：3D 渲染与资源质量收口
 
