@@ -139,11 +139,12 @@
 - **已真实参与渲染 / draw item 提交：**
   - `shader_variant`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:589) 决定 `lighting_enabled` 与材质解析路径；
   - `color` / `emissive` / `metallic` / `roughness` / `ao` / `normal_strength` / `material_alpha_cutoff`：由 [`MeshRendererComponent`](engine/ecs/components_3d.h:21) 映射到 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:52)，并由 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1166) 上传；
+  - `material_alpha_test` / `material_double_sided`：已由 [`MeshRendererComponent`](engine/ecs/components_3d.h:28) 传递到 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:60)，并纳入材质实例 / 组件 fallback 一致性解析；当前阶段属于“运行时语义已承载并可回归验证”，但尚未完全接到 OpenGL 管线状态切换；
   - `albedo_texture_handle` / `normal_texture_handle`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:648) 解析为 `texture_handle` / `normal_map_handle`；
-  - `receive_shadow`：由 [`MeshRendererComponent`](engine/ecs/components_3d.h:33) 写入 [`MeshDrawItem::receive_shadow`](engine/render/rhi/rhi_device.h:61)，并由 shader uniform `u_receive_shadow` 消费；
+  - `receive_shadow`：由 [`MeshRendererComponent`](engine/ecs/components_3d.h:35) 写入 [`MeshDrawItem::receive_shadow`](engine/render/rhi/rhi_device.h:63)，并由 shader uniform `u_receive_shadow` 消费；
   - `material_data_source` / `material_instance_id`：由 [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 控制 component fallback 与 material instance 优先级。
 - **已纳入 scene / runtime / test 一致性，但消费仍有边界说明：**
-  - `metallic_roughness_texture_handle` / `emissive_texture_handle` / `occlusion_texture_handle`：已存在于 [`MeshRendererComponent`](engine/ecs/components_3d.h:30) 与材质描述链路中，但当前 P1 文档仍应以“字段已承载，实际消费路径待继续细化”表述；
+  - `metallic_roughness_texture_handle` / `emissive_texture_handle` / `occlusion_texture_handle`：已存在于 [`MeshRendererComponent`](engine/ecs/components_3d.h:32) 与材质描述链路、scene roundtrip、Lua `.dmat` 加载路径中，但当前 OpenGL mesh shader 仍未真实采样这些贴图；
   - `visible` / `sorting_layer` / `order_in_layer`：已参与 runtime 提交筛选与排序语义，但属于渲染调度字段，不属于 PBR 材质参数本身。
 - **正式约束说明：**
   - 当前优先级为 `MaterialInstance > ComponentFallback`，并由 [`material_data_source`](engine/ecs/components_3d.h:37) 显式控制，不再依赖隐式规则；
@@ -319,9 +320,30 @@
 - 补齐 shader / RHI / draw item 之间的字段映射清单。
 - 清理临时补偿逻辑和不透明行为。
 
+**当前进度（2026-04-13）：**
+- [x] 已完成 [`RawMaterial`](engine/assets/compiler/raw_scene_data.h:52) → [`AssetManager::LoadMaterialInstanceFromDmat()`](engine/assets/asset_manager.cpp:564) → [`L_EcsSetMeshMaterial()`](engine/scripting/lua/bindings/lua_binding_ecs.cpp:685) → [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 的材质字段承载链路收口。
+- [x] 已明确 [`material_alpha_test`](engine/ecs/components_3d.h:28) / [`material_double_sided`](engine/ecs/components_3d.h:29) 当前属于“运行时语义已承载并可回归验证，但尚未完全接到 OpenGL 管线状态切换”。
+- [x] 已明确 [`metallic_roughness_texture_handle`](engine/ecs/components_3d.h:32) / [`emissive_texture_handle`](engine/ecs/components_3d.h:33) / [`occlusion_texture_handle`](engine/ecs/components_3d.h:34) 当前已进入 scene、runtime、Lua `.dmat` 与测试链路，但 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 及其内置 mesh fragment shader 仍未真实采样这些贴图。
+- [ ] 下一收口点固定为：扩展 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38)、[`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 与 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100)，让 metallic-roughness / emissive / occlusion 贴图进入真实 shader 消费路径。
+
+**当前 PBR / 材质消费边界（2026-04-13）：**
+- **已真实进入 OpenGL mesh shader / draw item 消费：**
+  - `color` / `metallic` / `roughness` / `ao` / `emissive` / `normal_strength` / `material_alpha_cutoff`；
+  - `albedo_texture_handle` / `normal_texture_handle`；
+  - `receive_shadow`；
+  - `material_data_source` / `material_instance_id` 的实例优先级解析。
+- **已纳入资源 / scene / runtime / test，但仍未真实进入 OpenGL mesh shader 采样：**
+  - `metallic_roughness_texture_handle`；
+  - `emissive_texture_handle`；
+  - `occlusion_texture_handle`。
+- **已形成运行时语义，但尚未完全绑定到 OpenGL 固定管线状态：**
+  - `material_alpha_test`；
+  - `material_double_sided`。
+
 **验收标准：**
 - 参数链路清晰可追踪。
 - 关键表现项可稳定复现。
+- 文档可直接作为下一轮 P2 实现入口，不再重复做字段边界梳理。
 
 ### 5.3 运行时回归矩阵建立
 
@@ -495,7 +517,7 @@ demo 周期不再承担底层功能发明职责，底层缺口原则上应在 `P
 ## P2：3D 渲染与资源质量收口
 
 - [ ] 资源导入与烹饪链收口
-- [ ] 渲染表现一致性收口
+- [-] 渲染表现一致性收口（材质字段承载链、真实消费边界与下一实现入口已文档化；OpenGL mesh shader 贴图真实消费仍在推进）
 - [ ] 3D 回归矩阵建立
 
 ## P3：reference demo 对齐
