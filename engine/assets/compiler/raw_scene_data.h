@@ -56,10 +56,17 @@ struct RawMaterial {
     float metallic_factor{0.0f};
     float roughness_factor{0.5f};
     glm::vec3 emissive_factor{0.0f};
-    
+    float normal_scale{1.0f};
+    float occlusion_strength{1.0f};
+    float alpha_cutoff{0.5f};
+    bool double_sided{false};
+    bool alpha_test{false};
+
     std::string base_color_texture;
     std::string normal_texture;
     std::string metallic_roughness_texture;
+    std::string emissive_texture;
+    std::string occlusion_texture;
 };
 
 struct RawAnimationChannel {

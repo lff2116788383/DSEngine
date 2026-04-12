@@ -694,32 +694,25 @@ int L_EcsSetMeshMaterial(lua_State* L) {
         // Check if second argument is a string (dmat path)
         if (lua_type(L, 2) == LUA_TSTRING) {
             std::string dmat_path = lua_tostring(L, 2);
-            // Material json 仍通过绑定上下文中的 AssetManager 读取
-            std::vector<uint8_t> file_data;
-            if (GetAssetManager().LoadFileToMemory(dmat_path, file_data)) {
-                std::string text(reinterpret_cast<const char*>(file_data.data()), file_data.size());
-                rapidjson::Document doc;
-                doc.Parse(text.c_str());
-                if (!doc.HasParseError() && doc.HasMember("materials") && doc["materials"].IsArray() && doc["materials"].Size() > 0) {
-                    const auto& mat = doc["materials"][0];
-                    if (mat.HasMember("base_color") && mat["base_color"].IsArray()) {
-                        mesh.color = glm::vec4(
-                            mat["base_color"][0].GetFloat(),
-                            mat["base_color"][1].GetFloat(),
-                            mat["base_color"][2].GetFloat(),
-                            mat["base_color"][3].GetFloat()
-                        );
-                    }
-                    if (mat.HasMember("emissive") && mat["emissive"].IsArray()) {
-                        mesh.emissive = glm::vec3(
-                            mat["emissive"][0].GetFloat(),
-                            mat["emissive"][1].GetFloat(),
-                            mat["emissive"][2].GetFloat()
-                        );
-                    }
-                    if (mat.HasMember("metallic")) mesh.metallic = mat["metallic"].GetFloat();
-                    if (mat.HasMember("roughness")) mesh.roughness = mat["roughness"].GetFloat();
-                }
+            auto material = GetAssetManager().LoadMaterialInstanceFromDmat(dmat_path);
+            if (material) {
+                mesh.material_instance_id = material->GetId();
+                mesh.material_data_source = MeshRendererComponent::MaterialDataSource::MaterialInstance;
+                mesh.shader_variant = material->GetShaderVariant();
+                mesh.color = material->GetBaseColor();
+                mesh.emissive = material->GetEmissiveColor();
+                mesh.albedo_texture_handle = material->GetTextureSlots().albedo;
+                mesh.normal_texture_handle = material->GetTextureSlots().normal;
+                mesh.metallic_roughness_texture_handle = material->GetTextureSlots().metallic_roughness;
+                mesh.emissive_texture_handle = material->GetTextureSlots().emissive;
+                mesh.occlusion_texture_handle = material->GetTextureSlots().occlusion;
+                mesh.metallic = material->GetScalarOverrides().metallic;
+                mesh.roughness = material->GetScalarOverrides().roughness;
+                mesh.ao = material->GetScalarOverrides().ao;
+                mesh.normal_strength = material->GetScalarOverrides().normal_strength;
+                mesh.material_alpha_cutoff = material->GetScalarOverrides().alpha_cutoff;
+                mesh.material_alpha_test = material->GetScalarOverrides().alpha_test;
+                mesh.material_double_sided = material->GetRasterOverrides().double_sided;
             }
             return 0;
         }

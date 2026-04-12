@@ -3,6 +3,7 @@
 #include "engine/assets/compiler/raw_scene_data.h"
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 using dse::asset::compiler::GltfImporter;
 using dse::asset::compiler::MeshCooker;
@@ -55,9 +56,19 @@ RawSceneData BuildMinimalScene() {
     RawMaterial material;
     material.name = "mat";
     material.base_color_factor = glm::vec4(0.25f, 0.5f, 0.75f, 1.0f);
+    material.metallic_factor = 0.35f;
+    material.roughness_factor = 0.65f;
+    material.emissive_factor = glm::vec3(0.1f, 0.2f, 0.3f);
+    material.normal_scale = 0.8f;
+    material.occlusion_strength = 0.45f;
+    material.alpha_cutoff = 0.33f;
+    material.double_sided = true;
+    material.alpha_test = true;
     material.base_color_texture = "base.png";
     material.normal_texture = "normal.png";
     material.metallic_roughness_texture = "mr.png";
+    material.emissive_texture = "emissive.png";
+    material.occlusion_texture = "occlusion.png";
     scene.materials.push_back(material);
 
     RawBone root;
@@ -131,4 +142,28 @@ TEST_CASE("Given_MinimalRawScene_When_CookersRun_Then_OutputFilesAreCreated", "[
     REQUIRE(std::filesystem::file_size(dmat_path) > 0);
     REQUIRE(std::filesystem::file_size(danim_path) > 0);
     REQUIRE(std::filesystem::file_size(dskel_path) > 0);
+}
+
+TEST_CASE("Given_MinimalRawScene_When_CookedToDmat_Then_ExtendedMaterialFieldsAreSerialized", "[engine][unit][asset_compiler][dmat]") {
+    MeshCooker cooker;
+    RawSceneData scene = BuildMinimalScene();
+    const auto dir = MakeImporterTempDir();
+    const auto dmat_path = dir / "material_fields.dmat";
+    ScopedFileCleanup cleanup_mat(dmat_path);
+
+    REQUIRE(cooker.CookToDmat(scene, dir.string(), "material_fields"));
+
+    std::ifstream in(dmat_path);
+    REQUIRE(in.is_open());
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    const std::string text = ss.str();
+
+    REQUIRE(text.find("\"normal_scale\": 0.8") != std::string::npos);
+    REQUIRE(text.find("\"occlusion_strength\": 0.45") != std::string::npos);
+    REQUIRE(text.find("\"alpha_cutoff\": 0.33") != std::string::npos);
+    REQUIRE(text.find("\"double_sided\": true") != std::string::npos);
+    REQUIRE(text.find("\"alpha_test\": true") != std::string::npos);
+    REQUIRE(text.find("\"emissive_texture\": \"emissive.png\"") != std::string::npos);
+    REQUIRE(text.find("\"occlusion_texture\": \"occlusion.png\"") != std::string::npos);
 }

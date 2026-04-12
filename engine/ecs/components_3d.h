@@ -25,6 +25,8 @@ struct MeshRendererComponent {
     float ao = 1.0f;
     float normal_strength = 1.0f;
     float material_alpha_cutoff = 0.5f;
+    bool material_alpha_test = false;
+    bool material_double_sided = false;
     unsigned int albedo_texture_handle = 0;
     unsigned int normal_texture_handle = 0;
     unsigned int metallic_roughness_texture_handle = 0;

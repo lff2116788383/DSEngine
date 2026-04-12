@@ -67,6 +67,8 @@ TEST_CASE("Given_MeshRendererPrefersComponentFallback_When_Rendering_Then_Compon
     mesh.ao = 0.85f;
     mesh.normal_strength = 1.4f;
     mesh.material_alpha_cutoff = 0.61f;
+    mesh.material_alpha_test = true;
+    mesh.material_double_sided = true;
     mesh.albedo_texture_handle = 21;
     mesh.normal_texture_handle = 22;
     mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
@@ -87,6 +89,8 @@ TEST_CASE("Given_MeshRendererPrefersComponentFallback_When_Rendering_Then_Compon
     REQUIRE(item.material_ao == Approx(0.85f));
     REQUIRE(item.material_normal_strength == Approx(1.4f));
     REQUIRE(item.material_alpha_cutoff == Approx(0.61f));
+    REQUIRE(item.material_alpha_test);
+    REQUIRE(item.material_double_sided);
     REQUIRE_FALSE(item.lighting_enabled);
 }
 
@@ -113,7 +117,9 @@ TEST_CASE("Given_MeshRendererPrefersMaterialInstance_When_Rendering_Then_Materia
     scalars.ao = 0.73f;
     scalars.normal_strength = 1.8f;
     scalars.alpha_cutoff = 0.27f;
+    scalars.alpha_test = true;
     material->SetScalarOverrides(scalars);
+    material->SetRasterOverrides(MaterialAsset::RasterOverrides{true});
 
     const auto entity = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(entity);
@@ -153,6 +159,8 @@ TEST_CASE("Given_MeshRendererPrefersMaterialInstance_When_Rendering_Then_Materia
     REQUIRE(item.material_ao == Approx(0.73f));
     REQUIRE(item.material_normal_strength == Approx(1.8f));
     REQUIRE(item.material_alpha_cutoff == Approx(0.27f));
+    REQUIRE(item.material_alpha_test);
+    REQUIRE(item.material_double_sided);
     REQUIRE(item.lighting_enabled);
 }
 

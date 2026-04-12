@@ -24,6 +24,8 @@ TEST_CASE("Given_DefaultMeshRendererComponent_When_Created_Then_PBRParametersAre
     REQUIRE(mesh_renderer.receive_shadow == true);
     REQUIRE(mesh_renderer.visible == true);
     REQUIRE(mesh_renderer.material_alpha_cutoff == Approx(0.5f));
+    REQUIRE_FALSE(mesh_renderer.material_alpha_test);
+    REQUIRE_FALSE(mesh_renderer.material_double_sided);
     REQUIRE(mesh_renderer.sorting_layer == 0);
     REQUIRE(mesh_renderer.order_in_layer == 0);
     REQUIRE(mesh_renderer.material_data_source == MeshRendererComponent::MaterialDataSource::ComponentFallback);
@@ -38,12 +40,16 @@ TEST_CASE("Given_MeshRendererComponent_When_ModifyingPBRParameters_Then_ValuesAr
     mesh_renderer.emissive = glm::vec3(100.0f, 100.0f, 100.0f); // 高强度自发光
     mesh_renderer.albedo_texture_handle = 301;
     mesh_renderer.normal_texture_handle = 302;
+    mesh_renderer.material_alpha_test = true;
+    mesh_renderer.material_double_sided = true;
     
     REQUIRE(mesh_renderer.metallic == 1.0f);
     REQUIRE(mesh_renderer.roughness == 0.0f);
     REQUIRE(mesh_renderer.emissive.x == 100.0f);
     REQUIRE(mesh_renderer.albedo_texture_handle == 301);
     REQUIRE(mesh_renderer.normal_texture_handle == 302);
+    REQUIRE(mesh_renderer.material_alpha_test);
+    REQUIRE(mesh_renderer.material_double_sided);
 }
 
 // 反向测试：测试异常属性赋值的安全保持

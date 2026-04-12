@@ -628,6 +628,12 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         const MaterialBlendMode resolved_blend_mode = prefer_material_instance
             ? material_instance->GetBlendMode()
             : MaterialBlendMode::Opaque;
+        const bool resolved_alpha_test = prefer_material_instance
+            ? material_instance->GetScalarOverrides().alpha_test
+            : mesh_renderer.material_alpha_test;
+        const bool resolved_double_sided = prefer_material_instance
+            ? material_instance->GetRasterOverrides().double_sided
+            : mesh_renderer.material_double_sided;
         
         MeshDrawItem item;
         item.model = transform.local_to_world;
@@ -667,6 +673,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.material_ao = resolved_scalars.ao;
         item.material_normal_strength = resolved_scalars.normal_strength;
         item.material_alpha_cutoff = resolved_scalars.alpha_cutoff;
+        item.material_alpha_test = resolved_alpha_test;
+        item.material_double_sided = resolved_double_sided;
         item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;

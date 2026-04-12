@@ -153,6 +153,11 @@ public:
         float ao = 1.0f;
         float normal_strength = 1.0f;
         float alpha_cutoff = 0.5f;
+        bool alpha_test = false;
+    };
+
+    struct RasterOverrides {
+        bool double_sided = false;
     };
 
     MaterialAsset(unsigned int id, const std::string& name);
@@ -167,6 +172,7 @@ public:
     const glm::vec3& GetEmissiveColor() const { return emissive_color_; }
     const TextureSlots& GetTextureSlots() const { return texture_slots_; }
     const ScalarOverrides& GetScalarOverrides() const { return scalar_overrides_; }
+    const RasterOverrides& GetRasterOverrides() const { return raster_overrides_; }
     /**
      * @brief 获取混合模式
      * @return 材质当前的混合模式枚举
@@ -202,6 +208,7 @@ public:
     void SetEmissiveColor(const glm::vec3& emissive_color) { emissive_color_ = emissive_color; }
     void SetTextureSlots(const TextureSlots& texture_slots) { texture_slots_ = texture_slots; }
     void SetScalarOverrides(const ScalarOverrides& scalar_overrides) { scalar_overrides_ = scalar_overrides; }
+    void SetRasterOverrides(const RasterOverrides& raster_overrides) { raster_overrides_ = raster_overrides; }
     /**
      * @brief 设置混合模式
      * @param blend_mode 混合模式枚举
@@ -219,6 +226,7 @@ private:
     glm::vec3 emissive_color_ = glm::vec3(0.0f);
     TextureSlots texture_slots_;
     ScalarOverrides scalar_overrides_;
+    RasterOverrides raster_overrides_;
     MaterialBlendMode blend_mode_ = MaterialBlendMode::Alpha;
 };
 
@@ -380,6 +388,7 @@ public:
      * // AssetManager::CreateMaterialInstance(...);
      */
     std::shared_ptr<MaterialAsset> CreateMaterialInstance(const std::string& name);
+    std::shared_ptr<MaterialAsset> LoadMaterialInstanceFromDmat(const std::string& dmat_path, std::size_t material_index = 0);
     /**
      * @brief 执行 GetMaterialInstance 操作
      * @param material_id 参数说明

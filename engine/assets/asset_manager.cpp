@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
+#include <rapidjson/document.h>
 #include "bundle/bundle.h"
 extern "C" {
 #include "aes.h"
@@ -557,6 +558,98 @@ std::shared_ptr<MaterialAsset> AssetManager::CreateMaterialInstance(const std::s
     unsigned int material_id = next_material_id_++;
     auto material = std::make_shared<MaterialAsset>(material_id, name);
     materials_[material_id] = material;
+    return material;
+}
+
+std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const std::string& dmat_path, std::size_t material_index) {
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(dmat_path, file_data)) {
+        return nullptr;
+    }
+
+    rapidjson::Document doc;
+    doc.Parse(reinterpret_cast<const char*>(file_data.data()), file_data.size());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("materials") || !doc["materials"].IsArray()) {
+        return nullptr;
+    }
+
+    const auto& materials = doc["materials"];
+    if (material_index >= materials.Size()) {
+        return nullptr;
+    }
+
+    const auto& mat = materials[static_cast<rapidjson::SizeType>(material_index)];
+    if (!mat.IsObject()) {
+        return nullptr;
+    }
+
+    const std::string name = (mat.HasMember("name") && mat["name"].IsString())
+        ? mat["name"].GetString()
+        : (std::filesystem::path(dmat_path).stem().string() + "_" + std::to_string(material_index));
+    auto material = CreateMaterialInstance(name);
+    if (!material) {
+        return nullptr;
+    }
+
+    if (mat.HasMember("base_color") && mat["base_color"].IsArray() && mat["base_color"].Size() >= 4) {
+        material->SetBaseColor(glm::vec4(
+            mat["base_color"][0].GetFloat(),
+            mat["base_color"][1].GetFloat(),
+            mat["base_color"][2].GetFloat(),
+            mat["base_color"][3].GetFloat()));
+    }
+    if (mat.HasMember("emissive") && mat["emissive"].IsArray() && mat["emissive"].Size() >= 3) {
+        material->SetEmissiveColor(glm::vec3(
+            mat["emissive"][0].GetFloat(),
+            mat["emissive"][1].GetFloat(),
+            mat["emissive"][2].GetFloat()));
+    }
+    MaterialAsset::RasterOverrides raster = material->GetRasterOverrides();
+    if (mat.HasMember("double_sided") && mat["double_sided"].IsBool()) {
+        raster.double_sided = mat["double_sided"].GetBool();
+    }
+    material->SetRasterOverrides(raster);
+    material->SetBlendMode(MaterialBlendMode::Opaque);
+
+    MaterialAsset::ScalarOverrides scalars = material->GetScalarOverrides();
+    if (mat.HasMember("metallic") && mat["metallic"].IsNumber()) {
+        scalars.metallic = mat["metallic"].GetFloat();
+    }
+    if (mat.HasMember("roughness") && mat["roughness"].IsNumber()) {
+        scalars.roughness = mat["roughness"].GetFloat();
+    }
+    if (mat.HasMember("occlusion_strength") && mat["occlusion_strength"].IsNumber()) {
+        scalars.ao = mat["occlusion_strength"].GetFloat();
+    }
+    if (mat.HasMember("normal_scale") && mat["normal_scale"].IsNumber()) {
+        scalars.normal_strength = mat["normal_scale"].GetFloat();
+    }
+    if (mat.HasMember("alpha_cutoff") && mat["alpha_cutoff"].IsNumber()) {
+        scalars.alpha_cutoff = mat["alpha_cutoff"].GetFloat();
+    }
+    if (mat.HasMember("alpha_test") && mat["alpha_test"].IsBool()) {
+        scalars.alpha_test = mat["alpha_test"].GetBool();
+    }
+    material->SetScalarOverrides(scalars);
+
+    MaterialAsset::TextureSlots slots = material->GetTextureSlots();
+    auto try_load_texture = [this](const rapidjson::Value& object, const char* key) -> unsigned int {
+        if (!object.HasMember(key) || !object[key].IsString()) {
+            return 0;
+        }
+        auto texture = LoadTexture(object[key].GetString());
+        return texture ? texture->GetHandle() : 0;
+    };
+    slots.albedo = try_load_texture(mat, "base_color_texture");
+    slots.normal = try_load_texture(mat, "normal_texture");
+    slots.metallic_roughness = try_load_texture(mat, "metallic_roughness_texture");
+    slots.emissive = try_load_texture(mat, "emissive_texture");
+    slots.occlusion = try_load_texture(mat, "occlusion_texture");
+    material->SetTextureSlots(slots);
+    if (slots.albedo != 0) {
+        material->SetTextureHandle(slots.albedo);
+    }
+
     return material;
 }
 

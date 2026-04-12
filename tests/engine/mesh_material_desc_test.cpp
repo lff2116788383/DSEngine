@@ -20,6 +20,8 @@ TEST_CASE("Given_MeshRendererComponent_When_AssigningMaterialFields_Then_PbrAndS
     mesh.receive_shadow = false;
     mesh.visible = true;
     mesh.material_alpha_cutoff = 0.33f;
+    mesh.material_alpha_test = true;
+    mesh.material_double_sided = true;
     mesh.sorting_layer = 2;
     mesh.order_in_layer = 7;
     mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
@@ -40,6 +42,8 @@ TEST_CASE("Given_MeshRendererComponent_When_AssigningMaterialFields_Then_PbrAndS
     REQUIRE(mesh.receive_shadow == false);
     REQUIRE(mesh.visible == true);
     REQUIRE(mesh.material_alpha_cutoff == Approx(0.33f));
+    REQUIRE(mesh.material_alpha_test == true);
+    REQUIRE(mesh.material_double_sided == true);
     REQUIRE(mesh.sorting_layer == 2);
     REQUIRE(mesh.order_in_layer == 7);
     REQUIRE(mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);
@@ -63,6 +67,8 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     source.receive_shadow = false;
     source.visible = false;
     source.material_alpha_cutoff = 0.66f;
+    source.material_alpha_test = true;
+    source.material_double_sided = true;
     source.sorting_layer = 4;
     source.order_in_layer = 9;
     source.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
@@ -84,6 +90,8 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     mesh.receive_shadow = source.receive_shadow;
     mesh.visible = source.visible;
     mesh.material_alpha_cutoff = source.material_alpha_cutoff;
+    mesh.material_alpha_test = source.material_alpha_test;
+    mesh.material_double_sided = source.material_double_sided;
     mesh.sorting_layer = source.sorting_layer;
     mesh.order_in_layer = source.order_in_layer;
     mesh.material_data_source = source.material_data_source;
@@ -104,6 +112,8 @@ TEST_CASE("Given_MeshRendererComponent_When_CopyingMaterialFields_Then_Component
     REQUIRE(mesh.receive_shadow == false);
     REQUIRE(mesh.visible == false);
     REQUIRE(mesh.material_alpha_cutoff == Approx(0.66f));
+    REQUIRE(mesh.material_alpha_test == true);
+    REQUIRE(mesh.material_double_sided == true);
     REQUIRE(mesh.sorting_layer == 4);
     REQUIRE(mesh.order_in_layer == 9);
     REQUIRE(mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);

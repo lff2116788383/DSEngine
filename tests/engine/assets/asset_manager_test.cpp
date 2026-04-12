@@ -7,6 +7,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <sstream>
 
 namespace {
 
@@ -188,4 +189,71 @@ TEST_CASE("Given_ReferenceDemo159StyleMaterials_When_RecreatedByIdAndUpdated_The
     REQUIRE(fetched1->GetScalarOverrides().metallic == Approx(0.12f));
     REQUIRE(fetched1->GetScalarOverrides().roughness == Approx(0.78f));
     REQUIRE(fetched1->GetEmissiveColor().x == Approx(0.1f));
+}
+
+TEST_CASE("Given_DmatMaterialFile_When_LoadMaterialInstanceFromDmat_Then_RuntimeMaterialFieldsAreMapped", "[engine][assets][material][dmat]") {
+    AssetManager asset_manager;
+
+    const auto root = MakeTempDir("dmat_load");
+    const auto data_root = root / "data_root";
+    std::error_code ec;
+    std::filesystem::create_directories(data_root / "textures", ec);
+    WriteBinaryFile(data_root / "textures" / "albedo.bin", {1, 2, 3, 4});
+    WriteBinaryFile(data_root / "textures" / "normal.bin", {5, 6, 7, 8});
+    WriteBinaryFile(data_root / "textures" / "mr.bin", {9, 10, 11, 12});
+    WriteBinaryFile(data_root / "textures" / "emissive.bin", {13, 14, 15, 16});
+    WriteBinaryFile(data_root / "textures" / "occlusion.bin", {17, 18, 19, 20});
+    asset_manager.ConfigureDataRoot(data_root.string());
+
+    const auto dmat_path = data_root / "materials.dmat";
+    {
+        std::ofstream out(dmat_path);
+        REQUIRE(out.is_open());
+        out << "{\n"
+               "  \"materials\": [\n"
+               "    {\n"
+               "      \"name\": \"runtime_mat\",\n"
+               "      \"base_color\": [0.2, 0.4, 0.6, 1.0],\n"
+               "      \"metallic\": 0.9,\n"
+               "      \"roughness\": 0.15,\n"
+               "      \"emissive\": [0.1, 0.3, 0.5],\n"
+               "      \"normal_scale\": 1.7,\n"
+               "      \"occlusion_strength\": 0.55,\n"
+               "      \"alpha_cutoff\": 0.25,\n"
+               "      \"double_sided\": true,\n"
+               "      \"alpha_test\": true,\n"
+               "      \"base_color_texture\": \"textures/albedo.bin\",\n"
+               "      \"normal_texture\": \"textures/normal.bin\",\n"
+               "      \"metallic_roughness_texture\": \"textures/mr.bin\",\n"
+               "      \"emissive_texture\": \"textures/emissive.bin\",\n"
+               "      \"occlusion_texture\": \"textures/occlusion.bin\"\n"
+               "    }\n"
+               "  ]\n"
+               "}\n";
+    }
+
+    auto material = asset_manager.LoadMaterialInstanceFromDmat("materials.dmat");
+    REQUIRE(material != nullptr);
+    REQUIRE(material->GetName() == "runtime_mat");
+    REQUIRE(material->GetBaseColor().x == Approx(0.2f));
+    REQUIRE(material->GetBaseColor().y == Approx(0.4f));
+    REQUIRE(material->GetBaseColor().z == Approx(0.6f));
+    REQUIRE(material->GetEmissiveColor().x == Approx(0.1f));
+    REQUIRE(material->GetEmissiveColor().y == Approx(0.3f));
+    REQUIRE(material->GetEmissiveColor().z == Approx(0.5f));
+    REQUIRE(material->GetScalarOverrides().metallic == Approx(0.9f));
+    REQUIRE(material->GetScalarOverrides().roughness == Approx(0.15f));
+    REQUIRE(material->GetScalarOverrides().ao == Approx(0.55f));
+    REQUIRE(material->GetScalarOverrides().normal_strength == Approx(1.7f));
+    REQUIRE(material->GetScalarOverrides().alpha_cutoff == Approx(0.25f));
+    REQUIRE(material->GetScalarOverrides().alpha_test);
+    REQUIRE(material->GetRasterOverrides().double_sided);
+    REQUIRE(material->GetTextureSlots().albedo != 0);
+    REQUIRE(material->GetTextureSlots().normal != 0);
+    REQUIRE(material->GetTextureSlots().metallic_roughness != 0);
+    REQUIRE(material->GetTextureSlots().emissive != 0);
+    REQUIRE(material->GetTextureSlots().occlusion != 0);
+    REQUIRE(material->GetTextureHandle() == material->GetTextureSlots().albedo);
+
+    std::filesystem::remove_all(root, ec);
 }

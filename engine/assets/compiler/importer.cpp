@@ -55,6 +55,11 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
         if (emissive.size() == 3) {
             raw_mat.emissive_factor = glm::vec3(emissive[0], emissive[1], emissive[2]);
         }
+        raw_mat.normal_scale = static_cast<float>(mat.normalTexture.scale);
+        raw_mat.occlusion_strength = static_cast<float>(mat.occlusionTexture.strength);
+        raw_mat.alpha_cutoff = static_cast<float>(mat.alphaCutoff);
+        raw_mat.double_sided = mat.doubleSided;
+        raw_mat.alpha_test = mat.alphaMode == "MASK";
 
         // 提取纹理
         if (mat.pbrMetallicRoughness.baseColorTexture.index >= 0) {
@@ -81,6 +86,24 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 int img_idx = model.textures[tex_idx].source;
                 if (img_idx >= 0 && img_idx < model.images.size()) {
                     raw_mat.metallic_roughness_texture = model.images[img_idx].uri;
+                }
+            }
+        }
+        if (mat.emissiveTexture.index >= 0) {
+            int tex_idx = mat.emissiveTexture.index;
+            if (tex_idx < model.textures.size()) {
+                int img_idx = model.textures[tex_idx].source;
+                if (img_idx >= 0 && img_idx < model.images.size()) {
+                    raw_mat.emissive_texture = model.images[img_idx].uri;
+                }
+            }
+        }
+        if (mat.occlusionTexture.index >= 0) {
+            int tex_idx = mat.occlusionTexture.index;
+            if (tex_idx < model.textures.size()) {
+                int img_idx = model.textures[tex_idx].source;
+                if (img_idx >= 0 && img_idx < model.images.size()) {
+                    raw_mat.occlusion_texture = model.images[img_idx].uri;
                 }
             }
         }
@@ -456,12 +479,19 @@ bool MeshCooker::CookToDmat(const RawSceneData& scene, const std::string& output
                                        << mat.base_color_factor.a << "],\n";
         out << "      \"metallic\": " << mat.metallic_factor << ",\n";
         out << "      \"roughness\": " << mat.roughness_factor << ",\n";
-        out << "      \"emissive\": [" << mat.emissive_factor.r << ", " 
-                                     << mat.emissive_factor.g << ", " 
+        out << "      \"emissive\": [" << mat.emissive_factor.r << ", "
+                                     << mat.emissive_factor.g << ", "
                                      << mat.emissive_factor.b << "],\n";
+        out << "      \"normal_scale\": " << mat.normal_scale << ",\n";
+        out << "      \"occlusion_strength\": " << mat.occlusion_strength << ",\n";
+        out << "      \"alpha_cutoff\": " << mat.alpha_cutoff << ",\n";
+        out << "      \"double_sided\": " << (mat.double_sided ? "true" : "false") << ",\n";
+        out << "      \"alpha_test\": " << (mat.alpha_test ? "true" : "false") << ",\n";
         out << "      \"base_color_texture\": \"" << mat.base_color_texture << "\",\n";
         out << "      \"normal_texture\": \"" << mat.normal_texture << "\",\n";
-        out << "      \"metallic_roughness_texture\": \"" << mat.metallic_roughness_texture << "\"\n";
+        out << "      \"metallic_roughness_texture\": \"" << mat.metallic_roughness_texture << "\",\n";
+        out << "      \"emissive_texture\": \"" << mat.emissive_texture << "\",\n";
+        out << "      \"occlusion_texture\": \"" << mat.occlusion_texture << "\"\n";
         out << "    }";
         if (i < scene.materials.size() - 1) out << ",";
         out << "\n";

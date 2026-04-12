@@ -143,6 +143,8 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     mesh.receive_shadow = true;
     mesh.visible = true;
     mesh.material_alpha_cutoff = 0.42f;
+    mesh.material_alpha_test = true;
+    mesh.material_double_sided = true;
     mesh.sorting_layer = 3;
     mesh.order_in_layer = 8;
     mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
@@ -270,6 +272,8 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_mesh.receive_shadow);
     REQUIRE(loaded_mesh.visible);
     REQUIRE(loaded_mesh.material_alpha_cutoff == Approx(0.42f));
+    REQUIRE(loaded_mesh.material_alpha_test);
+    REQUIRE(loaded_mesh.material_double_sided);
     REQUIRE(loaded_mesh.sorting_layer == 3);
     REQUIRE(loaded_mesh.order_in_layer == 8);
     REQUIRE(loaded_mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);

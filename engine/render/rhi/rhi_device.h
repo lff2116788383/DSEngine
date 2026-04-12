@@ -57,6 +57,8 @@ struct MeshDrawItem {
     glm::vec3 material_emissive = glm::vec3(0.0f);
     float material_normal_strength = 1.0f;
     float material_alpha_cutoff = 0.5f;
+    bool material_alpha_test = false;
+    bool material_double_sided = false;
     bool material_uses_instance_data = false;
     bool receive_shadow = true;
 

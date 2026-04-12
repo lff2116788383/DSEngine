@@ -146,6 +146,8 @@ bool Scene::Serialize(const std::string& filepath) {
             mesh_json.AddMember("material_instance_id", mesh.material_instance_id, allocator);
             mesh_json.AddMember("shader_variant", rapidjson::Value(mesh.shader_variant.c_str(), allocator), allocator);
             mesh_json.AddMember("material_alpha_cutoff", mesh.material_alpha_cutoff, allocator);
+            mesh_json.AddMember("material_alpha_test", mesh.material_alpha_test, allocator);
+            mesh_json.AddMember("material_double_sided", mesh.material_double_sided, allocator);
             mesh_json.AddMember("sorting_layer", mesh.sorting_layer, allocator);
             mesh_json.AddMember("order_in_layer", mesh.order_in_layer, allocator);
             mesh_json.AddMember("material_data_source", static_cast<int>(mesh.material_data_source), allocator);
@@ -527,6 +529,12 @@ bool Scene::Deserialize(const std::string& filepath) {
             }
             if (mesh_json.HasMember("material_alpha_cutoff") && mesh_json["material_alpha_cutoff"].IsNumber()) {
                 mesh.material_alpha_cutoff = mesh_json["material_alpha_cutoff"].GetFloat();
+            }
+            if (mesh_json.HasMember("material_alpha_test") && mesh_json["material_alpha_test"].IsBool()) {
+                mesh.material_alpha_test = mesh_json["material_alpha_test"].GetBool();
+            }
+            if (mesh_json.HasMember("material_double_sided") && mesh_json["material_double_sided"].IsBool()) {
+                mesh.material_double_sided = mesh_json["material_double_sided"].GetBool();
             }
             if (mesh_json.HasMember("albedo_texture_handle") && mesh_json["albedo_texture_handle"].IsUint()) {
                 mesh.albedo_texture_handle = mesh_json["albedo_texture_handle"].GetUint();
