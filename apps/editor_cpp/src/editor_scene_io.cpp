@@ -391,8 +391,34 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             WriteVec3(light_obj, "color", light.color, allocator);
             light_obj.AddMember("intensity", light.intensity, allocator);
             light_obj.AddMember("radius", light.radius, allocator);
+            light_obj.AddMember("falloff", light.falloff, allocator);
             light_obj.AddMember("cast_shadow", light.cast_shadow, allocator);
             ent_obj.AddMember("point_light", light_obj, allocator);
+        }
+
+        if (registry.all_of<dse::SpotLightComponent>(entity)) {
+            auto& light = registry.get<dse::SpotLightComponent>(entity);
+            rapidjson::Value light_obj(rapidjson::kObjectType);
+            light_obj.AddMember("enabled", light.enabled, allocator);
+            WriteVec3(light_obj, "color", light.color, allocator);
+            WriteVec3(light_obj, "direction", light.direction, allocator);
+            light_obj.AddMember("intensity", light.intensity, allocator);
+            light_obj.AddMember("radius", light.radius, allocator);
+            light_obj.AddMember("falloff", light.falloff, allocator);
+            light_obj.AddMember("inner_cone_angle", light.inner_cone_angle, allocator);
+            light_obj.AddMember("outer_cone_angle", light.outer_cone_angle, allocator);
+            light_obj.AddMember("cast_shadow", light.cast_shadow, allocator);
+            ent_obj.AddMember("spot_light", light_obj, allocator);
+        }
+
+        if (registry.all_of<dse::SkyLightComponent>(entity)) {
+            auto& light = registry.get<dse::SkyLightComponent>(entity);
+            rapidjson::Value light_obj(rapidjson::kObjectType);
+            light_obj.AddMember("enabled", light.enabled, allocator);
+            WriteVec3(light_obj, "up_color", light.up_color, allocator);
+            WriteVec3(light_obj, "down_color", light.down_color, allocator);
+            light_obj.AddMember("intensity", light.intensity, allocator);
+            ent_obj.AddMember("sky_light", light_obj, allocator);
         }
 
         if (registry.all_of<dse::SkyboxComponent>(entity)) {
@@ -413,6 +439,21 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             animator_obj.AddMember("speed", animator.speed, allocator);
             animator_obj.AddMember("loop", animator.loop, allocator);
             animator_obj.AddMember("use_anim_tree", animator.use_anim_tree, allocator);
+            animator_obj.AddMember("blend_parameter", rapidjson::Value(animator.blend_parameter.c_str(), allocator).Move(), allocator);
+            animator_obj.AddMember("blend_parameter_value", animator.blend_parameter_value, allocator);
+            rapidjson::Value blend_nodes(rapidjson::kArrayType);
+            for (const auto& node : animator.blend_nodes) {
+                rapidjson::Value node_obj(rapidjson::kObjectType);
+                node_obj.AddMember("name", rapidjson::Value(node.name.c_str(), allocator).Move(), allocator);
+                node_obj.AddMember("danim_path", rapidjson::Value(node.danim_path.c_str(), allocator).Move(), allocator);
+                node_obj.AddMember("current_time", node.current_time, allocator);
+                node_obj.AddMember("speed", node.speed, allocator);
+                node_obj.AddMember("loop", node.loop, allocator);
+                node_obj.AddMember("weight", node.weight, allocator);
+                node_obj.AddMember("threshold", node.threshold, allocator);
+                blend_nodes.PushBack(node_obj, allocator);
+            }
+            animator_obj.AddMember("blend_nodes", blend_nodes, allocator);
             ent_obj.AddMember("animator3d", animator_obj, allocator);
         }
 
@@ -704,7 +745,31 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             ReadVec3(light_obj, "color", light.color);
             if (light_obj.HasMember("intensity") && light_obj["intensity"].IsNumber()) light.intensity = light_obj["intensity"].GetFloat();
             if (light_obj.HasMember("radius") && light_obj["radius"].IsNumber()) light.radius = light_obj["radius"].GetFloat();
+            if (light_obj.HasMember("falloff") && light_obj["falloff"].IsNumber()) light.falloff = light_obj["falloff"].GetFloat();
             if (light_obj.HasMember("cast_shadow") && light_obj["cast_shadow"].IsBool()) light.cast_shadow = light_obj["cast_shadow"].GetBool();
+        }
+
+        if (v.HasMember("spot_light") && v["spot_light"].IsObject()) {
+            auto& light_obj = v["spot_light"];
+            auto& light = registry.emplace<dse::SpotLightComponent>(entity);
+            if (light_obj.HasMember("enabled") && light_obj["enabled"].IsBool()) light.enabled = light_obj["enabled"].GetBool();
+            ReadVec3(light_obj, "color", light.color);
+            ReadVec3(light_obj, "direction", light.direction);
+            if (light_obj.HasMember("intensity") && light_obj["intensity"].IsNumber()) light.intensity = light_obj["intensity"].GetFloat();
+            if (light_obj.HasMember("radius") && light_obj["radius"].IsNumber()) light.radius = light_obj["radius"].GetFloat();
+            if (light_obj.HasMember("falloff") && light_obj["falloff"].IsNumber()) light.falloff = light_obj["falloff"].GetFloat();
+            if (light_obj.HasMember("inner_cone_angle") && light_obj["inner_cone_angle"].IsNumber()) light.inner_cone_angle = light_obj["inner_cone_angle"].GetFloat();
+            if (light_obj.HasMember("outer_cone_angle") && light_obj["outer_cone_angle"].IsNumber()) light.outer_cone_angle = light_obj["outer_cone_angle"].GetFloat();
+            if (light_obj.HasMember("cast_shadow") && light_obj["cast_shadow"].IsBool()) light.cast_shadow = light_obj["cast_shadow"].GetBool();
+        }
+
+        if (v.HasMember("sky_light") && v["sky_light"].IsObject()) {
+            auto& light_obj = v["sky_light"];
+            auto& light = registry.emplace<dse::SkyLightComponent>(entity);
+            if (light_obj.HasMember("enabled") && light_obj["enabled"].IsBool()) light.enabled = light_obj["enabled"].GetBool();
+            ReadVec3(light_obj, "up_color", light.up_color);
+            ReadVec3(light_obj, "down_color", light.down_color);
+            if (light_obj.HasMember("intensity") && light_obj["intensity"].IsNumber()) light.intensity = light_obj["intensity"].GetFloat();
         }
 
         if (v.HasMember("skybox") && v["skybox"].IsObject()) {
@@ -724,6 +789,24 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             if (animator_obj.HasMember("speed") && animator_obj["speed"].IsNumber()) animator.speed = animator_obj["speed"].GetFloat();
             if (animator_obj.HasMember("loop") && animator_obj["loop"].IsBool()) animator.loop = animator_obj["loop"].GetBool();
             if (animator_obj.HasMember("use_anim_tree") && animator_obj["use_anim_tree"].IsBool()) animator.use_anim_tree = animator_obj["use_anim_tree"].GetBool();
+            if (animator_obj.HasMember("blend_parameter") && animator_obj["blend_parameter"].IsString()) animator.blend_parameter = animator_obj["blend_parameter"].GetString();
+            if (animator_obj.HasMember("blend_parameter_value") && animator_obj["blend_parameter_value"].IsNumber()) animator.blend_parameter_value = animator_obj["blend_parameter_value"].GetFloat();
+            if (animator_obj.HasMember("blend_nodes") && animator_obj["blend_nodes"].IsArray()) {
+                for (const auto& node_obj : animator_obj["blend_nodes"].GetArray()) {
+                    if (!node_obj.IsObject()) {
+                        continue;
+                    }
+                    dse::AnimBlendNode node;
+                    if (node_obj.HasMember("name") && node_obj["name"].IsString()) node.name = node_obj["name"].GetString();
+                    if (node_obj.HasMember("danim_path") && node_obj["danim_path"].IsString()) node.danim_path = node_obj["danim_path"].GetString();
+                    if (node_obj.HasMember("current_time") && node_obj["current_time"].IsNumber()) node.current_time = node_obj["current_time"].GetFloat();
+                    if (node_obj.HasMember("speed") && node_obj["speed"].IsNumber()) node.speed = node_obj["speed"].GetFloat();
+                    if (node_obj.HasMember("loop") && node_obj["loop"].IsBool()) node.loop = node_obj["loop"].GetBool();
+                    if (node_obj.HasMember("weight") && node_obj["weight"].IsNumber()) node.weight = node_obj["weight"].GetFloat();
+                    if (node_obj.HasMember("threshold") && node_obj["threshold"].IsNumber()) node.threshold = node_obj["threshold"].GetFloat();
+                    animator.blend_nodes.push_back(std::move(node));
+                }
+            }
             animator.state_machine.reset();
             animator.final_bone_matrices.clear();
         }

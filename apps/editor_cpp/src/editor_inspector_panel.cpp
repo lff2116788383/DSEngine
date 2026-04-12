@@ -293,6 +293,55 @@ void DrawPointLightSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##ptlight_color", glm::value_ptr(light.color)));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##ptlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##ptlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f));
+    INSPECTOR_PROPERTY("Falloff", ImGui::DragFloat("##ptlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f));
+    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##ptlight_shadow", &light.cast_shadow));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawSpotLightSection(EditorInspectorPanelContext& context) {
+    if (!context.registry.all_of<dse::SpotLightComponent>(context.selected_entity)) {
+        return;
+    }
+
+    auto& light = context.registry.get<dse::SpotLightComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader("Spot Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Columns(2, "spotlight_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##spotlight_enabled", &light.enabled));
+    INSPECTOR_PROPERTY("Direction", ImGui::DragFloat3("##spotlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f));
+    INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##spotlight_color", glm::value_ptr(light.color)));
+    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##spotlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##spotlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f));
+    INSPECTOR_PROPERTY("Falloff", ImGui::DragFloat("##spotlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f));
+    INSPECTOR_PROPERTY("Inner Cone", ImGui::DragFloat("##spotlight_inner", &light.inner_cone_angle, 0.25f, 0.0f, 89.0f));
+    INSPECTOR_PROPERTY("Outer Cone", ImGui::DragFloat("##spotlight_outer", &light.outer_cone_angle, 0.25f, 0.0f, 89.0f));
+    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##spotlight_shadow", &light.cast_shadow));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawSkyLightSection(EditorInspectorPanelContext& context) {
+    if (!context.registry.all_of<dse::SkyLightComponent>(context.selected_entity)) {
+        return;
+    }
+
+    auto& light = context.registry.get<dse::SkyLightComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader("Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Columns(2, "skylight_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##skylight_enabled", &light.enabled));
+    INSPECTOR_PROPERTY("Up Color", ImGui::ColorEdit3("##skylight_up", glm::value_ptr(light.up_color)));
+    INSPECTOR_PROPERTY("Down Color", ImGui::ColorEdit3("##skylight_down", glm::value_ptr(light.down_color)));
+    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##skylight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -373,6 +422,52 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
         });
         INSPECTOR_PROPERTY("Speed", ImGui::DragFloat("##anim_speed", &animator.speed, 0.1f, 0.0f, 10.0f));
         INSPECTOR_PROPERTY("Loop", ImGui::Checkbox("##anim_loop", &animator.loop));
+        INSPECTOR_PROPERTY("Use Blend Tree", ImGui::Checkbox("##anim_tree", &animator.use_anim_tree));
+        INSPECTOR_PROPERTY("Blend Value", ImGui::DragFloat("##anim_blend_value", &animator.blend_parameter_value, 0.05f, -100.0f, 100.0f));
+
+        char blend_param_buf[128] = {};
+        std::strncpy(blend_param_buf, animator.blend_parameter.c_str(), sizeof(blend_param_buf) - 1);
+        INSPECTOR_PROPERTY("Blend Param", if (ImGui::InputText("##anim_blend_param", blend_param_buf, sizeof(blend_param_buf))) {
+            animator.blend_parameter = blend_param_buf;
+        });
+
+        if (animator.use_anim_tree) {
+            ImGui::Separator();
+            ImGui::Text("Blend Nodes");
+            for (size_t i = 0; i < animator.blend_nodes.size(); ++i) {
+                auto& node = animator.blend_nodes[i];
+                ImGui::PushID(static_cast<int>(i));
+
+                char node_name_buf[128] = {};
+                std::strncpy(node_name_buf, node.name.c_str(), sizeof(node_name_buf) - 1);
+                INSPECTOR_PROPERTY("Node Name", if (ImGui::InputText("##blend_name", node_name_buf, sizeof(node_name_buf))) {
+                    node.name = node_name_buf;
+                });
+
+                char node_path_buf[256] = {};
+                std::strncpy(node_path_buf, node.danim_path.c_str(), sizeof(node_path_buf) - 1);
+                INSPECTOR_PROPERTY("Node Anim", if (ImGui::InputText("##blend_path", node_path_buf, sizeof(node_path_buf))) {
+                    node.danim_path = node_path_buf;
+                });
+
+                INSPECTOR_PROPERTY("Node Speed", ImGui::DragFloat("##blend_speed", &node.speed, 0.05f, 0.0f, 10.0f));
+                INSPECTOR_PROPERTY("Node Loop", ImGui::Checkbox("##blend_loop", &node.loop));
+                INSPECTOR_PROPERTY("Weight", ImGui::DragFloat("##blend_weight", &node.weight, 0.01f, 0.0f, 1.0f));
+                INSPECTOR_PROPERTY("Threshold", ImGui::DragFloat("##blend_threshold", &node.threshold, 0.05f, -100.0f, 100.0f));
+
+                if (ImGui::Button("Remove Node")) {
+                    animator.blend_nodes.erase(animator.blend_nodes.begin() + static_cast<std::ptrdiff_t>(i));
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::Separator();
+                ImGui::PopID();
+            }
+
+            if (ImGui::Button("Add Blend Node")) {
+                animator.blend_nodes.push_back(dse::AnimBlendNode{});
+            }
+        }
     }
 
     EndInspectorReadOnlyScope(context);
@@ -787,6 +882,12 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     if (ImGui::MenuItem("Point Light (3D)") && !context.registry.all_of<dse::PointLightComponent>(context.selected_entity)) {
         context.registry.emplace<dse::PointLightComponent>(context.selected_entity);
     }
+    if (ImGui::MenuItem("Spot Light (3D)") && !context.registry.all_of<dse::SpotLightComponent>(context.selected_entity)) {
+        context.registry.emplace<dse::SpotLightComponent>(context.selected_entity);
+    }
+    if (ImGui::MenuItem("Sky Light (3D)") && !context.registry.all_of<dse::SkyLightComponent>(context.selected_entity)) {
+        context.registry.emplace<dse::SkyLightComponent>(context.selected_entity);
+    }
     if (ImGui::MenuItem("Animator (3D)") && !context.registry.all_of<dse::Animator3DComponent>(context.selected_entity)) {
         context.registry.emplace<dse::Animator3DComponent>(context.selected_entity);
     }
@@ -848,6 +949,8 @@ void DrawInspectorPanel(EditorInspectorPanelContext& context,
         DrawCamera3DSection(context);
         DrawDirectionalLightSection(context);
         DrawPointLightSection(context);
+        DrawSpotLightSection(context);
+        DrawSkyLightSection(context);
         DrawSkyboxSection(context);
         DrawAnimator3DSection(context);
         DrawFreeCameraControllerSection(context);

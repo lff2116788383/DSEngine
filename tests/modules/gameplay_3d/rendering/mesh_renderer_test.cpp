@@ -23,6 +23,10 @@ TEST_CASE("Given_DefaultMeshRendererComponent_When_Created_Then_PBRParametersAre
     REQUIRE(mesh_renderer.occlusion_texture_handle == 0);
     REQUIRE(mesh_renderer.receive_shadow == true);
     REQUIRE(mesh_renderer.visible == true);
+    REQUIRE(mesh_renderer.material_alpha_cutoff == Approx(0.5f));
+    REQUIRE(mesh_renderer.sorting_layer == 0);
+    REQUIRE(mesh_renderer.order_in_layer == 0);
+    REQUIRE(mesh_renderer.material_data_source == MeshRendererComponent::MaterialDataSource::ComponentFallback);
 }
 
 // 边界测试：修改 MeshRendererComponent 的极端PBR参数

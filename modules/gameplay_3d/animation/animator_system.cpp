@@ -18,6 +18,15 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
     throw std::runtime_error("AnimatorSystem requires an injected AssetManager");
 }
 
+bool IsValidAnimHeader(const asset::compiler::AnimHeader* header) {
+    return header != nullptr &&
+        header->magic[0] == 'D' &&
+        header->magic[1] == 'S' &&
+        header->magic[2] == 'E' &&
+        header->magic[3] == 'A' &&
+        header->duration >= 0.0f;
+}
+
 template<typename T>
 T Interpolate(const std::vector<float>& times, const std::vector<T>& values, float current_time) {
     if (times.empty() || values.empty()) return T();
@@ -67,6 +76,43 @@ std::vector<float> BuildKeyTimes(const uint8_t* data, const asset::compiler::Ani
     return std::vector<float>(all_times, all_times + key_count);
 }
 
+float AdvanceClipTime(float current_time, float delta_time, float speed, float duration, bool loop) {
+    current_time += delta_time * speed;
+    if (duration <= 0.0f) {
+        return 0.0f;
+    }
+    if (current_time > duration) {
+        if (loop) {
+            current_time = std::fmod(current_time, duration);
+        } else {
+            current_time = duration;
+        }
+    } else if (current_time < 0.0f) {
+        current_time = loop ? duration + std::fmod(current_time, duration) : 0.0f;
+        if (current_time >= duration) {
+            current_time = 0.0f;
+        }
+    }
+    return current_time;
+}
+
+struct SampleBuffer {
+    std::vector<glm::vec3> positions;
+    std::vector<glm::quat> rotations;
+    std::vector<glm::vec3> scales;
+
+    explicit SampleBuffer(uint32_t bone_count)
+        : positions(bone_count, glm::vec3(0.0f))
+        , rotations(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
+        , scales(bone_count, glm::vec3(1.0f)) {}
+};
+
+void ApplySamplesToLocalTransforms(const SampleBuffer& sample, std::vector<glm::mat4>& local_transforms, uint32_t bone_count) {
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        local_transforms[i] = glm::translate(glm::mat4(1.0f), sample.positions[i]) * glm::mat4_cast(sample.rotations[i]) * glm::scale(glm::mat4(1.0f), sample.scales[i]);
+    }
+}
+
 }
 
 AssetManager* AnimatorSystem::asset_manager_ = nullptr;
@@ -109,12 +155,15 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             local_transforms[i] = bones[i].local_transform;
         }
         
-        auto EvaluateClip = [&](const std::string& anim_path, float current_time, std::vector<glm::vec3>& pos, std::vector<glm::quat>& rot, std::vector<glm::vec3>& scale, float& out_duration) -> bool {
+        auto EvaluateClip = [&](const std::string& anim_path, float current_time, SampleBuffer& sample, float& out_duration) -> bool {
+            if (anim_path.empty()) return false;
+
             auto danim = asset_manager.LoadDanim(anim_path);
             if (!danim || danim->GetData().empty()) return false;
             
             const uint8_t* data = danim->GetData().data();
             const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
+            if (!IsValidAnimHeader(header)) return false;
             out_duration = header->duration;
             
             const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
@@ -130,14 +179,126 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
                 
                 if (!position_times.empty() && !positions.empty()) {
-                    pos[ch.target_node_index] = Interpolate<glm::vec3>(position_times, positions, current_time);
+                    sample.positions[ch.target_node_index] = Interpolate<glm::vec3>(position_times, positions, current_time);
                 }
                 if (!rotation_times.empty() && !rotations.empty()) {
-                    rot[ch.target_node_index] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
+                    sample.rotations[ch.target_node_index] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
                 }
                 if (!scale_times.empty() && !scales.empty()) {
-                    scale[ch.target_node_index] = Interpolate<glm::vec3>(scale_times, scales, current_time);
+                    sample.scales[ch.target_node_index] = Interpolate<glm::vec3>(scale_times, scales, current_time);
                 }
+            }
+            return true;
+        };
+
+        auto EvaluateLegacyBlendTree = [&](std::vector<AnimBlendNode>& blend_nodes, float blend_parameter_value, SampleBuffer& out_sample) -> bool {
+            if (blend_nodes.empty()) {
+                return false;
+            }
+
+            std::vector<float> evaluated_weights(blend_nodes.size(), 0.0f);
+            const bool use_threshold_blend = blend_nodes.size() >= 2;
+            if (use_threshold_blend) {
+                size_t lower_index = 0;
+                size_t upper_index = blend_nodes.size() - 1;
+                float lower_threshold = blend_nodes.front().threshold;
+                float upper_threshold = blend_nodes.back().threshold;
+
+                for (size_t i = 0; i < blend_nodes.size(); ++i) {
+                    const float threshold = blend_nodes[i].threshold;
+                    if (threshold <= blend_parameter_value) {
+                        lower_index = i;
+                        lower_threshold = threshold;
+                    }
+                    if (threshold >= blend_parameter_value) {
+                        upper_index = i;
+                        upper_threshold = threshold;
+                        break;
+                    }
+                }
+
+                if (blend_parameter_value <= blend_nodes.front().threshold) {
+                    lower_index = 0;
+                    upper_index = 0;
+                    lower_threshold = blend_nodes.front().threshold;
+                    upper_threshold = blend_nodes.front().threshold;
+                } else if (blend_parameter_value >= blend_nodes.back().threshold) {
+                    lower_index = blend_nodes.size() - 1;
+                    upper_index = blend_nodes.size() - 1;
+                    lower_threshold = blend_nodes.back().threshold;
+                    upper_threshold = blend_nodes.back().threshold;
+                }
+
+                if (lower_index == upper_index || std::abs(upper_threshold - lower_threshold) <= 0.0001f) {
+                    evaluated_weights[lower_index] = 1.0f;
+                } else {
+                    const float range = upper_threshold - lower_threshold;
+                    const float t = std::clamp((blend_parameter_value - lower_threshold) / range, 0.0f, 1.0f);
+                    evaluated_weights[lower_index] = 1.0f - t;
+                    evaluated_weights[upper_index] = t;
+                }
+            } else {
+                evaluated_weights[0] = 1.0f;
+            }
+
+            SampleBuffer accumulated(bone_count);
+            std::fill(accumulated.positions.begin(), accumulated.positions.end(), glm::vec3(0.0f));
+            std::fill(accumulated.rotations.begin(), accumulated.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
+            std::fill(accumulated.scales.begin(), accumulated.scales.end(), glm::vec3(0.0f));
+            std::vector<bool> has_anim(bone_count, false);
+
+            float total_weight = 0.0f;
+            for (size_t node_index = 0; node_index < blend_nodes.size(); ++node_index) {
+                auto& node = blend_nodes[node_index];
+                const float evaluated_weight = use_threshold_blend ? evaluated_weights[node_index] : node.weight;
+                if (evaluated_weight <= 0.0f || node.danim_path.empty()) continue;
+
+                auto danim = asset_manager.LoadDanim(node.danim_path);
+                if (!danim || danim->GetData().empty()) {
+                    continue;
+                }
+
+                const uint8_t* data = danim->GetData().data();
+                const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
+                if (!IsValidAnimHeader(header)) {
+                    continue;
+                }
+
+                node.current_time = AdvanceClipTime(node.current_time, delta_time, node.speed, header->duration, node.loop);
+
+                float clip_duration = 0.0f;
+                SampleBuffer node_sample(bone_count);
+                if (!EvaluateClip(node.danim_path, node.current_time, node_sample, clip_duration)) {
+                    continue;
+                }
+                node.current_time = AdvanceClipTime(node.current_time, 0.0f, node.speed, clip_duration, node.loop);
+                total_weight += evaluated_weight;
+
+                for (uint32_t i = 0; i < bone_count; ++i) {
+                    if (!has_anim[i]) {
+                        accumulated.positions[i] = node_sample.positions[i] * evaluated_weight;
+                        accumulated.rotations[i] = node_sample.rotations[i] * evaluated_weight;
+                        accumulated.scales[i] = node_sample.scales[i] * evaluated_weight;
+                        has_anim[i] = true;
+                    } else {
+                        accumulated.positions[i] += node_sample.positions[i] * evaluated_weight;
+                        accumulated.rotations[i] += node_sample.rotations[i] * evaluated_weight;
+                        accumulated.scales[i] += node_sample.scales[i] * evaluated_weight;
+                    }
+                }
+            }
+
+            if (total_weight <= 0.0f) {
+                return false;
+            }
+
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (!has_anim[i]) {
+                    continue;
+                }
+                out_sample.positions[i] = accumulated.positions[i] / total_weight;
+                out_sample.rotations[i] = glm::normalize(accumulated.rotations[i]);
+                out_sample.scales[i] = accumulated.scales[i] / total_weight;
             }
             return true;
         };
@@ -205,20 +366,17 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 
                 // 3. Evaluate animation logic (current state)
                 float current_duration = 1.0f;
-                std::vector<glm::vec3> p0(bone_count, glm::vec3(0.0f));
-                std::vector<glm::quat> r0(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-                std::vector<glm::vec3> s0(bone_count, glm::vec3(1.0f));
+                SampleBuffer current_sample(bone_count);
                 
                 if (!current_state.is_blend_tree) {
-                    if (EvaluateClip(current_state.danim_path, animator.state_time, p0, r0, s0, current_duration)) {
-                        if (animator.state_time > current_duration) {
-                            if (current_state.loop) animator.state_time = std::fmod(animator.state_time, current_duration);
-                            else animator.state_time = current_duration;
-                        }
-                        animator.normalized_time = animator.state_time / current_duration;
+                    if (EvaluateClip(current_state.danim_path, animator.state_time, current_sample, current_duration)) {
+                        animator.state_time = AdvanceClipTime(animator.state_time, 0.0f, current_state.speed, current_duration, current_state.loop);
+                        animator.normalized_time = current_duration > 0.0f ? animator.state_time / current_duration : 0.0f;
                     }
                 } else {
-                    // TODO: Evaluate 1D Blend Tree for current state
+                    if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, current_sample)) {
+                        animator.normalized_time = 0.0f;
+                    }
                 }
                 
                 // 4. Evaluate and Blend Next State (Crossfade)
@@ -227,177 +385,47 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                     if (next_it != states.end()) {
                         const AnimState& next_state = next_it->second;
                         float next_duration = 1.0f;
-                        std::vector<glm::vec3> p1(bone_count, glm::vec3(0.0f));
-                        std::vector<glm::quat> r1(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-                        std::vector<glm::vec3> s1(bone_count, glm::vec3(1.0f));
+                        SampleBuffer next_sample(bone_count);
                         
                         if (!next_state.is_blend_tree) {
-                            if (EvaluateClip(next_state.danim_path, animator.next_state_time, p1, r1, s1, next_duration)) {
-                                if (animator.next_state_time > next_duration) {
-                                    if (next_state.loop) animator.next_state_time = std::fmod(animator.next_state_time, next_duration);
-                                    else animator.next_state_time = next_duration;
-                                }
+                            if (EvaluateClip(next_state.danim_path, animator.next_state_time, next_sample, next_duration)) {
+                                animator.next_state_time = AdvanceClipTime(animator.next_state_time, 0.0f, next_state.speed, next_duration, next_state.loop);
                             }
+                        } else {
+                            EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, next_sample);
                         }
                         
                         // Crossfade blend
                         float t = std::clamp(animator.transition_progress, 0.0f, 1.0f);
                         for (uint32_t i = 0; i < bone_count; ++i) {
-                            glm::vec3 final_p = glm::mix(p0[i], p1[i], t);
-                            glm::quat final_r = glm::slerp(r0[i], r1[i], t);
-                            glm::vec3 final_s = glm::mix(s0[i], s1[i], t);
+                            glm::vec3 final_p = glm::mix(current_sample.positions[i], next_sample.positions[i], t);
+                            glm::quat final_r = glm::slerp(current_sample.rotations[i], next_sample.rotations[i], t);
+                            glm::vec3 final_s = glm::mix(current_sample.scales[i], next_sample.scales[i], t);
                             local_transforms[i] = glm::translate(glm::mat4(1.0f), final_p) * glm::mat4_cast(final_r) * glm::scale(glm::mat4(1.0f), final_s);
                         }
                     }
                 } else {
                     // Apply single state
-                    for (uint32_t i = 0; i < bone_count; ++i) {
-                        local_transforms[i] = glm::translate(glm::mat4(1.0f), p0[i]) * glm::mat4_cast(r0[i]) * glm::scale(glm::mat4(1.0f), s0[i]);
-                    }
+                    ApplySamplesToLocalTransforms(current_sample, local_transforms, bone_count);
                 }
             }
         } else if (!animator.use_anim_tree) {
             // --- LEGACY SINGLE ANIMATION PATH ---
             if (animator.danim_path.empty()) continue;
-            auto danim = asset_manager.LoadDanim(animator.danim_path);
-            if (!danim || danim->GetData().empty()) continue;
-            const uint8_t* data = danim->GetData().data();
-            const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
-            
-            // Update time
-            auto& current_time = animator.current_time;
-            current_time += delta_time * animator.speed;
-            if (current_time > header->duration) {
-                if (animator.loop) current_time = std::fmod(current_time, header->duration);
-                else current_time = header->duration;
+
+            SampleBuffer sample(bone_count);
+            float duration = 0.0f;
+            if (!EvaluateClip(animator.danim_path, animator.current_time, sample, duration)) {
+                continue;
             }
-            
-            const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
-            for (uint32_t i = 0; i < header->channel_count; ++i) {
-                const auto& ch = channels[i];
-                if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
-                
-                std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
-                std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
-                std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
-                std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
-                std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
-                std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
-                
-                glm::vec3 p = !position_times.empty() && !positions.empty()
-                    ? Interpolate<glm::vec3>(position_times, positions, current_time)
-                    : glm::vec3(0.0f);
-                glm::quat r = !rotation_times.empty() && !rotations.empty()
-                    ? Interpolate<glm::quat>(rotation_times, rotations, current_time)
-                    : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-                glm::vec3 s = !scale_times.empty() && !scales.empty()
-                    ? Interpolate<glm::vec3>(scale_times, scales, current_time)
-                    : glm::vec3(1.0f);
-                
-                local_transforms[ch.target_node_index] = glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
-            }
+
+            animator.current_time = AdvanceClipTime(animator.current_time, delta_time, animator.speed, duration, animator.loop);
+            ApplySamplesToLocalTransforms(sample, local_transforms, bone_count);
         } else {
             // --- LEGACY ANIM TREE (1D Blend) PATH ---
-            std::vector<glm::vec3> blended_positions(bone_count, glm::vec3(0.0f));
-            std::vector<glm::quat> blended_rotations(bone_count, glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
-            std::vector<glm::vec3> blended_scales(bone_count, glm::vec3(0.0f));
-            std::vector<bool> has_anim(bone_count, false);
-
-            std::vector<float> evaluated_weights(animator.blend_nodes.size(), 0.0f);
-            const bool use_threshold_blend = animator.blend_nodes.size() >= 2;
-            if (use_threshold_blend) {
-                size_t lower_index = 0;
-                size_t upper_index = 0;
-                float lower_threshold = animator.blend_nodes.front().threshold;
-                float upper_threshold = animator.blend_nodes.back().threshold;
-                for (size_t i = 0; i < animator.blend_nodes.size(); ++i) {
-                    const float threshold = animator.blend_nodes[i].threshold;
-                    if (threshold <= animator.blend_parameter_value) {
-                        lower_index = i;
-                        lower_threshold = threshold;
-                    }
-                    if (threshold >= animator.blend_parameter_value) {
-                        upper_index = i;
-                        upper_threshold = threshold;
-                        break;
-                    }
-                }
-                if (lower_index == upper_index || std::abs(upper_threshold - lower_threshold) <= 0.0001f) {
-                    evaluated_weights[lower_index] = 1.0f;
-                } else {
-                    const float range = upper_threshold - lower_threshold;
-                    const float t = std::clamp((animator.blend_parameter_value - lower_threshold) / range, 0.0f, 1.0f);
-                    evaluated_weights[lower_index] = 1.0f - t;
-                    evaluated_weights[upper_index] = t;
-                }
-            } else if (!animator.blend_nodes.empty()) {
-                evaluated_weights[0] = 1.0f;
-            }
-
-            float total_weight = 0.0f;
-            for (size_t node_index = 0; node_index < animator.blend_nodes.size(); ++node_index) {
-                auto& node = animator.blend_nodes[node_index];
-                const float evaluated_weight = use_threshold_blend
-                    ? evaluated_weights[node_index]
-                    : node.weight;
-                if (evaluated_weight <= 0.0f) continue;
-                auto danim = asset_manager.LoadDanim(node.danim_path);
-                if (!danim || danim->GetData().empty()) continue;
-
-                total_weight += evaluated_weight;
-                const uint8_t* data = danim->GetData().data();
-                const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
-
-                node.current_time += delta_time * node.speed;
-                if (node.current_time > header->duration) {
-                    if (node.loop) node.current_time = std::fmod(node.current_time, header->duration);
-                    else node.current_time = header->duration;
-                }
-
-                const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
-                for (uint32_t i = 0; i < header->channel_count; ++i) {
-                    const auto& ch = channels[i];
-                    if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
-
-                    std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
-                    std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
-                    std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
-                    std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
-                    std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
-                    std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
-
-                    glm::vec3 p = !position_times.empty() && !positions.empty()
-                        ? Interpolate<glm::vec3>(position_times, positions, node.current_time)
-                        : glm::vec3(0.0f);
-                    glm::quat r = !rotation_times.empty() && !rotations.empty()
-                        ? Interpolate<glm::quat>(rotation_times, rotations, node.current_time)
-                        : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-                    glm::vec3 s = !scale_times.empty() && !scales.empty()
-                        ? Interpolate<glm::vec3>(scale_times, scales, node.current_time)
-                        : glm::vec3(1.0f);
-
-                    if (!has_anim[ch.target_node_index]) {
-                        blended_positions[ch.target_node_index] = p * evaluated_weight;
-                        blended_rotations[ch.target_node_index] = r * evaluated_weight;
-                        blended_scales[ch.target_node_index] = s * evaluated_weight;
-                        has_anim[ch.target_node_index] = true;
-                    } else {
-                        blended_positions[ch.target_node_index] += p * evaluated_weight;
-                        blended_rotations[ch.target_node_index] += r * evaluated_weight;
-                        blended_scales[ch.target_node_index] += s * evaluated_weight;
-                    }
-                }
-            }
-
-            if (total_weight > 0.0f) {
-                for (uint32_t i = 0; i < bone_count; ++i) {
-                    if (has_anim[i]) {
-                        glm::vec3 p = blended_positions[i] / total_weight;
-                        glm::quat r = glm::normalize(blended_rotations[i]);
-                        glm::vec3 s = blended_scales[i] / total_weight;
-                        local_transforms[i] = glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
-                    }
-                }
+            SampleBuffer sample(bone_count);
+            if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, sample)) {
+                ApplySamplesToLocalTransforms(sample, local_transforms, bone_count);
             }
         }
 

@@ -228,6 +228,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform float u_material_ao;
         uniform vec3 u_material_emissive;
         uniform float u_material_normal_strength;
+        uniform float u_material_alpha_cutoff;
 
         const float PI = 3.14159265359;
 
@@ -318,7 +319,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
         void main() {
             vec4 texColor = texture(u_texture, TexCoord);
-            if (texColor.a < 0.1) discard;
+            if (texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
 
             vec3 N = Normal;
             if (u_has_normal_map) {
@@ -480,6 +481,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     uniform_material_ao_loc_ = glGetUniformLocation(shader_handle_, "u_material_ao");
     uniform_material_emissive_loc_ = glGetUniformLocation(shader_handle_, "u_material_emissive");
     uniform_material_normal_strength_loc_ = glGetUniformLocation(shader_handle_, "u_material_normal_strength");
+    uniform_material_alpha_cutoff_loc_ = glGetUniformLocation(shader_handle_, "u_material_alpha_cutoff");
     uniform_receive_shadow_loc_ = glGetUniformLocation(shader_handle_, "u_receive_shadow");
     uniform_skinned_loc_ = glGetUniformLocation(shader_handle_, "u_skinned");
     uniform_bone_matrices_loc_ = glGetUniformLocation(shader_handle_, "u_bone_matrices");
@@ -1227,6 +1229,7 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
         glUniform1f(uniform_material_ao_loc_, item.material_ao);
         glUniform3f(uniform_material_emissive_loc_, item.material_emissive.r, item.material_emissive.g, item.material_emissive.b);
         glUniform1f(uniform_material_normal_strength_loc_, item.material_normal_strength);
+        glUniform1f(uniform_material_alpha_cutoff_loc_, item.material_alpha_cutoff);
         glUniform1i(uniform_receive_shadow_loc_, item.receive_shadow ? 1 : 0);
 
         if (uniform_skinned_loc_ != -1) {

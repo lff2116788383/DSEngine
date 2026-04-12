@@ -145,6 +145,10 @@ bool Scene::Serialize(const std::string& filepath) {
             mesh_json.AddMember("mesh_path", rapidjson::Value(mesh.mesh_path.c_str(), allocator), allocator);
             mesh_json.AddMember("material_instance_id", mesh.material_instance_id, allocator);
             mesh_json.AddMember("shader_variant", rapidjson::Value(mesh.shader_variant.c_str(), allocator), allocator);
+            mesh_json.AddMember("material_alpha_cutoff", mesh.material_alpha_cutoff, allocator);
+            mesh_json.AddMember("sorting_layer", mesh.sorting_layer, allocator);
+            mesh_json.AddMember("order_in_layer", mesh.order_in_layer, allocator);
+            mesh_json.AddMember("material_data_source", static_cast<int>(mesh.material_data_source), allocator);
             rapidjson::Value color(rapidjson::kArrayType);
             color.PushBack(mesh.color.r, allocator).PushBack(mesh.color.g, allocator).PushBack(mesh.color.b, allocator).PushBack(mesh.color.a, allocator);
             mesh_json.AddMember("color", color, allocator);
@@ -521,6 +525,9 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (mesh_json.HasMember("normal_strength") && mesh_json["normal_strength"].IsNumber()) {
                 mesh.normal_strength = mesh_json["normal_strength"].GetFloat();
             }
+            if (mesh_json.HasMember("material_alpha_cutoff") && mesh_json["material_alpha_cutoff"].IsNumber()) {
+                mesh.material_alpha_cutoff = mesh_json["material_alpha_cutoff"].GetFloat();
+            }
             if (mesh_json.HasMember("albedo_texture_handle") && mesh_json["albedo_texture_handle"].IsUint()) {
                 mesh.albedo_texture_handle = mesh_json["albedo_texture_handle"].GetUint();
             }
@@ -541,6 +548,17 @@ bool Scene::Deserialize(const std::string& filepath) {
             }
             if (mesh_json.HasMember("visible") && mesh_json["visible"].IsBool()) {
                 mesh.visible = mesh_json["visible"].GetBool();
+            }
+            if (mesh_json.HasMember("sorting_layer") && mesh_json["sorting_layer"].IsInt()) {
+                mesh.sorting_layer = mesh_json["sorting_layer"].GetInt();
+            }
+            if (mesh_json.HasMember("order_in_layer") && mesh_json["order_in_layer"].IsInt()) {
+                mesh.order_in_layer = mesh_json["order_in_layer"].GetInt();
+            }
+            if (mesh_json.HasMember("material_data_source") && mesh_json["material_data_source"].IsInt()) {
+                mesh.material_data_source = static_cast<dse::MeshRendererComponent::MaterialDataSource>(mesh_json["material_data_source"].GetInt());
+            } else if (mesh.material_instance_id != 0) {
+                mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
             }
             world.registry().emplace<dse::MeshRendererComponent>(entity, mesh);
         }

@@ -582,16 +582,20 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             material_instance = asset_manager.GetMaterialInstance(mesh_renderer.material_instance_id);
         }
 
-        const std::string& resolved_shader_variant = material_instance
+        const bool prefer_material_instance =
+            mesh_renderer.material_data_source == MeshRendererComponent::MaterialDataSource::MaterialInstance &&
+            material_instance != nullptr;
+
+        const std::string& resolved_shader_variant = prefer_material_instance
             ? material_instance->GetShaderVariant()
             : mesh_renderer.shader_variant;
-        const glm::vec4 resolved_base_color = material_instance
+        const glm::vec4 resolved_base_color = prefer_material_instance
             ? material_instance->GetBaseColor()
             : mesh_renderer.color;
-        const glm::vec3 resolved_emissive = material_instance
+        const glm::vec3 resolved_emissive = prefer_material_instance
             ? material_instance->GetEmissiveColor()
             : mesh_renderer.emissive;
-        const MaterialAsset::TextureSlots resolved_texture_slots = material_instance
+        const MaterialAsset::TextureSlots resolved_texture_slots = prefer_material_instance
             ? material_instance->GetTextureSlots()
             : MaterialAsset::TextureSlots{
                 mesh_renderer.albedo_texture_handle,
@@ -600,16 +604,16 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 mesh_renderer.emissive_texture_handle,
                 mesh_renderer.occlusion_texture_handle
             };
-        const MaterialAsset::ScalarOverrides resolved_scalars = material_instance
+        const MaterialAsset::ScalarOverrides resolved_scalars = prefer_material_instance
             ? material_instance->GetScalarOverrides()
             : MaterialAsset::ScalarOverrides{
                 mesh_renderer.metallic,
                 mesh_renderer.roughness,
                 mesh_renderer.ao,
                 mesh_renderer.normal_strength,
-                0.5f
+                mesh_renderer.material_alpha_cutoff
             };
-        const MaterialBlendMode resolved_blend_mode = material_instance
+        const MaterialBlendMode resolved_blend_mode = prefer_material_instance
             ? material_instance->GetBlendMode()
             : MaterialBlendMode::Opaque;
         
@@ -643,13 +647,15 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         
         item.texture_handle = resolved_texture_slots.albedo != 0
             ? resolved_texture_slots.albedo
-            : (material_instance ? material_instance->GetTextureHandle() : 0);
+            : (prefer_material_instance ? material_instance->GetTextureHandle() : 0);
         item.normal_map_handle = resolved_texture_slots.normal;
         item.material_albedo = glm::vec3(resolved_base_color);
         item.material_metallic = resolved_scalars.metallic;
         item.material_roughness = resolved_scalars.roughness;
         item.material_ao = resolved_scalars.ao;
         item.material_normal_strength = resolved_scalars.normal_strength;
+        item.material_alpha_cutoff = resolved_scalars.alpha_cutoff;
+        item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;
         

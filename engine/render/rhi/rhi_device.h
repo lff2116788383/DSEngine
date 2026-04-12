@@ -56,6 +56,8 @@ struct MeshDrawItem {
     float material_ao = 1.0f;
     glm::vec3 material_emissive = glm::vec3(0.0f);
     float material_normal_strength = 1.0f;
+    float material_alpha_cutoff = 0.5f;
+    bool material_uses_instance_data = false;
     bool receive_shadow = true;
 
     glm::vec3 light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -688,6 +690,7 @@ private:
     int uniform_material_ao_loc_ = -1;
     int uniform_material_emissive_loc_ = -1;
     int uniform_material_normal_strength_loc_ = -1;
+    int uniform_material_alpha_cutoff_loc_ = -1;
     int uniform_receive_shadow_loc_ = -1;
     int uniform_skinned_loc_ = -1;
     int uniform_bone_matrices_loc_ = -1;

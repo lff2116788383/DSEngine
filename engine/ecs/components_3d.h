@@ -10,6 +10,11 @@
 namespace dse {
 
 struct MeshRendererComponent {
+    enum class MaterialDataSource {
+        ComponentFallback = 0,
+        MaterialInstance = 1
+    };
+
     std::string mesh_path;
     unsigned int material_instance_id = 0;
     std::string shader_variant = "MESH_UNLIT";
@@ -19,6 +24,7 @@ struct MeshRendererComponent {
     float roughness = 0.5f;
     float ao = 1.0f;
     float normal_strength = 1.0f;
+    float material_alpha_cutoff = 0.5f;
     unsigned int albedo_texture_handle = 0;
     unsigned int normal_texture_handle = 0;
     unsigned int metallic_roughness_texture_handle = 0;
@@ -28,6 +34,7 @@ struct MeshRendererComponent {
     bool visible = true;
     int sorting_layer = 0;
     int order_in_layer = 0;
+    MaterialDataSource material_data_source = MaterialDataSource::ComponentFallback;
     std::vector<float> temp_vertices;
     std::vector<unsigned short> temp_indices;
 };

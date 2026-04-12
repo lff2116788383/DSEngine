@@ -142,6 +142,10 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     mesh.occlusion_texture_handle = 1005;
     mesh.receive_shadow = true;
     mesh.visible = true;
+    mesh.material_alpha_cutoff = 0.42f;
+    mesh.sorting_layer = 3;
+    mesh.order_in_layer = 8;
+    mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
 
     auto camera_entity = source.GetWorld().CreateEntity();
     source.GetWorld().registry().emplace<TransformComponent>(camera_entity);
@@ -265,6 +269,10 @@ TEST_CASE("Given_Minimal3DScene_When_SerializedAndDeserialized_Then_Core3DCompon
     REQUIRE(loaded_mesh.occlusion_texture_handle == 1005);
     REQUIRE(loaded_mesh.receive_shadow);
     REQUIRE(loaded_mesh.visible);
+    REQUIRE(loaded_mesh.material_alpha_cutoff == Approx(0.42f));
+    REQUIRE(loaded_mesh.sorting_layer == 3);
+    REQUIRE(loaded_mesh.order_in_layer == 8);
+    REQUIRE(loaded_mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);
 
     auto camera_view = loaded.GetWorld().registry().view<dse::Camera3DComponent>();
     REQUIRE(camera_view.begin() != camera_view.end());

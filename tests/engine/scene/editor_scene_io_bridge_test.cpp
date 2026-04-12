@@ -46,6 +46,8 @@ TEST_CASE("Given_Engine3DMvpScene_When_CopiedIntoEditorRegistry_Then_EditorScene
     REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::PointLightComponent>().begin() != loaded_registry.view<dse::PointLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SpotLightComponent>().begin() != loaded_registry.view<dse::SpotLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
     REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
     REQUIRE(loaded_registry.view<dse::Animator3DComponent>().begin() != loaded_registry.view<dse::Animator3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::TerrainComponent>().begin() != loaded_registry.view<dse::TerrainComponent>().end());
@@ -68,6 +70,31 @@ TEST_CASE("Given_Engine3DMvpScene_When_CopiedIntoEditorRegistry_Then_EditorScene
     REQUIRE(light.enabled);
     REQUIRE(light.intensity == Approx(1.8f));
     REQUIRE(light.cast_shadow);
+
+    auto point_light_view = loaded_registry.view<dse::PointLightComponent>();
+    const auto point_light_entity = *point_light_view.begin();
+    const auto& point_light = point_light_view.get<dse::PointLightComponent>(point_light_entity);
+    REQUIRE(point_light.radius == Approx(12.0f));
+    REQUIRE(point_light.falloff == Approx(1.2f));
+
+    auto spot_light_view = loaded_registry.view<dse::SpotLightComponent>();
+    const auto spot_light_entity = *spot_light_view.begin();
+    const auto& spot_light = spot_light_view.get<dse::SpotLightComponent>(spot_light_entity);
+    REQUIRE(spot_light.direction.y == Approx(-1.0f));
+    REQUIRE(spot_light.inner_cone_angle == Approx(15.0f));
+    REQUIRE(spot_light.outer_cone_angle == Approx(25.0f));
+
+    auto sky_light_view = loaded_registry.view<dse::SkyLightComponent>();
+    const auto sky_light_entity = *sky_light_view.begin();
+    const auto& sky_light = sky_light_view.get<dse::SkyLightComponent>(sky_light_entity);
+    REQUIRE(sky_light.up_color.x == Approx(0.25f));
+    REQUIRE(sky_light.down_color.z == Approx(0.55f));
+    REQUIRE(sky_light.intensity == Approx(1.1f));
+
+    auto animator_view = loaded_registry.view<dse::Animator3DComponent>();
+    const auto animator_entity = *animator_view.begin();
+    const auto& animator = animator_view.get<dse::Animator3DComponent>(animator_entity);
+    REQUIRE((animator.use_anim_tree == false || animator.blend_parameter == "speed"));
 }
 
 TEST_CASE("Given_ReferenceDemo158Scene_When_CopiedIntoEditorRegistry_Then_EditorSceneIoRoundTripKeepsReferenceBaseline", "[engine][unit][scene][3d][editor][reference_demo]") {
@@ -95,6 +122,7 @@ TEST_CASE("Given_ReferenceDemo158Scene_When_CopiedIntoEditorRegistry_Then_Editor
     REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SpotLightComponent>().begin() != loaded_registry.view<dse::SpotLightComponent>().end());
     REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
     REQUIRE(loaded_registry.view<dse::Animator3DComponent>().begin() != loaded_registry.view<dse::Animator3DComponent>().end());
 
@@ -134,6 +162,7 @@ TEST_CASE("Given_ReferenceDemo159Scene_When_CopiedIntoEditorRegistry_Then_Editor
     REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
     REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SpotLightComponent>().begin() != loaded_registry.view<dse::SpotLightComponent>().end());
     REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
 
     auto animator_view = loaded_registry.view<dse::Animator3DComponent>();

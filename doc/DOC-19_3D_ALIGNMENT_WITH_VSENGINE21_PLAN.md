@@ -1,560 +1,448 @@
-# DOC-19 DSEngine 3D 对齐 `reference/VSEngine2.1` 改造清单
+# DOC-19 3D 功能对齐任务周期清单
 
 ## 1. 文档目标
 
-本文档用于回答一个更具体的问题：
+本文档直接对照当前代码现状，重建 `DSEngine` 面向 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的 3D 对齐计划。
 
-> 如果要让 `DSEngine` 的 3D 能力逐步向 [`reference/VSEngine2.1`](reference/VSEngine2.1) 看齐，应该按什么顺序、以什么边界、补哪些能力，而不把当前仓库重新带回“功能点很多但闭环不清晰”的状态？
+本文档只回答 4 个问题：
 
-本文档不是要把 `DSEngine` 直接改造成旧引擎的复制品，而是要把 [`reference/VSEngine2.1`](reference/VSEngine2.1) 中已经证明有价值的 3D 能力，拆成适合当前仓库结构的对齐改造清单。
+1. 当前 `DSEngine` 的 3D 已经做到哪里。
+2. 接下来应该按什么顺序推进。
+3. 每个周期要交付什么、验收什么。
+4. [`reference/VSEngine2.1/Demo`](reference/VSEngine2.1/Demo) 里哪些 demo 值得作为后续参考列表。
 
-约束前提：
+本次重构后的原则非常明确：
 
-- 当前稳定主线仍然是 2D，见 [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md:16)
-- 当前 3D 更准确的定位仍然是 MVP 收口中，见 [`doc/DOC-15_3D_GAP_AUDIT_AND_TODO.md`](doc/DOC-15_3D_GAP_AUDIT_AND_TODO.md:18)
-- 对齐目标应优先补“高价值、可收口、可验证”的能力，不做无边界扩张
-- 新增一个明确目标：不仅要“能力对齐”，还要把 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的代表性 3D demo 用同类资源在 `DSEngine` 中重现，形成可对照演示结果
-
----
-
-## 2. 对齐基线：当前 `DSEngine` 与 `reference/VSEngine2.1` 的差异
-
-### 2.1 `DSEngine` 当前已具备的 3D 基线
-
-当前仓库已经具备以下 3D MVP 基础：
-
-- Mesh / Camera3D / Directional Light / Point Light / Skybox / Terrain 的最小场景闭环，见 [`assets/scenes/3d_mvp_minimal.scene.json`](assets/scenes/3d_mvp_minimal.scene.json:1)
-- 3D MVP runtime 启动与 smoke 样例，见 [`samples/cpp/phase1_demo_logic.cpp`](samples/cpp/phase1_demo_logic.cpp:65)
-- 3D Inspector 基础检视能力，见 [`apps/editor_cpp/src/editor_inspector_panel.cpp`](apps/editor_cpp/src/editor_inspector_panel.cpp:200)
-- Mesh / Terrain / Frustum Culling / Particle3D 等模块化子系统，见 [`doc/DOC-15_3D_GAP_AUDIT_AND_TODO.md`](doc/DOC-15_3D_GAP_AUDIT_AND_TODO.md:33)
-- 3D Scene save/load 与 editor bridge 回归，见 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:117) 与 [`tests/engine/scene/editor_scene_io_bridge_test.cpp`](tests/engine/scene/editor_scene_io_bridge_test.cpp:30)
-
-### 2.2 相比 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的主要缺口
-
-结合 [`reference/VSEngine2.1/VSGraphic`](reference/VSEngine2.1/VSGraphic) 与渲染后端代码，当前缺口主要集中在：
-
-1. **动画工作流深度不够**
-   - `DSEngine` 目前只有 `Animator3DComponent` 与基础状态机雏形
-   - [`reference/VSEngine2.1`](reference/VSEngine2.1) 已经有 [`VSAnimTree`](reference/VSEngine2.1/VSGraphic/VSAnimTree.h:12)、[`VSAnimSet`](reference/VSEngine2.1/VSGraphic/VSAnimSet.h:203)、[`VSSkeleton`](reference/VSEngine2.1/VSGraphic/VSSkeleton.h:8)、[`VSMorphSet`](reference/VSEngine2.1/VSGraphic/VSMorphSet.h:76)
-
-2. **灯光 / 阴影体系深度不够**
-   - `DSEngine` 当前以 Directional Light + CSM 为主，Point Light 能力较基础
-   - [`reference/VSEngine2.1`](reference/VSEngine2.1) 已覆盖 [`VSDirectionLight`](reference/VSEngine2.1/VSGraphic/VSDirectionLight.h:10)、[`VSPointLight`](reference/VSEngine2.1/VSGraphic/VSPointLight.h:12)、[`VSSpotLight`](reference/VSEngine2.1/VSGraphic/VSSpotLight.h:7)、[`VSSkyLight`](reference/VSEngine2.1/VSGraphic/VSSkyLight.h:7)，以及 [`VSShadowPass`](reference/VSEngine2.1/VSGraphic/VSShadowPass.h:82) 下多种 shadow path
-
-3. **材质 / 渲染通道体系不够完整**
-   - `DSEngine` 现在偏“组件字段驱动 + 少量 shader variant”
-   - [`reference/VSEngine2.1`](reference/VSEngine2.1) 已形成 [`VSMaterial`](reference/VSEngine2.1/VSGraphic/VSMaterial.h:389)、[`VSMaterialInstance`](reference/VSEngine2.1/VSGraphic/VSMaterial.h:612)、[`VSSceneRender`](reference/VSEngine2.1/VSGraphic/VSSceneRender.h:51)、[`VSPostEffectSet`](reference/VSEngine2.1/VSGraphic/VSPostEffectSet.h:15) 等完整体系
-
-4. **Terrain 生态不够完整**
-   - `DSEngine` 当前只有最小 `TerrainComponent` 与 `terrain_system`
-   - [`reference/VSEngine2.1`](reference/VSEngine2.1) 有 [`VSCLodTerrainNode`](reference/VSEngine2.1/VSGraphic/VSCLodTerrainNode.h:6)、[`VSDLodTerrainNode`](reference/VSEngine2.1/VSGraphic/VSDLodTerrainNode.h:5)、[`VSGPULodTerrainNode`](reference/VSEngine2.1/VSGraphic/VSGPULodTerrainNode.h:6)、[`VSRoamTerrainGeometry`](reference/VSEngine2.1/VSGraphic/VSRoamTerrainGemotry.h:23)
-
-5. **资源导入 / 烹饪链深度不够**
-   - `DSEngine` 已有 [`apps/tools/asset_builder/main.cpp`](apps/tools/asset_builder/main.cpp:8) 的 `gltf/glb -> dmesh/dmat/danim/dskel` 路径
-   - 但 [`reference/VSEngine2.1`](reference/VSEngine2.1) 有独立 [`FBXConverter`](reference/VSEngine2.1/FBXConverter/FBXConverter.cpp) 与更重的 FBX 资源使用习惯
-
-6. **编辑器 3D 工作流不够完整**
-   - 当前有 Inspector 基础项，但离成熟的 Scene View / Gizmo / 资源调参工作流还有明显差距
+- **先对齐功能，再做 demo，编辑器最后补。**
+- **每个周期只保留可执行任务，不再堆大段历史说明。**
+- **所有计划都以当前代码已经存在的 3D 基线为起点。**
 
 ---
 
-## 3. 改造总原则
+## 2. 当前代码基线
 
-为了避免“功能面变宽，但主线更乱”，本轮 3D 对齐必须遵循以下原则：
+### 2.1 当前已经具备的 3D 基础
 
-### 3.1 原则一：先补 runtime 高价值骨架，再做 demo 对齐，最后补 editor 工作流
+从当前代码看，`DSEngine` 已经不是纯 3D 占位状态，而是具备了继续扩展的运行时骨架。
 
-优先级必须是：
+#### 运行时组件层
 
-1. 材质渲染骨架
-2. 动画骨架
-3. 光照阴影骨架
-4. reference demo 重现基线
-5. 编辑器工作流与 terrain / 粒子 / 高级后处理等扩展生态
+- [`MeshRendererComponent`](engine/ecs/components_3d.h:12)
+- [`SkyLightComponent`](engine/ecs/components_3d.h:118)
+- [`Animator3DComponent`](engine/ecs/components_3d.h:150)
+- [`TerrainComponent`](engine/ecs/components_3d.h:196)
 
-这里需要明确一个边界：本轮对齐的第一目标是让 [`DSEngine`](.) 在 **runtime 3D 能力** 与 **reference demo 可对照结果** 上逐步向 [`reference/VSEngine2.1`](reference/VSEngine2.1) 靠拢，而不是先去追求一套完整 editor 制作流。
+这说明当前已经覆盖：
 
-原因是：[`reference/VSEngine2.1`](reference/VSEngine2.1) 本身并不是以 editor 为主要参考对象；当前更有价值的对齐对象，是其 3D runtime 功能体系、资源链深度和 demo 呈现结果。因此 editor 应视为 `DSEngine` 自身的后续产品化增强项，而不是本轮 reference 对齐阶段的前置硬门槛。
+- 网格渲染
+- 基础 PBR 参数承载
+- 点光 / 聚光 / 天光
+- 骨骼动画最小表达
+- 地形组件骨架
 
-### 3.2 原则二：每补一层，都要先形成 scene + test + 文档边界闭环；关键阶段再补 demo 闭环
+#### 运行时系统层
 
-任何新增 3D 子系统都不能只停留在“代码存在”，至少要同步补：
+- [`FramePipeline`](engine/runtime/frame_pipeline.h:42)
+- [`MeshRenderSystem`](modules/gameplay_3d/rendering/mesh_render_system.h:20)
+- [`AnimatorSystem`](modules/gameplay_3d/animation/animator_system.h:11)
+- [`TerrainSystem`](modules/gameplay_3d/rendering/terrain_system.h:10)
+- [`FrustumCullingSystem`](modules/gameplay_3d/rendering/frustum_culling_system.h:15)
+- [`Particle3DSystem`](modules/gameplay_3d/particles/particle3d_system.h:13)
 
-- 一个最小场景入口
+这说明当前 3D 主线已经具备：
+
+- 运行时帧调度
+- 3D 网格渲染提交
+- 动画更新
+- 地形更新
+- 视锥剔除
+- 3D 粒子骨架
+
+#### 当前已签入的 3D 场景基线
+
+- [`assets/scenes/3d_mvp_minimal.scene.json`](assets/scenes/3d_mvp_minimal.scene.json)
+- [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json)
+- [`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json)
+
+说明当前已经不是“只有代码，没有落地场景”，而是已经开始进入参考场景对齐阶段。
+
+### 2.2 当前最关键的差距
+
+虽然基础已经有了，但和 [`reference/VSEngine2.1`](reference/VSEngine2.1) 相比，当前仍然缺少稳定的 3D 功能闭环。
+
+当前最关键的问题不是“没有 3D”，而是：
+
+1. **功能点存在，但层次还不够稳定。**
+2. **材质 / 灯光 / 动画 / 阴影 仍偏最小闭环，不够完整。**
+3. **demo 还只是开始，不是完整参考矩阵。**
+4. **编辑器 3D 工作流明显滞后于运行时。**
+
+因此，后续顺序必须固定为：
+
+1. **先补齐 runtime 3D 功能。**
+2. **再建立 reference demo 对齐列表与逐个落地。**
+3. **最后补编辑器。**
+
+---
+
+## 3. 总体推进顺序
+
+本文档把后续工作拆成 4 个任务周期。
+
+### 周期顺序
+
+- **P1：3D 运行时功能全面对齐周期**
+- **P2：3D 渲染与资源质量收口周期**
+- **P3：reference demo 对齐周期**
+- **P4：3D 编辑器补齐周期**
+
+其中：
+
+- `P1 + P2` 属于“先对齐所有功能”。
+- `P3` 才开始系统做 demo。
+- `P4` 最后做编辑器。
+
+---
+
+## 4. P1：3D 运行时功能全面对齐周期
+
+> 目标：先把 3D 运行时从“可跑”推进到“功能面完整且边界清楚”。
+
+### 4.1 材质与网格渲染链路对齐
+
+**当前基础：**
+- [`MeshRendererComponent`](engine/ecs/components_3d.h:12)
+- [`MeshRenderSystem`](modules/gameplay_3d/rendering/mesh_render_system.h:20)
+
+**本周期任务：**
+- 统一 `MeshRenderer` 与 `MaterialAsset` 的职责边界。
+- 完成材质实例优先、组件字段兜底的正式约束说明。
+- 补齐材质参数在 scene、runtime、test 三层的一致性检查。
+- 明确哪些参数已真正参与渲染，哪些只是数据占位。
+- 收敛 shader variant 命名与用途，减少隐式规则。
+
+**验收标准：**
+- 至少 1 条 mesh + material instance 的稳定回归链路。
+- scene 存档 / 读档 / runtime 表现一致。
+- 文档里明确材质字段支持矩阵。
+
+**当前进度（2026-04-12）：**
+- [x] [`MeshRendererComponent`](engine/ecs/components_3d.h:12) 已显式增加 [`MaterialDataSource`](engine/ecs/components_3d.h:13) 与 [`material_alpha_cutoff`](engine/ecs/components_3d.h:27)，不再只依赖隐式规则。
+- [x] [`Scene`](engine/scene/scene.cpp:147) 已完成 [`material_alpha_cutoff`](engine/ecs/components_3d.h:27)、排序字段与 [`material_data_source`](engine/ecs/components_3d.h:37) 的存档 / 读档 roundtrip，并兼容旧 scene。
+- [x] [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:573) 已按 [`material_data_source`](engine/ecs/components_3d.h:37) 区分 component fallback 与 material instance。
+- [x] [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38) 已承载 [`material_alpha_cutoff`](engine/render/rhi/rhi_device.h:59) 与实例数据来源标记。
+- [x] [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 与内置 fragment shader 已真实消费 alpha cutoff，不再是仅数据占位。
+- [x] 已补充 [`mesh_material_desc_test.cpp`](tests/engine/mesh_material_desc_test.cpp)、[`scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp)、[`mesh_renderer_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_renderer_test.cpp)、[`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp) 覆盖 scene / runtime / draw item 解析链路。
+- [ ] 尚未在确认可用的 CMake build 目录中完成一次真实编译与测试执行。
+
+### 4.2 动画系统最小工作流对齐
+
+**当前基础：**
+- [`Animator3DComponent`](engine/ecs/components_3d.h:157)
+- [`AnimatorSystem`](modules/gameplay_3d/animation/animator_system.h:11)
+
+**当前进度（2026-04-12）：**
+- [x] [`Scene`](engine/scene/scene.cpp:262) 已覆盖 [`blend_parameter`](engine/ecs/components_3d.h:170)、[`blend_parameter_value`](engine/ecs/components_3d.h:171) 与 [`blend_nodes`](engine/ecs/components_3d.h:169) 的 serialize / deserialize。
+- [x] [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:353) 已对动画 scene roundtrip 中的 blend node 名称、路径、权重、阈值做断言。
+- [x] [`SaveScene()`](apps/editor_cpp/src/editor_scene_io.cpp:149) / [`LoadScene()`](apps/editor_cpp/src/editor_scene_io.cpp:463) 已补齐 editor scene 对 [`Animator3DComponent`](engine/ecs/components_3d.h:157) 的 blend 参数与节点数组存取，避免 editor 桥接丢字段。
+- [x] [`AnimatorSystem::Update()`](modules/gameplay_3d/animation/animator_system.cpp:124) 已补齐 runtime 侧 clip 校验、统一采样缓存、legacy 单动画路径收口，以及 legacy 1D blend tree 的空节点 / 单节点 / 阈值夹取行为。
+- [x] [`AnimatorSystem::Update()`](modules/gameplay_3d/animation/animator_system.cpp:124) 已把 state machine 路径中的 blend tree 采样接入 [`final_bone_matrices`](engine/ecs/components_3d.h:186) 更新链路，填补此前 blend tree TODO 缺口。
+- [ ] 尚未补上面向 [`AnimatorSystem`](modules/gameplay_3d/animation/animator_system.cpp:124) 的运行时 blend 边界测试与空资源行为测试。
+
+**本周期任务：**
+- 稳定 `dskel` / `danim` / blend 参数的运行时边界。
+- 固化最小 1D blend 行为定义。
+- 明确动画资源导入、scene 表达、runtime 更新三层的责任。
+- 补齐动画空资源、单动画、双节点 blend、阈值边界测试。
+
+**验收标准：**
+- 1 个可回归的骨骼动画场景。
+- scene roundtrip 与 runtime 行为一致。
+- 动画参数与节点阈值有稳定测试覆盖。
+
+### 4.3 灯光模型全面对齐
+
+**当前基础：**
+- [`SkyLightComponent`](engine/ecs/components_3d.h:125)
+- 点光 / 聚光 / 方向光均已存在于 [`engine/ecs/components_3d.h`](engine/ecs/components_3d.h)
+
+**当前进度（2026-04-12）：**
+- [x] [`Scene`](engine/scene/scene.cpp:248) 已覆盖 [`PointLightComponent`](engine/ecs/components_3d.h:102)、[`SpotLightComponent`](engine/ecs/components_3d.h:112)、[`SkyLightComponent`](engine/ecs/components_3d.h:125) 的 scene 存档 / 读档。
+- [x] [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:311) 已对 point / spot / sky 三类灯光的 roundtrip 字段做回归。
+- [x] [`SaveScene()`](apps/editor_cpp/src/editor_scene_io.cpp:149) / [`LoadScene()`](apps/editor_cpp/src/editor_scene_io.cpp:463) 已补齐 editor scene 对 point falloff、spot 全字段、sky light 参数的桥接。
+- [ ] 尚未把多灯运行时表现、阴影开关语义和参数说明矩阵文档化到统一收口材料。
+
+**本周期任务：**
+- 固定 Directional / Point / Spot / Sky 的字段边界。
+- 补充灯光参数的统一说明：颜色、强度、半径、衰减、阴影开关。
+- 清理“参数存在但行为不明确”的部分。
+- 增加多灯场景回归。
+
+**验收标准：**
+- 四类灯光均可稳定保存、加载、运行。
+- 多灯组合在 runtime 中表现稳定。
+- 参数语义文档化，不再依赖猜测。
+
+### 4.4 阴影能力主线对齐
+
+**当前基础：**
+- 当前主线仍以 `Directional + CSM` 为主。
+
+**本周期任务：**
+- 明确当前真正支持的 shadow path。
+- 列出 `已支持 / 部分支持 / 未支持` 矩阵。
+- 补齐 spot shadow 与 point shadow 的实现任务清单。
+- 保证 `RenderStats`、shadow pass 统计可以用来做收口判断。
+
+**验收标准：**
+- 阴影支持矩阵明确。
+- 至少一条稳定的方向光阴影回归。
+- 后续 spot / point shadow 的分解任务准备完成。
+
+### 4.5 地形、剔除、粒子等 3D 子系统边界对齐
+
+**当前基础：**
+- [`TerrainComponent`](engine/ecs/components_3d.h:196)
+- [`TerrainSystem`](modules/gameplay_3d/rendering/terrain_system.h:10)
+- [`FrustumCullingSystem`](modules/gameplay_3d/rendering/frustum_culling_system.h:15)
+- [`Particle3DSystem`](modules/gameplay_3d/particles/particle3d_system.h:13)
+
+**本周期任务：**
+- 明确这些系统属于“已接入主线”还是“实验性骨架”。
+- 为每个系统补一个最小场景或回归测试。
+- 把“存在代码但无场景/无测试”的部分列为后续重点。
+
+**验收标准：**
+- 每个系统都有状态归类：稳定 / 实验 / 占位。
+- 每个系统至少有一条验证入口。
+
+---
+
+## 5. P2：3D 渲染与资源质量收口周期
+
+> 目标：在 P1 功能已经齐全的前提下，把质量、资源链、表现一致性收口。
+
+### 5.1 资源导入与烹饪链收口
+
+**本周期任务：**
+- 重新梳理 `gltf/glb -> dmesh/dmat/danim/dskel` 当前能力边界。
+- 对照 [`reference/VSEngine2.1/FBXConverter`](reference/VSEngine2.1/FBXConverter) 列出缺口，但不照搬旧工具结构。
+- 明确哪些 reference 资源可直接转，哪些需要替代资源。
+
+**验收标准：**
+- 至少一套静态网格资源和一套骨骼资源能稳定导入并进入 demo 场景。
+
+### 5.2 渲染表现一致性收口
+
+**本周期任务：**
+- 梳理 PBR 参数的真实消费路径。
+- 区分“已真实支持”与“仅存档支持”。
+- 补齐 shader / RHI / draw item 之间的字段映射清单。
+- 清理临时补偿逻辑和不透明行为。
+
+**验收标准：**
+- 参数链路清晰可追踪。
+- 关键表现项可稳定复现。
+
+### 5.3 运行时回归矩阵建立
+
+**本周期任务：**
+- 建立 3D 回归测试矩阵：材质、动画、灯光、阴影、scene roundtrip、runtime startup。
+- 统一 smoke、unit、scene regression 的分层意义。
+- 明确哪些测试是门禁级别。
+
+**验收标准：**
+- 有一份稳定的 3D 回归矩阵清单。
+- 每个功能域至少有 1 条强回归。
+
+---
+
+## 6. P3：reference demo 对齐周期
+
+> 目标：在功能对齐完成后，再开始系统做 demo，而不是边补功能边临时拼 demo。
+
+### 6.1 demo 周期原则
+
+本周期只做两件事：
+
+1. 建立 [`reference/VSEngine2.1/Demo`](reference/VSEngine2.1/Demo) 的参考清单。
+2. 逐个选择高价值 demo，在 `DSEngine` 中做对应 scene 与运行基线。
+
+demo 周期不再承担底层功能发明职责，底层缺口原则上应在 `P1/P2` 收口。
+
+### 6.2 demo 交付要求
+
+每个 demo 对齐项都必须交付：
+
+- 一个签入的 scene 文件
+- 一份资源清单
 - 一条 smoke 或 regression
-- 一份文档边界说明
-- 在进入 reference 对齐阶段时，补一个可运行的对齐 demo 或 demo 子场景，用于和 [`reference/VSEngine2.1`](reference/VSEngine2.1) 做肉眼对照
+- 一份差异说明
+- 一张截图或一条视觉基线说明
 
-`editor` 检视入口、Scene View、Gizmo 与资源调参工作流属于 `DSEngine` 的工作流增强项，原则上放在 runtime 骨架与 reference demo 基线收口之后推进；除非某项能力必须依赖 editor 才能验证，否则不将其作为当前阶段的统一硬验收条件。
+### 6.3 reference demo 完整参考列表
 
-### 3.3 原则三：优先复用当前模块化方向，不回退到旧引擎式重耦合
+下面不是“全部立即实现”，而是后续做 demo 对齐时的参考池。
 
-当前仓库已经明确 3D 要走模块化能力线，见 [`doc/DOC-14_ARCHITECTURE_OPTIMIZATION_PLAN.md`](doc/DOC-14_ARCHITECTURE_OPTIMIZATION_PLAN.md:321)。
+#### 第一优先级：直接服务当前 3D 主线
 
-因此对齐方式应是：
+- [`reference/VSEngine2.1/Demo/15/15.7/Source.cpp`](reference/VSEngine2.1/Demo/15/15.7/Source.cpp)
+- [`reference/VSEngine2.1/Demo/15/15.8/Source.cpp`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp)
+- [`reference/VSEngine2.1/Demo/15/15.9/Source.cpp`](reference/VSEngine2.1/Demo/15/15.9/Source.cpp)
+- [`reference/VSEngine2.1/Demo/14/14.8/Source.cpp`](reference/VSEngine2.1/Demo/14/14.8/Source.cpp)
+- [`reference/VSEngine2.1/Demo/14/14.9/Source.cpp`](reference/VSEngine2.1/Demo/14/14.9/Source.cpp)
+- [`reference/VSEngine2.1/Demo/16/16.7/Source.cpp`](reference/VSEngine2.1/Demo/16/16.7/Source.cpp)
+- [`reference/VSEngine2.1/Demo/16/16.8/Source.cpp`](reference/VSEngine2.1/Demo/16/16.8/Source.cpp)
 
-- 学习 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的能力结构
-- 不照搬其全部类型层级与历史包袱
-- 继续把 3D 收敛在 `modules/gameplay_3d/`、scene、editor bridge、render pipeline 的清晰边界内
+建议用途：
 
-### 3.4 原则四：3D 永远不能反向污染 2D 主线稳定性
+- `15.x`：骨骼模型、灯光、观察镜头、材质参数
+- `14.x`：场景渲染、材质、后处理或渲染组织参考
+- `16.x`：更复杂的 3D 运行表现参考
 
-任何对齐改造都必须确保：
+#### 第二优先级：可作为后续扩展参考
 
-- `DSE_ENABLE_3D=OFF` 仍然稳定
-- 2D 常用门禁不被拖慢或打散
-- 3D 的构建、测试、样例、资源路径尽量独立收口
+- [`reference/VSEngine2.1/Demo/18/18.2/Source.cpp`](reference/VSEngine2.1/Demo/18/18.2/Source.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.4/Source.cpp`](reference/VSEngine2.1/Demo/18/18.4/Source.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.7/Source.cpp`](reference/VSEngine2.1/Demo/18/18.7/Source.cpp)
+- [`reference/VSEngine2.1/Demo/19/19.2/Source.cpp`](reference/VSEngine2.1/Demo/19/19.2/Source.cpp)
+- [`reference/VSEngine2.1/Demo/21/21.1/Source.cpp`](reference/VSEngine2.1/Demo/21/21.1/Source.cpp)
+
+建议用途：
+
+- 更复杂的渲染表现
+- 更完整的运行时组合场景
+- 用于后续高阶 3D 能力验证
+
+#### 第三优先级：暂列观察池
+
+- [`reference/VSEngine2.1/Demo/3/Demo3.1/Source.cpp`](reference/VSEngine2.1/Demo/3/Demo3.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/3/Demo3.2/Source.cpp`](reference/VSEngine2.1/Demo/3/Demo3.2/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.1/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.2/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.2/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.3/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.3/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.4/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.4/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.6/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.6/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.7/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.7/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.8/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.8/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.9/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.9/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.10/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.10/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.11/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.11/Source.cpp)
+- [`reference/VSEngine2.1/Demo/4/Demo4.12/Source.cpp`](reference/VSEngine2.1/Demo/4/Demo4.12/Source.cpp)
+- [`reference/VSEngine2.1/Demo/6/Demo6.1/Source.cpp`](reference/VSEngine2.1/Demo/6/Demo6.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/7/Demo7.1/Source.cpp`](reference/VSEngine2.1/Demo/7/Demo7.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/8/8.5/Source.cpp`](reference/VSEngine2.1/Demo/8/8.5/Source.cpp)
+- [`reference/VSEngine2.1/Demo/8/8.6/Source.cpp`](reference/VSEngine2.1/Demo/8/8.6/Source.cpp)
+- [`reference/VSEngine2.1/Demo/8/8.7/Source.cpp`](reference/VSEngine2.1/Demo/8/8.7/Source.cpp)
+- [`reference/VSEngine2.1/Demo/8/8.8/Source.cpp`](reference/VSEngine2.1/Demo/8/8.8/Source.cpp)
+- [`reference/VSEngine2.1/Demo/8/Demo8.1/Source.cpp`](reference/VSEngine2.1/Demo/8/Demo8.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/11/11.1/Source.cpp`](reference/VSEngine2.1/Demo/11/11.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/12/12.1/Source.cpp`](reference/VSEngine2.1/Demo/12/12.1/Source.cpp)
+- [`reference/VSEngine2.1/Demo/12/12.3/Source.cpp`](reference/VSEngine2.1/Demo/12/12.3/Source.cpp)
+- [`reference/VSEngine2.1/Demo/13/13.9/Source.cpp`](reference/VSEngine2.1/Demo/13/13.9/Source.cpp)
+- [`reference/VSEngine2.1/Demo/13/13.12/Source.cpp`](reference/VSEngine2.1/Demo/13/13.12/Source.cpp)
+- [`reference/VSEngine2.1/Demo/14/14.2/Source.cpp`](reference/VSEngine2.1/Demo/14/14.2/Source.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.1/Demo18.1.cpp`](reference/VSEngine2.1/Demo/18/18.1/Demo18.1.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.3/Demo18.3.cpp`](reference/VSEngine2.1/Demo/18/18.3/Demo18.3.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.5/Demo18.5.cpp`](reference/VSEngine2.1/Demo/18/18.5/Demo18.5.cpp)
+- [`reference/VSEngine2.1/Demo/18/18.6/Demo18.6.cpp`](reference/VSEngine2.1/Demo/18/18.6/Demo18.6.cpp)
+- [`reference/VSEngine2.1/Demo/19/19.1/Demo19.1.cpp`](reference/VSEngine2.1/Demo/19/19.1/Demo19.1.cpp)
+
+说明：
+
+- 这部分先保留为观察池。
+- 等 `P1/P2/P3` 前两批任务稳定后，再决定是否逐步纳入。
+
+### 6.4 demo 落地顺序建议
+
+建议按以下顺序落地：
+
+1. 已有基线继续收口：
+   - [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json)
+   - [`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json)
+2. 再扩展 `15.7`
+3. 再做 `14.8 / 14.9`
+4. 再做 `16.7 / 16.8`
+5. 最后视资源与功能成熟度扩展 `18.x / 19.x / 21.x`
 
 ---
 
-## 4. 分阶段对齐改造清单
+## 7. P4：3D 编辑器补齐周期
 
-## 4.1 P0：先把“像引擎”的 3D 基础骨架补齐
+> 目标：等 runtime 和 demo 都稳定后，再补 editor，不反过来拖慢主线。
 
-这一阶段的目标不是功能多，而是让 `DSEngine` 从“3D MVP”升级为“3D 基础骨架完整”。
+### 7.1 编辑器周期只做三类事
 
-### P0-1 材质描述与实例系统收口
+#### 第一类：可视化检视补齐
 
-目标：把当前 `MeshRendererComponent` 上分散的材质字段，逐步收口为更稳定的材质描述层。
+- MeshRenderer 检视
+- MaterialInstance 检视
+- Light 组件检视
+- Animator3D 检视
+- Terrain 检视
 
-建议项：
+#### 第二类：3D 场景操作补齐
 
-- 新增 `MaterialAsset` / `MaterialInstance` 运行时抽象
-- `MeshRendererComponent` 从“直接持有全部材质参数”逐步转向“引用材质实例 + 少量覆盖字段”
-- 建立更清晰的 shader variant 与 pass 组织关系
-- 让 scene save/load、runtime 使用同一套材质序列化语义；editor inspector 作为后续增强项再接入
+- 层级选择
+- 变换 gizmo
+- 摄像机观察
+- 基础场景保存 / 回滚
 
-阶段进展（已落地）：
+#### 第三类：资源驱动工作流补齐
 
-- [`engine/assets/asset_manager.h`](engine/assets/asset_manager.h:140) 已扩展 [`MaterialAsset`](engine/assets/asset_manager.h:140) 的 `base_color`、`emissive_color`、`TextureSlots`、`ScalarOverrides` 与 `blend_mode`，形成第一批 PBR 参数承载层
-- [`engine/assets/asset_manager.cpp`](engine/assets/asset_manager.cpp:143) 已为 mesh / pbr 命名材质实例补默认 `MESH_PBR` + `Opaque` 初始化策略
-- [`engine/ecs/components_3d.h`](engine/ecs/components_3d.h:12) 已为 [`MeshRendererComponent`](engine/ecs/components_3d.h:12) 增加 `albedo/normal/metallic_roughness/emissive/occlusion` 纹理句柄字段，保留旧组件字段作为兼容回退层
-- [`engine/scene/scene.cpp`](engine/scene/scene.cpp:938) 与 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:129) 已完成 mesh 材质纹理句柄的 scene roundtrip 回归
-- [`modules/gameplay_3d/rendering/mesh_render_system.cpp`](modules/gameplay_3d/rendering/mesh_render_system.cpp:573) 已改为优先通过 [`AssetManager::GetMaterialInstance()`](engine/assets/asset_manager.h:388) 解析材质实例，并把 shader variant / base color / emissive / texture slots / scalar overrides 注入 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38)
-- [`modules/gameplay_3d/rendering/mesh_render_system.cpp`](modules/gameplay_3d/rendering/mesh_render_system.cpp:640) 已补 `normal_map_handle` 写入，打通法线贴图句柄到运行时 draw item 的链路
-- [`tests/engine/assets/asset_manager_test.cpp`](tests/engine/assets/asset_manager_test.cpp:76)、[`tests/engine/mesh_material_desc_test.cpp`](tests/engine/mesh_material_desc_test.cpp:4)、[`tests/engine/mesh_render_material_desc_static_test.cpp`](tests/engine/mesh_render_material_desc_static_test.cpp:19)、[`tests/modules/gameplay_3d/rendering/mesh_renderer_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_renderer_test.cpp:8) 已补资产存储、组件字段、静态实现约束与默认值回归
+- 材质参数调节
+- 动画资源切换
+- 场景资源引用检查
+- demo 场景在 editor 中可打开、可检查、可保存
 
-验收：
+### 7.2 编辑器周期验收标准
 
-- 至少一条 `Mesh + MaterialInstance` 的最小场景回归
-- 旧字段可迁移，不直接打断当前 MVP scene
-- 文档中明确运行时材质实例与旧字段兼容边界；Inspector 可视化作为后续增强项
-
-当前结论：运行时、scene 与 asset 三层已完成第一版材质实例/PBR 参数收口，当前仍以“材质实例优先 + 组件字段兼容回退”模式工作；Inspector 可视化与 demo 材质效果对齐继续后置。
-
-对应参考：[`VSMaterial`](reference/VSEngine2.1/VSGraphic/VSMaterial.h:389)、[`VSMaterialInstance`](reference/VSEngine2.1/VSGraphic/VSMaterial.h:612)
-
-### P0-2 3D 动画最小工作流升级
-
-目标：从“有 Animator3DComponent”升级到“有最小动画图与骨骼资源闭环”。
-
-建议项：
-
-- 明确 `dskel` / `danim` / `anim graph` 三层边界
-- 让 [`Animator3DComponent`](assets/scenes/3d_mvp_minimal.scene.json:27) 不再只停留在开关与路径，而能表达：
-  - 默认状态
-  - 参数表
-  - 状态切换
-  - 混合节点
-- 先做最小 1D blend，再考虑更高阶树
-- 资源导入链补“带骨骼动画模型”的稳定样例
-
-阶段进展（已落地）：
-
-- [`engine/ecs/components_3d.h`](engine/ecs/components_3d.h:123) 已为 `AnimBlendNode` 增加 `name` / `threshold`，并为 `Animator3DComponent` 增加 `blend_parameter` / `blend_parameter_value`
-- [`engine/scene/scene.cpp`](engine/scene/scene.cpp:219) 已完成动画混合参数与 `blend_nodes` 的序列化 / 反序列化
-- [`modules/gameplay_3d/animation/animator_system.cpp`](modules/gameplay_3d/animation/animator_system.cpp:300) 已将 legacy anim tree 从纯手工 `weight` 混合提升为基于 `threshold + blend_parameter_value` 的最小 1D blend
-- [`tests/modules/gameplay_3d/animation/animator_system_test.cpp`](tests/modules/gameplay_3d/animation/animator_system_test.cpp:8) 与 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:181) 已补参数默认值、节点阈值与 scene roundtrip 验证
-
-验收：
-
-- 一个带骨骼动画的最小 scene
-- Animator3D 的 smoke / unit / scene roundtrip
-- 文档中明确当前 anim graph 的表达边界；动画状态可视化与 editor graph 作为后续增强项
-
-当前结论：引擎运行时与 scene 数据层已具备最小 anim-tree 表达能力，后续重点转向资源样例与编辑器可视化。
-
-对应参考：[`VSAnimTree`](reference/VSEngine2.1/VSGraphic/VSAnimTree.h:12)、[`VSAnimSet`](reference/VSEngine2.1/VSGraphic/VSAnimSet.h:203)、[`VSSkeletonMeshNode`](reference/VSEngine2.1/VSGraphic/VSSkeletonMeshNode.h:10)
-
-### P0-3 Spot Light 与 Sky Light 接入
-
-目标：把当前灯光从“基础可用”升级为“常见 3D 场景够用”。
-
-建议项：
-
-- 新增 `SpotLightComponent`
-- 新增 `SkyLightComponent` 或把环境光/天空光从当前 Directional/Skybox 逻辑中拆清
-- 建立灯光统一参数结构：颜色、强度、阴影、范围、衰减、投射选项
-- 优先统一 scene serialization / runtime render 路径，Inspector 入口后置
-
-阶段进展（已落地）：
-
-- [`engine/ecs/components_3d.h`](engine/ecs/components_3d.h:90) 已为 `PointLightComponent` / `SpotLightComponent` 增加 `falloff`，并新增 `SkyLightComponent`
-- [`engine/scene/scene.cpp`](engine/scene/scene.cpp:206) 已完成 `PointLightComponent.falloff`、`SpotLightComponent`、`SkyLightComponent` 与 `Animator3DComponent.blend_parameter` / `blend_nodes` 的 scene save/load 接入
-- [`modules/gameplay_3d/rendering/mesh_render_system.cpp`](modules/gameplay_3d/rendering/mesh_render_system.cpp:528) 已让点光 / 聚光半径受 `falloff` 影响，并将 `SkyLightComponent` 以最小环境光方式接入运行时渲染
-- [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:117)、[`tests/modules/gameplay_3d/rendering/advanced_3d_components_test.cpp`](tests/modules/gameplay_3d/rendering/advanced_3d_components_test.cpp:8) 已补充 roundtrip/default/storage 回归
-
-验收：
-
-- scene 可保存 / 加载 `SpotLightComponent`
-- runtime 能跑基础 spot lighting
-- 文档中写清 `Spot/Sky Light` 的运行时边界与下一步 shadow 计划；Inspector 可调参与可视化后置
-
-当前结论：引擎侧最小闭环已具备，编辑器 Inspector 接入仍后置。
-
-对应参考：[`VSSpotLight`](reference/VSEngine2.1/VSGraphic/VSSpotLight.h:7)、[`VSSkyLight`](reference/VSEngine2.1/VSGraphic/VSSkyLight.h:7)
-
-### P0-4 阴影路径统一清单化
-
-目标：明确当前支持哪些 shadow path，哪些是下一步要补的，不再让阴影能力处于“代码里似乎有一些”的状态。
-
-建议项：
-
-- 固定当前主线阴影方案：`Directional + CSM`
-- 规划下一步阴影能力顺序：
-  1. Spot Shadow
-  2. Point Light Shadow（优先 cubemap）
-  3. 更高级阴影技术放后
-- 为每一种阴影建立最小 scene + test
-- 输出 draw call / shadow pass / frame time 的粗粒度 profiling 字段
-
-阶段进展（已落地）：
-
-- [`engine/ecs/components_3d.h`](engine/ecs/components_3d.h:82) 已明确当前三类灯光的阴影表达边界：`DirectionalLight3DComponent.cast_shadow + cascade_splits`、`PointLightComponent.cast_shadow + shadow_map_handle`、`SpotLightComponent.cast_shadow + shadow_map_handle`
-- [`engine/scene/scene.cpp`](engine/scene/scene.cpp:191) 已完成 Directional / Point / Spot 灯光阴影相关字段的 scene save/load，当前可稳定保存 `cast_shadow`、`shadow_strength`、`cascade_splits`
-- [`engine/render/rhi/rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:1038) 已明确运行时当前实际生效的阴影主线仍为 `Directional + CSM`，mesh 提交阶段统一绑定 `u_shadow_maps` 与 `u_cascade_splits`
-- [`engine/render/rhi/rhi_device.h`](engine/render/rhi/rhi_device.h:108) 已为 [`RenderStats`](engine/render/rhi/rhi_device.h:108) 增加 `mesh_count` 与 `shadow_passes`，[`engine/render/rhi/rhi_device.cpp`](engine/render/rhi/rhi_device.cpp:968) 已补运行时粗粒度阴影 pass 统计
-- [`tests/modules/gameplay_3d/rendering/csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp:8) 与 [`tests/engine/render/rhi_device_test.cpp`](tests/engine/render/rhi_device_test.cpp:14) 已覆盖 CSM 默认配置与新增渲染统计字段默认值
-
-验收：
-
-- `engine.3d.shadow.*` 基础门禁分组
-- 文档写清“已支持 / 实验性 / 暂不纳入”
-
-当前结论：当前稳定支持路径为 `Directional + CSM`；`SpotLightComponent.cast_shadow` 与 `PointLightComponent.cast_shadow` 已完成数据层和 scene 层占位，但运行时 shadow map 采样仍未真正接入，继续归类为下一批能力。
-
-对应参考：[`VSShadowPass`](reference/VSEngine2.1/VSGraphic/VSShadowPass.h:82)、[`VSCubeShadowPass`](reference/VSEngine2.1/VSGraphic/VSShadowPass.h:6)
-
-### P0-5 建立“参考 demo 重现”基线
-
-目标：把“功能对齐”升级为“可见结果对齐”，至少选取 1~2 个 [`reference/VSEngine2.1`](reference/VSEngine2.1) 代表性 3D demo，在 `DSEngine` 用同类资源和接近的镜头/灯光/材质效果重现场景。
-
-建议项：
-
-- 先选 1 个静态展示类 demo + 1 个骨骼/材质参数类 demo 作为第一批目标
-- 优先参考 [`reference/VSEngine2.1/Demo/15/15.8/Source.cpp`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp:78) 与 [`reference/VSEngine2.1/Demo/15/15.9/Source.cpp`](reference/VSEngine2.1/Demo/15/15.9/Source.cpp:84) 这类场景：都包含 camera、sky light、directional light、skeleton mesh、ground plane、可交互观察
-- 为每个目标 demo 建立“资源清单 / 场景搭建说明 / 差异说明 / 截图基线”四件套
-- 在 `DSEngine` 中固定对应 scene，避免只在临时代码里拼装
-- 明确哪些效果属于“视觉接近即可”，哪些属于“必须行为一致”
-
-验收：
-
-- `DSEngine` 中至少有 1 个签入的 reference-demo 对齐 scene
-- 同类资源可稳定导入、保存、加载、运行
-- 有截图或录屏对照基线，能用于回归检查
-- 文档中能说明当前还原到什么程度、剩余差距是什么
-
-阶段进展（已落地首个 scene 基线）：
-
-- 已确认 [`reference/VSEngine2.1/Demo/15/15.8/Source.cpp`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp:78) 与 [`reference/VSEngine2.1/Demo/15/15.9/Source.cpp`](reference/VSEngine2.1/Demo/15/15.9/Source.cpp:84) 的共同最小场景骨架均为：`Camera + 1st-person observe + Skeleton Mesh + Ground Plane + Sky Light + Directional Light`
-- 其中 [`reference/VSEngine2.1/Demo/15/15.8/Source.cpp`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp:82) 已被选为首个签入 scene 的视觉基线，因为它主要验证镜头、灯光、骨骼模型与地面组合，不依赖运行时交互材质参数
-- [`reference/VSEngine2.1/Demo/15/15.9/Source.cpp`](reference/VSEngine2.1/Demo/15/15.9/Source.cpp:98) 仍作为第二阶段目标，用于验证 `skeleton mesh -> material instance -> runtime parameter override` 的连续链路；其关键行为是对两个材质实例持续写入 `SpecularPow`
-- 当前 [`DSEngine`](.) 侧对齐 scene 已签入为 [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1)，采用“角色占位 mesh + ground plane + directional light + sky light + skybox”的第一阶段近似构图
-- 对齐实现已优先走“签入 scene 文件 + 运行时直接加载”路径；其 scene 骨架继续复用 [`engine/scene/scene.cpp`](engine/scene/scene.cpp:56) 现有 `material_schema_version/materials/entities` 序列化结构
-- 对应最小验证已补到 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:385)、[`tests/engine/scene/editor_scene_io_bridge_test.cpp`](tests/engine/scene/editor_scene_io_bridge_test.cpp:30) 与 [`tests/engine/cpp_runtime_startup_scene_test.cpp`](tests/engine/cpp_runtime_startup_scene_test.cpp:75)，用于覆盖 checked-in scene 反序列化、editor bridge roundtrip 与 startup smoke
-
-建议的首批 demo 映射：
-
-1. Demo 15.8 -> `DSEngine` 首个签入对齐 scene（优先落地）
-   - Camera：使用 [`Camera3DComponent`](engine/ecs/components_3d.h:50) + [`FreeCameraControllerComponent`](engine/ecs/components_3d.h:188)，初始位姿尽量贴近 `VSVector3(0,100,-300)` 的观察关系，但按当前单位系折算为更适合 MVP 资源尺度的距离
-   - Skeleton Mesh：先使用当前可稳定导入的骨骼模型资源，占位复现“主展示角色”
-   - Ground Plane：优先用大尺度平面 mesh 或放大 cube 近似 [`NewOceanPlane.STMODEL`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp:94)，并保持 `cast_shadow/receive_shadow` 策略与参考接近
-   - Sky Light：使用 [`SkyLightComponent`](engine/ecs/components_3d.h:118)，颜色直接映射参考 demo 的 `up/down color`
-   - Directional Light：使用 [`DirectionalLight3DComponent`](engine/ecs/components_3d.h:82)，保留当前稳定主线 `Directional + CSM`
-
-2. Demo 15.9 -> 材质实例交互验证 scene（次级落地）
-   - 复用 15.8 的场景构图，减少视觉变量
-   - 额外要求：场景中的 skeleton mesh 至少绑定 2 个可寻址材质实例
-   - 运行时需要最小参数覆盖接口，把“`SpecularPow` 可按键调节”映射到 `DSEngine` 当前材质实例/PBR 参数体系可表达的等价字段
-   - 如果当前 shader 语义中尚无逐帧 `SpecularPow` 专用入口，则先以“roughness / metallic / emissive / normal_strength 中一项可交互改变并能稳定反映到画面”作为第一阶段替代基线
-
-四件套落地模板：
-
-- 资源清单：列出 skeleton mesh、ground mesh、可能需要的贴图与材质实例 ID
-- 场景搭建说明：记录 camera 初始位姿、光照颜色/方向、地面缩放、阴影开关
-- 差异说明：明确哪些地方是“资源不同但构图等价”，哪些是“当前引擎能力暂以近似效果替代”
-- 截图基线：至少固定 1 张正视角 + 1 张斜视角，后续用于 smoke / 人工回归对照
-
-当前结论：P0-5 已从“仅有首个 checked-in reference-demo scene 基线”推进到“15.8 静态构图 + 15.9 占位材质交互入口”并行阶段；[`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1) 已签入两份可寻址材质实例占位，[`samples/cpp/phase1_demo_logic.cpp`](samples/cpp/phase1_demo_logic.cpp:15) 已在 startup-scene 模式下为其创建运行时材质实例，并将参考 demo 中的 `SpecularPow0/1` 按键交互近似映射到 `roughness + emissive` 变化。下一步应继续补齐 `reference_demo_15_9` 的 smoke / 场景回归 / 截图基线收口，并把 [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1) 与 [`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1) 从占位资源版本升级为更接近参考 demo 的真实骨骼资源；editor bridge 继续保留，但不再作为本轮 reference 对齐阶段的主优先级。
+- reference scene 能在 editor 中稳定打开。
+- 关键 3D 组件可视化检视完整。
+- 编辑器修改不会破坏 runtime scene roundtrip。
 
 ---
 
-## 4.2 P1：先把 reference demo 对齐与资源导入链做实
+## 8. 周期清单总表
 
-### P1-1 资源导入链扩充到 `FBX + glTF` 双入口
+## P1：3D 运行时功能全面对齐
 
-目标：保留现代化 `glTF/glb` 主路径，同时补齐老项目常见 `FBX` 输入兼容。
+- [~] 材质与网格渲染链路对齐（scene / runtime / draw item / OpenGL shader 已打通，待真实构建验证与材质字段支持矩阵文档补全）
+- [~] 动画系统最小工作流对齐（scene / editor 桥接已补齐 blend 参数与节点数组，待 runtime blend 边界测试收口）
+- [~] 灯光模型全面对齐（scene / editor 桥接已补齐 point / spot / sky 字段，待多灯 runtime 与参数矩阵文档收口）
+- [ ] 阴影能力主线对齐
+- [ ] 地形 / 剔除 / 粒子等子系统状态归类与验证入口补齐
 
-建议项：
+## P2：3D 渲染与资源质量收口
 
-- 在 [`apps/tools/asset_builder/main.cpp`](apps/tools/asset_builder/main.cpp:8) 现有链路上扩充 `FBX` 输入
-- 输出统一仍建议落到 `dmesh / dmat / danim / dskel`
-- 明确资源导入失败日志、依赖缺失日志、路径规范
-- 增加一组“签入资源 + 构建期或测试期导入验证”
+- [ ] 资源导入与烹饪链收口
+- [ ] 渲染表现一致性收口
+- [ ] 3D 回归矩阵建立
 
-验收：
+## P3：reference demo 对齐
 
-- 至少 1 个 glTF 样例、1 个 FBX 样例稳定导入
-- 动画 / skeleton / material 输出文件完整
-- 文档说明推荐格式与兼容格式
+- [ ] 收口 [`reference_demo_15_8`](assets/scenes/reference_demo_15_8.scene.json)
+- [ ] 收口 [`reference_demo_15_9`](assets/scenes/reference_demo_15_9.scene.json)
+- [ ] 新增 `15.7` 对齐 demo
+- [ ] 新增 `14.8 / 14.9` 对齐 demo
+- [ ] 新增 `16.7 / 16.8` 对齐 demo
+- [ ] 视情况扩展 `18.x / 19.x / 21.x`
 
-### P1-2 reference demo 结果固化与回归收口
+## P4：3D 编辑器补齐
 
-目标：把当前已签入的 `reference_demo_*` 从“可运行占位 scene”升级为“可稳定回归的 reference 对齐样例”。
-
-建议项：
-
-- 为 [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1) 与 [`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1) 固化截图基线、参数记录与资源映射
-- 优先替换当前占位 skeleton mesh，提升与 [`reference/VSEngine2.1/Demo/15/15.8/Source.cpp`](reference/VSEngine2.1/Demo/15/15.8/Source.cpp:78) / [`reference/VSEngine2.1/Demo/15/15.9/Source.cpp`](reference/VSEngine2.1/Demo/15/15.9/Source.cpp:84) 的视觉接近度
-- 把 `15.9` 中的材质交互行为继续收敛为稳定 smoke / regression
-- 文档中明确“视觉近似项”和“行为必须一致项”的边界
-
-验收：
-
-- 至少 2 个 reference demo 对齐 scene 具备可复现截图基线与参数记录
-- scene load / startup smoke / 关键资源存在性检查可以稳定回归
-- 文档能解释当前还原程度、资源差异与剩余能力缺口
-
-### P1-3 Morph Target 最小链路
-
-目标：补齐面部、形变类动画所需的基础能力。
-
-建议项：
-
-- 定义 Morph 资源格式或在现有资产格式中扩展
-- Runtime 增加 morph weight 驱动
-- 材质 / shader 路径支持 morph data
-- Inspector 能看到 morph channel 与权重
-
-验收：
-
-- 一个最小 morph 样例场景
-- scene save/load 不丢 morph 配置
-- 单元测试能覆盖权重变更与边界情况
-
-对应参考：[`VSMorphSet`](reference/VSEngine2.1/VSGraphic/VSMorphSet.h:76)、[`VSDx11ShaderConstant.cpp`](reference/VSEngine2.1/VSDx11Renderer/VSDx11ShaderConstant.cpp:65)
-
-## 4.3 P2：补 `DSEngine` 自身 editor 工作流与 preview 能力
-
-这一阶段的重点不再是直接对齐 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的 runtime 功能，而是补齐 `DSEngine` 自身的 3D 制作流、预览流与后处理体验。只有在 P0/P1 的 runtime 与 demo 收口完成后，才适合进入。
-
-### P2-1 3D Scene View / Gizmo / Camera 操作增强
-
-目标：让编辑器从“能检视 3D 组件”升级到“能基本编辑 3D 场景”。
-
-建议项：
-
-- 统一 3D Scene View 摄像机导航
-- 完善位移 / 旋转 / 缩放 Gizmo 行为
-- 增加对齐、局部/世界坐标切换、吸附等高频能力
-- 增加基础 3D 选中反馈与包围盒辅助
-
-验收：
-
-- 可在 editor 中完成最小 3D 场景布局编辑
-- Play / Edit 不污染 3D 组件状态
-- 有 editor smoke 覆盖关键交互
-
-### P2-2 3D Post Process 基础矩阵
-
-目标：把当前 `PostProcessComponent` 从零散参数提升为有限可控的后处理集合。
-
-建议项：
-
-- 先固定 2~3 个高价值后处理：Bloom、Tone Mapping、Color Adjust
-- 明确每个效果的开关、参数、执行顺序
-- 在 render pipeline 中收口 pass 组织
-- Editor inspector 与 runtime 输出一致
-
-验收：
-
-- 可在最小 scene 中稳定启用/禁用
-- 有最小性能观测字段
-- 有配置 roundtrip 测试
-
-对应参考：[`VSPostEffectSet`](reference/VSEngine2.1/VSGraphic/VSPostEffectSet.h:15)、[`VSPostEffectPass`](reference/VSEngine2.1/VSGraphic/VSPostEffectPass.h:6)
-
-## 4.4 P3：扩展到真正“功能面接近 `VSEngine2.1`”
-
-这一阶段不应过早开始，只有在 P0/P1/P2 收口完成后才适合进入。
-
-### P3-1 Terrain LOD 生态
-
-建议顺序：
-
-1. 当前 TerrainComponent 参数清理与性能基线
-2. Chunk / patch 化管理
-3. CPU LOD 或距离驱动简化
-4. 再考虑 GPU LOD / ROAM 类复杂方案
-
-对应参考：[`VSCLodTerrainNode`](reference/VSEngine2.1/VSGraphic/VSCLodTerrainNode.h:6)、[`VSGPULodTerrainNode`](reference/VSEngine2.1/VSGraphic/VSGPULodTerrainNode.h:6)
-
-### P3-2 Point Light Shadow / 高级阴影方案
-
-建议顺序：
-
-1. Point Light Cubemap Shadow
-2. Spot Shadow 稳定化
-3. 再评估 Volume / Dual Paraboloid 是否还有投入价值
-
-对应参考：[`VSCubeShadowPass`](reference/VSEngine2.1/VSGraphic/VSShadowPass.h:6)、[`VSDualParaboloidShadowPass`](reference/VSEngine2.1/VSGraphic/VSShadowPass.h:116)
-
-### P3-3 动画图增强
-
-建议项：
-
-- 2D 参数驱动 blend
-- partial body / additive blend
-- 动画事件
-- 更可视化的 editor graph
-
-对应参考：[`VSPartialAnimBlend`](reference/VSEngine2.1/VSGraphic/VSPartialAnimBlend.h:12)、[`VSAdditiveBlend`](reference/VSEngine2.1/VSGraphic/VSAdditiveBlend.h:6)、[`VSRectAnimBlend`](reference/VSEngine2.1/VSGraphic/VSRectAnimBlend.h:31)
-
-### P3-4 3D 粒子与效果生态
-
-建议项：
-
-- 补 billboard / mesh particle 二分
-- 补基础 emitter shape、lifetime、velocity over time、color over time
-- 把 3D 粒子放进材质/后处理/阴影边界中统一看待
+- [ ] Mesh / Material / Light / Animator / Terrain 检视补齐
+- [ ] 3D 场景操作补齐
+- [ ] demo 场景 editor 工作流补齐
 
 ---
 
-## 5. 结构化执行清单
+## 9. 当前执行结论
 
-以下清单用于后续逐项落地。
+从当前代码状态出发，最合理的推进方式已经固定：
 
-### 5.1 必做项（优先级最高，先做 runtime foundation）
+1. **先做 P1，补齐 3D runtime 全功能边界。**
+2. **再做 P2，把渲染质量、资源链、回归矩阵收口。**
+3. **再做 P3，系统性对齐 [`reference/VSEngine2.1/Demo`](reference/VSEngine2.1/Demo)。**
+4. **最后做 P4，补编辑器。**
 
-- [ ] 建立 `3D Alignment` 文档与路线口径统一
-- [ ] 收口材质实例系统，减少 `MeshRendererComponent` 直接材质字段散落
-- [ ] 升级 `Animator3DComponent` 为最小动画图工作流
-- [ ] 接入 `SpotLightComponent`
-- [ ] 接入 `SkyLightComponent` / 环境光统一结构
-- [ ] 明确阴影主线与非主线能力分层
-- [ ] 为新增 3D 能力同步补 scene / smoke / regression / 文档边界
-
-### 5.2 应做项（P0 完成后，先做 demo 与资源链）
-
-- [ ] 扩展资源导入链到 `FBX + glTF`
-- [ ] 固化 `reference demo -> DSE scene` 的截图、参数、资源映射与 smoke/regression 口径
-- [ ] 增加 Morph Target 最小链路
-- [x] 给 3D profiling 增加 draw call / shadow pass / material switch / frame timing 观测（首版运行时统计）
-- [x] 建立 `reference demo -> DSE scene` 的截图、参数、资源映射表（文档级首版）
-
-### 5.3 后续工作流增强项（demo 收口后进入）
-
-- [ ] 强化 Scene View 与 3D Gizmo 编辑体验
-- [ ] 固定一组最小后处理矩阵
-
-当前已固定的首版映射建议：
-
-| Reference demo | `DSEngine` scene | 资源映射 | 参数映射 | 当前截图基线建议 |
-| --- | --- | --- | --- | --- |
-| `15.8` | [`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1) | `Skeleton Mesh -> assets/meshes/reference_demo_character_placeholder.fbx`（占位）、`Ground -> models/cube.dmesh`、`Sky -> assets/skyboxes/default_sky`（占位） | `DirectionalLight/SkyLight` 直接映射到 [`DirectionalLight3DComponent`](engine/ecs/components_3d.h:82) 与 [`SkyLightComponent`](engine/ecs/components_3d.h:118) | 固定 1 张正视角、1 张斜视角，机位取 scene 中 [`Camera3DComponent`](engine/ecs/components_3d.h:50) 初始位姿 |
-| `15.9` | [`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1) | `Skeleton Mesh -> assets/meshes/reference_demo_character_placeholder.fbx`（占位）、两个可寻址材质实例槽位 `430001/430002`、`Ground -> models/cube.dmesh` | `SpecularPow0/1 -> roughness + emissive`，运行时更新实现位于 [`samples/cpp/phase1_demo_logic.cpp`](samples/cpp/phase1_demo_logic.cpp:94) | 固定 1 张初始状态图，再分别记录 `spec0/spec1` 调整后的高/低两组参数截图，优先局部角色区域 |
-
-### 5.4 延后项（P2/P3 后评估）
-
-- [ ] Terrain 多级 LOD 生态
-- [ ] Point Light Cubemap Shadow
-- [ ] 更完整动画图编辑器
-- [ ] 更系统 3D 粒子生态
-- [ ] 更复杂大场景 streaming / async upload
-
----
-
-## 6. reference demo 对齐交付要求
-
-为了避免“文档里说对齐，实际没有可看结果”，后续每一轮 3D 对齐都建议附带以下交付物：
-
-1. 一个参考目标：明确对应哪个 [`reference/VSEngine2.1/Demo`](reference/VSEngine2.1/Demo)
-2. 一份资源映射：旧 demo 使用了哪些 mesh / skeleton / material / texture，`DSEngine` 里分别如何导入与落盘
-3. 一个签入 scene：能直接在 `DSEngine` 启动或 editor 打开
-4. 一组视觉基线：至少包含同机位截图、灯光参数、材质参数记录；遵循 [`doc/DOC-11_AI_DRIVEN_TEST_STRATEGY.md`](doc/DOC-11_AI_DRIVEN_TEST_STRATEGY.md:268) 的“少量基线图、固定分辨率、固定相机、优先局部区域比对”原则
-5. 一条回归：验证 scene load、关键组件存在、关键资源加载成功
-
-建议把这类场景单独归档为 `reference demo reproduction` 子集合，而不是混入普通 smoke scene。
-
----
-
-## 7. 推荐里程碑
-
-### M1：3D Foundation
-
-完成标志：
-
-- 材质实例系统落地第一版
-- Spot / Sky light 可用
-- Animator3D 最小图可运行
-- 至少 1 个 reference demo 对齐 scene 可运行
-- 新增能力具备 scene + test + 文档边界闭环
-
-### M2：Reference Demo Reproduction
-
-完成标志：
-
-- glTF / FBX 双入口可导入
-- 至少 2 个 reference demo 对齐结果有截图基线与参数记录
-- `reference_demo_*` 的 startup smoke / scene regression / 资源映射口径稳定
-- 后处理与 profiling 有最小统一口径
-- 3D `engine.3d.*` 门禁成组稳定
-
-### M3：3D Preview Workflow
-
-完成标志：
-
-- Editor 可完成最小 3D 制作流
-- Scene View / Gizmo / Camera 操作具备最小可用闭环
-- Play / Edit 隔离不污染 3D 组件状态
-- editor smoke 能覆盖关键交互
-
-### M4：3D Feature Expansion
-
-完成标志：
-
-- Terrain / shadow / animation / particle 进入第二层扩展
-- 3D 能力广度开始逼近 [`reference/VSEngine2.1`](reference/VSEngine2.1)
-- 但仍保持当前仓库的模块化与可验证边界
-
----
-
-## 8. 不建议直接照搬的部分
-
-为了避免把旧引擎包袱复制进来，以下内容不建议直接照搬：
-
-- 过重的类层级与历史命名体系
-- DX9/DX11 时代耦合严重的 renderer / material 接口形式
-- 大量以继承层次扩张功能的做法
-- 在未完成 MVP/Preview 闭环前提前铺满所有 terrain / shadow / animation 变体
-
-建议保留的是：
-
-- 功能分层思路
-- 资源链路深度
-- 动画 / 灯光 / 阴影 / 地形这些核心 3D 子系统的完整性意识
-
----
-
-## 9. 最终结论
-
-如果要让 `DSEngine` 的 3D 向 [`reference/VSEngine2.1`](reference/VSEngine2.1) 看齐，最合理的方式不是“全面补功能”，而是分四步走：
-
-1. **先补 runtime 骨架**：材质实例、动画图、Spot/Sky Light、阴影分层
-2. **再补 demo 重现基线**：挑选代表性 reference demo，用同类资源在 `DSEngine` 跑出可对照结果
-3. **再补 `DSEngine` 自身工作流**：资源导入、Scene View、后处理、profiling、editor 闭环
-4. **最后补生态深度**：Terrain LOD、高级阴影、Morph、复杂动画图、粒子生态
-
-一句话总结：
-
-> `DSEngine` 3D 对齐 [`reference/VSEngine2.1`](reference/VSEngine2.1) 的核心，不只是把功能点补齐，还要把 reference demo 用同类资源真实重现出来；因此主线应升级为“材质、动画、光照阴影、资源导入、编辑器工作流、demo 重现”六条主链共同收口。
+后续所有 3D 工作，都应以上述周期清单为准，不再回到“功能、demo、编辑器同时摊大饼”的推进方式。

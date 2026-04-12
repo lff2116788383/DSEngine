@@ -61,6 +61,7 @@ set(DSE_ENGINE_TEST_SOURCES
     ../modules/gameplay_3d/rendering/frustum_culling_test.cpp
     ../modules/gameplay_3d/rendering/advanced_3d_components_test.cpp
     ../modules/gameplay_3d/ai/steering_system_test.cpp
+    ../modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/time.cpp
     ${CMAKE_SOURCE_DIR}/engine/base/debug.cpp
     ${CMAKE_SOURCE_DIR}/engine/input/input.cpp
