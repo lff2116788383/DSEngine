@@ -136,13 +136,23 @@ bool FramePipeline::Init() {
     }
 
     render_resources_.sprite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({true, 0x0302, 0x0303});
-    
+    if (render_resources_.sprite_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: sprite pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
+
     PipelineStateDesc mesh_desc;
     mesh_desc.blend_enabled = false;
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
     mesh_desc.culling_enabled = true;
     render_resources_.mesh_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(mesh_desc);
+    if (render_resources_.mesh_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: mesh pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
 
     PipelineStateDesc prez_desc;
     prez_desc.blend_enabled = false;
@@ -151,6 +161,11 @@ bool FramePipeline::Init() {
     prez_desc.culling_enabled = true;
     // In a real engine we disable color write, but for now we'll just write to a depth-only FBO
     render_resources_.prez_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(prez_desc);
+    if (render_resources_.prez_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: prez pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
 
     PipelineStateDesc shadow_desc;
     shadow_desc.blend_enabled = false;
@@ -159,18 +174,31 @@ bool FramePipeline::Init() {
     shadow_desc.culling_enabled = true;
     shadow_desc.cull_face = 0x0404; // GL_FRONT to avoid peter-panning
     render_resources_.shadow_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(shadow_desc);
-    
+    if (render_resources_.shadow_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: shadow pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
+
     render_resources_.composite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({false, 0x0302, 0x0303});
-    
+    if (render_resources_.composite_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: composite pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
+
+    DEBUG_LOG_INFO("FramePipeline init: systems init begin");
     physics2d_system_.Init(*runtime_context_.world);
     spine_system_.SetAssetManager(&asset_manager);
     audio_system_.Initialize(&asset_manager);
     mesh_render_system_.SetAssetManager(&asset_manager);
+    DEBUG_LOG_INFO("FramePipeline init: systems init complete");
 
 #ifdef DSE_ENABLE_3D
     const auto runtime_modules = ResolveRuntimeModules();
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
+    DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
     if (enable_gameplay3d) {
         auto lib_3d = std::make_unique<dse::core::DynamicLibrary>();
         const std::vector<std::string> candidates = {
@@ -183,10 +211,12 @@ bool FramePipeline::Init() {
         bool loaded = false;
         for (const auto& candidate : candidates) {
             if (lib_3d->Load(candidate)) {
+                DEBUG_LOG_INFO("FramePipeline init: loaded 3D module candidate {}", candidate);
                 loaded = true;
                 break;
             }
         }
+        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module load result={}", loaded);
         if (loaded) {
             using CreateModuleFunc = dse::core::IModule*(*)();
             using DestroyModuleFunc = void(*)(dse::core::IModule*);
@@ -195,22 +225,29 @@ bool FramePipeline::Init() {
             if (create_func && destroy_func) {
                 dse::core::IModule* module_instance = create_func();
                 if (module_instance) {
+                    DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module instance created");
                     if (!module_instance->OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
+                        DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D module OnInit returned false");
                         destroy_func(module_instance);
                     } else {
+                        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module OnInit OK");
                         modules_.push_back({std::move(lib_3d), module_instance, destroy_func});
                     }
+                } else {
+                    DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D CreateModule returned null");
                 }
             }
         }
     }
 #endif
 
+    DEBUG_LOG_INFO("FramePipeline init: scene regression begin");
     bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample("bin/scene_roundtrip_regression.json");
     DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
     bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
-    
+    DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
+
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },
         [this]() { return LastMaxBatchSprites(); },

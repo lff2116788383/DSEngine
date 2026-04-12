@@ -23,6 +23,7 @@ struct EditorHierarchyPanelContext {
     World& world;
     entt::registry& registry;
     entt::entity& selected_entity;
+    bool read_only = false;
 };
 
 void DrawHierarchyPanel(EditorHierarchyPanelContext& context);

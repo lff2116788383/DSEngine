@@ -125,11 +125,6 @@ void SetupImGuiStyle() {
     style.TabBorderSize = 0.0f;
 }
 
-enum class EditorState {
-    Edit,
-    Play
-};
-
 extern std::vector<std::string> g_editor_languages;
 extern int g_editor_language_index;
 extern int g_current_gizmo_operation;
@@ -284,6 +279,8 @@ void EnsureEditorLocalizationData() {
 
 
 void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
+    const bool read_only = GetEditorState() == EditorState::Play;
+
     if (registry.all_of<UIAnchorComponent>(entity)) {
         if (ImGui::CollapsingHeader("UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& anchor = registry.get<UIAnchorComponent>(entity);
@@ -293,29 +290,33 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
                 "BottomRight", "StretchAll", "StretchHorizontal", "StretchVertical"
             };
             int current_anchor = static_cast<int>(anchor.anchor);
+            ImGui::BeginDisabled(read_only);
             if (ImGui::Combo("Anchor Preset", &current_anchor, anchor_types, IM_ARRAYSIZE(anchor_types))) {
                 anchor.anchor = current_anchor;
             }
             ImGui::DragFloat2("Offset", glm::value_ptr(anchor.offset), 1.0f);
-            
             if (ImGui::Button("Remove UI Anchor", ImVec2(-1, 0))) {
                 registry.remove<UIAnchorComponent>(entity);
             }
+            ImGui::EndDisabled();
         }
     } else {
+        ImGui::BeginDisabled(read_only);
         if (ImGui::Button("Add UI Anchor", ImVec2(-1, 0))) {
             registry.emplace<UIAnchorComponent>(entity);
         }
+        ImGui::EndDisabled();
     }
 
     if (registry.all_of<UIGridLayoutComponent>(entity)) {
         if (ImGui::CollapsingHeader("UI Grid Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& grid = registry.get<UIGridLayoutComponent>(entity);
+            ImGui::BeginDisabled(read_only);
             ImGui::DragInt("Columns", &grid.columns, 0.1f, 0, 100);
             ImGui::DragInt("Rows", &grid.rows, 0.1f, 0, 100);
             ImGui::DragFloat2("Cell Size", glm::value_ptr(grid.cell_size), 1.0f);
             ImGui::DragFloat2("Spacing", glm::value_ptr(grid.spacing), 1.0f);
-            
+
             const char* align_types[] = {
                 "TopLeft", "TopCenter", "TopRight",
                 "MiddleLeft", "MiddleCenter", "MiddleRight",
@@ -329,37 +330,44 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
             if (ImGui::Button("Remove UI Grid Layout", ImVec2(-1, 0))) {
                 registry.remove<UIGridLayoutComponent>(entity);
             }
+            ImGui::EndDisabled();
         }
     } else {
+        ImGui::BeginDisabled(read_only);
         if (ImGui::Button("Add UI Grid Layout", ImVec2(-1, 0))) {
             registry.emplace<UIGridLayoutComponent>(entity);
         }
+        ImGui::EndDisabled();
     }
 
     if (registry.all_of<UICanvasScalerComponent>(entity)) {
         if (ImGui::CollapsingHeader("UI Canvas Scaler", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& scaler = registry.get<UICanvasScalerComponent>(entity);
+            ImGui::BeginDisabled(read_only);
             ImGui::DragFloat2("Reference Resolution", glm::value_ptr(scaler.reference_resolution), 1.0f);
             ImGui::Checkbox("Match Width Or Height", &scaler.match_width_or_height);
             if (scaler.match_width_or_height) {
                 ImGui::SliderFloat("Match (0=Width, 1=Height)", &scaler.scale_factor, 0.0f, 1.0f);
             }
-            
+
             if (ImGui::Button("Remove UI Canvas Scaler", ImVec2(-1, 0))) {
                 registry.remove<UICanvasScalerComponent>(entity);
             }
+            ImGui::EndDisabled();
         }
     } else {
+        ImGui::BeginDisabled(read_only);
         if (ImGui::Button("Add UI Canvas Scaler", ImVec2(-1, 0))) {
             registry.emplace<UICanvasScalerComponent>(entity);
         }
+        ImGui::EndDisabled();
     }
 
     if (registry.all_of<UIAnimationComponent>(entity)) {
         if (ImGui::CollapsingHeader("UI Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& anim = registry.get<UIAnimationComponent>(entity);
-            
-            // Playback controls
+            ImGui::BeginDisabled(read_only);
+
             if (anim.playing) {
                 if (ImGui::Button("Stop##UIAnim", ImVec2(-1, 0))) anim.playing = false;
             } else {
@@ -370,43 +378,36 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
                     anim.reverse = false;
                 }
             }
-            
+
             ImGui::Separator();
             ImGui::Text("Animation Properties");
-            
-            // Time and Flow
             ImGui::DragFloat("Duration (s)", &anim.duration, 0.01f, 0.0f, 10.0f);
             ImGui::DragFloat("Delay (s)", &anim.delay, 0.01f, 0.0f, 10.0f);
-            
+
             ImGui::Checkbox("Loop", &anim.loop);
             ImGui::SameLine();
             ImGui::Checkbox("Ping Pong", &anim.ping_pong);
-            
+
             const char* easing_types[] = { "Linear", "Ease-In", "Ease-Out", "Ease-In-Out" };
             ImGui::Combo("Easing", &anim.easing, easing_types, IM_ARRAYSIZE(easing_types));
-            
+
             ImGui::Separator();
             ImGui::Text("Targets (Enable to animate)");
-            
-            // Position
             ImGui::Checkbox("##anim_pos", &anim.animate_position); ImGui::SameLine();
             if (anim.animate_position) {
                 ImGui::DragFloat2("Target Position", glm::value_ptr(anim.target_position), 1.0f);
             } else { ImGui::TextDisabled("Target Position"); }
-            
-            // Scale
+
             ImGui::Checkbox("##anim_scale", &anim.animate_scale); ImGui::SameLine();
             if (anim.animate_scale) {
                 ImGui::DragFloat2("Target Scale", glm::value_ptr(anim.target_scale), 0.05f);
             } else { ImGui::TextDisabled("Target Scale"); }
-            
-            // Alpha
+
             ImGui::Checkbox("##anim_alpha", &anim.animate_alpha); ImGui::SameLine();
             if (anim.animate_alpha) {
                 ImGui::DragFloat("Target Alpha", &anim.target_alpha, 0.05f, 0.0f, 1.0f);
             } else { ImGui::TextDisabled("Target Alpha"); }
-            
-            // Color
+
             ImGui::Checkbox("##anim_color", &anim.animate_color); ImGui::SameLine();
             if (anim.animate_color) {
                 ImGui::ColorEdit4("Target Color", glm::value_ptr(anim.target_color));
@@ -415,16 +416,24 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
             if (ImGui::Button("Remove UI Animation", ImVec2(-1, 0))) {
                 registry.remove<UIAnimationComponent>(entity);
             }
+            ImGui::EndDisabled();
         }
     } else {
+        ImGui::BeginDisabled(read_only);
         if (ImGui::Button("Add UI Animation", ImVec2(-1, 0))) {
             registry.emplace<UIAnimationComponent>(entity);
         }
+        ImGui::EndDisabled();
+    }
+
+    if (read_only) {
+        ImGui::TextDisabled("Play 模式下已禁用 UI Layout Inspector 编辑。请退出 Play 后修改 UI 布局组件。");
     }
 }
 
 void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_texture, unsigned int game_texture) {
     static entt::entity selected_entity = entt::null;
+    static EditorState last_editor_state = EditorState::Edit;
     World& world = engine.pipeline()->world();
     auto& registry = world.registry();
     static bool is2D = false;
@@ -436,14 +445,29 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     static bool collider_is_trigger = false;
     static char localization_preview_key[128] = "editor.preview.status";
     static char localization_preview_fallback[128] = "Language: {lang}";
+
+    if (last_editor_state != GetEditorState() && GetEditorState() == EditorState::Edit) {
+        selected_entity = entt::null;
+        inspector_active = true;
+        inspector_static = false;
+        sprite_flip_x = false;
+        sprite_flip_y = false;
+        collider_is_trigger = false;
+        std::strncpy(localization_preview_key, "editor.preview.status", sizeof(localization_preview_key) - 1);
+        localization_preview_key[sizeof(localization_preview_key) - 1] = '\0';
+        std::strncpy(localization_preview_fallback, "Language: {lang}", sizeof(localization_preview_fallback) - 1);
+        localization_preview_fallback[sizeof(localization_preview_fallback) - 1] = '\0';
+    }
+    last_editor_state = GetEditorState();
+
     dse::editor::BeginEditorShell();
-    dse::editor::EditorShellContext shell_context{engine, registry, selected_entity};
+    dse::editor::EditorShellContext shell_context{engine, registry, selected_entity, GetEditorState() == EditorState::Play};
     dse::editor::DrawEditorMainMenu(shell_context);
 
     DrawEditorToolbar(engine, registry, selected_entity);
 
     // Panels (Unity-style layout)
-    dse::editor::EditorHierarchyPanelContext hierarchy_context{world, registry, selected_entity};
+    dse::editor::EditorHierarchyPanelContext hierarchy_context{world, registry, selected_entity, GetEditorState() == EditorState::Play};
     dse::editor::DrawHierarchyPanel(hierarchy_context);
 
     dse::editor::EditorInspectorPanelContext inspector_context{
@@ -451,7 +475,8 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
         selected_entity,
         is2D,
         inspector_active,
-        inspector_static
+        inspector_static,
+        GetEditorState() == EditorState::Play
     };
     dse::editor::DrawInspectorPanel(inspector_context, DrawUILayoutInspector);
 
@@ -462,6 +487,7 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
         registry,
         selected_entity,
         is2D,
+        GetEditorState() == EditorState::Play,
         localization_preview_key,
         sizeof(localization_preview_key),
         localization_preview_fallback,

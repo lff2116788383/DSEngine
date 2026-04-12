@@ -1,6 +1,7 @@
 #include "catch/catch.hpp"
 
 #include "engine/scene/scene.h"
+#include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "apps/editor_cpp/src/editor_scene_io.h"
 
@@ -67,4 +68,58 @@ TEST_CASE("Given_Engine3DMvpScene_When_CopiedIntoEditorRegistry_Then_EditorScene
     REQUIRE(light.enabled);
     REQUIRE(light.intensity == Approx(1.8f));
     REQUIRE(light.cast_shadow);
+}
+
+TEST_CASE("Given_RuntimeOnly2DState_When_CopiedBetweenRegistries_Then_RuntimeFieldsAreResetForPlayExitRestore", "[engine][unit][scene][editor][copy_registry]") {
+    entt::registry runtime_registry;
+    const auto entity = runtime_registry.create();
+
+    auto& label = runtime_registry.emplace<UILabelComponent>(entity);
+    label.text = "Score: 99";
+    label.dirty = false;
+    label.runtime_glyph_entities = {entt::entity{42}, entt::entity{77}};
+
+    auto& rigidbody = runtime_registry.emplace<RigidBody2DComponent>(entity);
+    rigidbody.type = RigidBody2DType::Dynamic;
+    rigidbody.velocity = glm::vec2(4.0f, -2.0f);
+    rigidbody.gravity_scale = 2.5f;
+    rigidbody.fixed_rotation = true;
+    rigidbody.runtime_body = reinterpret_cast<b2Body*>(static_cast<uintptr_t>(0x1));
+
+    auto& emitter = runtime_registry.emplace<ParticleEmitterComponent>(entity);
+    emitter.max_particles = 64;
+    emitter.emit_rate = 12.0f;
+    emitter.emit_rate_scale = 1.5f;
+    emitter.emit_accumulator = 3.25f;
+    emitter.pending_burst = 5;
+    emitter.particles.push_back(Particle2D{});
+    emitter.particles.push_back(Particle2D{});
+
+    entt::registry copied_registry;
+    CopyRegistry(copied_registry, runtime_registry);
+
+    auto copied_view = copied_registry.view<UILabelComponent, RigidBody2DComponent, ParticleEmitterComponent>();
+    REQUIRE(copied_view.begin() != copied_view.end());
+    const auto copied_entity = *copied_view.begin();
+
+    const auto& copied_label = copied_registry.get<UILabelComponent>(copied_entity);
+    REQUIRE(copied_label.text == "Score: 99");
+    REQUIRE(copied_label.dirty);
+    REQUIRE(copied_label.runtime_glyph_entities.empty());
+
+    const auto& copied_rigidbody = copied_registry.get<RigidBody2DComponent>(copied_entity);
+    REQUIRE(copied_rigidbody.type == RigidBody2DType::Dynamic);
+    REQUIRE(copied_rigidbody.velocity.x == Approx(4.0f));
+    REQUIRE(copied_rigidbody.velocity.y == Approx(-2.0f));
+    REQUIRE(copied_rigidbody.gravity_scale == Approx(2.5f));
+    REQUIRE(copied_rigidbody.fixed_rotation);
+    REQUIRE(copied_rigidbody.runtime_body == nullptr);
+
+    const auto& copied_emitter = copied_registry.get<ParticleEmitterComponent>(copied_entity);
+    REQUIRE(copied_emitter.max_particles == 64);
+    REQUIRE(copied_emitter.emit_rate == Approx(12.0f));
+    REQUIRE(copied_emitter.emit_rate_scale == Approx(1.5f));
+    REQUIRE(copied_emitter.emit_accumulator == Approx(0.0f));
+    REQUIRE(copied_emitter.pending_burst == 0);
+    REQUIRE(copied_emitter.particles.empty());
 }

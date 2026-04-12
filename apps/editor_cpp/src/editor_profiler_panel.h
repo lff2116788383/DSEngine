@@ -12,6 +12,7 @@ struct EditorProfilerContext {
     dse::profiler::RenderProfiler& render_profiler;
 };
 
+void ResetProfilerPanelState();
 void DrawProfilerPanel(EditorProfilerContext& context);
 
 } // namespace dse::editor

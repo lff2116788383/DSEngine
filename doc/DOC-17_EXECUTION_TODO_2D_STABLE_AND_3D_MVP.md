@@ -45,7 +45,7 @@
 - [x] 检查 Scene save/load 主链是否存在明显脏状态问题（已确认当前至少存在 `tests/engine/scene/scene_flow_test.cpp` 与 `tests/engine/scene/editor_scene_io_bridge_test.cpp` 两条基础回归链；当前问题不是“完全无覆盖”，而是后续需要进一步提炼为 2D Stable 高频闭环检查项）
 - [x] 检查 Play/Edit 切换是否污染运行态（代码审计结论：当前 `apps/editor_cpp/src/editor_toolbar.cpp` 的 Play/Stop 主要依赖 `entt::registry` 级别 backup/restore；尚未看到对 runtime 子系统、脚本状态、音频/定时器/其他单例状态的完整隔离或回滚，因此当前结构存在运行态污染风险，后续应作为 2D Stable 的高频闭环问题继续收口）
 - [x] 检查 Inspector 对高频 2D 组件的修改反馈是否一致（代码审计结论：当前 2D Inspector 整体采用“直接改组件字段”的即时写入模式，但存在明显不一致：部分组件会显式标记 `dirty`（如 `TransformComponent` / `UILabelComponent`），部分高频组件则缺少统一 dirty/刷新语义（如 `SpriteRendererComponent` / `RigidBody2DComponent` / `ParticleEmitterComponent`）；另外 `Sprite Renderer` 区域的 UI 表述与底层字段 `shader_variant` 的语义存在混用，后续应作为高频编辑反馈一致性问题继续收口）
-- [ ] 只挑选 2~3 个最影响闭环的问题进入修复
+- [x] 只挑选 2~3 个最影响闭环的问题进入修复（本轮已实际落地并编译验证：Play/Edit 最小状态隔离、Inspector 高频 2D 组件 dirty/refresh 语义、Sprite Renderer Inspector 字段语义对齐；同时额外补收了 Play 模式下 3D Inspector、Hierarchy、File 菜单、Localization Preview、UI Layout Inspector 的只读保护）
 
 ### B2.1 当前选中的高优先修复问题池
 
@@ -71,10 +71,10 @@
 
 #### P0 当前最小手工验证计划（Play/Edit 第一刀）
 
-建议在继续补第二刀前，先做以下 5 项最小手工验证：
+建议基于当前这一轮 editor_cpp 改造，按以下顺序执行最小手工回归：
 
 1. **基本进入/退出 Play 不崩**
-   - 启动 `bin/dsengine-editor.exe`
+   - 启动 [`bin/dsengine-editor.exe`](bin/dsengine-editor.exe)
    - 打开当前可编辑的 2D scene
    - 点击 Play，等待 2~3 秒，再点击 Stop
    - 期望：不崩溃、不挂死、可顺利回到 Edit
@@ -84,18 +84,51 @@
    - Enter Play → 等待 → Stop
    - 期望：回到 Edit 后恢复为进入 Play 前的值
 
-3. **Lua runtime 残留是否明显减少**
+3. **2D Inspector 修改反馈是否一致**
+   - 在 Edit 下分别修改：
+     - `Transform`
+     - `Sprite Renderer`
+     - `RigidBody2D`
+     - `UILabel`
+     - `ParticleEmitter`
+   - 期望：修改后 Inspector 反馈稳定，无明显“改了但视图/状态不刷新”的现象
+
+4. **Play 中 3D Inspector 是否只读**
+   - 选中带 3D 组件的实体后进入 Play
+   - 尝试修改 MeshRenderer / Camera3D / RigidBody3D / Collider / ParticleSystem3D / PostProcess 等字段
+   - 期望：控件禁用，不能直接改写运行中的 3D 组件状态
+
+5. **Play 中场景结构入口是否被禁用**
+   - 进入 Play 后分别检查：
+     - Hierarchy 右键创建/删除/复制
+     - File 菜单中的 New/Open/Save/Save As
+   - 期望：这些入口处于禁用态，并出现只读提示
+
+6. **Play 中辅助写入口是否被禁用**
+   - 进入 Play 后检查：
+     - Localization Preview 的 Preview Key / Fallback / Apply To Selected UILabel
+     - UI Layout Inspector 的 Add/Remove/属性编辑/UI Animation 控制
+   - 期望：这些入口被禁用，并出现只读提示
+
+7. **退出 Play 后 editor-side 状态是否恢复**
+   - Edit 下先选中实体、改动 Localization Preview 输入、观察 Profiler 曲线
+   - Enter Play → Stop
+   - 期望：
+     - `selected_entity` 被清空
+     - Localization Preview 输入恢复默认值
+     - Profiler history 被清空
+     - Inspector / editor UI 不出现明显脏状态残留
+
+8. **Lua runtime 残留是否明显减少**
    - 对会走 Lua runtime 的 scene 连续执行 2~3 次 Play / Stop
    - 期望：不出现明显的脚本残留/重复初始化/越来越异常的状态
 
-4. **音频是否残留到 Edit**
+9. **音频是否残留到 Edit**
    - 用可触发 BGM/SFX 的 scene 进入 Play
    - 播放声音后点击 Stop
    - 期望：回到 Edit 后运行态音频停止
 
-5. **选择态与 Inspector 是否回到合理状态**
-   - Edit 下选中实体 → Play → Stop
-   - 期望：`selected_entity` 清空行为稳定，Inspector 不出现明显错误状态
+如果以上 9 项都通过，可认为当前 editor_cpp 的“Play 为观察态、Edit 为编辑态”的第一阶段闭环已经基本成立。
 
 ### B3. 文档与口径
 
@@ -107,10 +140,16 @@
 
 ## C. 第 2 周 TODO（2D 对外可展示）
 
-- [ ] 选定或整理一个最小 2D showcase 场景
-- [ ] 明确该场景覆盖的能力项（UI / localization / particle / physics2d / spine / animation / tilemap）
+- [x] 选定或整理一个最小 2D showcase 场景
+- [x] 明确该场景覆盖的能力项（UI / localization / particle / physics2d / spine / animation / tilemap）
 - [ ] 用该场景反向检查编辑器高频路径问题
 - [ ] 为该 showcase 场景补一条最小运行/回归说明
+
+### C.1 当前已落地的最小 2D showcase 入口
+
+- Lua runtime 新增 `phase1_2d_showcase` 入口，优先复用现有 phase1 资源路径与 2D 运行时 API。
+- 第一版 showcase 当前覆盖：camera、sprite、tilemap、physics2d、UI label / numeric label / button / panel、particle burst、audio、animator。
+- 第一版 showcase 暂未把“运行时主动切语言”纳入必选演示项，因为当前 Lua API 尚未暴露 localization bindings；该项保留为后续增强，不影响第一版正式对外演示。
 
 ---
 

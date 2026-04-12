@@ -16,6 +16,7 @@ set(DSE_ENGINE_TEST_SOURCES
     scene/octree_test.cpp
     scene/scene_flow_test.cpp
     scene/editor_scene_io_bridge_test.cpp
+    editor/editor_undo_test.cpp
     runtime/runtime_access_test.cpp
     runtime/frame_pipeline_static_regression_test.cpp
     cpp_runtime_startup_scene_test.cpp

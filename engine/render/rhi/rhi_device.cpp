@@ -761,22 +761,61 @@ void OpenGLRhiDevice::BeginFrame() {
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     unsigned int handle = ++next_render_target_handle_;
     unsigned int color_texture_handle = 0;
+    unsigned int depth_texture_handle = 0;
+    unsigned int fbo_handle = 0;
+
+    auto cleanup_failed_rt = [&]() {
+        if (fbo_handle != 0) {
+            glDeleteFramebuffers(1, &fbo_handle);
+            resource_ledger_.framebuffers_destroyed += 1;
+            fbo_handle = 0;
+        }
+        if (depth_texture_handle != 0) {
+            glDeleteTextures(1, &depth_texture_handle);
+            resource_ledger_.textures_destroyed += 1;
+            depth_texture_handle = 0;
+        }
+        if (color_texture_handle != 0) {
+            glDeleteTextures(1, &color_texture_handle);
+            resource_ledger_.textures_destroyed += 1;
+            color_texture_handle = 0;
+        }
+    };
+
     glGenTextures(1, &color_texture_handle);
     resource_ledger_.textures_created += 1;
-    unsigned int depth_texture_handle = 0;
+    if (color_texture_handle == 0) {
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment ({}x{}, color={}, depth={}, mipmaps={})",
+            desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+        return 0;
+    }
+
     if (desc.has_depth) {
         glGenTextures(1, &depth_texture_handle);
         resource_ledger_.textures_created += 1;
+        if (depth_texture_handle == 0) {
+            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{}, color={}, depth={}, mipmaps={})",
+                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+            cleanup_failed_rt();
+            return 0;
+        }
     }
-    unsigned int fbo_handle = 0;
+
     glGenFramebuffers(1, &fbo_handle);
     resource_ledger_.framebuffers_created += 1;
+    if (fbo_handle == 0) {
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenFramebuffers returned 0 ({}x{}, color={}, depth={}, mipmaps={})",
+            desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+        cleanup_failed_rt();
+        return 0;
+    }
+
     glBindTexture(GL_TEXTURE_2D, color_texture_handle);
-    
+
     // Support Phase 2 HDR and mipmaps
     GLint internal_format = desc.has_color ? GL_RGBA16F : GL_RGBA;
     GLenum type = desc.has_color ? GL_FLOAT : GL_UNSIGNED_BYTE;
-    
+
     if (desc.generate_mipmaps) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -787,7 +826,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, internal_format, desc.width, desc.height, 0, GL_RGBA, type, nullptr);
-    
+
     if (desc.generate_mipmaps) {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
@@ -800,11 +839,23 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
     }
+
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_handle);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texture_handle, 0);
     if (desc.has_depth) {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture_handle, 0);
     }
+
+    const GLenum framebuffer_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (framebuffer_status != GL_FRAMEBUFFER_COMPLETE) {
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{:X} ({}x{}, color={}, depth={}, mipmaps={})",
+            static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        cleanup_failed_rt();
+        return 0;
+    }
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
     render_targets_[handle] = {desc, fbo_handle, color_texture_handle, depth_texture_handle};

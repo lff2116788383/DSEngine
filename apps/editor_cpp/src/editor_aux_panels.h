@@ -13,6 +13,7 @@ struct EditorAuxPanelsContext {
     entt::registry& registry;
     entt::entity selected_entity;
     bool is_2d = false;
+    bool read_only = false;
     char* localization_preview_key = nullptr;
     std::size_t localization_preview_key_size = 0;
     char* localization_preview_fallback = nullptr;

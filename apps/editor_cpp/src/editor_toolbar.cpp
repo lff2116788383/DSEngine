@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "editor_profiler_panel.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/world.h"
@@ -21,16 +22,21 @@ std::unique_ptr<entt::registry> g_backup_registry;
 void MarkAllUILabelsDirty(entt::registry& registry) {
     auto view = registry.view<UILabelComponent>();
     for (auto entity : view) {
-        view.get<UILabelComponent>(entity).dirty = true;
+        auto& label = view.get<UILabelComponent>(entity);
+        label.runtime_glyph_entities.clear();
+        label.dirty = true;
     }
 }
 
-enum class EditorState {
-    Edit,
-    Play,
-    Pause
-};
 EditorState g_editor_state = EditorState::Edit;
+
+EditorState GetEditorState() {
+    return g_editor_state;
+}
+
+bool IsEditorInPlayMode() {
+    return g_editor_state == EditorState::Play;
+}
 
 namespace {
 
@@ -60,6 +66,8 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
         CopyRegistry(registry, *g_backup_registry);
         g_backup_registry.reset();
     }
+    MarkAllUILabelsDirty(registry);
+    dse::editor::ResetProfilerPanelState();
     selected_entity = entt::null;
     g_editor_state = EditorState::Edit;
 }

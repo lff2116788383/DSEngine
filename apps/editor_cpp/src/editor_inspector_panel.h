@@ -10,6 +10,7 @@ struct EditorInspectorPanelContext {
     bool is_2d;
     bool& inspector_active;
     bool& inspector_static;
+    bool read_only = false;
 };
 
 void DrawInspectorPanel(EditorInspectorPanelContext& context,

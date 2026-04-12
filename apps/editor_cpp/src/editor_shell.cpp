@@ -82,20 +82,23 @@ void DrawEditorMainMenu(EditorShellContext& context) {
     }
 
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("New Scene")) {
+        if (ImGui::MenuItem("New Scene", nullptr, false, !context.read_only)) {
             context.registry.clear();
             context.selected_entity = entt::null;
         }
-        if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
+        if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !context.read_only)) {
             LoadScene(context.registry, "scene.json");
             context.selected_entity = entt::null;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Save", "Ctrl+S")) {
+        if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {
             SaveScene(context.registry, "scene.json");
         }
-        if (ImGui::MenuItem("Save As...")) {
+        if (ImGui::MenuItem("Save As...", nullptr, false, !context.read_only)) {
             SaveScene(context.registry, "scene.json");
+        }
+        if (context.read_only) {
+            ImGui::TextDisabled("Play 模式下已禁用场景文件读写。");
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {

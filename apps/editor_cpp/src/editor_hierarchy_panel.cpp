@@ -56,28 +56,28 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
     }
 
     if (ImGui::BeginPopupContextWindow()) {
-        if (ImGui::MenuItem("Create Empty Entity")) {
+        if (ImGui::MenuItem("Create Empty Entity", nullptr, false, !context.read_only)) {
             auto new_ent = context.world.CreateEntity();
             context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
             context.registry.emplace<TransformComponent>(new_ent);
             context.selected_entity = new_ent;
         }
-        if (ImGui::MenuItem("Create UI Entity")) {
+        if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
             auto new_ent = context.world.CreateEntity();
             context.registry.emplace<EditorNameComponent>(new_ent, "New UI Element");
             context.registry.emplace<TransformComponent>(new_ent);
             context.registry.emplace<UIRendererComponent>(new_ent);
             context.selected_entity = new_ent;
         }
-        if (ImGui::BeginMenu("Create 3D Object")) {
-            if (ImGui::MenuItem("Camera 3D")) {
+        if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
+            if (ImGui::MenuItem("Camera 3D", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Camera 3D");
                 context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 0, 5));
                 context.registry.emplace<dse::Camera3DComponent>(new_ent);
                 context.selected_entity = new_ent;
             }
-            if (ImGui::MenuItem("Directional Light")) {
+            if (ImGui::MenuItem("Directional Light", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Directional Light");
                 auto& t = context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 5, 0));
@@ -85,7 +85,7 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 context.registry.emplace<dse::DirectionalLight3DComponent>(new_ent);
                 context.selected_entity = new_ent;
             }
-            if (ImGui::MenuItem("Cube")) {
+            if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Cube");
                 context.registry.emplace<TransformComponent>(new_ent);
@@ -93,7 +93,7 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 mesh.mesh_path = "data/models/cube.dmesh";
                 context.selected_entity = new_ent;
             }
-            if (ImGui::MenuItem("Physics Box")) {
+            if (ImGui::MenuItem("Physics Box", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Physics Box");
                 context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 5, 0));
@@ -103,7 +103,7 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 context.registry.emplace<dse::BoxCollider3DComponent>(new_ent);
                 context.selected_entity = new_ent;
             }
-            if (ImGui::MenuItem("Particle System 3D")) {
+            if (ImGui::MenuItem("Particle System 3D", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Particle 3D");
                 context.registry.emplace<TransformComponent>(new_ent);
@@ -112,11 +112,11 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             }
             ImGui::EndMenu();
         }
-        if (context.selected_entity != entt::null && ImGui::MenuItem("Delete Entity")) {
+        if (context.selected_entity != entt::null && ImGui::MenuItem("Delete Entity", nullptr, false, !context.read_only)) {
             context.world.DestroyEntity(context.selected_entity);
             context.selected_entity = entt::null;
         }
-        if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity")) {
+        if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
             const entt::entity source = context.selected_entity;
             auto new_ent = context.world.CreateEntity();
             auto copy_component = [&](auto type_tag) {
@@ -195,6 +195,10 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 context.registry.get<TransformComponent>(new_ent).dirty = true;
             }
             context.selected_entity = new_ent;
+        }
+        if (context.read_only) {
+            ImGui::Separator();
+            ImGui::TextDisabled("Play 模式下已禁用层级创建、删除、复制操作。");
         }
         ImGui::EndPopup();
     }

@@ -75,6 +75,15 @@ void PushHistorySample(std::vector<float>& history, float value) {
 
 } // namespace
 
+void ResetProfilerPanelState() {
+    CPUFrameHistory().clear();
+    FPSHistory().clear();
+    RenderDrawCallHistory().clear();
+    MemoryUsageHistory().clear();
+    LastProfiledFrame() = -1;
+    ProfilerExportStatus().clear();
+}
+
 void DrawProfilerPanel(EditorProfilerContext& context) {
     auto& g_cpu_profiler = context.cpu_profiler;
     auto& g_memory_profiler = context.memory_profiler;
@@ -92,6 +101,7 @@ void DrawProfilerPanel(EditorProfilerContext& context) {
         g_cpu_profiler.Reset();
         g_memory_profiler.Reset();
         g_render_profiler.Reset();
+        ResetProfilerPanelState();
     }
     ImGui::SameLine();
     ImGui::TextDisabled("Editor-side runtime metrics preview");

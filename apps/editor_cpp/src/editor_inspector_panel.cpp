@@ -13,6 +13,7 @@
 #include <variant>
 
 #include "editor_shared_components.h"
+#include "editor_toolbar.h"
 
 namespace dse::editor {
 
@@ -25,6 +26,35 @@ namespace {
     ImGui::SetNextItemWidth(-1); \
     code; \
     ImGui::NextColumn();
+
+bool IsInspectorReadOnly(const EditorInspectorPanelContext& context) {
+    return IsEditorInPlayMode() && !context.is_2d;
+}
+
+void BeginInspectorReadOnlyScope(const EditorInspectorPanelContext& context) {
+    if (IsInspectorReadOnly(context)) {
+        ImGui::BeginDisabled(true);
+    }
+}
+
+void EndInspectorReadOnlyScope(const EditorInspectorPanelContext& context) {
+    if (IsInspectorReadOnly(context)) {
+        ImGui::EndDisabled();
+    }
+}
+
+void MarkSpriteRendererDirty(SpriteRendererComponent& sprite) {
+    sprite.texture.reset();
+}
+
+void MarkRigidBody2DDirty(RigidBody2DComponent& rb2d) {
+    rb2d.runtime_body = nullptr;
+}
+
+void MarkParticleEmitterDirty(ParticleEmitterComponent& emitter) {
+    emitter.particles.clear();
+    emitter.pending_burst = 0;
+}
 
 void DrawInspectorHeader(EditorInspectorPanelContext& context) {
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.18f, 0.18f, 0.22f, 1.0f));
@@ -112,14 +142,15 @@ void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 80.0f);
 
     ImGui::AlignTextToFramePadding();
-    ImGui::Text("Sprite");
+    ImGui::Text("Shader");
     ImGui::NextColumn();
     ImGui::SetNextItemWidth(-1);
-    ImGui::Button(sprite.shader_variant.empty() ? "None (Texture)" : "Texture Set", ImVec2(-1, 0));
+    ImGui::Button(sprite.shader_variant.empty() ? "None" : sprite.shader_variant.c_str(), ImVec2(-1, 0));
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
             const char* path = static_cast<const char*>(payload->Data);
             sprite.shader_variant = path;
+            MarkSpriteRendererDirty(sprite);
         }
         ImGui::EndDragDropTarget();
     }
@@ -128,6 +159,7 @@ void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
     float color[4] = {sprite.color.r, sprite.color.g, sprite.color.b, sprite.color.a};
     INSPECTOR_PROPERTY("Color", if (ImGui::ColorEdit4("##color", color)) {
         sprite.color = glm::vec4(color[0], color[1], color[2], color[3]);
+        MarkSpriteRendererDirty(sprite);
     });
 
     ImGui::Columns(1);
@@ -150,14 +182,18 @@ void DrawRigidBody2DSection(EditorInspectorPanelContext& context) {
     int current_type = static_cast<int>(rb2d.type);
     INSPECTOR_PROPERTY("Body Type", if (ImGui::Combo("##type", &current_type, body_types, IM_ARRAYSIZE(body_types))) {
         rb2d.type = static_cast<RigidBody2DType>(current_type);
+        MarkRigidBody2DDirty(rb2d);
     });
 
     float vel[2] = {rb2d.velocity.x, rb2d.velocity.y};
     INSPECTOR_PROPERTY("Velocity", if (ImGui::DragFloat2("##vel", vel, 0.1f)) {
         rb2d.velocity = glm::vec2(vel[0], vel[1]);
+        MarkRigidBody2DDirty(rb2d);
     });
 
-    INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat("##grav", &rb2d.gravity_scale, 0.1f));
+    INSPECTOR_PROPERTY("Gravity", if (ImGui::DragFloat("##grav", &rb2d.gravity_scale, 0.1f)) {
+        MarkRigidBody2DDirty(rb2d);
+    });
     ImGui::Columns(1);
 }
 
@@ -173,6 +209,7 @@ void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "mesh_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
 
     char mesh_buf[256] = {};
     std::strncpy(mesh_buf, mesh.mesh_path.c_str(), sizeof(mesh_buf) - 1);
@@ -191,6 +228,7 @@ void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
     ImGui::Separator();
     INSPECTOR_PROPERTY("Receive Shadow", ImGui::Checkbox("##receive_shadow", &mesh.receive_shadow));
 
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -206,11 +244,13 @@ void DrawCamera3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "cam3d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##cam3d_enabled", &camera.enabled));
     INSPECTOR_PROPERTY("Priority", ImGui::DragInt("##cam3d_priority", &camera.priority, 1));
     INSPECTOR_PROPERTY("FOV", ImGui::DragFloat("##cam3d_fov", &camera.fov, 1.0f, 10.0f, 170.0f));
     INSPECTOR_PROPERTY("Near Clip", ImGui::DragFloat("##cam3d_near", &camera.near_clip, 0.05f, 0.01f, 10.0f));
     INSPECTOR_PROPERTY("Far Clip", ImGui::DragFloat("##cam3d_far", &camera.far_clip, 10.0f, 10.0f, 10000.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -226,11 +266,13 @@ void DrawDirectionalLightSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "dirlight_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##dirlight_enabled", &light.enabled));
     INSPECTOR_PROPERTY("Direction", ImGui::DragFloat3("##dirlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f));
     INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##dirlight_color", glm::value_ptr(light.color)));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##dirlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Ambient", ImGui::DragFloat("##dirlight_amb", &light.ambient_intensity, 0.05f, 0.0f, 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -246,10 +288,12 @@ void DrawPointLightSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "ptlight_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##ptlight_enabled", &light.enabled));
     INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##ptlight_color", glm::value_ptr(light.color)));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##ptlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##ptlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -265,6 +309,7 @@ void DrawSkyboxSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "skybox_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##skybox_enabled", &skybox.enabled));
 
     char path_buf[256] = {};
@@ -273,6 +318,7 @@ void DrawSkyboxSection(EditorInspectorPanelContext& context) {
         skybox.cubemap_path = path_buf;
     });
 
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -288,6 +334,7 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "anim_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##anim_enabled", &animator.enabled));
 
     char skel_buf[256] = {};
@@ -328,6 +375,7 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
         INSPECTOR_PROPERTY("Loop", ImGui::Checkbox("##anim_loop", &animator.loop));
     }
 
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -343,11 +391,13 @@ void DrawFreeCameraControllerSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "freecam_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##freecam_enabled", &controller.enabled));
     INSPECTOR_PROPERTY("Move Speed", ImGui::DragFloat("##freecam_speed", &controller.move_speed, 0.1f, 0.1f, 100.0f));
     INSPECTOR_PROPERTY("Sensitivity", ImGui::DragFloat("##freecam_sens", &controller.mouse_sensitivity, 0.01f, 0.01f, 2.0f));
     INSPECTOR_PROPERTY("Pitch", ImGui::DragFloat("##freecam_pitch", &controller.pitch, 1.0f, -89.0f, 89.0f));
     INSPECTOR_PROPERTY("Yaw", ImGui::DragFloat("##freecam_yaw", &controller.yaw, 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -363,6 +413,7 @@ void DrawTerrainSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "terrain_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##terrain_enabled", &terrain.enabled));
 
     char path_buf[256] = {};
@@ -376,6 +427,7 @@ void DrawTerrainSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Depth", if (ImGui::DragFloat("##terrain_depth", &terrain.depth, 1.0f, 10.0f, 1000.0f)) { terrain.is_dirty = true; });
     INSPECTOR_PROPERTY("Max Height", if (ImGui::DragFloat("##terrain_height", &terrain.max_height, 0.5f, 1.0f, 200.0f)) { terrain.is_dirty = true; });
     INSPECTOR_PROPERTY("Dynamic LOD", ImGui::Checkbox("##terrain_lod", &terrain.use_dynamic_lod));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -491,37 +543,38 @@ void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "particle_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
-    INSPECTOR_PROPERTY("Emitting", ImGui::Checkbox("##emitting", &emitter.emitting));
-    INSPECTOR_PROPERTY("Max Particles", ImGui::DragInt("##max_particles", &emitter.max_particles, 1.0f, 1, 5000));
-    INSPECTOR_PROPERTY("Emit Rate", ImGui::DragFloat("##emit_rate", &emitter.emit_rate, 0.1f, 0.0f, 1000.0f));
+    INSPECTOR_PROPERTY("Emitting", if (ImGui::Checkbox("##emitting", &emitter.emitting)) { MarkParticleEmitterDirty(emitter); });
+    INSPECTOR_PROPERTY("Max Particles", if (ImGui::DragInt("##max_particles", &emitter.max_particles, 1.0f, 1, 5000)) { MarkParticleEmitterDirty(emitter); });
+    INSPECTOR_PROPERTY("Emit Rate", if (ImGui::DragFloat("##emit_rate", &emitter.emit_rate, 0.1f, 0.0f, 1000.0f)) { MarkParticleEmitterDirty(emitter); });
     INSPECTOR_PROPERTY("Burst", if (ImGui::Button("Emit 10", ImVec2(-1, 0))) { emitter.pending_burst += 10; });
-    INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat3("##gravity", glm::value_ptr(emitter.gravity), 0.05f));
+    INSPECTOR_PROPERTY("Gravity", if (ImGui::DragFloat3("##gravity", glm::value_ptr(emitter.gravity), 0.05f)) { MarkParticleEmitterDirty(emitter); });
 
     ImGui::Separator();
     ImGui::Text("Randomize Params");
-    INSPECTOR_PROPERTY("Enable Random", ImGui::Checkbox("##random_params", &emitter.use_random_params));
+    INSPECTOR_PROPERTY("Enable Random", if (ImGui::Checkbox("##random_params", &emitter.use_random_params)) { MarkParticleEmitterDirty(emitter); });
 
     if (emitter.use_random_params) {
-        INSPECTOR_PROPERTY("Life Time", ImGui::DragFloat2("##life_time_range", &emitter.life_time_min, 0.05f, 0.05f, 30.0f));
-        INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##size_range", &emitter.size_min, 0.05f, 0.01f, 100.0f));
-        INSPECTOR_PROPERTY("Velocity Min", ImGui::DragFloat3("##vel_min", glm::value_ptr(emitter.velocity_min), 0.1f));
-        INSPECTOR_PROPERTY("Velocity Max", ImGui::DragFloat3("##vel_max", glm::value_ptr(emitter.velocity_max), 0.1f));
+        INSPECTOR_PROPERTY("Life Time", if (ImGui::DragFloat2("##life_time_range", &emitter.life_time_min, 0.05f, 0.05f, 30.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Size", if (ImGui::DragFloat2("##size_range", &emitter.size_min, 0.05f, 0.01f, 100.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Velocity Min", if (ImGui::DragFloat3("##vel_min", glm::value_ptr(emitter.velocity_min), 0.1f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Velocity Max", if (ImGui::DragFloat3("##vel_max", glm::value_ptr(emitter.velocity_max), 0.1f)) { MarkParticleEmitterDirty(emitter); });
     } else {
-        INSPECTOR_PROPERTY("Life Time", ImGui::DragFloat("##life_time", &emitter.start_life_time, 0.05f, 0.05f, 30.0f));
-        INSPECTOR_PROPERTY("Start Size", ImGui::DragFloat("##start_size", &emitter.start_size, 0.05f, 0.01f, 100.0f));
-        INSPECTOR_PROPERTY("Start Color", ImGui::ColorEdit4("##start_color", glm::value_ptr(emitter.start_color)));
+        INSPECTOR_PROPERTY("Life Time", if (ImGui::DragFloat("##life_time", &emitter.start_life_time, 0.05f, 0.05f, 30.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Start Size", if (ImGui::DragFloat("##start_size", &emitter.start_size, 0.05f, 0.01f, 100.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Start Color", if (ImGui::ColorEdit4("##start_color", glm::value_ptr(emitter.start_color))) { MarkParticleEmitterDirty(emitter); });
     }
 
-    auto draw_curve_inspector = [](const char* label_text, ParticleCurve& curve, float min_val, float max_val) {
-        INSPECTOR_PROPERTY(label_text, ImGui::Checkbox((std::string("##enabled_") + label_text).c_str(), &curve.enabled));
+    auto draw_curve_inspector = [&emitter](const char* label_text, ParticleCurve& curve, float min_val, float max_val) {
+        INSPECTOR_PROPERTY(label_text, if (ImGui::Checkbox((std::string("##enabled_") + label_text).c_str(), &curve.enabled)) { MarkParticleEmitterDirty(emitter); });
         if (curve.enabled) {
             const char* curve_types[] = { "Linear", "EaseIn", "EaseOut", "EaseInOut" };
             int current_type = static_cast<int>(curve.type);
             INSPECTOR_PROPERTY("  Type", if (ImGui::Combo((std::string("##type_") + label_text).c_str(), &current_type, curve_types, IM_ARRAYSIZE(curve_types))) {
                 curve.type = static_cast<ParticleCurveType>(current_type);
+                MarkParticleEmitterDirty(emitter);
             });
-            INSPECTOR_PROPERTY("  Start", ImGui::DragFloat((std::string("##start_") + label_text).c_str(), &curve.start_value, 0.05f, min_val, max_val));
-            INSPECTOR_PROPERTY("  End", ImGui::DragFloat((std::string("##end_") + label_text).c_str(), &curve.end_value, 0.05f, min_val, max_val));
+            INSPECTOR_PROPERTY("  Start", if (ImGui::DragFloat((std::string("##start_") + label_text).c_str(), &curve.start_value, 0.05f, min_val, max_val)) { MarkParticleEmitterDirty(emitter); });
+            INSPECTOR_PROPERTY("  End", if (ImGui::DragFloat((std::string("##end_") + label_text).c_str(), &curve.end_value, 0.05f, min_val, max_val)) { MarkParticleEmitterDirty(emitter); });
         }
     };
 
@@ -537,14 +590,15 @@ void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
     int collision_mode = static_cast<int>(emitter.collision_mode);
     INSPECTOR_PROPERTY("Mode", if (ImGui::Combo("##collision_mode", &collision_mode, collision_modes, IM_ARRAYSIZE(collision_modes))) {
         emitter.collision_mode = static_cast<ParticleCollisionMode>(collision_mode);
+        MarkParticleEmitterDirty(emitter);
     });
 
     if (emitter.collision_mode != ParticleCollisionMode::None) {
-        INSPECTOR_PROPERTY("Bounce", ImGui::DragFloat("##collision_bounce", &emitter.collision_bounce, 0.01f, 0.0f, 1.0f));
-        INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##collision_friction", &emitter.collision_friction, 0.01f, 0.0f, 1.0f));
-        INSPECTOR_PROPERTY("Life Loss", ImGui::DragFloat("##collision_life_loss", &emitter.collision_life_loss, 0.01f, 0.0f, 1.0f));
+        INSPECTOR_PROPERTY("Bounce", if (ImGui::DragFloat("##collision_bounce", &emitter.collision_bounce, 0.01f, 0.0f, 1.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Friction", if (ImGui::DragFloat("##collision_friction", &emitter.collision_friction, 0.01f, 0.0f, 1.0f)) { MarkParticleEmitterDirty(emitter); });
+        INSPECTOR_PROPERTY("Life Loss", if (ImGui::DragFloat("##collision_life_loss", &emitter.collision_life_loss, 0.01f, 0.0f, 1.0f)) { MarkParticleEmitterDirty(emitter); });
         if (emitter.collision_mode == ParticleCollisionMode::GroundPlane) {
-            INSPECTOR_PROPERTY("Ground Y", ImGui::DragFloat("##ground_y", &emitter.ground_y, 0.05f));
+            INSPECTOR_PROPERTY("Ground Y", if (ImGui::DragFloat("##ground_y", &emitter.ground_y, 0.05f)) { MarkParticleEmitterDirty(emitter); });
         }
     }
 
@@ -564,6 +618,7 @@ void DrawRigidBody3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "rb3d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     const char* types[] = { "Static", "Kinematic", "Dynamic" };
     int type_idx = static_cast<int>(rb.type);
     INSPECTOR_PROPERTY("Body Type", if (ImGui::Combo("##rb3d_type", &type_idx, types, IM_ARRAYSIZE(types))) {
@@ -574,6 +629,7 @@ void DrawRigidBody3DSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Angular Drag", ImGui::DragFloat("##rb3d_angdrag", &rb.angular_drag, 0.05f, 0.0f));
     INSPECTOR_PROPERTY("Use Gravity", ImGui::Checkbox("##rb3d_grav", &rb.use_gravity));
     INSPECTOR_PROPERTY("Gravity Scale", ImGui::DragFloat("##rb3d_gscale", &rb.gravity_scale, 0.1f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -589,11 +645,13 @@ void DrawBoxCollider3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "boxcol3d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Size", ImGui::DragFloat3("##boxcol3d_size", glm::value_ptr(collider.size), 0.1f, 0.01f));
     INSPECTOR_PROPERTY("Center", ImGui::DragFloat3("##boxcol3d_center", glm::value_ptr(collider.center), 0.1f));
     INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##boxcol3d_trigger", &collider.is_trigger));
     INSPECTOR_PROPERTY("Bounciness", ImGui::DragFloat("##boxcol3d_bounce", &collider.bounciness, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##boxcol3d_fric", &collider.friction, 0.05f, 0.0f, 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -609,11 +667,13 @@ void DrawSphereCollider3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "sphcol3d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##sphcol3d_rad", &collider.radius, 0.1f, 0.01f));
     INSPECTOR_PROPERTY("Center", ImGui::DragFloat3("##sphcol3d_center", glm::value_ptr(collider.center), 0.1f));
     INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##sphcol3d_trigger", &collider.is_trigger));
     INSPECTOR_PROPERTY("Bounciness", ImGui::DragFloat("##sphcol3d_bounce", &collider.bounciness, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##sphcol3d_fric", &collider.friction, 0.05f, 0.0f, 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -629,6 +689,7 @@ void DrawParticleSystem3DSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "ps3d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##ps3d_en", &ps.enabled));
     INSPECTOR_PROPERTY("Max Particles", ImGui::Text("%d (Active: %d)", ps.max_particles, ps.active_particle_count));
     INSPECTOR_PROPERTY("Emission Rate", ImGui::DragFloat("##ps3d_rate", &ps.emission_rate, 1.0f, 0.0f, 10000.0f));
@@ -649,6 +710,7 @@ void DrawParticleSystem3DSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Max", ImGui::DragFloat("##ps3d_spmax", &ps.start_speed_max, 0.1f, 0.0f, 50.0f));
     INSPECTOR_PROPERTY("Color", ImGui::ColorEdit4("##ps3d_color", glm::value_ptr(ps.start_color)));
     INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat3("##ps3d_grav", glm::value_ptr(ps.gravity), 0.1f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -664,6 +726,7 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
 
     ImGui::Columns(2, "pp_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##pp_enabled", &pp.enabled));
     INSPECTOR_PROPERTY("Exposure", ImGui::DragFloat("##pp_exp", &pp.exposure, 0.05f, 0.0f, 10.0f));
     ImGui::Separator();
@@ -672,13 +735,18 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Bloom Enabled", ImGui::Checkbox("##pp_bloom_en", &pp.bloom_enabled));
     INSPECTOR_PROPERTY("Threshold", ImGui::DragFloat("##pp_bloom_thresh", &pp.bloom_threshold, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##pp_bloom_int", &pp.bloom_intensity, 0.05f, 0.0f, 10.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
 void DrawAddComponentSection(EditorInspectorPanelContext& context) {
+    const bool read_only = IsInspectorReadOnly(context);
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
+    if (read_only) {
+        ImGui::BeginDisabled(true);
+    }
     if (ImGui::Button("Add Component", ImVec2(120, 30))) {
         ImGui::OpenPopup("AddComponentPopup");
     }
@@ -758,6 +826,10 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     }
 
     ImGui::EndPopup();
+    if (read_only) {
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("Play 模式下已禁用 3D Inspector 编辑。请退出 Play 后修改 3D 组件。");
+    }
 }
 
 } // namespace

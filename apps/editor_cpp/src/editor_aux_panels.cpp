@@ -120,6 +120,9 @@ void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {
     ImGui::Begin("Localization Preview");
     auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
     ImGui::Text("Current Language: %s", localization.GetCurrentLanguage().c_str());
+    if (context.read_only) {
+        ImGui::BeginDisabled(true);
+    }
     ImGui::InputText("Preview Key", context.localization_preview_key, context.localization_preview_key_size);
     ImGui::InputText("Fallback", context.localization_preview_fallback, context.localization_preview_fallback_size);
 
@@ -150,6 +153,11 @@ void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {
         }
     } else {
         ImGui::TextDisabled("Select a UILabel entity to apply preview settings.");
+    }
+
+    if (context.read_only) {
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("Play 模式下已禁用本地化预览写入。请退出 Play 后应用到 UILabel。");
     }
 
     ImGui::End();

@@ -388,6 +388,7 @@ bool BootstrapLuaRuntime() {
         return false;
     }
     state.startup_script_path = ResolveStartupLuaScript();
+    DEBUG_LOG_INFO("Lua bootstrap: startup script resolved to {}", state.startup_script_path.empty() ? "<empty>" : state.startup_script_path);
     if (state.startup_script_path.empty()) {
         DEBUG_LOG_ERROR("Lua startup script not found, set by SetStartupLuaScriptPath or DSE_STARTUP_LUA");
         lua_close(state.state);
@@ -415,8 +416,11 @@ bool BootstrapLuaRuntime() {
     lua_pop(state.state, 1);
     luaL_requiref(state.state, LUA_DBLIBNAME, luaopen_debug, 1);
     lua_pop(state.state, 1);
+    DEBUG_LOG_INFO("Lua bootstrap: package path setup begin");
     SetupLuaPackagePath(state.state, state.startup_script_path);
+    DEBUG_LOG_INFO("Lua bootstrap: register API begin");
     lua_binding::RegisterPhase1LuaApi(state.state);
+    DEBUG_LOG_INFO("Lua bootstrap: loading startup script begin");
     if (luaL_dofile(state.state, state.startup_script_path.c_str()) != LUA_OK) {
         DEBUG_LOG_ERROR("Lua startup load failed: {}", lua_tostring(state.state, -1));
         lua_pop(state.state, 1);
@@ -425,8 +429,10 @@ bool BootstrapLuaRuntime() {
         state.lua_memory_usage = 0;
         return false;
     }
+    DEBUG_LOG_INFO("Lua bootstrap: startup script load OK");
     lua_getglobal(state.state, "Awake");
     if (lua_isfunction(state.state, -1)) {
+        DEBUG_LOG_INFO("Lua bootstrap: Awake begin");
         if (lua_pcall(state.state, 0, 0, 0) != LUA_OK) {
             DEBUG_LOG_ERROR("Lua Awake failed: {}", lua_tostring(state.state, -1));
             lua_pop(state.state, 1);
@@ -436,6 +442,7 @@ bool BootstrapLuaRuntime() {
             return false;
         }
         state.awake_called = true;
+        DEBUG_LOG_INFO("Lua bootstrap: Awake OK");
     } else {
         lua_pop(state.state, 1);
     }

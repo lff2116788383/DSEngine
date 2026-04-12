@@ -10,6 +10,7 @@
 #include <GLFW/glfw3.h>
 #include <glad/gl.h>
 #include <iostream>
+#include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/base/time.h"
 #include "engine/platform/screen.h"
@@ -128,6 +129,7 @@ bool EngineInstance::Init() {
         }
     }
 
+    Debug::Init();
     core::JobSystem::Init();
 
     pipeline_->EnableEditorMode(config_.enable_editor);
@@ -145,6 +147,7 @@ bool EngineInstance::Init() {
         std::cerr << "Failed to initialize FramePipeline\n";
         pipeline_->Shutdown();
         core::JobSystem::Shutdown();
+        Debug::ShutDown();
         if (!config_.enable_editor) glfwTerminate();
         return false;
     }
@@ -181,6 +184,7 @@ void EngineInstance::Shutdown() {
     
     pipeline_->Shutdown();
     core::JobSystem::Shutdown();
+    Debug::ShutDown();
     
     if (!config_.enable_editor) {
         glfwTerminate();

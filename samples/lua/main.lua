@@ -10,6 +10,8 @@ if game_entry == "frog_jump" then
     RuntimeEntry = require("frog_jump")
 elseif game_entry == "phase1_2d_mvp" then
     RuntimeEntry = require("phase1_2d_mvp")
+elseif game_entry == "phase1_2d_showcase" then
+    RuntimeEntry = require("phase1_2d_showcase")
 else
     RuntimeEntry = require("phase2_3d_mvp")
 end
@@ -24,9 +26,11 @@ function Awake()
     if game_entry == "frog_jump" then
         RuntimeEntry.Setup(Config.frog_jump or {})
     elseif game_entry == "phase1_2d_mvp" then
-        RuntimeEntry.Setup(Config.phase1_2d)
+        RuntimeEntry.Setup(Config.phase1_2d or {})
+    elseif game_entry == "phase1_2d_showcase" then
+        RuntimeEntry.Setup(Config.phase1_2d_showcase or {})
     else
-        RuntimeEntry.Setup(Config.phase2_3d)
+        RuntimeEntry.Setup(Config.phase2_3d or {})
     end
 end
 
