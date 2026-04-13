@@ -273,8 +273,9 @@ struct BoxCollider2DComponent {
     float restitution = 0.0f;                            ///< 恢复系数 (弹性)
     bool is_trigger = false;                             ///< 是否为触发器 (仅检测不产生物理力)
     
-    // Internal Box2D shape handle
-    b2ShapeId runtime_fixture{};                         ///< 运行时绑定的 Box2D 夹具实例
+    // Internal Box2D runtime fixture pointer
+    b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
+
 };
 
 // --- New Core Systems Components ---

@@ -127,6 +127,8 @@ if "%BUILD_LAUNCHER%"=="1" set CMAKE_LAUNCHER_OPTION=-DDSE_BUILD_LAUNCHER=ON
 set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=OFF
 if "%BUILD_ENGINE_TESTS%"=="1" set CMAKE_ENGINE_TEST_OPTION=-DDSE_BUILD_ENGINE_TESTS=ON
 set CMAKE_SPINE_OPTION=-DDSE_ENABLE_SPINE=ON
+set CMAKE_BOX2D_LINKAGE_OPTION=-DBUILD_SHARED_LIBS=OFF
+
 
 :: Check Administrator Privileges if we need to package EXE
 if "%PACKAGE_EDITOR_EXE%"=="1" set NEED_ADMIN=1
@@ -171,6 +173,8 @@ if %ERRORLEVEL% neq 0 (
 echo [OK] CMake found.
 
 if "%BUILD_EDITOR%"=="1" (
+
+
     where python >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Python is not installed or not in PATH.
@@ -254,7 +258,8 @@ if exist %BUILD_DIR%\CMakeCache.txt (
 :: 2. Configure CMake project
 echo.
 echo [2/4] Configuring CMake project...
-cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% %CMAKE_SPINE_OPTION%
+cmake -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% %CMAKE_SPINE_OPTION% %CMAKE_BOX2D_LINKAGE_OPTION%
+
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake Configure failed!
     popd

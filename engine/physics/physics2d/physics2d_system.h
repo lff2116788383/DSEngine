@@ -58,7 +58,8 @@ public:
 private:
     using ContactPair = std::tuple<Entity, Entity, bool>;
 
-    b2WorldId physics_world_{};
+    b2World* physics_world_ = nullptr;
+
     std::set<ContactPair> active_contact_pairs_;
     int velocity_iterations_ = 8;
     int position_iterations_ = 3;
