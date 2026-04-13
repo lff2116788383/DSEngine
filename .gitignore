@@ -88,9 +88,9 @@ lerna-debug.log*
 screenshot/
 screenshots/
 
-# Trae/AI temporary files
-.trae/*
-!.trae/rules/
+# CodeBuddy rule files
+.codebuddy/*
+!.codebuddy/rules/
 .cline/
 .cursor/
 
