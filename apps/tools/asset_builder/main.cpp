@@ -10,20 +10,23 @@ namespace {
 void PrintUsage() {
     std::cout
         << "Usage:\n"
-        << "  AssetBuilder <input.gltf/glb> <output.dmesh>\n"
-        << "  AssetBuilder <input.gltf/glb> --out-dir <output_dir>\n\n"
+        << "  AssetBuilder <input.gltf/glb/fbx> <output.dmesh>\n"
+        << "  AssetBuilder <input.gltf/glb/fbx> --out-dir <output_dir>\n\n"
         << "Examples:\n"
         << "  AssetBuilder assets/model.glb cooked/model.dmesh\n"
-        << "  AssetBuilder assets/model.glb --out-dir cooked\n\n"
+        << "  AssetBuilder assets/model.fbx --out-dir cooked\n\n"
         << "Notes:\n"
-        << "  - The tool imports glTF/GLB and cooks .dmesh/.dmat/.danim/.dskel in one pass.\n"
+        << "  - The tool imports glTF/GLB/FBX and cooks .dmesh/.dmat/.danim/.dskel in one pass.\n"
+        << "  - FBX is imported offline through the asset compiler path; runtime does not read FBX directly.\n"
         << "  - When --out-dir is used, the base file name is derived from the input file stem.\n";
 }
 
 bool HasSupportedInputExtension(const std::filesystem::path& path) {
     const std::string ext = path.extension().string();
-    return ext == ".gltf" || ext == ".glb" || ext == ".GLTF" || ext == ".GLB";
+    return ext == ".gltf" || ext == ".glb" || ext == ".fbx"
+        || ext == ".GLTF" || ext == ".GLB" || ext == ".FBX";
 }
+
 
 bool IsLikelyFbxInput(const std::filesystem::path& path) {
     const std::string ext = path.extension().string();
@@ -52,14 +55,11 @@ int main(int argc, char** argv) {
 
     const std::filesystem::path input_path = argv[1];
     if (!HasSupportedInputExtension(input_path)) {
-        if (IsLikelyFbxInput(input_path)) {
-            std::cerr << "[AssetBuilder] FBX is not supported as direct input. Please convert the source asset to .gltf/.glb before cooking." << std::endl;
-        } else {
-            std::cerr << "[AssetBuilder] Unsupported input extension: " << input_path.extension().string()
-                      << ". Only .gltf/.glb are supported." << std::endl;
-        }
+        std::cerr << "[AssetBuilder] Unsupported input extension: " << input_path.extension().string()
+                  << ". Only .gltf/.glb/.fbx are supported." << std::endl;
         return 1;
     }
+
 
 
     std::filesystem::path output_dmesh_path;
@@ -93,14 +93,22 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    GltfImporter importer;
     RawSceneData scene;
 
     std::cout << "[AssetBuilder] Importing: " << input_path.string() << std::endl;
-    if (!importer.Import(input_path.string(), scene)) {
+    bool import_ok = false;
+    if (IsLikelyFbxInput(input_path)) {
+        FbxImporter importer;
+        import_ok = importer.Import(input_path.string(), scene);
+    } else {
+        GltfImporter importer;
+        import_ok = importer.Import(input_path.string(), scene);
+    }
+    if (!import_ok) {
         std::cerr << "[AssetBuilder] Failed to import file: " << input_path.string() << std::endl;
         return 1;
     }
+
 
     std::cout << "[AssetBuilder] Imported successfully. Meshes=" << scene.meshes.size()
               << ", Materials=" << scene.materials.size()
@@ -124,17 +132,26 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::cout << "[AssetBuilder] Cooking danim: " << danim_path.string() << std::endl;
-    if (!cooker.CookToDanim(scene, output_dir.string(), base_name)) {
-        std::cerr << "[AssetBuilder] Failed to cook danim: " << danim_path.string() << std::endl;
-        return 1;
+    if (scene.animations.empty()) {
+        std::cout << "[AssetBuilder] Skip danim: no animation data in source." << std::endl;
+    } else {
+        std::cout << "[AssetBuilder] Cooking danim: " << danim_path.string() << std::endl;
+        if (!cooker.CookToDanim(scene, output_dir.string(), base_name)) {
+            std::cerr << "[AssetBuilder] Failed to cook danim: " << danim_path.string() << std::endl;
+            return 1;
+        }
     }
 
-    std::cout << "[AssetBuilder] Cooking dskel: " << dskel_path.string() << std::endl;
-    if (!cooker.CookToDskel(scene, output_dir.string(), base_name)) {
-        std::cerr << "[AssetBuilder] Failed to cook dskel: " << dskel_path.string() << std::endl;
-        return 1;
+    if (scene.skeleton.empty()) {
+        std::cout << "[AssetBuilder] Skip dskel: no skeleton data in source." << std::endl;
+    } else {
+        std::cout << "[AssetBuilder] Cooking dskel: " << dskel_path.string() << std::endl;
+        if (!cooker.CookToDskel(scene, output_dir.string(), base_name)) {
+            std::cerr << "[AssetBuilder] Failed to cook dskel: " << dskel_path.string() << std::endl;
+            return 1;
+        }
     }
+
 
     std::cout << "[AssetBuilder] Cooked successfully." << std::endl;
     return 0;

@@ -81,8 +81,27 @@ int L_AppGetMouseRightUp(lua_State* L) {
     return 1;
 }
 
+int L_AppGetKey(lua_State* L) {
+    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, Input::GetKey(key_code));
+    return 1;
+}
+
+int L_AppGetKeyDown(lua_State* L) {
+    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, Input::GetKeyDown(key_code));
+    return 1;
+}
+
+int L_AppGetKeyUp(lua_State* L) {
+    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, Input::GetKeyUp(key_code));
+    return 1;
+}
+
 /**
  * @brief Lua 绑定：获取鼠标左键当前帧是否触发了双击
+
  * @param L Lua 状态机
  * @return 压入一个布尔值，表示是否双击
  * @example if app.get_mouse_left_double_click() then print("double click") end
@@ -196,7 +215,11 @@ void RegisterAppBindings(lua_State* L) {
     set_fn("get_mouse_right", L_AppGetMouseRight);
     set_fn("get_mouse_right_down", L_AppGetMouseRightDown);
     set_fn("get_mouse_right_up", L_AppGetMouseRightUp);
+    set_fn("get_key", L_AppGetKey);
+    set_fn("get_key_down", L_AppGetKeyDown);
+    set_fn("get_key_up", L_AppGetKeyUp);
     set_fn("get_mouse_left_double_click", L_AppGetMouseLeftDoubleClick);
+
     set_fn("get_mouse_left_long_press", L_AppGetMouseLeftLongPress);
     set_fn("get_mouse_swipe_dx", L_AppGetMouseSwipeDeltaX);
     set_fn("get_mouse_swipe_dy", L_AppGetMouseSwipeDeltaY);

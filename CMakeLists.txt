@@ -330,6 +330,11 @@ add_executable(AssetBuilder
     engine/assets/compiler/importer.cpp
 )
 target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
+if(DSE_HAS_ASSIMP)
+    target_link_libraries(AssetBuilder PRIVATE assimp)
+    target_compile_definitions(AssetBuilder PRIVATE DSE_HAS_ASSIMP=1)
+endif()
+
 
 install(TARGETS dse_engine
     EXPORT DSEngineTargets

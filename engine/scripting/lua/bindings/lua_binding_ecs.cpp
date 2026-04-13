@@ -1137,6 +1137,9 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_mesh_path", L_EcsSetMeshPath);
     set_fn("set_mesh_material", L_EcsSetMeshMaterial);
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
+    set_fn("set_mesh_material_scalar", L_EcsSetMeshMaterialScalar);
+    set_fn("set_mesh_emissive", L_EcsSetMeshEmissive);
+
     set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);
     set_fn("set_directional_light_3d", L_EcsSetDirectionalLight3D);
     set_fn("add_point_light_3d", L_EcsAddPointLight3D);
@@ -1176,6 +1179,8 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_gameplay_tuning", L_EcsAddGameplayTuning);
     set_fn("set_gameplay_tuning", L_EcsSetGameplayTuning);
     set_fn("physics_3d_raycast", L_Physics3DRaycast);
+    set_fn("load_scene", L_EcsLoadScene);
 }
+
 
 }

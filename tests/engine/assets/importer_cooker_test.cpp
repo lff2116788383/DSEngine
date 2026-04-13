@@ -5,8 +5,10 @@
 #include <fstream>
 #include <sstream>
 
+using dse::asset::compiler::FbxImporter;
 using dse::asset::compiler::GltfImporter;
 using dse::asset::compiler::MeshCooker;
+
 using dse::asset::compiler::RawAnimation;
 using dse::asset::compiler::RawAnimationChannel;
 using dse::asset::compiler::RawBone;
@@ -350,4 +352,22 @@ TEST_CASE("Given_MinimalGltfFile_When_Imported_Then_PbrSkeletonAndAnimationField
     REQUIRE(animation.channels.front().position_keys.size() == 2);
     REQUIRE(animation.channels.front().position_keys.back().x == Approx(1.0f));
 }
+
+TEST_CASE("Given_FbxImporterSource_When_Reviewed_Then_AssimpBasedOfflineContractsAreExplicit", "[engine][unit][asset_compiler][fbx][static]") {
+    std::ifstream in("engine/assets/compiler/importer.cpp", std::ios::in | std::ios::binary);
+    REQUIRE(in.is_open());
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    const std::string source = ss.str();
+
+    REQUIRE(source.find("bool FbxImporter::Import") != std::string::npos);
+    REQUIRE(source.find("Assimp::Importer") != std::string::npos);
+    REQUIRE(source.find("aiProcess_Triangulate") != std::string::npos);
+    REQUIRE(source.find("aiProcess_LimitBoneWeights") != std::string::npos);
+    REQUIRE(source.find("out_scene.materials.reserve(scene->mNumMaterials)") != std::string::npos);
+    REQUIRE(source.find("out_scene.meshes.reserve(scene->mNumMeshes)") != std::string::npos);
+    REQUIRE(source.find("BuildAssimpBoneHierarchy") != std::string::npos);
+    REQUIRE(source.find("out_scene.animations.reserve(scene->mNumAnimations)") != std::string::npos);
+}
+
 

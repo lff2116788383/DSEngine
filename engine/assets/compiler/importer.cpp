@@ -11,14 +11,69 @@
 #include <fstream>
 #include <limits>
 #include <queue>
+#include <unordered_map>
+#include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+
 
 namespace dse {
 namespace asset {
 namespace compiler {
 
+namespace {
+
+glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
+    glm::mat4 result(1.0f);
+    result[0][0] = matrix.a1; result[1][0] = matrix.a2; result[2][0] = matrix.a3; result[3][0] = matrix.a4;
+    result[0][1] = matrix.b1; result[1][1] = matrix.b2; result[2][1] = matrix.b3; result[3][1] = matrix.b4;
+    result[0][2] = matrix.c1; result[1][2] = matrix.c2; result[2][2] = matrix.c3; result[3][2] = matrix.c4;
+    result[0][3] = matrix.d1; result[1][3] = matrix.d2; result[2][3] = matrix.d3; result[3][3] = matrix.d4;
+    return result;
+}
+
+std::string ResolveAssimpTexturePath(const std::filesystem::path& source_file, const aiMaterial* material, aiTextureType type) {
+    if (!material) {
+        return {};
+    }
+    aiString texture_path;
+    if (material->GetTextureCount(type) == 0 || material->GetTexture(type, 0, &texture_path) != AI_SUCCESS) {
+        return {};
+    }
+    const std::filesystem::path raw_path = texture_path.C_Str();
+    if (raw_path.empty()) {
+        return {};
+    }
+    if (raw_path.is_absolute()) {
+        return raw_path.generic_string();
+    }
+    return (source_file.parent_path() / raw_path).lexically_normal().generic_string();
+}
+
+void BuildAssimpBoneHierarchy(const aiNode* node, int parent_index, std::unordered_map<std::string, int>& bone_index_map, RawSceneData& out_scene) {
+    if (!node) {
+        return;
+    }
+    auto it = bone_index_map.find(node->mName.C_Str());
+    int current_parent_index = parent_index;
+    if (it != bone_index_map.end()) {
+        RawBone& bone = out_scene.skeleton[it->second];
+        bone.parent_index = parent_index;
+        bone.local_transform = AiMatrix4x4ToGlm(node->mTransformation);
+        current_parent_index = it->second;
+    }
+    for (unsigned int child_index = 0; child_index < node->mNumChildren; ++child_index) {
+        BuildAssimpBoneHierarchy(node->mChildren[child_index], current_parent_index, bone_index_map, out_scene);
+    }
+}
+
+} // namespace
+
 bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
+
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
@@ -381,7 +436,190 @@ struct RuntimeVertex {
     glm::vec4 tangent;
 };
 
+bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
+    Assimp::Importer importer;
+
+    const aiScene* scene = importer.ReadFile(
+        file_path,
+        aiProcess_Triangulate |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_GenSmoothNormals |
+        aiProcess_CalcTangentSpace |
+        aiProcess_LimitBoneWeights |
+        aiProcess_ImproveCacheLocality |
+        aiProcess_SortByPType
+    );
+    if (!scene || !scene->mRootNode) {
+        std::cerr << "FBX Error: " << importer.GetErrorString() << std::endl;
+        return false;
+    }
+
+    const std::filesystem::path source_path(file_path);
+    out_scene = RawSceneData{};
+
+    out_scene.materials.reserve(scene->mNumMaterials);
+    for (unsigned int material_index = 0; material_index < scene->mNumMaterials; ++material_index) {
+        const aiMaterial* material = scene->mMaterials[material_index];
+        RawMaterial raw_material;
+        aiString name;
+        if (material->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) {
+            raw_material.name = name.C_Str();
+        }
+        aiColor4D diffuse_color(1.0f, 1.0f, 1.0f, 1.0f);
+        if (aiGetMaterialColor(material, AI_MATKEY_BASE_COLOR, &diffuse_color) != AI_SUCCESS) {
+            aiGetMaterialColor(material, AI_MATKEY_COLOR_DIFFUSE, &diffuse_color);
+        }
+        raw_material.base_color_factor = glm::vec4(diffuse_color.r, diffuse_color.g, diffuse_color.b, diffuse_color.a);
+
+        float metallic = 0.0f;
+        if (aiGetMaterialFloat(material, AI_MATKEY_METALLIC_FACTOR, &metallic) == AI_SUCCESS) {
+            raw_material.metallic_factor = metallic;
+        }
+        float roughness = 0.5f;
+        if (aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) == AI_SUCCESS) {
+            raw_material.roughness_factor = roughness;
+        }
+        aiColor4D emissive_color(0.0f, 0.0f, 0.0f, 1.0f);
+        if (aiGetMaterialColor(material, AI_MATKEY_COLOR_EMISSIVE, &emissive_color) == AI_SUCCESS) {
+            raw_material.emissive_factor = glm::vec3(emissive_color.r, emissive_color.g, emissive_color.b);
+        }
+
+        raw_material.base_color_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_BASE_COLOR);
+        if (raw_material.base_color_texture.empty()) {
+            raw_material.base_color_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_DIFFUSE);
+        }
+        raw_material.normal_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_NORMALS);
+        raw_material.metallic_roughness_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_UNKNOWN);
+        raw_material.emissive_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_EMISSIVE);
+        raw_material.occlusion_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_LIGHTMAP);
+        out_scene.materials.push_back(raw_material);
+    }
+
+    std::unordered_map<std::string, int> bone_index_map;
+    out_scene.meshes.reserve(scene->mNumMeshes);
+    for (unsigned int mesh_index = 0; mesh_index < scene->mNumMeshes; ++mesh_index) {
+        const aiMesh* mesh = scene->mMeshes[mesh_index];
+        if (!mesh || mesh->mNumVertices == 0) {
+            continue;
+        }
+        RawSubMesh raw_mesh;
+        raw_mesh.name = mesh->mName.C_Str();
+        raw_mesh.material_index = mesh->mMaterialIndex;
+        raw_mesh.positions.reserve(mesh->mNumVertices);
+        raw_mesh.normals.reserve(mesh->mNumVertices);
+        raw_mesh.tangents.reserve(mesh->mNumVertices);
+        raw_mesh.texcoords.reserve(mesh->mNumVertices);
+        raw_mesh.joint_indices.assign(mesh->mNumVertices, glm::ivec4(0));
+        raw_mesh.joint_weights.assign(mesh->mNumVertices, glm::vec4(0.0f));
+
+        for (unsigned int vertex_index = 0; vertex_index < mesh->mNumVertices; ++vertex_index) {
+            const aiVector3D& position = mesh->mVertices[vertex_index];
+            raw_mesh.positions.emplace_back(position.x, position.y, position.z);
+            if (mesh->HasNormals()) {
+                const aiVector3D& normal = mesh->mNormals[vertex_index];
+                raw_mesh.normals.emplace_back(normal.x, normal.y, normal.z);
+            }
+            if (mesh->HasTangentsAndBitangents()) {
+                const aiVector3D& tangent = mesh->mTangents[vertex_index];
+                raw_mesh.tangents.emplace_back(tangent.x, tangent.y, tangent.z, 1.0f);
+            }
+            if (mesh->HasTextureCoords(0)) {
+                const aiVector3D& texcoord = mesh->mTextureCoords[0][vertex_index];
+                raw_mesh.texcoords.emplace_back(texcoord.x, texcoord.y);
+            }
+        }
+
+        for (unsigned int face_index = 0; face_index < mesh->mNumFaces; ++face_index) {
+            const aiFace& face = mesh->mFaces[face_index];
+            for (unsigned int index = 0; index < face.mNumIndices; ++index) {
+                raw_mesh.indices.push_back(face.mIndices[index]);
+            }
+        }
+
+        for (unsigned int bone_offset = 0; bone_offset < mesh->mNumBones; ++bone_offset) {
+            const aiBone* bone = mesh->mBones[bone_offset];
+            if (!bone) {
+                continue;
+            }
+            const std::string bone_name = bone->mName.C_Str();
+            int bone_index = -1;
+            auto it = bone_index_map.find(bone_name);
+            if (it == bone_index_map.end()) {
+                bone_index = static_cast<int>(out_scene.skeleton.size());
+                bone_index_map.emplace(bone_name, bone_index);
+                RawBone raw_bone;
+                raw_bone.name = bone_name;
+                raw_bone.inverse_bind_matrix = AiMatrix4x4ToGlm(bone->mOffsetMatrix);
+                out_scene.skeleton.push_back(raw_bone);
+            } else {
+                bone_index = it->second;
+            }
+            for (unsigned int weight_index = 0; weight_index < bone->mNumWeights; ++weight_index) {
+                const aiVertexWeight& weight = bone->mWeights[weight_index];
+                glm::ivec4& joint_indices = raw_mesh.joint_indices[weight.mVertexId];
+                glm::vec4& joint_weights = raw_mesh.joint_weights[weight.mVertexId];
+                for (int slot = 0; slot < 4; ++slot) {
+                    if (joint_weights[slot] == 0.0f) {
+                        joint_indices[slot] = bone_index;
+                        joint_weights[slot] = weight.mWeight;
+                        break;
+                    }
+                }
+            }
+        }
+
+        out_scene.meshes.push_back(std::move(raw_mesh));
+    }
+
+    BuildAssimpBoneHierarchy(scene->mRootNode, -1, bone_index_map, out_scene);
+
+    out_scene.animations.reserve(scene->mNumAnimations);
+    for (unsigned int animation_index = 0; animation_index < scene->mNumAnimations; ++animation_index) {
+        const aiAnimation* animation = scene->mAnimations[animation_index];
+        if (!animation) {
+            continue;
+        }
+        RawAnimation raw_animation;
+        raw_animation.name = animation->mName.C_Str();
+        const float ticks_per_second = animation->mTicksPerSecond > 0.0 ? static_cast<float>(animation->mTicksPerSecond) : 1.0f;
+        raw_animation.duration = static_cast<float>(animation->mDuration / ticks_per_second);
+        for (unsigned int channel_index = 0; channel_index < animation->mNumChannels; ++channel_index) {
+            const aiNodeAnim* channel = animation->mChannels[channel_index];
+            if (!channel) {
+                continue;
+            }
+            auto bone_it = bone_index_map.find(channel->mNodeName.C_Str());
+            if (bone_it == bone_index_map.end()) {
+                continue;
+            }
+            RawAnimationChannel raw_channel;
+            raw_channel.target_node_index = bone_it->second;
+            for (unsigned int key_index = 0; key_index < channel->mNumPositionKeys; ++key_index) {
+                raw_channel.time_keys.push_back(static_cast<float>(channel->mPositionKeys[key_index].mTime / ticks_per_second));
+                const aiVector3D& value = channel->mPositionKeys[key_index].mValue;
+                raw_channel.position_keys.emplace_back(value.x, value.y, value.z);
+            }
+            for (unsigned int key_index = 0; key_index < channel->mNumRotationKeys; ++key_index) {
+                const aiQuaternion& value = channel->mRotationKeys[key_index].mValue;
+                raw_channel.rotation_keys.emplace_back(value.w, value.x, value.y, value.z);
+            }
+            for (unsigned int key_index = 0; key_index < channel->mNumScalingKeys; ++key_index) {
+                const aiVector3D& value = channel->mScalingKeys[key_index].mValue;
+                raw_channel.scale_keys.emplace_back(value.x, value.y, value.z);
+            }
+            raw_animation.channels.push_back(std::move(raw_channel));
+        }
+        if (!raw_animation.channels.empty()) {
+            out_scene.animations.push_back(std::move(raw_animation));
+        }
+    }
+
+    return !out_scene.meshes.empty();
+}
+
+
 bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& output_path) {
+
     if (scene.meshes.empty()) return false;
     
     std::ofstream out(output_path, std::ios::binary);
