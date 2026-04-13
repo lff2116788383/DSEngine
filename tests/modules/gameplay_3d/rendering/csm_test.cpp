@@ -90,11 +90,14 @@ TEST_CASE("Given_RuntimeShadowPipelineSource_When_Inspected_Then_SupportedShadow
         REQUIRE(frame_pipeline_source.find("u_spot_light_space_matrices") != std::string::npos);
     }
 
-    SECTION("Point shadow path is not implemented in runtime pipeline") {
-        REQUIRE(frame_pipeline_source.find("point_shadow_pass") == std::string::npos);
-        REQUIRE(frame_pipeline_source.find("SetGlobalPointShadowMap") == std::string::npos);
-        REQUIRE(frame_pipeline_source.find("PointLightComponent") == std::string::npos);
+    SECTION("Point shadow path is supported in runtime pipeline") {
+        REQUIRE(frame_pipeline_source.find("\"point_shadow_pass\"") != std::string::npos);
+        REQUIRE(frame_pipeline_source.find("view<TransformComponent, dse::PointLightComponent>()") != std::string::npos);
+        REQUIRE(frame_pipeline_source.find("light.cast_shadow") != std::string::npos);
+        REQUIRE(frame_pipeline_source.find("SetGlobalPointShadowMap") != std::string::npos);
+        REQUIRE(frame_pipeline_source.find("point_shadow_render_target[shadow_slot]") != std::string::npos);
     }
+
 
     SECTION("Shadow statistics are tracked by depth-only render pass") {
         REQUIRE(rhi_source.find("current_frame_stats_.shadow_passes += 1") != std::string::npos);

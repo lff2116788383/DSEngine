@@ -41,7 +41,9 @@ set(DSE_ENGINE_TEST_SOURCES
     ../modules/gameplay_2d/ui/ui_deep_state_test.cpp
     assets/asset_manager_test.cpp
     assets/importer_cooker_test.cpp
+    assets/asset_builder_static_test.cpp
     build_generation_guard_test.cpp
+
     runtime_host_integration_test.cpp
     audio/audio_system_test.cpp
     render/command_buffer_test.cpp
@@ -200,8 +202,10 @@ set_tests_properties(engine.2d.camera PROPERTIES LABELS "engine;unit;2d;camera;s
 
 add_test(
     NAME engine.3d.unit
-    COMMAND ${DSE_ENGINE_TEST_TARGET} "[mesh_renderer],[terrain],[csm],[camera_3d],[animator3d],[steering],[culling],[particle3d]"
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[mesh_renderer],[terrain],[csm],[shadow_matrix],[camera_3d],[animator3d],[steering],[culling],[particle3d],[material],[lighting],[runtime][static]"
 )
+
+
 set_tests_properties(engine.3d.unit PROPERTIES LABELS "engine;unit;3d")
 
 add_test(
@@ -353,9 +357,21 @@ set_tests_properties(engine.resource_injection PROPERTIES
 )
 
 add_test(
+    NAME engine.asset_compiler
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[asset_compiler]"
+)
+set_tests_properties(engine.asset_compiler PROPERTIES
+    LABELS "engine;unit;asset_compiler;3d;gate"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    TIMEOUT 15
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
+
+add_test(
     NAME engine.build_generation
     COMMAND ${DSE_ENGINE_TEST_TARGET} "[build_generation]"
 )
+
 
 set_tests_properties(engine.build_generation PROPERTIES
     LABELS "engine;unit;build_generation;vcpkg;gate"

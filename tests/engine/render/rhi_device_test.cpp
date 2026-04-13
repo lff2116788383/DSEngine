@@ -104,8 +104,13 @@ TEST_CASE("Given_OpenGLRhiDeviceShader_When_PbrTextureMapsAreAligned_Then_Shader
     REQUIRE(source.find("uniform bool u_has_emissive_map;") != std::string::npos);
     REQUIRE(source.find("uniform sampler2D u_occlusion_map;") != std::string::npos);
     REQUIRE(source.find("uniform bool u_has_occlusion_map;") != std::string::npos);
+    REQUIRE(source.find("uniform bool u_material_alpha_test;") != std::string::npos);
+    REQUIRE(source.find("if (u_material_alpha_test && texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;") != std::string::npos);
     REQUIRE(source.find("roughness = clamp(mrSample.g * u_material_roughness, 0.04, 1.0);") != std::string::npos);
     REQUIRE(source.find("metallic = clamp(mrSample.b * u_material_metallic, 0.0, 1.0);") != std::string::npos);
     REQUIRE(source.find("ao *= texture(u_occlusion_map, TexCoord).r;") != std::string::npos);
     REQUIRE(source.find("emissive *= texture(u_emissive_map, TexCoord).rgb;") != std::string::npos);
+    REQUIRE(source.find("glDisable(GL_CULL_FACE);") != std::string::npos);
+    REQUIRE(source.find("if (item.material_double_sided)") != std::string::npos);
 }
+

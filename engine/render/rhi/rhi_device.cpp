@@ -338,7 +338,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
         void main() {
             vec4 texColor = texture(u_texture, TexCoord);
-            if (texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
+            if (u_material_alpha_test && texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
+
 
             vec3 N = Normal;
             if (u_has_normal_map) {
@@ -1375,7 +1376,26 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
         glUniform3f(uniform_material_emissive_loc_, item.material_emissive.r, item.material_emissive.g, item.material_emissive.b);
         glUniform1f(uniform_material_normal_strength_loc_, item.material_normal_strength);
         glUniform1f(uniform_material_alpha_cutoff_loc_, item.material_alpha_cutoff);
+        if (uniform_material_alpha_test_loc_ != -1) {
+            glUniform1i(uniform_material_alpha_test_loc_, item.material_alpha_test ? 1 : 0);
+        }
         glUniform1i(uniform_receive_shadow_loc_, item.receive_shadow ? 1 : 0);
+
+        if (item.material_double_sided) {
+            glDisable(GL_CULL_FACE);
+        } else if (active_pipeline_state_ != 0) {
+            auto pipeline_state_it = pipeline_states_.find(active_pipeline_state_);
+            if (pipeline_state_it != pipeline_states_.end() && pipeline_state_it->second.culling_enabled) {
+                glEnable(GL_CULL_FACE);
+                glCullFace(pipeline_state_it->second.cull_face);
+            } else {
+                glDisable(GL_CULL_FACE);
+            }
+        } else {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+        }
+
 
         if (uniform_skinned_loc_ != -1) {
             glUniform1i(uniform_skinned_loc_, item.skinned ? 1 : 0);

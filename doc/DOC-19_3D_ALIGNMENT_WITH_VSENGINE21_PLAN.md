@@ -222,7 +222,8 @@
 **当前进度（2026-04-12）：**
 - [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:475) 已存在 `shadow_pass`，并对 [`DirectionalLight3DComponent`](engine/ecs/components_3d.h:89) 的 `cast_shadow` 与 `cascade_splits` 做主线路径处理。
 - [x] [`csm_test.cpp`](tests/modules/gameplay_3d/rendering/csm_test.cpp) 已对 Directional + CSM 默认值、级联分割修改，以及当前 shadow path / shadow stats 矩阵归类做回归断言，并通过 [`engine.3d.unit`](tests/engine/CMakeLists.txt:201) 作为 3D runtime gate 的一部分持续执行。
-- [x] [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 已补充 runtime static regression，对 `spot_shadow_pass`、`spot_shadow_render_target[4]` 与 `u_spot_light_space_matrices` 的源码存在性做门禁约束。
+- [x] [`frame_pipeline_static_regression_test.cpp`](tests/engine/runtime/frame_pipeline_static_regression_test.cpp:50) 已补充 runtime static regression，对 `spot_shadow_pass`、`spot_shadow_render_target[4]`、`point_shadow_pass`、`point_shadow_render_target[4]` 以及对应 shadow map 绑定点的源码存在性做门禁约束。
+
 - [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:523) 已存在 `spot_shadow_pass`，并通过 [`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 预绑定 spot shadow depth texture。
 - [x] [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp:565) 已新增 `point_shadow_pass`，为启用阴影的 point light 建立 cubemap shadow render target 与 6 个朝向的 runtime shadow 提交路径。
 - [x] [`render_pipeline_resources.h`](engine/runtime/render_pipeline_resources.h:22) 已新增 `point_shadow_render_target[4]`，[`BindRuntimeShadowMaps()`](engine/runtime/runtime_render_shell.cpp:15) 也已补齐 [`SetGlobalPointShadowMap()`](engine/render/rhi/rhi_device.h:165) 绑定。
@@ -309,8 +310,53 @@
 - 对照 [`reference/VSEngine2.1/FBXConverter`](reference/VSEngine2.1/FBXConverter) 列出缺口，但不照搬旧工具结构。
 - 明确哪些 reference 资源可直接转，哪些需要替代资源。
 
+**当前进度（2026-04-13）：**
+- [x] [`GltfImporter::Import()`](engine/assets/compiler/importer.cpp:21) 已可将 glTF / GLB 中的 PBR 材质字段、基础纹理引用、submesh 顶点流、骨骼 inverse bind matrix 与最小动画 channel 导入 [`RawSceneData`](engine/assets/compiler/raw_scene_data.h:86)。
+- [x] [`MeshCooker`](engine/assets/compiler/importer.h:15) 已可输出 [`dmesh`](engine/assets/compiler/raw_scene_data.h:96) / [`dmat`](engine/assets/compiler/importer.h:18) / [`danim`](engine/assets/compiler/raw_scene_data.h:118) / [`dskel`](engine/assets/compiler/raw_scene_data.h:136) 四类产物。
+- [x] [`AssetManager::LoadMaterialInstanceFromDmat()`](engine/assets/asset_manager.cpp:564) 已打通 `.dmat` 到 runtime [`MaterialAsset`](engine/assets/asset_manager.h) 的字段映射。
+- [x] 已补充 [`importer_cooker_test.cpp`](tests/engine/assets/importer_cooker_test.cpp) 的最小 glTF 导入回归，覆盖 PBR 材质、骨骼层级与动画 channel 导入；并新增独立 [`engine.asset_compiler`](tests/engine/CMakeLists.txt) gate 作为资源链最小门禁。
+
+**当前 glTF / GLB 支持矩阵（2026-04-13）：**
+- **已支持导入到 `RawSceneData`：**
+  - 材质：`baseColorFactor`、`metallicFactor`、`roughnessFactor`、`emissiveFactor`、`normalTexture.scale`、`occlusionTexture.strength`、`alphaCutoff`、`doubleSided`、`alphaMode == MASK`；
+  - 纹理引用：`baseColorTexture`、`normalTexture`、`metallicRoughnessTexture`、`emissiveTexture`、`occlusionTexture` 的 image uri；
+  - 顶点流：`POSITION`、`NORMAL`、`TANGENT`、`TEXCOORD_0`、`WEIGHTS_0`、`JOINTS_0`；
+  - 索引：`UNSIGNED_SHORT` / `UNSIGNED_INT`，以及无索引 primitive 的顺序索引补齐；
+  - 骨骼：首个 `skin` 的 `joints`、`inverseBindMatrices`、节点父子关系与局部 TRS / matrix；
+  - 动画：首个 `skin` 相关 joint 的 `translation` / `rotation` / `scale` channel。
+- **当前明确未接入 / 需替代资源或后续补齐：**
+  - 顶点色 `COLOR_0`；
+  - morph target / blend shape / animation weights；
+  - 非蒙皮节点动画 channel；
+  - 多 `skin` 资源的并行导入策略；
+  - 更宽的 joints/indices 组件类型与 primitive mode 细分支持矩阵。
+
+**reference/VSEngine2.1 资源可转矩阵（2026-04-13）：**
+- **当前可直接复用的参考信息：**
+  - [`reference/VSEngine2.1/FBXResource`](reference/VSEngine2.1/FBXResource) 中的资源分类与命名，可作为后续 scene / demo 选型依据；
+  - [`reference/VSEngine2.1/Bin/Resource/Texture`](reference/VSEngine2.1/Bin/Resource/Texture) 中的纹理命名语义（如 `_D` / `_N` / `_E` / `_s`），可直接映射到当前 `base_color` / `normal` / `emissive` / `metallic_roughness` 或替代材质槽位；
+  - [`reference/VSEngine2.1/FBXConverter`](reference/VSEngine2.1/FBXConverter) 可作为“旧资源如何被拆分为网格 / 材质 / 动画 / 骨骼”的参考来源，但不直接迁入实现。
+- **当前不可直接喂给主仓 importer、需先转换或替代的资源：**
+  - `.FBX` 网格 / 骨骼 / 动画资源：当前主仓 importer 仅支持 `glTF/GLB`，不能直接读取 [`reference/VSEngine2.1/FBXResource`](reference/VSEngine2.1/FBXResource) 下的 `.FBX`；
+  - 依赖 vertex color、morph target、复杂多 skin 或更重 FBX 特性的 reference 资源：即便转换到 glTF，也会受到当前 importer 支持矩阵限制；
+  - 直接依赖旧引擎专有材质语义或 FBXConverter 私有输出结构的资源，当前不应直接照搬。
+- **当前建议的替代策略：**
+  - **静态网格类 reference 资源**：优先选择不依赖 vertex color / morph 的简单 `.FBX`，离线转成 `glTF/GLB` 后走现有 `engine.asset_compiler` 链路；
+  - **骨骼动画类 reference 资源**：优先选择单 skin、TRS 动画、无 morph 的 `.FBX`，转换后验证是否仍落在当前 `JOINTS_0 + WEIGHTS_0 + translation/rotation/scale` 支持矩阵内；
+  - **纹理资源**：可优先直接复用或人工映射到当前 `.dmat` 语义，再由 runtime 材质链消费。
+
+**最小 reference 资源转入试点（当前建议流程）：**
+1. 从 [`reference/VSEngine2.1/FBXResource`](reference/VSEngine2.1/FBXResource) 选择一个**不依赖 vertex color / morph / 多 skin** 的静态网格或单 skin 资源；
+2. 在仓外或人工流程中把 `.FBX` 转成 `glTF/GLB`，并保持贴图语义与当前 `.dmat` 槽位可映射；
+3. 使用现有 [`apps/tools/asset_builder/main.cpp`](apps/tools/asset_builder/main.cpp) 作为主仓内试点入口，将 `glTF/GLB` 烹饪为 `.dmesh/.dmat/.danim/.dskel`；当前该入口已补齐 `--help`、`--out-dir` 以及关键失败提示，适合作为最小试点统一入口；
+
+4. 通过 [`engine.asset_compiler`](tests/engine/CMakeLists.txt) 先验证资源链，再决定是否进入后续 scene / demo 对齐。
+
 **验收标准：**
+
+
 - 至少一套静态网格资源和一套骨骼资源能稳定导入并进入 demo 场景。
+
 
 ### 5.2 渲染表现一致性收口
 
@@ -322,7 +368,8 @@
 
 **当前进度（2026-04-13）：**
 - [x] 已完成 [`RawMaterial`](engine/assets/compiler/raw_scene_data.h:52) → [`AssetManager::LoadMaterialInstanceFromDmat()`](engine/assets/asset_manager.cpp:564) → [`L_EcsSetMeshMaterial()`](engine/scripting/lua/bindings/lua_binding_ecs.cpp:685) → [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 的材质字段承载链路收口。
-- [x] 已明确 [`material_alpha_test`](engine/ecs/components_3d.h:28) / [`material_double_sided`](engine/ecs/components_3d.h:29) 当前属于“运行时语义已承载并可回归验证，但尚未完全接到 OpenGL 管线状态切换”。
+- [x] 已明确 [`material_alpha_test`](engine/ecs/components_3d.h:28) / [`material_double_sided`](engine/ecs/components_3d.h:29) 已进入 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1187) 的真实消费路径：前者显式控制 fragment shader 的 alpha discard，后者显式控制 OpenGL 面剔除状态。
+
 - [x] 已扩展 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38)、[`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 与 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100)，让 [`metallic_roughness_texture_handle`](engine/ecs/components_3d.h:32) / [`emissive_texture_handle`](engine/ecs/components_3d.h:33) / [`occlusion_texture_handle`](engine/ecs/components_3d.h:34) 进入真实 shader 消费路径。
 - [x] 已补充 [`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp:47) 与 [`rhi_device_test.cpp`](tests/engine/render/rhi_device_test.cpp:77) 覆盖 draw item 字段映射与 shader / uniform 静态门禁。
 - [-] 为继续验证 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 的 P2 回归入口，已同步修复当前构建链上的非 3D 功能性阻塞：[`lua_runtime.cpp`](engine/scripting/lua/lua_runtime.cpp:378) 的 Lua 5.4 [`lua_newstate`](depends/lua/lua.h) 适配、[`physics2d_system.cpp`](engine/physics/physics2d/physics2d_system.cpp:100) / [`physics2d_system.h`](engine/physics/physics2d/physics2d_system.h:22) 的 Box2D handle-style API 收口、以及 [`CMakeLists.txt`](CMakeLists.txt:209) 中 [`dse_engine`](CMakeLists.txt:209) 的 `/utf-8` 与 [`box2d`](depends/box2d-2.4.1/src/CMakeLists.txt:77) 显式链接配置；当前构建仍在持续推进，尚未拿到最终完整通过结果。
@@ -332,12 +379,11 @@
   - `color` / `metallic` / `roughness` / `ao` / `emissive` / `normal_strength` / `material_alpha_cutoff`；
   - `albedo_texture_handle` / `normal_texture_handle`；
   - `metallic_roughness_texture_handle` / `emissive_texture_handle` / `occlusion_texture_handle`；
+  - `material_alpha_test` / `material_double_sided`；
   - `receive_shadow`；
   - `material_data_source` / `material_instance_id` 的实例优先级解析。
-- **已形成运行时语义，但尚未完全绑定到 OpenGL 固定管线状态：**
-  - `material_alpha_test`；
-  - `material_double_sided`。
 - **当前验证边界说明：**
+
   - shader / draw item / 材质解析链路已由静态回归与材质解析回归覆盖；
   - 完整 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 构建门禁正在继续验证中，当前主要在清理与 3D P2 无直接产品语义关系、但会阻塞验证入口的底层构建链问题。
 
@@ -353,9 +399,17 @@
 - 统一 smoke、unit、scene regression 的分层意义。
 - 明确哪些测试是门禁级别。
 
+**当前进度（2026-04-13）：**
+- [x] 已形成当前 3D runtime 最小回归矩阵：[`engine.3d.unit`](tests/engine/CMakeLists.txt:201) + [`engine.3d.scene_mvp`](tests/engine/CMakeLists.txt:208) + [`engine.3d.runtime_mvp_smoke`](tests/engine/CMakeLists.txt:229)。
+- [x] [`engine.3d.unit`](tests/engine/CMakeLists.txt:201) 已覆盖材质、灯光、阴影、动画、相机、地形、剔除、粒子与 runtime static regression 标签，不再只聚焦少数 3D 组件。
+- [x] [`engine.3d.scene_mvp`](tests/engine/CMakeLists.txt:208) 负责最小 3D 场景的 scene roundtrip / 组件可加载性门禁。
+- [x] [`engine.3d.runtime_mvp_smoke`](tests/engine/CMakeLists.txt:229) 负责 runtime startup scene 入口的 3D MVP 冒烟验证。
+- [x] 已在 [`doc/TESTING_CTEST_GUIDE.md`](doc/TESTING_CTEST_GUIDE.md) 中同步当前 3D 回归矩阵说明，统一脚本 / `CTest` / 文档口径。
+
 **验收标准：**
 - 有一份稳定的 3D 回归矩阵清单。
 - 每个功能域至少有 1 条强回归。
+
 
 ---
 
@@ -517,9 +571,10 @@ demo 周期不再承担底层功能发明职责，底层缺口原则上应在 `P
 
 ## P2：3D 渲染与资源质量收口
 
-- [ ] 资源导入与烹饪链收口
-- [-] 渲染表现一致性收口（[`MeshDrawItem`](engine/render/rhi/rhi_device.h:38) / [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) / [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 已打通 metallic-roughness / emissive / occlusion 真实消费；当前重点转为收口完整构建验证链）
-- [ ] 3D 回归矩阵建立
+- [x] 资源导入与烹饪链收口（`gltf/glb -> dmesh/dmat/danim/dskel` 主链、`engine.asset_compiler` gate、glTF 支持矩阵、reference 资源可转矩阵与 `AssetBuilder` 试点入口说明已补齐）
+- [-] 渲染表现一致性收口（[`MeshDrawItem`](engine/render/rhi/rhi_device.h:38) / [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) / [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 已打通 metallic-roughness / emissive / occlusion 真实消费；`material_alpha_test` / `material_double_sided` 也已进入真实 OpenGL 消费路径；当前重点转为收口完整构建验证链）
+- [x] 3D 回归矩阵建立（已形成 `engine.3d.unit` + `engine.3d.scene_mvp` + `engine.3d.runtime_mvp_smoke` + `engine.asset_compiler` + `engine.asset_builder` 的最小回归组合）
+
 
 ## P3：reference demo 对齐
 

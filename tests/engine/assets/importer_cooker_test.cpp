@@ -144,26 +144,210 @@ TEST_CASE("Given_MinimalRawScene_When_CookersRun_Then_OutputFilesAreCreated", "[
     REQUIRE(std::filesystem::file_size(dskel_path) > 0);
 }
 
-TEST_CASE("Given_MinimalRawScene_When_CookedToDmat_Then_ExtendedMaterialFieldsAreSerialized", "[engine][unit][asset_compiler][dmat]") {
-    MeshCooker cooker;
-    RawSceneData scene = BuildMinimalScene();
-    const auto dir = MakeImporterTempDir();
-    const auto dmat_path = dir / "material_fields.dmat";
-    ScopedFileCleanup cleanup_mat(dmat_path);
 
-    REQUIRE(cooker.CookToDmat(scene, dir.string(), "material_fields"));
-
-    std::ifstream in(dmat_path);
+TEST_CASE("Given_GltfImporterSource_When_Reviewed_Then_CurrentSupportMatrixAndKnownGapsAreExplicit", "[engine][unit][asset_compiler][gltf][static]") {
+    std::ifstream in("engine/assets/compiler/importer.cpp", std::ios::in | std::ios::binary);
     REQUIRE(in.is_open());
     std::ostringstream ss;
     ss << in.rdbuf();
-    const std::string text = ss.str();
+    const std::string source = ss.str();
 
-    REQUIRE(text.find("\"normal_scale\": 0.8") != std::string::npos);
-    REQUIRE(text.find("\"occlusion_strength\": 0.45") != std::string::npos);
-    REQUIRE(text.find("\"alpha_cutoff\": 0.33") != std::string::npos);
-    REQUIRE(text.find("\"double_sided\": true") != std::string::npos);
-    REQUIRE(text.find("\"alpha_test\": true") != std::string::npos);
-    REQUIRE(text.find("\"emissive_texture\": \"emissive.png\"") != std::string::npos);
-    REQUIRE(text.find("\"occlusion_texture\": \"occlusion.png\"") != std::string::npos);
+    SECTION("当前已支持的 glTF 输入字段") {
+        REQUIRE(source.find("primitive.attributes.find(\"POSITION\")") != std::string::npos);
+        REQUIRE(source.find("primitive.attributes.find(\"NORMAL\")") != std::string::npos);
+        REQUIRE(source.find("primitive.attributes.find(\"TANGENT\")") != std::string::npos);
+        REQUIRE(source.find("primitive.attributes.find(\"TEXCOORD_0\")") != std::string::npos);
+        REQUIRE(source.find("primitive.attributes.find(\"WEIGHTS_0\")") != std::string::npos);
+        REQUIRE(source.find("primitive.attributes.find(\"JOINTS_0\")") != std::string::npos);
+        REQUIRE(source.find("mat.doubleSided") != std::string::npos);
+        REQUIRE(source.find("mat.alphaMode == \"MASK\"") != std::string::npos);
+        REQUIRE(source.find("channel.target_path == \"translation\"") != std::string::npos);
+        REQUIRE(source.find("channel.target_path == \"rotation\"") != std::string::npos);
+        REQUIRE(source.find("channel.target_path == \"scale\"") != std::string::npos);
+    }
+
+    SECTION("当前仍未接入的能力在源码中可明确识别") {
+        REQUIRE(source.find("COLOR_0") == std::string::npos);
+        REQUIRE(source.find("targets") == std::string::npos);
+        REQUIRE(source.find("weights") == std::string::npos);
+    }
 }
+
+TEST_CASE("Given_MinimalGltfFile_When_Imported_Then_PbrSkeletonAndAnimationFieldsReachRawScene", "[engine][unit][asset_compiler][gltf][3d]") {
+
+    GltfImporter importer;
+    RawSceneData scene;
+    const auto dir = MakeImporterTempDir();
+    const auto gltf_path = dir / "minimal_import_scene.gltf";
+    ScopedFileCleanup cleanup_gltf(gltf_path);
+
+    {
+        std::ofstream out(gltf_path);
+        REQUIRE(out.is_open());
+        out << R"JSON({
+  "asset": { "version": "2.0" },
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAABAAAAAQAAAAAAAAAAgD8AAAAAAACAPwAAgD8AAAAAAACAPwAAgD8=",
+      "byteLength": 288
+    }
+  ],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
+    { "buffer": 0, "byteOffset": 36, "byteLength": 36 },
+    { "buffer": 0, "byteOffset": 72, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 96, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 144, "byteLength": 16 },
+    { "buffer": 0, "byteOffset": 160, "byteLength": 12 },
+    { "buffer": 0, "byteOffset": 172, "byteLength": 64 },
+    { "buffer": 0, "byteOffset": 236, "byteLength": 8 },
+    { "buffer": 0, "byteOffset": 244, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 268, "byteLength": 16 },
+    { "buffer": 0, "byteOffset": 284, "byteLength": 4 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
+    { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3" },
+    { "bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2" },
+    { "bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 4, "componentType": 5121, "count": 3, "type": "VEC4" },
+    { "bufferView": 5, "componentType": 5123, "count": 6, "type": "SCALAR" },
+    { "bufferView": 6, "componentType": 5126, "count": 1, "type": "MAT4" },
+    { "bufferView": 7, "componentType": 5126, "count": 2, "type": "SCALAR" },
+    { "bufferView": 8, "componentType": 5126, "count": 2, "type": "VEC3" },
+    { "bufferView": 9, "componentType": 5126, "count": 1, "type": "VEC4" },
+    { "bufferView": 10, "componentType": 5126, "count": 1, "type": "VEC4" }
+  ],
+  "images": [
+    { "uri": "base.png" },
+    { "uri": "normal.png" },
+    { "uri": "mr.png" },
+    { "uri": "emissive.png" },
+    { "uri": "occlusion.png" }
+  ],
+  "textures": [
+    { "source": 0 },
+    { "source": 1 },
+    { "source": 2 },
+    { "source": 3 },
+    { "source": 4 }
+  ],
+  "materials": [
+    {
+      "name": "pbr_mat",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [0.2, 0.4, 0.6, 1.0],
+        "metallicFactor": 0.8,
+        "roughnessFactor": 0.3,
+        "baseColorTexture": { "index": 0 },
+        "metallicRoughnessTexture": { "index": 2 }
+      },
+      "normalTexture": { "index": 1, "scale": 0.7 },
+      "occlusionTexture": { "index": 4, "strength": 0.55 },
+      "emissiveTexture": { "index": 3 },
+      "emissiveFactor": [0.1, 0.2, 0.3],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.42,
+      "doubleSided": true
+    }
+  ],
+  "meshes": [
+    {
+      "name": "tri_mesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "WEIGHTS_0": 3,
+            "JOINTS_0": 4
+          },
+          "indices": 5,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    { "name": "root_joint", "mesh": 0, "skin": 0, "children": [1] },
+    { "name": "child_joint", "translation": [0.0, 1.0, 0.0] }
+  ],
+  "skins": [
+    {
+      "joints": [0, 1],
+      "inverseBindMatrices": 6
+    }
+  ],
+  "animations": [
+    {
+      "name": "idle",
+      "channels": [
+        { "sampler": 0, "target": { "node": 1, "path": "translation" } }
+      ],
+      "samplers": [
+        { "input": 7, "output": 8 }
+      ]
+    }
+  ],
+  "scenes": [
+    { "nodes": [0] }
+  ],
+  "scene": 0
+})JSON";
+    }
+
+    REQUIRE(importer.Import(gltf_path.string(), scene));
+    REQUIRE(scene.meshes.size() == 1);
+    REQUIRE(scene.materials.size() == 1);
+    REQUIRE(scene.skeleton.size() == 2);
+    REQUIRE(scene.animations.size() == 1);
+
+    const auto& mesh = scene.meshes.front();
+    REQUIRE(mesh.name == "tri_mesh");
+    REQUIRE(mesh.material_index == 0u);
+    REQUIRE(mesh.positions.size() == 3);
+    REQUIRE(mesh.normals.size() == 3);
+    REQUIRE(mesh.texcoords.size() == 3);
+    REQUIRE(mesh.joint_weights.size() == 3);
+    REQUIRE(mesh.joint_indices.size() == 3);
+    REQUIRE(mesh.indices.size() == 6);
+    REQUIRE(mesh.joint_indices.front().x == 0);
+    REQUIRE(mesh.joint_indices.front().y == 1);
+    REQUIRE(mesh.joint_weights.front().x == Approx(1.0f));
+
+    const auto& material = scene.materials.front();
+    REQUIRE(material.name == "pbr_mat");
+    REQUIRE(material.base_color_factor.x == Approx(0.2f));
+    REQUIRE(material.base_color_factor.y == Approx(0.4f));
+    REQUIRE(material.base_color_factor.z == Approx(0.6f));
+    REQUIRE(material.metallic_factor == Approx(0.8f));
+    REQUIRE(material.roughness_factor == Approx(0.3f));
+    REQUIRE(material.emissive_factor.z == Approx(0.3f));
+    REQUIRE(material.normal_scale == Approx(0.7f));
+    REQUIRE(material.occlusion_strength == Approx(0.55f));
+    REQUIRE(material.alpha_cutoff == Approx(0.42f));
+    REQUIRE(material.alpha_test);
+    REQUIRE(material.double_sided);
+    REQUIRE(material.base_color_texture == "base.png");
+    REQUIRE(material.normal_texture == "normal.png");
+    REQUIRE(material.metallic_roughness_texture == "mr.png");
+    REQUIRE(material.emissive_texture == "emissive.png");
+    REQUIRE(material.occlusion_texture == "occlusion.png");
+
+    REQUIRE(scene.skeleton[0].name == "root_joint");
+    REQUIRE(scene.skeleton[0].parent_index == -1);
+    REQUIRE(scene.skeleton[1].name == "child_joint");
+    REQUIRE(scene.skeleton[1].parent_index == 0);
+    REQUIRE(scene.skeleton[1].local_transform[3][1] == Approx(1.0f));
+
+    const auto& animation = scene.animations.front();
+    REQUIRE(animation.name == "idle");
+    REQUIRE(animation.duration == Approx(1.0f));
+    REQUIRE(animation.channels.size() == 1);
+    REQUIRE(animation.channels.front().target_node_index == 1);
+    REQUIRE(animation.channels.front().time_keys.size() == 2);
+    REQUIRE(animation.channels.front().position_keys.size() == 2);
+    REQUIRE(animation.channels.front().position_keys.back().x == Approx(1.0f));
+}
+

@@ -153,31 +153,70 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.scene_m
 - 最小 3D 场景结构
 - 3D MVP 相关测试与样例场景路径
 
-### 5.5 3D MVP Runtime Smoke 门禁
+### 5.6 3D Runtime 回归矩阵
 
-当前 C++ sample/runtime 已支持通过环境变量加载最小 3D MVP 场景：
+当目标是继续收口 `DOC-19` 中的 3D runtime 功能面对齐，而不是做 demo / editor 时，建议将以下入口视为当前最小 3D 回归矩阵：
 
-- 环境变量：`DSE_STARTUP_SCENE`
-- 推荐值：`assets/scenes/3d_mvp_minimal.scene.json`
-- 对应 gate：`engine.3d.runtime_mvp_smoke`
+- `engine.3d.unit`
+- `engine.3d.scene_mvp`
+- `engine.3d.runtime_mvp_smoke`
+
+其中：
+
+- `engine.3d.unit` 负责 3D runtime 侧的材质、灯光、阴影、动画、相机、地形、剔除、粒子与静态渲染壳层回归；
+- `engine.3d.scene_mvp` 负责最小 3D 场景的 scene roundtrip / 组件可加载性门禁；
+- `engine.3d.runtime_mvp_smoke` 负责 C++ runtime startup scene 入口仍能真正切进 3D MVP 场景。
+
+推荐组合执行：
+
+```bat
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.unit|engine.3d.scene_mvp|engine.3d.runtime_mvp_smoke"
+```
+
+建议后续凡是修改以下方向，都优先补跑上述 3D 组合：
+
+- `engine/render/rhi/`
+- `engine/runtime/`
+- `engine/scene/scene.cpp`
+- `engine/ecs/components_3d.h`
+- `modules/gameplay_3d/`
+- `assets/scenes/3d_mvp_minimal.scene.json`
+
+### 5.7 3D 资源导入与烹饪链门禁
+
+当目标是继续收口 `gltf/glb -> dmesh/dmat/danim/dskel` 的 3D 资源链，而不是只验证运行时渲染路径时，建议额外执行：
+
+- `engine.asset_compiler`
 
 推荐单独执行：
 
 ```bat
-ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.runtime_mvp_smoke"
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.asset_compiler"
 ```
 
-该 gate 的定位是验证：
+该 gate 当前覆盖：
 
-- C++ sample/runtime 能识别 `DSE_STARTUP_SCENE`
-- Runtime 能成功加载已签入的最小 3D MVP 场景
-- 旧硬编码 demo 不会继续污染 startup scene 模式
+- `GltfImporter` 对最小 glTF 场景的 PBR 材质字段导入；
+- 骨骼层级、inverse bind matrix 与动画 channel 的最小导入；
+- `MeshCooker` 对 `.dmesh` / `.dmat` / `.danim` / `.dskel` 的产物生成；
+- `.dmat` 到 runtime `MaterialAsset` 字段映射的连续性；
+- importer 当前支持矩阵的静态门禁（已支持字段与明确未接入能力）。
 
-它不是完整渲染正确性测试，但能兜底“runtime 入口是否真的切进 3D MVP scene”。
+当前建议把以下能力视为**已支持**：`POSITION`、`NORMAL`、`TANGENT`、`TEXCOORD_0`、`WEIGHTS_0`、`JOINTS_0`、PBR 基础材质字段、首个 skin 的骨骼层级，以及 joint 上的 `translation/rotation/scale` 动画 channel。
+
+当前建议把以下能力视为**明确未接入**：`COLOR_0`、morph target / blend shape / animation weights、非蒙皮节点动画，以及更复杂的多 skin / primitive mode 细分资源。
+
+补充说明：当前 `engine.asset_compiler` gate 固定的是 **glTF/GLB -> DSE 运行时资产** 这条主链；`reference/VSEngine2.1` 仓内的原始 3D 资源目前主要是 `.FBX` 与配套贴图，**不能直接作为当前 importer 输入**，需先做离线格式转换或挑选替代资源。
+
+当前主仓内可用于 reference 资源转入试点的入口是 [`apps/tools/asset_builder/main.cpp`](apps/tools/asset_builder/main.cpp)：它会把输入的 `glTF/GLB` 一次性烹饪为 `.dmesh/.dmat/.danim/.dskel`，适合作为最小试点流程的统一入口。
 
 ## 6.1 Windows + Catch + Lua 单测挂起排查结论
 
+
+
+
 本地 Windows 调试过程中，曾出现以下 Lua 单测在 `session.run()` 返回前无输出超时的现象：
+
 
 - `engine.lua_runtime`
 - `engine.lua_runtime.smoke`

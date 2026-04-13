@@ -710,7 +710,9 @@ private:
     int uniform_material_emissive_loc_ = -1;
     int uniform_material_normal_strength_loc_ = -1;
     int uniform_material_alpha_cutoff_loc_ = -1;
+    int uniform_material_alpha_test_loc_ = -1;
     int uniform_receive_shadow_loc_ = -1;
+
     int uniform_skinned_loc_ = -1;
     int uniform_bone_matrices_loc_ = -1;
 
