@@ -36,7 +36,7 @@ Entity BodyEntity(const b2Body* body) {
     if (body == nullptr) {
         return entt::null;
     }
-    return static_cast<Entity>(body->GetUserData().pointer);
+    return static_cast<Entity>(const_cast<b2Body*>(body)->GetUserData().pointer);
 }
 
 void NotifyContactEnter(World& world, Entity entityA, Entity entityB, bool is_trigger) {

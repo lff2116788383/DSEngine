@@ -1,5 +1,10 @@
 set(DSE_ENGINE_TEST_TARGET dse_engine_unit_tests)
 
+set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c)
+if(NOT EXISTS ${DSE_GLAD_SOURCE})
+    set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glad/src/glad.c)
+endif()
+
 set(DSE_ENGINE_TEST_SOURCES
     main.cpp
     base/tween_test.cpp

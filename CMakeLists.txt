@@ -12,7 +12,7 @@ include(GNUInstallDirs)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_definitions(-D GLM_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
+add_definitions(-D GLM_FORCE_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
 add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
 
 add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
@@ -49,6 +49,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin)
 set(VcpkgAutoLink "false" CACHE STRING "Disable MSBuild vcpkg auto-link wildcard injection" FORCE)
 
 if (MSVC)
+    if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime library" FORCE)
+    endif()
     set(CMAKE_VS_GLOBALS
         "VcpkgApplocalDeps=false"
         "VcpkgAutoLink=false"
@@ -108,16 +111,27 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/box2d-2.4.1)
+# 强制 box2d 使用静态 CRT，与 dse_engine 的 /MTd 一致
+if(MSVC)
+    set_property(TARGET box2d PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 if(DSE_HAS_ASSIMP)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
     set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_INSTALL_PDB OFF CACHE BOOL "Disable assimp PDB install to avoid missing .pdb install failure" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_SHARED OFF CACHE BOOL "" FORCE)
     set(CMAKE_C_STANDARD_INCLUDE_DIRECTORIES
         ${CMAKE_C_STANDARD_INCLUDE_DIRECTORIES}
         ${CMAKE_SOURCE_DIR}/depends/lua
     )
     add_subdirectory(depends/assimp)
+    # 强制 assimp 使用静态 CRT，与 dse_engine 的 /MTd 一致
+    if(MSVC)
+        set_property(TARGET assimp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 endif()
 
 set(CMAKE_WARN_DEPRECATED ${DSE_PREV_CMAKE_WARN_DEPRECATED})
@@ -147,11 +161,10 @@ if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
 endif()
 
-# PhysX 禁用时排除 physics3d 相关源文件
+# PhysX 禁用或缺库时排除 physics3d 相关源文件
 if(NOT DSE_ENABLE_PHYSX)
     list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
-elseif(MSVC AND NOT EXISTS "${PHYSX_TARGET_DIR}/physx/lib")
-    message(WARNING "PhysX headers exist but libraries are missing; excluding physics3d sources for this build.")
+elseif(MSVC AND NOT DSE_HAS_PHYSX_LIBS)
     list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
 endif()
 
@@ -176,7 +189,7 @@ if(DSE_ENABLE_3D)
     
     target_compile_definitions(DSE_Gameplay3D PRIVATE DSE_GAMEPLAY3D_EXPORTS)
 
-    if(DSE_ENABLE_PHYSX)
+    if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         target_include_directories(DSE_Gameplay3D PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
         target_link_directories(DSE_Gameplay3D PRIVATE ${PHYSX_DLL_DIR_DEBUG})
         target_link_libraries(DSE_Gameplay3D PRIVATE ${PHYSX_LIBS})
@@ -192,7 +205,6 @@ if(DSE_ENABLE_3D)
     endif()
 endif()
 
-file(GLOB_RECURSE box2d_cpp "${BOX2D_ROOT}/src/*.cpp")
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
 file(GLOB_RECURSE tiny_aes_c "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/*.c")
 file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
@@ -212,7 +224,6 @@ add_library(dse_engine SHARED
     ${easy_profiler_core_source}
     ${lua_src}
     ${luasocket_c}
-    ${box2d_cpp}
     ${spine_cpp}
     ${tiny_aes_c}
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
@@ -228,7 +239,7 @@ target_link_libraries(dse_engine PRIVATE box2d)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
 endif()
-if(DSE_ENABLE_PHYSX)
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     target_include_directories(dse_engine PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
     target_link_directories(dse_engine PRIVATE ${PHYSX_DLL_DIR_DEBUG})
     target_link_libraries(dse_engine PRIVATE ${PHYSX_LIBS})
@@ -333,6 +344,9 @@ target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tiny
 if(DSE_HAS_ASSIMP)
     target_link_libraries(AssetBuilder PRIVATE assimp)
     target_compile_definitions(AssetBuilder PRIVATE DSE_HAS_ASSIMP=1)
+endif()
+if(MSVC)
+    set_property(TARGET AssetBuilder PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 

@@ -21,8 +21,9 @@ using Entity = entt::entity;
 
 class TextureAsset;
 
-// Forward declaration for Box2D handle-style API
-#include <box2d/id.h>
+// Forward declarations for Box2D types
+class b2Body;
+class b2Fixture;
 
 /**
  * @struct TransformComponent
@@ -252,7 +253,7 @@ struct RigidBody2DComponent {
     bool fixed_rotation = false;                         ///< 是否锁定旋转
     
     // Internal Box2D body handle
-    b2BodyId runtime_body{};                             ///< 运行时绑定的 Box2D 刚体实例
+    b2Body* runtime_body = nullptr;                         ///< 运行时绑定的 Box2D 刚体实例
     
     // Callbacks for collision events
     std::function<void(Entity other)> on_collision_enter;///< 物理碰撞进入回调

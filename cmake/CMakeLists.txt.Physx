@@ -55,7 +55,9 @@ set(PHYSX_INCLUDE_DIR "${PHYSX_TARGET_DIR}/physx/include")
 set(PXSHARED_INCLUDE_DIR "${PHYSX_TARGET_DIR}/pxshared/include")
 
 # Link Libraries
+set(DSE_HAS_PHYSX_LIBS OFF)
 if(MSVC)
+
     set(_PHYSX_MSVC_VARIANTS
         win.x86_64.vc143.mt
         win.x86_64.vc142.mt
@@ -100,8 +102,10 @@ if(MSVC)
         file(GLOB PHYSX_DLLS_RELEASE "${PHYSX_DLL_DIR_RELEASE}/*.dll")
     endif()
 
-    if(NOT PHYSX_LIB_DIR_DEBUG AND NOT PHYSX_LIB_DIR_RELEASE)
-        message(WARNING "PhysX libraries were not found under ${PHYSX_TARGET_DIR}/physx/lib. Set DSE_ENABLE_PHYSX=OFF to build without PhysX.")
+    if(PHYSX_LIB_DIR_DEBUG OR PHYSX_LIB_DIR_RELEASE)
+        set(DSE_HAS_PHYSX_LIBS ON)
+    else()
+        message(STATUS "PhysX libraries were not found under ${PHYSX_TARGET_DIR}/physx/lib; physics3d sources will be skipped for this build.")
     endif()
 else()
     # Mac/Linux placeholder

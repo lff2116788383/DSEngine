@@ -746,6 +746,42 @@ int L_EcsSetMeshShaderVariant(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetMeshMaterialScalar(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* param_name = luaL_checkstring(L, 2);
+    float value = static_cast<float>(luaL_checknumber(L, 3));
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        std::string name(param_name);
+        if (name == "metallic") mesh.metallic = value;
+        else if (name == "roughness") mesh.roughness = value;
+        else if (name == "ao") mesh.ao = value;
+        else if (name == "normal_strength") mesh.normal_strength = value;
+        else if (name == "material_alpha_cutoff") mesh.material_alpha_cutoff = value;
+    }
+    return 0;
+}
+
+int L_EcsSetMeshEmissive(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float r = static_cast<float>(luaL_checknumber(L, 2));
+    float g = static_cast<float>(luaL_checknumber(L, 3));
+    float b = static_cast<float>(luaL_checknumber(L, 4));
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        mesh.emissive = glm::vec3(r, g, b);
+    }
+    return 0;
+}
+
 int L_EcsAddDirectionalLight3D(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1111,6 +1147,13 @@ int L_Physics3DRaycast(lua_State* L) {
     lua_setfield(L, -2, "hit");
     
     return 1;
+}
+
+int L_EcsLoadScene(lua_State* L) {
+    const char* scene_path = luaL_checkstring(L, 1);
+    // TODO: [CodeBuddy-2026-04-13] 场景加载功能待实现，当前为占位实现
+    (void)scene_path;
+    return 0;
 }
 
 }
