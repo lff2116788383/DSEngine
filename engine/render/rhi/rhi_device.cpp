@@ -180,6 +180,12 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform sampler2D u_texture;
         uniform sampler2D u_normal_map;
         uniform bool u_has_normal_map;
+        uniform sampler2D u_metallic_roughness_map;
+        uniform bool u_has_metallic_roughness_map;
+        uniform sampler2D u_emissive_map;
+        uniform bool u_has_emissive_map;
+        uniform sampler2D u_occlusion_map;
+        uniform bool u_has_occlusion_map;
         
         #define CSM_CASCADES 3
         uniform sampler2D u_shadow_maps[CSM_CASCADES];
@@ -344,6 +350,9 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
             if (!u_lighting_enabled) {
                 vec3 result = texColor.rgb * ourColor.rgb * u_material_albedo;
+                if (u_has_emissive_map) {
+                    result += texture(u_emissive_map, TexCoord).rgb * u_material_emissive;
+                }
                 // Tonemapping & Gamma correction
                 result = result / (result + vec3(1.0));
                 result = pow(result, vec3(1.0/2.2));
@@ -352,9 +361,24 @@ void OpenGLRhiDevice::EnsureInitialized() {
             }
 
             vec3 albedo = pow(texColor.rgb * ourColor.rgb * u_material_albedo, vec3(2.2));
+            float metallic = clamp(u_material_metallic, 0.0, 1.0);
+            float roughness = clamp(u_material_roughness, 0.04, 1.0);
+            float ao = max(u_material_ao, 0.0);
+            vec3 emissive = u_material_emissive;
+            if (u_has_metallic_roughness_map) {
+                vec4 mrSample = texture(u_metallic_roughness_map, TexCoord);
+                roughness = clamp(mrSample.g * u_material_roughness, 0.04, 1.0);
+                metallic = clamp(mrSample.b * u_material_metallic, 0.0, 1.0);
+            }
+            if (u_has_occlusion_map) {
+                ao *= texture(u_occlusion_map, TexCoord).r;
+            }
+            if (u_has_emissive_map) {
+                emissive *= texture(u_emissive_map, TexCoord).rgb;
+            }
             vec3 V = normalize(u_camera_pos - FragPos);
             vec3 F0 = vec3(0.04);
-            F0 = mix(F0, albedo, u_material_metallic);
+            F0 = mix(F0, albedo, metallic);
 
             vec3 Lo = vec3(0.0);
             
@@ -362,8 +386,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
             {
                 vec3 L = normalize(-u_light_direction);
                 vec3 H = normalize(V + L);
-                float NDF = DistributionGGX(N, H, u_material_roughness);
-                float G   = GeometrySmith(N, V, L, u_material_roughness);
+                float NDF = DistributionGGX(N, H, roughness);
+                float G   = GeometrySmith(N, V, L, roughness);
                 vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
                 vec3 numerator    = NDF * G * F;
@@ -372,7 +396,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
                 vec3 kS = F;
                 vec3 kD = vec3(1.0) - kS;
-                kD *= 1.0 - u_material_metallic;
+                kD *= 1.0 - metallic;
 
                 float NdotL = max(dot(N, L), 0.0);
                 float shadow = ShadowCalculation(FragPos, FragPosViewSpace, N, L);
@@ -388,8 +412,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
                 attenuation *= attenuation;
                 vec3 radiance = u_point_lights[i].color * u_point_lights[i].intensity * attenuation;
 
-                float NDF = DistributionGGX(N, H, u_material_roughness);
-                float G   = GeometrySmith(N, V, L, u_material_roughness);
+                float NDF = DistributionGGX(N, H, roughness);
+                float G   = GeometrySmith(N, V, L, roughness);
                 vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
                 vec3 numerator    = NDF * G * F;
@@ -398,7 +422,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
                 vec3 kS = F;
                 vec3 kD = vec3(1.0) - kS;
-                kD *= 1.0 - u_material_metallic;
+                kD *= 1.0 - metallic;
 
                 float NdotL = max(dot(N, L), 0.0);
                 float point_shadow = 0.0;
@@ -427,8 +451,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
                 }
 
                 vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * attenuation * cone;
-                float NDF = DistributionGGX(N, H, u_material_roughness);
-                float G   = GeometrySmith(N, V, L, u_material_roughness);
+                float NDF = DistributionGGX(N, H, roughness);
+                float G   = GeometrySmith(N, V, L, roughness);
                 vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
                 vec3 numerator    = NDF * G * F;
@@ -437,7 +461,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
                 vec3 kS = F;
                 vec3 kD = vec3(1.0) - kS;
-                kD *= 1.0 - u_material_metallic;
+                kD *= 1.0 - metallic;
 
                 float NdotL = max(dot(N, L), 0.0);
                 float spot_shadow = 0.0;
@@ -453,16 +477,16 @@ void OpenGLRhiDevice::EnsureInitialized() {
             vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
             vec3 kS_ambient = F;
             vec3 kD_ambient = 1.0 - kS_ambient;
-            kD_ambient *= 1.0 - u_material_metallic;
+            kD_ambient *= 1.0 - metallic;
             
             // Simple constant ambient light for now
             vec3 irradiance = vec3(u_ambient_intensity);
             vec3 diffuse_ambient = irradiance * albedo;
             // Fake specular ambient based on roughness
-            vec3 specular_ambient = irradiance * F0 * (1.0 - u_material_roughness);
+            vec3 specular_ambient = irradiance * F0 * (1.0 - roughness);
             
-            vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * u_material_ao;
-            vec3 color = ambient + Lo + u_material_emissive;
+            vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * ao;
+            vec3 color = ambient + Lo + emissive;
 
             color = color / (color + vec3(1.0));
             color = pow(color, vec3(1.0/2.2));
@@ -485,6 +509,12 @@ void OpenGLRhiDevice::EnsureInitialized() {
     
     uniform_normal_map_loc_ = glGetUniformLocation(shader_handle_, "u_normal_map");
     uniform_has_normal_map_loc_ = glGetUniformLocation(shader_handle_, "u_has_normal_map");
+    uniform_metallic_roughness_map_loc_ = glGetUniformLocation(shader_handle_, "u_metallic_roughness_map");
+    uniform_has_metallic_roughness_map_loc_ = glGetUniformLocation(shader_handle_, "u_has_metallic_roughness_map");
+    uniform_emissive_map_loc_ = glGetUniformLocation(shader_handle_, "u_emissive_map");
+    uniform_has_emissive_map_loc_ = glGetUniformLocation(shader_handle_, "u_has_emissive_map");
+    uniform_occlusion_map_loc_ = glGetUniformLocation(shader_handle_, "u_occlusion_map");
+    uniform_has_occlusion_map_loc_ = glGetUniformLocation(shader_handle_, "u_has_occlusion_map");
     uniform_camera_pos_loc_ = glGetUniformLocation(shader_handle_, "u_camera_pos");
     uniform_lighting_enabled_loc_ = glGetUniformLocation(shader_handle_, "u_lighting_enabled");
     uniform_light_direction_loc_ = glGetUniformLocation(shader_handle_, "u_light_direction");
@@ -1185,6 +1215,9 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
 
     unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_normal_map_handle = std::numeric_limits<unsigned int>::max();
+    unsigned int last_metallic_roughness_map_handle = std::numeric_limits<unsigned int>::max();
+    unsigned int last_emissive_map_handle = std::numeric_limits<unsigned int>::max();
+    unsigned int last_occlusion_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_blend_mode = std::numeric_limits<unsigned int>::max();
 
     for (const auto& item : items) {
@@ -1214,6 +1247,51 @@ void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& i
             glUniform1i(uniform_has_normal_map_loc_, 1);
         } else {
             glUniform1i(uniform_has_normal_map_loc_, 0);
+        }
+
+        if (last_metallic_roughness_map_handle != item.metallic_roughness_map_handle) {
+            if (last_metallic_roughness_map_handle != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_metallic_roughness_map_handle = item.metallic_roughness_map_handle;
+        }
+        if (item.metallic_roughness_map_handle != 0) {
+            glActiveTexture(GL_TEXTURE13);
+            glBindTexture(GL_TEXTURE_2D, item.metallic_roughness_map_handle);
+            glUniform1i(uniform_metallic_roughness_map_loc_, 13);
+            glUniform1i(uniform_has_metallic_roughness_map_loc_, 1);
+        } else {
+            glUniform1i(uniform_has_metallic_roughness_map_loc_, 0);
+        }
+
+        if (last_emissive_map_handle != item.emissive_map_handle) {
+            if (last_emissive_map_handle != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_emissive_map_handle = item.emissive_map_handle;
+        }
+        if (item.emissive_map_handle != 0) {
+            glActiveTexture(GL_TEXTURE14);
+            glBindTexture(GL_TEXTURE_2D, item.emissive_map_handle);
+            glUniform1i(uniform_emissive_map_loc_, 14);
+            glUniform1i(uniform_has_emissive_map_loc_, 1);
+        } else {
+            glUniform1i(uniform_has_emissive_map_loc_, 0);
+        }
+
+        if (last_occlusion_map_handle != item.occlusion_map_handle) {
+            if (last_occlusion_map_handle != std::numeric_limits<unsigned int>::max()) {
+                current_frame_stats_.material_switches += 1;
+            }
+            last_occlusion_map_handle = item.occlusion_map_handle;
+        }
+        if (item.occlusion_map_handle != 0) {
+            glActiveTexture(GL_TEXTURE15);
+            glBindTexture(GL_TEXTURE_2D, item.occlusion_map_handle);
+            glUniform1i(uniform_occlusion_map_loc_, 15);
+            glUniform1i(uniform_has_occlusion_map_loc_, 1);
+        } else {
+            glUniform1i(uniform_has_occlusion_map_loc_, 0);
         }
 
         glUniform1i(uniform_lighting_enabled_loc_, item.lighting_enabled ? 1 : 0);

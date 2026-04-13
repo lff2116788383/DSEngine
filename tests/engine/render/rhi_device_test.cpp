@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <string>
 
 #include "engine/render/rhi/rhi_device.h"
 
@@ -71,4 +72,40 @@ TEST_CASE("Given_OpenGLRhiDeviceHeader_When_MultiSpotShadowSupportIsAdded_Then_P
     REQUIRE(header.find("global_spot_shadow_map_[4]") != std::string::npos);
     REQUIRE(header.find("global_spot_light_space_matrix_[4]") != std::string::npos);
     REQUIRE(header.find("int shadow_index = -1;") != std::string::npos);
+}
+
+TEST_CASE("Given_OpenGLRhiDeviceShader_When_PbrTextureMapsAreAligned_Then_ShaderAndDrawItemContainMetallicRoughnessEmissiveOcclusionPaths", "[engine][render][rhi][static]") {
+    const std::string header = []() {
+        std::ifstream input("engine/render/rhi/rhi_device.h", std::ios::in | std::ios::binary);
+        REQUIRE(input.is_open());
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        return buffer.str();
+    }();
+
+    const std::string source = []() {
+        std::ifstream input("engine/render/rhi/rhi_device.cpp", std::ios::in | std::ios::binary);
+        REQUIRE(input.is_open());
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        return buffer.str();
+    }();
+
+    REQUIRE(header.find("unsigned int metallic_roughness_map_handle = 0;") != std::string::npos);
+    REQUIRE(header.find("unsigned int emissive_map_handle = 0;") != std::string::npos);
+    REQUIRE(header.find("unsigned int occlusion_map_handle = 0;") != std::string::npos);
+    REQUIRE(header.find("int uniform_metallic_roughness_map_loc_ = -1;") != std::string::npos);
+    REQUIRE(header.find("int uniform_emissive_map_loc_ = -1;") != std::string::npos);
+    REQUIRE(header.find("int uniform_occlusion_map_loc_ = -1;") != std::string::npos);
+
+    REQUIRE(source.find("uniform sampler2D u_metallic_roughness_map;") != std::string::npos);
+    REQUIRE(source.find("uniform bool u_has_metallic_roughness_map;") != std::string::npos);
+    REQUIRE(source.find("uniform sampler2D u_emissive_map;") != std::string::npos);
+    REQUIRE(source.find("uniform bool u_has_emissive_map;") != std::string::npos);
+    REQUIRE(source.find("uniform sampler2D u_occlusion_map;") != std::string::npos);
+    REQUIRE(source.find("uniform bool u_has_occlusion_map;") != std::string::npos);
+    REQUIRE(source.find("roughness = clamp(mrSample.g * u_material_roughness, 0.04, 1.0);") != std::string::npos);
+    REQUIRE(source.find("metallic = clamp(mrSample.b * u_material_metallic, 0.0, 1.0);") != std::string::npos);
+    REQUIRE(source.find("ao *= texture(u_occlusion_map, TexCoord).r;") != std::string::npos);
+    REQUIRE(source.find("emissive *= texture(u_emissive_map, TexCoord).rgb;") != std::string::npos);
 }

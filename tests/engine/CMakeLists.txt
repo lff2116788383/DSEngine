@@ -88,7 +88,7 @@ set(DSE_ENGINE_TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/engine/physics/physics2d/physics2d_system.cpp
     ${CMAKE_SOURCE_DIR}/engine/platform/screen.cpp
     ${CMAKE_SOURCE_DIR}/engine/render/rhi/rhi_device.cpp
-    ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c
+    ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
     ${CMAKE_SOURCE_DIR}/depends/bundle/bundle.cpp
     ${CMAKE_SOURCE_DIR}/modules/gameplay_3d/rendering/frustum_culling_system.cpp
@@ -117,6 +117,7 @@ target_include_directories(${DSE_ENGINE_TEST_TARGET}
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/depends
+        ${CMAKE_SOURCE_DIR}/depends/glad/include
         ${CMAKE_SOURCE_DIR}/tests
 )
 

@@ -323,22 +323,23 @@
 **当前进度（2026-04-13）：**
 - [x] 已完成 [`RawMaterial`](engine/assets/compiler/raw_scene_data.h:52) → [`AssetManager::LoadMaterialInstanceFromDmat()`](engine/assets/asset_manager.cpp:564) → [`L_EcsSetMeshMaterial()`](engine/scripting/lua/bindings/lua_binding_ecs.cpp:685) → [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 的材质字段承载链路收口。
 - [x] 已明确 [`material_alpha_test`](engine/ecs/components_3d.h:28) / [`material_double_sided`](engine/ecs/components_3d.h:29) 当前属于“运行时语义已承载并可回归验证，但尚未完全接到 OpenGL 管线状态切换”。
-- [x] 已明确 [`metallic_roughness_texture_handle`](engine/ecs/components_3d.h:32) / [`emissive_texture_handle`](engine/ecs/components_3d.h:33) / [`occlusion_texture_handle`](engine/ecs/components_3d.h:34) 当前已进入 scene、runtime、Lua `.dmat` 与测试链路，但 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 及其内置 mesh fragment shader 仍未真实采样这些贴图。
-- [ ] 下一收口点固定为：扩展 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38)、[`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 与 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100)，让 metallic-roughness / emissive / occlusion 贴图进入真实 shader 消费路径。
+- [x] 已扩展 [`MeshDrawItem`](engine/render/rhi/rhi_device.h:38)、[`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) 与 [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100)，让 [`metallic_roughness_texture_handle`](engine/ecs/components_3d.h:32) / [`emissive_texture_handle`](engine/ecs/components_3d.h:33) / [`occlusion_texture_handle`](engine/ecs/components_3d.h:34) 进入真实 shader 消费路径。
+- [x] 已补充 [`mesh_render_system_material_resolution_test.cpp`](tests/modules/gameplay_3d/rendering/mesh_render_system_material_resolution_test.cpp:47) 与 [`rhi_device_test.cpp`](tests/engine/render/rhi_device_test.cpp:77) 覆盖 draw item 字段映射与 shader / uniform 静态门禁。
+- [-] 为继续验证 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 的 P2 回归入口，已同步修复当前构建链上的非 3D 功能性阻塞：[`lua_runtime.cpp`](engine/scripting/lua/lua_runtime.cpp:378) 的 Lua 5.4 [`lua_newstate`](depends/lua/lua.h) 适配、[`physics2d_system.cpp`](engine/physics/physics2d/physics2d_system.cpp:100) / [`physics2d_system.h`](engine/physics/physics2d/physics2d_system.h:22) 的 Box2D handle-style API 收口、以及 [`CMakeLists.txt`](CMakeLists.txt:209) 中 [`dse_engine`](CMakeLists.txt:209) 的 `/utf-8` 与 [`box2d`](depends/box2d-2.4.1/src/CMakeLists.txt:77) 显式链接配置；当前构建仍在持续推进，尚未拿到最终完整通过结果。
 
 **当前 PBR / 材质消费边界（2026-04-13）：**
 - **已真实进入 OpenGL mesh shader / draw item 消费：**
   - `color` / `metallic` / `roughness` / `ao` / `emissive` / `normal_strength` / `material_alpha_cutoff`；
   - `albedo_texture_handle` / `normal_texture_handle`；
+  - `metallic_roughness_texture_handle` / `emissive_texture_handle` / `occlusion_texture_handle`；
   - `receive_shadow`；
   - `material_data_source` / `material_instance_id` 的实例优先级解析。
-- **已纳入资源 / scene / runtime / test，但仍未真实进入 OpenGL mesh shader 采样：**
-  - `metallic_roughness_texture_handle`；
-  - `emissive_texture_handle`；
-  - `occlusion_texture_handle`。
 - **已形成运行时语义，但尚未完全绑定到 OpenGL 固定管线状态：**
   - `material_alpha_test`；
   - `material_double_sided`。
+- **当前验证边界说明：**
+  - shader / draw item / 材质解析链路已由静态回归与材质解析回归覆盖；
+  - 完整 [`dse_engine_unit_tests`](tests/engine/CMakeLists.txt) 构建门禁正在继续验证中，当前主要在清理与 3D P2 无直接产品语义关系、但会阻塞验证入口的底层构建链问题。
 
 **验收标准：**
 - 参数链路清晰可追踪。
@@ -517,7 +518,7 @@ demo 周期不再承担底层功能发明职责，底层缺口原则上应在 `P
 ## P2：3D 渲染与资源质量收口
 
 - [ ] 资源导入与烹饪链收口
-- [-] 渲染表现一致性收口（材质字段承载链、真实消费边界与下一实现入口已文档化；OpenGL mesh shader 贴图真实消费仍在推进）
+- [-] 渲染表现一致性收口（[`MeshDrawItem`](engine/render/rhi/rhi_device.h:38) / [`MeshRenderSystem::Render()`](modules/gameplay_3d/rendering/mesh_render_system.cpp:585) / [`OpenGLRhiDevice::RealSubmitDrawMeshBatch()`](engine/render/rhi/rhi_device.cpp:1100) 已打通 metallic-roughness / emissive / occlusion 真实消费；当前重点转为收口完整构建验证链）
 - [ ] 3D 回归矩阵建立
 
 ## P3：reference demo 对齐

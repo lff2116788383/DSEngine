@@ -8,83 +8,74 @@
 #include "engine/base/debug.h"
 #include <glm/gtx/quaternion.hpp>
 
-// --- Contact Listener ---
-class PhysicsContactListener : public b2ContactListener {
-public:
-    PhysicsContactListener(World* world, Physics2DSystem* system) : world_(world), system_(system) {}
+namespace {
 
-    void BeginContact(b2Contact* contact) override {
-        b2Fixture* fixtureA = contact->GetFixtureA();
-        b2Fixture* fixtureB = contact->GetFixtureB();
+bool IsValidBodyId(const b2BodyId& body_id) {
+    return B2_IS_NON_NULL(body_id);
+}
 
-        Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
-        Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
-        const bool is_trigger = fixtureA->IsSensor() || fixtureB->IsSensor();
+bool IsValidShapeId(const b2ShapeId& shape_id) {
+    return B2_IS_NON_NULL(shape_id);
+}
 
-        Entity orderedA = entityA;
-        Entity orderedB = entityB;
-        if (orderedB < orderedA) {
-            std::swap(orderedA, orderedB);
-        }
-        system_->active_contact_pairs_.emplace(orderedA, orderedB, is_trigger);
+bool IsBodyTypeDynamic(RigidBody2DType type) {
+    return type == RigidBody2DType::Dynamic;
+}
 
-        if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
-            auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
-            if (is_trigger) {
-                if (rbA.on_trigger_enter) rbA.on_trigger_enter(entityB);
-            } else {
-                if (rbA.on_collision_enter) rbA.on_collision_enter(entityB);
-            }
-        }
+b2BodyType ToBox2DBodyType(RigidBody2DType type) {
+    switch (type) {
+        case RigidBody2DType::Static: return b2_staticBody;
+        case RigidBody2DType::Kinematic: return b2_kinematicBody;
+        case RigidBody2DType::Dynamic: return b2_dynamicBody;
+        default: return b2_staticBody;
+    }
+}
 
-        if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
-            auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
-            if (is_trigger) {
-                if (rbB.on_trigger_enter) rbB.on_trigger_enter(entityA);
-            } else {
-                if (rbB.on_collision_enter) rbB.on_collision_enter(entityA);
-            }
+Entity BodyEntity(const b2BodyId& body_id) {
+    return static_cast<Entity>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body_id)));
+}
+
+void NotifyContactEnter(World& world, Entity entityA, Entity entityB, bool is_trigger) {
+    if (world.registry().valid(entityA) && world.registry().all_of<RigidBody2DComponent>(entityA)) {
+        auto& rbA = world.registry().get<RigidBody2DComponent>(entityA);
+        if (is_trigger) {
+            if (rbA.on_trigger_enter) rbA.on_trigger_enter(entityB);
+        } else {
+            if (rbA.on_collision_enter) rbA.on_collision_enter(entityB);
         }
     }
 
-    void EndContact(b2Contact* contact) override {
-        b2Fixture* fixtureA = contact->GetFixtureA();
-        b2Fixture* fixtureB = contact->GetFixtureB();
-
-        Entity entityA = (Entity)(uintptr_t)fixtureA->GetBody()->GetUserData().pointer;
-        Entity entityB = (Entity)(uintptr_t)fixtureB->GetBody()->GetUserData().pointer;
-        const bool is_trigger = fixtureA->IsSensor() || fixtureB->IsSensor();
-
-        Entity orderedA = entityA;
-        Entity orderedB = entityB;
-        if (orderedB < orderedA) {
-            std::swap(orderedA, orderedB);
+    if (world.registry().valid(entityB) && world.registry().all_of<RigidBody2DComponent>(entityB)) {
+        auto& rbB = world.registry().get<RigidBody2DComponent>(entityB);
+        if (is_trigger) {
+            if (rbB.on_trigger_enter) rbB.on_trigger_enter(entityA);
+        } else {
+            if (rbB.on_collision_enter) rbB.on_collision_enter(entityA);
         }
-        system_->active_contact_pairs_.erase(std::make_tuple(orderedA, orderedB, is_trigger));
+    }
+}
 
-        if (world_->registry().valid(entityA) && world_->registry().all_of<RigidBody2DComponent>(entityA)) {
-            auto& rbA = world_->registry().get<RigidBody2DComponent>(entityA);
-            if (is_trigger) {
-                if (rbA.on_trigger_exit) rbA.on_trigger_exit(entityB);
-            } else {
-                if (rbA.on_collision_exit) rbA.on_collision_exit(entityB);
-            }
-        }
-
-        if (world_->registry().valid(entityB) && world_->registry().all_of<RigidBody2DComponent>(entityB)) {
-            auto& rbB = world_->registry().get<RigidBody2DComponent>(entityB);
-            if (is_trigger) {
-                if (rbB.on_trigger_exit) rbB.on_trigger_exit(entityA);
-            } else {
-                if (rbB.on_collision_exit) rbB.on_collision_exit(entityA);
-            }
+void NotifyContactExit(World& world, Entity entityA, Entity entityB, bool is_trigger) {
+    if (world.registry().valid(entityA) && world.registry().all_of<RigidBody2DComponent>(entityA)) {
+        auto& rbA = world.registry().get<RigidBody2DComponent>(entityA);
+        if (is_trigger) {
+            if (rbA.on_trigger_exit) rbA.on_trigger_exit(entityB);
+        } else {
+            if (rbA.on_collision_exit) rbA.on_collision_exit(entityB);
         }
     }
 
-private:
-    World* world_;
-    Physics2DSystem* system_;
-};
+    if (world.registry().valid(entityB) && world.registry().all_of<RigidBody2DComponent>(entityB)) {
+        auto& rbB = world.registry().get<RigidBody2DComponent>(entityB);
+        if (is_trigger) {
+            if (rbB.on_trigger_exit) rbB.on_trigger_exit(entityA);
+        } else {
+            if (rbB.on_collision_exit) rbB.on_collision_exit(entityA);
+        }
+    }
+}
+
+} // namespace
 
 Physics2DSystem::Physics2DSystem() {
 }
@@ -93,65 +84,46 @@ Physics2DSystem::~Physics2DSystem() {
 }
 
 void Physics2DSystem::Init(World& world) {
+    (void)world;
     Shutdown();
-    b2Vec2 gravity(0.0f, -9.81f);
-    physics_world_ = std::make_unique<b2World>(gravity);
-    contact_listener_ = std::make_unique<PhysicsContactListener>(&world, this);
-    physics_world_->SetContactListener(contact_listener_.get());
+    b2WorldDef world_def = b2DefaultWorldDef();
+    world_def.gravity = b2Vec2{0.0f, -9.81f};
+    physics_world_ = b2CreateWorld(&world_def);
+    DEBUG_LOG_INFO("[Physics2D] Init world_valid={}", b2World_IsValid(physics_world_));
 }
 
 void Physics2DSystem::Shutdown() {
     active_contact_pairs_.clear();
-    contact_listener_.reset();
-    physics_world_.reset();
+    if (b2World_IsValid(physics_world_)) {
+        b2DestroyWorld(physics_world_);
+    }
+    physics_world_ = b2WorldId{};
 }
 
 
 void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
-    if (!physics_world_) return;
-
-    for (b2Body* body = physics_world_->GetBodyList(); body != nullptr;) {
-        b2Body* next = body->GetNext();
-        Entity entity = static_cast<Entity>(body->GetUserData().pointer);
-        if (!world.registry().valid(entity) || !world.registry().all_of<RigidBody2DComponent>(entity)) {
-            physics_world_->DestroyBody(body);
-        }
-        body = next;
-    }
+    if (!b2World_IsValid(physics_world_)) return;
 
     auto collider_view = world.registry().view<BoxCollider2DComponent>();
     for (auto entity : collider_view) {
         auto& collider = collider_view.get<BoxCollider2DComponent>(entity);
         if (!world.registry().all_of<RigidBody2DComponent>(entity)) {
-            collider.runtime_fixture = nullptr;
+            collider.runtime_fixture = b2ShapeId{};
             continue;
         }
         auto& rb = world.registry().get<RigidBody2DComponent>(entity);
-        if (rb.runtime_body == nullptr) {
-            collider.runtime_fixture = nullptr;
-        } else if (collider.runtime_fixture != nullptr) {
-            collider.runtime_fixture->Refilter();
+        if (!IsValidBodyId(rb.runtime_body)) {
+            collider.runtime_fixture = b2ShapeId{};
         }
     }
 
     auto rb_view = world.registry().view<RigidBody2DComponent>();
     for (auto entity : rb_view) {
         auto& rb = rb_view.get<RigidBody2DComponent>(entity);
-        if (rb.runtime_body == nullptr) {
-            continue;
-        }
-        const b2Body* runtime_body = rb.runtime_body;
-        bool body_still_alive = false;
-        for (b2Body* body = physics_world_->GetBodyList(); body != nullptr; body = body->GetNext()) {
-            if (body == runtime_body) {
-                body_still_alive = true;
-                break;
-            }
-        }
-        if (!body_still_alive) {
-            rb.runtime_body = nullptr;
+        if (!IsValidBodyId(rb.runtime_body) || !b2Body_IsValid(rb.runtime_body)) {
+            rb.runtime_body = b2BodyId{};
             if (world.registry().all_of<BoxCollider2DComponent>(entity)) {
-                world.registry().get<BoxCollider2DComponent>(entity).runtime_fixture = nullptr;
+                world.registry().get<BoxCollider2DComponent>(entity).runtime_fixture = b2ShapeId{};
             }
         }
     }
@@ -162,55 +134,49 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         auto& rb = view.get<RigidBody2DComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
 
-        if (!rb.runtime_body) {
-            b2BodyDef body_def;
-            body_def.position.Set(transform.position.x, transform.position.y);
-            body_def.angle = glm::roll(transform.rotation); // Assuming rotation is around Z for 2D
-            
-            switch (rb.type) {
-                case RigidBody2DType::Static: body_def.type = b2_staticBody; break;
-                case RigidBody2DType::Kinematic: body_def.type = b2_kinematicBody; break;
-                case RigidBody2DType::Dynamic: body_def.type = b2_dynamicBody; break;
-            }
-            
+        if (!IsValidBodyId(rb.runtime_body)) {
+            b2BodyDef body_def = b2DefaultBodyDef();
+            body_def.position = b2Vec2{transform.position.x, transform.position.y};
+            body_def.rotation = b2MakeRot(glm::roll(transform.rotation));
+            body_def.type = ToBox2DBodyType(rb.type);
             body_def.gravityScale = rb.gravity_scale;
-            body_def.fixedRotation = rb.fixed_rotation;
-            
-            b2Body* body = physics_world_->CreateBody(&body_def);
-            body->GetUserData().pointer = static_cast<uintptr_t>(entity);
-            rb.runtime_body = body;
+            body_def.motionLocks.angularZ = rb.fixed_rotation;
 
-            // Check if it has a collider
+            rb.runtime_body = b2CreateBody(physics_world_, &body_def);
+            b2Body_SetUserData(rb.runtime_body, reinterpret_cast<void*>(static_cast<uintptr_t>(entity)));
+            DEBUG_LOG_INFO("[Physics2D] CreateBody entity={} valid={}", static_cast<uint32_t>(entity), b2Body_IsValid(rb.runtime_body));
+
             if (world.registry().all_of<BoxCollider2DComponent>(entity)) {
                 auto& bc = world.registry().get<BoxCollider2DComponent>(entity);
-                
-                b2PolygonShape box_shape;
-                box_shape.SetAsBox(bc.size.x * transform.scale.x / 2.0f, 
-                                   bc.size.y * transform.scale.y / 2.0f,
-                                   b2Vec2(bc.offset.x, bc.offset.y), 
-                                   0.0f);
+                b2Polygon box_shape = b2MakeOffsetBox(
+                    bc.size.x * transform.scale.x / 2.0f,
+                    bc.size.y * transform.scale.y / 2.0f,
+                    b2Vec2{bc.offset.x, bc.offset.y},
+                    b2MakeRot(0.0f));
 
-                b2FixtureDef fixture_def;
-                fixture_def.shape = &box_shape;
-                fixture_def.density = bc.density;
-                fixture_def.friction = bc.friction;
-                fixture_def.restitution = bc.restitution;
-                fixture_def.isSensor = bc.is_trigger;
-
-                bc.runtime_fixture = body->CreateFixture(&fixture_def);
+                b2ShapeDef shape_def = b2DefaultShapeDef();
+                shape_def.density = bc.density;
+                shape_def.isSensor = bc.is_trigger;
+                shape_def.enableSensorEvents = bc.is_trigger;
+                shape_def.enableContactEvents = !bc.is_trigger;
+                bc.runtime_fixture = b2CreatePolygonShape(rb.runtime_body, &shape_def, &box_shape);
+                if (IsValidShapeId(bc.runtime_fixture)) {
+                    b2Shape_SetFriction(bc.runtime_fixture, bc.friction);
+                    b2Shape_SetRestitution(bc.runtime_fixture, bc.restitution);
+                }
             }
         } else {
-            const b2Vec2 body_position = rb.runtime_body->GetPosition();
-            const float body_angle = rb.runtime_body->GetAngle();
+            const b2Vec2 body_position = b2Body_GetPosition(rb.runtime_body);
+            const float body_angle = b2Rot_GetAngle(b2Body_GetRotation(rb.runtime_body));
             const float ecs_angle = glm::roll(transform.rotation);
             const bool transform_mismatch = std::abs(body_position.x - transform.position.x) > 0.0001f ||
                                             std::abs(body_position.y - transform.position.y) > 0.0001f ||
                                             std::abs(body_angle - ecs_angle) > 0.0001f;
-            if (rb.type == RigidBody2DType::Dynamic) {
+            if (IsBodyTypeDynamic(rb.type)) {
                 if (transform.dirty) {
-                    rb.runtime_body->SetTransform(b2Vec2(transform.position.x, transform.position.y), ecs_angle);
-                    rb.runtime_body->SetLinearVelocity(b2Vec2(rb.velocity.x, rb.velocity.y));
-                    rb.runtime_body->SetAwake(true);
+                    b2Body_SetTransform(rb.runtime_body, b2Vec2{transform.position.x, transform.position.y}, b2MakeRot(ecs_angle));
+                    b2Body_SetLinearVelocity(rb.runtime_body, b2Vec2{rb.velocity.x, rb.velocity.y});
+                    b2Body_SetAwake(rb.runtime_body, true);
                     transform.dirty = false;
                 } else if (transform_mismatch) {
                     transform.position.x = body_position.x;
@@ -220,7 +186,7 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                 }
             } else {
                 if (transform.dirty) {
-                    rb.runtime_body->SetTransform(b2Vec2(transform.position.x, transform.position.y), ecs_angle);
+                    b2Body_SetTransform(rb.runtime_body, b2Vec2{transform.position.x, transform.position.y}, b2MakeRot(ecs_angle));
                     transform.dirty = false;
                 } else if (transform_mismatch) {
                     transform.position.x = body_position.x;
@@ -230,14 +196,42 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                 }
 
                 if (rb.type == RigidBody2DType::Kinematic) {
-                    rb.runtime_body->SetLinearVelocity(b2Vec2(rb.velocity.x, rb.velocity.y));
+                    b2Body_SetLinearVelocity(rb.runtime_body, b2Vec2{rb.velocity.x, rb.velocity.y});
                 }
             }
         }
     }
 
     // 2. Step the physics world
-    physics_world_->Step(fixed_delta_time, velocity_iterations_, position_iterations_);
+    b2World_Step(physics_world_, fixed_delta_time, 4);
+
+    b2ContactEvents contact_events = b2World_GetContactEvents(physics_world_);
+    for (int i = 0; i < contact_events.beginCount; ++i) {
+        const b2ContactBeginTouchEvent& event = contact_events.beginEvents[i];
+        const Entity entityA = BodyEntity(b2Shape_GetBody(event.shapeIdA));
+        const Entity entityB = BodyEntity(b2Shape_GetBody(event.shapeIdB));
+        const bool is_trigger = b2Shape_IsSensor(event.shapeIdA) || b2Shape_IsSensor(event.shapeIdB);
+        Entity orderedA = entityA;
+        Entity orderedB = entityB;
+        if (orderedB < orderedA) {
+            std::swap(orderedA, orderedB);
+        }
+        active_contact_pairs_.emplace(orderedA, orderedB, is_trigger);
+        NotifyContactEnter(world, entityA, entityB, is_trigger);
+    }
+    for (int i = 0; i < contact_events.endCount; ++i) {
+        const b2ContactEndTouchEvent& event = contact_events.endEvents[i];
+        const Entity entityA = BodyEntity(b2Shape_GetBody(event.shapeIdA));
+        const Entity entityB = BodyEntity(b2Shape_GetBody(event.shapeIdB));
+        const bool is_trigger = b2Shape_IsSensor(event.shapeIdA) || b2Shape_IsSensor(event.shapeIdB);
+        Entity orderedA = entityA;
+        Entity orderedB = entityB;
+        if (orderedB < orderedA) {
+            std::swap(orderedA, orderedB);
+        }
+        active_contact_pairs_.erase(std::make_tuple(orderedA, orderedB, is_trigger));
+        NotifyContactExit(world, entityA, entityB, is_trigger);
+    }
 
 
     // 3. Sync Box2D transforms back to ECS
@@ -245,54 +239,38 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         auto& rb = view.get<RigidBody2DComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
 
-        if (rb.runtime_body && rb.type == RigidBody2DType::Dynamic) {
-            b2Vec2 position = rb.runtime_body->GetPosition();
-            float angle = rb.runtime_body->GetAngle();
+        if (IsValidBodyId(rb.runtime_body) && rb.type == RigidBody2DType::Dynamic) {
+            b2Vec2 position = b2Body_GetPosition(rb.runtime_body);
+            float angle = b2Rot_GetAngle(b2Body_GetRotation(rb.runtime_body));
 
             transform.position.x = position.x;
             transform.position.y = position.y;
             transform.rotation = glm::angleAxis(angle, glm::vec3(0.0f, 0.0f, 1.0f));
             transform.dirty = false;
 
-            b2Vec2 velocity = rb.runtime_body->GetLinearVelocity();
+            b2Vec2 velocity = b2Body_GetLinearVelocity(rb.runtime_body);
             rb.velocity.x = velocity.x;
             rb.velocity.y = velocity.y;
         }
     }
 }
 
-// Raycast Callback
-class SimpleRayCastCallback : public b2RayCastCallback {
-public:
-    Entity hit_entity = entt::null;
-    b2Vec2 hit_point;
-    b2Vec2 hit_normal;
-    float fraction = 1.0f;
-    bool hit = false;
-
-    float ReportFixture(b2Fixture* fixture, const b2Vec2& point, const b2Vec2& normal, float fraction) override {
-        this->hit = true;
-        this->hit_entity = (Entity)(uintptr_t)fixture->GetBody()->GetUserData().pointer;
-        this->hit_point = point;
-        this->hit_normal = normal;
-        this->fraction = fraction;
-        
-        // Return fraction to find closest hit
-        return fraction;
-    }
-};
+// Raycast uses Box2D handle-style closest-hit query in current Box2D version.
 
 bool Physics2DSystem::Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal) {
-    if (!physics_world_) return false;
+    if (!b2World_IsValid(physics_world_)) return false;
 
-    SimpleRayCastCallback callback;
-    physics_world_->RayCast(&callback, b2Vec2(start.x, start.y), b2Vec2(end.x, end.y));
-
-    if (callback.hit) {
-        out_entity = callback.hit_entity;
-        out_point = glm::vec2(callback.hit_point.x, callback.hit_point.y);
-        out_normal = glm::vec2(callback.hit_normal.x, callback.hit_normal.y);
-        return true;
+    const b2Vec2 origin{start.x, start.y};
+    const b2Vec2 translation{end.x - start.x, end.y - start.y};
+    const b2QueryFilter filter = b2DefaultQueryFilter();
+    const b2RayResult result = b2World_CastRayClosest(physics_world_, origin, translation, filter);
+    if (!IsValidShapeId(result.shapeId)) {
+        return false;
     }
-    return false;
+
+    const b2BodyId hit_body = b2Shape_GetBody(result.shapeId);
+    out_entity = BodyEntity(hit_body);
+    out_point = glm::vec2(result.point.x, result.point.y);
+    out_normal = glm::vec2(result.normal.x, result.normal.y);
+    return true;
 }

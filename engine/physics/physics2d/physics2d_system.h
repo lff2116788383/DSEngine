@@ -12,8 +12,6 @@
 #include <set>
 #include <tuple>
 
-// Forward declarations
-class PhysicsContactListener;
 
 /**
  * @class Physics2DSystem
@@ -60,10 +58,7 @@ public:
 private:
     using ContactPair = std::tuple<Entity, Entity, bool>;
 
-    friend class PhysicsContactListener;
-
-    std::unique_ptr<b2World> physics_world_;
-    std::unique_ptr<PhysicsContactListener> contact_listener_;
+    b2WorldId physics_world_{};
     std::set<ContactPair> active_contact_pairs_;
     int velocity_iterations_ = 8;
     int position_iterations_ = 3;

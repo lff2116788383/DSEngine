@@ -1,3 +1,8 @@
+set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c)
+if(NOT EXISTS ${DSE_GLAD_SOURCE})
+    set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glad/src/glad.c)
+endif()
+
 add_executable(dse_editor_cpp WIN32
     src/main.cpp
     src/editor_aux_panels.cpp
@@ -8,7 +13,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_shell.cpp
     src/editor_toolbar.cpp
     src/editor_viewport_panel.cpp
-    ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c
+    ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_tables.cpp
@@ -24,7 +29,7 @@ if(MSVC)
     set_property(TARGET dse_editor_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
-target_include_directories(dse_editor_cpp PRIVATE 
+target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/engine
     ${CMAKE_SOURCE_DIR}/engine/runtime
@@ -32,6 +37,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/include
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps
+    ${CMAKE_SOURCE_DIR}/depends/glad/include
     ${CMAKE_SOURCE_DIR}/depends/imgui
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends
     ${CMAKE_SOURCE_DIR}/third_party/imguizmo

@@ -71,6 +71,9 @@ TEST_CASE("Given_MeshRendererPrefersComponentFallback_When_Rendering_Then_Compon
     mesh.material_double_sided = true;
     mesh.albedo_texture_handle = 21;
     mesh.normal_texture_handle = 22;
+    mesh.metallic_roughness_texture_handle = 23;
+    mesh.emissive_texture_handle = 24;
+    mesh.occlusion_texture_handle = 25;
     mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
     AttachMinimalRenderableMesh(world, entity);
 
@@ -82,6 +85,9 @@ TEST_CASE("Given_MeshRendererPrefersComponentFallback_When_Rendering_Then_Compon
     REQUIRE_FALSE(item.material_uses_instance_data);
     REQUIRE(item.texture_handle == 21);
     REQUIRE(item.normal_map_handle == 22);
+    REQUIRE(item.metallic_roughness_map_handle == 23);
+    REQUIRE(item.emissive_map_handle == 24);
+    REQUIRE(item.occlusion_map_handle == 25);
     REQUIRE(item.material_albedo.r == Approx(0.7f));
     REQUIRE(item.material_emissive.z == Approx(0.3f));
     REQUIRE(item.material_metallic == Approx(0.25f));
@@ -110,6 +116,9 @@ TEST_CASE("Given_MeshRendererPrefersMaterialInstance_When_Rendering_Then_Materia
     MaterialAsset::TextureSlots slots = material->GetTextureSlots();
     slots.albedo = 41;
     slots.normal = 42;
+    slots.metallic_roughness = 43;
+    slots.emissive = 44;
+    slots.occlusion = 45;
     material->SetTextureSlots(slots);
     MaterialAsset::ScalarOverrides scalars = material->GetScalarOverrides();
     scalars.metallic = 0.91f;
@@ -149,6 +158,9 @@ TEST_CASE("Given_MeshRendererPrefersMaterialInstance_When_Rendering_Then_Materia
     REQUIRE(item.material_uses_instance_data);
     REQUIRE(item.texture_handle == 41);
     REQUIRE(item.normal_map_handle == 42);
+    REQUIRE(item.metallic_roughness_map_handle == 43);
+    REQUIRE(item.emissive_map_handle == 44);
+    REQUIRE(item.occlusion_map_handle == 45);
     REQUIRE(item.material_albedo.r == Approx(0.2f));
     REQUIRE(item.material_albedo.g == Approx(0.4f));
     REQUIRE(item.material_albedo.b == Approx(0.6f));

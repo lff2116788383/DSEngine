@@ -667,6 +667,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             ? resolved_texture_slots.albedo
             : (prefer_material_instance ? material_instance->GetTextureHandle() : 0);
         item.normal_map_handle = resolved_texture_slots.normal;
+        item.metallic_roughness_map_handle = resolved_texture_slots.metallic_roughness;
+        item.emissive_map_handle = resolved_texture_slots.emissive;
+        item.occlusion_map_handle = resolved_texture_slots.occlusion;
         item.material_albedo = glm::vec3(resolved_base_color);
         item.material_metallic = resolved_scalars.metallic;
         item.material_roughness = resolved_scalars.roughness;

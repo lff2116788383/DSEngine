@@ -41,6 +41,9 @@ struct MeshDrawItem {
     
     unsigned int texture_handle = 0;
     unsigned int normal_map_handle = 0;
+    unsigned int metallic_roughness_map_handle = 0;
+    unsigned int emissive_map_handle = 0;
+    unsigned int occlusion_map_handle = 0;
     unsigned int blend_mode = 0;
     glm::mat4 model = glm::mat4(1.0f);
     glm::vec4 color = glm::vec4(1.0f);
@@ -688,6 +691,12 @@ private:
     int uniform_shadow_map_loc_[3];
     int uniform_normal_map_loc_ = -1;
     int uniform_has_normal_map_loc_ = -1;
+    int uniform_metallic_roughness_map_loc_ = -1;
+    int uniform_has_metallic_roughness_map_loc_ = -1;
+    int uniform_emissive_map_loc_ = -1;
+    int uniform_has_emissive_map_loc_ = -1;
+    int uniform_occlusion_map_loc_ = -1;
+    int uniform_has_occlusion_map_loc_ = -1;
     int uniform_lighting_enabled_loc_ = -1;
     int uniform_light_direction_loc_ = -1;
     int uniform_light_color_loc_ = -1;

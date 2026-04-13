@@ -21,9 +21,8 @@ using Entity = entt::entity;
 
 class TextureAsset;
 
-// Forward declaration for Box2D
-class b2Body;
-class b2Fixture;
+// Forward declaration for Box2D handle-style API
+#include <box2d/id.h>
 
 /**
  * @struct TransformComponent
@@ -252,8 +251,8 @@ struct RigidBody2DComponent {
     float gravity_scale = 1.0f;                          ///< 重力缩放倍数
     bool fixed_rotation = false;                         ///< 是否锁定旋转
     
-    // Internal Box2D body pointer
-    b2Body* runtime_body = nullptr;                      ///< 运行时绑定的 Box2D 刚体实例
+    // Internal Box2D body handle
+    b2BodyId runtime_body{};                             ///< 运行时绑定的 Box2D 刚体实例
     
     // Callbacks for collision events
     std::function<void(Entity other)> on_collision_enter;///< 物理碰撞进入回调
@@ -274,8 +273,8 @@ struct BoxCollider2DComponent {
     float restitution = 0.0f;                            ///< 恢复系数 (弹性)
     bool is_trigger = false;                             ///< 是否为触发器 (仅检测不产生物理力)
     
-    // Internal Box2D fixture pointer
-    b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
+    // Internal Box2D shape handle
+    b2ShapeId runtime_fixture{};                         ///< 运行时绑定的 Box2D 夹具实例
 };
 
 // --- New Core Systems Components ---

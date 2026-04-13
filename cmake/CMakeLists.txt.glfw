@@ -52,6 +52,9 @@ include_directories("${GLFW_SOURCE_DIR}/include" "${GLFW_SOURCE_DIR}/deps")
 
 set(GLAD_GL "${GLFW_SOURCE_DIR}/deps/glad/gl.h"
         "${GLFW_SOURCE_DIR}/deps/glad_gl.c")
+if(NOT EXISTS "${GLFW_SOURCE_DIR}/deps/glad_gl.c")
+    set(GLAD_GL "${CMAKE_SOURCE_DIR}/depends/glad/src/glad.c")
+endif()
 set(GLAD_VULKAN "${GLFW_SOURCE_DIR}/deps/glad/vulkan.h"
         "${GLFW_SOURCE_DIR}/deps/glad_vulkan.c")
 set(GETOPT "${GLFW_SOURCE_DIR}/deps/getopt.h"

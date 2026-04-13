@@ -9,7 +9,8 @@ project(DSEngine C CXX)
 include(GNUInstallDirs)
 
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_definitions(-D GLM_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
 add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
@@ -223,6 +224,7 @@ add_library(dse_engine SHARED
     engine/runtime/runtime_render_shell.cpp
     engine/runtime/business_runtime_bridge.cpp
 )
+target_link_libraries(dse_engine PRIVATE box2d)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
 endif()
@@ -236,12 +238,13 @@ if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 if(MSVC)
-    target_compile_options(dse_engine PRIVATE /wd5033 /wd4834)
+    target_compile_options(dse_engine PRIVATE /utf-8 /wd5033 /wd4834)
 endif()
 
 target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/lua
     ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
+    ${CMAKE_SOURCE_DIR}/depends/glad/include
 )
 
 if(DSE_ENABLE_3D)
@@ -265,6 +268,12 @@ function(dse_apply_config_postfix target_name)
 endfunction()
 
 dse_apply_config_postfix(dse_engine)
+if(MSVC)
+    set_target_properties(dse_engine PROPERTIES
+        IMPORT_SUFFIX "_debug.lib"
+        IMPORT_PREFIX ""
+    )
+endif()
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
