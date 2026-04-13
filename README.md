@@ -146,6 +146,7 @@ bin\dsengine-editor.exe
 - `doc/DOC-03_EDITOR.md`
 - `doc/DOC-04_TESTING.md`
 - `doc/DOC-07_ROADMAP.md`
+- `doc/SUBMODULES.md`
 
 专题文档按需阅读：
 

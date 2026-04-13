@@ -1,15 +1,18 @@
 [submodule "depends/spine-runtimes"]
 	path = depends/spine-runtimes
 	url = https://github.com/EsotericSoftware/spine-runtimes.git
+	branch = 4.2
 [submodule "depends/tiny-AES-c"]
 	path = depends/tiny-AES-c
 	url = https://github.com/kokke/tiny-AES-c.git
 [submodule "depends/tinygltf"]
 	path = depends/tinygltf
 	url = https://github.com/syoyo/tinygltf.git
+	branch = release
 [submodule "depends/assimp"]
 	path = depends/assimp
 	url = https://github.com/assimp/assimp.git
+	branch = master
 [submodule "depends/imgui"]
 	path = depends/imgui
 	url = https://github.com/ocornut/imgui.git
@@ -38,6 +41,7 @@
 [submodule "depends/stb"]
 	path = depends/stb
 	url = https://github.com/nothings/stb.git
+	branch = master
 [submodule "depends/lua"]
 	path = depends/lua
 	url = https://github.com/lua/lua.git
