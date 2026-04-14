@@ -429,6 +429,7 @@ void FramePipeline::BuildRenderGraph() {
 }
 
 void FramePipeline::BuildRenderGraphInternal() {
+    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_passes_.clear();
     
     // 0. PreZ Pass
@@ -615,9 +616,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     // 2. Main Scene Pass
     render_graph_passes_.push_back({
         "scene_pass",
-        [this](CommandBuffer& cmd_buffer) {
+        [this, &asset_manager](CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({render_resources_.scene_render_target, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
-            
             auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
             int selected_priority3d = std::numeric_limits<int>::min();
@@ -655,11 +655,18 @@ void FramePipeline::BuildRenderGraphInternal() {
                 auto skybox_view = runtime_context_.world->registry().view<dse::SkyboxComponent>();
                 for (auto sky_entity : skybox_view) {
                     auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-                    if (skybox.enabled) {
-                        // Use the cubemap_handle directly
-                        cmd_buffer.DrawSkybox(skybox.cubemap_handle);
-                        break;
+                    if (!skybox.enabled) {
+                        continue;
                     }
+                    if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
+                        if (auto cubemap = asset_manager.LoadCubemapDirectory(skybox.cubemap_path)) {
+                            skybox.cubemap_handle = cubemap->GetHandle();
+                        }
+                    }
+                    if (skybox.cubemap_handle != 0) {
+                        cmd_buffer.DrawSkybox(skybox.cubemap_handle);
+                    }
+                    break;
                 }
             } else {
                 auto camera_view = runtime_context_.world->registry().view<CameraComponent>();

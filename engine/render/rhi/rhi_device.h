@@ -393,6 +393,7 @@ public:
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
@@ -522,6 +523,7 @@ public:
      * @return 纹理句柄
      */
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
     void DeleteTexture(unsigned int texture_handle) override;
 
     /**

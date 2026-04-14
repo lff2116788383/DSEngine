@@ -1061,6 +1061,33 @@ unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsig
     return texture_handle;
 }
 
+unsigned int OpenGLRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+
+    unsigned int texture_handle = 0;
+    glGenTextures(1, &texture_handle);
+    resource_ledger_.textures_created += 1;
+    if (texture_handle == 0) {
+        return 0;
+    }
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, texture_handle);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    for (int face = 0; face < 6; ++face) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_faces[face]);
+    }
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    return texture_handle;
+}
+
 void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
     if (texture_handle == 0) {
         return;

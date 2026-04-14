@@ -17,6 +17,9 @@ public:
     unsigned int GetRenderTargetDepthTexture(unsigned int handle) const override { return 1; }
     unsigned int GetRenderTargetDepthTextureFace(unsigned int handle, unsigned int face) const override { return 1; }
     unsigned int CreateTexture2D(int width, int height, const unsigned char* data, bool linear) override { return 1; }
+    unsigned int CreateTextureCube(int width, int height, const unsigned char* const data[6], bool linear) override { return 1; }
+
+
     void DeleteTexture(unsigned int handle) override {}
     unsigned int CreateShaderProgram(const std::string& v, const std::string& f) override { return 1; }
     void DeleteShaderProgram(unsigned int handle) override {}

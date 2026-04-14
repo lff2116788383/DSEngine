@@ -1,6 +1,7 @@
 #include "catch/catch.hpp"
 
 #include "engine/assets/asset_manager.h"
+#include "engine/render/rhi/rhi_device.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -26,6 +27,66 @@ void WriteBinaryFile(const std::filesystem::path& path, const std::vector<std::u
     file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     REQUIRE(file.good());
 }
+
+void WriteSolidBmp1x1(const std::filesystem::path& path, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    const std::vector<std::uint8_t> bytes = {
+        0x42, 0x4D, 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0,
+        40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0,
+        0, 0, 0, 0, 4, 0, 0, 0, 19, 11, 0, 0, 19, 11, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        b, g, r, 0
+    };
+    WriteBinaryFile(path, bytes);
+}
+
+class MockRhiDevice final : public RhiDevice {
+public:
+    void Shutdown() override {}
+    void BeginFrame() override {}
+    unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 1; }
+    unsigned int GetRenderTargetColorTexture(unsigned int) const override { return 1; }
+    unsigned int GetRenderTargetDepthTexture(unsigned int) const override { return 1; }
+    unsigned int GetRenderTargetDepthTextureFace(unsigned int, unsigned int) const override { return 1; }
+    unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override {
+        ++create_texture2d_calls;
+        return next_texture_handle++;
+    }
+    unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override {
+        ++create_texture_cube_calls;
+        last_cube_width = width;
+        last_cube_height = height;
+        last_cube_linear = linear_filter;
+        last_cube_face0 = rgba8_faces[0];
+        return next_texture_handle++;
+    }
+    void DeleteTexture(unsigned int handle) override {
+        ++delete_texture_calls;
+        last_deleted_texture = handle;
+    }
+    unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 1; }
+    void DeleteShaderProgram(unsigned int) override {}
+    unsigned int CreatePipelineState(const PipelineStateDesc&) override { return 1; }
+    unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 1; }
+    void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
+    void DeleteBuffer(unsigned int) override {}
+    unsigned int CreateVertexArray() override { return 1; }
+    void DeleteVertexArray(unsigned int) override {}
+    std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
+    void Submit(std::shared_ptr<CommandBuffer>) override {}
+    void EndFrame() override {}
+    const RenderStats& LastFrameStats() const override { return stats; }
+
+    unsigned int next_texture_handle = 100;
+    int create_texture2d_calls = 0;
+    int create_texture_cube_calls = 0;
+    int delete_texture_calls = 0;
+    int last_cube_width = 0;
+    int last_cube_height = 0;
+    bool last_cube_linear = false;
+    const unsigned char* last_cube_face0 = nullptr;
+    unsigned int last_deleted_texture = 0;
+    RenderStats stats{};
+};
 
 } // namespace
 
@@ -77,6 +138,72 @@ TEST_CASE("Given_DataRootDiskFiles_When_LoadFileToMemory_Then_LogicalAndPrefixed
     REQUIRE(asset_manager.LoadFileToMemory("data/audio/click.dat", loaded));
     REQUIRE(loaded == std::vector<std::uint8_t>({1, 2, 3, 4}));
 
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("Given_CubemapDirectory_When_LoadedTwice_Then_CubeTextureIsCreatedAndCached", "[engine][assets][skybox]") {
+    AssetManager asset_manager;
+    MockRhiDevice rhi;
+
+    const auto root = MakeTempDir("cubemap_success");
+    const auto data_root = root / "data_root";
+    const auto sky_dir = data_root / "skyboxes" / "default_sky";
+    WriteSolidBmp1x1(sky_dir / "px.bmp", 128, 160, 200);
+    WriteSolidBmp1x1(sky_dir / "nx.bmp", 110, 140, 180);
+    WriteSolidBmp1x1(sky_dir / "py.bmp", 180, 205, 240);
+    WriteSolidBmp1x1(sky_dir / "ny.bmp", 30, 45, 80);
+    WriteSolidBmp1x1(sky_dir / "pz.bmp", 120, 155, 210);
+    WriteSolidBmp1x1(sky_dir / "nz.bmp", 70, 95, 150);
+
+    asset_manager.ConfigureDataRoot(data_root.string());
+    asset_manager.SetRhiDevice(&rhi);
+
+    auto cubemap = asset_manager.LoadCubemapDirectory("skyboxes/default_sky");
+    REQUIRE(cubemap != nullptr);
+    REQUIRE(cubemap->GetHandle() == 100);
+    REQUIRE(cubemap->GetWidth() == 1);
+    REQUIRE(cubemap->GetHeight() == 1);
+    REQUIRE(rhi.create_texture_cube_calls == 1);
+    REQUIRE(rhi.last_cube_width == 1);
+    REQUIRE(rhi.last_cube_height == 1);
+    REQUIRE(rhi.last_cube_linear);
+    REQUIRE(rhi.last_cube_face0 != nullptr);
+
+    auto cached = asset_manager.LoadCubemapDirectory("data/skyboxes/default_sky");
+    REQUIRE(cached == cubemap);
+    REQUIRE(rhi.create_texture_cube_calls == 1);
+
+    asset_manager.ReleaseGpuResources();
+    REQUIRE(rhi.delete_texture_calls == 1);
+    REQUIRE(rhi.last_deleted_texture == 100);
+
+    asset_manager.SetRhiDevice(nullptr);
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("Given_CubemapDirectoryMissingFace_When_Loaded_Then_ReturnsNull", "[engine][assets][skybox]") {
+    AssetManager asset_manager;
+    MockRhiDevice rhi;
+
+    const auto root = MakeTempDir("cubemap_missing_face");
+    const auto data_root = root / "data_root";
+    const auto sky_dir = data_root / "skyboxes" / "broken_sky";
+    WriteSolidBmp1x1(sky_dir / "px.bmp", 64, 96, 128);
+    WriteSolidBmp1x1(sky_dir / "nx.bmp", 64, 96, 128);
+    WriteSolidBmp1x1(sky_dir / "py.bmp", 64, 96, 128);
+    WriteSolidBmp1x1(sky_dir / "ny.bmp", 64, 96, 128);
+    WriteSolidBmp1x1(sky_dir / "pz.bmp", 64, 96, 128);
+
+    asset_manager.ConfigureDataRoot(data_root.string());
+    asset_manager.SetRhiDevice(&rhi);
+
+    auto cubemap = asset_manager.LoadCubemapDirectory("skyboxes/broken_sky");
+    REQUIRE(cubemap == nullptr);
+    REQUIRE(rhi.create_texture_cube_calls == 0);
+
+    asset_manager.SetRhiDevice(nullptr);
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
 }

@@ -127,6 +127,12 @@ void CopyRegistry(entt::registry& dst, entt::registry& src) {
         if (src.all_of<dse::PointLightComponent>(entity)) {
             dst.emplace<dse::PointLightComponent>(new_ent, src.get<dse::PointLightComponent>(entity));
         }
+        if (src.all_of<dse::SpotLightComponent>(entity)) {
+            dst.emplace<dse::SpotLightComponent>(new_ent, src.get<dse::SpotLightComponent>(entity));
+        }
+        if (src.all_of<dse::SkyLightComponent>(entity)) {
+            dst.emplace<dse::SkyLightComponent>(new_ent, src.get<dse::SkyLightComponent>(entity));
+        }
         if (src.all_of<dse::SkyboxComponent>(entity)) {
             dst.emplace<dse::SkyboxComponent>(new_ent, src.get<dse::SkyboxComponent>(entity));
         }
@@ -381,6 +387,18 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             mesh_obj.AddMember("visible", mesh.visible, allocator);
             mesh_obj.AddMember("receive_shadow", mesh.receive_shadow, allocator);
             mesh_obj.AddMember("mesh_path", rapidjson::Value(mesh.mesh_path.c_str(), allocator).Move(), allocator);
+            mesh_obj.AddMember("material_instance_id", mesh.material_instance_id, allocator);
+            mesh_obj.AddMember("shader_variant", rapidjson::Value(mesh.shader_variant.c_str(), allocator).Move(), allocator);
+            mesh_obj.AddMember("material_data_source", static_cast<int>(mesh.material_data_source), allocator);
+            WriteVec4(mesh_obj, "color", mesh.color, allocator);
+            WriteVec3(mesh_obj, "emissive", mesh.emissive, allocator);
+            mesh_obj.AddMember("metallic", mesh.metallic, allocator);
+            mesh_obj.AddMember("roughness", mesh.roughness, allocator);
+            mesh_obj.AddMember("ao", mesh.ao, allocator);
+            mesh_obj.AddMember("normal_strength", mesh.normal_strength, allocator);
+            mesh_obj.AddMember("material_alpha_cutoff", mesh.material_alpha_cutoff, allocator);
+            mesh_obj.AddMember("material_alpha_test", mesh.material_alpha_test, allocator);
+            mesh_obj.AddMember("material_double_sided", mesh.material_double_sided, allocator);
             ent_obj.AddMember("mesh_renderer", mesh_obj, allocator);
         }
 
@@ -736,6 +754,18 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             if (mesh_obj.HasMember("visible") && mesh_obj["visible"].IsBool()) mesh.visible = mesh_obj["visible"].GetBool();
             if (mesh_obj.HasMember("receive_shadow") && mesh_obj["receive_shadow"].IsBool()) mesh.receive_shadow = mesh_obj["receive_shadow"].GetBool();
             if (mesh_obj.HasMember("mesh_path") && mesh_obj["mesh_path"].IsString()) mesh.mesh_path = mesh_obj["mesh_path"].GetString();
+            if (mesh_obj.HasMember("material_instance_id") && mesh_obj["material_instance_id"].IsUint()) mesh.material_instance_id = mesh_obj["material_instance_id"].GetUint();
+            if (mesh_obj.HasMember("shader_variant") && mesh_obj["shader_variant"].IsString()) mesh.shader_variant = mesh_obj["shader_variant"].GetString();
+            if (mesh_obj.HasMember("material_data_source") && mesh_obj["material_data_source"].IsInt()) mesh.material_data_source = static_cast<dse::MeshRendererComponent::MaterialDataSource>(mesh_obj["material_data_source"].GetInt());
+            ReadVec4(mesh_obj, "color", mesh.color);
+            ReadVec3(mesh_obj, "emissive", mesh.emissive);
+            if (mesh_obj.HasMember("metallic") && mesh_obj["metallic"].IsNumber()) mesh.metallic = mesh_obj["metallic"].GetFloat();
+            if (mesh_obj.HasMember("roughness") && mesh_obj["roughness"].IsNumber()) mesh.roughness = mesh_obj["roughness"].GetFloat();
+            if (mesh_obj.HasMember("ao") && mesh_obj["ao"].IsNumber()) mesh.ao = mesh_obj["ao"].GetFloat();
+            if (mesh_obj.HasMember("normal_strength") && mesh_obj["normal_strength"].IsNumber()) mesh.normal_strength = mesh_obj["normal_strength"].GetFloat();
+            if (mesh_obj.HasMember("material_alpha_cutoff") && mesh_obj["material_alpha_cutoff"].IsNumber()) mesh.material_alpha_cutoff = mesh_obj["material_alpha_cutoff"].GetFloat();
+            if (mesh_obj.HasMember("material_alpha_test") && mesh_obj["material_alpha_test"].IsBool()) mesh.material_alpha_test = mesh_obj["material_alpha_test"].GetBool();
+            if (mesh_obj.HasMember("material_double_sided") && mesh_obj["material_double_sided"].IsBool()) mesh.material_double_sided = mesh_obj["material_double_sided"].GetBool();
         }
 
         if (v.HasMember("point_light") && v["point_light"].IsObject()) {

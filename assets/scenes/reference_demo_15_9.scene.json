@@ -157,9 +157,9 @@
           "scale": [1.0, 1.0, 1.0]
         },
         "SkyboxComponent": {
-          "enabled": false,
+          "enabled": true,
           "cubemap_handle": 0,
-          "cubemap_path": ""
+          "cubemap_path": "assets/source/reference_demo/shared/skybox/default_sky"
         }
       }
     }

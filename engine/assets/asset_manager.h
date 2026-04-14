@@ -56,6 +56,27 @@ private:
 };
 
 /**
+ * @class CubemapAsset
+ * @brief 立方体贴图资源，当前用于 SkyboxComponent 的六面天空盒纹理。
+ */
+class CubemapAsset {
+public:
+    CubemapAsset(const std::string& path, unsigned int handle, int width, int height);
+    ~CubemapAsset();
+
+    unsigned int GetHandle() const { return handle_; }
+    int GetWidth() const { return width_; }
+    int GetHeight() const { return height_; }
+    const std::string& GetPath() const { return path_; }
+
+private:
+    std::string path_;
+    unsigned int handle_;
+    int width_;
+    int height_;
+};
+
+/**
  * @class ShaderAsset
  * @brief 着色器资源封装，存储着色器程序在 RHI 层的句柄
  */
@@ -283,6 +304,12 @@ public:
      */
     std::shared_ptr<TextureAsset> LoadTexture(const std::string& path);
     /**
+     * @brief 从目录加载六面天空盒立方体贴图。
+     * @param directory_path 包含 px/nx/py/ny/pz/nz 六个同尺寸图片的目录
+     * @return 成功时返回 CubemapAsset；任一面缺失、尺寸不一致或 RHI 未就绪时返回 nullptr
+     */
+    std::shared_ptr<CubemapAsset> LoadCubemapDirectory(const std::string& directory_path);
+    /**
      * @brief 执行 LoadShader 操作
      * @param name 参数说明
      * @param vert_src 参数说明
@@ -409,6 +436,7 @@ public:
 private:
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
+    std::unordered_map<std::string, std::weak_ptr<CubemapAsset>> cubemaps_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
     std::unordered_map<std::string, std::weak_ptr<DmeshAsset>> dmeshes_;

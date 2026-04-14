@@ -117,7 +117,7 @@ local demo_config = {
         "[VSE-Demo][15.9] 键盘调参：'-' / '=' 调左侧 roughness，'[' / ']' 调右侧 metallic。",
         "[VSE-Demo][15.9] 参考 scene: assets/scenes/reference_demo_15_9.scene.json",
         "[VSE-Demo][15.9] 当前已接入 Monster / MonsterLOD0 / OceanPlane cooked 资产。",
-        "[VSE-Demo][15.9] 天空盒资源仍待补齐，现阶段使用 SkyLight 作为最小环境光替代。"
+        "[VSE-Demo][15.9] 当前已接入最小目录式天空盒，并继续保留 SkyLight 作为环境光近似。"
     },
     camera = {
         x = 0.0,

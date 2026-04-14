@@ -100,7 +100,7 @@
         "SkyboxComponent": {
           "enabled": true,
           "cubemap_handle": 0,
-          "cubemap_path": "assets/skyboxes/default_sky"
+          "cubemap_path": "assets/source/reference_demo/shared/skybox/default_sky"
         }
       }
     },

@@ -54,7 +54,7 @@
 | 资源名 | 当前引用路径 | 建议替代目标 | 关联 demo | 资源类型 | 当前状态 | reference 依赖状态 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `reference_demo_character_placeholder.fbx` | `assets/meshes/reference_demo_character_placeholder.fbx` | 以 `Monster.FBX` / `MonsterLOD0.FBX` 导入后的主仓角色资产替代 | `15.8`, `15.9` | `mesh placeholder` | `已替换` | `已脱离占位路径` | `15.8 / 15.9` scene 已不再引用该占位路径 |
-| `default_sky` | `assets/skyboxes/default_sky` | `assets/source/reference_demo/shared/skybox/default_sky/` | `15.8`, `15.9` | `skybox` | `临时替代` | `已脱离占位路径` | 当前缺真实天空盒资源；`15.8 / 15.9` 暂时禁用 `SkyboxComponent` 并使用 `SkyLightComponent` 保留最小环境光 |
+| `default_sky` | `assets/skyboxes/default_sky` | `assets/source/reference_demo/shared/skybox/default_sky/` | `15.8`, `15.9` | `skybox` | `已接入运行时（最小目录式）` | `已脱离占位路径` | 当前采用目录式 cubemap 约定：`cubemap_path` 指向目录，目录内固定六面 `px/nx/py/ny/pz/nz`；主仓已补入最小 `.ppm` 六面资源，`15.8 / 15.9 / 3d_mvp_minimal` 已启用 `SkyboxComponent`，但尚未接入 HDR/IBL/cooked skybox 资产链 |
 | `Monster` 贴图集 | `reference/VSEngine2.1/Bin/Resource/Texture/Monster*.tga` | `assets/source/reference_demo/shared/monster/textures/` | `15.8`, `15.9` | `texture` | `已迁移并接入 dmat` | `已脱离 reference` | 已迁入 `Monster_d/e/n/s.tga` 与 `Monster_w_d/e/n/s.tga` 共 8 张贴图；`Monster.dmat` 与 `MonsterLOD0.dmat` 已回写到主仓内 `assets/source/reference_demo/shared/monster/textures/Monster_*` 路径，静态检查 `all_local=true` |
 
 ---
@@ -79,14 +79,16 @@
 
 ---
 
-## 5. 当前结论（2026-04-13）
+## 5. 当前结论（2026-04-14）
 
 - `reference/VSEngine2.1` 子模块当前仍存在，可作为第二阶段资源迁移输入源；
 - `assets/source/reference_demo/` 已开始建立，第一批 `Monster.FBX` / `MonsterLOD0.FBX` / `OceanPlane.FBX` 已迁入主仓；
-- 当前 `15.8 / 15.9` 已具备 Lua demo 骨架，但 importer、cooker 与运行时切换尚未完成；
-- 第三阶段最小链路已打通：`FbxImporter`、`AssetBuilder` 的 `.fbx` 分支与最小静态测试已补入，并已成功生成新的 `AssetBuilder.exe`；
-- 已完成 `Monster.FBX` 的手工 cooked 验证，产出 `Monster.dmesh / Monster.dmat / Monster.danim / Monster.dskel`；
-- 当前主要剩余问题是运行时接入与主工程稳定性：`15.8 / 15.9` scene 仍未切到新 cooked 产物，且主工程仍存在 Box2D 3.x API 与 `depends/box2d-2.4.1` 依赖版本不匹配问题。
+- `15.8 / 15.9` 相关 cooked 资产、材质贴图与 scene 主链已经接入运行时；
+- `default_sky` 已从占位路径切换到主仓目录式 skybox 资源，`3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已启用 `SkyboxComponent`；
+- Editor 桥接链路已补齐 `SkyLight` / `SpotLight` 与 `MeshRenderer` 材质字段往返，`reference_demo` 场景桥接回归已通过；
+- Lua demo 15.8 / 15.9 的 smoke 已确认通过，reference scene 启动后 `missing_resource_count=0`；
+- 当前主要剩余问题已从“是否可运行”转为“最终视觉质量提升”：后续重点是更高质量 skybox 原始资源、IBL、cooked skybox 资产链与截图基线。
+
 
 
 

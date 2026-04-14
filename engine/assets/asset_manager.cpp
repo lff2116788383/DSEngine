@@ -81,6 +81,13 @@ TextureAsset::TextureAsset(const std::string& path, unsigned int handle, int wid
 TextureAsset::~TextureAsset() {
 }
 
+CubemapAsset::CubemapAsset(const std::string& path, unsigned int handle, int width, int height)
+    : path_(path), handle_(handle), width_(width), height_(height) {
+}
+
+CubemapAsset::~CubemapAsset() {
+}
+
 ShaderAsset::ShaderAsset(const std::string& name, unsigned int handle)
     : name_(name), handle_(handle) {
 }
@@ -314,6 +321,113 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         textures_[cache_key] = tex;
     }
     return tex;
+}
+
+std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::string& directory_path) {
+    const std::string logical_path = NormalizeAssetPath(directory_path);
+    const std::string resolved_path = ResolveAssetPath(directory_path);
+    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(directory_path) : NormalizePath(resolved_path)) : logical_path;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = cubemaps_.find(cache_key);
+        if (it != cubemaps_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    const std::string base_path = resolved_path.empty() ? directory_path : resolved_path;
+    const std::filesystem::path base_dir = std::filesystem::path(base_path);
+    if (!std::filesystem::exists(base_dir) || !std::filesystem::is_directory(base_dir)) {
+        DEBUG_LOG_ERROR("Cubemap directory does not exist: {}", directory_path);
+        return nullptr;
+    }
+
+    const char* face_names[6] = {"px", "nx", "py", "ny", "pz", "nz"};
+    const char* extensions[] = {".png", ".jpg", ".jpeg", ".bmp", ".tga", ".ppm"};
+    std::vector<std::string> face_paths(6);
+    for (int face = 0; face < 6; ++face) {
+        for (const char* ext : extensions) {
+            const std::filesystem::path candidate = base_dir / (std::string(face_names[face]) + ext);
+            if (std::filesystem::exists(candidate)) {
+                face_paths[face] = candidate.string();
+                break;
+            }
+        }
+        if (face_paths[face].empty()) {
+            DEBUG_LOG_ERROR("Cubemap face is missing: {} ({})", directory_path, face_names[face]);
+            return nullptr;
+        }
+    }
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    std::vector<unsigned char*> face_pixels(6, nullptr);
+    auto cleanup_faces = [&]() {
+        for (auto* pixels : face_pixels) {
+            if (pixels) {
+                stbi_image_free(pixels);
+            }
+        }
+    };
+
+    stbi_set_flip_vertically_on_load(false);
+    for (int face = 0; face < 6; ++face) {
+        std::vector<uint8_t> file_data;
+        if (!LoadFileToMemory(face_paths[face], file_data)) {
+            DEBUG_LOG_ERROR("Failed to read cubemap face: {}", face_paths[face]);
+            cleanup_faces();
+            return nullptr;
+        }
+
+        int face_width = 0;
+        int face_height = 0;
+        int face_channels = 0;
+        face_pixels[face] = stbi_load_from_memory(file_data.data(), static_cast<int>(file_data.size()), &face_width, &face_height, &face_channels, 4);
+        if (!face_pixels[face]) {
+            DEBUG_LOG_ERROR("Failed to decode cubemap face: {}", face_paths[face]);
+            cleanup_faces();
+            return nullptr;
+        }
+
+        if (face == 0) {
+            width = face_width;
+            height = face_height;
+            channels = face_channels;
+        } else if (face_width != width || face_height != height) {
+            DEBUG_LOG_ERROR("Cubemap face size mismatch in directory: {}", directory_path);
+            cleanup_faces();
+            return nullptr;
+        }
+    }
+
+    const unsigned char* face_ptrs[6] = {
+        face_pixels[0], face_pixels[1], face_pixels[2], face_pixels[3], face_pixels[4], face_pixels[5]
+    };
+
+    unsigned int handle = 0;
+    {
+        std::lock_guard<std::mutex> lock(config_mutex_);
+        if (rhi_device_) {
+            handle = rhi_device_->CreateTextureCube(width, height, face_ptrs, true);
+        }
+    }
+
+    cleanup_faces();
+
+    if (handle == 0) {
+        DEBUG_LOG_ERROR("Failed to create cubemap via RHI: {}", directory_path);
+        return nullptr;
+    }
+
+    auto cubemap = std::make_shared<CubemapAsset>(base_dir.generic_string(), handle, width, height);
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        cubemaps_[cache_key] = cubemap;
+    }
+    return cubemap;
 }
 
 std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src) {
@@ -731,6 +845,7 @@ void AssetManager::ReleaseGpuResources() {
 
     if (!device) {
         textures_.clear();
+        cubemaps_.clear();
         shaders_.clear();
         materials_.clear();
         return;
@@ -745,6 +860,16 @@ void AssetManager::ReleaseGpuResources() {
         }
     }
     textures_.clear();
+
+    for (auto it = cubemaps_.begin(); it != cubemaps_.end(); ++it) {
+        if (auto cubemap = it->second.lock()) {
+            const unsigned int handle = cubemap->GetHandle();
+            if (handle != 0) {
+                device->DeleteTexture(handle);
+            }
+        }
+    }
+    cubemaps_.clear();
 
     for (auto it = shaders_.begin(); it != shaders_.end(); ++it) {
         if (auto shader = it->second.lock()) {

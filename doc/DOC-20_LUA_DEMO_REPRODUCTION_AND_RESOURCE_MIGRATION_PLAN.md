@@ -478,209 +478,162 @@
 
 ### 9.2 迁移原则
 
-后续迁移时必须遵循：
+后续迁移建议遵循：
 
-1. **只迁出实际有价值且后续主线要用的资源**；
-2. **先服务第一批 demo**，不要一次性整包全搬；
-3. **迁入后改为主仓命名与目录规则**；
-4. **记录来源映射**，避免后续失去追溯；
-5. **避免继续通过 `reference/...` 相对路径访问资源**。
+1. **先做 demo 直接依赖项**，不要一开始全量拷贝整个 `FBXResource`；
+2. **保留原始文件名与来源记录**，便于回溯；
+3. **源资源与 cooked 产物分层保存**；
+4. **每迁一个资源，都要同步更新资源映射文档**；
+5. **主仓运行路径不得再直接指向 `reference/...`**。
 
-### 9.3 第一批建议迁入资源
+### 9.3 第一批建议迁出资源
 
-为支撑 `15.8 / 15.9 / 15.7`，建议优先迁入：
+建议第一批只迁：
 
 - `Monster.FBX`
 - `OceanPlane.FBX`
-- `Walk.FBX`
-- `Attack.FBX`
-- `Attack2.FBX`
-- `RootMotion.FBX`
-- `MonsterLOD0.FBX`（如第一阶段需要验证 LOD 可额外纳入）
+- `MonsterLOD0.FBX`（如果 `15.9` 最终需要）
+- 与 `15.8 / 15.9` 直接相关的贴图资源
+- 与 `15.8 / 15.9` 直接相关的天空盒资源
 
-并根据 reference 中实际使用的贴图语义，同时迁出对应纹理源：
+### 9.4 推荐主仓落点
 
-- 角色主体 diffuse / normal / specular / emissive；
-- 地面或海面贴图；
-- demo 所需最小环境贴图。
-
-### 9.4 建议的拷贝落点
-
-例如：
-
-- `assets/source/reference_demo/15_8/monster/`
-- `assets/source/reference_demo/15_8/ocean_plane/`
-- `assets/source/reference_demo/15_8/textures/`
-- `assets/source/reference_demo/15_9/monster/`
-- `assets/source/reference_demo/15_9/textures/`
-
-如果多 demo 共用同一份角色源资源，则可抽为：
+建议：
 
 - `assets/source/reference_demo/shared/monster/`
 - `assets/source/reference_demo/shared/ocean_plane/`
+- `assets/source/reference_demo/shared/skybox/`
 
-### 9.5 迁移时必须补的附属文档
+后续再通过 importer / cooker 输出到：
 
-建议同时新增资源来源清单，例如：
+- `assets/demo/15_8/...`
+- `assets/demo/15_9/...`
 
-- [`doc/RESOURCE_MIGRATION_REFERENCE_MAP.md`](./RESOURCE_MIGRATION_REFERENCE_MAP.md)
-
-至少记录：
-
-- 原 reference 路径；
-- 新主仓路径；
-- 对应 demo；
-- 是否已转成 cooked 资产；
-- 是否仍依赖人工转换；
-- 当前是否已摆脱 `reference` 路径依赖。
-
-当前仓库已补入该映射文档骨架，后续第二阶段执行时应直接在该文档中更新状态，而不是把迁移记录散落到多个计划文档中。
-
+或者输出到统一 cooked 目录。
 
 ---
 
-## 10. 建议的实施顺序
+## 10. 回归验证建议
 
-### 10.1 第一阶段：搭建 Lua demo 产品线骨架
+### 10.1 每个 demo 至少需要三层验证
 
-当前状态判断：**基本完成，可进入后续实施阶段，但不能等价视为第一批 demo 已可交付。**
+#### A. 资源存在性回归
 
-已完成内容：
+例如：
 
-- 扩展 `samples/lua/main.lua`，支持 `vse_demo_15_7 / 15_8 / 15_9`；
-- 新建 `samples/lua/vse_demo/` 与 `common/`；
-- 梳理并沉淀第一批 demo 公共相机/输入/灯光搭建逻辑；
-- 在 `samples/lua/config.lua` 中补充对应 `game_entry` 配置；
-- 为 `15.8 / 15.9` 建立“优先加载 reference scene，失败时回退到程序化预览”的过渡运行路径。
+- scene 中引用的 mesh/material/texture/skybox 路径必须存在；
+- 启动时不允许再出现 `resource_missing` 日志。
 
-当前仍未完成的边界：
+#### B. startup scene / startup lua smoke
 
-- 真实角色、天空盒与贴图资源尚未迁入主仓资产目录；
-- 运行结果仍允许出现 `mvp_resource_missing` 诊断，不满足“能看到完整 demo 画面”的交付口径；
-- 尚未形成脱离 `reference` 资源体系的稳定资产主链；
-- 文档第 10.4 / 10.5 节要求的 executable demo 验收目标尚未达成。
+例如：
 
-因此，第一阶段可以视为 **Lua demo 产品线骨架已经搭好**，后续工作应立即转入资源迁移与导入链补齐，而不应继续把 scene/test 占位视作主要增量。
+- 指定 `DSE_STARTUP_SCENE=...reference_demo_15_8.scene.json`
+- 或指定 `DSE_STARTUP_LUA=...demo15_8.lua`
 
-### 10.2 第二阶段：迁出第一批源资源
+要求：
 
-准入前提：
+- 程序能启动；
+- 至少跑若干帧；
+- 不崩溃；
+- 输出关键 bootstrap 成功标志。
 
-- 第一阶段骨架已完成，可稳定切换 `vse_demo_15_7 / 15_8 / 15_9`；
-- 当前缺口资源已经通过日志与 scene 定义明确定位；
-- 后续资源落点统一以主仓目录为准，不再新增对 `reference/...` 运行时路径的直接依赖。
+#### C. 最小交互 / 画面结果验证
 
-建议执行清单：
+后续建议逐步增加：
 
-- 从 `reference/VSEngine2.1/FBXResource` 复制第一批真正要用的 FBX；
-- 优先迁出 `15.8 / 15.9` 直接依赖的角色、地面、天空盒与最小纹理集合；
-- 统一迁入 `assets/source/reference_demo/`；
-- 为每一批迁移资源建立来源映射记录，标明原始路径、目标路径、关联 demo 与当前状态；
-- 停止新逻辑直接依赖 `reference/...` 路径；
-- 若某项资源暂无法直接复用，必须在映射清单中显式记录“替代方案 / 人工转换待办 / 当前阻塞原因”。
+- 屏幕截图 hash/阈值比较；
+- 关键运行日志；
+- 交互状态切换断言。
 
+### 10.2 当前最值得先补的回归
 
-### 10.3 第三阶段：补齐 FBX 导入最小主链
+优先建议：
 
-当前状态判断：**已完成第一批 FBX（`Monster / OceanPlane / MonsterLOD0`）最小导入链路打通。**
+1. `reference_demo_15_8.scene.json` startup scene smoke；
+2. `reference_demo_15_9.scene.json` startup scene smoke；
+3. `demo15_8.lua` Lua host smoke；
+4. `demo15_9.lua` Lua host smoke。
 
-已完成内容：
-
-- 已在 `engine/assets/compiler/` 中新增 `FbxImporter` 接口与基于 `assimp` 的最小实现；
-- 已让 `AssetBuilder` 接受 `.fbx` 输入分支，并按扩展名分流到 `GltfImporter / FbxImporter`；
-- 已补充针对 `FbxImporter` 的最小静态回归测试；
-- 已在干净构建目录下成功编出新的 `AssetBuilder.exe`；
-- 已完成 `Monster.FBX` 手工冒烟导入，成功产出 `Monster.dmesh / Monster.dmat / Monster.danim / Monster.dskel`；
-- 已完成 `OceanPlane.FBX` 与 `MonsterLOD0.FBX` 冒烟导入，成功产出对应 `dmesh / dmat`，并在无动画/骨骼场景下按预期跳过 `danim / dskel`。
-
-当前剩余边界：
-
-- `15.8` 运行时 scene 已切到第一批 cooked 产物：角色使用 `Monster.dmesh / Monster.dskel / Monster.danim`，地面使用 `OceanPlane.dmesh`；
-- `15.9` 运行时 scene 已切到第一批 cooked 产物：左侧使用 `Monster.dmesh / Monster.dskel / Monster.danim`，右侧使用 `MonsterLOD0.dmesh`，地面使用 `OceanPlane.dmesh`；
-- `default_sky` 与部分纹理资源仍待补齐迁移与导入；当前 `15.8 / 15.9` 暂时禁用 `SkyboxComponent`，以 `SkyLightComponent` 保留最小环境光，避免继续依赖缺失的天空盒占位路径；
-- 主工程当前仍存在 Box2D 版本错配问题：代码使用了 `box2d/id.h` 与 `b2BodyId / b2ShapeId / b2WorldId` 等 3.x handle API，但仓库依赖仍是 `depends/box2d-2.4.1`。
-
-本阶段后续应优先完成：
-
-- 把导入产物逐步接入 `15.8 / 15.9` scene 资源引用，替换当前 placeholder 路径；
-- 补齐 `default_sky` 与第一批纹理来源，形成可运行画面闭环；
-- 并行整理 Box2D 版本对齐方案，避免后续全量构建继续被 2D 物理依赖阻塞。
-
-
-
-
-### 10.4 第四阶段：落地 `15.8` Lua executable
-
-验收目标：
-
-- 可双击或运行可执行程序进入场景；
-- 场景中可见角色、地面、方向光、天光、相机；
-- 资源不再依赖 `reference/...` 路径；
-- 至少一条 smoke 保证 demo 可启动。
-
-当前状态判断：**运行闭环已打通，真实天空盒/纹理仍待补齐。**
-
-已完成内容：
-
-- `reference_demo_15_8.scene.json` 已切到 `Monster.dmesh / Monster.dskel / Monster.danim` 与 `OceanPlane.dmesh`；
-- `SkyboxComponent` 已暂时禁用，避免继续依赖缺失的 `default_sky` 占位路径；
-- `dse.ecs.load_scene` 已接入 `Scene::Deserialize`，Lua demo 可真实加载 reference scene；
-- 已通过 `dse_example_lua` smoke，日志确认 `startup_scene_loaded` 且 `missing_resource_count=0`；
-- 已补入 Lua demo smoke 与 C++ startup scene smoke 回归覆盖。
-
-当前剩余边界：
-
-- 天空盒资源仍是临时禁用方案，后续需要补齐真实 `default_sky` 或替代环境贴图；
-- 角色贴图当前已完成第一、二批最小迁移：`Monster_d/e/n/s.tga` 与 `Monster_w_d/e/n/s.tga` 共 8 张贴图已迁入 `assets/source/reference_demo/shared/monster/textures/`，`Monster.dmat` 与 `MonsterLOD0.dmat` 也已全部回写到主仓内贴图路径；后续仍需确认 `Monster_s / Monster_w_s` 作为高光/粗糙度槽位的通道语义是否与当前 PBR 采样策略完全匹配；
-- 当前 smoke 能证明可启动与无已知缺资源诊断，但尚未替代人工视觉审查。
-
-### 10.5 第五阶段：落地 `15.9` 材质交互 demo
-
-验收目标：
-
-- 在 `15.8` 的稳定资源链上增加材质参数演示；
-- Lua 层可控制材质参数；
-- 有最小 HUD 或日志反馈；
-- 可作为“DSEngine 3D 材质演示样板”。
-
-当前状态判断：**运行闭环已打通，材质交互具备最小日志反馈。**
-
-已完成内容：
-
-- `reference_demo_15_9.scene.json` 已切到 `Monster.dmesh / Monster.dskel / Monster.danim`、`MonsterLOD0.dmesh` 与 `OceanPlane.dmesh`；
-- `SkyboxComponent` 已暂时禁用，避免继续依赖缺失的 `default_sky` 占位路径；
-- `demo15_9.lua` 已直接绑定 scene 中的左右材质展示实体，不再额外创建程序化 cube；
-- Lua 层保留 `roughness / metallic / emissive` 参数调节，并通过 `material_bootstrap` / `material_input` 日志反馈当前材质状态；
-- 已通过 `dse_example_lua` smoke，日志确认 `startup_scene_loaded`、`missing_resource_count=0` 与 `material_bootstrap`；
-- 已补入 Lua demo smoke 与 C++ startup scene smoke 回归覆盖。
-
-当前剩余边界：
-
-- 尚未补齐真实 HUD，仅以日志作为最小反馈；
-- 天空盒与纹理资源迁移仍需继续收敛；
-- 材质交互还需要人工视觉审查确认效果与 reference demo 的表现差异。
+这样才能把“scene 存在”升级为“demo 真能运行”。
 
 ---
 
-## 11. 验收标准
+## 11. 15.8 / 15.9 天空盒与最终视觉闭环补充（2026-04-14）
 
-后续任何一个“已复现”的 VSEngine demo，至少必须满足：
+### 11.1 当前状态
 
-1. **能启动**：通过 DSEngine 可执行程序真实运行；
-2. **能看到**：关键场景元素已渲染出来，而不是只打印日志；
-3. **能交互**：至少具备自由相机或材质参数调节；
-4. **能脱离 reference**：运行时不再直接依赖 `reference/VSEngine2.1` 路径；
-5. **能回归**：至少保留一条 smoke 或 regression；
-6. **能说明差异**：若与 reference demo 存在降级或替代实现，必须写清楚。
+- `SkyboxComponent` 已从“仅序列化占位”推进到**最小可运行链路**：
+  - `Scene` / Editor / Lua 绑定继续承载组件数据；
+  - `FramePipeline` 在 `scene_pass` 中会按 `cubemap_path` 懒加载 cubemap；
+  - 成功加载后把运行时 `cubemap_handle` 回填到组件，并提交 `DrawSkybox`；
+  - OpenGL RHI 已补齐最小 `samplerCube` 绘制路径。
+- `15.8 / 15.9 / 3d_mvp_minimal` 已统一接入主仓 skybox 目录资源，不再使用 `assets/skyboxes/default_sky` 占位路径。
+- 当前 skybox 只负责**背景绘制**；`SkyLightComponent` 仍然负责简化的半球环境光近似。
 
----
+### 11.2 资源格式约定
 
-## 12. 当前执行结论
+**结论：`cubemap_path` 指向目录，而不是清单文件或单文件。**
 
-从当前仓库状态出发，最合理的后续路径已经明确：
+目录内固定六面命名：
 
-1. **把 VSEngine demo 的复现主线切到 Lua executable。**
-2. **第一批先做 `15.8 / 15.9 / 15.7`，不要继续停留在 scene/test 占位。**
-3. **DSEngine 必须补齐最小 `FBX` 导入主链，否则 reference 资源迁移无法形成可持续工作流。**
-4. **主仓要开始建立自己的 demo 资源目录，不再长期依赖 `reference/VSEngine2.1`。**
-5. **后续所有 demo 工作，都应以“可运行、可观察、可迁移、可回归”为标准，而不是只以结构加载通过为完成。**
+- `px`
+- `nx`
+- `py`
+- `ny`
+- `pz`
+- `nz`
+
+当前允许的图片扩展名：
+
+- `.png`
+- `.jpg`
+- `.jpeg`
+- `.bmp`
+- `.tga`
+- `.ppm`
+
+### 11.3 选择目录方案的理由
+
+- 主仓当前已有 `stb_image` 的 **2D 图片解码能力**，可直接复用；
+- 当前仓库内**没有现成可复用**的 `.hdr/.dds/.ktx` 天空盒解析链；
+- 若采用单文件 equirectangular / `.hdr` 方案，需要额外补球面到 cubemap 转换、HDR 解码与更多渲染基础设施，不符合本轮“最小可落地”目标；
+- 若采用清单文件方案，虽然扩展性更好，但当前六面固定命名已经足够满足 `15.8 / 15.9` 的最小闭环，额外清单只会增加一层解析复杂度。
+
+因此，本轮资源约定以**目录 + 固定六面文件名**为准。
+
+### 11.4 当前最小实现边界
+
+当前最小 skybox/cubemap 链路只覆盖：
+
+- 目录式六面纹理加载；
+- OpenGL `GL_TEXTURE_CUBE_MAP` 上传；
+- `samplerCube` 背景绘制；
+- 运行时句柄懒加载与缓存复用。
+
+**明确未覆盖：**
+
+- HDR 源图导入；
+- `.dds/.ktx` 直接加载；
+- IBL `irradiance / prefilter / BRDF LUT`；
+- skybox 驱动的真实 PBR 反射；
+- cooked skybox 资产编译链；
+- Editor 的专用 skybox 资源选择器。
+
+### 11.5 验证口径
+
+本轮 skybox 最小验证至少包含：
+
+- `AssetManager` 目录式 cubemap 成功加载；
+- 缓存复用有效；
+- 缺少任一面时返回失败；
+- `reference_demo_15_8.scene.json` / `reference_demo_15_9.scene.json` 已切到主仓 skybox 路径。
+
+### 11.7 当前进度结论（2026-04-14）
+
+- `15.8 / 15.9` 的 `SkyboxComponent` 已完成最小可运行闭环：`cubemap_path` 采用目录式约定，运行时按目录懒加载六面 cubemap，并通过现有 `DrawSkybox` 提交背景绘制。
+- `3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已全部切到 `assets/source/reference_demo/shared/skybox/default_sky`，并启用 `SkyboxComponent`。
+- Editor 侧 `editor_scene_io` 已补齐 `SkyLightComponent` / `SpotLightComponent` 拷贝与 `MeshRendererComponent` 材质字段往返，`reference_demo` 场景桥接测试已恢复通过。
+- Lua demo 层已同步文案状态，`demo15_8.lua` / `demo15_9.lua` 启动 reference scene 时均可在 smoke 中稳定通过，且 `missing_resource_count=0`。
+- 当前仍未覆盖 HDR / DDS / KTX / IBL / cooked skybox 资产链，这些属于后续画质提升阶段，不阻塞本轮最小视觉闭环交付。
+
