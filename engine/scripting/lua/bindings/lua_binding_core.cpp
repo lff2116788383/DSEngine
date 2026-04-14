@@ -12,7 +12,7 @@
 #include "engine/input/key_code.h"
 #include "engine/platform/screen.h"
 extern "C" {
-#include <lauxlib.h>
+#include "depends/lua/lauxlib.h"
 }
 
 namespace dse::runtime::lua_binding {

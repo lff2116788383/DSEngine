@@ -14,13 +14,14 @@
 #include <cstdint>
 #include <unordered_map>
 extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
+#include "depends/lua/lua.h"
+#include "depends/lua/lauxlib.h"
+#include "depends/lua/lualib.h"
 }
 
 namespace dse::runtime {
 namespace {
+
 struct RuntimeState {
     struct ScriptInstance {
         int table_ref = LUA_NOREF;
@@ -75,6 +76,26 @@ static void* LuaMemoryAllocator(void* ud, void* ptr, size_t osize, size_t nsize)
     }
 
     return new_ptr;
+}
+
+lua_State* CreateLuaState(lua_State* (*new_state)(lua_Alloc), lua_Alloc allocator) {
+    lua_State* L = new_state(allocator);
+    if (L) {
+        lua_setallocf(L, allocator, nullptr);
+    }
+    return L;
+}
+
+lua_State* CreateLuaState(lua_State* (*new_state)(lua_Alloc, void*), lua_Alloc allocator) {
+    return new_state(allocator, nullptr);
+}
+
+lua_State* CreateLuaState(lua_State* (*new_state)(lua_Alloc, void*, unsigned int), lua_Alloc allocator) {
+    return new_state(allocator, nullptr, 0);
+}
+
+lua_State* CreateLuaState() {
+    return CreateLuaState(&lua_newstate, LuaMemoryAllocator);
 }
 
 std::string ResolveStartupLuaScript() {
@@ -383,7 +404,7 @@ bool BootstrapLuaRuntime() {
         return false;
     }
     DEBUG_LOG_INFO("[LuaRuntime] lua_newstate begin allocator={} seed=0", reinterpret_cast<const void*>(&LuaMemoryAllocator));
-    state.state = lua_newstate(&LuaMemoryAllocator, nullptr);
+    state.state = CreateLuaState();
     if (!state.state) {
         DEBUG_LOG_ERROR("Lua init failed: lua_newstate returned nullptr");
         return false;

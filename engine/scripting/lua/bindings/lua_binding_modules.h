@@ -7,7 +7,7 @@
 #define DSE_LUA_BINDING_MODULES_H
 
 extern "C" {
-#include <lua.h>
+#include "depends/lua/lua.h"
 }
 
 namespace dse::runtime::lua_binding {

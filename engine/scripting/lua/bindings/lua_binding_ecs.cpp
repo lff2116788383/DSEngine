@@ -15,7 +15,7 @@
 #endif
 #include <limits>
 extern "C" {
-#include <lauxlib.h>
+#include "depends/lua/lauxlib.h"
 }
 
 #include "engine/assets/asset_manager.h"

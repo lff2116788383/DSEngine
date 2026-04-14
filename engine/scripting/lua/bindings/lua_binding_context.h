@@ -9,7 +9,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/ecs/world.h"
 extern "C" {
-#include <lua.h>
+#include "depends/lua/lua.h"
 }
 
 class AssetManager;

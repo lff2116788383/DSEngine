@@ -8,7 +8,7 @@
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/components_2d.h"
 extern "C" {
-#include <lauxlib.h>
+#include "depends/lua/lauxlib.h"
 }
 
 namespace dse::runtime::lua_binding {
