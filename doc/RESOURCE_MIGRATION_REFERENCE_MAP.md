@@ -43,9 +43,9 @@
 
 | 资源名 | 来源路径 | 目标路径 | 关联 demo | 资源类型 | 当前状态 | reference 依赖状态 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `Monster.FBX` | `reference/VSEngine2.1/FBXResource/Monster.FBX` | `assets/source/reference_demo/shared/monster/Monster.FBX` | `15.8`, `15.9` | `fbx` | `已完成导入验证` | `仍依赖 reference` | 已产出 `Monster.dmesh / Monster.dmat / Monster.danim / Monster.dskel` |
-| `OceanPlane.FBX` | `reference/VSEngine2.1/FBXResource/OceanPlane.FBX` | `assets/source/reference_demo/shared/ocean_plane/OceanPlane.FBX` | `15.8`, `15.9` | `fbx` | `已完成导入验证` | `仍依赖 reference` | 已产出 `OceanPlane.dmesh / OceanPlane.dmat`（无动画/骨骼，跳过 `danim/dskel`） |
-| `MonsterLOD0.FBX` | `reference/VSEngine2.1/FBXResource/MonsterLOD0.fbx` | `assets/source/reference_demo/shared/monster/MonsterLOD0.FBX` | `15.8`, `15.9` | `fbx` | `已完成导入验证` | `仍依赖 reference` | 已产出 `MonsterLOD0.dmesh / MonsterLOD0.dmat`（无动画/骨骼，跳过 `danim/dskel`） |
+| `Monster.FBX` | `reference/VSEngine2.1/FBXResource/Monster.FBX` | `assets/source/reference_demo/shared/monster/Monster.FBX` | `15.8`, `15.9` | `fbx` | `15.8 / 15.9 已接入运行时` | `15.8 / 15.9 已脱离 reference` | 已产出 `Monster.dmesh / Monster.dmat / Monster.danim / Monster.dskel`；`15.8` 与 `15.9` scene 已切到 `assets/cooked/reference_demo/shared/monster/Monster.dmesh` |
+| `OceanPlane.FBX` | `reference/VSEngine2.1/FBXResource/OceanPlane.FBX` | `assets/source/reference_demo/shared/ocean_plane/OceanPlane.FBX` | `15.8`, `15.9` | `fbx` | `15.8 / 15.9 已接入运行时` | `15.8 / 15.9 已脱离 reference` | 已产出 `OceanPlane.dmesh / OceanPlane.dmat`；`15.8` 与 `15.9` scene 已切到 `assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh` |
+| `MonsterLOD0.FBX` | `reference/VSEngine2.1/FBXResource/MonsterLOD0.fbx` | `assets/source/reference_demo/shared/monster/MonsterLOD0.FBX` | `15.8`, `15.9` | `fbx` | `15.9 已接入运行时` | `15.9 已脱离 reference` | 已产出 `MonsterLOD0.dmesh / MonsterLOD0.dmat`（无动画/骨骼，跳过 `danim/dskel`）；`15.9` scene 已切到 `assets/cooked/reference_demo/shared/monster_lod0/MonsterLOD0.dmesh` |
 
 
 
@@ -53,8 +53,9 @@
 
 | 资源名 | 当前引用路径 | 建议替代目标 | 关联 demo | 资源类型 | 当前状态 | reference 依赖状态 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `reference_demo_character_placeholder.fbx` | `assets/meshes/reference_demo_character_placeholder.fbx` | 以 `Monster.FBX` 导入后的主仓角色资产替代 | `15.8`, `15.9` | `mesh placeholder` | `阻塞` | `仍依赖占位路径` | 当前 scene 能加载但会报缺资源日志 |
-| `default_sky` | `assets/skyboxes/default_sky` | `assets/source/reference_demo/shared/skybox/default_sky/` | `15.8`, `15.9` | `skybox` | `阻塞` | `仍依赖占位路径` | 需补齐最小天空盒来源与导入策略 |
+| `reference_demo_character_placeholder.fbx` | `assets/meshes/reference_demo_character_placeholder.fbx` | 以 `Monster.FBX` / `MonsterLOD0.FBX` 导入后的主仓角色资产替代 | `15.8`, `15.9` | `mesh placeholder` | `已替换` | `已脱离占位路径` | `15.8 / 15.9` scene 已不再引用该占位路径 |
+| `default_sky` | `assets/skyboxes/default_sky` | `assets/source/reference_demo/shared/skybox/default_sky/` | `15.8`, `15.9` | `skybox` | `临时替代` | `已脱离占位路径` | 当前缺真实天空盒资源；`15.8 / 15.9` 暂时禁用 `SkyboxComponent` 并使用 `SkyLightComponent` 保留最小环境光 |
+| `Monster` 贴图集 | `reference/VSEngine2.1/Bin/Resource/Texture/Monster*.tga` | `assets/source/reference_demo/shared/monster/textures/` | `15.8`, `15.9` | `texture` | `已迁移并接入 dmat` | `已脱离 reference` | 已迁入 `Monster_d/e/n/s.tga` 与 `Monster_w_d/e/n/s.tga` 共 8 张贴图；`Monster.dmat` 与 `MonsterLOD0.dmat` 已回写到主仓内 `assets/source/reference_demo/shared/monster/textures/Monster_*` 路径，静态检查 `all_local=true` |
 
 ---
 

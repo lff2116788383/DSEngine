@@ -56,48 +56,8 @@ local function log_material_state(tag)
 end
 
 local function bind_reference_mesh_entities()
-    local left = dse.ecs.create_entity()
-    local right = dse.ecs.create_entity()
-    state.left_entity = left
-    state.right_entity = right
-    dse.ecs.add_transform(left, -2.8, 0.0, 0.0, 1.1, 2.8, 1.0)
-    dse.ecs.add_transform(right, 2.8, 0.0, 0.0, 1.1, 2.8, 1.0)
-    dse.ecs.add_mesh_renderer(left, 0.95, 0.95, 1.0, 1.0, {
-        -0.5, -0.5,  0.5,
-         0.5, -0.5,  0.5,
-         0.5,  0.5,  0.5,
-        -0.5,  0.5,  0.5,
-        -0.5, -0.5, -0.5,
-         0.5, -0.5, -0.5,
-         0.5,  0.5, -0.5,
-        -0.5,  0.5, -0.5
-    }, {
-        0, 1, 2, 2, 3, 0,
-        1, 5, 6, 6, 2, 1,
-        5, 4, 7, 7, 6, 5,
-        4, 0, 3, 3, 7, 4,
-        3, 2, 6, 6, 7, 3,
-        4, 5, 1, 1, 0, 4
-    })
-    dse.ecs.add_mesh_renderer(right, 1.0, 0.9, 0.85, 1.0, {
-        -0.5, -0.5,  0.5,
-         0.5, -0.5,  0.5,
-         0.5,  0.5,  0.5,
-        -0.5,  0.5,  0.5,
-        -0.5, -0.5, -0.5,
-         0.5, -0.5, -0.5,
-         0.5,  0.5, -0.5,
-        -0.5,  0.5, -0.5
-    }, {
-        0, 1, 2, 2, 3, 0,
-        1, 5, 6, 6, 2, 1,
-        5, 4, 7, 7, 6, 5,
-        4, 0, 3, 3, 7, 4,
-        3, 2, 6, 6, 7, 3,
-        4, 5, 1, 1, 0, 4
-    })
-    dse.ecs.set_mesh_shader_variant(left, "MESH_PBR")
-    dse.ecs.set_mesh_shader_variant(right, "MESH_PBR")
+    state.left_entity = 1
+    state.right_entity = 2
     apply_material_state()
 end
 
@@ -155,7 +115,9 @@ local demo_config = {
         "[VSE-Demo][15.9] 启动 Lua 对齐版材质演示。",
         "[VSE-Demo][15.9] 当前阶段优先加载 reference scene，并用 Lua 覆盖材质参数。",
         "[VSE-Demo][15.9] 键盘调参：'-' / '=' 调左侧 roughness，'[' / ']' 调右侧 metallic。",
-        "[VSE-Demo][15.9] 参考 scene: assets/scenes/reference_demo_15_9.scene.json"
+        "[VSE-Demo][15.9] 参考 scene: assets/scenes/reference_demo_15_9.scene.json",
+        "[VSE-Demo][15.9] 当前已接入 Monster / MonsterLOD0 / OceanPlane cooked 资产。",
+        "[VSE-Demo][15.9] 天空盒资源仍待补齐，现阶段使用 SkyLight 作为最小环境光替代。"
     },
     camera = {
         x = 0.0,

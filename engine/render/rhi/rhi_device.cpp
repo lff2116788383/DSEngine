@@ -238,6 +238,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
         uniform vec3 u_material_emissive;
         uniform float u_material_normal_strength;
         uniform float u_material_alpha_cutoff;
+        uniform bool u_material_alpha_test;
 
         const float PI = 3.14159265359;
 

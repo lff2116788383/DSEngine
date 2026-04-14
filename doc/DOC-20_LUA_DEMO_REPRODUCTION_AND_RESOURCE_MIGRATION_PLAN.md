@@ -595,8 +595,9 @@
 
 当前剩余边界：
 
-- 当前“已打通”口径仍是离线 cooked 资产层，`15.8 / 15.9` 运行时 scene 仍未切到这批新产物；
-- `default_sky` 与部分纹理资源仍待补齐迁移与导入；
+- `15.8` 运行时 scene 已切到第一批 cooked 产物：角色使用 `Monster.dmesh / Monster.dskel / Monster.danim`，地面使用 `OceanPlane.dmesh`；
+- `15.9` 运行时 scene 已切到第一批 cooked 产物：左侧使用 `Monster.dmesh / Monster.dskel / Monster.danim`，右侧使用 `MonsterLOD0.dmesh`，地面使用 `OceanPlane.dmesh`；
+- `default_sky` 与部分纹理资源仍待补齐迁移与导入；当前 `15.8 / 15.9` 暂时禁用 `SkyboxComponent`，以 `SkyLightComponent` 保留最小环境光，避免继续依赖缺失的天空盒占位路径；
 - 主工程当前仍存在 Box2D 版本错配问题：代码使用了 `box2d/id.h` 与 `b2BodyId / b2ShapeId / b2WorldId` 等 3.x handle API，但仓库依赖仍是 `depends/box2d-2.4.1`。
 
 本阶段后续应优先完成：
@@ -617,6 +618,22 @@
 - 资源不再依赖 `reference/...` 路径；
 - 至少一条 smoke 保证 demo 可启动。
 
+当前状态判断：**运行闭环已打通，真实天空盒/纹理仍待补齐。**
+
+已完成内容：
+
+- `reference_demo_15_8.scene.json` 已切到 `Monster.dmesh / Monster.dskel / Monster.danim` 与 `OceanPlane.dmesh`；
+- `SkyboxComponent` 已暂时禁用，避免继续依赖缺失的 `default_sky` 占位路径；
+- `dse.ecs.load_scene` 已接入 `Scene::Deserialize`，Lua demo 可真实加载 reference scene；
+- 已通过 `dse_example_lua` smoke，日志确认 `startup_scene_loaded` 且 `missing_resource_count=0`；
+- 已补入 Lua demo smoke 与 C++ startup scene smoke 回归覆盖。
+
+当前剩余边界：
+
+- 天空盒资源仍是临时禁用方案，后续需要补齐真实 `default_sky` 或替代环境贴图；
+- 角色贴图当前已完成第一、二批最小迁移：`Monster_d/e/n/s.tga` 与 `Monster_w_d/e/n/s.tga` 共 8 张贴图已迁入 `assets/source/reference_demo/shared/monster/textures/`，`Monster.dmat` 与 `MonsterLOD0.dmat` 也已全部回写到主仓内贴图路径；后续仍需确认 `Monster_s / Monster_w_s` 作为高光/粗糙度槽位的通道语义是否与当前 PBR 采样策略完全匹配；
+- 当前 smoke 能证明可启动与无已知缺资源诊断，但尚未替代人工视觉审查。
+
 ### 10.5 第五阶段：落地 `15.9` 材质交互 demo
 
 验收目标：
@@ -625,6 +642,23 @@
 - Lua 层可控制材质参数；
 - 有最小 HUD 或日志反馈；
 - 可作为“DSEngine 3D 材质演示样板”。
+
+当前状态判断：**运行闭环已打通，材质交互具备最小日志反馈。**
+
+已完成内容：
+
+- `reference_demo_15_9.scene.json` 已切到 `Monster.dmesh / Monster.dskel / Monster.danim`、`MonsterLOD0.dmesh` 与 `OceanPlane.dmesh`；
+- `SkyboxComponent` 已暂时禁用，避免继续依赖缺失的 `default_sky` 占位路径；
+- `demo15_9.lua` 已直接绑定 scene 中的左右材质展示实体，不再额外创建程序化 cube；
+- Lua 层保留 `roughness / metallic / emissive` 参数调节，并通过 `material_bootstrap` / `material_input` 日志反馈当前材质状态；
+- 已通过 `dse_example_lua` smoke，日志确认 `startup_scene_loaded`、`missing_resource_count=0` 与 `material_bootstrap`；
+- 已补入 Lua demo smoke 与 C++ startup scene smoke 回归覆盖。
+
+当前剩余边界：
+
+- 尚未补齐真实 HUD，仅以日志作为最小反馈；
+- 天空盒与纹理资源迁移仍需继续收敛；
+- 材质交互还需要人工视觉审查确认效果与 reference demo 的表现差异。
 
 ---
 

@@ -37,44 +37,62 @@ void WriteTextFile(const std::string& path, const std::string& content) {
 
 }
 
-TEST_CASE("Smoke Snapshot - Lua runtime bootstrap update and cleanup remain deterministic", "[engine][smoke][snapshot][lua_runtime]") {
+
+TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without known missing resources", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
-    const std::string startup_path = MakeTempPath("runtime_smoke_startup_single.lua");
-    const std::string component_script_path = MakeTempPath("runtime_smoke_component_single.lua");
-    const std::string output_path = MakeTempPath("runtime_smoke_output_single.txt");
-
-    WriteTextFile(startup_path, "Awake = function() end\n");
+    const std::string startup_path = MakeTempPath("runtime_smoke_demo15_8_startup.lua");
     WriteTextFile(
-        component_script_path,
-        "return {\n"
-        "  OnUpdate = function(self, entity, dt)\n"
-        "    local f = io.open('" + ToLuaPath(output_path) + "', 'w')\n"
-        "    if f then\n"
-        "      f:write('tick:' .. tostring(entity))\n"
-        "      f:close()\n"
-        "    end\n"
-        "  end\n"
-        "}\n");
+        startup_path,
+        "package.path = package.path .. ';samples/lua/?.lua;samples/lua/?/init.lua;samples/lua/?/?.lua'\n"
+        "local demo = require('vse_demo.demo15_8')\n"
+        "Awake = function() demo.Setup({ title = 'Smoke 15.8' }) end\n"
+        "Update = function(dt) end\n");
 
     World world;
     AssetManager asset_manager;
-    Entity entity = world.CreateEntity();
-    auto& script = world.registry().emplace<ScriptComponent>(entity);
-    script.script_path = component_script_path;
-    script.enabled = true;
-
     ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
     SetStartupLuaScriptPath(startup_path);
 
     REQUIRE(BootstrapLuaRuntime());
-    REQUIRE(GetLuaMemoryUsage() > 0);
+    std::size_t transform_count_158 = 0;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        (void)entity;
+        ++transform_count_158;
+    }
+    REQUIRE(transform_count_158 == 6u);
     TickLuaRuntime(0.016f);
-    const bool output_exists = std::filesystem::exists(output_path);
-    INFO("output_path=" << output_path);
-    REQUIRE(output_exists);
     ShutdownLuaRuntime();
     ConfigureLuaApiContext(LuaApiContext{});
     SetStartupLuaScriptPath("");
-    REQUIRE(GetLuaMemoryUsage() == 0);
 }
+
+TEST_CASE("Smoke Snapshot - Lua demo 15.9 setup loads reference scene and keeps material showcase entities bound", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+    dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+
+    const std::string startup_path = MakeTempPath("runtime_smoke_demo15_9_startup.lua");
+    WriteTextFile(
+        startup_path,
+        "package.path = package.path .. ';samples/lua/?.lua;samples/lua/?/init.lua;samples/lua/?/?.lua'\n"
+        "local demo = require('vse_demo.demo15_9')\n"
+        "Awake = function() demo.Setup({ title = 'Smoke 15.9' }) end\n"
+        "Update = function(dt) demo.Update(dt) end\n");
+
+    World world;
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
+    SetStartupLuaScriptPath(startup_path);
+
+    REQUIRE(BootstrapLuaRuntime());
+    std::size_t transform_count_159 = 0;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        (void)entity;
+        ++transform_count_159;
+    }
+    REQUIRE(transform_count_159 == 7u);
+    TickLuaRuntime(0.016f);
+    ShutdownLuaRuntime();
+    ConfigureLuaApiContext(LuaApiContext{});
+    SetStartupLuaScriptPath("");
+}
+

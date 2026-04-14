@@ -11,10 +11,10 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "assets/source/reference_demo/shared/monster/模型资源/H0009_Guardian/animation/soulbrast_d.tga",
-      "normal_texture": "",
-      "metallic_roughness_texture": "",
-      "emissive_texture": "assets/source/reference_demo/shared/monster/模型资源/H0009_Guardian/animation/soulbrast_e.tga",
+      "base_color_texture": "assets/source/reference_demo/shared/monster/textures/Monster_d.tga",
+      "normal_texture": "assets/source/reference_demo/shared/monster/textures/Monster_n.tga",
+      "metallic_roughness_texture": "assets/source/reference_demo/shared/monster/textures/Monster_s.tga",
+      "emissive_texture": "assets/source/reference_demo/shared/monster/textures/Monster_e.tga",
       "occlusion_texture": ""
     },
     {
@@ -28,10 +28,10 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "assets/source/reference_demo/shared/monster/模型资源/H0009_Guardian/animation/soulbrast_w_d.tga",
-      "normal_texture": "",
-      "metallic_roughness_texture": "",
-      "emissive_texture": "assets/source/reference_demo/shared/monster/模型资源/H0009_Guardian/animation/soulbrast_w_e.tga",
+      "base_color_texture": "assets/source/reference_demo/shared/monster/textures/Monster_w_d.tga",
+      "normal_texture": "assets/source/reference_demo/shared/monster/textures/Monster_w_n.tga",
+      "metallic_roughness_texture": "assets/source/reference_demo/shared/monster/textures/Monster_w_s.tga",
+      "emissive_texture": "assets/source/reference_demo/shared/monster/textures/Monster_w_e.tga",
       "occlusion_texture": ""
     }
   ]

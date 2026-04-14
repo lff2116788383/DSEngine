@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
+#include "engine/scene/scene.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
@@ -1150,10 +1151,26 @@ int L_Physics3DRaycast(lua_State* L) {
 }
 
 int L_EcsLoadScene(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "world_unavailable");
+        return 2;
+    }
+
     const char* scene_path = luaL_checkstring(L, 1);
-    // TODO: [CodeBuddy-2026-04-13] 场景加载功能待实现，当前为占位实现
-    (void)scene_path;
-    return 0;
+    scene::Scene scene_loader("lua_runtime_scene_loader");
+    scene_loader.BindWorld(world);
+    const bool ok = scene_loader.Deserialize(scene_path);
+    scene_loader.UnbindWorld();
+
+    lua_pushboolean(L, ok ? 1 : 0);
+    if (ok) {
+        lua_pushstring(L, "");
+    } else {
+        lua_pushstring(L, "scene_deserialize_failed");
+    }
+    return 2;
 }
 
 }

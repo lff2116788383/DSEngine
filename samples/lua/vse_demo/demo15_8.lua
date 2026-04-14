@@ -41,9 +41,8 @@ local demo_config = {
         "[VSE-Demo][15.8] 当前阶段优先加载 reference scene，并保留自由相机观察。",
         "[VSE-Demo][15.8] 参考 scene: assets/scenes/reference_demo_15_8.scene.json",
         "[VSE-Demo][15.8] 观察建议：使用 W/A/S/D 与鼠标查看当前构图和灯光基线。",
-        "[VSE-Demo][15.8] 待资源链补齐后将切换到真实角色/天空盒资产。",
-        "[VSE-Demo][15.8] 资源缺口: assets/meshes/reference_demo_character_placeholder.fbx",
-        "[VSE-Demo][15.8] 资源缺口: assets/skyboxes/default_sky"
+        "[VSE-Demo][15.8] 当前已接入 Monster / OceanPlane cooked 资产。",
+        "[VSE-Demo][15.8] 天空盒资源仍待补齐，现阶段使用 SkyLight 作为最小环境光替代。"
     },
 
     camera = {

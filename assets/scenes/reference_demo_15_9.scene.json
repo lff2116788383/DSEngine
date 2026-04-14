@@ -12,7 +12,7 @@
           "scale": [1.0, 1.0, 1.0]
         },
         "MeshRendererComponent": {
-          "mesh_path": "assets/meshes/reference_demo_character_placeholder.fbx",
+          "mesh_path": "assets/cooked/reference_demo/shared/monster/Monster.dmesh",
           "material_instance_id": 430001,
           "shader_variant": "MESH_PBR",
           "color": [0.95, 0.95, 1.0, 1.0],
@@ -25,9 +25,9 @@
           "visible": true
         },
         "Animator3DComponent": {
-          "enabled": false,
-          "dskel_path": "",
-          "danim_path": "",
+          "enabled": true,
+          "dskel_path": "assets/cooked/reference_demo/shared/monster/Monster.dskel",
+          "danim_path": "assets/cooked/reference_demo/shared/monster/Monster.danim",
           "speed": 1.0,
           "loop": true,
           "use_anim_tree": false,
@@ -46,7 +46,7 @@
           "scale": [1.0, 1.0, 1.0]
         },
         "MeshRendererComponent": {
-          "mesh_path": "assets/meshes/reference_demo_character_placeholder.fbx",
+          "mesh_path": "assets/cooked/reference_demo/shared/monster_lod0/MonsterLOD0.dmesh",
           "material_instance_id": 430002,
           "shader_variant": "MESH_PBR",
           "color": [1.0, 0.9, 0.85, 1.0],
@@ -131,10 +131,10 @@
         "TransformComponent": {
           "position": [0.0, -2.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [48.0, 1.0, 48.0]
+          "scale": [1.0, 1.0, 1.0]
         },
         "MeshRendererComponent": {
-          "mesh_path": "models/cube.dmesh",
+          "mesh_path": "assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh",
           "material_instance_id": 0,
           "shader_variant": "MESH_PBR",
           "color": [0.8, 0.8, 0.85, 1.0],
@@ -157,9 +157,9 @@
           "scale": [1.0, 1.0, 1.0]
         },
         "SkyboxComponent": {
-          "enabled": true,
+          "enabled": false,
           "cubemap_handle": 0,
-          "cubemap_path": "assets/skyboxes/default_sky"
+          "cubemap_path": ""
         }
       }
     }
