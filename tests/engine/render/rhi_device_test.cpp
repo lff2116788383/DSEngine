@@ -15,11 +15,20 @@ TEST_CASE("Given_OpenGLRhiDevice_When_QueryingUnknownRenderTargetTextures_Then_R
     REQUIRE(device.GetRenderTargetDepthTexture(123456u) == 0);
 }
 
+TEST_CASE("Given_OpenGLRhiDevice_When_QueryingUnknownRenderTargetPixels_Then_ReturnsEmptyBuffer", "[engine][render][rhi]") {
+    OpenGLRhiDevice device;
+
+    REQUIRE(device.ReadRenderTargetColorRgba8(0).empty());
+    REQUIRE(device.ReadRenderTargetColorRgba8(123456u).empty());
+}
+
+
+
 TEST_CASE("Given_OpenGLRhiDevice_When_CreatingPipelineStates_Then_HandlesAreUniqueAndLastFrameStatsStayStableWithoutFrames", "[engine][render][rhi]") {
     OpenGLRhiDevice device;
 
     PipelineStateDesc alpha_blend{};
-    alpha_blend.blend_enabled = true;
+
     alpha_blend.depth_test_enabled = false;
 
     PipelineStateDesc opaque{};

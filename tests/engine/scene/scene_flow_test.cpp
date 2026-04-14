@@ -462,11 +462,64 @@ TEST_CASE("Given_CheckedInReferenceDemo158Scene_When_Deserialized_Then_Reference
     }
     REQUIRE(mesh_count >= 2);
 
-    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::SkyLightComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyLightComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+    auto camera_view = loaded.GetWorld().registry().view<dse::Camera3DComponent>();
+    REQUIRE(camera_view.begin() != camera_view.end());
+    const auto camera_entity = *camera_view.begin();
+    const auto& camera = camera_view.get<dse::Camera3DComponent>(camera_entity);
+    const auto& camera_transform = loaded.GetWorld().registry().get<TransformComponent>(camera_entity);
+    REQUIRE(camera_transform.position.y == Approx(5.4f));
+    REQUIRE(camera_transform.position.z == Approx(15.5f));
+    REQUIRE(camera.fov == Approx(52.0f));
+
+    auto directional_view = loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>();
+    REQUIRE(directional_view.begin() != directional_view.end());
+    const auto directional_entity = *directional_view.begin();
+    const auto& directional = directional_view.get<dse::DirectionalLight3DComponent>(directional_entity);
+    REQUIRE(directional.direction.x == Approx(-0.35f));
+    REQUIRE(directional.direction.z == Approx(-0.2f));
+    REQUIRE(directional.intensity == Approx(2.15f));
+    REQUIRE(directional.ambient_intensity == Approx(0.16f));
+    REQUIRE(directional.shadow_strength == Approx(0.52f));
+
+    auto sky_light_view = loaded.GetWorld().registry().view<dse::SkyLightComponent>();
+    REQUIRE(sky_light_view.begin() != sky_light_view.end());
+    const auto sky_light_entity = *sky_light_view.begin();
+    const auto& sky_light = sky_light_view.get<dse::SkyLightComponent>(sky_light_entity);
+    REQUIRE(sky_light.up_color.x == Approx(0.34f));
+    REQUIRE(sky_light.up_color.z == Approx(0.46f));
+    REQUIRE(sky_light.down_color.y == Approx(0.09f));
+    REQUIRE(sky_light.intensity == Approx(1.18f));
+
+    auto skybox_view = loaded.GetWorld().registry().view<dse::SkyboxComponent>();
+    REQUIRE(skybox_view.begin() != skybox_view.end());
+    const auto skybox_entity = *skybox_view.begin();
+    const auto& skybox = skybox_view.get<dse::SkyboxComponent>(skybox_entity);
+    REQUIRE(skybox.cubemap_path == "assets/source/reference_demo/shared/skybox/default_sky");
+
     REQUIRE(loaded.GetWorld().registry().view<dse::Animator3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Animator3DComponent>().end());
+
+    bool hero_found = false;
+    bool ground_found = false;
+    for (auto entity : mesh_view) {
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (mesh.mesh_path == "assets/cooked/reference_demo/shared/monster/Monster.dmesh") {
+            hero_found = true;
+            REQUIRE(mesh.color.x == Approx(1.0f));
+            REQUIRE(mesh.color.y == Approx(0.98f));
+            REQUIRE(mesh.emissive.z == Approx(0.02f));
+            REQUIRE(mesh.metallic == Approx(0.04f));
+            REQUIRE(mesh.roughness == Approx(0.52f));
+        }
+        if (mesh.mesh_path == "assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh") {
+            ground_found = true;
+            REQUIRE(mesh.color.x == Approx(0.66f));
+            REQUIRE(mesh.color.z == Approx(0.8f));
+            REQUIRE(mesh.metallic == Approx(0.02f));
+            REQUIRE(mesh.roughness == Approx(0.74f));
+        }
+    }
+    REQUIRE(hero_found);
+    REQUIRE(ground_found);
 }
 
 
@@ -489,6 +542,40 @@ TEST_CASE("Given_CheckedInReferenceDemo159Scene_When_Deserialized_Then_MaterialI
     REQUIRE(mesh_count >= 3);
     REQUIRE(interactive_material_mesh_count == 2);
 
+    auto camera_view = loaded.GetWorld().registry().view<dse::Camera3DComponent>();
+    REQUIRE(camera_view.begin() != camera_view.end());
+    const auto camera_entity = *camera_view.begin();
+    const auto& camera = camera_view.get<dse::Camera3DComponent>(camera_entity);
+    const auto& camera_transform = loaded.GetWorld().registry().get<TransformComponent>(camera_entity);
+    REQUIRE(camera_transform.position.y == Approx(6.2f));
+    REQUIRE(camera_transform.position.z == Approx(17.8f));
+    REQUIRE(camera.fov == Approx(50.0f));
+
+    auto directional_view = loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>();
+    REQUIRE(directional_view.begin() != directional_view.end());
+    const auto directional_entity = *directional_view.begin();
+    const auto& directional = directional_view.get<dse::DirectionalLight3DComponent>(directional_entity);
+    REQUIRE(directional.direction.x == Approx(-0.28f));
+    REQUIRE(directional.direction.z == Approx(-0.18f));
+    REQUIRE(directional.intensity == Approx(2.25f));
+    REQUIRE(directional.ambient_intensity == Approx(0.17f));
+    REQUIRE(directional.shadow_strength == Approx(0.55f));
+
+    auto sky_light_view = loaded.GetWorld().registry().view<dse::SkyLightComponent>();
+    REQUIRE(sky_light_view.begin() != sky_light_view.end());
+    const auto sky_light_entity = *sky_light_view.begin();
+    const auto& sky_light = sky_light_view.get<dse::SkyLightComponent>(sky_light_entity);
+    REQUIRE(sky_light.up_color.x == Approx(0.32f));
+    REQUIRE(sky_light.up_color.z == Approx(0.44f));
+    REQUIRE(sky_light.down_color.y == Approx(0.08f));
+    REQUIRE(sky_light.intensity == Approx(1.22f));
+
+    auto skybox_view = loaded.GetWorld().registry().view<dse::SkyboxComponent>();
+    REQUIRE(skybox_view.begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+    const auto skybox_entity = *skybox_view.begin();
+    const auto& skybox = skybox_view.get<dse::SkyboxComponent>(skybox_entity);
+    REQUIRE(skybox.cubemap_path == "assets/source/reference_demo/shared/skybox/default_sky");
+
     auto animator_view = loaded.GetWorld().registry().view<dse::Animator3DComponent>();
     size_t animator_count = 0;
     for (auto entity : animator_view) {
@@ -497,11 +584,39 @@ TEST_CASE("Given_CheckedInReferenceDemo159Scene_When_Deserialized_Then_MaterialI
     }
     REQUIRE(animator_count == 2);
 
-    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::SkyLightComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyLightComponent>().end());
-    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+    bool left_found = false;
+    bool right_found = false;
+    bool ground_found = false;
+    for (auto entity : mesh_view) {
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (mesh.material_instance_id == 430001) {
+            left_found = true;
+            REQUIRE(mesh.color.x == Approx(0.9f));
+            REQUIRE(mesh.color.z == Approx(0.98f));
+            REQUIRE(mesh.emissive.z == Approx(0.08f));
+            REQUIRE(mesh.metallic == Approx(0.03f));
+            REQUIRE(mesh.roughness == Approx(0.78f));
+        }
+        if (mesh.material_instance_id == 430002) {
+            right_found = true;
+            REQUIRE(mesh.color.y == Approx(0.86f));
+            REQUIRE(mesh.emissive.x == Approx(0.08f));
+            REQUIRE(mesh.metallic == Approx(0.38f));
+            REQUIRE(mesh.roughness == Approx(0.18f));
+        }
+        if (mesh.mesh_path == "assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh") {
+            ground_found = true;
+            REQUIRE(mesh.color.x == Approx(0.64f));
+            REQUIRE(mesh.color.z == Approx(0.8f));
+            REQUIRE(mesh.metallic == Approx(0.03f));
+            REQUIRE(mesh.roughness == Approx(0.7f));
+        }
+    }
+    REQUIRE(left_found);
+    REQUIRE(right_found);
+    REQUIRE(ground_found);
 }
+
 
 TEST_CASE("Given_SceneRegressionHelpers_When_Executed_Then_ReturnTrue", "[engine][unit][scene]") {
     const std::string roundtrip_path = MakeSceneTempPath("scene_regression_roundtrip.json");

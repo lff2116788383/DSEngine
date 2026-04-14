@@ -14,14 +14,14 @@ local state = {
     left_entity = nil,
     right_entity = nil,
     left_material = {
-        metallic = 0.08,
-        roughness = 0.55,
-        emissive = { 0.0, 0.0, 0.20 }
+        metallic = 0.03,
+        roughness = 0.78,
+        emissive = { 0.0, 0.0, 0.08 }
     },
     right_material = {
-        metallic = 0.12,
-        roughness = 0.30,
-        emissive = { 0.24, 0.0, 0.0 }
+        metallic = 0.38,
+        roughness = 0.18,
+        emissive = { 0.08, 0.01, 0.0 }
     }
 }
 
@@ -55,7 +55,49 @@ local function log_material_state(tag)
     ))
 end
 
+local function try_bind_reference_mesh_entities_by_position()
+    local left_candidate = nil
+    local right_candidate = nil
+    local candidates = {}
+    local monster_entities = dse.ecs.find_entities_by_mesh_path("assets/cooked/reference_demo/shared/monster/Monster.dmesh")
+    local lod_entities = dse.ecs.find_entities_by_mesh_path("assets/cooked/reference_demo/shared/monster_lod0/MonsterLOD0.dmesh")
+    if type(monster_entities) == "table" then
+        for _, entity in ipairs(monster_entities) do
+            table.insert(candidates, entity)
+        end
+    end
+    if type(lod_entities) == "table" then
+        for _, entity in ipairs(lod_entities) do
+            table.insert(candidates, entity)
+        end
+    end
+    for _, entity in ipairs(candidates) do
+        local x, y, z = dse.ecs.get_transform_position(entity)
+        if x ~= nil and y ~= nil and y > -1.0 then
+            if x < -1.0 then
+                left_candidate = entity
+            elseif x > 1.0 then
+                right_candidate = entity
+            end
+        end
+    end
+    if left_candidate ~= nil and right_candidate ~= nil then
+        state.left_entity = left_candidate
+        state.right_entity = right_candidate
+        apply_material_state()
+        print(string.format("[VSE-Demo][15.9] runtime_entity_binding left=%d right=%d", left_candidate, right_candidate))
+        return true
+    end
+    return false
+end
+
+
 local function bind_reference_mesh_entities()
+    state.left_entity = nil
+    state.right_entity = nil
+    if try_bind_reference_mesh_entities_by_position() then
+        return
+    end
     state.left_entity = 1
     state.right_entity = 2
     dse.ecs.set_mesh_material(state.left_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 0)
@@ -63,7 +105,9 @@ local function bind_reference_mesh_entities()
     print("[VSE-Demo][15.9] material_instance_bound slot=left source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=0")
     print("[VSE-Demo][15.9] material_instance_bound slot=right source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=1")
     apply_material_state()
+    print("[VSE-Demo][15.9] runtime_entity_binding fallback_ids=1,2")
 end
+
 
 local function try_load_reference_scene(scene_path)
     local ok, diagnostics = dse.ecs.load_scene(scene_path)
@@ -122,7 +166,8 @@ local demo_config = {
         "[VSE-Demo][15.9] 参考 scene: assets/scenes/reference_demo_15_9.scene.json",
         "[VSE-Demo][15.9] 当前已接入 Monster / MonsterLOD0 / OceanPlane cooked 资产。",
         "[VSE-Demo][15.9] 左右展示位已分别绑定 Monster.dmat 的第 0 / 1 个材质槽，并继续叠加 Lua 标量调参。",
-        "[VSE-Demo][15.9] 当前已接入最小目录式天空盒，并继续保留 SkyLight 作为环境光近似。"
+        "[VSE-Demo][15.9] 当前已接入最小目录式天空盒，并继续保留 SkyLight 作为环境光近似。",
+        "[VSE-Demo][15.9] 启动日志会输出 runtime_entity_binding，便于确认左右材质作用到了正确实体。"
     },
     camera = {
         x = 0.0,
@@ -215,6 +260,8 @@ function Demo159.Setup(config)
         state.left_entity = 1
         state.right_entity = 2
         apply_material_state()
+        print_visual_baseline_summary()
+
     end
     log_material_state("material_bootstrap")
 

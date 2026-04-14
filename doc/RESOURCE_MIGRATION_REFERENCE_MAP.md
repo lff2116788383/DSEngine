@@ -93,7 +93,13 @@
 - Editor 桥接链路已补齐 `SkyLight` / `SpotLight` 与 `MeshRenderer` 材质字段往返，`reference_demo` 场景桥接回归已通过；
 - Lua demo 15.8 / 15.9 的 smoke 已确认通过，reference scene 启动后 `missing_resource_count=0`；
 - `15.7 / 15.9` 已开始复用 `Monster.dmat` 的多材质槽运行时绑定：Lua `set_mesh_material(entity, dmat, index)` 现支持可选材质索引，`15.7` 左侧两个展示位与 `15.9` 左右两个展示位已分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽；
-- 当前主要剩余问题已从“是否可运行”转为“最终视觉质量提升”：后续重点是更高质量 skybox 原始资源、IBL、cooked skybox 资产链与截图基线。
+- `15.8 / 15.9` 已补入最终视觉质量参数基线：相机构图、方向光、SkyLight、角色材质与地面材质均已进入 scene 级断言；
+- `15.9` 额外修复了 Lua runtime 的左右角色实体绑定问题：不再硬编码 scene JSON 的实体 id，而是通过最小只读 Lua 查询接口按 `mesh_path + 位置` 识别左右展示实体；
+- `dse_lua_runtime_smoke_single_test.exe -s` 当前已能稳定覆盖并通过 `15.8 / 15.9` 的最小视觉状态基线；
+- 仓库当前尚无完整运行时截图 / framebuffer readback / PNG golden comparison 链路，但已具备 `RenderTarget` / `FramePipeline` / `stb_image_write` 等可复用底座；
+- 下一阶段如需补首张视觉基线，建议只针对 `reference_demo_15_9` 增加单场景、固定分辨率、固定帧数、弱约束图像比较的最小截图专项；
+- 代码层面的真实改造入口已基本确认：`engine/render/rhi/rhi_device.h/.cpp` 已完成 readback，后续由 `engine/runtime/frame_pipeline.*` 暴露截图源 render target，再由 `engine/runtime/engine_app.cpp` 或测试 helper 负责 PNG 导出；
+- 当前主要剩余问题已从“是否可运行”转为“真实截图基线与更高质量渲染”：后续重点是可复用 screenshot 基础设施、更高质量 skybox 原始资源、IBL 与 cooked skybox 资产链。
 
 
 

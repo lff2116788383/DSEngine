@@ -653,6 +653,109 @@
 
 - 当前仍未覆盖 HDR / DDS / KTX / IBL / cooked skybox 资产链，这些属于后续画质提升阶段，不阻塞本轮最小视觉闭环交付。
 
+---
+
+## 12. 最终视觉质量提升与截图基线进展（2026-04-14）
+
+### 12.1 本轮已完成的视觉质量提升
+
+本轮没有引入新的渲染架构或第三方依赖，而是在现有 scene / Lua / smoke 链路上做最小收口：
+
+- **相机构图**：
+  - `reference_demo_15_8.scene.json` 从较远的 `camera=(0, 6, 18), fov=60` 收紧为 `camera=(0, 5.4, 15.5), fov=52`，让单角色主体更集中；
+  - `reference_demo_15_9.scene.json` 从 `camera=(0, 7.5, 20), fov=60` 收紧为 `camera=(0, 6.2, 17.8), fov=50`，让左右材质对比更易观察。
+- **方向光 / SkyLight**：
+  - 两个 demo 都提高了主方向光强度与阴影强度，避免角色与地面在最小 skybox 下显得过平；
+  - `SkyLightComponent` 改为更接近冷色天空 / 暗部补光的半球光参数，继续作为 IBL 缺失前的环境光近似。
+- **角色与地面材质**：
+  - `15.8` 主角色 roughness 降低到 `0.52`，地面 roughness 降低到 `0.74` 并加入极弱 emissive，用于提升主体与地面的可读性；
+  - `15.9` 左右角色拉开成“偏冷哑光”和“偏暖高光”两组参数，右侧 `metallic=0.38 / roughness=0.18`，左侧 `metallic=0.03 / roughness=0.78`。
+- **人工观察日志**：
+  - `demo15_9.lua` 本轮额外修复了一个关键运行时缺口：scene JSON 中的 `id=1/2` 不能被继续当作 Lua 运行时实体句柄使用。为避免硬编码 entt 运行时实体编号，已在 Lua ECS 绑定层补入最小只读查询接口 `find_entities_by_mesh_path`，并改为“按 mesh_path 找候选实体、再按位置区分左右角色”的绑定策略；`15.9` 的左右材质参数现在已能稳定作用到正确实体。
+- 对应地，`dse_lua_runtime_smoke_single_test.exe -s` 已补齐并通过 `15.8 / 15.9` 的相机、灯光与左右材质对比断言，当前最小视觉基线已同时覆盖 scene 层与 Lua runtime 层。
+- 当前仍未覆盖 HDR / DDS / KTX / IBL / cooked skybox 资产链，这些属于后续画质提升阶段，不阻塞本轮最小视觉闭环交付。
+
+
+全面检索后，仓库目前已有 `snapshot` 风格确定性 smoke，但未发现完整可复用的运行时截图 / framebuffer readback / PNG golden comparison 链路。因此本轮没有伪造“像素截图基线”，而是先落地最小可维护的替代验证：
+
+- `tests/engine/scene/scene_flow_test.cpp` 已把 `15.8 / 15.9` 的相机、方向光、SkyLight、skybox 路径、角色材质、地面材质纳入确定性断言；
+- `tests/engine/lua_runtime_smoke_single_test.cpp` 已把 Lua 启动后的关键相机 / 灯光 / 材质状态纳入 smoke snapshot 断言；
+- 当前基线能防止 scene 参数被误改、Lua 启动未加载 reference scene、`15.9` 左右材质对比退化等问题。
+
+### 12.3 当前基线验证口径
+
+当前推荐验证集合为：
+
+1. `dse_engine_unit_tests.exe "[scene][3d][reference_demo]"`
+   - 覆盖 `reference_demo_15_8.scene.json` / `reference_demo_15_9.scene.json` 的 scene 级视觉状态基线；
+2. `dse_lua_runtime_smoke_single_test.exe -s`
+   - 覆盖 Lua demo 15.8 / 15.9 启动 reference scene 后的最小运行时状态；
+3. 手动运行 Lua demo 后观察日志中的 `visual_baseline` / `observer_checkpoints`，再进行人工截图留档。
+
+### 12.4 下一阶段剩余边界
+
+后续如果要从“状态基线”升级为真正截图基线，需要补齐以下能力：
+
+- runtime 或测试层可控窗口尺寸、固定相机朝向与固定渲染帧数；
+- framebuffer readback / screenshot 输出能力；
+- PNG 或原始像素 hash 的 golden baseline 管理；
+- 允许小阈值误差的图像比较工具，避免不同 GPU / 驱动导致无意义抖动；
+- 更高质量 skybox 原始资源、HDR / IBL / cooked skybox 资产链，用于替代当前最小 `.ppm` 六面 skybox。
+
+### 12.5 下一阶段最小截图链路建议（已基于当前代码库检索）
+
+结合当前仓库现状，最小可落地的截图链路建议不是直接做“全场景图像回归平台”，而是只补以下四个点：
+
+1. **RHI 层只补一个只读接口**
+   - 在 `RhiDevice` 增加类似 `ReadRenderTargetColorRgba8(render_target_handle)` 的只读方法；
+   - OpenGL 实现里基于现有 `RenderTarget` / FBO 句柄做 `glBindFramebuffer + glReadPixels`；
+   - 先只支持读取颜色附件 0 的 RGBA8，不在第一步扩展深度、cube face、多 mip。
+
+2. **Runtime 层只补一个测试友好的导出入口**
+   - 复用 `FramePipeline` 已存在的 `scene_render_target` / `main_render_target`；
+   - 在 runtime host 或 test helper 中增加“跑固定帧数后导出一张 PNG”的最小入口；
+   - PNG 写出可复用当前已经引入的 `stb_image_write`，避免新增第三方依赖。
+
+3. **测试层先只覆盖一个固定场景**
+   - 不建议一下子给 `15.8 / 15.9 / 3d_mvp_minimal` 全部铺开；
+   - 首批最多只给 `reference_demo_15_9` 增加 1 张低分辨率基线图，用于验证左右材质反差和天空盒背景是否仍然存在；
+   - 固定项至少包括：窗口尺寸、startup scene、最大帧数、相机位置、后处理开关。
+
+4. **图像比较先做弱约束版本**
+   - 第一版不做整图逐像素严格相等；
+   - 可先做以下二选一：
+     - 方案 A：对整图做简单 hash / 均值亮度 / 局部区域均值比较；
+     - 方案 B：仅裁剪左右角色所在区域，比较区域均值和高光强度分布；
+   - 等链路稳定后，再决定是否增加小阈值像素 diff。
+
+### 12.7 当前代码层面的真实落点（2026-04-14 再确认）
+
+本轮继续向下检索后，最小截图专项需要修改的真实代码位置已经基本明确：
+
+- **窗口尺寸固定**：`engine/runtime/engine_app.h` 中的 `EngineRunConfig.window_width / window_height` 已可直接控制；
+- **固定帧数**：`engine/runtime/engine_app.cpp` 已支持环境变量 `DSE_MAX_FRAMES`；
+- **截图源 RenderTarget**：`engine/runtime/frame_pipeline.cpp` 已明确维护 `scene_render_target` 与 `main_render_target`；
+- **读取目标句柄**：`FramePipeline::GetSceneTextureId()` / `GetMainTextureId()` 当前只能拿到颜色纹理句柄，还不能把像素读回 CPU；
+- **RHI 进展**：`engine/render/rhi/rhi_device.h/.cpp` 已补入最小 `ReadRenderTargetColorRgba8(render_target_handle)` 能力，OpenGL 后端现已可基于现有 `RenderTarget` FBO 执行 `glReadPixels` 并返回 RGBA8 缓冲；
+- **PNG 输出底座**：`engine/runtime/engine_app.cpp` 已引入 `stb_image_write`，无需额外引入新库。
+
+因此，下一阶段如果正式实现最小截图专项，建议按以下文件顺序推进：
+
+1. `engine/runtime/frame_pipeline.h/.cpp`
+   - 视情况补一个“读取 scene/main render target 像素”的薄包装；
+2. `engine/runtime/engine_app.cpp` 或单独 test helper
+   - 增加固定帧数后导出 PNG 的最小入口；
+3. `tests/engine/`
+   - 新增单场景截图专项测试，首批仅覆盖 `reference_demo_15_9`。
+
+### 12.8 当前截图专项进度结论
+
+- **已完成**：RHI 层最小 readback API 已落地，新增 `ReadRenderTargetColorRgba8`，并通过 `dse_engine_unit_tests.exe [render][rhi]` 回归；
+- **未完成**：runtime/test 层尚未补“跑固定帧数后导出 PNG”的统一入口；
+- **未完成**：尚未落第一张 `reference_demo_15_9` 的基线图与弱约束图像比较；
+- **当前建议**：下一轮优先补 PNG 导出入口，而不是继续扩大 readback 能力边界。
+
+
 
 
 

@@ -150,6 +150,8 @@ function Demo158.Setup(config)
         Bootstrap.SetupScene(merged)
         print("[VSE-Demo][15.8] fallback_scene_active programmatic_preview")
         print("[VSE-Demo][15.8] observer_hint free_camera=W/A/S/D + mouse")
+        print_visual_baseline_summary()
+
     end
 end
 

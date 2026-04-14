@@ -18,7 +18,8 @@ public:
     unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 1; }
     unsigned int GetRenderTargetColorTexture(unsigned int) const override { return 1; }
     unsigned int GetRenderTargetDepthTexture(unsigned int) const override { return 1; }
-    unsigned int GetRenderTargetDepthTextureFace(unsigned int, unsigned int) const override { return 1; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int) const override { return {}; }
+
     unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override { return 1; }
     unsigned int CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return 1; }
     void DeleteTexture(unsigned int) override {}

@@ -2,6 +2,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
 
@@ -136,11 +137,29 @@ TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without kn
         ++transform_count_158;
     }
     REQUIRE(transform_count_158 == 6u);
+
+    auto camera_view = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+    REQUIRE(camera_view.begin() != camera_view.end());
+    const auto camera_entity = *camera_view.begin();
+    const auto& camera = camera_view.get<dse::Camera3DComponent>(camera_entity);
+    const auto& camera_transform = camera_view.get<TransformComponent>(camera_entity);
+    REQUIRE(camera_transform.position.y == Approx(5.4f));
+    REQUIRE(camera_transform.position.z == Approx(15.5f));
+    REQUIRE(camera.fov == Approx(52.0f));
+
+    auto light_view = world.registry().view<dse::DirectionalLight3DComponent>();
+    REQUIRE(light_view.begin() != light_view.end());
+    const auto light_entity = *light_view.begin();
+    const auto& light = light_view.get<dse::DirectionalLight3DComponent>(light_entity);
+    REQUIRE(light.intensity == Approx(2.15f));
+    REQUIRE(light.shadow_strength == Approx(0.52f));
+
     TickLuaRuntime(0.016f);
     ShutdownLuaRuntime();
     ConfigureLuaApiContext(LuaApiContext{});
     SetStartupLuaScriptPath("");
 }
+
 
 TEST_CASE("Smoke Snapshot - Lua demo 15.9 setup loads reference scene and keeps material showcase entities bound", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
@@ -165,9 +184,45 @@ TEST_CASE("Smoke Snapshot - Lua demo 15.9 setup loads reference scene and keeps 
         ++transform_count_159;
     }
     REQUIRE(transform_count_159 == 7u);
+
+    auto camera_view = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+    REQUIRE(camera_view.begin() != camera_view.end());
+    const auto camera_entity = *camera_view.begin();
+    const auto& camera = camera_view.get<dse::Camera3DComponent>(camera_entity);
+    const auto& camera_transform = camera_view.get<TransformComponent>(camera_entity);
+    REQUIRE(camera_transform.position.y == Approx(6.2f));
+    REQUIRE(camera_transform.position.z == Approx(17.8f));
+    REQUIRE(camera.fov == Approx(50.0f));
+
+    auto mesh_view = world.registry().view<dse::MeshRendererComponent, TransformComponent>();
+    bool left_found = false;
+    bool right_found = false;
+    for (auto entity : mesh_view) {
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        const auto& transform = mesh_view.get<TransformComponent>(entity);
+        if (transform.position.y > -1.0f && transform.position.x < -1.0f) {
+            left_found = true;
+            REQUIRE(mesh.metallic == Approx(0.03f));
+            REQUIRE(mesh.roughness == Approx(0.78f));
+        }
+        if (transform.position.y > -1.0f && transform.position.x > 1.0f) {
+            right_found = true;
+            REQUIRE(mesh.metallic == Approx(0.38f));
+            REQUIRE(mesh.roughness == Approx(0.18f));
+        }
+    }
+
+    INFO("15.9 runtime expects one left and one right showcase mesh above ground");
+
+
+
+    REQUIRE(left_found);
+    REQUIRE(right_found);
+
     TickLuaRuntime(0.016f);
     ShutdownLuaRuntime();
     ConfigureLuaApiContext(LuaApiContext{});
     SetStartupLuaScriptPath("");
 }
+
 

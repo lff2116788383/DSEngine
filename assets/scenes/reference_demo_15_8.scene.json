@@ -15,10 +15,10 @@
           "mesh_path": "assets/cooked/reference_demo/shared/monster/Monster.dmesh",
           "material_instance_id": 0,
           "shader_variant": "MESH_PBR",
-          "color": [1.0, 1.0, 1.0, 1.0],
-          "emissive": [0.0, 0.0, 0.0],
-          "metallic": 0.05,
-          "roughness": 0.65,
+          "color": [1.0, 0.98, 0.97, 1.0],
+          "emissive": [0.015, 0.012, 0.02],
+          "metallic": 0.04,
+          "roughness": 0.52,
           "ao": 1.0,
           "normal_strength": 1.0,
           "receive_shadow": true,
@@ -41,14 +41,14 @@
       "id": 2,
       "components": {
         "TransformComponent": {
-          "position": [0.0, 6.0, 18.0],
+          "position": [0.0, 5.4, 15.5],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         },
         "Camera3DComponent": {
           "enabled": true,
           "priority": 0,
-          "fov": 60.0,
+          "fov": 52.0,
           "aspect_ratio": 1.7777778,
           "near_clip": 0.1,
           "far_clip": 1000.0
@@ -65,13 +65,13 @@
         },
         "DirectionalLight3DComponent": {
           "enabled": true,
-          "direction": [-0.45, -1.0, -0.45],
-          "color": [1.0, 0.97, 0.92],
-          "intensity": 1.8,
-          "ambient_intensity": 0.12,
-          "shadow_strength": 0.45,
+          "direction": [-0.35, -1.0, -0.2],
+          "color": [1.0, 0.96, 0.9],
+          "intensity": 2.15,
+          "ambient_intensity": 0.16,
+          "shadow_strength": 0.52,
           "cast_shadow": true,
-          "cascade_splits": [20.0, 60.0, 180.0]
+          "cascade_splits": [18.0, 54.0, 160.0]
         }
       }
     },
@@ -85,9 +85,9 @@
         },
         "SkyLightComponent": {
           "enabled": true,
-          "up_color": [0.2, 0.2, 0.2],
-          "down_color": [0.0, 0.0, 0.5],
-          "intensity": 1.0
+          "up_color": [0.34, 0.38, 0.46],
+          "down_color": [0.06, 0.09, 0.14],
+          "intensity": 1.18
         }
       }
     },
@@ -103,10 +103,10 @@
           "mesh_path": "assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh",
           "material_instance_id": 0,
           "shader_variant": "MESH_PBR",
-          "color": [0.8, 0.8, 0.85, 1.0],
-          "emissive": [0.0, 0.0, 0.0],
-          "metallic": 0.0,
-          "roughness": 0.9,
+          "color": [0.66, 0.72, 0.8, 1.0],
+          "emissive": [0.01, 0.015, 0.02],
+          "metallic": 0.02,
+          "roughness": 0.74,
           "ao": 1.0,
           "normal_strength": 1.0,
           "receive_shadow": true,
@@ -131,3 +131,4 @@
     }
   ]
 }
+

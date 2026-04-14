@@ -1038,13 +1038,27 @@ unsigned int OpenGLRhiDevice::GetRenderTargetDepthTexture(unsigned int render_ta
     return it->second.depth_texture_handle;
 }
 
-unsigned int OpenGLRhiDevice::GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const {
+std::vector<unsigned char> OpenGLRhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const {
     auto it = render_targets_.find(render_target_handle);
-    if (it == render_targets_.end() || face >= 6 || !it->second.desc.cube_map) {
-        return 0;
+    if (it == render_targets_.end() || !it->second.desc.has_color || it->second.desc.width <= 0 || it->second.desc.height <= 0) {
+        return {};
     }
-    return it->second.depth_texture_handle;
+
+    const auto& target = it->second;
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(target.desc.width) * static_cast<std::size_t>(target.desc.height) * 4u, 0u);
+
+    GLint previous_fbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, target.fbo_handle);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, target.desc.width, target.desc.height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_fbo));
+
+    return pixels;
 }
+
+
 
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {

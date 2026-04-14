@@ -391,7 +391,8 @@ public:
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
-    virtual unsigned int GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const = 0;
+    virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
+
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
@@ -474,7 +475,8 @@ public:
      */
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
-    unsigned int GetRenderTargetDepthTextureFace(unsigned int render_target_handle, unsigned int face) const override;
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
+
     
     /**
      * @brief 创建 VBO 或 EBO 数据缓冲

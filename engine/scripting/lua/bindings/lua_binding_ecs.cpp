@@ -1153,6 +1153,27 @@ int L_Physics3DRaycast(lua_State* L) {
     return 1;
 }
 
+int L_EcsFindEntitiesByMeshPath(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_newtable(L);
+        return 1;
+    }
+
+    const char* mesh_path = luaL_checkstring(L, 1);
+    lua_newtable(L);
+    int index = 1;
+    auto view = world->registry().view<MeshRendererComponent>();
+    for (auto entity : view) {
+        const auto& mesh = view.get<MeshRendererComponent>(entity);
+        if (mesh.mesh_path == mesh_path) {
+            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<std::uint32_t>(entity)));
+            lua_rawseti(L, -2, index++);
+        }
+    }
+    return 1;
+}
+
 int L_EcsLoadScene(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1198,6 +1219,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_sprite", L_EcsAddSprite);
     set_fn("add_mesh_renderer", L_EcsAddMeshRenderer);
     set_fn("set_mesh_path", L_EcsSetMeshPath);
+    set_fn("find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath);
     set_fn("set_mesh_material", L_EcsSetMeshMaterial);
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
     set_fn("set_mesh_material_scalar", L_EcsSetMeshMaterialScalar);
