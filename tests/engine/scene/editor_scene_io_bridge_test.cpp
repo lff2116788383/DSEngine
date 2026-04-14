@@ -138,6 +138,63 @@ TEST_CASE("Given_ReferenceDemo158Scene_When_CopiedIntoEditorRegistry_Then_Editor
     REQUIRE(mesh.visible);
 }
 
+TEST_CASE("Given_ReferenceDemo157Scene_When_CopiedIntoEditorRegistry_Then_EditorSceneIoRoundTripKeepsMaterialShowcaseBaseline", "[engine][unit][scene][3d][editor][reference_demo]") {
+    scene::Scene runtime_scene("runtime-reference-demo-15-7");
+    REQUIRE(runtime_scene.Deserialize("assets/scenes/reference_demo_15_7.scene.json"));
+
+    entt::registry editor_registry;
+    CopyRegistry(editor_registry, runtime_scene.GetWorld().registry());
+
+    const std::string path = MakeEditorSceneTempPath("editor_scene_reference_demo_15_7_bridge.json");
+    ScopedTempPath cleanup(path);
+
+    SaveScene(editor_registry, path);
+
+    entt::registry loaded_registry;
+    LoadScene(loaded_registry, path);
+
+    auto mesh_view = loaded_registry.view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    size_t showcase_mesh_count = 0;
+    size_t material_instance_mesh_count = 0;
+    for (auto entity : mesh_view) {
+        ++mesh_count;
+        const auto& loaded_mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (loaded_mesh.material_instance_id == 420001 || loaded_mesh.material_instance_id == 420002 || loaded_mesh.material_instance_id == 420003 ||
+            loaded_mesh.material_instance_id == 420004 || loaded_mesh.material_instance_id == 420005) {
+            ++showcase_mesh_count;
+            if (loaded_mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance) {
+                ++material_instance_mesh_count;
+            }
+        }
+    }
+    REQUIRE(mesh_count >= 6);
+    REQUIRE(showcase_mesh_count == 5);
+    REQUIRE(material_instance_mesh_count == 5);
+
+
+    REQUIRE(loaded_registry.view<dse::Camera3DComponent>().begin() != loaded_registry.view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::DirectionalLight3DComponent>().begin() != loaded_registry.view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyLightComponent>().begin() != loaded_registry.view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
+
+    auto skybox_view = loaded_registry.view<dse::SkyboxComponent>();
+    REQUIRE(skybox_view.begin() != skybox_view.end());
+    const auto skybox_entity = *skybox_view.begin();
+    const auto& skybox = skybox_view.get<dse::SkyboxComponent>(skybox_entity);
+    REQUIRE(skybox.enabled);
+    REQUIRE(skybox.cubemap_path == "assets/source/reference_demo/shared/skybox/default_sky");
+
+    auto animator_view = loaded_registry.view<dse::Animator3DComponent>();
+    size_t animator_count = 0;
+    for (auto entity : animator_view) {
+        (void)entity;
+        ++animator_count;
+    }
+    REQUIRE(animator_count == 3);
+}
+
 TEST_CASE("Given_ReferenceDemo159Scene_When_CopiedIntoEditorRegistry_Then_EditorSceneIoRoundTripKeepsMaterialInteractionBaseline", "[engine][unit][scene][3d][editor][reference_demo]") {
     scene::Scene runtime_scene("runtime-reference-demo-15-9");
     REQUIRE(runtime_scene.Deserialize("assets/scenes/reference_demo_15_9.scene.json"));
@@ -172,7 +229,7 @@ TEST_CASE("Given_ReferenceDemo159Scene_When_CopiedIntoEditorRegistry_Then_Editor
     REQUIRE(loaded_registry.view<dse::SkyboxComponent>().begin() != loaded_registry.view<dse::SkyboxComponent>().end());
 
     auto skybox_view = loaded_registry.view<dse::SkyboxComponent>();
-    REQUIRE(skybox_view.begin() != skybox_view.end());
+    REQUIRE(skybox_view.begin() != loaded_registry.view<dse::SkyboxComponent>().end());
     const auto skybox_entity = *skybox_view.begin();
     const auto& skybox = skybox_view.get<dse::SkyboxComponent>(skybox_entity);
     REQUIRE(skybox.enabled);
@@ -186,6 +243,7 @@ TEST_CASE("Given_ReferenceDemo159Scene_When_CopiedIntoEditorRegistry_Then_Editor
     }
     REQUIRE(animator_count == 2);
 }
+
 
 TEST_CASE("Given_RuntimeOnly2DState_When_CopiedBetweenRegistries_Then_RuntimeFieldsAreResetForPlayExitRestore", "[engine][unit][scene][editor][copy_registry]") {
     entt::registry runtime_registry;

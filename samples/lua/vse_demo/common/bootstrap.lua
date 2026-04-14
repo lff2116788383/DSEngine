@@ -103,7 +103,18 @@ local function setup_directional_light(light)
     return entity
 end
 
+local function setup_skybox(skybox)
+    local cfg = skybox or {}
+    if cfg.enabled == false or type(cfg.cubemap_path) ~= "string" or cfg.cubemap_path == "" then
+        return nil
+    end
+    local entity = remember(dse.ecs.create_entity())
+    dse.ecs.add_skybox(entity, cfg.cubemap_path)
+    return entity
+end
+
 local function setup_ground(ground)
+
     local cfg = ground or {}
     return create_box_mesh(
         cfg.x or 0.0,

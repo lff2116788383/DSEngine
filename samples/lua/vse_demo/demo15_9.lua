@@ -58,6 +58,10 @@ end
 local function bind_reference_mesh_entities()
     state.left_entity = 1
     state.right_entity = 2
+    dse.ecs.set_mesh_material(state.left_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 0)
+    dse.ecs.set_mesh_material(state.right_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 1)
+    print("[VSE-Demo][15.9] material_instance_bound slot=left source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=0")
+    print("[VSE-Demo][15.9] material_instance_bound slot=right source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=1")
     apply_material_state()
 end
 
@@ -117,6 +121,7 @@ local demo_config = {
         "[VSE-Demo][15.9] 键盘调参：'-' / '=' 调左侧 roughness，'[' / ']' 调右侧 metallic。",
         "[VSE-Demo][15.9] 参考 scene: assets/scenes/reference_demo_15_9.scene.json",
         "[VSE-Demo][15.9] 当前已接入 Monster / MonsterLOD0 / OceanPlane cooked 资产。",
+        "[VSE-Demo][15.9] 左右展示位已分别绑定 Monster.dmat 的第 0 / 1 个材质槽，并继续叠加 Lua 标量调参。",
         "[VSE-Demo][15.9] 当前已接入最小目录式天空盒，并继续保留 SkyLight 作为环境光近似。"
     },
     camera = {

@@ -90,6 +90,20 @@ TEST_CASE("Given_ValidStartupScene_When_RuntimeStarts_Then_SceneModeLoadsAndLega
     REQUIRE(output.find("spawned=0/0") != std::string::npos);
 }
 
+TEST_CASE("Given_ReferenceDemo157StartupScene_When_RuntimeStarts_Then_MaterialShowcaseSceneLoadsWithoutKnownMissingResources", "[engine][smoke][cpp_runtime][startup_scene][reference_demo]") {
+    const std::string repoRoot = ResolveRepoRoot();
+    const std::string scenePath = "assets/scenes/reference_demo_15_7.scene.json";
+
+    const std::string output = RunSampleAndCapture(repoRoot, scenePath);
+    INFO(output);
+    REQUIRE(output.find("startup_scene_env=assets/scenes/reference_demo_15_7.scene.json") != std::string::npos);
+    REQUIRE(output.find("startup_scene_loaded path=assets/scenes/reference_demo_15_7.scene.json") != std::string::npos);
+    REQUIRE(output.find("mvp_resource_missing type=mesh path=assets/meshes/reference_demo_character_placeholder.fbx") == std::string::npos);
+    REQUIRE(output.find("mvp_resource_missing type=skybox path=assets/skyboxes/default_sky") == std::string::npos);
+    REQUIRE(output.find("status=PASS") != std::string::npos);
+    REQUIRE(output.find("spawned=0/0") != std::string::npos);
+}
+
 TEST_CASE("Given_ReferenceDemoStartupScene_When_RuntimeStarts_Then_ReferenceSceneLoadsWithoutKnownMissingResources", "[engine][smoke][cpp_runtime][startup_scene][reference_demo]") {
     const std::string repoRoot = ResolveRepoRoot();
     const std::string scenePath = "assets/scenes/reference_demo_15_8.scene.json";
@@ -103,6 +117,7 @@ TEST_CASE("Given_ReferenceDemoStartupScene_When_RuntimeStarts_Then_ReferenceScen
     REQUIRE(output.find("status=PASS") != std::string::npos);
     REQUIRE(output.find("spawned=0/0") != std::string::npos);
 }
+
 
 TEST_CASE("Given_ReferenceDemo159StartupScene_When_RuntimeStarts_Then_MaterialBootstrapLoadsWithoutKnownMissingResources", "[engine][smoke][cpp_runtime][startup_scene][reference_demo]") {
     const std::string repoRoot = ResolveRepoRoot();

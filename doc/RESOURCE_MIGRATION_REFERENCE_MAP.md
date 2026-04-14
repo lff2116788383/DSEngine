@@ -84,10 +84,20 @@
 - `reference/VSEngine2.1` 子模块当前仍存在，可作为第二阶段资源迁移输入源；
 - `assets/source/reference_demo/` 已开始建立，第一批 `Monster.FBX` / `MonsterLOD0.FBX` / `OceanPlane.FBX` 已迁入主仓；
 - `15.8 / 15.9` 相关 cooked 资产、材质贴图与 scene 主链已经接入运行时；
-- `default_sky` 已从占位路径切换到主仓目录式 skybox 资源，`3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已启用 `SkyboxComponent`；
+- `15.7` 已从程序化材质预览推进到真实模型 scene 主路径：`reference_demo_15_7.scene.json` 现已复用主仓 `Monster` / `OceanPlane` cooked 资产与目录式 skybox 资源；对应 Lua / scene / startup / editor bridge 回归源码已补齐并完成测试目标重编，`engine.lua_runtime.smoke`、`[skybox]`、`[scene][3d][reference_demo]` 与 `[editor][reference_demo]` 路径均已确认通过；当前展示位已从 3 组扩展到 5 组，并显式标记为 `MaterialInstance` 数据源语义，且 Lua 主路径已通过 `set_mesh_material(..., dmat, index)` 绑定 `Monster.dmat` 第 0 / 1 个材质槽，更贴近参考 demo 的材质观察目标；
+
+
+
+
+- `default_sky` 已从占位路径切换到主仓目录式 skybox 资源，`3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已启用 `SkyboxComponent`，且当前已补齐可稳定解码的最小 `.bmp` 六面资源，修复了此前 `.ppm` 占位面图在单测路径下的 cubemap 解码失败问题；
 - Editor 桥接链路已补齐 `SkyLight` / `SpotLight` 与 `MeshRenderer` 材质字段往返，`reference_demo` 场景桥接回归已通过；
 - Lua demo 15.8 / 15.9 的 smoke 已确认通过，reference scene 启动后 `missing_resource_count=0`；
+- `15.7 / 15.9` 已开始复用 `Monster.dmat` 的多材质槽运行时绑定：Lua `set_mesh_material(entity, dmat, index)` 现支持可选材质索引，`15.7` 左侧两个展示位与 `15.9` 左右两个展示位已分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽；
 - 当前主要剩余问题已从“是否可运行”转为“最终视觉质量提升”：后续重点是更高质量 skybox 原始资源、IBL、cooked skybox 资产链与截图基线。
+
+
+
+
 
 
 

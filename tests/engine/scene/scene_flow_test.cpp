@@ -408,6 +408,47 @@ TEST_CASE("Given_CheckedInMinimal3DMvpScene_When_Deserialized_Then_Core3DCompone
     REQUIRE(scene::RunMinimal3DMvpSceneRegressionSample("assets/scenes/3d_mvp_minimal.scene.json"));
 }
 
+TEST_CASE("Given_CheckedInReferenceDemo157Scene_When_Deserialized_Then_MaterialShowcaseBaselineComponentsArePresent", "[engine][unit][scene][3d][reference_demo]") {
+    scene::Scene loaded("reference-demo-15-7");
+    REQUIRE(loaded.Deserialize("assets/scenes/reference_demo_15_7.scene.json"));
+    REQUIRE(loaded.GetName() == "reference_demo_15_7");
+
+    auto mesh_view = loaded.GetWorld().registry().view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    size_t mesh_count = 0;
+    size_t showcase_mesh_count = 0;
+    size_t material_instance_mesh_count = 0;
+    for (auto entity : mesh_view) {
+        ++mesh_count;
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        if (mesh.material_instance_id == 420001 || mesh.material_instance_id == 420002 || mesh.material_instance_id == 420003 ||
+            mesh.material_instance_id == 420004 || mesh.material_instance_id == 420005) {
+            ++showcase_mesh_count;
+            if (mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance) {
+                ++material_instance_mesh_count;
+            }
+        }
+    }
+    REQUIRE(mesh_count >= 6);
+    REQUIRE(showcase_mesh_count == 5);
+    REQUIRE(material_instance_mesh_count == 5);
+
+
+    auto animator_view = loaded.GetWorld().registry().view<dse::Animator3DComponent>();
+    size_t animator_count = 0;
+    for (auto entity : animator_view) {
+        (void)entity;
+        ++animator_count;
+    }
+    REQUIRE(animator_count == 5);
+
+
+    REQUIRE(loaded.GetWorld().registry().view<dse::Camera3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Camera3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().begin() != loaded.GetWorld().registry().view<dse::DirectionalLight3DComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyLightComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyLightComponent>().end());
+    REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
+}
+
 TEST_CASE("Given_CheckedInReferenceDemo158Scene_When_Deserialized_Then_ReferenceDemoBaselineComponentsArePresent", "[engine][unit][scene][3d][reference_demo]") {
     scene::Scene loaded("reference-demo-15-8");
     REQUIRE(loaded.Deserialize("assets/scenes/reference_demo_15_8.scene.json"));
@@ -427,6 +468,7 @@ TEST_CASE("Given_CheckedInReferenceDemo158Scene_When_Deserialized_Then_Reference
     REQUIRE(loaded.GetWorld().registry().view<dse::SkyboxComponent>().begin() != loaded.GetWorld().registry().view<dse::SkyboxComponent>().end());
     REQUIRE(loaded.GetWorld().registry().view<dse::Animator3DComponent>().begin() != loaded.GetWorld().registry().view<dse::Animator3DComponent>().end());
 }
+
 
 TEST_CASE("Given_CheckedInReferenceDemo159Scene_When_Deserialized_Then_MaterialInteractionBaselineComponentsArePresent", "[engine][unit][scene][3d][reference_demo]") {
     scene::Scene loaded("reference-demo-15-9");

@@ -635,5 +635,25 @@
 - `3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已全部切到 `assets/source/reference_demo/shared/skybox/default_sky`，并启用 `SkyboxComponent`。
 - Editor 侧 `editor_scene_io` 已补齐 `SkyLightComponent` / `SpotLightComponent` 拷贝与 `MeshRendererComponent` 材质字段往返，`reference_demo` 场景桥接测试已恢复通过。
 - Lua demo 层已同步文案状态，`demo15_8.lua` / `demo15_9.lua` 启动 reference scene 时均可在 smoke 中稳定通过，且 `missing_resource_count=0`。
+- `demo15_7.lua` 已从“仅程序化材质预览”推进为“优先加载 `reference_demo_15_7.scene.json` 的真实模型展示主路径”，并在失败时回退到原有程序化预览；新 scene 已接入 5 个 `Monster` 展示位、`OceanPlane`、方向光、`SkyLight` 与目录式 skybox，当前观察语义已从 3 组材质近似推进到更贴近参考 demo 的 5 类材质观察位（PhoneTwoPass / Phone / BlinnPhone / OrenNayar / Custom）。
+- `reference_demo_15_7.scene.json` 的 5 个展示位已显式标记为 `MaterialInstance` 数据源语义，后续可逐步替换为真实导入的 `NewMonsterPhone*` / `Material*` 变体资产；本轮已重编 `dse_engine_unit_tests` 并确认 `Given_CheckedInReferenceDemo157Scene*` 基线通过。
+- `demo15_7.lua` 现已让左侧两个展示位显式调用 `set_mesh_material(..., "assets/cooked/reference_demo/shared/monster/Monster.dmat", index)`，分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，验证 Lua 层 `dmat -> MaterialInstance` 运行时路径可按材质索引接入当前 `15.7` 主线；其余展示位仍保留标量实例语义，等待后续真实变体资产。
+- 同一套 Lua `dmat` 材质索引能力已开始复用到 `demo15_9.lua`：左右展示位现分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，并继续叠加现有 metallic / roughness 交互覆盖。
+
+
+
+
+
+- `15.7 / 15.8 / 15.9` 现统一复用 `assets/source/reference_demo/shared/skybox/default_sky`；`default_sky` 已补齐可稳定解码的最小 `.bmp` 六面资源，修复了此前 `.ppm` 占位面图在单测路径下的 cubemap 解码失败问题。
+- 已重新编译 `dse_engine_unit_tests` 与 `dse_lua_runtime_tests`，并确认 `engine.lua_runtime.smoke` 继续通过；`[skybox]`、`[scene][3d][reference_demo]`、`[editor][reference_demo]` 标签测试现已全部通过，说明 `15.7` 新增 scene、Lua 主路径与 editor bridge 回归都已闭环。
+- 当前全量 `engine.unit` 仍存在与本轮改动无关的其他历史失败项，需后续单独排查；本轮 `15.7 / reference_demo / default_sky` 改动未引入新的相关失败。
+
+- `15.7 / 15.9` 当前都已开始复用 `Monster.dmat` 的多材质槽：Lua `set_mesh_material(entity, dmat, index)` 已支持可选材质索引，`15.7` 左侧两个展示位与 `15.9` 左右两个展示位现已分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，并继续叠加各自的 Lua 参数交互覆盖。
+- `lua_runtime_smoke_single_test.cpp` 已补强 dmat 材质索引回归：当前不仅验证 `set_mesh_material(..., dmat, 1)` 能创建有效 `MaterialInstance`，还验证同一 `dmat` 的第 0 / 1 个材质槽会生成不同的 `material_instance_id`，确保该能力具备可防回归门禁。
+
 - 当前仍未覆盖 HDR / DDS / KTX / IBL / cooked skybox 资产链，这些属于后续画质提升阶段，不阻塞本轮最小视觉闭环交付。
+
+
+
+
 

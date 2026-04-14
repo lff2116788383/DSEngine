@@ -38,6 +38,80 @@ void WriteTextFile(const std::string& path, const std::string& content) {
 }
 
 
+TEST_CASE("Smoke Snapshot - Lua demo 15.7 setup boots material showcase preview without runtime failure", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+    dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+
+    const std::string startup_path = MakeTempPath("runtime_smoke_demo15_7_startup.lua");
+    WriteTextFile(
+        startup_path,
+        "package.path = package.path .. ';samples/lua/?.lua;samples/lua/?/init.lua;samples/lua/?/?.lua'\n"
+        "local demo = require('vse_demo.demo15_7')\n"
+        "Awake = function() demo.Setup({ title = 'Smoke 15.7' }) end\n"
+        "Update = function(dt) demo.Update(dt) end\n");
+
+    World world;
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
+    SetStartupLuaScriptPath(startup_path);
+
+    REQUIRE(BootstrapLuaRuntime());
+    std::size_t transform_count_157 = 0;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        (void)entity;
+        ++transform_count_157;
+    }
+    REQUIRE(transform_count_157 == 10u);
+
+
+
+    TickLuaRuntime(0.016f);
+    ShutdownLuaRuntime();
+    ConfigureLuaApiContext(LuaApiContext{});
+    SetStartupLuaScriptPath("");
+}
+
+TEST_CASE("Smoke Snapshot - Lua set_mesh_material supports dmat material index binding", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+    dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+
+    const std::string startup_path = MakeTempPath("runtime_smoke_dmat_index_startup.lua");
+    WriteTextFile(
+        startup_path,
+        "local entity0 = dse.ecs.create_entity()\n"
+        "local entity1 = dse.ecs.create_entity()\n"
+        "Awake = function()\n"
+        "  dse.ecs.add_transform(entity0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)\n"
+        "  dse.ecs.add_mesh_renderer(entity0, 1.0, 1.0, 1.0, 1.0, { -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5 }, { 0, 1, 2 })\n"
+        "  dse.ecs.set_mesh_material(entity0, 'assets/cooked/reference_demo/shared/monster/Monster.dmat', 0)\n"
+        "  dse.ecs.add_transform(entity1, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0)\n"
+        "  dse.ecs.add_mesh_renderer(entity1, 1.0, 1.0, 1.0, 1.0, { -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5 }, { 0, 1, 2 })\n"
+        "  dse.ecs.set_mesh_material(entity1, 'assets/cooked/reference_demo/shared/monster/Monster.dmat', 1)\n"
+        "end\n"
+        "Update = function(dt) end\n");
+
+    World world;
+    AssetManager asset_manager;
+    ConfigureLuaApiContext(LuaApiContext{&world, {}, {}, {}, {}, &asset_manager});
+    SetStartupLuaScriptPath(startup_path);
+
+    REQUIRE(BootstrapLuaRuntime());
+    auto mesh_view = world.registry().view<dse::MeshRendererComponent>();
+    REQUIRE(mesh_view.begin() != mesh_view.end());
+    std::vector<unsigned int> material_ids;
+    for (auto entity : mesh_view) {
+        const auto& mesh = mesh_view.get<dse::MeshRendererComponent>(entity);
+        REQUIRE(mesh.material_instance_id != 0u);
+        REQUIRE(mesh.material_data_source == dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);
+        REQUIRE(mesh.albedo_texture_handle != 0u);
+        material_ids.push_back(mesh.material_instance_id);
+    }
+    REQUIRE(material_ids.size() == 2u);
+    REQUIRE(material_ids[0] != material_ids[1]);
+    ShutdownLuaRuntime();
+    ConfigureLuaApiContext(LuaApiContext{});
+    SetStartupLuaScriptPath("");
+}
+
+
 TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without known missing resources", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
@@ -48,6 +122,7 @@ TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without kn
         "local demo = require('vse_demo.demo15_8')\n"
         "Awake = function() demo.Setup({ title = 'Smoke 15.8' }) end\n"
         "Update = function(dt) end\n");
+
 
     World world;
     AssetManager asset_manager;

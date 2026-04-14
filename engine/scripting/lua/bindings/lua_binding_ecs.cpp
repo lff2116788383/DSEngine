@@ -695,7 +695,10 @@ int L_EcsSetMeshMaterial(lua_State* L) {
         // Check if second argument is a string (dmat path)
         if (lua_type(L, 2) == LUA_TSTRING) {
             std::string dmat_path = lua_tostring(L, 2);
-            auto material = GetAssetManager().LoadMaterialInstanceFromDmat(dmat_path);
+            const std::size_t material_index = lua_gettop(L) >= 3 && lua_isinteger(L, 3)
+                ? static_cast<std::size_t>(lua_tointeger(L, 3))
+                : 0u;
+            auto material = GetAssetManager().LoadMaterialInstanceFromDmat(dmat_path, material_index);
             if (material) {
                 mesh.material_instance_id = material->GetId();
                 mesh.material_data_source = MeshRendererComponent::MaterialDataSource::MaterialInstance;
