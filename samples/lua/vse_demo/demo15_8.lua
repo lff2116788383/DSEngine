@@ -33,7 +33,28 @@ local function try_load_reference_scene(scene_path)
 end
 
 
+local function print_visual_baseline_summary(config)
+    local runtime = config or demo_config
+    Bootstrap.PrintSceneSummary(runtime)
+    print(string.format(
+        "[VSE-Demo][15.8] visual_baseline camera=(%.1f,%.1f,%.1f) monster_mesh=%s ground_mesh=%s skybox=%s",
+        runtime.camera.x or 0.0,
+        runtime.camera.y or 0.0,
+        runtime.camera.z or 0.0,
+        "assets/cooked/reference_demo/shared/monster/Monster.dmesh",
+        "assets/cooked/reference_demo/shared/ocean_plane/OceanPlane.dmesh",
+        runtime.skybox and runtime.skybox.cubemap_path or "none"
+    ))
+end
+
+local function log_observer_checkpoints()
+    print("[VSE-Demo][15.8] observer_checkpoints hero=single_monster ground=ocean_plane skybox=default_sky")
+    print("[VSE-Demo][15.8] observer_hint free_camera=W/A/S/D + mouse")
+end
+
 local demo_config = {
+
+
 
     title = "DSEngine Lua Demo 15.8",
     intro_lines = {
@@ -47,12 +68,12 @@ local demo_config = {
 
     camera = {
         x = 0.0,
-        y = 6.0,
-        z = 18.0,
+        y = 5.4,
+        z = 15.5,
         pitch = -14.0,
         yaw = 0.0,
         roll = 0.0,
-        fov = 60.0,
+        fov = 52.0,
         priority = 100,
         free_camera = true,
         post_process = {
@@ -62,29 +83,35 @@ local demo_config = {
         }
     },
     light = {
-        dir_x = -0.45,
+        dir_x = -0.35,
         dir_y = -1.0,
-        dir_z = -0.45,
+        dir_z = -0.2,
         color_r = 1.0,
-        color_g = 0.97,
-        color_b = 0.92,
-        intensity = 1.8,
-        ambient = 0.12,
-        shadow = 0.45
+        color_g = 0.96,
+        color_b = 0.9,
+        intensity = 2.15,
+        ambient = 0.16,
+        shadow = 0.52
+    },
+    skybox = {
+        cubemap_path = "assets/source/reference_demo/shared/skybox/default_sky"
     },
     ground = {
+
         x = 0.0,
         y = -2.0,
         z = 0.0,
         sx = 40.0,
         sy = 1.0,
         sz = 40.0,
-        color = { 0.8, 0.8, 0.85, 1.0 },
+        color = { 0.66, 0.72, 0.8, 1.0 },
         material = {
-            metallic = 0.0,
-            roughness = 0.9,
+            metallic = 0.02,
+            roughness = 0.74,
             ao = 1.0,
-            emissive_strength = 0.0
+            emissive_strength = 0.02,
+            emissive_g = 0.015,
+            emissive_b = 0.02
         }
     },
     actors = {
@@ -95,13 +122,15 @@ local demo_config = {
             sx = 1.2,
             sy = 3.0,
             sz = 1.0,
-            color = { 0.92, 0.94, 1.0, 1.0 },
+            color = { 1.0, 0.98, 0.97, 1.0 },
             material = {
-                metallic = 0.05,
-                roughness = 0.65,
+                metallic = 0.04,
+                roughness = 0.52,
                 ao = 1.0,
-                emissive_strength = 0.03,
-                emissive_b = 0.18
+                emissive_strength = 0.02,
+                emissive_r = 0.015,
+                emissive_g = 0.012,
+                emissive_b = 0.02
             }
         },
         {
@@ -150,9 +179,10 @@ function Demo158.Setup(config)
         Bootstrap.SetupScene(merged)
         print("[VSE-Demo][15.8] fallback_scene_active programmatic_preview")
         print("[VSE-Demo][15.8] observer_hint free_camera=W/A/S/D + mouse")
-        print_visual_baseline_summary()
+        print_visual_baseline_summary(merged)
 
     end
+    log_observer_checkpoints()
 end
 
 

@@ -137,6 +137,21 @@ local function print_lines(lines)
     end
 end
 
+function Bootstrap.PrintSceneSummary(config)
+    local runtime = config or {}
+    local actor_count = type(runtime.actors) == "table" and #runtime.actors or 0
+    local skybox_path = ""
+    if type(runtime.skybox) == "table" and type(runtime.skybox.cubemap_path) == "string" then
+        skybox_path = runtime.skybox.cubemap_path
+    end
+    print(string.format(
+        "[VSE-Demo] fallback_scene_summary title=%s actors=%d skybox=%s",
+        tostring(runtime.title or ""),
+        actor_count,
+        skybox_path ~= "" and skybox_path or "none"
+    ))
+end
+
 function Bootstrap.SetupScene(config)
     created_entities = {}
     local runtime = config or {}
@@ -147,6 +162,7 @@ function Bootstrap.SetupScene(config)
     print_lines(runtime.intro_lines)
     setup_camera(runtime.camera)
     setup_directional_light(runtime.light)
+    setup_skybox(runtime.skybox)
     setup_ground(runtime.ground)
 
     if type(runtime.actors) == "table" then
@@ -169,6 +185,8 @@ function Bootstrap.SetupScene(config)
             print(line)
         end
     end
+
+    Bootstrap.PrintSceneSummary(runtime)
 end
 
 function Bootstrap.UpdateMaterialPreview(actors, channel, delta)

@@ -634,24 +634,17 @@
 - `15.8 / 15.9` 的 `SkyboxComponent` 已完成最小可运行闭环：`cubemap_path` 采用目录式约定，运行时按目录懒加载六面 cubemap，并通过现有 `DrawSkybox` 提交背景绘制。
 - `3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已全部切到 `assets/source/reference_demo/shared/skybox/default_sky`，并启用 `SkyboxComponent`。
 - Editor 侧 `editor_scene_io` 已补齐 `SkyLightComponent` / `SpotLightComponent` 拷贝与 `MeshRendererComponent` 材质字段往返，`reference_demo` 场景桥接测试已恢复通过。
-- Lua demo 层已同步文案状态，`demo15_8.lua` / `demo15_9.lua` 启动 reference scene 时均可在 smoke 中稳定通过，且 `missing_resource_count=0`。
+- Lua demo 层已继续推进到“reference scene 优先 + 程序化 fallback 兜底”的统一路径；`demo15_8.lua` / `demo15_9.lua` 当前都会输出 `visual_baseline`、`observer_checkpoints`、`fallback_scene_summary` 等人工观察日志，并补齐了天空盒、相机构图、灯光与材质参数的主线配置。
 - `demo15_7.lua` 已从“仅程序化材质预览”推进为“优先加载 `reference_demo_15_7.scene.json` 的真实模型展示主路径”，并在失败时回退到原有程序化预览；新 scene 已接入 5 个 `Monster` 展示位、`OceanPlane`、方向光、`SkyLight` 与目录式 skybox，当前观察语义已从 3 组材质近似推进到更贴近参考 demo 的 5 类材质观察位（PhoneTwoPass / Phone / BlinnPhone / OrenNayar / Custom）。
 - `reference_demo_15_7.scene.json` 的 5 个展示位已显式标记为 `MaterialInstance` 数据源语义，后续可逐步替换为真实导入的 `NewMonsterPhone*` / `Material*` 变体资产；本轮已重编 `dse_engine_unit_tests` 并确认 `Given_CheckedInReferenceDemo157Scene*` 基线通过。
 - `demo15_7.lua` 现已让左侧两个展示位显式调用 `set_mesh_material(..., "assets/cooked/reference_demo/shared/monster/Monster.dmat", index)`，分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，验证 Lua 层 `dmat -> MaterialInstance` 运行时路径可按材质索引接入当前 `15.7` 主线；其余展示位仍保留标量实例语义，等待后续真实变体资产。
 - 同一套 Lua `dmat` 材质索引能力已开始复用到 `demo15_9.lua`：左右展示位现分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，并继续叠加现有 metallic / roughness 交互覆盖。
-
-
-
-
-
 - `15.7 / 15.8 / 15.9` 现统一复用 `assets/source/reference_demo/shared/skybox/default_sky`；`default_sky` 已补齐可稳定解码的最小 `.bmp` 六面资源，修复了此前 `.ppm` 占位面图在单测路径下的 cubemap 解码失败问题。
-- 已重新编译 `dse_engine_unit_tests` 与 `dse_lua_runtime_tests`，并确认 `engine.lua_runtime.smoke` 继续通过；`[skybox]`、`[scene][3d][reference_demo]`、`[editor][reference_demo]` 标签测试现已全部通过，说明 `15.7` 新增 scene、Lua 主路径与 editor bridge 回归都已闭环。
-- 当前全量 `engine.unit` 仍存在与本轮改动无关的其他历史失败项，需后续单独排查；本轮 `15.7 / reference_demo / default_sky` 改动未引入新的相关失败。
-
-- `15.7 / 15.9` 当前都已开始复用 `Monster.dmat` 的多材质槽：Lua `set_mesh_material(entity, dmat, index)` 已支持可选材质索引，`15.7` 左侧两个展示位与 `15.9` 左右两个展示位现已分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽，并继续叠加各自的 Lua 参数交互覆盖。
-- `lua_runtime_smoke_single_test.cpp` 已补强 dmat 材质索引回归：当前不仅验证 `set_mesh_material(..., dmat, 1)` 能创建有效 `MaterialInstance`，还验证同一 `dmat` 的第 0 / 1 个材质槽会生成不同的 `material_instance_id`，确保该能力具备可防回归门禁。
-
-- 当前仍未覆盖 HDR / DDS / KTX / IBL / cooked skybox 资产链，这些属于后续画质提升阶段，不阻塞本轮最小视觉闭环交付。
+- `lua_runtime_smoke_single_test.cpp` 本轮已补充 RAII 清理守卫，并为 `15.8 / 15.9` 增加专用过滤标签，避免整组运行时的 Lua 全局状态串扰；`lua_test_main.cpp` 也已从 `quick_exit` 改为正常 `return`，减少 CTest 环境下的退出/输出异常。
+- `tests/engine/CMakeLists.txt` 已补齐 Lua 单测目标的 runtime DLL 拷贝、工作目录修复和 smoke 过滤收敛；同时尝试将 `dse_lua_runtime_smoke_single_test` 改造为单翻译单元入口，以绕开当前 Windows/VS 生成工程对 smoke 目标编译状态的异常复用。
+- 对第三方源码依赖，顶层 `CMakeLists.txt` 已统一关闭 `ASSIMP_INSTALL` / `ENTT_INSTALL`，并在 `depends/assimp` / `depends/entt-3.13.0` 中对 package config / export 逻辑做了最小 install 场景收口，当前 `cmake -S . -B build_vs2022 ...` 已恢复成功。
+- 当前**已经确认通过**的验证包括：`15.7` 单独 smoke 用例通过、`15.8` 单独 smoke 用例通过；其中 `15.8` 已实际验证 `startup_scene_loaded`、`missing_resource_count=0`、相机/FOV/灯光强度/阴影强度断言全部通过。
+- 当前**尚未闭环**的唯一阻塞是：Windows + VS 生成工程下，`dse_lua_runtime_smoke_single_test(_v2)` 目标仍未稳定产出 exe，导致 `engine.lua_runtime.smoke` 的整组 CTest 门禁暂时无法完整跑通；这属于本机构建链问题，而不是 `DOC-20` 本轮 Lua demo 对齐实现本身的阻塞。
 
 ---
 

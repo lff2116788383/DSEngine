@@ -52,10 +52,11 @@ int main(int argc, char* argv[]) {
     Catch::Session session;
     const int cli_result = session.applyCommandLine(argc, argv);
     if (cli_result != 0) {
-        std::quick_exit(cli_result);
+        return cli_result;
     }
 
     const int result = session.run();
     PauseOnFailureIfNeeded(result);
-    std::quick_exit(result);
+    return result;
 }
+

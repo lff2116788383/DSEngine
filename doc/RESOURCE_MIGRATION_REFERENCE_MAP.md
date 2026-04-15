@@ -84,22 +84,20 @@
 - `reference/VSEngine2.1` 子模块当前仍存在，可作为第二阶段资源迁移输入源；
 - `assets/source/reference_demo/` 已开始建立，第一批 `Monster.FBX` / `MonsterLOD0.FBX` / `OceanPlane.FBX` 已迁入主仓；
 - `15.8 / 15.9` 相关 cooked 资产、材质贴图与 scene 主链已经接入运行时；
-- `15.7` 已从程序化材质预览推进到真实模型 scene 主路径：`reference_demo_15_7.scene.json` 现已复用主仓 `Monster` / `OceanPlane` cooked 资产与目录式 skybox 资源；对应 Lua / scene / startup / editor bridge 回归源码已补齐并完成测试目标重编，`engine.lua_runtime.smoke`、`[skybox]`、`[scene][3d][reference_demo]` 与 `[editor][reference_demo]` 路径均已确认通过；当前展示位已从 3 组扩展到 5 组，并显式标记为 `MaterialInstance` 数据源语义，且 Lua 主路径已通过 `set_mesh_material(..., dmat, index)` 绑定 `Monster.dmat` 第 0 / 1 个材质槽，更贴近参考 demo 的材质观察目标；
-
-
-
-
+- `15.7` 已从程序化材质预览推进到真实模型 scene 主路径：`reference_demo_15_7.scene.json` 现已复用主仓 `Monster` / `OceanPlane` cooked 资产与目录式 skybox 资源；对应 Lua / scene / startup / editor bridge 回归源码已补齐并完成测试目标重编，`[skybox]`、`[scene][3d][reference_demo]` 与 `[editor][reference_demo]` 路径均已确认通过；当前展示位已从 3 组扩展到 5 组，并显式标记为 `MaterialInstance` 数据源语义，且 Lua 主路径已通过 `set_mesh_material(..., dmat, index)` 绑定 `Monster.dmat` 第 0 / 1 个材质槽，更贴近参考 demo 的材质观察目标；
 - `default_sky` 已从占位路径切换到主仓目录式 skybox 资源，`3d_mvp_minimal`、`reference_demo_15_8`、`reference_demo_15_9` 已启用 `SkyboxComponent`，且当前已补齐可稳定解码的最小 `.bmp` 六面资源，修复了此前 `.ppm` 占位面图在单测路径下的 cubemap 解码失败问题；
 - Editor 桥接链路已补齐 `SkyLight` / `SpotLight` 与 `MeshRenderer` 材质字段往返，`reference_demo` 场景桥接回归已通过；
-- Lua demo 15.8 / 15.9 的 smoke 已确认通过，reference scene 启动后 `missing_resource_count=0`；
+- Lua demo 15.8 / 15.9 的实现层已继续推进到“reference scene 优先 + 程序化 fallback 兜底”的统一路径，`demo15_8.lua` / `demo15_9.lua` 目前都会输出 `visual_baseline`、`observer_checkpoints`、`fallback_scene_summary` 等人工观察日志；
 - `15.7 / 15.9` 已开始复用 `Monster.dmat` 的多材质槽运行时绑定：Lua `set_mesh_material(entity, dmat, index)` 现支持可选材质索引，`15.7` 左侧两个展示位与 `15.9` 左右两个展示位已分别绑定 `Monster.dmat` 的第 0 / 1 个材质槽；
 - `15.8 / 15.9` 已补入最终视觉质量参数基线：相机构图、方向光、SkyLight、角色材质与地面材质均已进入 scene 级断言；
 - `15.9` 额外修复了 Lua runtime 的左右角色实体绑定问题：不再硬编码 scene JSON 的实体 id，而是通过最小只读 Lua 查询接口按 `mesh_path + 位置` 识别左右展示实体；
-- `dse_lua_runtime_smoke_single_test.exe -s` 当前已能稳定覆盖并通过 `15.8 / 15.9` 的最小视觉状态基线；
+- **当前已确认通过**：`15.7` 单独 smoke、`15.8` 单独 smoke；其中 `15.8` 已实际验证 `startup_scene_loaded`、`missing_resource_count=0` 以及相机/FOV/灯光断言全部通过；
+- **当前仍未闭环**：`dse_lua_runtime_smoke_single_test(_v2)` 在本机 Windows + VS 生成工程下仍未稳定产出 exe，因此 `engine.lua_runtime.smoke` 的整组 CTest 门禁尚未完整恢复；这属于测试 target 的本机构建链问题，而不是本轮 Lua demo 对齐实现本身的阻塞；
 - 仓库当前尚无完整运行时截图 / framebuffer readback / PNG golden comparison 链路，但已具备 `RenderTarget` / `FramePipeline` / `stb_image_write` 等可复用底座；
 - 下一阶段如需补首张视觉基线，建议只针对 `reference_demo_15_9` 增加单场景、固定分辨率、固定帧数、弱约束图像比较的最小截图专项；
 - 代码层面的真实改造入口已基本确认：`engine/render/rhi/rhi_device.h/.cpp` 已完成 readback，后续由 `engine/runtime/frame_pipeline.*` 暴露截图源 render target，再由 `engine/runtime/engine_app.cpp` 或测试 helper 负责 PNG 导出；
-- 当前主要剩余问题已从“是否可运行”转为“真实截图基线与更高质量渲染”：后续重点是可复用 screenshot 基础设施、更高质量 skybox 原始资源、IBL 与 cooked skybox 资产链。
+- 当前主要剩余问题已从“是否可运行”转为“两类问题并行存在”：一类是 Lua smoke 测试目标本机构建链尚未闭环，另一类是后续更高质量截图基线、IBL 与 cooked skybox 资产链仍待推进。
+
 
 
 

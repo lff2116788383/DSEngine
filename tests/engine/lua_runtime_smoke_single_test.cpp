@@ -40,7 +40,9 @@ void WriteTextFile(const std::string& path, const std::string& content) {
 
 
 TEST_CASE("Smoke Snapshot - Lua demo 15.7 setup boots material showcase preview without runtime failure", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+    ScopedLuaApiContextReset scoped_context_reset;
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+
 
     const std::string startup_path = MakeTempPath("runtime_smoke_demo15_7_startup.lua");
     WriteTextFile(
@@ -113,8 +115,10 @@ TEST_CASE("Smoke Snapshot - Lua set_mesh_material supports dmat material index b
 }
 
 
-TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without known missing resources", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without known missing resources", "[engine][smoke][snapshot][lua_runtime][lua_demo][vse_demo_15_8_15_9]") {
+    ScopedLuaApiContextReset scoped_context_reset;
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
+
 
     const std::string startup_path = MakeTempPath("runtime_smoke_demo15_8_startup.lua");
     WriteTextFile(
@@ -161,7 +165,7 @@ TEST_CASE("Smoke Snapshot - Lua demo 15.8 setup loads reference scene without kn
 }
 
 
-TEST_CASE("Smoke Snapshot - Lua demo 15.9 setup loads reference scene and keeps material showcase entities bound", "[engine][smoke][snapshot][lua_runtime][lua_demo]") {
+TEST_CASE("Smoke Snapshot - Lua demo 15.9 setup loads reference scene and keeps material showcase entities bound", "[engine][smoke][snapshot][lua_runtime][lua_demo][vse_demo_15_8_15_9]") {
     dse::debug::SetLogLevel(dse::debug::LogLevel::Off);
 
     const std::string startup_path = MakeTempPath("runtime_smoke_demo15_9_startup.lua");

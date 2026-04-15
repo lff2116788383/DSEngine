@@ -276,9 +276,10 @@ target_link_libraries(${DSE_LUA_RUNTIME_TEST_TARGET}
 
 set(DSE_LUA_RUNTIME_CORE_SINGLE_TARGET dse_lua_runtime_core_single_test)
 add_executable(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
-    lua_test_main.cpp
+    main.cpp
     lua_runtime_core_single_test.cpp
 )
+
 target_include_directories(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
@@ -291,12 +292,15 @@ if(MSVC)
     target_compile_options(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE /utf-8)
 endif()
 target_link_libraries(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PRIVATE dse_engine)
+set_property(TARGET ${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET} PROPERTY LINK_LIBRARY_DEPENDENCIES ON)
 
-set(DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET dse_lua_runtime_smoke_single_test)
+
+set(DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET dse_lua_runtime_smoke_single_test_v2)
 add_executable(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
-    lua_test_main.cpp
-    lua_runtime_smoke_single_test.cpp
+    lua_runtime_smoke_entry.cpp
 )
+
+
 target_include_directories(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
@@ -312,9 +316,10 @@ target_link_libraries(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} PRIVATE dse_engine)
 
 set(DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET dse_lua_resource_injection_single_test)
 add_executable(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
-    lua_test_main.cpp
+    main.cpp
     lua_resource_injection_test.cpp
 )
+
 target_include_directories(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
@@ -327,6 +332,8 @@ if(MSVC)
     target_compile_options(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PRIVATE /utf-8)
 endif()
 target_link_libraries(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PRIVATE dse_engine)
+set_property(TARGET ${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET} PROPERTY LINK_LIBRARY_DEPENDENCIES ON)
+
 
 add_test(
     NAME engine.lua_runtime
@@ -341,14 +348,19 @@ set_tests_properties(engine.lua_runtime PROPERTIES
 
 add_test(
     NAME engine.lua_runtime.smoke
-    COMMAND ${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET}
+    COMMAND ${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET} "[vse_demo_15_8_15_9]"
 )
+
+
 set_tests_properties(engine.lua_runtime.smoke PROPERTIES
     LABELS "engine;smoke;snapshot;lua_runtime"
     PASS_REGULAR_EXPRESSION "All tests passed"
-    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-    TIMEOUT 15
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "DSE_NO_TEST_PAUSE=1"
+    TIMEOUT 30
 )
+
+
 
 add_test(
     NAME engine.resource_injection
@@ -392,10 +404,11 @@ add_test(
 
 set_tests_properties(engine.cpp_runtime PROPERTIES
     LABELS "engine;unit;cpp_runtime;resource_injection;gate"
-    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     TIMEOUT 15
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
+
 
 add_test(
     NAME engine.runtime_host.integration
@@ -413,3 +426,7 @@ add_dependencies(${DSE_ENGINE_TEST_TARGET} DSEngine_example_cpp dse_example_lua)
 
 dse_copy_runtime_dlls(${DSE_ENGINE_TEST_TARGET})
 dse_copy_runtime_dlls(${DSE_LUA_RUNTIME_TEST_TARGET})
+dse_copy_runtime_dlls(${DSE_LUA_RUNTIME_CORE_SINGLE_TARGET})
+dse_copy_runtime_dlls(${DSE_LUA_RUNTIME_SMOKE_SINGLE_TARGET})
+dse_copy_runtime_dlls(${DSE_LUA_RESOURCE_INJECTION_SINGLE_TARGET})
+

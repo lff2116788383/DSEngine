@@ -171,12 +171,12 @@ local demo_config = {
     },
     camera = {
         x = 0.0,
-        y = 7.5,
-        z = 20.0,
+        y = 6.2,
+        z = 17.8,
         pitch = -16.0,
         yaw = 0.0,
         roll = 0.0,
-        fov = 60.0,
+        fov = 50.0,
         priority = 100,
         free_camera = true,
         post_process = {
@@ -186,29 +186,35 @@ local demo_config = {
         }
     },
     light = {
-        dir_x = -0.45,
+        dir_x = -0.28,
         dir_y = -1.0,
-        dir_z = -0.45,
+        dir_z = -0.18,
         color_r = 1.0,
-        color_g = 0.97,
-        color_b = 0.92,
-        intensity = 1.8,
-        ambient = 0.12,
-        shadow = 0.45
+        color_g = 0.95,
+        color_b = 0.9,
+        intensity = 2.25,
+        ambient = 0.17,
+        shadow = 0.55
+    },
+    skybox = {
+        cubemap_path = "assets/source/reference_demo/shared/skybox/default_sky"
     },
     ground = {
+
         x = 0.0,
         y = -2.0,
         z = 0.0,
         sx = 48.0,
         sy = 1.0,
         sz = 48.0,
-        color = { 0.8, 0.8, 0.85, 1.0 },
+        color = { 0.64, 0.7, 0.8, 1.0 },
         material = {
-            metallic = 0.0,
-            roughness = 0.9,
+            metallic = 0.03,
+            roughness = 0.7,
             ao = 1.0,
-            emissive_strength = 0.0
+            emissive_strength = 0.02,
+            emissive_g = 0.015,
+            emissive_b = 0.02
         }
     },
     actors = {
@@ -219,13 +225,13 @@ local demo_config = {
             sx = 1.1,
             sy = 2.8,
             sz = 1.0,
-            color = { 0.95, 0.95, 1.0, 1.0 },
+            color = { 0.9, 0.92, 0.98, 1.0 },
             material = {
-                metallic = 0.08,
-                roughness = 0.55,
+                metallic = 0.03,
+                roughness = 0.78,
                 ao = 1.0,
-                emissive_strength = 0.05,
-                emissive_b = 0.20
+                emissive_strength = 0.08,
+                emissive_b = 0.08
             }
         },
         {
@@ -235,13 +241,14 @@ local demo_config = {
             sx = 1.1,
             sy = 2.8,
             sz = 1.0,
-            color = { 1.0, 0.9, 0.85, 1.0 },
+            color = { 1.0, 0.86, 0.78, 1.0 },
             material = {
-                metallic = 0.12,
-                roughness = 0.30,
+                metallic = 0.38,
+                roughness = 0.18,
                 ao = 1.0,
                 emissive_strength = 0.08,
-                emissive_r = 0.24
+                emissive_r = 0.08,
+                emissive_g = 0.01
             }
         }
     }
@@ -260,10 +267,13 @@ function Demo159.Setup(config)
         state.left_entity = 1
         state.right_entity = 2
         apply_material_state()
-        print_visual_baseline_summary()
+        print_visual_baseline_summary(merged)
 
     end
+
+    log_observer_checkpoints()
     log_material_state("material_bootstrap")
+
 
     state.initialized = true
 end
