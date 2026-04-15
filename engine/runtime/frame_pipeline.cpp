@@ -102,12 +102,18 @@ bool FramePipeline::Init() {
     const int render_width = Screen::width();
     const int render_height = Screen::height();
     
-    if (runtime_context_.editor_mode) {
-        // 在编辑器模式下，将最终合成结果输出到一个纹理中，而不是直接输出到屏幕
-        render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, false});
-    } else {
-        render_resources_.main_render_target = 0;
-    }
+    // 始终创建最终合成 RenderTarget：editor 直接展示该纹理，runtime 再 present 到默认 framebuffer。
+    RenderTargetDesc main_rt_desc{};
+    main_rt_desc.width = render_width;
+    main_rt_desc.height = render_height;
+    main_rt_desc.has_color = true;
+    main_rt_desc.has_depth = false;
+    render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget(main_rt_desc);
+
+
+
+
+
     
     // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
     render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
@@ -825,7 +831,24 @@ void FramePipeline::BuildRenderGraphInternal() {
             cmd_buffer.EndRenderPass();
         }
     });
+
+    if (!runtime_context_.editor_mode) {
+        render_graph_passes_.push_back({
+            "present_pass",
+            [this](CommandBuffer& cmd_buffer) {
+                const unsigned int main_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
+                if (main_color == 0) {
+                    return;
+                }
+                cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
+                cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
+                cmd_buffer.DrawPostProcess(main_color, "copy", {});
+                cmd_buffer.EndRenderPass();
+            }
+        });
+    }
 }
+
 
 void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
@@ -879,6 +902,34 @@ unsigned int FramePipeline::GetSceneTextureId() const {
 unsigned int FramePipeline::GetMainTextureId() const {
     if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) return 0;
     return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
+}
+
+std::vector<unsigned char> FramePipeline::ReadSceneColorRgba8() const {
+    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) {
+        return {};
+    }
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8(render_resources_.scene_render_target);
+}
+
+RenderTargetReadback FramePipeline::ReadSceneColorRgba8WithSize() const {
+    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) {
+        return {};
+    }
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.scene_render_target);
+}
+
+std::vector<unsigned char> FramePipeline::ReadMainColorRgba8() const {
+    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) {
+        return {};
+    }
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8(render_resources_.main_render_target);
+}
+
+RenderTargetReadback FramePipeline::ReadMainColorRgba8WithSize() const {
+    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) {
+        return {};
+    }
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.main_render_target);
 }
 
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {

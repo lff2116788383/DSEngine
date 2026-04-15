@@ -24,6 +24,7 @@ set(DSE_ENGINE_TEST_SOURCES
     editor/editor_undo_test.cpp
     runtime/runtime_access_test.cpp
     runtime/frame_pipeline_static_regression_test.cpp
+    runtime/reference_demo_screenshot_test.cpp
     cpp_runtime_startup_scene_test.cpp
     mesh_material_desc_test.cpp
     mesh_render_material_desc_static_test.cpp
@@ -409,6 +410,18 @@ set_tests_properties(engine.cpp_runtime PROPERTIES
     PASS_REGULAR_EXPRESSION "All tests passed"
 )
 
+
+add_test(
+    NAME engine.reference_demo.screenshot
+    COMMAND ${DSE_ENGINE_TEST_TARGET} "[reference_demo][screenshot]"
+)
+
+set_tests_properties(engine.reference_demo.screenshot PROPERTIES
+    LABELS "engine;smoke;snapshot;reference_demo;screenshot"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "All tests passed"
+)
 
 add_test(
     NAME engine.runtime_host.integration

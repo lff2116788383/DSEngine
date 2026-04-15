@@ -149,7 +149,30 @@ public:
      */
     unsigned int GetMainTextureId() const;
 
-private:
+    /**
+     * @brief 读取上一帧场景渲染目标的 RGBA8 像素，用于截图和图像回归
+     * @return 像素缓冲，失败或未初始化时返回空数组
+     */
+    std::vector<unsigned char> ReadSceneColorRgba8() const;
+
+    /**
+     * @brief 读取上一帧场景渲染目标的尺寸与 RGBA8 像素，用于截图导出
+     * @return 包含宽高与像素缓冲的读回结果
+     */
+    RenderTargetReadback ReadSceneColorRgba8WithSize() const;
+
+    /**
+     * @brief 读取上一帧最终合成渲染目标的 RGBA8 像素，用于编辑器与截图验证
+     * @return 像素缓冲，失败或未初始化时返回空数组
+     */
+    std::vector<unsigned char> ReadMainColorRgba8() const;
+
+    /**
+     * @brief 读取上一帧最终合成渲染目标的尺寸与 RGBA8 像素，用于编辑器截图验证
+     * @return 包含宽高与像素缓冲的读回结果
+     */
+    RenderTargetReadback ReadMainColorRgba8WithSize() const;
+
     struct RenderGraphPass {
         std::string name;
         std::function<void(CommandBuffer&)> execute;

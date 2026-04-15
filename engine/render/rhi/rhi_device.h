@@ -151,7 +151,14 @@ struct PipelineStateDesc {
     unsigned int cull_face = 0x0405; // GL_BACK
 };
 
+struct RenderTargetReadback {
+    int width = 0;
+    int height = 0;
+    std::vector<unsigned char> pixels;
+};
+
 class OpenGLRhiDevice;
+
 
 // Simple Command Buffer abstraction for Phase 1
 /**
@@ -392,6 +399,7 @@ public:
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
+    virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
 
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
@@ -476,6 +484,7 @@ public:
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
 
     
     /**

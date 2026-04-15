@@ -18,6 +18,8 @@
 #include <cstdlib>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
+#include <string>
 
 #ifndef STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -41,7 +43,66 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
 void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
     Input::RecordMousePosition(xpos, ypos);
 }
+
+std::string ReadNonEmptyEnv(const char* name) {
+    if (const char* value = std::getenv(name)) {
+        if (value[0] != '\0') {
+            return value;
+        }
+    }
+    return {};
 }
+
+void FlipImageRowsRgba8(std::vector<unsigned char>& pixels, int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+
+    const std::size_t row_bytes = static_cast<std::size_t>(width) * 4u;
+    std::vector<unsigned char> row(row_bytes, 0u);
+    for (int y = 0; y < height / 2; ++y) {
+        auto* top = pixels.data() + static_cast<std::size_t>(y) * row_bytes;
+        auto* bottom = pixels.data() + static_cast<std::size_t>(height - 1 - y) * row_bytes;
+        std::copy(top, top + row_bytes, row.begin());
+        std::copy(bottom, bottom + row_bytes, top);
+        std::copy(row.begin(), row.end(), bottom);
+    }
+}
+
+bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
+    const std::string screenshot_path = ReadNonEmptyEnv("DSE_SCREENSHOT_PATH");
+    if (screenshot_path.empty()) {
+        return true;
+    }
+
+    const std::string target = ReadNonEmptyEnv("DSE_SCREENSHOT_TARGET");
+    RenderTargetReadback readback = (target == "main")
+        ? pipeline.ReadMainColorRgba8WithSize()
+        : pipeline.ReadSceneColorRgba8WithSize();
+    if (readback.pixels.empty() || readback.width <= 0 || readback.height <= 0) {
+        std::cerr << "Failed to capture screenshot pixels\n";
+        return false;
+    }
+
+    const std::size_t expected_size = static_cast<std::size_t>(readback.width) * static_cast<std::size_t>(readback.height) * 4u;
+    if (readback.pixels.size() != expected_size) {
+        std::cerr << "Unexpected screenshot pixel buffer size\n";
+        return false;
+    }
+
+    FlipImageRowsRgba8(readback.pixels, readback.width, readback.height);
+    std::filesystem::create_directories(std::filesystem::path(screenshot_path).parent_path());
+    if (stbi_write_png(screenshot_path.c_str(), readback.width, readback.height, 4, readback.pixels.data(), readback.width * 4) == 0) {
+        std::cerr << "Failed to write screenshot png: " << screenshot_path << "\n";
+        return false;
+    }
+
+    std::cout << "DSE_SCREENSHOT_WRITTEN path=" << screenshot_path << " target=" << (target == "main" ? "main" : "scene")
+              << " size=" << readback.width << "x" << readback.height << std::endl;
+    return true;
+}
+}
+
 
 EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config), services_(config.services) {
     if (services_.world == nullptr && config_.world != nullptr) {
@@ -225,8 +286,11 @@ int EngineInstance::Run() {
         }
     }
 
+    const bool screenshot_ok = CaptureRuntimeScreenshot(*pipeline_);
+
+
     Shutdown();
-    return 0;
+    return screenshot_ok ? 0 : -2;
 }
 
 int RunEngine(const EngineRunConfig& config) {

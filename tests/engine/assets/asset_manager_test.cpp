@@ -47,6 +47,7 @@ public:
     unsigned int GetRenderTargetColorTexture(unsigned int) const override { return 1; }
     unsigned int GetRenderTargetDepthTexture(unsigned int) const override { return 1; }
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int) const override { return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int) const override { return {}; }
 
     unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override {
         ++create_texture2d_calls;

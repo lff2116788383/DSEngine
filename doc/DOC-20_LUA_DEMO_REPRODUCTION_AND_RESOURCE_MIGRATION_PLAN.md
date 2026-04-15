@@ -744,9 +744,22 @@
 ### 12.8 当前截图专项进度结论
 
 - **已完成**：RHI 层最小 readback API 已落地，新增 `ReadRenderTargetColorRgba8`，并通过 `dse_engine_unit_tests.exe [render][rhi]` 回归；
-- **未完成**：runtime/test 层尚未补“跑固定帧数后导出 PNG”的统一入口；
-- **未完成**：尚未落第一张 `reference_demo_15_9` 的基线图与弱约束图像比较；
-- **当前建议**：下一轮优先补 PNG 导出入口，而不是继续扩大 readback 能力边界。
+- **已完成**：runtime 层已补上最小 PNG 导出入口；当前可通过环境变量 `DSE_SCREENSHOT_PATH` 指定输出路径，并用 `DSE_SCREENSHOT_TARGET=scene|main` 选择读取 `scene_render_target` 或 `main_render_target`；导出时会基于实际 RenderTarget 尺寸做 readback 与 PNG 写出，而不是继续假设窗口 framebuffer 尺寸；
+- **已完成**：`tests/engine/runtime/reference_demo_screenshot_test.cpp` 已新增 `reference_demo_15_9` 单场景截图专项，并注册为 `engine.reference_demo.screenshot`；当前专项已确认通过，验证口径包括：startup scene 成功加载、PNG 文件真实写出、文件头为 PNG 签名、`IDAT` 载荷非空且可得到非零弱约束 hash；同时已进一步补上 PNG 解码后的最小区域统计，当前会校验中央主体区域与天空区域均非纯黑、且天空区域保持 `blue >= red` 的冷色背景特征；
+- **已完成**：runtime 渲染闭环已继续向前推进：当前 `composite_pass` 会先把 scene / UI 合成到 `main_render_target`，runtime 非 editor 模式下也已补入 `present_pass`，会把 `main` 纹理再绘制回默认 framebuffer，避免最终合成结果只停留在离屏目标中；
+- **本轮修复与复核结论**：此前 `main_render_target` 的首个问题是 `RenderTargetDesc` 聚合参数错位，旧代码等价于创建 `has_color=false, has_depth=false` 的空 FBO；当前已改为显式字段赋值。随后尝试把 `composite_pass` / `present_pass` 的全屏复制改为 `DrawPostProcess(..., "copy", {})`，但最新复核显示：`main` PNG 现在可以写出且日志可显示 `target=main`，但解码后中心/天空区域仍为全黑。因此当前稳定门禁仍保持在 `scene` 读回，`main` 内容写入问题继续作为后续专项排查项；
+- **未完成**：尚未引入真正的 golden PNG 基线文件管理，也还没有做左右展示位的区域均值/高光分布等更细粒度图像比较；另外，`main_render_target` 当前虽然已能导出 PNG，但内容仍为全黑，后续需要继续排查 `composite_pass` 的实际绘制结果为何未反映到读回内容中；
+- **当前建议**：下一轮若继续推进，应优先围绕 `main_render_target` 做更小粒度诊断（例如新增只渲染纯色/单纹理 copy 的最小 RHI 或 runtime 测试），在确认最终合成内容真正进入 `main` 后，再正式把截图门禁切换到 `main` 目标；在此之前，`reference_demo_15_9` 继续沿用 `scene` 读回 + 中央/天空区域弱约束作为稳定基线。
+
+
+
+
+
+
+
+
+
+
 
 
 
