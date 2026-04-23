@@ -3,7 +3,9 @@
 #include "engine/core/module.h"
 
 // 3D Systems
+#if defined(DSE_ENABLE_PHYSX) && defined(DSE_HAS_PHYSX_LIBS)
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
@@ -27,7 +29,9 @@ public:
         if (asset_manager == nullptr) {
             return false;
         }
+#if defined(DSE_ENABLE_PHYSX) && defined(DSE_HAS_PHYSX_LIBS)
         physics3d_system_.Init(world);
+#endif
         mesh_render_system_.SetAssetManager(asset_manager);
         animator_system_.SetAssetManager(asset_manager);
         particle3d_system_.SetAssetManager(asset_manager);
@@ -44,7 +48,12 @@ public:
     }
 
     void OnFixedUpdate(World& world, float fixed_delta_time) override {
+#if defined(DSE_ENABLE_PHYSX) && defined(DSE_HAS_PHYSX_LIBS)
         physics3d_system_.FixedUpdate(world, fixed_delta_time);
+#else
+        (void)world;
+        (void)fixed_delta_time;
+#endif
     }
 
     void OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) override {
@@ -106,7 +115,9 @@ public:
     }
 
     void OnShutdown(World& world) override {
+#if defined(DSE_ENABLE_PHYSX) && defined(DSE_HAS_PHYSX_LIBS)
         physics3d_system_.Shutdown();
+#endif
         particle3d_system_.Shutdown(world);
         mesh_render_system_.SetAssetManager(nullptr);
         animator_system_.SetAssetManager(nullptr);
@@ -114,7 +125,9 @@ public:
     }
 
 private:
+#if defined(DSE_ENABLE_PHYSX) && defined(DSE_HAS_PHYSX_LIBS)
     physics3d::Physics3DSystem physics3d_system_;
+#endif
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     FrustumCullingSystem frustum_culling_system_;
@@ -126,3 +139,4 @@ private:
 
 } // namespace gameplay3d
 } // namespace dse
+

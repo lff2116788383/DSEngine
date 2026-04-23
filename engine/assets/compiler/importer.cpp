@@ -16,8 +16,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <assimp/Importer.hpp>
+#include <assimp/material.h>
+#include <assimp/mesh.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <cctype>
 #include <cstdio>
+#include <cstring>
 
 
 
@@ -62,7 +67,15 @@ std::string DecodeBase64Data(const std::string& encoded) {
 }
 
 glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
+    glm::mat4 result(1.0f);
+    result[0][0] = matrix.a1; result[1][0] = matrix.a2; result[2][0] = matrix.a3; result[3][0] = matrix.a4;
+    result[0][1] = matrix.b1; result[1][1] = matrix.b2; result[2][1] = matrix.b3; result[3][1] = matrix.b4;
+    result[0][2] = matrix.c1; result[1][2] = matrix.c2; result[2][2] = matrix.c3; result[3][2] = matrix.c4;
+    result[0][3] = matrix.d1; result[1][3] = matrix.d2; result[2][3] = matrix.d3; result[3][3] = matrix.d4;
+    return result;
+}
 
+bool MaterializeAsciiGltfBufferDataUris(std::string& source, const std::filesystem::path& source_file, std::vector<std::filesystem::path>& temp_files) {
     constexpr const char* kPrefix = "data:application/octet-stream;base64,";
     bool changed = false;
     std::size_t search_from = 0;
@@ -105,15 +118,6 @@ glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
     return changed;
 }
 
-
-
-    glm::mat4 result(1.0f);
-    result[0][0] = matrix.a1; result[1][0] = matrix.a2; result[2][0] = matrix.a3; result[3][0] = matrix.a4;
-    result[0][1] = matrix.b1; result[1][1] = matrix.b2; result[2][1] = matrix.b3; result[3][1] = matrix.b4;
-    result[0][2] = matrix.c1; result[1][2] = matrix.c2; result[2][2] = matrix.c3; result[3][2] = matrix.c4;
-    result[0][3] = matrix.d1; result[1][3] = matrix.d2; result[2][3] = matrix.d3; result[3][3] = matrix.d4;
-    return result;
-}
 
 std::string ResolveAssimpTexturePath(const std::filesystem::path& source_file, const aiMaterial* material, aiTextureType type) {
     if (!material) {

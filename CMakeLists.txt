@@ -26,11 +26,11 @@ endif()
 
 option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
-option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
+option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
-option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" OFF)
+option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 
 
 if(DSE_ENABLE_2D)
@@ -180,8 +180,14 @@ endif()
 
 if(DSE_ENABLE_3D)
     file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
-    
+    list(APPEND engine_cpp
+        "modules/gameplay_3d/rendering/mesh_render_system.cpp"
+        "modules/gameplay_3d/animation/animation_state_machine.cpp"
+    )
+
     add_library(DSE_Gameplay3D SHARED ${gameplay_3d_cpp})
+
+
     target_include_directories(DSE_Gameplay3D PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
@@ -190,7 +196,11 @@ if(DSE_ENABLE_3D)
         ${CMAKE_SOURCE_DIR}/depends/glm
     )
     
-    target_compile_definitions(DSE_Gameplay3D PRIVATE DSE_GAMEPLAY3D_EXPORTS)
+    target_compile_definitions(DSE_Gameplay3D PRIVATE
+        DSE_GAMEPLAY3D_EXPORTS
+        $<$<BOOL:${DSE_HAS_PHYSX_LIBS}>:DSE_HAS_PHYSX_LIBS=1>
+    )
+
 
     if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         target_include_directories(DSE_Gameplay3D PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
@@ -384,17 +394,19 @@ install(EXPORT DSEngineTargets
 enable_testing()
 
 if(DSE_BUILD_GTESTS)
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-    )
+    set(DSE_LOCAL_GTEST_DIR "${CMAKE_SOURCE_DIR}/depends/googletest-1.17.0")
+    if(NOT EXISTS "${DSE_LOCAL_GTEST_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "DSE_BUILD_GTESTS=ON 需要本地 GoogleTest 源码。请将 googletest-1.17.0.zip 解压到 ${DSE_LOCAL_GTEST_DIR}"
+        )
+    endif()
+
     # 禁止 googletest 自身占据全局 include / install，避免与引擎构建冲突
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     # 引擎使用静态 CRT (/MT)，gtest 也必须使用静态 CRT 以保持一致
     set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+    add_subdirectory("${DSE_LOCAL_GTEST_DIR}" "${CMAKE_BINARY_DIR}/third_party/googletest")
 
     add_subdirectory(tests/gtest)
 endif()
