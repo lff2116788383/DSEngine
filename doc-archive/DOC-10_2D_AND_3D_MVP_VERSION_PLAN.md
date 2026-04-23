@@ -1,11 +1,11 @@
-# DOC-10 2D 主线与 3D MVP 版本规划
+﻿# DOC-10 2D 主线与 3D MVP 版本规划
 
 本文档用于把后续版本规划收敛到两个明确目标：
 
 1. 先把 2D 主线做成可稳定交付版本
 2. 再把 3D 推进到最小可验证 MVP 版本
 
-本文档不继续无限制扩张功能列表，而是给出阶段边界、版本目标、验收口径与不纳入项。实际优先级以当前仓库代码状态为基础，并与 [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md) 保持一致。
+本文档不继续无限制扩张功能列表，而是给出阶段边界、版本目标、验收口径与不纳入项。实际优先级以当前仓库代码状态为基础，并与 [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md) 保持一致。
 
 ---
 
@@ -318,10 +318,10 @@
 
 从当前阶段开始，建议统一采用以下文档策略：
 
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md) 继续作为主线路线图
-- [`doc/DOC-08_3D_ROADMAP.md`](doc/DOC-08_3D_ROADMAP.md) 继续作为 3D 参考口径文档
-- 本文档 [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md) 作为版本规划文档
-- 架构拆分则继续参考 [`doc/DOC-09_CODE_DOC_ALIGNMENT_AND_REFACTOR_PLAN.md`](doc/DOC-09_CODE_DOC_ALIGNMENT_AND_REFACTOR_PLAN.md)
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md) 继续作为主线路线图
+- [`doc-archive/DOC-08_3D_ROADMAP.md`](doc-archive/DOC-08_3D_ROADMAP.md) 继续作为 3D 参考口径文档
+- 本文档 [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md) 作为版本规划文档
+- 架构拆分则继续参考 [`doc-archive/DOC-09_CODE_DOC_ALIGNMENT_AND_REFACTOR_PLAN.md`](doc-archive/DOC-09_CODE_DOC_ALIGNMENT_AND_REFACTOR_PLAN.md)
 
 这样可以避免：
 

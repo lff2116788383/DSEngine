@@ -1,11 +1,11 @@
 # DOC-17 执行 TODO：2D Stable 与 3D MVP
 
-本文档是 [`doc/DOC-16_2D_STABLE_AND_3D_MVP_4_TO_6_WEEK_PLAN.md`](doc/DOC-16_2D_STABLE_AND_3D_MVP_4_TO_6_WEEK_PLAN.md) 的执行拆分版。
+本文档是 [`doc-archive/DOC-16_2D_STABLE_AND_3D_MVP_4_TO_6_WEEK_PLAN.md`](doc-archive/DOC-16_2D_STABLE_AND_3D_MVP_4_TO_6_WEEK_PLAN.md) 的执行拆分版。
 
 原则：
 
 - 只列当前阶段真要做的事
-- 不把“以后可能有用”的东西混进来
+- 不把"以后可能有用"的东西混进来
 - 每项尽量可直接验证
 
 ---
@@ -14,7 +14,7 @@
 
 - [x] 修复 Windows 下 Lua single tests / Catch runner 假性挂起问题
 - [x] 将 Lua runtime 配置接口改为 `const&` 形式，避免临时对象相关问题
-- [x] 将易触发问题的 Lua 单测断言改为“先求值再断言”模式
+- [x] 将易触发问题的 Lua 单测断言改为"先求值再断言"模式
 - [x] 文档补充 Windows + Catch + Lua 单测挂起规避说明
 - [x] 验证以下门禁通过：
   - [x] `engine.unit`
@@ -35,16 +35,16 @@
 
 ### B1. 测试与门禁
 
-- [x] 在文档中固定“当前常用 2D 主线门禁清单”（已写入 `doc/TESTING_CTEST_GUIDE.md`）
+- [x] 在文档中固定"当前常用 2D 主线门禁清单"（已写入 `doc-archive/TESTING_CTEST_GUIDE.md`）
 - [x] 检查 `tests/engine/runtime_smoke_snapshot_test.cpp` 是否也存在同类断言形态隐患（已确认当前文件已采用 snapshot/先求值后断言模式，无需额外修正）
 - [x] 检查是否还有其他 single-test target 使用不一致的 runner 结构（当前 `tests/engine/` 下仅 `main.cpp` 与 `lua_test_main.cpp` 两套 runner；Lua single-test targets 已统一使用 `lua_test_main.cpp`）
 - [x] 形成一条可直接复制执行的本地常用回归命令集合（已整理到本文档附录）
 
 ### B2. 2D 编辑器高频闭环排查
 
-- [x] 检查 Scene save/load 主链是否存在明显脏状态问题（已确认当前至少存在 `tests/engine/scene/scene_flow_test.cpp` 与 `tests/engine/scene/editor_scene_io_bridge_test.cpp` 两条基础回归链；当前问题不是“完全无覆盖”，而是后续需要进一步提炼为 2D Stable 高频闭环检查项）
+- [x] 检查 Scene save/load 主链是否存在明显脏状态问题（已确认当前至少存在 `tests/engine/scene/scene_flow_test.cpp` 与 `tests/engine/scene/editor_scene_io_bridge_test.cpp` 两条基础回归链；当前问题不是"完全无覆盖"，而是后续需要进一步提炼为 2D Stable 高频闭环检查项）
 - [x] 检查 Play/Edit 切换是否污染运行态（代码审计结论：当前 `apps/editor_cpp/src/editor_toolbar.cpp` 的 Play/Stop 主要依赖 `entt::registry` 级别 backup/restore；尚未看到对 runtime 子系统、脚本状态、音频/定时器/其他单例状态的完整隔离或回滚，因此当前结构存在运行态污染风险，后续应作为 2D Stable 的高频闭环问题继续收口）
-- [x] 检查 Inspector 对高频 2D 组件的修改反馈是否一致（代码审计结论：当前 2D Inspector 整体采用“直接改组件字段”的即时写入模式，但存在明显不一致：部分组件会显式标记 `dirty`（如 `TransformComponent` / `UILabelComponent`），部分高频组件则缺少统一 dirty/刷新语义（如 `SpriteRendererComponent` / `RigidBody2DComponent` / `ParticleEmitterComponent`）；另外 `Sprite Renderer` 区域的 UI 表述与底层字段 `shader_variant` 的语义存在混用，后续应作为高频编辑反馈一致性问题继续收口）
+- [x] 检查 Inspector 对高频 2D 组件的修改反馈是否一致（代码审计结论：当前 2D Inspector 整体采用"直接改组件字段"的即时写入模式，但存在明显不一致：部分组件会显式标记 `dirty`（如 `TransformComponent` / `UILabelComponent`），部分高频组件则缺少统一 dirty/刷新语义（如 `SpriteRendererComponent` / `RigidBody2DComponent` / `ParticleEmitterComponent`）；另外 `Sprite Renderer` 区域的 UI 表述与底层字段 `shader_variant` 的语义存在混用，后续应作为高频编辑反馈一致性问题继续收口）
 - [x] 只挑选 2~3 个最影响闭环的问题进入修复（本轮已实际落地并编译验证：Play/Edit 最小状态隔离、Inspector 高频 2D 组件 dirty/refresh 语义、Sprite Renderer Inspector 字段语义对齐；同时额外补收了 Play 模式下 3D Inspector、Hierarchy、File 菜单、Localization Preview、UI Layout Inspector 的只读保护）
 
 ### B2.1 当前选中的高优先修复问题池
@@ -67,7 +67,7 @@
 3. **Sprite Renderer Inspector 的 UI 表述与底层字段语义不一致（P1）**
    - 当前 UI 操作看起来像在编辑 texture/sprite
    - 但底层拖拽实际写入的是 `shader_variant`
-   - 应明确修正为“字段语义对齐”或“UI 文案对齐”中的一种
+   - 应明确修正为"字段语义对齐"或"UI 文案对齐"中的一种
 
 #### P0 当前最小手工验证计划（Play/Edit 第一刀）
 
@@ -91,7 +91,7 @@
      - `RigidBody2D`
      - `UILabel`
      - `ParticleEmitter`
-   - 期望：修改后 Inspector 反馈稳定，无明显“改了但视图/状态不刷新”的现象
+   - 期望：修改后 Inspector 反馈稳定，无明显"改了但视图/状态不刷新"的现象
 
 4. **Play 中 3D Inspector 是否只读**
    - 选中带 3D 组件的实体后进入 Play
@@ -128,13 +128,13 @@
    - 播放声音后点击 Stop
    - 期望：回到 Edit 后运行态音频停止
 
-如果以上 9 项都通过，可认为当前 editor_cpp 的“Play 为观察态、Edit 为编辑态”的第一阶段闭环已经基本成立。
+如果以上 9 项都通过，可认为当前 editor_cpp 的"Play 为观察态、Edit 为编辑态"的第一阶段闭环已经基本成立。
 
 ### B3. 文档与口径
 
 - [ ] 在版本/路线文档中明确：当前稳定主线是 2D，3D 仍为 MVP 收口中
-- [ ] 整理一版“当前 2D 已达标能力清单”
-- [ ] 整理一版“当前 3D 仅承诺 MVP 的能力边界”
+- [ ] 整理一版"当前 2D 已达标能力清单"
+- [ ] 整理一版"当前 3D 仅承诺 MVP 的能力边界"
 
 ---
 
@@ -149,15 +149,15 @@
 
 - Lua runtime 新增 `phase1_2d_showcase` 入口，优先复用现有 phase1 资源路径与 2D 运行时 API。
 - 第一版 showcase 当前覆盖：camera、sprite、tilemap、physics2d、UI label / numeric label / button / panel、particle burst、audio、animator。
-- 第一版 showcase 暂未把“运行时主动切语言”纳入必选演示项，因为当前 Lua API 尚未暴露 localization bindings；该项保留为后续增强，不影响第一版正式对外演示。
+- 第一版 showcase 暂未把"运行时主动切语言"纳入必选演示项，因为当前 Lua API 尚未暴露 localization bindings；该项保留为后续增强，不影响第一版正式对外演示。
 
 ---
 
 ## D. 第 3~4 周 TODO（3D MVP 收口）
 
 - [x] 固定最小 3D MVP 场景定义（已签入 [`assets/scenes/3d_mvp_minimal.scene.json`](assets/scenes/3d_mvp_minimal.scene.json:1)、[`assets/scenes/reference_demo_15_8.scene.json`](assets/scenes/reference_demo_15_8.scene.json:1)、[`assets/scenes/reference_demo_15_9.scene.json`](assets/scenes/reference_demo_15_9.scene.json:1)）
-- [x] 明确 3D MVP 完成定义（已写入 [`doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
-- [x] 整理当前 3D 能力为三类：必须保留 / 暂不纳入 / 暂缓（已写入 [`doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
+- [x] 明确 3D MVP 完成定义（已写入 [`doc-archive/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc-archive/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
+- [x] 整理当前 3D 能力为三类：必须保留 / 暂不纳入 / 暂缓（已写入 [`doc-archive/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md`](doc-archive/DOC-19_3D_ALIGNMENT_WITH_VSENGINE21_PLAN.md:1)）
 - [x] 核实 `engine.3d.scene_mvp` 与 `engine.3d.runtime_mvp_smoke` 的当前有效性（当前 3D 主链已围绕 [`tests/engine/CMakeLists.txt`](tests/engine/CMakeLists.txt:201) 中的 `engine.3d.scene_mvp` / `engine.3d.smoke` 与相关 scene/test 继续收口）
 - [x] 检查最小 3D 场景 save/load 主链（已由 [`tests/engine/scene/scene_flow_test.cpp`](tests/engine/scene/scene_flow_test.cpp:1)、[`tests/engine/scene/editor_scene_io_bridge_test.cpp`](tests/engine/scene/editor_scene_io_bridge_test.cpp:1)、[`engine/scene/scene.cpp`](engine/scene/scene.cpp:850) 相关回归覆盖）
 - [ ] 检查关键 3D 组件 Inspector 主链（MeshRenderer / Camera3D / DirectionalLight / Skybox）

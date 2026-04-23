@@ -92,7 +92,7 @@
 - `15.8 / 15.9` 已补入最终视觉质量参数基线：相机构图、方向光、SkyLight、角色材质与地面材质均已进入 scene 级断言；
 - `15.9` 额外修复了 Lua runtime 的左右角色实体绑定问题：不再硬编码 scene JSON 的实体 id，而是通过最小只读 Lua 查询接口按 `mesh_path + 位置` 识别左右展示实体；
 - **当前已确认通过**：`15.7` 单独 smoke、`15.8` 单独 smoke；其中 `15.8` 已实际验证 `startup_scene_loaded`、`missing_resource_count=0` 以及相机/FOV/灯光断言全部通过；
-- **当前仍未闭环**：`dse_lua_runtime_smoke_single_test(_v2)` 在本机 Windows + VS 生成工程下仍未稳定产出 exe，因此 `engine.lua_runtime.smoke` 的整组 CTest 门禁尚未完整恢复；这属于测试 target 的本机构建链问题，而不是本轮 Lua demo 对齐实现本身的阻塞；
+- **当前已修复**：`dse_lua_runtime_smoke_single_test_v2` 编译阻塞已修复（根因：`lua_runtime_smoke_single_test.cpp` 缺少 `ScopedLuaApiContextReset` 定义，已补齐），exe 已可正常产出；`engine.lua_runtime.smoke` 需在具备图形上下文的环境中执行最终验证
 - 仓库当前尚无完整运行时截图 / framebuffer readback / PNG golden comparison 链路，但已具备 `RenderTarget` / `FramePipeline` / `stb_image_write` 等可复用底座；
 - 下一阶段如需补首张视觉基线，建议只针对 `reference_demo_15_9` 增加单场景、固定分辨率、固定帧数、弱约束图像比较的最小截图专项；
 - 代码层面的真实改造入口已基本确认：`engine/render/rhi/rhi_device.h/.cpp` 已完成 readback，后续由 `engine/runtime/frame_pipeline.*` 暴露截图源 render target，再由 `engine/runtime/engine_app.cpp` 或测试 helper 负责 PNG 导出；

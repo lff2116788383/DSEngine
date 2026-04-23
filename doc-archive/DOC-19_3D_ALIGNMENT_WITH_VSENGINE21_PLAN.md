@@ -404,7 +404,7 @@
 - [x] [`engine.3d.unit`](tests/engine/CMakeLists.txt:201) 已覆盖材质、灯光、阴影、动画、相机、地形、剔除、粒子与 runtime static regression 标签，不再只聚焦少数 3D 组件。
 - [x] [`engine.3d.scene_mvp`](tests/engine/CMakeLists.txt:208) 负责最小 3D 场景的 scene roundtrip / 组件可加载性门禁。
 - [x] [`engine.3d.runtime_mvp_smoke`](tests/engine/CMakeLists.txt:229) 负责 runtime startup scene 入口的 3D MVP 冒烟验证。
-- [x] 已在 [`doc/TESTING_CTEST_GUIDE.md`](doc/TESTING_CTEST_GUIDE.md) 中同步当前 3D 回归矩阵说明，统一脚本 / `CTest` / 文档口径。
+- [x] 已在 [`doc-archive/TESTING_CTEST_GUIDE.md`](doc-archive/TESTING_CTEST_GUIDE.md) 中同步当前 3D 回归矩阵说明，统一脚本 / `CTest` / 文档口径。
 
 **验收标准：**
 - 有一份稳定的 3D 回归矩阵清单。

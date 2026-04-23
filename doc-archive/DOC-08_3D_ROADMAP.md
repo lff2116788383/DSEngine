@@ -1,8 +1,8 @@
-# DOC-08 3D 说明（降级为参考文档）
+﻿# DOC-08 3D 说明（降级为参考文档）
 
 本文档不再作为主线路线图文档维护，而是作为当前 3D 状态的参考说明。
 
-当前 3D 的主线结论、后续路线和验收口径，统一以 `doc/DOC-07_ROADMAP.md` 为准。
+当前 3D 的主线结论、后续路线和验收口径，统一以 `doc-archive/DOC-07_ROADMAP.md` 为准。
 
 ## 1. 当前定位
 
@@ -42,17 +42,17 @@ DSEngine 的 3D 能力当前应准确描述为：
 从当前版本开始：
 
 - 不再在本文件中维护独立的 3D 主路线图
-- 3D 的优先级、验收条件、边界与阶段目标统一收敛到 [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-- 3D 的阶段版本规划统一收敛到 [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
+- 3D 的优先级、验收条件、边界与阶段目标统一收敛到 [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+- 3D 的阶段版本规划统一收敛到 [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
 - 如果未来 3D 真正进入稳定主线，再视情况恢复独立 3D 文档
 
 ## 4. 当前阅读建议
 
 如果需要了解项目后续方向，优先阅读：
 
-1. [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md)
-2. [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-3. [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
+1. [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md)
+2. [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+3. [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
 
 如果只想确认 3D 的当前口径，请记住一句话：
 

@@ -123,8 +123,8 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine
 
 ## 6. 与其他文档的关系
 
-- [`doc/DOC-02_BUILD_AND_RUN.md`](doc/DOC-02_BUILD_AND_RUN.md) 负责总体构建与运行说明
-- [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md) 负责测试体系全貌与回归建议
+- [`doc-archive/DOC-02_BUILD_AND_RUN.md`](doc-archive/DOC-02_BUILD_AND_RUN.md) 负责总体构建与运行说明
+- [`doc-archive/DOC-04_TESTING.md`](doc-archive/DOC-04_TESTING.md) 负责测试体系全貌与回归建议
 - 本文档只负责把“当前可执行的最小门禁”写清楚
 
 ### 5.4 3D MVP 最小场景门禁
@@ -211,6 +211,31 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.asset_comp
 当前主仓内可用于 reference 资源转入试点的入口是 [`apps/tools/asset_builder/main.cpp`](apps/tools/asset_builder/main.cpp)：它会把输入的 `glTF/GLB` 一次性烹饪为 `.dmesh/.dmat/.danim/.dskel`，适合作为最小试点流程的统一入口。
 
 ## 6.1 Windows + Catch + Lua 单测挂起排查结论
+
+### 5.8 Runtime 中枢收口后的验证关注点
+
+当目标是继续收口 `engine/runtime/` 的中枢边界，而不是扩展功能面时，当前建议优先关注：
+
+- 双宿主启动链不得退化：`engine.cpp_runtime`、`engine.lua_runtime`、`engine.resource_injection`
+- `FramePipeline::Init()` 应聚焦 runtime 初始化，不再直接承担 scene regression 一类启动期副作用
+- 启动期 scene regression 当前由 `EngineInstance` 承接，属于应用外壳控制的回归检查，而不是帧流水线初始化职责
+
+推荐最小命令：
+
+```bat
+cmake --build build_vs2022 --config Debug --target dse_engine_unit_tests dse_lua_runtime_tests dse_lua_runtime_core_single_test dse_lua_runtime_smoke_single_test_v2 dse_lua_resource_injection_single_test -- /m:1 /nologo
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.cpp_runtime|engine.lua_runtime|engine.resource_injection|engine.unit|engine.lua_runtime.smoke"
+```
+
+若修改了以下任一方向，建议至少补跑上述组合：
+
+- `engine/runtime/engine_app.cpp`
+- `engine/runtime/frame_pipeline.cpp`
+- `engine/runtime/runtime_*.cpp`
+- `tests/engine/runtime/`
+
+## 6.1 Windows + Catch + Lua 单测挂起排查结论
+
 
 
 

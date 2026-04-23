@@ -1,4 +1,4 @@
-# DOC-14 当前架构优化方案
+﻿# DOC-14 当前架构优化方案
 
 本文档基于当前仓库的实际代码结构、构建方式、测试组织和主线文档，对现阶段 DSEngine 的架构优化方向给出一个**渐进式、可落地**的方案。
 
@@ -12,9 +12,9 @@
 相关背景文档建议结合阅读：
 
 - [`README.md`](README.md)
-- [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md)
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-- [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
+- [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md)
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+- [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
 
 ---
 
@@ -594,9 +594,9 @@ modules/
 每完成一个关键阶段，建议同步更新：
 
 - [`README.md`](README.md)
-- [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md)
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-- [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
+- [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md)
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+- [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
 
 防止“实现已经变了，文档口径还停留在旧阶段”。
 

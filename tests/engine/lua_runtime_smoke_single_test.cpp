@@ -26,15 +26,20 @@ std::string MakeTempPath(const char* name) {
     return (base / name).string();
 }
 
-std::string ToLuaPath(const std::string& path) {
-    return std::filesystem::path(path).generic_string();
-}
+class ScopedLuaApiContextReset {
+public:
+    ~ScopedLuaApiContextReset() {
+        ConfigureLuaApiContext(LuaApiContext{});
+        SetStartupLuaScriptPath("");
+    }
+};
 
 void WriteTextFile(const std::string& path, const std::string& content) {
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     REQUIRE(out.is_open());
     out << content;
 }
+
 
 }
 

@@ -32,6 +32,16 @@ TEST_CASE("Given_FramePipelineSource_When_CheckParticleUpdateCall_Then_Physics2D
     REQUIRE(update_graph_source.find("pipeline.particle_system_.Update(world, delta_time, &pipeline.physics2d_system_);") != std::string::npos);
 }
 
+TEST_CASE("Given_RuntimeBoundaryRefactor_When_StartupSceneRegressionRuns_Then_ItIsOwnedByEngineInstanceInsteadOfFramePipeline", "[engine][unit][runtime][static]") {
+    const std::string frame_pipeline_source = ReadTextFile("engine/runtime/frame_pipeline.cpp");
+    const std::string engine_app_source = ReadTextFile("engine/runtime/engine_app.cpp");
+    REQUIRE(frame_pipeline_source.find("RunSceneRoundTripRegressionSample") == std::string::npos);
+    REQUIRE(frame_pipeline_source.find("RunSceneBackwardCompatibilityRegressionSample") == std::string::npos);
+    REQUIRE(engine_app_source.find("RunSceneRoundTripRegressionSample") != std::string::npos);
+    REQUIRE(engine_app_source.find("RunSceneBackwardCompatibilityRegressionSample") != std::string::npos);
+}
+
+
 TEST_CASE("Given_FramePipelineSource_When_RuntimeGraphsAreExtracted_Then_UpdateAndFixedUpdateDelegateToRuntimeUpdateGraph", "[engine][unit][runtime][static]") {
     const std::string frame_pipeline_source = ReadTextFile("engine/runtime/frame_pipeline.cpp");
     REQUIRE(frame_pipeline_source.find("dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);") != std::string::npos);

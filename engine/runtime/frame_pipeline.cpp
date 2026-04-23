@@ -251,12 +251,8 @@ bool FramePipeline::Init() {
     }
 #endif
 
-    DEBUG_LOG_INFO("FramePipeline init: scene regression begin");
-    bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample("bin/scene_roundtrip_regression.json");
-    DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
-    bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
-    DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
+
 
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },

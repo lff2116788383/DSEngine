@@ -1,4 +1,4 @@
-# DOC-09 代码与文档对齐检查及架构拆分建议
+﻿# DOC-09 代码与文档对齐检查及架构拆分建议
 
 本文档基于当前仓库代码、测试与现有主线文档的交叉检查结果，目的有两个：
 
@@ -13,10 +13,10 @@
 
 本次对齐检查重点参考了以下文档：
 
-- [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md)
-- [`doc/DOC-03_EDITOR.md`](doc/DOC-03_EDITOR.md)
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-- [`doc/DOC-08_3D_ROADMAP.md`](doc/DOC-08_3D_ROADMAP.md)
+- [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md)
+- [`doc-archive/DOC-03_EDITOR.md`](doc-archive/DOC-03_EDITOR.md)
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+- [`doc-archive/DOC-08_3D_ROADMAP.md`](doc-archive/DOC-08_3D_ROADMAP.md)
 
 并结合以下代码与测试进行交叉判断：
 
@@ -67,7 +67,7 @@
 ## 3. 文档与代码一致的部分
 
 ### 3.1 Runtime 主线已形成
-文档在 [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md) 中将 Runtime 描述为当前主线之一，这与代码一致。
+文档在 [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md) 中将 Runtime 描述为当前主线之一，这与代码一致。
 
 从 [`EngineInstance::Init()`](engine/runtime/engine_app.cpp:62)、[`EngineInstance::Tick()`](engine/runtime/engine_app.cpp:146)、[`EngineInstance::Run()`](engine/runtime/engine_app.cpp:182) 可确认：
 
@@ -96,7 +96,7 @@
 相对地，3D 虽然存在模块、组件、测试和样例，但从 [`engine/core/module.h`](engine/core/module.h)、[`FramePipeline::BuildRenderGraph()`](engine/runtime/frame_pipeline.cpp:430) 以及 [`tests/modules/gameplay_3d/rendering/3d_smoke_test.cpp`](tests/modules/gameplay_3d/rendering/3d_smoke_test.cpp) 看，3D 更像“接入中的体系”，而不是稳定产品线。
 
 ### 3.3 Editor 文档口径基本准确
-[`doc/DOC-03_EDITOR.md`](doc/DOC-03_EDITOR.md) 将编辑器描述为：
+[`doc-archive/DOC-03_EDITOR.md`](doc-archive/DOC-03_EDITOR.md) 将编辑器描述为：
 
 - 当前主线编辑器
 - 已进入可用阶段
@@ -113,7 +113,7 @@
 因此文档关于“可用但集中度过高”的判断是准确的。
 
 ### 3.4 资源系统已有工程化基础，但仍保留全局态
-[`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md) 与 [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md) 中对资源系统的描述基本与代码一致。
+[`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md) 与 [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md) 中对资源系统的描述基本与代码一致。
 
 从 [`AssetManager::ConfigureDataRoot()`](engine/assets/asset_manager.cpp:104)、[`AssetManager::PackBundle()`](engine/assets/asset_manager.cpp:169)、[`AssetManager::MountBundle()`](engine/assets/asset_manager.cpp:206)、[`AssetManager::ReleaseGpuResources()`](engine/assets/asset_manager.cpp:631) 可确认：
 
@@ -125,7 +125,7 @@
 同时从 [`AssetManager::Instance()`](engine/assets/asset_manager.cpp:94) 也能确认，全局态还在。
 
 ### 3.5 3D 文档降级为参考文档是合理的
-[`doc/DOC-08_3D_ROADMAP.md`](doc/DOC-08_3D_ROADMAP.md) 不再把 3D 当成主线路线图，而是降级为参考口径，这与代码现状匹配。
+[`doc-archive/DOC-08_3D_ROADMAP.md`](doc-archive/DOC-08_3D_ROADMAP.md) 不再把 3D 当成主线路线图，而是降级为参考口径，这与代码现状匹配。
 
 从 [`frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp) 中的 [`ResolveRuntimeModules()`](engine/runtime/frame_pipeline.cpp:40) 和 `#ifdef DSE_ENABLE_3D` 条件接入逻辑可见，3D 当前就是可接入、可试跑，但仍不是默认稳定主线。
 
@@ -147,7 +147,7 @@
 
 这说明 Lua Runtime 已经进入“稳定性增强阶段”，而不只是“功能可用阶段”。
 
-建议后续在 [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md) 或 [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md) 中补一条：
+建议后续在 [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md) 或 [`doc-archive/DOC-04_TESTING.md`](doc-archive/DOC-04_TESTING.md) 中补一条：
 
 - Lua Runtime 已有失败恢复与多脚本隔离类回归测试
 
@@ -167,7 +167,7 @@
 文档目前提到了 profiler 和性能方向，但没有强调这部分“运行时内建观测指标”已经存在。这个点比文档体现得更成熟。
 
 ### 4.3 Editor 的 3D 检视接入程度比文档稍强
-[`doc/DOC-03_EDITOR.md`](doc/DOC-03_EDITOR.md) 里对 3D 编辑能力表述得比较克制，这是对的；但从 [`apps/editor_cpp/src/main.cpp`](apps/editor_cpp/src/main.cpp) 实际搜索结果看，已经能检视和操作较多 3D 组件：
+[`doc-archive/DOC-03_EDITOR.md`](doc-archive/DOC-03_EDITOR.md) 里对 3D 编辑能力表述得比较克制，这是对的；但从 [`apps/editor_cpp/src/main.cpp`](apps/editor_cpp/src/main.cpp) 实际搜索结果看，已经能检视和操作较多 3D 组件：
 
 - Mesh Renderer
 - Camera 3D
@@ -190,7 +190,7 @@
 ## 5. 文档超前于代码或需要收紧的部分
 
 ### 5.1 测试门禁口径需要更谨慎
-[`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md) 提到将若干测试作为基础门禁，这个方向是对的，但从代码现状看，门禁还没有完全收紧。
+[`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md) 提到将若干测试作为基础门禁，这个方向是对的，但从代码现状看，门禁还没有完全收紧。
 
 最直接的例子是 [`tests/modules/gameplay_2d/ui/ui_system_test.cpp`](tests/modules/gameplay_2d/ui/ui_system_test.cpp:1) 第一行仍然是 `e#include`，这说明至少存在如下几种可能：
 
@@ -486,22 +486,22 @@ engine/runtime/
 
 ## 10. 对现有文档的具体建议
 
-### 10.1 [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md)
+### 10.1 [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md)
 建议补充：
 
 - Lua Runtime 已有失败恢复与脚本隔离回归
 - Runtime 已有更完整的性能统计与 callback backlog 观测
 
-### 10.2 [`doc/DOC-03_EDITOR.md`](doc/DOC-03_EDITOR.md)
+### 10.2 [`doc-archive/DOC-03_EDITOR.md`](doc-archive/DOC-03_EDITOR.md)
 建议补充：
 
 - 已接入较多 3D 组件 Inspector
 - 当前 Play/Edit 切换使用 registry 快照恢复，属于简化方案，不等同于完整 PIE
 
-### 10.3 [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
+### 10.3 [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
 建议保持当前主线不变，但把“测试门禁已建立”的语气再收紧一点，更强调“入口已建立，门禁仍需固化”。
 
-### 10.4 [`doc/DOC-08_3D_ROADMAP.md`](doc/DOC-08_3D_ROADMAP.md)
+### 10.4 [`doc-archive/DOC-08_3D_ROADMAP.md`](doc-archive/DOC-08_3D_ROADMAP.md)
 当前表述基本合适，建议不扩大内容，继续保持参考文档定位。
 
 ---
@@ -512,10 +512,10 @@ engine/runtime/
 
 更具体地说：
 
-- [`doc/DOC-01_ARCHITECTURE.md`](doc/DOC-01_ARCHITECTURE.md) 与实际 Runtime / 模块 / 资源 / Lua / Editor 现状基本一致
-- [`doc/DOC-03_EDITOR.md`](doc/DOC-03_EDITOR.md) 对编辑器阶段判断基本准确
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md) 对后续优先级排序是合理的
-- [`doc/DOC-08_3D_ROADMAP.md`](doc/DOC-08_3D_ROADMAP.md) 的降级处理符合当前事实
+- [`doc-archive/DOC-01_ARCHITECTURE.md`](doc-archive/DOC-01_ARCHITECTURE.md) 与实际 Runtime / 模块 / 资源 / Lua / Editor 现状基本一致
+- [`doc-archive/DOC-03_EDITOR.md`](doc-archive/DOC-03_EDITOR.md) 对编辑器阶段判断基本准确
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md) 对后续优先级排序是合理的
+- [`doc-archive/DOC-08_3D_ROADMAP.md`](doc-archive/DOC-08_3D_ROADMAP.md) 的降级处理符合当前事实
 
 因此，当前最合理的动作不是重写主线文档，而是：
 

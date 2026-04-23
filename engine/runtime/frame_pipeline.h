@@ -37,7 +37,7 @@ class AssetManager;
 
 /**
  * @class FramePipeline
- * @brief 引擎的主循环流水线，单例模式，控制各个 System 的调用顺序和生命周期。
+ * @brief 引擎的主循环流水线，负责逐帧调度与直接渲染相关初始化，不承接高层启动期副作用流程。
  */
 class FramePipeline {
 public:

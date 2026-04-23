@@ -1,4 +1,4 @@
-# DOC-11 AI 驱动项目测试策略
+﻿# DOC-11 AI 驱动项目测试策略
 
 本文档用于为当前 DSEngine 提供一套更适合 **AI 驱动开发** 的测试策略，目标不是追求测试形式尽可能丰富，而是以**尽量少的人力投入**，最大化保证引擎功能正确性，并降低 AI 持续改动带来的回归风险。
 
@@ -17,10 +17,10 @@
 
 相关文档：
 
-- [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md)
-- [`doc/TESTING_CTEST_GUIDE.md`](doc/TESTING_CTEST_GUIDE.md)
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)
-- [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
+- [`doc-archive/DOC-04_TESTING.md`](doc-archive/DOC-04_TESTING.md)
+- [`doc-archive/TESTING_CTEST_GUIDE.md`](doc-archive/TESTING_CTEST_GUIDE.md)
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)
+- [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)
 
 ---
 
@@ -342,7 +342,7 @@ AI 驱动开发下，更常见的问题其实是：
 - `engine.2d.particle`
 - `engine.2d.localization`
 
-这与 [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md) 和 [`doc/TESTING_CTEST_GUIDE.md`](doc/TESTING_CTEST_GUIDE.md) 当前建议一致。
+这与 [`doc-archive/DOC-04_TESTING.md`](doc-archive/DOC-04_TESTING.md) 和 [`doc-archive/TESTING_CTEST_GUIDE.md`](doc-archive/TESTING_CTEST_GUIDE.md) 当前建议一致。
 
 ## 7.2 只维护 6 个最小 smoke 场景
 
@@ -424,10 +424,10 @@ AI 驱动开发下，更常见的问题其实是：
 
 本策略与现有文档的关系如下：
 
-- [`doc/DOC-04_TESTING.md`](doc/DOC-04_TESTING.md)：继续作为当前测试入口与回归范围说明
-- [`doc/TESTING_CTEST_GUIDE.md`](doc/TESTING_CTEST_GUIDE.md)：继续作为本地最小门禁说明
-- [`doc/DOC-07_ROADMAP.md`](doc/DOC-07_ROADMAP.md)：继续作为测试、构建、性能门禁的中期路线图
-- [`doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)：继续定义 3D MVP 阶段的 smoke、场景启动和保存加载回归要求
+- [`doc-archive/DOC-04_TESTING.md`](doc-archive/DOC-04_TESTING.md)：继续作为当前测试入口与回归范围说明
+- [`doc-archive/TESTING_CTEST_GUIDE.md`](doc-archive/TESTING_CTEST_GUIDE.md)：继续作为本地最小门禁说明
+- [`doc-archive/DOC-07_ROADMAP.md`](doc-archive/DOC-07_ROADMAP.md)：继续作为测试、构建、性能门禁的中期路线图
+- [`doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md`](doc-archive/DOC-10_2D_AND_3D_MVP_VERSION_PLAN.md)：继续定义 3D MVP 阶段的 smoke、场景启动和保存加载回归要求
 
 本文档仅补充：
 

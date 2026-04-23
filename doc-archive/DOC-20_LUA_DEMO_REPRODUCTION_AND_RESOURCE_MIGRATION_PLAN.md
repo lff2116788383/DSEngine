@@ -644,7 +644,7 @@
 - `tests/engine/CMakeLists.txt` 已补齐 Lua 单测目标的 runtime DLL 拷贝、工作目录修复和 smoke 过滤收敛；同时尝试将 `dse_lua_runtime_smoke_single_test` 改造为单翻译单元入口，以绕开当前 Windows/VS 生成工程对 smoke 目标编译状态的异常复用。
 - 对第三方源码依赖，顶层 `CMakeLists.txt` 已统一关闭 `ASSIMP_INSTALL` / `ENTT_INSTALL`，并在 `depends/assimp` / `depends/entt-3.13.0` 中对 package config / export 逻辑做了最小 install 场景收口，当前 `cmake -S . -B build_vs2022 ...` 已恢复成功。
 - 当前**已经确认通过**的验证包括：`15.7` 单独 smoke 用例通过、`15.8` 单独 smoke 用例通过；其中 `15.8` 已实际验证 `startup_scene_loaded`、`missing_resource_count=0`、相机/FOV/灯光强度/阴影强度断言全部通过。
-- 当前**尚未闭环**的唯一阻塞是：Windows + VS 生成工程下，`dse_lua_runtime_smoke_single_test(_v2)` 目标仍未稳定产出 exe，导致 `engine.lua_runtime.smoke` 的整组 CTest 门禁暂时无法完整跑通；这属于本机构建链问题，而不是 `DOC-20` 本轮 Lua demo 对齐实现本身的阻塞。
+- **编译阻塞已修复**（2026-04-23）：`dse_lua_runtime_smoke_single_test_v2` 的编译失败根因已定位（`lua_runtime_smoke_single_test.cpp` 缺少 `ScopedLuaApiContextReset` 定义），已补齐并验证 exe 可正常产出；`engine.lua_runtime.smoke` 需在具备图形上下文的环境中执行最终验证。
 
 ---
 

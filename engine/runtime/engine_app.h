@@ -1,6 +1,6 @@
 /**
  * @file engine_app.h
- * @brief 引擎核心模块，提供基础功能支持
+ * @brief 引擎应用外壳，负责运行时生命周期与服务装配。
  */
 
 #ifndef DSE_ENGINE_APP_H
@@ -34,7 +34,7 @@ struct EngineRunConfig {
 
 /**
  * @class EngineInstance
- * @brief 引擎独立运行实例，实现多实例解耦的基础
+ * @brief 引擎应用运行实例，负责生命周期、默认服务装配与主循环驱动。
  */
 class EngineInstance {
 public:
@@ -69,6 +69,17 @@ public:
     FramePipeline* pipeline() const { return pipeline_.get(); }
 
 private:
+    /**
+     * @brief 运行启动期场景回归样例。
+     * @return 所有样例通过返回 true
+     */
+    bool RunStartupSceneRegressionChecks();
+
+    /**
+     * @brief Init() 失败路径的统一清理，避免多处重复清理代码。
+     */
+    void CleanupOnInitFailure();
+
     EngineRunConfig config_;
     RuntimeServices services_{};
     std::unique_ptr<World> default_world_;
@@ -84,3 +95,4 @@ int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibilit
 }
 
 #endif
+

@@ -1,12 +1,12 @@
 /**
  * @file engine_app.cpp
- * @brief 引擎核心模块，提供基础功能支持
+ * @brief 引擎应用外壳，负责运行时生命周期与服务装配。
  */
 
 #define GLFW_INCLUDE_NONE
 #include "engine/runtime/engine_app.h"
 #include "engine/scripting/lua/lua_runtime.h"
-#include "engine/assets/asset_manager.h"
+#include "engine/scene/scene.h"
 #include <GLFW/glfw3.h>
 #include <glad/gl.h>
 #include <iostream>
@@ -51,6 +51,11 @@ std::string ReadNonEmptyEnv(const char* name) {
         }
     }
     return {};
+}
+
+bool IsStartupSceneRegressionDisabled() {
+    const char* env = std::getenv("DSE_DISABLE_STARTUP_SCENE_REGRESSION");
+    return env && env[0] != '\0' && std::string(env) != "0";
 }
 
 void FlipImageRowsRgba8(std::vector<unsigned char>& pixels, int width, int height) {
@@ -104,6 +109,7 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
 }
 
 
+
 EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config), services_(config.services) {
     if (services_.world == nullptr && config_.world != nullptr) {
         services_.world = config_.world;
@@ -132,7 +138,29 @@ EngineInstance::~EngineInstance() {
     Shutdown();
 }
 
+bool EngineInstance::RunStartupSceneRegressionChecks() {
+    if (IsStartupSceneRegressionDisabled()) {
+        DEBUG_LOG_INFO("EngineInstance init: startup scene regression checks skipped by env");
+        return true;
+    }
+
+    DEBUG_LOG_INFO("EngineInstance init: startup scene regression begin");
+    const bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample("bin/scene_roundtrip_regression.json");
+    DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
+    const bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
+    DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
+    return scene_round_trip_ok && scene_backward_compat_ok;
+}
+
+void EngineInstance::CleanupOnInitFailure() {
+    pipeline_->Shutdown();
+    core::JobSystem::Shutdown();
+    Debug::ShutDown();
+    if (!config_.enable_editor) glfwTerminate();
+}
+
 bool EngineInstance::Init() {
+
     if (is_initialized_) return true;
 
     // 如果未启用编辑器模式，则初始化系统环境
@@ -206,16 +234,20 @@ bool EngineInstance::Init() {
     
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
-        pipeline_->Shutdown();
-        core::JobSystem::Shutdown();
-        Debug::ShutDown();
-        if (!config_.enable_editor) glfwTerminate();
+        CleanupOnInitFailure();
+        return false;
+    }
+
+    if (!RunStartupSceneRegressionChecks()) {
+        std::cerr << "Startup scene regression checks failed\n";
+        CleanupOnInitFailure();
         return false;
     }
 
     is_initialized_ = true;
     return true;
 }
+
 
 void EngineInstance::Tick() {
     if (!is_initialized_) return;
