@@ -30,7 +30,9 @@ option(DSE_ENABLE_3D "Enable 3D runtime path" OFF)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
-option(DSE_BUILD_ENGINE_TESTS "Build engine unit test targets" OFF)
+option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" OFF)
+
+
 if(DSE_ENABLE_2D)
     add_definitions(-D DSE_ENABLE_2D)
 endif()
@@ -88,7 +90,6 @@ include_directories("depends/rttr-0.9.6/src")
 include_directories("depends/glm")
 include_directories("depends/glm_ext")
 include_directories("depends/rapidjson/include")
-include_directories("depends/eventpp/tests")
 include_directories("depends/eventpp/include")
 include_directories("depends/timetool")
 include_directories("depends/tinygltf")
@@ -382,9 +383,22 @@ install(EXPORT DSEngineTargets
 
 enable_testing()
 
-if(DSE_BUILD_ENGINE_TESTS)
-    add_subdirectory(tests)
+if(DSE_BUILD_GTESTS)
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+    )
+    # 禁止 googletest 自身占据全局 include / install，避免与引擎构建冲突
+    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    # 引擎使用静态 CRT (/MT)，gtest 也必须使用静态 CRT 以保持一致
+    set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    add_subdirectory(tests/gtest)
 endif()
+
 
 find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
 find_program(NPX_EXECUTABLE NAMES npx.cmd npx)

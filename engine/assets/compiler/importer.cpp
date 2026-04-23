@@ -17,7 +17,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
-#include <assimp/scene.h>
+#include <cstdio>
+
 
 
 namespace dse {
@@ -26,7 +27,86 @@ namespace compiler {
 
 namespace {
 
+
+
+std::string DecodeBase64Data(const std::string& encoded) {
+    static const std::string kChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string clean;
+    clean.reserve(encoded.size());
+    for (unsigned char ch : encoded) {
+        if (std::isalnum(ch) || ch == '+' || ch == '/' || ch == '=') {
+            clean.push_back(static_cast<char>(ch));
+        }
+    }
+
+    std::string out;
+    out.reserve((clean.size() * 3) / 4);
+    int val = 0;
+    int valb = -8;
+    for (unsigned char ch : clean) {
+        if (ch == '=') {
+            break;
+        }
+        const auto idx = kChars.find(static_cast<char>(ch));
+        if (idx == std::string::npos) {
+            return {};
+        }
+        val = (val << 6) + static_cast<int>(idx);
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back(static_cast<char>((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
 glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
+
+    constexpr const char* kPrefix = "data:application/octet-stream;base64,";
+    bool changed = false;
+    std::size_t search_from = 0;
+    int buffer_index = 0;
+    while (true) {
+        std::size_t pos = source.find(kPrefix, search_from);
+        if (pos == std::string::npos) {
+            break;
+        }
+        const std::size_t uri_begin = pos;
+        const std::size_t data_begin = pos + std::strlen(kPrefix);
+        const std::size_t data_end = source.find('"', data_begin);
+        if (data_end == std::string::npos) {
+            break;
+        }
+
+        const std::string encoded = source.substr(data_begin, data_end - data_begin);
+        const std::string decoded = DecodeBase64Data(encoded);
+        if (decoded.empty()) {
+            search_from = data_end;
+            continue;
+        }
+
+        const std::filesystem::path temp_path = source_file.parent_path() / (source_file.stem().string() + ".buffer_" + std::to_string(buffer_index++) + ".bin");
+        std::ofstream out(temp_path, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) {
+            return false;
+        }
+        out.write(decoded.data(), static_cast<std::streamsize>(decoded.size()));
+        if (!out.good()) {
+            return false;
+        }
+        temp_files.push_back(temp_path);
+
+        const std::string replacement = temp_path.filename().generic_string();
+        source.replace(uri_begin, data_end - uri_begin, replacement);
+        search_from = uri_begin + replacement.size();
+        changed = true;
+    }
+    return changed;
+}
+
+
+
     glm::mat4 result(1.0f);
     result[0][0] = matrix.a1; result[1][0] = matrix.a2; result[2][0] = matrix.a3; result[3][0] = matrix.a4;
     result[0][1] = matrix.b1; result[1][1] = matrix.b2; result[2][1] = matrix.b3; result[3][1] = matrix.b4;
@@ -83,8 +163,25 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
     if (file_path.find(".glb") != std::string::npos) {
         ret = loader.LoadBinaryFromFile(&model, &err, &warn, file_path);
     } else {
-        ret = loader.LoadASCIIFromFile(&model, &err, &warn, file_path);
+        std::ifstream input(file_path, std::ios::in | std::ios::binary);
+        if (!input.is_open()) {
+            err = "Failed to read file: " + file_path + ": File open error : " + file_path;
+            ret = false;
+        } else {
+            const std::filesystem::path source_path = std::filesystem::path(file_path);
+            std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+            std::vector<std::filesystem::path> temp_files;
+            const bool materialized = MaterializeAsciiGltfBufferDataUris(source, source_path, temp_files);
+            const std::string base_dir = source_path.parent_path().generic_string();
+            ret = loader.LoadASCIIFromString(&model, &err, &warn, source.c_str(), static_cast<unsigned int>(source.size()), base_dir.empty() ? std::string(".") : base_dir);
+            for (const auto& temp_file : temp_files) {
+                std::error_code ec;
+                std::filesystem::remove(temp_file, ec);
+            }
+            (void)materialized;
+        }
     }
+
     
     if (!warn.empty()) {
         std::cout << "GLTF Warn: " << warn << std::endl;

@@ -56,8 +56,6 @@ local function log_material_state(tag)
 end
 
 local function try_bind_reference_mesh_entities_by_position()
-    local left_candidate = nil
-    local right_candidate = nil
     local candidates = {}
     local monster_entities = dse.ecs.find_entities_by_mesh_path("assets/cooked/reference_demo/shared/monster/Monster.dmesh")
     local lod_entities = dse.ecs.find_entities_by_mesh_path("assets/cooked/reference_demo/shared/monster_lod0/MonsterLOD0.dmesh")
@@ -71,21 +69,26 @@ local function try_bind_reference_mesh_entities_by_position()
             table.insert(candidates, entity)
         end
     end
+
+    local positioned = {}
     for _, entity in ipairs(candidates) do
-        local x, y, z = dse.ecs.get_transform_position(entity)
-        if x ~= nil and y ~= nil and y > -1.0 then
-            if x < -1.0 then
-                left_candidate = entity
-            elseif x > 1.0 then
-                right_candidate = entity
+        if type(entity) == "number" and entity > 0 then
+            local x, y, z = dse.ecs.get_transform_position(entity)
+            if x ~= nil and y ~= nil and y > -1.0 then
+                table.insert(positioned, { entity = entity, x = x })
             end
         end
     end
-    if left_candidate ~= nil and right_candidate ~= nil then
-        state.left_entity = left_candidate
-        state.right_entity = right_candidate
+
+    table.sort(positioned, function(a, b)
+        return a.x < b.x
+    end)
+
+    if #positioned >= 2 then
+        state.left_entity = positioned[1].entity
+        state.right_entity = positioned[#positioned].entity
         apply_material_state()
-        print(string.format("[VSE-Demo][15.9] runtime_entity_binding left=%d right=%d", left_candidate, right_candidate))
+        print(string.format("[VSE-Demo][15.9] runtime_entity_binding left=%d right=%d", state.left_entity, state.right_entity))
         return true
     end
     return false
@@ -96,8 +99,15 @@ local function bind_reference_mesh_entities()
     state.left_entity = nil
     state.right_entity = nil
     if try_bind_reference_mesh_entities_by_position() then
+        dse.ecs.set_mesh_material(state.left_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 0)
+        dse.ecs.set_mesh_material(state.right_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 1)
+        print("[VSE-Demo][15.9] material_instance_bound slot=left source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=0")
+        print("[VSE-Demo][15.9] material_instance_bound slot=right source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=1")
+        apply_material_state()
+        print(string.format("[VSE-Demo][15.9] runtime_entity_binding left=%d right=%d", state.left_entity, state.right_entity))
         return
     end
+
     state.left_entity = 1
     state.right_entity = 2
     dse.ecs.set_mesh_material(state.left_entity, "assets/cooked/reference_demo/shared/monster/Monster.dmat", 0)
@@ -105,11 +115,31 @@ local function bind_reference_mesh_entities()
     print("[VSE-Demo][15.9] material_instance_bound slot=left source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=0")
     print("[VSE-Demo][15.9] material_instance_bound slot=right source=assets/cooked/reference_demo/shared/monster/Monster.dmat index=1")
     apply_material_state()
-    print("[VSE-Demo][15.9] runtime_entity_binding fallback_ids=1,2")
+    print(string.format("[VSE-Demo][15.9] runtime_entity_binding fallback_ids=%d,%d", state.left_entity, state.right_entity))
 end
 
 
+local function print_visual_baseline_summary(config)
+    local runtime = config or demo_config
+    Bootstrap.PrintSceneSummary(runtime)
+    print(string.format(
+        "[VSE-Demo][15.9] visual_baseline camera=(%.1f,%.1f,%.1f) left_mesh=%s right_mesh=%s skybox=%s",
+        runtime.camera.x or 0.0,
+        runtime.camera.y or 0.0,
+        runtime.camera.z or 0.0,
+        "assets/cooked/reference_demo/shared/monster/Monster.dmesh",
+        "assets/cooked/reference_demo/shared/monster_lod0/MonsterLOD0.dmesh",
+        runtime.skybox and runtime.skybox.cubemap_path or "none"
+    ))
+end
+
+local function log_observer_checkpoints()
+    print("[VSE-Demo][15.9] observer_checkpoints hero=dual_monster ground=ocean_plane skybox=default_sky")
+    print("[VSE-Demo][15.9] observer_hint free_camera=W/A/S/D + mouse")
+end
+
 local function try_load_reference_scene(scene_path)
+
     local ok, diagnostics = dse.ecs.load_scene(scene_path)
     if ok then
         local missing_count = 0

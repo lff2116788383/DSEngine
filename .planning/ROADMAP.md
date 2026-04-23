@@ -3,24 +3,25 @@
 **Created:** 2026-04-22
 **Source:** `.planning/PROJECT.md` + `.planning/REQUIREMENTS.md` + `.planning/codebase/`
 
-## Milestone v1 — 收口当前主线并建立可持续演进基线
+## Milestone v1 — Lua 驱动 3D 原型实战化闭环
 
-目标：围绕现有 brownfield 仓库的真实状态，优先收口 runtime / editor / 2D / 3D MVP / asset chain / testing-doc alignment 六条主线，避免继续扩散复杂度。
+目标：围绕现有 brownfield 仓库的真实状态，在已完成 runtime 中枢首轮收口的基础上，优先解决 **引擎内部 bug、崩溃、超时、目标缺失与核心回归问题**，并据此验证 **3D runtime + 3D 场景 + 3D 资产链 + Lua gameplay 脚本层** 是否足以支撑一个可持续迭代的 3D 游戏原型；2D 继续作为稳定基线守护；编辑器延后到技术路线明确后再集中决策。
 
 | Phase | Name | Description | Requirements |
 |------|------|-------------|--------------|
 | 1 | Runtime 中枢收口 | 降低 `engine/runtime/` 关键装配链复杂度，守住双宿主与主循环主线 | RT-01, RT-02, RT-03, RT-04 |
-| 2 | Editor 高频闭环增强 | 提升原生编辑器高频流程稳定性，降低宿主壳层维护压力 | EDIT-01, EDIT-02, EDIT-03 |
-| 3 | 2D Stable 门禁巩固 | 守住 2D 主线高频模块、Lua/runtime/资源注入协作链路 | 2D-01, 2D-02, 2D-03 |
-| 4 | 3D MVP 受控收口 | 在不冒充成熟主线的前提下，补齐 3D MVP 的最小稳定闭环 | 3D-01, 3D-02, 3D-03, 3D-04 |
-| 5 | 资产链与工具链对齐 | 稳定资产导入/烹饪链，并维持 Windows 本地脚本工作流可靠性 | AST-01, AST-02, AST-03 |
-| 6 | 测试与文档口径对齐 | 保持测试 gate、README、专题文档与当前实现持续一致 | QA-01, QA-02, QA-03, QA-04 |
+| 2 | 引擎稳定性与 3D 崩溃清零 | 先跑通 runtime / 3D / Lua / asset 最小矩阵，定位并修复阻塞原型推进的内部问题 | 3D-01, 3D-02, 3D-04, QA-01 |
+| 3 | Lua 3D Gameplay 与资产链闭环 | 补齐 Lua 驱动 3D gameplay 所需的核心绑定、脚本工作流与资产导入主链 | 3D-03, L3D-01, L3D-02, AST-01, AST-03 |
+| 4 | 3D Playable Prototype 基线 | 用一个 Lua 驱动的 3D playable prototype / reference demo 固化实战基线 | L3D-03, L3D-04 |
+| 5 | 2D Stable 基线守护 | 保持 2D 主线与既有 Lua/runtime/资源注入链路不被 3D 推进破坏 | 2D-01, 2D-02, 2D-03 |
+| 6 | 测试与文档口径对齐 | 对齐 3D、Lua、资产链与主线文档/测试口径，收紧真实能力边界 | AST-02, QA-02, QA-03, QA-04 |
+| 7 | Editor 路线重估与后置收口 | 在技术路线明确后，再决定编辑器该如何服务真实内容生产 | EDIT-01, EDIT-02, EDIT-03 |
 
 ## Phase Details
 
 ### Phase 1: Runtime 中枢收口
 
-**Why now:** `FramePipeline` 与 runtime 装配链是当前最大的复杂度与风险源，且会影响 editor、2D、3D 与测试的所有后续工作。
+**Why now:** `FramePipeline` 与 runtime 装配链是所有宿主、3D runtime、Lua 启动链与资产链的共同底座；若 runtime 中枢持续失控，后续任何 3D 实战推进都会建立在不稳地基上。
 
 **Scope:**
 - 梳理 `EngineInstance` / `FramePipeline` / runtime context 边界
@@ -29,66 +30,79 @@
 
 **Depends on:** None
 
-### Phase 2: Editor 高频闭环增强
+### Phase 2: 引擎稳定性与 3D 崩溃清零
 
-**Why now:** 原生编辑器已是当前主线宿主之一，但 `apps/editor_cpp/src/main.cpp` 仍偏重，若不先稳住高频闭环，后续功能扩展会持续放大壳层复杂度。
+**Why now:** 在继续扩展 3D gameplay 或评估“能否做实战原型”之前，必须先确认当前引擎底座不会因为 bug、崩溃、超时、目标缺失或假阳性而给出错误信号；否则后续所有 3D 结论都不可靠。
 
 **Scope:**
-- 聚焦场景加载/保存、常用面板、实体操作与检视主路径
-- 优先改善高频使用摩擦与宿主层过载问题
-- 保持“直接复用 runtime 核心能力”的当前路线
+- 跑通 `engine.cpp_runtime`、`engine.lua_runtime`、`engine.resource_injection`、`engine.unit`、`engine.lua_runtime.smoke` 的最小 runtime 回归
+- 固化 `engine.3d.unit`、`engine.3d.scene_mvp`、`engine.3d.runtime_mvp_smoke` 最小矩阵
+- 补跑 `engine.asset_compiler` 并确认资产链主路径真实性
+- 优先修复阻塞 Lua / runtime / 3D 原型推进的 bug、崩溃、超时与目标缺失问题
+- 明确哪些能力是“已稳定”、哪些只是“已接入未收口”
 
 **Depends on:** Phase 1
 
-### Phase 3: 2D Stable 门禁巩固
+### Phase 3: Lua 3D Gameplay 与资产链闭环
 
-**Why now:** 2D 是当前默认稳定主线，必须优先守住 Lua/C++ runtime、资源注入与高频子系统的回归门禁。
-
-**Scope:**
-- 固化 UI / Physics2D / Particle / Localization / Spine 的主门禁
-- 减少 2D 主线因其他链路改动被静默破坏
-- 明确哪些 gate 是当前日常最小验证集合
-
-**Depends on:** Phase 1
-
-### Phase 4: 3D MVP 受控收口
-
-**Why now:** 3D 已接入且已有最小测试矩阵，但当前只能以 MVP 口径推进，必须受控收口而不是扩面。
+**Why now:** 只有在稳定性问题先被收口后，Lua 侧对 3D gameplay 的真实能力边界才值得继续补齐；否则会把问题从 runtime 层错误地归咎到脚本层。
 
 **Scope:**
-- 维持最小 3D 场景 gate 与 runtime smoke 的真实性
-- 收紧 3D 资产链、runtime 与测试的边界口径
-- 避免对外或对内把 3D 当成默认稳定主线
+- 梳理并补齐 Lua 侧对 3D 场景、实体、组件、相机或等价 gameplay 能力的真实绑定
+- 固化 glTF/GLB/FBX → 运行时资产的最小主链
+- 让 Lua 3D sample / demo 能作为后续原型开发的真实起点
 
-**Depends on:** Phase 1, Phase 5
+**Depends on:** Phase 1, Phase 2
 
-### Phase 5: 资产链与工具链对齐
+### Phase 4: 3D Playable Prototype 基线
 
-**Why now:** 资产导入与烹饪链是 runtime 与 3D MVP 的基础，而且 `AssetBuilder` 与测试 gate 已经存在，应优先让其稳定、可验证、边界清晰。
+**Why now:** 引擎是否能投入实战，不能只靠组件清单和门禁名判断；必须用一个真实可玩的 Lua 3D prototype 来验证 gameplay、场景、资产与宿主链是否形成闭环。
 
 **Scope:**
-- 稳定 glTF/GLB/FBX 到运行时资产的最小主链
-- 对齐已支持能力、未接入边界与工具用法
-- 保持 `build_*.bat` 脚本在 Windows 主线上可靠可用
+- 选择一个 Lua 驱动的 3D sample / reference demo 作为 playable prototype 基线
+- 为其补最小 smoke / 回归入口与验证说明
+- 明确“当前能做什么、还不能做什么”的真实实战边界
+
+**Depends on:** Phase 2, Phase 3
+
+### Phase 5: 2D Stable 基线守护
+
+**Why now:** 2D 仍是仓库当前默认稳定主线；若在推进 3D 的过程中破坏 2D、Lua runtime 或资源注入链，整体工程反而会退步。
+
+**Scope:**
+- 守住 UI / Physics2D / Particle / Localization / Spine 的主门禁
+- 保持 Lua runtime、资源注入与 2D 协作链路可验证
+- 明确 3D 推进过程中必须长期保留的默认稳定基线
 
 **Depends on:** Phase 1
 
 ### Phase 6: 测试与文档口径对齐
 
-**Why now:** 当前仓库文档量大、测试门禁多，若代码/测试/文档不同步，后续任何规划都容易被错误上下文拖偏。
+**Why now:** 一旦稳定性矩阵、3D、Lua、资产链成为近期主线，README / 测试文档 / 规划口径就必须同步修正，否则后续实现和判断会被过时上下文拖偏。
 
 **Scope:**
 - 对齐 README、测试指南、专题文档与实际实现口径
-- 明确主线门禁、推荐命令与现状边界
+- 明确主线门禁、推荐命令与当前 3D / Lua 原型能力边界
 - 降低 AI / 人工在 brownfield 仓库中被旧文档误导的概率
 
 **Depends on:** Phase 2, Phase 3, Phase 4, Phase 5
 
+### Phase 7: Editor 路线重估与后置收口
+
+**Why now:** 编辑器并非没有价值，而是当前 ImGui 方案视觉体验与技术路线都未确定；在 3D 原型主线验证前继续前置投入，性价比偏低。
+
+**Scope:**
+- 重新评估原生编辑器、Tauri 辅助壳层或其他路线的长期价值
+- 明确编辑器是否真正服务 Lua 3D 内容生产闭环
+- 在路线明确后再决定是否恢复高优先级投入
+
+**Depends on:** Phase 4, Phase 6
+
 ## Summary
 
-- Total phases: 6
-- Current recommendation: 从 `Phase 1` 开始
-- Suggested next command: `/gsd-plan-phase 1`
+- Total phases: 7
+- Current recommendation: `Phase 1` 已完成后，进入 `Phase 2`
+- Suggested next command: `/gsd-plan-phase 2`
 
 ---
-*Last updated: 2026-04-22 after initial brownfield roadmap creation*
+*Last updated: 2026-04-23 after gsd-health repair aligned roadmap with stability-first execution*

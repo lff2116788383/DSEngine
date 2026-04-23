@@ -18,7 +18,7 @@
 - 在 `tests/engine/runtime/frame_pipeline_static_regression_test.cpp` 中新增静态回归测试，约束 scene regression 不再出现在 `FramePipeline` 源码中，而必须由 `EngineInstance` 承接。
 
 ### 4. 测试文档口径已同步
-- 在 `doc-archive/TESTING_CTEST_GUIDE.md` 中补充"Runtime 中枢收口后的验证关注点"，明确：
+- 在 `doc-archive/TESTING_CTEST_GUIDE.md` 中补充“Runtime 中枢收口后的验证关注点”，明确：
   - 双宿主链路是首要验收信号
   - `FramePipeline::Init()` 不再承担 scene regression 启动期副作用
   - 启动期回归检查由 `EngineInstance` 控制
@@ -32,14 +32,12 @@
 - `ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.unit|engine.cpp_runtime|engine.lua_runtime|engine.resource_injection|engine.lua_runtime.smoke"`
 - 当前状态：待重新执行并确认 `engine.lua_runtime.smoke` 是否恢复可运行
 
-
 ### 当前验证结论
 - `engine.unit` 与最小测试构建链路已恢复到可执行状态
 - 本轮 runtime 边界收口没有新增编译层面的阻塞
 - **Lua runtime smoke 目标编译阻塞已修复**：`dse_lua_runtime_smoke_single_test_v2.exe` 已成功产出（原因：`lua_runtime_smoke_single_test.cpp` 缺少 `ScopedLuaApiContextReset` 类定义，已补齐）
 - `engine.lua_runtime` 和 `engine.resource_injection` 已通过直接执行验证
 - `engine.lua_runtime.smoke` 依赖图形上下文与窗口系统，属于环境依赖型 smoke，在无窗口环境下暂缓执行
-
 
 ## Outcome Against Phase Goal
 
@@ -56,9 +54,14 @@
 
 ## Recommended Next Step
 
-- Phase 1 已完成，进入 Phase 2（Editor 高频闭环增强）
+- Phase 1 已完成，进入 Phase 2（引擎稳定性与 3D 崩溃清零）
+- 优先执行 runtime / Lua / 3D / asset 最小矩阵，确认当前真实性与失败边界
 - 在具备图形上下文的环境中执行 `ctest -R "engine.lua_runtime.smoke"` 完成最终闭环
-- 人工执行双宿主启动体验回归（见 VALIDATION.md Manual-Only Verifications）
+- 人工执行双宿主启动体验回归（见 `01-VALIDATION.md` Manual-Only Verifications）
+
+## Notes
+
+- `.planning/phases/01-runtime/02-PLAN.md` 属于 Phase 1 收尾阶段的 gap closure 计划，当前已被 Summary 与 STATE 结论吸收，不再阻塞进入下一阶段。
 
 ---
 

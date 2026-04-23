@@ -175,3 +175,5 @@ build_fast_*.log
 *.ncb
 *.aps
 *.pch
+*.txt
+*.log
