@@ -10,12 +10,15 @@
 | Phase | Name | Description | Requirements |
 |------|------|-------------|--------------|
 | 1 | Runtime 中枢收口 | 降低 `engine/runtime/` 关键装配链复杂度，守住双宿主与主循环主线 | RT-01, RT-02, RT-03, RT-04 |
-| 2 | 引擎稳定性与 3D 崩溃清零 | 先跑通 runtime / 3D / Lua / asset 最小矩阵，定位并修复阻塞原型推进的内部问题 | 3D-01, 3D-02, 3D-04, QA-01 |
-| 3 | Lua 3D Gameplay 与资产链闭环 | 补齐 Lua 驱动 3D gameplay 所需的核心绑定、脚本工作流与资产导入主链 | 3D-03, L3D-01, L3D-02, AST-01, AST-03 |
-| 4 | 3D Playable Prototype 基线 | 用一个 Lua 驱动的 3D playable prototype / reference demo 固化实战基线 | L3D-03, L3D-04 |
-| 5 | 2D Stable 基线守护 | 保持 2D 主线与既有 Lua/runtime/资源注入链路不被 3D 推进破坏 | 2D-01, 2D-02, 2D-03 |
-| 6 | 测试与文档口径对齐 | 对齐 3D、Lua、资产链与主线文档/测试口径，收紧真实能力边界 | AST-02, QA-02, QA-03, QA-04 |
-| 7 | Editor 路线重估与后置收口 | 在技术路线明确后，再决定编辑器该如何服务真实内容生产 | EDIT-01, EDIT-02, EDIT-03 |
+| 2 | GTest 全引擎测试基线 | 基于新引入的本地 GoogleTest，对 `dse_engine` 建立核心单元测试骨架与可扩展 CTest 标签体系 | QA-01, QA-02, QA-04 |
+| 3 | GMock 集成测试与系统交互验证 | 在 GTest 基线稳定后，引入 GMock 覆盖 runtime、asset、module、Lua/C++ bridge 等系统交互边界 | QA-01, QA-02, RT-02, RT-03 |
+| 4 | 引擎稳定性与 3D 崩溃清零 | 基于新测试基线跑通 runtime / 3D / Lua / asset 最小矩阵，定位并修复阻塞原型推进的内部问题 | 3D-01, 3D-02, 3D-04, QA-01 |
+| 5 | Lua 3D Gameplay 与资产链闭环 | 补齐 Lua 驱动 3D gameplay 所需的核心绑定、脚本工作流与资产导入主链 | 3D-03, L3D-01, L3D-02, AST-01, AST-03 |
+| 6 | 3D Playable Prototype 基线 | 用一个 Lua 驱动的 3D playable prototype / reference demo 固化实战基线 | L3D-03, L3D-04 |
+| 7 | 2D Stable 基线守护 | 保持 2D 主线与既有 Lua/runtime/资源注入链路不被 3D 推进破坏 | 2D-01, 2D-02, 2D-03 |
+| 8 | Google Benchmark 性能专项 | 经用户确认引入 Google Benchmark 后，为 ECS、Asset、Lua binding、render/update 等关键路径建立性能基线 | QA-01, QA-02 |
+| 9 | 测试与文档口径对齐 | 对齐 GTest/GMock/Benchmark、3D、Lua、资产链与主线文档/测试口径，收紧真实能力边界 | AST-02, QA-02, QA-03, QA-04 |
+| 10 | Editor 路线重估与后置收口 | 在技术路线明确后，再决定编辑器该如何服务真实内容生产 | EDIT-01, EDIT-02, EDIT-03 |
 
 ## Phase Details
 

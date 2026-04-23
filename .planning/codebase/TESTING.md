@@ -1,227 +1,186 @@
 # DSEngine Codebase Testing
 
-## 总体测试策略
+## 总体测试现状
 
-DSEngine 当前测试体系已经不是“零散单测集合”，而是一个围绕 **CTest + 分层门禁 + Windows 本地最小回归** 构建的验证系统。
+当前仓库的测试体系已经从旧的 Catch/多目录测试布局收敛到 **GoogleTest + CTest** 的新入口。实际存在的测试目录是：
 
-测试主线重点覆盖：
+- `tests/gtest/`
+- `tests/gtest/unit/`
 
-- engine 核心单测
-- Lua / C++ runtime 生命周期
-- 2D 子系统 smoke / snapshot
-- 3D MVP 最小门禁
-- 资产导入与烹饪链
-- 编辑器与场景 IO 的关键桥接路径
+当前明确可构建的测试目标是：
 
-## 测试入口
+- `dse_gtest_unit_tests`
 
-### CTest 是统一入口
+当前明确注册的 CTest 条目是：
 
-文档与 CMake 配置都明确了：测试统一通过 `ctest` 运行，而不是只在 IDE 中手点执行。
+- `gtest.engine.unit`
+- 标签：`engine;unit;gtest`
 
-关键文件：
+这意味着后续测试规划必须基于当前真实入口推进，不能继续假设 `tests/engine/`、`tests/modules/`、`tests/spine/` 等旧目录仍然存在。
 
-- `tests/CMakeLists.txt`
-- `tests/engine/CMakeLists.txt`
-- `tests/spine/CMakeLists.txt`
-- `doc-archive/TESTING_CTEST_GUIDE.md`
+## 当前测试入口
 
-### 顶层开关
+### CMake 开关
 
-顶层 `CMakeLists.txt` 中测试由：
+顶层 `CMakeLists.txt` 通过以下选项控制 GTest：
 
-- `DSE_BUILD_ENGINE_TESTS`
+- `DSE_BUILD_GTESTS`
 
-控制。
+当该开关开启时，CMake 会使用本地 GoogleTest 源码：
 
-典型构建方式见：
+- `depends/googletest-1.17.0`
 
-- `README.md`
-- `doc-archive/TESTING_CTEST_GUIDE.md`
-- `build_fast_tests.bat`
+若本地源码缺失，配置阶段会失败并提示解压位置。
 
-## 测试目录结构
+### 测试目标
 
-### `tests/engine/`
+`tests/gtest/unit/CMakeLists.txt` 定义：
 
-覆盖范围很广，包括：
+- target：`dse_gtest_unit_tests`
+- link：`GTest::gtest_main`、`dse_engine`
+- CTest name：`gtest.engine.unit`
+- CTest labels：`engine;unit;gtest`
 
-- `base/`
-- `core/`
-- `ecs/`
-- `scene/`
-- `editor/`
-- `runtime/`
-- `assets/`
-- `audio/`
-- `render/`
-- `profiler/`
-- `platform/`
-- `scripting/`
+### 脚本入口
 
-### `tests/modules/`
+`build_fast_tests.bat` 是当前最直接的测试脚本：
 
-聚焦 gameplay 模块：
+1. 配置 `DSE_BUILD_GTESTS=ON`
+2. 构建 `dse_gtest_unit_tests`
+3. 执行 `ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest`
 
-- `gameplay_2d/*`
-- `gameplay_3d/*`
+`build_all.bat` 也暴露 `--with-tests` / `--no-tests` 选项，并通过 CMake 参数控制是否启用 GTest。
 
-### `tests/spine/`
+## 建议测试分层
 
-Spine 单独成组，说明它在当前仓库中是高价值专项能力，而不是普通边角功能。
+用户提出的策略整体合理，但需要按仓库当前依赖状态分阶段落地。
 
-## 组织方式
+### 1. 单元测试：GoogleTest
 
-### 单个测试二进制，多组 CTest gate
+适合优先覆盖：
 
-`tests/engine/CMakeLists.txt` 里，`dse_engine_unit_tests` 被注册成多个测试入口：
+- 核心数学工具
+- 基础数据结构
+- `engine/base/`
+- `engine/core/` 中无外部设备依赖的逻辑
+- ECS 组件默认值与轻量行为
+- 资产路径、配置解析、纯函数工具
 
-- `engine.unit`
-- `engine.2d.ui`
-- `engine.2d.tilemap`
-- `engine.2d.particle`
-- `engine.2d.physics2d`
-- `engine.2d.spine`
-- `engine.2d.localization`
-- `engine.2d.animation`
-- `engine.2d.camera`
-- `engine.3d.unit`
-- `engine.3d.scene_mvp`
-- `engine.3d.smoke`
-- `engine.3d.runtime_mvp_smoke`
+建议命名与标签：
 
-这说明测试组织不是“一个测试文件对应一个可执行”，而是：
+- `gtest.engine.unit`
+- `engine;unit;gtest`
 
-- 用统一测试 target 聚合实现
-- 再用标签与运行参数切出多个 gate
+当前最优先的工作不是追求大量覆盖率，而是建立稳定、快速、可重复的单元测试骨架。
 
-### 多测试目标并存
+### 2. 集成测试：GoogleTest + GMock
 
-除主单测目标外，还存在：
+`depends/googletest-1.17.0` 已包含 GoogleMock，因此 GMock 是可用但尚未接入当前测试目标的能力。
 
-- `dse_lua_runtime_tests`
-- `dse_lua_runtime_core_single_test`
-- `dse_lua_runtime_smoke_single_test_v2`
-- 资源注入与 spine 等专项相关入口
+适合后续覆盖：
 
-这说明 Lua runtime 相关测试被单独拉出来做更细的专项门禁。
+- `AssetManager` 与 RHI / 文件加载边界
+- runtime service 注入
+- `FramePipeline` 初始化依赖
+- 模块加载与 `IModule` 生命周期
+- Lua/C++ runtime 桥接中的可替换边界
 
-## 当前高价值门禁
+建议新增独立目标或标签，避免和纯 unit 混在一起：
 
-根据 `doc-archive/TESTING_CTEST_GUIDE.md`，当前最常用的 2D 主线门禁包括：
+- `gtest.engine.integration`
+- `engine;integration;gtest;gmock`
 
-- `engine.unit`
-- `engine.lua_runtime`
-- `engine.lua_runtime.smoke`
-- `engine.resource_injection`
-- `engine.cpp_runtime`
-- `engine.2d.ui`
-- `engine.2d.physics2d`
-- `engine.2d.particle`
-- `engine.2d.localization`
-- `engine.spine`
-- `engine.spine.smoke`
+GMock 的价值在于隔离系统交互，不建议用它替代简单纯逻辑单测。
 
-这些门禁覆盖：
+### 3. 性能测试：Google Benchmark
 
-- 双宿主 runtime
-- 资源注入
-- 高频 2D 子系统
-- Spine 资源消费链
+这个方向合理，但**当前仓库没有发现项目主线可用的 Google Benchmark 依赖**。`depends/` 中有第三方库自己的 benchmark 目录或文档，但不等于本项目已经 vendored `google/benchmark`。
 
-## 3D 相关门禁
+因此建议把 Google Benchmark 放到第三阶段：
 
-当前 3D 不是默认稳定主线，但已经具备明确最小 gate：
+1. 先建立 GTest 单元测试基线
+2. 再接入 GMock 集成测试
+3. 最后在用户确认新增第三方依赖后，引入 Google Benchmark
 
-- `engine.3d.unit`
-- `engine.3d.scene_mvp`
-- `engine.3d.runtime_mvp_smoke`
-- `engine.asset_compiler`
+适合性能测试的关键路径：
 
-其中：
+- `FramePipeline` update/render 关键段的可测子路径
+- ECS 大量实体遍历
+- AssetManager 缓存命中/路径解析
+- Lua 绑定高频调用边界
+- Mesh / animation / particle 关键循环
+- 资源导入与烹饪中的热点路径
 
-- `engine.3d.scene_mvp`：守住最小 3D 场景可加载性
-- `engine.3d.runtime_mvp_smoke`：守住 runtime 能实际切入 3D MVP 场景
-- `engine.asset_compiler`：守住 glTF/GLB 到运行时资产的离线链路
+建议标签：
 
-## 测试命名风格
+- `engine;benchmark;performance`
 
-从大量 `TEST_CASE(...)` 可以看出，当前偏向：
+Benchmark 不建议纳入默认 `build_fast_tests.bat`，应作为手动或专项 gate，避免拖慢默认门禁。
 
-- Given / When / Then
-- 明确场景、动作、预期结果
+## 推荐落地顺序
 
-示例风格：
+### Phase A：GTest 全引擎单元测试基线
 
-- `Given_EmptySpinePaths_When_Update_Then_ComponentStateRemainsUnchanged`
-- `Given_DefaultTerrainComponent_When_Created_Then_IsDirtyIsTrue`
+目标：先让整个引擎库有可持续扩展的单元测试目录和 target 结构。
 
-这使测试日志具有较好的语义可读性。
+建议目录：
 
-## Smoke / Snapshot / Regression 倾向
+- `tests/gtest/unit/core/`
+- `tests/gtest/unit/base/`
+- `tests/gtest/unit/ecs/`
+- `tests/gtest/unit/assets/`
+- `tests/gtest/unit/runtime/`
+- `tests/gtest/unit/modules/`
 
-仓库测试不只验证纯逻辑，还包含：
+建议输出：
 
-- **smoke**：最小可执行链路
-- **snapshot**：结果快照/表现验证
-- **static regression**：静态回归保护
-- **runtime smoke**：真实宿主启动路径验证
-- **scene MVP gate**：场景级门禁
+- 一个或多个 `dse_gtest_*_unit_tests` target
+- 每个 target 都有明确 CTest name 与标签
+- 默认 `build_fast_tests.bat` 至少跑通基础 unit 集合
 
-说明测试目标是“防回归 + 守主链”，不是单纯追求覆盖率数字。
+### Phase B：GMock 集成测试层
 
-## Windows 特定经验
+目标：把系统间交互从真实环境中剥离出来做可重复验证。
 
-`doc-archive/TESTING_CTEST_GUIDE.md` 中记录了非常具体的 Windows + Lua 测试经验：
+建议目录：
 
-- 某些断言表达式写法会导致 `session.run()` 不返回的假性超时
-- 推荐先算到局部变量，再做 `REQUIRE(...)`
+- `tests/gtest/integration/`
 
-这是一条非常实际的项目级测试约定，新增 Lua runtime 单测时应优先继承。
+建议关注：
 
-## 推荐命令
+- runtime service 注入
+- 资产系统与渲染设备边界
+- 动态模块接口
+- Lua runtime 上下文边界
 
-### 最小常用门禁
+### Phase C：Google Benchmark 性能专项
 
-- `build_fast_tests.bat`
-- `ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.unit|engine.lua_runtime|engine.cpp_runtime|engine.resource_injection|engine.spine|engine.2d.ui|engine.2d.physics2d|engine.2d.particle|engine.2d.localization"`
+目标：只覆盖关键路径，不把 benchmark 当普通单测运行。
 
-### engine 标签全集
+建议目录：
 
-- `ctest --test-dir build_vs2022 -C Debug --output-on-failure -L engine`
+- `tests/benchmark/`
 
-### 3D MVP 回归矩阵
+建议前置条件：
 
-- `ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.3d.unit|engine.3d.scene_mvp|engine.3d.runtime_mvp_smoke"`
+- 用户明确授权引入 Google Benchmark
+- CMake 开关独立，例如 `DSE_BUILD_BENCHMARKS`
+- 默认关闭，不进入普通构建和快速测试
 
-### 资产导入门禁
+## 补充建议
 
-- `ctest --test-dir build_vs2022 -C Debug --output-on-failure -R "engine.asset_compiler"`
-
-## 当前测试哲学
-
-从文档与目录结构综合看，当前测试哲学是：
-
-- 优先守住 2D 稳定主线
-- 用最小但真实可执行的 gate 防回归
-- 3D 以 MVP 收口为主，不假装“已经全面稳定”
-- 把 runtime、场景、资源链路纳入门禁，而不只是测纯算法
+- **补测试文档**：当前 README 与部分规划文档仍引用旧测试结构，应在测试基线 phase 中同步修正。
+- **补标签规范**：建议统一 `engine;unit;gtest`、`engine;integration;gtest;gmock`、`engine;benchmark;performance`。
+- **补目录约束**：新增测试优先放在 `tests/gtest/` 下，不再恢复旧目录，除非明确重建多框架测试体系。
+- **先测构建链**：每新增 target 都必须验证 `cmake --build ... --target <target>` 与对应 `ctest` 标签。
+- **避免 benchmark 过早引入**：Google Benchmark 是合理目标，但需要额外第三方依赖授权，不应在当前阶段默认假设已存在。
 
 ## 结论
 
-DSEngine 的 testing 体系已经具备较成熟的基础：
+新的测试策略方向是合理的，但应修正为分阶段执行：
 
-- 有统一入口
-- 有层级标签
-- 有最小门禁矩阵
-- 有运行时与资源链路验证
-- 有工程经验文档沉淀
+1. **立即优先**：GoogleTest 覆盖引擎核心单元测试基线
+2. **随后推进**：GoogleTest + GMock 做系统交互集成测试
+3. **专项引入**：Google Benchmark 做关键路径性能测试，需先确认依赖引入策略
 
-后续新增能力时，最佳做法通常是：
-
-1. 先判断属于哪个 gate 层级
-2. 补充对应测试文件
-3. 更新 `CTest` 注册或标签
-4. 必要时同步更新 `doc-archive/TESTING_CTEST_GUIDE.md`
-
-也就是说，测试在这个仓库里是**主线工程约束**，不是上线前临时补的附属物。
+当前最应该进入后续阶段开发的，是 **GTest 全引擎单元测试基线建设**。

@@ -2,212 +2,182 @@
 
 ## 总体判断
 
-DSEngine 当前属于 **brownfield 引擎仓库**：顶层分层相对清晰，但若干核心枢纽类职责偏重。最准确的高层结构可以概括为：
+DSEngine 当前属于 **brownfield 引擎仓库**：顶层分层仍然清晰，但核心运行链与工具链处于“主线已形成、局部正在收口”的状态。当前最准确的高层结构可概括为：
 
-- `apps/`：宿主与工具入口层
-- `engine/`：引擎核心与运行时基础设施
-- `modules/`：玩法/功能模块层（2D 与 3D）
-- `tests/`：单测、smoke、回归与门禁
-- `assets/` / `data/` / `samples/` / `script/`：样例、脚本与运行资源
+- `apps/`：宿主、编辑器、桌面 Launcher、资产工具入口层
+- `engine/`：引擎核心、runtime、RHI、脚本桥接、资产与基础设施
+- `modules/`：2D / 3D gameplay 功能模块
+- `tests/`：当前收敛后的 GoogleTest 测试入口
+- `data/` / `samples/` / `script/`：默认运行资源、样例与脚本层资源
+- `depends/` / `third_party/`：本地 vendored 第三方依赖
 
 ## 主要架构分层
 
 ### 1. 宿主入口层：`apps/`
 
-宿主层负责“如何启动引擎”，而不是承载所有引擎逻辑：
+宿主层负责“如何启动或包装引擎”，而不是承载全部引擎逻辑：
 
 - `apps/runtime/cpp_host/main.cpp`：C++ 业务宿主
 - `apps/runtime/lua_host/main.cpp`：Lua 业务宿主
-- `apps/editor_cpp/src/main.cpp`：编辑器宿主
-- `apps/tools/asset_builder/main.cpp`：离线资产工具
-- `apps/launcher_tauri/`：桌面 launcher 子项目
+- `apps/editor_cpp/src/main.cpp`：原生编辑器宿主
+- `apps/tools/asset_builder/main.cpp`：离线资产导入与烹饪入口
+- `apps/launcher_tauri/`：桌面 Launcher 子工程
 
-这一层决定了：
+这一层决定：
 
-- 启动哪种业务模式
+- 使用哪种业务宿主
 - 是否启用编辑器模式
-- 如何组织工具 UI 或离线工作流
+- 是否进入离线工具流或桌面辅助入口
 
 ### 2. 引擎核心层：`engine/`
 
 `engine/` 是仓库的中枢，承载：
 
 - runtime 生命周期
-- ECS world 与基础组件
-- scene / prefab / transform
+- ECS world 与组件基础设施
+- 场景、transform 与序列化
 - render / RHI / render target / pipeline state
 - scripting bridge
 - assets / importer / cooker
 - input / platform / profiler / core utilities
+- 2D / 3D 物理基础层
 
 ### 3. 模块层：`modules/`
 
-`modules/` 是功能层扩展，当前分为两大方向：
+`modules/` 是 gameplay 扩展层，当前分为：
 
 - `modules/gameplay_2d/`
 - `modules/gameplay_3d/`
 
-2D 层包含：
+2D 层包含 camera / animation / localization / particle / tilemap / ui / spine / rendering 等子系统；3D 层包含 animation / ai / camera / particles / rendering 等子系统。
 
-- camera
-- animation
-- localization
-- particle
-- tilemap
-- ui
-- spine
-- rendering
-
-3D 层包含：
-
-- animation
-- ai
-- camera
-- particles
-- rendering
-
-这里体现的是“核心引擎 + gameplay 模块”的结构，而不是所有逻辑都塞进 `engine/`。
+这里体现的是“核心引擎 + gameplay 模块”的结构，而不是把所有能力都塞进 `engine/`。
 
 ## 运行时主链
 
-### EngineInstance 作为应用运行容器
+### EngineInstance 作为运行容器
 
-`engine/runtime/engine_app.cpp` 中的 `EngineInstance` 是应用层级容器，负责：
+`engine/runtime/engine_app.cpp` 中的 `EngineInstance` 当前负责：
 
-- 衔接 `EngineRunConfig`
-- 建立默认 `World` 与 `AssetManager`
-- 初始化窗口/GL 上下文（非 editor 模式）
-- 初始化 `Debug`、`JobSystem`
+- 组装 `EngineRunConfig`
+- 注入或创建默认 `World` 与 `AssetManager`
+- 初始化 GLFW / glad（非 editor 模式）
+- 初始化 `Debug` 与 `JobSystem`
 - 创建并驱动 `FramePipeline`
-- 管理 `Init / Tick / Shutdown / Run`
+- 执行 `Init / Tick / Shutdown / Run`
+- 触发 startup scene regression 与截图输出等 runtime 级辅助行为
 
-它更像“运行时外壳 + 生命周期协调者”。
+它是“应用外壳 + 生命周期协调者”。
 
 ### FramePipeline 作为帧主循环中枢
 
 `engine/runtime/frame_pipeline.cpp` 是当前最关键的高耦合点之一，负责：
 
-- 检查 world / asset manager 注入
-- 创建 RHI device
-- 配置 data root
-- 初始化 render targets / pipeline states
-- 初始化 physics / audio / spine / mesh rendering 等系统
-- 条件加载 Gameplay3D 动态模块
-- 执行 scene regression sample
-- 承接后续 update / render / fixed update
+- world / asset manager 注入校验
+- RHI device 创建与数据根配置
+- render target 与 pipeline state 初始化
+- 2D 物理、音频、Spine、mesh render 等系统装配
+- 条件加载 `DSE_Gameplay3D` 动态模块
+- 业务 bootstrap
+- update / fixed update / render 主链执行
 
-这意味着 `FramePipeline` 当前同时兼具：
+同时，仓库已经开始把部分帧逻辑拆到：
 
-- runtime bootstrap
-- render graph 初始化
-- 系统装配
-- 模块加载
-- 部分回归校验
+- `runtime_frame_ops.cpp`
+- `runtime_update_graph.cpp`
+- `runtime_render_shell.cpp`
 
-该类是重要的架构枢纽，也是未来拆分风险最高的区域之一。
-
-## 数据与依赖流
-
-### 依赖方向（理想形态）
-
-从目录与引用关系看，当前主要方向应为：
-
-- `apps -> engine`
-- `modules -> engine`
-- `tests -> apps/engine/modules`
-
-没有明显证据表明存在系统性 `engine -> apps` 反向依赖，这说明顶层方向基本健康。
-
-### 运行时数据中心
-
-在实际执行链中，几个关键共享对象是：
-
-- `World`
-- `AssetManager`
-- `OpenGLRhiDevice` / RHI 资源
-- 各类 runtime context / render resources
-
-这些对象在 `EngineInstance` 与 `FramePipeline` 中被注入、保存并向系统扩散。
+说明 runtime 中枢已有收口趋势，但 `FramePipeline` 仍然是关键复杂度中心。
 
 ## 动态模块架构
 
-3D gameplay 能力不是完全静态耦合到主 runtime 中，而是存在动态模块装配路径：
+3D gameplay 能力不是完全静态耦合在主 runtime 中，而是保留了动态模块边界：
 
-- `FramePipeline::Init()` 中会解析 `DSE_RUNTIME_MODULES`
-- 在 `DSE_ENABLE_3D` 下尝试加载 `DSE_Gameplay3D`
-- 通过 `CreateModule` / `DestroyModule` 导出函数进行模块实例化
+- `CMakeLists.txt` 在 `DSE_ENABLE_3D=ON` 时构建 `DSE_Gameplay3D`
+- `FramePipeline::Init()` 会读取 `DSE_RUNTIME_MODULES`
+- 运行时按候选动态库名尝试加载 `DSE_Gameplay3D`
+- 模块通过 `CreateModule` / `DestroyModule` 与 `core::IModule` 接口接入
 
-说明当前 3D 方向具备一定插件化/动态库边界，但并未完全成为仓库默认主线。
+同时，`dse_engine` 也静态编入了自身直接依赖的 3D 实现文件（如 `mesh_render_system.cpp`、`animation_state_machine.cpp`），说明当前 3D 仍处于“动态模块边界 + 主库局部直连共存”的过渡态。
 
-关键位置：
+### PhysX 降级边界
 
-- `engine/runtime/frame_pipeline.cpp`
-- `modules/gameplay_3d/gameplay_3d_module.h`
+当前 3D 模块的物理后端不是无条件可用：
+
+- `DSE_ENABLE_PHYSX` 控制是否启用 PhysX 方向
+- `DSE_HAS_PHYSX_LIBS` 反映本机是否真的存在 PhysX `.lib`
+- 无 PhysX 库时，`Gameplay3DModule` 会跳过 `Physics3DSystem` 成员与调用，仍允许 3D 模块构建通过
+
+这表明 3D 模块当前具备“无物理后端降级”的本地适配能力。
 
 ## 编辑器架构
 
-`apps/editor_cpp/` 当前是原生编辑器主线，具有明显的“引擎内嵌编辑器”风格：
+`apps/editor_cpp/` 当前是原生编辑器主线，明显属于“引擎内嵌编辑器”风格：
 
 - 编辑器直接链接 `dse_engine`
-- 编辑器主程序同时感知 2D / 3D ECS 组件
-- 面板模块拆分为多个 `editor_*` 文件
-- UI 层用 ImGui DockSpace + 各面板组成
-- 场景 IO 与 undo 功能直接位于编辑器代码中
+- 编辑器主程序直接感知 2D / 3D ECS 组件与相机矩阵
+- 面板式结构拆分为多个 `editor_*` 文件
+- UI 由 ImGui DockSpace + 各面板组成
+- 场景 IO、部分导出与本地化数据种子逻辑直接位于编辑器层
 
-这不是典型的“完全分层工具应用”，而更接近“对 runtime 直接进行工具化包装”。优点是迭代快，风险是宿主层容易过重。
+优点是迭代快、共用 runtime 能力；风险是宿主层容易过重。
 
 ## 资源与场景链路
 
-当前仓库已形成一条相对完整的资产与场景链：
+当前仓库已形成较清晰的资源与场景链：
 
-- 原始资源位于 `assets/`、`data/`、samples 对应目录
-- 场景使用 JSON 表达（如 `assets/scenes/*.scene.json`）
-- 离线工具 `AssetBuilder` 负责导入并烹饪运行时格式
-- runtime / tests 可通过 `DSE_STARTUP_SCENE` 或样例路径驱动最小场景加载
+- 默认运行资源位于 `data/`
+- 脚本与 demo 位于 `samples/` 与 `script/`
+- 场景使用 JSON 表达
+- `AssetBuilder` 负责 glTF / GLB / FBX 到运行时资产格式的离线导入与烹饪
+- runtime 可通过环境变量如 `DSE_STARTUP_SCENE` 驱动最小场景启动
 
-说明场景与资产已经是独立重要子系统，而不只是 demo 辅助文件。
+这说明“资源与场景”已经是主线子系统，而不是单纯 demo 辅助物。
 
 ## 测试架构
 
-测试不是“附属脚本”，而是仓库分层的一部分：
+当前测试架构已经从旧布局收敛到新入口：
 
-- `tests/engine/`：核心引擎、runtime、assets、render、scene 等测试
-- `tests/modules/`：2D / 3D gameplay 模块测试
-- `tests/spine/`：Spine 专项测试
+- `tests/` 当前只保留 `tests/gtest/`
+- `tests/gtest/unit/` 负责当前可见的单元测试入口
+- `dse_gtest_unit_tests` 是当前明确构建目标
+- `gtest.engine.unit` 是当前明确注册的 `CTest` 条目
 
-`tests/engine/CMakeLists.txt` 中还将一组单目标程序注册成多个 `CTest` gate，形成“同一测试二进制 + 多个标签入口”的组织方式。
+因此当前架构里，测试更准确地应理解为：
+
+- **GoogleTest + CTest 的新入口正在建立中**
+- 旧的 `tests/engine/` / `tests/modules/` / `tests/spine/` 布局不应再作为当前真实结构引用
 
 ## 当前架构特征总结
 
 ### 优点
 
-- 顶层目录职责较清晰
-- 引擎、模块、宿主、测试四层边界基本存在
-- 2D / 3D 能力已经形成模块化组织
-- 测试与脚本/资源链路已进入主线，而不是散落 demo
-- 编辑器与 runtime 共用核心系统，减少重复实现
+- 顶层目录职责仍然清晰
+- 引擎、模块、宿主、工具的边界基本存在
+- runtime 主链已经形成
+- 3D 动态模块边界存在，且支持本机缺 PhysX 时降级构建
+- 本地 GoogleTest 接入已经落地，测试骨架可继续扩展
 
 ### 风险
 
-- `FramePipeline` 职责明显偏重
+- `FramePipeline` 仍然职责偏重
 - 编辑器主程序感知过多底层细节
-- 运行时仍保留部分全局态/单例兼容痕迹
-- 3D 是“已接入但未完全收口”的架构状态
-- 动态模块、资源链、编辑器、runtime 多链并存，系统复杂度较高
+- 3D 模块边界与主库直连共存，属于过渡态
+- 测试地图与代码现状在近期发生过漂移，需要持续同步
+- Launcher / Editor / Runtime / 3D / 资产链并行存在，系统复杂度较高
 
 ## 结论
 
-DSEngine 的 architecture 更像一个 **正在从“单体引擎原型”向“可持续工程化引擎仓库”过渡的结构**：
+DSEngine 的 architecture 更像一个 **正在从单体引擎原型向可持续工程化仓库演进** 的结构：
 
 - 分层已经形成
-- 主链已经明确
-- 测试与工具链正在成体系
-- 但关键中枢类和编辑器壳层仍需进一步降耦与职责收口
+- runtime 主链明确
+- 编辑器与 3D 能力已接入
+- 但测试体系、3D 模块边界和 runtime 中枢仍在收口过程中
 
-对于后续 GSD 规划，这意味着应优先围绕：
+对于后续 GSD 规划，这意味着优先级应继续围绕：
 
 - runtime 中枢收口
-- 编辑器高频闭环
-- 资产/测试/3D MVP 主链稳定性
-
-而不是盲目扩展新功能面。
+- GTest 测试基线建设
+- 3D 模块与 Lua 资产链主路径稳定性
+- 文档与代码口径持续同步
