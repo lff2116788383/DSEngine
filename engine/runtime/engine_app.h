@@ -67,6 +67,8 @@ public:
      * @brief 获取渲染管线
      */
     FramePipeline* pipeline() const { return pipeline_.get(); }
+    core::ServiceLocator& service_locator() { return service_locator_; }
+    const core::ServiceLocator& service_locator() const { return service_locator_; }
 
 private:
     /**
@@ -80,8 +82,13 @@ private:
      */
     void CleanupOnInitFailure();
 
+    void RegisterRuntimeServices();
+    void ResetRuntimeServices();
+    std::shared_ptr<core::EventBus> event_bus_;
+
     EngineRunConfig config_;
     RuntimeServices services_{};
+    core::ServiceLocator service_locator_{};
     std::unique_ptr<World> default_world_;
     std::unique_ptr<AssetManager> default_asset_manager_;
     std::unique_ptr<FramePipeline> pipeline_;

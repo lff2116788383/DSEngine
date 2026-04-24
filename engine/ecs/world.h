@@ -1,6 +1,11 @@
 /**
  * @file world.h
  * @brief 实体组件系统(ECS)核心，管理实体、组件生命周期和系统调度
+ *
+ * 改进点：
+ * - World 不再强制单例，改为可实例化
+ * - Instance() 保留兼容，委托到 ServiceLocator
+ * - 支持多 World 并行运行
  */
 
 #ifndef DSE_WORLD_H
@@ -19,20 +24,35 @@ using Entity = entt::entity;
 /**
  * @class World
  * @brief 实体世界管理器，封装 EnTT registry，提供实体的创建、销毁和查询接口。
+ *
+ * 生命周期管理：
+ * - 推荐通过 EngineInstance 或 ServiceLocator 获取 World 实例
+ * - Instance() 保留作为兼容过渡
+ * - 支持创建多个独立 World（多场景并行）
+ *
+ * @example
+ * // 新用法（推荐）- 通过 ServiceLocator
+ * auto* world = ServiceLocator::Instance().Get<World>();
+ *
+ * // 旧用法（兼容）
+ * World::Instance().CreateEntity();
  */
 class World {
 public:
+    World() = default;
+
     /**
-     * @brief 获取 World 单例
+     * @brief 获取 World 默认实例（兼容过渡，委托到 ServiceLocator）
      * @return World 实例引用
+     * @deprecated 通过 EngineInstance 或 ServiceLocator 获取 World
      */
     static World& Instance();
-
+    
     /**
      * @brief 创建一个新的空实体
      * @return 新创建的实体 ID
      * @example
-     * // Entity e = World::Instance().CreateEntity();
+     * Entity e = world.CreateEntity();
      */
     Entity CreateEntity();
     

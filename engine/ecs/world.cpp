@@ -4,11 +4,18 @@
  */
 
 #include "engine/ecs/world.h"
-#include <cstdio>
+#include "engine/core/service_locator.h"
 
 World& World::Instance() {
-    static World instance;
-    return instance;
+    // 委托到 ServiceLocator，若未注册则自动创建并注册
+    auto& locator = dse::core::ServiceLocator::Instance();
+    auto* existing = locator.Get<World>();
+    if (!existing) {
+        auto instance = std::make_shared<World>();
+        locator.Register<World, World>(instance);
+        return *instance;
+    }
+    return *existing;
 }
 
 Entity World::CreateEntity() {
@@ -27,20 +34,12 @@ void World::DestroyEntity(Entity entity) {
 }
 
 void World::Clear() {
-    std::printf("[world] Clear begin this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
-    std::fflush(stdout);
     registry_.clear();
     entity_count_ = 0;
-    std::printf("[world] Clear end this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
-    std::fflush(stdout);
 }
 
 World::~World() {
-    std::printf("[world] ~World begin this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
-    std::fflush(stdout);
     Clear();
-    std::printf("[world] ~World end this=%p entity_count=%zu\n", static_cast<void*>(this), entity_count_);
-    std::fflush(stdout);
 }
 
 bool World::IsAlive(Entity entity) const {

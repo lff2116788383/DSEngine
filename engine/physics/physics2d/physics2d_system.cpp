@@ -4,7 +4,8 @@
  */
 
 #include "engine/physics/physics2d/physics2d_system.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/physics_2d.h"
+#include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
 #include <glm/gtx/quaternion.hpp>
 #include <cmath>

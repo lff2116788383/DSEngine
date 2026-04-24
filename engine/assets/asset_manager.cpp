@@ -8,6 +8,7 @@
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/core/event_bus.h"
+#include <utility>
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
@@ -106,6 +107,16 @@ MaterialAsset::MaterialAsset(unsigned int id, const std::string& name)
 void AssetManager::SetRhiDevice(RhiDevice* rhi_device) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     rhi_device_ = rhi_device;
+}
+
+void AssetManager::SetEventBus(EventBus* event_bus) {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    event_bus_ = event_bus;
+}
+
+EventBus* AssetManager::GetEventBus() const {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    return event_bus_;
 }
 
 void AssetManager::ConfigureDataRoot(const std::string& data_root) {
@@ -581,6 +592,16 @@ std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
     return dskel;
 }
 
+namespace {
+void PublishResourceLoaded(EventBus* event_bus, const std::string& path, bool success) {
+    if (!event_bus) {
+        dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(path, success);
+        return;
+    }
+    event_bus->Publish<dse::core::ResourceLoadedEvent>(path, success);
+}
+}
+
 void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback) {
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);
@@ -591,13 +612,14 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         if (it != textures_.end()) {
             if (auto shared = it->second.lock()) {
                 if (callback) callback(shared);
-                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(cache_key, true);
+                PublishResourceLoaded(GetEventBus(), cache_key, true);
                 return;
             }
         }
     }
 
-    dse::core::JobSystem::Execute([this, path, resolved_path, cache_key, callback]() {
+    EventBus* event_bus = GetEventBus();
+    dse::core::JobSystem::ExecuteStatic([this, path, resolved_path, cache_key, callback, event_bus]() {
         std::vector<uint8_t> file_data;
         if (!LoadFileToMemory(path, file_data)) {
             DEBUG_LOG_ERROR("Failed to read texture file async: {}", path);
@@ -605,7 +627,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
                 std::lock_guard<std::mutex> lock(callback_mutex_);
                 pending_main_thread_callbacks_.push_back([callback]() { callback(nullptr); });
             }
-            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(cache_key, false);
+            PublishResourceLoaded(event_bus, cache_key, false);
             return;
         }
 
@@ -620,8 +642,8 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
                 pending_main_thread_callbacks_.push_back([callback]() {
                     callback(nullptr);
                 });
-                pending_main_thread_callbacks_.push_back([resolved_path]() {
-                    dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, false);
+                pending_main_thread_callbacks_.push_back([resolved_path, event_bus]() {
+                    PublishResourceLoaded(event_bus, resolved_path, false);
                 });
                 pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
                 if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {
@@ -646,7 +668,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
                 if (callback) {
                     callback(nullptr);
                 }
-                dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, false);
+                PublishResourceLoaded(event_bus, resolved_path, false);
                 return;
             }
             auto tex = std::make_shared<TextureAsset>(resolved_path, handle, width, height, channels);
@@ -657,7 +679,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
             if (callback) {
                 callback(tex);
             }
-            dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(resolved_path, true);
+            PublishResourceLoaded(event_bus, resolved_path, true);
         });
         pending_callbacks_high_watermark_ = std::max(pending_callbacks_high_watermark_, pending_main_thread_callbacks_.size());
         if (!callback_backlog_warned_ && pending_main_thread_callbacks_.size() >= 1024) {

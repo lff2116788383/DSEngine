@@ -6,7 +6,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/script.h"
 #include "engine/base/debug.h"
 #include <filesystem>
 #include <vector>

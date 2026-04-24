@@ -1,15 +1,19 @@
 /**
  * @file event_bus.h
  * @brief 核心事件总线系统，提供跨模块、类型安全的发布-订阅机制
+ *
+ * 改进点：
+ * - 使用 EventId (编译期 FNV-1a 哈希) 替代 std::type_index，确保跨 DLL 安全
+ * - 模板接口保持不变，Subscribe/Publish 用法无需改动
  */
 
 #ifndef DSE_CORE_EVENT_BUS_H
 #define DSE_CORE_EVENT_BUS_H
 
+#include "engine/core/event_id.h"
 #include <functional>
 #include <unordered_map>
 #include <vector>
-#include <typeindex>
 #include <memory>
 #include <mutex>
 #include <atomic>
@@ -37,6 +41,8 @@ struct UiClickEvent : public Event {
      */
     explicit UiClickEvent(std::uint32_t entity_id) : entity(entity_id) {}
     std::uint32_t entity = 0;
+
+    static constexpr EventId kEventId = events::kUiClick;
 };
 
 struct ResourceLoadedEvent : public Event {
@@ -49,6 +55,8 @@ struct ResourceLoadedEvent : public Event {
         : path(std::move(resource_path)), success(loaded) {}
     std::string path;
     bool success = false;
+
+    static constexpr EventId kEventId = events::kResourceLoaded;
 };
 
 enum class SceneLifecyclePhase {
@@ -63,6 +71,8 @@ struct SceneLifecycleEvent : public Event {
      */
     explicit SceneLifecycleEvent(SceneLifecyclePhase lifecycle_phase) : phase(lifecycle_phase) {}
     SceneLifecyclePhase phase = SceneLifecyclePhase::Init;
+
+    static constexpr EventId kEventId = events::kSceneLifecycle;
 };
 
 /**
@@ -102,25 +112,64 @@ private:
     CallbackFunc callback_;
 };
 
+/// 事件类型特征：获取 TEvent 对应的 EventId
+template<typename TEvent>
+struct EventTraits {
+    static constexpr EventId GetId() {
+        // 优先使用事件类内定义的 kEventId 常量
+        if constexpr (requires { TEvent::kEventId; }) {
+            return TEvent::kEventId;
+        } else {
+            // 回退：基于类型名的编译期哈希（不应走到此路径，新事件应定义 kEventId）
+            return MakeEventId(__FUNCSIG__);
+        }
+    }
+};
+
 struct SubscriptionHandle {
-    std::type_index type = std::type_index(typeid(void));
-    std::size_t id = 0;
+    EventId event_id = 0;     ///< 事件类型 ID（跨 DLL 安全）
+    std::size_t id = 0;       ///< 订阅唯一序号
     bool valid = false;
 };
 
 /**
  * @class EventBus
- * @brief 全局事件总线，负责事件的分发和订阅管理
+ * @brief 事件总线，负责事件的分发和订阅管理
+ *
+ * 生命周期管理：
+ * - 推荐通过 ServiceLocator 获取：ServiceLocator::Instance().Get<EventBus>()
+ * - Instance() 保留作为兼容过渡，委托到 ServiceLocator
+ * - 由 EngineInstance 统一管理初始化和销毁
+ *
+ * @example
+ * // 新用法（推荐）
+ * auto* bus = ServiceLocator::Instance().Get<EventBus>();
+ * bus->Publish<UiClickEvent>(entity_id);
+ *
+ * // 旧用法（兼容）
+ * EventBus::Instance().Publish<UiClickEvent>(entity_id);
  */
 class EventBus {
 public:
+    EventBus() = default;
+    explicit EventBus(ServiceLocator* owner_locator) : owner_locator_(owner_locator) {}
+    ~EventBus() = default;
+    EventBus(const EventBus&) = delete;
+    EventBus& operator=(const EventBus&) = delete;
+
     /**
-     * @brief 获取 EventBus 单例
+     * @brief 获取 EventBus 实例（兼容过渡，委托到 ServiceLocator）
      * @return EventBus 实例引用
+     * @deprecated 通过 ServiceLocator::Instance().Get<EventBus>() 获取
      */
-    static EventBus& Instance() {
-        static EventBus instance;
-        return instance;
+    static EventBus& Instance();
+
+    void SetOwnerLocator(ServiceLocator* owner_locator) {
+        owner_locator_ = owner_locator;
+    }
+
+    ServiceLocator* owner_locator() const {
+        return owner_locator_;
     }
 
     template<typename TEvent>
@@ -131,13 +180,13 @@ public:
      */
     SubscriptionHandle Subscribe(std::function<void(const TEvent&)> callback) {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto type_idx = std::type_index(typeid(TEvent));
+        EventId eid = EventTraits<TEvent>::GetId();
         auto id = next_subscription_id_++;
-        callbacks_[type_idx].push_back({
+        callbacks_[eid].push_back({
             id,
             std::make_shared<EventCallback<TEvent>>(std::move(callback))
         });
-        return {type_idx, id, true};
+        return {eid, id, true};
     }
 
     /**
@@ -149,7 +198,7 @@ public:
             return;
         }
         std::lock_guard<std::mutex> lock(mutex_);
-        auto it = callbacks_.find(handle.type);
+        auto it = callbacks_.find(handle.event_id);
         if (it == callbacks_.end()) {
             return;
         }
@@ -169,7 +218,7 @@ public:
      */
     void Publish(Args&&... args) {
         TEvent event(std::forward<Args>(args)...);
-        PublishEvent(&event, std::type_index(typeid(TEvent)));
+        PublishEvent(&event, EventTraits<TEvent>::GetId());
     }
 
 private:
@@ -178,26 +227,16 @@ private:
         std::shared_ptr<IEventCallback> callback;
     };
 
-    EventBus() = default;
-    ~EventBus() = default;
-    EventBus(const EventBus&) = delete;
-    EventBus& operator=(const EventBus&) = delete;
-
     /**
-     * @brief 执行 PublishEvent 操作
-     * @param event 参数说明
-     * @param type_idx 参数说明
+     * @brief 按事件 ID 查找订阅者并派发事件
+     * @param event 事件基类指针
+     * @param event_id 事件类型 ID
      */
-    void PublishEvent(Event* event, std::type_index type_idx) {
+    void PublishEvent(Event* event, EventId event_id) {
         std::vector<std::shared_ptr<IEventCallback>> call_list;
         {
-    /**
-     * @brief 执行 lock 操作
-     * @param mutex_ 参数说明
-     * @return std::lock_guard<std::mutex> 返回值说明
-     */
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = callbacks_.find(type_idx);
+            auto it = callbacks_.find(event_id);
             if (it == callbacks_.end()) {
                 return;
             }
@@ -211,9 +250,10 @@ private:
         }
     }
 
-    std::unordered_map<std::type_index, std::vector<CallbackEntry>> callbacks_;
+    std::unordered_map<EventId, std::vector<CallbackEntry>> callbacks_;
     std::atomic<std::size_t> next_subscription_id_{1};
     std::mutex mutex_;
+    ServiceLocator* owner_locator_ = nullptr;
 };
 
 } // namespace core

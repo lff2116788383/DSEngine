@@ -4,7 +4,7 @@
  */
 
 #include "audio_system.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/audio.h"
 #include "engine/assets/asset_manager.h"
 #include <iostream>
 #include <algorithm>

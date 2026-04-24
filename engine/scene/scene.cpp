@@ -4,7 +4,9 @@
  */
 
 #include "engine/scene/scene.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/script.h"
+#include "engine/ecs/sprite.h"
+#include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/base/debug.h"
 #include <fstream>

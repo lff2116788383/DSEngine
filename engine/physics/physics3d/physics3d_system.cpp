@@ -1,7 +1,7 @@
 #include "engine/physics/physics3d/physics3d_system.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
 #include <PxPhysicsAPI.h>
 

@@ -10,9 +10,13 @@
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 #include "engine/assets/asset_manager.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/audio.h"
+#include "engine/ecs/physics_2d.h"
+#include "engine/ecs/transform.h"
+#include "engine/ecs/ui.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/service_locator.h"
 #include "engine/scene/scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -55,8 +59,10 @@ std::vector<std::string> ResolveRuntimeModules() {
 }
 
 FramePipeline& FramePipeline::Instance() {
-    static FramePipeline instance;
-    return instance;
+    if (auto* registered = dse::core::ServiceLocator::Instance().Get<FramePipeline>()) {
+        return *registered;
+    }
+    throw std::runtime_error("FramePipeline::Instance() requires an EngineInstance-managed FramePipeline registration");
 }
 
 bool FramePipeline::Init() {
@@ -269,7 +275,9 @@ bool FramePipeline::Init() {
     BuildRenderGraph();
 
     initialized_ = true;
-    dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
+    if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
+        event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
+    }
     return true;
 }
 
@@ -277,7 +285,9 @@ void FramePipeline::Shutdown() {
     if (!initialized_) {
         return;
     }
-    dse::core::EventBus::Instance().Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
+    if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
+        event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
+    }
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_passes_.clear();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);

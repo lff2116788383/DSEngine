@@ -12,6 +12,9 @@
 #include <iostream>
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
+#include "engine/core/service_locator.h"
+#include "engine/core/event_bus.h"
+#include <utility>
 #include "engine/base/time.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
@@ -152,9 +155,38 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
     return scene_round_trip_ok && scene_backward_compat_ok;
 }
 
+void EngineInstance::RegisterRuntimeServices() {
+    auto pipeline_shared = std::shared_ptr<FramePipeline>(pipeline_.get(), [](FramePipeline*) {});
+    service_locator_.Register<FramePipeline, FramePipeline>(pipeline_shared);
+
+    if (services_.world) {
+        auto world_shared = std::shared_ptr<World>(services_.world, [](World*) {});
+        service_locator_.Register<World, World>(world_shared);
+    }
+
+    event_bus_ = std::make_shared<core::EventBus>(&service_locator_);
+    service_locator_.Register<core::EventBus, core::EventBus>(event_bus_);
+
+    service_locator_.BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
+    service_locator_.BridgeTo<World>(core::ServiceLocator::Instance());
+    service_locator_.BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
+}
+
+void EngineInstance::ResetRuntimeServices() {
+    service_locator_.Reset<core::EventBus>();
+    service_locator_.Reset<FramePipeline>();
+    service_locator_.Reset<World>();
+    event_bus_.reset();
+
+    core::ServiceLocator::Instance().Reset<FramePipeline>();
+    core::ServiceLocator::Instance().Reset<World>();
+    core::ServiceLocator::Instance().Reset<core::EventBus>();
+}
+
 void EngineInstance::CleanupOnInitFailure() {
+    ResetRuntimeServices();
     pipeline_->Shutdown();
-    core::JobSystem::Shutdown();
+    core::JobSystem::ShutdownStatic();
     Debug::ShutDown();
     if (!config_.enable_editor) glfwTerminate();
 }
@@ -219,11 +251,17 @@ bool EngineInstance::Init() {
     }
 
     Debug::Init();
-    core::JobSystem::Init();
+    core::JobSystem::InitStatic();
+
+    // 先登记 EngineInstance 级服务容器，再桥接到兼容全局入口。
+    RegisterRuntimeServices();
 
     pipeline_->EnableEditorMode(config_.enable_editor);
     pipeline_->SetWorld(services_.world);
     pipeline_->SetAssetManager(services_.asset_manager);
+    if (services_.asset_manager) {
+        services_.asset_manager->SetEventBus(event_bus_.get());
+    }
     pipeline_->SetBusinessMode(config_.business_mode);
     
     if (config_.business_mode == BusinessMode::Lua && !config_.startup_lua_script_path.empty()) {
@@ -276,7 +314,15 @@ void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
     
     pipeline_->Shutdown();
-    core::JobSystem::Shutdown();
+    core::JobSystem::ShutdownStatic();
+
+    if (services_.asset_manager) {
+        services_.asset_manager->SetEventBus(nullptr);
+    }
+
+    // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World / FramePipeline 本身，由 EngineInstance 管理）
+    ResetRuntimeServices();
+    
     Debug::ShutDown();
     
     if (!config_.enable_editor) {

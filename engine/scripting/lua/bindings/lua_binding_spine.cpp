@@ -1,7 +1,7 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/ecs/world.h"
-#include "engine/ecs/components_2d.h"
+#include "engine/ecs/sprite.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }

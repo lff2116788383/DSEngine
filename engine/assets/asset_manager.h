@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 class RhiDevice;
+namespace dse::core { class EventBus; }
 
 /**
  * @class TextureAsset
@@ -284,6 +285,8 @@ public:
      * @param rhi_device 渲染硬件接口实例
      */
     void SetRhiDevice(RhiDevice* rhi_device);
+    void SetEventBus(dse::core::EventBus* event_bus);
+    dse::core::EventBus* GetEventBus() const;
     /**
      * @brief 配置数据根目录
      * @param data_root 资源文件的基础路径
@@ -455,6 +458,7 @@ private:
     std::mutex callback_mutex_;
     mutable std::mutex config_mutex_;
     RhiDevice* rhi_device_ = nullptr;
+    dse::core::EventBus* event_bus_ = nullptr;
     std::deque<std::function<void()>> pending_main_thread_callbacks_;
     std::size_t pending_callbacks_high_watermark_ = 0;
     bool callback_backlog_warned_ = false;
