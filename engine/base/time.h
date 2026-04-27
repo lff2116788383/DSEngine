@@ -44,19 +44,19 @@ public:
      * @brief 获取上一帧到当前帧的增量时间（Delta Time）
      * @return 增量时间（秒）
      */
-    static float delta_time(){return delta_time_;}
+    static float delta_time();
 
     /**
      * @brief 获取固定的物理更新步长
      * @return 固定更新时间（秒）
      */
-    static float fixed_update_time(){return fixed_update_time_;}
+    static float fixed_update_time();
 
     /**
      * @brief 设置固定的物理更新步长
      * @param time 设定的时间步长（秒）
      */
-    static void set_fixed_update_time(float time){fixed_update_time_ = time;}
+    static void set_fixed_update_time(float time);
 
 private:
     static std::chrono::system_clock::time_point startup_time_;

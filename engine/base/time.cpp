@@ -20,6 +20,18 @@ Time::Time() {
 Time::~Time() {
 }
 
+float Time::delta_time() {
+    return delta_time_;
+}
+
+float Time::fixed_update_time() {
+    return fixed_update_time_;
+}
+
+void Time::set_fixed_update_time(float time) {
+    fixed_update_time_ = time;
+}
+
 void Time::Init() {
     startup_time_= std::chrono::system_clock::now();
 }
