@@ -5,6 +5,7 @@
 
 #include "audio_system.h"
 #include "engine/ecs/audio.h"
+#include "engine/ecs/world.h"
 #include "engine/assets/asset_manager.h"
 #include <iostream>
 #include <algorithm>

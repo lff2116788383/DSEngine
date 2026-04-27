@@ -57,6 +57,14 @@ public:
     virtual void OnRenderScene(World& world, CommandBuffer& cmd_buffer) {}
 
     /**
+     * @brief 模块渲染：UI (独立于场景的 UI 渲染阶段)
+     *
+     * UI 渲染通常使用独立的正交投影和 RenderTarget，
+     * 与 Scene Pass 分离以保证 UI 不被深度测试影响
+     */
+    virtual void OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {}
+
+    /**
      * @brief 模块关闭，释放资源
      */
     virtual void OnShutdown(World& world) = 0;

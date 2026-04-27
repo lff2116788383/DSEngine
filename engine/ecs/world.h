@@ -34,7 +34,7 @@ using Entity = entt::entity;
  * // 新用法（推荐）- 通过 ServiceLocator
  * auto* world = ServiceLocator::Instance().Get<World>();
  *
- * // 旧用法（兼容）
+ * // 旧用法（兼容，需先注册 World 到 ServiceLocator）
  * World::Instance().CreateEntity();
  */
 class World {
@@ -44,6 +44,7 @@ public:
     /**
      * @brief 获取 World 默认实例（兼容过渡，委托到 ServiceLocator）
      * @return World 实例引用
+     * @throws std::runtime_error 若未通过 ServiceLocator 注册 World 实例
      * @deprecated 通过 EngineInstance 或 ServiceLocator 获取 World
      */
     static World& Instance();

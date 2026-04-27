@@ -7,7 +7,7 @@
  * - 实体存活检查
  * - 实体计数
  * - 清空世界
- * - Instance() 委托到 ServiceLocator
+ * - Instance() 委托到 ServiceLocator（已注册/未注册）
  */
 
 #include <gtest/gtest.h>
@@ -111,13 +111,9 @@ TEST_F(WorldInstanceTest, Instance委托到ServiceLocator) {
     EXPECT_EQ(instance.EntityCount(), 1u);
 }
 
-TEST_F(WorldInstanceTest, Instance未注册时自动创建) {
-    // 未注册时 Instance() 应自动创建并注册
-    auto& instance = World::Instance();
-    EXPECT_EQ(instance.EntityCount(), 0u);
-
-    // 验证已注册到 ServiceLocator
-    EXPECT_TRUE(ServiceLocator::Instance().Has<World>());
+TEST_F(WorldInstanceTest, Instance未注册时抛出异常) {
+    // 未注册时 Instance() 应抛出异常，要求调用方显式管理 World 生命周期
+    EXPECT_THROW({ World::Instance(); }, std::runtime_error);
 }
 
 // ============================================================

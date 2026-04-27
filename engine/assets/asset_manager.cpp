@@ -109,14 +109,24 @@ void AssetManager::SetRhiDevice(RhiDevice* rhi_device) {
     rhi_device_ = rhi_device;
 }
 
-void AssetManager::SetEventBus(EventBus* event_bus) {
+void AssetManager::SetEventBus(dse::core::EventBus* event_bus) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     event_bus_ = event_bus;
 }
 
-EventBus* AssetManager::GetEventBus() const {
+void AssetManager::SetJobSystem(dse::core::JobSystem* job_system) {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    job_system_ = job_system;
+}
+
+dse::core::EventBus* AssetManager::GetEventBus() const {
     std::lock_guard<std::mutex> lock(config_mutex_);
     return event_bus_;
+}
+
+dse::core::JobSystem* AssetManager::GetJobSystem() const {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    return job_system_;
 }
 
 void AssetManager::ConfigureDataRoot(const std::string& data_root) {
@@ -593,7 +603,7 @@ std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
 }
 
 namespace {
-void PublishResourceLoaded(EventBus* event_bus, const std::string& path, bool success) {
+void PublishResourceLoaded(dse::core::EventBus* event_bus, const std::string& path, bool success) {
     if (!event_bus) {
         dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(path, success);
         return;
@@ -618,8 +628,9 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         }
     }
 
-    EventBus* event_bus = GetEventBus();
-    dse::core::JobSystem::ExecuteStatic([this, path, resolved_path, cache_key, callback, event_bus]() {
+    dse::core::EventBus* event_bus = GetEventBus();
+    dse::core::JobSystem* job_system = GetJobSystem();
+    auto worker = [this, path, resolved_path, cache_key, callback, event_bus]() {
         std::vector<uint8_t> file_data;
         if (!LoadFileToMemory(path, file_data)) {
             DEBUG_LOG_ERROR("Failed to read texture file async: {}", path);
@@ -655,7 +666,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         }
 
         std::lock_guard<std::mutex> callback_lock(callback_mutex_);
-        pending_main_thread_callbacks_.push_back([this, callback, cache_key, resolved_path, width, height, channels, data]() {
+        pending_main_thread_callbacks_.push_back([this, callback, cache_key, resolved_path, width, height, channels, data, event_bus]() {
             unsigned int handle = 0;
             {
                 std::lock_guard<std::mutex> config_lock(config_mutex_);
@@ -686,7 +697,13 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
             callback_backlog_warned_ = true;
             DEBUG_LOG_WARN("Async callback backlog is high: {}", pending_main_thread_callbacks_.size());
         }
-    });
+    };
+
+    if (job_system) {
+        job_system->Execute(worker);
+    } else {
+        worker();
+    }
 }
 
 std::shared_ptr<MaterialAsset> AssetManager::CreateMaterialInstance(const std::string& name) {

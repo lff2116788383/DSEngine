@@ -7,13 +7,11 @@
 #include "engine/core/service_locator.h"
 
 World& World::Instance() {
-    // 委托到 ServiceLocator，若未注册则自动创建并注册
+    // 委托到 ServiceLocator，若未注册则抛出异常
     auto& locator = dse::core::ServiceLocator::Instance();
     auto* existing = locator.Get<World>();
     if (!existing) {
-        auto instance = std::make_shared<World>();
-        locator.Register<World, World>(instance);
-        return *instance;
+        throw std::runtime_error("World::Instance() requires a registered World. Use ServiceLocator or EngineInstance to register one.");
     }
     return *existing;
 }

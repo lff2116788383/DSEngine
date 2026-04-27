@@ -16,7 +16,7 @@
 #ifndef DSE_RENDER_GL_RESOURCE_MANAGER_H
 #define DSE_RENDER_GL_RESOURCE_MANAGER_H
 
-#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/rhi_types.h"
 #include <unordered_map>
 #include <vector>
 #include <cstddef>
@@ -86,6 +86,8 @@ public:
     void StoreRenderTarget(unsigned int handle, const RenderTargetResource& rt);
     const RenderTargetResource* GetRenderTarget(unsigned int handle) const;
     void RemoveRenderTarget(unsigned int handle);
+    /// 销毁所有渲染目标（由 OpenGLRhiDevice::Shutdown 调用）
+    void DestroyAllRenderTargets();
 
     // --- 管线状态 ---
     void StorePipelineState(unsigned int handle, const PipelineStateDesc& desc);

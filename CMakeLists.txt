@@ -243,6 +243,7 @@ add_library(dse_engine SHARED
     ${bundle_cpp}
     ${imgui_src}
     ${engine_cpp}
+    modules/gameplay_2d/gameplay_2d_module.cpp
     engine/runtime/runtime_frame_ops.cpp
     engine/runtime/runtime_update_graph.cpp
     engine/runtime/runtime_render_shell.cpp

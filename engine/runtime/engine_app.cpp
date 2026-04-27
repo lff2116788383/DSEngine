@@ -113,12 +113,17 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
 
 
 
-EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config), services_(config.services) {
+EngineInstance::EngineInstance(const EngineRunConfig& config)
+    : config_(config)
+    , services_(config.services) {
     if (services_.world == nullptr && config_.world != nullptr) {
         services_.world = config_.world;
     }
     if (services_.asset_manager == nullptr && config_.asset_manager != nullptr) {
         services_.asset_manager = config_.asset_manager;
+    }
+    if (services_.job_system == nullptr && config_.job_system != nullptr) {
+        services_.job_system = config_.job_system;
     }
     if (services_.world == nullptr) {
         default_world_ = std::make_unique<World>();
@@ -128,10 +133,15 @@ EngineInstance::EngineInstance(const EngineRunConfig& config) : config_(config),
         default_asset_manager_ = std::make_unique<AssetManager>();
         services_.asset_manager = default_asset_manager_.get();
     }
+    if (services_.job_system == nullptr) {
+        default_job_system_ = std::make_unique<core::JobSystem>();
+        services_.job_system = default_job_system_.get();
+    }
 
     // Keep backward-compatible mirrors in sync for older call sites.
     config_.world = services_.world;
     config_.asset_manager = services_.asset_manager;
+    config_.job_system = services_.job_system;
     config_.services = services_;
 
     pipeline_ = std::make_unique<FramePipeline>();
@@ -157,27 +167,35 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
 
 void EngineInstance::RegisterRuntimeServices() {
     auto pipeline_shared = std::shared_ptr<FramePipeline>(pipeline_.get(), [](FramePipeline*) {});
-    service_locator_.Register<FramePipeline, FramePipeline>(pipeline_shared);
+    service_locator().Register<FramePipeline, FramePipeline>(pipeline_shared);
 
     if (services_.world) {
         auto world_shared = std::shared_ptr<World>(services_.world, [](World*) {});
-        service_locator_.Register<World, World>(world_shared);
+        service_locator().Register<World, World>(world_shared);
     }
 
-    event_bus_ = std::make_shared<core::EventBus>(&service_locator_);
-    service_locator_.Register<core::EventBus, core::EventBus>(event_bus_);
+    event_bus_ = std::make_shared<core::EventBus>(&service_locator());
+    service_locator().Register<core::EventBus, core::EventBus>(event_bus_);
 
-    service_locator_.BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
-    service_locator_.BridgeTo<World>(core::ServiceLocator::Instance());
-    service_locator_.BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
+    if (services_.job_system) {
+        auto job_system_shared = std::shared_ptr<core::JobSystem>(services_.job_system, [](core::JobSystem*) {});
+        service_locator().Register<core::JobSystem, core::JobSystem>(job_system_shared);
+    }
+
+    service_locator().BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<World>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<core::JobSystem>(core::ServiceLocator::Instance());
 }
 
 void EngineInstance::ResetRuntimeServices() {
-    service_locator_.Reset<core::EventBus>();
-    service_locator_.Reset<FramePipeline>();
-    service_locator_.Reset<World>();
+    service_locator().Reset<core::JobSystem>();
+    service_locator().Reset<core::EventBus>();
+    service_locator().Reset<FramePipeline>();
+    service_locator().Reset<World>();
     event_bus_.reset();
 
+    core::ServiceLocator::Instance().Reset<core::JobSystem>();
     core::ServiceLocator::Instance().Reset<FramePipeline>();
     core::ServiceLocator::Instance().Reset<World>();
     core::ServiceLocator::Instance().Reset<core::EventBus>();
@@ -186,7 +204,9 @@ void EngineInstance::ResetRuntimeServices() {
 void EngineInstance::CleanupOnInitFailure() {
     ResetRuntimeServices();
     pipeline_->Shutdown();
-    core::JobSystem::ShutdownStatic();
+    if (services_.job_system) {
+        services_.job_system->Shutdown();
+    }
     Debug::ShutDown();
     if (!config_.enable_editor) glfwTerminate();
 }
@@ -251,7 +271,9 @@ bool EngineInstance::Init() {
     }
 
     Debug::Init();
-    core::JobSystem::InitStatic();
+    if (services_.job_system) {
+        services_.job_system->Init();
+    }
 
     // 先登记 EngineInstance 级服务容器，再桥接到兼容全局入口。
     RegisterRuntimeServices();
@@ -261,6 +283,7 @@ bool EngineInstance::Init() {
     pipeline_->SetAssetManager(services_.asset_manager);
     if (services_.asset_manager) {
         services_.asset_manager->SetEventBus(event_bus_.get());
+        services_.asset_manager->SetJobSystem(services_.job_system);
     }
     pipeline_->SetBusinessMode(config_.business_mode);
     
@@ -314,10 +337,13 @@ void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
     
     pipeline_->Shutdown();
-    core::JobSystem::ShutdownStatic();
+    if (services_.job_system) {
+        services_.job_system->Shutdown();
+    }
 
     if (services_.asset_manager) {
         services_.asset_manager->SetEventBus(nullptr);
+        services_.asset_manager->SetJobSystem(nullptr);
     }
 
     // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World / FramePipeline 本身，由 EngineInstance 管理）

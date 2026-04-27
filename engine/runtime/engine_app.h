@@ -11,6 +11,9 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/runtime_services.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/core/service_locator.h"
+#include "engine/core/job_system.h"
+#include "engine/core/event_bus.h"
 
 namespace dse::runtime {
 
@@ -25,6 +28,7 @@ struct EngineRunConfig {
     // Backward-compatible aliases; EngineInstance will fold them into services.
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
+    dse::core::JobSystem* job_system = nullptr;
 
     EngineRunConfig& WithServices(RuntimeServices runtime_services) {
         services = runtime_services;
@@ -67,8 +71,8 @@ public:
      * @brief 获取渲染管线
      */
     FramePipeline* pipeline() const { return pipeline_.get(); }
-    core::ServiceLocator& service_locator() { return service_locator_; }
-    const core::ServiceLocator& service_locator() const { return service_locator_; }
+    dse::core::ServiceLocator& service_locator() { return dse::core::ServiceLocator::Instance(); }
+    const dse::core::ServiceLocator& service_locator() const { return dse::core::ServiceLocator::Instance(); }
 
 private:
     /**
@@ -84,13 +88,14 @@ private:
 
     void RegisterRuntimeServices();
     void ResetRuntimeServices();
-    std::shared_ptr<core::EventBus> event_bus_;
+    dse::core::JobSystem* job_system() const { return services_.job_system; }
+    std::shared_ptr<dse::core::EventBus> event_bus_;
 
     EngineRunConfig config_;
     RuntimeServices services_{};
-    core::ServiceLocator service_locator_{};
     std::unique_ptr<World> default_world_;
     std::unique_ptr<AssetManager> default_asset_manager_;
+    std::unique_ptr<dse::core::JobSystem> default_job_system_;
     std::unique_ptr<FramePipeline> pipeline_;
     float accumulator_ = 0.0f;
     float fixed_time_step_ = 0.02f;

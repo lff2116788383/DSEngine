@@ -5,6 +5,8 @@
 
 #include "engine/render/rhi/gl_resource_manager.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/base/debug.h"
+#include <glad/gl.h>
 #include <cstdio>
 
 namespace dse {
@@ -38,6 +40,27 @@ void GLResourceManager::RemoveRenderTarget(unsigned int handle) {
     }
 }
 
+void GLResourceManager::DestroyAllRenderTargets() {
+    for (auto& [handle, target] : render_targets_) {
+        if (target.fbo_handle != 0) {
+            glDeleteFramebuffers(1, &target.fbo_handle);
+            resource_ledger_.framebuffers_destroyed += 1;
+            target.fbo_handle = 0;
+        }
+        if (target.color_texture_handle != 0) {
+            glDeleteTextures(1, &target.color_texture_handle);
+            resource_ledger_.textures_destroyed += 1;
+            target.color_texture_handle = 0;
+        }
+        if (target.depth_texture_handle != 0) {
+            glDeleteTextures(1, &target.depth_texture_handle);
+            resource_ledger_.textures_destroyed += 1;
+            target.depth_texture_handle = 0;
+        }
+    }
+    render_targets_.clear();
+}
+
 void GLResourceManager::StorePipelineState(unsigned int handle, const PipelineStateDesc& desc) {
     pipeline_states_[handle] = desc;
     resource_ledger_.pipeline_states_created++;
@@ -57,29 +80,25 @@ const ResourceLedger& GLResourceManager::ledger() const {
 }
 
 void GLResourceManager::LogResourceLedger() const {
-    std::printf("[GLResourceManager] Resource Ledger:\n");
-    std::printf("  Textures:        created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.textures_created, resource_ledger_.textures_destroyed,
-        resource_ledger_.textures_created - resource_ledger_.textures_destroyed);
-    std::printf("  Framebuffers:    created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.framebuffers_created, resource_ledger_.framebuffers_destroyed,
-        resource_ledger_.framebuffers_created - resource_ledger_.framebuffers_destroyed);
-    std::printf("  RenderTargets:   created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.render_targets_created, resource_ledger_.render_targets_destroyed,
-        resource_ledger_.render_targets_created - resource_ledger_.render_targets_destroyed);
-    std::printf("  PipelineStates:  created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.pipeline_states_created, resource_ledger_.pipeline_states_destroyed,
-        resource_ledger_.pipeline_states_created - resource_ledger_.pipeline_states_destroyed);
-    std::printf("  ShaderPrograms:  created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.shader_programs_created, resource_ledger_.shader_programs_destroyed,
-        resource_ledger_.shader_programs_created - resource_ledger_.shader_programs_destroyed);
-    std::printf("  VertexArrays:    created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.vertex_arrays_created, resource_ledger_.vertex_arrays_destroyed,
-        resource_ledger_.vertex_arrays_created - resource_ledger_.vertex_arrays_destroyed);
-    std::printf("  Buffers:         created=%zu destroyed=%zu alive=%zu\n",
-        resource_ledger_.buffers_created, resource_ledger_.buffers_destroyed,
-        resource_ledger_.buffers_created - resource_ledger_.buffers_destroyed);
-    std::fflush(stdout);
+    const std::size_t live_textures = resource_ledger_.textures_created - resource_ledger_.textures_destroyed;
+    const std::size_t live_fbos = resource_ledger_.framebuffers_created - resource_ledger_.framebuffers_destroyed;
+    const std::size_t live_programs = resource_ledger_.shader_programs_created - resource_ledger_.shader_programs_destroyed;
+    const std::size_t live_vaos = resource_ledger_.vertex_arrays_created - resource_ledger_.vertex_arrays_destroyed;
+    const std::size_t live_buffers = resource_ledger_.buffers_created - resource_ledger_.buffers_destroyed;
+    const std::size_t live_targets = resource_ledger_.render_targets_created - resource_ledger_.render_targets_destroyed;
+    const std::size_t live_pipelines = resource_ledger_.pipeline_states_created - resource_ledger_.pipeline_states_destroyed;
+    DEBUG_LOG_INFO("RHI resource ledger: textures={}/{}, framebuffers={}/{}, shader_programs={}/{}, vaos={}/{}, buffers={}/{}, render_targets={}/{}, pipeline_states={}/{}",
+                   resource_ledger_.textures_destroyed, resource_ledger_.textures_created,
+                   resource_ledger_.framebuffers_destroyed, resource_ledger_.framebuffers_created,
+                   resource_ledger_.shader_programs_destroyed, resource_ledger_.shader_programs_created,
+                   resource_ledger_.vertex_arrays_destroyed, resource_ledger_.vertex_arrays_created,
+                   resource_ledger_.buffers_destroyed, resource_ledger_.buffers_created,
+                   resource_ledger_.render_targets_destroyed, resource_ledger_.render_targets_created,
+                   resource_ledger_.pipeline_states_destroyed, resource_ledger_.pipeline_states_created);
+    if (live_textures != 0 || live_fbos != 0 || live_programs != 0 || live_vaos != 0 || live_buffers != 0 || live_targets != 0 || live_pipelines != 0) {
+        DEBUG_LOG_WARN("RHI resource ledger detected live GL objects: textures={}, framebuffers={}, shader_programs={}, vaos={}, buffers={}, render_targets={}, pipeline_states={}",
+                       live_textures, live_fbos, live_programs, live_vaos, live_buffers, live_targets, live_pipelines);
+    }
 }
 
 } // namespace render

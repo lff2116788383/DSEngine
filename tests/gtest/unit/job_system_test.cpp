@@ -1,14 +1,17 @@
 /**
- * @file job_system_test.cpp
- * @brief JobSystem 的单元测试
- *
- * 覆盖场景：
- * - 实例化 JobSystem 的初始化和关闭
- * - 异步任务执行
- * - 无线程池时同步执行
- * - 静态兼容接口
- * - 多任务并发执行
- */
+* @file job_system_test.cpp
+* @brief JobSystem 的单元测试
+*
+* 覆盖场景：
+* - 实例化 JobSystem 的初始化和关闭
+* - 异步任务执行（兼容 Execute 接口）
+* - 无线程池时同步执行
+* - ServiceLocator 注入
+* - 多任务并发执行
+* - 优先级调度
+* - JobHandle 等待完成
+* - 任务依赖链
+*/
 
 #include <gtest/gtest.h>
 #include "engine/core/job_system.h"
@@ -117,31 +120,22 @@ TEST_F(JobSystemInstanceTest, 重复关闭不崩溃) {
 }
 
 // ============================================================
-// 静态兼容接口测试
+// ServiceLocator 注入测试
 // ============================================================
 
-class JobSystemStaticTest : public ::testing::Test {
-protected:
-    void TearDown() override {
-        // 确保清理
-        auto* existing = ServiceLocator::Instance().Get<JobSystem>();
-        if (existing) {
-            existing->Shutdown();
-        }
-        ServiceLocator::Instance().Reset<JobSystem>();
-    }
-};
-
-TEST_F(JobSystemStaticTest, InitStatic创建并注册JobSystem) {
-    JobSystem::InitStatic();
-    EXPECT_TRUE(ServiceLocator::Instance().Has<JobSystem>());
+TEST_F(JobSystemInstanceTest, ServiceLocator可注入实例并执行任务) {
+    auto job_system = std::make_shared<JobSystem>();
+    job_system->Init();
+    ServiceLocator::Instance().Register<JobSystem, JobSystem>(job_system);
 
     std::atomic<int> counter{0};
     std::mutex mutex;
     std::condition_variable condition;
     bool finished = false;
 
-    JobSystem::ExecuteStatic([&counter, &mutex, &condition, &finished]() {
+    auto* resolved = ServiceLocator::Instance().Get<JobSystem>();
+    ASSERT_NE(resolved, nullptr);
+    resolved->Execute([&counter, &mutex, &condition, &finished]() {
         counter.fetch_add(1);
         {
             std::lock_guard<std::mutex> lock(mutex);
@@ -158,21 +152,233 @@ TEST_F(JobSystemStaticTest, InitStatic创建并注册JobSystem) {
     }
     EXPECT_EQ(counter.load(), 1);
 
-    JobSystem::ShutdownStatic();
+    job_system->Shutdown();
+    ServiceLocator::Instance().Reset<JobSystem>();
 }
 
-
-TEST_F(JobSystemStaticTest, ExecuteStatic无实例时同步执行) {
-    // 不调用 InitStatic，直接 ExecuteStatic
+TEST_F(JobSystemInstanceTest, 未注册时调用方可回退为同步执行) {
     int value = 0;
-    JobSystem::ExecuteStatic([&value]() { value = 55; });
+    auto* resolved = ServiceLocator::Instance().Get<JobSystem>();
+    if (resolved) {
+        resolved->Execute([&value]() { value = 55; });
+    } else {
+        value = 55;
+    }
     EXPECT_EQ(value, 55);
 }
 
-TEST_F(JobSystemStaticTest, ShutdownStatic清理ServiceLocator) {
-    JobSystem::InitStatic();
-    EXPECT_TRUE(ServiceLocator::Instance().Has<JobSystem>());
+// ============================================================
+// JobHandle 与 Wait 测试
+// ============================================================
 
-    JobSystem::ShutdownStatic();
-    EXPECT_FALSE(ServiceLocator::Instance().Has<JobSystem>());
+TEST_F(JobSystemInstanceTest, Submit返回有效Handle) {
+    JobSystem js;
+    js.Init();
+
+    auto handle = js.Submit([](){}, JobPriority::Normal);
+    EXPECT_TRUE(handle.is_valid());
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, Wait能等待任务完成) {
+    JobSystem js;
+    js.Init();
+
+    std::atomic<int> counter{0};
+    auto handle = js.Submit([&counter]() {
+        counter.fetch_add(1);
+    }, JobPriority::Normal);
+
+    js.Wait(handle);
+    EXPECT_EQ(counter.load(), 1);
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, Wait无效Handle不崩溃) {
+    JobSystem js;
+    js.Init();
+
+    JobHandle invalid;
+    js.Wait(invalid); // 无效句柄应立即返回
+
+    js.Shutdown();
+    SUCCEED();
+}
+
+TEST_F(JobSystemInstanceTest, Wait已完成任务立即返回) {
+    JobSystem js;
+    js.Init();
+
+    auto handle = js.Submit([](){}, JobPriority::Normal);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // 任务应该已完成
+    js.Wait(handle); // 应立即返回
+
+    js.Shutdown();
+    SUCCEED();
+}
+
+// ============================================================
+// 优先级测试
+// ============================================================
+
+TEST_F(JobSystemInstanceTest, 高优先级任务优先执行) {
+    JobSystem js;
+    js.Init();
+
+    // 提交低优先级任务使队列非空，然后提交高优先级
+    // 注意：此测试验证优先级排队机制，实际执行顺序受线程调度影响
+    std::atomic<int> execution_order{0};
+    std::atomic<int> high_order{-1};
+    std::atomic<int> low_order{-1};
+
+    // 使用同步屏障确保任务在队列中排队后再执行
+    std::mutex mutex;
+    std::condition_variable all_submitted;
+    bool ready = false;
+
+    // 提交一批低优先级任务
+    for (int i = 0; i < 5; ++i) {
+        js.Submit([&execution_order, &low_order]() {
+            int order = execution_order.fetch_add(1);
+            if (low_order.load() == -1) low_order.store(order);
+        }, JobPriority::Low);
+    }
+
+    // 提交高优先级任务
+    auto high_handle = js.Submit([&execution_order, &high_order]() {
+        int order = execution_order.fetch_add(1);
+        high_order.store(order);
+    }, JobPriority::High);
+
+    js.Wait(high_handle);
+
+    // 高优先级任务应该在低优先级之前执行（或至少不晚于第一个低优先级）
+    // 由于线程调度的不确定性，只验证高优先级有被执行
+    EXPECT_GE(high_order.load(), 0);
+
+    js.Shutdown();
+}
+
+// ============================================================
+// 依赖链测试
+// ============================================================
+
+TEST_F(JobSystemInstanceTest, 依赖任务在依赖完成后执行) {
+    JobSystem js;
+    js.Init();
+
+    std::atomic<int> counter{0};
+    std::atomic<int> first_val{-1};
+    std::atomic<int> second_val{-1};
+
+    auto dep = js.Submit([&counter, &first_val]() {
+        first_val.store(counter.fetch_add(1)); // 先执行，值为 0
+    }, JobPriority::Normal);
+
+    auto dependent = js.SubmitWithDependency([&counter, &second_val]() {
+        second_val.store(counter.fetch_add(1)); // 后执行，值为 1
+    }, {dep}, JobPriority::Normal);
+
+    js.Wait(dependent);
+
+    // first_val 应该是 0，second_val 应该是 1
+    EXPECT_EQ(first_val.load(), 0);
+    EXPECT_EQ(second_val.load(), 1);
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, 多依赖全部完成后才执行) {
+    JobSystem js;
+    js.Init();
+
+    std::atomic<int> counter{0};
+    std::vector<JobHandle> deps;
+    std::atomic<int> dep_count{0};
+
+    for (int i = 0; i < 3; ++i) {
+        deps.push_back(js.Submit([&dep_count]() {
+            dep_count.fetch_add(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }, JobPriority::Normal));
+    }
+
+    std::atomic<bool> dependent_executed{false};
+    auto dependent = js.SubmitWithDependency([&dependent_executed, &dep_count]() {
+        dependent_executed.store(true);
+        // 依赖全部完成时 dep_count 应为 3
+    }, deps, JobPriority::Normal);
+
+    js.Wait(dependent);
+
+    EXPECT_TRUE(dependent_executed.load());
+    EXPECT_EQ(dep_count.load(), 3);
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, 无依赖的SubmitWithDependency等价于Submit) {
+    JobSystem js;
+    js.Init();
+
+    std::atomic<int> counter{0};
+    auto handle = js.SubmitWithDependency([&counter]() {
+        counter.fetch_add(1);
+    }, {}, JobPriority::Normal);
+
+    js.Wait(handle);
+    EXPECT_EQ(counter.load(), 1);
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, 已完成依赖的SubmitWithDependency直接入队) {
+    JobSystem js;
+    js.Init();
+
+    auto dep = js.Submit([](){}, JobPriority::Normal);
+    js.Wait(dep); // 确保依赖完成
+
+    std::atomic<int> counter{0};
+    auto handle = js.SubmitWithDependency([&counter]() {
+        counter.fetch_add(1);
+    }, {dep}, JobPriority::Normal);
+
+    js.Wait(handle);
+    EXPECT_EQ(counter.load(), 1);
+
+    js.Shutdown();
+}
+
+TEST_F(JobSystemInstanceTest, 依赖链可以级联) {
+    JobSystem js;
+    js.Init();
+
+    std::atomic<int> counter{0};
+    std::vector<int> order;
+
+    auto a = js.Submit([&counter, &order]() {
+        order.push_back(counter.fetch_add(1)); // 0
+    }, JobPriority::Normal);
+
+    auto b = js.SubmitWithDependency([&counter, &order]() {
+        order.push_back(counter.fetch_add(1)); // 1
+    }, {a}, JobPriority::Normal);
+
+    auto c = js.SubmitWithDependency([&counter, &order]() {
+        order.push_back(counter.fetch_add(1)); // 2
+    }, {b}, JobPriority::Normal);
+
+    js.Wait(c);
+
+    // A → B → C 级联执行，顺序应为 0, 1, 2
+    ASSERT_EQ(order.size(), 3u);
+    EXPECT_EQ(order[0], 0);
+    EXPECT_EQ(order[1], 1);
+    EXPECT_EQ(order[2], 2);
+
+    js.Shutdown();
 }

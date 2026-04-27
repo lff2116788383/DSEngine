@@ -25,6 +25,8 @@
 namespace dse {
 namespace core {
 
+class ServiceLocator;
+
 /**
  * @class Event
  * @brief 所有系统事件的基类，业务事件应继承此基类

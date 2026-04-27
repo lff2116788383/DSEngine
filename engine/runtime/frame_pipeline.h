@@ -23,6 +23,7 @@
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "modules/gameplay_2d/spine/spine_system.h"
+#include "modules/gameplay_2d/gameplay_2d_module.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
@@ -32,6 +33,7 @@
 #include "engine/runtime/render_pipeline_resources.h"
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/business_runtime_bridge.h"
+#include "engine/render/render_graph.h"
 
 class AssetManager;
 
@@ -174,10 +176,8 @@ public:
      */
     RenderTargetReadback ReadMainColorRgba8WithSize() const;
 
-    struct RenderGraphPass {
-        std::string name;
-        std::function<void(CommandBuffer&)> execute;
-    };
+    /// 基于 DAG 的渲染图
+    dse::render::RenderGraph render_graph_dag_;
 
     friend void dse::runtime::RunFrameUpdate(FramePipeline& pipeline, float delta_time);
     friend void dse::runtime::RunFrameFixedUpdate(FramePipeline& pipeline, float fixed_delta_time);
@@ -205,17 +205,7 @@ private:
 
     dse::runtime::RuntimeContext runtime_context_{};
     
-    TransformSystem transform_system_;
-    CameraSystem camera_system_;
-    SpriteRenderSystem sprite_render_system_;
-    UIRenderSystem ui_render_system_;
-    Physics2DSystem physics2d_system_;
-    AnimationSystem animation_system_;
-    ParticleSystem particle_system_;
-    dse::gameplay2d::SpineSystem spine_system_;
-    dse::gameplay2d::UISystem ui_logic_system_;
-    dse::gameplay2d::AudioSystem audio_system_;
-    dse::gameplay2d::TilemapSystem tilemap_system_;
+    dse::gameplay2d::Gameplay2DModule gameplay2d_module_;
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
     
     // 动态模块化架构：不再直接实例化 3D 相关系统
@@ -241,7 +231,6 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
-    std::vector<RenderGraphPass> render_graph_passes_;
 };
 
 #endif

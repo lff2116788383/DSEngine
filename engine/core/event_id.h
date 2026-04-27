@@ -38,10 +38,66 @@ constexpr EventId MakeEventId(const char* str) {
 }
 
 /// 已注册事件 ID 常量（集中定义，避免冲突）
+///
+/// 命名规范：k + PascalCase 事件名
+/// 新增事件必须在此注册，确保跨 DLL 一致性
 namespace events {
+    // --- UI 事件 ---
     constexpr EventId kUiClick         = MakeEventId("UiClick");
+    constexpr EventId kUiHover         = MakeEventId("UiHover");
+    constexpr EventId kUiFocus         = MakeEventId("UiFocus");
+    constexpr EventId kUiBlur          = MakeEventId("UiBlur");
+    constexpr EventId kUiDrag          = MakeEventId("UiDrag");
+    constexpr EventId kUiSubmit        = MakeEventId("UiSubmit");
+
+    // --- 资源事件 ---
     constexpr EventId kResourceLoaded  = MakeEventId("ResourceLoaded");
+    constexpr EventId kResourceUnloaded = MakeEventId("ResourceUnloaded");
+    constexpr EventId kResourceLoadFailed = MakeEventId("ResourceLoadFailed");
+    constexpr EventId kTextureReady    = MakeEventId("TextureReady");
+    constexpr EventId kShaderCompiled  = MakeEventId("ShaderCompiled");
+
+    // --- 场景/实体事件 ---
     constexpr EventId kSceneLifecycle  = MakeEventId("SceneLifecycle");
+    constexpr EventId kEntityCreated   = MakeEventId("EntityCreated");
+    constexpr EventId kEntityDestroyed = MakeEventId("EntityDestroyed");
+    constexpr EventId kParentChanged   = MakeEventId("ParentChanged");
+    constexpr EventId kTransformChanged = MakeEventId("TransformChanged");
+
+    // --- 窗口/输入事件 ---
+    constexpr EventId kWindowResize    = MakeEventId("WindowResize");
+    constexpr EventId kWindowClose     = MakeEventId("WindowClose");
+    constexpr EventId kWindowFocus     = MakeEventId("WindowFocus");
+    constexpr EventId kKeyDown         = MakeEventId("KeyDown");
+    constexpr EventId kKeyUp           = MakeEventId("KeyUp");
+    constexpr EventId kMouseDown       = MakeEventId("MouseDown");
+    constexpr EventId kMouseUp         = MakeEventId("MouseUp");
+    constexpr EventId kMouseMove       = MakeEventId("MouseMove");
+    constexpr EventId kMouseScroll     = MakeEventId("MouseScroll");
+
+    // --- 物理/碰撞事件 ---
+    constexpr EventId kCollisionBegin  = MakeEventId("CollisionBegin");
+    constexpr EventId kCollisionEnd    = MakeEventId("CollisionEnd");
+    constexpr EventId kTriggerEnter    = MakeEventId("TriggerEnter");
+    constexpr EventId kTriggerExit     = MakeEventId("TriggerExit");
+
+    // --- 音频事件 ---
+    constexpr EventId kAudioPlay       = MakeEventId("AudioPlay");
+    constexpr EventId kAudioStop       = MakeEventId("AudioStop");
+    constexpr EventId kAudioFinished   = MakeEventId("AudioFinished");
+
+    // --- 动画事件 ---
+    constexpr EventId kAnimationStart  = MakeEventId("AnimationStart");
+    constexpr EventId kAnimationEnd    = MakeEventId("AnimationEnd");
+    constexpr EventId kAnimationEvent  = MakeEventId("AnimationEvent");
+
+    // --- 引擎生命周期事件 ---
+    constexpr EventId kEngineInit      = MakeEventId("EngineInit");
+    constexpr EventId kEngineShutdown  = MakeEventId("EngineShutdown");
+    constexpr EventId kFrameBegin      = MakeEventId("FrameBegin");
+    constexpr EventId kFrameEnd        = MakeEventId("FrameEnd");
+    constexpr EventId kModuleLoaded    = MakeEventId("ModuleLoaded");
+    constexpr EventId kModuleUnloaded  = MakeEventId("ModuleUnloaded");
 } // namespace events
 
 } // namespace core

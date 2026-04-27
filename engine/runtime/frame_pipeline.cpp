@@ -204,9 +204,7 @@ bool FramePipeline::Init() {
     }
 
     DEBUG_LOG_INFO("FramePipeline init: systems init begin");
-    physics2d_system_.Init(*runtime_context_.world);
-    spine_system_.SetAssetManager(&asset_manager);
-    audio_system_.Initialize(&asset_manager);
+    gameplay2d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
     mesh_render_system_.SetAssetManager(&asset_manager);
     DEBUG_LOG_INFO("FramePipeline init: systems init complete");
 
@@ -289,12 +287,9 @@ void FramePipeline::Shutdown() {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    render_graph_passes_.clear();
+    render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
-    audio_system_.Shutdown();
-    physics2d_system_.Shutdown();
-    spine_system_.Shutdown(runtime_context_.world->registry());
-    spine_system_.SetAssetManager(nullptr);
+    gameplay2d_module_.OnShutdown(*runtime_context_.world);
     mesh_render_system_.SetAssetManager(nullptr);
     asset_manager.ReleaseGpuResources();
     
@@ -442,12 +437,29 @@ void FramePipeline::BuildRenderGraph() {
 
 void FramePipeline::BuildRenderGraphInternal() {
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    render_graph_passes_.clear();
-    
-    // 0. PreZ Pass
-    render_graph_passes_.push_back({
-        "prez_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    render_graph_dag_.Reset();
+
+    // ---- 声明渲染资源 ----
+    auto prez_depth    = render_graph_dag_.DeclareResource("prez_depth");
+    auto shadow_depth  = render_graph_dag_.DeclareResource("shadow_depth");
+    auto spot_shadow   = render_graph_dag_.DeclareResource("spot_shadow");
+    auto point_shadow  = render_graph_dag_.DeclareResource("point_shadow");
+    auto scene_color   = render_graph_dag_.DeclareResource("scene_color");
+    auto scene_depth   = render_graph_dag_.DeclareResource("scene_depth");
+    auto ui_color      = render_graph_dag_.DeclareResource("ui_color");
+    auto bloom_extract = render_graph_dag_.DeclareResource("bloom_extract");
+    auto bloom_mip0    = render_graph_dag_.DeclareResource("bloom_mip0");
+    auto main_color    = render_graph_dag_.DeclareResource("main_color");
+
+    // 标记外部输出：最终合成和场景颜色（编辑器需要）
+    render_graph_dag_.MarkOutput(main_color);
+    render_graph_dag_.MarkOutput(scene_color);
+
+    // ---- 0. PreZ Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("prez_pass");
+        render_graph_dag_.PassWrite(pass, prez_depth);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({render_resources_.prez_render_target, glm::vec4(0.0f), true});
             auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
@@ -474,7 +486,6 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cmd_buffer.SetCamera(view, projection);
                 cmd_buffer.SetPipelineState(render_resources_.prez_pipeline_state);
                 
-                // 分发 PreZ 渲染事件
                 for (auto& mod : modules_) {
                     if (mod.instance) {
                         mod.instance->OnRenderPreZ(*runtime_context_.world, cmd_buffer);
@@ -482,13 +493,14 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
             }
             cmd_buffer.EndRenderPass();
-        }
-    });
+        });
+    }
 
-    // 1. Shadow Map Pass
-    render_graph_passes_.push_back({
-        "shadow_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    // ---- 1. Shadow Map Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("shadow_pass");
+        render_graph_dag_.PassWrite(pass, shadow_depth);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             auto light_view = runtime_context_.world->registry().view<dse::DirectionalLight3DComponent>();
             if (light_view.begin() == light_view.end()) return;
             auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
@@ -498,10 +510,8 @@ void FramePipeline::BuildRenderGraphInternal() {
             std::vector<float> cascade_splits(CSM_CASCADES);
 
             for (int i = 0; i < CSM_CASCADES; ++i) {
-                cmd_buffer.BeginRenderPass({render_resources_.shadow_render_target[i], glm::vec4(1.0f), true}); // Clear depth to 1.0
+                cmd_buffer.BeginRenderPass({render_resources_.shadow_render_target[i], glm::vec4(1.0f), true});
                 
-                // Simple ortho projection for cascades (in a full implementation, this should bound the view frustum splits)
-                // Here we just scale up the orthographic size based on the cascade level
                 float size = 20.0f * std::pow(2.0f, static_cast<float>(i));
                 glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, 200.0f);
                 glm::vec3 light_pos = -glm::normalize(light.direction) * 100.0f;
@@ -513,7 +523,6 @@ void FramePipeline::BuildRenderGraphInternal() {
                 cmd_buffer.SetCamera(light_view_mat, light_proj);
                 cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
                 
-                // 分发 Shadow 渲染事件
                 for (auto& mod : modules_) {
                     if (mod.instance) {
                         mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, i, light_view_mat, light_proj);
@@ -531,12 +540,14 @@ void FramePipeline::BuildRenderGraphInternal() {
                     device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
                 }
             }
-        }
-    });
+        });
+    }
 
-    render_graph_passes_.push_back({
-        "spot_shadow_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    // ---- Spot Shadow Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("spot_shadow_pass");
+        render_graph_dag_.PassWrite(pass, spot_shadow);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             auto spot_light_view = runtime_context_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
             std::vector<glm::mat4> spot_light_space_matrices;
             spot_light_space_matrices.reserve(4);
@@ -571,12 +582,14 @@ void FramePipeline::BuildRenderGraphInternal() {
                 ++shadow_slot;
             }
             cmd_buffer.SetGlobalMat4Array("u_spot_light_space_matrices", spot_light_space_matrices);
-        }
-    });
+        });
+    }
 
-    render_graph_passes_.push_back({
-        "point_shadow_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    // ---- Point Shadow Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("point_shadow_pass");
+        render_graph_dag_.PassWrite(pass, point_shadow);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             auto point_light_view = runtime_context_.world->registry().view<TransformComponent, dse::PointLightComponent>();
             int shadow_slot = 0;
             for (auto entity : point_light_view) {
@@ -622,13 +635,18 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
                 ++shadow_slot;
             }
-        }
-    });
+        });
+    }
  
-    // 2. Main Scene Pass
-    render_graph_passes_.push_back({
-        "scene_pass",
-        [this, &asset_manager](CommandBuffer& cmd_buffer) {
+    // ---- 2. Main Scene Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("scene_pass");
+        render_graph_dag_.PassRead(pass, shadow_depth);
+        render_graph_dag_.PassRead(pass, spot_shadow);
+        render_graph_dag_.PassRead(pass, point_shadow);
+        render_graph_dag_.PassWrite(pass, scene_color);
+        render_graph_dag_.PassWrite(pass, scene_depth);
+        render_graph_dag_.PassSetExecute(pass, [this, &asset_manager](CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({render_resources_.scene_render_target, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
             auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
             entt::entity selected_camera3d = entt::null;
@@ -663,7 +681,6 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
                 cmd_buffer.SetCamera(view, projection);
                 
-                // Draw Skybox
                 auto skybox_view = runtime_context_.world->registry().view<dse::SkyboxComponent>();
                 for (auto sky_entity : skybox_view) {
                     auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
@@ -705,28 +722,27 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
             }
             
-            // 3D Mesh & Particle rendering
             cmd_buffer.SetPipelineState(render_resources_.mesh_pipeline_state);
             
-            // 分发 Scene 渲染事件
             for (auto& mod : modules_) {
                 if (mod.instance) {
                     mod.instance->OnRenderScene(*runtime_context_.world, cmd_buffer);
                 }
             }
             
-            // 2D Sprite/Particle/Spine rendering
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
-            sprite_render_system_.Render(*runtime_context_.world, cmd_buffer);
-            spine_system_.Render(*runtime_context_.world, cmd_buffer);
-            particle_system_.Render(*runtime_context_.world, cmd_buffer);
+            gameplay2d_module_.OnRenderScene(*runtime_context_.world, cmd_buffer);
             cmd_buffer.EndRenderPass();
-        }
-    });
+        });
+    }
 
-    render_graph_passes_.push_back({
-        "post_process_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    // ---- Post Process Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("post_process_pass");
+        render_graph_dag_.PassRead(pass, scene_color);
+        render_graph_dag_.PassWrite(pass, bloom_extract);
+        render_graph_dag_.PassWrite(pass, bloom_mip0);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
             bool pp_enabled = false;
             dse::PostProcessComponent pp_config;
@@ -739,17 +755,15 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
 
             if (!pp_enabled || !pp_config.bloom_enabled) {
-                return; // 只有在启用后处理时才执行
+                return;
             }
 
-            // Bloom Extract
             cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
             cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_extract_rt, glm::vec4(0.0f), false});
-            const unsigned int scene_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
-            cmd_buffer.DrawPostProcess(scene_color, "bloom_extract", {pp_config.bloom_threshold});
+            const unsigned int scene_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+            cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_extract", {pp_config.bloom_threshold});
             cmd_buffer.EndRenderPass();
 
-            // Downsample Pass (Dual Filter)
             unsigned int current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_extract_rt);
             int mip_w = Screen::width() / 2;
             int mip_h = Screen::height() / 2;
@@ -764,40 +778,38 @@ void FramePipeline::BuildRenderGraphInternal() {
                 if (mip_h < 1) mip_h = 1;
             }
 
-            // Upsample Pass (Dual Filter Tent)
-            // We go backwards from the smallest mip
             for (int i = static_cast<int>(render_resources_.pp_bloom_mip_rts.size()) - 1; i > 0; --i) {
                 unsigned int target_rt = render_resources_.pp_bloom_mip_rts[i - 1];
                 current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
                 cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
-                // Note: To implement additive blending correctly for PBR bloom upsample, we might need a specific blend state.
-                // For simplicity in Phase 2, we just use the tent filter directly and rely on composite later, or add blend.
-                // In standard Dual Filtering, upsample actually blends with the previous downsample layer.
-                // Since our pipeline doesn't have an easy way to specify additive blend just for post-process here without a new state,
-                // we'll pass the base texture as a second param if we update the shader, but let's just do a basic upsample for now.
-                cmd_buffer.DrawPostProcess(current_src, "bloom_upsample", {0.005f}); // Filter radius
+                cmd_buffer.DrawPostProcess(current_src, "bloom_upsample", {0.005f});
                 cmd_buffer.EndRenderPass();
             }
+        });
+    }
 
-            // Final result is in render_resources_.pp_bloom_mip_rts[0]
-        }
-    });
-
-    render_graph_passes_.push_back({
-        "ui_pass",
-        [this](CommandBuffer& cmd_buffer) {
+    // ---- UI Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("ui_pass");
+        render_graph_dag_.PassWrite(pass, ui_color);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             cmd_buffer.BeginRenderPass({render_resources_.ui_render_target, glm::vec4(0.0f), true});
-            ui_render_system_.Render(*runtime_context_.world, cmd_buffer, Screen::width(), Screen::height());
+            gameplay2d_module_.OnRenderUI(*runtime_context_.world, cmd_buffer, Screen::width(), Screen::height());
             cmd_buffer.EndRenderPass();
-        }
-    });
+        });
+    }
 
-    render_graph_passes_.push_back({
-        "composite_pass",
-        [this](CommandBuffer& cmd_buffer) {
-            const unsigned int scene_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
-            const unsigned int ui_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.ui_render_target);
+    // ---- Composite Pass ----
+    {
+        auto pass = render_graph_dag_.AddPass("composite_pass");
+        render_graph_dag_.PassRead(pass, scene_color);
+        render_graph_dag_.PassRead(pass, ui_color);
+        render_graph_dag_.PassRead(pass, bloom_mip0);
+        render_graph_dag_.PassWrite(pass, main_color);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
+            const unsigned int scene_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+            const unsigned int ui_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.ui_render_target);
             
             auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
             bool pp_enabled = false;
@@ -817,10 +829,10 @@ void FramePipeline::BuildRenderGraphInternal() {
 
             if (pp_enabled && pp_config.bloom_enabled) {
                 const unsigned int blur_v_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
-                cmd_buffer.DrawPostProcess(scene_color, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
+                cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
             } else {
                 SpriteDrawItem scene_quad;
-                scene_quad.texture_handle = scene_color;
+                scene_quad.texture_handle = scene_color_tex;
                 scene_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
                 scene_quad.model = glm::scale(scene_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
                 scene_quad.color = glm::vec4(1.0f);
@@ -829,29 +841,34 @@ void FramePipeline::BuildRenderGraphInternal() {
 
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             SpriteDrawItem ui_quad;
-            ui_quad.texture_handle = ui_color;
+            ui_quad.texture_handle = ui_color_tex;
             ui_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
             ui_quad.model = glm::scale(ui_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
             ui_quad.color = glm::vec4(1.0f);
             cmd_buffer.DrawBatch({ui_quad});
             cmd_buffer.EndRenderPass();
-        }
-    });
-
-    if (!runtime_context_.editor_mode) {
-        render_graph_passes_.push_back({
-            "present_pass",
-            [this](CommandBuffer& cmd_buffer) {
-                const unsigned int main_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
-                if (main_color == 0) {
-                    return;
-                }
-                cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
-                cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
-                cmd_buffer.DrawPostProcess(main_color, "copy", {});
-                cmd_buffer.EndRenderPass();
-            }
         });
+    }
+
+    // ---- Present Pass (仅 runtime 模式) ----
+    if (!runtime_context_.editor_mode) {
+        auto pass = render_graph_dag_.AddPass("present_pass");
+        render_graph_dag_.PassRead(pass, main_color);
+        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
+            const unsigned int main_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
+            if (main_color_tex == 0) {
+                return;
+            }
+            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
+            cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
+            cmd_buffer.DrawPostProcess(main_color_tex, "copy", {});
+            cmd_buffer.EndRenderPass();
+        });
+    }
+
+    // 编译 DAG（拓扑排序 + 无用 Pass 剔除）
+    if (!render_graph_dag_.Compile()) {
+        DEBUG_LOG_ERROR("RenderGraph 编译失败：检测到循环依赖");
     }
 }
 
@@ -861,9 +878,7 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    for (auto& pass : render_graph_passes_) {
-        pass.execute(cmd_buffer);
-    }
+    render_graph_dag_.Execute(cmd_buffer);
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {
