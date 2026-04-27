@@ -8,6 +8,7 @@
  * - TimeSinceStartup 返回非负值
  * - fixed_update_time 默认值与设置
  * - 连续 Update 的 delta_time 累积
+ * - 重新 Init 后静态状态重置语义
  */
 
 #include <gtest/gtest.h>
@@ -23,6 +24,7 @@ class TimeTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Time::Init();
+        Time::set_fixed_update_time(1.0f / 60.0f);
     }
 };
 
@@ -65,6 +67,17 @@ TEST_F(TimeTest, TimeSinceStartup随时间增长) {
     EXPECT_GT(t2, t1);
 }
 
+TEST_F(TimeTest, 再次Init后TimeSinceStartup重新接近零) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    EXPECT_GT(Time::TimeSinceStartup(), 0.0f);
+
+    Time::Init();
+
+    float reset_time = Time::TimeSinceStartup();
+    EXPECT_GE(reset_time, 0.0f);
+    EXPECT_LT(reset_time, 1.0f);
+}
+
 // ============================================================
 // fixed_update_time 测试
 // ============================================================
@@ -84,3 +97,14 @@ TEST_F(TimeTest, 多次设置fixed_update_time以最后一次为准) {
     Time::set_fixed_update_time(0.033f);
     EXPECT_FLOAT_EQ(Time::fixed_update_time(), 0.033f);
 }
+
+TEST_F(TimeTest, 允许设置fixed_update_time为零) {
+    Time::set_fixed_update_time(0.0f);
+    EXPECT_FLOAT_EQ(Time::fixed_update_time(), 0.0f);
+}
+
+TEST_F(TimeTest, 当前实现允许设置fixed_update_time为负值) {
+    Time::set_fixed_update_time(-0.5f);
+    EXPECT_FLOAT_EQ(Time::fixed_update_time(), -0.5f);
+}
+
