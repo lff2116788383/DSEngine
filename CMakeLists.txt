@@ -219,8 +219,11 @@ if(DSE_ENABLE_3D)
 endif()
 
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
-file(GLOB_RECURSE tiny_aes_c "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/*.c")
+set(tiny_aes_c
+    "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c"
+)
 file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
+
 
 set(imgui_src
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp"
@@ -260,8 +263,12 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
-    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 endif()
+
+
+
+
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /utf-8 /wd5033 /wd4834)
 endif()
