@@ -67,7 +67,7 @@ public:
     static void Reset();
 
 private:
-    static std::chrono::system_clock::time_point startup_time_;
+    static std::chrono::steady_clock::time_point startup_time_;
     static float last_frame_time_;
     //~zh 上一帧花费的时间
     //~en The time spent on the last frame

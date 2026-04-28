@@ -10,13 +10,13 @@ namespace dse {
 // Standard Particle data structure matching the GPU SSBO/VBO layout
 // pos(vec3), color(vec4), size(float)
 struct GPUParticleData {
-    glm::vec3 position;
-    glm::vec4 color;
-    float size;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec4 color = glm::vec4(1.0f);
+    float size = 0.0f;
     
     // CPU-side only state, or compute shader auxiliary data
-    glm::vec3 velocity;
-    float life;
+    glm::vec3 velocity = glm::vec3(0.0f);
+    float life = 0.0f;
 };
 
 struct ParticleSystem3DComponent {

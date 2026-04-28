@@ -9,7 +9,7 @@
 
 #include "time.h"
 
-std::chrono::system_clock::time_point Time::startup_time_;
+std::chrono::steady_clock::time_point Time::startup_time_;
 float Time::delta_time_=0;
 float Time::last_frame_time_=0;
 float Time::fixed_update_time_=1.0/60;
@@ -33,25 +33,25 @@ void Time::set_fixed_update_time(float time) {
 }
 
 void Time::Reset() {
-    startup_time_ = std::chrono::system_clock::now();
+    startup_time_ = std::chrono::steady_clock::now();
     delta_time_ = 0.0f;
     last_frame_time_ = 0.0f;
     fixed_update_time_ = 1.0f / 60.0f;
 }
 
 void Time::Init() {
-    startup_time_= std::chrono::system_clock::now();
+    startup_time_ = std::chrono::steady_clock::now();
+    delta_time_ = 0.0f;
+    last_frame_time_ = 0.0f;
 }
 
 void Time::Update() {
-    if(last_frame_time_>0){
-        delta_time_=TimeSinceStartup()-last_frame_time_;
-    }
-    last_frame_time_=TimeSinceStartup();
+    const float now = TimeSinceStartup();
+    delta_time_ = now - last_frame_time_;
+    last_frame_time_ = now;
 }
 
 float Time::TimeSinceStartup() {
-    std::chrono::time_point now = std::chrono::system_clock::now();
-    uint64_t ms=std::chrono::duration_cast<std::chrono::milliseconds>(now - startup_time_).count();
-    return ms/1000.0f;
+    const auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration<float>(now - startup_time_).count();
 }
