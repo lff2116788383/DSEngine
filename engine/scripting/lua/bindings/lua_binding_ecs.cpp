@@ -26,6 +26,9 @@ extern "C" {
 }
 
 #include "engine/assets/asset_manager.h"
+#include "engine/core/service_locator.h"
+#include "engine/physics/physics2d/physics2d_system.h"
+#include <box2d/box2d.h>
 #include <rapidjson/document.h>
 
 namespace dse::runtime::lua_binding {
@@ -400,6 +403,102 @@ int L_EcsAddBoxCollider(lua_State* L) {
     collider.friction = friction;
     collider.restitution = restitution;
     return 0;
+}
+
+int L_EcsSetBoxColliderTrigger(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool is_trigger = lua_toboolean(L, 2) != 0;
+    if (world->registry().valid(e) && world->registry().all_of<BoxCollider2DComponent>(e)) {
+        auto& collider = world->registry().get<BoxCollider2DComponent>(e);
+        collider.is_trigger = is_trigger;
+        if (collider.runtime_fixture != nullptr) {
+            collider.runtime_fixture->SetSensor(is_trigger);
+        }
+    }
+    return 0;
+}
+
+int L_EcsSetRigidBodyVelocity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float vx = static_cast<float>(luaL_checknumber(L, 2));
+    float vy = static_cast<float>(luaL_checknumber(L, 3));
+    if (world->registry().valid(e) && world->registry().all_of<RigidBody2DComponent>(e)) {
+        auto& rb = world->registry().get<RigidBody2DComponent>(e);
+        rb.velocity = glm::vec2(vx, vy);
+        if (rb.runtime_body != nullptr) {
+            rb.runtime_body->SetLinearVelocity(b2Vec2{vx, vy});
+            rb.runtime_body->SetAwake(true);
+        }
+    }
+    return 0;
+}
+
+int L_EcsRaycast2D(lua_State* L) {
+    auto* physics = dse::core::ServiceLocator::Instance().Get<Physics2DSystem>();
+    if (physics == nullptr) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    glm::vec2 start(
+        static_cast<float>(luaL_checknumber(L, 1)),
+        static_cast<float>(luaL_checknumber(L, 2))
+    );
+    glm::vec2 end(
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4))
+    );
+
+    Entity hit_entity = entt::null;
+    glm::vec2 hit_point(0.0f);
+    glm::vec2 hit_normal(0.0f);
+    if (!physics->Raycast(start, end, hit_entity, hit_point, hit_normal)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    lua_pushboolean(L, 1);
+    lua_pushinteger(L, static_cast<lua_Integer>(static_cast<std::uint32_t>(hit_entity)));
+    lua_pushnumber(L, hit_point.x);
+    lua_pushnumber(L, hit_point.y);
+    lua_pushnumber(L, hit_normal.x);
+    lua_pushnumber(L, hit_normal.y);
+    return 6;
+}
+
+int L_EcsPollCollisionEvent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<RigidBody2DComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& rb = world->registry().get<RigidBody2DComponent>(e);
+    if (rb.pending_contact_events.empty()) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const Physics2DContactEvent event = rb.pending_contact_events.front();
+    rb.pending_contact_events.pop_front();
+    lua_pushboolean(L, 1);
+    lua_pushinteger(L, static_cast<lua_Integer>(static_cast<std::uint32_t>(event.other)));
+    lua_pushboolean(L, event.is_trigger ? 1 : 0);
+    lua_pushboolean(L, event.is_enter ? 1 : 0);
+    return 4;
 }
 
 int L_EcsAddTilemap(lua_State* L) {
@@ -1255,7 +1354,11 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
     set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);
+    set_fn("set_rigid_body_velocity", L_EcsSetRigidBodyVelocity);
     set_fn("add_box_collider", L_EcsAddBoxCollider);
+    set_fn("set_box_collider_trigger", L_EcsSetBoxColliderTrigger);
+    set_fn("raycast_2d", L_EcsRaycast2D);
+    set_fn("poll_collision_event", L_EcsPollCollisionEvent);
     set_fn("add_tilemap", L_EcsAddTilemap);
     set_fn("set_tile", L_EcsSetTile);
     set_fn("add_animator", L_EcsAddAnimator);

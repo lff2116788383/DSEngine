@@ -43,6 +43,7 @@ Entity BodyEntity(const b2Body* body) {
 void NotifyContactEnter(World& world, Entity entityA, Entity entityB, bool is_trigger) {
     if (world.registry().valid(entityA) && world.registry().all_of<RigidBody2DComponent>(entityA)) {
         auto& rbA = world.registry().get<RigidBody2DComponent>(entityA);
+        rbA.pending_contact_events.push_back({entityB, is_trigger, true});
         if (is_trigger) {
             if (rbA.on_trigger_enter) rbA.on_trigger_enter(entityB);
         } else {
@@ -52,6 +53,7 @@ void NotifyContactEnter(World& world, Entity entityA, Entity entityB, bool is_tr
 
     if (world.registry().valid(entityB) && world.registry().all_of<RigidBody2DComponent>(entityB)) {
         auto& rbB = world.registry().get<RigidBody2DComponent>(entityB);
+        rbB.pending_contact_events.push_back({entityA, is_trigger, true});
         if (is_trigger) {
             if (rbB.on_trigger_enter) rbB.on_trigger_enter(entityA);
         } else {
@@ -63,6 +65,7 @@ void NotifyContactEnter(World& world, Entity entityA, Entity entityB, bool is_tr
 void NotifyContactExit(World& world, Entity entityA, Entity entityB, bool is_trigger) {
     if (world.registry().valid(entityA) && world.registry().all_of<RigidBody2DComponent>(entityA)) {
         auto& rbA = world.registry().get<RigidBody2DComponent>(entityA);
+        rbA.pending_contact_events.push_back({entityB, is_trigger, false});
         if (is_trigger) {
             if (rbA.on_trigger_exit) rbA.on_trigger_exit(entityB);
         } else {
@@ -72,6 +75,7 @@ void NotifyContactExit(World& world, Entity entityA, Entity entityB, bool is_tri
 
     if (world.registry().valid(entityB) && world.registry().all_of<RigidBody2DComponent>(entityB)) {
         auto& rbB = world.registry().get<RigidBody2DComponent>(entityB);
+        rbB.pending_contact_events.push_back({entityA, is_trigger, false});
         if (is_trigger) {
             if (rbB.on_trigger_exit) rbB.on_trigger_exit(entityA);
         } else {

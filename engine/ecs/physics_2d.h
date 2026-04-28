@@ -7,10 +7,17 @@
 #define DSE_ECS_COMPONENTS_2D_PHYSICS_2D_H
 
 #include <glm/glm.hpp>
+#include <deque>
 #include <functional>
 #include <entt/entt.hpp>
 
 using Entity = entt::entity;
+
+struct Physics2DContactEvent {
+    Entity other = entt::null;           ///< 另一方实体
+    bool is_trigger = false;             ///< 是否来自触发器
+    bool is_enter = true;                ///< true=进入，false=离开
+};
 
 // Box2D 前向声明
 class b2Body;
@@ -44,6 +51,7 @@ struct RigidBody2DComponent {
     std::function<void(Entity other)> on_collision_exit; ///< 物理碰撞离开回调
     std::function<void(Entity other)> on_trigger_enter;  ///< 触发器进入回调
     std::function<void(Entity other)> on_trigger_exit;   ///< 触发器离开回调
+    std::deque<Physics2DContactEvent> pending_contact_events;  ///< 运行时接触事件队列，供脚本/工具轮询，不应序列化
 };
 
 /**

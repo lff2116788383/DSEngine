@@ -1,7 +1,7 @@
 Config={}
 Config.title="DSEngine"
 Config.data_path="data/"
-Config.game_entry="legacy_phase2_3d_mvp"
+Config.game_entry="phase1_2d_physics_showcase"
 Config.phase1_2d={
     total_boxes=1024,
     spawn_per_frame=64,
@@ -13,6 +13,9 @@ Config.phase1_2d={
 }
 Config.phase1_2d_showcase={
     camera_ortho_size=7.5
+}
+Config.phase1_2d_physics_showcase={
+    camera_ortho_size=9.0
 }
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
@@ -30,5 +33,3 @@ Config.vse_demo_15_9={
     title="DSEngine Lua Demo 15.9"
 }
 return Config
-
-

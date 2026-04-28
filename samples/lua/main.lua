@@ -6,8 +6,11 @@ end
 
 local RuntimeEntry = nil
 local runtime_config = nil
-local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase2_3d_mvp"
-if game_entry == "frog_jump" then
+local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase1_2d_physics_showcase"
+if game_entry == "phase1_2d_physics_showcase" then
+    RuntimeEntry = require("phase1_2d_physics_showcase")
+    runtime_config = Config.phase1_2d_physics_showcase or {}
+elseif game_entry == "frog_jump" then
     RuntimeEntry = require("frog_jump")
     runtime_config = Config.frog_jump or {}
 elseif game_entry == "phase1_2d_mvp" then
@@ -26,11 +29,9 @@ elseif game_entry == "vse_demo_15_9" then
     RuntimeEntry = require("vse_demo.demo15_9")
     runtime_config = Config.vse_demo_15_9 or {}
 else
-
     RuntimeEntry = require("phase2_3d_mvp")
     runtime_config = Config.phase2_3d or {}
 end
-
 
 function Awake()
     if type(Config.title) == "string" and Config.title ~= "" then
@@ -41,7 +42,6 @@ function Awake()
     end
     RuntimeEntry.Setup(runtime_config or {})
 end
-
 
 function Update(delta_time)
     RuntimeEntry.Update(delta_time)
