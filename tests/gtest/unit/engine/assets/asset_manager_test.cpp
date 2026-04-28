@@ -168,7 +168,7 @@ TEST(MaterialAssetTest, SetBlendMode修改混合模式) {
     EXPECT_EQ(mat.GetBlendMode(), MaterialBlendMode::Opaque);
 }
 
-TEST(MaterialAssetTest, SetBaseColorAndEmissive) {
+TEST(MaterialAssetTest, 设置基色和自发光) {
     MaterialAsset mat(1, "test");
     glm::vec4 base_color(0.1f, 0.2f, 0.3f, 1.0f);
     glm::vec3 emissive(1.0f, 0.5f, 0.0f);

@@ -125,3 +125,17 @@ glm::vec2 Input::GetSwipeDelta() {
 bool Input::IsDeviceShaking() {
     return device_shaking_;
 }
+
+void Input::Reset() {
+    key_event_map_.clear();
+    key_event_map_current_frame_.clear();
+    key_down_timestamp_.clear();
+    key_last_click_timestamp_.clear();
+    key_double_click_frame_.clear();
+    mouse_position_ = {0, 0};
+    previous_mouse_position_ = {0, 0};
+    swipe_delta_ = {0, 0};
+    previous_swipe_delta_ = {0, 0};
+    mouse_scroll_ = 0.0f;
+    device_shaking_ = false;
+}

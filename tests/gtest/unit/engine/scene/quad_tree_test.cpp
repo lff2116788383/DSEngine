@@ -108,7 +108,7 @@ TEST(QuadTreeTest, 超过容量时细分) {
     EXPECT_EQ(found.size(), 5u);
 }
 
-TEST(QuadTreeTest, Clear后树为空) {
+TEST(QuadTreeTest, 清空后树为空) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
 

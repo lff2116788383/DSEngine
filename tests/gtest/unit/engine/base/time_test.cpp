@@ -26,6 +26,10 @@ protected:
         Time::Init();
         Time::set_fixed_update_time(1.0f / 60.0f);
     }
+
+    void TearDown() override {
+        Time::Reset();
+    }
 };
 
 TEST_F(TimeTest, 初始化后TimeSinceStartup接近零) {

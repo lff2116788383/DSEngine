@@ -127,7 +127,7 @@ TEST(OctreeTest, 超过容量时细分) {
     EXPECT_TRUE(tree.IsDivided());
 }
 
-TEST(OctreeTest, Clear后树为空) {
+TEST(OctreeTest, 清空后树为空) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 4);
 

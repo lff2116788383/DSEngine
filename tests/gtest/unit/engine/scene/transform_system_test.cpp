@@ -128,7 +128,7 @@ TEST(TransformSystemTest, 父级缩放影响子级) {
 // dirty 标志
 // ============================================================
 
-TEST(TransformSystemTest, Update后dirty标志被清除) {
+TEST(TransformSystemTest, 更新后dirty标志被清除) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();

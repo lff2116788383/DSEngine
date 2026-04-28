@@ -34,7 +34,7 @@ TEST(VertexAttributeTest, OR组合所有属性) {
     EXPECT_TRUE(static_cast<bool>(all & VertexAttribute::Weights));
 }
 
-TEST(VertexAttributeTest, AND检测单个属性) {
+TEST(VertexAttributeTest, 位与检测单个属性) {
     auto pos_norm = VertexAttribute::Position | VertexAttribute::Normal;
     EXPECT_TRUE(static_cast<bool>(pos_norm & VertexAttribute::Position));
     EXPECT_FALSE(static_cast<bool>(pos_norm & VertexAttribute::Color));

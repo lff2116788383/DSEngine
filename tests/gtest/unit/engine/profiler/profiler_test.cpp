@@ -86,7 +86,7 @@ TEST(CPUProfilerTest, Reset清除所有统计) {
     EXPECT_EQ(profiler.GetFrameStats().frame_count, 0);
 }
 
-TEST(CPUProfilerTest, ExportCSV非空) {
+TEST(CPUProfilerTest, 导出CSV非空) {
     CPUProfiler profiler;
     profiler.BeginSample("CSVTest");
     profiler.EndSample();
@@ -96,7 +96,7 @@ TEST(CPUProfilerTest, ExportCSV非空) {
     EXPECT_NE(csv.find("CSVTest"), std::string::npos);
 }
 
-TEST(CPUProfilerTest, ExportJSON非空) {
+TEST(CPUProfilerTest, 导出JSON非空) {
     CPUProfiler profiler;
     profiler.BeginSample("JSONTest");
     profiler.EndSample();
@@ -200,7 +200,7 @@ TEST(MemoryProfilerTest, Reset清除所有统计) {
     EXPECT_EQ(snap.active_allocations, 0);
 }
 
-TEST(MemoryProfilerTest, ExportCSV非空) {
+TEST(MemoryProfilerTest, 导出CSV非空) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("CSV", 256);
     std::string csv = profiler.ExportCSV();
@@ -220,7 +220,7 @@ TEST(RenderProfilerTest, 初始状态为零) {
     EXPECT_EQ(frame.vertex_count, 0);
 }
 
-TEST(RenderProfilerTest, RecordDrawCall增加计数) {
+TEST(RenderProfilerTest, 记录绘制调用增加计数) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordDrawCall(100, 50);
@@ -232,7 +232,7 @@ TEST(RenderProfilerTest, RecordDrawCall增加计数) {
     EXPECT_EQ(frame.triangle_count, 150);
 }
 
-TEST(RenderProfilerTest, RecordSpriteBatch统计正确) {
+TEST(RenderProfilerTest, 记录精灵批次统计正确) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordSpriteBatch(10);
@@ -245,7 +245,7 @@ TEST(RenderProfilerTest, RecordSpriteBatch统计正确) {
     EXPECT_EQ(frame.triangle_count, 20); // 10 * 2
 }
 
-TEST(RenderProfilerTest, RecordTextureBind和ShaderSwitch) {
+TEST(RenderProfilerTest, 记录纹理绑定和着色器切换) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordTextureBind();
@@ -257,7 +257,7 @@ TEST(RenderProfilerTest, RecordTextureBind和ShaderSwitch) {
     EXPECT_EQ(frame.shader_switches, 1);
 }
 
-TEST(RenderProfilerTest, SetTextureMemory) {
+TEST(RenderProfilerTest, 设置纹理内存) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.SetTextureMemory(1024 * 1024);
@@ -265,7 +265,7 @@ TEST(RenderProfilerTest, SetTextureMemory) {
     EXPECT_EQ(profiler.GetCurrentFrameStats().texture_memory, 1024u * 1024);
 }
 
-TEST(RenderProfilerTest, EndFrame累积统计) {
+TEST(RenderProfilerTest, 结束帧累积统计) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordDrawCall(100, 50);
@@ -297,7 +297,7 @@ TEST(RenderProfilerTest, 多帧Peak统计) {
     EXPECT_EQ(acc.peak_vertices, 350);
 }
 
-TEST(RenderProfilerTest, Reset清除所有统计) {
+TEST(RenderProfilerTest, 重置清除所有统计) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordDrawCall(100, 50);
@@ -308,7 +308,7 @@ TEST(RenderProfilerTest, Reset清除所有统计) {
     EXPECT_EQ(profiler.GetCurrentFrameStats().draw_calls, 0);
 }
 
-TEST(RenderProfilerTest, ExportCSV非空) {
+TEST(RenderProfilerTest, 导出CSV非空) {
     RenderProfiler profiler;
     profiler.BeginFrame();
     profiler.RecordDrawCall(100, 50);

@@ -1,15 +1,15 @@
 /**
- * @file eventbus_servicelocator_integration_test.cpp
- * @brief EventBus + ServiceLocator cross-module integration tests
- *
- * Test scenarios:
- * - Service registration and retrieval through ServiceLocator
- * - EventBus as a service injected and retrieved
- * - EventBus Instance() consistency with ServiceLocator injection
- * - Multi-service collaboration: EventBus + World + JobSystem
- * - BridgeTo cross-locator bridging
- * - Lifecycle management: service reset and event channel disconnect
- */
+* @file eventbus_servicelocator_integration_test.cpp
+* @brief EventBus + ServiceLocator 跨模块集成测试
+*
+* 验证场景：
+* - 服务注册与检索
+* - EventBus 作为服务注入和检索
+* - EventBus Instance() 与 ServiceLocator 注入的一致性
+* - 多服务协作：EventBus + World + JobSystem
+* - BridgeTo 跨定位器桥接
+* - 生命周期管理：服务重置与事件通道断开
+*/
 
 #ifdef _MSC_VER
 #include <io.h>
@@ -26,7 +26,7 @@
 using namespace dse::core;
 
 // ============================================================
-// Custom test events
+// 自定义测试事件
 // ============================================================
 
 struct IntegrationTestEvent : public Event {
@@ -42,7 +42,7 @@ struct LifecycleTestEvent : public Event {
 };
 
 // ============================================================
-// ServiceLocator injection of EventBus
+// ServiceLocator 注入 EventBus
 // ============================================================
 
 class EventBusServiceLocatorIntegrationTest : public ::testing::Test {
@@ -54,7 +54,7 @@ protected:
     }
 };
 
-TEST_F(EventBusServiceLocatorIntegrationTest, RegisteredEventBusRetrievableViaServiceLocator) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 注册EventBus后可通过ServiceLocator检索) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -69,7 +69,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, RegisteredEventBusRetrievableViaSe
     EXPECT_EQ(received, 42);
 }
 
-TEST_F(EventBusServiceLocatorIntegrationTest, EmplaceCreatesEventBusInstance) {
+TEST_F(EventBusServiceLocatorIntegrationTest, Emplace创建EventBus实例) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
 
     auto* resolved = ServiceLocator::Instance().Get<EventBus>();
@@ -84,10 +84,10 @@ TEST_F(EventBusServiceLocatorIntegrationTest, EmplaceCreatesEventBusInstance) {
 }
 
 // ============================================================
-// EventBus Instance() and ServiceLocator consistency
+// EventBus Instance() 与 ServiceLocator 一致性
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, InstanceReturnsSameAsServiceLocatorRegistered) {
+TEST_F(EventBusServiceLocatorIntegrationTest, Instance与ServiceLocator注册返回同一对象) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -98,10 +98,10 @@ TEST_F(EventBusServiceLocatorIntegrationTest, InstanceReturnsSameAsServiceLocato
 }
 
 // ============================================================
-// Multi-service collaboration
+// 多服务协作
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, MultipleServicesRegisteredAndRetrievable) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 多服务注册后均可检索) {
     auto bus = std::make_shared<EventBus>();
     auto world = std::make_shared<World>();
     auto job_system = std::make_shared<JobSystem>();
@@ -121,7 +121,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, MultipleServicesRegisteredAndRetri
     job_system->Shutdown();
 }
 
-TEST_F(EventBusServiceLocatorIntegrationTest, CrossServiceEventCommunication) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 跨服务事件通信) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -141,36 +141,36 @@ TEST_F(EventBusServiceLocatorIntegrationTest, CrossServiceEventCommunication) {
 }
 
 // ============================================================
-// BridgeTo cross-locator bridging
+// BridgeTo 跨定位器桥接
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, BridgeToTransfersServiceToTargetLocator) {
+TEST_F(EventBusServiceLocatorIntegrationTest, BridgeTo将服务转移到目标定位器) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
-    // BridgeTo requires a target locator, but ServiceLocator constructor is private.
-    // Use the singleton pattern: register into the same singleton after reset
+    // BridgeTo 要求目标定位器，但 ServiceLocator 构造函数为私有
+    // 使用单例模式：重置后重新注册到同一单例
     auto shared_bus = ServiceLocator::Instance().GetShared<EventBus>();
     ASSERT_TRUE(shared_bus != nullptr);
 
-    // Verify shared pointer semantics work
+    // 验证共享指针语义
     auto* ptr1 = shared_bus.get();
     auto* ptr2 = ServiceLocator::Instance().Get<EventBus>();
     EXPECT_EQ(ptr1, ptr2);
 }
 
-TEST_F(EventBusServiceLocatorIntegrationTest, UnregisteredServiceBridgeReturnsFalse) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 未注册服务桥接返回失败) {
     ServiceLocator::Instance().Reset<EventBus>();
-    // BridgeTo with unregistered service returns false
-    // Since we can't create another ServiceLocator, test via Has<>
+    // BridgeTo 对未注册服务返回 false
+    // 由于无法创建另一个 ServiceLocator，通过 Has<> 验证
     EXPECT_FALSE(ServiceLocator::Instance().Has<EventBus>());
 }
 
 // ============================================================
-// Lifecycle management
+// 生命周期管理
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, ResetAllClearsAllServices) {
+TEST_F(EventBusServiceLocatorIntegrationTest, ResetAll清空所有服务) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
     ServiceLocator::Instance().Emplace<World, World>();
 
@@ -183,7 +183,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, ResetAllClearsAllServices) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<World>());
 }
 
-TEST_F(EventBusServiceLocatorIntegrationTest, ResetSpecificServiceDoesNotAffectOthers) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 重置特定服务不影响其他服务) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
     ServiceLocator::Instance().Emplace<World, World>();
 
@@ -193,7 +193,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, ResetSpecificServiceDoesNotAffectO
     EXPECT_TRUE(ServiceLocator::Instance().Has<World>());
 }
 
-TEST_F(EventBusServiceLocatorIntegrationTest, AfterResetEventBusNoLongerReachable) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 重置后EventBus不再可达) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -208,16 +208,16 @@ TEST_F(EventBusServiceLocatorIntegrationTest, AfterResetEventBusNoLongerReachabl
 
     EXPECT_EQ(ServiceLocator::Instance().Get<EventBus>(), nullptr);
 
-    // Original shared_ptr still works
+    // 原始 shared_ptr 仍然有效
     bus->Publish<IntegrationTestEvent>(99);
     EXPECT_EQ(received, 99);
 }
 
 // ============================================================
-// Has check
+// Has 检查
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, HasCorrectlyReflectsRegistrationState) {
+TEST_F(EventBusServiceLocatorIntegrationTest, Has正确反映注册状态) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<EventBus>());
 
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
@@ -228,10 +228,10 @@ TEST_F(EventBusServiceLocatorIntegrationTest, HasCorrectlyReflectsRegistrationSt
 }
 
 // ============================================================
-// Scene lifecycle events driving World operations
+// 场景生命周期事件驱动 World 操作
 // ============================================================
 
-TEST_F(EventBusServiceLocatorIntegrationTest, SceneLifecycleEventDrivesWorldOperations) {
+TEST_F(EventBusServiceLocatorIntegrationTest, 场景生命周期事件驱动World操作) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
     auto world = std::make_shared<World>();

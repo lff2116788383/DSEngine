@@ -58,6 +58,14 @@ public:
      */
     static void set_fixed_update_time(float time);
 
+    /**
+     * @brief 重置时间状态为默认值（用于测试隔离）
+     *
+     * 将 delta_time、last_frame_time 恢复为 0，fixed_update_time 恢复为 1/60，
+     * startup_time 重置为当前时刻。
+     */
+    static void Reset();
+
 private:
     static std::chrono::system_clock::time_point startup_time_;
     static float last_frame_time_;

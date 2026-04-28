@@ -18,6 +18,7 @@
 #include <io.h>
 #endif
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "engine/render/render_graph.h"
 #include "engine/render/rhi/rhi_device.h"
 #include <vector>
@@ -26,25 +27,25 @@
 using namespace dse::render;
 
 // ============================================================
-// NullCommandBuffer：CommandBuffer 的空实现，仅用于测试
+// GMock 版 CommandBuffer，支持 EXPECT_CALL 验证渲染命令调用
 // ============================================================
 
-class NullCommandBuffer : public CommandBuffer {
+class MockCommandBuffer : public CommandBuffer {
 public:
-    void BeginRenderPass(const RenderPassDesc&) override {}
-    void EndRenderPass() override {}
-    void SetPipelineState(unsigned int) override {}
-    void SetCamera(const glm::mat4&, const glm::mat4&) override {}
-    void DrawBatch(const std::vector<DrawBatchItem>&) override {}
-    void DrawMeshBatch(const std::vector<MeshDrawItem>&) override {}
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>&) override {}
-    void ClearColor(const glm::vec4&) override {}
-    void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
-    void SetGlobalMat4Array(const std::string&, const std::vector<glm::mat4>&) override {}
-    void SetGlobalFloatArray(const std::string&, const std::vector<float>&) override {}
-    void DrawSkybox(unsigned int) override {}
-    void DrawPostProcess(unsigned int, const std::string&, const std::vector<float>&) override {}
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
+    MOCK_METHOD(void, BeginRenderPass, (const RenderPassDesc&), (override));
+    MOCK_METHOD(void, EndRenderPass, (), (override));
+    MOCK_METHOD(void, SetPipelineState, (unsigned int), (override));
+    MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
+    MOCK_METHOD(void, DrawBatch, (const std::vector<DrawBatchItem>&), (override));
+    MOCK_METHOD(void, DrawMeshBatch, (const std::vector<MeshDrawItem>&), (override));
+    MOCK_METHOD(void, DrawSpriteBatch, (const std::vector<SpriteDrawItem>&), (override));
+    MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
+    MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
+    MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
+    MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
+    MOCK_METHOD(void, DrawSkybox, (unsigned int), (override));
+    MOCK_METHOD(void, DrawPostProcess, (unsigned int, const std::string&, const std::vector<float>&), (override));
+    MOCK_METHOD(void, DrawParticles3D, (const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
 };
 
 // ============================================================
@@ -79,7 +80,7 @@ class RenderGraphIntegrationTest : public ::testing::Test {
 protected:
     RenderGraph graph;
     PassExecutionLog log;
-    NullCommandBuffer cmd_buffer;
+    MockCommandBuffer cmd_buffer;
 
     void TearDown() override {
         graph.Reset();
@@ -180,7 +181,7 @@ TEST_F(RenderGraphIntegrationTest, 无输出被读取的Pass被剔除) {
     EXPECT_FALSE(log.Contains("DeadPass"));
 }
 
-TEST_F(RenderGraphIntegrationTest, MarkOutput保护Pass不被剔除) {
+TEST_F(RenderGraphIntegrationTest, 标记输出保护Pass不被剔除) {
     auto res = graph.DeclareResource("final_output");
 
     auto pass = graph.AddPass("ProtectedPass");
@@ -244,7 +245,7 @@ TEST_F(RenderGraphIntegrationTest, 菱形依赖拓扑排序正确) {
 // Compile/Execute 重复与 Reset
 // ============================================================
 
-TEST_F(RenderGraphIntegrationTest, Reset后可重新构建DAG) {
+TEST_F(RenderGraphIntegrationTest, 重置后可重新构建DAG) {
     auto res = graph.DeclareResource("first_res");
     auto pass = graph.AddPass("FirstPass");
     graph.PassWrite(pass, res);

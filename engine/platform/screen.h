@@ -53,6 +53,13 @@ public:
      */
     static void set_width_height(int width,int height){width_=width;height_=height;calculate_aspect_ratio();}
 
+    /**
+     * @brief 重置屏幕状态为默认值（用于测试隔离）
+     *
+     * 将宽高和宽高比恢复为 0，等价于进程刚启动的初始状态。
+     */
+    static void Reset() { width_ = 0; height_ = 0; aspect_ratio_ = 0.0f; }
+
 private:
     /**
      * @brief 内部方法，根据当前宽高重新计算并缓存 aspect_ratio_

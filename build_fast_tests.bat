@@ -26,7 +26,27 @@ echo [INFO] Building gtest targets (Debug)...
 cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests
 if !ERRORLEVEL! neq 0 (
     echo.
-    echo [ERROR] Build failed! Check the output above.
+    echo [ERROR] Unit test build failed! Check the output above.
+    popd
+    pause
+    exit /b !ERRORLEVEL!
+)
+
+echo [INFO] Building integration test target (Debug)...
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests
+if !ERRORLEVEL! neq 0 (
+    echo.
+    echo [ERROR] Integration test build failed! Check the output above.
+    popd
+    pause
+    exit /b !ERRORLEVEL!
+)
+
+echo [INFO] Building smoke test target (Debug)...
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests
+if !ERRORLEVEL! neq 0 (
+    echo.
+    echo [ERROR] Smoke test build failed! Check the output above.
     popd
     pause
     exit /b !ERRORLEVEL!

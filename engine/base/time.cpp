@@ -32,6 +32,13 @@ void Time::set_fixed_update_time(float time) {
     fixed_update_time_ = time;
 }
 
+void Time::Reset() {
+    startup_time_ = std::chrono::system_clock::now();
+    delta_time_ = 0.0f;
+    last_frame_time_ = 0.0f;
+    fixed_update_time_ = 1.0f / 60.0f;
+}
+
 void Time::Init() {
     startup_time_= std::chrono::system_clock::now();
 }

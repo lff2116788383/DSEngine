@@ -129,6 +129,14 @@ public:
      */
     static bool IsDeviceShaking();
 
+    /**
+     * @brief 重置所有输入状态（用于测试隔离）
+     *
+     * 清除所有按键映射、鼠标位置、滚轮值和设备摇晃标记，
+     * 使 Input 回到等价于进程刚启动的初始状态。
+     */
+    static void Reset();
+
 private:
     static std::unordered_map<unsigned short,unsigned short> key_event_map_; ///< 存储按键状态，0松手 1按下 2持续按下
 

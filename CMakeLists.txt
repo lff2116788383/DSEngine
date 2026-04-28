@@ -263,7 +263,7 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)
-    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 
@@ -410,7 +410,7 @@ if(DSE_BUILD_GTESTS)
     endif()
 
     # 禁止 googletest 自身占据全局 include / install，避免与引擎构建冲突
-    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+    set(BUILD_GMOCK ON CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     # 引擎使用静态 CRT (/MT)，gtest 也必须使用静态 CRT 以保持一致
     set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
