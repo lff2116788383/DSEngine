@@ -18,6 +18,8 @@
 #include <entt/entt.hpp>
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/core/service_locator.h"
+#include <stdexcept>
 
 using Entity = entt::entity;
 
@@ -47,7 +49,14 @@ public:
      * @throws std::runtime_error 若未通过 ServiceLocator 注册 World 实例
      * @deprecated 通过 EngineInstance 或 ServiceLocator 获取 World
      */
-    static World& Instance();
+    static World& Instance() {
+        auto& locator = dse::core::ServiceLocator::Instance();
+        auto* existing = locator.Get<World>();
+        if (!existing) {
+            throw std::runtime_error("World::Instance() requires a registered World. Use ServiceLocator or EngineInstance to register one.");
+        }
+        return *existing;
+    }
     
     /**
      * @brief 创建一个新的空实体

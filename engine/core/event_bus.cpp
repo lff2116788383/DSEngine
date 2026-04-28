@@ -10,15 +10,6 @@
 namespace dse {
 namespace core {
 
-EventBus& EventBus::Instance() {
-    // 委托到 ServiceLocator；兼容入口不再隐式创建实例，避免绕开 EngineInstance 装配链。
-    auto& locator = ServiceLocator::Instance();
-    auto* existing = locator.Get<EventBus>();
-    if (!existing) {
-        throw std::runtime_error("EventBus::Instance() requires an EngineInstance-managed EventBus registration");
-    }
-    return *existing;
-}
 
 } // namespace core
 } // namespace dse

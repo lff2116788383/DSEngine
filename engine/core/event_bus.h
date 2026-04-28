@@ -21,6 +21,7 @@
 #include <string>
 #include <cstdint>
 #include <utility>
+#include "engine/core/service_locator.h"
 
 namespace dse {
 namespace core {
@@ -164,7 +165,18 @@ public:
      * @return EventBus 实例引用
      * @deprecated 通过 ServiceLocator::Instance().Get<EventBus>() 获取
      */
-    static EventBus& Instance();
+    static EventBus& Instance() {
+        auto& locator = ServiceLocator::Instance();
+        auto* existing = locator.Get<EventBus>();
+        if (existing) {
+            existing->SetOwnerLocator(&locator);
+            return *existing;
+        }
+
+        auto created = std::make_shared<EventBus>(&locator);
+        locator.Register<EventBus, EventBus>(created);
+        return *created;
+    }
 
     void SetOwnerLocator(ServiceLocator* owner_locator) {
         owner_locator_ = owner_locator;

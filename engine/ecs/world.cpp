@@ -6,16 +6,6 @@
 #include "engine/ecs/world.h"
 #include "engine/core/service_locator.h"
 
-World& World::Instance() {
-    // 委托到 ServiceLocator，若未注册则抛出异常
-    auto& locator = dse::core::ServiceLocator::Instance();
-    auto* existing = locator.Get<World>();
-    if (!existing) {
-        throw std::runtime_error("World::Instance() requires a registered World. Use ServiceLocator or EngineInstance to register one.");
-    }
-    return *existing;
-}
-
 Entity World::CreateEntity() {
     Entity entity = registry_.create();
     ++entity_count_;

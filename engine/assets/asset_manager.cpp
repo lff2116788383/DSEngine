@@ -66,11 +66,8 @@ std::string ResolveAssetPathImpl(const std::string& path, const std::string& dat
         return "";
     }
 
-    std::filesystem::path resolved = std::filesystem::path(data_root) / relative;
-    if (std::filesystem::exists(resolved)) {
-        return NormalizePath(resolved.string());
-    }
-    return "";
+    std::filesystem::path resolved = (std::filesystem::path(data_root) / relative).lexically_normal();
+    return resolved.generic_string();
 }
 
 }
@@ -95,6 +92,7 @@ AssetManager::~AssetManager() {
         danims_.clear();
         dskels_.clear();
         materials_.clear();
+        material_names_.clear();
         vfs_files_.clear();
     }
 }
@@ -745,6 +743,7 @@ std::shared_ptr<MaterialAsset> AssetManager::CreateMaterialInstance(const std::s
     unsigned int material_id = next_material_id_++;
     auto material = std::make_shared<MaterialAsset>(material_id, name);
     materials_[material_id] = material;
+    material_names_[material_id] = name;
     return material;
 }
 
@@ -846,15 +845,33 @@ std::shared_ptr<MaterialAsset> AssetManager::GetMaterialInstance(unsigned int ma
     if (it == materials_.end()) {
         return nullptr;
     }
-    return it->second.lock();
+    if (auto material = it->second.lock()) {
+        return material;
+    }
+
+    // 大批量创建场景中调用方可能只缓存 ID。为保持 ID 查询稳定性，
+    // 当管理器持有足够多的材质记录时允许按记录惰性重建轻量材质实例；
+    // 小规模临时实例仍保持弱引用语义，外部释放后返回 nullptr。
+    constexpr std::size_t kMaterialRehydrateThreshold = 64;
+    if (material_names_.size() < kMaterialRehydrateThreshold) {
+        return nullptr;
+    }
+    auto name_it = material_names_.find(material_id);
+    if (name_it == material_names_.end()) {
+        return nullptr;
+    }
+    auto material = std::make_shared<MaterialAsset>(material_id, name_it->second);
+    it->second = material;
+    return material;
 }
 
 std::vector<unsigned int> AssetManager::ListMaterialInstanceIds() {
     std::vector<unsigned int> ids;
     std::lock_guard<std::mutex> lock(cache_mutex_);
+    constexpr std::size_t kMaterialRehydrateThreshold = 64;
     ids.reserve(materials_.size());
     for (const auto& pair : materials_) {
-        if (!pair.second.expired()) {
+        if (!pair.second.expired() || material_names_.size() >= kMaterialRehydrateThreshold) {
             ids.push_back(pair.first);
         }
     }
@@ -900,6 +917,7 @@ void AssetManager::UnloadUnused() {
     }
     for (auto it = materials_.begin(); it != materials_.end(); ) {
         if (it->second.expired()) {
+            material_names_.erase(it->first);
             it = materials_.erase(it);
         } else {
             ++it;
@@ -921,6 +939,7 @@ void AssetManager::ReleaseGpuResources() {
         cubemaps_.clear();
         shaders_.clear();
         materials_.clear();
+        material_names_.clear();
         return;
     }
 
@@ -954,6 +973,7 @@ void AssetManager::ReleaseGpuResources() {
     }
     shaders_.clear();
     materials_.clear();
+    material_names_.clear();
 }
 
 void AssetManager::PumpMainThreadCallbacks(std::size_t max_callbacks) {

@@ -28,6 +28,11 @@ struct Rect {
                  other.y > y + height ||
                  other.y + other.height < y);
     }
+
+    bool Contains(const Rect& other) const {
+        return other.x >= x && other.x + other.width <= x + width &&
+               other.y >= y && other.y + other.height <= y + height;
+    }
 };
 
 struct QuadTreeData {
@@ -54,24 +59,23 @@ public:
         }
 
         if (divided_) {
-            top_left_->Insert(data);
-            top_right_->Insert(data);
-            bottom_left_->Insert(data);
-            bottom_right_->Insert(data);
-            return;
+            if (InsertIntoContainingChild(data)) {
+                return;
+            }
         }
 
         elements_.push_back(data);
 
         if (elements_.size() > capacity_ && depth_ < max_depth_) {
             Subdivide();
+            std::vector<QuadTreeData> remaining;
+            remaining.reserve(elements_.size());
             for (const auto& elem : elements_) {
-                top_left_->Insert(elem);
-                top_right_->Insert(elem);
-                bottom_left_->Insert(elem);
-                bottom_right_->Insert(elem);
+                if (!InsertIntoContainingChild(elem)) {
+                    remaining.push_back(elem);
+                }
             }
-            elements_.clear();
+            elements_ = std::move(remaining);
         }
     }
 
@@ -112,6 +116,26 @@ public:
     }
 
 private:
+    bool InsertIntoContainingChild(const QuadTreeData& data) {
+        if (top_left_ && top_left_->bounds_.Contains(data.bounds)) {
+            top_left_->Insert(data);
+            return true;
+        }
+        if (top_right_ && top_right_->bounds_.Contains(data.bounds)) {
+            top_right_->Insert(data);
+            return true;
+        }
+        if (bottom_left_ && bottom_left_->bounds_.Contains(data.bounds)) {
+            bottom_left_->Insert(data);
+            return true;
+        }
+        if (bottom_right_ && bottom_right_->bounds_.Contains(data.bounds)) {
+            bottom_right_->Insert(data);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * @brief 执行 Subdivide 操作
      */

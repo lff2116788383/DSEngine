@@ -451,6 +451,7 @@ private:
     std::unordered_map<std::string, std::weak_ptr<DanimAsset>> danims_;
     std::unordered_map<std::string, std::weak_ptr<DskelAsset>> dskels_;
     std::unordered_map<unsigned int, std::weak_ptr<MaterialAsset>> materials_;
+    std::unordered_map<unsigned int, std::string> material_names_;
     
     // Virtual File System for Bundles
     std::unordered_map<std::string, std::vector<uint8_t>> vfs_files_;

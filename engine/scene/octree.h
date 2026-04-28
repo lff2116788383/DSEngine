@@ -32,6 +32,12 @@ struct AABB {
                  other.min_extents.z > max_extents.z ||
                  other.max_extents.z < min_extents.z);
     }
+
+    bool Contains(const AABB& other) const {
+        return other.min_extents.x >= min_extents.x && other.max_extents.x <= max_extents.x &&
+               other.min_extents.y >= min_extents.y && other.max_extents.y <= max_extents.y &&
+               other.min_extents.z >= min_extents.z && other.max_extents.z <= max_extents.z;
+    }
 };
 
 struct OctreeData {
@@ -58,22 +64,23 @@ public:
         }
 
         if (divided_) {
-            for (int i = 0; i < 8; ++i) {
-                children_[i]->Insert(data);
+            if (InsertIntoContainingChild(data)) {
+                return;
             }
-            return;
         }
 
         elements_.push_back(data);
 
         if (elements_.size() > capacity_ && depth_ < max_depth_) {
             Subdivide();
+            std::vector<OctreeData> remaining;
+            remaining.reserve(elements_.size());
             for (const auto& elem : elements_) {
-                for (int i = 0; i < 8; ++i) {
-                    children_[i]->Insert(elem);
+                if (!InsertIntoContainingChild(elem)) {
+                    remaining.push_back(elem);
                 }
             }
-            elements_.clear();
+            elements_ = std::move(remaining);
         }
     }
 
@@ -117,6 +124,16 @@ public:
     const std::vector<OctreeData>& GetElements() const { return elements_; }
 
 private:
+    bool InsertIntoContainingChild(const OctreeData& data) {
+        for (int i = 0; i < 8; ++i) {
+            if (children_[i] && children_[i]->bounds_.Contains(data.bounds)) {
+                children_[i]->Insert(data);
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * @brief 执行 Subdivide 操作
      */

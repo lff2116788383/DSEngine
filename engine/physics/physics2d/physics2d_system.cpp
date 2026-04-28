@@ -112,10 +112,23 @@ Physics2DSystem::~Physics2DSystem() {
 }
 
 void Physics2DSystem::Init(World& world) {
-    (void)world;
     Shutdown();
+
+    auto collider_view = world.registry().view<BoxCollider2DComponent>();
+    for (auto entity : collider_view) {
+        collider_view.get<BoxCollider2DComponent>(entity).runtime_fixture = nullptr;
+    }
+    auto rb_view = world.registry().view<RigidBody2DComponent>();
+    for (auto entity : rb_view) {
+        rb_view.get<RigidBody2DComponent>(entity).runtime_body = nullptr;
+    }
+
     physics_world_ = new b2World(b2Vec2(0.0f, -9.81f));
     DEBUG_LOG_INFO("[Physics2D] Init world_valid={}", physics_world_ != nullptr);
+
+    // 立即同步 ECS 物理组件到 Box2D。这样 Init 后即可进行 Raycast，
+    // 也避免 Shutdown 后再次 Init 时复用已失效的 runtime 指针。
+    FixedUpdate(world, 0.0f);
 }
 
 void Physics2DSystem::Shutdown() {
@@ -189,6 +202,8 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                 fixture_def.isSensor = bc.is_trigger;
                 bc.runtime_fixture = rb.runtime_body->CreateFixture(&fixture_def);
             }
+
+            rb.runtime_body->SetLinearVelocity(b2Vec2{rb.velocity.x, rb.velocity.y});
         } else {
             const b2Vec2 body_position = rb.runtime_body->GetPosition();
             const float body_angle = rb.runtime_body->GetAngle();
