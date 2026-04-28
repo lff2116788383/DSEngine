@@ -75,6 +75,30 @@ std::string ResolveAssetPathImpl(const std::string& path, const std::string& dat
 
 }
 
+AssetManager::AssetManager() = default;
+
+AssetManager::~AssetManager() {
+    // 在成员容器析构前主动释放，避免静态 CRT Debug 堆在 DLL 卸载/测试进程退出阶段
+    // 再处理跨模块分配过的 STL 节点时触发 debug_heap 链表断言。
+    ReleaseGpuResources();
+    {
+        std::lock_guard<std::mutex> callback_lock(callback_mutex_);
+        pending_main_thread_callbacks_.clear();
+    }
+    {
+        std::lock_guard<std::mutex> cache_lock(cache_mutex_);
+        textures_.clear();
+        cubemaps_.clear();
+        shaders_.clear();
+        audio_clips_.clear();
+        dmeshes_.clear();
+        danims_.clear();
+        dskels_.clear();
+        materials_.clear();
+        vfs_files_.clear();
+    }
+}
+
 TextureAsset::TextureAsset(const std::string& path, unsigned int handle, int width, int height, int channels)
     : path_(path), handle_(handle), width_(width), height_(height), channels_(channels) {
 }
@@ -203,9 +227,12 @@ bool AssetManager::PackBundle(const std::string& input_dir, const std::string& o
             std::ifstream file(entry.path(), std::ios::binary | std::ios::ate);
             if (!file) continue;
             std::streamsize size = file.tellg();
+            if (size < 0) {
+                continue;
+            }
             file.seekg(0, std::ios::beg);
-            std::string content(size, '\0');
-            if (file.read(&content[0], size)) {
+            std::string content(static_cast<std::size_t>(size), '\0');
+            if (size == 0 || file.read(content.data(), size)) {
                 pak.resize(idx + 1);
                 std::string rel_path = std::filesystem::relative(entry.path(), input_dir).generic_string();
                 std::replace(rel_path.begin(), rel_path.end(), '\\', '/');
@@ -238,9 +265,13 @@ bool AssetManager::MountBundle(const std::string& bundle_path, const std::string
         return false;
     }
     std::streamsize size = file.tellg();
+    if (size < 0) {
+        DEBUG_LOG_ERROR("Failed to query bundle size: {}", bundle_path);
+        return false;
+    }
     file.seekg(0, std::ios::beg);
-    std::string bin(size, '\0');
-    if (!file.read(&bin[0], size)) return false;
+    std::string bin(static_cast<std::size_t>(size), '\0');
+    if (size > 0 && !file.read(bin.data(), size)) return false;
     
     if (!aes_key.empty() && aes_key.size() >= 16) {
         struct AES_ctx ctx;
@@ -284,13 +315,17 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
     std::ifstream file(load_path, std::ios::binary | std::ios::ate);
     if (!file) return false;
     std::streamsize size = file.tellg();
+    if (size < 0) {
+        return false;
+    }
     file.seekg(0, std::ios::beg);
-    out_data.resize(size);
-    if (file.read((char*)out_data.data(), size)) {
+    out_data.resize(static_cast<std::size_t>(size));
+    if (size == 0 || file.read(reinterpret_cast<char*>(out_data.data()), size)) {
         return true;
     }
     return false;
 }
+
 
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
     const std::string logical_path = NormalizeAssetPath(path);
@@ -605,7 +640,6 @@ std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
 namespace {
 void PublishResourceLoaded(dse::core::EventBus* event_bus, const std::string& path, bool success) {
     if (!event_bus) {
-        dse::core::EventBus::Instance().Publish<dse::core::ResourceLoadedEvent>(path, success);
         return;
     }
     event_bus->Publish<dse::core::ResourceLoadedEvent>(path, success);

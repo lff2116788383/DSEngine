@@ -31,11 +31,12 @@ void JobSystem::Init() {
         num_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency() - 1));
         workers_.reserve(static_cast<size_t>(num_threads));
         local_queues_.reserve(static_cast<size_t>(num_threads));
+        for (int i = 0; i < num_threads; ++i) {
+            local_queues_.push_back(new WorkerLocalQueue());
+        }
     }
 
     for (int i = 0; i < num_threads; ++i) {
-        auto* local = new WorkerLocalQueue();
-        local_queues_.push_back(local);
         workers_.emplace_back(&JobSystem::WorkerThread, this, i);
     }
 }
@@ -53,7 +54,6 @@ void JobSystem::Shutdown() {
         is_stopping_ = true;
         is_initialized_ = false;
         workers_to_join.swap(workers_);
-        queues_to_delete.swap(local_queues_);
     }
 
     condition_.notify_all();
@@ -64,13 +64,9 @@ void JobSystem::Shutdown() {
         }
     }
 
-    // 清理本地队列
-    for (auto* q : queues_to_delete) {
-        delete q;
-    }
-
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
+        queues_to_delete.swap(local_queues_);
         // 清理全局队列
         while (!job_queue_.empty()) {
             job_queue_.pop();
@@ -84,8 +80,14 @@ void JobSystem::Shutdown() {
         }
         completion_signals_.clear();
         pending_dependents_.clear();
+        pending_jobs_.clear();
         completed_jobs_.clear();
         is_stopping_ = false;
+    }
+
+    // 必须在线程全部退出后再释放本地队列；WorkerThread 和 StealJob 会无锁读取 local_queues_。
+    for (auto* q : queues_to_delete) {
+        delete q;
     }
 }
 
@@ -285,14 +287,23 @@ bool JobSystem::StealJob(WorkerLocalQueue& src, JobEntry& out_job) {
 // ============================================================
 
 void JobSystem::WorkerThread(int index) {
-    WorkerLocalQueue* my_queue = local_queues_[index];
+    WorkerLocalQueue* my_queue = nullptr;
+    std::vector<WorkerLocalQueue*> queue_snapshot;
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        if (index < 0 || index >= static_cast<int>(local_queues_.size())) {
+            return;
+        }
+        my_queue = local_queues_[index];
+        queue_snapshot = local_queues_;
+    }
 
     while (true) {
         JobEntry entry;
         bool got_job = false;
 
         // 1. 先检查本地队列
-        {
+        if (my_queue) {
             std::lock_guard<std::mutex> lock(my_queue->mutex);
             if (!my_queue->queue.empty()) {
                 entry = std::move(my_queue->queue.front());
@@ -304,7 +315,7 @@ void JobSystem::WorkerThread(int index) {
         // 2. 再检查全局队列
         if (!got_job) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (is_stopping_ && job_queue_.empty() && pending_jobs_.empty()) {
+            if (is_stopping_ && job_queue_.empty()) {
                 return;
             }
 
@@ -315,11 +326,11 @@ void JobSystem::WorkerThread(int index) {
             }
         }
 
-        // 3. 尝试窃取其他线程的任务
+        // 3. 尝试窃取其他线程的任务。使用启动时快照，避免 Shutdown 修改 local_queues_ 时并发读写 vector。
         if (!got_job) {
-            for (int i = 0; i < static_cast<int>(local_queues_.size()); ++i) {
-                if (i == index) continue;
-                if (StealJob(*local_queues_[i], entry)) {
+            for (int i = 0; i < static_cast<int>(queue_snapshot.size()); ++i) {
+                if (i == index || queue_snapshot[i] == nullptr) continue;
+                if (StealJob(*queue_snapshot[i], entry)) {
                     got_job = true;
                     break;
                 }

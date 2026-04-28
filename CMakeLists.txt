@@ -51,9 +51,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin)
 set(VcpkgAutoLink "false" CACHE STRING "Disable MSBuild vcpkg auto-link wildcard injection" FORCE)
 
 if (MSVC)
-    if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime library" FORCE)
-    endif()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "MSVC runtime library" FORCE)
     set(CMAKE_VS_GLOBALS
         "VcpkgApplocalDeps=false"
         "VcpkgAutoLink=false"
@@ -112,9 +110,9 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(depends/box2d-2.4.1)
-# 强制 box2d 使用静态 CRT，与 dse_engine 的 /MTd 一致
+# 强制 box2d 使用 DLL CRT，与 dse_engine 的 /MDd 一致
 if(MSVC)
-    set_property(TARGET box2d PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET box2d PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 if(DSE_HAS_ASSIMP)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -130,9 +128,9 @@ if(DSE_HAS_ASSIMP)
         ${CMAKE_SOURCE_DIR}/depends/lua
     )
     add_subdirectory(depends/assimp)
-    # 强制 assimp 使用静态 CRT，与 dse_engine 的 /MTd 一致
+    # 强制 assimp 使用 DLL CRT，与 dse_engine 的 /MDd 一致
     if(MSVC)
-        set_property(TARGET assimp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        set_property(TARGET assimp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endif()
 
@@ -159,6 +157,9 @@ file(GLOB_RECURSE engine_cpp
     "engine/*.cpp"
     "modules/gameplay_2d/*.cpp"
 )
+
+list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
+
 
 if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
@@ -214,7 +215,7 @@ if(DSE_ENABLE_3D)
     endif()
     
     if (MSVC)
-        set_property(TARGET DSE_Gameplay3D PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        set_property(TARGET DSE_Gameplay3D PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endif()
 
@@ -308,7 +309,7 @@ if(MSVC)
 endif()
 
 if (MSVC)
-    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 else()
     add_definitions(-D _DEBUG)
 endif ()
@@ -367,7 +368,7 @@ if(DSE_HAS_ASSIMP)
     target_compile_definitions(AssetBuilder PRIVATE DSE_HAS_ASSIMP=1)
 endif()
 if(MSVC)
-    set_property(TARGET AssetBuilder PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET AssetBuilder PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 
@@ -412,8 +413,8 @@ if(DSE_BUILD_GTESTS)
     # 禁止 googletest 自身占据全局 include / install，避免与引擎构建冲突
     set(BUILD_GMOCK ON CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-    # 引擎使用静态 CRT (/MT)，gtest 也必须使用静态 CRT 以保持一致
-    set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+    # dse_engine 是 DLL；GoogleTest 和测试 exe 使用 DLL CRT，避免 Debug CRT 堆链表跨模块不一致。
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     add_subdirectory("${DSE_LOCAL_GTEST_DIR}" "${CMAKE_BINARY_DIR}/third_party/googletest")
 
     add_subdirectory(tests/gtest)

@@ -10,6 +10,7 @@ if (MSVC)
     set_property(TARGET dse_example_lua PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
+
 dse_copy_runtime_assets(dse_example_lua)
 
 install(TARGETS dse_example_lua

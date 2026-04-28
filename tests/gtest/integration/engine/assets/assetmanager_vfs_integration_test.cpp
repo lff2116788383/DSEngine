@@ -181,12 +181,16 @@ TEST_F(AssetManagerVfsIntegrationTest, 创建材质实例缓存命中) {
 }
 
 TEST_F(AssetManagerVfsIntegrationTest, 列出已创建的材质实例ID) {
-    asset_mgr.CreateMaterialInstance("mat_a");
-    asset_mgr.CreateMaterialInstance("mat_b");
+    auto mat_a = asset_mgr.CreateMaterialInstance("mat_a");
+    auto mat_b = asset_mgr.CreateMaterialInstance("mat_b");
+
+    ASSERT_NE(mat_a, nullptr);
+    ASSERT_NE(mat_b, nullptr);
 
     auto ids = asset_mgr.ListMaterialInstanceIds();
     EXPECT_GE(ids.size(), 2u);
 }
+
 
 TEST_F(AssetManagerVfsIntegrationTest, 卸载未使用资源) {
     auto mat = asset_mgr.CreateMaterialInstance("temp_mat");

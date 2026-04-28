@@ -438,8 +438,8 @@ public:
     void UnloadUnused();
     void ReleaseGpuResources();
 
-    AssetManager() = default;
-    ~AssetManager() = default;
+    AssetManager();
+    ~AssetManager();
 
 private:
     
