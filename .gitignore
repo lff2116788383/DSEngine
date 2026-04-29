@@ -1,22 +1,16 @@
-# C++ and CMake Build Artifacts
+# C++ / CMake 构建产物
 cmake-build-debug*
 cmake-build-release*
 build/
+build_*/
 build_vs2022/
 build_p1/
 build_export/
 out/
 bin/
-*.exe
-*.dll
-*.lib
-*.a
-*.so
-*.dylib
-*.pdb
-imgui.ini
-
-# CMake generated files
+artifacts/
+_deps/
+Testing/
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
@@ -25,21 +19,55 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
-_deps/
-Testing/
+*.obj
+*.idb
+*.ipch
+*.tlog
+*.lastbuildstate
+*.recipe
+*.ilk
+*.exp
+*.pch
+*.iobj
+*.ipdb
+*.rsp
+*.sbr
+*.bsc
+*.ncb
+*.aps
+*.stackdump
+*.core
+*.dmp
 
-# IDE and Editor Files
+# 保留工程脚本，避免被 *.txt 误伤
+!**/CMakeLists.txt
+
+# 二进制与库文件
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+*.pdb
+*.7z
+*.zip
+
+# IDE / 编辑器
 .idea/
 .vs/
+.vscode/
 *.user
 *.suo
 *.sln
 *.vcxproj*
-.vscode/
 *.VC.db
 *.opendb
+imgui.ini
+editor_layout.ini
+bin/editor_layout.ini
 
-# Electron, Node.js and Tauri App Artifacts
+# Node / Electron / Tauri
 apps/editor/node_modules/
 apps/launcher/node_modules/
 apps/launcher_tauri/node_modules/
@@ -48,67 +76,53 @@ apps/launcher/dist/
 apps/launcher_tauri/dist/
 apps/editor/build/
 apps/launcher/build/
+apps/editor/build/Release/
+apps/editor/build/Debug/
+apps/editor/.node-gyp/
+apps/editor/out/
+apps/launcher/out/
+apps/editor/release/
+apps/launcher/release/
 apps/launcher_tauri/.webpack/
 apps/launcher_tauri/src-tauri/target/
 apps/launcher_tauri/src-tauri/gen/
 apps/launcher_tauri/src-tauri/2.0.0-rc
-apps/editor/*.log
-apps/launcher/*.log
-apps/launcher_tauri/*.log
-apps/editor/release/
-apps/launcher/release/
-apps/editor/out/
-apps/launcher/out/
 bin/editor_pkg/
 bin/launcher_pkg/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Node-GYP Artifacts
-apps/editor/build/Release/
-apps/editor/build/Debug/
-apps/editor/.node-gyp/
-
-# NPM Cache
 .npm-cache/
 .cache/
 .eslintcache
 .stylelintcache
-
-# Logs and outputs
-logs/
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-screenshot/
-screenshots/
+apps/editor/*.log
+apps/launcher/*.log
+apps/launcher_tauri/*.log
 
-# CodeBuddy rule files
+# CodeBuddy / 工具本地数据
 .codebuddy/*
 !.codebuddy/rules/
 .cline/
 .cursor/
+.history/
+.roo_probe_*.cpp
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
+# 日志与截图
+logs/
+*.log
+*.log.json
+screenshot/
+screenshots/
+ui_debug_log.txt
+build_all.log
+build_fast_*.log
 
-# Project Data & Editor Temp
+# 项目运行时本地数据
 scene.json
 bin/scene.json
-editor_layout.ini
-bin/editor_layout.ini
 bin/editor_exports/
 bin/editor_localization/
 bin/samples/lua/data/NewFolder*
@@ -118,62 +132,35 @@ samples/lua/data/NewFolder*
 samples/lua/data/NewScript*.lua
 samples/lua/data/NewMaterial*.mat
 
-# Script cache
+# 脚本缓存 / 临时文件
 *.pyc
 __pycache__/
 *.luac
-
-# Third-party temporary downloads (if any)
-depends/miniaudio/*.tmp
-
-# Reference and documentation drafts (Do not track external engine source references)
-ref/
-
-# Local temporary/build artifacts
-build_*/
-artifacts/
 *.tmp
 *.temp
 *.cache
 *.bak
-.tmp/
-.temp/
 tmp/
 temp/
 cache/
-logs/
-*.log
-.roo_probe_*.cpp
-.history/
-ui_debug_log.txt
+.tmp/
+.temp/
+depends/miniaudio/*.tmp
 cmd-*.txt
-*.stackdump
-*.core
-*.dmp
-*.ilk
-*.exp
-*.obj
-*.idb
-*.ipch
-*.tlog
-*.lastbuildstate
-*.recipe
-*.log.json
 
-# Batch / packaging generated artifacts
+# 参考资料与外部草稿
+ref/
+
+# 操作系统生成文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 其他本地文本输出
 rustup-init.exe
-build_all.log
-build_fast_*.log
-*.7z
-*.zip
-*.pch
-*.iobj
-*.ipdb
-*.rsp
-*.sbr
-*.bsc
-*.ncb
-*.aps
-*.pch
 *.txt
-*.log
