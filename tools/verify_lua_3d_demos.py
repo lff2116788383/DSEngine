@@ -50,6 +50,12 @@ REQUIRED_LOG_TOKENS = {
         "texture_api set_terrain_texture=true",
         "real_sampling=true",
     ],
+    "3d_shadow_showcase": [
+        "shadow_param_api",
+        "set_directional_light_shadow=true",
+        "cast_shadow=true",
+        "cascade_splits=12.0/32.0/80.0",
+    ],
     "3d_audio_spatial": [
         "real_3d_audio",
         "set_3d_mode=true",

@@ -18,7 +18,7 @@ local function add_cube(name, x, y, z, sx, sy, sz, color, material)
     dse.ecs.add_mesh_renderer(e, color[1], color[2], color[3], color[4] or 1.0, cube_vertices(), cube_indices())
     dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
     material = material or {}
-    dse.ecs.set_mesh_material(e, material.metallic or 0.0, material.roughness or 0.5, material.ao or 1.0, material.er or 0.0, material.eg or 0.0, material.eb or 0.0, material.opacity or 1.0, material.double_sided ~= false, material.receive_shadow ~= false)
+    dse.ecs.set_mesh_material(e, material.metallic or 0.0, material.roughness or 0.5, material.ao or 1.0, material.er or 0.0, material.eg or 0.0, material.eb or 0.0, material.normal_strength or 1.0, material.receive_shadow ~= false, material.double_sided ~= false)
     return e
 end
 
@@ -36,6 +36,7 @@ local function setup_scene(config)
     local initial_strength = (type(config) == "table" and type(config.shadow_strength) == "number") and config.shadow_strength or 0.45
     local light = dse.ecs.create_entity()
     dse.ecs.add_directional_light_3d(light, -0.45, -1.0, -0.28, 1.0, 0.94, 0.82, 1.25, 0.12, initial_strength)
+    local shadow_ok, cast_shadow, applied_strength, c0, c1, c2 = dse.ecs.set_directional_light_shadow(light, true, initial_strength, 12.0, 32.0, 80.0)
     state.light = light
 
     add_cube("ground", 0.0, -0.58, 0.0, 8.5, 0.12, 5.5, {0.52, 0.52, 0.46, 1.0}, {roughness = 0.72, receive_shadow = true})
@@ -44,6 +45,7 @@ local function setup_scene(config)
     state.shadow_marker = add_cube("shadow_fallback_marker", 0.42, -0.49, 0.46, 1.4, 0.026, 1.0, {0.035, 0.035, 0.035, 0.78}, {roughness = 1.0, receive_shadow = false})
     add_cube("strength_meter", -3.5, 0.15, 2.1, 0.24, 1.0, 0.24, {0.25, 0.55, 1.0, 1.0}, {er = 0.03, eg = 0.12, eb = 0.35})
     print(string.format("[3D][Shadow] setup: directional light shadow_strength=%.2f; caster above receive-shadow ground", initial_strength))
+    print(string.format("[3D][Shadow] shadow_param_api set_directional_light_shadow=%s cast_shadow=%s shadow_strength=%.2f cascade_splits=%.1f/%.1f/%.1f", tostring(shadow_ok == true), tostring(cast_shadow == true), applied_strength or -1.0, c0 or -1.0, c1 or -1.0, c2 or -1.0))
     print("[3D][Shadow] fallback marker tracks caster footprint so screenshots show expected shadow theme even before full shadow validation.")
 end
 
@@ -66,6 +68,7 @@ function ShadowShowcase3D.Update(delta_time)
     local strength = 0.18 + (math.sin(state.time * 0.8) * 0.5 + 0.5) * 0.62
     if state.light ~= nil then
         dse.ecs.set_directional_light_3d(state.light, true, -0.45, -1.0, -0.28, 1.0, 0.94, 0.82, 1.25, 0.12, strength)
+        dse.ecs.set_directional_light_shadow(state.light, true, strength, 12.0, 32.0, 80.0)
     end
     if state.shadow_marker ~= nil then
         local scale = 1.15 + (1.0 - (y - 0.95)) * 0.35
@@ -74,7 +77,7 @@ function ShadowShowcase3D.Update(delta_time)
     end
     if not state.logged and state.time > 1.0 then
         state.logged = true
-        print(string.format("[3D][Shadow] runtime: animated shadow_strength=%.2f caster=(%.2f,%.2f,%.2f)", strength, x, y, z))
+        print(string.format("[3D][Shadow] runtime: set_directional_light_shadow=true cast_shadow=true animated shadow_strength=%.2f cascade_splits=12.0/32.0/80.0 caster=(%.2f,%.2f,%.2f)", strength, x, y, z))
     end
 end
 

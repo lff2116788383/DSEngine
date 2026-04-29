@@ -124,7 +124,7 @@ data/
 | P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
 | P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已落地 fallback | 已接入 Terrain 组件入口与可见程序化高度 fallback；真实 heightmap 采样/LOD 仍待专项补齐 |
-| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已落地 fallback | 已接入方向光 shadow_strength 动态调节与可见投影 fallback；真实 shadow pass 稳定性仍待专项验证 |
+| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已接入可用 shadow 参数 API | 已新增 `set_directional_light_shadow` 暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 保留可见投影 fallback 并用日志验收真实 API 调用 |
 | P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已落地 fallback | 已接入 Animator3D/FSM Lua 入口与分段 cube rig 状态切换；成套骨骼动画资源仍待补齐 |
 | P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 已落地 fallback | 已接入跟随相机、Animator3D 状态和 cube character rig；真实角色控制器/动画资源仍待补齐 |
 | P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 已落地 fallback | 已接入 AudioSource volume/pitch 动态 fallback 与环绕可视化；3D source/listener API 仍待补齐 |
@@ -290,10 +290,10 @@ data/
 - 目标画面/交互：cube 在地面上投射方向光阴影，展示 shadow strength 变化。
 - 参考来源：cpp-game-engine-book 第 25 章 Shadow Mapping、第 23 章光照；VSEngine2.1 Demo 15.22。
 - 需要能力：light cast_shadow、shadow map pass、shadow strength setter。
-- 当前可能缺口：Lua 未暴露 cast_shadow；shadow 稳定性需要专项验证。
+- 当前可能缺口：Lua 已暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；真实 shadow pass 视觉稳定性仍需在更多 GPU/驱动组合上复验。
 - 最小实现路径：补 light shadow setter；地面 + 悬空 cube + 方向光。
-- 实施状态：已完成 fallback 版。当前使用已暴露 `set_directional_light_3d` 动态调节 shadow_strength，悬空 caster 持续移动；同步用地面暗色投影 marker 保证截图主题稳定。
-- 验收标准：地面有明确投影；shadow_strength 改变后阴影深浅变化。
+- 实施状态：已完成可用 shadow 参数 API。当前 demo 调用 `set_directional_light_shadow(light, true, strength, 12.0, 32.0, 80.0)`，真实写入 `DirectionalLight3DComponent.cast_shadow/shadow_strength/cascade_splits`，悬空 caster 持续移动；同步用地面暗色投影 marker 保证截图主题稳定。
+- 验收标准：日志包含 `shadow_param_api`、`set_directional_light_shadow=true`、`cast_shadow=true`、`cascade_splits=12.0/32.0/80.0`；地面有明确投影；shadow_strength 改变后阴影深浅变化。
 
 ### 7.3 `samples/lua/3d/3d_animation_basic.lua`
 
@@ -346,7 +346,7 @@ data/
 ### 第三阶段：P2 资产/底层专项
 
 11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。（已完成可用图片 heightmap 文件采样、terrain texture 绑定与 LOD 参数/日志验收；仍保留 marker grid 作为可视参考）
-12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成 fallback，真实 shadow pass 待专项验证）
+12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成可用 shadow 参数 API：Lua 可设置方向光 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 日志强制验收真实 API 调用，真实 shadow pass 视觉稳定性继续专项复验）
 13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成 fallback，成套骨骼动画资源待补齐）
 14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。（已完成 fallback，真实角色控制器/资源待补齐）
 15. `3d_audio_spatial`：补 3D audio source/listener 后实现。（已完成可用 3D audio API：Lua 可设置 source 3D mode、listener、distance attenuation，并由 AudioSystem 同步 Transform 到 miniaudio）
@@ -390,7 +390,7 @@ data/
 | `3d_particles_showcase` | 粒子发射参数 | 粒子云可见 | 持续生成/消散 |
 | `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
 | `3d_terrain_heightmap` | terrain_heightmap_api、load_terrain_heightmap、set_terrain_texture、real_sampling 日志 | 图片 heightmap 采样出的非平面地形并绑定 terrain texture | Lua `load_terrain_heightmap` 返回 image/sample resolution；`set_terrain_texture` 返回 handle/size；`get_terrain_lod` 返回 current_lod |
-| `3d_shadow_showcase` | shadow 参数 | 地面投影 | shadow_strength 变化 |
+| `3d_shadow_showcase` | shadow_param_api、set_directional_light_shadow、cast_shadow、cascade_splits 日志 | 地面投影与 fallback marker 共同保证阴影主题可见 | Lua `set_directional_light_shadow` 返回并写入 cast_shadow、shadow_strength、CSM cascade_splits，Update 中持续调节 shadow_strength |
 | `3d_animation_basic` | anim state/time | 骨骼/蒙皮运动 | 动作切换 |
 | `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
 | `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
@@ -411,6 +411,7 @@ data/
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
 9. Animator3D：准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
 10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；待补实际空间音效资源。
+11. Shadow：已新增 `set_directional_light_shadow(entity, cast_shadow, shadow_strength, cascade0, cascade1, cascade2)`，Lua 可稳定配置方向光阴影开关、强度与 CSM 分段；真实 shadow pass 视觉稳定性继续专项复验。
 
 ## 12. 结论
 

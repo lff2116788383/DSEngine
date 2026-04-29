@@ -1300,6 +1300,40 @@ int L_EcsSetDirectionalLight3D(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetDirectionalLightShadow(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<DirectionalLight3DComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& light = world->registry().get<DirectionalLight3DComponent>(e);
+    if (!lua_isnoneornil(L, 2)) {
+        light.cast_shadow = lua_toboolean(L, 2) != 0;
+    }
+    light.shadow_strength = std::clamp(static_cast<float>(luaL_optnumber(L, 3, light.shadow_strength)), 0.0f, 1.0f);
+    const float c0 = static_cast<float>(luaL_optnumber(L, 4, light.cascade_splits[0]));
+    const float c1 = static_cast<float>(luaL_optnumber(L, 5, light.cascade_splits[1]));
+    const float c2 = static_cast<float>(luaL_optnumber(L, 6, light.cascade_splits[2]));
+    light.cascade_splits[0] = std::max(0.1f, c0);
+    light.cascade_splits[1] = std::max(light.cascade_splits[0] + 0.1f, c1);
+    light.cascade_splits[2] = std::max(light.cascade_splits[1] + 0.1f, c2);
+
+    lua_pushboolean(L, 1);
+    lua_pushboolean(L, light.cast_shadow ? 1 : 0);
+    lua_pushnumber(L, light.shadow_strength);
+    lua_pushnumber(L, light.cascade_splits[0]);
+    lua_pushnumber(L, light.cascade_splits[1]);
+    lua_pushnumber(L, light.cascade_splits[2]);
+    return 6;
+}
+
 int L_EcsSetTransformRotation(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1885,6 +1919,7 @@ void RegisterEcsBindings(lua_State* L) {
 
     set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);
     set_fn("set_directional_light_3d", L_EcsSetDirectionalLight3D);
+    set_fn("set_directional_light_shadow", L_EcsSetDirectionalLightShadow);
     set_fn("add_point_light_3d", L_EcsAddPointLight3D);
     set_fn("add_spot_light_3d", L_EcsAddSpotLight3D);
     set_fn("add_animator_3d", L_EcsAddAnimator3D);
