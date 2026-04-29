@@ -1,8 +1,8 @@
 -- 3D P2 sample: third-person character showcase
--- 目标：展示第三人称跟随相机、角色移动/转向/攻击状态；当前用 cube character rig 作为角色资源 fallback。
+-- 目标：展示第三人称跟随相机、真实 Steering 移动与 Animator3D 资源状态；cube character rig 保留为截图 fallback。
 local CharacterThirdPerson3D = {}
 
-local state = { camera = nil, character = nil, parts = {}, time = 0.0, mode = "run", logged_mode = "", target = nil, steering_logged = false, last_target_mode = "" }
+local state = { camera = nil, character = nil, skinned_mesh = nil, parts = {}, time = 0.0, mode = "run", logged_mode = "", target = nil, steering_logged = false, animation_logged = false, last_target_mode = "", resources = {} }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -46,12 +46,36 @@ local function setup_scene(config)
     local character = dse.ecs.create_entity()
     dse.ecs.add_transform(character, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
     dse.ecs.add_steering(character, config.move_speed or 2.8, config.steering_force or 10.0, 1.0)
-    dse.ecs.add_animator_3d(character, config.danim_path or "", config.dskel_path or "")
+    local mesh_path = (type(config.mesh_path) == "string") and config.mesh_path or ""
+    local material_path = (type(config.material_path) == "string") and config.material_path or ""
+    local danim_path = (type(config.danim_path) == "string") and config.danim_path or ""
+    local dskel_path = (type(config.dskel_path) == "string") and config.dskel_path or ""
+    state.resources = { mesh_path = mesh_path, material_path = material_path, danim_path = danim_path, dskel_path = dskel_path }
+    dse.ecs.add_animator_3d(character, danim_path, dskel_path)
     dse.ecs.init_animator_3d_fsm(character)
-    dse.ecs.add_animator_3d_state(character, "run", config.danim_path or "", true, 1.0)
-    dse.ecs.add_animator_3d_state(character, "attack", config.danim_path or "", false, 1.4)
+    dse.ecs.add_animator_3d_state(character, "run", danim_path, true, 1.0)
+    dse.ecs.add_animator_3d_state(character, "attack", danim_path, false, 1.4)
     dse.ecs.set_animator_3d_state(character, "run", 1.0, true)
     state.character = character
+
+    if mesh_path ~= "" then
+        local skinned = dse.ecs.create_entity()
+        dse.ecs.add_transform(skinned, -0.85, 0.05, -0.38, 1.15, 1.15, 1.15)
+        dse.ecs.add_mesh_renderer(skinned, 0.40, 0.85, 1.0, 1.0)
+        dse.ecs.set_mesh_path(skinned, mesh_path)
+        if material_path ~= "" then
+            dse.ecs.set_mesh_material(skinned, material_path)
+        else
+            dse.ecs.set_mesh_material(skinned, 0.0, 0.45, 1.0, 0.02, 0.08, 0.14, 1.0, true, true)
+        end
+        dse.ecs.set_mesh_shader_variant(skinned, "MESH_LIT")
+        dse.ecs.add_animator_3d(skinned, danim_path, dskel_path)
+        dse.ecs.init_animator_3d_fsm(skinned)
+        dse.ecs.add_animator_3d_state(skinned, "run", danim_path, true, 1.0)
+        dse.ecs.add_animator_3d_state(skinned, "attack", danim_path, false, 1.4)
+        dse.ecs.set_animator_3d_state(skinned, "run", 1.0, true)
+        state.skinned_mesh = skinned
+    end
 
     add_part("body", 0.0, 0.85, 0.0, 0.56, 0.78, 0.34, {0.18, 0.42, 0.90, 1.0})
     add_part("head", 0.0, 1.48, 0.0, 0.34, 0.34, 0.34, {0.94, 0.78, 0.58, 1.0})
@@ -66,7 +90,13 @@ local function setup_scene(config)
     if dse.ecs.get_steering_state then
         ok, enabled, seek, flee, arrive = dse.ecs.get_steering_state(character)
     end
+    local anim_ok, anim_state, anim_norm, anim_clip, anim_speed, anim_loop, anim_transition, anim_bones, anim_has_skeleton = dse.ecs.get_animator_3d_state(character)
     print(string.format("[3D][Character] setup: character_steering_api add_steering=true get_steering_state=%s enabled=%s seek=%s flee=%s arrive=%s third-person follow camera + cube character rig fallback. States: run/attack.", tostring(ok), tostring(enabled), tostring(seek), tostring(flee), tostring(arrive)))
+    print(string.format("[3D][Character] character_animation_resource character_animator_state_api resource_paths_configured=%s mesh_path=%s material_path=%s danim_path=%s dskel_path=%s get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s", tostring(mesh_path ~= "" and danim_path ~= "" and dskel_path ~= ""), mesh_path, material_path, danim_path, dskel_path, tostring(anim_ok == true), tostring(anim_state), anim_norm or -1.0, anim_clip or -1.0, anim_speed or -1.0, tostring(anim_loop == true), tostring(anim_transition == true), tostring(anim_bones), tostring(anim_has_skeleton == true)))
+    if state.skinned_mesh ~= nil then
+        local mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = dse.ecs.get_animator_3d_state(state.skinned_mesh)
+        print(string.format("[3D][Character] character_skinned_mesh_resource get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s", tostring(mesh_ok == true), tostring(mesh_state), mesh_norm or -1.0, mesh_clip or -1.0, mesh_speed or -1.0, tostring(mesh_loop == true), tostring(mesh_transition == true), tostring(mesh_bones), tostring(mesh_has_skeleton == true)))
+    end
 end
 
 local function apply_part_transform(root_x, root_y, root_z, root_yaw, phase)
@@ -132,6 +162,11 @@ function CharacterThirdPerson3D.Update(delta_time)
     end
     if state.character ~= nil then
         dse.ecs.set_animator_3d_state(state.character, state.mode, state.mode == "attack" and 1.4 or 1.0, state.mode ~= "attack")
+        if state.skinned_mesh ~= nil then
+            dse.ecs.set_animator_3d_state(state.skinned_mesh, state.mode, state.mode == "attack" and 1.4 or 1.0, state.mode ~= "attack")
+            dse.ecs.set_transform_position(state.skinned_mesh, root_x - 0.85, (root_y or 0.0) + 0.05, root_z - 0.38)
+            dse.ecs.set_transform_rotation(state.skinned_mesh, 0.0, root_yaw, 0.0)
+        end
     end
     apply_part_transform(root_x, root_y or 0.0, root_z, root_yaw, state.time * 5.5)
     if state.camera ~= nil then
@@ -143,6 +178,17 @@ function CharacterThirdPerson3D.Update(delta_time)
     if (not state.steering_logged) and has_steering and (speed or 0.0) > 0.02 then
         state.steering_logged = true
         print(string.format("[3D][Character] runtime: character_steering_api get_steering_state=true steering_enabled=%s seek=%s arrive=%s velocity=(%.2f,%.2f,%.2f) speed=%.2f speed_nonzero=%s max_velocity=%.2f max_force=%.2f mass=%.2f target=(%.2f,%.2f)", tostring(steering_enabled), tostring(seek_enabled), tostring(arrive_enabled), vx or 0.0, vy or 0.0, vz or 0.0, speed or 0.0, tostring((speed or 0.0) > 0.02), max_velocity or 0.0, max_force or 0.0, mass or 0.0, target_x, target_z))
+    end
+    if (not state.animation_logged) and state.character ~= nil and state.time > 1.0 then
+        local anim_ok, anim_state, anim_norm, anim_clip, anim_speed, anim_loop, anim_transition, anim_bones, anim_has_skeleton = dse.ecs.get_animator_3d_state(state.character)
+        local mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = false, "none", -1.0, -1.0, -1.0, false, false, 0, false
+        if state.skinned_mesh ~= nil then
+            mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = dse.ecs.get_animator_3d_state(state.skinned_mesh)
+        end
+        if anim_bones ~= nil and anim_bones > 0 then
+            state.animation_logged = true
+            print(string.format("[3D][Character] runtime_animation: character_animation_resource character_animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s mesh_state=%s mesh_final_bones=%s mesh_has_skeleton=%s mesh_norm=%.2f mesh_clip=%.2f", tostring(anim_ok == true), tostring(anim_state), anim_norm or -1.0, anim_clip or -1.0, anim_speed or -1.0, tostring(anim_loop == true), tostring(anim_transition == true), tostring(anim_bones), tostring(anim_has_skeleton == true), tostring(mesh_state), tostring(mesh_bones), tostring(mesh_has_skeleton == true), mesh_norm or -1.0, mesh_clip or -1.0))
+        end
     end
     if state.logged_mode ~= state.mode then
         state.logged_mode = state.mode

@@ -90,8 +90,10 @@ Config.demo_3d_animation_basic={
 }
 Config.demo_3d_character_third_person={
     camera_distance=10.5,
-    danim_path="",
-    dskel_path="",
+    mesh_path="animation/minimal_rig/two_bone.dmesh",
+    material_path="animation/minimal_rig/two_bone.dmat",
+    danim_path="animation/minimal_rig/two_bone_idle_walk.danim",
+    dskel_path="animation/minimal_rig/two_bone.dskel",
     move_speed=2.8,
     steering_force=10.0
 }
