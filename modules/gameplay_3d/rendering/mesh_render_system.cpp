@@ -636,7 +636,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             : mesh_renderer.material_double_sided;
         
         MeshDrawItem item;
-        item.model = transform.local_to_world;
+        const glm::mat4 mesh_model = transform.local_to_world;
+        item.model = glm::mat4(1.0f);
         item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
         item.order_in_layer = mesh_renderer.order_in_layer;
@@ -670,6 +671,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.metallic_roughness_map_handle = resolved_texture_slots.metallic_roughness;
         item.emissive_map_handle = resolved_texture_slots.emissive;
         item.occlusion_map_handle = resolved_texture_slots.occlusion;
+        item.color = resolved_base_color;
         item.material_albedo = glm::vec3(resolved_base_color);
         item.material_metallic = resolved_scalars.metallic;
         item.material_roughness = resolved_scalars.roughness;
@@ -756,18 +758,18 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             if (invalid_index) {
                 continue;
             }
-            const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(item.model));
+            const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(mesh_model));
             item.vertices.reserve(vertex_count);
             for (size_t i = 0; i < vertex_count; ++i) {
                 BatchVertex bv;
-                glm::vec4 world_pos = item.model * glm::vec4(
+                glm::vec4 world_pos = mesh_model * glm::vec4(
                     local_positions[i].x,
                     local_positions[i].y,
                     local_positions[i].z,
                     1.0f
                 );
                 bv.pos = item.skinned ? local_positions[i] : glm::vec3(world_pos);
-                bv.color = mesh_renderer.color;
+                bv.color = item.color;
                 
                 glm::vec3 normal;
                 if (is_dmesh_format) {

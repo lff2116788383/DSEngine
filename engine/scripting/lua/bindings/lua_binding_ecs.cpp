@@ -837,6 +837,9 @@ int L_EcsSetMeshMaterial(lua_State* L) {
         if (lua_gettop(L) >= 9) {
             mesh.receive_shadow = lua_toboolean(L, 9) != 0;
         }
+        if (lua_gettop(L) >= 10) {
+            mesh.material_double_sided = lua_toboolean(L, 10) != 0;
+        }
     }
     return 0;
 }

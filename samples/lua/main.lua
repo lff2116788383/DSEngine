@@ -7,7 +7,16 @@ end
 local RuntimeEntry = nil
 local runtime_config = nil
 local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase1_2d_physics_showcase"
-if game_entry == "phase1_2d_physics_showcase" then
+if game_entry == "3d_triangle" then
+    RuntimeEntry = require("3d.triangle")
+    runtime_config = Config.basic_3d or {}
+elseif game_entry == "3d_square" then
+    RuntimeEntry = require("3d.square")
+    runtime_config = Config.basic_3d or {}
+elseif game_entry == "3d_cube" then
+    RuntimeEntry = require("3d.cube")
+    runtime_config = Config.basic_3d or {}
+elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}
 elseif game_entry == "frog_jump" then

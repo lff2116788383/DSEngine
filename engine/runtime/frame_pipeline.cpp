@@ -822,7 +822,8 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
             
             cmd_buffer.SetPipelineState(render_resources_.mesh_pipeline_state);
-            
+
+            mesh_render_system_.Render(*runtime_context_.world, cmd_buffer);
             for (auto& mod : modules_) {
                 if (mod.instance) {
                     mod.instance->OnRenderScene(*runtime_context_.world, cmd_buffer);

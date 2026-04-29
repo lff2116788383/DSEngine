@@ -17,6 +17,9 @@ Config.phase1_2d_showcase={
 Config.phase1_2d_physics_showcase={
     camera_ortho_size=9.0
 }
+Config.basic_3d={
+    camera_distance=6.0
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }
