@@ -131,6 +131,10 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             continue;
         }
         
+        if (animator.dskel_path.empty()) {
+            continue;
+        }
+
         auto dskel = asset_manager.LoadDskel(animator.dskel_path);
         if (!dskel || dskel->GetData().empty()) {
             continue;

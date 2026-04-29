@@ -344,9 +344,10 @@ bool FramePipeline::Init() {
     }
 #else
     if (enable_gameplay3d) {
-        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D particle built-in fallback enabled");
+        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D built-in fallback enabled (particle/steering/animator)");
         particle3d_system_.SetAssetManager(&asset_manager);
         particle3d_system_.Init(*runtime_context_.world, runtime_context_.rhi_device.get());
+        dse::gameplay3d::AnimatorSystem::SetAssetManager(&asset_manager);
         builtin_gameplay3d_enabled_ = true;
     }
 #endif
@@ -390,6 +391,7 @@ void FramePipeline::Shutdown() {
     if (builtin_gameplay3d_enabled_) {
         particle3d_system_.Shutdown(*runtime_context_.world);
         particle3d_system_.SetAssetManager(nullptr);
+        dse::gameplay3d::AnimatorSystem::SetAssetManager(nullptr);
         builtin_gameplay3d_enabled_ = false;
     }
 #endif
@@ -453,6 +455,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     if (builtin_gameplay3d_enabled_) {
         particle3d_system_.Update(*runtime_context_.world, delta_time);
         steering_system_.Update(*runtime_context_.world, delta_time);
+        dse::gameplay3d::AnimatorSystem::Update(*runtime_context_.world, delta_time);
     }
 #endif
 

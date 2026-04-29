@@ -125,7 +125,7 @@ data/
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
 | P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已落地 fallback | 已接入 Terrain 组件入口与可见程序化高度 fallback；真实 heightmap 采样/LOD 仍待专项补齐 |
 | P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已接入可用 shadow 参数 API | 已新增 `set_directional_light_shadow` 暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 保留可见投影 fallback 并用日志验收真实 API 调用 |
-| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已接入 Animator3D 状态查询 API | 已新增 `get_animator_3d_state` 读取真实 Animator3D 组件状态/时间/speed/loop/transition/final_bones 信息；demo 用日志验收真实 API 调用，成套骨骼动画资源仍待补齐 |
+| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已接入最小真实动画资源包 | 已新增 `data/animation/minimal_rig` two-bone `.dmesh/.dskel/.danim/.dmat`，`config.lua` 默认指向该资源；demo 同时保留 cube rig fallback，并用 `get_animator_3d_state` 日志验收真实资源路径、状态、时间、loop、transition、final_bones/has_skeleton |
 | P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 已落地 fallback | 已接入跟随相机、Animator3D 状态和 cube character rig；真实角色控制器/动画资源仍待补齐 |
 | P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 已落地 fallback | 已接入 AudioSource volume/pitch 动态 fallback 与环绕可视化；3D source/listener API 仍待补齐 |
 | P3 | `samples/lua/3d/3d_physics_raycast_pick.lua` | Physics3D raycast/拾取专项 | 已接入可用 raycast | 已接入 BoxCollider3D/RigidBody3D、可见 ray beam/命中 marker；Lua `physics_3d_raycast` 优先使用 PhysX service，未启用时使用 ECS 3D collider 几何 fallback |
@@ -300,10 +300,10 @@ data/
 - 目标画面/交互：骨骼模型循环播放 Idle/Walk，并按时间切换。
 - 参考来源：cpp-game-engine-book 第 18/19/20 章；VSEngine2.1 Demo 14.9/15.3/15.22。
 - 需要能力：`add_animator_3d`、Animator3D FSM、skinned mesh 渲染、动画资源。
-- 当前可能缺口：Lua 已可查询真实 Animator3D 组件状态；缺 `.dskel/.danim/.dmesh/.dmat` 成套资源。
-- 最小实现路径：先补状态查询 API 固定日志验收，再用最小 two-bone 测试资源；再从 reference 拷贝/转换角色资源到 `data/models/character`、`data/animation`。
-- 实施状态：已完成 fallback 版并新增可用 Animator3D 状态查询 API。当前创建 Animator3D + FSM + idle/walk 状态，并用分段 cube rig 做可见 Idle/Walk 姿态切换；demo 调用 `get_animator_3d_state(actor)` 读取真实组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones 数量，配置预留 danim/dskel 路径。
-- 验收标准：日志包含 `animator_state_api`、`get_animator_3d_state=true`、`state=idle`、`final_bones=`；模型明显运动；切换后动作变化。无真实骨骼资源时 `normalized_time/final_bones` 可为 0，但必须来自组件查询 API。
+- 当前可能缺口：已具备最小 two-bone `.dskel/.danim/.dmesh/.dmat` 资源链路和状态验收；后续缺口是更完整角色资源、多 clip 动画、蒙皮视觉质量与第三人称角色控制器联动。
+- 最小实现路径：先补状态查询 API 固定日志验收，再用 `data/animation/minimal_rig` 最小 two-bone 测试资源验收真实资源路径；后续从 reference 拷贝/转换角色资源到 `data/models/character`、`data/animation`。
+- 实施状态：已完成最小真实动画资源包专项。当前 `config.lua` 默认配置 `animation/minimal_rig/two_bone.dmesh`、`two_bone.dmat`、`two_bone_idle_walk.danim`、`two_bone.dskel`；demo 创建 Animator3D + FSM + idle/walk 状态，新增 skinned mesh 资源实体，并保留分段 cube rig 作为截图语义兜底。`DSE_ENABLE_3D=OFF` Lua runtime 下由 `FramePipeline` 内置 Animator3D 更新链路驱动 `normalized_time/final_bone_matrices`，demo 调用 `get_animator_3d_state` 读取真实组件 state、normalized_time、clip_time、speed、loop、transition、final_bones 与 has_skeleton。
+- 验收标准：日志必须包含 `animator_resource_chain`、`real_animation_resource`、`resource_paths_configured=true`、最小资源路径、`animator_state_api`、`get_animator_3d_state=true`、`state=idle`、`final_bones=`、`has_skeleton=true`、`skinned_mesh_resource`、`mesh_final_bones=`、`mesh_has_skeleton=true`；画面中最小资源 mesh 与 cube rig fallback 均可见，cube rig 保证 Idle/Walk 切换截图语义。
 
 ### 7.4 `samples/lua/3d/3d_character_third_person.lua`
 
@@ -347,7 +347,7 @@ data/
 
 11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。（已完成可用图片 heightmap 文件采样、terrain texture 绑定与 LOD 参数/日志验收；仍保留 marker grid 作为可视参考）
 12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成可用 shadow 参数 API：Lua 可设置方向光 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 日志强制验收真实 API 调用，真实 shadow pass 视觉稳定性继续专项复验）
-13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成 Animator3D 状态查询 API：Lua 可读取真实组件 state/time/speed/loop/transition/final_bones，并由 demo 日志强制验收；成套骨骼动画资源待补齐）
+13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成最小真实动画资源包：`data/animation/minimal_rig` 提供 two-bone `.dmesh/.dskel/.danim/.dmat`，demo 默认加载并通过 Animator3D 状态/骨骼 token 验收；真实角色、多 clip 和更完整蒙皮资产待后续）
 14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。（已完成 cube rig fallback + 真实 SteeringSystem 移动验收；真实 capsule/character controller 与角色资源待补齐）
 15. `3d_audio_spatial`：补 3D audio source/listener 后实现。（已完成可用 3D audio API 与最小真实 wav 音源：Lua 可设置 source 3D mode、listener、distance attenuation，并通过 `get_source_state` 回读 clip/runtime 状态；AudioSystem 同步 Transform 到 miniaudio）
 
@@ -391,7 +391,7 @@ data/
 | `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
 | `3d_terrain_heightmap` | terrain_heightmap_api、load_terrain_heightmap、set_terrain_texture、real_sampling 日志 | 图片 heightmap 采样出的非平面地形并绑定 terrain texture | Lua `load_terrain_heightmap` 返回 image/sample resolution；`set_terrain_texture` 返回 handle/size；`get_terrain_lod` 返回 current_lod |
 | `3d_shadow_showcase` | shadow_param_api、set_directional_light_shadow、cast_shadow、cascade_splits 日志 | 地面投影与 fallback marker 共同保证阴影主题可见 | Lua `set_directional_light_shadow` 返回并写入 cast_shadow、shadow_strength、CSM cascade_splits，Update 中持续调节 shadow_strength |
-| `3d_animation_basic` | animator_state_api、get_animator_3d_state、state、final_bones 日志 | 分段 cube rig fallback 明确运动；后续接骨骼/蒙皮资源 | Lua `get_animator_3d_state` 返回真实 Animator3D 组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；无资源时数值可为 0 但 API 调用必须成功 |
+| `3d_animation_basic` | `animator_resource_chain`、`real_animation_resource`、`resource_paths_configured=true`、最小资源路径、`animator_state_api`、`get_animator_3d_state=true`、`state=idle`、`final_bones=`、`has_skeleton=true`、`skinned_mesh_resource`、`mesh_final_bones=`、`mesh_has_skeleton=true` 日志 | `data/animation/minimal_rig` 最小资源 mesh 与分段 cube rig fallback 同屏可见；cube rig 继续保证截图语义 | Lua `get_animator_3d_state` 返回真实 Animator3D 组件 state、normalized_time、clip_time、speed、loop、transition、final_bones 与 has_skeleton；Lua runtime 内置 Animator3D 更新链路驱动最小资源骨骼矩阵 |
 | `3d_character_third_person` | `character_steering_api`、`add_steering=true`、`set_steering_target=true`、`get_steering_state=true`、`speed_nonzero=true` 日志 | 角色+跟随相机，目标 marker 可见 | Lua `get_steering_state` 回读真实 SteeringComponent velocity/speed；`DSE_ENABLE_3D=OFF` Lua runtime 下由内置 SteeringSystem 更新链路驱动角色根节点移动/攻击切换 |
 | `3d_audio_spatial` | real_3d_audio、get_source_state、clip_loaded、spatial_enabled、runtime_handle_nonzero 日志 | 音源/listener 标记和距离环可见 | Lua `get_source_state` 回读真实 AudioSourceComponent clip/runtime/3D 参数；最小 wav 音源随 Transform 绕 listener 移动 |
 | `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
@@ -409,7 +409,7 @@ data/
 6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询；新增 `load_terrain_heightmap` 从图片文件采样高度并新增 `set_terrain_texture` 绑定 terrain texture）
 7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径，并提供真实运行时状态验收查询。（已完成 `set_particle_system_3d_params` 与 `get_particle_system_3d_state`；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 Particle3D 更新链路驱动真实初始化与 active particle count）
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
-9. Animator3D：已新增 `get_animator_3d_state(entity)`，Lua 可查询 Animator3D 真实组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；下一步准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
+9. Animator3D：已新增 `get_animator_3d_state(entity)`，Lua 可查询 Animator3D 真实组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；已准备 `data/animation/minimal_rig` 最小 two-bone `.dmesh/.dskel/.danim/.dmat` 资源包并接入 `3d_animation_basic` 自动验收。后续重点转向真实角色/多 clip 资产、蒙皮视觉质量和第三人称角色控制器联动。
 9b. Character/Steering：已新增 `get_steering_state(entity)`，`set_steering_target` 现在返回是否成功；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 SteeringSystem 更新链路驱动真实 velocity 与 Transform 移动，`3d_character_third_person` 可用该状态验收角色根节点移动。
 10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance` 与 `get_source_state`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；已提供 `data/audio/spatial/spatial_ping.wav` 最小真实空间音效资源用于自动验收。
 11. Shadow：已新增 `set_directional_light_shadow(entity, cast_shadow, shadow_strength, cascade0, cascade1, cascade2)`，Lua 可稳定配置方向光阴影开关、强度与 CSM 分段；真实 shadow pass 视觉稳定性继续专项复验。

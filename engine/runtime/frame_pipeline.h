@@ -28,6 +28,7 @@
 #ifndef DSE_ENABLE_3D
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"
+#include "modules/gameplay_3d/animation/animator_system.h"
 #endif
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
@@ -214,10 +215,11 @@ private:
 #ifndef DSE_ENABLE_3D
     dse::gameplay3d::Particle3DSystem particle3d_system_;
     dse::gameplay3d::SteeringSystem steering_system_;
+    dse::gameplay3d::AnimatorSystem animator3d_system_;
     bool builtin_gameplay3d_enabled_ = false;
 #endif
     
-    // 动态模块优先；未启用完整 3D 构建时保留 Particle3D 最小内置更新链路。
+    // 动态模块优先；未启用完整 3D 构建时保留 Particle3D/Steering/Animator3D 最小内置更新链路。
     struct LoadedModule {
         std::unique_ptr<dse::core::DynamicLibrary> lib;
         dse::core::IModule* instance = nullptr;
