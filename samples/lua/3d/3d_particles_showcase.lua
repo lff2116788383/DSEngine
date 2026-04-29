@@ -2,7 +2,7 @@
 -- 目标：验证 3D 粒子发射器、Lua 参数 setter 与可视化 emitter marker。
 local ParticlesShowcase3D = {}
 
-local state = { camera = nil, emitter = nil, marker = nil, objects = {}, fallback_particles = {}, time = 0.0 }
+local state = { camera = nil, emitter = nil, marker = nil, objects = {}, fallback_particles = {}, time = 0.0, runtime_probe_time = 0.0, runtime_probe_count = 0 }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -44,6 +44,17 @@ local function setup_scene(config)
     dse.ecs.add_transform(emitter, 0.0, 0.35, 0.0, 1.0, 1.0, 1.0)
     dse.ecs.add_particle_system_3d(emitter, config.max_particles or 420, config.emission_rate or 120.0)
     dse.ecs.set_particle_system_3d_params(emitter, 1.0, 2.2, 0.06, 0.18, 1.2, 3.4, 1.0, 0.56, 0.12, 0.92, 0.0, -2.2, 0.0, "")
+    local runtime_ok, active_particles, max_particles, emission_rate, life_min, life_max, size_min, size_max, speed_min, speed_max, gravity_x, gravity_y, gravity_z, color_r, color_g, color_b, color_a, texture_path, enabled, initialized, texture_handle = dse.ecs.get_particle_system_3d_state(emitter)
+    print(string.format(
+        "[3D][Particles] particle_runtime_bootstrap ok=%s active_particles=%d max_particles=%d emission_rate=%.1f enabled=%s initialized=%s texture_handle=%d",
+        tostring(runtime_ok),
+        active_particles or -1,
+        max_particles or -1,
+        emission_rate or -1.0,
+        tostring(enabled),
+        tostring(initialized),
+        texture_handle or 0
+    ))
     state.emitter = emitter
 
     for i = 1, 18 do
@@ -54,6 +65,7 @@ local function setup_scene(config)
         table.insert(state.fallback_particles, { entity = p, angle = angle, radius = radius, base_y = y, speed = 0.8 + (i % 4) * 0.15 })
     end
     print(string.format("[3D][Particles] emitter max_particles=%d emission_rate=%.1f life=1.0..2.2 size=0.06..0.18 visible_markers=%d", config.max_particles or 420, config.emission_rate or 120.0, #state.fallback_particles))
+    print("[3D][Particles] particle_runtime_api get_particle_system_3d_state=true")
 end
 
 function ParticlesShowcase3D.Setup(config)
@@ -79,6 +91,57 @@ function ParticlesShowcase3D.Update(delta_time)
         local radius = p.radius + rise * 0.35
         dse.ecs.set_transform_position(p.entity, x + math.cos(angle) * radius, p.base_y + rise * 1.1, z + math.sin(angle) * radius)
         dse.ecs.set_transform_rotation(p.entity, state.time * 80.0, state.time * (100.0 + i), 0.0)
+    end
+
+    state.runtime_probe_time = state.runtime_probe_time + dt
+    if state.emitter ~= nil and state.runtime_probe_time >= 0.5 and state.runtime_probe_count < 4 then
+        state.runtime_probe_time = 0.0
+        state.runtime_probe_count = state.runtime_probe_count + 1
+        local ok,
+            active_particles,
+            max_particles,
+            emission_rate,
+            life_min,
+            life_max,
+            size_min,
+            size_max,
+            speed_min,
+            speed_max,
+            gravity_x,
+            gravity_y,
+            gravity_z,
+            color_r,
+            color_g,
+            color_b,
+            color_a,
+            texture_path,
+            enabled,
+            initialized,
+            texture_handle = dse.ecs.get_particle_system_3d_state(state.emitter)
+        print(string.format(
+            "[3D][Particles] particle_runtime_api get_particle_system_3d_state=%s active_particles=%d max_particles=%d emission_rate=%.1f life=%.2f..%.2f size=%.2f..%.2f speed=%.2f..%.2f gravity=%.2f/%.2f/%.2f color=%.2f/%.2f/%.2f/%.2f enabled=%s initialized=%s texture_handle=%d texture_path=%s",
+            tostring(ok),
+            active_particles or -1,
+            max_particles or -1,
+            emission_rate or -1.0,
+            life_min or -1.0,
+            life_max or -1.0,
+            size_min or -1.0,
+            size_max or -1.0,
+            speed_min or -1.0,
+            speed_max or -1.0,
+            gravity_x or 0.0,
+            gravity_y or 0.0,
+            gravity_z or 0.0,
+            color_r or 0.0,
+            color_g or 0.0,
+            color_b or 0.0,
+            color_a or 0.0,
+            tostring(enabled),
+            tostring(initialized),
+            texture_handle or 0,
+            texture_path or ""
+        ))
     end
 end
 

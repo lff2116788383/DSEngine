@@ -44,6 +44,12 @@ P3_3D_ENTRIES = [
 ]
 
 REQUIRED_LOG_TOKENS = {
+    "3d_particles_showcase": [
+        "particle_runtime_api",
+        "get_particle_system_3d_state=true",
+        "active_particles=",
+        "enabled=true",
+    ],
     "3d_terrain_heightmap": [
         "terrain_heightmap_api",
         "load_terrain_heightmap=true",

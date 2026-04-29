@@ -79,6 +79,44 @@ int L_EcsSetParticleSystem3DParams(lua_State* L) {
     return 0;
 }
 
+int L_EcsGetParticleSystem3DState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<ParticleSystem3DComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const auto& ps = world->registry().get<ParticleSystem3DComponent>(e);
+    lua_pushboolean(L, 1);
+    lua_pushinteger(L, static_cast<lua_Integer>(ps.active_particle_count));
+    lua_pushinteger(L, static_cast<lua_Integer>(ps.max_particles));
+    lua_pushnumber(L, ps.emission_rate);
+    lua_pushnumber(L, ps.start_life_min);
+    lua_pushnumber(L, ps.start_life_max);
+    lua_pushnumber(L, ps.start_size_min);
+    lua_pushnumber(L, ps.start_size_max);
+    lua_pushnumber(L, ps.start_speed_min);
+    lua_pushnumber(L, ps.start_speed_max);
+    lua_pushnumber(L, ps.gravity.x);
+    lua_pushnumber(L, ps.gravity.y);
+    lua_pushnumber(L, ps.gravity.z);
+    lua_pushnumber(L, ps.start_color.r);
+    lua_pushnumber(L, ps.start_color.g);
+    lua_pushnumber(L, ps.start_color.b);
+    lua_pushnumber(L, ps.start_color.a);
+    lua_pushstring(L, ps.texture_path.c_str());
+    lua_pushboolean(L, ps.enabled ? 1 : 0);
+    lua_pushboolean(L, ps.initialized ? 1 : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(ps.texture_handle));
+    return 21;
+}
+
 int L_EcsGetTransformPosition(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1973,6 +2011,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_sphere_collider_3d", L_EcsAddSphereCollider3D);
     set_fn("add_particle_system_3d", L_EcsAddParticleSystem3D);
     set_fn("set_particle_system_3d_params", L_EcsSetParticleSystem3DParams);
+    set_fn("get_particle_system_3d_state", L_EcsGetParticleSystem3DState);
     set_fn("add_post_process", L_EcsAddPostProcess);
     set_fn("set_post_process_bloom", L_EcsSetPostProcessBloom);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
