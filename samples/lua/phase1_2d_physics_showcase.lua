@@ -95,24 +95,24 @@ end
 local function make_label(font_tex, text, x, y, r, g, b)
     local e = dse.ecs.create_entity()
     dse.ecs.add_transform(e, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-    dse.ui.add_label(e, text, font_tex, r, g, b, 1.0, 14.0, 20.0, 1.0, 16, 6, 32, x, y)
+    dse.ui.add_label(e, text, font_tex, r, g, b, 1.0, 8.0, 12.0, 1.0, 16, 6, 32, x, y)
     return e
 end
 
 local function setup_ui(font_tex, ui_tex)
     local root = dse.ecs.create_entity()
     dse.ecs.add_transform(root, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-    dse.ui.add_renderer(root, ui_tex, 0.06, 0.08, 0.12, 0.80, 950)
+    dse.ui.add_renderer(root, 0, 0.06, 0.08, 0.12, 0.80, 950, 720.0, 170.0)
     dse.ui.add_panel(root, true)
 
-    state.ui.title = make_label(font_tex, "2D Physics Showcase", -300.0, -38.0, 1.0, 0.95, 0.72)
-    state.ui.desc = make_label(font_tex, "drop / trigger / collision / raycast / highlight", -300.0, -8.0, 0.78, 0.90, 1.0)
-    state.ui.stats = make_label(font_tex, "waiting...", 120.0, -38.0, 1.0, 1.0, 1.0)
-    state.ui.raycast = make_label(font_tex, "raycast: none", 120.0, -8.0, 0.98, 0.80, 0.42)
-    state.ui.log1 = make_label(font_tex, "", -300.0, 36.0, 0.90, 1.0, 0.90)
-    state.ui.log2 = make_label(font_tex, "", -300.0, 62.0, 0.90, 1.0, 0.90)
-    state.ui.log3 = make_label(font_tex, "", -300.0, 88.0, 0.90, 1.0, 0.90)
-    state.ui.log4 = make_label(font_tex, "", -300.0, 114.0, 0.90, 1.0, 0.90)
+    state.ui.title = make_label(font_tex, "2D Physics Showcase", -340.0, -64.0, 1.0, 0.95, 0.72)
+    state.ui.desc = make_label(font_tex, "drop / trigger / collision / raycast / highlight", -340.0, -44.0, 0.78, 0.90, 1.0)
+    state.ui.stats = make_label(font_tex, "waiting...", 130.0, -64.0, 1.0, 1.0, 1.0)
+    state.ui.raycast = make_label(font_tex, "raycast: none", 130.0, -44.0, 0.98, 0.80, 0.42)
+    state.ui.log1 = make_label(font_tex, "", -340.0, -16.0, 0.90, 1.0, 0.90)
+    state.ui.log2 = make_label(font_tex, "", -340.0, 2.0, 0.90, 1.0, 0.90)
+    state.ui.log3 = make_label(font_tex, "", -340.0, 20.0, 0.90, 1.0, 0.90)
+    state.ui.log4 = make_label(font_tex, "", -340.0, 38.0, 0.90, 1.0, 0.90)
     state.ui.root = root
 end
 

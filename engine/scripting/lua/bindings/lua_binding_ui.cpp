@@ -28,7 +28,9 @@ int L_UiAddRenderer(lua_State* L) {
     ui.texture_handle = tex_handle;
     ui.color = glm::vec4(r, g, b, a);
     ui.order = order;
-    ui.size = glm::vec2(1.0f, 1.0f);
+    ui.size = glm::vec2(
+        static_cast<float>(luaL_optnumber(L, 8, 640.0)),
+        static_cast<float>(luaL_optnumber(L, 9, 160.0)));
     return 0;
 }
 
@@ -52,6 +54,14 @@ int L_UiAddLabel(lua_State* L) {
     int ascii_start = static_cast<int>(luaL_optinteger(L, 13, 0));
     float offset_x = static_cast<float>(luaL_optnumber(L, 14, 0.0));
     float offset_y = static_cast<float>(luaL_optnumber(L, 15, 0.0));
+    auto& ui = world->registry().emplace_or_replace<UIRendererComponent>(e);
+    ui.texture_handle = font_tex_handle;
+    ui.color = glm::vec4(r, g, b, 0.0f);
+    ui.visible = true;
+    ui.interactable = false;
+    ui.position = glm::vec2(offset_x, offset_y);
+    ui.size = glm::vec2(0.0f, 0.0f);
+
     auto& label = world->registry().emplace_or_replace<UILabelComponent>(e);
     label.text = text;
     label.font_texture_handle = font_tex_handle;
@@ -70,9 +80,6 @@ int L_UiAddLabel(lua_State* L) {
     }
     if (ascii_start > 0) {
         label.ascii_start = ascii_start;
-    }
-    if (offset_x != 0.0f || offset_y != 0.0f) {
-        label.offset = glm::vec2(offset_x, offset_y);
     }
     label.dirty = true;
     return 0;

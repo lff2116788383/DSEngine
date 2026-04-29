@@ -80,14 +80,14 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             parent_h * ui.anchor_min.y
         );
 
-        // 2. Calculate Pivot Offset
-        glm::vec2 pivot_offset = glm::vec2(
-            -ui.size.x * ui.pivot.x,
-            -ui.size.y * ui.pivot.y
+        // 2. Convert authoring position/pivot into the quad center expected by DrawBatch.
+        glm::vec2 pivot_to_center = glm::vec2(
+            ui.size.x * (0.5f - ui.pivot.x),
+            ui.size.y * (0.5f - ui.pivot.y)
         );
 
-        // 3. Final Position
-        glm::vec2 final_pos = anchor_pos + ui.position + pivot_offset;
+        // 3. Final center position
+        glm::vec2 final_pos = anchor_pos + ui.position + pivot_to_center;
 
         // Build model matrix for UI
         glm::mat4 model = glm::mat4(1.0f);

@@ -225,8 +225,9 @@ void UISystem::SyncLabels(entt::registry& registry) {
             const glm::vec2 base_position = ui.position + label.offset + glm::vec2(static_cast<float>(i) * (label.glyph_size.x + label.spacing), 0.0f);
             const int base_order = ui.order + static_cast<int>(i) * 10 + 1;
             const float u0 = static_cast<float>(col) * inv_cols;
-            const float v0 = static_cast<float>(row) * inv_rows;
-            const glm::vec4 uv = glm::vec4(u0, v0, u0 + inv_cols, v0 + inv_rows);
+            const float v0 = 1.0f - static_cast<float>(row + 1) * inv_rows;
+            const float v1 = 1.0f - static_cast<float>(row) * inv_rows;
+            const glm::vec4 uv = glm::vec4(u0, v0, u0 + inv_cols, v1);
             if (rich && rich->enable_shadow) {
                 spawn_glyph(base_position + rich->shadow_offset, rich->shadow_color, uv, base_order);
             }

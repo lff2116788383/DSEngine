@@ -240,6 +240,10 @@ bool EngineInstance::Init() {
             glfwTerminate();
             return false;
         }
+        int framebuffer_width = config_.window_width;
+        int framebuffer_height = config_.window_height;
+        glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
+        Screen::set_width_height(framebuffer_width, framebuffer_height);
     } else {
         // 在编辑器模式下，gladLoadGL 通常已经在编辑器主程序中初始化过了，
         // 但由于引擎是 DLL，exe 中的 glad 初始化不会影响 DLL 中的 glad 函数指针，

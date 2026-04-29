@@ -712,6 +712,16 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     glUniform1i(loc.texture, 0);
+    if (loc.model >= 0) {
+        const glm::mat4 identity_model(1.0f);
+        glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(identity_model));
+    }
+    if (loc.skinned >= 0) {
+        glUniform1i(loc.skinned, 0);
+    }
+    if (loc.morph_enabled >= 0) {
+        glUniform1i(loc.morph_enabled, 0);
+    }
 
     std::vector<BatchVertex> batch_vertices;
     batch_vertices.reserve(MAX_VERTICES);

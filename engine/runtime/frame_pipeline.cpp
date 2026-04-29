@@ -19,6 +19,7 @@
 #include "engine/core/service_locator.h"
 #include "engine/scene/scene.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glad/gl.h>
 #include <iostream>
 #include <filesystem>
 #include <cstdlib>
@@ -33,6 +34,79 @@
 #include <sstream>
 
 namespace {
+struct ReadbackStats {
+    int width = 0;
+    int height = 0;
+    std::size_t pixels = 0;
+    std::size_t non_black = 0;
+    unsigned int max_rgb = 0;
+    double avg_rgb = 0.0;
+};
+
+ReadbackStats AnalyzeReadback(const RenderTargetReadback& readback) {
+    ReadbackStats stats;
+    stats.width = readback.width;
+    stats.height = readback.height;
+    stats.pixels = readback.pixels.size() / 4u;
+    if (stats.pixels == 0) {
+        return stats;
+    }
+
+    unsigned long long rgb_sum = 0;
+    for (std::size_t i = 0; i + 3 < readback.pixels.size(); i += 4) {
+        const unsigned int rgb = static_cast<unsigned int>(readback.pixels[i]) +
+                                 static_cast<unsigned int>(readback.pixels[i + 1]) +
+                                 static_cast<unsigned int>(readback.pixels[i + 2]);
+        rgb_sum += rgb;
+        stats.max_rgb = std::max(stats.max_rgb, rgb);
+        if (rgb > 8u) {
+            ++stats.non_black;
+        }
+    }
+    stats.avg_rgb = static_cast<double>(rgb_sum) / static_cast<double>(stats.pixels);
+    return stats;
+}
+
+void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
+    const auto stats = AnalyzeReadback(readback);
+    DEBUG_LOG_INFO("Render readback {}: size={}x{} pixels={} non_black={} max_rgb={} avg_rgb={}",
+                   label,
+                   stats.width,
+                   stats.height,
+                   stats.pixels,
+                   stats.non_black,
+                   stats.max_rgb,
+                   stats.avg_rgb);
+}
+
+void LogDefaultFramebufferStats() {
+    const int width = Screen::width();
+    const int height = Screen::height();
+    if (width <= 0 || height <= 0) {
+        DEBUG_LOG_WARN("Render readback default framebuffer skipped: invalid size {}x{}", width, height);
+        return;
+    }
+
+    RenderTargetReadback readback;
+    readback.width = width;
+    readback.height = height;
+    readback.pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u, 0u);
+
+    GLint previous_fbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, readback.pixels.data());
+    const GLenum gl_error = glGetError();
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_fbo));
+
+    LogReadbackStats("default_backbuffer", readback);
+    if (gl_error != GL_NO_ERROR) {
+        DEBUG_LOG_ERROR("Render readback default framebuffer gl_error=0x{:X}", static_cast<unsigned int>(gl_error));
+    }
+}
+
 AssetManager& RequireAssetManager(AssetManager* asset_manager) {
     if (asset_manager) {
         return *asset_manager;
@@ -151,7 +225,14 @@ bool FramePipeline::Init() {
         }
     }
 
-    render_resources_.sprite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({true, 0x0302, 0x0303});
+    PipelineStateDesc sprite_desc;
+    sprite_desc.blend_enabled = true;
+    sprite_desc.blend_src = 0x0302; // GL_SRC_ALPHA
+    sprite_desc.blend_dst = 0x0303; // GL_ONE_MINUS_SRC_ALPHA
+    sprite_desc.depth_test_enabled = false;
+    sprite_desc.depth_write_enabled = false;
+    sprite_desc.culling_enabled = false;
+    render_resources_.sprite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(sprite_desc);
     if (render_resources_.sprite_pipeline_state == 0) {
         DEBUG_LOG_ERROR("FramePipeline init failed: sprite pipeline state creation returned 0");
         Shutdown();
@@ -196,7 +277,14 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    render_resources_.composite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState({false, 0x0302, 0x0303});
+    PipelineStateDesc composite_desc;
+    composite_desc.blend_enabled = false;
+    composite_desc.blend_src = 0x0302; // GL_SRC_ALPHA
+    composite_desc.blend_dst = 0x0303; // GL_ONE_MINUS_SRC_ALPHA
+    composite_desc.depth_test_enabled = false;
+    composite_desc.depth_write_enabled = false;
+    composite_desc.culling_enabled = false;
+    render_resources_.composite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(composite_desc);
     if (render_resources_.composite_pipeline_state == 0) {
         DEBUG_LOG_ERROR("FramePipeline init failed: composite pipeline state creation returned 0");
         Shutdown();
@@ -373,6 +461,17 @@ void FramePipeline::RunRenderInternal() {
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
+    if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
+        if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
+            static int readback_diag_frame = 0;
+            if (readback_diag_frame < 5 || (readback_diag_frame % 60) == 0) {
+                LogReadbackStats("scene", ReadSceneColorRgba8WithSize());
+                LogReadbackStats("main", ReadMainColorRgba8WithSize());
+                LogDefaultFramebufferStats();
+            }
+            ++readback_diag_frame;
+        }
+    }
     const auto& frame_stats = runtime_context_.rhi_device->LastFrameStats();
     auto render_end = std::chrono::high_resolution_clock::now();
     render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
@@ -823,21 +922,17 @@ void FramePipeline::BuildRenderGraphInternal() {
             }
 
             cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
-            cmd_buffer.BeginRenderPass({render_resources_.main_render_target, glm::vec4(0.0f), false});
-            glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
-            cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
+            cmd_buffer.BeginRenderPass({render_resources_.main_render_target, glm::vec4(0.0f), true});
 
             if (pp_enabled && pp_config.bloom_enabled) {
                 const unsigned int blur_v_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
                 cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
             } else {
-                SpriteDrawItem scene_quad;
-                scene_quad.texture_handle = scene_color_tex;
-                scene_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
-                scene_quad.model = glm::scale(scene_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
-                scene_quad.color = glm::vec4(1.0f);
-                cmd_buffer.DrawBatch({scene_quad});
+                cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
             }
+
+            glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
+            cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
 
             cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
             SpriteDrawItem ui_quad;

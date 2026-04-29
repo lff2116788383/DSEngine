@@ -355,11 +355,11 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 return;
             }
 
-            vec3 albedo = pow(texColor.rgb * ourColor.rgb * u_material_albedo, vec3(2.2));
+            vec3 surface_albedo = pow(texColor.rgb * ourColor.rgb * u_material_albedo, vec3(2.2));
             float metallic = clamp(u_material_metallic, 0.0, 1.0);
             float roughness = clamp(u_material_roughness, 0.04, 1.0);
             float ao = max(u_material_ao, 0.0);
-            vec3 emissive = u_material_emissive;
+            vec3 surface_emissive = u_material_emissive;
             if (u_has_metallic_roughness_map) {
                 vec4 mrSample = texture(u_metallic_roughness_map, TexCoord);
                 roughness = clamp(mrSample.g * u_material_roughness, 0.04, 1.0);
@@ -369,11 +369,11 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 ao *= texture(u_occlusion_map, TexCoord).r;
             }
             if (u_has_emissive_map) {
-                emissive *= texture(u_emissive_map, TexCoord).rgb;
+                surface_emissive *= texture(u_emissive_map, TexCoord).rgb;
             }
             vec3 V = normalize(u_camera_pos - FragPos);
             vec3 F0 = vec3(0.04);
-            F0 = mix(F0, albedo, metallic);
+            F0 = mix(F0, surface_albedo, metallic);
 
             vec3 Lo = vec3(0.0);
             
@@ -395,7 +395,7 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
                 float NdotL = max(dot(N, L), 0.0);
                 float shadow = ShadowCalculation(FragPos, FragPosViewSpace, N, L);
-                Lo += (kD * albedo / PI + specular) * u_light_color * u_light_intensity * NdotL * (1.0 - shadow);
+                Lo += (kD * surface_albedo / PI + specular) * u_light_color * u_light_intensity * NdotL * (1.0 - shadow);
             }
             
             // 点光源
@@ -421,10 +421,12 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
                 float NdotL = max(dot(N, L), 0.0);
                 float point_shadow = 0.0;
-                if (u_point_lights[i].cast_shadow) {
-                    point_shadow = PointShadowCalculation(u_point_lights[i].shadow_index, FragPos, u_point_lights[i].position, u_point_lights[i].radius);
+                bool point_cast_shadow = u_point_lights[i].cast_shadow;
+                int point_shadow_index = u_point_lights[i].shadow_index;
+                if (point_cast_shadow) {
+                    point_shadow = PointShadowCalculation(point_shadow_index, FragPos, u_point_lights[i].position, u_point_lights[i].radius);
                 }
-                Lo += (kD * albedo / PI + specular) * radiance * NdotL * (1.0 - point_shadow);
+                Lo += (kD * surface_albedo / PI + specular) * radiance * NdotL * (1.0 - point_shadow);
             }
 
             // 聚光灯
@@ -460,10 +462,12 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
                 float NdotL = max(dot(N, L), 0.0);
                 float spot_shadow = 0.0;
-                if (u_spot_lights[i].cast_shadow) {
-                    spot_shadow = SpotShadowCalculation(u_spot_lights[i].shadow_index, FragPos, N, L);
+                bool spot_cast_shadow = u_spot_lights[i].cast_shadow;
+                int spot_shadow_index = u_spot_lights[i].shadow_index;
+                if (spot_cast_shadow) {
+                    spot_shadow = SpotShadowCalculation(spot_shadow_index, FragPos, N, L);
                 }
-                Lo += (kD * albedo / PI + specular) * radiance * NdotL * (1.0 - spot_shadow);
+                Lo += (kD * surface_albedo / PI + specular) * radiance * NdotL * (1.0 - spot_shadow);
             }
             
             // 环境光
@@ -473,11 +477,11 @@ void GLShaderManager::InitBuiltinPBRShader() {
             kD_ambient *= 1.0 - metallic;
             
             vec3 irradiance = vec3(u_ambient_intensity);
-            vec3 diffuse_ambient = irradiance * albedo;
+            vec3 diffuse_ambient = irradiance * surface_albedo;
             vec3 specular_ambient = irradiance * F0 * (1.0 - roughness);
             
             vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * ao;
-            vec3 color = ambient + Lo + emissive;
+            vec3 color = ambient + Lo + surface_emissive;
 
             color = color / (color + vec3(1.0));
             color = pow(color, vec3(1.0/2.2));
