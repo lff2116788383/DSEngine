@@ -56,7 +56,8 @@ local function setup_actor(config)
     add_part("leg_l", -0.22, 0.05, 0.0, 0.22, 0.72, 0.24, {0.20, 0.36, 0.70, 1.0})
     add_part("leg_r", 0.22, 0.05, 0.0, 0.22, 0.72, 0.24, {0.20, 0.36, 0.70, 1.0})
     add_part("state_beacon", 1.6, 1.2, 0.0, 0.28, 0.28, 0.28, {0.2, 1.0, 0.45, 1.0}, {0.04, 0.45, 0.08})
-    print(string.format("[3D][Animation] setup: Animator3D actor danim='%s' dskel='%s'; fallback cube rig switches idle/walk", danim, dskel))
+    local state_ok, current_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = dse.ecs.get_animator_3d_state(actor)
+    print(string.format("[3D][Animation] setup: animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s danim='%s' dskel='%s'; fallback cube rig switches idle/walk", tostring(state_ok == true), tostring(current_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count), tostring(has_skeleton == true), danim, dskel))
 end
 
 local function switch_state(name)
@@ -65,6 +66,9 @@ local function switch_state(name)
     if state.actor ~= nil then
         dse.ecs.set_animator_3d_state(state.actor, name, name == "walk" and 1.15 or 1.0, true)
         if name == "walk" then dse.ecs.set_animator_3d_param_float(state.actor, "speed", 1.0) else dse.ecs.set_animator_3d_param_float(state.actor, "speed", 0.0) end
+        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count = dse.ecs.get_animator_3d_state(state.actor)
+        print(string.format("[3D][Animation] animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s", tostring(ok == true), tostring(actual_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count)))
+        return
     end
     print(string.format("[3D][Animation] state=%s normalized_time=0.00", name))
 end
@@ -99,6 +103,11 @@ function AnimationBasic3D.Update(delta_time)
         end
         dse.ecs.set_transform_position(b.entity, x, y, z)
         dse.ecs.set_transform_rotation(b.entity, rx, ry, rz)
+    end
+    if state.actor ~= nil and state.time > 1.0 and state.logged_state ~= state.current_state then
+        state.logged_state = state.current_state
+        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count = dse.ecs.get_animator_3d_state(state.actor)
+        print(string.format("[3D][Animation] runtime: animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s", tostring(ok == true), tostring(actual_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count)))
     end
 end
 

@@ -1534,6 +1534,32 @@ int L_EcsSetAnimator3DParamTrigger(lua_State* L) {
     return 0;
 }
 
+int L_EcsGetAnimator3DState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<Animator3DComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const auto& animator = world->registry().get<Animator3DComponent>(e);
+    lua_pushboolean(L, 1);
+    lua_pushstring(L, animator.current_state_name.empty() ? animator.danim_path.c_str() : animator.current_state_name.c_str());
+    lua_pushnumber(L, animator.normalized_time);
+    lua_pushnumber(L, animator.state_machine ? animator.state_time : animator.current_time);
+    lua_pushnumber(L, animator.speed);
+    lua_pushboolean(L, animator.loop ? 1 : 0);
+    lua_pushboolean(L, animator.is_transitioning ? 1 : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(animator.final_bone_matrices.size()));
+    lua_pushboolean(L, !animator.dskel_path.empty() ? 1 : 0);
+    return 9;
+}
+
 int L_EcsAddSkybox(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1924,6 +1950,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_spot_light_3d", L_EcsAddSpotLight3D);
     set_fn("add_animator_3d", L_EcsAddAnimator3D);
     set_fn("set_animator_3d_state", L_EcsSetAnimator3DState);
+    set_fn("get_animator_3d_state", L_EcsGetAnimator3DState);
     set_fn("init_animator_3d_fsm", L_EcsInitAnimator3DStateMachine);
     set_fn("add_animator_3d_state", L_EcsAddAnimator3DState);
     set_fn("add_animator_3d_transition", L_EcsAddAnimator3DTransition);

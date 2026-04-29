@@ -56,6 +56,12 @@ REQUIRED_LOG_TOKENS = {
         "cast_shadow=true",
         "cascade_splits=12.0/32.0/80.0",
     ],
+    "3d_animation_basic": [
+        "animator_state_api",
+        "get_animator_3d_state=true",
+        "state=idle",
+        "final_bones=",
+    ],
     "3d_audio_spatial": [
         "real_3d_audio",
         "set_3d_mode=true",
