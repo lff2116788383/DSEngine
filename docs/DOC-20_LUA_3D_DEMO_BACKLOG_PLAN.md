@@ -320,10 +320,10 @@ data/
 - 目标画面/交互：音源绕 listener/camera 移动，戴耳机可感知左右/远近变化；画面用小球标记音源和 listener。
 - 参考来源：cpp-game-engine-book 第 15.2 章 3D 音效。
 - 需要能力：3D AudioSource、AudioListener、位置同步、距离衰减。
-- 当前可能缺口：Lua audio 基础 source/play/volume/pitch 已扩展出 3D mode/listener/distance；待后续补充实际空间音效资源。
-- 最小实现路径：补 `audio.set_3d_mode`、`audio.add_listener`、`audio.set_3d_distance`；从 reference 或现有资源整理音效到 `data/audio/spatial`。
-- 实施状态：已完成可用 3D Audio API 接入。当前 demo 创建 listener/source 可视化 marker，调用 `dse.audio.add_listener`、`dse.audio.set_3d_mode`、`dse.audio.set_3d_distance`，AudioSystem 每帧从 Transform 同步 listener/source 位置到底层 miniaudio 3D spatialization；配置预留 audio_path，并保留 visual-only 路径用于无音频资源时验证 API 日志。
-- 验收标准：日志打印 source/listener position 与 `set_3d_mode/add_listener/set_3d_distance`；配置音频资源后声像随音源移动变化；关闭 3D 后声像不变。
+- 当前可能缺口：可用 3D source/listener/distance API 与最小真实 wav 音源已接入；后续主要补更丰富的空间音效资源与手动试听场景。
+- 最小实现路径：补 `audio.set_3d_mode`、`audio.add_listener`、`audio.set_3d_distance`、`audio.get_source_state`，并提供 `data/audio/spatial/spatial_ping.wav` 作为可提交的最小循环提示音。
+- 实施状态：已完成可用 3D Audio API 与实际音频资源接入。当前 demo 创建 listener/source 可视化 marker，调用 `dse.audio.add_listener`、`dse.audio.set_3d_mode`、`dse.audio.set_3d_distance` 与 `dse.audio.get_source_state`；`Config.demo_3d_audio_spatial.audio_path` 默认指向 `audio/spatial/spatial_ping.wav`，AudioSystem 每帧从 Transform 同步 listener/source 位置到底层 miniaudio 3D spatialization，并由日志回读 clip_loaded/spatial_enabled/runtime_handle。
+- 验收标准：日志打印 source/listener position 与 `set_3d_mode/add_listener/set_3d_distance/get_source_state`；`audio_state_api=true`、`clip_loaded=true`、`spatial_enabled=true`、`runtime_handle_nonzero=true`；配置音频资源后声像随音源移动变化。
 
 ## 8. 推荐实施顺序
 
@@ -349,7 +349,7 @@ data/
 12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成可用 shadow 参数 API：Lua 可设置方向光 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 日志强制验收真实 API 调用，真实 shadow pass 视觉稳定性继续专项复验）
 13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成 Animator3D 状态查询 API：Lua 可读取真实组件 state/time/speed/loop/transition/final_bones，并由 demo 日志强制验收；成套骨骼动画资源待补齐）
 14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。（已完成 fallback，真实角色控制器/资源待补齐）
-15. `3d_audio_spatial`：补 3D audio source/listener 后实现。（已完成可用 3D audio API：Lua 可设置 source 3D mode、listener、distance attenuation，并由 AudioSystem 同步 Transform 到 miniaudio）
+15. `3d_audio_spatial`：补 3D audio source/listener 后实现。（已完成可用 3D audio API 与最小真实 wav 音源：Lua 可设置 source 3D mode、listener、distance attenuation，并通过 `get_source_state` 回读 clip/runtime 状态；AudioSystem 同步 Transform 到 miniaudio）
 
 ### 第四阶段：P3 专项增强批次
 
@@ -393,11 +393,11 @@ data/
 | `3d_shadow_showcase` | shadow_param_api、set_directional_light_shadow、cast_shadow、cascade_splits 日志 | 地面投影与 fallback marker 共同保证阴影主题可见 | Lua `set_directional_light_shadow` 返回并写入 cast_shadow、shadow_strength、CSM cascade_splits，Update 中持续调节 shadow_strength |
 | `3d_animation_basic` | animator_state_api、get_animator_3d_state、state、final_bones 日志 | 分段 cube rig fallback 明确运动；后续接骨骼/蒙皮资源 | Lua `get_animator_3d_state` 返回真实 Animator3D 组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；无资源时数值可为 0 但 API 调用必须成功 |
 | `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
-| `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
+| `3d_audio_spatial` | real_3d_audio、get_source_state、clip_loaded、spatial_enabled、runtime_handle_nonzero 日志 | 音源/listener 标记和距离环可见 | Lua `get_source_state` 回读真实 AudioSourceComponent clip/runtime/3D 参数；最小 wav 音源随 Transform 绕 listener 移动 |
 | `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
 | `3d_texture_material_slots` | mesh/material path、set_mesh_texture slot 与 mesh_authoring_api 日志 | albedo/roughness/emissive/normal slot 样本行可见，额外 authored quad 使用 Lua UV 贴图采样 | Lua `set_mesh_texture` 返回 handle/size；`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 返回 attribute count 并影响 MeshRenderSystem 顶点属性 |
 | `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
-| `3d_audio_spatial` | real_3d_audio、set_3d_mode/add_listener/set_3d_distance 与 source/listener position 日志 | 音源/listener 标记和距离环可见 | Lua `set_3d_mode/add_listener/set_3d_distance` 可配置 3D 音源、listener 和距离衰减；AudioSystem 同步 Transform 到 miniaudio |
+| `3d_audio_spatial` | real_3d_audio、set_3d_mode/add_listener/set_3d_distance/get_source_state 与 source/listener position 日志 | 音源/listener 标记和距离环可见 | Lua `set_3d_mode/add_listener/set_3d_distance/get_source_state` 可配置并回读 3D 音源、listener、距离衰减、clip 加载和 runtime handle；AudioSystem 同步 Transform 到 miniaudio |
 
 ## 11. 当前引擎缺口与最小补齐路径
 
@@ -410,7 +410,7 @@ data/
 7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径，并提供真实运行时状态验收查询。（已完成 `set_particle_system_3d_params` 与 `get_particle_system_3d_state`；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 Particle3D 更新链路驱动真实初始化与 active particle count）
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
 9. Animator3D：已新增 `get_animator_3d_state(entity)`，Lua 可查询 Animator3D 真实组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；下一步准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
-10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；待补实际空间音效资源。
+10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance` 与 `get_source_state`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；已提供 `data/audio/spatial/spatial_ping.wav` 最小真实空间音效资源用于自动验收。
 11. Shadow：已新增 `set_directional_light_shadow(entity, cast_shadow, shadow_strength, cascade0, cascade1, cascade2)`，Lua 可稳定配置方向光阴影开关、强度与 CSM 分段；真实 shadow pass 视觉稳定性继续专项复验。
 
 ## 12. 结论

@@ -2,7 +2,7 @@
 -- 目标：展示 3D audio source/listener/distance API；音源随 Transform 绕 listener 运动并同步到底层 3D 音频。
 local AudioSpatial3D = {}
 
-local state = { camera = nil, listener = nil, source = nil, source_marker = nil, rings = {}, time = 0.0, logged = false, api_logged = false, min_distance = 1.0, max_distance = 5.5, rolloff = 1.1 }
+local state = { camera = nil, listener = nil, source = nil, source_marker = nil, rings = {}, time = 0.0, logged = false, api_logged = false, min_distance = 1.0, max_distance = 5.5, rolloff = 1.1, audio_path = "" }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -44,6 +44,7 @@ local function setup_scene(config)
     end
 
     local audio_path = (type(config) == "table" and type(config.audio_path) == "string") and config.audio_path or ""
+    state.audio_path = audio_path
     state.source = dse.ecs.create_entity()
     dse.ecs.add_transform(state.source, 2.4, 0.55, 0.0, 1.0, 1.0, 1.0)
     if dse.audio.add_listener then
@@ -62,7 +63,11 @@ local function setup_scene(config)
     if dse.audio.set_3d_mode then dse.audio.set_3d_mode(state.source, true) end
     if dse.audio.set_3d_distance then dse.audio.set_3d_distance(state.source, state.min_distance, state.max_distance, state.rolloff) end
     if state.audio_enabled then dse.audio.set_playing(state.source, true) end
-    print(string.format("[3D][AudioSpatial] setup: real_3d_audio api add_listener entity=%s set_3d_mode=true set_3d_distance min=%.2f max=%.2f rolloff=%.2f audio_path='%s' audio_enabled=%s", tostring(state.listener), state.min_distance, state.max_distance, state.rolloff, audio_path, tostring(state.audio_enabled)))
+    local has_state, clip_loaded, is_playing, spatial_enabled, min_d, max_d, rolloff, source_volume, source_pitch, runtime_handle, clip_bytes, clip_path = false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, ""
+    if dse.audio.get_source_state then
+        has_state, clip_loaded, is_playing, spatial_enabled, min_d, max_d, rolloff, source_volume, source_pitch, runtime_handle, clip_bytes, clip_path = dse.audio.get_source_state(state.source)
+    end
+    print(string.format("[3D][AudioSpatial] setup: real_3d_audio api add_listener entity=%s set_3d_mode=true set_3d_distance min=%.2f max=%.2f rolloff=%.2f audio_path='%s' audio_enabled=%s audio_state_api=%s clip_loaded=%s spatial_enabled=%s clip_bytes=%d clip_path=%s initial_playing=%s runtime_handle=%d", tostring(state.listener), state.min_distance, state.max_distance, state.rolloff, audio_path, tostring(state.audio_enabled), tostring(has_state), tostring(clip_loaded), tostring(spatial_enabled), clip_bytes or 0, clip_path or "", tostring(is_playing), runtime_handle or 0))
 end
 
 function AudioSpatial3D.Setup(config)
@@ -97,7 +102,11 @@ function AudioSpatial3D.Update(delta_time)
     end
     if not state.logged and state.time > 1.0 then
         state.logged = true
-        print(string.format("[3D][AudioSpatial] runtime: real_3d_audio source=(%.2f,0.55,%.2f) listener=(0.00,0.35,0.00) distance=%.2f api=set_3d_mode/add_listener/set_3d_distance min=%.2f max=%.2f rolloff=%.2f fallback_volume=%.2f pitch=%.2f", x, z, distance, state.min_distance, state.max_distance, state.rolloff, volume, pitch))
+        local has_state, clip_loaded, is_playing, spatial_enabled, min_d, max_d, rolloff, source_volume, source_pitch, runtime_handle, clip_bytes, clip_path = false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, ""
+        if dse.audio.get_source_state and state.source ~= nil then
+            has_state, clip_loaded, is_playing, spatial_enabled, min_d, max_d, rolloff, source_volume, source_pitch, runtime_handle, clip_bytes, clip_path = dse.audio.get_source_state(state.source)
+        end
+        print(string.format("[3D][AudioSpatial] runtime: real_3d_audio source=(%.2f,0.55,%.2f) listener=(0.00,0.35,0.00) distance=%.2f api=set_3d_mode/add_listener/set_3d_distance/get_source_state audio_state_api=%s clip_loaded=%s spatial_enabled=%s is_playing=%s runtime_handle_nonzero=%s runtime_handle=%d clip_bytes=%d clip_path=%s min=%.2f max=%.2f rolloff=%.2f fallback_volume=%.2f pitch=%.2f", x, z, distance, tostring(has_state), tostring(clip_loaded), tostring(spatial_enabled), tostring(is_playing), tostring((runtime_handle or 0) > 0), runtime_handle or 0, clip_bytes or 0, clip_path or "", min_d or state.min_distance, max_d or state.max_distance, rolloff or state.rolloff, volume, pitch))
     end
 end
 

@@ -152,6 +152,34 @@ int L_AudioSet3DDistance(lua_State* L) {
     }
     return 0;
 }
+
+int L_AudioGetSourceState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<AudioSourceComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const auto& audio = world->registry().get<AudioSourceComponent>(e);
+    lua_pushboolean(L, 1);
+    lua_pushboolean(L, audio.clip != nullptr);
+    lua_pushboolean(L, audio.is_playing);
+    lua_pushboolean(L, audio.spatial_enabled);
+    lua_pushnumber(L, audio.min_distance);
+    lua_pushnumber(L, audio.max_distance);
+    lua_pushnumber(L, audio.rolloff);
+    lua_pushnumber(L, audio.volume);
+    lua_pushnumber(L, audio.pitch);
+    lua_pushinteger(L, static_cast<lua_Integer>(audio.runtime_handle));
+    lua_pushinteger(L, audio.clip ? static_cast<lua_Integer>(audio.clip->GetData().size()) : 0);
+    lua_pushstring(L, audio.clip ? audio.clip->GetPath().c_str() : "");
+    return 12;
+}
 }
 
 void RegisterAudioBindings(lua_State* L) {
@@ -170,6 +198,7 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("set_3d_mode", L_AudioSet3DMode);
     set_fn("add_listener", L_AudioAddListener);
     set_fn("set_3d_distance", L_AudioSet3DDistance);
+    set_fn("get_source_state", L_AudioGetSourceState);
 }
 
 }

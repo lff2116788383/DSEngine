@@ -92,7 +92,7 @@ Config.demo_3d_character_third_person={
 }
 Config.demo_3d_audio_spatial={
     camera_distance=9.5,
-    audio_path="",
+    audio_path="audio/spatial/spatial_ping.wav",
     min_distance=1.0,
     max_distance=5.5,
     rolloff=1.1

@@ -75,6 +75,11 @@ REQUIRED_LOG_TOKENS = {
         "set_3d_mode=true",
         "set_3d_distance",
         "add_listener",
+        "get_source_state",
+        "audio_state_api=true",
+        "clip_loaded=true",
+        "spatial_enabled=true",
+        "runtime_handle_nonzero=true",
     ],
     "3d_texture_material_slots": [
         "mesh_authoring_api",
