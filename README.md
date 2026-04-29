@@ -37,6 +37,11 @@ Lua 宿主默认加载 `samples/lua/main.lua`，该入口会读取 `samples/lua/
 - `3d_lighting_showcase`：方向光/点光/聚光 showcase，对应 `samples/lua/3d/3d_lighting_showcase.lua`
 - `3d_camera_showcase`：多相机切换 showcase，对应 `samples/lua/3d/3d_camera_showcase.lua`
 - `3d_textured_cube`：贴图立方体范例，对应 `samples/lua/3d/3d_textured_cube.lua`
+- `3d_scene_showcase`：P1 小型综合 3D 场景，对应 `samples/lua/3d/3d_scene_showcase.lua`
+- `3d_skybox_environment`：SkyLight 环境色 showcase，对应 `samples/lua/3d/3d_skybox_environment.lua`
+- `3d_postprocess_showcase`：Bloom 后处理 showcase，对应 `samples/lua/3d/3d_postprocess_showcase.lua`
+- `3d_particles_showcase`：3D 粒子喷泉 showcase，对应 `samples/lua/3d/3d_particles_showcase.lua`
+- `3d_physics_stack`：3D 刚体堆叠 showcase，对应 `samples/lua/3d/3d_physics_stack.lua`
 
 示例：将 `samples/lua/config.lua` 中的配置改为：
 
@@ -107,6 +112,12 @@ build_fast_lua.bat && python tools\verify_lua_3d_demos.py --entries all
 python tools\verify_lua_3d_demos.py --entries p0
 ```
 
+只验证新 P1 Lua 3D demo：
+
+```cmd
+python tools\verify_lua_3d_demos.py --entries p1
+```
+
 只验证基础 3D demo：
 
 ```cmd
@@ -134,7 +145,7 @@ tmp/lua_3d_verify/lua_<entry>.png
 
 可用参数：
 
-- `--entries basic|p0|all|<entry...>`：选择验证范围，默认 `all`。
+- `--entries basic|p0|p1|all|<entry...>`：选择验证范围，默认 `all`。
 - `--frames <N>`：每个 demo 自动运行帧数，默认 `90`。
 - `--timeout <SECONDS>`：单个 demo 超时时间，默认 `90`。
 - `--out-dir <PATH>`：输出日志和截图目录，默认 `tmp/lua_3d_verify`。
@@ -198,3 +209,8 @@ if exist bin\samples rmdir /S /Q bin\samples && xcopy samples bin\samples /E /I 
 - `3d/3d_lighting_showcase.lua`：3D 光照 showcase
 - `3d/3d_camera_showcase.lua`：3D 相机切换 showcase
 - `3d/3d_textured_cube.lua`：贴图立方体验证范例
+- `3d/3d_scene_showcase.lua`：P1 小型综合 3D 场景
+- `3d/3d_skybox_environment.lua`：SkyLight 环境色 showcase
+- `3d/3d_postprocess_showcase.lua`：Bloom 后处理 showcase
+- `3d/3d_particles_showcase.lua`：3D 粒子喷泉 showcase
+- `3d/3d_physics_stack.lua`：3D 刚体堆叠 showcase

@@ -21,10 +21,19 @@ P0_3D_ENTRIES = [
     "3d_textured_cube",
 ]
 
+P1_3D_ENTRIES = [
+    "3d_scene_showcase",
+    "3d_skybox_environment",
+    "3d_postprocess_showcase",
+    "3d_particles_showcase",
+    "3d_physics_stack",
+]
+
 ENTRY_PRESETS = {
     "basic": BASIC_3D_ENTRIES,
     "p0": P0_3D_ENTRIES,
-    "all": BASIC_3D_ENTRIES + P0_3D_ENTRIES,
+    "p1": P1_3D_ENTRIES,
+    "all": BASIC_3D_ENTRIES + P0_3D_ENTRIES + P1_3D_ENTRIES,
 }
 
 
@@ -108,7 +117,7 @@ def expand_entries(values: Iterable[str]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify Lua 3D demos by running the Lua host and writing screenshots/logs.")
-    parser.add_argument("--entries", nargs="+", default=["all"], help="Entries or presets: basic, p0, all. Default: all")
+    parser.add_argument("--entries", nargs="+", default=["all"], help="Entries or presets: basic, p0, p1, all. Default: all")
     parser.add_argument("--frames", type=int, default=90, help="Frame count before auto-exit. Default: 90")
     parser.add_argument("--timeout", type=int, default=90, help="Timeout seconds per demo. Default: 90")
     parser.add_argument("--out-dir", default="tmp/lua_3d_verify", help="Output directory for screenshots/logs. Default: tmp/lua_3d_verify")

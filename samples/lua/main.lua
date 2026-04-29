@@ -31,6 +31,21 @@ elseif game_entry == "3d_camera_showcase" then
 elseif game_entry == "3d_textured_cube" then
     RuntimeEntry = require("3d.3d_textured_cube")
     runtime_config = Config.demo_3d_textured_cube or Config.basic_3d or {}
+elseif game_entry == "3d_scene_showcase" then
+    RuntimeEntry = require("3d.3d_scene_showcase")
+    runtime_config = Config.demo_3d_scene_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_skybox_environment" then
+    RuntimeEntry = require("3d.3d_skybox_environment")
+    runtime_config = Config.demo_3d_skybox_environment or Config.basic_3d or {}
+elseif game_entry == "3d_postprocess_showcase" then
+    RuntimeEntry = require("3d.3d_postprocess_showcase")
+    runtime_config = Config.demo_3d_postprocess_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_particles_showcase" then
+    RuntimeEntry = require("3d.3d_particles_showcase")
+    runtime_config = Config.demo_3d_particles_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_physics_stack" then
+    RuntimeEntry = require("3d.3d_physics_stack")
+    runtime_config = Config.demo_3d_physics_stack or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}

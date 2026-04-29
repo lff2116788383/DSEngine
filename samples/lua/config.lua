@@ -39,6 +39,33 @@ Config.demo_3d_textured_cube={
     mesh_path="models/cube.dmesh",
     material_path="models/cube.dmat"
 }
+Config.demo_3d_scene_showcase={
+    camera_distance=12.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat"
+}
+Config.demo_3d_skybox_environment={
+    camera_distance=9.0,
+    intensity=1.0,
+    up_color={0.20,0.30,0.50},
+    down_color={0.03,0.05,0.08},
+    skybox_path=""
+}
+Config.demo_3d_postprocess_showcase={
+    camera_distance=8.5,
+    bloom_threshold=0.8,
+    bloom_intensity=1.25,
+    exposure=1.0
+}
+Config.demo_3d_particles_showcase={
+    camera_distance=8.5,
+    max_particles=420,
+    emission_rate=120.0
+}
+Config.demo_3d_physics_stack={
+    camera_distance=10.0,
+    rows=5
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

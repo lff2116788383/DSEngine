@@ -49,6 +49,34 @@ int L_EcsAddParticleSystem3D(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetParticleSystem3DParams(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<ParticleSystem3DComponent>(e)) {
+        auto& ps = world->registry().get<ParticleSystem3DComponent>(e);
+        ps.start_life_min = static_cast<float>(luaL_optnumber(L, 2, ps.start_life_min));
+        ps.start_life_max = static_cast<float>(luaL_optnumber(L, 3, ps.start_life_max));
+        ps.start_size_min = static_cast<float>(luaL_optnumber(L, 4, ps.start_size_min));
+        ps.start_size_max = static_cast<float>(luaL_optnumber(L, 5, ps.start_size_max));
+        ps.start_speed_min = static_cast<float>(luaL_optnumber(L, 6, ps.start_speed_min));
+        ps.start_speed_max = static_cast<float>(luaL_optnumber(L, 7, ps.start_speed_max));
+        ps.start_color = glm::vec4(
+            static_cast<float>(luaL_optnumber(L, 8, ps.start_color.r)),
+            static_cast<float>(luaL_optnumber(L, 9, ps.start_color.g)),
+            static_cast<float>(luaL_optnumber(L, 10, ps.start_color.b)),
+            static_cast<float>(luaL_optnumber(L, 11, ps.start_color.a)));
+        ps.gravity = glm::vec3(
+            static_cast<float>(luaL_optnumber(L, 12, ps.gravity.x)),
+            static_cast<float>(luaL_optnumber(L, 13, ps.gravity.y)),
+            static_cast<float>(luaL_optnumber(L, 14, ps.gravity.z)));
+        ps.texture_path = luaL_optstring(L, 15, ps.texture_path.c_str());
+    }
+    return 0;
+}
+
 int L_EcsGetTransformPosition(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1157,6 +1185,48 @@ int L_EcsAddSkybox(lua_State* L) {
     return 0;
 }
 
+int L_EcsAddSkyLight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    auto& light = world->registry().emplace_or_replace<SkyLightComponent>(e);
+    light.enabled = true;
+    light.up_color = glm::vec3(
+        static_cast<float>(luaL_optnumber(L, 2, 0.22)),
+        static_cast<float>(luaL_optnumber(L, 3, 0.28)),
+        static_cast<float>(luaL_optnumber(L, 4, 0.38)));
+    light.down_color = glm::vec3(
+        static_cast<float>(luaL_optnumber(L, 5, 0.04)),
+        static_cast<float>(luaL_optnumber(L, 6, 0.05)),
+        static_cast<float>(luaL_optnumber(L, 7, 0.08)));
+    light.intensity = static_cast<float>(luaL_optnumber(L, 8, 1.0));
+    return 0;
+}
+
+int L_EcsSetSkyLight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<SkyLightComponent>(e)) {
+        auto& light = world->registry().get<SkyLightComponent>(e);
+        light.up_color = glm::vec3(
+            static_cast<float>(luaL_optnumber(L, 2, light.up_color.r)),
+            static_cast<float>(luaL_optnumber(L, 3, light.up_color.g)),
+            static_cast<float>(luaL_optnumber(L, 4, light.up_color.b)));
+        light.down_color = glm::vec3(
+            static_cast<float>(luaL_optnumber(L, 5, light.down_color.r)),
+            static_cast<float>(luaL_optnumber(L, 6, light.down_color.g)),
+            static_cast<float>(luaL_optnumber(L, 7, light.down_color.b)));
+        light.intensity = static_cast<float>(luaL_optnumber(L, 8, light.intensity));
+        light.enabled = lua_isnoneornil(L, 9) ? light.enabled : (lua_toboolean(L, 9) != 0);
+    }
+    return 0;
+}
+
 int L_EcsAddFreeCameraController(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1221,6 +1291,24 @@ int L_EcsAddPostProcess(lua_State* L) {
     pp.bloom_enabled = lua_toboolean(L, 2) != 0;
     pp.bloom_threshold = static_cast<float>(luaL_optnumber(L, 3, 1.0));
     pp.bloom_intensity = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    pp.exposure = static_cast<float>(luaL_optnumber(L, 5, pp.exposure));
+    return 0;
+}
+
+int L_EcsSetPostProcessBloom(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<PostProcessComponent>(e)) {
+        auto& pp = world->registry().get<PostProcessComponent>(e);
+        pp.enabled = lua_isnoneornil(L, 2) ? pp.enabled : (lua_toboolean(L, 2) != 0);
+        pp.bloom_enabled = lua_isnoneornil(L, 3) ? pp.bloom_enabled : (lua_toboolean(L, 3) != 0);
+        pp.bloom_threshold = static_cast<float>(luaL_optnumber(L, 4, pp.bloom_threshold));
+        pp.bloom_intensity = static_cast<float>(luaL_optnumber(L, 5, pp.bloom_intensity));
+        pp.exposure = static_cast<float>(luaL_optnumber(L, 6, pp.exposure));
+    }
     return 0;
 }
 
@@ -1345,6 +1433,8 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_animator_3d_param_float", L_EcsSetAnimator3DParamFloat);
     set_fn("set_animator_3d_param_trigger", L_EcsSetAnimator3DParamTrigger);
     set_fn("add_skybox", L_EcsAddSkybox);
+    set_fn("add_sky_light", L_EcsAddSkyLight);
+    set_fn("set_sky_light", L_EcsSetSkyLight);
     set_fn("add_terrain", L_EcsAddTerrain);
     set_fn("add_steering", L_EcsAddSteering);
     set_fn("set_steering_target", L_EcsSetSteeringTarget);
@@ -1353,7 +1443,9 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_box_collider_3d", L_EcsAddBoxCollider3D);
     set_fn("add_sphere_collider_3d", L_EcsAddSphereCollider3D);
     set_fn("add_particle_system_3d", L_EcsAddParticleSystem3D);
+    set_fn("set_particle_system_3d_params", L_EcsSetParticleSystem3DParams);
     set_fn("add_post_process", L_EcsAddPostProcess);
+    set_fn("set_post_process_bloom", L_EcsSetPostProcessBloom);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
     set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);

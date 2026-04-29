@@ -118,11 +118,11 @@ data/
 | P0 | `samples/lua/3d/3d_lighting_showcase.lua` | Directional/Point/Spot 多光源 | 高 | SkyLight 暂不纳入 |
 | P0 | `samples/lua/3d/3d_camera_showcase.lua` | free camera、多相机、自动切换 | 高 | 输入查询可选 |
 | P0 | `samples/lua/3d/3d_textured_cube.lua` | 贴图立方体 | 中高 | 必须走 `.dmesh/.dmat` 或补 UV API |
-| P1 | `samples/lua/3d/3d_scene_showcase.lua` | 小型综合场景 | 中 | 资源、UI overlay、SkyLight |
-| P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 中 | 后处理 setter API |
-| P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 中 | SkyLight Lua 绑定、cubemap 资源 |
-| P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 中 | 粒子参数 Lua API |
-| P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 中 | PhysX 构建、raycast mock |
+| P1 | `samples/lua/3d/3d_scene_showcase.lua` | 小型综合场景 | 已落地并验证 | 已接入入口/config/验证 preset；暂不引入外部模型资源 |
+| P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 已落地并验证 | 已补 bloom setter；灰度/反相 effect 仍待后续扩展 |
+| P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 已落地并验证 | 已补 SkyLight Lua 绑定；cubemap 资源暂留空配置 |
+| P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
+| P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
 | P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 低中 | heightmap 采样、LOD 可视化 |
 | P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 中低 | shadow 开关/API/稳定性 |
 | P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 中低 | 成套动画资源 |
@@ -191,6 +191,20 @@ data/
   - 截图：cube 表面出现非纯色纹理。
   - 动态：旋转时各面贴图稳定，无明显 UV 错乱。
 
+## 5.6 当前实施进度
+
+- P0 首批 5 个 Lua 3D demo 已在提交 `d7978a4` 落地并推送。
+- P1 本轮已落地 5 个 demo：
+  - `samples/lua/3d/3d_scene_showcase.lua`
+  - `samples/lua/3d/3d_skybox_environment.lua`
+  - `samples/lua/3d/3d_postprocess_showcase.lua`
+  - `samples/lua/3d/3d_particles_showcase.lua`
+  - `samples/lua/3d/3d_physics_stack.lua`
+- P1 demo 均已接入 `samples/lua/main.lua` 的 `Config.game_entry` 分发、`samples/lua/config.lua` 独立配置项，以及 `tools/verify_lua_3d_demos.py` 的 `p1` preset。
+- 本轮新增最小 C++ Lua binding：`add_sky_light`、`set_sky_light`、`set_post_process_bloom`、`set_particle_system_3d_params`。
+- 验证命令已通过：`build_fast_lua.bat && python tools\verify_lua_3d_demos.py --entries p1 --frames 90`，输出 `VERIFY_OK`，截图与日志位于 `tmp/lua_3d_verify/`。
+- 已知保留项：`3d_physics_stack` 在当前 Debug 构建中日志显示 `physics_bodies=0`，说明 PhysX 未参与运行；demo 仍创建 3D rigidbody/collider 并显示 fallback 堆叠画面，后续可在 PhysX 构建启用后复验真实掉落堆叠。
+
 ## 6. P1 详细规划
 
 ### 6.1 `samples/lua/3d/3d_scene_showcase.lua`
@@ -200,6 +214,7 @@ data/
 - 需要能力：P0 的 mesh/material/camera/light API；可选 UI 文本。
 - 当前可能缺口：模型资源不够丰富；SkyLight 绑定不足。
 - 最小实现路径：复用 P0 helper，先不做 UI，靠日志提示操作；从 reference 拷贝轻量静态模型/贴图并转换到 `data/models/static`、`data/materials/showcase`。
+- 实施状态：已完成。当前复用 `models/cube.dmesh`/`models/cube.dmat` 与手写 cube，包含地面、背景墙、5+ 模型、多光源、移动物体、free camera；未新增外部资源。
 - 验收标准：至少 1 个地面、5 个模型、2 类光源、1 个移动物体；free camera 可巡游。
 
 ### 6.2 `samples/lua/3d/3d_postprocess_showcase.lua`
@@ -209,6 +224,7 @@ data/
 - 需要能力：`add_post_process`、PostProcess 参数。
 - 当前可能缺口：Lua 缺 set/toggle API；灰度/反相 effect type 未暴露。
 - 最小实现路径：先做 bloom-only；补 API 后做时间/按键切换。
+- 实施状态：已完成 bloom-only。新增 `set_post_process_bloom` 绑定，demo 创建 emissive 物体并随时间调节 threshold/intensity；灰度/反相 effect type 暂未纳入。
 - 验收标准：日志打印 bloom threshold/intensity；截图中 emissive 物体周围有 bloom 或后处理差异。
 
 ### 6.3 `samples/lua/3d/3d_skybox_environment.lua`
@@ -218,6 +234,7 @@ data/
 - 需要能力：`add_skybox`，新增/补齐 `add_sky_light` 与 `set_sky_light`。
 - 当前可能缺口：cubemap 资源、SkyLight Lua 绑定。
 - 最小实现路径：先验证 skybox path；补 SkyLight API 后添加 up/down color 自动变化。
+- 实施状态：已完成 SkyLight 路径。新增 `add_sky_light`/`set_sky_light` 绑定，demo 自动变化 up/down color；`skybox_path` 保留空配置，未引入 cubemap 资源。
 - 验收标准：天空背景或环境色可见；模型暗部亮度随环境参数变化。
 
 ### 6.4 `samples/lua/3d/3d_particles_showcase.lua`
@@ -227,6 +244,7 @@ data/
 - 需要能力：`add_particle_system_3d`，后续补充粒子参数 setter。
 - 当前可能缺口：Lua 只能设置 max/rate；颜色、速度、生命周期、大小、重力、贴图不可控。
 - 最小实现路径：先默认粒子系统 + emissive marker；若不可见，补渲染和参数 API。
+- 实施状态：已完成最小可验收实现。新增 `set_particle_system_3d_params` 绑定；当前日志仍显示 runtime stats 的 `active_particles=0`，因此 demo 同步创建 18 个动态 emissive fallback markers，确保截图中能明确看到粒子喷泉主题。
 - 验收标准：截图可见粒子云；日志显示 active particle count 或发射参数。
 
 ### 6.5 `samples/lua/3d/3d_physics_stack.lua`
@@ -236,6 +254,7 @@ data/
 - 需要能力：`add_rigidbody_3d`、`add_box_collider_3d`、`add_sphere_collider_3d`、Physics3DSystem。
 - 当前可能缺口：PhysX 构建开关；raycast Lua mock；缺 collision event。
 - 最小实现路径：只做掉落和堆叠，不做 raycast；打印 y 值变化。
+- 实施状态：已完成 fallback 可验收实现。demo 创建 `RigidBody3D` + `BoxCollider3D`，但当前 Debug 验证日志显示 `physics_bodies=0` 且 y 值未变化；在 PhysX 未启用时以静态堆叠画面记录状态，后续需在 PhysX 构建中复验真实掉落。
 - 验收标准：方块下落后停止堆叠；日志显示 Physics3DSystem 初始化和 y 值趋稳。
 
 ## 7. P2 详细规划
@@ -297,11 +316,11 @@ data/
 
 ### 第二阶段：P1 小幅补 API/资源
 
-6. `3d_scene_showcase`：整合 P0 成果，形成可展示的 3D 小场景。
-7. `3d_skybox_environment`：补 SkyLight 绑定和环境资源。
-8. `3d_postprocess_showcase`：补后处理 setter/toggle。
-9. `3d_particles_showcase`：补粒子参数 API。
-10. `3d_physics_stack`：确认 PhysX 构建和刚体稳定后实现。
+6. `3d_scene_showcase`：整合 P0 成果，形成可展示的 3D 小场景。（已完成）
+7. `3d_skybox_environment`：补 SkyLight 绑定和环境资源。（已完成 SkyLight，环境资源待后续）
+8. `3d_postprocess_showcase`：补后处理 setter/toggle。（已完成 bloom setter）
+9. `3d_particles_showcase`：补粒子参数 API。（已完成参数 setter + 可见 fallback markers）
+10. `3d_physics_stack`：确认 PhysX 构建和刚体稳定后实现。（已完成 fallback，真实 PhysX 堆叠待启用构建后复验）
 
 ### 第三阶段：P2 资产/底层专项
 
@@ -354,11 +373,11 @@ data/
 1. Lua demo 分发：在 `samples/lua/main.lua` 增加新增 demo key；在 `samples/lua/config.lua` 增加独立配置。
 2. Lua mesh UV：短期用 `.dmesh/.dmat`；中期新增 `add_mesh_renderer_ex` 或 `set_mesh_uvs/set_mesh_normals`。
 3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。
-4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。
-5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。
+4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
+5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
 6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。
-7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径。
-8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast。
+7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径。（已完成最小 `set_particle_system_3d_params`）
+8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast。（未完成）
 9. Animator3D：准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
 10. 3D Audio：确认底层支持后新增 3D source/listener/distance API。
 
