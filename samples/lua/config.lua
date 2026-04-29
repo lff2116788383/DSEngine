@@ -55,7 +55,8 @@ Config.demo_3d_postprocess_showcase={
     camera_distance=8.5,
     bloom_threshold=0.8,
     bloom_intensity=1.25,
-    exposure=1.0
+    exposure=1.0,
+    gamma=2.2
 }
 Config.demo_3d_particles_showcase={
     camera_distance=8.5,

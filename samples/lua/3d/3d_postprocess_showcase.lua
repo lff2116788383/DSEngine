@@ -2,7 +2,7 @@
 -- 目标：验证 bloom 后处理参数与 emissive 物体的视觉差异。
 local PostprocessShowcase3D = {}
 
-local state = { camera = nil, post_process = nil, cubes = {}, time = 0.0 }
+local state = { camera = nil, post_process = nil, cubes = {}, time = 0.0, logged_state = false }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -43,9 +43,19 @@ local function setup_scene(config)
     local pp = dse.ecs.create_entity()
     local threshold = config.bloom_threshold or 0.8
     local intensity = config.bloom_intensity or 1.25
-    dse.ecs.add_post_process(pp, true, threshold, intensity, config.exposure or 1.0)
+    local exposure = config.exposure or 1.0
+    local gamma = config.gamma or 2.2
+    dse.ecs.add_post_process(pp, true, threshold, intensity, exposure)
+    local color_ok = false
+    if dse.ecs.set_post_process_color then
+        color_ok = dse.ecs.set_post_process_color(pp, true, exposure, gamma)
+    end
+    local state_ok, enabled, bloom_enabled, read_threshold, read_intensity, color_enabled, read_exposure, read_gamma = false, false, false, 0.0, 0.0, false, 0.0, 0.0
+    if dse.ecs.get_post_process_state then
+        state_ok, enabled, bloom_enabled, read_threshold, read_intensity, color_enabled, read_exposure, read_gamma = dse.ecs.get_post_process_state(pp)
+    end
     state.post_process = pp
-    print(string.format("[3D][PostProcess] bloom threshold=%.2f intensity=%.2f exposure=%.2f", threshold, intensity, config.exposure or 1.0))
+    print(string.format("[3D][PostProcess] setup: postprocess_state_api get_post_process_state=%s set_post_process_color=%s enabled=%s bloom_enabled=%s threshold=%.2f intensity=%.2f color_grading=%s exposure=%.2f gamma=%.2f", tostring(state_ok), tostring(color_ok), tostring(enabled), tostring(bloom_enabled), read_threshold or threshold, read_intensity or intensity, tostring(color_enabled), read_exposure or exposure, read_gamma or gamma))
 end
 
 function PostprocessShowcase3D.Setup(config)
@@ -60,7 +70,18 @@ function PostprocessShowcase3D.Update(delta_time)
     state.time = state.time + dt
     local pulse = (math.sin(state.time * 1.15) + 1.0) * 0.5
     if state.post_process ~= nil then
-        dse.ecs.set_post_process_bloom(state.post_process, true, true, 0.65 + pulse * 0.55, 0.75 + pulse * 1.25, 1.0)
+        local exposure = 0.85 + pulse * 0.35
+        local gamma = 2.0 + pulse * 0.35
+        local bloom_ok = dse.ecs.set_post_process_bloom(state.post_process, true, true, 0.65 + pulse * 0.55, 0.75 + pulse * 1.25, exposure)
+        local color_ok = false
+        if dse.ecs.set_post_process_color then
+            color_ok = dse.ecs.set_post_process_color(state.post_process, true, exposure, gamma)
+        end
+        if dse.ecs.get_post_process_state and not state.logged_state and state.time > 0.35 then
+            state.logged_state = true
+            local state_ok, enabled, bloom_enabled, threshold, intensity, color_enabled, read_exposure, read_gamma, ssao_enabled, ssao_radius, ssao_bias = dse.ecs.get_post_process_state(state.post_process)
+            print(string.format("[3D][PostProcess] runtime: postprocess_state_api get_post_process_state=%s set_post_process_bloom=%s set_post_process_color=%s enabled=%s bloom_enabled=%s threshold=%.2f intensity=%.2f color_grading=%s exposure=%.2f gamma=%.2f ssao=%s/%.2f/%.2f", tostring(state_ok), tostring(bloom_ok), tostring(color_ok), tostring(enabled), tostring(bloom_enabled), threshold or 0.0, intensity or 0.0, tostring(color_enabled), read_exposure or 0.0, read_gamma or 0.0, tostring(ssao_enabled), ssao_radius or 0.0, ssao_bias or 0.0))
+        end
     end
     for i, item in ipairs(state.cubes) do
         if i > 1 then dse.ecs.set_transform_rotation(item.entity, math.sin(state.time + i) * 7.0, state.time * (12.0 + i * 4.0), 0.0) end

@@ -1776,7 +1776,8 @@ int L_EcsAddPostProcess(lua_State* L) {
 int L_EcsSetPostProcessBloom(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
-        return 0;
+        lua_pushboolean(L, 0);
+        return 1;
     }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     if (world->registry().valid(e) && world->registry().all_of<PostProcessComponent>(e)) {
@@ -1786,8 +1787,57 @@ int L_EcsSetPostProcessBloom(lua_State* L) {
         pp.bloom_threshold = static_cast<float>(luaL_optnumber(L, 4, pp.bloom_threshold));
         pp.bloom_intensity = static_cast<float>(luaL_optnumber(L, 5, pp.bloom_intensity));
         pp.exposure = static_cast<float>(luaL_optnumber(L, 6, pp.exposure));
+        lua_pushboolean(L, 1);
+        return 1;
     }
-    return 0;
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int L_EcsSetPostProcessColor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<PostProcessComponent>(e)) {
+        auto& pp = world->registry().get<PostProcessComponent>(e);
+        pp.color_grading_enabled = lua_isnoneornil(L, 2) ? pp.color_grading_enabled : (lua_toboolean(L, 2) != 0);
+        pp.exposure = static_cast<float>(luaL_optnumber(L, 3, pp.exposure));
+        pp.gamma = static_cast<float>(luaL_optnumber(L, 4, pp.gamma));
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int L_EcsGetPostProcessState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<PostProcessComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const auto& pp = world->registry().get<PostProcessComponent>(e);
+    lua_pushboolean(L, 1);
+    lua_pushboolean(L, pp.enabled ? 1 : 0);
+    lua_pushboolean(L, pp.bloom_enabled ? 1 : 0);
+    lua_pushnumber(L, pp.bloom_threshold);
+    lua_pushnumber(L, pp.bloom_intensity);
+    lua_pushboolean(L, pp.color_grading_enabled ? 1 : 0);
+    lua_pushnumber(L, pp.exposure);
+    lua_pushnumber(L, pp.gamma);
+    lua_pushboolean(L, pp.ssao_enabled ? 1 : 0);
+    lua_pushnumber(L, pp.ssao_radius);
+    lua_pushnumber(L, pp.ssao_bias);
+    return 11;
 }
 
 namespace {
@@ -2067,6 +2117,8 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("get_particle_system_3d_state", L_EcsGetParticleSystem3DState);
     set_fn("add_post_process", L_EcsAddPostProcess);
     set_fn("set_post_process_bloom", L_EcsSetPostProcessBloom);
+    set_fn("set_post_process_color", L_EcsSetPostProcessColor);
+    set_fn("get_post_process_state", L_EcsGetPostProcessState);
     set_fn("set_sprite_uv_scroll", L_EcsSetSpriteUvScroll);
     set_fn("set_sprite_uv_offset", L_EcsSetSpriteUvOffset);
     set_fn("add_rigid_body", L_EcsAddRigidBody);

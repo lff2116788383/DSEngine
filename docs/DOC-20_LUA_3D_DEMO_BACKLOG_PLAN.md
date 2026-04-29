@@ -119,7 +119,7 @@ data/
 | P0 | `samples/lua/3d/3d_camera_showcase.lua` | free camera、多相机、自动切换 | 高 | 输入查询可选 |
 | P0 | `samples/lua/3d/3d_textured_cube.lua` | 贴图立方体 | 中高 | 必须走 `.dmesh/.dmat` 或补 UV API |
 | P1 | `samples/lua/3d/3d_scene_showcase.lua` | 小型综合场景 | 已落地并验证 | 已接入入口/config/验证 preset；暂不引入外部模型资源 |
-| P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 已落地并验证 | 已补 bloom setter；灰度/反相 effect 仍待后续扩展 |
+| P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 已落地并验证 | 已补 bloom/color grading setter 与组件状态回读；灰度/反相 effect 仍待后续扩展 |
 | P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 已落地并验证 | 已补 SkyLight Lua 绑定；cubemap 资源暂留空配置 |
 | P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
@@ -204,7 +204,7 @@ data/
   - `samples/lua/3d/3d_particles_showcase.lua`
   - `samples/lua/3d/3d_physics_stack.lua`
 - P1 demo 均已接入 `samples/lua/main.lua` 的 `Config.game_entry` 分发、`samples/lua/config.lua` 独立配置项，以及 `tools/verify_lua_3d_demos.py` 的 `p1` preset。
-- 本轮新增最小 C++ Lua binding：`add_sky_light`、`set_sky_light`、`set_post_process_bloom`、`set_particle_system_3d_params`。
+- 本轮新增最小 C++ Lua binding：`add_sky_light`、`set_sky_light`、`set_post_process_bloom`、`set_post_process_color`、`get_post_process_state`、`set_particle_system_3d_params`。
 - 验证命令已通过：`build_fast_lua.bat && python tools\verify_lua_3d_demos.py --entries p1 --frames 90`，输出 `VERIFY_OK`，截图与日志位于 `tmp/lua_3d_verify/`。
 - 已知保留项：`3d_physics_stack` 在当前 Debug 构建中日志显示 `physics_bodies=0`，说明 PhysX 未参与运行；demo 仍创建 3D rigidbody/collider 并显示 fallback 堆叠画面，后续可在 PhysX 构建启用后复验真实掉落堆叠。
 - P2 本轮继续补充 5 个 demo：
@@ -235,13 +235,13 @@ data/
 
 ### 6.2 `samples/lua/3d/3d_postprocess_showcase.lua`
 
-- 目标画面/交互：bloom 或灰度后处理开关；emissive 物体触发 bloom。
+- 目标画面/交互：bloom 与 color grading 后处理参数开关；emissive 物体触发 bloom。
 - 参考来源：VSEngine2.1 Demo 15.3。
-- 需要能力：`add_post_process`、PostProcess 参数。
-- 当前可能缺口：Lua 缺 set/toggle API；灰度/反相 effect type 未暴露。
-- 最小实现路径：先做 bloom-only；补 API 后做时间/按键切换。
-- 实施状态：已完成 bloom-only。新增 `set_post_process_bloom` 绑定，demo 创建 emissive 物体并随时间调节 threshold/intensity；灰度/反相 effect type 暂未纳入。
-- 验收标准：日志打印 bloom threshold/intensity；截图中 emissive 物体周围有 bloom 或后处理差异。
+- 需要能力：`add_post_process`、PostProcess 参数、后处理 setter 与状态回读。
+- 当前可能缺口：Lua 已可设置 bloom/enabled/exposure/gamma 并回读 PostProcessComponent 状态；灰度/反相 effect type 未暴露，shader 侧 gamma 仍需后续接入参数化。
+- 最小实现路径：先做 bloom-only；补 `set_post_process_bloom`、`set_post_process_color` 与 `get_post_process_state` 后做时间切换和日志验收。
+- 实施状态：已补齐后处理状态回读验收。`set_post_process_bloom` 返回成功布尔值，新增 `set_post_process_color(entity, color_grading_enabled, exposure, gamma)` 与 `get_post_process_state(entity)`，demo 创建 emissive 物体并随时间调节 threshold/intensity/exposure/gamma，日志从真实 `PostProcessComponent` 回读 bloom/color grading/SSAO 状态；灰度/反相 effect type 暂未纳入。
+- 验收标准：日志必须包含 `postprocess_state_api`、`get_post_process_state=true`、`set_post_process_bloom=true`、`set_post_process_color=true`、`color_grading=true`、`gamma=`；截图中 emissive 物体周围有 bloom 或后处理差异。
 
 ### 6.3 `samples/lua/3d/3d_skybox_environment.lua`
 
@@ -339,7 +339,7 @@ data/
 
 6. `3d_scene_showcase`：整合 P0 成果，形成可展示的 3D 小场景。（已完成）
 7. `3d_skybox_environment`：补 SkyLight 绑定和环境资源。（已完成 SkyLight，环境资源待后续）
-8. `3d_postprocess_showcase`：补后处理 setter/toggle。（已完成 bloom setter）
+8. `3d_postprocess_showcase`：补后处理 setter/toggle。（已完成 bloom/color grading setter 与 `get_post_process_state` 状态回读；灰度/反相 effect mode 待后续）
 9. `3d_particles_showcase`：补粒子参数 API与真实运行时状态验收。（已完成参数 setter + `get_particle_system_3d_state` + `DSE_ENABLE_3D=OFF` 内置 Particle3D 更新链路 + 可见 fallback markers）
 10. `3d_physics_stack`：确认 PhysX 构建和刚体稳定后实现。（已完成 fallback，真实 PhysX 堆叠待启用构建后复验）
 
@@ -385,7 +385,7 @@ data/
 | `3d_camera_showcase` | 输出 active camera | 不同视角截图序列 | free camera 或自动切换 |
 | `3d_textured_cube` | dmat/texture slot 日志 | cube 表面有纹理 | 旋转观察各面 |
 | `3d_scene_showcase` | 对象/光源/相机数量 | 小型场景完整可见 | free camera 巡游 |
-| `3d_postprocess_showcase` | bloom/effect 参数 | bloom/灰度差异 | 开关或时间切换 |
+| `3d_postprocess_showcase` | `postprocess_state_api`、`get_post_process_state=true`、`set_post_process_bloom=true`、`set_post_process_color=true`、`color_grading=true`、`gamma=` 日志 | bloom/color grading 参数差异，emissive 物体周围 bloom 主题可见 | Lua `get_post_process_state` 回读真实 `PostProcessComponent` enabled/bloom/threshold/intensity/color_grading/exposure/gamma/SSAO 状态，Update 中持续调节 bloom 与 exposure/gamma |
 | `3d_skybox_environment` | skybox/skylight 参数 | 天空/环境色变化 | 环境强度变化 |
 | `3d_particles_showcase` | `particle_runtime_api`、`get_particle_system_3d_state`、`active_particles`、`active_particles_nonzero=true`、`enabled`、`initialized=true` 日志 | 粒子喷泉主题可见，fallback marker 保底 | Lua `get_particle_system_3d_state` 返回真实 `ParticleSystem3DComponent` active/max/rate/life/size/speed/gravity/color/texture/enabled/initialized`；`DSE_ENABLE_3D=OFF` Lua runtime 下由内置 Particle3D 更新链路驱动 |
 | `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
@@ -405,7 +405,7 @@ data/
 2. Lua mesh UV：已新增 `set_mesh_uvs/set_mesh_normals/set_mesh_tangents`，MeshRenderSystem 对 Lua 手写 mesh 使用显式 UV/normal/tangent；更完整的 `add_mesh_renderer_ex` 可后续作为便捷封装。
 3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。（已完成可用接入，支持 albedo/normal/metallic_roughness/emissive/occlusion；已补 Lua UV/normal/tangent authoring，手写 mesh 可直接显示贴图采样）
 4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
-5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
+5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成 `set_post_process_bloom`、`set_post_process_color` 与 `get_post_process_state`；enabled/bloom/exposure/gamma/color_grading 可调并可回读，灰度/反相 effect mode 与 shader gamma 参数化待后续）
 6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询；新增 `load_terrain_heightmap` 从图片文件采样高度并新增 `set_terrain_texture` 绑定 terrain texture）
 7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径，并提供真实运行时状态验收查询。（已完成 `set_particle_system_3d_params` 与 `get_particle_system_3d_state`；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 Particle3D 更新链路驱动真实初始化与 active particle count）
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）

@@ -44,6 +44,14 @@ P3_3D_ENTRIES = [
 ]
 
 REQUIRED_LOG_TOKENS = {
+    "3d_postprocess_showcase": [
+        "postprocess_state_api",
+        "get_post_process_state=true",
+        "set_post_process_bloom=true",
+        "set_post_process_color=true",
+        "color_grading=true",
+        "gamma=",
+    ],
     "3d_particles_showcase": [
         "particle_runtime_api",
         "get_particle_system_3d_state=true",
