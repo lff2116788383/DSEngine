@@ -15,6 +15,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/ui.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_particle.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
 #include "engine/scene/scene.h"
@@ -296,11 +297,11 @@ bool FramePipeline::Init() {
     mesh_render_system_.SetAssetManager(&asset_manager);
     DEBUG_LOG_INFO("FramePipeline init: systems init complete");
 
-#ifdef DSE_ENABLE_3D
     const auto runtime_modules = ResolveRuntimeModules();
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
+#ifdef DSE_ENABLE_3D
     if (enable_gameplay3d) {
         auto lib_3d = std::make_unique<dse::core::DynamicLibrary>();
         const std::vector<std::string> candidates = {
@@ -341,6 +342,13 @@ bool FramePipeline::Init() {
             }
         }
     }
+#else
+    if (enable_gameplay3d) {
+        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D particle built-in fallback enabled");
+        particle3d_system_.SetAssetManager(&asset_manager);
+        particle3d_system_.Init(*runtime_context_.world, runtime_context_.rhi_device.get());
+        builtin_gameplay3d_enabled_ = true;
+    }
 #endif
 
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
@@ -378,6 +386,13 @@ void FramePipeline::Shutdown() {
     render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     gameplay2d_module_.OnShutdown(*runtime_context_.world);
+#ifndef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        particle3d_system_.Shutdown(*runtime_context_.world);
+        particle3d_system_.SetAssetManager(nullptr);
+        builtin_gameplay3d_enabled_ = false;
+    }
+#endif
     mesh_render_system_.SetAssetManager(nullptr);
     asset_manager.ReleaseGpuResources();
     
@@ -432,9 +447,14 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
-    
+
     dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);
-    
+#ifndef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        particle3d_system_.Update(*runtime_context_.world, delta_time);
+    }
+#endif
+
     auto update_end = std::chrono::high_resolution_clock::now();
     update_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(update_end - update_begin).count();
     update_samples_ += 1;
@@ -490,12 +510,20 @@ void FramePipeline::RunRenderInternal() {
         }
         size_t particle_emitters = 0;
         size_t active_particles = 0;
-        auto particle_view = runtime_context_.world->registry().view<ParticleEmitterComponent>();
-        for (auto emitter_entity : particle_view) {
-            auto& emitter = particle_view.get<ParticleEmitterComponent>(emitter_entity);
+        auto particle2d_view = runtime_context_.world->registry().view<ParticleEmitterComponent>();
+        for (auto emitter_entity : particle2d_view) {
+            auto& emitter = particle2d_view.get<ParticleEmitterComponent>(emitter_entity);
             (void)emitter_entity;
             ++particle_emitters;
             active_particles += emitter.particles.size();
+        }
+        auto particle3d_view = runtime_context_.world->registry().view<dse::ParticleSystem3DComponent>();
+        for (auto particle_entity : particle3d_view) {
+            const auto& particle_system = particle3d_view.get<dse::ParticleSystem3DComponent>(particle_entity);
+            (void)particle_entity;
+            ++particle_emitters;
+            const int active_particle_count = particle_system.active_particle_count;
+            active_particles += static_cast<size_t>(active_particle_count > 0 ? active_particle_count : 0);
         }
         float avg_update_ms = update_samples_ > 0 ? update_time_accumulator_ms_ / static_cast<float>(update_samples_) : 0.0f;
         float avg_fixed_ms = fixed_samples_ > 0 ? fixed_time_accumulator_ms_ / static_cast<float>(fixed_samples_) : 0.0f;

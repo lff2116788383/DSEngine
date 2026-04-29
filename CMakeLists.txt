@@ -176,6 +176,7 @@ if(NOT DSE_ENABLE_3D)
     list(APPEND engine_cpp
         "modules/gameplay_3d/rendering/mesh_render_system.cpp"
         "modules/gameplay_3d/animation/animation_state_machine.cpp"
+        "modules/gameplay_3d/particles/particle3d_system.cpp"
     )
 endif()
 
@@ -327,6 +328,7 @@ function(dse_copy_runtime_assets target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:${target_name}>
+        $<$<TARGET_EXISTS:DSE_Gameplay3D>:$<TARGET_FILE:DSE_Gameplay3D>>
         $<TARGET_FILE_DIR:${target_name}>
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
@@ -345,6 +347,7 @@ function(dse_copy_runtime_dlls target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:${target_name}>
+        $<$<TARGET_EXISTS:DSE_Gameplay3D>:$<TARGET_FILE:DSE_Gameplay3D>>
         $<TARGET_FILE_DIR:${target_name}>
         COMMAND_EXPAND_LISTS
     )

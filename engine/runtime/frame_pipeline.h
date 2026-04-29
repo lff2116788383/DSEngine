@@ -25,6 +25,9 @@
 #include "modules/gameplay_2d/spine/spine_system.h"
 #include "modules/gameplay_2d/gameplay_2d_module.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
+#ifndef DSE_ENABLE_3D
+#include "modules/gameplay_3d/particles/particle3d_system.h"
+#endif
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
 #include "engine/runtime/runtime_frame_ops.h"
@@ -207,8 +210,12 @@ private:
     
     dse::gameplay2d::Gameplay2DModule gameplay2d_module_;
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
+#ifndef DSE_ENABLE_3D
+    dse::gameplay3d::Particle3DSystem particle3d_system_;
+    bool builtin_gameplay3d_enabled_ = false;
+#endif
     
-    // 动态模块化架构：不再直接实例化 3D 相关系统
+    // 动态模块优先；未启用完整 3D 构建时保留 Particle3D 最小内置更新链路。
     struct LoadedModule {
         std::unique_ptr<dse::core::DynamicLibrary> lib;
         dse::core::IModule* instance = nullptr;

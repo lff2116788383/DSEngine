@@ -118,10 +118,12 @@ function ParticlesShowcase3D.Update(delta_time)
             enabled,
             initialized,
             texture_handle = dse.ecs.get_particle_system_3d_state(state.emitter)
+        local active_nonzero = (active_particles or 0) > 0
         print(string.format(
-            "[3D][Particles] particle_runtime_api get_particle_system_3d_state=%s active_particles=%d max_particles=%d emission_rate=%.1f life=%.2f..%.2f size=%.2f..%.2f speed=%.2f..%.2f gravity=%.2f/%.2f/%.2f color=%.2f/%.2f/%.2f/%.2f enabled=%s initialized=%s texture_handle=%d texture_path=%s",
+            "[3D][Particles] particle_runtime_api get_particle_system_3d_state=%s active_particles=%d active_particles_nonzero=%s max_particles=%d emission_rate=%.1f life=%.2f..%.2f size=%.2f..%.2f speed=%.2f..%.2f gravity=%.2f/%.2f/%.2f color=%.2f/%.2f/%.2f/%.2f enabled=%s initialized=%s texture_handle=%d texture_path=%s",
             tostring(ok),
             active_particles or -1,
+            tostring(active_nonzero),
             max_particles or -1,
             emission_rate or -1.0,
             life_min or -1.0,

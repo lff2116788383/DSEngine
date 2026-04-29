@@ -258,10 +258,10 @@ data/
 - 目标画面/交互：粒子喷泉/火花，从发射器位置持续产生粒子。
 - 参考来源：DSEngine 当前 3D particle system。
 - 需要能力：`add_particle_system_3d`、`set_particle_system_3d_params`、`get_particle_system_3d_state`。
-- 当前可能缺口：真实粒子渲染可见性仍依赖后续专项复验；即使保留 fallback markers，日志也必须证明真实系统已经初始化并持续更新 active particle count。
-- 最小实现路径：保留 emissive fallback marker 稳定截图主题，同时新增 runtime 查询 API，把 `active_particles/max_particles/emission_rate/life/size/speed/gravity/color/texture/enabled/initialized` 直接从真实 `ParticleSystem3DComponent` 回读到 Lua 日志。
-- 实施状态：已补齐真实 Particle3D 运行时状态验收 API。新增 `get_particle_system_3d_state(entity)` 绑定，demo 在 Update 中周期打印 `particle_runtime_api get_particle_system_3d_state=true active_particles=... initialized=true`，从而证明真实粒子系统已初始化、发射并更新；18 个动态 emissive fallback markers 继续保留，用于截图稳定兜底。
-- 验收标准：截图可见粒子喷泉主题；日志必须包含 `particle_runtime_api`、`get_particle_system_3d_state=true`、`active_particles=`、`enabled=true`，且数值来自真实组件查询；若 `initialized` 在当前帧预算下尚未翻转，也需能从真实组件查询稳定读到其它运行时参数。
+- 当前可能缺口：真实粒子渲染可见性仍保留 fallback markers 兜底，但日志必须证明真实系统已经初始化并持续更新 active particle count。
+- 最小实现路径：保留 emissive fallback marker 稳定截图主题，同时新增 runtime 查询 API，把 `active_particles/max_particles/emission_rate/life/size/speed/gravity/color/texture/enabled/initialized` 直接从真实 `ParticleSystem3DComponent` 回读到 Lua 日志；当 `DSE_ENABLE_3D=OFF` 且无 `DSE_Gameplay3D` 动态模块时，由 `FramePipeline` 启用 Particle3D 最小内置更新链路，避免 Lua runtime 构建中组件无人驱动。
+- 实施状态：已补齐真实 Particle3D 运行时状态验收 API 与 `DSE_ENABLE_3D=OFF` 内置更新链路。新增 `get_particle_system_3d_state(entity)` 绑定，demo 在 Update 中周期打印 `particle_runtime_api get_particle_system_3d_state=true active_particles=... active_particles_nonzero=true initialized=true`，从而证明真实粒子系统已初始化、发射并更新；18 个动态 emissive fallback markers 继续保留，用于截图稳定兜底。
+- 验收标准：截图可见粒子喷泉主题；日志必须包含 `particle_runtime_api`、`get_particle_system_3d_state=true`、`active_particles=`、`active_particles_nonzero=true`、`enabled=true`、`initialized=true`，且数值来自真实组件查询。
 
 ### 6.5 `samples/lua/3d/3d_physics_stack.lua`
 
@@ -340,7 +340,7 @@ data/
 6. `3d_scene_showcase`：整合 P0 成果，形成可展示的 3D 小场景。（已完成）
 7. `3d_skybox_environment`：补 SkyLight 绑定和环境资源。（已完成 SkyLight，环境资源待后续）
 8. `3d_postprocess_showcase`：补后处理 setter/toggle。（已完成 bloom setter）
-9. `3d_particles_showcase`：补粒子参数 API与真实运行时状态验收。（已完成参数 setter + `get_particle_system_3d_state` + 可见 fallback markers）
+9. `3d_particles_showcase`：补粒子参数 API与真实运行时状态验收。（已完成参数 setter + `get_particle_system_3d_state` + `DSE_ENABLE_3D=OFF` 内置 Particle3D 更新链路 + 可见 fallback markers）
 10. `3d_physics_stack`：确认 PhysX 构建和刚体稳定后实现。（已完成 fallback，真实 PhysX 堆叠待启用构建后复验）
 
 ### 第三阶段：P2 资产/底层专项
@@ -387,7 +387,7 @@ data/
 | `3d_scene_showcase` | 对象/光源/相机数量 | 小型场景完整可见 | free camera 巡游 |
 | `3d_postprocess_showcase` | bloom/effect 参数 | bloom/灰度差异 | 开关或时间切换 |
 | `3d_skybox_environment` | skybox/skylight 参数 | 天空/环境色变化 | 环境强度变化 |
-| `3d_particles_showcase` | `particle_runtime_api`、`get_particle_system_3d_state`、`active_particles`、`enabled` 日志 | 粒子喷泉主题可见，fallback marker 保底 | Lua `get_particle_system_3d_state` 返回真实 `ParticleSystem3DComponent` active/max/rate/life/size/speed/gravity/color/texture/enabled/initialized` |
+| `3d_particles_showcase` | `particle_runtime_api`、`get_particle_system_3d_state`、`active_particles`、`active_particles_nonzero=true`、`enabled`、`initialized=true` 日志 | 粒子喷泉主题可见，fallback marker 保底 | Lua `get_particle_system_3d_state` 返回真实 `ParticleSystem3DComponent` active/max/rate/life/size/speed/gravity/color/texture/enabled/initialized`；`DSE_ENABLE_3D=OFF` Lua runtime 下由内置 Particle3D 更新链路驱动 |
 | `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
 | `3d_terrain_heightmap` | terrain_heightmap_api、load_terrain_heightmap、set_terrain_texture、real_sampling 日志 | 图片 heightmap 采样出的非平面地形并绑定 terrain texture | Lua `load_terrain_heightmap` 返回 image/sample resolution；`set_terrain_texture` 返回 handle/size；`get_terrain_lod` 返回 current_lod |
 | `3d_shadow_showcase` | shadow_param_api、set_directional_light_shadow、cast_shadow、cascade_splits 日志 | 地面投影与 fallback marker 共同保证阴影主题可见 | Lua `set_directional_light_shadow` 返回并写入 cast_shadow、shadow_strength、CSM cascade_splits，Update 中持续调节 shadow_strength |
@@ -407,7 +407,7 @@ data/
 4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
 5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
 6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询；新增 `load_terrain_heightmap` 从图片文件采样高度并新增 `set_terrain_texture` 绑定 terrain texture）
-7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径，并提供真实运行时状态验收查询。（已完成 `set_particle_system_3d_params` 与 `get_particle_system_3d_state`；真实粒子渲染可见性稳定性仍待继续专项复验）
+7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径，并提供真实运行时状态验收查询。（已完成 `set_particle_system_3d_params` 与 `get_particle_system_3d_state`；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 Particle3D 更新链路驱动真实初始化与 active particle count）
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
 9. Animator3D：已新增 `get_animator_3d_state(entity)`，Lua 可查询 Animator3D 真实组件 state、normalized_time、clip_time、speed、loop、transition 与 final_bones；下一步准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
 10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；待补实际空间音效资源。

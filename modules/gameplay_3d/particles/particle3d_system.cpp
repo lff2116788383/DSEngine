@@ -98,22 +98,27 @@ void Particle3DSystem::Update(World& world, float delta_time) {
     if (!rhi_) return;
     auto& asset_manager = RequireAssetManager(asset_manager_);
 
-    auto view = world.registry().view<ParticleSystem3DComponent, TransformComponent>();
-    
-    for (auto entity : view) {
-        auto& ps = view.get<ParticleSystem3DComponent>(entity);
-        auto& transform = view.get<TransformComponent>(entity);
+    auto particle_view = world.registry().view<ParticleSystem3DComponent>();
+    auto transform_view = world.registry().view<TransformComponent>();
+    for (auto entity : particle_view) {
+        auto& ps = particle_view.get<ParticleSystem3DComponent>(entity);
+        if (!transform_view.contains(entity)) {
+            continue;
+        }
+        auto& transform = transform_view.get<TransformComponent>(entity);
 
         if (!ps.initialized) {
             ps.particles.resize(ps.max_particles);
             for (auto& p : ps.particles) p.life = -1.0f; // All dead initially
-            
+
             // Create instance VBO (size = max_particles * 8 floats)
             ps.instance_vbo = rhi_->CreateBuffer(ps.max_particles * 8 * sizeof(float), nullptr, true, false);
             ps.initialized = true;
         }
 
-        if (!ps.enabled) continue;
+        if (!ps.enabled) {
+            continue;
+        }
 
         // 1. Emission
         ps.emission_accumulator += delta_time * ps.emission_rate;
@@ -124,7 +129,7 @@ void Particle3DSystem::Update(World& world, float delta_time) {
 
         // 2. CPU Simulation (Move to Compute Shader in next iteration if performance is an issue)
         int highest_active = 0;
-        
+
         // We pack data to upload
         std::vector<float> gpu_data;
         gpu_data.reserve(ps.max_particles * 8);
@@ -137,7 +142,7 @@ void Particle3DSystem::Update(World& world, float delta_time) {
                     p.velocity += ps.gravity * delta_time;
                     p.position += p.velocity * delta_time;
                     // Optional: Fade out color over time based on start_life vs life
-                    
+
                     gpu_data.push_back(p.position.x);
                     gpu_data.push_back(p.position.y);
                     gpu_data.push_back(p.position.z);
@@ -146,12 +151,12 @@ void Particle3DSystem::Update(World& world, float delta_time) {
                     gpu_data.push_back(p.color.b);
                     gpu_data.push_back(p.color.a);
                     gpu_data.push_back(p.size);
-                    
+
                     highest_active++;
                 }
             }
         }
-        
+
         ps.active_particle_count = highest_active;
 
         // 3. Upload to GPU
@@ -164,6 +169,7 @@ void Particle3DSystem::Update(World& world, float delta_time) {
             auto tex = asset_manager.LoadTexture(ps.texture_path);
             if (tex) ps.texture_handle = tex->GetHandle();
         }
+
     }
 }
 

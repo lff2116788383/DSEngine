@@ -48,7 +48,9 @@ REQUIRED_LOG_TOKENS = {
         "particle_runtime_api",
         "get_particle_system_3d_state=true",
         "active_particles=",
+        "active_particles_nonzero=true",
         "enabled=true",
+        "initialized=true",
     ],
     "3d_terrain_heightmap": [
         "terrain_heightmap_api",
