@@ -51,3 +51,6 @@
 [submodule "reference/VSEngine2.1"]
 	path = reference/VSEngine2.1
 	url = https://github.com/79134054/VSEngine2.1.git
+[submodule "reference/cpp-game-engine-book"]
+	path = reference/cpp-game-engine-book
+	url = https://github.com/ThisisGame/cpp-game-engine-book.git
