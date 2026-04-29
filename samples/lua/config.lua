@@ -88,7 +88,9 @@ Config.demo_3d_animation_basic={
 Config.demo_3d_character_third_person={
     camera_distance=10.5,
     danim_path="",
-    dskel_path=""
+    dskel_path="",
+    move_speed=2.8,
+    steering_force=10.0
 }
 Config.demo_3d_audio_spatial={
     camera_distance=9.5,

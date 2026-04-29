@@ -70,6 +70,13 @@ REQUIRED_LOG_TOKENS = {
         "state=idle",
         "final_bones=",
     ],
+    "3d_character_third_person": [
+        "character_steering_api",
+        "add_steering=true",
+        "set_steering_target=true",
+        "get_steering_state=true",
+        "speed_nonzero=true",
+    ],
     "3d_audio_spatial": [
         "real_3d_audio",
         "set_3d_mode=true",

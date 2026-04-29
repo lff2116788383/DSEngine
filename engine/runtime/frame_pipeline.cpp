@@ -452,6 +452,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 #ifndef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
         particle3d_system_.Update(*runtime_context_.world, delta_time);
+        steering_system_.Update(*runtime_context_.world, delta_time);
     }
 #endif
 

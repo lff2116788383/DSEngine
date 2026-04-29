@@ -2,7 +2,7 @@
 -- 目标：展示第三人称跟随相机、角色移动/转向/攻击状态；当前用 cube character rig 作为角色资源 fallback。
 local CharacterThirdPerson3D = {}
 
-local state = { camera = nil, character = nil, parts = {}, time = 0.0, mode = "run", logged_mode = "" }
+local state = { camera = nil, character = nil, parts = {}, time = 0.0, mode = "run", logged_mode = "", target = nil, steering_logged = false, last_target_mode = "" }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -45,6 +45,7 @@ local function setup_scene(config)
 
     local character = dse.ecs.create_entity()
     dse.ecs.add_transform(character, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+    dse.ecs.add_steering(character, config.move_speed or 2.8, config.steering_force or 10.0, 1.0)
     dse.ecs.add_animator_3d(character, config.danim_path or "", config.dskel_path or "")
     dse.ecs.init_animator_3d_fsm(character)
     dse.ecs.add_animator_3d_state(character, "run", config.danim_path or "", true, 1.0)
@@ -59,7 +60,13 @@ local function setup_scene(config)
     add_part("leg_l", -0.18, 0.14, 0.0, 0.18, 0.64, 0.22, {0.12, 0.24, 0.58, 1.0})
     add_part("leg_r", 0.18, 0.14, 0.0, 0.18, 0.64, 0.22, {0.12, 0.24, 0.58, 1.0})
     add_part("weapon", 0.72, 0.95, 0.0, 0.12, 0.90, 0.12, {0.92, 0.86, 0.38, 1.0})
-    print("[3D][Character] setup: third-person follow camera + cube character rig fallback. States: run/attack.")
+    state.target = add_cube("steering_target", 0.0, -0.28, 0.0, 0.35, 0.08, 0.35, {0.18, 0.95, 0.35, 1.0}, {0.04, 0.22, 0.08})
+
+    local ok, enabled, seek, flee, arrive = false, false, false, false, false
+    if dse.ecs.get_steering_state then
+        ok, enabled, seek, flee, arrive = dse.ecs.get_steering_state(character)
+    end
+    print(string.format("[3D][Character] setup: character_steering_api add_steering=true get_steering_state=%s enabled=%s seek=%s flee=%s arrive=%s third-person follow camera + cube character rig fallback. States: run/attack.", tostring(ok), tostring(enabled), tostring(seek), tostring(flee), tostring(arrive)))
 end
 
 local function apply_part_transform(root_x, root_y, root_z, root_yaw, phase)
@@ -90,26 +97,56 @@ function CharacterThirdPerson3D.Update(delta_time)
     state.time = state.time + dt
     local mode_cycle = math.floor(state.time / 3.0) % 3
     state.mode = (mode_cycle == 2) and "attack" or "run"
-    local radius = 2.25
-    local root_x = math.cos(state.time * 0.55) * radius
-    local root_z = math.sin(state.time * 0.55) * radius * 0.72
+    local target_radius = state.mode == "attack" and 1.15 or 2.25
+    local target_x = math.cos(state.time * 0.55) * target_radius
+    local target_z = math.sin(state.time * 0.55) * target_radius * 0.72
+    if state.target ~= nil then
+        dse.ecs.set_transform_position(state.target, target_x, -0.28, target_z)
+    end
+
+    local steering_ok = false
+    if state.character ~= nil and dse.ecs.set_steering_target then
+        local target_mode = state.mode == "attack" and "arrive" or "seek"
+        steering_ok = dse.ecs.set_steering_target(state.character, target_mode, target_x, 0.0, target_z)
+        if state.last_target_mode ~= target_mode then
+            state.last_target_mode = target_mode
+            print(string.format("[3D][Character] steering_target set_steering_target=%s behavior=%s target=(%.2f,%.2f)", tostring(steering_ok), target_mode, target_x, target_z))
+        end
+    end
+
+    local root_x, root_y, root_z = 0.0, 0.0, 0.0
+    if state.character ~= nil and dse.ecs.get_transform_position then
+        root_x, root_y, root_z = dse.ecs.get_transform_position(state.character)
+    else
+        root_x, root_z = target_x, target_z
+    end
+
+    local has_steering, steering_enabled, seek_enabled, flee_enabled, arrive_enabled, vx, vy, vz, speed, max_velocity, max_force, mass = false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    if state.character ~= nil and dse.ecs.get_steering_state then
+        has_steering, steering_enabled, seek_enabled, flee_enabled, arrive_enabled, vx, vy, vz, speed, max_velocity, max_force, mass = dse.ecs.get_steering_state(state.character)
+    end
+
     local root_yaw = -state.time * 31.5 + 90.0
-    if state.mode == "attack" then root_x = root_x * 0.55; root_z = root_z * 0.55 end
+    if math.abs(vx or 0.0) + math.abs(vz or 0.0) > 0.001 then
+        root_yaw = math.deg(math.atan(vx, vz))
+    end
     if state.character ~= nil then
-        dse.ecs.set_transform_position(state.character, root_x, 0.0, root_z)
-        dse.ecs.set_transform_rotation(state.character, 0.0, root_yaw, 0.0)
         dse.ecs.set_animator_3d_state(state.character, state.mode, state.mode == "attack" and 1.4 or 1.0, state.mode ~= "attack")
     end
-    apply_part_transform(root_x, 0.0, root_z, root_yaw, state.time * 5.5)
+    apply_part_transform(root_x, root_y or 0.0, root_z, root_yaw, state.time * 5.5)
     if state.camera ~= nil then
         local cam_x = root_x - math.cos(state.time * 0.55) * 4.0
         local cam_z = root_z + 6.8
         dse.ecs.set_transform_position(state.camera, cam_x, 3.2, cam_z)
         dse.ecs.set_transform_rotation(state.camera, -19.0, math.sin(state.time * 0.35) * 5.0, 0.0)
     end
+    if (not state.steering_logged) and has_steering and (speed or 0.0) > 0.02 then
+        state.steering_logged = true
+        print(string.format("[3D][Character] runtime: character_steering_api get_steering_state=true steering_enabled=%s seek=%s arrive=%s velocity=(%.2f,%.2f,%.2f) speed=%.2f speed_nonzero=%s max_velocity=%.2f max_force=%.2f mass=%.2f target=(%.2f,%.2f)", tostring(steering_enabled), tostring(seek_enabled), tostring(arrive_enabled), vx or 0.0, vy or 0.0, vz or 0.0, speed or 0.0, tostring((speed or 0.0) > 0.02), max_velocity or 0.0, max_force or 0.0, mass or 0.0, target_x, target_z))
+    end
     if state.logged_mode ~= state.mode then
         state.logged_mode = state.mode
-        print(string.format("[3D][Character] state=%s speed=%.2f pos=(%.2f,%.2f)", state.mode, state.mode == "attack" and 0.0 or 1.0, root_x, root_z))
+        print(string.format("[3D][Character] state=%s speed=%.2f pos=(%.2f,%.2f) steering_state_api=%s", state.mode, speed or 0.0, root_x, root_z, tostring(has_steering)))
     end
 end
 

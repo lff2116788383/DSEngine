@@ -27,6 +27,7 @@
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #ifndef DSE_ENABLE_3D
 #include "modules/gameplay_3d/particles/particle3d_system.h"
+#include "modules/gameplay_3d/ai/steering_system.h"
 #endif
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
@@ -212,6 +213,7 @@ private:
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
 #ifndef DSE_ENABLE_3D
     dse::gameplay3d::Particle3DSystem particle3d_system_;
+    dse::gameplay3d::SteeringSystem steering_system_;
     bool builtin_gameplay3d_enabled_ = false;
 #endif
     

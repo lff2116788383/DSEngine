@@ -419,7 +419,8 @@ int L_EcsAddSteering(lua_State* L) {
 int L_EcsSetSteeringTarget(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
-        return 0;
+        lua_pushboolean(L, 0);
+        return 1;
     }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     const char* behavior = luaL_checkstring(L, 2);
@@ -431,16 +432,67 @@ int L_EcsSetSteeringTarget(lua_State* L) {
         std::string b = behavior;
         if (b == "seek") {
             steering.seek_enabled = true;
+            steering.flee_enabled = false;
+            steering.arrive_enabled = false;
             steering.seek_target = glm::vec3(tx, ty, tz);
+            lua_pushboolean(L, 1);
+            return 1;
         } else if (b == "flee") {
+            steering.seek_enabled = false;
             steering.flee_enabled = true;
+            steering.arrive_enabled = false;
             steering.flee_target = glm::vec3(tx, ty, tz);
+            lua_pushboolean(L, 1);
+            return 1;
         } else if (b == "arrive") {
+            steering.seek_enabled = false;
+            steering.flee_enabled = false;
             steering.arrive_enabled = true;
             steering.arrive_target = glm::vec3(tx, ty, tz);
+            lua_pushboolean(L, 1);
+            return 1;
         }
     }
-    return 0;
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int L_EcsGetSteeringState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<SteeringComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const auto& steering = world->registry().get<SteeringComponent>(e);
+    lua_pushboolean(L, 1);
+    lua_pushboolean(L, steering.enabled ? 1 : 0);
+    lua_pushboolean(L, steering.seek_enabled ? 1 : 0);
+    lua_pushboolean(L, steering.flee_enabled ? 1 : 0);
+    lua_pushboolean(L, steering.arrive_enabled ? 1 : 0);
+    lua_pushnumber(L, steering.velocity.x);
+    lua_pushnumber(L, steering.velocity.y);
+    lua_pushnumber(L, steering.velocity.z);
+    lua_pushnumber(L, glm::length(steering.velocity));
+    lua_pushnumber(L, steering.max_velocity);
+    lua_pushnumber(L, steering.max_force);
+    lua_pushnumber(L, steering.mass);
+    lua_pushnumber(L, steering.arrive_deceleration_radius);
+    lua_pushnumber(L, steering.seek_target.x);
+    lua_pushnumber(L, steering.seek_target.y);
+    lua_pushnumber(L, steering.seek_target.z);
+    lua_pushnumber(L, steering.flee_target.x);
+    lua_pushnumber(L, steering.flee_target.y);
+    lua_pushnumber(L, steering.flee_target.z);
+    lua_pushnumber(L, steering.arrive_target.x);
+    lua_pushnumber(L, steering.arrive_target.y);
+    lua_pushnumber(L, steering.arrive_target.z);
+    return 22;
 }
 
 int L_EcsCreateEntity(lua_State* L) {
@@ -2005,6 +2057,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("get_terrain_lod", L_EcsGetTerrainLod);
     set_fn("add_steering", L_EcsAddSteering);
     set_fn("set_steering_target", L_EcsSetSteeringTarget);
+    set_fn("get_steering_state", L_EcsGetSteeringState);
     set_fn("add_free_camera_controller", L_EcsAddFreeCameraController);
     set_fn("add_rigidbody_3d", L_EcsAddRigidBody3D);
     set_fn("add_box_collider_3d", L_EcsAddBoxCollider3D);

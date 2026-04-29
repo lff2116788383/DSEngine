@@ -177,6 +177,7 @@ if(NOT DSE_ENABLE_3D)
         "modules/gameplay_3d/rendering/mesh_render_system.cpp"
         "modules/gameplay_3d/animation/animation_state_machine.cpp"
         "modules/gameplay_3d/particles/particle3d_system.cpp"
+        "modules/gameplay_3d/ai/steering_system.cpp"
     )
 endif()
 
