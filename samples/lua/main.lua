@@ -46,6 +46,30 @@ elseif game_entry == "3d_particles_showcase" then
 elseif game_entry == "3d_physics_stack" then
     RuntimeEntry = require("3d.3d_physics_stack")
     runtime_config = Config.demo_3d_physics_stack or Config.basic_3d or {}
+elseif game_entry == "3d_terrain_heightmap" then
+    RuntimeEntry = require("3d.3d_terrain_heightmap")
+    runtime_config = Config.demo_3d_terrain_heightmap or Config.basic_3d or {}
+elseif game_entry == "3d_shadow_showcase" then
+    RuntimeEntry = require("3d.3d_shadow_showcase")
+    runtime_config = Config.demo_3d_shadow_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_animation_basic" then
+    RuntimeEntry = require("3d.3d_animation_basic")
+    runtime_config = Config.demo_3d_animation_basic or Config.basic_3d or {}
+elseif game_entry == "3d_character_third_person" then
+    RuntimeEntry = require("3d.3d_character_third_person")
+    runtime_config = Config.demo_3d_character_third_person or Config.basic_3d or {}
+elseif game_entry == "3d_audio_spatial" then
+    RuntimeEntry = require("3d.3d_audio_spatial")
+    runtime_config = Config.demo_3d_audio_spatial or Config.basic_3d or {}
+elseif game_entry == "3d_physics_raycast_pick" then
+    RuntimeEntry = require("3d.3d_physics_raycast_pick")
+    runtime_config = Config.demo_3d_physics_raycast_pick or Config.basic_3d or {}
+elseif game_entry == "3d_texture_material_slots" then
+    RuntimeEntry = require("3d.3d_texture_material_slots")
+    runtime_config = Config.demo_3d_texture_material_slots or Config.basic_3d or {}
+elseif game_entry == "3d_terrain_lod_zones" then
+    RuntimeEntry = require("3d.3d_terrain_lod_zones")
+    runtime_config = Config.demo_3d_terrain_lod_zones or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}

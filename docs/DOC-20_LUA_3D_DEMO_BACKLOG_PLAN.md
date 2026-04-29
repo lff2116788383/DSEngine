@@ -66,7 +66,7 @@
 - `.dmesh` 加载路径已能读取 position/normal/uv/skin/tangent 等数据，适合优先验证 `data/models/cube.dmesh` 与 `data/models/cube.dmat`。
 - `.obj/.gltf/.fbx` fallback 主要解析 position/index，材质贴图仍应依赖 `.dmat` 或后续资产管线。
 - SkyLight 组件和渲染侧读取已存在，但 Lua 缺少 add/set skylight 绑定。
-- Terrain 有组件和渲染系统，但 heightmap 采样与 Lua 参数还不完整。
+- Terrain 有组件和渲染系统；Lua 已可写入程序化 height data、配置 resolution/LOD 并读取当前 LOD，图片 heightmap 文件采样仍待补齐。
 - Physics3D 有 PhysX 系统和刚体/碰撞体绑定，但 Lua raycast 当前仍是 mock miss。
 - Particle3D 有系统，但 Lua 参数太少，只能设置 max_particles 和 emission_rate。
 - Audio Lua 绑定目前是基础 2D 音源控制，缺 3D source/listener API。
@@ -123,11 +123,14 @@ data/
 | P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 已落地并验证 | 已补 SkyLight Lua 绑定；cubemap 资源暂留空配置 |
 | P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
-| P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 低中 | heightmap 采样、LOD 可视化 |
-| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 中低 | shadow 开关/API/稳定性 |
-| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 中低 | 成套动画资源 |
-| P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 低 | 角色控制器、相机、动画资源 |
-| P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 低 | 3D audio source/listener API |
+| P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已落地 fallback | 已接入 Terrain 组件入口与可见程序化高度 fallback；真实 heightmap 采样/LOD 仍待专项补齐 |
+| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已落地 fallback | 已接入方向光 shadow_strength 动态调节与可见投影 fallback；真实 shadow pass 稳定性仍待专项验证 |
+| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已落地 fallback | 已接入 Animator3D/FSM Lua 入口与分段 cube rig 状态切换；成套骨骼动画资源仍待补齐 |
+| P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 已落地 fallback | 已接入跟随相机、Animator3D 状态和 cube character rig；真实角色控制器/动画资源仍待补齐 |
+| P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 已落地 fallback | 已接入 AudioSource volume/pitch 动态 fallback 与环绕可视化；3D source/listener API 仍待补齐 |
+| P3 | `samples/lua/3d/3d_physics_raycast_pick.lua` | Physics3D raycast/拾取专项 | 已接入可用 raycast | 已接入 BoxCollider3D/RigidBody3D、可见 ray beam/命中 marker；Lua `physics_3d_raycast` 优先使用 PhysX service，未启用时使用 ECS 3D collider 几何 fallback |
+| P3 | `samples/lua/3d/3d_texture_material_slots.lua` | texture/material slot 专项 | 已接入可用 texture slot API | 已接入 `.dmesh/.dmat` 样本与材质 slot marker；Lua `set_mesh_texture(entity, slot, path)` 可绑定 albedo/normal/metallic_roughness/emissive/occlusion，UV/normal/tangent Lua authoring 仍待补齐 |
+| P3 | `samples/lua/3d/3d_terrain_lod_zones.lua` | Terrain LOD 分区专项 | 已接入可用 terrain height/LOD API | 已接入 TerrainComponent 程序化 height data、resolution/LOD 参数与 current_lod 查询；near/mid/far tile 密度继续作为可视化标尺，图片 heightmap 文件采样仍待补齐 |
 
 ## 5. P0 详细规划
 
@@ -204,6 +207,19 @@ data/
 - 本轮新增最小 C++ Lua binding：`add_sky_light`、`set_sky_light`、`set_post_process_bloom`、`set_particle_system_3d_params`。
 - 验证命令已通过：`build_fast_lua.bat && python tools\verify_lua_3d_demos.py --entries p1 --frames 90`，输出 `VERIFY_OK`，截图与日志位于 `tmp/lua_3d_verify/`。
 - 已知保留项：`3d_physics_stack` 在当前 Debug 构建中日志显示 `physics_bodies=0`，说明 PhysX 未参与运行；demo 仍创建 3D rigidbody/collider 并显示 fallback 堆叠画面，后续可在 PhysX 构建启用后复验真实掉落堆叠。
+- P2 本轮继续补充 5 个 demo：
+  - `samples/lua/3d/3d_terrain_heightmap.lua`
+  - `samples/lua/3d/3d_shadow_showcase.lua`
+  - `samples/lua/3d/3d_animation_basic.lua`
+  - `samples/lua/3d/3d_character_third_person.lua`
+  - `samples/lua/3d/3d_audio_spatial.lua`
+- P2 新增 demo 已接入 `samples/lua/main.lua` 的 `Config.game_entry` 分发、`samples/lua/config.lua` 独立配置项，以及 `tools/verify_lua_3d_demos.py` 的 `p2` preset。
+- P2 本轮遵循“先可见、后专项完善”的策略：Terrain 使用程序化高度 marker fallback，Shadow 使用地面暗色投影 marker fallback，Animation 使用分段 cube rig fallback，Character 使用 cube character rig + 自动跟随相机 fallback，Audio 使用环绕音源 marker + volume/pitch fallback；真实 heightmap 采样/LOD、shadow pass 稳定性、骨骼动画资源、角色控制器、3D audio source/listener API 仍作为后续专项保留。
+- P3/专项增强首批新增 3 个 demo：
+  - `samples/lua/3d/3d_physics_raycast_pick.lua`
+  - `samples/lua/3d/3d_texture_material_slots.lua`
+  - `samples/lua/3d/3d_terrain_lod_zones.lua`
+- P3 首批用于把 P1/P2 fallback 中最关键的底层缺口拆成独立验收入口：Physics raycast 用可见 beam/命中 marker 先固定截图语义，Texture/Material slot 用 `.dmesh/.dmat` + slot marker 固定材质链路验收语义，Terrain LOD 用 near/mid/far 分区 tile 密度固定 LOD 验收语义；真实底层能力补齐后可在同名 demo 中逐步替换 fallback。
 
 ## 6. P1 详细规划
 
@@ -266,6 +282,7 @@ data/
 - 需要能力：`add_terrain`、heightmap 采样、LOD 参数、terrain texture。
 - 当前可能缺口：heightmap_path 未真正采样；Lua 无 resolution/lod/texture 参数。
 - 最小实现路径：从 reference 拷贝 heightmap 到 `data/terrain/heightmaps`；补 TerrainSystem 采样与 Lua 参数。
+- 实施状态：已完成 fallback 版。当前创建 TerrainComponent 并打印 heightmap/尺寸参数，同时用 11x9 程序化高度 tile marker 形成非平面地形画面；near/far LOD marker 用于截图中表达 LOD 主题。
 - 验收标准：地形非平面；相机远近移动时 LOD 日志或三角密度变化。
 
 ### 7.2 `samples/lua/3d/3d_shadow_showcase.lua`
@@ -275,6 +292,7 @@ data/
 - 需要能力：light cast_shadow、shadow map pass、shadow strength setter。
 - 当前可能缺口：Lua 未暴露 cast_shadow；shadow 稳定性需要专项验证。
 - 最小实现路径：补 light shadow setter；地面 + 悬空 cube + 方向光。
+- 实施状态：已完成 fallback 版。当前使用已暴露 `set_directional_light_3d` 动态调节 shadow_strength，悬空 caster 持续移动；同步用地面暗色投影 marker 保证截图主题稳定。
 - 验收标准：地面有明确投影；shadow_strength 改变后阴影深浅变化。
 
 ### 7.3 `samples/lua/3d/3d_animation_basic.lua`
@@ -284,6 +302,7 @@ data/
 - 需要能力：`add_animator_3d`、Animator3D FSM、skinned mesh 渲染、动画资源。
 - 当前可能缺口：缺 `.dskel/.danim/.dmesh/.dmat` 成套资源。
 - 最小实现路径：先用最小 two-bone 测试资源；再从 reference 拷贝/转换角色资源到 `data/models/character`、`data/animation`。
+- 实施状态：已完成 fallback 版。当前创建 Animator3D + FSM + idle/walk 状态，并用分段 cube rig 做可见 Idle/Walk 姿态切换；配置预留 danim/dskel 路径。
 - 验收标准：模型明显运动；日志显示 current animation 和 normalized_time；切换后动作变化。
 
 ### 7.4 `samples/lua/3d/3d_character_third_person.lua`
@@ -293,6 +312,7 @@ data/
 - 需要能力：3D 输入、角色控制、third-person camera、Animator3D FSM、角色资源。
 - 当前可能缺口：Lua `set_camera_follow` 偏 2D；缺 3D third-person controller；缺 capsule/character controller。
 - 最小实现路径：cube 代替角色实现 follow，再接入骨骼模型和动画。
+- 实施状态：已完成 fallback 版。当前使用 cube character rig 表达角色，自动沿路径移动并周期切换 run/attack，第三人称相机通过 Lua 手动跟随；同时接入 Animator3D/FSM 状态入口。
 - 验收标准：角色移动时相机稳定跟随；日志显示 speed/state；攻击状态可触发。
 
 ### 7.5 `samples/lua/3d/3d_audio_spatial.lua`
@@ -302,6 +322,7 @@ data/
 - 需要能力：3D AudioSource、AudioListener、位置同步、距离衰减。
 - 当前可能缺口：Lua audio 只有基础 source/play/volume/pitch；缺 3D mode/listener/distance。
 - 最小实现路径：补 `audio.set_3d_mode`、`audio.add_listener`、`audio.set_3d_distance`；从 reference 或现有资源整理音效到 `data/audio/spatial`。
+- 实施状态：已完成 fallback 版。当前创建 listener/source 可视化 marker，音源绕 listener 运动，并用 2D AudioSource 的 volume/pitch 动态变化近似距离/声像提示；配置预留 audio_path。
 - 验收标准：日志打印 source/listener position；声像随音源移动变化；关闭 3D 后声像不变。
 
 ## 8. 推荐实施顺序
@@ -324,11 +345,17 @@ data/
 
 ### 第三阶段：P2 资产/底层专项
 
-11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。
-12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。
-13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。
-14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。
-15. `3d_audio_spatial`：补 3D audio source/listener 后实现。
+11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。（已完成 fallback，真实 heightmap/LOD 待专项补齐）
+12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成 fallback，真实 shadow pass 待专项验证）
+13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成 fallback，成套骨骼动画资源待补齐）
+14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。（已完成 fallback，真实角色控制器/资源待补齐）
+15. `3d_audio_spatial`：补 3D audio source/listener 后实现。（已完成 fallback，真实 3D audio API 待补齐）
+
+### 第四阶段：P3 专项增强批次
+
+16. `3d_physics_raycast_pick`：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast 后，验证准星/射线拾取、命中点和命中实体。（已完成可用 raycast 接入：优先 PhysX service，未启用时走 ECS Box/Sphere collider 几何 fallback；demo 可打印 hit/entity/position/normal/distance）
+17. `3d_texture_material_slots`：补 `set_mesh_texture(entity, slot, path)` 或材质实例 texture slot API 后，验证 albedo/normal/roughness/emissive 多贴图链路。（已完成可用 texture slot API：Lua 可绑定 albedo/normal/metallic_roughness/emissive/occlusion；demo 可打印 handle/size 与各 slot 绑定结果，UV/normal/tangent Lua authoring 待补齐）
+18. `3d_terrain_lod_zones`：实现 Terrain heightmap sampling、resolution、LOD renderer 后，验证 near/mid/far LOD 分区和密度变化。（已完成可用 terrain height/LOD API：Lua 可设置 resolution、写入程序化 height grid、配置动态 LOD 参数并读取 current_lod；图片 heightmap 文件采样待补齐）
 
 ## 9. 首批最建议实现的 5 个 demo
 
@@ -367,17 +394,20 @@ data/
 | `3d_animation_basic` | anim state/time | 骨骼/蒙皮运动 | 动作切换 |
 | `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
 | `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
+| `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
+| `3d_texture_material_slots` | mesh/material path 与 set_mesh_texture slot 绑定日志 | albedo/roughness/emissive/normal slot 样本行可见 | Lua `set_mesh_texture` 返回 handle/size；emissive/roughness 动态变化 |
+| `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样待补齐 |
 
 ## 11. 当前引擎缺口与最小补齐路径
 
 1. Lua demo 分发：在 `samples/lua/main.lua` 增加新增 demo key；在 `samples/lua/config.lua` 增加独立配置。
 2. Lua mesh UV：短期用 `.dmesh/.dmat`；中期新增 `add_mesh_renderer_ex` 或 `set_mesh_uvs/set_mesh_normals`。
-3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。
+3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。（已完成可用接入，支持 albedo/normal/metallic_roughness/emissive/occlusion，待继续补 Lua UV/normal/tangent authoring）
 4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
 5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
-6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。
+6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询，图片 heightmap 文件采样与 terrain texture 待补齐）
 7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径。（已完成最小 `set_particle_system_3d_params`）
-8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast。（未完成）
+8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
 9. Animator3D：准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
 10. 3D Audio：确认底层支持后新增 3D source/listener/distance API。
 

@@ -66,6 +66,47 @@ Config.demo_3d_physics_stack={
     camera_distance=10.0,
     rows=5
 }
+Config.demo_3d_terrain_heightmap={
+    camera_distance=14.0,
+    heightmap_path="",
+    width=12.0,
+    depth=9.0,
+    max_height=2.8
+}
+Config.demo_3d_shadow_showcase={
+    camera_distance=9.0,
+    shadow_strength=0.45
+}
+Config.demo_3d_animation_basic={
+    camera_distance=8.5,
+    danim_path="",
+    dskel_path=""
+}
+Config.demo_3d_character_third_person={
+    camera_distance=10.5,
+    danim_path="",
+    dskel_path=""
+}
+Config.demo_3d_audio_spatial={
+    camera_distance=9.5,
+    audio_path=""
+}
+Config.demo_3d_physics_raycast_pick={
+    camera_distance=9.5,
+    target_count=5
+}
+Config.demo_3d_texture_material_slots={
+    camera_distance=10.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat"
+}
+Config.demo_3d_terrain_lod_zones={
+    camera_distance=15.0,
+    heightmap_path="",
+    width=14.0,
+    depth=10.0,
+    max_height=3.0
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

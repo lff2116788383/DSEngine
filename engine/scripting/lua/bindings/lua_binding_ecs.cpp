@@ -20,6 +20,8 @@
 #ifdef DSE_ENABLE_PHYSX
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
+#include <algorithm>
+#include <cmath>
 #include <limits>
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -174,6 +176,76 @@ int L_EcsAddTerrain(lua_State* L) {
     terrain.max_height = max_height;
     terrain.is_dirty = true;
     return 0;
+}
+
+int L_EcsSetTerrainParams(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<TerrainComponent>(e)) {
+        return 0;
+    }
+
+    auto& terrain = world->registry().get<TerrainComponent>(e);
+    terrain.resolution_x = std::max(2, static_cast<int>(luaL_optinteger(L, 2, terrain.resolution_x)));
+    terrain.resolution_z = std::max(2, static_cast<int>(luaL_optinteger(L, 3, terrain.resolution_z)));
+    terrain.max_lod_levels = std::max(1, static_cast<int>(luaL_optinteger(L, 4, terrain.max_lod_levels)));
+    terrain.lod_distance_factor = std::max(0.1f, static_cast<float>(luaL_optnumber(L, 5, terrain.lod_distance_factor)));
+    if (lua_gettop(L) >= 6) {
+        terrain.use_dynamic_lod = lua_toboolean(L, 6) != 0;
+    }
+    terrain.height_data.assign(static_cast<std::size_t>(terrain.resolution_x * terrain.resolution_z), 0.0f);
+    terrain.current_lod = std::clamp(terrain.current_lod, 0, terrain.max_lod_levels - 1);
+    terrain.is_dirty = true;
+    return 0;
+}
+
+int L_EcsSetTerrainHeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    int x = static_cast<int>(luaL_checkinteger(L, 2));
+    int z = static_cast<int>(luaL_checkinteger(L, 3));
+    float height = static_cast<float>(luaL_checknumber(L, 4));
+    if (!world->registry().valid(e) || !world->registry().all_of<TerrainComponent>(e)) {
+        return 0;
+    }
+
+    auto& terrain = world->registry().get<TerrainComponent>(e);
+    if (terrain.resolution_x < 2 || terrain.resolution_z < 2) {
+        return 0;
+    }
+    if (terrain.height_data.size() != static_cast<std::size_t>(terrain.resolution_x * terrain.resolution_z)) {
+        terrain.height_data.assign(static_cast<std::size_t>(terrain.resolution_x * terrain.resolution_z), 0.0f);
+    }
+    if (x < 0 || z < 0 || x >= terrain.resolution_x || z >= terrain.resolution_z) {
+        return 0;
+    }
+    terrain.height_data[static_cast<std::size_t>(z * terrain.resolution_x + x)] = height;
+    terrain.is_dirty = true;
+    return 0;
+}
+
+int L_EcsGetTerrainLod(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<TerrainComponent>(e)) {
+        return 0;
+    }
+    const auto& terrain = world->registry().get<TerrainComponent>(e);
+    lua_pushinteger(L, terrain.current_lod);
+    lua_pushinteger(L, terrain.resolution_x);
+    lua_pushinteger(L, terrain.resolution_z);
+    lua_pushinteger(L, terrain.max_lod_levels);
+    lua_pushnumber(L, terrain.lod_distance_factor);
+    return 5;
 }
 
 int L_EcsAddSteering(lua_State* L) {
@@ -906,6 +978,53 @@ int L_EcsSetMeshMaterialScalar(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetMeshTexture(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const std::string slot = luaL_checkstring(L, 2);
+    const char* texture_path = luaL_checkstring(L, 3);
+    if (!world->registry().valid(e) || !world->registry().all_of<MeshRendererComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto texture = GetAssetManager().LoadTexture(texture_path);
+    if (!texture) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& mesh = world->registry().get<MeshRendererComponent>(e);
+    const unsigned int handle = texture->GetHandle();
+    if (slot == "albedo" || slot == "base_color" || slot == "diffuse") {
+        mesh.albedo_texture_handle = handle;
+    } else if (slot == "normal" || slot == "normal_map") {
+        mesh.normal_texture_handle = handle;
+    } else if (slot == "metallic_roughness" || slot == "roughness" || slot == "mr") {
+        mesh.metallic_roughness_texture_handle = handle;
+    } else if (slot == "emissive" || slot == "emission") {
+        mesh.emissive_texture_handle = handle;
+    } else if (slot == "occlusion" || slot == "ao") {
+        mesh.occlusion_texture_handle = handle;
+    } else {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    // Direct Lua slot authoring should override copied .dmat/material-instance slots for this component.
+    mesh.material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
+    lua_pushboolean(L, 1);
+    lua_pushinteger(L, static_cast<lua_Integer>(handle));
+    lua_pushinteger(L, static_cast<lua_Integer>(texture->GetWidth()));
+    lua_pushinteger(L, static_cast<lua_Integer>(texture->GetHeight()));
+    return 4;
+}
+
 int L_EcsSetMeshEmissive(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1312,41 +1431,171 @@ int L_EcsSetPostProcessBloom(lua_State* L) {
     return 0;
 }
 
+namespace {
+struct LuaPhysicsRaycastHit {
+    bool hit = false;
+    Entity entity = entt::null;
+    glm::vec3 point = glm::vec3(0.0f);
+    glm::vec3 normal = glm::vec3(0.0f);
+    float distance = 0.0f;
+};
+
+bool IntersectRayAabb(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& min_v, const glm::vec3& max_v, float max_dist, float& out_t, glm::vec3& out_normal) {
+    float tmin = 0.0f;
+    float tmax = max_dist;
+    glm::vec3 enter_normal(0.0f);
+
+    auto test_axis = [&](float o, float d, float min_axis, float max_axis, const glm::vec3& negative_normal, const glm::vec3& positive_normal) -> bool {
+        const float eps = 1.0e-6f;
+        if (std::fabs(d) < eps) {
+            return o >= min_axis && o <= max_axis;
+        }
+        float t1 = (min_axis - o) / d;
+        float t2 = (max_axis - o) / d;
+        glm::vec3 n1 = negative_normal;
+        glm::vec3 n2 = positive_normal;
+        if (t1 > t2) {
+            std::swap(t1, t2);
+            std::swap(n1, n2);
+        }
+        if (t1 > tmin) {
+            tmin = t1;
+            enter_normal = n1;
+        }
+        if (t2 < tmax) {
+            tmax = t2;
+        }
+        return tmin <= tmax;
+    };
+
+    if (!test_axis(origin.x, dir.x, min_v.x, max_v.x, glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f))) return false;
+    if (!test_axis(origin.y, dir.y, min_v.y, max_v.y, glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))) return false;
+    if (!test_axis(origin.z, dir.z, min_v.z, max_v.z, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 0.0f, 1.0f))) return false;
+
+    out_t = tmin;
+    out_normal = enter_normal;
+    return out_t >= 0.0f && out_t <= max_dist;
+}
+
+bool IntersectRaySphere(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& center, float radius, float max_dist, float& out_t, glm::vec3& out_normal) {
+    glm::vec3 oc = origin - center;
+    const float b = 2.0f * glm::dot(oc, dir);
+    const float c = glm::dot(oc, oc) - radius * radius;
+    const float discriminant = b * b - 4.0f * c;
+    if (discriminant < 0.0f) {
+        return false;
+    }
+    const float root = std::sqrt(discriminant);
+    float t = (-b - root) * 0.5f;
+    if (t < 0.0f) {
+        t = (-b + root) * 0.5f;
+    }
+    if (t < 0.0f || t > max_dist) {
+        return false;
+    }
+    out_t = t;
+    out_normal = glm::normalize((origin + dir * t) - center);
+    return true;
+}
+
+LuaPhysicsRaycastHit RaycastEcs3DColliders(World& world, const glm::vec3& origin, const glm::vec3& direction, float max_dist) {
+    LuaPhysicsRaycastHit best;
+    best.distance = max_dist;
+
+    auto box_view = world.registry().view<TransformComponent, BoxCollider3DComponent>();
+    for (auto entity : box_view) {
+        const auto& transform = box_view.get<TransformComponent>(entity);
+        const auto& collider = box_view.get<BoxCollider3DComponent>(entity);
+        const glm::vec3 center = transform.position + collider.center;
+        const glm::vec3 half_size = glm::abs(transform.scale * collider.size) * 0.5f;
+        float t = 0.0f;
+        glm::vec3 normal(0.0f);
+        if (IntersectRayAabb(origin, direction, center - half_size, center + half_size, best.distance, t, normal)) {
+            best.hit = true;
+            best.entity = entity;
+            best.distance = t;
+            best.point = origin + direction * t;
+            best.normal = normal;
+        }
+    }
+
+    auto sphere_view = world.registry().view<TransformComponent, SphereCollider3DComponent>();
+    for (auto entity : sphere_view) {
+        const auto& transform = sphere_view.get<TransformComponent>(entity);
+        const auto& collider = sphere_view.get<SphereCollider3DComponent>(entity);
+        const glm::vec3 center = transform.position + collider.center;
+        const float max_scale = std::max(std::fabs(transform.scale.x), std::max(std::fabs(transform.scale.y), std::fabs(transform.scale.z)));
+        float t = 0.0f;
+        glm::vec3 normal(0.0f);
+        if (IntersectRaySphere(origin, direction, center, collider.radius * max_scale, best.distance, t, normal)) {
+            best.hit = true;
+            best.entity = entity;
+            best.distance = t;
+            best.point = origin + direction * t;
+            best.normal = normal;
+        }
+    }
+
+    return best;
+}
+
+int PushPhysics3DRaycastResult(lua_State* L, const LuaPhysicsRaycastHit& hit) {
+    lua_pushboolean(L, hit.hit ? 1 : 0);
+    if (!hit.hit) {
+        return 1;
+    }
+    lua_pushinteger(L, static_cast<lua_Integer>(static_cast<std::uint32_t>(hit.entity)));
+    lua_pushnumber(L, hit.point.x);
+    lua_pushnumber(L, hit.point.y);
+    lua_pushnumber(L, hit.point.z);
+    lua_pushnumber(L, hit.normal.x);
+    lua_pushnumber(L, hit.normal.y);
+    lua_pushnumber(L, hit.normal.z);
+    lua_pushnumber(L, hit.distance);
+    return 9;
+}
+}
+
 int L_Physics3DRaycast(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
-        return 0;
+        lua_pushboolean(L, 0);
+        return 1;
     }
-#ifdef DSE_ENABLE_PHYSX
-    // We assume Physics3DSystem is globally accessible or accessible via world context
-    // For now, we will just return a dummy result as Physics3DSystem is not directly accessible here yet
-    // In a real scenario, we'd fetch the system from the world or a global locator
-    
-    // Read origin
-    float ox = static_cast<float>(luaL_checknumber(L, 1));
-    float oy = static_cast<float>(luaL_checknumber(L, 2));
-    float oz = static_cast<float>(luaL_checknumber(L, 3));
-    
-    // Read direction
-    float dx = static_cast<float>(luaL_checknumber(L, 4));
-    float dy = static_cast<float>(luaL_checknumber(L, 5));
-    float dz = static_cast<float>(luaL_checknumber(L, 6));
-    
-    // Read max distance
+
+    glm::vec3 origin(
+        static_cast<float>(luaL_checknumber(L, 1)),
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)));
+    glm::vec3 direction(
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_checknumber(L, 5)),
+        static_cast<float>(luaL_checknumber(L, 6)));
     float max_dist = static_cast<float>(luaL_optnumber(L, 7, 1000.0));
 
-    // TODO: Actually call physics3d::Physics3DSystem::Raycast
-    // For now, mock the return
-#else
-    // PhysX disabled or unavailable in current build; keep Lua API callable with empty result.
+    const float len = glm::length(direction);
+    if (len <= 1.0e-6f || max_dist <= 0.0f) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    direction /= len;
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        const auto physx_hit = physics->Raycast(origin, direction, max_dist);
+        if (physx_hit.hit) {
+            LuaPhysicsRaycastHit hit;
+            hit.hit = true;
+            hit.entity = physx_hit.entity;
+            hit.point = physx_hit.hit_point;
+            hit.normal = physx_hit.hit_normal;
+            hit.distance = physx_hit.distance;
+            return PushPhysics3DRaycastResult(L, hit);
+        }
+    }
 #endif
-    bool hit = false;
-    
-    lua_newtable(L);
-    lua_pushboolean(L, hit);
-    lua_setfield(L, -2, "hit");
-    
-    return 1;
+
+    return PushPhysics3DRaycastResult(L, RaycastEcs3DColliders(*world, origin, direction, max_dist));
 }
 
 int L_EcsFindEntitiesByMeshPath(lua_State* L) {
@@ -1419,6 +1668,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_mesh_material", L_EcsSetMeshMaterial);
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
     set_fn("set_mesh_material_scalar", L_EcsSetMeshMaterialScalar);
+    set_fn("set_mesh_texture", L_EcsSetMeshTexture);
     set_fn("set_mesh_emissive", L_EcsSetMeshEmissive);
 
     set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);
@@ -1436,6 +1686,9 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_sky_light", L_EcsAddSkyLight);
     set_fn("set_sky_light", L_EcsSetSkyLight);
     set_fn("add_terrain", L_EcsAddTerrain);
+    set_fn("set_terrain_params", L_EcsSetTerrainParams);
+    set_fn("set_terrain_height", L_EcsSetTerrainHeight);
+    set_fn("get_terrain_lod", L_EcsGetTerrainLod);
     set_fn("add_steering", L_EcsAddSteering);
     set_fn("set_steering_target", L_EcsSetSteeringTarget);
     set_fn("add_free_camera_controller", L_EcsAddFreeCameraController);
