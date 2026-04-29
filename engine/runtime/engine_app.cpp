@@ -61,6 +61,14 @@ bool IsStartupSceneRegressionDisabled() {
     return env && env[0] != '\0' && std::string(env) != "0";
 }
 
+std::string RuntimeOutputPathInBin(const char* filename) {
+    std::filesystem::path current_path = std::filesystem::current_path();
+    if (current_path.filename() == "bin") {
+        return (current_path / filename).string();
+    }
+    return (current_path / "bin" / filename).string();
+}
+
 void FlipImageRowsRgba8(std::vector<unsigned char>& pixels, int width, int height) {
     if (width <= 0 || height <= 0) {
         return;
@@ -158,9 +166,9 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
     }
 
     DEBUG_LOG_INFO("EngineInstance init: startup scene regression begin");
-    const bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample("bin/scene_roundtrip_regression.json");
+    const bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample(RuntimeOutputPathInBin("scene_roundtrip_regression.json"));
     DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
-    const bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample("bin/scene_backward_compat_regression.json");
+    const bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample(RuntimeOutputPathInBin("scene_backward_compat_regression.json"));
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     return scene_round_trip_ok && scene_backward_compat_ok;
 }
