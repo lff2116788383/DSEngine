@@ -32,6 +32,11 @@ Lua 宿主默认加载 `samples/lua/main.lua`，该入口会读取 `samples/lua/
 - `3d_triangle`：3D 三角形范例，对应 `samples/lua/3d/triangle.lua`
 - `3d_square`：3D 正方形范例，对应 `samples/lua/3d/square.lua`
 - `3d_cube`：3D 立方体范例，对应 `samples/lua/3d/cube.lua`
+- `3d_static_model`：资源化 `.dmesh/.dmat` 静态模型范例，对应 `samples/lua/3d/3d_static_model.lua`
+- `3d_material_showcase`：材质参数 showcase，对应 `samples/lua/3d/3d_material_showcase.lua`
+- `3d_lighting_showcase`：方向光/点光/聚光 showcase，对应 `samples/lua/3d/3d_lighting_showcase.lua`
+- `3d_camera_showcase`：多相机切换 showcase，对应 `samples/lua/3d/3d_camera_showcase.lua`
+- `3d_textured_cube`：贴图立方体范例，对应 `samples/lua/3d/3d_textured_cube.lua`
 
 示例：将 `samples/lua/config.lua` 中的配置改为：
 
@@ -79,6 +84,106 @@ bin\DSEngine_lua_debug.exe
 $env:DSE_SCREENSHOT_PATH='tmp\lua_3d_cube.png'
 ```
 
+### Lua 3D 自动验证脚本
+
+推荐使用 `tools/verify_lua_3d_demos.py` 批量验证 Lua 3D demo。脚本会自动：
+
+- 同步 `samples/` 到 `bin/samples/`，避免运行时仍读取旧的 `bin/samples/lua/main.lua` 或旧 config。
+- 逐个修改 `bin/samples/lua/config.lua` 的 `Config.game_entry`。
+- 设置截图和 readback 诊断环境变量。
+- 运行 `bin/DSEngine_lua_debug.exe`。
+- 输出每个 demo 的日志和截图。
+- 结束后恢复原始 `bin/samples/lua/config.lua`。
+
+最快完整验证流程：
+
+```cmd
+build_fast_lua.bat && python tools\verify_lua_3d_demos.py --entries all
+```
+
+只验证新 P0 Lua 3D demo：
+
+```cmd
+python tools\verify_lua_3d_demos.py --entries p0
+```
+
+只验证基础 3D demo：
+
+```cmd
+python tools\verify_lua_3d_demos.py --entries basic
+```
+
+只验证某一个入口，适合调试单个 demo：
+
+```cmd
+python tools\verify_lua_3d_demos.py --entries 3d_textured_cube --frames 90
+```
+
+默认输出目录：
+
+```text
+tmp/lua_3d_verify/
+```
+
+其中每个 demo 会生成：
+
+```text
+tmp/lua_3d_verify/lua_<entry>.log
+tmp/lua_3d_verify/lua_<entry>.png
+```
+
+可用参数：
+
+- `--entries basic|p0|all|<entry...>`：选择验证范围，默认 `all`。
+- `--frames <N>`：每个 demo 自动运行帧数，默认 `90`。
+- `--timeout <SECONDS>`：单个 demo 超时时间，默认 `90`。
+- `--out-dir <PATH>`：输出日志和截图目录，默认 `tmp/lua_3d_verify`。
+- `--no-sync`：不重新同步 `samples/` 到 `bin/samples/`，仅在明确知道 `bin/samples/` 已最新时使用。
+
+### 最快且稳定的 Lua demo 调试方式
+
+经验上最稳定的调试方式是固定使用 `bin/samples` 作为运行时样例目录，并让脚本或命令在运行前同步源码样例。不要只改 `samples/lua/config.lua` 后直接运行宿主，因为宿主在本地常会解析到 `bin/samples/lua/main.lua`。
+
+推荐流程：
+
+1. 改 Lua demo 或资源文件。
+2. 如果改了 C++ 引擎代码，先运行：
+
+```cmd
+build_fast_lua.bat
+```
+
+3. 如果只改 Lua 脚本/资源，可直接运行单 demo 验证：
+
+```cmd
+python tools\verify_lua_3d_demos.py --entries 3d_textured_cube --frames 90
+```
+
+4. 查看：
+
+```text
+tmp/lua_3d_verify/lua_3d_textured_cube.log
+tmp/lua_3d_verify/lua_3d_textured_cube.png
+```
+
+5. 搜索日志中的关键错误：
+
+```cmd
+findstr /S /N /C:"[ERROR]" /C:"[WARN]" tmp\lua_3d_verify\*.log
+```
+
+稳定性注意事项：
+
+- 单 demo 调试优先用 `python tools\verify_lua_3d_demos.py --entries <entry>`，比手动编辑 config 更不容易跑错入口。
+- 如果需要手动运行宿主，先同步样例目录：
+
+```cmd
+if exist bin\samples rmdir /S /Q bin\samples && xcopy samples bin\samples /E /I /Y >nul
+```
+
+- 手动截图时建议使用 `DSE_MAX_FRAMES=90`、`DSE_SCREENSHOT_TARGET=main`、`DSE_RENDER_READBACK_DIAG=1`。
+- 看到截图内容不符合预期时，先检查日志中的 `Lua bootstrap: startup script resolved to ...`，确认实际加载的是哪个 `main.lua`。
+
 ### 样例目录说明
 
 `samples/lua/` 保留多个 Lua 示例，当前默认推荐入口为 2D 物理 showcase：
@@ -88,3 +193,8 @@ $env:DSE_SCREENSHOT_PATH='tmp\lua_3d_cube.png'
 - `3d/triangle.lua`：3D 三角形基础范例
 - `3d/square.lua`：3D 正方形基础范例
 - `3d/cube.lua`：3D 立方体基础范例
+- `3d/3d_static_model.lua`：资源化 Mesh/Material 静态模型范例
+- `3d/3d_material_showcase.lua`：材质参数 showcase
+- `3d/3d_lighting_showcase.lua`：3D 光照 showcase
+- `3d/3d_camera_showcase.lua`：3D 相机切换 showcase
+- `3d/3d_textured_cube.lua`：贴图立方体验证范例

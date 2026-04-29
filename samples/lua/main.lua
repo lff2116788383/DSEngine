@@ -16,6 +16,21 @@ elseif game_entry == "3d_square" then
 elseif game_entry == "3d_cube" then
     RuntimeEntry = require("3d.cube")
     runtime_config = Config.basic_3d or {}
+elseif game_entry == "3d_static_model" then
+    RuntimeEntry = require("3d.3d_static_model")
+    runtime_config = Config.demo_3d_static_model or Config.basic_3d or {}
+elseif game_entry == "3d_material_showcase" then
+    RuntimeEntry = require("3d.3d_material_showcase")
+    runtime_config = Config.demo_3d_material_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_lighting_showcase" then
+    RuntimeEntry = require("3d.3d_lighting_showcase")
+    runtime_config = Config.demo_3d_lighting_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_camera_showcase" then
+    RuntimeEntry = require("3d.3d_camera_showcase")
+    runtime_config = Config.demo_3d_camera_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_textured_cube" then
+    RuntimeEntry = require("3d.3d_textured_cube")
+    runtime_config = Config.demo_3d_textured_cube or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}

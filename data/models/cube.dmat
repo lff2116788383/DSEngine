@@ -6,7 +6,7 @@
       "metallic": 0,
       "roughness": 1,
       "emissive": [0, 0, 0],
-      "base_color_texture": "CesiumLogoFlat.png",
+      "base_color_texture": "models/CesiumLogoFlat.png",
       "normal_texture": "",
       "metallic_roughness_texture": ""
     }

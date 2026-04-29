@@ -20,6 +20,25 @@ Config.phase1_2d_physics_showcase={
 Config.basic_3d={
     camera_distance=6.0
 }
+Config.demo_3d_static_model={
+    camera_distance=8.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat"
+}
+Config.demo_3d_material_showcase={
+    camera_distance=10.0
+}
+Config.demo_3d_lighting_showcase={
+    camera_distance=11.0
+}
+Config.demo_3d_camera_showcase={
+    camera_distance=7.0
+}
+Config.demo_3d_textured_cube={
+    camera_distance=7.5,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat"
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

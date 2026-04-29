@@ -1,0 +1,369 @@
+# Lua 3D Demo Backlog 规划
+
+> 范围：规划 `samples/lua/3d` 后续 Lua 3D demo，不直接实现代码。外部资源允许从 `reference/` 拷贝到 `data/` 下按类型整理。
+
+## 1. 参考资料摘要
+
+### cpp-game-engine-book 路线
+
+- `reference/cpp-game-engine-book/README.md` 的整体路线是：OpenGL 基础图元 → Shader → 纹理 → Mesh/Material → GameObject/Component → Camera → Control → GUI → Sound → Lua → 骨骼动画/蒙皮/FBX → PhysX → 经典光照/Shadow。
+- `reference/cpp-game-engine-book/pages/SUMMARY.md` 中与 Lua 3D demo 最相关的章节：
+  - 第 5 章：贴图，适合规划 textured cube。
+  - 第 7 章：Mesh/Material/MeshRenderer，适合规划材质展示、静态模型加载。
+  - 第 10 章：Camera，适合规划多相机、相机排序、相机参数展示。
+  - 第 11 章：Control，适合规划 free camera / first-person / orbit camera。
+  - 第 15.2 章：3D sound，适合规划 AudioSource + Listener。
+  - 第 18/19/20 章：骨骼动画、蒙皮、FBX，适合规划 animation/character demo。
+  - 第 22/23/25 章：PhysX、经典光照、Shadow Mapping，适合规划 physics、lighting、shadow demo。
+- `reference/cpp-game-engine-book/pages/7. draw_mesh_and_material/7.6 mesh_renderer.md` 的核心思想是：Mesh、Material、Shader、Texture 资源化，由 MeshRenderer 汇总渲染。这正好对应 DSEngine 当前 `MeshRendererComponent` + `.dmesh/.dmat` 路线。
+
+### VSEngine2.1 参考点
+
+- `reference/VSEngine2.1/Demo/13/13.9`：heightmap 地形、DLOD、线框切换。
+- `reference/VSEngine2.1/Demo/14/14.9`：SkyLight 上/下半球颜色、SkeletonActor。
+- `reference/VSEngine2.1/Demo/15/15.3`：后处理灰度开关、DirectionalLight、SkeletonActor、SkyLight。
+- `reference/VSEngine2.1/Demo/15/15.9`：MaterialInstance shader 参数实时调节。
+- `reference/VSEngine2.1/Demo/15/15.22`：第一人称相机、多动画角色、地面、SkyLight、PointLight 组合场景。
+- `reference/VSEngine2.1/Demo/15/15.27`：Diffuse/Normal/Emissive 多贴图材质绑定与模型保存流程。
+- `reference/VSEngine2.1/Demo/14/14.27`：角色 Actor、第三人称相机、角色移动、攻击、AnimTree。
+
+## 2. 当前 Lua/3D 基线能力
+
+### 已有 demo
+
+当前已有基础 demo：
+
+- `samples/lua/3d/triangle.lua`：3 顶点、1 个三角面、基础方向光、free camera。
+- `samples/lua/3d/square.lua`：4 顶点、2 个三角面、索引复用、基础材质。
+- `samples/lua/3d/cube.lua`：8 顶点、12 个三角面、Lit shader、基础材质、旋转立方体。
+
+这些 demo 已经建立了固定风格：
+
+- 模块表 `Setup/Update`。
+- 局部 `state` 存实体和时间。
+- `setup_camera/setup_light/setup_xxx` 拆分。
+- 启动日志说明目标与操作。
+- `Update` 中做旋转或动态变化。
+
+### Lua 分发方式
+
+- `samples/lua/main.lua` 通过 `Config.game_entry` 分发。
+- 当前 3D key：`3d_triangle`、`3d_square`、`3d_cube`。
+- `samples/lua/config.lua` 目前提供 `Config.basic_3d.camera_distance`。
+- 后续建议：每个新增 demo 在 `config.lua` 中独立配置，例如 `Config.demo_3d_static_model`、`Config.demo_3d_lighting_showcase`，避免全部复用 `basic_3d`。
+
+### 已暴露能力
+
+- Transform：创建实体、添加 transform、设置 position/rotation、读取 position。
+- Mesh/Material：添加 MeshRenderer、设置 mesh path、设置 dmat material、设置 shader variant、设置 metallic/roughness/ao/emissive/double-sided 等参数。
+- Camera：添加 3D camera、设置 priority/enabled、添加 free camera controller。
+- Lights：DirectionalLight、PointLight、SpotLight 可从 Lua 创建。
+- 进阶组件：Terrain、PostProcess、ParticleSystem3D、RigidBody3D、Collider3D、Animator3D、Skybox 等已有部分 Lua 入口。
+
+### 当前能力边界
+
+- 手写 Lua mesh 只传 position，非 `.dmesh` 路径在渲染侧默认 stride=3、UV=0，因此 textured cube 不适合用纯 Lua 顶点实现，优先走 `.dmesh/.dmat`。
+- `.dmesh` 加载路径已能读取 position/normal/uv/skin/tangent 等数据，适合优先验证 `data/models/cube.dmesh` 与 `data/models/cube.dmat`。
+- `.obj/.gltf/.fbx` fallback 主要解析 position/index，材质贴图仍应依赖 `.dmat` 或后续资产管线。
+- SkyLight 组件和渲染侧读取已存在，但 Lua 缺少 add/set skylight 绑定。
+- Terrain 有组件和渲染系统，但 heightmap 采样与 Lua 参数还不完整。
+- Physics3D 有 PhysX 系统和刚体/碰撞体绑定，但 Lua raycast 当前仍是 mock miss。
+- Particle3D 有系统，但 Lua 参数太少，只能设置 max_particles 和 emission_rate。
+- Audio Lua 绑定目前是基础 2D 音源控制，缺 3D source/listener API。
+- Animator3D Lua API 已有，但缺稳定成套动画资源与端到端验收样例。
+
+## 3. 资源整理建议
+
+允许从 `reference/` 拷贝资源到 `data/` 后，建议统一整理为：
+
+```text
+data/
+  models/
+    primitives/
+    static/
+    character/
+  materials/
+    primitives/
+    showcase/
+    character/
+  textures/
+    checker/
+    material_showcase/
+    environment/
+    terrain/
+    vse_demo/
+  audio/
+    sfx/
+    spatial/
+  terrain/
+    heightmaps/
+  animation/
+    skeletons/
+    clips/
+```
+
+资源原则：
+
+1. P0 只依赖现有 `data/models/cube.dmesh`、`data/models/cube.dmat`，以及最小 checker 纹理。
+2. P1 从 VSEngine2.1 参考中挑选轻量静态模型/贴图，转换或重打包到 DSEngine 可读取格式。
+3. P2 再引入 terrain heightmap、character、skeleton、animation、audio 等重资源。
+4. 每个资源目录添加 README 或 manifest，记录来源、原路径、转换方式、许可证/用途。
+
+## 4. Demo backlog 总表
+
+| 优先级 | Demo 文件 | 主题 | 当前可行性 | 主要缺口 |
+|---|---|---|---|---|
+| P0 | `samples/lua/3d/3d_static_model.lua` | `.dmesh/.dmat` 静态模型加载 | 高 | Lua 入口与 config |
+| P0 | `samples/lua/3d/3d_material_showcase.lua` | PBR 参数、发光、双面展示 | 高 | 纹理 slot 需 `.dmat` |
+| P0 | `samples/lua/3d/3d_lighting_showcase.lua` | Directional/Point/Spot 多光源 | 高 | SkyLight 暂不纳入 |
+| P0 | `samples/lua/3d/3d_camera_showcase.lua` | free camera、多相机、自动切换 | 高 | 输入查询可选 |
+| P0 | `samples/lua/3d/3d_textured_cube.lua` | 贴图立方体 | 中高 | 必须走 `.dmesh/.dmat` 或补 UV API |
+| P1 | `samples/lua/3d/3d_scene_showcase.lua` | 小型综合场景 | 中 | 资源、UI overlay、SkyLight |
+| P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 中 | 后处理 setter API |
+| P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 中 | SkyLight Lua 绑定、cubemap 资源 |
+| P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 中 | 粒子参数 Lua API |
+| P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 中 | PhysX 构建、raycast mock |
+| P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 低中 | heightmap 采样、LOD 可视化 |
+| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 中低 | shadow 开关/API/稳定性 |
+| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 中低 | 成套动画资源 |
+| P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 低 | 角色控制器、相机、动画资源 |
+| P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 低 | 3D audio source/listener API |
+
+## 5. P0 详细规划
+
+### 5.1 `samples/lua/3d/3d_static_model.lua`
+
+- 目标画面/交互：加载 `data/models/cube.dmesh` 与 `data/models/cube.dmat`，显示一个资源化 cube；旁边放手写 cube 作为对比。
+- 参考来源：cpp-game-engine-book 第 7 章 Mesh/Material/MeshRenderer；第 20 章模型导入路线。
+- 需要能力：`add_mesh_renderer`、`set_mesh_path`、`set_mesh_material`、`set_mesh_shader_variant`。
+- 当前可能缺口：需要确认 `cube.dmat` 中 texture path 是否完整；若无贴图，先验收 mesh path + material scalar。
+- 最小实现路径：复制 `cube.lua` 结构，改为 `set_mesh_path("models/cube.dmesh")` 与 `set_mesh_material("models/cube.dmat")`。
+- 验收标准：
+  - 日志：`[3D][StaticModel] loaded models/cube.dmesh + models/cube.dmat`。
+  - 截图：资源 cube 与手写 cube 并排可见。
+  - 动态：资源 cube 持续旋转。
+
+### 5.2 `samples/lua/3d/3d_material_showcase.lua`
+
+- 目标画面/交互：多行 cube 展示 base color、metallic、roughness、emissive、double-sided、receive shadow 等差异；一个参数随时间变化。
+- 参考来源：cpp-game-engine-book 第 7 章；VSEngine2.1 Demo 15.9 的 MaterialInstance shader 参数实时调节。
+- 需要能力：`set_mesh_material`、`set_mesh_material_scalar`、`set_mesh_emissive`。
+- 当前可能缺口：Lua 无直接 texture slot setter；base color 动态修改能力不足。
+- 最小实现路径：复用 cube 几何，创建 3x3 材质矩阵；Update 中动态修改 roughness 或 emissive。
+- 验收标准：
+  - 日志：输出每个样本的 metallic/roughness/emissive。
+  - 截图：多个 cube 在高光、暗哑、发光上有明显差异。
+  - 数值：运行 5 秒内有一个 cube 的发光或粗糙度变化。
+
+### 5.3 `samples/lua/3d/3d_lighting_showcase.lua`
+
+- 目标画面/交互：地面 + 多个 cube，显示 DirectionalLight、PointLight、SpotLight 的影响；PointLight 绕场景移动。
+- 参考来源：cpp-game-engine-book 第 23 章经典光照；VSEngine2.1 Demo 15.22。
+- 需要能力：`add_directional_light_3d`、`set_directional_light_3d`、`add_point_light_3d`、`add_spot_light_3d`。
+- 当前可能缺口：SkyLight Lua 绑定缺失；shadow 暂不纳入。
+- 最小实现路径：创建方向光、红/蓝 point light、spot light；用 emissive 小 cube 标记光源位置。
+- 验收标准：
+  - 日志：输出三类光源参数。
+  - 截图：多色照明区域清晰可见。
+  - 动态：PointLight 移动时高亮区域随时间移动。
+
+### 5.4 `samples/lua/3d/3d_camera_showcase.lua`
+
+- 目标画面/交互：free camera + 自动 orbit camera + 固定俯视 camera；每 4 秒自动切换 active camera。
+- 参考来源：cpp-game-engine-book 第 10/11 章；VSEngine2.1 Demo 15.22 的第一人称相机控制。
+- 需要能力：`add_camera_3d`、`set_camera_priority`、`set_camera_enabled`、`add_free_camera_controller`。
+- 当前可能缺口：Lua 输入查询能力如不足，先自动切换。
+- 最小实现路径：创建多个 camera entity；通过 `set_camera_enabled` 或 priority 轮换。
+- 验收标准：
+  - 日志：每次切换打印 active camera。
+  - 截图：同一场景从不同视角显示。
+  - 交互：free camera 可右键 + W/A/S/D/Q/E 移动。
+
+### 5.5 `samples/lua/3d/3d_textured_cube.lua`
+
+- 目标画面/交互：纯色 cube 与 textured cube 对比，验证 UV/texture/material 链路。
+- 参考来源：cpp-game-engine-book 第 5/7 章；VSEngine2.1 Demo 15.27 多贴图材质绑定。
+- 需要能力：`.dmesh` 带 UV、`.dmat` 绑定 texture slot、MeshRenderer 读取 texture handles。
+- 当前可能缺口：纯 Lua 手写 mesh 没 UV；若现有 `cube.dmat` 无贴图，需要新增 checker texture + dmat。
+- 最小实现路径：使用 `models/cube.dmesh` + `models/cube.dmat`；必要时从 reference 或自制 checker 资源整理到 `data/textures/checker`。
+- 验收标准：
+  - 日志：打印 dmat path 和 texture slot 解析状态。
+  - 截图：cube 表面出现非纯色纹理。
+  - 动态：旋转时各面贴图稳定，无明显 UV 错乱。
+
+## 6. P1 详细规划
+
+### 6.1 `samples/lua/3d/3d_scene_showcase.lua`
+
+- 目标画面/交互：地面、多个静态模型、多光源、简单 UI/log overlay、自由相机，形成小型综合场景。
+- 参考来源：VSEngine2.1 Demo 15.22；cpp-game-engine-book 第 7/10/11/23 章。
+- 需要能力：P0 的 mesh/material/camera/light API；可选 UI 文本。
+- 当前可能缺口：模型资源不够丰富；SkyLight 绑定不足。
+- 最小实现路径：复用 P0 helper，先不做 UI，靠日志提示操作；从 reference 拷贝轻量静态模型/贴图并转换到 `data/models/static`、`data/materials/showcase`。
+- 验收标准：至少 1 个地面、5 个模型、2 类光源、1 个移动物体；free camera 可巡游。
+
+### 6.2 `samples/lua/3d/3d_postprocess_showcase.lua`
+
+- 目标画面/交互：bloom 或灰度后处理开关；emissive 物体触发 bloom。
+- 参考来源：VSEngine2.1 Demo 15.3。
+- 需要能力：`add_post_process`、PostProcess 参数。
+- 当前可能缺口：Lua 缺 set/toggle API；灰度/反相 effect type 未暴露。
+- 最小实现路径：先做 bloom-only；补 API 后做时间/按键切换。
+- 验收标准：日志打印 bloom threshold/intensity；截图中 emissive 物体周围有 bloom 或后处理差异。
+
+### 6.3 `samples/lua/3d/3d_skybox_environment.lua`
+
+- 目标画面/交互：skybox 或 SkyLight 上下半球环境色；观察模型暗部随环境变化。
+- 参考来源：VSEngine2.1 Demo 14.9；cpp-game-engine-book Camera/Lighting。
+- 需要能力：`add_skybox`，新增/补齐 `add_sky_light` 与 `set_sky_light`。
+- 当前可能缺口：cubemap 资源、SkyLight Lua 绑定。
+- 最小实现路径：先验证 skybox path；补 SkyLight API 后添加 up/down color 自动变化。
+- 验收标准：天空背景或环境色可见；模型暗部亮度随环境参数变化。
+
+### 6.4 `samples/lua/3d/3d_particles_showcase.lua`
+
+- 目标画面/交互：粒子喷泉/火花，从发射器位置持续产生粒子。
+- 参考来源：DSEngine 当前 3D particle system。
+- 需要能力：`add_particle_system_3d`，后续补充粒子参数 setter。
+- 当前可能缺口：Lua 只能设置 max/rate；颜色、速度、生命周期、大小、重力、贴图不可控。
+- 最小实现路径：先默认粒子系统 + emissive marker；若不可见，补渲染和参数 API。
+- 验收标准：截图可见粒子云；日志显示 active particle count 或发射参数。
+
+### 6.5 `samples/lua/3d/3d_physics_stack.lua`
+
+- 目标画面/交互：动态 cube/sphere 从空中落到静态地面并堆叠；后续 raycast 选择。
+- 参考来源：cpp-game-engine-book 第 22 章 PhysX。
+- 需要能力：`add_rigidbody_3d`、`add_box_collider_3d`、`add_sphere_collider_3d`、Physics3DSystem。
+- 当前可能缺口：PhysX 构建开关；raycast Lua mock；缺 collision event。
+- 最小实现路径：只做掉落和堆叠，不做 raycast；打印 y 值变化。
+- 验收标准：方块下落后停止堆叠；日志显示 Physics3DSystem 初始化和 y 值趋稳。
+
+## 7. P2 详细规划
+
+### 7.1 `samples/lua/3d/3d_terrain_heightmap.lua`
+
+- 目标画面/交互：heightmap 地形、动态 LOD、自由相机漫游、可选线框/LOD 信息。
+- 参考来源：VSEngine2.1 Demo 13.9。
+- 需要能力：`add_terrain`、heightmap 采样、LOD 参数、terrain texture。
+- 当前可能缺口：heightmap_path 未真正采样；Lua 无 resolution/lod/texture 参数。
+- 最小实现路径：从 reference 拷贝 heightmap 到 `data/terrain/heightmaps`；补 TerrainSystem 采样与 Lua 参数。
+- 验收标准：地形非平面；相机远近移动时 LOD 日志或三角密度变化。
+
+### 7.2 `samples/lua/3d/3d_shadow_showcase.lua`
+
+- 目标画面/交互：cube 在地面上投射方向光阴影，展示 shadow strength 变化。
+- 参考来源：cpp-game-engine-book 第 25 章 Shadow Mapping、第 23 章光照；VSEngine2.1 Demo 15.22。
+- 需要能力：light cast_shadow、shadow map pass、shadow strength setter。
+- 当前可能缺口：Lua 未暴露 cast_shadow；shadow 稳定性需要专项验证。
+- 最小实现路径：补 light shadow setter；地面 + 悬空 cube + 方向光。
+- 验收标准：地面有明确投影；shadow_strength 改变后阴影深浅变化。
+
+### 7.3 `samples/lua/3d/3d_animation_basic.lua`
+
+- 目标画面/交互：骨骼模型循环播放 Idle/Walk，并按时间切换。
+- 参考来源：cpp-game-engine-book 第 18/19/20 章；VSEngine2.1 Demo 14.9/15.3/15.22。
+- 需要能力：`add_animator_3d`、Animator3D FSM、skinned mesh 渲染、动画资源。
+- 当前可能缺口：缺 `.dskel/.danim/.dmesh/.dmat` 成套资源。
+- 最小实现路径：先用最小 two-bone 测试资源；再从 reference 拷贝/转换角色资源到 `data/models/character`、`data/animation`。
+- 验收标准：模型明显运动；日志显示 current animation 和 normalized_time；切换后动作变化。
+
+### 7.4 `samples/lua/3d/3d_character_third_person.lua`
+
+- 目标画面/交互：第三人称相机跟随角色；角色移动、转向、攻击；动画状态切换。
+- 参考来源：VSEngine2.1 Demo 14.27；cpp-game-engine-book 第 10/11/18/19/20 章。
+- 需要能力：3D 输入、角色控制、third-person camera、Animator3D FSM、角色资源。
+- 当前可能缺口：Lua `set_camera_follow` 偏 2D；缺 3D third-person controller；缺 capsule/character controller。
+- 最小实现路径：cube 代替角色实现 follow，再接入骨骼模型和动画。
+- 验收标准：角色移动时相机稳定跟随；日志显示 speed/state；攻击状态可触发。
+
+### 7.5 `samples/lua/3d/3d_audio_spatial.lua`
+
+- 目标画面/交互：音源绕 listener/camera 移动，戴耳机可感知左右/远近变化；画面用小球标记音源和 listener。
+- 参考来源：cpp-game-engine-book 第 15.2 章 3D 音效。
+- 需要能力：3D AudioSource、AudioListener、位置同步、距离衰减。
+- 当前可能缺口：Lua audio 只有基础 source/play/volume/pitch；缺 3D mode/listener/distance。
+- 最小实现路径：补 `audio.set_3d_mode`、`audio.add_listener`、`audio.set_3d_distance`；从 reference 或现有资源整理音效到 `data/audio/spatial`。
+- 验收标准：日志打印 source/listener position；声像随音源移动变化；关闭 3D 后声像不变。
+
+## 8. 推荐实施顺序
+
+### 第一阶段：P0 可立即做
+
+1. `3d_static_model`：先验证资源化 mesh/material，这是从 cube 到真实资产的最短路径。
+2. `3d_material_showcase`：在资源/几何稳定后，系统展示材质参数。
+3. `3d_lighting_showcase`：把现有方向光扩展为多光源，为综合场景和 shadow 打基础。
+4. `3d_camera_showcase`：复杂场景前先把观察方式标准化。
+5. `3d_textured_cube`：最后验证 texture/material 链路，因为它依赖 `.dmesh/.dmat` 和贴图资源。
+
+### 第二阶段：P1 小幅补 API/资源
+
+6. `3d_scene_showcase`：整合 P0 成果，形成可展示的 3D 小场景。
+7. `3d_skybox_environment`：补 SkyLight 绑定和环境资源。
+8. `3d_postprocess_showcase`：补后处理 setter/toggle。
+9. `3d_particles_showcase`：补粒子参数 API。
+10. `3d_physics_stack`：确认 PhysX 构建和刚体稳定后实现。
+
+### 第三阶段：P2 资产/底层专项
+
+11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。
+12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。
+13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。
+14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。
+15. `3d_audio_spatial`：补 3D audio source/listener 后实现。
+
+## 9. 首批最建议实现的 5 个 demo
+
+1. `samples/lua/3d/3d_static_model.lua`
+   - 从 `cube.lua` 的手写顶点自然过渡到 `.dmesh/.dmat`。
+   - 最快验证资源链路。
+2. `samples/lua/3d/3d_material_showcase.lua`
+   - 从单 cube 材质过渡到材质矩阵。
+   - 可作为材质参数回归截图。
+3. `samples/lua/3d/3d_lighting_showcase.lua`
+   - 从单方向光过渡到 Directional/Point/Spot。
+   - 为 scene/shadow 打基础。
+4. `samples/lua/3d/3d_camera_showcase.lua`
+   - 从“能看 cube”过渡到“能观察复杂 3D 场景”。
+   - 后续 demo 可复用相机 helper。
+5. `samples/lua/3d/3d_textured_cube.lua`
+   - 从材质 scalar 过渡到贴图资源。
+   - 验证 UV、texture slot、dmat。
+
+## 10. 验收与截图方案
+
+| Demo | 日志验收 | 截图/视觉验收 | 交互/数值验收 |
+|---|---|---|---|
+| `3d_static_model` | mesh/material path 加载日志 | 资源 cube 与手写 cube 并排 | 资源 cube 旋转 |
+| `3d_material_showcase` | 输出每个材质参数 | 多 cube 高光/发光/粗糙差异 | roughness/emissive 动态变化 |
+| `3d_lighting_showcase` | 输出 light 类型和参数 | 多色光照区域 | PointLight 绕圈 |
+| `3d_camera_showcase` | 输出 active camera | 不同视角截图序列 | free camera 或自动切换 |
+| `3d_textured_cube` | dmat/texture slot 日志 | cube 表面有纹理 | 旋转观察各面 |
+| `3d_scene_showcase` | 对象/光源/相机数量 | 小型场景完整可见 | free camera 巡游 |
+| `3d_postprocess_showcase` | bloom/effect 参数 | bloom/灰度差异 | 开关或时间切换 |
+| `3d_skybox_environment` | skybox/skylight 参数 | 天空/环境色变化 | 环境强度变化 |
+| `3d_particles_showcase` | 粒子发射参数 | 粒子云可见 | 持续生成/消散 |
+| `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
+| `3d_terrain_heightmap` | heightmap/LOD 日志 | 非平面地形 | 远近 LOD 变化 |
+| `3d_shadow_showcase` | shadow 参数 | 地面投影 | shadow_strength 变化 |
+| `3d_animation_basic` | anim state/time | 骨骼/蒙皮运动 | 动作切换 |
+| `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
+| `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
+
+## 11. 当前引擎缺口与最小补齐路径
+
+1. Lua demo 分发：在 `samples/lua/main.lua` 增加新增 demo key；在 `samples/lua/config.lua` 增加独立配置。
+2. Lua mesh UV：短期用 `.dmesh/.dmat`；中期新增 `add_mesh_renderer_ex` 或 `set_mesh_uvs/set_mesh_normals`。
+3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。
+4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。
+5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。
+6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。
+7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径。
+8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast。
+9. Animator3D：准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。
+10. 3D Audio：确认底层支持后新增 3D source/listener/distance API。
+
+## 12. 结论
+
+优先落地 P0 的 5 个 demo：`3d_static_model`、`3d_material_showcase`、`3d_lighting_showcase`、`3d_camera_showcase`、`3d_textured_cube`。它们能从当前 triangle/square/cube 平滑过渡到 Mesh/Material、材质参数、多光源、相机控制、贴图链路，并且大概率不需要大规模底层改动。
+
+随后以 `3d_scene_showcase` 整合 P0 成果，再逐步补齐 SkyLight、PostProcess、Particle、Physics、Terrain、Shadow、Animation、Character、3D Audio。资源从 `reference/` 复制时应统一进入 `data/` 分类目录，并记录来源与转换方式，避免 demo 依赖 reference 路径。

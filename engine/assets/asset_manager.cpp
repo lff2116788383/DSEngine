@@ -823,7 +823,11 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
         if (!object.HasMember(key) || !object[key].IsString()) {
             return 0;
         }
-        auto texture = LoadTexture(object[key].GetString());
+        const char* texture_path = object[key].GetString();
+        if (texture_path == nullptr || texture_path[0] == '\0') {
+            return 0;
+        }
+        auto texture = LoadTexture(texture_path);
         return texture ? texture->GetHandle() : 0;
     };
     slots.albedo = try_load_texture(mat, "base_color_texture");

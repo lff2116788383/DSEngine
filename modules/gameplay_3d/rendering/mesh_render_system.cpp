@@ -476,13 +476,14 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                     uint32_t max_idx = 0;
                     for (auto idx : mesh_renderer.temp_indices) max_idx = std::max(max_idx, static_cast<uint32_t>(idx));
                     
-                    mesh_renderer.temp_vertices.reserve((max_idx + 1) * 16);
+                    constexpr int kDmeshVertexFloatStride = 20;
+                    mesh_renderer.temp_vertices.reserve((max_idx + 1) * kDmeshVertexFloatStride);
                     for (uint32_t i = 0; i <= max_idx; ++i) {
-                        for (int j = 0; j < 16; ++j) {
-                            mesh_renderer.temp_vertices.push_back(vertices[i * 16 + j]);
+                        for (int j = 0; j < kDmeshVertexFloatStride; ++j) {
+                            mesh_renderer.temp_vertices.push_back(vertices[i * kDmeshVertexFloatStride + j]);
                         }
                     }
-                    update_bounding_box(mesh_renderer.temp_vertices, 16);
+                    update_bounding_box(mesh_renderer.temp_vertices, kDmeshVertexFloatStride);
                     return;
                 }
             }
@@ -725,7 +726,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
             bool is_dmesh_format = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
-            size_t stride = is_dmesh_format ? 20 : 3; // Update stride to 20 for dmesh format
+            size_t stride = is_dmesh_format ? 20 : 3;
             if (mesh_renderer.temp_vertices.size() % stride != 0) {
                 continue;
             }
