@@ -354,7 +354,7 @@ data/
 ### 第四阶段：P3 专项增强批次
 
 16. `3d_physics_raycast_pick`：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast 后，验证准星/射线拾取、命中点和命中实体。（已完成可用 raycast 接入：优先 PhysX service，未启用时走 ECS Box/Sphere collider 几何 fallback；demo 可打印 hit/entity/position/normal/distance）
-17. `3d_texture_material_slots`：补 `set_mesh_texture(entity, slot, path)` 或材质实例 texture slot API 后，验证 albedo/normal/roughness/emissive 多贴图链路。（已完成可用 texture slot API：Lua 可绑定 albedo/normal/metallic_roughness/emissive/occlusion；demo 可打印 handle/size 与各 slot 绑定结果，UV/normal/tangent Lua authoring 待补齐）
+17. `3d_texture_material_slots`：补 `set_mesh_texture(entity, slot, path)` 或材质实例 texture slot API 后，验证 albedo/normal/roughness/emissive 多贴图链路。（已完成可用 texture slot API：Lua 可绑定 albedo/normal/metallic_roughness/emissive/occlusion；新增 `set_mesh_uvs/set_mesh_normals/set_mesh_tangents`，可为 Lua 手写 mesh author UV/normal/tangent 并驱动贴图采样）
 18. `3d_terrain_lod_zones`：实现 Terrain heightmap sampling、resolution、LOD renderer 后，验证 near/mid/far LOD 分区和密度变化。（已完成可用 terrain height/LOD API：Lua 可设置 resolution、写入程序化 height grid、配置动态 LOD 参数并读取 current_lod；图片 heightmap 文件采样与 terrain texture 已在 `3d_terrain_heightmap` 专项补齐）
 
 ## 9. 首批最建议实现的 5 个 demo
@@ -395,15 +395,15 @@ data/
 | `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
 | `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
 | `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
-| `3d_texture_material_slots` | mesh/material path 与 set_mesh_texture slot 绑定日志 | albedo/roughness/emissive/normal slot 样本行可见 | Lua `set_mesh_texture` 返回 handle/size；emissive/roughness 动态变化 |
+| `3d_texture_material_slots` | mesh/material path、set_mesh_texture slot 与 mesh_authoring_api 日志 | albedo/roughness/emissive/normal slot 样本行可见，额外 authored quad 使用 Lua UV 贴图采样 | Lua `set_mesh_texture` 返回 handle/size；`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 返回 attribute count 并影响 MeshRenderSystem 顶点属性 |
 | `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
 | `3d_audio_spatial` | real_3d_audio、set_3d_mode/add_listener/set_3d_distance 与 source/listener position 日志 | 音源/listener 标记和距离环可见 | Lua `set_3d_mode/add_listener/set_3d_distance` 可配置 3D 音源、listener 和距离衰减；AudioSystem 同步 Transform 到 miniaudio |
 
 ## 11. 当前引擎缺口与最小补齐路径
 
 1. Lua demo 分发：在 `samples/lua/main.lua` 增加新增 demo key；在 `samples/lua/config.lua` 增加独立配置。
-2. Lua mesh UV：短期用 `.dmesh/.dmat`；中期新增 `add_mesh_renderer_ex` 或 `set_mesh_uvs/set_mesh_normals`。
-3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。（已完成可用接入，支持 albedo/normal/metallic_roughness/emissive/occlusion，待继续补 Lua UV/normal/tangent authoring）
+2. Lua mesh UV：已新增 `set_mesh_uvs/set_mesh_normals/set_mesh_tangents`，MeshRenderSystem 对 Lua 手写 mesh 使用显式 UV/normal/tangent；更完整的 `add_mesh_renderer_ex` 可后续作为便捷封装。
+3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。（已完成可用接入，支持 albedo/normal/metallic_roughness/emissive/occlusion；已补 Lua UV/normal/tangent authoring，手写 mesh 可直接显示贴图采样）
 4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
 5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
 6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询；新增 `load_terrain_heightmap` 从图片文件采样高度并新增 `set_terrain_texture` 绑定 terrain texture）

@@ -1,5 +1,5 @@
 -- 3D P3 sample: texture/material slots showcase
--- 目标：专项展示 albedo/normal/emissive/roughness 等 texture slot；Lua set_mesh_texture 可直接绑定 albedo/normal/emissive 等贴图槽。
+-- 目标：专项展示 albedo/normal/emissive/roughness 等 texture slot；Lua 可直接绑定贴图槽并 author UV/normal/tangent。
 local TextureMaterialSlots3D = {}
 
 local state = { camera = nil, samples = {}, time = 0.0, logged = false }
@@ -10,6 +10,26 @@ end
 
 local function cube_indices()
     return { 0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4 }
+end
+
+local function plane_vertices()
+    return { -0.7,-0.45,0.0, 0.7,-0.45,0.0, 0.7,0.45,0.0, -0.7,0.45,0.0 }
+end
+
+local function plane_indices()
+    return { 0,1,2, 2,3,0 }
+end
+
+local function plane_uvs()
+    return { 0.0,0.0, 1.0,0.0, 1.0,1.0, 0.0,1.0 }
+end
+
+local function plane_normals()
+    return { 0.0,0.0,1.0, 0.0,0.0,1.0, 0.0,0.0,1.0, 0.0,0.0,1.0 }
+end
+
+local function plane_tangents()
+    return { 1.0,0.0,0.0, 1.0,0.0,0.0, 1.0,0.0,0.0, 1.0,0.0,0.0 }
 end
 
 local function setup_camera(config)
@@ -62,15 +82,37 @@ local function setup_scene(config)
     local emissive = add_cube("emissive_slot", 1.3, 0.25, 0.0, {0.18, 0.32, 1.0, 1.0}, 0.0, 0.45, {0.02, 0.10, 0.65})
     local normal = add_cube("normal_slot_marker", 2.6, 0.25, 0.0, {0.55, 0.38, 1.0, 1.0}, 0.0, 0.42, {0.08, 0.04, 0.20})
 
+    local authored = dse.ecs.create_entity()
+    dse.ecs.add_transform(authored, 0.0, 1.45, 0.0, 1.55, 1.55, 1.55)
+    dse.ecs.add_mesh_renderer(authored, 1.0, 1.0, 1.0, 1.0, plane_vertices(), plane_indices())
+    dse.ecs.set_mesh_shader_variant(authored, "MESH_LIT")
+    dse.ecs.set_mesh_material(authored, 0.0, 0.42, 1.0, 0.05, 0.05, 0.05, 1.0, true, true)
+    table.insert(state.samples, { name = "authored_uv_normal_tangent", entity = authored, x = 0.0, y = 1.45, z = 0.0, roughness = 0.42, emissive = {0.05, 0.05, 0.05} })
+
     if dse.ecs.set_mesh_texture then
         local ok_albedo, handle_albedo, width_albedo, height_albedo = dse.ecs.set_mesh_texture(albedo, "albedo", "models/CesiumLogoFlat.png")
         local ok_normal = dse.ecs.set_mesh_texture(normal, "normal", "models/CesiumLogoFlat.png")
         local ok_emissive = dse.ecs.set_mesh_texture(emissive, "emissive", "models/CesiumLogoFlat.png")
         local ok_mr = dse.ecs.set_mesh_texture(rough_low, "metallic_roughness", "models/CesiumLogoFlat.png")
-        print(string.format("[3D][TextureMaterialSlots] set_mesh_texture: albedo=%s handle=%s size=%sx%s normal=%s emissive=%s metallic_roughness=%s", tostring(ok_albedo), tostring(handle_albedo), tostring(width_albedo), tostring(height_albedo), tostring(ok_normal), tostring(ok_emissive), tostring(ok_mr)))
+        local ok_authored_texture = dse.ecs.set_mesh_texture(authored, "albedo", "models/CesiumLogoFlat.png")
+        print(string.format("[3D][TextureMaterialSlots] set_mesh_texture: albedo=%s handle=%s size=%sx%s normal=%s emissive=%s metallic_roughness=%s authored_texture=%s", tostring(ok_albedo), tostring(handle_albedo), tostring(width_albedo), tostring(height_albedo), tostring(ok_normal), tostring(ok_emissive), tostring(ok_mr), tostring(ok_authored_texture)))
     else
         print("[3D][TextureMaterialSlots] set_mesh_texture unavailable; using dmat/component fallback markers only.")
     end
+
+    local uv_ok, uv_count, uv_vertices = false, 0, 0
+    local normals_ok, normal_count = false, 0
+    local tangents_ok, tangent_count = false, 0
+    if dse.ecs.set_mesh_uvs then
+        uv_ok, uv_count, uv_vertices = dse.ecs.set_mesh_uvs(authored, plane_uvs())
+    end
+    if dse.ecs.set_mesh_normals then
+        normals_ok, normal_count = dse.ecs.set_mesh_normals(authored, plane_normals())
+    end
+    if dse.ecs.set_mesh_tangents then
+        tangents_ok, tangent_count = dse.ecs.set_mesh_tangents(authored, plane_tangents())
+    end
+    print(string.format("[3D][TextureMaterialSlots] mesh_authoring_api set_mesh_uvs=%s uv_count=%s/%s set_mesh_normals=%s normal_count=%s set_mesh_tangents=%s tangent_count=%s", tostring(uv_ok), tostring(uv_count), tostring(uv_vertices), tostring(normals_ok), tostring(normal_count), tostring(tangents_ok), tostring(tangent_count)))
 
     add_label_marker("albedo", -2.6, -0.95, {1.0, 1.0, 1.0})
     add_label_marker("rough_low", -1.3, -0.95, {0.9, 0.9, 0.25})
@@ -78,8 +120,8 @@ local function setup_scene(config)
     add_label_marker("emissive", 1.3, -0.95, {0.1, 0.4, 1.0})
     add_label_marker("normal", 2.6, -0.95, {0.7, 0.45, 1.0})
 
-    print(string.format("[3D][TextureMaterialSlots] setup: dmat sample mesh=%s material=%s plus Lua set_mesh_texture slot markers.", mesh_path, material_path))
-    print("[3D][TextureMaterialSlots] active API: set_mesh_texture(entity, slot, path) supports albedo/normal/metallic_roughness/emissive/occlusion; Lua UV/normal/tangent authoring remains future work.")
+    print(string.format("[3D][TextureMaterialSlots] setup: dmat sample mesh=%s material=%s plus Lua set_mesh_texture slot markers and authored UV quad.", mesh_path, material_path))
+    print("[3D][TextureMaterialSlots] active API: set_mesh_texture plus set_mesh_uvs/set_mesh_normals/set_mesh_tangents author Lua mesh vertex attributes.")
 end
 
 function TextureMaterialSlots3D.Setup(config)
@@ -102,7 +144,7 @@ function TextureMaterialSlots3D.Update(delta_time)
     end
     if not state.logged and state.time > 0.2 then
         state.logged = true
-        print("[3D][TextureMaterialSlots] runtime: visible row maps to albedo / roughness low / roughness high / emissive / normal texture slots.")
+        print("[3D][TextureMaterialSlots] runtime: mesh_authoring_api authored quad uses UV texture sampling, explicit normal, and explicit tangent; visible row maps to material texture slots.")
     end
 end
 

@@ -725,7 +725,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
-            bool is_dmesh_format = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
+            const bool is_dmesh_format = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
+            const std::size_t vertex_count_from_pos3 = mesh_renderer.temp_vertices.size() / 3;
+            const bool has_lua_uvs = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_uvs.size() == vertex_count_from_pos3 * 2;
+            const bool has_lua_normals = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_normals.size() == vertex_count_from_pos3 * 3;
+            const bool has_lua_tangents = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_tangents.size() == vertex_count_from_pos3 * 3;
             size_t stride = is_dmesh_format ? 20 : 3;
             if (mesh_renderer.temp_vertices.size() % stride != 0) {
                 continue;
@@ -801,11 +805,17 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                         bv.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
                     }
                 } else {
-                    normal = local_normals[i];
-                    bv.uv = glm::vec2(0.0f, 0.0f);
+                    normal = has_lua_normals
+                        ? glm::vec3(mesh_renderer.temp_normals[i * 3 + 0], mesh_renderer.temp_normals[i * 3 + 1], mesh_renderer.temp_normals[i * 3 + 2])
+                        : local_normals[i];
+                    bv.uv = has_lua_uvs
+                        ? glm::vec2(mesh_renderer.temp_uvs[i * 2 + 0], mesh_renderer.temp_uvs[i * 2 + 1])
+                        : glm::vec2(0.0f, 0.0f);
                     bv.weights = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
                     bv.joints = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-                    bv.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+                    bv.tangent = has_lua_tangents
+                        ? glm::vec3(mesh_renderer.temp_tangents[i * 3 + 0], mesh_renderer.temp_tangents[i * 3 + 1], mesh_renderer.temp_tangents[i * 3 + 2])
+                        : glm::vec3(1.0f, 0.0f, 0.0f);
                 }
                 
                 if (glm::length(normal) < 1e-6f) {

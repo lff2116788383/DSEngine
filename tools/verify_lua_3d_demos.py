@@ -56,6 +56,13 @@ REQUIRED_LOG_TOKENS = {
         "set_3d_distance",
         "add_listener",
     ],
+    "3d_texture_material_slots": [
+        "mesh_authoring_api",
+        "set_mesh_uvs=true",
+        "set_mesh_normals=true",
+        "set_mesh_tangents=true",
+        "authored quad uses UV texture sampling",
+    ],
 }
 
 ENTRY_PRESETS = {

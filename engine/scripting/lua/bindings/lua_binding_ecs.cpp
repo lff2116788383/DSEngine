@@ -958,6 +958,9 @@ int L_EcsAddMeshRenderer(lua_State* L) {
     mesh.color = glm::vec4(r, g, b, a);
     mesh.temp_vertices.clear();
     mesh.temp_indices.clear();
+    mesh.temp_uvs.clear();
+    mesh.temp_normals.clear();
+    mesh.temp_tangents.clear();
     
     if (lua_istable(L, 6)) {
         int v_len = lua_rawlen(L, 6);
@@ -997,6 +1000,9 @@ int L_EcsSetMeshPath(lua_State* L) {
         mesh.mesh_path = mesh_path;
         mesh.temp_vertices.clear();
         mesh.temp_indices.clear();
+        mesh.temp_uvs.clear();
+        mesh.temp_normals.clear();
+        mesh.temp_tangents.clear();
     }
     return 0;
 }
@@ -1136,6 +1142,96 @@ int L_EcsSetMeshTexture(lua_State* L) {
     lua_pushinteger(L, static_cast<lua_Integer>(texture->GetWidth()));
     lua_pushinteger(L, static_cast<lua_Integer>(texture->GetHeight()));
     return 4;
+}
+
+int L_EcsSetMeshUv(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<MeshRendererComponent>(e) || !lua_istable(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& mesh = world->registry().get<MeshRendererComponent>(e);
+    mesh.temp_uvs.clear();
+    const int uv_len = lua_rawlen(L, 2);
+    for (int i = 1; i <= uv_len; ++i) {
+        lua_rawgeti(L, 2, i);
+        mesh.temp_uvs.push_back(static_cast<float>(luaL_checknumber(L, -1)));
+        lua_pop(L, 1);
+    }
+
+    const std::size_t vertex_count = mesh.temp_vertices.size() / 3;
+    const bool ok = vertex_count > 0 && mesh.temp_uvs.size() == vertex_count * 2;
+    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(mesh.temp_uvs.size() / 2));
+    lua_pushinteger(L, static_cast<lua_Integer>(vertex_count));
+    return 3;
+}
+
+int L_EcsSetMeshNormals(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<MeshRendererComponent>(e) || !lua_istable(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& mesh = world->registry().get<MeshRendererComponent>(e);
+    mesh.temp_normals.clear();
+    const int normal_len = lua_rawlen(L, 2);
+    for (int i = 1; i <= normal_len; ++i) {
+        lua_rawgeti(L, 2, i);
+        mesh.temp_normals.push_back(static_cast<float>(luaL_checknumber(L, -1)));
+        lua_pop(L, 1);
+    }
+
+    const std::size_t vertex_count = mesh.temp_vertices.size() / 3;
+    const bool ok = vertex_count > 0 && mesh.temp_normals.size() == vertex_count * 3;
+    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(mesh.temp_normals.size() / 3));
+    lua_pushinteger(L, static_cast<lua_Integer>(vertex_count));
+    return 3;
+}
+
+int L_EcsSetMeshTangents(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<MeshRendererComponent>(e) || !lua_istable(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& mesh = world->registry().get<MeshRendererComponent>(e);
+    mesh.temp_tangents.clear();
+    const int tangent_len = lua_rawlen(L, 2);
+    for (int i = 1; i <= tangent_len; ++i) {
+        lua_rawgeti(L, 2, i);
+        mesh.temp_tangents.push_back(static_cast<float>(luaL_checknumber(L, -1)));
+        lua_pop(L, 1);
+    }
+
+    const std::size_t vertex_count = mesh.temp_vertices.size() / 3;
+    const bool ok = vertex_count > 0 && mesh.temp_tangents.size() == vertex_count * 3;
+    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(mesh.temp_tangents.size() / 3));
+    lua_pushinteger(L, static_cast<lua_Integer>(vertex_count));
+    return 3;
 }
 
 int L_EcsSetMeshEmissive(lua_State* L) {
@@ -1782,6 +1878,9 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
     set_fn("set_mesh_material_scalar", L_EcsSetMeshMaterialScalar);
     set_fn("set_mesh_texture", L_EcsSetMeshTexture);
+    set_fn("set_mesh_uvs", L_EcsSetMeshUv);
+    set_fn("set_mesh_normals", L_EcsSetMeshNormals);
+    set_fn("set_mesh_tangents", L_EcsSetMeshTangents);
     set_fn("set_mesh_emissive", L_EcsSetMeshEmissive);
 
     set_fn("add_directional_light_3d", L_EcsAddDirectionalLight3D);

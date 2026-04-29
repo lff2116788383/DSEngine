@@ -39,6 +39,9 @@ struct MeshRendererComponent {
     MaterialDataSource material_data_source = MaterialDataSource::ComponentFallback;
     std::vector<float> temp_vertices;
     std::vector<unsigned short> temp_indices;
+    std::vector<float> temp_uvs;
+    std::vector<float> temp_normals;
+    std::vector<float> temp_tangents;
 };
 
 struct BoundingBoxComponent {
