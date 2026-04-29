@@ -68,10 +68,13 @@ Config.demo_3d_physics_stack={
 }
 Config.demo_3d_terrain_heightmap={
     camera_distance=14.0,
-    heightmap_path="",
+    heightmap_path="terrain/heightmap_ridge.bmp",
+    texture_path="terrain/grass_rock.bmp",
     width=12.0,
     depth=9.0,
-    max_height=2.8
+    max_height=2.8,
+    resolution_x=33,
+    resolution_z=33
 }
 Config.demo_3d_shadow_showcase={
     camera_distance=9.0,

@@ -345,7 +345,7 @@ data/
 
 ### 第三阶段：P2 资产/底层专项
 
-11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。（已完成 fallback，真实 heightmap/LOD 待专项补齐）
+11. `3d_terrain_heightmap`：补 heightmap 和 LOD 可视化。（已完成可用图片 heightmap 文件采样、terrain texture 绑定与 LOD 参数/日志验收；仍保留 marker grid 作为可视参考）
 12. `3d_shadow_showcase`：补 shadow 开关与稳定验收。（已完成 fallback，真实 shadow pass 待专项验证）
 13. `3d_animation_basic`：补动画资源和 skinned mesh 验证。（已完成 fallback，成套骨骼动画资源待补齐）
 14. `3d_character_third_person`：在动画和相机控制稳定后做角色综合 demo。（已完成 fallback，真实角色控制器/资源待补齐）
@@ -355,7 +355,7 @@ data/
 
 16. `3d_physics_raycast_pick`：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast 后，验证准星/射线拾取、命中点和命中实体。（已完成可用 raycast 接入：优先 PhysX service，未启用时走 ECS Box/Sphere collider 几何 fallback；demo 可打印 hit/entity/position/normal/distance）
 17. `3d_texture_material_slots`：补 `set_mesh_texture(entity, slot, path)` 或材质实例 texture slot API 后，验证 albedo/normal/roughness/emissive 多贴图链路。（已完成可用 texture slot API：Lua 可绑定 albedo/normal/metallic_roughness/emissive/occlusion；demo 可打印 handle/size 与各 slot 绑定结果，UV/normal/tangent Lua authoring 待补齐）
-18. `3d_terrain_lod_zones`：实现 Terrain heightmap sampling、resolution、LOD renderer 后，验证 near/mid/far LOD 分区和密度变化。（已完成可用 terrain height/LOD API：Lua 可设置 resolution、写入程序化 height grid、配置动态 LOD 参数并读取 current_lod；图片 heightmap 文件采样待补齐）
+18. `3d_terrain_lod_zones`：实现 Terrain heightmap sampling、resolution、LOD renderer 后，验证 near/mid/far LOD 分区和密度变化。（已完成可用 terrain height/LOD API：Lua 可设置 resolution、写入程序化 height grid、配置动态 LOD 参数并读取 current_lod；图片 heightmap 文件采样与 terrain texture 已在 `3d_terrain_heightmap` 专项补齐）
 
 ## 9. 首批最建议实现的 5 个 demo
 
@@ -389,14 +389,14 @@ data/
 | `3d_skybox_environment` | skybox/skylight 参数 | 天空/环境色变化 | 环境强度变化 |
 | `3d_particles_showcase` | 粒子发射参数 | 粒子云可见 | 持续生成/消散 |
 | `3d_physics_stack` | PhysX init + y 值 | cube 下落堆叠 | y 值下降后稳定 |
-| `3d_terrain_heightmap` | heightmap/LOD 日志 | 非平面地形 | 远近 LOD 变化 |
+| `3d_terrain_heightmap` | terrain_heightmap_api、load_terrain_heightmap、set_terrain_texture、real_sampling 日志 | 图片 heightmap 采样出的非平面地形并绑定 terrain texture | Lua `load_terrain_heightmap` 返回 image/sample resolution；`set_terrain_texture` 返回 handle/size；`get_terrain_lod` 返回 current_lod |
 | `3d_shadow_showcase` | shadow 参数 | 地面投影 | shadow_strength 变化 |
 | `3d_animation_basic` | anim state/time | 骨骼/蒙皮运动 | 动作切换 |
 | `3d_character_third_person` | speed/state | 角色+跟随相机 | 移动/攻击 |
 | `3d_audio_spatial` | source/listener position | 音源/listener 标记 | 声像/距离变化 |
 | `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
 | `3d_texture_material_slots` | mesh/material path 与 set_mesh_texture slot 绑定日志 | albedo/roughness/emissive/normal slot 样本行可见 | Lua `set_mesh_texture` 返回 handle/size；emissive/roughness 动态变化 |
-| `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样待补齐 |
+| `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
 | `3d_audio_spatial` | real_3d_audio、set_3d_mode/add_listener/set_3d_distance 与 source/listener position 日志 | 音源/listener 标记和距离环可见 | Lua `set_3d_mode/add_listener/set_3d_distance` 可配置 3D 音源、listener 和距离衰减；AudioSystem 同步 Transform 到 miniaudio |
 
 ## 11. 当前引擎缺口与最小补齐路径
@@ -406,7 +406,7 @@ data/
 3. Texture slot：短期依赖 `.dmat`；中期新增 `set_mesh_texture(entity, slot, path)`。（已完成可用接入，支持 albedo/normal/metallic_roughness/emissive/occlusion，待继续补 Lua UV/normal/tangent authoring）
 4. SkyLight：新增 Lua `add_sky_light`、`set_sky_light`。（已完成）
 5. PostProcess：新增 Lua `set_post_process_enabled`、`set_bloom`、`set_exposure_gamma`、`set_post_effect_mode`。（已完成最小 `set_post_process_bloom`；enabled/bloom/exposure 可调，其余待后续）
-6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询，图片 heightmap 文件采样与 terrain texture 待补齐）
+6. Terrain：实现 heightmap 采样；Lua 暴露 resolution、LOD、texture。（已完成 resolution/程序化 height data/LOD 参数与 current_lod 查询；新增 `load_terrain_heightmap` 从图片文件采样高度并新增 `set_terrain_texture` 绑定 terrain texture）
 7. Particle3D：Lua 暴露颜色、大小、速度、生命、重力、贴图路径。（已完成最小 `set_particle_system_3d_params`）
 8. Physics3D raycast：把 Lua `physics_3d_raycast` 接到真实 Physics3DSystem Raycast；未启用 PhysX 时使用 ECS 3D collider 几何 fallback。（已完成可用接入，待 PhysX 构建复验真实后端）
 9. Animator3D：准备最小 `.dmesh/.dskel/.danim/.dmat` 资源包，先验收单动画。

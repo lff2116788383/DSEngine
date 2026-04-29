@@ -311,6 +311,7 @@ public:
      * // AssetManager::LoadTexture(...);
      */
     std::shared_ptr<TextureAsset> LoadTexture(const std::string& path);
+    bool LoadImageRgba(const std::string& path, std::vector<unsigned char>& out_pixels, int& out_width, int& out_height, int& out_channels);
     /**
      * @brief 从目录加载六面天空盒立方体贴图。
      * @param directory_path 包含 px/nx/py/ny/pz/nz 六个同尺寸图片的目录

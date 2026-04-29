@@ -1,5 +1,5 @@
 -- 3D P2 sample: terrain heightmap showcase
--- 目标：验证 Terrain 组件入口；当前无 heightmap 资源时以程序化地形 marker 展示 LOD/起伏主题。
+-- 目标：验证 Terrain 图片 heightmap 文件采样、terrain texture 与 LOD 参数入口。
 local TerrainHeightmap3D = {}
 
 local state = { camera = nil, terrain = nil, markers = {}, time = 0.0, logged = false }
@@ -40,11 +40,28 @@ local function setup_terrain(config)
     local terrain = dse.ecs.create_entity()
     dse.ecs.add_transform(terrain, 0.0, -0.75, 0.0, 1.0, 1.0, 1.0)
     local heightmap = (type(config) == "table" and type(config.heightmap_path) == "string") and config.heightmap_path or ""
+    local texture_path = (type(config) == "table" and type(config.texture_path) == "string") and config.texture_path or ""
     local width = (type(config) == "table" and type(config.width) == "number") and config.width or 12.0
     local depth = (type(config) == "table" and type(config.depth) == "number") and config.depth or 9.0
     local max_height = (type(config) == "table" and type(config.max_height) == "number") and config.max_height or 2.8
+    local resolution_x = (type(config) == "table" and type(config.resolution_x) == "number") and config.resolution_x or 33
+    local resolution_z = (type(config) == "table" and type(config.resolution_z) == "number") and config.resolution_z or 33
     dse.ecs.add_terrain(terrain, heightmap, width, depth, max_height)
+    dse.ecs.set_terrain_params(terrain, resolution_x, resolution_z, 4, 6.0, true)
+    local heightmap_ok, image_w, image_h, image_channels, sampled_x, sampled_z = false, 0, 0, 0, resolution_x, resolution_z
+    if heightmap ~= "" and dse.ecs.load_terrain_heightmap then
+        heightmap_ok, image_w, image_h, image_channels, sampled_x, sampled_z = dse.ecs.load_terrain_heightmap(terrain, heightmap)
+    end
+    local texture_ok, texture_handle, texture_w, texture_h = false, 0, 0, 0
+    if texture_path ~= "" and dse.ecs.set_terrain_texture then
+        texture_ok, texture_handle, texture_w, texture_h = dse.ecs.set_terrain_texture(terrain, texture_path)
+    end
     state.terrain = terrain
+    state.heightmap_ok = heightmap_ok
+    state.texture_ok = texture_ok
+    state.image_w = image_w or 0
+    state.image_h = image_h or 0
+    state.texture_handle = texture_handle or 0
 
     local light = dse.ecs.create_entity()
     dse.ecs.add_directional_light_3d(light, -0.42, -1.0, -0.25, 0.95, 0.96, 1.0, 1.15, 0.18, 0.32)
@@ -61,8 +78,9 @@ local function setup_terrain(config)
 
     add_marker("near_lod_marker", -4.8, 1.2, -3.8, 0.24, 0.24, 0.24, {0.2, 0.9, 0.35, 1.0}, {0.05, 0.35, 0.08})
     add_marker("far_lod_marker", 4.8, 1.2, 3.8, 0.46, 0.46, 0.46, {1.0, 0.72, 0.2, 1.0}, {0.4, 0.18, 0.03})
-    print(string.format("[3D][Terrain] setup: add_terrain heightmap='%s' width=%.1f depth=%.1f max_height=%.1f fallback_grid=99", heightmap, width, depth, max_height))
-    print("[3D][Terrain] LOD markers: small green near / large amber far. Use free camera to inspect terrain relief.")
+    print(string.format("[3D][Terrain] setup: terrain_heightmap_api add_terrain heightmap='%s' load_terrain_heightmap=%s image=%dx%d channels=%d sampled=%dx%d width=%.1f depth=%.1f max_height=%.1f", heightmap, tostring(heightmap_ok), image_w or 0, image_h or 0, image_channels or 0, sampled_x or 0, sampled_z or 0, width, depth, max_height))
+    print(string.format("[3D][Terrain] texture_api set_terrain_texture=%s texture='%s' handle=%s size=%dx%d fallback_grid=99", tostring(texture_ok), texture_path, tostring(texture_handle), texture_w or 0, texture_h or 0))
+    print("[3D][Terrain] LOD markers: small green near / large amber far. Real terrain mesh uses sampled heightmap; marker grid remains as visual reference.")
 end
 
 function TerrainHeightmap3D.Setup(config)
@@ -81,7 +99,8 @@ function TerrainHeightmap3D.Update(delta_time)
     end
     if not state.logged and state.time > 1.0 then
         state.logged = true
-        print("[3D][Terrain] runtime: terrain component created; procedural fallback makes non-flat heightfield visible until real heightmap sampling/LOD assets land.")
+        local lod, rx, rz, max_lod, lod_factor = dse.ecs.get_terrain_lod(state.terrain)
+        print(string.format("[3D][Terrain] runtime: terrain_heightmap_api real_sampling=%s terrain_texture=%s image=%dx%d texture_handle=%s current_lod=%s resolution=%sx%s max_lod=%s lod_factor=%.2f", tostring(state.heightmap_ok), tostring(state.texture_ok), state.image_w or 0, state.image_h or 0, tostring(state.texture_handle), tostring(lod), tostring(rx), tostring(rz), tostring(max_lod), lod_factor or 0.0))
     end
 end
 

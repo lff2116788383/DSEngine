@@ -325,6 +325,40 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
 }
 
 
+bool AssetManager::LoadImageRgba(const std::string& path, std::vector<unsigned char>& out_pixels, int& out_width, int& out_height, int& out_channels) {
+    out_pixels.clear();
+    out_width = 0;
+    out_height = 0;
+    out_channels = 0;
+
+    std::vector<uint8_t> file_data;
+    if (!LoadFileToMemory(path, file_data)) {
+        DEBUG_LOG_ERROR("Failed to read image file: {}", path);
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    stbi_set_flip_vertically_on_load(false);
+    unsigned char* data = stbi_load_from_memory(file_data.data(), static_cast<int>(file_data.size()), &width, &height, &channels, 4);
+    if (!data || width <= 0 || height <= 0) {
+        if (data) {
+            stbi_image_free(data);
+        }
+        DEBUG_LOG_ERROR("Failed to decode image: {}", path);
+        return false;
+    }
+
+    const std::size_t byte_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
+    out_pixels.assign(data, data + byte_count);
+    out_width = width;
+    out_height = height;
+    out_channels = channels;
+    stbi_image_free(data);
+    return true;
+}
+
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);

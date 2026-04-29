@@ -158,6 +158,56 @@ int L_EcsAddSpotLight3D(lua_State* L) {
     return 0;
 }
 
+void SampleTerrainHeightmap(TerrainComponent& terrain, const std::vector<unsigned char>& pixels, int image_width, int image_height) {
+    if (image_width <= 0 || image_height <= 0 || terrain.resolution_x < 2 || terrain.resolution_z < 2) {
+        return;
+    }
+
+    terrain.height_data.assign(static_cast<std::size_t>(terrain.resolution_x * terrain.resolution_z), 0.0f);
+    for (int z = 0; z < terrain.resolution_z; ++z) {
+        const float v = terrain.resolution_z == 1 ? 0.0f : static_cast<float>(z) / static_cast<float>(terrain.resolution_z - 1);
+        const int src_z = std::clamp(static_cast<int>(std::round(v * static_cast<float>(image_height - 1))), 0, image_height - 1);
+        for (int x = 0; x < terrain.resolution_x; ++x) {
+            const float u = terrain.resolution_x == 1 ? 0.0f : static_cast<float>(x) / static_cast<float>(terrain.resolution_x - 1);
+            const int src_x = std::clamp(static_cast<int>(std::round(u * static_cast<float>(image_width - 1))), 0, image_width - 1);
+            const std::size_t index = (static_cast<std::size_t>(src_z) * static_cast<std::size_t>(image_width) + static_cast<std::size_t>(src_x)) * 4u;
+            if (index + 2 >= pixels.size()) {
+                continue;
+            }
+            const float r = static_cast<float>(pixels[index + 0]) / 255.0f;
+            const float g = static_cast<float>(pixels[index + 1]) / 255.0f;
+            const float b = static_cast<float>(pixels[index + 2]) / 255.0f;
+            const float luminance = r * 0.2126f + g * 0.7152f + b * 0.0722f;
+            terrain.height_data[static_cast<std::size_t>(z * terrain.resolution_x + x)] = luminance * terrain.max_height;
+        }
+    }
+    terrain.heightmap_width = image_width;
+    terrain.heightmap_height = image_height;
+}
+
+bool LoadTerrainHeightmap(TerrainComponent& terrain, const std::string& heightmap_path) {
+    if (heightmap_path.empty()) {
+        terrain.heightmap_width = 0;
+        terrain.heightmap_height = 0;
+        terrain.heightmap_channels = 0;
+        return false;
+    }
+
+    std::vector<unsigned char> pixels;
+    int image_width = 0;
+    int image_height = 0;
+    int image_channels = 0;
+    if (!GetAssetManager().LoadImageRgba(heightmap_path, pixels, image_width, image_height, image_channels)) {
+        return false;
+    }
+
+    terrain.heightmap_path = heightmap_path;
+    terrain.heightmap_channels = image_channels;
+    SampleTerrainHeightmap(terrain, pixels, image_width, image_height);
+    terrain.is_dirty = true;
+    return true;
+}
+
 int L_EcsAddTerrain(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -174,6 +224,9 @@ int L_EcsAddTerrain(lua_State* L) {
     terrain.width = width;
     terrain.depth = depth;
     terrain.max_height = max_height;
+    if (heightmap_path[0] != '\0') {
+        LoadTerrainHeightmap(terrain, heightmap_path);
+    }
     terrain.is_dirty = true;
     return 0;
 }
@@ -197,6 +250,9 @@ int L_EcsSetTerrainParams(lua_State* L) {
         terrain.use_dynamic_lod = lua_toboolean(L, 6) != 0;
     }
     terrain.height_data.assign(static_cast<std::size_t>(terrain.resolution_x * terrain.resolution_z), 0.0f);
+    if (!terrain.heightmap_path.empty()) {
+        LoadTerrainHeightmap(terrain, terrain.heightmap_path);
+    }
     terrain.current_lod = std::clamp(terrain.current_lod, 0, terrain.max_lod_levels - 1);
     terrain.is_dirty = true;
     return 0;
@@ -228,6 +284,63 @@ int L_EcsSetTerrainHeight(lua_State* L) {
     terrain.height_data[static_cast<std::size_t>(z * terrain.resolution_x + x)] = height;
     terrain.is_dirty = true;
     return 0;
+}
+
+int L_EcsLoadTerrainHeightmap(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* heightmap_path = luaL_checkstring(L, 2);
+    if (!world->registry().valid(e) || !world->registry().all_of<TerrainComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& terrain = world->registry().get<TerrainComponent>(e);
+    const bool ok = LoadTerrainHeightmap(terrain, heightmap_path);
+    lua_pushboolean(L, ok ? 1 : 0);
+    if (ok) {
+        lua_pushinteger(L, terrain.heightmap_width);
+        lua_pushinteger(L, terrain.heightmap_height);
+        lua_pushinteger(L, terrain.heightmap_channels);
+        lua_pushinteger(L, terrain.resolution_x);
+        lua_pushinteger(L, terrain.resolution_z);
+        return 6;
+    }
+    return 1;
+}
+
+int L_EcsSetTerrainTexture(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* texture_path = luaL_checkstring(L, 2);
+    if (!world->registry().valid(e) || !world->registry().all_of<TerrainComponent>(e)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto texture = GetAssetManager().LoadTexture(texture_path);
+    if (!texture) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto& terrain = world->registry().get<TerrainComponent>(e);
+    terrain.texture_path = texture_path;
+    terrain.texture_handle = texture->GetHandle();
+    terrain.is_dirty = true;
+    lua_pushboolean(L, 1);
+    lua_pushinteger(L, static_cast<lua_Integer>(terrain.texture_handle));
+    lua_pushinteger(L, static_cast<lua_Integer>(texture->GetWidth()));
+    lua_pushinteger(L, static_cast<lua_Integer>(texture->GetHeight()));
+    return 4;
 }
 
 int L_EcsGetTerrainLod(lua_State* L) {
@@ -1688,6 +1801,8 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_terrain", L_EcsAddTerrain);
     set_fn("set_terrain_params", L_EcsSetTerrainParams);
     set_fn("set_terrain_height", L_EcsSetTerrainHeight);
+    set_fn("load_terrain_heightmap", L_EcsLoadTerrainHeightmap);
+    set_fn("set_terrain_texture", L_EcsSetTerrainTexture);
     set_fn("get_terrain_lod", L_EcsGetTerrainLod);
     set_fn("add_steering", L_EcsAddSteering);
     set_fn("set_steering_target", L_EcsSetSteeringTarget);

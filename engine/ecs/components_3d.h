@@ -205,7 +205,11 @@ struct FreeCameraControllerComponent {
 struct TerrainComponent {
     bool enabled = true;
     std::string heightmap_path;
+    std::string texture_path;
     unsigned int texture_handle = 0;
+    int heightmap_width = 0;
+    int heightmap_height = 0;
+    int heightmap_channels = 0;
     
     // Terrain parameters
     float width = 100.0f;

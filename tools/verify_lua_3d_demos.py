@@ -44,6 +44,12 @@ P3_3D_ENTRIES = [
 ]
 
 REQUIRED_LOG_TOKENS = {
+    "3d_terrain_heightmap": [
+        "terrain_heightmap_api",
+        "load_terrain_heightmap=true",
+        "texture_api set_terrain_texture=true",
+        "real_sampling=true",
+    ],
     "3d_audio_spatial": [
         "real_3d_audio",
         "set_3d_mode=true",
