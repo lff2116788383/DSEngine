@@ -5,6 +5,7 @@
 
 #include "audio_system.h"
 #include "engine/ecs/audio.h"
+#include "engine/ecs/transform.h"
 #include "engine/ecs/world.h"
 #include "engine/assets/asset_manager.h"
 #include <iostream>
@@ -246,6 +247,27 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         }
     }
 
+    auto listener_view = registry.view<AudioListenerComponent, TransformComponent>();
+    bool listener_applied = false;
+    for (auto entity : listener_view) {
+        const auto& listener = listener_view.get<AudioListenerComponent>(entity);
+        if (!listener.enabled) {
+            continue;
+        }
+        const auto& transform = listener_view.get<TransformComponent>(entity);
+        ma_engine_listener_set_position(
+            engine_handle_->get(),
+            listener.listener_index,
+            transform.position.x,
+            transform.position.y,
+            transform.position.z);
+        listener_applied = true;
+        break;
+    }
+    if (!listener_applied) {
+        ma_engine_listener_set_position(engine_handle_->get(), 0, 0.0f, 0.0f, 0.0f);
+    }
+
     auto view = registry.view<AudioSourceComponent>();
     for (auto entity : view) {
         auto& audio = view.get<AudioSourceComponent>(entity);
@@ -268,6 +290,14 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
                 ma_sound_set_looping(&new_sound->value, audio.loop ? MA_TRUE : MA_FALSE);
                 ma_sound_set_volume(&new_sound->value, audio.volume * sfx_volume_);
                 ma_sound_set_pitch(&new_sound->value, audio.pitch);
+                ma_sound_set_spatialization_enabled(&new_sound->value, audio.spatial_enabled ? MA_TRUE : MA_FALSE);
+                ma_sound_set_min_distance(&new_sound->value, audio.min_distance);
+                ma_sound_set_max_distance(&new_sound->value, audio.max_distance);
+                ma_sound_set_rolloff(&new_sound->value, audio.rolloff);
+                if (registry.all_of<TransformComponent>(entity)) {
+                    const auto& transform = registry.get<TransformComponent>(entity);
+                    ma_sound_set_position(&new_sound->value, transform.position.x, transform.position.y, transform.position.z);
+                }
                 ma_sound_start(&new_sound->value);
                 sound = new_sound->get();
                 sound_handle = new_sound.get();
@@ -286,6 +316,14 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         ma_sound_set_looping(sound, audio.loop ? MA_TRUE : MA_FALSE);
         ma_sound_set_volume(sound, audio.volume * sfx_volume_);
         ma_sound_set_pitch(sound, audio.pitch);
+        ma_sound_set_spatialization_enabled(sound, audio.spatial_enabled ? MA_TRUE : MA_FALSE);
+        ma_sound_set_min_distance(sound, audio.min_distance);
+        ma_sound_set_max_distance(sound, audio.max_distance);
+        ma_sound_set_rolloff(sound, audio.rolloff);
+        if (registry.all_of<TransformComponent>(entity)) {
+            const auto& transform = registry.get<TransformComponent>(entity);
+            ma_sound_set_position(sound, transform.position.x, transform.position.y, transform.position.z);
+        }
         if (audio.restart_requested) {
             ma_sound_stop(sound);
             ma_sound_seek_to_pcm_frame(sound, 0);

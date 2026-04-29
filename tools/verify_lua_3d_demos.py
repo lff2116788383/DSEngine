@@ -43,6 +43,15 @@ P3_3D_ENTRIES = [
     "3d_terrain_lod_zones",
 ]
 
+REQUIRED_LOG_TOKENS = {
+    "3d_audio_spatial": [
+        "real_3d_audio",
+        "set_3d_mode=true",
+        "set_3d_distance",
+        "add_listener",
+    ],
+}
+
 ENTRY_PRESETS = {
     "basic": BASIC_3D_ENTRIES,
     "p0": P0_3D_ENTRIES,
@@ -109,6 +118,11 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
             tail_lines.append(line)
     for line in tail_lines[-30:]:
         print(line, flush=True)
+
+    missing_tokens = [token for token in REQUIRED_LOG_TOKENS.get(entry, []) if token not in output]
+    if missing_tokens:
+        print(f"LOG_ASSERT_MISSING {entry}: {','.join(missing_tokens)}", flush=True)
+        return 3
 
     if not png_path.exists():
         print(f"SCREENSHOT_MISSING {png_path}", flush=True)

@@ -7,6 +7,7 @@
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/audio.h"
+#include <algorithm>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -106,6 +107,51 @@ int L_AudioSetPitch(lua_State* L) {
     }
     return 0;
 }
+int L_AudioSet3DMode(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool enabled = lua_toboolean(L, 2) != 0;
+    if (world->registry().valid(e)) {
+        auto& audio = world->registry().get_or_emplace<AudioSourceComponent>(e);
+        audio.spatial_enabled = enabled;
+    }
+    return 0;
+}
+
+int L_AudioAddListener(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e)) {
+        auto& listener = world->registry().emplace_or_replace<AudioListenerComponent>(e);
+        listener.enabled = true;
+        listener.listener_index = 0;
+    }
+    return 0;
+}
+
+int L_AudioSet3DDistance(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float min_distance = std::max(0.01f, static_cast<float>(luaL_optnumber(L, 2, 1.0)));
+    float max_distance = std::max(min_distance, static_cast<float>(luaL_optnumber(L, 3, 20.0)));
+    float rolloff = std::max(0.0f, static_cast<float>(luaL_optnumber(L, 4, 1.0)));
+    if (world->registry().valid(e)) {
+        auto& audio = world->registry().get_or_emplace<AudioSourceComponent>(e);
+        audio.min_distance = min_distance;
+        audio.max_distance = max_distance;
+        audio.rolloff = rolloff;
+    }
+    return 0;
+}
 }
 
 void RegisterAudioBindings(lua_State* L) {
@@ -121,6 +167,9 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("set_loop", L_AudioSetLoop);
     set_fn("set_volume", L_AudioSetVolume);
     set_fn("set_pitch", L_AudioSetPitch);
+    set_fn("set_3d_mode", L_AudioSet3DMode);
+    set_fn("add_listener", L_AudioAddListener);
+    set_fn("set_3d_distance", L_AudioSet3DDistance);
 }
 
 }

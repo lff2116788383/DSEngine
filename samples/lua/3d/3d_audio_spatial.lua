@@ -1,8 +1,8 @@
 -- 3D P2 sample: spatial audio showcase
--- 目标：展示 3D audio source/listener 概念；当前音频绑定仍是 2D source，因此用环绕音源 marker + volume/pitch 动态 fallback。
+-- 目标：展示 3D audio source/listener/distance API；音源随 Transform 绕 listener 运动并同步到底层 3D 音频。
 local AudioSpatial3D = {}
 
-local state = { camera = nil, listener = nil, source = nil, source_marker = nil, rings = {}, time = 0.0, logged = false }
+local state = { camera = nil, listener = nil, source = nil, source_marker = nil, rings = {}, time = 0.0, logged = false, api_logged = false, min_distance = 1.0, max_distance = 5.5, rolloff = 1.1 }
 
 local function cube_vertices()
     return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
@@ -46,15 +46,23 @@ local function setup_scene(config)
     local audio_path = (type(config) == "table" and type(config.audio_path) == "string") and config.audio_path or ""
     state.source = dse.ecs.create_entity()
     dse.ecs.add_transform(state.source, 2.4, 0.55, 0.0, 1.0, 1.0, 1.0)
+    if dse.audio.add_listener then
+        dse.audio.add_listener(state.listener)
+        state.api_logged = true
+    end
+    state.min_distance = (type(config) == "table" and type(config.min_distance) == "number") and config.min_distance or 1.0
+    state.max_distance = (type(config) == "table" and type(config.max_distance) == "number") and config.max_distance or 5.5
+    state.rolloff = (type(config) == "table" and type(config.rolloff) == "number") and config.rolloff or 1.1
     if audio_path ~= "" then
-        dse.audio.add_source(state.source, audio_path, true, true, 0.35)
-        dse.audio.set_playing(state.source, true)
+        dse.audio.add_source(state.source, audio_path, true, true, 0.70)
         state.audio_enabled = true
-        print(string.format("[3D][AudioSpatial] setup: source orbits listener. audio_path='%s' 3D audio API missing, using volume/pitch fallback.", audio_path))
     else
         state.audio_enabled = false
-        print("[3D][AudioSpatial] setup: source orbits listener. audio_path empty; visual-only spatial audio fallback active.")
     end
+    if dse.audio.set_3d_mode then dse.audio.set_3d_mode(state.source, true) end
+    if dse.audio.set_3d_distance then dse.audio.set_3d_distance(state.source, state.min_distance, state.max_distance, state.rolloff) end
+    if state.audio_enabled then dse.audio.set_playing(state.source, true) end
+    print(string.format("[3D][AudioSpatial] setup: real_3d_audio api add_listener entity=%s set_3d_mode=true set_3d_distance min=%.2f max=%.2f rolloff=%.2f audio_path='%s' audio_enabled=%s", tostring(state.listener), state.min_distance, state.max_distance, state.rolloff, audio_path, tostring(state.audio_enabled)))
 end
 
 function AudioSpatial3D.Setup(config)
@@ -70,7 +78,7 @@ function AudioSpatial3D.Update(delta_time)
     local x = math.cos(state.time * 0.85) * radius
     local z = math.sin(state.time * 0.85) * radius
     local distance = math.sqrt(x * x + z * z)
-    local volume = math.max(0.08, math.min(0.85, 1.0 - distance / 5.0))
+    local volume = math.max(0.08, math.min(0.85, 1.0 - distance / state.max_distance))
     local pitch = 0.82 + (math.sin(state.time * 0.85) * 0.5 + 0.5) * 0.36
     if state.source ~= nil then
         dse.ecs.set_transform_position(state.source, x, 0.55, z)
@@ -89,7 +97,7 @@ function AudioSpatial3D.Update(delta_time)
     end
     if not state.logged and state.time > 1.0 then
         state.logged = true
-        print(string.format("[3D][AudioSpatial] runtime: source=(%.2f,%.2f) listener=(0,0) distance=%.2f volume=%.2f pitch=%.2f", x, z, distance, volume, pitch))
+        print(string.format("[3D][AudioSpatial] runtime: real_3d_audio source=(%.2f,0.55,%.2f) listener=(0.00,0.35,0.00) distance=%.2f api=set_3d_mode/add_listener/set_3d_distance min=%.2f max=%.2f rolloff=%.2f fallback_volume=%.2f pitch=%.2f", x, z, distance, state.min_distance, state.max_distance, state.rolloff, volume, pitch))
     end
 end
 
