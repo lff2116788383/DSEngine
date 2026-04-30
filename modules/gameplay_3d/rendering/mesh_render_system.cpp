@@ -8,7 +8,6 @@
 #include <cstring>
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
-#include <iostream>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -650,7 +649,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 item.skinned = true;
                 item.bone_matrices = animator.final_bone_matrices;
                 for (auto& mat : item.bone_matrices) {
-                    mat = item.model * mat; // Multiply model matrix so skin_mat outputs World Space
+                    mat = mesh_model * mat; // Multiply model matrix so skin_mat outputs world space.
                 }
             }
         }
@@ -684,6 +683,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;
+        item.depth_test_enabled = mesh_renderer.depth_test_enabled;
+        item.depth_write_enabled = mesh_renderer.depth_write_enabled;
         
         item.point_lights.clear();
         for (const auto& pt_data : point_lights) {

@@ -39,6 +39,7 @@ struct PipelineStateDesc {
     unsigned int blend_dst = 0x0303;     ///< GL_ONE_MINUS_SRC_ALPHA
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
+    unsigned int depth_func = 0x0201;      ///< GL_LESS
     bool culling_enabled = true;
     unsigned int cull_face = 0x0405;     ///< GL_BACK
 };
@@ -115,6 +116,8 @@ struct MeshDrawItem {
     bool material_double_sided = false;
     bool material_uses_instance_data = false;
     bool receive_shadow = true;
+    bool depth_test_enabled = true;
+    bool depth_write_enabled = true;
 
     glm::vec3 light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color = glm::vec3(1.0f);

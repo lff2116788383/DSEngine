@@ -1153,6 +1153,20 @@ int L_EcsSetMeshMaterial(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetMeshDepthState(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        return 0;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
+        auto& mesh = world->registry().get<MeshRendererComponent>(e);
+        mesh.depth_test_enabled = lua_toboolean(L, 2) != 0;
+        mesh.depth_write_enabled = lua_gettop(L) >= 3 ? (lua_toboolean(L, 3) != 0) : mesh.depth_write_enabled;
+    }
+    return 0;
+}
+
 int L_EcsSetMeshShaderVariant(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1183,6 +1197,11 @@ int L_EcsSetMeshMaterialScalar(lua_State* L) {
         else if (name == "ao") mesh.ao = value;
         else if (name == "normal_strength") mesh.normal_strength = value;
         else if (name == "material_alpha_cutoff") mesh.material_alpha_cutoff = value;
+
+        // Direct Lua material authoring is intended to override copied .dmat/material-instance values.
+        // Keep this consistent with set_mesh_texture(), otherwise scalar/emissive fixes are ignored
+        // whenever set_mesh_material(<dmat>) selected MaterialInstance as the data source.
+        mesh.material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
     }
     return 0;
 }
@@ -1336,6 +1355,9 @@ int L_EcsSetMeshEmissive(lua_State* L) {
     if (world->registry().valid(e) && world->registry().all_of<MeshRendererComponent>(e)) {
         auto& mesh = world->registry().get<MeshRendererComponent>(e);
         mesh.emissive = glm::vec3(r, g, b);
+
+        // Direct Lua material authoring is intended to override copied .dmat/material-instance values.
+        mesh.material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
     }
     return 0;
 }
@@ -2076,6 +2098,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath);
     set_fn("set_mesh_material", L_EcsSetMeshMaterial);
     set_fn("set_mesh_shader_variant", L_EcsSetMeshShaderVariant);
+    set_fn("set_mesh_depth_state", L_EcsSetMeshDepthState);
     set_fn("set_mesh_material_scalar", L_EcsSetMeshMaterialScalar);
     set_fn("set_mesh_texture", L_EcsSetMeshTexture);
     set_fn("set_mesh_uvs", L_EcsSetMeshUv);

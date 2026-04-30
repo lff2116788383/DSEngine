@@ -18,8 +18,10 @@
 #include <cstddef>
 
 constexpr size_t MAX_SPRITES = 10000;
-constexpr size_t MAX_VERTICES = MAX_SPRITES * 4;
-constexpr size_t MAX_INDICES = MAX_SPRITES * 6;
+constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
+constexpr size_t MAX_SPRITE_INDICES = MAX_SPRITES * 6;
+constexpr size_t MAX_MESH_VERTICES = 131072;
+constexpr size_t MAX_MESH_INDICES = 262144;
 
 namespace dse {
 namespace render {
@@ -32,7 +34,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
                                           InitCreateVboFn create_vbo_fn,
                                           InitUpdateVboFn update_vbo_fn) {
     // 构建精灵索引模板
-    std::vector<unsigned short> indices(MAX_INDICES);
+    std::vector<unsigned short> indices(MAX_SPRITE_INDICES);
     for (size_t i = 0, j = 0; i < MAX_SPRITES; ++i) {
         indices[j++] = static_cast<unsigned short>(i * 4 + 0);
         indices[j++] = static_cast<unsigned short>(i * 4 + 1);
@@ -42,7 +44,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
         indices[j++] = static_cast<unsigned short>(i * 4 + 0);
     }
 
-    std::vector<BatchVertex> vertices(MAX_VERTICES);
+    std::vector<BatchVertex> vertices(MAX_SPRITE_VERTICES);
 
     // 2D 精灵批处理 VAO
     vao_handle_ = create_vao_fn();
@@ -62,8 +64,8 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
     // ebo 生命周期随 vao，这里不需要单独存储
 
     // 3D 网格 VAO
-    mesh_vbo_handle_ = create_vbo_fn(MAX_VERTICES * sizeof(BatchVertex), nullptr, true, false);
-    mesh_ibo_handle_ = create_vbo_fn(MAX_INDICES * sizeof(unsigned short), nullptr, true, true);
+    mesh_vbo_handle_ = create_vbo_fn(MAX_MESH_VERTICES * sizeof(BatchVertex), nullptr, true, false);
+    mesh_ibo_handle_ = create_vbo_fn(MAX_MESH_INDICES * sizeof(unsigned short), nullptr, true, true);
     mesh_vao_handle_ = create_vao_fn();
     glBindVertexArray(mesh_vao_handle_);
     glBindBuffer(GL_ARRAY_BUFFER, mesh_vbo_handle_);
@@ -238,6 +240,15 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
 
+        const bool depth_test_changed = !item.depth_test_enabled;
+        const bool depth_write_changed = !item.depth_write_enabled;
+        if (depth_test_changed) {
+            glDisable(GL_DEPTH_TEST);
+        }
+        if (depth_write_changed) {
+            glDepthMask(GL_FALSE);
+        }
+
         unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
         if (last_texture_handle != tex) {
             if (last_texture_handle != std::numeric_limits<unsigned int>::max()) {
@@ -407,6 +418,22 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(item.model));
         }
 
+        if (item.vertices.size() > MAX_MESH_VERTICES || item.indices.size() > MAX_MESH_INDICES) {
+            DEBUG_LOG_WARN("Skipping mesh draw item exceeding dynamic buffer capacity: vertices={} indices={} max_vertices={} max_indices={}",
+                           item.vertices.size(), item.indices.size(), MAX_MESH_VERTICES, MAX_MESH_INDICES);
+            if (depth_write_changed) {
+                glDepthMask(GL_TRUE);
+            }
+            if (depth_test_changed && state_mgr.active_pipeline_state() != 0) {
+                auto pipeline_state = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
+                if (pipeline_state && pipeline_state->depth_test_enabled) {
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthFunc(pipeline_state->depth_func);
+                }
+            }
+            continue;
+        }
+
         // 实际绘制
         if (item.vao_override > 0) {
             glBindVertexArray(item.vao_override);
@@ -421,6 +448,17 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindVertexArray(mesh_vao_handle_);
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_SHORT, nullptr);
             glBindVertexArray(0);
+        }
+
+        if (depth_write_changed) {
+            glDepthMask(GL_TRUE);
+        }
+        if (depth_test_changed && state_mgr.active_pipeline_state() != 0) {
+            auto pipeline_state = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
+            if (pipeline_state && pipeline_state->depth_test_enabled) {
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(pipeline_state->depth_func);
+            }
         }
 
         current_frame_stats_.draw_calls += 1;
@@ -732,7 +770,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     }
 
     std::vector<BatchVertex> batch_vertices;
-    batch_vertices.reserve(MAX_VERTICES);
+    batch_vertices.reserve(MAX_SPRITE_VERTICES);
 
     unsigned int current_texture = items[0].texture_handle == 0 ? white_texture_handle_ : items[0].texture_handle;
     unsigned int current_material_instance = items[0].material_instance_id;
@@ -793,7 +831,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
             item.material_instance_id != current_material_instance ||
             item.shader_variant_key != current_shader_variant ||
             item.blend_mode != current_blend_mode ||
-            batch_vertices.size() + 4 > MAX_VERTICES) {
+            batch_vertices.size() + 4 > MAX_SPRITE_VERTICES) {
             flush_batch();
             current_texture = tex;
             current_material_instance = item.material_instance_id;

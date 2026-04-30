@@ -33,6 +33,8 @@ struct MeshRendererComponent {
     unsigned int emissive_texture_handle = 0;
     unsigned int occlusion_texture_handle = 0;
     bool receive_shadow = true;
+    bool depth_test_enabled = true;
+    bool depth_write_enabled = true;
     bool visible = true;
     int sorting_layer = 0;
     int order_in_layer = 0;

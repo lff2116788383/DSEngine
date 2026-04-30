@@ -1,0 +1,38 @@
+{
+  "materials": [
+    {
+      "name": "defaultMat",
+      "base_color": [0.55, 0.55, 0.55, 1],
+      "metallic": 0,
+      "roughness": 0.717157,
+      "emissive": [0, 0, 0],
+      "normal_scale": 1,
+      "occlusion_strength": 1,
+      "alpha_cutoff": 0.5,
+      "double_sided": false,
+      "alpha_test": false,
+      "base_color_texture": "D:/work_source/Char_work/tt test/maps/body_d1.tga",
+      "normal_texture": "",
+      "metallic_roughness_texture": "",
+      "emissive_texture": "",
+      "occlusion_texture": ""
+    },
+    {
+      "name": "02 - Default",
+      "base_color": [0.588235, 0.588235, 0.588235, 1],
+      "metallic": 0,
+      "roughness": 0.858579,
+      "emissive": [0, 0, 0],
+      "normal_scale": 1,
+      "occlusion_strength": 1,
+      "alpha_cutoff": 0.5,
+      "double_sided": false,
+      "alpha_test": false,
+      "base_color_texture": "D:/work_source/Char_work/tt test/maps/final_wepon_d256.tga",
+      "normal_texture": "",
+      "metallic_roughness_texture": "",
+      "emissive_texture": "",
+      "occlusion_texture": ""
+    }
+  ]
+}

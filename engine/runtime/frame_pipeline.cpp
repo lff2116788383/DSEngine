@@ -245,6 +245,7 @@ bool FramePipeline::Init() {
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
     mesh_desc.culling_enabled = true;
+    mesh_desc.depth_func = 0x0203; // GL_LEQUAL: scene color pass must accept depth equality after PreZ.
     render_resources_.mesh_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(mesh_desc);
     if (render_resources_.mesh_pipeline_state == 0) {
         DEBUG_LOG_ERROR("FramePipeline init failed: mesh pipeline state creation returned 0");

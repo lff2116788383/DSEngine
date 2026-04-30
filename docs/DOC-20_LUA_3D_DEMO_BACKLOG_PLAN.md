@@ -123,14 +123,19 @@ data/
 | P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 已落地并验证 | 已补 SkyLight Lua 绑定；cubemap 资源暂留空配置 |
 | P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
-| P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已落地 fallback | 已接入 Terrain 组件入口与可见程序化高度 fallback；真实 heightmap 采样/LOD 仍待专项补齐 |
-| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已接入可用 shadow 参数 API | 已新增 `set_directional_light_shadow` 暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；demo 保留可见投影 fallback 并用日志验收真实 API 调用 |
-| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已接入最小真实动画资源包 | 已新增 `data/animation/minimal_rig` two-bone `.dmesh/.dskel/.danim/.dmat`，`config.lua` 默认指向该资源；demo 同时保留 cube rig fallback，并用 `get_animator_3d_state` 日志验收真实资源路径、状态、时间、loop、transition、final_bones/has_skeleton |
-| P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 已落地 fallback | 已接入跟随相机、Animator3D 状态和 cube character rig；真实角色控制器/动画资源仍待补齐 |
-| P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 已落地 fallback | 已接入 AudioSource volume/pitch 动态 fallback 与环绕可视化；3D source/listener API 仍待补齐 |
+| P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已接入真实图片采样 | 已接入 `load_terrain_heightmap` 与 `set_terrain_texture`；仍保留 marker grid 作为截图可视参考 |
+| P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已接入可用 shadow 参数 API | 已新增 `set_directional_light_shadow` 暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；真实 shadow pass 视觉稳定性继续专项复验 |
+| P2 | `samples/lua/3d/3d_animation_basic.lua` | 骨骼动画播放 | 已接入最小真实动画资源包 | 已新增 `data/animation/minimal_rig` two-bone `.dmesh/.dskel/.danim/.dmat`，`config.lua` 默认指向该资源；后续重点转向真实角色、多 clip 与蒙皮视觉质量 |
+| P2 | `samples/lua/3d/3d_character_third_person.lua` | 第三人称角色 | 已接入 Steering + Animator 资源联动 | 已接入跟随相机、真实 SteeringSystem 移动、Animator3D 状态和最小资源链路；真实 capsule/character controller 与角色资产仍待补齐 |
+| P2 | `samples/lua/3d/3d_audio_spatial.lua` | 3D 空间音频 | 已接入真实 3D audio API 与 wav 资源 | 已接入 source/listener/distance attenuation/state 回读，`data/audio/spatial/spatial_ping.wav` 可自动验收 |
 | P3 | `samples/lua/3d/3d_physics_raycast_pick.lua` | Physics3D raycast/拾取专项 | 已接入可用 raycast | 已接入 BoxCollider3D/RigidBody3D、可见 ray beam/命中 marker；Lua `physics_3d_raycast` 优先使用 PhysX service，未启用时使用 ECS 3D collider 几何 fallback |
-| P3 | `samples/lua/3d/3d_texture_material_slots.lua` | texture/material slot 专项 | 已接入可用 texture slot API | 已接入 `.dmesh/.dmat` 样本与材质 slot marker；Lua `set_mesh_texture(entity, slot, path)` 可绑定 albedo/normal/metallic_roughness/emissive/occlusion，UV/normal/tangent Lua authoring 仍待补齐 |
-| P3 | `samples/lua/3d/3d_terrain_lod_zones.lua` | Terrain LOD 分区专项 | 已接入可用 terrain height/LOD API | 已接入 TerrainComponent 程序化 height data、resolution/LOD 参数与 current_lod 查询；near/mid/far tile 密度继续作为可视化标尺，图片 heightmap 文件采样仍待补齐 |
+| P3 | `samples/lua/3d/3d_texture_material_slots.lua` | texture/material slot 专项 | 已接入可用 texture slot + 顶点属性 authoring | 已接入 `.dmesh/.dmat` 样本与材质 slot marker；Lua `set_mesh_texture(entity, slot, path)` 可绑定 albedo/normal/metallic_roughness/emissive/occlusion，`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 可驱动手写 mesh 贴图采样 |
+| P3 | `samples/lua/3d/3d_terrain_lod_zones.lua` | Terrain LOD 分区专项 | 已接入可用 terrain height/LOD API | 已接入 TerrainComponent 程序化 height data、resolution/LOD 参数与 current_lod 查询；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
+| P4 | `samples/lua/3d/3d_vse15_22_scene.lua` | VSEngine 15.22 综合场景对齐 | 建议新增 | 组合第一人称/自由相机、多角色/最小 rig、地面、SkyLight、PointLight、动画状态切换；允许从 `reference/` 拷贝轻量资源到 `data/` 后再接入 |
+| P4 | `samples/lua/3d/3d_physics_interaction.lua` | 真实物理交互 | 建议新增 | 合并堆叠、raycast、选中高亮、施加 impulse/force；重点复验 PhysX 构建真实后端，保留 ECS collider fallback |
+| P4 | `samples/lua/3d/3d_character_controller.lua` | 真实角色控制器 | 建议新增 | capsule/character controller、地面检测、跳跃、斜坡、阻挡；复用最小 Animator3D 资源，后续替换真实角色资产 |
+| P4 | `samples/lua/3d/3d_asset_pack_showcase.lua` | 资源包/导入链路展示 | 建议新增 | 对 `data/models/static`、`data/materials/showcase`、`data/textures`、`data/animation` 做 manifest 化加载验收，资源可从 `reference/` 整理拷贝 |
+| P4 | `samples/lua/3d/3d_render_quality_showcase.lua` | 渲染质量专项 | 建议新增 | 聚焦 shadow 稳定性、CSM 分段、bloom/exposure/gamma、灰度/反相 effect mode；减少纯 fallback 视觉验收 |
 
 ## 5. P0 详细规划
 
@@ -414,8 +419,102 @@ data/
 10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance` 与 `get_source_state`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；已提供 `data/audio/spatial/spatial_ping.wav` 最小真实空间音效资源用于自动验收。
 11. Shadow：已新增 `set_directional_light_shadow(entity, cast_shadow, shadow_strength, cascade0, cascade1, cascade2)`，Lua 可稳定配置方向光阴影开关、强度与 CSM 分段；真实 shadow pass 视觉稳定性继续专项复验。
 
-## 12. 结论
+## 12. 当前阶段结论：从“补 demo”转为“P4 质量收口”
 
-优先落地 P0 的 5 个 demo：`3d_static_model`、`3d_material_showcase`、`3d_lighting_showcase`、`3d_camera_showcase`、`3d_textured_cube`。它们能从当前 triangle/square/cube 平滑过渡到 Mesh/Material、材质参数、多光源、相机控制、贴图链路，并且大概率不需要大规模底层改动。
+截至提交 `5a0217e`，Lua 3D demo 已经完成 basic、P0、P1、P2 与首批 P3 覆盖：
 
-随后以 `3d_scene_showcase` 整合 P0 成果，再逐步补齐 SkyLight、PostProcess、Particle、Physics、Terrain、Shadow、Animation、Character、3D Audio。资源从 `reference/` 复制时应统一进入 `data/` 分类目录，并记录来源与转换方式，避免 demo 依赖 reference 路径。
+- basic：`3d_triangle`、`3d_square`、`3d_cube`。
+- P0：资源化 mesh/material、材质矩阵、多光源、多相机、贴图 cube。
+- P1：综合场景、SkyLight/环境、后处理、Particle3D、Physics3D stack。
+- P2：Terrain heightmap、Shadow、Animator3D、第三人称 Character、3D Audio。
+- P3：Physics3D raycast pick、texture/material slots、Terrain LOD zones。
+
+因此下一阶段不建议继续横向堆大量同类展示 demo。优先级应调整为：
+
+1. 把已有 fallback/半真实 demo 推向真实后端和真实资源。
+2. 强化 `tools/verify_lua_3d_demos.py` 自动验收质量，避免只检查“能跑”和“有截图”。
+3. 从 `reference/` 选择轻量资源拷贝到 `data/`，形成可追踪 asset pack，而不是 demo 直接依赖 reference 路径。
+4. 只新增少量 P4 demo，用于 VSEngine 对齐、真实物理交互、角色控制器、资产包和渲染质量专项。
+
+## 13. P4 后续规划
+
+### 13.1 `samples/lua/3d/3d_vse15_22_scene.lua`
+
+- 目标：对齐 VSEngine2.1 Demo 15.22 的组合场景：第一人称/自由相机、多动画角色、地面、SkyLight、PointLight。
+- 当前可复用能力：`3d_scene_showcase` 的场景组织、`3d_character_third_person` 的 Steering/Animator 资源链路、`3d_skybox_environment` 的 SkyLight、`3d_lighting_showcase` 的多光源。
+- 外部资源策略：可从 `reference/VSEngine2.1/Demo/15/15.22` 选取轻量地面贴图、角色占位 mesh 或材质资源，复制到 `data/models/static`、`data/models/character`、`data/textures/vse_demo`、`data/materials/showcase`，并记录来源；若转换成本高，首版仍用 `data/animation/minimal_rig` 与 cube character fallback。
+- 最小验收：日志包含 scene object/light/camera/character 数量、SkyLight 参数、Animator3D state、Steering speed；截图显示地面、多角色/占位角色、多光源、跟随/自由观察。
+- 优先级：P4 第一优先级。它是下一阶段最适合对外展示的综合 demo。
+
+### 13.2 `samples/lua/3d/3d_physics_interaction.lua`
+
+- 目标：合并 `3d_physics_stack` 和 `3d_physics_raycast_pick`，验证真实堆叠、raycast 命中、选中高亮、施加 impulse/force。
+- 当前可复用能力：RigidBody3D、BoxCollider3D/SphereCollider3D、`physics_3d_raycast`、ECS collider fallback。
+- 前置缺口：PhysX 构建链路需要稳定复验；需要补 Lua impulse/force API 才能完成真正交互。
+- 外部资源策略：首版不需要外部资源；如需更明确视觉，可从 reference 拷贝简单 crate/box 贴图到 `data/textures/vse_demo` 并用 `set_mesh_texture` 绑定。
+- 最小验收：日志包含 PhysX backend/fallback backend、raycast hit entity、selected entity、impulse applied、y 值变化和稳定状态；截图显示堆叠体、射线、命中 marker、选中高亮。
+- 优先级：高，但应排在 PhysX 构建复验之后。
+
+### 13.3 `samples/lua/3d/3d_character_controller.lua`
+
+- 目标：从 Steering 角色推进到 capsule/character controller，覆盖地面检测、跳跃、斜坡、碰撞阻挡、相机跟随和动画状态切换。
+- 当前可复用能力：`3d_character_third_person` 的跟随相机、最小 Animator3D 资源、Steering 状态回读。
+- 前置缺口：需要 C++ 层 CharacterController/CapsuleController 组件或基于 Physics3D 的最小 Kinematic controller；Lua 需暴露 move/jump/grounded/state API。
+- 外部资源策略：首版仍使用 `data/animation/minimal_rig`；后续可从 `reference/` 挑选角色 mesh/贴图/动画，整理到 `data/models/character` 与 `data/animation/character`。
+- 最小验收：日志包含 controller grounded、velocity、jump trigger、collision/blocked state、Animator3D state；截图显示角色、地面、障碍、跳跃/移动轨迹 marker。
+- 优先级：中高，属于 gameplay 必需能力。
+
+### 13.4 `samples/lua/3d/3d_asset_pack_showcase.lua`
+
+- 目标：将外部资源整理为可追踪 asset pack，集中验证模型、材质、贴图、动画、音频资源链路。
+- 当前可复用能力：`.dmesh/.dmat`、texture slots、Terrain texture、Animator3D minimal rig、3D Audio wav。
+- 外部资源策略：允许从 `reference/` 拷贝，但必须进入 `data/` 分类目录并附带 manifest/README，记录原始路径、转换方式、用途与许可证/来源说明。
+- 建议资源目录：
+
+```text
+data/
+  models/static/
+  models/character/
+  materials/showcase/
+  textures/vse_demo/
+  textures/material_showcase/
+  animation/character/
+  audio/spatial/
+```
+
+- 最小验收：日志逐项打印 asset manifest、mesh/material/texture/audio/animation 加载结果；截图展示至少 3 个静态资源、1 个多贴图材质样本、1 个动画/音频可视 marker。
+- 优先级：中。建议与资源转换流程一起做，不要只做空壳 demo。
+
+### 13.5 `samples/lua/3d/3d_render_quality_showcase.lua`
+
+- 目标：把 `3d_shadow_showcase` 和 `3d_postprocess_showcase` 从参数验收推进到视觉质量验收。
+- 当前可复用能力：`set_directional_light_shadow`、PostProcess bloom/color grading/state 回读、emissive marker、地面/caster 场景。
+- 前置缺口：真实 shadow pass 跨 GPU/驱动稳定性、灰度/反相 effect mode、shader gamma 参数化。
+- 外部资源策略：可从 reference 拷贝高对比地面/墙面贴图到 `data/textures/vse_demo`，用于更清楚观察阴影、bloom 和 gamma。
+- 最小验收：日志包含 shadow strength/cascade splits、postprocess state、effect mode、exposure/gamma；截图或 readback 统计能区分阴影区域、bloom 高亮区域和不同后处理状态。
+- 优先级：中。
+
+## 14. 资源从 `reference/` 拷贝到 `data/` 的规则
+
+1. demo 运行时不得直接依赖 `reference/` 路径；`reference/` 只作为素材来源。
+2. 复制后的资源必须位于 `data/` 下，按类型放入 `models`、`materials`、`textures`、`terrain`、`animation`、`audio` 等目录。
+3. 每批资源至少添加或更新一个 README/manifest，记录：
+   - 来源工程与原始路径。
+   - 拷贝/转换时间。
+   - 转换命令或手工处理步骤。
+   - 目标用途和关联 demo。
+   - 许可证/内部参考用途说明。
+4. 对自动验证需要的资源，应优先选择体积小、可提交、无外部运行时依赖的文件。
+5. 复杂模型、角色动画和大贴图应先做最小样本包，再逐步替换 demo 中的 cube/fallback。
+
+## 15. 推荐执行顺序
+
+1. 更新本文档：明确 P4 不是“大量新增 demo”，而是质量收口和真实能力补齐。
+2. 增强 `tools/verify_lua_3d_demos.py`：新增 `p4` preset、截图非黑屏/非纯色检测、关键 demo 的多帧日志断言。
+3. 复验真实后端：优先 PhysX stack/raycast、Shadow pass、Character controller 设计。
+4. 新增 `3d_vse15_22_scene`：用现有资源和最小 rig 先形成综合展示，后续逐步替换 reference 资源。
+5. 新增 `3d_physics_interaction`：在 PhysX 构建稳定和 impulse/force API 暴露后实现。
+6. 建立 `data/` 资源 manifest：为后续 `3d_asset_pack_showcase` 和真实角色/材质 demo 做准备。
+7. 再补 `3d_character_controller`、`3d_asset_pack_showcase`、`3d_render_quality_showcase`。
+
+最终建议：`samples/lua/3d` 当前数量已经足够。下一步先做 P4 文档/验证/资源收口，再新增 1~2 个高价值 demo；若只能选一个新 demo，首选 `samples/lua/3d/3d_vse15_22_scene.lua`。

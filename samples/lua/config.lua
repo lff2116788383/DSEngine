@@ -120,6 +120,26 @@ Config.demo_3d_terrain_lod_zones={
     depth=10.0,
     max_height=3.0
 }
+Config.demo_3d_vse15_22_scene={
+    camera_distance=13.5,
+    camera_speed=6.2,
+    mesh_path="vse_demo/15_22/cooked/OceanPlane.dmesh",
+    material_path="vse_demo/15_22/cooked/OceanPlane.dmat",
+    character_mesh_path="vse_demo/15_22/cooked/Monster.dmesh",
+    character_material_path="vse_demo/15_22/cooked/Monster.dmat",
+    danim_path="vse_demo/15_22/cooked/Monster.danim",
+    dskel_path="vse_demo/15_22/cooked/Monster.dskel",
+    idle_danim_path="vse_demo/15_22/cooked/Monster.danim",
+    walk_danim_path="vse_demo/15_22/cooked/Walk.danim",
+    attack_danim_path="vse_demo/15_22/cooked/Attack.danim",
+    attack2_danim_path="vse_demo/15_22/cooked/Attack2.danim",
+    pos_danim_path="vse_demo/15_22/cooked/Monster.danim",
+    additive_danim_path="vse_demo/15_22/cooked/Monster.danim",
+    move_speed=2.7,
+    steering_force=10.0,
+    sky_intensity=1.05,
+    shadow_strength=0.36
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

@@ -43,6 +43,10 @@ P3_3D_ENTRIES = [
     "3d_terrain_lod_zones",
 ]
 
+P4_3D_ENTRIES = [
+    "3d_vse15_22_scene",
+]
+
 REQUIRED_LOG_TOKENS = {
     "3d_postprocess_showcase": [
         "postprocess_state_api",
@@ -126,6 +130,38 @@ REQUIRED_LOG_TOKENS = {
         "set_mesh_tangents=true",
         "authored quad uses UV texture sampling",
     ],
+    "3d_vse15_22_scene": [
+        "p4_vse15_22_scene",
+        "full_scene_replica=true",
+        "reference_policy=copy_reference_to_data",
+        "camera_replica",
+        "vse_camera_pos=(0,900,900)",
+        "ocean_plane_replica",
+        "vse_asset=NewOceanPlane.STMODEL",
+        "monster_replica index=1",
+        "monster_replica index=6",
+        "p4_character_setup",
+        "character_count=6",
+        "vse_positions=(-300,0,300)|(0,0,300)|(300,0,300)|(-300,0,-300)|(0,0,-300)|(300,0,-300)",
+        "vse_states=Idle,Walk,Attack,Attack2,Pos,AddtiveAnim",
+        "p4_animation_resource",
+        "resource_paths_configured=true",
+        "cooked_fbx=true",
+        "mesh_path=vse_demo/15_22/cooked/Monster.dmesh",
+        "idle_danim_path=vse_demo/15_22/cooked/Monster.danim",
+        "walk_danim_path=vse_demo/15_22/cooked/Walk.danim",
+        "attack_danim_path=vse_demo/15_22/cooked/Attack.danim",
+        "attack2_danim_path=vse_demo/15_22/cooked/Attack2.danim",
+        "pos_danim_path=vse_demo/15_22/cooked/Monster.danim",
+        "additive_danim_path=vse_demo/15_22/cooked/Monster.danim",
+        "dskel_path=vse_demo/15_22/cooked/Monster.dskel",
+        "runtime_animation",
+        "final_bones=48",
+        "has_skeleton=true",
+        "runtime_environment",
+        "PointLight=true",
+        "OceanPlane=true",
+    ],
 }
 
 ENTRY_PRESETS = {
@@ -134,7 +170,8 @@ ENTRY_PRESETS = {
     "p1": P1_3D_ENTRIES,
     "p2": P2_3D_ENTRIES,
     "p3": P3_3D_ENTRIES,
-    "all": BASIC_3D_ENTRIES + P0_3D_ENTRIES + P1_3D_ENTRIES + P2_3D_ENTRIES + P3_3D_ENTRIES,
+    "p4": P4_3D_ENTRIES,
+    "all": BASIC_3D_ENTRIES + P0_3D_ENTRIES + P1_3D_ENTRIES + P2_3D_ENTRIES + P3_3D_ENTRIES + P4_3D_ENTRIES,
 }
 
 
@@ -149,6 +186,15 @@ def replace_game_entry(config_text: str, entry: str) -> str:
     if count == 0:
         raise RuntimeError("Config.game_entry not found in config.lua")
     return updated
+
+
+def extract_render_readback_metrics(output: str) -> tuple[int | None, int | None]:
+    max_rgb: int | None = None
+    avg_rgb: int | None = None
+    for match in re.finditer(r"Render readback (?:main|scene|default_backbuffer):[^\n]*max_rgb=(\d+) avg_rgb=(\d+)", output):
+        max_rgb = max(max_rgb or 0, int(match.group(1)))
+        avg_rgb = max(avg_rgb or 0, int(match.group(2)))
+    return max_rgb, avg_rgb
 
 
 def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, original_config: str, entry: str, frames: int, timeout: int, out_dir: pathlib.Path) -> int:
@@ -203,6 +249,12 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
     if not png_path.exists():
         print(f"SCREENSHOT_MISSING {png_path}", flush=True)
         return 2
+
+    max_rgb, avg_rgb = extract_render_readback_metrics(output)
+    if entry == "3d_vse15_22_scene" and (max_rgb is None or avg_rgb is None or max_rgb < 40 or avg_rgb < 18):
+        print(f"SCREENSHOT_TOO_DARK {entry}: max_rgb={max_rgb} avg_rgb={avg_rgb} min_max_rgb=40 min_avg_rgb=18", flush=True)
+        return 4
+
     print(f"SCREENSHOT_OK {png_path}", flush=True)
     return proc.returncode
 

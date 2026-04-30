@@ -64,6 +64,9 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     if (state.depth_write_enabled != cached.depth_write_enabled) {
         glDepthMask(state.depth_write_enabled ? GL_TRUE : GL_FALSE);
     }
+    if (state.depth_test_enabled && state.depth_func != cached.depth_func) {
+        glDepthFunc(state.depth_func);
+    }
 
     // --- 裁剪面 Diff ---
     if (state.culling_enabled != cached.culling_enabled) {

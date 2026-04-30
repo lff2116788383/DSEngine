@@ -70,6 +70,9 @@ elseif game_entry == "3d_texture_material_slots" then
 elseif game_entry == "3d_terrain_lod_zones" then
     RuntimeEntry = require("3d.3d_terrain_lod_zones")
     runtime_config = Config.demo_3d_terrain_lod_zones or Config.basic_3d or {}
+elseif game_entry == "3d_vse15_22_scene" then
+    RuntimeEntry = require("3d.3d_vse15_22_scene")
+    runtime_config = Config.demo_3d_vse15_22_scene or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}
