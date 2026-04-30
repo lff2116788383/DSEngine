@@ -138,7 +138,10 @@ Config.demo_3d_vse15_22_scene={
     move_speed=2.7,
     steering_force=10.0,
     sky_intensity=1.05,
-    shadow_strength=0.36
+    shadow_strength=0.36,
+    ocean_clip_safe=false,
+    ocean_clip_safe_z_min=-17.5,
+    ocean_clip_safe_z_max=12.0
 }
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"

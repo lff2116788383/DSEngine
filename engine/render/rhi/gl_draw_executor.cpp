@@ -16,6 +16,9 @@
 #include <algorithm>
 #include <functional>
 #include <cstddef>
+#include <cmath>
+#include <limits>
+#include <sstream>
 
 constexpr size_t MAX_SPRITES = 10000;
 constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
@@ -25,6 +28,75 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 
 namespace dse {
 namespace render {
+namespace {
+
+float SignedArea2D(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c) {
+    return 0.5f * ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+}
+
+std::string FormatVec4ForDiag(const glm::vec4& value) {
+    std::ostringstream oss;
+    oss << "(" << value.x << "," << value.y << "," << value.z << "," << value.w << ")";
+    return oss.str();
+}
+
+void LogVse1522OceanPlaneTriangleDiagnostics(int frame,
+                                             const MeshDrawItem& item,
+                                             const glm::mat4& clip_matrix) {
+    if (item.debug_label != "OceanPlane") {
+        return;
+    }
+    const std::size_t triangle_count = item.indices.size() / 3;
+    for (std::size_t tri = 0; tri < triangle_count; ++tri) {
+        const unsigned short i0 = item.indices[tri * 3 + 0];
+        const unsigned short i1 = item.indices[tri * 3 + 1];
+        const unsigned short i2 = item.indices[tri * 3 + 2];
+        if (i0 >= item.vertices.size() || i1 >= item.vertices.size() || i2 >= item.vertices.size()) {
+            continue;
+        }
+        const glm::vec4 c0 = clip_matrix * glm::vec4(item.vertices[i0].pos, 1.0f);
+        const glm::vec4 c1 = clip_matrix * glm::vec4(item.vertices[i1].pos, 1.0f);
+        const glm::vec4 c2 = clip_matrix * glm::vec4(item.vertices[i2].pos, 1.0f);
+        const bool w0_valid = c0.w > 1e-6f;
+        const bool w1_valid = c1.w > 1e-6f;
+        const bool w2_valid = c2.w > 1e-6f;
+        const int valid_w = (w0_valid ? 1 : 0) + (w1_valid ? 1 : 0) + (w2_valid ? 1 : 0);
+        const auto safe_ndc = [](const glm::vec4& clip) -> glm::vec3 {
+            if (std::abs(clip.w) < 1e-6f) {
+                return glm::vec3(0.0f);
+            }
+            return glm::vec3(clip) / clip.w;
+        };
+        const glm::vec3 n0 = safe_ndc(c0);
+        const glm::vec3 n1 = safe_ndc(c1);
+        const glm::vec3 n2 = safe_ndc(c2);
+        const float signed_area = SignedArea2D(glm::vec2(n0), glm::vec2(n1), glm::vec2(n2));
+        const float ndc_z_min = std::min(n0.z, std::min(n1.z, n2.z));
+        const float ndc_z_max = std::max(n0.z, std::max(n1.z, n2.z));
+        const bool crosses_near = (c0.z < -c0.w) || (c1.z < -c1.w) || (c2.z < -c2.w);
+        const bool crosses_far = (c0.z > c0.w) || (c1.z > c1.w) || (c2.z > c2.w);
+        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][OceanPlaneTri] frame={} tri={} indices=({},{},{}) valid_w={} w=({},{},{}) clip0={} clip1={} clip2={} ndc_z_min={} ndc_z_max={} signed_area_ndc={} crosses_near={} crosses_far={}",
+                       frame,
+                       tri,
+                       i0,
+                       i1,
+                       i2,
+                       valid_w,
+                       c0.w,
+                       c1.w,
+                       c2.w,
+                       FormatVec4ForDiag(c0),
+                       FormatVec4ForDiag(c1),
+                       FormatVec4ForDiag(c2),
+                       ndc_z_min,
+                       ndc_z_max,
+                       signed_area,
+                       crosses_near,
+                       crosses_far);
+    }
+}
+
+} // namespace
 
 // ============================================================
 // 几何缓冲区初始化
@@ -195,6 +267,19 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);
+    static int vse1522_depth_diag_frames = 0;
+    const bool emit_vse1522_depth_diag = vse1522_depth_diag_frames < 3 &&
+        std::any_of(items.begin(), items.end(), [](const MeshDrawItem& item) {
+            return !item.debug_label.empty();
+        });
+    if (emit_vse1522_depth_diag) {
+        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} batch_items={} camera_pos=({},{},{})",
+                       vse1522_depth_diag_frames,
+                       items.size(),
+                       inv_view[3][0],
+                       inv_view[3][1],
+                       inv_view[3][2]);
+    }
 
     const auto& loc = shader_mgr.pbr_locations();
     glUseProgram(shader_mgr.pbr_shader_handle());
@@ -239,6 +324,55 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
+
+        if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
+            float ndc_min_z = std::numeric_limits<float>::max();
+            float ndc_max_z = std::numeric_limits<float>::lowest();
+            float ndc_sum_z = 0.0f;
+            float clip_min_w = std::numeric_limits<float>::max();
+            float clip_max_w = std::numeric_limits<float>::lowest();
+            int valid_clip_vertices = 0;
+            int behind_or_zero_w = 0;
+            const glm::mat4 clip_matrix = vp * item.model;
+            for (const auto& vertex : item.vertices) {
+                const glm::vec4 clip = clip_matrix * glm::vec4(vertex.pos, 1.0f);
+                clip_min_w = std::min(clip_min_w, clip.w);
+                clip_max_w = std::max(clip_max_w, clip.w);
+                if (std::abs(clip.w) < 1e-6f || clip.w <= 0.0f) {
+                    ++behind_or_zero_w;
+                    continue;
+                }
+                const float ndc_z = clip.z / clip.w;
+                ndc_min_z = std::min(ndc_min_z, ndc_z);
+                ndc_max_z = std::max(ndc_max_z, ndc_z);
+                ndc_sum_z += ndc_z;
+                ++valid_clip_vertices;
+            }
+            const float ndc_avg_z = valid_clip_vertices > 0 ? ndc_sum_z / static_cast<float>(valid_clip_vertices) : 0.0f;
+            DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} label={} skinned={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) ndc_z_min={} ndc_z_max={} ndc_z_avg={} clip_w_min={} clip_w_max={} invalid_w={} double_sided={} blend_mode={}",
+                           vse1522_depth_diag_frames,
+                           item.debug_label,
+                           item.skinned,
+                           item.depth_test_enabled,
+                           item.depth_write_enabled,
+                           item.vertices.size(),
+                           item.indices.size(),
+                           item.debug_world_bounds_min.x,
+                           item.debug_world_bounds_min.y,
+                           item.debug_world_bounds_min.z,
+                           item.debug_world_bounds_max.x,
+                           item.debug_world_bounds_max.y,
+                           item.debug_world_bounds_max.z,
+                           ndc_min_z,
+                           ndc_max_z,
+                           ndc_avg_z,
+                           clip_min_w,
+                           clip_max_w,
+                           behind_or_zero_w,
+                           item.material_double_sided,
+                           item.blend_mode);
+            LogVse1522OceanPlaneTriangleDiagnostics(vse1522_depth_diag_frames, item, clip_matrix);
+        }
 
         const bool depth_test_changed = !item.depth_test_enabled;
         const bool depth_write_changed = !item.depth_write_enabled;
@@ -462,6 +596,31 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         current_frame_stats_.draw_calls += 1;
+    }
+    if (emit_vse1522_depth_diag) {
+        std::vector<float> depth_samples(9, 1.0f);
+        const int viewport_w = Screen::width();
+        const int viewport_h = Screen::height();
+        const int sample_x[9] = { viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4, viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4, viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4 };
+        const int sample_y[9] = { viewport_h / 4, viewport_h / 4, viewport_h / 4, viewport_h / 2, viewport_h / 2, viewport_h / 2, viewport_h * 3 / 4, viewport_h * 3 / 4, viewport_h * 3 / 4 };
+        float depth_min = std::numeric_limits<float>::max();
+        float depth_max = std::numeric_limits<float>::lowest();
+        float depth_sum = 0.0f;
+        for (int i = 0; i < 9; ++i) {
+            glReadPixels(sample_x[i], sample_y[i], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth_samples[static_cast<std::size_t>(i)]);
+            depth_min = std::min(depth_min, depth_samples[static_cast<std::size_t>(i)]);
+            depth_max = std::max(depth_max, depth_samples[static_cast<std::size_t>(i)]);
+            depth_sum += depth_samples[static_cast<std::size_t>(i)];
+        }
+        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} depth_samples_3x3 min={} max={} avg={} values=({}, {}, {}, {}, {}, {}, {}, {}, {})",
+                       vse1522_depth_diag_frames,
+                       depth_min,
+                       depth_max,
+                       depth_sum / 9.0f,
+                       depth_samples[0], depth_samples[1], depth_samples[2],
+                       depth_samples[3], depth_samples[4], depth_samples[5],
+                       depth_samples[6], depth_samples[7], depth_samples[8]);
+        ++vse1522_depth_diag_frames;
     }
 }
 

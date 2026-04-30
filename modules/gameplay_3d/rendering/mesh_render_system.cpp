@@ -2,6 +2,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/base/debug.h"
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
@@ -42,6 +43,26 @@ std::string ToLower(std::string value) {
         ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     }
     return value;
+}
+
+std::string ClassifyVse1522MeshForDiagnostics(const MeshRendererComponent& mesh_renderer) {
+    if (mesh_renderer.mesh_path == "procedural:DSE_OceanPlaneQuad") {
+        return "OceanPlane";
+    }
+    if (mesh_renderer.mesh_path.empty() &&
+        mesh_renderer.temp_vertices.size() == 12 &&
+        mesh_renderer.temp_indices.size() == 6 &&
+        mesh_renderer.depth_write_enabled) {
+        return "OceanPlane";
+    }
+    if (mesh_renderer.mesh_path.find("vse_demo/15_22/cooked/Monster.dmesh") != std::string::npos) {
+        return "Monster";
+    }
+    return std::string();
+}
+
+bool ShouldLogVse1522MeshDiagnostics(const MeshRendererComponent& mesh_renderer) {
+    return !ClassifyVse1522MeshForDiagnostics(mesh_renderer).empty();
 }
 
 bool LoadTextFile(AssetManager& asset_manager, const std::string& path, std::string& out_text) {
@@ -466,21 +487,34 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                     const uint32_t* indices = reinterpret_cast<const uint32_t*>(data + header->index_data_offset);
                     const float* vertices = reinterpret_cast<const float*>(data + header->vertex_data_offset);
                     
-                    const auto& first_submesh = submeshes[0];
-                    mesh_renderer.temp_indices.reserve(first_submesh.index_count);
-                    for (uint32_t i = 0; i < first_submesh.index_count; ++i) {
-                        mesh_renderer.temp_indices.push_back(static_cast<unsigned short>(indices[first_submesh.index_start + i]));
-                    }
-                    
-                    uint32_t max_idx = 0;
-                    for (auto idx : mesh_renderer.temp_indices) max_idx = std::max(max_idx, static_cast<uint32_t>(idx));
-                    
                     constexpr int kDmeshVertexFloatStride = 20;
-                    mesh_renderer.temp_vertices.reserve((max_idx + 1) * kDmeshVertexFloatStride);
-                    for (uint32_t i = 0; i <= max_idx; ++i) {
+                    mesh_renderer.temp_vertices.reserve(static_cast<std::size_t>(header->vertex_count) * kDmeshVertexFloatStride);
+                    for (uint32_t i = 0; i < header->vertex_count; ++i) {
                         for (int j = 0; j < kDmeshVertexFloatStride; ++j) {
-                            mesh_renderer.temp_vertices.push_back(vertices[i * kDmeshVertexFloatStride + j]);
+                            mesh_renderer.temp_vertices.push_back(vertices[static_cast<std::size_t>(i) * kDmeshVertexFloatStride + j]);
                         }
+                    }
+
+                    mesh_renderer.temp_indices.reserve(header->index_count);
+                    bool index_overflow = false;
+                    for (uint32_t submesh_index = 0; submesh_index < header->submesh_count; ++submesh_index) {
+                        const auto& submesh = submeshes[submesh_index];
+                        for (uint32_t i = 0; i < submesh.index_count; ++i) {
+                            const uint32_t resolved_index = submesh.base_vertex + indices[submesh.index_start + i];
+                            if (resolved_index >= header->vertex_count || resolved_index > std::numeric_limits<unsigned short>::max()) {
+                                index_overflow = true;
+                                break;
+                            }
+                            mesh_renderer.temp_indices.push_back(static_cast<unsigned short>(resolved_index));
+                        }
+                        if (index_overflow) {
+                            break;
+                        }
+                    }
+                    if (index_overflow) {
+                        mesh_renderer.temp_vertices.clear();
+                        mesh_renderer.temp_indices.clear();
+                        return;
                     }
                     update_bounding_box(mesh_renderer.temp_vertices, kDmeshVertexFloatStride);
                     return;
@@ -637,6 +671,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         
         MeshDrawItem item;
         const glm::mat4 mesh_model = transform.local_to_world;
+        item.debug_label = ClassifyVse1522MeshForDiagnostics(mesh_renderer);
         item.model = glm::mat4(1.0f);
         item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
@@ -649,7 +684,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 item.skinned = true;
                 item.bone_matrices = animator.final_bone_matrices;
                 for (auto& mat : item.bone_matrices) {
-                    mat = mesh_model * mat; // Multiply model matrix so skin_mat outputs world space.
+                    mat = mesh_model * mat;
                 }
             }
         }
@@ -726,6 +761,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
+            const bool emit_vse1522_depth_diag = ShouldLogVse1522MeshDiagnostics(mesh_renderer);
             const bool is_dmesh_format = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
             const std::size_t vertex_count_from_pos3 = mesh_renderer.temp_vertices.size() / 3;
             const bool has_lua_uvs = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_uvs.size() == vertex_count_from_pos3 * 2;
@@ -744,6 +780,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     mesh_renderer.temp_vertices[i * stride + 2]
                 );
             }
+            glm::vec3 world_min(std::numeric_limits<float>::max());
+            glm::vec3 world_max(std::numeric_limits<float>::lowest());
             std::vector<glm::vec3> local_normals(vertex_count, glm::vec3(0.0f));
             bool invalid_index = false;
             for (size_t i = 0; i + 2 < mesh_renderer.temp_indices.size(); i += 3) {
@@ -764,7 +802,6 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             if (invalid_index) {
                 continue;
             }
-            const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(mesh_model));
             item.vertices.reserve(vertex_count);
             for (size_t i = 0; i < vertex_count; ++i) {
                 BatchVertex bv;
@@ -774,7 +811,10 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     local_positions[i].z,
                     1.0f
                 );
-                bv.pos = item.skinned ? local_positions[i] : glm::vec3(world_pos);
+                const glm::vec3 world_pos3(world_pos);
+                world_min = glm::min(world_min, world_pos3);
+                world_max = glm::max(world_max, world_pos3);
+                bv.pos = item.skinned ? local_positions[i] : world_pos3;
                 bv.color = item.color;
                 
                 glm::vec3 normal;
@@ -824,10 +864,41 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 } else {
                     normal = glm::normalize(normal);
                 }
+                const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(mesh_model));
                 bv.normal = item.skinned ? normal : glm::normalize(normal_matrix * normal);
                 item.vertices.push_back(bv);
             }
             item.indices = mesh_renderer.temp_indices;
+            item.debug_world_bounds_min = world_min;
+            item.debug_world_bounds_max = world_max;
+            if (emit_vse1522_depth_diag) {
+                static int vse1522_diag_frame = 0;
+                static int vse1522_diag_logs = 0;
+                if (vse1522_diag_logs < 12) {
+                    DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][MeshRenderSystem] seq={} label={} entity={} skinned={} mesh_path={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) local_stride={} material_double_sided={} sorting=({}, {}) note=skinned_bounds_are_bind_mesh_model_bounds",
+                                   vse1522_diag_frame,
+                                   item.debug_label,
+                                   static_cast<unsigned int>(entity),
+                                   item.skinned,
+                                   mesh_renderer.mesh_path,
+                                   item.depth_test_enabled,
+                                   item.depth_write_enabled,
+                                   item.vertices.size(),
+                                   item.indices.size(),
+                                   world_min.x,
+                                   world_min.y,
+                                   world_min.z,
+                                   world_max.x,
+                                   world_max.y,
+                                   world_max.z,
+                                   stride,
+                                   item.material_double_sided,
+                                   item.sorting_layer,
+                                   item.order_in_layer);
+                    ++vse1522_diag_logs;
+                }
+                ++vse1522_diag_frame;
+            }
         }
 
         if (!item.vertices.empty() && !item.indices.empty()) {

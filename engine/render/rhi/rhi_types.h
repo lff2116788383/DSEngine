@@ -17,6 +17,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <cstdint>
+#include <string>
 
 // ============================================================
 // 渲染目标与管线状态描述
@@ -118,6 +119,10 @@ struct MeshDrawItem {
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
+
+    std::string debug_label;
+    glm::vec3 debug_world_bounds_min = glm::vec3(0.0f);
+    glm::vec3 debug_world_bounds_max = glm::vec3(0.0f);
 
     glm::vec3 light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color = glm::vec3(1.0f);

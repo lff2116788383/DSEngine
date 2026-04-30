@@ -553,8 +553,14 @@ int L_EcsAddCamera3D(lua_State* L) {
     camera.enabled = true;
     camera.priority = priority;
     camera.fov = fov;
-    camera.near_clip = 0.1f;
-    camera.far_clip = 1000.0f;
+    camera.near_clip = static_cast<float>(luaL_optnumber(L, 4, 0.1));
+    camera.far_clip = static_cast<float>(luaL_optnumber(L, 5, 1000.0));
+    if (camera.near_clip <= 0.0f) {
+        camera.near_clip = 0.1f;
+    }
+    if (camera.far_clip <= camera.near_clip) {
+        camera.far_clip = camera.near_clip + 1000.0f;
+    }
     return 0;
 }
 
