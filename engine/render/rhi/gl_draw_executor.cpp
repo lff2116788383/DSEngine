@@ -231,11 +231,51 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     }
     if (render_pass.clear_color_enabled) {
         glClearColor(render_pass.clear_color.r, render_pass.clear_color.g, render_pass.clear_color.b, render_pass.clear_color.a);
+        if (has_depth) {
+            // 确保 depth mask 开启：glClear(GL_DEPTH_BUFFER_BIT) 受 glDepthMask 控制，
+            // 若上一帧 composite/present pass 关闭了 depth write（glDepthMask(GL_FALSE)），
+            // 此处 clear 将静默失效，导致 depth buffer 残留旧值而非 1.0。
+            glDepthMask(GL_TRUE);
+        }
         glClearDepth(1.0);
         glClear(has_depth ? (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) : GL_COLOR_BUFFER_BIT);
     } else if (has_depth) {
+        glDepthMask(GL_TRUE);
         glClearDepth(1.0);
         glClear(GL_DEPTH_BUFFER_BIT);
+    }
+
+    // VSE 15.22 深度诊断：scene pass clear 后验证 depth buffer 初始值
+    static int vse1522_beginpass_diag_frames = 0;
+    if (vse1522_beginpass_diag_frames < 5 && has_depth && render_pass.render_target != 0) {
+        auto diag_rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+        if (diag_rt && diag_rt->desc.has_depth && diag_rt->desc.has_color) {
+            // 只对同时有 color+depth 的 render target（即 scene pass）做诊断
+            float post_clear_depth = -1.0f;
+            glReadPixels(Screen::width() / 2, Screen::height() / 2, 1, 1,
+                         GL_DEPTH_COMPONENT, GL_FLOAT, &post_clear_depth);
+            GLint fbo = 0;
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+            GLint depth_type = 0;
+            glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &depth_type);
+            GLint depth_bits = 0;
+            if (depth_type != GL_NONE) {
+                glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                    GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE, &depth_bits);
+            }
+            GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][BeginRenderPass] frame={} rt_handle={} fbo={} has_depth={} depth_attachment_type={} depth_bits={} fb_status={} post_clear_depth={} expected=1.0",
+                           vse1522_beginpass_diag_frames,
+                           render_pass.render_target,
+                           fbo,
+                           has_depth ? 1 : 0,
+                           depth_type,
+                           depth_bits,
+                           static_cast<unsigned int>(fb_status),
+                           post_clear_depth);
+            ++vse1522_beginpass_diag_frames;
+        }
     }
 }
 
@@ -268,17 +308,50 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);
     static int vse1522_depth_diag_frames = 0;
-    const bool emit_vse1522_depth_diag = vse1522_depth_diag_frames < 3 &&
+    const bool emit_vse1522_depth_diag = vse1522_depth_diag_frames < 5 &&
         std::any_of(items.begin(), items.end(), [](const MeshDrawItem& item) {
             return !item.debug_label.empty();
         });
     if (emit_vse1522_depth_diag) {
-        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} batch_items={} camera_pos=({},{},{})",
+        // 诊断：检查当前 FBO 绑定和 depth attachment 状态
+        GLint bound_fbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound_fbo);
+        GLint depth_attached_type = 0;
+        GLint depth_attached_name = 0;
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+            GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &depth_attached_type);
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+            GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &depth_attached_name);
+        GLint depth_size = 0;
+        if (depth_attached_type != GL_NONE) {
+            glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE, &depth_size);
+        }
+        GLboolean depth_test_enabled = glIsEnabled(GL_DEPTH_TEST);
+        GLboolean depth_write_enabled = GL_TRUE;
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_write_enabled);
+        GLint depth_func = 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+
+        // 尝试读取一个中心像素的深度值，验证 depth readback 是否正常工作
+        float center_depth = -1.0f;
+        glReadPixels(Screen::width() / 2, Screen::height() / 2, 1, 1,
+                     GL_DEPTH_COMPONENT, GL_FLOAT, &center_depth);
+
+        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} batch_items={} camera_pos=({},{},{}) bound_fbo={} depth_attached_type={} depth_attached_name={} depth_size_bits={} depth_test_enabled={} depth_write_enabled={} depth_func={} center_depth_pre_draw={}",
                        vse1522_depth_diag_frames,
                        items.size(),
                        inv_view[3][0],
                        inv_view[3][1],
-                       inv_view[3][2]);
+                       inv_view[3][2],
+                       bound_fbo,
+                       depth_attached_type,
+                       depth_attached_name,
+                       depth_size,
+                       depth_test_enabled ? 1 : 0,
+                       depth_write_enabled ? 1 : 0,
+                       static_cast<unsigned int>(depth_func),
+                       center_depth);
     }
 
     const auto& loc = shader_mgr.pbr_locations();
@@ -349,7 +422,15 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 ++valid_clip_vertices;
             }
             const float ndc_avg_z = valid_clip_vertices > 0 ? ndc_sum_z / static_cast<float>(valid_clip_vertices) : 0.0f;
-            DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} label={} skinned={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) ndc_z_min={} ndc_z_max={} ndc_z_avg={} clip_w_min={} clip_w_max={} invalid_w={} double_sided={} blend_mode={}",
+
+            // 额外诊断：记录当前 GL depth state
+            GLboolean gl_depth_test = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean gl_depth_write = GL_TRUE;
+            glGetBooleanv(GL_DEPTH_WRITEMASK, &gl_depth_write);
+            GLint gl_depth_func = 0;
+            glGetIntegerv(GL_DEPTH_FUNC, &gl_depth_func);
+
+            DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} label={} skinned={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) ndc_z_min={} ndc_z_max={} ndc_z_avg={} clip_w_min={} clip_w_max={} invalid_w={} double_sided={} blend_mode={} gl_depth_test={} gl_depth_write={} gl_depth_func={}",
                            vse1522_depth_diag_frames,
                            item.debug_label,
                            item.skinned,
@@ -370,7 +451,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                            clip_max_w,
                            behind_or_zero_w,
                            item.material_double_sided,
-                           item.blend_mode);
+                           item.blend_mode,
+                           gl_depth_test ? 1 : 0,
+                           gl_depth_write ? 1 : 0,
+                           static_cast<unsigned int>(gl_depth_func));
             LogVse1522OceanPlaneTriangleDiagnostics(vse1522_depth_diag_frames, item, clip_matrix);
         }
 
@@ -595,10 +679,46 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
+        // 分阶段深度采样：Monster/OceanPlane 绘制后立即采样
+        if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
+            const int vw = Screen::width();
+            const int vh = Screen::height();
+            float post_depth = -1.0f;
+            glReadPixels(vw / 2, vh / 2, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &post_depth);
+            // 在屏幕 1/4 位置（更可能在 Monster 正下方/地面上）采样
+            float ground_depth = -1.0f;
+            glReadPixels(vw / 2, vh / 4, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &ground_depth);
+            unsigned char post_color[4] = {0, 0, 0, 0};
+            glReadPixels(vw / 2, vh / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, post_color);
+            unsigned char ground_color[4] = {0, 0, 0, 0};
+            glReadPixels(vw / 2, vh / 4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, ground_color);
+            GLboolean post_depth_test = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean post_depth_write = GL_TRUE;
+            glGetBooleanv(GL_DEPTH_WRITEMASK, &post_depth_write);
+            GLint post_depth_func = 0;
+            glGetIntegerv(GL_DEPTH_FUNC, &post_depth_func);
+            DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][PostDraw] frame={} label={} post_depth_center={} post_depth_quarter={} post_color_center=({},{},{},{}) post_color_quarter=({},{},{},{}) depth_test={} depth_write={} depth_func={}",
+                           vse1522_depth_diag_frames,
+                           item.debug_label,
+                           post_depth,
+                           ground_depth,
+                           post_color[0], post_color[1], post_color[2], post_color[3],
+                           ground_color[0], ground_color[1], ground_color[2], ground_color[3],
+                           post_depth_test ? 1 : 0,
+                           post_depth_write ? 1 : 0,
+                           static_cast<unsigned int>(post_depth_func));
+        }
+
         current_frame_stats_.draw_calls += 1;
     }
     if (emit_vse1522_depth_diag) {
-        std::vector<float> depth_samples(9, 1.0f);
+        // 最终深度采样：验证 FBO 绑定和 depth attachment
+        GLint final_fbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &final_fbo);
+        GLint final_depth_type = 0;
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+            GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &final_depth_type);
+        std::vector<float> depth_samples(9, -2.0f);
         const int viewport_w = Screen::width();
         const int viewport_h = Screen::height();
         const int sample_x[9] = { viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4, viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4, viewport_w / 4, viewport_w / 2, viewport_w * 3 / 4 };
@@ -612,14 +732,32 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             depth_max = std::max(depth_max, depth_samples[static_cast<std::size_t>(i)]);
             depth_sum += depth_samples[static_cast<std::size_t>(i)];
         }
-        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} depth_samples_3x3 min={} max={} avg={} values=({}, {}, {}, {}, {}, {}, {}, {}, {})",
+
+        // 同时采样中心区域的 color 值，确认渲染有输出
+        unsigned char center_rgba[4] = {0, 0, 0, 0};
+        glReadPixels(viewport_w / 2, viewport_h / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, center_rgba);
+
+        // 检查 GL depth state
+        GLboolean final_depth_test = glIsEnabled(GL_DEPTH_TEST);
+        GLboolean final_depth_write = GL_TRUE;
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &final_depth_write);
+        GLint final_depth_func = 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &final_depth_func);
+
+        DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][GLDrawExecutor] frame={} post_draw final_fbo={} final_depth_attachment_type={} final_depth_test={} final_depth_write={} final_depth_func={} depth_samples_3x3 min={} max={} avg={} values=({}, {}, {}, {}, {}, {}, {}, {}, {}) center_color=({},{},{},{})",
                        vse1522_depth_diag_frames,
+                       final_fbo,
+                       final_depth_type,
+                       final_depth_test ? 1 : 0,
+                       final_depth_write ? 1 : 0,
+                       static_cast<unsigned int>(final_depth_func),
                        depth_min,
                        depth_max,
                        depth_sum / 9.0f,
                        depth_samples[0], depth_samples[1], depth_samples[2],
                        depth_samples[3], depth_samples[4], depth_samples[5],
-                       depth_samples[6], depth_samples[7], depth_samples[8]);
+                       depth_samples[6], depth_samples[7], depth_samples[8],
+                       center_rgba[0], center_rgba[1], center_rgba[2], center_rgba[3]);
         ++vse1522_depth_diag_frames;
     }
 }

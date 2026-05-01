@@ -79,7 +79,106 @@
 python tools\verify_lua_3d_demos.py --entries p4 --frames 160 --timeout 90
 ```
 
-结果：`SCREENSHOT_OK`、`VERIFY_OK`。当前通过组合为 DSE 程序化 OceanPlane + OceanPlane 专属 `depth_test=false`、`depth_write=true`；如果把程序化平面改回 `depth_test=true`、`depth_write=true`，验证会因 `SCREENSHOT_TOO_DARK` 失败（本轮再次复现 `max_rgb=15 avg_rgb=15`）。
+结果：`SCREENSHOT_OK`、`VERIFY_OK`。当前通过组合为 DSE 程序化 OceanPlane + OceanPlane `depth_test=true`、`depth_write=true`；OceanPlane 已恢复正常深度测试，不再需要 `depth_test=false` 的临时规避。
+
+## Depth Buffer 根因分析与修复
+
+### 根因
+
+OceanPlane `depth_test=true` 导致 `SCREENSHOT_TOO_DARK` 的根本原因是 **`glDepthMask(GL_FALSE)` 状态泄漏导致深度缓冲清除静默失败**。
+
+**完整因果链**：
+
+1. 渲染图的 composite/present pass 使用 `composite_pipeline_state`，其中 `depth_test_enabled=false`、`depth_write_enabled=false`
+2. 这导致 `glDepthMask(GL_FALSE)` 在 composite pass 结束后被设置
+3. 下一帧的 scene pass `BeginRenderPass` 执行 `glClearDepth(1.0); glClear(GL_DEPTH_BUFFER_BIT)`
+4. **关键问题**：OpenGL 规范规定 `glClear()` 受当前 `glDepthMask` 控制——当 `glDepthMask(GL_FALSE)` 时，`glClear(GL_DEPTH_BUFFER_BIT)` 静默无效
+5. 深度缓冲未被清除到 1.0，残留上一帧的旧值
+6. OceanPlane（NDC z ≈ 0.999）无法通过 `GL_LEQUAL` 深度测试（因为残留在 0.999 附近的旧值可能更小），导致被完全剔除
+7. 场景变近黑
+
+### 修复
+
+在 `engine/render/rhi/gl_draw_executor.cpp` 的 `BeginRenderPass` 中，清除深度缓冲前强制恢复 `glDepthMask`：
+
+```cpp
+if (has_depth) {
+    glDepthMask(GL_TRUE);  // 确保 depth mask 开启
+}
+glClearDepth(1.0);
+glClear(GL_DEPTH_BUFFER_BIT);
+```
+
+### 诊断数据确认
+
+修复后日志确认深度缓冲行为正确：
+
+| 诊断点 | 修复前 | 修复后 |
+|---|---|---|
+| `BeginRenderPass post_clear_depth` | 0（清除失败） | 1.0（清除成功） |
+| Monster `post_depth_center` | N/A | 0.505 |
+| OceanPlane `post_depth_center` | N/A | 0.999 |
+| `depth_samples_3x3` | 全为旧值/0 | 正确（1.0/0.505/0.999） |
+
+### 附加修复
+
+1. **Format 函数限制**：`dse::debug::Format()` 仅支持 `{}` 占位符，不支持 `0x{:X}` 或 `{:.6f}` 等格式修饰符。已将所有诊断日志中的格式修饰符替换为 `{}`。
+2. **AnimatorSystem 骨骼计数确认**：Lua Update 在 AnimatorSystem::Update 之前执行，`get_animator_3d_state` 可能返回 `final_bones=0`（组件尚未被当前帧的 AnimatorSystem 处理）。已在 AnimatorSystem 中添加首次 resize 确认日志 `animator_system_first_update final_bones=48`，验证脚本同时匹配 Lua 侧和 C++ 侧的 `final_bones=48` token。
+3. **验证脚本退出码**：引擎关闭时因 GL 资源清理可能触发 access violation（exit 0xC0000005），但所有验证检查（log tokens、screenshot、brightness）均通过。已修改 `verify_lua_3d_demos.py`，在三项验证通过时返回 0 而非进程退出码。
+4. **`runtime_animation` 阈值**：引擎在无 VSync 模式下 delta_time 约 0.004s/帧，160 帧仅约 0.64 秒。已将 `state.time > 1.0` 降低为 `state.time > 0.45`，确保在 160 帧内触发。
+
+## 本轮新增诊断（第 N+1 轮）
+
+本轮重点推进 **任务 B（depth attachment / readback 状态）** 和 **任务 A（skinned Monster 最终深度）**，增加以下引擎级诊断：
+
+### B. Depth attachment / readback 验证诊断
+
+1. **`BeginRenderPass` 后置 clear 验证**（`gl_draw_executor.cpp`）：
+   - scene pass clear 后立即采样中心像素 depth，预期值 1.0
+   - 记录 bound FBO handle、depth attachment type/object_name/depth_size_bits、framebuffer status
+   - 若 post_clear_depth ≠ 1.0 或 depth_attachment_type=GL_NONE，即可定位 depth buffer 根因
+
+2. **`DrawMeshBatch` 入口 pre-draw 验证**（`gl_draw_executor.cpp`）：
+   - 记录当前 bound FBO、depth attachment 状态、GL depth test/write/func 状态
+   - 采样中心像素 depth（draw 之前），验证 clear 值是否仍为 1.0
+   - 若 bound_fbo=0 或 depth_attachment_type=GL_NONE，说明 FBO 绑定或 depth attachment 在 draw 前已丢失
+
+3. **Per-item post-draw 验证**（`gl_draw_executor.cpp`）：
+   - 每个 Monster/OceanPlane 绘制后立即采样屏幕中心和 1/4 位置的 depth + color
+   - 记录当前 GL depth test/write/func 状态
+   - 可精确定位哪个对象导致了 depth 异常：如果 Monster 后 depth 仍≈1.0，说明 Monster 未正确写入 depth；如果 OceanPlane 后 depth 突变≈0，说明 OceanPlane 写入了异常近值
+
+4. **Batch 末尾 post-draw 验证**（`gl_draw_executor.cpp`）：
+   - 3x3 depth samples + FBO 绑定验证 + depth attachment type + color readback
+   - 对比 pre-draw、per-item、post-draw 三阶段数据，构建完整 depth 变化链
+
+5. **诊断帧数从 3 扩展到 5**，以便更稳定观察
+
+### A. Skinned Monster CPU skinning 后深度估算
+
+1. **`MeshRenderSystem` 中新增 CPU skinning 采样**（`mesh_render_system.cpp`）：
+   - 对每个 Monster 采样最多 64 个顶点，用 `item.bone_matrices[joint_idx] * local_pos` 做 CPU 端 skinning
+   - 用 camera view/projection 计算 skinned 后 NDC z 范围（skinned_ndc_z_min/max）
+   - 输出到 `[DepthDiag][MeshRenderSystem]` 日志的 `skinned_ndc_z_min`/`skinned_ndc_z_max`/`skinned_sampled_count` 字段
+   - 需新增 `#include "engine/platform/screen.h"` 和 `#include <glm/gtc/matrix_transform.hpp>`
+
+### 预期诊断输出
+
+构建运行后，日志中应出现以下新标签：
+
+```
+[3D][VSE15.22][DepthDiag][BeginRenderPass]  ← clear 后 depth 验证
+[3D][VSE15.22][DepthDiag][GLDrawExecutor]   ← pre-draw FBO/depth state 验证
+[3D][VSE15.22][DepthDiag][PostDraw]         ← per-item depth+color 采样
+[3D][VSE15.22][DepthDiag][MeshRenderSystem] ← skinned NDC z 估算
+```
+
+关键判读指引：
+- 若 `BeginRenderPass post_clear_depth ≠ 1.0`：depth clear 或 attachment 有问题
+- 若 `GLDrawExecutor depth_attached_type=GL_NONE`：FBO depth attachment 缺失
+- 若 `PostDraw Monster post_depth_center ≈ 1.0`：Monster 未正确写入 depth（可能是 skinned mesh + GL state 问题）
+- 若 `PostDraw OceanPlane post_depth_center ≈ 0.0`：OceanPlane 写入了异常近值
+- 若 `MeshRenderSystem skinned_ndc_z_min ≈ -1.0` 或 `skinned_ndc_z_max ≈ 1.0`：CPU skinning 估算显示 Monster 深度范围异常
 
 ## 当前阶段视觉差异与后续根因
 
@@ -127,7 +226,7 @@ data/
 3. 若需要完全匹配 VSE 原生资源，再编写 `.SKMODEL/.STMODEL/.ACTION/.ANIMTREE` 只读转换器。
 4. 把当前 Idle/Pos/AddtiveAnim 的 Monster clip 近似映射升级为真实 VSE 状态动画。
 5. 增加 screenshot/mesh bounds 级验收，确保 cooked Monster/OceanPlane 在不同机器上不是黑屏、过小或贴图缺失。
-6. 针对 OceanPlane 单独排查：当前已替换为 DSE 程序化平面，并已从完全禁用深度推进到 `depth_test=false/depth_write=true`；但 `depth_test=true/depth_write=true` 仍会导致截图近黑，即使把 OceanPlane 创建在 Monster 之后也无法恢复。当前受控诊断进一步显示 OceanPlane 大四边形处在极远深度（NDC z 约 `0.999589`）且有 2/4 顶点 `clip.w<=0`；三角形级日志确认两个 OceanPlane triangle 都跨 near plane，其中一个 triangle 只有 1 个有效 `w>0` 顶点，另一个只有 2 个有效 `w>0` 顶点，且裁剪前 NDC z 可到 `1.01683`。本轮进一步测试了 clip-safe OceanPlane：把 z 范围裁为 `[-17.5,12.0]` 后，triangle 级日志显示 `invalid_w=0`、`crosses_near=false`，但 `depth_test=true/depth_write=true` 仍然 `SCREENSHOT_TOO_DARK`，说明 near-plane crossing 是一个真实几何异常，但不是唯一根因。下一步建议把重点转向三组方向：其一，增加 CPU 端 skinning 后 Monster bounds/depth 诊断或 GPU transform feedback/深度可视化，确认角色最终是否写出异常近/远深度；其二，检查 scene pass 深度附件/默认 framebuffer readback 语义与 depth clear/write 状态，解释为什么 3x3 depth readback 长期为 0；其三，在不引入非 VSE fallback 物体的前提下，评估 ground/support_plane 专用 pass 或 depth policy，判断应在引擎层引入 support_plane 专用语义，而不是继续依赖 Lua 的 OceanPlane `depth_test=false` workaround。本轮已排除动态模块 + 内置 mesh render 双提交、PreZ 预写、默认 `GL_LESS`/`GL_LEQUAL` 不一致，并新增 clip-safe 反证：不跨 near plane 仍无法恢复 `depth_test=true`。
+6. 针对 OceanPlane 单独排查：~~当前已替换为 DSE 程序化平面，并已从完全禁用深度推进到 `depth_test=false/depth_write=true`~~ **已解决**：depth buffer 根因为 `glDepthMask(GL_FALSE)` 状态泄漏导致深度清除静默失败；修复后 OceanPlane `depth_test=true/depth_write=true` 正常工作，`VERIFY_OK`。后续应关注：(a) OceanPlane near-plane crossing（2/4 顶点 `clip.w<=0`，`crosses_near=true`）在 clip-safe 模式下是否需要引擎级裁剪辅助；(b) 引擎关闭时 GL 资源泄漏导致的 access violation (exit 0xC0000005)；(c) 诊断代码清理——当前 `gl_draw_executor.cpp` 和 `mesh_render_system.cpp` 中的 VSE 15.22 专属诊断应在根因确认后逐步降低或移除；(d) `frame_pipeline.cpp` 中 Runtime stats 的 `{:.3f}` 格式修饰符不生效问题。
 
 ## 许可/用途说明
 

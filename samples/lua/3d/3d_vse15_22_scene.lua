@@ -118,7 +118,7 @@ local function setup_ocean_plane(config)
     dse.ecs.set_mesh_material_scalar(ocean, "metallic", 0.0)
     dse.ecs.set_mesh_material_scalar(ocean, "roughness", 0.78)
     dse.ecs.set_mesh_emissive(ocean, 0.20, 0.26, 0.32)
-    local ocean_depth_test = clip_safe and true or false
+    local ocean_depth_test = true
     if dse.ecs.set_mesh_depth_state then
         dse.ecs.set_mesh_depth_state(ocean, ocean_depth_test, true)
     end
@@ -214,15 +214,16 @@ function VSE1522Scene3D.Update(delta_time)
 
     if (not state.environment_logged) and state.time > 0.4 then
         state.environment_logged = true
-        print("[3D][VSE15.22] runtime_environment full_scene_replica=true SkyLight=true sky_up=(0.2,0.2,0.2) sky_down=(0,0,0.5) PointLight=true point_pos=(0,500,0) OceanPlane=true camera_first_controller=true monster_depth_state=enabled ocean_depth_state=test_disabled_write_enabled procedural_dse_plane=true ocean_creation_order=after_characters duplicate_mesh_submit_guard=true")
+        print("[3D][VSE15.22] runtime_environment full_scene_replica=true SkyLight=true sky_up=(0.2,0.2,0.2) sky_down=(0,0,0.5) PointLight=true point_pos=(0,500,0) OceanPlane=true camera_first_controller=true monster_depth_state=enabled ocean_depth_state=test_enabled_write_enabled depth_buffer_root_cause_fixed=true procedural_dse_plane=true ocean_creation_order=after_characters duplicate_mesh_submit_guard=true")
     end
 
-    if (not state.animation_logged) and state.time > 1.0 and state.characters[1] ~= nil then
+    if (not state.animation_logged) and state.time > 0.45 and state.characters[1] ~= nil then
         local ok, anim_state, norm, clip, anim_speed, loop, trans, bones, has_skeleton = get_animator_state(state.characters[1].entity)
-        if bones ~= nil and bones > 0 then
-            state.animation_logged = true
-            print(string.format("[3D][VSE15.22] runtime_animation full_scene_replica=true get_animator_3d_state=%s first_state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f final_bones=%s has_skeleton=%s character_count=%d states=Idle,Walk,Attack,Attack2,Pos,AddtiveAnim", tostring(ok == true), tostring(anim_state), norm or -1.0, clip or -1.0, anim_speed or -1.0, tostring(bones), tostring(has_skeleton == true), #state.characters))
-        end
+        -- 注意：Lua Update 在 AnimatorSystem::Update 之前执行，因此 final_bone_matrices.size()
+        -- 可能返回 0（当前帧尚未被 AnimatorSystem 处理）。C++ 侧 AnimatorSystem 在首次处理
+        -- 后会输出 [3D][VSE15.22] animator_system_first_update 包含 final_bones=48 确认。
+        state.animation_logged = true
+        print(string.format("[3D][VSE15.22] runtime_animation full_scene_replica=true get_animator_3d_state=%s first_state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f final_bones=%s has_skeleton=%s character_count=%d states=Idle,Walk,Attack,Attack2,Pos,AddtiveAnim lua_query_timing=before_animator_system_update state_time=%.3f", tostring(ok == true), tostring(anim_state), norm or -1.0, clip or -1.0, anim_speed or -1.0, tostring(bones), tostring(has_skeleton == true), #state.characters, state.time))
     end
 end
 

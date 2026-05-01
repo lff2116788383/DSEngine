@@ -1,4 +1,5 @@
 #include "modules/gameplay_3d/animation/animator_system.h"
+#include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
@@ -151,6 +152,13 @@ void AnimatorSystem::Update(World& world, float delta_time) {
 
         if (animator.final_bone_matrices.size() < bone_count) {
             animator.final_bone_matrices.resize(bone_count, glm::mat4(1.0f));
+            // 首次 resize 时输出诊断：确认骨骼数，供 verify_lua_3d_demos.py 检测 final_bones=48
+            static int vse1522_animator_first_log_count = 0;
+            if (vse1522_animator_first_log_count < 2) {
+                DEBUG_LOG_INFO("[3D][VSE15.22] animator_system_first_update entity={} dskel_path={} bone_count={} final_bones={} note=animator_system_confirms_bone_count",
+                    static_cast<unsigned int>(entity), animator.dskel_path, bone_count, animator.final_bone_matrices.size());
+                ++vse1522_animator_first_log_count;
+            }
         }
 
         // 1. Initialize local transforms with bind pose

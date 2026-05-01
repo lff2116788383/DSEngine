@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -802,6 +803,81 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             if (invalid_index) {
                 continue;
             }
+
+            // CPU skinning 后深度估算：采样前 N 个顶点做 skinning，估算最终 NDC z 范围
+            float skinned_ndc_z_min = std::numeric_limits<float>::max();
+            float skinned_ndc_z_max = std::numeric_limits<float>::lowest();
+            int skinned_valid_count = 0;
+            if (emit_vse1522_depth_diag && item.skinned && !item.bone_matrices.empty()) {
+                // 获取 camera view/projection
+                auto camera3d_view = world.registry().view<Camera3DComponent>();
+                entt::entity cam_entity = entt::null;
+                int cam_priority = std::numeric_limits<int>::min();
+                for (auto ce : camera3d_view) {
+                    auto& cam = camera3d_view.get<Camera3DComponent>(ce);
+                    if (cam.enabled && cam.priority > cam_priority) {
+                        cam_entity = ce;
+                        cam_priority = cam.priority;
+                    }
+                }
+                if (cam_entity != entt::null) {
+                    auto& cam = camera3d_view.get<Camera3DComponent>(cam_entity);
+                    glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
+                        cam.aspect_ratio,
+                        cam.near_clip, cam.far_clip);
+                    glm::mat4 cam_view(1.0f);
+                    if (world.registry().all_of<TransformComponent>(cam_entity)) {
+                        auto& cam_tf = world.registry().get<TransformComponent>(cam_entity);
+                        glm::vec3 front = cam_tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                        glm::vec3 up = cam_tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                        cam_view = glm::lookAt(cam_tf.position, cam_tf.position + front, up);
+                    }
+                    const glm::mat4 vp = proj * cam_view;
+
+                    // 采样最多 64 个顶点做 CPU skinning
+                    const size_t sample_count = std::min(vertex_count, static_cast<size_t>(64));
+                    for (size_t si = 0; si < sample_count; ++si) {
+                        const glm::vec3& lpos = local_positions[si];
+                        glm::vec4 skinned_pos(0.0f);
+                        if (is_dmesh_format && stride >= 12) {
+                            // dmesh 顶点有 weights 和 joints
+                            glm::vec4 weights(
+                                mesh_renderer.temp_vertices[si * stride + 8],
+                                mesh_renderer.temp_vertices[si * stride + 9],
+                                mesh_renderer.temp_vertices[si * stride + 10],
+                                mesh_renderer.temp_vertices[si * stride + 11]
+                            );
+                            int j0, j1, j2, j3;
+                            std::memcpy(&j0, &mesh_renderer.temp_vertices[si * stride + 12], sizeof(float));
+                            std::memcpy(&j1, &mesh_renderer.temp_vertices[si * stride + 13], sizeof(float));
+                            std::memcpy(&j2, &mesh_renderer.temp_vertices[si * stride + 14], sizeof(float));
+                            std::memcpy(&j3, &mesh_renderer.temp_vertices[si * stride + 15], sizeof(float));
+                            const float w_sum = weights.x + weights.y + weights.z + weights.w;
+                            if (w_sum < 1e-6f) continue;
+                            // bone_matrices 已经预乘了 mesh_model
+                            const int bone_indices[4] = {j0, j1, j2, j3};
+                            const float bone_weights[4] = {weights.x, weights.y, weights.z, weights.w};
+                            for (int b = 0; b < 4; ++b) {
+                                if (bone_weights[b] < 1e-6f) continue;
+                                const int bi = bone_indices[b];
+                                if (bi >= 0 && static_cast<size_t>(bi) < item.bone_matrices.size()) {
+                                    skinned_pos += bone_weights[b] * (item.bone_matrices[bi] * glm::vec4(lpos, 1.0f));
+                                }
+                            }
+                        } else {
+                            // 非 dmesh：无骨骼信息，跳过
+                            continue;
+                        }
+                        const glm::vec4 clip = vp * skinned_pos;
+                        if (clip.w > 1e-6f) {
+                            const float ndc_z = clip.z / clip.w;
+                            skinned_ndc_z_min = std::min(skinned_ndc_z_min, ndc_z);
+                            skinned_ndc_z_max = std::max(skinned_ndc_z_max, ndc_z);
+                            ++skinned_valid_count;
+                        }
+                    }
+                }
+            }
             item.vertices.reserve(vertex_count);
             for (size_t i = 0; i < vertex_count; ++i) {
                 BatchVertex bv;
@@ -875,7 +951,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 static int vse1522_diag_frame = 0;
                 static int vse1522_diag_logs = 0;
                 if (vse1522_diag_logs < 12) {
-                    DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][MeshRenderSystem] seq={} label={} entity={} skinned={} mesh_path={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) local_stride={} material_double_sided={} sorting=({}, {}) note=skinned_bounds_are_bind_mesh_model_bounds",
+                    DEBUG_LOG_INFO("[3D][VSE15.22][DepthDiag][MeshRenderSystem] seq={} label={} entity={} skinned={} mesh_path={} depth_test={} depth_write={} vertices={} indices={} world_min=({},{},{}) world_max=({},{},{}) local_stride={} material_double_sided={} sorting=({}, {}) skinned_ndc_z_min={} skinned_ndc_z_max={} skinned_sampled_count={} note=skinned_bounds_are_bind_mesh_model_bounds",
                                    vse1522_diag_frame,
                                    item.debug_label,
                                    static_cast<unsigned int>(entity),
@@ -894,7 +970,10 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                                    stride,
                                    item.material_double_sided,
                                    item.sorting_layer,
-                                   item.order_in_layer);
+                                   item.order_in_layer,
+                                   item.skinned ? skinned_ndc_z_min : 0.0f,
+                                   item.skinned ? skinned_ndc_z_max : 0.0f,
+                                   skinned_valid_count);
                     ++vse1522_diag_logs;
                 }
                 ++vse1522_diag_frame;
