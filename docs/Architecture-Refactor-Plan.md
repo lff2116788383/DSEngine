@@ -1,8 +1,8 @@
 # DSEngine 架构修复优化方案
 
-> **版本**: v1.9.0  
-> **日期**: 2026-04-27  
-> **状态**: 编译验证通过（P1/P2/P3 完全闭环，P4/P6/P7/P8/P9/P10 编译回归通过，2 个 EventBus::Instance 兼容测试待修复）
+> **版本**: v2.0.0  
+> **日期**: 2026-05-02  
+> **状态**: 渲染管线与粒子系统缺陷修复完成，VSE 15.22 综合场景 demo 验证通过
 > **基于**: DSEngine Phase 2 架构审查
 
 ---
@@ -1087,6 +1087,7 @@ DSEngine 架构设计明显借鉴了现代商业引擎经验，在 ECS 架构、
 
 | 版本 | 日期 | 变更摘要 |
 |------|------|----------|
+| v2.0.0 | 2026-05-02 | 渲染管线与粒子系统缺陷修复：`glDepthMask(GL_TRUE)` 深度写入修复（VSE 15.22 场景全像素非黑）；`ShutdownGeometryBuffers` GL 资源释放 + 静态 VAO/VBO 转成员变量；VSE 15.22 诊断代码 `#ifdef DSE_VSE_1522_DIAG` 编译隔离；`DEBUG_LOG` 格式符 `{:.3f}`/`{:X}` → `{}` 修正；粒子发射累加器首帧 dt 爆炸修复（`emission_accumulator` 钳制上限为 `max_particles`）；验证脚本 Windows 编码处理；VSE 15.22 综合场景 demo 落地验证通过 |
 | v1.9.0 | 2026-04-27 | 统一编译回归验证通过：dse_engine + dse_gtest_unit_tests 编译成功；修复 3 个编译问题（rhi_device.h 命名空间 render::→dse::render::、gl_draw_executor.h 裸函数指针→std::function 支持捕获 lambda、render_graph.h 嵌套 /* */ 注释冲突）；183 个单元测试中 181 个 PASSED，2 个 EventBus::Instance 兼容测试待修复；P2/P6/P7/P10 验证标准勾选更新 |
 | v1.8.0 | 2026-04-27 | P2 终局完成：GLPipelineStateManager 加入 cached_gl_state_ Diff 机制（仅切换变化的 GL 状态，减少冗余调用）；确认四子系统（ResourceManager/PipelineStateManager/ShaderManager/DrawExecutor）+ UBOManager 全部独立文件化；OpenGLRhiDevice 协调器 277 行 < 300 行目标；P2 状态升级为完全闭环 |
 | v1.7.0 | 2026-04-27 | P8 补充 render_graph_test（20+ 用例覆盖 DAG 拓扑/剔除/循环检测）和 module_test（IModule 生命周期/多态）；P9 扩充 events 命名空间至 41 个常量（UI/资源/场景/输入/物理/音频/动画/生命周期）；更新跨 DLL 测试覆盖全部常量无碰撞；全量代码重构完成，待统一编译测试验证 |

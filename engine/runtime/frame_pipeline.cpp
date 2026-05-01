@@ -104,7 +104,7 @@ void LogDefaultFramebufferStats() {
 
     LogReadbackStats("default_backbuffer", readback);
     if (gl_error != GL_NO_ERROR) {
-        DEBUG_LOG_ERROR("Render readback default framebuffer gl_error=0x{:X}", static_cast<unsigned int>(gl_error));
+        DEBUG_LOG_ERROR("Render readback default framebuffer gl_error=0x{}", static_cast<unsigned int>(gl_error));
     }
 }
 
@@ -536,7 +536,7 @@ void FramePipeline::RunRenderInternal() {
         auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={:.3f}, avg_fixed_ms={:.3f}, avg_render_ms={:.3f}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
                        stats.mesh_count,

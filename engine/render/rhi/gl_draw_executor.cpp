@@ -30,6 +30,8 @@ namespace dse {
 namespace render {
 namespace {
 
+#ifdef DSE_VSE_1522_DIAG
+
 float SignedArea2D(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c) {
     return 0.5f * ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
 }
@@ -95,6 +97,8 @@ void LogVse1522OceanPlaneTriangleDiagnostics(int frame,
                        crosses_far);
     }
 }
+
+#endif // DSE_VSE_1522_DIAG
 
 } // namespace
 
@@ -177,16 +181,21 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         white_texture_handle_ = 0;
     }
     // 3D 网格缓冲
-    if (mesh_vbo_handle_ != 0) { mesh_vbo_handle_ = 0; }
-    if (mesh_ibo_handle_ != 0) { mesh_ibo_handle_ = 0; }
-    if (mesh_vao_handle_ != 0) { mesh_vao_handle_ = 0; }
+    if (mesh_vao_handle_ != 0) { glDeleteVertexArrays(1, &mesh_vao_handle_); mesh_vao_handle_ = 0; }
+    if (mesh_vbo_handle_ != 0) { glDeleteBuffers(1, &mesh_vbo_handle_); mesh_vbo_handle_ = 0; }
+    if (mesh_ibo_handle_ != 0) { glDeleteBuffers(1, &mesh_ibo_handle_); mesh_ibo_handle_ = 0; }
     // 2D 精灵缓冲
-    if (vbo_handle_ != 0) { vbo_handle_ = 0; }
-    if (ebo_handle_ != 0) { ebo_handle_ = 0; }
-    if (vao_handle_ != 0) { vao_handle_ = 0; }
+    if (vao_handle_ != 0) { glDeleteVertexArrays(1, &vao_handle_); vao_handle_ = 0; }
+    if (vbo_handle_ != 0) { glDeleteBuffers(1, &vbo_handle_); vbo_handle_ = 0; }
     // 天空盒缓冲
-    if (skybox_vbo_handle_ != 0) { skybox_vbo_handle_ = 0; }
-    if (skybox_vao_handle_ != 0) { skybox_vao_handle_ = 0; }
+    if (skybox_vao_handle_ != 0) { glDeleteVertexArrays(1, &skybox_vao_handle_); skybox_vao_handle_ = 0; }
+    if (skybox_vbo_handle_ != 0) { glDeleteBuffers(1, &skybox_vbo_handle_); skybox_vbo_handle_ = 0; }
+    // 后处理全屏四边形
+    if (pp_vao_handle_ != 0) { glDeleteVertexArrays(1, &pp_vao_handle_); pp_vao_handle_ = 0; }
+    if (pp_vbo_handle_ != 0) { glDeleteBuffers(1, &pp_vbo_handle_); pp_vbo_handle_ = 0; }
+    // 3D 粒子四边形
+    if (particle_quad_vao_handle_ != 0) { glDeleteVertexArrays(1, &particle_quad_vao_handle_); particle_quad_vao_handle_ = 0; }
+    if (particle_quad_vbo_handle_ != 0) { glDeleteBuffers(1, &particle_quad_vbo_handle_); particle_quad_vbo_handle_ = 0; }
 
     active_render_target_ = 0;
 }
@@ -245,6 +254,7 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
         glClear(GL_DEPTH_BUFFER_BIT);
     }
 
+#ifdef DSE_VSE_1522_DIAG
     // VSE 15.22 深度诊断：scene pass clear 后验证 depth buffer 初始值
     static int vse1522_beginpass_diag_frames = 0;
     if (vse1522_beginpass_diag_frames < 5 && has_depth && render_pass.render_target != 0) {
@@ -277,6 +287,7 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             ++vse1522_beginpass_diag_frames;
         }
     }
+#endif // DSE_VSE_1522_DIAG
 }
 
 void GLDrawExecutor::EndRenderPass(GLResourceManager& resource_mgr) {
@@ -307,6 +318,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);
+#ifdef DSE_VSE_1522_DIAG
     static int vse1522_depth_diag_frames = 0;
     const bool emit_vse1522_depth_diag = vse1522_depth_diag_frames < 5 &&
         std::any_of(items.begin(), items.end(), [](const MeshDrawItem& item) {
@@ -353,6 +365,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                        static_cast<unsigned int>(depth_func),
                        center_depth);
     }
+#else
+    const bool emit_vse1522_depth_diag = false;
+#endif // DSE_VSE_1522_DIAG
 
     const auto& loc = shader_mgr.pbr_locations();
     glUseProgram(shader_mgr.pbr_shader_handle());
@@ -399,6 +414,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (item.vertices.empty() || item.indices.empty()) continue;
 
         if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
+#ifdef DSE_VSE_1522_DIAG
             float ndc_min_z = std::numeric_limits<float>::max();
             float ndc_max_z = std::numeric_limits<float>::lowest();
             float ndc_sum_z = 0.0f;
@@ -456,6 +472,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                            gl_depth_write ? 1 : 0,
                            static_cast<unsigned int>(gl_depth_func));
             LogVse1522OceanPlaneTriangleDiagnostics(vse1522_depth_diag_frames, item, clip_matrix);
+#endif // DSE_VSE_1522_DIAG
         }
 
         const bool depth_test_changed = !item.depth_test_enabled;
@@ -681,6 +698,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 分阶段深度采样：Monster/OceanPlane 绘制后立即采样
         if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
+#ifdef DSE_VSE_1522_DIAG
             const int vw = Screen::width();
             const int vh = Screen::height();
             float post_depth = -1.0f;
@@ -707,11 +725,13 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                            post_depth_test ? 1 : 0,
                            post_depth_write ? 1 : 0,
                            static_cast<unsigned int>(post_depth_func));
+#endif // DSE_VSE_1522_DIAG
         }
 
         current_frame_stats_.draw_calls += 1;
     }
     if (emit_vse1522_depth_diag) {
+#ifdef DSE_VSE_1522_DIAG
         // 最终深度采样：验证 FBO 绑定和 depth attachment
         GLint final_fbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &final_fbo);
@@ -759,6 +779,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                        depth_samples[6], depth_samples[7], depth_samples[8],
                        center_rgba[0], center_rgba[1], center_rgba[2], center_rgba[3]);
         ++vse1522_depth_diag_frames;
+#endif // DSE_VSE_1522_DIAG
     }
 }
 
@@ -828,11 +849,8 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                                        const std::string& effect_name,
                                        const std::vector<float>& params,
                                        GLShaderManager& shader_mgr) {
-    // 后处理全屏四边形 VAO/VBO（静态持久化）
-    static unsigned int pp_vao = 0;
-    static unsigned int pp_vbo = 0;
-
-    if (pp_vao == 0) {
+    // 后处理全屏四边形 VAO/VBO
+    if (pp_vao_handle_ == 0) {
         float quadVertices[] = {
             -1.0f,  1.0f,  0.0f, 1.0f,
             -1.0f, -1.0f,  0.0f, 0.0f,
@@ -841,10 +859,10 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
              1.0f, -1.0f,  1.0f, 0.0f,
              1.0f,  1.0f,  1.0f, 1.0f
         };
-        glGenVertexArrays(1, &pp_vao);
-        glGenBuffers(1, &pp_vbo);
-        glBindVertexArray(pp_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, pp_vbo);
+        glGenVertexArrays(1, &pp_vao_handle_);
+        glGenBuffers(1, &pp_vbo_handle_);
+        glBindVertexArray(pp_vao_handle_);
+        glBindBuffer(GL_ARRAY_BUFFER, pp_vbo_handle_);
         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
@@ -1005,7 +1023,7 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
 
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
-    glBindVertexArray(pp_vao);
+    glBindVertexArray(pp_vao_handle_);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
@@ -1177,10 +1195,8 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
         shader_mgr.InitParticleShader();
     }
 
-    // 粒子四边形 VAO/VBO（静态持久化）
-    static unsigned int quad_vao = 0;
-    static unsigned int quad_vbo = 0;
-    if (quad_vao == 0) {
+    // 粒子四边形 VAO/VBO
+    if (particle_quad_vao_handle_ == 0) {
         float quad_vertices[] = {
              -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
               0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
@@ -1189,10 +1205,10 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
               0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
              -0.5f,  0.5f, 0.0f,  0.0f, 1.0f
         };
-        glGenVertexArrays(1, &quad_vao);
-        glGenBuffers(1, &quad_vbo);
-        glBindVertexArray(quad_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
+        glGenVertexArrays(1, &particle_quad_vao_handle_);
+        glGenBuffers(1, &particle_quad_vbo_handle_);
+        glBindVertexArray(particle_quad_vao_handle_);
+        glBindBuffer(GL_ARRAY_BUFFER, particle_quad_vbo_handle_);
         glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
@@ -1222,7 +1238,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle);
 
-        glBindVertexArray(quad_vao);
+        glBindVertexArray(particle_quad_vao_handle_);
         glBindBuffer(GL_ARRAY_BUFFER, item.instance_vbo);
 
         size_t stride = 8 * sizeof(float);

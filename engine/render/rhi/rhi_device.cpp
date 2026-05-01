@@ -466,7 +466,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
 
     const GLenum framebuffer_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (framebuffer_status != GL_FRAMEBUFFER_COMPLETE) {
-        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{:X} ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{} ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
             static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);

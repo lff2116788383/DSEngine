@@ -121,10 +121,16 @@ void Particle3DSystem::Update(World& world, float delta_time) {
         }
 
         // 1. Emission
+        // 钳制累加器上限为 max_particles，防止首帧超大 dt 导致 while 循环百万级迭代假死
         ps.emission_accumulator += delta_time * ps.emission_rate;
-        while (ps.emission_accumulator > 1.0f) {
+        if (ps.emission_accumulator > static_cast<float>(ps.max_particles)) {
+            ps.emission_accumulator = static_cast<float>(ps.max_particles);
+        }
+        int emitted = 0;
+        while (ps.emission_accumulator > 1.0f && emitted < ps.max_particles) {
             EmitParticle(ps, transform);
             ps.emission_accumulator -= 1.0f;
+            ++emitted;
         }
 
         // 2. CPU Simulation (Move to Compute Shader in next iteration if performance is an issue)

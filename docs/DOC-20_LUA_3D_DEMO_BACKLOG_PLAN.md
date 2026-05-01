@@ -121,7 +121,7 @@ data/
 | P1 | `samples/lua/3d/3d_scene_showcase.lua` | 小型综合场景 | 已落地并验证 | 已接入入口/config/验证 preset；暂不引入外部模型资源 |
 | P1 | `samples/lua/3d/3d_postprocess_showcase.lua` | bloom/灰度/后处理开关 | 已落地并验证 | 已补 bloom/color grading setter 与组件状态回读；灰度/反相 effect 仍待后续扩展 |
 | P1 | `samples/lua/3d/3d_skybox_environment.lua` | skybox/skylight/环境色 | 已落地并验证 | 已补 SkyLight Lua 绑定；cubemap 资源暂留空配置 |
-| P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；当前同时使用可见 emissive fallback markers 确保截图主题明确 |
+| P1 | `samples/lua/3d/3d_particles_showcase.lua` | 3D 粒子 | 已落地并验证 | 已补粒子参数 setter；已修复首帧超大 dt 导致发射累加器爆炸假死（`emission_accumulator` 钳制上限为 `max_particles`）；emissive fallback markers 确保截图主题明确 |
 | P1 | `samples/lua/3d/3d_physics_stack.lua` | 刚体堆叠、碰撞 | 已落地并验证 | Debug 构建未启用 PhysX 时以可见堆叠 marker fallback；真实堆叠依赖 PhysX 构建 |
 | P2 | `samples/lua/3d/3d_terrain_heightmap.lua` | heightmap 地形/LOD | 已接入真实图片采样 | 已接入 `load_terrain_heightmap` 与 `set_terrain_texture`；仍保留 marker grid 作为截图可视参考 |
 | P2 | `samples/lua/3d/3d_shadow_showcase.lua` | 阴影展示 | 已接入可用 shadow 参数 API | 已新增 `set_directional_light_shadow` 暴露 cast_shadow、shadow_strength 与 CSM cascade_splits；真实 shadow pass 视觉稳定性继续专项复验 |
@@ -131,7 +131,7 @@ data/
 | P3 | `samples/lua/3d/3d_physics_raycast_pick.lua` | Physics3D raycast/拾取专项 | 已接入可用 raycast | 已接入 BoxCollider3D/RigidBody3D、可见 ray beam/命中 marker；Lua `physics_3d_raycast` 优先使用 PhysX service，未启用时使用 ECS 3D collider 几何 fallback |
 | P3 | `samples/lua/3d/3d_texture_material_slots.lua` | texture/material slot 专项 | 已接入可用 texture slot + 顶点属性 authoring | 已接入 `.dmesh/.dmat` 样本与材质 slot marker；Lua `set_mesh_texture(entity, slot, path)` 可绑定 albedo/normal/metallic_roughness/emissive/occlusion，`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 可驱动手写 mesh 贴图采样 |
 | P3 | `samples/lua/3d/3d_terrain_lod_zones.lua` | Terrain LOD 分区专项 | 已接入可用 terrain height/LOD API | 已接入 TerrainComponent 程序化 height data、resolution/LOD 参数与 current_lod 查询；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
-| P4 | `samples/lua/3d/3d_vse15_22_scene.lua` | VSEngine 15.22 综合场景对齐 | 建议新增 | 组合第一人称/自由相机、多角色/最小 rig、地面、SkyLight、PointLight、动画状态切换；允许从 `reference/` 拷贝轻量资源到 `data/` 后再接入 |
+| P4 | `samples/lua/3d/3d_vse15_22_scene.lua` | VSEngine 15.22 综合场景对齐 | 已落地并验证 | 已实现多角色+OceanPlane+SkyLight+PointLight 综合场景；已修复 `glDepthMask` 深度写入、`ShutdownGeometryBuffers` GL 资源释放、`DEBUG_LOG` 格式符等问题；VSE 15.22 诊断代码已通过 `#ifdef DSE_VSE_1522_DIAG` 隔离 |
 | P4 | `samples/lua/3d/3d_physics_interaction.lua` | 真实物理交互 | 建议新增 | 合并堆叠、raycast、选中高亮、施加 impulse/force；重点复验 PhysX 构建真实后端，保留 ECS collider fallback |
 | P4 | `samples/lua/3d/3d_character_controller.lua` | 真实角色控制器 | 建议新增 | capsule/character controller、地面检测、跳跃、斜坡、阻挡；复用最小 Animator3D 资源，后续替换真实角色资产 |
 | P4 | `samples/lua/3d/3d_asset_pack_showcase.lua` | 资源包/导入链路展示 | 建议新增 | 对 `data/models/static`、`data/materials/showcase`、`data/textures`、`data/animation` 做 manifest 化加载验收，资源可从 `reference/` 整理拷贝 |
@@ -225,6 +225,16 @@ data/
   - `samples/lua/3d/3d_texture_material_slots.lua`
   - `samples/lua/3d/3d_terrain_lod_zones.lua`
 - P3 首批用于把 P1/P2 fallback 中最关键的底层缺口拆成独立验收入口：Physics raycast 用可见 beam/命中 marker 先固定截图语义，Texture/Material slot 用 `.dmesh/.dmat` + slot marker 固定材质链路验收语义，Terrain LOD 用 near/mid/far 分区 tile 密度固定 LOD 验收语义；真实底层能力补齐后可在同名 demo 中逐步替换 fallback。
+- P4 首批已落地 1 个综合 demo：
+  - `samples/lua/3d/3d_vse15_22_scene.lua`：VSEngine 15.22 综合场景对齐
+- P4 本轮同时修复多个渲染管线缺陷：
+  - `glDepthMask(GL_TRUE)` 深度写入修复：VSE 15.22 场景全像素非黑，深度缓冲正确写入（[`gl_draw_executor.cpp`](engine/render/rhi/gl_draw_executor.cpp)）。
+  - `ShutdownGeometryBuffers` GL 资源释放 + `static VAO/VBO` 转成员变量（[`gl_draw_executor.h`](engine/render/rhi/gl_draw_executor.h)）。
+  - VSE 15.22 诊断代码通过 `#ifdef DSE_VSE_1522_DIAG` 编译隔离。
+  - `DEBUG_LOG` 非法格式符 `{:.3f}`/`{:X}` → `{}` 修正（[`rhi_device.cpp`](engine/render/rhi/rhi_device.cpp)、[`mesh_render_system.cpp`](modules/gameplay_3d/rendering/mesh_render_system.cpp)）。
+  - 粒子发射累加器首帧 dt 爆炸修复（[`particle3d_system.cpp`](modules/gameplay_3d/particles/particle3d_system.cpp)）。
+  - 验证脚本 Windows 编码处理（[`verify_lua_3d_demos.py`](tools/verify_lua_3d_demos.py)）。
+- 验证结果：VSE 15.22 场景 `max_rgb=424`、全像素非黑、8 draw calls、7 meshes、4 render passes；粒子 showcase 修复后 `active_particles=120`、`max_rgb=377`，90 帧正常完成。
 
 ## 6. P1 详细规划
 
@@ -265,7 +275,7 @@ data/
 - 需要能力：`add_particle_system_3d`、`set_particle_system_3d_params`、`get_particle_system_3d_state`。
 - 当前可能缺口：真实粒子渲染可见性仍保留 fallback markers 兜底，但日志必须证明真实系统已经初始化并持续更新 active particle count。
 - 最小实现路径：保留 emissive fallback marker 稳定截图主题，同时新增 runtime 查询 API，把 `active_particles/max_particles/emission_rate/life/size/speed/gravity/color/texture/enabled/initialized` 直接从真实 `ParticleSystem3DComponent` 回读到 Lua 日志；当 `DSE_ENABLE_3D=OFF` 且无 `DSE_Gameplay3D` 动态模块时，由 `FramePipeline` 启用 Particle3D 最小内置更新链路，避免 Lua runtime 构建中组件无人驱动。
-- 实施状态：已补齐真实 Particle3D 运行时状态验收 API 与 `DSE_ENABLE_3D=OFF` 内置更新链路。新增 `get_particle_system_3d_state(entity)` 绑定，demo 在 Update 中周期打印 `particle_runtime_api get_particle_system_3d_state=true active_particles=... active_particles_nonzero=true initialized=true`，从而证明真实粒子系统已初始化、发射并更新；18 个动态 emissive fallback markers 继续保留，用于截图稳定兜底。
+- 实施状态：已补齐真实 Particle3D 运行时状态验收 API 与 `DSE_ENABLE_3D=OFF` 内置更新链路。新增 `get_particle_system_3d_state(entity)` 绑定，demo 在 Update 中周期打印 `particle_runtime_api get_particle_system_3d_state=true active_particles=... active_particles_nonzero=true initialized=true`，从而证明真实粒子系统已初始化、发射并更新；18 个动态 emissive fallback markers 继续保留，用于截图稳定兜底。**已修复首帧超大 dt 导致进程假死**：`Particle3DSystem::Update` 中 `emission_accumulator += delta_time * emission_rate` 在首帧收到超大 dt（~11768s），累加器爆炸至百万级导致 while 循环百万次迭代；修复为钳制累加器上限为 `max_particles` 并在 while 循环中加入 `emitted < max_particles` 双重保护（[`particle3d_system.cpp`](modules/gameplay_3d/particles/particle3d_system.cpp)）。
 - 验收标准：截图可见粒子喷泉主题；日志必须包含 `particle_runtime_api`、`get_particle_system_3d_state=true`、`active_particles=`、`active_particles_nonzero=true`、`enabled=true`、`initialized=true`，且数值来自真实组件查询。
 
 ### 6.5 `samples/lua/3d/3d_physics_stack.lua`
@@ -445,6 +455,7 @@ data/
 - 外部资源策略：可从 `reference/VSEngine2.1/Demo/15/15.22` 选取轻量地面贴图、角色占位 mesh 或材质资源，复制到 `data/models/static`、`data/models/character`、`data/textures/vse_demo`、`data/materials/showcase`，并记录来源；若转换成本高，首版仍用 `data/animation/minimal_rig` 与 cube character fallback。
 - 最小验收：日志包含 scene object/light/camera/character 数量、SkyLight 参数、Animator3D state、Steering speed；截图显示地面、多角色/占位角色、多光源、跟随/自由观察。
 - 优先级：P4 第一优先级。它是下一阶段最适合对外展示的综合 demo。
+- 实施状态：已落地并验证。当前实现多角色（6 个 Spine 角色）+ OceanPlane 海面 + SkyLight + PointLight 综合场景，使用 cube character + spine 动画 fallback。本轮修复了 `glDepthMask` 深度写入缺失（全像素非黑）、`ShutdownGeometryBuffers` GL 资源释放、静态 VAO/VBO 生命周期、`DEBUG_LOG` 格式符等问题；VSE 15.22 诊断代码已通过 `#ifdef DSE_VSE_1522_DIAG` 编译隔离。验证通过：`max_rgb=424`、全像素非黑、8 draw calls、7 meshes。
 
 ### 13.2 `samples/lua/3d/3d_physics_interaction.lua`
 

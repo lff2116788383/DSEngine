@@ -46,6 +46,8 @@ std::string ToLower(std::string value) {
     return value;
 }
 
+#ifdef DSE_VSE_1522_DIAG
+
 std::string ClassifyVse1522MeshForDiagnostics(const MeshRendererComponent& mesh_renderer) {
     if (mesh_renderer.mesh_path == "procedural:DSE_OceanPlaneQuad") {
         return "OceanPlane";
@@ -65,6 +67,8 @@ std::string ClassifyVse1522MeshForDiagnostics(const MeshRendererComponent& mesh_
 bool ShouldLogVse1522MeshDiagnostics(const MeshRendererComponent& mesh_renderer) {
     return !ClassifyVse1522MeshForDiagnostics(mesh_renderer).empty();
 }
+
+#endif // DSE_VSE_1522_DIAG
 
 bool LoadTextFile(AssetManager& asset_manager, const std::string& path, std::string& out_text) {
     std::vector<uint8_t> bytes;
@@ -672,7 +676,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         
         MeshDrawItem item;
         const glm::mat4 mesh_model = transform.local_to_world;
+#ifdef DSE_VSE_1522_DIAG
         item.debug_label = ClassifyVse1522MeshForDiagnostics(mesh_renderer);
+#endif // DSE_VSE_1522_DIAG
         item.model = glm::mat4(1.0f);
         item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
@@ -762,7 +768,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
+#ifdef DSE_VSE_1522_DIAG
             const bool emit_vse1522_depth_diag = ShouldLogVse1522MeshDiagnostics(mesh_renderer);
+#else
+            const bool emit_vse1522_depth_diag = false;
+#endif // DSE_VSE_1522_DIAG
             const bool is_dmesh_format = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
             const std::size_t vertex_count_from_pos3 = mesh_renderer.temp_vertices.size() / 3;
             const bool has_lua_uvs = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_uvs.size() == vertex_count_from_pos3 * 2;
@@ -808,6 +818,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             float skinned_ndc_z_min = std::numeric_limits<float>::max();
             float skinned_ndc_z_max = std::numeric_limits<float>::lowest();
             int skinned_valid_count = 0;
+#ifdef DSE_VSE_1522_DIAG
             if (emit_vse1522_depth_diag && item.skinned && !item.bone_matrices.empty()) {
                 // 获取 camera view/projection
                 auto camera3d_view = world.registry().view<Camera3DComponent>();
@@ -878,6 +889,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     }
                 }
             }
+#endif // DSE_VSE_1522_DIAG
             item.vertices.reserve(vertex_count);
             for (size_t i = 0; i < vertex_count; ++i) {
                 BatchVertex bv;
@@ -948,6 +960,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.debug_world_bounds_min = world_min;
             item.debug_world_bounds_max = world_max;
             if (emit_vse1522_depth_diag) {
+#ifdef DSE_VSE_1522_DIAG
                 static int vse1522_diag_frame = 0;
                 static int vse1522_diag_logs = 0;
                 if (vse1522_diag_logs < 12) {
@@ -977,6 +990,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     ++vse1522_diag_logs;
                 }
                 ++vse1522_diag_frame;
+#endif // DSE_VSE_1522_DIAG
             }
         }
 

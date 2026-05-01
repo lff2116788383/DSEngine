@@ -158,6 +158,14 @@ private:
     unsigned int skybox_vao_handle_ = 0;
     unsigned int skybox_vbo_handle_ = 0;
 
+    // 后处理全屏四边形
+    unsigned int pp_vao_handle_ = 0;
+    unsigned int pp_vbo_handle_ = 0;
+
+    // 3D 粒子四边形
+    unsigned int particle_quad_vao_handle_ = 0;
+    unsigned int particle_quad_vbo_handle_ = 0;
+
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;
 

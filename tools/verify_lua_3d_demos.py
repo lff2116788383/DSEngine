@@ -7,17 +7,23 @@ import subprocess
 import sys
 from typing import Iterable
 
-# 修复 Windows 下 stdout 编码问题
-if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+# 修复 Windows 下 stdout/stderr 编码问题
+# 优先设置 PYTHONIOENCODING 确保子进程也使用 UTF-8
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8:replace")
+    # 尝试将控制台代码页切换到 UTF-8
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        subprocess.run(["chcp", "65001"], shell=True, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
-if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
-    try:
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-    except Exception:
-        pass
+
+for stream in (sys.stdout, sys.stderr):
+    if stream and hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 BASIC_3D_ENTRIES = [
     "3d_triangle",
