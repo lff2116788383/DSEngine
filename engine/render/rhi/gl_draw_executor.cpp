@@ -126,10 +126,10 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
     vao_handle_ = create_vao_fn();
     glBindVertexArray(vao_handle_);
     vbo_handle_ = create_vbo_fn(vertices.size() * sizeof(BatchVertex), vertices.data(), true, false);
-    unsigned int ebo = create_vbo_fn(indices.size() * sizeof(unsigned short), indices.data(), false, true);
+    ebo_handle_ = create_vbo_fn(indices.size() * sizeof(unsigned short), indices.data(), false, true);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo_handle_);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_handle_);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, pos)));
     glEnableVertexAttribArray(1);
@@ -164,38 +164,92 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
 
     // 白色 1x1 默认纹理
     unsigned char white_texture[] = {255, 255, 255, 255};
-    glGenTextures(1, &white_texture_handle_);
-    glBindTexture(GL_TEXTURE_2D, white_texture_handle_);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white_texture);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    if (create_texture_fn_) {
+        white_texture_handle_ = create_texture_fn_(1, 1, white_texture, false);
+    } else {
+        glGenTextures(1, &white_texture_handle_);
+        glBindTexture(GL_TEXTURE_2D, white_texture_handle_);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white_texture);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
 
 void GLDrawExecutor::ShutdownGeometryBuffers() {
     // 白色纹理
     if (white_texture_handle_ != 0) {
-        glDeleteTextures(1, &white_texture_handle_);
+        if (delete_texture_fn_) { delete_texture_fn_(white_texture_handle_); }
+        else { glDeleteTextures(1, &white_texture_handle_); }
         white_texture_handle_ = 0;
     }
     // 3D 网格缓冲
-    if (mesh_vao_handle_ != 0) { glDeleteVertexArrays(1, &mesh_vao_handle_); mesh_vao_handle_ = 0; }
-    if (mesh_vbo_handle_ != 0) { glDeleteBuffers(1, &mesh_vbo_handle_); mesh_vbo_handle_ = 0; }
-    if (mesh_ibo_handle_ != 0) { glDeleteBuffers(1, &mesh_ibo_handle_); mesh_ibo_handle_ = 0; }
+    if (mesh_vao_handle_ != 0) {
+        if (delete_vao_fn_) { delete_vao_fn_(mesh_vao_handle_); }
+        else { glDeleteVertexArrays(1, &mesh_vao_handle_); }
+        mesh_vao_handle_ = 0;
+    }
+    if (mesh_vbo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(mesh_vbo_handle_); }
+        else { glDeleteBuffers(1, &mesh_vbo_handle_); }
+        mesh_vbo_handle_ = 0;
+    }
+    if (mesh_ibo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(mesh_ibo_handle_); }
+        else { glDeleteBuffers(1, &mesh_ibo_handle_); }
+        mesh_ibo_handle_ = 0;
+    }
     // 2D 精灵缓冲
-    if (vao_handle_ != 0) { glDeleteVertexArrays(1, &vao_handle_); vao_handle_ = 0; }
-    if (vbo_handle_ != 0) { glDeleteBuffers(1, &vbo_handle_); vbo_handle_ = 0; }
+    if (vao_handle_ != 0) {
+        if (delete_vao_fn_) { delete_vao_fn_(vao_handle_); }
+        else { glDeleteVertexArrays(1, &vao_handle_); }
+        vao_handle_ = 0;
+    }
+    if (vbo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(vbo_handle_); }
+        else { glDeleteBuffers(1, &vbo_handle_); }
+        vbo_handle_ = 0;
+    }
+    if (ebo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(ebo_handle_); }
+        else { glDeleteBuffers(1, &ebo_handle_); }
+        ebo_handle_ = 0;
+    }
     // 天空盒缓冲
-    if (skybox_vao_handle_ != 0) { glDeleteVertexArrays(1, &skybox_vao_handle_); skybox_vao_handle_ = 0; }
-    if (skybox_vbo_handle_ != 0) { glDeleteBuffers(1, &skybox_vbo_handle_); skybox_vbo_handle_ = 0; }
+    if (skybox_vao_handle_ != 0) {
+        if (delete_vao_fn_) { delete_vao_fn_(skybox_vao_handle_); }
+        else { glDeleteVertexArrays(1, &skybox_vao_handle_); }
+        skybox_vao_handle_ = 0;
+    }
+    if (skybox_vbo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(skybox_vbo_handle_); }
+        else { glDeleteBuffers(1, &skybox_vbo_handle_); }
+        skybox_vbo_handle_ = 0;
+    }
     // 后处理全屏四边形
-    if (pp_vao_handle_ != 0) { glDeleteVertexArrays(1, &pp_vao_handle_); pp_vao_handle_ = 0; }
-    if (pp_vbo_handle_ != 0) { glDeleteBuffers(1, &pp_vbo_handle_); pp_vbo_handle_ = 0; }
+    if (pp_vao_handle_ != 0) {
+        if (delete_vao_fn_) { delete_vao_fn_(pp_vao_handle_); }
+        else { glDeleteVertexArrays(1, &pp_vao_handle_); }
+        pp_vao_handle_ = 0;
+    }
+    if (pp_vbo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(pp_vbo_handle_); }
+        else { glDeleteBuffers(1, &pp_vbo_handle_); }
+        pp_vbo_handle_ = 0;
+    }
     // 3D 粒子四边形
-    if (particle_quad_vao_handle_ != 0) { glDeleteVertexArrays(1, &particle_quad_vao_handle_); particle_quad_vao_handle_ = 0; }
-    if (particle_quad_vbo_handle_ != 0) { glDeleteBuffers(1, &particle_quad_vbo_handle_); particle_quad_vbo_handle_ = 0; }
+    if (particle_quad_vao_handle_ != 0) {
+        if (delete_vao_fn_) { delete_vao_fn_(particle_quad_vao_handle_); }
+        else { glDeleteVertexArrays(1, &particle_quad_vao_handle_); }
+        particle_quad_vao_handle_ = 0;
+    }
+    if (particle_quad_vbo_handle_ != 0) {
+        if (delete_buffer_fn_) { delete_buffer_fn_(particle_quad_vbo_handle_); }
+        else { glDeleteBuffers(1, &particle_quad_vbo_handle_); }
+        particle_quad_vbo_handle_ = 0;
+    }
 
     active_render_target_ = 0;
 }
@@ -859,11 +913,18 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
              1.0f, -1.0f,  1.0f, 0.0f,
              1.0f,  1.0f,  1.0f, 1.0f
         };
-        glGenVertexArrays(1, &pp_vao_handle_);
-        glGenBuffers(1, &pp_vbo_handle_);
+        if (create_vao_fn_ && create_buffer_fn_) {
+            pp_vao_handle_ = create_vao_fn_();
+            pp_vbo_handle_ = create_buffer_fn_(sizeof(quadVertices), &quadVertices, false, false);
+        } else {
+            glGenVertexArrays(1, &pp_vao_handle_);
+            glGenBuffers(1, &pp_vbo_handle_);
+        }
         glBindVertexArray(pp_vao_handle_);
         glBindBuffer(GL_ARRAY_BUFFER, pp_vbo_handle_);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        if (!create_buffer_fn_) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        }
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(1);
@@ -1205,11 +1266,18 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
               0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
              -0.5f,  0.5f, 0.0f,  0.0f, 1.0f
         };
-        glGenVertexArrays(1, &particle_quad_vao_handle_);
-        glGenBuffers(1, &particle_quad_vbo_handle_);
+        if (create_vao_fn_ && create_buffer_fn_) {
+            particle_quad_vao_handle_ = create_vao_fn_();
+            particle_quad_vbo_handle_ = create_buffer_fn_(sizeof(quad_vertices), quad_vertices, false, false);
+        } else {
+            glGenVertexArrays(1, &particle_quad_vao_handle_);
+            glGenBuffers(1, &particle_quad_vbo_handle_);
+        }
         glBindVertexArray(particle_quad_vao_handle_);
         glBindBuffer(GL_ARRAY_BUFFER, particle_quad_vbo_handle_);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+        if (!create_buffer_fn_) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+        }
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(1);

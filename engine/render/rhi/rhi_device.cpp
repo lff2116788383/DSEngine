@@ -221,6 +221,18 @@ void OpenGLRhiDevice::EnsureInitialized() {
     draw_executor_.set_update_buffer_fn([this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
         UpdateBuffer(handle, offset, size, data, is_index);
     });
+    draw_executor_.set_delete_vao_fn([this](unsigned int handle) {
+        DeleteVertexArray(handle);
+    });
+    draw_executor_.set_delete_buffer_fn([this](unsigned int handle) {
+        DeleteBuffer(handle);
+    });
+    draw_executor_.set_delete_texture_fn([this](unsigned int handle) {
+        DeleteTexture(handle);
+    });
+    draw_executor_.set_create_texture_fn([this](int w, int h, const unsigned char* data, bool linear) -> unsigned int {
+        return CreateTexture2D(w, h, data, linear);
+    });
 
     // 初始化内置 PBR 着色器
     shader_mgr_.InitBuiltinPBRShader();

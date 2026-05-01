@@ -144,6 +144,18 @@ public:
     void set_create_buffer_fn(CreateBufferFn fn) { create_buffer_fn_ = fn; }
     void set_create_vao_fn(CreateVaoFn fn) { create_vao_fn_ = fn; }
 
+    /// 设置 DeleteVertexArray/DeleteBuffer/DeleteTexture 函数指针（供 Shutdown 走账本）
+    using DeleteVaoFn = std::function<void(unsigned int)>;
+    using DeleteBufferFn = std::function<void(unsigned int)>;
+    using DeleteTextureFn = std::function<void(unsigned int)>;
+    void set_delete_vao_fn(DeleteVaoFn fn) { delete_vao_fn_ = fn; }
+    void set_delete_buffer_fn(DeleteBufferFn fn) { delete_buffer_fn_ = fn; }
+    void set_delete_texture_fn(DeleteTextureFn fn) { delete_texture_fn_ = fn; }
+
+    /// 设置 CreateTexture 函数指针（供白色纹理走账本）
+    using CreateTextureFn = std::function<unsigned int(int, int, const unsigned char*, bool)>;
+    void set_create_texture_fn(CreateTextureFn fn) { create_texture_fn_ = fn; }
+
 private:
     // 几何缓冲区
     unsigned int vao_handle_ = 0;
@@ -187,6 +199,10 @@ private:
     UpdateBufferFn update_buffer_fn_ = nullptr;
     CreateBufferFn create_buffer_fn_ = nullptr;
     CreateVaoFn create_vao_fn_ = nullptr;
+    DeleteVaoFn delete_vao_fn_ = nullptr;
+    DeleteBufferFn delete_buffer_fn_ = nullptr;
+    DeleteTextureFn delete_texture_fn_ = nullptr;
+    CreateTextureFn create_texture_fn_ = nullptr;
 };
 
 } // namespace render
