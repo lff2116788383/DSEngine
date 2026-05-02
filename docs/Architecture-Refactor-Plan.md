@@ -1,8 +1,8 @@
 # DSEngine 架构修复优化方案
 
-> **版本**: v2.2.0  
+> **版本**: v2.3.0  
 > **日期**: 2026-05-02  
-> **状态**: PhysX 真实后端集成完成，3D 物理管线可用；P5 调研完成
+> **状态**: P6 3D 物理 Lua Demo 端到端验证通过；PhysX 力/速度/重力 API 暴露至 Lua
 > **基于**: DSEngine Phase 2 架构审查
 
 ---
@@ -1087,6 +1087,7 @@ DSEngine 架构设计明显借鉴了现代商业引擎经验，在 ECS 架构、
 
 | 版本 | 日期 | 变更摘要 |
 |------|------|----------|
+| v2.3.0 | 2026-05-02 | P6 3D 物理 Lua Demo 端到端验证通过：新增 5 个 Lua 物理 API（add_force/add_impulse/set_velocity/get_velocity/set_gravity）；Physics3DSystem 添加动力学接口 + world_cache_ 缓存；3d_physics_stack demo 增强（冲量验证+位置检测+速度查询）；physics_bodies 统计修复（含 RigidBody3DComponent）；AnimatorSystem 延迟 RequireAssetManager 修复空 World 崩溃；verify_lua_3d_demos.py 物理栈验证通过（PhysX ENABLED，5 box FELL，impulse 生效） |
 | v2.2.0 | 2026-05-02 | PhysX 真实后端集成：解压完整 physx-4.1 预编译包；修复 CMake PhysX lib 查找（bin/ 目录 fallback）；绕过 CRT 不匹配（自定义 DseDefaultSimulationFilterShader + DseCpuDispatcher 替代 PhysXExtensions 静态库）；添加 DSE_ENABLE_PHYSX 编译定义；注册 Physics3DSystem 到 ServiceLocator + FixedUpdate 调度；添加 physics_3d_raycast Lua 绑定；PhysX DLL post-build 复制；461 单元测试全绿 |
 | v2.1.0 | 2026-05-02 | P8 全量测试验证通过：568 例全绿（单元 461 + 集成 107 + 冒烟 6）；文档中原记录的 2 个 EventBus::Instance 兼容测试失败已在后续提交中修复；更新 P8/ctest 验证标准为已通过 |
 | v2.0.0 | 2026-05-02 | 渲染管线与粒子系统缺陷修复：`glDepthMask(GL_TRUE)` 深度写入修复（VSE 15.22 场景全像素非黑）；`ShutdownGeometryBuffers` GL 资源释放 + 静态 VAO/VBO 转成员变量；VSE 15.22 诊断代码 `#ifdef DSE_VSE_1522_DIAG` 编译隔离；`DEBUG_LOG` 格式符 `{:.3f}`/`{:X}` → `{}` 修正；粒子发射累加器首帧 dt 爆炸修复（`emission_accumulator` 钳制上限为 `max_particles`）；验证脚本 Windows 编码处理；VSE 15.22 综合场景 demo 落地验证通过 |

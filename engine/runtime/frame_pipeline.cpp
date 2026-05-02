@@ -15,6 +15,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/ui.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
@@ -528,6 +529,13 @@ void FramePipeline::RunRenderInternal() {
             (void)entity;
             ++physics_bodies;
         }
+#ifdef DSE_ENABLE_3D
+        auto physics3d_view = runtime_context_.world->registry().view<dse::RigidBody3DComponent>();
+        for (auto entity : physics3d_view) {
+            (void)entity;
+            ++physics_bodies;
+        }
+#endif
         size_t particle_emitters = 0;
         size_t active_particles = 0;
         auto particle2d_view = runtime_context_.world->registry().view<ParticleEmitterComponent>();

@@ -68,6 +68,7 @@ static PhysXAllocator g_allocator;
 static PhysXErrorCallback g_error_callback;
 
 bool Physics3DSystem::Init(World& world) {
+    world_cache_ = &world;
     DEBUG_LOG_INFO("Physics3DSystem Initialized (Backend: NVIDIA PhysX)");
     
     foundation_ = PxCreateFoundation(PX_PHYSICS_VERSION, g_allocator, g_error_callback);
@@ -256,6 +257,94 @@ RaycastResult Physics3DSystem::Raycast(const glm::vec3& origin, const glm::vec3&
         }
     }
     return result;
+}
+
+void Physics3DSystem::AddForce(entt::entity entity, const glm::vec3& force) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->addForce(PxVec3(force.x, force.y, force.z), PxForceMode::eFORCE);
+    }
+}
+
+void Physics3DSystem::AddImpulse(entt::entity entity, const glm::vec3& impulse) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->addForce(PxVec3(impulse.x, impulse.y, impulse.z), PxForceMode::eIMPULSE);
+    }
+}
+
+void Physics3DSystem::SetVelocity(entt::entity entity, const glm::vec3& velocity) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->setLinearVelocity(PxVec3(velocity.x, velocity.y, velocity.z));
+    }
+}
+
+glm::vec3 Physics3DSystem::GetVelocity(entt::entity entity) const {
+    if (!scene_) return glm::vec3(0.0f);
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return glm::vec3(0.0f);
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return glm::vec3(0.0f);
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        PxVec3 vel = dynamic->getLinearVelocity();
+        return glm::vec3(vel.x, vel.y, vel.z);
+    }
+    return glm::vec3(0.0f);
+}
+
+void Physics3DSystem::SetGravityEnabled(entt::entity entity, bool enabled) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !enabled);
+    }
+    rb.use_gravity = enabled;
+}
+
+bool Physics3DSystem::IsGravityEnabled(entt::entity entity) const {
+    if (!scene_) return true;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return true;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    return rb.use_gravity;
 }
 
 } // namespace physics3d

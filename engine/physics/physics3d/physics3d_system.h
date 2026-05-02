@@ -33,8 +33,16 @@ public:
     void Shutdown();
     void FixedUpdate(World& world, float fixed_delta_time);
     
-    // API for Raycasting
+    // 射线检测
     RaycastResult Raycast(const glm::vec3& origin, const glm::vec3& direction, float max_distance);
+
+    // 刚体动力学 API
+    void AddForce(entt::entity entity, const glm::vec3& force);
+    void AddImpulse(entt::entity entity, const glm::vec3& impulse);
+    void SetVelocity(entt::entity entity, const glm::vec3& velocity);
+    glm::vec3 GetVelocity(entt::entity entity) const;
+    void SetGravityEnabled(entt::entity entity, bool enabled);
+    bool IsGravityEnabled(entt::entity entity) const;
 
 private:
     physx::PxFoundation* foundation_ = nullptr;
@@ -42,6 +50,7 @@ private:
     physx::PxScene* scene_ = nullptr;
     physx::PxCpuDispatcher* dispatcher_ = nullptr;
     physx::PxMaterial* default_material_ = nullptr;
+    World* world_cache_ = nullptr; ///< Init 时缓存的 World 指针，供动力学 API 使用
 
     void SyncTransformsToPhysics(World& world);
     void SyncPhysicsToTransforms(World& world);

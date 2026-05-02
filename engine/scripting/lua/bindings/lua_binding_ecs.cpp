@@ -1786,6 +1786,106 @@ int L_EcsAddSphereCollider3D(lua_State* L) {
     return 0;
 }
 
+/// 对 3D 刚体施加持续的力（需 PhysX 后端）
+int L_EcsRigidBody3DAddForce(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float fx = static_cast<float>(luaL_checknumber(L, 2));
+    float fy = static_cast<float>(luaL_checknumber(L, 3));
+    float fz = static_cast<float>(luaL_checknumber(L, 4));
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        physics->AddForce(e, glm::vec3(fx, fy, fz));
+    }
+#endif
+    return 0;
+}
+
+/// 对 3D 刚体施加瞬时冲量（需 PhysX 后端）
+int L_EcsRigidBody3DAddImpulse(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float ix = static_cast<float>(luaL_checknumber(L, 2));
+    float iy = static_cast<float>(luaL_checknumber(L, 3));
+    float iz = static_cast<float>(luaL_checknumber(L, 4));
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        physics->AddImpulse(e, glm::vec3(ix, iy, iz));
+    }
+#endif
+    return 0;
+}
+
+/// 设置 3D 刚体线速度（需 PhysX 后端）
+int L_EcsRigidBody3DSetVelocity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float vx = static_cast<float>(luaL_checknumber(L, 2));
+    float vy = static_cast<float>(luaL_checknumber(L, 3));
+    float vz = static_cast<float>(luaL_checknumber(L, 4));
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        physics->SetVelocity(e, glm::vec3(vx, vy, vz));
+    }
+#endif
+    // 同步到组件缓存
+    if (world->registry().valid(e) && world->registry().all_of<RigidBody3DComponent>(e)) {
+        auto& rb = world->registry().get<RigidBody3DComponent>(e);
+        rb.velocity = glm::vec3(vx, vy, vz);
+    }
+    return 0;
+}
+
+/// 获取 3D 刚体线速度（需 PhysX 后端），返回 vx,vy,vz
+int L_EcsRigidBody3DGetVelocity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+        return 3;
+    }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        glm::vec3 vel = physics->GetVelocity(e);
+        lua_pushnumber(L, static_cast<lua_Number>(vel.x));
+        lua_pushnumber(L, static_cast<lua_Number>(vel.y));
+        lua_pushnumber(L, static_cast<lua_Number>(vel.z));
+        return 3;
+    }
+#endif
+    // 无 PhysX 时回退到组件缓存
+    if (world->registry().valid(e) && world->registry().all_of<RigidBody3DComponent>(e)) {
+        auto& rb = world->registry().get<RigidBody3DComponent>(e);
+        lua_pushnumber(L, static_cast<lua_Number>(rb.velocity.x));
+        lua_pushnumber(L, static_cast<lua_Number>(rb.velocity.y));
+        lua_pushnumber(L, static_cast<lua_Number>(rb.velocity.z));
+    } else {
+        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+    }
+    return 3;
+}
+
+/// 设置 3D 刚体是否受重力（需 PhysX 后端）
+int L_EcsRigidBody3DSetGravity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool enabled = lua_toboolean(L, 2) != 0;
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        physics->SetGravityEnabled(e, enabled);
+    }
+#endif
+    if (world->registry().valid(e) && world->registry().all_of<RigidBody3DComponent>(e)) {
+        auto& rb = world->registry().get<RigidBody3DComponent>(e);
+        rb.use_gravity = enabled;
+    }
+    return 0;
+}
+
 int L_EcsAddPostProcess(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -2141,6 +2241,11 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_rigidbody_3d", L_EcsAddRigidBody3D);
     set_fn("add_box_collider_3d", L_EcsAddBoxCollider3D);
     set_fn("add_sphere_collider_3d", L_EcsAddSphereCollider3D);
+    set_fn("rigidbody_3d_add_force", L_EcsRigidBody3DAddForce);
+    set_fn("rigidbody_3d_add_impulse", L_EcsRigidBody3DAddImpulse);
+    set_fn("rigidbody_3d_set_velocity", L_EcsRigidBody3DSetVelocity);
+    set_fn("rigidbody_3d_get_velocity", L_EcsRigidBody3DGetVelocity);
+    set_fn("rigidbody_3d_set_gravity", L_EcsRigidBody3DSetGravity);
     set_fn("physics_3d_raycast", L_Physics3DRaycast);
     set_fn("add_particle_system_3d", L_EcsAddParticleSystem3D);
     set_fn("set_particle_system_3d_params", L_EcsSetParticleSystem3DParams);
@@ -2170,6 +2275,11 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("particle_burst", L_EcsParticleBurst);
     set_fn("add_gameplay_tuning", L_EcsAddGameplayTuning);
     set_fn("set_gameplay_tuning", L_EcsSetGameplayTuning);
+    set_fn("rigidbody_3d_add_force", L_EcsRigidBody3DAddForce);
+    set_fn("rigidbody_3d_add_impulse", L_EcsRigidBody3DAddImpulse);
+    set_fn("rigidbody_3d_set_velocity", L_EcsRigidBody3DSetVelocity);
+    set_fn("rigidbody_3d_get_velocity", L_EcsRigidBody3DGetVelocity);
+    set_fn("rigidbody_3d_set_gravity", L_EcsRigidBody3DSetGravity);
     set_fn("physics_3d_raycast", L_Physics3DRaycast);
     set_fn("load_scene", L_EcsLoadScene);
 }
