@@ -353,6 +353,17 @@ bool FramePipeline::Init() {
     }
 #endif
 
+#ifdef DSE_ENABLE_3D
+    // PhysX 3D 物理系统初始化并注册到 ServiceLocator
+    if (physics3d_system_.Init(*runtime_context_.world)) {
+        dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
+            std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
+        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem (PhysX) initialized and registered");
+    } else {
+        DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
+    }
+#endif
+
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
 
 
@@ -397,6 +408,10 @@ void FramePipeline::Shutdown() {
     }
 #endif
     mesh_render_system_.SetAssetManager(nullptr);
+#ifdef DSE_ENABLE_3D
+    physics3d_system_.Shutdown();
+    dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
+#endif
     asset_manager.ReleaseGpuResources();
     
     for (auto& mod : modules_) {

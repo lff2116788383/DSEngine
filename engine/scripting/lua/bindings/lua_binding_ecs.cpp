@@ -2141,6 +2141,7 @@ void RegisterEcsBindings(lua_State* L) {
     set_fn("add_rigidbody_3d", L_EcsAddRigidBody3D);
     set_fn("add_box_collider_3d", L_EcsAddBoxCollider3D);
     set_fn("add_sphere_collider_3d", L_EcsAddSphereCollider3D);
+    set_fn("physics_3d_raycast", L_Physics3DRaycast);
     set_fn("add_particle_system_3d", L_EcsAddParticleSystem3D);
     set_fn("set_particle_system_3d_params", L_EcsSetParticleSystem3DParams);
     set_fn("get_particle_system_3d_state", L_EcsGetParticleSystem3DState);

@@ -75,24 +75,35 @@ if(MSVC)
         if(NOT PHYSX_DLL_DIR_RELEASE AND EXISTS "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
             set(PHYSX_DLL_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
         endif()
-        if(NOT PHYSX_LIB_DIR_DEBUG AND EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
-            set(PHYSX_LIB_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
+        # 优先查找 lib/ 目录；部分 PhysX 预编译包将 .lib 放在 bin/ 下
+        if(NOT PHYSX_LIB_DIR_DEBUG)
+            if(EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
+                set(PHYSX_LIB_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/debug")
+            elseif(EXISTS "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/debug")
+                set(PHYSX_LIB_DIR_DEBUG "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/debug")
+            endif()
         endif()
-        if(NOT PHYSX_LIB_DIR_RELEASE AND EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
-            set(PHYSX_LIB_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
+        if(NOT PHYSX_LIB_DIR_RELEASE)
+            if(EXISTS "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
+                set(PHYSX_LIB_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/lib/${_physx_variant}/release")
+            elseif(EXISTS "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
+                set(PHYSX_LIB_DIR_RELEASE "${PHYSX_TARGET_DIR}/physx/bin/${_physx_variant}/release")
+            endif()
         endif()
     endforeach()
 
     if(PHYSX_LIB_DIR_DEBUG)
-        file(GLOB _PHYSX_LIB_FILES_DEBUG "${PHYSX_LIB_DIR_DEBUG}/*.lib")
+        # 仅选取 DLL import lib，避免 static lib 的 CRT 不匹配
+        # PhysX 4.1 DLL 模式下 Extensions 已编译进 PhysX_64.dll
+        file(GLOB _PHYSX_DLL_LIBS_DEBUG "${PHYSX_LIB_DIR_DEBUG}/PhysX_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXCommon_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXCooking_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXFoundation_64.lib")
     endif()
     if(PHYSX_LIB_DIR_RELEASE)
-        file(GLOB _PHYSX_LIB_FILES_RELEASE "${PHYSX_LIB_DIR_RELEASE}/*.lib")
+        file(GLOB _PHYSX_DLL_LIBS_RELEASE "${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib")
     endif()
 
     set(PHYSX_LIBS
-        "$<$<CONFIG:Debug>:${_PHYSX_LIB_FILES_DEBUG}>"
-        "$<$<NOT:$<CONFIG:Debug>>:${_PHYSX_LIB_FILES_RELEASE}>"
+        "$<$<CONFIG:Debug>:${_PHYSX_DLL_LIBS_DEBUG}>"
+        "$<$<NOT:$<CONFIG:Debug>>:${_PHYSX_DLL_LIBS_RELEASE}>"
     )
 
     if(EXISTS "${PHYSX_DLL_DIR_DEBUG}")
@@ -104,8 +115,9 @@ if(MSVC)
 
     if(PHYSX_LIB_DIR_DEBUG OR PHYSX_LIB_DIR_RELEASE)
         set(DSE_HAS_PHYSX_LIBS ON)
+        message(STATUS "PhysX libraries found: lib_debug=${PHYSX_LIB_DIR_DEBUG} lib_release=${PHYSX_LIB_DIR_RELEASE}")
     else()
-        message(STATUS "PhysX libraries were not found under ${PHYSX_TARGET_DIR}/physx/lib; physics3d sources will be skipped for this build.")
+        message(STATUS "PhysX libraries were not found under ${PHYSX_TARGET_DIR}/physx/{lib,bin}; physics3d sources will be skipped for this build.")
     endif()
 else()
     # Mac/Linux placeholder

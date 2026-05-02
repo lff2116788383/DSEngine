@@ -123,9 +123,10 @@ void AnimatorSystem::SetAssetManager(AssetManager* asset_manager) {
 }
 
 void AnimatorSystem::Update(World& world, float delta_time) {
-    auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = world.registry().view<Animator3DComponent>();
+    if (view.empty()) return;
     
+    AssetManager* asset_manager_ptr = nullptr;
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
         if (!animator.enabled) {
@@ -135,6 +136,12 @@ void AnimatorSystem::Update(World& world, float delta_time) {
         if (animator.dskel_path.empty()) {
             continue;
         }
+
+        // 延迟获取 AssetManager：仅在首次遇到真正需要加载资源的实体时校验
+        if (!asset_manager_ptr) {
+            asset_manager_ptr = &RequireAssetManager(asset_manager_);
+        }
+        auto& asset_manager = *asset_manager_ptr;
 
         auto dskel = asset_manager.LoadDskel(animator.dskel_path);
         if (!dskel || dskel->GetData().empty()) {

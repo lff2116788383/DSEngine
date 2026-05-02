@@ -4,6 +4,10 @@
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 
+#ifdef DSE_ENABLE_3D
+#include "engine/physics/physics3d/physics3d_system.h"
+#endif
+
 #include <glm/vec2.hpp>
 
 namespace dse::runtime {
@@ -32,6 +36,11 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
             mod.instance->OnFixedUpdate(world, fixed_delta_time);
         }
     }
+
+#ifdef DSE_ENABLE_3D
+    // PhysX 3D 物理固定步长更新
+    pipeline.physics3d_system_.FixedUpdate(world, fixed_delta_time);
+#endif
 }
 
 } // namespace dse::runtime

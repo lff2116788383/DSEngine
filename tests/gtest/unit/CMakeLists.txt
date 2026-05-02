@@ -94,6 +94,16 @@ if(DSE_ENABLE_3D)
     target_link_libraries(${DSE_GTEST_UNIT_TARGET} PRIVATE DSE_Gameplay3D)
 endif()
 
+# PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    add_custom_command(TARGET ${DSE_GTEST_UNIT_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${PHYSX_DLLS_DEBUG}
+            $<TARGET_FILE_DIR:${DSE_GTEST_UNIT_TARGET}>
+        COMMAND_EXPAND_LISTS
+    )
+endif()
+
 add_test(
     NAME gtest.engine.unit
     COMMAND ${DSE_GTEST_UNIT_TARGET}

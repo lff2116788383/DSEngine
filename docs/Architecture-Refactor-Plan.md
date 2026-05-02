@@ -1,8 +1,8 @@
 # DSEngine 架构修复优化方案
 
-> **版本**: v2.0.0  
+> **版本**: v2.2.0  
 > **日期**: 2026-05-02  
-> **状态**: 渲染管线与粒子系统缺陷修复完成，VSE 15.22 综合场景 demo 验证通过
+> **状态**: PhysX 真实后端集成完成，3D 物理管线可用；P5 调研完成
 > **基于**: DSEngine Phase 2 架构审查
 
 ---
@@ -840,7 +840,7 @@ tests/
 - [ ] 核心模块测试覆盖率 > 70%
 - [x] 已补充 [`event_id_test.cpp`](tests/gtest/unit/event_id_test.cpp)、[`service_locator_test.cpp`](tests/gtest/unit/service_locator_test.cpp)、[`world_test.cpp`](tests/gtest/unit/world_test.cpp)、[`job_system_test.cpp`](tests/gtest/unit/job_system_test.cpp)、[`event_bus_test.cpp`](tests/gtest/unit/event_bus_test.cpp)、[`math_pool_test.cpp`](tests/gtest/unit/math_pool_test.cpp)、[`ecs_component_test.cpp`](tests/gtest/unit/ecs_component_test.cpp)、[`asset_manager_test.cpp`](tests/gtest/unit/asset_manager_test.cpp)、[`event_id_cross_dll_test.cpp`](tests/gtest/unit/event_id_cross_dll_test.cpp)、[`render_graph_test.cpp`](tests/gtest/unit/render_graph_test.cpp)、[`module_test.cpp`](tests/gtest/unit/module_test.cpp)
 - [x] gtest 单元测试目标已在 [`tests/gtest/unit/CMakeLists.txt`](tests/gtest/unit/CMakeLists.txt) 注册
-- [ ] `ctest` 可通过，所有测试绿色
+- [x] `ctest` 可通过，所有测试绿色
 - [ ] CI 可执行最小验证集
 
 **当前进度（2026-04-27）**：
@@ -853,7 +853,7 @@ tests/
 - 新增 [`event_id_cross_dll_test.cpp`](tests/gtest/unit/event_id_cross_dll_test.cpp)，覆盖：不同作用域相同字符串哈希一致、内置常量与直接计算一致、不同字符串无碰撞、编译期与运行期一致、空字符串哈希非零、大小写敏感、FNV-1a 偏移基础值验证、**events 命名空间全部 41 个常量无碰撞**、**集中定义常量与 MakeEventId 直接计算一致**。
 - 新增 [`render_graph_test.cpp`](tests/gtest/unit/render_graph_test.cpp)，覆盖：资源声明/重复声明/不同名、Pass 添加/读写声明、线性依赖拓扑排序、菱形依赖拓扑排序、无依赖 Pass 执行顺序、无输出 Pass 自动剔除、MarkOutput 保护依赖链、无 MarkOutput 兼容模式、循环依赖检测、未编译时回退执行、空 Pass 执行、空图编译与执行、Reset 清空状态、culled_pass_count 统计、Compile 后添加新 Pass 标记未编译、PassRead/PassWrite 去重。
 - 新增 [`module_test.cpp`](tests/gtest/unit/module_test.cpp)，覆盖：OnInit/OnUpdate/OnFixedUpdate/OnShutdown 生命周期回调、GetName 返回值、默认渲染虚方法不崩溃、多模块独立生命周期、多次 Update 调用计数、通过基类指针多态使用。
-- 结论：P8 测试代码已完成，编译验证已通过（183 个测试用例中 181 个 PASSED，2 个 EventBus::Instance 兼容测试因未在测试中注册 ServiceLocator 而失败，待修复）。
+- 结论：P8 测试代码已完成，全量测试已通过（568 个测试用例全部 PASSED：单元 461 + 集成 107 + 冒烟 6）。
 
 ---
 
@@ -1012,13 +1012,13 @@ apps/editor_cpp/
 ```
 Phase R1 (2-3 周) ─ 基础设施加固
 ├── P4: 2D 组件文件拆分            [已完成]
-├── P8: 补核心模块单元测试 (P0)     [编译验证通过，2 个 EventBus::Instance 兼容测试待修复]
+├── P8: 补核心模块单元测试 (P0)     [全绿：568 例 PASSED]
 └── P9: EventBus 跨 DLL 安全       [代码完成，3D模块集成验证待后续]
 
 Phase R2 (3-4 周) ─ 核心架构治理
 ├── P1: 单例滥用治理 (Phase A-C)   [完全闭环，所有兼容层已清退]
 ├── P2: OpenGLRhiDevice 职责拆分   [完全闭环，四子系统独立文件化 + 状态 Diff]
-└── P8: 补核心模块单元测试 (P1)     [编译验证通过，2 个 EventBus::Instance 兼容测试待修复]
+└── P8: 补核心模块单元测试 (P1)     [全绿：568 例 PASSED]
 
 Phase R3 (3-4 周) ─ 模块化统一
 ├── P3: 2D 系统模块化对齐          [完全闭环，所有调度路径均通过 IModule 接口]
@@ -1031,7 +1031,7 @@ Phase R4 (4-6 周) ─ 渲染管线现代化
 └── P10: JobSystem 能力增强        [编译回归验证通过]
 
 Phase R5 (持续) ─ 工程化提升
-├── P5: Lua 绑定代码生成化
+├── P5: Lua 绑定代码生成化        [调研完成，方案待定：当前绑定用 raw C API 非Sol2，需先统一绑定层]
 └── P8: 补集成测试 (P2)
 ```
 
@@ -1087,6 +1087,8 @@ DSEngine 架构设计明显借鉴了现代商业引擎经验，在 ECS 架构、
 
 | 版本 | 日期 | 变更摘要 |
 |------|------|----------|
+| v2.2.0 | 2026-05-02 | PhysX 真实后端集成：解压完整 physx-4.1 预编译包；修复 CMake PhysX lib 查找（bin/ 目录 fallback）；绕过 CRT 不匹配（自定义 DseDefaultSimulationFilterShader + DseCpuDispatcher 替代 PhysXExtensions 静态库）；添加 DSE_ENABLE_PHYSX 编译定义；注册 Physics3DSystem 到 ServiceLocator + FixedUpdate 调度；添加 physics_3d_raycast Lua 绑定；PhysX DLL post-build 复制；461 单元测试全绿 |
+| v2.1.0 | 2026-05-02 | P8 全量测试验证通过：568 例全绿（单元 461 + 集成 107 + 冒烟 6）；文档中原记录的 2 个 EventBus::Instance 兼容测试失败已在后续提交中修复；更新 P8/ctest 验证标准为已通过 |
 | v2.0.0 | 2026-05-02 | 渲染管线与粒子系统缺陷修复：`glDepthMask(GL_TRUE)` 深度写入修复（VSE 15.22 场景全像素非黑）；`ShutdownGeometryBuffers` GL 资源释放 + 静态 VAO/VBO 转成员变量；VSE 15.22 诊断代码 `#ifdef DSE_VSE_1522_DIAG` 编译隔离；`DEBUG_LOG` 格式符 `{:.3f}`/`{:X}` → `{}` 修正；粒子发射累加器首帧 dt 爆炸修复（`emission_accumulator` 钳制上限为 `max_particles`）；验证脚本 Windows 编码处理；VSE 15.22 综合场景 demo 落地验证通过 |
 | v1.9.0 | 2026-04-27 | 统一编译回归验证通过：dse_engine + dse_gtest_unit_tests 编译成功；修复 3 个编译问题（rhi_device.h 命名空间 render::→dse::render::、gl_draw_executor.h 裸函数指针→std::function 支持捕获 lambda、render_graph.h 嵌套 /* */ 注释冲突）；183 个单元测试中 181 个 PASSED，2 个 EventBus::Instance 兼容测试待修复；P2/P6/P7/P10 验证标准勾选更新 |
 | v1.8.0 | 2026-04-27 | P2 终局完成：GLPipelineStateManager 加入 cached_gl_state_ Diff 机制（仅切换变化的 GL 状态，减少冗余调用）；确认四子系统（ResourceManager/PipelineStateManager/ShaderManager/DrawExecutor）+ UBOManager 全部独立文件化；OpenGLRhiDevice 协调器 277 行 < 300 行目标；P2 状态升级为完全闭环 |

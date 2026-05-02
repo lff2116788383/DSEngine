@@ -39,6 +39,9 @@ endif()
 if(DSE_ENABLE_3D)
     add_definitions(-D DSE_ENABLE_3D)
 endif()
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    add_definitions(-D DSE_ENABLE_PHYSX)
+endif()
 
 # 设置输出目录为 bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

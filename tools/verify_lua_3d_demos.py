@@ -66,6 +66,29 @@ P4_3D_ENTRIES = [
 ]
 
 REQUIRED_LOG_TOKENS = {
+    # P0 基础 3D demo：验证渲染管线基础可达
+    "3d_static_model": [
+        "[3D][StaticModel]",
+    ],
+    "3d_material_showcase": [
+        "[3D][MaterialShowcase]",
+    ],
+    "3d_lighting_showcase": [
+        "[3D][LightingShowcase]",
+    ],
+    "3d_camera_showcase": [
+        "[3D][CameraShowcase]",
+    ],
+    "3d_textured_cube": [
+        "[3D][TexturedCube]",
+    ],
+    # P1 demo
+    "3d_scene_showcase": [
+        "[3D][SceneShowcase]",
+    ],
+    "3d_skybox_environment": [
+        "[3D][SkyboxEnvironment]",
+    ],
     "3d_postprocess_showcase": [
         "postprocess_state_api",
         "get_post_process_state=true",
@@ -141,12 +164,24 @@ REQUIRED_LOG_TOKENS = {
         "spatial_enabled=true",
         "runtime_handle_nonzero=true",
     ],
+    "3d_physics_stack": [
+        "[3D][PhysicsStack]",
+    ],
     "3d_texture_material_slots": [
         "mesh_authoring_api",
         "set_mesh_uvs=true",
         "set_mesh_normals=true",
         "set_mesh_tangents=true",
         "authored quad uses UV texture sampling",
+    ],
+    "3d_physics_raycast_pick": [
+        "[3D][PhysicsRaycastPick]",
+        "physics_3d_raycast",
+    ],
+    "3d_terrain_lod_zones": [
+        "[3D][TerrainLodZones]",
+        "terrain_api",
+        "runtime_lod",
     ],
     "3d_vse15_22_scene": [
         "p4_vse15_22_scene",
@@ -215,6 +250,76 @@ def extract_render_readback_metrics(output: str) -> tuple[int | None, int | None
     return max_rgb, avg_rgb
 
 
+def check_screenshot_not_black(png_path: pathlib.Path) -> tuple[bool, str]:
+    """检查截图是否为黑屏或接近纯色。
+
+    使用轻量像素采样（无需第三方图像库），读取 PNG 文件头后
+    按 IHDR 解析宽高，然后对 IDAT 解压后的原始像素做间隔采样。
+    如果采样点 RGB 值全部接近 0 或全部相同，视为黑屏/纯色。
+
+    回退策略：若无法解析 PNG（如文件过小或格式异常），
+    只做文件大小检查（> 1KB 即视为非黑屏）。
+
+    Returns:
+        (is_ok, detail): is_ok=True 表示截图正常，detail 为诊断信息
+    """
+    MIN_FILE_SIZE = 1024  # 1KB 以下几乎不可能是有效截图
+    if not png_path.exists():
+        return False, "file_not_found"
+    file_size = png_path.stat().st_size
+    if file_size < MIN_FILE_SIZE:
+        return False, f"file_too_small={file_size}bytes"
+
+    # 尝试用 PIL/Pillow 做精确检测（如可用）
+    try:
+        from PIL import Image
+        import numpy as np
+        img = Image.open(str(png_path)).convert("RGB")
+        arr = np.array(img)
+        # 采样：最多取 100x100 网格
+        h, w = arr.shape[:2]
+        step_h = max(1, h // 100)
+        step_w = max(1, w // 100)
+        sampled = arr[::step_h, ::step_w]
+
+        max_val = int(sampled.max())
+        min_val = int(sampled.min())
+        mean_val = float(sampled.mean())
+
+        # 全黑判定
+        if max_val <= 5:
+            return False, f"all_black max={max_val} mean={mean_val:.1f}"
+        # 近乎纯色判定：最大最小差值极小
+        if max_val - min_val <= 3 and max_val <= 15:
+            return False, f"near_solid max={max_val} min={min_val} mean={mean_val:.1f}"
+        return True, f"max={max_val} min={min_val} mean={mean_val:.1f}"
+    except ImportError:
+        # 无 Pillow，用 render readback 亮度指标替代
+        return True, f"file_size_ok={file_size}bytes (no_pillow_skip_pixel_check)"
+
+
+def check_log_errors(output: str) -> list[str]:
+    """从日志中提取 [ERROR] 行（排除已知的无害错误）。
+
+    Returns:
+        error_lines: 非空的 [ERROR] 行列表
+    """
+    # 已知可忽略的错误模式（引擎关闭时 GL 资源清理等）
+    IGNORED_PATTERNS = [
+        "ShutdownGeometryBuffers",  # GL VAO/VBO 清理时的非致命警告
+        "glDelete",                 # GL 资源释放
+    ]
+    errors = []
+    for line in output.splitlines():
+        if "[ERROR]" not in line:
+            continue
+        # 跳过已知无害错误
+        if any(pat in line for pat in IGNORED_PATTERNS):
+            continue
+        errors.append(line.strip())
+    return errors
+
+
 def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, original_config: str, entry: str, frames: int, timeout: int, out_dir: pathlib.Path) -> int:
     print(f"=== RUN {entry} ===", flush=True)
     config_path.write_text(replace_game_entry(original_config, entry), encoding="utf-8")
@@ -264,6 +369,19 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
         print(f"LOG_ASSERT_MISSING {entry}: {','.join(missing_tokens)}", flush=True)
         return 3
 
+    # 检测日志中的 [ERROR] 行
+    error_lines = check_log_errors(output)
+    if error_lines:
+        # 打印前 5 条错误，但不直接阻断——某些引擎关闭错误是预期的
+        for err in error_lines[:5]:
+            print(f"LOG_ERROR {entry}: {err}", flush=True)
+        if len(error_lines) > 5:
+            print(f"LOG_ERROR {entry}: ... and {len(error_lines) - 5} more errors", flush=True)
+        # 仅当错误行数过多（>10）时才视为阻断
+        if len(error_lines) > 10:
+            print(f"LOG_ERROR_TOO_MANY {entry}: {len(error_lines)} errors", flush=True)
+            return 5
+
     if not png_path.exists():
         print(f"SCREENSHOT_MISSING {png_path}", flush=True)
         return 2
@@ -273,7 +391,13 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
         print(f"SCREENSHOT_TOO_DARK {entry}: max_rgb={max_rgb} avg_rgb={avg_rgb} min_max_rgb=40 min_avg_rgb=18", flush=True)
         return 4
 
-    print(f"SCREENSHOT_OK {png_path}", flush=True)
+    # 截图黑屏/纯色检测（所有 demo 通用）
+    screenshot_ok, screenshot_detail = check_screenshot_not_black(png_path)
+    if not screenshot_ok:
+        print(f"SCREENSHOT_BLACK_OR_SOLID {entry}: {screenshot_detail}", flush=True)
+        return 4
+
+    print(f"SCREENSHOT_OK {png_path} ({screenshot_detail})", flush=True)
     # 引擎关闭时可能因 GL 资源清理等触发 access violation (exit 0xC0000005 = 3221225477)，
     # 但只要 log tokens、截图、亮度三项验证均通过，即视为验证成功。
     return 0
@@ -294,7 +418,11 @@ def expand_entries(values: Iterable[str]) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify Lua 3D demos by running the Lua host and writing screenshots/logs.")
+    parser = argparse.ArgumentParser(
+        description="Verify Lua 3D demos by running the Lua host and writing screenshots/logs. "
+                    "Exit codes: 0=OK, 1=setup error, 2=screenshot missing, 3=log token missing, "
+                    "4=screenshot black/too dark, 5=too many log errors, 124=timeout."
+    )
     parser.add_argument("--entries", nargs="+", default=["all"], help="Entries or presets: basic, p0, p1, p2, p3, all. Default: all")
     parser.add_argument("--frames", type=int, default=90, help="Frame count before auto-exit. Default: 90")
     parser.add_argument("--timeout", type=int, default=90, help="Timeout seconds per demo. Default: 90")

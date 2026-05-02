@@ -15,6 +15,9 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/scene/transform_system.h"
 #include "engine/physics/physics2d/physics2d_system.h"
+#ifdef DSE_ENABLE_3D
+#include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
 #include "modules/gameplay_2d/camera/camera_system.h"
 #include "modules/gameplay_2d/ui/ui_system.h"
@@ -212,6 +215,9 @@ private:
     
     dse::gameplay2d::Gameplay2DModule gameplay2d_module_;
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
+#ifdef DSE_ENABLE_3D
+    dse::physics3d::Physics3DSystem physics3d_system_;
+#endif
 #ifndef DSE_ENABLE_3D
     dse::gameplay3d::Particle3DSystem particle3d_system_;
     dse::gameplay3d::SteeringSystem steering_system_;

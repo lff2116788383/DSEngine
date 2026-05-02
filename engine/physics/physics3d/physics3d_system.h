@@ -9,7 +9,7 @@ namespace physx {
     class PxFoundation;
     class PxPhysics;
     class PxScene;
-    class PxDefaultCpuDispatcher;
+    class PxCpuDispatcher;
     class PxMaterial;
 }
 
@@ -40,7 +40,7 @@ private:
     physx::PxFoundation* foundation_ = nullptr;
     physx::PxPhysics* physics_ = nullptr;
     physx::PxScene* scene_ = nullptr;
-    physx::PxDefaultCpuDispatcher* dispatcher_ = nullptr;
+    physx::PxCpuDispatcher* dispatcher_ = nullptr;
     physx::PxMaterial* default_material_ = nullptr;
 
     void SyncTransformsToPhysics(World& world);

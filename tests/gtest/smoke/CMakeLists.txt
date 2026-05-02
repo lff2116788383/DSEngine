@@ -24,6 +24,16 @@ target_link_libraries(${DSE_GTEST_SMOKE_TARGET}
         dse_engine
 )
 
+# PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    add_custom_command(TARGET ${DSE_GTEST_SMOKE_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${PHYSX_DLLS_DEBUG}
+            $<TARGET_FILE_DIR:${DSE_GTEST_SMOKE_TARGET}>
+        COMMAND_EXPAND_LISTS
+    )
+endif()
+
 add_test(
     NAME gtest.engine.smoke
     COMMAND ${DSE_GTEST_SMOKE_TARGET}
