@@ -72,6 +72,11 @@ inline Entity CheckEntity(lua_State* L, int i) {
     return LuaEntityFromInteger(luaL_checkinteger(L, i));
 }
 
+/// 从 Lua 栈位置 i,i+1 提取 glm::vec2
+inline glm::vec2 CheckVec2(lua_State* L, int i) {
+    return glm::vec2(CheckFloat(L, i), CheckFloat(L, i + 1));
+}
+
 /// 从 Lua 栈位置 i,i+1,i+2 提取 glm::vec3
 inline glm::vec3 CheckVec3(lua_State* L, int i) {
     return glm::vec3(CheckFloat(L, i), CheckFloat(L, i + 1), CheckFloat(L, i + 2));
@@ -109,6 +114,12 @@ inline void PushBool(lua_State* L, bool v) {
 /// 推入 Entity 到 Lua 栈
 inline void PushEntity(lua_State* L, Entity e) {
     lua_pushinteger(L, static_cast<lua_Integer>(static_cast<std::uint32_t>(e)));
+}
+
+/// 推入 glm::vec2 到 Lua 栈（2 个返回值）
+inline void PushVec2(lua_State* L, const glm::vec2& v) {
+    PushFloat(L, v.x);
+    PushFloat(L, v.y);
 }
 
 /// 推入 glm::vec3 到 Lua 栈（3 个返回值）
@@ -286,6 +297,11 @@ inline void RegisterBindings(lua_State* L, std::initializer_list<BindingEntry> e
     DSE_LUA_COMPONENT_GETTER(Name, Component, field, helper::PushVec3(L, comp->field), 3) \
     DSE_LUA_COMPONENT_SETTER(Name, Component, field, glm::vec3, helper::CheckVec3(L, 2))
 
+/// 生成 glm::vec2 字段的 getter + setter 对
+#define DSE_LUA_COMPONENT_VEC2(Name, Component, field) \
+    DSE_LUA_COMPONENT_GETTER(Name, Component, field, helper::PushVec2(L, comp->field), 2) \
+    DSE_LUA_COMPONENT_SETTER(Name, Component, field, glm::vec2, helper::CheckVec2(L, 2))
+
 /// 生成 float 字段的 getter + setter 对
 #define DSE_LUA_COMPONENT_FLOAT(Name, Component, field) \
     DSE_LUA_COMPONENT_GETTER(Name, Component, field, helper::PushFloat(L, comp->field), 1) \
@@ -313,6 +329,11 @@ inline void RegisterBindings(lua_State* L, std::initializer_list<BindingEntry> e
 #define DSE_LUA_COMPONENT_VEC3_DIRTY(Name, Component, field, dirty_field) \
     DSE_LUA_COMPONENT_GETTER(Name, Component, field, helper::PushVec3(L, comp->field), 3) \
     DSE_LUA_COMPONENT_SETTER_POST(Name, Component, field, helper::CheckVec3(L, 2), comp->dirty_field = true)
+
+/// 生成 glm::vec2 字段的 getter + setter（setter 设置后标记 dirty_field = true）
+#define DSE_LUA_COMPONENT_VEC2_DIRTY(Name, Component, field, dirty_field) \
+    DSE_LUA_COMPONENT_GETTER(Name, Component, field, helper::PushVec2(L, comp->field), 2) \
+    DSE_LUA_COMPONENT_SETTER_POST(Name, Component, field, helper::CheckVec2(L, 2), comp->dirty_field = true)
 
 /// 生成 float 字段的 getter + setter（setter 设置后标记 dirty_field = true）
 #define DSE_LUA_COMPONENT_FLOAT_DIRTY(Name, Component, field, dirty_field) \

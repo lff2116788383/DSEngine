@@ -5,7 +5,9 @@
 #include "engine/input/input.h"
 
 #ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #endif
 
 #include <glm/vec2.hpp>
@@ -38,8 +40,10 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
     }
 
 #ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_PHYSX)
     // PhysX 3D 物理固定步长更新
     pipeline.physics3d_system_.FixedUpdate(world, fixed_delta_time);
+#endif
 #endif
 }
 

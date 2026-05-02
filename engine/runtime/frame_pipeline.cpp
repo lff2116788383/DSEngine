@@ -354,7 +354,7 @@ bool FramePipeline::Init() {
     }
 #endif
 
-#ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     // PhysX 3D 物理系统初始化并注册到 ServiceLocator
     if (physics3d_system_.Init(*runtime_context_.world)) {
         dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
@@ -409,7 +409,7 @@ void FramePipeline::Shutdown() {
     }
 #endif
     mesh_render_system_.SetAssetManager(nullptr);
-#ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     physics3d_system_.Shutdown();
     dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
 #endif
@@ -529,7 +529,7 @@ void FramePipeline::RunRenderInternal() {
             (void)entity;
             ++physics_bodies;
         }
-#ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
         auto physics3d_view = runtime_context_.world->registry().view<dse::RigidBody3DComponent>();
         for (auto entity : physics3d_view) {
             (void)entity;

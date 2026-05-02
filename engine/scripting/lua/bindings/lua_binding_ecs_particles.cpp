@@ -106,17 +106,8 @@ int L_EcsAddParticleEmitter(lua_State* L) {
     return 0;
 }
 
-int L_EcsSetParticleDensity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float density_scale = helper::CheckFloat(L, 2);
-    if (density_scale < 0.0f) density_scale = 0.0f;
-    auto* emitter = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!emitter) return 0;
-    emitter->emit_rate_scale = density_scale;
-    return 0;
-}
+// ParticleEmitter 密度缩放 setter — extract 中内嵌 clamp
+DSE_LUA_COMPONENT_SETTER(ParticleDensity, ParticleEmitterComponent, emit_rate_scale, float, std::max(0.0f, helper::CheckFloat(L, 2)))
 
 int L_EcsParticleBurst(lua_State* L) {
     World* world = GetWorld();

@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
+#include "engine/scripting/lua/bindings/lua_binding_helper.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/audio.h"
 #include <algorithm>
@@ -63,50 +64,10 @@ int L_AudioRestart(lua_State* L) {
     return 0;
 }
 
-int L_AudioSetLoop(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
-    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    bool loop = lua_toboolean(L, 2);
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        auto& audio = world->registry().get<AudioSourceComponent>(e);
-        audio.loop = loop;
-    }
-    return 0;
-}
-
-int L_AudioSetVolume(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
-    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    float volume = static_cast<float>(luaL_checknumber(L, 2));
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        auto& audio = world->registry().get<AudioSourceComponent>(e);
-        audio.volume = volume;
-    }
-    return 0;
-}
-
-int L_AudioSetPitch(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
-    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    float pitch = static_cast<float>(luaL_checknumber(L, 2));
-    if (pitch <= 0.01f) {
-        pitch = 0.01f;
-    }
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        auto& audio = world->registry().get<AudioSourceComponent>(e);
-        audio.pitch = pitch;
-    }
-    return 0;
-}
+// 音频组件简单 setter — 使用宏替代手写样板
+DSE_LUA_COMPONENT_SETTER(AudioLoop, AudioSourceComponent, loop, bool, helper::CheckBool(L, 2))
+DSE_LUA_COMPONENT_SETTER(AudioVolume, AudioSourceComponent, volume, float, helper::CheckFloat(L, 2))
+DSE_LUA_COMPONENT_SETTER(AudioPitch, AudioSourceComponent, pitch, float, std::max(0.01f, helper::CheckFloat(L, 2)))
 int L_AudioSet3DMode(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -192,9 +153,9 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("add_source", L_AudioAddSource);
     set_fn("set_playing", L_AudioSetPlaying);
     set_fn("restart", L_AudioRestart);
-    set_fn("set_loop", L_AudioSetLoop);
-    set_fn("set_volume", L_AudioSetVolume);
-    set_fn("set_pitch", L_AudioSetPitch);
+    set_fn("set_loop", L_EcsSetAudioLoop);
+    set_fn("set_volume", L_EcsSetAudioVolume);
+    set_fn("set_pitch", L_EcsSetAudioPitch);
     set_fn("set_3d_mode", L_AudioSet3DMode);
     set_fn("add_listener", L_AudioAddListener);
     set_fn("set_3d_distance", L_AudioSet3DDistance);

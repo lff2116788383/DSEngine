@@ -139,29 +139,9 @@ int L_EcsAddSprite(lua_State* L) {
     return 0;
 }
 
-int L_EcsSetSpriteUvScroll(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float speed_x = helper::OptFloat(L, 2, 0.0f);
-    float speed_y = helper::OptFloat(L, 3, 0.0f);
-    auto* sprite = helper::TryGetComponent<SpriteRendererComponent>(*world, e);
-    if (!sprite) return 0;
-    sprite->uv_scroll_speed = glm::vec2(speed_x, speed_y);
-    return 0;
-}
-
-int L_EcsSetSpriteUvOffset(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float offset_x = helper::OptFloat(L, 2, 0.0f);
-    float offset_y = helper::OptFloat(L, 3, 0.0f);
-    auto* sprite = helper::TryGetComponent<SpriteRendererComponent>(*world, e);
-    if (!sprite) return 0;
-    sprite->uv_offset = glm::vec2(offset_x, offset_y);
-    return 0;
-}
+// Sprite vec2 字段 setter — 使用宏替代手写样板
+DSE_LUA_COMPONENT_SETTER(SpriteUvScroll, SpriteRendererComponent, uv_scroll_speed, glm::vec2, helper::CheckVec2(L, 2))
+DSE_LUA_COMPONENT_SETTER(SpriteUvOffset, SpriteRendererComponent, uv_offset, glm::vec2, helper::CheckVec2(L, 2))
 
 // ============================================================
 // MeshRenderer
@@ -291,16 +271,8 @@ int L_EcsSetMeshDepthState(lua_State* L) {
     return 0;
 }
 
-int L_EcsSetMeshShaderVariant(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    const char* shader_variant = luaL_checkstring(L, 2);
-    auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
-    if (!mesh) return 0;
-    mesh->shader_variant = shader_variant;
-    return 0;
-}
+// MeshRenderer shader variant setter
+DSE_LUA_COMPONENT_SETTER(MeshShaderVariant, MeshRendererComponent, shader_variant, std::string, std::string(helper::CheckString(L, 2)))
 
 int L_EcsSetMeshMaterialScalar(lua_State* L) {
     World* world = GetWorld();
@@ -455,19 +427,10 @@ int L_EcsSetMeshTangents(lua_State* L) {
     return 3;
 }
 
-int L_EcsSetMeshEmissive(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float r = helper::CheckFloat(L, 2);
-    float g = helper::CheckFloat(L, 3);
-    float b = helper::CheckFloat(L, 4);
-    auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
-    if (!mesh) return 0;
-    mesh->emissive = glm::vec3(r, g, b);
-    mesh->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
-    return 0;
-}
+// MeshRenderer emissive setter — 设置后标记数据源为 ComponentFallback
+DSE_LUA_COMPONENT_SETTER_POST(MeshEmissive, MeshRendererComponent, emissive,
+    glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4)),
+    comp->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback)
 
 // ============================================================
 // Lights
