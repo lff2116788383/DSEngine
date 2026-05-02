@@ -211,7 +211,10 @@ if(DSE_ENABLE_3D)
 
     if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         target_include_directories(DSE_Gameplay3D PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
-        target_link_directories(DSE_Gameplay3D PRIVATE ${PHYSX_DLL_DIR_DEBUG})
+        target_link_directories(DSE_Gameplay3D PRIVATE
+            $<$<CONFIG:Debug>:${PHYSX_DLL_DIR_DEBUG}>
+            $<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLL_DIR_RELEASE}>
+        )
         target_link_libraries(DSE_Gameplay3D PRIVATE ${PHYSX_LIBS})
     endif()
     set_target_properties(DSE_Gameplay3D PROPERTIES OUTPUT_NAME "DSE_Gameplay3D")
@@ -265,7 +268,10 @@ if(DSE_HAS_ASSIMP)
 endif()
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     target_include_directories(dse_engine PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
-    target_link_directories(dse_engine PRIVATE ${PHYSX_DLL_DIR_DEBUG})
+    target_link_directories(dse_engine PRIVATE
+        $<$<CONFIG:Debug>:${PHYSX_DLL_DIR_DEBUG}>
+        $<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLL_DIR_RELEASE}>
+    )
     target_link_libraries(dse_engine PRIVATE ${PHYSX_LIBS})
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")

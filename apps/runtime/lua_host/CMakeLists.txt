@@ -17,7 +17,7 @@ dse_copy_runtime_assets(dse_example_lua)
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     add_custom_command(TARGET dse_example_lua POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${PHYSX_DLLS_DEBUG}
+            "$<$<CONFIG:Debug>:${PHYSX_DLLS_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLLS_RELEASE}>"
             $<TARGET_FILE_DIR:dse_example_lua>
         COMMAND_EXPAND_LISTS
     )
