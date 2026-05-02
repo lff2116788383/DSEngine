@@ -101,6 +101,14 @@ if(MSVC)
         file(GLOB _PHYSX_DLL_LIBS_RELEASE "${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib")
     endif()
 
+    # 部分预编译 PhysX 包仅提供 debug 配置的 import lib，release 目录为空。
+    # DLL import lib 只是链接桩，不区分配置；运行时由对应 DLL 决定行为。
+    # 当 release import lib 缺失时，回退使用 debug import lib 完成链接。
+    if(NOT _PHYSX_DLL_LIBS_RELEASE AND _PHYSX_DLL_LIBS_DEBUG)
+        set(_PHYSX_DLL_LIBS_RELEASE ${_PHYSX_DLL_LIBS_DEBUG})
+        message(STATUS "PhysX: release import libs not found, falling back to debug import libs for all configs")
+    endif()
+
     set(PHYSX_LIBS
         "$<$<CONFIG:Debug>:${_PHYSX_DLL_LIBS_DEBUG}>"
         "$<$<NOT:$<CONFIG:Debug>>:${_PHYSX_DLL_LIBS_RELEASE}>"
@@ -111,6 +119,12 @@ if(MSVC)
     endif()
     if(EXISTS "${PHYSX_DLL_DIR_RELEASE}")
         file(GLOB PHYSX_DLLS_RELEASE "${PHYSX_DLL_DIR_RELEASE}/*.dll")
+    endif()
+
+    # 同样，release DLL 缺失时回退到 debug DLL 用于部署
+    if(NOT PHYSX_DLLS_RELEASE AND PHYSX_DLLS_DEBUG)
+        set(PHYSX_DLLS_RELEASE ${PHYSX_DLLS_DEBUG})
+        message(STATUS "PhysX: release DLLs not found, falling back to debug DLLs for deployment")
     endif()
 
     if(PHYSX_LIB_DIR_DEBUG OR PHYSX_LIB_DIR_RELEASE)
