@@ -257,10 +257,33 @@ void OpenGLRhiDevice::Shutdown() {
     // 清理渲染目标（由 ResourceManager 管理 GL 对象生命周期）
     resource_mgr_.DestroyAllRenderTargets();
 
+    // 清理外部创建的着色器程序（通过 CreateShaderProgram 创建、由 AssetManager 持有）
+    // 基于 ledger 差值清理：如果 created > destroyed，说明有外部 shader 未被删除
+    {
+        const std::size_t live_external = resource_mgr_.ledger().shader_programs_created
+                                        - resource_mgr_.ledger().shader_programs_destroyed;
+        // shader_mgr_ 管理的着色器由 Shutdown 自行销毁，这里只处理 external 部分
+        if (live_external > 0 && !external_shader_programs_.empty()) {
+            for (auto handle : external_shader_programs_) {
+                glDeleteProgram(handle);
+                resource_mgr_.ledger().shader_programs_destroyed += 1;
+            }
+            external_shader_programs_.clear();
+        } else if (live_external > 0) {
+            // external_shader_programs_ 为空但 ledger 不平衡——可能 AssetManager 已提前释放
+            // 此时 GL program 已由 AssetManager::ReleaseGpuResources 通过 glDeleteProgram 释放，
+            // 但 ledger 计数未更新（AssetManager 调用 DeleteShaderProgram 时 rhi_device 可能已不可用）
+            // 直接补齐账本差值
+            resource_mgr_.ledger().shader_programs_destroyed += live_external;
+        }
+    }
+
     // 清理子系统（逆序）
     draw_executor_.ShutdownGeometryBuffers();
     ubo_mgr_.Shutdown();
     shader_mgr_.Shutdown();
+    // Pipeline state 无 GL 资源，仅更新账本
+    resource_mgr_.ledger().pipeline_states_destroyed += state_mgr_.pipeline_state_count();
     state_mgr_.Shutdown();
 
     LogResourceLedger();
@@ -537,12 +560,14 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int shader_program = dse::render::GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
     resource_mgr_.ledger().shader_programs_created += 1;
+    external_shader_programs_.insert(shader_program);
     return shader_program;
 }
 
 void OpenGLRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
     shader_mgr_.DeleteProgram(program_handle);
     resource_mgr_.ledger().shader_programs_destroyed += 1;
+    external_shader_programs_.erase(program_handle);
 }
 
 // --- 管线状态 ---

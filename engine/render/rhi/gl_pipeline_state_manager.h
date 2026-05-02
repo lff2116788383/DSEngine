@@ -55,6 +55,9 @@ public:
     /// 上一次 ApplyState 时的 Diff 命中次数（同一 handle 连续 Apply 跳过）
     std::size_t diff_hits() const { return diff_hits_; }
 
+    /// 当前管线状态数量（供 Shutdown 时更新账本）
+    std::size_t pipeline_state_count() const { return pipeline_states_.size(); }
+
 private:
     unsigned int next_pipeline_state_handle_ = 330000;
     std::unordered_map<unsigned int, PipelineStateDesc> pipeline_states_;

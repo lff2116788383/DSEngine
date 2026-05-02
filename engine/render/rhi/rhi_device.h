@@ -17,6 +17,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstdint>
 #include <string>
 #include "engine/render/rhi/rhi_types.h"
@@ -269,6 +270,9 @@ private:
     dse::render::GLShaderManager shader_mgr_;
     dse::render::GLDrawExecutor draw_executor_;
     dse::render::UBOManager ubo_mgr_;
+
+    /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理
+    std::unordered_set<unsigned int> external_shader_programs_;
 
     bool initialized_ = false;
 };

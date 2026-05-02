@@ -688,6 +688,7 @@ unsigned int GLShaderManager::GetOrCreatePostProcessShader(const std::string& ef
 
     const char* fs_c_str = fs_src.c_str();
     unsigned int shader = CompileProgram(vs_src, fs_c_str);
+    programs_created_ += 1;
     pp_shaders_[effect_name] = shader;
     return shader;
 }

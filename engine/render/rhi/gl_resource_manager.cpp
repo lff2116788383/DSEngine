@@ -58,6 +58,7 @@ void GLResourceManager::DestroyAllRenderTargets() {
             target.depth_texture_handle = 0;
         }
     }
+    resource_ledger_.render_targets_destroyed += render_targets_.size();
     render_targets_.clear();
 }
 
