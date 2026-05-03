@@ -39,9 +39,8 @@ endif()
 if(DSE_ENABLE_3D)
     add_definitions(-D DSE_ENABLE_3D)
 endif()
-if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
-    add_definitions(-D DSE_ENABLE_PHYSX)
-endif()
+# 注意：DSE_ENABLE_PHYSX 宏定义移至 Physx cmake include 之后，
+# 因为 DSE_HAS_PHYSX_LIBS 在 cmake/CMakeLists.txt.Physx 中才被设置。
 
 # 设置输出目录为 bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
@@ -76,6 +75,12 @@ include(cmake/CMakeLists.txt.lua_script)
 include(cmake/CMakeLists.txt.luasocket)
 if(DSE_ENABLE_PHYSX)
     include(cmake/CMakeLists.txt.Physx)
+endif()
+
+# DSE_ENABLE_PHYSX 宏需在 Physx cmake include 之后定义，
+# 因为 DSE_HAS_PHYSX_LIBS 在 cmake/CMakeLists.txt.Physx 中才被设置
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    add_definitions(-D DSE_ENABLE_PHYSX)
 endif()
 
 #头文件目录
