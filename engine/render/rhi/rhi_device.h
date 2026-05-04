@@ -152,6 +152,9 @@ private:
 /**
  * @class RhiDevice
  * @brief 渲染硬件接口基类，提供创建 GPU 资源（纹理、缓冲、着色器）及命令缓冲的统一抽象
+ *
+ * 阴影/光源全局状态接口：所有后端（OpenGL、Vulkan）均实现相同的阴影贴图与光源矩阵绑定，
+ * 消除上层代码对具体后端的 dynamic_cast 依赖。
  */
 class RhiDevice {
 public:
@@ -178,6 +181,16 @@ public:
     virtual void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) = 0;
     virtual void EndFrame() = 0;
     virtual const RenderStats& LastFrameStats() const = 0;
+
+    // --- 阴影/光源全局状态接口（所有后端统一） ---
+    virtual void SetGlobalShadowMap(unsigned int index, unsigned int handle) = 0;
+    void SetGlobalSpotShadowMap(unsigned int handle) { SetGlobalSpotShadowMap(0, handle); }
+    virtual void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) = 0;
+    virtual void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) = 0;
+    virtual void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
+    virtual void SetGlobalCascadeSplit(unsigned int index, float split) = 0;
+    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { SetGlobalSpotLightSpaceMatrix(0, mat); }
+    virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
 };
 
 /**
@@ -193,6 +206,9 @@ public:
  */
 class OpenGLRhiDevice final : public RhiDevice {
 public:
+    using RhiDevice::SetGlobalSpotShadowMap;
+    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
+
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
@@ -217,28 +233,22 @@ public:
     const RenderStats& LastFrameStats() const override;
 
     // --- 全局阴影/光源矩阵（委托到 draw_executor_） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) {
+    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override {
         draw_executor_.SetGlobalShadowMap(index, handle);
     }
-    void SetGlobalSpotShadowMap(unsigned int handle) {
-        SetGlobalSpotShadowMap(0, handle);
-    }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
+    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override {
         draw_executor_.SetGlobalSpotShadowMap(index, handle);
     }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) {
+    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override {
         draw_executor_.SetGlobalPointShadowMap(index, handle);
     }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
+    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
     }
-    void SetGlobalCascadeSplit(unsigned int index, float split) {
+    void SetGlobalCascadeSplit(unsigned int index, float split) override {
         draw_executor_.SetGlobalCascadeSplit(index, split);
     }
-    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) {
-        SetGlobalSpotLightSpaceMatrix(0, mat);
-    }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
+    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
 

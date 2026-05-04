@@ -8,6 +8,7 @@
 #include "engine/render/rhi/gl_shader_manager.h"
 #include "engine/render/rhi/gl_resource_manager.h"
 #include "engine/render/rhi/ubo_manager.h"
+#include "engine/render/rhi/gl_enum_convert.h"
 #include "engine/platform/screen.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>
@@ -677,7 +678,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             auto pipeline_state = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
             if (pipeline_state && pipeline_state->culling_enabled) {
                 glEnable(GL_CULL_FACE);
-                glCullFace(pipeline_state->cull_face);
+                glCullFace(ToGLCullFace(pipeline_state->cull_face));
             } else {
                 glDisable(GL_CULL_FACE);
             }
@@ -717,7 +718,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 auto pipeline_state = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
                 if (pipeline_state && pipeline_state->depth_test_enabled) {
                     glEnable(GL_DEPTH_TEST);
-                    glDepthFunc(pipeline_state->depth_func);
+                    glDepthFunc(ToGLCompareFunc(pipeline_state->depth_func));
                 }
             }
             continue;
@@ -746,7 +747,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             auto pipeline_state = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
             if (pipeline_state && pipeline_state->depth_test_enabled) {
                 glEnable(GL_DEPTH_TEST);
-                glDepthFunc(pipeline_state->depth_func);
+                glDepthFunc(ToGLCompareFunc(pipeline_state->depth_func));
             }
         }
 

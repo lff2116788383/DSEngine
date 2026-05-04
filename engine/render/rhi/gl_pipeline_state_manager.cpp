@@ -4,6 +4,7 @@
  */
 
 #include "engine/render/rhi/gl_pipeline_state_manager.h"
+#include "engine/render/rhi/gl_enum_convert.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>
 
@@ -50,7 +51,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         }
     }
     if (state.blend_enabled && (state.blend_src != cached.blend_src || state.blend_dst != cached.blend_dst)) {
-        glBlendFunc(state.blend_src, state.blend_dst);
+        glBlendFunc(ToGLBlendFactor(state.blend_src), ToGLBlendFactor(state.blend_dst));
     }
 
     // --- 深度测试 Diff ---
@@ -65,7 +66,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         glDepthMask(state.depth_write_enabled ? GL_TRUE : GL_FALSE);
     }
     if (state.depth_test_enabled && state.depth_func != cached.depth_func) {
-        glDepthFunc(state.depth_func);
+        glDepthFunc(ToGLCompareFunc(state.depth_func));
     }
 
     // --- 裁剪面 Diff ---
@@ -77,7 +78,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         }
     }
     if (state.culling_enabled && state.cull_face != cached.cull_face) {
-        glCullFace(state.cull_face);
+        glCullFace(ToGLCullFace(state.cull_face));
     }
 
     // 更新缓存

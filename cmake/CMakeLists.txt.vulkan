@@ -1,0 +1,108 @@
+# ============================================================================
+# Vulkan Headers + Loader 源码集成 — Vulkan RHI 后端核心依赖
+# ============================================================================
+#
+# 条件：仅在 DSE_ENABLE_VULKAN=ON 时激活
+# 源码位置：depends/Vulkan-Headers/ + depends/Vulkan-Loader/
+# 产出：Vulkan::Headers（接口库）+ Vulkan::Loader（vulkan-1.dll/vulkan-1.lib）
+#
+# 优先使用 depends/ 中的源码；如果源码缺失则回退到 find_package(Vulkan)。
+# 这样开发者无需单独安装 Vulkan SDK，只需克隆子模块即可。
+# ============================================================================
+
+if(NOT DSE_ENABLE_VULKAN)
+    return()
+endif()
+
+set(VK_HEADERS_DIR "${CMAKE_SOURCE_DIR}/depends/Vulkan-Headers")
+set(VK_LOADER_DIR "${CMAKE_SOURCE_DIR}/depends/Vulkan-Loader")
+
+# --- 1. Vulkan Headers ---
+if(EXISTS "${VK_HEADERS_DIR}/CMakeLists.txt")
+    # 保存/恢复 CMake 状态，避免全局设置污染
+    set(DSE_VK_PREV_CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED})
+    set(DSE_VK_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+    set(CMAKE_WARN_DEPRECATED OFF)
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
+
+    # 禁止 Vulkan-Headers 的 install 目标
+    set(VULKAN_HEADERS_INSTALL OFF CACHE BOOL "" FORCE)
+
+    add_subdirectory(${VK_HEADERS_DIR} ${CMAKE_BINARY_DIR}/third_party/vulkan-headers)
+
+    set(CMAKE_WARN_DEPRECATED ${DSE_VK_PREV_CMAKE_WARN_DEPRECATED})
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_VK_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+
+    set(DSE_VULKAN_HEADERS_FROM_SOURCE ON)
+    set(DSE_VULKAN_INCLUDE_DIR "${VK_HEADERS_DIR}/include")
+    message(STATUS "Vulkan-Headers integrated from source: ${VK_HEADERS_DIR}")
+else()
+    message(STATUS "Vulkan-Headers source not found at ${VK_HEADERS_DIR}, will try find_package")
+    set(DSE_VULKAN_HEADERS_FROM_SOURCE OFF)
+endif()
+
+# --- 2. Vulkan Loader ---
+if(EXISTS "${VK_LOADER_DIR}/CMakeLists.txt")
+    # 保存/恢复 CMake 状态
+    set(DSE_VK_PREV_CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED})
+    set(DSE_VK_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+    set(CMAKE_WARN_DEPRECATED OFF)
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
+
+    # 禁用测试、安装、代码生成等不需要的目标
+    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(LOADER_CODEGEN OFF CACHE BOOL "" FORCE)
+    set(LOADER_ENABLE_ADDRESS_SANITIZER OFF CACHE BOOL "" FORCE)
+    set(LOADER_ENABLE_THREAD_SANITIZER OFF CACHE BOOL "" FORCE)
+    set(LOADER_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+
+    # 告诉 Vulkan-Loader 使用我们刚编译的 Vulkan-Headers
+    if(DSE_VULKAN_HEADERS_FROM_SOURCE)
+        set(VulkanHeaders_DIR "${CMAKE_BINARY_DIR}/third_party/vulkan-headers" CACHE PATH "" FORCE)
+    endif()
+
+    add_subdirectory(${VK_LOADER_DIR} ${CMAKE_BINARY_DIR}/third_party/vulkan-loader)
+
+    set(CMAKE_WARN_DEPRECATED ${DSE_VK_PREV_CMAKE_WARN_DEPRECATED})
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_VK_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+
+    # Vulkan Loader 使用 /MT 静态 CRT，需强制与引擎 /MD DLL CRT 一致
+    if(MSVC)
+        set_property(TARGET vulkan PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+
+    set(DSE_VULKAN_LOADER_FROM_SOURCE ON)
+    message(STATUS "Vulkan-Loader integrated from source: ${VK_LOADER_DIR}")
+else()
+    message(STATUS "Vulkan-Loader source not found at ${VK_LOADER_DIR}, will try find_package")
+    set(DSE_VULKAN_LOADER_FROM_SOURCE OFF)
+endif()
+
+# --- 3. 回退：系统 Vulkan SDK ---
+if(NOT DSE_VULKAN_HEADERS_FROM_SOURCE AND NOT DSE_VULKAN_LOADER_FROM_SOURCE)
+    find_package(Vulkan QUIET)
+    if(Vulkan_FOUND)
+        message(STATUS "Using system Vulkan SDK: ${Vulkan_INCLUDE_DIRS}")
+        set(DSE_VULKAN_FROM_SYSTEM ON)
+    else()
+        message(WARNING
+            "Vulkan not available from any source:\n"
+            "  1. depends/Vulkan-Headers/ source not found\n"
+            "  2. depends/Vulkan-Loader/ source not found\n"
+            "  3. System Vulkan SDK not found via find_package\n"
+            "Vulkan RHI backend will be disabled. "
+            "Either clone the submodules or install Vulkan SDK from https://vulkan.lunarg.com/"
+        )
+        set(DSE_ENABLE_VULKAN OFF)
+        set(DSE_VULKAN_FROM_SYSTEM OFF)
+    endif()
+else()
+    set(DSE_VULKAN_FROM_SYSTEM OFF)
+endif()
+
+# 汇总标记
+if(DSE_VULKAN_HEADERS_FROM_SOURCE OR DSE_VULKAN_LOADER_FROM_SOURCE OR DSE_VULKAN_FROM_SYSTEM)
+    set(DSE_HAS_VULKAN ON)
+else()
+    set(DSE_HAS_VULKAN OFF)
+endif()

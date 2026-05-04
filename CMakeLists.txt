@@ -28,6 +28,7 @@ option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
+option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
@@ -39,6 +40,13 @@ endif()
 if(DSE_ENABLE_3D)
     add_definitions(-D DSE_ENABLE_3D)
 endif()
+
+# Vulkan + glslang 源码集成（仅在 Vulkan 启用时加载）
+if(DSE_ENABLE_VULKAN)
+    include(cmake/CMakeLists.txt.vulkan)
+    include(cmake/CMakeLists.txt.glslang)
+endif()
+
 # 注意：DSE_ENABLE_PHYSX 宏定义移至 Physx cmake include 之后，
 # 因为 DSE_HAS_PHYSX_LIBS 在 cmake/CMakeLists.txt.Physx 中才被设置。
 
@@ -168,6 +176,11 @@ file(GLOB_RECURSE engine_cpp
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 
+# Vulkan RHI 后端源文件仅在启用时编译
+if(NOT DSE_ENABLE_VULKAN)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
+endif()
+
 
 if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
@@ -289,6 +302,39 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
             ${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib
             ${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib>
     )
+endif()
+# --- Vulkan RHI 后端 ---
+if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)
+    add_definitions(-D DSE_ENABLE_VULKAN)
+
+    # Vulkan 头文件 + Loader 链接（源码构建或系统 SDK）
+    if(DSE_VULKAN_HEADERS_FROM_SOURCE)
+        target_link_libraries(dse_engine PRIVATE Vulkan::Headers)
+    endif()
+    if(DSE_VULKAN_LOADER_FROM_SOURCE)
+        target_link_libraries(dse_engine PRIVATE Vulkan::Loader)
+    elseif(DSE_VULKAN_FROM_SYSTEM)
+        target_include_directories(dse_engine PRIVATE ${Vulkan_INCLUDE_DIRS})
+        target_link_libraries(dse_engine PRIVATE Vulkan::Vulkan)
+    endif()
+
+    # glslang 运行时编译库（GLSL→SPIR-V）
+    if(DSE_HAS_GLSLANG)
+        add_definitions(-D DSE_HAS_GLSLANG)
+        target_include_directories(dse_engine PRIVATE
+            ${DSE_GLSLANG_INCLUDE_DIR}
+            ${DSE_GLSLANG_INCLUDE_DIR}/glslang/Include
+            ${DSE_GLSLANG_INCLUDE_DIR}/SPIRV
+        )
+        target_link_libraries(dse_engine PRIVATE glslang SPIRV MachineIndependent GenericCodeGen glslang-default-resource-limits)
+    else()
+        message(WARNING "DSE_ENABLE_VULKAN=ON but glslang not available. "
+                        "Vulkan shader compilation will be disabled at runtime.")
+    endif()
+elseif(DSE_ENABLE_VULKAN AND NOT DSE_HAS_VULKAN)
+    message(WARNING "DSE_ENABLE_VULKAN=ON but Vulkan headers/loader not available. "
+                    "Vulkan RHI backend will be disabled.")
+    set(DSE_ENABLE_VULKAN OFF)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)

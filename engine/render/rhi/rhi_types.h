@@ -3,6 +3,7 @@
  * @brief RHI 层公共类型定义，集中管理所有渲染相关的数据描述结构体
  *
  * 包含：
+ * - RHI 无关枚举（混合因子/深度函数/剔除面等）
  * - 渲染目标描述 (RenderTargetDesc)
  * - 管线状态描述 (PipelineStateDesc)
  * - 渲染通道描述 (RenderPassDesc)
@@ -20,6 +21,51 @@
 #include <string>
 
 // ============================================================
+// RHI 无关枚举 — 替代原 OpenGL 硬编码常量
+// ============================================================
+
+/// RHI 后端类型
+enum class RhiBackend : unsigned int {
+    OpenGL = 0,
+    Vulkan = 1,
+    Default = OpenGL  ///< 默认使用 OpenGL 后端
+};
+
+/// 混合因子
+enum class BlendFactor : unsigned int {
+    Zero = 0,
+    One = 1,
+    SrcAlpha = 2,
+    OneMinusSrcAlpha = 3,
+    DstAlpha = 4,
+    OneMinusDstAlpha = 5,
+    SrcColor = 6,
+    OneMinusSrcColor = 7,
+    DstColor = 8,
+    OneMinusDstColor = 9,
+};
+
+/// 深度比较函数
+enum class CompareFunc : unsigned int {
+    Never = 0,
+    Less = 1,
+    Equal = 2,
+    LessEqual = 3,
+    Greater = 4,
+    NotEqual = 5,
+    GreaterEqual = 6,
+    Always = 7,
+};
+
+/// 剔除面
+enum class CullFace : unsigned int {
+    None = 0,
+    Front = 1,
+    Back = 2,
+    FrontAndBack = 3,
+};
+
+// ============================================================
 // 渲染目标与管线状态描述
 // ============================================================
 
@@ -33,16 +79,16 @@ struct RenderTargetDesc {
     bool cube_map = false;
 };
 
-/// 管线状态描述符
+/// 管线状态描述符（RHI 无关）
 struct PipelineStateDesc {
     bool blend_enabled = true;
-    unsigned int blend_src = 0x0302;     ///< GL_SRC_ALPHA
-    unsigned int blend_dst = 0x0303;     ///< GL_ONE_MINUS_SRC_ALPHA
+    BlendFactor blend_src = BlendFactor::SrcAlpha;
+    BlendFactor blend_dst = BlendFactor::OneMinusSrcAlpha;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
-    unsigned int depth_func = 0x0201;      ///< GL_LESS
+    CompareFunc depth_func = CompareFunc::Less;
     bool culling_enabled = true;
-    unsigned int cull_face = 0x0405;     ///< GL_BACK
+    CullFace cull_face = CullFace::Back;
 };
 
 /// 渲染通道描述符
@@ -89,7 +135,7 @@ struct BatchVertex {
 
 /// 3D 网格绘制项
 struct MeshDrawItem {
-    unsigned int vao_override = 0;       ///< 非零时直接使用此 VAO
+    unsigned int vao_override = 0;       ///< 非零时直接使用此 VAO（仅 GL 后端有效）
     unsigned int index_count_override = 0;
 
     unsigned int texture_handle = 0;
@@ -189,4 +235,5 @@ struct RenderStats {
     int max_batch_sprites = 0;
     int render_passes = 0;
     int shadow_passes = 0;
+    int particle_count = 0;  ///< 3D 粒子数量
 };

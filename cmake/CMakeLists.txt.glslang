@@ -1,0 +1,91 @@
+# ============================================================================
+# glslang 源码集成 — Vulkan RHI 后端 GLSL→SPIR-V 运行时编译
+# ============================================================================
+#
+# 条件：仅在 DSE_ENABLE_VULKAN=ON 时激活
+# 源码位置：depends/glslang/
+# 产出：glslang, SPIRV 静态库 → 链接进 dse_engine
+#
+# glslang 的 add_subdirectory 方式集成，自动产生以下 target：
+#   glslang       : 核心编译器库
+#   SPIRV         : SPIR-V 生成器
+#   glslang-standalone : 独立编译器（不需要，禁用测试避免构建）
+# ============================================================================
+
+if(NOT DSE_ENABLE_VULKAN)
+    return()
+endif()
+
+set(GLSLANG_DIR "${CMAKE_SOURCE_DIR}/depends/glslang")
+
+if(NOT EXISTS "${GLSLANG_DIR}/CMakeLists.txt")
+    message(WARNING "glslang source not found at ${GLSLANG_DIR}. "
+                    "Vulkan shader compilation will not be available. "
+                    "Run: git clone --depth 1 --branch 15.0.0 "
+                    "https://github.com/KhronosGroup/glslang.git depends/glslang")
+    set(DSE_HAS_GLSLANG OFF)
+    return()
+endif()
+
+# 抑制 glslang 构建噪音：禁用测试/安装/工具
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(SKIP_GLSLANG_INSTALL ON CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+set(SPIRV_TESTS OFF CACHE BOOL "" FORCE)
+
+# glslang 默认构建 SPIRV-Tools 作为可选依赖。
+# 引擎当前仅需要 glslang + SPIRV 生成器，不需要 SPIRV-Tools 优化。
+# 禁用 SPIRV-Tools 避免额外下载和编译时间。
+set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+
+# 保存/恢复 CMake 状态，避免 glslang 的全局设置污染主工程
+set(DSE_GLSLANG_PREV_CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED})
+set(DSE_GLSLANG_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+set(CMAKE_WARN_DEPRECATED OFF)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1)
+
+add_subdirectory(${GLSLANG_DIR} ${CMAKE_BINARY_DIR}/third_party/glslang)
+
+set(CMAKE_WARN_DEPRECATED ${DSE_GLSLANG_PREV_CMAKE_WARN_DEPRECATED})
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_GLSLANG_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
+
+# glslang 使用 /MT 静态 CRT，需强制与引擎 /MD DLL CRT 一致
+if(MSVC)
+    set_property(TARGET glslang PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set_property(TARGET SPIRV PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set_property(TARGET MachineIndependent PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set_property(TARGET GenericCodeGen PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set_property(TARGET glslang-default-resource-limits PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    if(TARGET SPIRV-Tools-opt)
+        set_property(TARGET SPIRV-Tools-opt PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+    if(TARGET SPIRV-Tools)
+        set_property(TARGET SPIRV-Tools PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+endif()
+
+# 同步主工程的编译定义，避免 LNK2038 链接不匹配
+set(DSE_GLSLANG_COMPILE_DEFS
+    _CRT_STDIO_ISO_WIDE_SPECIFIERS=1
+    _CRT_NONSTDC_NO_WARNINGS=1
+    _CRT_DECLARE_NONSTDC_NAMES=1
+)
+target_compile_definitions(glslang PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+target_compile_definitions(SPIRV PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+target_compile_definitions(MachineIndependent PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+target_compile_definitions(GenericCodeGen PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+target_compile_definitions(glslang-default-resource-limits PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+if(TARGET SPIRV-Tools-opt)
+    target_compile_definitions(SPIRV-Tools-opt PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+endif()
+if(TARGET SPIRV-Tools)
+    target_compile_definitions(SPIRV-Tools PRIVATE ${DSE_GLSLANG_COMPILE_DEFS})
+endif()
+
+# 将 glslang include 路径暴露给 dse_engine（include() 方式下变量自动在父作用域）
+set(DSE_GLSLANG_INCLUDE_DIR "${GLSLANG_DIR}")
+set(DSE_HAS_GLSLANG ON)
+
+message(STATUS "glslang integrated from ${GLSLANG_DIR}")

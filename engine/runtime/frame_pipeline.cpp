@@ -20,6 +20,7 @@
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
 #include "engine/scene/scene.h"
+#include "engine/render/rhi/rhi_factory.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glad/gl.h>
 #include <iostream>
@@ -150,7 +151,9 @@ bool FramePipeline::Init() {
         return false;
     }
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    runtime_context_.rhi_device = std::make_unique<OpenGLRhiDevice>();
+    const auto rhi_backend = dse::render::ResolveRhiBackendFromEnv();
+    runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
+    DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
@@ -229,8 +232,8 @@ bool FramePipeline::Init() {
 
     PipelineStateDesc sprite_desc;
     sprite_desc.blend_enabled = true;
-    sprite_desc.blend_src = 0x0302; // GL_SRC_ALPHA
-    sprite_desc.blend_dst = 0x0303; // GL_ONE_MINUS_SRC_ALPHA
+    sprite_desc.blend_src = BlendFactor::SrcAlpha;
+    sprite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
     sprite_desc.depth_test_enabled = false;
     sprite_desc.depth_write_enabled = false;
     sprite_desc.culling_enabled = false;
@@ -246,7 +249,7 @@ bool FramePipeline::Init() {
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
     mesh_desc.culling_enabled = true;
-    mesh_desc.depth_func = 0x0203; // GL_LEQUAL: scene color pass must accept depth equality after PreZ.
+    mesh_desc.depth_func = CompareFunc::LessEqual; // scene color pass must accept depth equality after PreZ.
     render_resources_.mesh_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(mesh_desc);
     if (render_resources_.mesh_pipeline_state == 0) {
         DEBUG_LOG_ERROR("FramePipeline init failed: mesh pipeline state creation returned 0");
@@ -272,7 +275,7 @@ bool FramePipeline::Init() {
     shadow_desc.depth_test_enabled = true;
     shadow_desc.depth_write_enabled = true;
     shadow_desc.culling_enabled = true;
-    shadow_desc.cull_face = 0x0404; // GL_FRONT to avoid peter-panning
+    shadow_desc.cull_face = CullFace::Front; // avoid peter-panning
     render_resources_.shadow_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(shadow_desc);
     if (render_resources_.shadow_pipeline_state == 0) {
         DEBUG_LOG_ERROR("FramePipeline init failed: shadow pipeline state creation returned 0");
@@ -282,8 +285,8 @@ bool FramePipeline::Init() {
 
     PipelineStateDesc composite_desc;
     composite_desc.blend_enabled = false;
-    composite_desc.blend_src = 0x0302; // GL_SRC_ALPHA
-    composite_desc.blend_dst = 0x0303; // GL_ONE_MINUS_SRC_ALPHA
+    composite_desc.blend_src = BlendFactor::SrcAlpha;
+    composite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
     composite_desc.depth_test_enabled = false;
     composite_desc.depth_write_enabled = false;
     composite_desc.culling_enabled = false;
@@ -708,9 +711,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             cmd_buffer.SetGlobalFloatArray("u_cascade_splits", cascade_splits);
 
             for (int i = 0; i < CSM_CASCADES; ++i) {
-                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
-                    device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
-                }
+                runtime_context_.rhi_device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
             }
         });
     }
@@ -748,9 +749,7 @@ void FramePipeline::BuildRenderGraphInternal() {
                 }
                 cmd_buffer.EndRenderPass();
                 spot_light_space_matrices.push_back(light_proj * light_view_mat);
-                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
-                    device->SetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.spot_shadow_render_target[shadow_slot]));
-                }
+                runtime_context_.rhi_device->SetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.spot_shadow_render_target[shadow_slot]));
                 ++shadow_slot;
             }
             cmd_buffer.SetGlobalMat4Array("u_spot_light_space_matrices", spot_light_space_matrices);
@@ -802,9 +801,8 @@ void FramePipeline::BuildRenderGraphInternal() {
                     cmd_buffer.EndRenderPass();
                 }
 
-                if (auto* device = dynamic_cast<OpenGLRhiDevice*>(runtime_context_.rhi_device.get())) {
-                    device->SetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.point_shadow_render_target[shadow_slot]));
-                }
+
+                runtime_context_.rhi_device->SetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.point_shadow_render_target[shadow_slot]));
                 ++shadow_slot;
             }
         });

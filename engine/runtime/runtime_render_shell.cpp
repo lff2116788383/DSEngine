@@ -13,14 +13,12 @@ std::shared_ptr<CommandBuffer> CreateRuntimeRenderCommandBuffer(::FramePipeline&
 }
 
 void BindRuntimeShadowMaps(::FramePipeline& pipeline) {
-    if (auto* device = dynamic_cast<OpenGLRhiDevice*>(pipeline.runtime_context_.rhi_device.get())) {
-        for (int i = 0; i < CSM_CASCADES; ++i) {
-            device->SetGlobalShadowMap(i, pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.shadow_render_target[i]));
-        }
-        for (int i = 0; i < 4; ++i) {
-            device->SetGlobalSpotShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.spot_shadow_render_target[i]));
-            device->SetGlobalPointShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.point_shadow_render_target[i]));
-        }
+    for (int i = 0; i < CSM_CASCADES; ++i) {
+        pipeline.runtime_context_.rhi_device->SetGlobalShadowMap(i, pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.shadow_render_target[i]));
+    }
+    for (int i = 0; i < 4; ++i) {
+        pipeline.runtime_context_.rhi_device->SetGlobalSpotShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.spot_shadow_render_target[i]));
+        pipeline.runtime_context_.rhi_device->SetGlobalPointShadowMap(static_cast<unsigned int>(i), pipeline.runtime_context_.rhi_device->GetRenderTargetDepthTexture(pipeline.render_resources_.point_shadow_render_target[i]));
     }
 }
 
