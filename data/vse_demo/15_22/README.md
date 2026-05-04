@@ -183,9 +183,11 @@ glClear(GL_DEPTH_BUFFER_BIT);
 ## 当前阶段视觉差异与后续根因
 
 1. 已修复 `.dmesh` 多 submesh 丢失问题；`Monster.dmesh` 的 2 个 submesh 现在都会进入 `MeshDrawItem`。
-2. 当前截图验收不再依赖关闭所有 VSE cooked mesh 深度：6 个 Monster 已恢复正常 depth test/write；剩余兼容开关只作用于 OceanPlane 语义平面，且当前只需关闭 OceanPlane depth test、保留 depth write 即可稳定 `VERIFY_OK`。说明黑屏/近黑的深度根因主要集中在大平面与 depth test/PreZ 链路，而不是 Monster skinned mesh 全局异常。当前 OceanPlane 已由 DSE 程序化生成，避免继续依赖 VSE 生成/派生的 cooked 平面资源。
+2. 当前截图验收不再依赖关闭任何 cooked mesh 深度：6 个 Monster 和 OceanPlane 均使用 `depth_test=true/depth_write=true` 正常工作。深度缓冲根因（`glDepthMask(GL_FALSE)` 状态泄漏）已修复。
 3. VSE 原始相机 `(0,900,900)` / dir `(0,-1,-1)` 按 `SCALE=0.01` 直映射到 DSE `(0,9,9)` / `-45` 后，自动截图中对象仍过小或不可见；当前继续使用 `(0,5.2,14)` / `-26` 保证肉眼可检查场景，但这仍属于 DSE 可见范围映射，不是 1:1 相机复刻。
-4. 材质仍使用 `MESH_UNLIT` 与偏亮 emissive/tint，原因是 PBR + 当前贴图/灯光映射下截图亮度不足；后续需要修正 `.dmat` 贴图路径、VSE specular/emissive 到 DSE PBR 参数映射，再逐步回到 `MESH_PBR`。
+4. 材质已从 `MESH_UNLIT` 升级至 `MESH_PBR`，并通过 `set_mesh_texture` 设置了 Monster 的 albedo/normal/roughness/emissive 贴图（来自 `raw/Texture/Monster_d/n/s/e.tga`）。
+5. OceanPlane 已从 DSE 程序化四边形升级为 cooked `OceanPlane.dmesh` + `OceanPlane.dmat`，逼近 VSE 原始网格几何。
+6. PointLight 阴影已通过新增 `set_point_light_shadow` Lua API 开启，Demo 15.22 核心功能"演示点光源传统影子"已复刻。引擎渲染管线中 `shadow_passes=6`（PointLight 6 面立方体阴影）已确认工作。
 
 ## 当前不能 100% VSE 原生格式直读的原因
 
@@ -221,12 +223,13 @@ data/
 
 ## 后续实施顺序
 
-1. 复制/重映射 `soulbrast*.tga` 或替代贴图到 `data/vse_demo/15_22/textures/`，并修正 `.dmat` 中的相对路径。
+1. ~~复制/重映射贴图到 `data/vse_demo/15_22/textures/`，并修正 `.dmat` 中的相对路径。~~ 已完成：通过 `set_mesh_texture` Lua API 直接设置贴图 slot，贴图路径为 `raw/Texture/Monster_d/n/s/e.tga`。
 2. 修正 `AssetBuilder` 多 clip 输出：允许一个 FBX 导出多个 `.danim`，或允许只导出 animation/skeleton 而复用主 `Monster.dmesh`。
 3. 若需要完全匹配 VSE 原生资源，再编写 `.SKMODEL/.STMODEL/.ACTION/.ANIMTREE` 只读转换器。
 4. 把当前 Idle/Pos/AddtiveAnim 的 Monster clip 近似映射升级为真实 VSE 状态动画。
 5. 增加 screenshot/mesh bounds 级验收，确保 cooked Monster/OceanPlane 在不同机器上不是黑屏、过小或贴图缺失。
-6. 针对 OceanPlane 单独排查：~~当前已替换为 DSE 程序化平面，并已从完全禁用深度推进到 `depth_test=false/depth_write=true`~~ **已解决**：depth buffer 根因为 `glDepthMask(GL_FALSE)` 状态泄漏导致深度清除静默失败；修复后 OceanPlane `depth_test=true/depth_write=true` 正常工作，`VERIFY_OK`。后续应关注：(a) OceanPlane near-plane crossing（2/4 顶点 `clip.w<=0`，`crosses_near=true`）在 clip-safe 模式下是否需要引擎级裁剪辅助；(b) 引擎关闭时 GL 资源泄漏导致的 access violation (exit 0xC0000005)；(c) 诊断代码清理——当前 `gl_draw_executor.cpp` 和 `mesh_render_system.cpp` 中的 VSE 15.22 专属诊断应在根因确认后逐步降低或移除；(d) `frame_pipeline.cpp` 中 Runtime stats 的 `{:.3f}` 格式修饰符不生效问题。
+6. 针对 OceanPlane 排查：(a) 引擎关闭时 GL 资源泄漏导致的 access violation (exit 0xC0000005)；(b) 诊断代码清理——当前 `gl_draw_executor.cpp` 和 `mesh_render_system.cpp` 中的 VSE 15.22 专属诊断应在根因确认后逐步降低或移除；(c) `frame_pipeline.cpp` 中 Runtime stats 的格式问题。
+7. 实现 Additive 动画混合模式：VSE 6 个动画状态之一的 AddtiveAnim 需要引擎 Animator3D 支持 additive blend，当前使用 Monster.danim 近似。
 
 ## 许可/用途说明
 

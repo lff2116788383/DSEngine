@@ -531,6 +531,31 @@ int L_EcsAddPointLight3D(lua_State* L) {
     return 0;
 }
 
+/** 设置 PointLight 阴影参数
+ *  @param entity    灯光实体
+ *  @param cast_shadow  是否投射阴影（bool，默认 true）
+ *  @return bool 是否设置成功
+ */
+int L_EcsSetPointLightShadow(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* light = helper::TryGetComponent<PointLightComponent>(*world, e);
+    if (!light) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    if (!lua_isnoneornil(L, 2)) {
+        light->cast_shadow = helper::CheckBool(L, 2);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsAddSpotLight3D(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -1000,6 +1025,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_directional_light_3d",  L_EcsSetDirectionalLight3D},
         {"set_directional_light_shadow", L_EcsSetDirectionalLightShadow},
         {"add_point_light_3d",        L_EcsAddPointLight3D},
+        {"set_point_light_shadow",    L_EcsSetPointLightShadow},
         {"add_spot_light_3d",         L_EcsAddSpotLight3D},
         {"add_sky_light",             L_EcsAddSkyLight},
         {"set_sky_light",             L_EcsSetSkyLight},
