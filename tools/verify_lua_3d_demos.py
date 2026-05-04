@@ -3,8 +3,10 @@ import os
 import pathlib
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import zlib
 from typing import Iterable
 
 # 修复 Windows 下 stdout/stderr 编码问题
@@ -206,6 +208,8 @@ REQUIRED_LOG_TOKENS = {
         "point_shadow=true",
         "pbr_material=true",
         "cooked_ocean=true",
+        "texture_bind_summary",
+        "loaded_slots=4",
     ],
 }
 
@@ -247,19 +251,127 @@ def extract_render_readback_metrics(output: str) -> tuple[int | None, int | None
     return max_rgb, avg_rgb
 
 
+def _paeth_predictor(a: int, b: int, c: int) -> int:
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+
+def _read_png_rgb_pixels(png_path: pathlib.Path) -> tuple[int, int, list[tuple[int, int, int]]]:
+    """用 stdlib 解码 8-bit RGB/RGBA PNG，避免无 Pillow 环境跳过像素检查。"""
+    data = png_path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not_png")
+
+    pos = 8
+    width = height = bit_depth = color_type = None
+    raw = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        chunk_type = data[pos + 4:pos + 8]
+        chunk = data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if chunk_type == b"IHDR":
+            width, height, bit_depth, color_type, compression, png_filter, interlace = struct.unpack(">IIBBBBB", chunk)
+            if compression != 0 or png_filter != 0 or interlace != 0:
+                raise ValueError("unsupported_png_layout")
+        elif chunk_type == b"IDAT":
+            raw += chunk
+        elif chunk_type == b"IEND":
+            break
+
+    if width is None or height is None or bit_depth != 8 or color_type not in (2, 6):
+        raise ValueError("unsupported_png_format")
+
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    inflated = zlib.decompress(raw)
+    rows: list[bytearray] = []
+    cursor = 0
+    prev = bytearray(stride)
+    for _ in range(height):
+        filter_type = inflated[cursor]
+        cursor += 1
+        row = bytearray(inflated[cursor:cursor + stride])
+        cursor += stride
+        for i in range(stride):
+            left = row[i - channels] if i >= channels else 0
+            up = prev[i]
+            up_left = prev[i - channels] if i >= channels else 0
+            if filter_type == 1:
+                row[i] = (row[i] + left) & 0xFF
+            elif filter_type == 2:
+                row[i] = (row[i] + up) & 0xFF
+            elif filter_type == 3:
+                row[i] = (row[i] + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                row[i] = (row[i] + _paeth_predictor(left, up, up_left)) & 0xFF
+            elif filter_type != 0:
+                raise ValueError("unsupported_png_filter")
+        rows.append(row)
+        prev = row
+
+    pixels: list[tuple[int, int, int]] = []
+    for row in rows:
+        for x in range(0, stride, channels):
+            pixels.append((row[x], row[x + 1], row[x + 2]))
+    return width, height, pixels
+
+
+def _png_visual_metrics(png_path: pathlib.Path) -> dict[str, float | int]:
+    width, height, pixels = _read_png_rgb_pixels(png_path)
+    total = len(pixels)
+    lumas = [0.2126 * r + 0.7152 * g + 0.0722 * b for r, g, b in pixels]
+    min_val = min(min(p) for p in pixels)
+    max_val = max(max(p) for p in pixels)
+    mean_val = sum(sum(p) / 3.0 for p in pixels) / total
+    mean_luma = sum(lumas) / total
+    variance = sum((l - mean_luma) * (l - mean_luma) for l in lumas) / total
+
+    border: list[tuple[int, int, int]] = []
+    for y in range(height):
+        for x in range(width):
+            if y < 20 or y >= height - 20 or x < 20 or x >= width - 20:
+                border.append(pixels[y * width + x])
+    bg_r = sum(p[0] for p in border) / len(border)
+    bg_g = sum(p[1] for p in border) / len(border)
+    bg_b = sum(p[2] for p in border) / len(border)
+    subject = 0
+    for r, g, b in pixels:
+        if abs(r - bg_r) + abs(g - bg_g) + abs(b - bg_b) > 36.0:
+            subject += 1
+
+    edges = 0
+    edge_samples = 0
+    for y in range(1, height):
+        row = y * width
+        prev_row = (y - 1) * width
+        for x in range(1, width):
+            lum = lumas[row + x]
+            if abs(lum - lumas[row + x - 1]) > 10.0 or abs(lum - lumas[prev_row + x]) > 10.0:
+                edges += 1
+            edge_samples += 1
+
+    return {
+        "width": width,
+        "height": height,
+        "min": int(min_val),
+        "max": int(max_val),
+        "mean": float(mean_val),
+        "luma_std": variance ** 0.5,
+        "subject_ratio": subject / total,
+        "edge_ratio": edges / max(1, edge_samples),
+    }
+
+
 def check_screenshot_not_black(png_path: pathlib.Path) -> tuple[bool, str]:
-    """检查截图是否为黑屏或接近纯色。
-
-    使用轻量像素采样（无需第三方图像库），读取 PNG 文件头后
-    按 IHDR 解析宽高，然后对 IDAT 解压后的原始像素做间隔采样。
-    如果采样点 RGB 值全部接近 0 或全部相同，视为黑屏/纯色。
-
-    回退策略：若无法解析 PNG（如文件过小或格式异常），
-    只做文件大小检查（> 1KB 即视为非黑屏）。
-
-    Returns:
-        (is_ok, detail): is_ok=True 表示截图正常，detail 为诊断信息
-    """
+    """检查截图是否为黑屏或接近纯色；无 Pillow 时也必须解析像素。"""
     MIN_FILE_SIZE = 1024  # 1KB 以下几乎不可能是有效截图
     if not png_path.exists():
         return False, "file_not_found"
@@ -267,32 +379,40 @@ def check_screenshot_not_black(png_path: pathlib.Path) -> tuple[bool, str]:
     if file_size < MIN_FILE_SIZE:
         return False, f"file_too_small={file_size}bytes"
 
-    # 尝试用 PIL/Pillow 做精确检测（如可用）
     try:
-        from PIL import Image
-        import numpy as np
-        img = Image.open(str(png_path)).convert("RGB")
-        arr = np.array(img)
-        # 采样：最多取 100x100 网格
-        h, w = arr.shape[:2]
-        step_h = max(1, h // 100)
-        step_w = max(1, w // 100)
-        sampled = arr[::step_h, ::step_w]
+        metrics = _png_visual_metrics(png_path)
+    except Exception as exc:
+        return False, f"png_decode_failed={exc} file_size={file_size}bytes"
 
-        max_val = int(sampled.max())
-        min_val = int(sampled.min())
-        mean_val = float(sampled.mean())
+    max_val = int(metrics["max"])
+    min_val = int(metrics["min"])
+    mean_val = float(metrics["mean"])
+    luma_std = float(metrics["luma_std"])
+    if max_val <= 5:
+        return False, f"all_black max={max_val} mean={mean_val:.1f}"
+    if max_val - min_val <= 3 or luma_std <= 1.5:
+        return False, f"near_solid max={max_val} min={min_val} mean={mean_val:.1f} luma_std={luma_std:.2f}"
+    return True, "max={} min={} mean={:.1f} luma_std={:.2f} subject_ratio={:.4f} edge_ratio={:.4f}".format(max_val, min_val, mean_val, luma_std, float(metrics["subject_ratio"]), float(metrics["edge_ratio"]))
 
-        # 全黑判定
-        if max_val <= 5:
-            return False, f"all_black max={max_val} mean={mean_val:.1f}"
-        # 近乎纯色判定：最大最小差值极小
-        if max_val - min_val <= 3 and max_val <= 15:
-            return False, f"near_solid max={max_val} min={min_val} mean={mean_val:.1f}"
-        return True, f"max={max_val} min={min_val} mean={mean_val:.1f}"
-    except ImportError:
-        # 无 Pillow，用 render readback 亮度指标替代
-        return True, f"file_size_ok={file_size}bytes (no_pillow_skip_pixel_check)"
+
+def check_vse15_22_visual_subject(png_path: pathlib.Path) -> tuple[bool, str]:
+    """VSE 15.22 专项验收：不能只亮，必须有足够非背景主体与边缘细节。"""
+    try:
+        metrics = _png_visual_metrics(png_path)
+    except Exception as exc:
+        return False, f"png_decode_failed={exc}"
+
+    subject_ratio = float(metrics["subject_ratio"])
+    edge_ratio = float(metrics["edge_ratio"])
+    luma_std = float(metrics["luma_std"])
+    detail = "subject_ratio={:.4f} edge_ratio={:.4f} luma_std={:.2f} max={} mean={:.1f}".format(subject_ratio, edge_ratio, luma_std, int(metrics["max"]), float(metrics["mean"]))
+    if subject_ratio < 0.080:
+        return False, f"subject_too_small {detail} min_subject_ratio=0.080"
+    if edge_ratio < 0.002:
+        return False, f"edge_detail_too_low {detail} min_edge_ratio=0.002"
+    if luma_std < 8.0:
+        return False, f"contrast_too_low {detail} min_luma_std=8.0"
+    return True, detail
 
 
 def check_log_errors(output: str) -> list[str]:
@@ -393,6 +513,13 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
     if not screenshot_ok:
         print(f"SCREENSHOT_BLACK_OR_SOLID {entry}: {screenshot_detail}", flush=True)
         return 4
+
+    if entry == "3d_vse15_22_scene":
+        vse_visual_ok, vse_visual_detail = check_vse15_22_visual_subject(png_path)
+        if not vse_visual_ok:
+            print(f"SCREENSHOT_SUBJECT_NOT_VISIBLE {entry}: {vse_visual_detail}", flush=True)
+            return 4
+        screenshot_detail = f"{screenshot_detail}; vse_visual={vse_visual_detail}"
 
     print(f"SCREENSHOT_OK {png_path} ({screenshot_detail})", flush=True)
     # 引擎关闭时可能因 GL 资源清理等触发 access violation (exit 0xC0000005 = 3221225477)，

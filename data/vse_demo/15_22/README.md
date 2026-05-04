@@ -2,7 +2,7 @@
 
 > 用途：为 `samples/lua/3d/3d_vse15_22_scene.lua` 的“完整场景复刻”记录原始素材、离线转换结果与当前缺口。
 >
-> 当前状态：已复制 VSE 15.22 相关原始/源资源到 `data/vse_demo/15_22/raw/`，并已用 `bin/AssetBuilder.exe` 从 FBX 烘焙出 `data/vse_demo/15_22/cooked/` 下的 DSE `.dmesh/.dmat/.dskel/.danim`。当前 Lua demo 已严格复刻 `Source.cpp` 场景对象清单与坐标布局：6 个 `NewMonsterWithAnim.SKMODEL`、1 个语义等价的 DSE 程序化 `NewOceanPlane.STMODEL` 支撑平面、1 个 SkyLight、1 个 PointLight、1 个第一人称/自由相机等价控制器；不再生成非 VSE 15.22 的 crate/cover/marker/cube fallback 可见物。DSEngine 运行时仍不能直接加载 VSE 原生 `.SKMODEL`、`.STMODEL`、`.TEXTURE`、`.ACTION/.ANIMTREE`，因此资源承载方式是“FBX cooked 角色 + DSE 程序化生成的 VSE 支撑平面语义复刻”，不是 VSE 原生格式直读。
+> 当前状态：已复制 VSE 15.22 相关原始/源资源到 `data/vse_demo/15_22/raw/`，并已用 `bin/AssetBuilder.exe` 从 FBX 烘焙出 `data/vse_demo/15_22/cooked/` 下的 DSE `.dmesh/.dmat/.dskel/.danim`。当前 Lua demo 已复刻 `Source.cpp` 场景对象清单与坐标布局：6 个 `NewMonsterWithAnim.SKMODEL`、1 个 cooked `NewOceanPlane.STMODEL` 支撑平面、1 个 SkyLight、1 个 PointLight、1 个第一人称/自由相机等价控制器；不再生成非 VSE 15.22 的 crate/cover/marker/cube fallback 可见物。默认相机/角色缩放采用截图验收视角，确保 800x600 截图中 6 个 Monster 有足够主体占比；`use_vse_camera_coords=true` 仍可切回 VSE 原始缩放相机。本轮针对截图“像是没贴图”的问题补充了实际 texture slot 验证：Lua 运行时逐实体调用 `set_mesh_texture` 绑定 Monster_d/n/s/e.tga，并要求日志出现 `texture_bind_summary loaded_slots=4`；同时将 `.dmat` 灰色 base_color/tint/emissive 对贴图的过度乘色降到最低，避免把 diffuse 贴图压成近灰。DSEngine 运行时仍不能直接加载 VSE 原生 `.SKMODEL`、`.STMODEL`、`.TEXTURE`、`.ACTION/.ANIMTREE`，因此资源承载方式是“FBX cooked 角色 + cooked OceanPlane + Lua 显式贴图 slot”，不是 VSE 原生格式直读。
 
 ## 来源
 
@@ -11,7 +11,7 @@
 - 参考场景内容：
   - 6 个 `NewMonsterWithAnim.SKMODEL` 骨骼角色实例。
   - 动画状态：`Idle`、`Walk`、`Attack`、`Attack2`、`Pos`、`AddtiveAnim`。
-  - 地面：`NewOceanPlane.STMODEL` 语义对象；该资源在 VSE material-saver demo 中由共享 `OceanPlane.STMODEL` 生成/派生，DSE demo 当前改为运行时程序化生成等价支撑平面，不再依赖 cooked VSE OceanPlane mesh。
+  - 地面：`NewOceanPlane.STMODEL` 语义对象；DSE demo 当前使用从 FBX 烘焙出的 cooked `OceanPlane.dmesh` + `OceanPlane.dmat` 承载，不再使用程序化四边形 fallback。
   - SkyLight 上/下半球颜色。
   - PointLight。
   - 第一人称相机控制。
@@ -54,8 +54,8 @@
 
 当前 `samples/lua/3d/3d_vse15_22_scene.lua` 已切到 cooked FBX 资源，并按 `Source.cpp` 坐标做完整场景复刻：
 
-- Camera：VSE `(0,900,900)` + dir `(0,-1,-1)`，FOV=90、near/far=`1/8000`。当前 DSE 已支持 Lua 传入 3D camera near/far，并使用 DSE 可见窗口 `(0,5.2,14)` / pitch `-26` 作为截图验收视角；VSE 原始 `(0,9,9)` / `-45` 已验证会因当前坐标/模型尺度组合在自动截图中几乎不可见，后续需继续做坐标系/单位尺度等价推导。
-- 地面：`NewOceanPlane.STMODEL` 在 VSE 侧是由共享 `OceanPlane.STMODEL` 生成/派生出的支撑资源；当前 Lua 不再加载 `vse_demo/15_22/cooked/OceanPlane.dmesh/.dmat`，而是在 DSE 运行时生成 `procedural:DSE_OceanPlaneQuad` 四边形，VSE 语义位置 `(0,0,0)`、scale `(100,100,100)`，DSE 当前使用 `dse_half_size=17.5` 匹配自动截图可见范围。
+- Camera：VSE `(0,900,900)` + dir `(0,-1,-1)`，FOV=90、near/far=`1/8000`。DSE 默认使用截图验收视角 `(0,4.2,7.0)` / pitch `-33`，让 2x3 的 6 个 cooked Monster 在 800x600 截图中有更大主体面积，便于观察 `Monster_d.tga` 贴图色块/边缘；config `use_vse_camera_coords=true` 可切换到 VSE 原始缩放坐标 `(0,9,9)` / pitch `-45`。
+- 地面：`NewOceanPlane.STMODEL` 在 VSE 侧是由共享 `OceanPlane.STMODEL` 生成/派生出的支撑资源；当前 Lua 使用 cooked `OceanPlane.dmesh` + `OceanPlane.dmat`，VSE 语义位置 `(0,0,0)`、scale `(100,100,100)`。
 - 角色：6 个 `NewMonsterWithAnim.SKMODEL` 均使用 `vse_demo/15_22/cooked/Monster.dmesh` + `vse_demo/15_22/cooked/Monster.dmat` + `vse_demo/15_22/cooked/Monster.dskel`。
 - 角色坐标：`(-300,0,300)`、`(0,0,300)`、`(300,0,300)`、`(-300,0,-300)`、`(0,0,-300)`、`(300,0,-300)`，DSE 按 `SCALE=0.01` 放置。
 - 动画映射：`Monster.danim` 近似 Idle/Pos/AddtiveAnim，`Walk.danim` 对齐 Walk，`Attack.danim` 对齐 Attack，`Attack2.danim` 对齐 Attack2。
@@ -180,19 +180,21 @@ glClear(GL_DEPTH_BUFFER_BIT);
 - 若 `PostDraw OceanPlane post_depth_center ≈ 0.0`：OceanPlane 写入了异常近值
 - 若 `MeshRenderSystem skinned_ndc_z_min ≈ -1.0` 或 `skinned_ndc_z_max ≈ 1.0`：CPU skinning 估算显示 Monster 深度范围异常
 
-## 当前阶段视觉差异与后续根因
+## 当前阶段视觉差异与验收结论
 
 1. 已修复 `.dmesh` 多 submesh 丢失问题；`Monster.dmesh` 的 2 个 submesh 现在都会进入 `MeshDrawItem`。
 2. 当前截图验收不再依赖关闭任何 cooked mesh 深度：6 个 Monster 和 OceanPlane 均使用 `depth_test=true/depth_write=true` 正常工作。深度缓冲根因（`glDepthMask(GL_FALSE)` 状态泄漏）已修复。
-3. VSE 原始相机 `(0,900,900)` / dir `(0,-1,-1)` 按 `SCALE=0.01` 直映射到 DSE `(0,9,9)` / `-45` 后，自动截图中对象仍过小或不可见；当前继续使用 `(0,5.2,14)` / `-26` 保证肉眼可检查场景，但这仍属于 DSE 可见范围映射，不是 1:1 相机复刻。
-4. 材质已从 `MESH_UNLIT` 升级至 `MESH_PBR`，并通过 `set_mesh_texture` 设置了 Monster 的 albedo/normal/roughness/emissive 贴图（来自 `raw/Texture/Monster_d/n/s/e.tga`）。
+3. 相机坐标支持 VSE 原始映射：默认使用截图验收视角 `(0,4.2,7.0)` / pitch `-33`，并将 cooked Monster 默认 `monster_scale` 调整为 `0.180`，确保截图中不再只是“非黑/亮屏”，而是能看到 2x3 角色主体和更明显的贴图色块。config 中设置 `use_vse_camera_coords=true` 可切换到 VSE 原始 `(0,9,9)` / pitch `-45`（VSE `(0,900,900)` / dir `(0,-1,-1)` 按 `SCALE=0.01` 缩放）。
+4. 材质已从 `MESH_UNLIT` 升级至 `MESH_PBR`，并通过 `set_mesh_texture` 设置了 Monster 的 albedo/normal/roughness/emissive 贴图（来自 `raw/Texture/Monster_d/n/s/e.tga`）。由于 cooked `Monster.dmat`/`OceanPlane.dmat` 的 texture slot 为空，截图验收不能再只看 `pbr_textures=true`，必须看日志中的 `texture_bind` 与 `texture_bind_summary loaded_slots=4`；Lua binding 会返回实际 GL handle 与贴图尺寸，当前每个 Monster 均为 4 个 512x512 贴图 slot 绑定成功。
 5. OceanPlane 已从 DSE 程序化四边形升级为 cooked `OceanPlane.dmesh` + `OceanPlane.dmat`，逼近 VSE 原始网格几何。
-6. PointLight 阴影已通过新增 `set_point_light_shadow` Lua API 开启，Demo 15.22 核心功能"演示点光源传统影子"已复刻。引擎渲染管线中 `shadow_passes=6`（PointLight 6 面立方体阴影）已确认工作。
+6. PointLight 阴影已通过新增 `set_point_light_shadow` Lua API 开启；引擎渲染管线中 `shadow_passes=6`（PointLight 6 面立方体阴影）已确认工作。注意：`reference/VSEngine2.1/Demo/15/15.22/Source.cpp` 本身只创建 PointLight，未像 15.23 那样显式 `SetShadowType(ST_DUAL_PARABOLOID)`，因此这里按 demo 标题/功能做 DSE 等价阴影演示，不宣称 VSE 原生 shadow type 逐行一致。
+7. 验证脚本已从 token/亮度验收升级为 PNG 像素级验收：无 Pillow 环境也会用 stdlib 解析 PNG，VSE 15.22 额外检查 `subject_ratio`、`edge_ratio`、`luma_std`，避免再次把“纯亮背景 + 很小主体”误判为视觉完成；并且新增日志 token 要求 `texture_bind_summary` 与 `loaded_slots=4`，避免把“Lua 里存在 textures table”误判为贴图真正绑定。
+8. 最新验证通过：`python tools\verify_lua_3d_demos.py --entries 3d_vse15_22_scene --frames 160 --timeout 90` 输出 `SCREENSHOT_OK` 与 `VERIFY_OK`，关键指标为 `subject_ratio=0.1661`、`edge_ratio=0.0027`、`luma_std=27.77`、`max=144`、`mean=121.2`；日志确认相机为 `(0,4.2,7.0)` / pitch `-33`、`visual_scale=0.180`，6 个 Monster 均 `texture_bind_summary loaded_slots=4`。该结论表示“对象清单、坐标布局、动画轮询、cooked 资源、截图主体可见性和实际贴图 slot 绑定”均通过；仍不是 VSE 原生专有格式直读或逐像素一致。
 
 ## 当前不能 100% VSE 原生格式直读的原因
 
 1. DSEngine 目前稳定加载的是 DSE 自有 `.dmesh/.dmat/.dskel/.danim` 资源链路。
-2. VSE 原始 `.SKMODEL/.STMODEL/.TEXTURE/.ACTION/.ANIMTREE` 是 VSE 自有资源格式，DSE 运行时没有直接 reader。
+2. VSE 原始 `.SKMODEL/.STMODEL/.TEXTURE/.ACTION/.ANIMTREE` 是 VSE 编辑器自动从 FBX 烘焙生成的专有格式，DSE 运行时不需要 reader——DSE 走自己的 `AssetBuilder` 从 FBX 源烘焙 DSE 格式路线。
 3. `AssetBuilder` 当前每个 FBX 只烘焙第一个 animation clip 到一个 `.danim`，无法直接从 VSE `.ANIMTREE/.ACTION` 拆出完整状态机。
 4. Demo 15.22 的关键价值在于“同一骨骼模型播放 6 个动画状态”。当前完整场景对象、坐标、相机、SkyLight、PointLight 已复刻；动画资源已经以 cooked FBX 覆盖 Walk/Attack/Attack2，并用 Monster clip 近似 Idle/Pos/AddtiveAnim。后续若要 100% 原生动画还原，需要：
    - VSE `.ACTION/.ANIMTREE` reader 或更多 FBX clip 源。
@@ -218,16 +220,17 @@ data/
   animation/character/vse15_22/attack2.danim
   animation/character/vse15_22/pos.danim
   animation/character/vse15_22/additive_anim.danim
-  # OceanPlane 语义对象建议继续由 DSE 程序化生成，不再沉淀 VSE 生成/派生平面的 cooked mesh/material。
+  static/vse15_22/ocean_plane.dmesh
+  materials/vse15_22/ocean_plane.dmat
 ```
 
 ## 后续实施顺序
 
-1. ~~复制/重映射贴图到 `data/vse_demo/15_22/textures/`，并修正 `.dmat` 中的相对路径。~~ 已完成：通过 `set_mesh_texture` Lua API 直接设置贴图 slot，贴图路径为 `raw/Texture/Monster_d/n/s/e.tga`。
+1. ~~复制/重映射贴图到 `data/vse_demo/15_22/textures/`，并修正 `.dmat` 中的相对路径。~~ 已完成：通过 `set_mesh_texture` Lua API 直接设置贴图 slot，贴图路径为 `raw/Texture/Monster_d/n/s/e.tga`；验证日志必须出现 `texture_bind_summary loaded_slots=4`，因为 cooked `.dmat` 自身没有贴图路径。
 2. 修正 `AssetBuilder` 多 clip 输出：允许一个 FBX 导出多个 `.danim`，或允许只导出 animation/skeleton 而复用主 `Monster.dmesh`。
 3. 若需要完全匹配 VSE 原生资源，再编写 `.SKMODEL/.STMODEL/.ACTION/.ANIMTREE` 只读转换器。
 4. 把当前 Idle/Pos/AddtiveAnim 的 Monster clip 近似映射升级为真实 VSE 状态动画。
-5. 增加 screenshot/mesh bounds 级验收，确保 cooked Monster/OceanPlane 在不同机器上不是黑屏、过小或贴图缺失。
+5. ~~增加 screenshot/mesh bounds 级验收，确保 cooked Monster/OceanPlane 在不同机器上不是黑屏、过小或贴图缺失。~~ 已完成：`verify_lua_3d_demos.py` 现在解析 PNG 并对 VSE 15.22 检查主体占比、边缘细节和亮度对比。
 6. 针对 OceanPlane 排查：(a) 引擎关闭时 GL 资源泄漏导致的 access violation (exit 0xC0000005)；(b) 诊断代码清理——当前 `gl_draw_executor.cpp` 和 `mesh_render_system.cpp` 中的 VSE 15.22 专属诊断应在根因确认后逐步降低或移除；(c) `frame_pipeline.cpp` 中 Runtime stats 的格式问题。
 7. 实现 Additive 动画混合模式：VSE 6 个动画状态之一的 AddtiveAnim 需要引擎 Animator3D 支持 additive blend，当前使用 Monster.danim 近似。
 

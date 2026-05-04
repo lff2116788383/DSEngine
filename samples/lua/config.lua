@@ -121,8 +121,11 @@ Config.demo_3d_terrain_lod_zones={
     max_height=3.0
 }
 Config.demo_3d_vse15_22_scene={
-    camera_distance=13.5,
+    camera_distance=7.0,
+    camera_height=4.2,
+    camera_pitch=-33.0,
     camera_speed=6.2,
+    monster_scale=0.180,
     mesh_path="vse_demo/15_22/cooked/OceanPlane.dmesh",
     material_path="vse_demo/15_22/cooked/OceanPlane.dmat",
     character_mesh_path="vse_demo/15_22/cooked/Monster.dmesh",

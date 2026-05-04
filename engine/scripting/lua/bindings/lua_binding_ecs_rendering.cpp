@@ -257,6 +257,16 @@ int L_EcsSetMeshMaterial(lua_State* L) {
     if (lua_gettop(L) >= 10) {
         mesh->material_double_sided = helper::CheckBool(L, 10);
     }
+    // 可选 base_color 覆盖：用于 .dmat 之后的 Lua 材质创作恢复贴图的白色乘色，
+    // 避免 .dmat base_color 与 material_albedo 双重相乘把 PBR 贴图压成灰色。
+    if (lua_gettop(L) >= 13) {
+        mesh->color.r = helper::CheckFloat(L, 11);
+        mesh->color.g = helper::CheckFloat(L, 12);
+        mesh->color.b = helper::CheckFloat(L, 13);
+        if (lua_gettop(L) >= 14) {
+            mesh->color.a = helper::CheckFloat(L, 14);
+        }
+    }
     return 0;
 }
 
