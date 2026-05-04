@@ -23,6 +23,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/scripting/lua_runtime_integration_test.cpp
     engine/scripting/lua_eventbus_integration_test.cpp
     engine/scripting/lua_ecs_integration_test.cpp
+    engine/scripting/lua_binding_3d_integration_test.cpp
+    engine/scripting/lua_binding_audio_integration_test.cpp
     # engine/audio
     engine/audio/audio_asset_integration_test.cpp
     # modules

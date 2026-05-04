@@ -185,6 +185,19 @@ Config.demo_3d_audio_complete={
     audio_path_b="",
     audio_path_c=""
 }
+Config.demo_3d_asset_pack_showcase={
+    camera_distance=12.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat"
+}
+Config.demo_3d_render_quality_showcase={
+    camera_distance=11.0,
+    shadow_strength=0.50,
+    bloom_threshold=0.75,
+    bloom_intensity=1.35,
+    exposure=1.0,
+    gamma=2.2
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

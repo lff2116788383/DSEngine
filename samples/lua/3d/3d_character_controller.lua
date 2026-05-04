@@ -1,6 +1,8 @@
--- 3D P4 sample: CharacterController3D showcase
+-- 3D P4 sample: CharacterController3D showcase + PhysX 专项回归
 -- 目标：验证 PhysX kinematic PxRigidDynamic + sweep 角色控制器 + Lua move/jump/grounded API
--- 5 个分时交互阶段：移动→跳跃→方向切换→碰撞检测→着地验证
+-- 8 个分时交互阶段：
+--   P1 移动→P2 跳跃→P3 方向切换→P4 碰撞检测→P5 着地验证
+--   P6 sweep 薄壁检测→P7 collider fallback 对比→P8 连续跳跃回归
 -- PhysX ENABLED 时使用真实后端，DISABLED 时 Transform fallback 仍可运行
 local CharacterController3D = {}
 
@@ -12,16 +14,18 @@ local state = {
     markers = {},
     time = 0.0,
     logged_api = false,
-    logged_phase1 = false,
-    logged_phase2 = false,
-    logged_phase3 = false,
-    logged_phase4 = false,
-    logged_phase5 = false,
+    logged_phase = {},
     gravity_y = -9.81,
     character_velocity_y = 0.0,
     is_grounded = false,
     move_dir = 1,           -- 1=前 -1=后
     character_facing = 0.0, -- 朝向角度
+    -- PhysX 专项回归数据
+    phase_start_pos = {},   -- 每阶段开始位置
+    jump_peak_y = 0.0,      -- 跳跃最高点
+    sweep_hit_count = 0,    -- sweep 检测命中次数
+    grounded_transition_count = 0,  -- grounded 状态翻转次数
+    last_grounded = false,
 }
 
 local function cube_vertices()
@@ -74,6 +78,8 @@ local function setup_scene(config)
         { name = "wall_right",  x = 3.0,  y = 0.40, z = 0.0,  sx = 0.4,  sy = 0.8, sz = 2.5, color = {0.42, 0.36, 0.30, 1.0} },
         { name = "step",        x = 1.5,  y = 0.10, z = 2.0,  sx = 1.8,  sy = 0.20,sz = 1.0, color = {0.55, 0.50, 0.42, 1.0} },
         { name = "ramp_block",  x = -1.5, y = 0.25, z = -1.2, sx = 1.2,  sy = 0.5, sz = 0.8, color = {0.45, 0.52, 0.40, 1.0} },
+        -- P6: sweep 薄壁检测专用障碍物
+        { name = "thin_wall",   x = 0.0,  y = 0.50, z = -5.5, sx = 3.0,  sy = 1.0, sz = 0.08,color = {0.70, 0.55, 0.25, 1.0} },
     }
     for _, obs in ipairs(obstacles) do
         local e = add_visual_cube(obs.name, obs.x, obs.y, obs.z, obs.sx, obs.sy, obs.sz, obs.color)
@@ -85,7 +91,6 @@ local function setup_scene(config)
     -- 角色控制器
     local character = dse.ecs.create_entity()
     dse.ecs.add_transform(character, 0.0, 0.0, 2.0, 1.0, 1.0, 1.0)
-    -- 创建 CharacterController3D 组件
     local cc_radius = 0.35
     local cc_height = 1.0
     local cc_success = dse.ecs.add_character_controller_3d(character, cc_radius, cc_height, 45.0, 0.3)
@@ -115,6 +120,7 @@ local function setup_scene(config)
     print("[3D][CharacterController] character_controller_api=true")
     print("[3D][CharacterController] add_character_controller_3d=" .. tostring(cc_success))
     print("[3D][CharacterController] radius=" .. cc_radius .. " height=" .. cc_height)
+    print("[3D][CharacterController] physx_regression: 8-phase sweep/grounded/jump/collider_fallback")
 end
 
 function CharacterController3D.Setup(config)
@@ -128,7 +134,6 @@ function CharacterController3D.Update(dt)
     local char = state.character
     if not char then return end
 
-    -- 移动速度
     local move_speed = 2.5
     local gravity = state.gravity_y
     local jump_speed = 5.0
@@ -142,32 +147,48 @@ function CharacterController3D.Update(dt)
     end
     dy = state.character_velocity_y * dt
 
-    -- ===== 阶段控制 =====
-    -- Phase 1 (0~2s)：向前移动
+    -- ===== 8 阶段控制 =====
+    -- Phase 1 (0~2s)：向前移动 + 记录起始位置
     if t < 2.0 then
         dz = -move_speed * dt * state.move_dir
-        if not state.logged_phase1 then
-            state.logged_phase1 = true
-            print("[3D][CharacterController] phase1=move_forward speed=" .. move_speed)
+        if not state.logged_phase[1] then
+            state.logged_phase[1] = true
+            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            state.phase_start_pos[1] = { x = px, y = py, z = pz }
+            print("[3D][CharacterController] phase1=move_forward speed=" .. move_speed
+                .. " start_pos=" .. string.format("(%.2f,%.2f,%.2f)", px, py, pz))
         end
 
-    -- Phase 2 (2~3.5s)：跳跃
-    elseif t < 3.5 then
+    -- Phase 2 (2~4s)：跳跃 + 峰值检测
+    elseif t < 4.0 then
         dz = -move_speed * dt * state.move_dir * 0.5
-        if not state.logged_phase2 then
-            state.logged_phase2 = true
+        if not state.logged_phase[2] then
+            state.logged_phase[2] = true
             local jump_ok = dse.ecs.character_controller_3d_jump(char, jump_speed)
             state.character_velocity_y = jump_speed
-            print("[3D][CharacterController] phase2=jump jump_speed=" .. jump_speed .. " jump_ok=" .. tostring(jump_ok))
+            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            state.phase_start_pos[2] = { x = px, y = py, z = pz }
+            print("[3D][CharacterController] phase2=jump jump_speed=" .. jump_speed
+                .. " jump_ok=" .. tostring(jump_ok)
+                .. " launch_y=" .. string.format("%.2f", py))
+        end
+        -- 跟踪跳跃峰值
+        local _, cur_y, _ = dse.ecs.character_controller_3d_get_position(char)
+        if cur_y > state.jump_peak_y then
+            state.jump_peak_y = cur_y
         end
 
-    -- Phase 3 (3.5~5.5s)：切换方向移动
+    -- Phase 3 (4~5.5s)：切换方向移动 + 着地确认
     elseif t < 5.5 then
         state.move_dir = -1
         dz = -move_speed * dt * state.move_dir
-        if not state.logged_phase3 then
-            state.logged_phase3 = true
-            print("[3D][CharacterController] phase3=reverse_direction dir=" .. state.move_dir)
+        if not state.logged_phase[3] then
+            state.logged_phase[3] = true
+            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            print("[3D][CharacterController] phase3=reverse_direction dir=" .. state.move_dir
+                .. " jump_peak_y=" .. string.format("%.2f", state.jump_peak_y)
+                .. " landed=" .. tostring(state.is_grounded)
+                .. " cur_y=" .. string.format("%.2f", py))
         end
 
     -- Phase 4 (5.5~7.0s)：朝障碍物方向移动 + 碰撞检测
@@ -175,28 +196,76 @@ function CharacterController3D.Update(dt)
         state.move_dir = 1
         dx = -move_speed * dt * 0.7
         dz = -move_speed * dt * state.move_dir
-        if not state.logged_phase4 then
-            state.logged_phase4 = true
+        if not state.logged_phase[4] then
+            state.logged_phase[4] = true
             print("[3D][CharacterController] phase4=obstacle_collision")
         end
 
-    -- Phase 5 (7.0s+)：连续跳跃验证着地
+    -- Phase 5 (7.0~8.5s)：着地验证 + grounded 精确性
+    elseif t < 8.5 then
+        dz = -move_speed * dt * 0.3
+        if not state.logged_phase[5] then
+            state.logged_phase[5] = true
+            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local grounded_check = dse.ecs.character_controller_3d_is_grounded(char)
+            print("[3D][CharacterController] phase5=grounded_verify"
+                .. " move_api_grounded=" .. tostring(state.is_grounded)
+                .. " is_grounded_api=" .. tostring(grounded_check)
+                .. " pos_y=" .. string.format("%.2f", py)
+                .. " grounded_transitions=" .. tostring(state.grounded_transition_count))
+        end
+
+    -- Phase 6 (8.5~10.5s)：sweep 薄壁检测（朝 thin_wall 移动）
+    elseif t < 10.5 then
+        state.move_dir = -1
+        dz = -move_speed * dt * 1.2
+        dx = move_speed * dt * 0.2
+        if not state.logged_phase[6] then
+            state.logged_phase[6] = true
+            print("[3D][CharacterController] phase6=sweep_thin_wall 朝 thin_wall 移动验证 sweep 碰撞")
+        end
+
+    -- Phase 7 (10.5~12.0s)：collider fallback 对比
+    --     角色 move 后检查位置是否合理（不应穿墙）
+    elseif t < 12.0 then
+        state.move_dir = 1
+        dz = -move_speed * dt * 0.5
+        dx = move_speed * dt * 0.6
+        if not state.logged_phase[7] then
+            state.logged_phase[7] = true
+            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            print("[3D][CharacterController] phase7=collider_fallback pos="
+                .. string.format("(%.2f,%.2f,%.2f)", px, py, pz)
+                .. " 角色 move 后位置应合理（不穿墙/不嵌入地面）")
+        end
+
+    -- Phase 8 (12.0s+)：连续跳跃回归
     else
         dz = -move_speed * dt * 0.3
-        -- 每 1.2 秒跳一次
-        if state.is_grounded and (t % 1.2 < dt) then
-            dse.ecs.character_controller_3d_jump(char, jump_speed * 0.8)
-            state.character_velocity_y = jump_speed * 0.8
+        if state.is_grounded and (t % 1.0 < dt) then
+            dse.ecs.character_controller_3d_jump(char, jump_speed * 0.75)
+            state.character_velocity_y = jump_speed * 0.75
         end
-        if not state.logged_phase5 then
-            state.logged_phase5 = true
-            print("[3D][CharacterController] phase5=continuous_jump_grounded_check")
+        if not state.logged_phase[8] then
+            state.logged_phase[8] = true
+            print("[3D][CharacterController] phase8=continuous_jump_regression 每1.0s跳跃验证着地循环")
         end
     end
 
     -- 调用 move API
     local is_grounded, vx, vy, vz, collision_flags = dse.ecs.character_controller_3d_move(char, dx, dy, dz, 0.001, dt)
+
+    -- grounded 状态翻转计数
+    if is_grounded ~= state.last_grounded then
+        state.grounded_transition_count = state.grounded_transition_count + 1
+        state.last_grounded = is_grounded
+    end
     state.is_grounded = is_grounded
+
+    -- sweep 命中计数（collision_flags 非零表示发生了碰撞）
+    if collision_flags and collision_flags ~= 0 then
+        state.sweep_hit_count = state.sweep_hit_count + 1
+    end
 
     -- 查询位置
     local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
@@ -212,10 +281,8 @@ function CharacterController3D.Update(dt)
     if state.markers[3] then
         local gm = state.markers[3]
         if state.is_grounded then
-            -- 绿色=着地
             dse.ecs.set_mesh_material(gm.entity, 0.0, 0.48, 1.0, 0.0, 0.20, 0.05, 1.0, true, true)
         else
-            -- 红色=空中
             dse.ecs.set_mesh_material(gm.entity, 0.0, 0.48, 1.0, 0.25, 0.05, 0.02, 1.0, true, true)
         end
     end
@@ -232,11 +299,27 @@ function CharacterController3D.Update(dt)
     end
 
     -- 阶段验证日志
-    if t > 3.0 and t < 3.1 then
-        print("[3D][CharacterController] phase1_verify grounded=" .. tostring(is_grounded) .. " pos_y=" .. string.format("%.2f", py))
+    if t > 3.8 and t < 3.9 then
+        print("[3D][CharacterController] phase2_verify jump_peak_y=" .. string.format("%.2f", state.jump_peak_y)
+            .. " is_grounded=" .. tostring(is_grounded) .. " pos_y=" .. string.format("%.2f", py))
     end
-    if t > 5.0 and t < 5.1 then
-        print("[3D][CharacterController] phase2_verify jump_landed=" .. tostring(is_grounded) .. " pos_y=" .. string.format("%.2f", py))
+    if t > 5.2 and t < 5.3 then
+        print("[3D][CharacterController] phase3_verify landed=" .. tostring(is_grounded)
+            .. " pos_y=" .. string.format("%.2f", py)
+            .. " grounded_transitions=" .. tostring(state.grounded_transition_count))
+    end
+    if t > 8.2 and t < 8.3 then
+        print("[3D][CharacterController] phase5_verify grounded=" .. tostring(is_grounded)
+            .. " grounded_transitions=" .. tostring(state.grounded_transition_count)
+            .. " sweep_hits=" .. tostring(state.sweep_hit_count))
+    end
+    if t > 10.2 and t < 10.3 then
+        print("[3D][CharacterController] phase6_verify sweep_hits=" .. tostring(state.sweep_hit_count)
+            .. " pos=" .. string.format("(%.2f,%.2f,%.2f)", px, py, pz))
+    end
+    if t > 11.8 and t < 11.9 then
+        print("[3D][CharacterController] phase7_verify collider_fallback pos="
+            .. string.format("(%.2f,%.2f,%.2f)", px, py, pz))
     end
 end
 

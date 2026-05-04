@@ -100,6 +100,12 @@ elseif game_entry == "3d_physics_triggers" then
 elseif game_entry == "3d_audio_complete" then
     RuntimeEntry = require("3d.3d_audio_complete")
     runtime_config = Config.demo_3d_audio_complete or Config.basic_3d or {}
+elseif game_entry == "3d_asset_pack_showcase" then
+    RuntimeEntry = require("3d.3d_asset_pack_showcase")
+    runtime_config = Config.demo_3d_asset_pack_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_render_quality_showcase" then
+    RuntimeEntry = require("3d.3d_render_quality_showcase")
+    runtime_config = Config.demo_3d_render_quality_showcase or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}
