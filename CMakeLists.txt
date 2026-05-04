@@ -277,7 +277,18 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         $<$<CONFIG:Debug>:${PHYSX_DLL_DIR_DEBUG}>
         $<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLL_DIR_RELEASE}>
     )
-    target_link_libraries(dse_engine PRIVATE ${PHYSX_LIBS})
+    target_link_libraries(dse_engine PRIVATE
+        $<$<CONFIG:Debug>:
+            ${PHYSX_LIB_DIR_DEBUG}/PhysX_64.lib
+            ${PHYSX_LIB_DIR_DEBUG}/PhysXCommon_64.lib
+            ${PHYSX_LIB_DIR_DEBUG}/PhysXCooking_64.lib
+            ${PHYSX_LIB_DIR_DEBUG}/PhysXFoundation_64.lib>
+        $<$<NOT:$<CONFIG:Debug>>:
+            ${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib
+            ${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib
+            ${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib
+            ${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib>
+    )
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
 if(WIN32)

@@ -132,8 +132,8 @@ data/
 | P3 | `samples/lua/3d/3d_texture_material_slots.lua` | texture/material slot 专项 | 已接入可用 texture slot + 顶点属性 authoring | 已接入 `.dmesh/.dmat` 样本与材质 slot marker；Lua `set_mesh_texture(entity, slot, path)` 可绑定 albedo/normal/metallic_roughness/emissive/occlusion，`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 可驱动手写 mesh 贴图采样 |
 | P3 | `samples/lua/3d/3d_terrain_lod_zones.lua` | Terrain LOD 分区专项 | 已接入可用 terrain height/LOD API | 已接入 TerrainComponent 程序化 height data、resolution/LOD 参数与 current_lod 查询；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
 | P4 | `samples/lua/3d/3d_vse15_22_scene.lua` | VSEngine 15.22 综合场景对齐 | 已落地并验证 | 已实现多角色+OceanPlane+SkyLight+PointLight 综合场景；已修复 `glDepthMask` 深度写入、`ShutdownGeometryBuffers` GL 资源释放、`DEBUG_LOG` 格式符等问题；VSE 15.22 诊断代码已通过 `#ifdef DSE_VSE_1522_DIAG` 隔离 |
-| P4 | `samples/lua/3d/3d_physics_interaction.lua` | 真实物理交互 | 建议新增 | 合并堆叠、raycast、选中高亮、施加 impulse/force；重点复验 PhysX 构建真实后端，保留 ECS collider fallback |
-| P4 | `samples/lua/3d/3d_character_controller.lua` | 真实角色控制器 | 建议新增 | capsule/character controller、地面检测、跳跃、斜坡、阻挡；复用最小 Animator3D 资源，后续替换真实角色资产 |
+| P4 | `samples/lua/3d/3d_physics_interaction.lua` | 真实物理交互 | 已落地 | 综合验证 PhysX 全链路：堆叠掉落、impulse/force 施力、velocity 查询、raycast 拾取、gravity 开关；5 个交互阶段分时触发；PhysX ENABLED 时使用真实后端，DISABLED 时仍可运行（ECS collider fallback） |
+| P4 | `samples/lua/3d/3d_character_controller.lua` | 真实角色控制器 | 已落地 | 基于 kinematic `PxRigidDynamic` + `PxScene::sweep` 的自定义控制器 + Lua move/jump/grounded/position API；5 阶段验证：移动→跳跃→方向切换→碰撞检测→连续跳跃着地 |
 | P4 | `samples/lua/3d/3d_asset_pack_showcase.lua` | 资源包/导入链路展示 | 建议新增 | 对 `data/models/static`、`data/materials/showcase`、`data/textures`、`data/animation` 做 manifest 化加载验收，资源可从 `reference/` 整理拷贝 |
 | P4 | `samples/lua/3d/3d_render_quality_showcase.lua` | 渲染质量专项 | 建议新增 | 聚焦 shadow 稳定性、CSM 分段、bloom/exposure/gamma、灰度/反相 effect mode；减少纯 fallback 视觉验收 |
 
@@ -410,6 +410,8 @@ data/
 | `3d_character_third_person` | `character_steering_api`、`add_steering=true`、`set_steering_target=true`、`get_steering_state=true`、`speed_nonzero=true`、`character_animation_resource`、`character_animator_state_api`、`resource_paths_configured=true`、最小资源路径、`character_skinned_mesh_resource`、`runtime_animation:`、`final_bones=2`、`mesh_final_bones=2`、`has_skeleton=true`、`mesh_has_skeleton=true` 日志 | 角色+跟随相机，目标 marker 和最小 skinned mesh 可见，cube rig fallback 保留 | Lua `get_steering_state` 回读真实 SteeringComponent velocity/speed；Lua `get_animator_3d_state` 回读角色 Animator3D state/time/final_bones/has_skeleton；`DSE_ENABLE_3D=OFF` Lua runtime 下由内置 SteeringSystem + Animator3D 更新链路驱动角色根节点移动/攻击切换与最小资源骨骼矩阵 |
 | `3d_audio_spatial` | real_3d_audio、get_source_state、clip_loaded、spatial_enabled、runtime_handle_nonzero 日志 | 音源/listener 标记和距离环可见 | Lua `get_source_state` 回读真实 AudioSourceComponent clip/runtime/3D 参数；最小 wav 音源随 Transform 绕 listener 移动 |
 | `3d_physics_raycast_pick` | raycast hit/entity/position/normal/distance | ray beam、目标、命中 marker 清晰可见 | Lua `physics_3d_raycast` 返回真实命中信息；PhysX 不可用时 ECS collider fallback 仍可命中 |
+| `3d_physics_interaction` | `[3D][PhysicsInteraction]`、`physics_interaction_api=true`、phase1~5 日志 | 堆叠方块、球体、命中 marker 可见 | 5 阶段综合交互验证：impulse→force→velocity→raycast→gravity toggle；PhysX ENABLED 使用真实后端 |
+| `3d_character_controller` | `[3D][CharacterController]`、`character_controller_api=true`、phase1~5 日志 | 角色 marker、障碍物、着地指示可见 | 5 阶段验证：移动→跳跃→方向切换→碰撞检测→连续跳跃着地；PhysX PxCapsuleController 真实后端 |
 | `3d_texture_material_slots` | mesh/material path、set_mesh_texture slot 与 mesh_authoring_api 日志 | albedo/roughness/emissive/normal slot 样本行可见，额外 authored quad 使用 Lua UV 贴图采样 | Lua `set_mesh_texture` 返回 handle/size；`set_mesh_uvs/set_mesh_normals/set_mesh_tangents` 返回 attribute count 并影响 MeshRenderSystem 顶点属性 |
 | `3d_terrain_lod_zones` | TerrainComponent 参数、terrain_api 与 runtime_lod 日志 | near/mid/far 三段 tile 密度差异明显，TerrainSystem 使用程序化 height grid | Lua `set_terrain_params/set_terrain_height/get_terrain_lod` 可设置网格并返回 current_lod；图片 heightmap 文件采样与 terrain texture 已由 `3d_terrain_heightmap` 验收 |
 | `3d_audio_spatial` | real_3d_audio、set_3d_mode/add_listener/set_3d_distance/get_source_state 与 source/listener position 日志 | 音源/listener 标记和距离环可见 | Lua `set_3d_mode/add_listener/set_3d_distance/get_source_state` 可配置并回读 3D 音源、listener、距离衰减、clip 加载和 runtime handle；AudioSystem 同步 Transform 到 miniaudio |
@@ -428,6 +430,7 @@ data/
 9b. Character/Steering：已新增 `get_steering_state(entity)`，`set_steering_target` 现在返回是否成功；`DSE_ENABLE_3D=OFF` Lua runtime 下已由 `FramePipeline` 内置 SteeringSystem 更新链路驱动真实 velocity 与 Transform 移动，`3d_character_third_person` 已复用 `data/animation/minimal_rig` 资源并用 `get_animator_3d_state` 同时验收角色 Animator3D 资源联动。后续重点是 capsule/character controller、真实角色资产和多 clip 攻击/移动动画。
 10. 3D Audio：已新增 `set_3d_mode`、`add_listener`、`set_3d_distance` 与 `get_source_state`，AudioSystem 使用 miniaudio spatialization 同步 source/listener Transform；已提供 `data/audio/spatial/spatial_ping.wav` 最小真实空间音效资源用于自动验收。
 11. Shadow：已新增 `set_directional_light_shadow(entity, cast_shadow, shadow_strength, cascade0, cascade1, cascade2)`，Lua 可稳定配置方向光阴影开关、强度与 CSM 分段；真实 shadow pass 视觉稳定性继续专项复验。
+12. CharacterController3D：已集成 PhysX PxCapsuleController，Lua 暴露 `add_character_controller_3d`、`character_controller_3d_move`、`character_controller_3d_jump`、`character_controller_3d_is_grounded`、`character_controller_3d_get_position`；`Physics3DSystem` 管理 `PxControllerManager` 生命周期，`SyncCharacterControllers` 每帧同步位置与着地状态；PhysX DISABLED 时 Transform fallback 仍可运行。
 
 ## 12. 当前阶段结论：从“补 demo”转为“P4 质量收口”
 
@@ -460,20 +463,26 @@ data/
 ### 13.2 `samples/lua/3d/3d_physics_interaction.lua`
 
 - 目标：合并 `3d_physics_stack` 和 `3d_physics_raycast_pick`，验证真实堆叠、raycast 命中、选中高亮、施加 impulse/force。
-- 当前可复用能力：RigidBody3D、BoxCollider3D/SphereCollider3D、`physics_3d_raycast`、ECS collider fallback。
-- 前置缺口：PhysX 构建链路需要稳定复验；需要补 Lua impulse/force API 才能完成真正交互。
-- 外部资源策略：首版不需要外部资源；如需更明确视觉，可从 reference 拷贝简单 crate/box 贴图到 `data/textures/vse_demo` 并用 `set_mesh_texture` 绑定。
-- 最小验收：日志包含 PhysX backend/fallback backend、raycast hit entity、selected entity、impulse applied、y 值变化和稳定状态；截图显示堆叠体、射线、命中 marker、选中高亮。
-- 优先级：高，但应排在 PhysX 构建复验之后。
+- 当前可复用能力：RigidBody3D、BoxCollider3D/SphereCollider3D、`physics_3d_raycast`、ECS collider fallback、`rigidbody_3d_add_impulse`/`rigidbody_3d_add_force`/`rigidbody_3d_get_velocity`/`rigidbody_3d_set_gravity`。
+- 实施状态：**已落地**。PhysX 构建已稳定启用，全部 5 个物理 Lua API 已暴露。Demo 包含 5 个分时交互阶段：
+  1. Phase 1 (0.6s)：对首个动态方块施加向上冲量 `add_impulse`
+  2. Phase 2 (1.2s)：对球体施加强制力 `add_force`
+  3. Phase 3 (2.0s)：检测速度和位置变化 `get_velocity` + `get_transform_position`
+  4. Phase 4 (2.5s)：从上方向下 raycast 拾取 `physics_3d_raycast`
+  5. Phase 5 (3.2s)：重力开关验证 `rigidbody_3d_set_gravity`
+- 验收标准：日志包含 `[3D][PhysicsInteraction]`、`physics_interaction_api=true`、phase1~5 各阶段输出；PhysX ENABLED 时堆叠体下落、冲量生效；PhysX DISABLED 时 ECS collider fallback 仍可运行。
 
 ### 13.3 `samples/lua/3d/3d_character_controller.lua`
 
 - 目标：从 Steering 角色推进到 capsule/character controller，覆盖地面检测、跳跃、斜坡、碰撞阻挡、相机跟随和动画状态切换。
 - 当前可复用能力：`3d_character_third_person` 的跟随相机、最小 Animator3D 资源、Steering 状态回读。
-- 前置缺口：需要 C++ 层 CharacterController/CapsuleController 组件或基于 Physics3D 的最小 Kinematic controller；Lua 需暴露 move/jump/grounded/state API。
-- 外部资源策略：首版仍使用 `data/animation/minimal_rig`；后续可从 `reference/` 挑选角色 mesh/贴图/动画，整理到 `data/models/character` 与 `data/animation/character`。
-- 最小验收：日志包含 controller grounded、velocity、jump trigger、collision/blocked state、Animator3D state；截图显示角色、地面、障碍、跳跃/移动轨迹 marker。
-- 优先级：中高，属于 gameplay 必需能力。
+- 实施状态：**已落地**。PhysX PxCapsuleController 已集成到 `Physics3DSystem`，Lua 暴露 5 个 API（`add_character_controller_3d`、`character_controller_3d_move`、`character_controller_3d_jump`、`character_controller_3d_is_grounded`、`character_controller_3d_get_position`）。Demo 包含 5 个分时交互阶段：
+  1. Phase 1 (0~2s)：向前移动 `move`
+  2. Phase 2 (2~3.5s)：跳跃 `jump`
+  3. Phase 3 (3.5~5.5s)：切换方向移动
+  4. Phase 4 (5.5~7s)：朝障碍物移动 + 碰撞检测
+  5. Phase 5 (7s+)：连续跳跃着地验证
+- 验收标准：日志包含 `[3D][CharacterController]`、`character_controller_api=true`、`add_character_controller_3d`、phase1~5 各阶段输出；PhysX ENABLED 时角色移动、跳跃、碰撞、着地检测均使用真实后端。
 
 ### 13.4 `samples/lua/3d/3d_asset_pack_showcase.lua`
 
@@ -524,8 +533,10 @@ data/
 2. 增强 `tools/verify_lua_3d_demos.py`：新增 `p4` preset、截图非黑屏/非纯色检测、关键 demo 的多帧日志断言。
 3. 复验真实后端：优先 PhysX stack/raycast、Shadow pass、Character controller 设计。
 4. 新增 `3d_vse15_22_scene`：用现有资源和最小 rig 先形成综合展示，后续逐步替换 reference 资源。
-5. 新增 `3d_physics_interaction`：在 PhysX 构建稳定和 impulse/force API 暴露后实现。
+5. ~~新增 `3d_physics_interaction`~~：已完成。PhysX 构建稳定，impulse/force/velocity/gravity API 全部暴露，5 阶段交互验证落地。
 6. 建立 `data/` 资源 manifest：为后续 `3d_asset_pack_showcase` 和真实角色/材质 demo 做准备。
-7. 再补 `3d_character_controller`、`3d_asset_pack_showcase`、`3d_render_quality_showcase`。
+7. ~~补 `3d_character_controller`~~：已完成。PhysX PxCapsuleController 集成 + Lua move/jump/grounded/position API，5 阶段交互验证落地。
+8. 建立 `data/` 资源 manifest：为后续 `3d_asset_pack_showcase` 和真实角色/材质 demo 做准备。
+9. 再补 `3d_asset_pack_showcase`、`3d_render_quality_showcase`。
 
 最终建议：`samples/lua/3d` 当前数量已经足够。下一步先做 P4 文档/验证/资源收口，再新增 1~2 个高价值 demo；若只能选一个新 demo，首选 `samples/lua/3d/3d_vse15_22_scene.lua`。

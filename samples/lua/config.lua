@@ -143,6 +143,12 @@ Config.demo_3d_vse15_22_scene={
     ocean_clip_safe_z_min=-17.5,
     ocean_clip_safe_z_max=12.0
 }
+
+Config.demo_3d_character_controller={
+    camera_distance=8.0,
+    camera_speed=4.0,
+    move_speed=2.5
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

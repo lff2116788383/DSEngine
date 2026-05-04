@@ -1,8 +1,8 @@
 # DSEngine 架构修复优化方案
 
-> **版本**: v2.3.0  
-> **日期**: 2026-05-02  
-> **状态**: P6 3D 物理 Lua Demo 端到端验证通过；PhysX 力/速度/重力 API 暴露至 Lua
+> **版本**: v2.5.0  
+> **日期**: 2026-05-03  
+> **状态**: P4 CharacterController3D 落地；基于 kinematic PxRigidDynamic + sweep 的自定义角色控制器 + Lua 5 API；3d_character_controller.lua 5 阶段验证
 > **基于**: DSEngine Phase 2 架构审查
 
 ---
@@ -1087,6 +1087,8 @@ DSEngine 架构设计明显借鉴了现代商业引擎经验，在 ECS 架构、
 
 | 版本 | 日期 | 变更摘要 |
 |------|------|----------|
+| v2.5.0 | 2026-05-03 | P4 CharacterController3D 落地：新增 `CharacterController3DComponent`（capsule radius/height/slope_limit/step_offset/is_grounded/collision_flags）；`Physics3DSystem` 集成 `PxControllerManager` + `PxCapsuleController`（懒创建/移动/跳跃/着地检测/位置查询/生命周期管理）；Lua 暴露 5 个 API（`add_character_controller_3d`/`move`/`jump`/`is_grounded`/`get_position`）；新增 `3d_character_controller.lua` P4 demo（5 阶段验证：移动→跳跃→方向切换→碰撞检测→连续跳跃着地） |
+| v2.4.0 | 2026-05-03 | PhysX CMake 配置修复 + P4 物理综合交互 Demo：CMake release import lib/DLL fallback 机制；DLL 部署 config-aware generator expression（6 个 CMake 文件）；DSE_ENABLE_PHYSX 宏时序修复（add_definitions 移至 include 之后）；Physics3DSystem 单元测试增强至 8 例；新增 `3d_physics_interaction.lua` P4 综合交互 demo（5 阶段验证 impulse/force/velocity/raycast/gravity）；verify_lua_3d_demos.py 注册 P4 physics interaction 入口 |
 | v2.3.0 | 2026-05-02 | P6 3D 物理 Lua Demo 端到端验证通过：新增 5 个 Lua 物理 API（add_force/add_impulse/set_velocity/get_velocity/set_gravity）；Physics3DSystem 添加动力学接口 + world_cache_ 缓存；3d_physics_stack demo 增强（冲量验证+位置检测+速度查询）；physics_bodies 统计修复（含 RigidBody3DComponent）；AnimatorSystem 延迟 RequireAssetManager 修复空 World 崩溃；verify_lua_3d_demos.py 物理栈验证通过（PhysX ENABLED，5 box FELL，impulse 生效） |
 | v2.2.0 | 2026-05-02 | PhysX 真实后端集成：解压完整 physx-4.1 预编译包；修复 CMake PhysX lib 查找（bin/ 目录 fallback）；绕过 CRT 不匹配（自定义 DseDefaultSimulationFilterShader + DseCpuDispatcher 替代 PhysXExtensions 静态库）；添加 DSE_ENABLE_PHYSX 编译定义；注册 Physics3DSystem 到 ServiceLocator + FixedUpdate 调度；添加 physics_3d_raycast Lua 绑定；PhysX DLL post-build 复制；461 单元测试全绿 |
 | v2.1.0 | 2026-05-02 | P8 全量测试验证通过：568 例全绿（单元 461 + 集成 107 + 冒烟 6）；文档中原记录的 2 个 EventBus::Instance 兼容测试失败已在后续提交中修复；更新 P8/ctest 验证标准为已通过 |

@@ -305,6 +305,124 @@ int L_Physics3DRaycast(lua_State* L) {
     return PushPhysics3DRaycastResult(L, RaycastEcs3DColliders(*world, origin, direction, max_dist));
 }
 
+// ============================================================
+// CharacterController3D 绑定
+// ============================================================
+
+/// 添加角色控制器组件：add_character_controller_3d(entity, radius, height, [slope_limit, step_offset])
+int L_EcsAddCharacterController3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float radius = helper::OptFloat(L, 2, 0.3f);
+    float height = helper::OptFloat(L, 3, 1.0f);
+    float slope_limit = helper::OptFloat(L, 4, 45.0f);
+    float step_offset = helper::OptFloat(L, 5, 0.3f);
+    auto& cc = world->registry().emplace_or_replace<CharacterController3DComponent>(e);
+    cc.radius = radius;
+    cc.height = height;
+    cc.slope_limit = slope_limit;
+    cc.step_offset = step_offset;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+/// 移动角色控制器：character_controller_3d_move(entity, dx, dy, dz, [min_dist, dt]) → is_grounded, vel_x, vel_y, vel_z, collision_flags
+int L_EcsCharacterController3DMove(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    float dx = helper::CheckFloat(L, 2);
+    float dy = helper::CheckFloat(L, 3);
+    float dz = helper::CheckFloat(L, 4);
+    float min_dist = helper::OptFloat(L, 5, 0.0f);
+    float dt = helper::OptFloat(L, 6, 1.0f / 60.0f);
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        auto result = physics->MoveCharacter(e, glm::vec3(dx, dy, dz), min_dist, dt);
+        lua_pushboolean(L, result.is_grounded ? 1 : 0);
+        helper::PushVec3(L, result.velocity);
+        lua_pushinteger(L, static_cast<lua_Integer>(result.collision_flags));
+        return 5;
+    }
+#endif
+    // 无 PhysX 时回退：直接修改 Transform
+    World* world = GetWorld();
+    if (world) {
+        auto* transform = helper::TryGetComponent<TransformComponent>(*world, e);
+        if (transform) {
+            transform->position += glm::vec3(dx, dy, dz);
+            transform->dirty = true;
+        }
+    }
+    lua_pushboolean(L, 0);
+    lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+    lua_pushinteger(L, 0);
+    return 5;
+}
+
+/// 角色跳跃：character_controller_3d_jump(entity, jump_speed) → success
+int L_EcsCharacterController3DJump(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    float jump_speed = helper::OptFloat(L, 2, 5.0f);
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        bool success = physics->JumpCharacter(e, jump_speed);
+        lua_pushboolean(L, success ? 1 : 0);
+        return 1;
+    }
+#endif
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+/// 查询是否着地：character_controller_3d_is_grounded(entity) → is_grounded
+int L_EcsCharacterController3DIsGrounded(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        lua_pushboolean(L, physics->IsCharacterGrounded(e) ? 1 : 0);
+        return 1;
+    }
+#endif
+    // 无 PhysX 回退：从组件缓存读取
+    World* world = GetWorld();
+    if (world) {
+        const auto* cc = helper::TryGetComponentConst<CharacterController3DComponent>(*world, e);
+        if (cc) {
+            lua_pushboolean(L, cc->is_grounded ? 1 : 0);
+            return 1;
+        }
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+/// 获取角色位置：character_controller_3d_get_position(entity) → x, y, z
+int L_EcsCharacterController3DGetPosition(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        glm::vec3 pos = physics->GetCharacterPosition(e);
+        helper::PushVec3(L, pos);
+        return 3;
+    }
+#endif
+    // 回退到 Transform
+    World* world = GetWorld();
+    if (world) {
+        const auto* transform = helper::TryGetComponentConst<TransformComponent>(*world, e);
+        if (transform) {
+            helper::PushVec3(L, transform->position);
+            return 3;
+        }
+    }
+    lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+    return 3;
+}
+
 } // namespace
 
 void RegisterEcsPhysics3DBindings(lua_State* L) {
@@ -319,6 +437,11 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"rigidbody_3d_get_velocity", L_EcsRigidBody3DGetVelocity},
         {"rigidbody_3d_set_gravity",  L_EcsRigidBody3DSetGravity},
         {"physics_3d_raycast",        L_Physics3DRaycast},
+        {"add_character_controller_3d",          L_EcsAddCharacterController3D},
+        {"character_controller_3d_move",         L_EcsCharacterController3DMove},
+        {"character_controller_3d_jump",         L_EcsCharacterController3DJump},
+        {"character_controller_3d_is_grounded",  L_EcsCharacterController3DIsGrounded},
+        {"character_controller_3d_get_position", L_EcsCharacterController3DGetPosition},
     });
 }
 

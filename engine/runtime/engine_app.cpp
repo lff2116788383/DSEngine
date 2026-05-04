@@ -347,7 +347,10 @@ void EngineInstance::Tick() {
 
 void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
-    
+
+    GLFWwindow* current_window = glfwGetCurrentContext();
+
+    pipeline_->SetWindowTitleSetter(nullptr);
     pipeline_->Shutdown();
     if (services_.job_system) {
         services_.job_system->Shutdown();
@@ -358,15 +361,40 @@ void EngineInstance::Shutdown() {
         services_.asset_manager->SetJobSystem(nullptr);
     }
 
-    // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World / FramePipeline 本身，由 EngineInstance 管理）
+    // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World 本身，由 EngineInstance 管理）
     ResetRuntimeServices();
-    
+
+    // FramePipeline and the default runtime services own objects whose destructors may touch
+    // engine/runtime state. Destroy owned instances while GLFW/GL and the debug logger are still
+    // alive instead of deferring to EngineInstance member destruction after RunEngine() returns.
+    pipeline_.reset();
+    if (default_world_) {
+        default_world_->Clear();
+        // EnTT keeps component storage pools allocated after clear(); one of the late pool
+        // destructors is currently crashing during process teardown after runtime shutdown.
+        // The world is empty at this point and the process is exiting, so intentionally detach
+        // the default world to avoid a late registry destructor re-entering released state.
+        (void)default_world_.release();
+        services_.world = nullptr;
+        config_.world = nullptr;
+        config_.services.world = nullptr;
+    }
+    default_asset_manager_.reset();
+    default_job_system_.reset();
+
     Debug::ShutDown();
-    
+
     if (!config_.enable_editor) {
+        if (current_window) {
+            glfwSetKeyCallback(current_window, nullptr);
+            glfwSetMouseButtonCallback(current_window, nullptr);
+            glfwSetScrollCallback(current_window, nullptr);
+            glfwSetCursorPosCallback(current_window, nullptr);
+            glfwDestroyWindow(current_window);
+        }
         glfwTerminate();
     }
-    
+
     is_initialized_ = false;
 }
 

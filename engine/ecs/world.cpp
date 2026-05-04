@@ -22,6 +22,9 @@ void World::DestroyEntity(Entity entity) {
 }
 
 void World::Clear() {
+    if (entity_count_ == 0) {
+        return;
+    }
     registry_.clear();
     entity_count_ = 0;
 }

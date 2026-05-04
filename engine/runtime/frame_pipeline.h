@@ -217,6 +217,7 @@ private:
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     dse::physics3d::Physics3DSystem physics3d_system_;
+    bool physics3d_system_initialized_ = false;
 #endif
 #ifndef DSE_ENABLE_3D
     dse::gameplay3d::Particle3DSystem particle3d_system_;

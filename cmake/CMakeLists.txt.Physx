@@ -93,12 +93,22 @@ if(MSVC)
     endforeach()
 
     if(PHYSX_LIB_DIR_DEBUG)
-        # 仅选取 DLL import lib，避免 static lib 的 CRT 不匹配
-        # PhysX 4.1 DLL 模式下 Extensions 已编译进 PhysX_64.dll
-        file(GLOB _PHYSX_DLL_LIBS_DEBUG "${PHYSX_LIB_DIR_DEBUG}/PhysX_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXCommon_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXCooking_64.lib" "${PHYSX_LIB_DIR_DEBUG}/PhysXFoundation_64.lib")
+        # DLL import lib（PhysX 4.1 预编译包中 CharacterKinematic 仅有 /MT CRT 的 static 版本，
+        # 与项目 /MD CRT 不兼容，因此不链接；角色控制器改用 PxScene::sweep 自行实现）
+        file(GLOB _PHYSX_DLL_LIBS_DEBUG
+            "${PHYSX_LIB_DIR_DEBUG}/PhysX_64.lib"
+            "${PHYSX_LIB_DIR_DEBUG}/PhysXCommon_64.lib"
+            "${PHYSX_LIB_DIR_DEBUG}/PhysXCooking_64.lib"
+            "${PHYSX_LIB_DIR_DEBUG}/PhysXFoundation_64.lib"
+        )
     endif()
     if(PHYSX_LIB_DIR_RELEASE)
-        file(GLOB _PHYSX_DLL_LIBS_RELEASE "${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib" "${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib")
+        file(GLOB _PHYSX_DLL_LIBS_RELEASE
+            "${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib"
+            "${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib"
+            "${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib"
+            "${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib"
+        )
     endif()
 
     # 部分预编译 PhysX 包仅提供 debug 配置的 import lib，release 目录为空。

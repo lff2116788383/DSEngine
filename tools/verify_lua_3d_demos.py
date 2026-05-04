@@ -62,6 +62,8 @@ P3_3D_ENTRIES = [
 ]
 
 P4_3D_ENTRIES = [
+    "3d_character_controller",
+    "3d_physics_interaction",
     "3d_vse15_22_scene",
 ]
 
@@ -182,6 +184,14 @@ REQUIRED_LOG_TOKENS = {
         "[3D][TerrainLodZones]",
         "terrain_api",
         "runtime_lod",
+    ],
+    "3d_physics_interaction": [
+        "[3D][PhysicsInteraction]",
+        "physics_interaction_api=true",
+    ],
+    "3d_character_controller": [
+        "[3D][CharacterController]",
+        "character_controller_api=true",
     ],
     "3d_vse15_22_scene": [
         "p4_vse15_22_scene",

@@ -355,10 +355,11 @@ bool FramePipeline::Init() {
 #endif
 
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
-    // PhysX 3D 物理系统初始化并注册到 ServiceLocator
+    // PhysX 3D 物理由引擎侧统一持有，确保 Lua 绑定查询的是同一个 ServiceLocator 实例。
     if (physics3d_system_.Init(*runtime_context_.world)) {
         dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
             std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
+        physics3d_system_initialized_ = true;
         DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem (PhysX) initialized and registered");
     } else {
         DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
@@ -408,22 +409,38 @@ void FramePipeline::Shutdown() {
         builtin_gameplay3d_enabled_ = false;
     }
 #endif
-    mesh_render_system_.SetAssetManager(nullptr);
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
-    physics3d_system_.Shutdown();
-    dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
-#endif
-    asset_manager.ReleaseGpuResources();
-    
+
+    // Dynamic modules own 3D render-side systems and may still reference asset/RHI resources.
+    // Shut them down before global GPU resource release and before unloading their DLLs.
     for (auto& mod : modules_) {
         if (mod.instance) {
             mod.instance->OnShutdown(*runtime_context_.world);
             if (mod.destroy) {
                 mod.destroy(mod.instance);
             }
+            mod.instance = nullptr;
         }
     }
+
+    // ECS components may hold runtime/shared_ptr state whose destructors live in dynamically
+    // loaded gameplay modules or touch asset/RHI objects. Clear the world while module DLLs,
+    // AssetManager and RHI are still alive, instead of deferring registry destruction to
+    // EngineInstance teardown after modules_.clear() unloads DLLs.
+    if (runtime_context_.world) {
+        runtime_context_.world->Clear();
+    }
+
     modules_.clear();
+
+    mesh_render_system_.SetAssetManager(nullptr);
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+    if (physics3d_system_initialized_) {
+        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
+        physics3d_system_.Shutdown();
+        physics3d_system_initialized_ = false;
+    }
+#endif
+    asset_manager.ReleaseGpuResources();
 
     if (runtime_context_.rhi_device) {
         runtime_context_.rhi_device->Shutdown();

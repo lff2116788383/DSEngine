@@ -14,6 +14,9 @@ namespace physx {
 }
 
 namespace dse {
+
+struct CharacterController3DComponent;
+
 namespace physics3d {
 
 struct RaycastResult {
@@ -22,6 +25,13 @@ struct RaycastResult {
     glm::vec3 hit_point = glm::vec3(0.0f);
     glm::vec3 hit_normal = glm::vec3(0.0f);
     float distance = 0.0f;
+};
+
+/// 角色控制器移动结果
+struct CharacterMoveResult {
+    bool is_grounded = false;           ///< 是否着地
+    glm::vec3 velocity = glm::vec3(0.0f);  ///< 移动后速度
+    uint8_t collision_flags = 0;        ///< CharacterCollisionFlag 位掩码
 };
 
 class Physics3DSystem {
@@ -44,6 +54,12 @@ public:
     void SetGravityEnabled(entt::entity entity, bool enabled);
     bool IsGravityEnabled(entt::entity entity) const;
 
+    // 角色控制器 API（基于 PxScene::sweep 的自定义实现，不依赖 PxControllerManager）
+    CharacterMoveResult MoveCharacter(entt::entity entity, const glm::vec3& displacement, float min_dist, float delta_time);
+    bool JumpCharacter(entt::entity entity, float jump_speed);
+    bool IsCharacterGrounded(entt::entity entity) const;
+    glm::vec3 GetCharacterPosition(entt::entity entity) const;
+
 private:
     physx::PxFoundation* foundation_ = nullptr;
     physx::PxPhysics* physics_ = nullptr;
@@ -54,6 +70,8 @@ private:
 
     void SyncTransformsToPhysics(World& world);
     void SyncPhysicsToTransforms(World& world);
+    void SyncCharacterControllers(World& world, float fixed_delta_time);
+    void CreateCharacterActor(World& world, entt::entity entity, CharacterController3DComponent& cc, const ::TransformComponent& transform);
 };
 
 } // namespace physics3d
