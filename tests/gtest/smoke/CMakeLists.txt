@@ -2,14 +2,18 @@ set(DSE_GTEST_SMOKE_TARGET dse_gtest_smoke_tests)
 
 add_executable(${DSE_GTEST_SMOKE_TARGET}
     engine_core_services_smoke_test.cpp
+    lua_host_smoke_test.cpp
+    runtime_lifecycle_smoke_test.cpp
 )
 
 target_include_directories(${DSE_GTEST_SMOKE_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/modules
         ${CMAKE_SOURCE_DIR}/depends
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
+        ${CMAKE_SOURCE_DIR}/depends/glm
 )
 
 target_compile_features(${DSE_GTEST_SMOKE_TARGET} PRIVATE cxx_std_20)

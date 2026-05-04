@@ -10,15 +10,21 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     # engine/ecs
     engine/ecs/ecs_physics2d_integration_test.cpp
     engine/ecs/ecs_transform_integration_test.cpp
+    engine/ecs/gameplay3d_ecs_integration_test.cpp
     # engine/physics
     engine/physics/physics2d_collision_event_integration_test.cpp
+    engine/physics/physics3d_ecs_integration_test.cpp
     # engine/render
     engine/render/rendergraph_integration_test.cpp
+    engine/render/render_scene_integration_test.cpp
     # engine/scene
     engine/scene/scene_world_serialization_integration_test.cpp
     # engine/scripting
     engine/scripting/lua_runtime_integration_test.cpp
     engine/scripting/lua_eventbus_integration_test.cpp
+    engine/scripting/lua_ecs_integration_test.cpp
+    # engine/audio
+    engine/audio/audio_asset_integration_test.cpp
     # modules
     modules/module_lifecycle_integration_test.cpp
 )
@@ -27,8 +33,10 @@ target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/modules
         ${CMAKE_SOURCE_DIR}/depends
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
+        ${CMAKE_SOURCE_DIR}/depends/glm
 )
 
 target_compile_features(${DSE_GTEST_INTEGRATION_TARGET} PRIVATE cxx_std_20)

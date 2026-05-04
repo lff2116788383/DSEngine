@@ -49,6 +49,10 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/assets/asset_manager_test.cpp
     # engine/profiler
     engine/profiler/profiler_test.cpp
+    # engine/runtime
+    engine/runtime/frame_pipeline_test.cpp
+    engine/runtime/runtime_context_test.cpp
+    engine/runtime/engine_app_test.cpp
     # modules/gameplay_2d
     modules/gameplay_2d/animation_system_2d_test.cpp
     modules/gameplay_2d/camera_system_2d_test.cpp
@@ -76,6 +80,7 @@ target_include_directories(${DSE_GTEST_UNIT_TARGET}
         ${CMAKE_SOURCE_DIR}/modules
         ${CMAKE_SOURCE_DIR}/depends
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
+        ${CMAKE_SOURCE_DIR}/depends/glm
 )
 
 target_compile_features(${DSE_GTEST_UNIT_TARGET} PRIVATE cxx_std_20)
