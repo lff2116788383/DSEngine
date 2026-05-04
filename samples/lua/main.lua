@@ -76,6 +76,9 @@ elseif game_entry == "3d_vse15_22_scene" then
 elseif game_entry == "3d_character_controller" then
     RuntimeEntry = require("3d.3d_character_controller")
     runtime_config = Config.demo_3d_character_controller or Config.basic_3d or {}
+elseif game_entry == "3d_physics_interaction" then
+    RuntimeEntry = require("3d.3d_physics_interaction")
+    runtime_config = Config.demo_3d_physics_interaction or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}

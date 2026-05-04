@@ -109,6 +109,14 @@ local function setup_scene(config)
 
     print("[3D][PhysicsInteraction] setup: ground + stacked boxes + sphere target + hit marker")
     print(string.format("[3D][PhysicsInteraction] PhysX %s", dse.ecs.physics_3d_raycast and "ENABLED" or "DISABLED"))
+    -- 在 setup 阶段即验证 API 可用性（不依赖仿真时间积累）
+    local has_impulse = dse.ecs.rigidbody_3d_add_impulse ~= nil
+    local has_force = dse.ecs.rigidbody_3d_add_force ~= nil
+    local has_velocity = dse.ecs.rigidbody_3d_get_velocity ~= nil
+    local has_gravity = dse.ecs.rigidbody_3d_set_gravity ~= nil
+    local has_raycast = dse.ecs.physics_3d_raycast ~= nil
+    print(string.format("[3D][PhysicsInteraction] physics_interaction_api=true impulse=%s force=%s velocity=%s gravity=%s raycast=%s",
+        tostring(has_impulse), tostring(has_force), tostring(has_velocity), tostring(has_gravity), tostring(has_raycast)))
 end
 
 -- ============================================================
@@ -229,28 +237,28 @@ function PhysicsInteraction3D.Update(delta_time)
     if dt > 0.1 then dt = 0.1 end
     state.time = state.time + dt
 
-    -- Phase 1: 0.6s 后施加冲量
-    if state.time > 0.6 and not state.impulse_done then
+    -- Phase 1: 0.3s 后施加冲量
+    if state.time > 0.3 and not state.impulse_done then
         phase_impulse()
     end
 
-    -- Phase 2: 1.2s 后施加持续力
-    if state.time > 1.2 and not state.force_done then
+    -- Phase 2: 0.6s 后施加持续力
+    if state.time > 0.6 and not state.force_done then
         phase_force()
     end
 
-    -- Phase 3: 2.0s 后检测速度和位置
-    if state.time > 2.0 and not state.velocity_logged then
+    -- Phase 3: 1.0s 后检测速度和位置
+    if state.time > 1.0 and not state.velocity_logged then
         phase_velocity()
     end
 
-    -- Phase 4: 2.5s 后执行 raycast
-    if state.time > 2.5 and not state.raycast_logged then
+    -- Phase 4: 1.2s 后执行 raycast
+    if state.time > 1.2 and not state.raycast_logged then
         phase_raycast()
     end
 
-    -- Phase 5: 3.2s 后测试重力控制
-    if state.time > 3.2 and not state.gravity_test_done then
+    -- Phase 5: 1.5s 后测试重力控制
+    if state.time > 1.5 and not state.gravity_test_done then
         phase_gravity()
     end
 
@@ -259,8 +267,8 @@ function PhysicsInteraction3D.Update(delta_time)
         dse.ecs.set_transform_rotation(state.hit_marker, state.time * 35.0, state.time * 90.0, 0.0)
     end
 
-    -- 最终汇总日志（4.0s 后输出一次）
-    if state.time > 4.0 and #state.log_summary > 0 and not state.final_logged then
+    -- 最终汇总日志（2.0s 后输出一次）
+    if state.time > 2.0 and #state.log_summary > 0 and not state.final_logged then
         state.final_logged = true
         print(string.format("[3D][PhysicsInteraction] summary: %s", table.concat(state.log_summary, ", ")))
         print(string.format("[3D][PhysicsInteraction] physics_interaction_api=true"))

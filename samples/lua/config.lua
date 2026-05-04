@@ -149,6 +149,11 @@ Config.demo_3d_character_controller={
     camera_speed=4.0,
     move_speed=2.5
 }
+Config.demo_3d_physics_interaction={
+    camera_distance=12.0,
+    rows=3,
+    cols=2
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

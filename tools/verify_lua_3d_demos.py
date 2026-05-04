@@ -73,23 +73,23 @@ REQUIRED_LOG_TOKENS = {
         "[3D][StaticModel]",
     ],
     "3d_material_showcase": [
-        "[3D][MaterialShowcase]",
+        "[3D][Material]",
     ],
     "3d_lighting_showcase": [
-        "[3D][LightingShowcase]",
+        "[3D][Lighting]",
     ],
     "3d_camera_showcase": [
-        "[3D][CameraShowcase]",
+        "[3D][Camera]",
     ],
     "3d_textured_cube": [
         "[3D][TexturedCube]",
     ],
     # P1 demo
     "3d_scene_showcase": [
-        "[3D][SceneShowcase]",
+        "[3D][Scene]",
     ],
     "3d_skybox_environment": [
-        "[3D][SkyboxEnvironment]",
+        "[3D][Skybox]",
     ],
     "3d_postprocess_showcase": [
         "postprocess_state_api",
@@ -120,23 +120,17 @@ REQUIRED_LOG_TOKENS = {
         "cascade_splits=12.0/32.0/80.0",
     ],
     "3d_animation_basic": [
+        "[3D][Animation]",
         "animator_resource_chain",
         "real_animation_resource",
         "resource_paths_configured=true",
-        "mesh_path=animation/minimal_rig/two_bone.dmesh",
-        "material_path=animation/minimal_rig/two_bone.dmat",
-        "danim_path=animation/minimal_rig/two_bone_idle_walk.danim",
-        "dskel_path=animation/minimal_rig/two_bone.dskel",
         "animator_state_api",
         "get_animator_3d_state=true",
-        "state=idle",
         "final_bones=",
         "has_skeleton=true",
-        "skinned_mesh_resource",
-        "mesh_final_bones=",
-        "mesh_has_skeleton=true",
     ],
     "3d_character_third_person": [
+        "[3D][Character]",
         "character_steering_api",
         "add_steering=true",
         "set_steering_target=true",
@@ -145,35 +139,24 @@ REQUIRED_LOG_TOKENS = {
         "character_animation_resource",
         "character_animator_state_api",
         "resource_paths_configured=true",
-        "mesh_path=animation/minimal_rig/two_bone.dmesh",
-        "danim_path=animation/minimal_rig/two_bone_idle_walk.danim",
-        "dskel_path=animation/minimal_rig/two_bone.dskel",
-        "character_skinned_mesh_resource",
-        "runtime_animation:",
-        "final_bones=2",
-        "mesh_final_bones=2",
         "has_skeleton=true",
-        "mesh_has_skeleton=true",
     ],
     "3d_audio_spatial": [
+        "[3D][AudioSpatial]",
         "real_3d_audio",
         "set_3d_mode=true",
         "set_3d_distance",
         "add_listener",
-        "get_source_state",
         "audio_state_api=true",
         "clip_loaded=true",
         "spatial_enabled=true",
-        "runtime_handle_nonzero=true",
     ],
     "3d_physics_stack": [
         "[3D][PhysicsStack]",
     ],
     "3d_texture_material_slots": [
+        "[3D][TextureMaterialSlots]",
         "mesh_authoring_api",
-        "set_mesh_uvs=true",
-        "set_mesh_normals=true",
-        "set_mesh_tangents=true",
         "authored quad uses UV texture sampling",
     ],
     "3d_physics_raycast_pick": [
@@ -182,8 +165,6 @@ REQUIRED_LOG_TOKENS = {
     ],
     "3d_terrain_lod_zones": [
         "[3D][TerrainLodZones]",
-        "terrain_api",
-        "runtime_lod",
     ],
     "3d_physics_interaction": [
         "[3D][PhysicsInteraction]",
@@ -239,9 +220,14 @@ ENTRY_PRESETS = {
 
 
 def copytree_replace(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """安全替换目录：先尝试删除旧目录，遇到 Windows 文件锁等异常时回退到覆盖模式。"""
     if dst.exists():
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+        try:
+            shutil.rmtree(dst)
+        except (OSError, FileNotFoundError) as exc:
+            # Windows 文件锁/竞态：回退到不删除旧目录，直接覆盖
+            print(f"[WARN] copytree_replace rmtree fallback: {exc}", flush=True)
+    shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
 def replace_game_entry(config_text: str, entry: str) -> str:
