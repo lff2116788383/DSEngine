@@ -180,8 +180,8 @@ function MetricsDebug3D.Update(delta_time)
         local draw_calls, max_batch, sprite_count, memory_kb, screen_w, screen_h, uptime = collect_metrics()
 
         print(string.format("[3D][MetricsDebug] metrics: uptime=%.1f draw_calls=%d max_batch=%d sprite_count=%d memory_kb=%d screen=%dx%d peak_dc=%d peak_mem=%d",
-            uptime, draw_calls, max_batch, sprite_count, memory_kb, screen_w, screen_h,
-            state.peak_draw_calls, state.peak_memory_kb))
+            uptime, math.floor(draw_calls), math.floor(max_batch), math.floor(sprite_count), math.floor(memory_kb), math.floor(screen_w), math.floor(screen_h),
+            math.floor(state.peak_draw_calls), math.floor(state.peak_memory_kb)))
     end
 
     -- 首次指标报告
@@ -189,7 +189,7 @@ function MetricsDebug3D.Update(delta_time)
         state.logged_metrics = true
         local draw_calls, max_batch, sprite_count, memory_kb, screen_w, screen_h, uptime = collect_metrics()
         print(string.format("[3D][MetricsDebug] first_sample: draw_calls=%d max_batch=%d sprite_count=%d memory_kb=%d screen=%dx%d uptime=%.2f",
-            draw_calls, max_batch, sprite_count, memory_kb, screen_w, screen_h, uptime))
+            math.floor(draw_calls), math.floor(max_batch), math.floor(sprite_count), math.floor(memory_kb), math.floor(screen_w), math.floor(screen_h), uptime))
     end
 end
 

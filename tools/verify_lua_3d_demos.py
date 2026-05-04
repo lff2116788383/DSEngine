@@ -61,6 +61,13 @@ P3_3D_ENTRIES = [
     "3d_physics_raycast_pick",
     "3d_texture_material_slots",
     "3d_terrain_lod_zones",
+    "3d_input_showcase",
+    "3d_hud_overlay",
+    "3d_procedural_mesh",
+    "3d_scene_load",
+    "3d_metrics_debug",
+    "3d_physics_triggers",
+    "3d_audio_complete",
 ]
 
 P4_3D_ENTRIES = [
@@ -168,6 +175,69 @@ REQUIRED_LOG_TOKENS = {
     "3d_terrain_lod_zones": [
         "[3D][TerrainLodZones]",
     ],
+    "3d_input_showcase": [
+        "[3D][Input]",
+        "input_api_summary",
+        "get_key=true",
+        "get_mouse_left_down=true",
+        "get_screen_width=true",
+        "time_since_startup=true",
+    ],
+    "3d_hud_overlay": [
+        "[3D][HudOverlay]",
+        "ui_api",
+        "add_renderer=true",
+        "add_label=true",
+        "add_panel=true",
+        "add_button=true",
+        "add_joystick=true",
+        "runtime:",
+    ],
+    "3d_procedural_mesh": [
+        "[3D][ProceduralMesh]",
+        "procedural sphere + cylinder + cone",
+        "sphere: vertices=",
+        "cylinder: vertices=",
+        "cone: vertices=",
+        "mesh_authoring_api",
+        "set_mesh_uvs=true",
+        "set_mesh_normals=true",
+        "set_mesh_tangents=true",
+    ],
+    "3d_scene_load": [
+        "[3D][SceneLoad]",
+        "api_summary",
+        "load_scene=",
+        "find_entities_by_mesh_path=",
+        "fallback_objects=",
+    ],
+    "3d_metrics_debug": [
+        "[3D][MetricsDebug]",
+        "api_summary",
+        "get_draw_calls=true",
+        "get_memory_usage_kb=true",
+        "get_screen_width=true",
+        "setup: 17 objects",
+    ],
+    "3d_physics_triggers": [
+        "[3D][PhysicsTriggers]",
+        "3d_raycast=true",
+        "3d_impulse=true",
+        "3d_velocity=true",
+        "phase1: impulse",
+    ],
+    "3d_audio_complete": [
+        "[3D][AudioComplete]",
+        "api_summary",
+        "add_listener=true",
+        "add_source=true",
+        "set_3d_mode=true",
+        "set_3d_distance=true",
+        "set_loop=true",
+        "restart=true",
+        "get_source_state=true",
+        "setup: 3 spatial audio sources",
+    ],
     "3d_physics_interaction": [
         "[3D][PhysicsInteraction]",
         "physics_interaction_api=true",
@@ -211,6 +281,17 @@ REQUIRED_LOG_TOKENS = {
         "texture_bind_summary",
         "loaded_slots=4",
     ],
+}
+
+VISUAL_SUBJECT_CHECKS = {
+    "3d_input_showcase": {"min_subject_ratio": 0.030, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_hud_overlay": {"min_subject_ratio": 0.040, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_procedural_mesh": {"min_subject_ratio": 0.045, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_scene_load": {"min_subject_ratio": 0.030, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_metrics_debug": {"min_subject_ratio": 0.040, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_physics_triggers": {"min_subject_ratio": 0.035, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_audio_complete": {"min_subject_ratio": 0.035, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
+    "3d_vse15_22_scene": {"min_subject_ratio": 0.080, "min_edge_ratio": 0.0020, "min_luma_std": 8.0},
 }
 
 ENTRY_PRESETS = {
@@ -395,23 +476,26 @@ def check_screenshot_not_black(png_path: pathlib.Path) -> tuple[bool, str]:
     return True, "max={} min={} mean={:.1f} luma_std={:.2f} subject_ratio={:.4f} edge_ratio={:.4f}".format(max_val, min_val, mean_val, luma_std, float(metrics["subject_ratio"]), float(metrics["edge_ratio"]))
 
 
-def check_vse15_22_visual_subject(png_path: pathlib.Path) -> tuple[bool, str]:
-    """VSE 15.22 专项验收：不能只亮，必须有足够非背景主体与边缘细节。"""
+def check_visual_subject(png_path: pathlib.Path, thresholds: dict[str, float]) -> tuple[bool, str]:
+    """专项视觉验收：不能只亮，必须有足够非背景主体与边缘细节。"""
     try:
         metrics = _png_visual_metrics(png_path)
     except Exception as exc:
         return False, f"png_decode_failed={exc}"
 
+    min_subject_ratio = float(thresholds["min_subject_ratio"])
+    min_edge_ratio = float(thresholds["min_edge_ratio"])
+    min_luma_std = float(thresholds["min_luma_std"])
     subject_ratio = float(metrics["subject_ratio"])
     edge_ratio = float(metrics["edge_ratio"])
     luma_std = float(metrics["luma_std"])
     detail = "subject_ratio={:.4f} edge_ratio={:.4f} luma_std={:.2f} max={} mean={:.1f}".format(subject_ratio, edge_ratio, luma_std, int(metrics["max"]), float(metrics["mean"]))
-    if subject_ratio < 0.080:
-        return False, f"subject_too_small {detail} min_subject_ratio=0.080"
-    if edge_ratio < 0.002:
-        return False, f"edge_detail_too_low {detail} min_edge_ratio=0.002"
-    if luma_std < 8.0:
-        return False, f"contrast_too_low {detail} min_luma_std=8.0"
+    if subject_ratio < min_subject_ratio:
+        return False, f"subject_too_small {detail} min_subject_ratio={min_subject_ratio:.3f}"
+    if edge_ratio < min_edge_ratio:
+        return False, f"edge_detail_too_low {detail} min_edge_ratio={min_edge_ratio:.3f}"
+    if luma_std < min_luma_std:
+        return False, f"contrast_too_low {detail} min_luma_std={min_luma_std:.1f}"
     return True, detail
 
 
@@ -514,12 +598,13 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
         print(f"SCREENSHOT_BLACK_OR_SOLID {entry}: {screenshot_detail}", flush=True)
         return 4
 
-    if entry == "3d_vse15_22_scene":
-        vse_visual_ok, vse_visual_detail = check_vse15_22_visual_subject(png_path)
-        if not vse_visual_ok:
-            print(f"SCREENSHOT_SUBJECT_NOT_VISIBLE {entry}: {vse_visual_detail}", flush=True)
+    visual_thresholds = VISUAL_SUBJECT_CHECKS.get(entry)
+    if visual_thresholds:
+        visual_ok, visual_detail = check_visual_subject(png_path, visual_thresholds)
+        if not visual_ok:
+            print(f"SCREENSHOT_SUBJECT_NOT_VISIBLE {entry}: {visual_detail}", flush=True)
             return 4
-        screenshot_detail = f"{screenshot_detail}; vse_visual={vse_visual_detail}"
+        screenshot_detail = f"{screenshot_detail}; subject_visual={visual_detail}"
 
     print(f"SCREENSHOT_OK {png_path} ({screenshot_detail})", flush=True)
     # 引擎关闭时可能因 GL 资源清理等触发 access violation (exit 0xC0000005 = 3221225477)，

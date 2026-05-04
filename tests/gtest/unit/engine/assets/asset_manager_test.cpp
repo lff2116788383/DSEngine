@@ -13,8 +13,67 @@
 
 #include <gtest/gtest.h>
 #include "engine/assets/asset_manager.h"
+#include "engine/render/rhi/rhi_device.h"
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <vector>
+
+namespace {
+
+class AssetManagerFakeRhiDevice final : public RhiDevice {
+public:
+    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override {
+        (void)linear_filter;
+        EXPECT_EQ(width, 1);
+        EXPECT_EQ(height, 1);
+        EXPECT_NE(rgba8_data, nullptr);
+        return next_texture_handle_++;
+    }
+
+    void DeleteTexture(unsigned int texture_handle) override {
+        deleted_textures.push_back(texture_handle);
+    }
+
+    void Shutdown() override {}
+    void BeginFrame() override {}
+    unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return 0; }
+    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override { (void)render_target_handle; return 0; }
+    unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override { (void)render_target_handle; return 0; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
+    unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override { (void)width; (void)height; (void)rgba8_faces; (void)linear_filter; return 0; }
+    unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override { (void)vert_src; (void)frag_src; return 0; }
+    void DeleteShaderProgram(unsigned int program_handle) override { (void)program_handle; }
+    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return 0; }
+    unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override { (void)size; (void)data; (void)is_dynamic; (void)is_index; return 0; }
+    void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override { (void)handle; (void)offset; (void)size; (void)data; (void)is_index; }
+    void DeleteBuffer(unsigned int handle) override { (void)handle; }
+    unsigned int CreateVertexArray() override { return 0; }
+    void DeleteVertexArray(unsigned int handle) override { (void)handle; }
+    std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
+    void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override { (void)cmd_buffer; }
+    void EndFrame() override {}
+    const RenderStats& LastFrameStats() const override { return stats_; }
+
+    std::vector<unsigned int> deleted_textures;
+
+private:
+    unsigned int next_texture_handle_ = 900001;
+    RenderStats stats_{};
+};
+
+std::filesystem::path WriteOnePixelPpm(const std::filesystem::path& dir) {
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path image_path = dir / "weak_ref_release.ppm";
+    std::ofstream out(image_path, std::ios::binary);
+    out << "P6\n1 1\n255\n";
+    const unsigned char pixel[3] = {255, 64, 32};
+    out.write(reinterpret_cast<const char*>(pixel), sizeof(pixel));
+    return image_path;
+}
+
+}  // namespace
 
 // ============================================================
 // MaterialInstance 生命周期测试
@@ -117,6 +176,36 @@ TEST(AssetManagerTest, UnloadUnused保留仍在使用的实例) {
     auto ids = mgr.ListMaterialInstanceIds();
     EXPECT_EQ(ids.size(), 1u);
     EXPECT_EQ(ids[0], mat_alive->GetId());
+}
+
+TEST(AssetManagerTest, 弱引用过期后ReleaseGpuResources仍释放纹理句柄) {
+    AssetManagerFakeRhiDevice fake_rhi;
+    const std::filesystem::path temp_dir = std::filesystem::temp_directory_path() / "dse_asset_manager_gpu_release_test";
+    const std::filesystem::path image_path = WriteOnePixelPpm(temp_dir);
+
+    unsigned int handle = 0;
+    {
+        AssetManager mgr;
+        mgr.SetRhiDevice(&fake_rhi);
+        mgr.ConfigureDataRoot(temp_dir.string());
+        {
+            auto texture = mgr.LoadTexture("weak_ref_release.ppm");
+            ASSERT_NE(texture, nullptr);
+            handle = texture->GetHandle();
+            ASSERT_NE(handle, 0u);
+        }
+
+        ASSERT_TRUE(fake_rhi.deleted_textures.empty());
+        mgr.ReleaseGpuResources();
+        ASSERT_EQ(fake_rhi.deleted_textures.size(), 1u);
+        EXPECT_EQ(fake_rhi.deleted_textures[0], handle);
+
+        mgr.ReleaseGpuResources();
+        EXPECT_EQ(fake_rhi.deleted_textures.size(), 1u);
+    }
+
+    EXPECT_EQ(fake_rhi.deleted_textures.size(), 1u);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ============================================================
