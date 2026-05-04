@@ -62,7 +62,7 @@ void VulkanCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& ite
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DrawSpriteBatch(
         vk_command_buffer_, items, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr());
+        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
 void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
@@ -120,6 +120,14 @@ void VulkanRhiDevice::EnsureInitialized() {
     // 初始化子系统
     state_mgr_.Init(&context_, &shader_mgr_);
     shader_mgr_.Init(&context_);
+
+    // 编译内置着色器
+    shader_mgr_.InitBuiltinPBRShader();
+    shader_mgr_.InitSkyboxShader();
+    shader_mgr_.InitParticleShader();
+    shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitPostProcessShader();
+
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);
 
     initialized_ = true;
@@ -144,6 +152,15 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     // 3. 初始化其余子系统
     state_mgr_.Init(&context_, &shader_mgr_);
     shader_mgr_.Init(&context_);
+
+    // 4. 编译内置着色器（PBR/天空盒/粒子/精灵/后处理）
+    shader_mgr_.InitBuiltinPBRShader();
+    shader_mgr_.InitSkyboxShader();
+    shader_mgr_.InitParticleShader();
+    shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitPostProcessShader();
+
+    // 5. 初始化几何缓冲区和 UBO
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);
 
     initialized_ = true;
@@ -191,15 +208,132 @@ unsigned int VulkanRhiDevice::GetRenderTargetDepthTexture(unsigned int render_ta
 }
 
 std::vector<unsigned char> VulkanRhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const {
-    // TODO: [CodeBuddy-2026-05-04] 从 VkImage 回读像素数据
-    (void)render_target_handle;
-    return {};
+    auto result = ReadRenderTargetColorRgba8WithSize(render_target_handle);
+    return std::move(result.pixels);
 }
 
 RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const {
-    // TODO: [CodeBuddy-2026-05-04] 从 VkImage 回读像素数据
-    (void)render_target_handle;
-    return {};
+    // const_cast: 底层读回操作在语义上是只读的，但 Vulkan 命令提交需要非 const 访问
+    auto& resource_mgr = const_cast<VulkanResourceManager&>(resource_mgr_);
+    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle);
+    if (!rt || !rt->has_color) {
+        return {};
+    }
+
+    auto device = context_.device();
+    auto physical_device = context_.physical_device();
+
+    int width = rt->width;
+    int height = rt->height;
+    size_t data_size = width * height * 4;
+
+    // 创建回读缓冲区
+    VkBuffer readback_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory readback_memory = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo buf_info{};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = data_size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(device, &buf_info, nullptr, &readback_buffer) != VK_SUCCESS) {
+        return {};
+    }
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device, readback_buffer, &mem_reqs);
+
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+    uint32_t memory_type_index = UINT32_MAX;
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((mem_reqs.memoryTypeBits & (1 << i)) &&
+            (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+            memory_type_index = i;
+            break;
+        }
+    }
+    if (memory_type_index == UINT32_MAX) {
+        vkDestroyBuffer(device, readback_buffer, nullptr);
+        return {};
+    }
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = memory_type_index;
+
+    if (vkAllocateMemory(device, &alloc_info, nullptr, &readback_memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device, readback_buffer, nullptr);
+        return {};
+    }
+    vkBindBufferMemory(device, readback_buffer, readback_memory, 0);
+
+    // 录制命令：transition image → copy → transition back
+    VkCommandBuffer cmd = resource_mgr.BeginSingleTimeCommands();
+
+    // 过渡颜色附件到 TRANSFER_SRC
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = rt->color_texture.image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    // 拷贝 image → buffer
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    vkCmdCopyImageToBuffer(cmd, rt->color_texture.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           readback_buffer, 1, &region);
+
+    // 过渡回 SHADER_READ_ONLY
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    resource_mgr.EndSingleTimeCommands(cmd);
+
+    // 回读像素
+    RenderTargetReadback result;
+    result.width = width;
+    result.height = height;
+    result.pixels.resize(data_size);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(device, readback_memory, 0, data_size, 0, &mapped) == VK_SUCCESS) {
+        memcpy(result.pixels.data(), mapped, data_size);
+        vkUnmapMemory(device, readback_memory);
+    }
+
+    // 清理
+    vkDestroyBuffer(device, readback_buffer, nullptr);
+    vkFreeMemory(device, readback_memory, nullptr);
+
+    return result;
 }
 
 unsigned int VulkanRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {

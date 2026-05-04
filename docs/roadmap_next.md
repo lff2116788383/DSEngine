@@ -145,9 +145,12 @@
 - [x] 延迟 Pipeline 创建（VulkanPipelineStateManager::GetOrCreateVkPipeline）
 - [x] 修复 BeginRenderPass 的 swapchain Framebuffer 获取
 - [x] 修复 gl_enum_convert.h 宏重定义警告（改为 GLConst 命名空间常量）
-- [ ] Vulkan=ON 编译通过 + Vulkan=OFF 零回归验证（已完成编译验证，运行时渲染验证待进行）
+- [x] Vulkan=ON 编译通过 + Vulkan=OFF 零回归验证
+- [x] Vulkan UBO 上传（PerFrame/PerScene/PerMaterial → DescriptorSet 更新）
+- [x] Vulkan DescriptorPool 创建与 DescriptorSet 分配
+- [x] 所有 Draw 调用绑定真实 DescriptorSet（替换 VK_NULL_HANDLE）
+- [x] 内置着色器初始化（PBR/Skybox/Particle/Sprite/PostProcess）
+- [x] Vulkan 2D 精灵批处理完整实现（DrawSpriteBatch 顶点组装 + 绘制）
+- [x] Vulkan 后处理着色器独立化（PostProcess 专用着色器 + DrawPostProcess 使用）
+- [x] RenderTarget 像素回读（ReadRenderTargetColorRgba8 via vkCmdCopyImageToBuffer）
 - [ ] 通过现有 3D Demo 验证 Vulkan 渲染路径
-- [ ] Vulkan UBO 上传（PerFrame/PerScene/PerMaterial → DescriptorSet 更新）
-- [ ] Vulkan 2D 精灵批处理完整实现（当前仅计数 stub）
-- [ ] Vulkan 后处理着色器独立化（当前复用 PBR shader 占位）
-- [ ] RenderTarget 像素回读（ReadRenderTargetColorRgba8）

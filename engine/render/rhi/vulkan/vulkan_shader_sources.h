@@ -541,6 +541,54 @@ void main() {
 )";
 
 // ============================================================
+// 2D 精灵着色器
+// ============================================================
+
+/// 2D 精灵顶点着色器（Vulkan GLSL 450）
+constexpr const char* kSpriteVertex = R"(#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec4 aColor;
+
+layout(location = 0) out vec4 vColor;
+layout(location = 1) out vec2 vTexCoord;
+
+layout(std140, set = 0, binding = 0) uniform PerFrame {
+    mat4 vp;
+    mat4 view;
+    vec4 camera_pos;
+};
+
+layout(push_constant) uniform PushConstants {
+    mat4 model;
+} pc;
+
+void main() {
+    gl_Position = vp * pc.model * vec4(aPos, 0.0, 1.0);
+    vColor = aColor;
+    vTexCoord = aTexCoord;
+}
+)";
+
+/// 2D 精灵片段着色器（Vulkan GLSL 450）
+constexpr const char* kSpriteFragment = R"(#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(location = 0) in vec4 vColor;
+layout(location = 1) in vec2 vTexCoord;
+layout(location = 0) out vec4 FragColor;
+
+layout(set = 2, binding = 1) uniform sampler2D u_texture;
+
+void main() {
+    vec4 texColor = texture(u_texture, vTexCoord);
+    FragColor = texColor * vColor;
+}
+)";
+
+// ============================================================
 // 后处理着色器（屏幕四边形 VS + 各种 FS）
 // ============================================================
 

@@ -10,6 +10,8 @@
  * - 3D 粒子绘制
  * - RenderPass 管理
  * - 全局阴影贴图/光源矩阵管理
+ * - UBO 管理（PerFrame/PerScene/PerMaterial）
+ * - DescriptorSet 分配与绑定
  */
 
 #ifndef DSE_RENDER_VULKAN_DRAW_EXECUTOR_H
@@ -29,6 +31,31 @@ class VulkanContext;
 class VulkanResourceManager;
 class VulkanPipelineStateManager;
 class VulkanShaderManager;
+struct VulkanShaderProgram;
+
+/// PerFrame UBO 数据布局（与着色器 set=0, binding=0 对齐）
+struct VulkanPerFrameUBO {
+    glm::mat4 vp;
+    glm::mat4 view;
+    glm::vec4 camera_pos;   ///< xyz=position, w=unused
+};
+
+/// PerScene UBO 数据布局（与着色器 set=1, binding=0 对齐）
+struct VulkanPerSceneUBO {
+    glm::vec4 light_dir_and_enabled;    ///< xyz=direction, w=enabled
+    glm::vec4 light_color_and_ambient;  ///< xyz=color, w=ambient
+    glm::vec4 light_params;             ///< x=intensity, y=shadow_strength, z=receive_shadow, w=unused
+    glm::vec4 cascade_splits;           ///< xyz=cascade_splits, w=unused
+    glm::mat4 light_space_matrices[3];
+};
+
+/// PerMaterial UBO 数据布局（与着色器 set=2, binding=0 对齐）
+struct VulkanPerMaterialUBO {
+    glm::vec4 albedo;           ///< xyz=albedo, w=metallic
+    glm::vec4 roughness_ao;     ///< x=roughness, y=ao, z=normal_strength, w=alpha_cutoff
+    glm::vec4 emissive;         ///< xyz=emissive, w=alpha_test
+    glm::vec4 flags;            ///< x=has_normal_map, y=has_metallic_roughness_map, z=has_emissive_map, w=has_occlusion_map
+};
 
 /**
  * @class VulkanDrawExecutor
@@ -36,19 +63,21 @@ class VulkanShaderManager;
  *
  * 职责：
  * 1. 管理几何缓冲区（VkBuffer/VkDeviceMemory）
- * 2. 录制各类绘制命令到 VkCommandBuffer
- * 3. 管理全局阴影贴图和光源空间矩阵
- * 4. 追踪渲染统计数据
+ * 2. 管理 UBO 缓冲区（PerFrame/PerScene/PerMaterial，按 swapchain image 双缓冲）
+ * 3. 录制各类绘制命令到 VkCommandBuffer
+ * 4. 分配与更新 DescriptorSet，在 draw call 前绑定
+ * 5. 管理全局阴影贴图和光源空间矩阵
+ * 6. 追踪渲染统计数据
  */
 class VulkanDrawExecutor {
 public:
     VulkanDrawExecutor() = default;
     ~VulkanDrawExecutor() = default;
 
-    /// 初始化几何缓冲区
+    /// 初始化几何缓冲区和 UBO 缓冲区
     void InitGeometryBuffers(VulkanContext* context, VulkanResourceManager* resource_mgr);
 
-    /// 清理所有几何缓冲区资源
+    /// 清理所有几何缓冲区和 UBO 资源
     void ShutdownGeometryBuffers();
 
     // --- RenderPass ---
@@ -63,7 +92,8 @@ public:
                           const glm::mat4& view,
                           const glm::mat4& projection,
                           VulkanPipelineStateManager& pipeline_mgr,
-                          VulkanShaderManager& shader_mgr);
+                          VulkanShaderManager& shader_mgr,
+                          VulkanResourceManager& resource_mgr);
 
     void DrawMeshBatch(VkCommandBuffer cmd_buf,
                         const std::vector<MeshDrawItem>& items,
@@ -132,6 +162,47 @@ public:
     unsigned int white_texture_handle() const { return white_texture_handle_; }
 
 private:
+    /// 创建单个 UBO 缓冲区（host-visible + coherent）
+    bool CreateUBOBuffer(VkDeviceSize size, VkBuffer& out_buf, VkDeviceMemory& out_mem);
+
+    /// 更新 PerFrame UBO 数据并写入缓冲
+    void UpdatePerFrameUBO(const glm::mat4& view, const glm::mat4& projection,
+                            const std::unordered_map<std::string, glm::mat4>& pending_mat4);
+
+    /// 更新 PerScene UBO 数据并写入缓冲（从 MeshDrawItem 中提取光源信息）
+    void UpdatePerSceneUBO(const MeshDrawItem& item);
+
+    /// 更新 PerMaterial UBO 数据并写入缓冲
+    void UpdatePerMaterialUBO(const MeshDrawItem& item);
+
+    /// 为 3D mesh 绘制分配并更新 DescriptorSet（Set 0/1/2）
+    VkDescriptorSet AllocateAndUpdateMeshDescriptorSets(
+        VkCommandBuffer cmd_buf,
+        const VulkanShaderProgram* program,
+        const MeshDrawItem& item,
+        VulkanResourceManager& resource_mgr);
+
+    /// 为天空盒绘制分配并更新 DescriptorSet
+    VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(
+        VkCommandBuffer cmd_buf,
+        const VulkanShaderProgram* program,
+        unsigned int cubemap_texture_handle,
+        VulkanResourceManager& resource_mgr);
+
+    /// 为粒子绘制分配并更新 DescriptorSet
+    VkDescriptorSet AllocateAndUpdateParticleDescriptorSets(
+        VkCommandBuffer cmd_buf,
+        const VulkanShaderProgram* program,
+        unsigned int texture_handle,
+        VulkanResourceManager& resource_mgr);
+
+    /// 为后处理绘制分配并更新 DescriptorSet
+    VkDescriptorSet AllocateAndUpdatePostProcessDescriptorSets(
+        VkCommandBuffer cmd_buf,
+        const VulkanShaderProgram* program,
+        unsigned int source_texture,
+        VulkanResourceManager& resource_mgr);
+
     VulkanContext* context_ = nullptr;
     VulkanResourceManager* resource_mgr_ = nullptr;
 
@@ -157,6 +228,18 @@ private:
 
     // 白色纹理
     unsigned int white_texture_handle_ = 0;
+
+    // UBO 缓冲区（双缓冲，按 swapchain image）
+    static constexpr int MAX_FRAMES = 2;
+    VkBuffer per_frame_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory per_frame_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer per_scene_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory per_scene_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer per_material_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory per_material_ubo_mem_[MAX_FRAMES] = {};
+
+    // 当前帧索引（与 VulkanContext::current_frame() 对齐）
+    uint32_t current_frame_index_ = 0;
 
     // 全局阴影/光源状态
     glm::mat4 global_light_space_matrix_[3];

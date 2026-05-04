@@ -27,6 +27,12 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
         return false;
     }
 
+    // 创建 Descriptor Pool
+    if (!CreateDescriptorPool()) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool");
+        return false;
+    }
+
     initialized_ = true;
     DEBUG_LOG_INFO("[Vulkan] ResourceManager initialized");
     return true;
@@ -69,6 +75,11 @@ void VulkanResourceManager::Shutdown() {
     if (command_pool_ != VK_NULL_HANDLE) {
         vkDestroyCommandPool(device_, command_pool_, nullptr);
         command_pool_ = VK_NULL_HANDLE;
+    }
+
+    if (descriptor_pool_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
+        descriptor_pool_ = VK_NULL_HANDLE;
     }
 
     initialized_ = false;
@@ -763,6 +774,49 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 
     DEBUG_LOG_ERROR("[Vulkan] Failed to find suitable memory type");
     return 0;
+}
+
+// ============================================================
+// Descriptor Pool & Set
+// ============================================================
+
+bool VulkanResourceManager::CreateDescriptorPool() {
+    // 池大小：覆盖所有描述符类型，每帧最大用量估算
+    std::vector<VkDescriptorPoolSize> pool_sizes = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         256},  // PerFrame/PerScene/PerMaterial UBO
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024}, // 纹理采样器
+    };
+
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 512;  // 每帧最多 512 个 DescriptorSet
+    pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    pool_info.pPoolSizes = pool_sizes.data();
+
+    if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &descriptor_pool_) != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool");
+        return false;
+    }
+
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pool created (maxSets=512)");
+    return true;
+}
+
+VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayout layout) {
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = descriptor_pool_;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &layout;
+
+    VkDescriptorSet descriptor_set;
+    VkResult result = vkAllocateDescriptorSets(device_, &alloc_info, &descriptor_set);
+    if (result != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to allocate descriptor set: {}", static_cast<int>(result));
+        return VK_NULL_HANDLE;
+    }
+    return descriptor_set;
 }
 
 } // namespace render

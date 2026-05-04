@@ -95,10 +95,18 @@ public:
     /// 初始化粒子着色器
     void InitParticleShader();
 
+    /// 初始化 2D 精灵着色器
+    void InitSpriteShader();
+
+    /// 初始化后处理着色器（直通/全屏四边形）
+    void InitPostProcessShader();
+
     // --- 内置着色器访问器 ---
     unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
     unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
     unsigned int particle_shader_handle() const { return particle_shader_handle_; }
+    unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
+    unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
 
     /// 着色器程序计数
     std::size_t programs_created() const { return programs_created_; }
@@ -147,6 +155,8 @@ private:
     unsigned int pbr_shader_handle_ = 0;
     unsigned int skybox_shader_handle_ = 0;
     unsigned int particle_shader_handle_ = 0;
+    unsigned int sprite_shader_handle_ = 0;
+    unsigned int postprocess_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

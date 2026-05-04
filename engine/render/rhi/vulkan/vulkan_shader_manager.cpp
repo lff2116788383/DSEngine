@@ -471,5 +471,28 @@ void VulkanShaderManager::InitParticleShader() {
     }
 }
 
+void VulkanShaderManager::InitSpriteShader() {
+    sprite_shader_handle_ = CreateProgram(
+        vulkan_shaders::kSpriteVertex, vulkan_shaders::kSpriteFragment);
+    if (sprite_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan sprite shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("Vulkan sprite shader created: handle={}", sprite_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitPostProcessShader() {
+    // 使用后处理专用着色器（全屏四边形 VS + 直通 FS）
+    std::string pp_frag = std::string(vulkan_shaders::kPostProcessHeader) +
+                          vulkan_shaders::kPostProcessPassthroughFS;
+    postprocess_shader_handle_ = CreateProgram(
+        vulkan_shaders::kPostProcessVertex, pp_frag);
+    if (postprocess_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan post-process shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
+    }
+}
+
 } // namespace render
 } // namespace dse

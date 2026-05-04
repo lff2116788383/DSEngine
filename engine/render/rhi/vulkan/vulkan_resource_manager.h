@@ -102,6 +102,17 @@ public:
     /// 获取渲染目标的颜色附件 ImageView
     VkImageView GetRenderTargetColorImageView(unsigned int handle) const;
 
+    // --- Descriptor Pool & Set ---
+    VkDescriptorPool descriptor_pool() const { return descriptor_pool_; }
+
+    /// 从全局 DescriptorPool 分配 DescriptorSet
+    /// @param layout 需要匹配的 VkDescriptorSetLayout
+    /// @return 新分配的 VkDescriptorSet（VK_NULL_HANDLE 表示失败）
+    VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout layout);
+
+    /// 创建 DescriptorPool（在 Init 中自动调用）
+    bool CreateDescriptorPool();
+
     // --- 句柄生成 ---
     unsigned int AllocateTextureHandle();
     unsigned int AllocateRenderTargetHandle();
@@ -127,6 +138,9 @@ private:
 
     // 命令池
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
+
+    // Descriptor Pool
+    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
 
     // 资源存储
     std::unordered_map<unsigned int, VulkanTexture> textures_;
