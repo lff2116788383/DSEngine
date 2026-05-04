@@ -153,4 +153,4 @@
 - [x] Vulkan 2D 精灵批处理完整实现（DrawSpriteBatch 顶点组装 + 绘制）
 - [x] Vulkan 后处理着色器独立化（PostProcess 专用着色器 + DrawPostProcess 使用）
 - [x] RenderTarget 像素回读（ReadRenderTargetColorRgba8 via vkCmdCopyImageToBuffer）
-- [ ] 通过现有 3D Demo 验证 Vulkan 渲染路径
+- [x] 通过现有 3D Demo 验证 Vulkan 渲染路径

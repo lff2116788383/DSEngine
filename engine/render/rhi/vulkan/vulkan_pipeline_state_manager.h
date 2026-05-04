@@ -62,7 +62,7 @@ public:
     /// @param extent 渲染区域大小
     VkPipeline GetOrCreateVkPipeline(
         unsigned int handle,
-        const class VulkanShaderProgram* shader_program,
+        const struct VulkanShaderProgram* shader_program,
         VkRenderPass render_pass,
         const std::vector<VkVertexInputBindingDescription>& vertex_bindings,
         const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
