@@ -87,6 +87,9 @@ AssetManager::~AssetManager() {
         textures_.clear();
         cubemaps_.clear();
         shaders_.clear();
+        gpu_texture_handles_.clear();
+        gpu_cubemap_handles_.clear();
+        gpu_shader_handles_.clear();
         audio_clips_.clear();
         dmeshes_.clear();
         danims_.clear();
@@ -407,6 +410,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         textures_[cache_key] = tex;
+        gpu_texture_handles_.insert(handle);
     }
     return tex;
 }
@@ -514,6 +518,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::stri
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         cubemaps_[cache_key] = cubemap;
+        gpu_cubemap_handles_.insert(handle);
     }
     return cubemap;
 }
@@ -545,6 +550,7 @@ std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, c
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         shaders_[name] = shader;
+        gpu_shader_handles_.insert(handle);
     }
     return shader;
 }
@@ -976,39 +982,36 @@ void AssetManager::ReleaseGpuResources() {
         textures_.clear();
         cubemaps_.clear();
         shaders_.clear();
+        gpu_texture_handles_.clear();
+        gpu_cubemap_handles_.clear();
+        gpu_shader_handles_.clear();
         materials_.clear();
         material_names_.clear();
         return;
     }
 
-    for (auto it = textures_.begin(); it != textures_.end(); ++it) {
-        if (auto texture = it->second.lock()) {
-            const unsigned int handle = texture->GetHandle();
-            if (handle != 0) {
-                device->DeleteTexture(handle);
-            }
+    for (const unsigned int handle : gpu_texture_handles_) {
+        if (handle != 0) {
+            device->DeleteTexture(handle);
         }
     }
+    gpu_texture_handles_.clear();
     textures_.clear();
 
-    for (auto it = cubemaps_.begin(); it != cubemaps_.end(); ++it) {
-        if (auto cubemap = it->second.lock()) {
-            const unsigned int handle = cubemap->GetHandle();
-            if (handle != 0) {
-                device->DeleteTexture(handle);
-            }
+    for (const unsigned int handle : gpu_cubemap_handles_) {
+        if (handle != 0) {
+            device->DeleteTexture(handle);
         }
     }
+    gpu_cubemap_handles_.clear();
     cubemaps_.clear();
 
-    for (auto it = shaders_.begin(); it != shaders_.end(); ++it) {
-        if (auto shader = it->second.lock()) {
-            const unsigned int handle = shader->GetHandle();
-            if (handle != 0) {
-                device->DeleteShaderProgram(handle);
-            }
+    for (const unsigned int handle : gpu_shader_handles_) {
+        if (handle != 0) {
+            device->DeleteShaderProgram(handle);
         }
     }
+    gpu_shader_handles_.clear();
     shaders_.clear();
     materials_.clear();
     material_names_.clear();

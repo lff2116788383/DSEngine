@@ -157,6 +157,34 @@ Config.demo_3d_physics_interaction={
     rows=3,
     cols=2
 }
+Config.demo_3d_input_showcase={
+    camera_distance=12.0,
+    move_speed=3.5
+}
+Config.demo_3d_hud_overlay={
+    camera_distance=14.0
+}
+Config.demo_3d_procedural_mesh={
+    camera_distance=12.0
+}
+Config.demo_3d_scene_load={
+    camera_distance=12.0,
+    scene_path=""
+}
+Config.demo_3d_metrics_debug={
+    camera_distance=14.0,
+    rows=3,
+    cols=5
+}
+Config.demo_3d_physics_triggers={
+    camera_distance=14.0
+}
+Config.demo_3d_audio_complete={
+    camera_distance=12.0,
+    audio_path_a="audio/spatial/spatial_ping.wav",
+    audio_path_b="",
+    audio_path_c=""
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

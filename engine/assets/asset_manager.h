@@ -8,6 +8,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <functional>
 #include <mutex>
@@ -447,6 +448,9 @@ private:
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<CubemapAsset>> cubemaps_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
+    std::unordered_set<unsigned int> gpu_texture_handles_;
+    std::unordered_set<unsigned int> gpu_cubemap_handles_;
+    std::unordered_set<unsigned int> gpu_shader_handles_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
     std::unordered_map<std::string, std::weak_ptr<DmeshAsset>> dmeshes_;
     std::unordered_map<std::string, std::weak_ptr<DanimAsset>> danims_;

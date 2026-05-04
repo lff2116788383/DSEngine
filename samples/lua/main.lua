@@ -79,6 +79,27 @@ elseif game_entry == "3d_character_controller" then
 elseif game_entry == "3d_physics_interaction" then
     RuntimeEntry = require("3d.3d_physics_interaction")
     runtime_config = Config.demo_3d_physics_interaction or Config.basic_3d or {}
+elseif game_entry == "3d_input_showcase" then
+    RuntimeEntry = require("3d.3d_input_showcase")
+    runtime_config = Config.demo_3d_input_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_hud_overlay" then
+    RuntimeEntry = require("3d.3d_hud_overlay")
+    runtime_config = Config.demo_3d_hud_overlay or Config.basic_3d or {}
+elseif game_entry == "3d_procedural_mesh" then
+    RuntimeEntry = require("3d.3d_procedural_mesh")
+    runtime_config = Config.demo_3d_procedural_mesh or Config.basic_3d or {}
+elseif game_entry == "3d_scene_load" then
+    RuntimeEntry = require("3d.3d_scene_load")
+    runtime_config = Config.demo_3d_scene_load or Config.basic_3d or {}
+elseif game_entry == "3d_metrics_debug" then
+    RuntimeEntry = require("3d.3d_metrics_debug")
+    runtime_config = Config.demo_3d_metrics_debug or Config.basic_3d or {}
+elseif game_entry == "3d_physics_triggers" then
+    RuntimeEntry = require("3d.3d_physics_triggers")
+    runtime_config = Config.demo_3d_physics_triggers or Config.basic_3d or {}
+elseif game_entry == "3d_audio_complete" then
+    RuntimeEntry = require("3d.3d_audio_complete")
+    runtime_config = Config.demo_3d_audio_complete or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}
