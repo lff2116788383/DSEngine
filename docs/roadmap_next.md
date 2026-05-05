@@ -16,7 +16,7 @@
 | **Scripting/Lua** | 22 文件 | ★★★★★ | 5 集成 | Binding 覆盖最全（ECS/3D/物理/粒子/UI/动画/Spine） |
 | **Asset** | 4 文件 | ★★★★☆ | 2 unit + 2 集成 | 异步加载全资源类型 + LRU 淘汰 + 文件热重载 |
 | **Scene** | 10 文件 | ★★★★★ | 45 unit | 有 prefab/序列化/空间划分/子场景/场景管理器/场景切换/UUID跨场景引用 |
-| **Audio** | 2 文件 | ★★★☆☆ | 无独立测试 | miniaudio 封装，缺 3D 空间化 C++ API |
+| **Audio** | 2 文件 | ★★★★☆ | 21 unit | miniaudio 封装 + 3D Listener/衰减模型/遮挡 |
 | **Runtime** | 15 文件 | ★★★★☆ | 有测试 | FramePipeline/EngineApp 成熟 |
 | **Profiler** | 6 文件 | ★★★☆☆ | 无测试 | CPU/Memory/Render 三线，但缺集成 |
 | **Input** | 2 文件 | ★★★☆☆ | 无独立测试 | 基础键鼠，缺 gamepad/手势 |
@@ -54,14 +54,42 @@
 3. ✅ **运行时 Scene 状态机** — `TransitionTo(path, TransitionMode)` 支持 Instant/Additive/Fade 三种过渡模式，Fade 含 FadingOut→Loading→FadingIn 状态机（8 tests）
 4. ✅ **跨场景 Entity 引用** — `UUIDComponent`（`engine/ecs/uuid_component.h`）+ `SceneManager::ResolveReference(uuid)` 在所有已加载 SubScene 中查找 Entity（11 tests）
 
-### ⭐ P1：音频 3D 空间化 C++ 层
+### ✅ P1：音频 3D 空间化 C++ 层（已完成）
 
 **原因**: `AudioSystem` 的 3D 空间化只在 Lua binding 层做了简单暴露，C++ 层没有 `AudioListener`、距离衰减模型、遮挡等。
 
 具体方向：
-1. **AudioListener 组件** — 跟随 Camera 自动更新 listener position/orientation
-2. **距离衰减模型** — Linear/Inverse/Exponential 三种
-3. **Occlusion/Obstruction** — 基于 Physics3D raycast 的声音遮挡
+1. ✅ **AudioListener 组件** — 跟随 Camera 自动更新 listener position/orientation
+2. ✅ **距离衰减模型** — Linear/Inverse/Exponential 三种
+3. ✅ **Occlusion/Obstruction** — 基于 Physics3D raycast 的声音遮挡
+
+#### 实施内容
+
+1. ✅ **Phase 1: AudioListener + 方向同步**
+   - `AudioListenerComponent`（`engine/ecs/audio.h`）支持 enabled / listener_index
+   - `AudioSystem::Update` 从 TransformComponent 四元数计算 forward/up，同步 listener position + direction + world_up 到 miniaudio
+   - Camera3DComponent 自动回退：无显式 AudioListenerComponent 时，自动使用第一个活跃 Camera3D 实体的 Transform 作为 listener
+
+2. ✅ **Phase 2: 距离衰减模型**
+   - `AudioAttenuationModel` 枚举（Inverse / Linear / Exponential）
+   - `AudioSourceComponent` 新增 `attenuation_model` 字段
+   - `AudioSystem::Update` 通过 `ma_sound_set_attenuation_model()` 将枚举映射到 miniaudio 衰减模型
+
+3. ✅ **Phase 3: Occlusion/Obstruction**
+   - `AudioSourceComponent` 新增 `occlusion_enabled` / `occlusion_factor` 字段
+   - `AudioSystem` 新增 `SetRaycastFunction(AudioRaycastFunc)` 解耦回调（不直接依赖 Physics3D 库）
+   - Update 循环中对启用空间化+遮挡的音源，从 listener→source 发射射线，命中障碍物时对音量施加 `occlusion_factor` 衰减
+
+4. ✅ **新增 21 个单元测试**（611 总测试零回归）
+
+#### 变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/ecs/audio.h` | 新增 `AudioAttenuationModel` 枚举 + `AudioSourceComponent` 衰减/遮挡字段 |
+| `engine/audio/audio_system.h` | 新增 `AudioRaycastResult` / `AudioRaycastFunc` / `SetRaycastFunction()` |
+| `engine/audio/audio_system.cpp` | Update 重写：listener 方向同步 + Camera3D 回退 + 衰减模型 + 遮挡射线检测 |
+| `tests/gtest/unit/engine/audio/audio_3d_spatial_test.cpp` | 21 个单元测试（Phase 1/2/3） |
 
 ### 🔹 P2：Profiler 可视化 + 性能回归基线
 

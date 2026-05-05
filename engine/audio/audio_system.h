@@ -13,11 +13,25 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <functional>
+#include <glm/glm.hpp>
 
 class AssetManager;
 
 namespace dse {
 namespace gameplay2d {
+
+/**
+ * @struct AudioRaycastResult
+ * @brief 音频遮挡射线检测结果
+ */
+struct AudioRaycastResult {
+    bool hit = false;
+    float distance = 0.0f;
+};
+
+/// 射线检测回调类型：(origin, direction, max_distance) -> result
+using AudioRaycastFunc = std::function<AudioRaycastResult(const glm::vec3&, const glm::vec3&, float)>;
 
 /**
  * @class AudioSystem
@@ -136,6 +150,12 @@ public:
      */
     void SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms);
 
+    /**
+     * @brief 注入射线检测回调用于音频遮挡检测
+     * @param func 射线检测函数（置空以禁用遮挡）
+     */
+    void SetRaycastFunction(AudioRaycastFunc func);
+
 private:
     struct EngineHandle;
     struct ResourceManagerHandle;
@@ -167,6 +187,7 @@ private:
     std::uint32_t sfx_trigger_cooldown_ms_ = 20;
     bool is_initialized = false;
     AssetManager* asset_manager_ = nullptr;
+    AudioRaycastFunc raycast_func_;
 };
 
 } // namespace gameplay2d

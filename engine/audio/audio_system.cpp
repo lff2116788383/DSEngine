@@ -7,11 +7,13 @@
 #include "engine/ecs/audio.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/world.h"
+#include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
 #include <iostream>
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <glm/gtc/quaternion.hpp>
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
@@ -232,6 +234,17 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
     return true;
 }
 
+namespace {
+ma_attenuation_model MapAttenuationModel(AudioAttenuationModel model) {
+    switch (model) {
+        case AudioAttenuationModel::Linear:      return ma_attenuation_model_linear;
+        case AudioAttenuationModel::Exponential: return ma_attenuation_model_exponential;
+        case AudioAttenuationModel::Inverse:
+        default:                                 return ma_attenuation_model_inverse;
+    }
+}
+} // anonymous namespace
+
 void AudioSystem::Update(entt::registry& registry, float dt) {
     (void)dt;
     if (!is_initialized || !engine_handle_ || !engine_handle_->get()) {
@@ -247,27 +260,52 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         }
     }
 
+    // --- Phase 1: Listener position + orientation ---
+    glm::vec3 listener_pos(0.0f);
+    glm::vec3 listener_fwd(0.0f, 0.0f, -1.0f);
+    glm::vec3 listener_up(0.0f, 1.0f, 0.0f);
+    bool listener_found = false;
+    unsigned int active_listener_index = 0;
+
     auto listener_view = registry.view<AudioListenerComponent, TransformComponent>();
-    bool listener_applied = false;
     for (auto entity : listener_view) {
         const auto& listener = listener_view.get<AudioListenerComponent>(entity);
         if (!listener.enabled) {
             continue;
         }
         const auto& transform = listener_view.get<TransformComponent>(entity);
-        ma_engine_listener_set_position(
-            engine_handle_->get(),
-            listener.listener_index,
-            transform.position.x,
-            transform.position.y,
-            transform.position.z);
-        listener_applied = true;
+        listener_pos = transform.position;
+        listener_fwd = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+        listener_up  = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+        active_listener_index = listener.listener_index;
+        listener_found = true;
         break;
     }
-    if (!listener_applied) {
-        ma_engine_listener_set_position(engine_handle_->get(), 0, 0.0f, 0.0f, 0.0f);
+
+    // Camera3DComponent fallback: auto-follow camera if no explicit listener
+    if (!listener_found) {
+        auto camera_view = registry.view<Camera3DComponent, TransformComponent>();
+        for (auto entity : camera_view) {
+            const auto& camera = camera_view.get<Camera3DComponent>(entity);
+            if (!camera.enabled) continue;
+            const auto& transform = camera_view.get<TransformComponent>(entity);
+            listener_pos = transform.position;
+            listener_fwd = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            listener_up  = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            active_listener_index = 0;
+            listener_found = true;
+            break;
+        }
     }
 
+    ma_engine_listener_set_position(engine_handle_->get(), active_listener_index,
+        listener_pos.x, listener_pos.y, listener_pos.z);
+    ma_engine_listener_set_direction(engine_handle_->get(), active_listener_index,
+        listener_fwd.x, listener_fwd.y, listener_fwd.z);
+    ma_engine_listener_set_world_up(engine_handle_->get(), active_listener_index,
+        listener_up.x, listener_up.y, listener_up.z);
+
+    // --- Process audio sources ---
     auto view = registry.view<AudioSourceComponent>();
     for (auto entity : view) {
         auto& audio = view.get<AudioSourceComponent>(entity);
@@ -288,12 +326,28 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
             if (result == MA_SUCCESS) {
                 new_sound->initialized = true;
                 ma_sound_set_looping(&new_sound->value, audio.loop ? MA_TRUE : MA_FALSE);
-                ma_sound_set_volume(&new_sound->value, audio.volume * sfx_volume_);
                 ma_sound_set_pitch(&new_sound->value, audio.pitch);
                 ma_sound_set_spatialization_enabled(&new_sound->value, audio.spatial_enabled ? MA_TRUE : MA_FALSE);
                 ma_sound_set_min_distance(&new_sound->value, audio.min_distance);
                 ma_sound_set_max_distance(&new_sound->value, audio.max_distance);
                 ma_sound_set_rolloff(&new_sound->value, audio.rolloff);
+                // Phase 2: attenuation model
+                ma_sound_set_attenuation_model(&new_sound->value, MapAttenuationModel(audio.attenuation_model));
+                // Phase 3: occlusion volume
+                float effective_volume = audio.volume * sfx_volume_;
+                if (audio.spatial_enabled && audio.occlusion_enabled && raycast_func_ && listener_found
+                    && registry.all_of<TransformComponent>(entity)) {
+                    const auto& src_transform = registry.get<TransformComponent>(entity);
+                    const glm::vec3 dir = src_transform.position - listener_pos;
+                    const float dist = glm::length(dir);
+                    if (dist > 0.001f) {
+                        auto ray_result = raycast_func_(listener_pos, dir / dist, dist);
+                        if (ray_result.hit && ray_result.distance < dist - 0.01f) {
+                            effective_volume *= audio.occlusion_factor;
+                        }
+                    }
+                }
+                ma_sound_set_volume(&new_sound->value, effective_volume);
                 if (registry.all_of<TransformComponent>(entity)) {
                     const auto& transform = registry.get<TransformComponent>(entity);
                     ma_sound_set_position(&new_sound->value, transform.position.x, transform.position.y, transform.position.z);
@@ -314,12 +368,28 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         }
 
         ma_sound_set_looping(sound, audio.loop ? MA_TRUE : MA_FALSE);
-        ma_sound_set_volume(sound, audio.volume * sfx_volume_);
         ma_sound_set_pitch(sound, audio.pitch);
         ma_sound_set_spatialization_enabled(sound, audio.spatial_enabled ? MA_TRUE : MA_FALSE);
         ma_sound_set_min_distance(sound, audio.min_distance);
         ma_sound_set_max_distance(sound, audio.max_distance);
         ma_sound_set_rolloff(sound, audio.rolloff);
+        // Phase 2: attenuation model
+        ma_sound_set_attenuation_model(sound, MapAttenuationModel(audio.attenuation_model));
+        // Phase 3: occlusion volume
+        float effective_volume = audio.volume * sfx_volume_;
+        if (audio.spatial_enabled && audio.occlusion_enabled && raycast_func_ && listener_found
+            && registry.all_of<TransformComponent>(entity)) {
+            const auto& src_transform = registry.get<TransformComponent>(entity);
+            const glm::vec3 dir = src_transform.position - listener_pos;
+            const float dist = glm::length(dir);
+            if (dist > 0.001f) {
+                auto ray_result = raycast_func_(listener_pos, dir / dist, dist);
+                if (ray_result.hit && ray_result.distance < dist - 0.01f) {
+                    effective_volume *= audio.occlusion_factor;
+                }
+            }
+        }
+        ma_sound_set_volume(sound, effective_volume);
         if (registry.all_of<TransformComponent>(entity)) {
             const auto& transform = registry.get<TransformComponent>(entity);
             ma_sound_set_position(sound, transform.position.x, transform.position.y, transform.position.z);
@@ -507,6 +577,10 @@ void AudioSystem::SetMaxConcurrentSfxPerClip(std::size_t max_instances) {
 
 void AudioSystem::SetSfxTriggerCooldownMs(std::uint32_t cooldown_ms) {
     sfx_trigger_cooldown_ms_ = cooldown_ms;
+}
+
+void AudioSystem::SetRaycastFunction(AudioRaycastFunc func) {
+    raycast_func_ = std::move(func);
 }
 
 void AudioSystem::ApplyAllVolumes() {

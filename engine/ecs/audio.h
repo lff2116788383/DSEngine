@@ -12,6 +12,16 @@
 class AudioClipAsset;
 
 /**
+ * @enum AudioAttenuationModel
+ * @brief 3D 音频距离衰减模型
+ */
+enum class AudioAttenuationModel {
+    Inverse = 0,       ///< 反比例衰减（默认，物理上最真实）
+    Linear = 1,        ///< 线性衰减
+    Exponential = 2    ///< 指数衰减
+};
+
+/**
  * @struct AudioSourceComponent
  * @brief 音频源组件，挂载在实体上用于播放 3D/2D 空间音效
  */
@@ -28,6 +38,10 @@ struct AudioSourceComponent {
     float min_distance = 1.0f;                           ///< 3D 衰减起始距离
     float max_distance = 20.0f;                          ///< 3D 衰减最大距离
     float rolloff = 1.0f;                                ///< 3D 距离衰减曲线系数
+    AudioAttenuationModel attenuation_model = AudioAttenuationModel::Inverse; ///< 距离衰减模型
+
+    bool occlusion_enabled = false;                      ///< 是否启用遮挡检测（需 Physics3D raycast）
+    float occlusion_factor = 0.2f;                       ///< 遮挡时音量乘数 (0.0=静音, 1.0=无衰减)
     
     // Internal handle to audio engine (e.g., miniaudio)
     unsigned int runtime_handle = 0;                     ///< 引擎底层的音频句柄
