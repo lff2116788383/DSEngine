@@ -139,6 +139,7 @@ void VulkanRhiDevice::EnsureInitialized() {
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitPostProcessShader();
+    shader_mgr_.InitBloomComputeShaders();
 
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);
 
@@ -171,6 +172,7 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitPostProcessShader();
+    shader_mgr_.InitBloomComputeShaders();
 
     // 5. 初始化几何缓冲区和 UBO
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);
