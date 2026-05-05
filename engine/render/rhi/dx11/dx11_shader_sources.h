@@ -169,7 +169,7 @@ Texture2D u_shadow_map1 : register(t6);
 Texture2D u_shadow_map2 : register(t7);
 
 SamplerState u_sampler : register(s0);
-SamplerState u_shadow_sampler : register(s1);
+SamplerComparisonState u_cmp_sampler : register(s1);
 
 static const float PI = 3.14159265359;
 
@@ -208,10 +208,15 @@ float3 fresnelSchlick(float cosTheta, float3 F0) {
     return F0 + (1.0 - F0) * pow(saturate(1.0 - cosTheta), 5.0);
 }
 
-float SampleShadowMap(int cascade, float2 uv) {
-    if (cascade == 0) return u_shadow_map0.Sample(u_shadow_sampler, uv).r;
-    if (cascade == 1) return u_shadow_map1.Sample(u_shadow_sampler, uv).r;
-    return u_shadow_map2.Sample(u_shadow_sampler, uv).r;
+float SampleShadowPCF(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
+                       float3 proj_coords, float bias) {
+    float shadow = 0.0;
+    float2 texel = 1.0 / float2(2048.0, 2048.0);
+    [unroll] for (int x = -1; x <= 1; ++x)
+    [unroll] for (int y = -1; y <= 1; ++y)
+        shadow += shadowMap.SampleCmpLevelZero(
+            cmp_sampler, proj_coords.xy + float2(x, y) * texel, proj_coords.z - bias);
+    return shadow / 9.0;
 }
 
 float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, float3 lightDir) {
@@ -235,19 +240,12 @@ float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, 
     if (proj.z > 1.0) return 0.0;
     if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) return 0.0;
 
-    float currentDepth = proj.z;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-
-    float shadow = 0.0;
-    float texelSize = 1.0 / 1024.0;
-    for (int x = -1; x <= 1; ++x) {
-        for (int y = -1; y <= 1; ++y) {
-            float pcf = SampleShadowMap(ci, proj.xy + float2(x, y) * texelSize);
-            shadow += (currentDepth - bias) > pcf ? 1.0 : 0.0;
-        }
-    }
-    shadow /= 9.0;
-    return clamp(shadow * light_params.y, 0.0, 1.0);
+    float lit = 0.0;
+    if (ci == 0)      lit = SampleShadowPCF(u_shadow_map0, u_cmp_sampler, proj, bias);
+    else if (ci == 1) lit = SampleShadowPCF(u_shadow_map1, u_cmp_sampler, proj, bias);
+    else              lit = SampleShadowPCF(u_shadow_map2, u_cmp_sampler, proj, bias);
+    return clamp((1.0 - lit) * light_params.y, 0.0, 1.0);
 }
 
 float4 PSMain(PSInput input) : SV_TARGET {

@@ -438,3 +438,17 @@ TEST_F(CompositePassTest, CompositePass_BloomEnabled_使用bloom_composite) {
     dse::render::CompositePass pass(ctx);
     pass.Execute(mock);
 }
+
+// ============================================================
+// Phase H3 — RenderGraph WAW 冲突检测
+// ============================================================
+
+TEST_F(RenderGraphIntegrationTest, WAW冲突编译失败) {
+    auto res = graph.DeclareResource("rt_color");
+    graph.AddPass("PassA", {}, {{res, ResourceState::RenderTarget}},
+                  [](CommandBuffer&) {});
+    graph.AddPass("PassB", {}, {{res, ResourceState::RenderTarget}},
+                  [](CommandBuffer&) {});
+    graph.MarkOutput(res);
+    EXPECT_FALSE(graph.Compile());
+}

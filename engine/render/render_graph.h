@@ -66,6 +66,20 @@ struct RenderResourceHandleHash {
     }
 };
 
+/// 渲染资源状态枚举（用于屏障自动化）
+enum class ResourceState : uint8_t {
+    Undefined,
+    RenderTarget,
+    ShaderRead,
+    UnorderedAccess
+};
+
+/// 渲染资源访问描述（Pass 声明读写依赖时使用）
+struct ResourceAccess {
+    RenderResourceHandle resource;
+    ResourceState required_state;
+};
+
 /// 渲染 Pass 句柄
 struct RenderPassHandle {
     uint32_t id = 0;
@@ -117,6 +131,17 @@ public:
     /// @param name Pass 名称
     /// @return Pass 句柄
     RenderPassHandle AddPass(const std::string& name);
+
+    /// 添加一个渲染 Pass，同时声明读写依赖与执行函数
+    /// @param name   Pass 名称
+    /// @param reads  该 Pass 读取的资源列表
+    /// @param writes 该 Pass 写入的资源列表
+    /// @param execute 执行函数
+    /// @return Pass 句柄
+    RenderPassHandle AddPass(const std::string& name,
+                             std::vector<ResourceAccess> reads,
+                             std::vector<ResourceAccess> writes,
+                             std::function<void(CommandBuffer&)> execute);
 
     /// 为指定 Pass 声明读取资源
     void PassRead(RenderPassHandle pass, RenderResourceHandle resource);

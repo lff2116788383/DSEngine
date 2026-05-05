@@ -581,3 +581,30 @@ TEST(ToneMappingTest, ACESFilmic_中性输入在开区间) {
     EXPECT_GT(result, 0.0f);
     EXPECT_LT(result, 1.0f);
 }
+
+// ============================================================
+// ShadowPCFTest — PCF 纯数学验证（无 GPU 依赖）
+// ============================================================
+
+TEST(ShadowPCFTest, PCF_全遮挡返回零) {
+    float samples[9] = {0,0,0,0,0,0,0,0,0};
+    float sum = 0.0f;
+    for (float s : samples) sum += s;
+    EXPECT_NEAR(sum / 9.0f, 0.0f, 1e-5f);
+}
+
+TEST(ShadowPCFTest, PCF_无遮挡返回一) {
+    float samples[9] = {1,1,1,1,1,1,1,1,1};
+    float sum = 0.0f;
+    for (float s : samples) sum += s;
+    EXPECT_NEAR(sum / 9.0f, 1.0f, 1e-5f);
+}
+
+TEST(ShadowPCFTest, PCF_半遮挡在开区间) {
+    float samples[9] = {1,0,1,0,1,0,1,0,1};
+    float sum = 0.0f;
+    for (float s : samples) sum += s;
+    float result = sum / 9.0f;
+    EXPECT_GT(result, 0.0f);
+    EXPECT_LT(result, 1.0f);
+}

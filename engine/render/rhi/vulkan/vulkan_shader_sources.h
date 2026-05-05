@@ -150,7 +150,7 @@ layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;
 layout(set = 2, binding = 5) uniform sampler2D u_occlusion_map;
 
 #define CSM_CASCADES 3
-layout(set = 2, binding = 6) uniform sampler2D u_shadow_maps[CSM_CASCADES];
+layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_maps[CSM_CASCADES];
 layout(set = 2, binding = 7) uniform sampler2D u_spot_shadow_maps[4];
 
 layout(std140, set = 2, binding = 10) uniform SpotLightData {
@@ -255,6 +255,16 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
+    float shadow = 0.0;
+    vec2 texel_size = 1.0 / vec2(textureSize(shadowMap, 0));
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+            shadow += texture(shadowMap, vec3(proj_coords.xy
+                      + vec2(x, y) * texel_size, proj_coords.z - bias));
+    return shadow / 9.0;
+}
+
 float ShadowCalculation(vec3 fragPosWorldSpace, vec3 fragPosViewSpace, vec3 normal, vec3 lightDir) {
     if (!u_receive_shadow) return 0.0;
     int cascadeIndex = CSM_CASCADES - 1;
@@ -269,18 +279,9 @@ float ShadowCalculation(vec3 fragPosWorldSpace, vec3 fragPosViewSpace, vec3 norm
     projCoords = projCoords * 0.5 + 0.5;
     if(projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
-    float currentDepth = projCoords.z;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-    float shadow = 0.0;
-    vec2 texelSize = 1.0 / vec2(textureSize(u_shadow_maps[cascadeIndex], 0));
-    for (int x = -1; x <= 1; ++x) {
-        for (int y = -1; y <= 1; ++y) {
-            float pcfDepth = texture(u_shadow_maps[cascadeIndex], projCoords.xy + vec2(x, y) * texelSize).r;
-            shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
-        }
-    }
-    shadow /= 9.0;
-    return clamp(shadow * u_shadow_strength, 0.0, 1.0);
+    float lit = SampleShadowPCF(u_shadow_maps[cascadeIndex], projCoords, bias);
+    return clamp((1.0 - lit) * u_shadow_strength, 0.0, 1.0);
 }
 
 float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {

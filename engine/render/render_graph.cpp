@@ -171,6 +171,17 @@ void RenderGraph::PassWrite(RenderPassHandle pass, RenderResourceHandle resource
     }
 }
 
+RenderPassHandle RenderGraph::AddPass(const std::string& name,
+                                       std::vector<ResourceAccess> reads,
+                                       std::vector<ResourceAccess> writes,
+                                       std::function<void(CommandBuffer&)> execute) {
+    RenderPassHandle handle = AddPass(name);
+    for (const auto& ra : reads)  PassRead(handle, ra.resource);
+    for (const auto& wa : writes) PassWrite(handle, wa.resource);
+    PassSetExecute(handle, std::move(execute));
+    return handle;
+}
+
 void RenderGraph::PassSetExecute(RenderPassHandle pass, std::function<void(CommandBuffer&)> execute) {
     if (!pass.is_valid() || !execute) return;
 
@@ -193,6 +204,14 @@ void RenderGraph::MarkOutput(RenderResourceHandle resource) {
 
 bool RenderGraph::Compile() {
     compiled_order_.clear();
+
+    // ---- 0. WAW 冲突检测：同一资源被多个 Pass 写入 ----
+    for (const auto& res : resources_) {
+        if (res.writers.size() > 1) {
+            is_compiled_ = false;
+            return false;
+        }
+    }
 
     if (passes_.empty()) {
         is_compiled_ = true;
