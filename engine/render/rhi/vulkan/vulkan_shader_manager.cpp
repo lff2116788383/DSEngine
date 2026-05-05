@@ -78,6 +78,19 @@ void VulkanShaderManager::Shutdown() {
     }
     programs_.clear();
 
+    // 销毁 Compute 程序
+    for (auto& [handle, prog] : compute_programs_) {
+        if (prog.pipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(device, prog.pipeline, nullptr);
+        if (prog.pipeline_layout != VK_NULL_HANDLE)
+            vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
+        if (prog.descriptor_set_layout != VK_NULL_HANDLE)
+            vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        if (prog.comp_module != VK_NULL_HANDLE)
+            vkDestroyShaderModule(device, prog.comp_module, nullptr);
+    }
+    compute_programs_.clear();
+
     // descriptor layout 缓存中的对象已在 program 销毁时清理
     descriptor_layout_cache_.clear();
 
@@ -98,6 +111,7 @@ bool VulkanShaderManager::CompileGlslToSpirv(
     switch (stage) {
     case VK_SHADER_STAGE_VERTEX_BIT:   glslang_stage = EShLangVertex; break;
     case VK_SHADER_STAGE_FRAGMENT_BIT: glslang_stage = EShLangFragment; break;
+    case VK_SHADER_STAGE_COMPUTE_BIT:  glslang_stage = EShLangCompute;  break;
     default:
         DEBUG_LOG_WARN("Unsupported shader stage: {}", static_cast<int>(stage));
         return false;
@@ -119,9 +133,9 @@ bool VulkanShaderManager::CompileGlslToSpirv(
         EShMsgSpvRules | EShMsgVulkanRules);
 
     if (!shader.parse(&resources, 450, false, messages)) {
-        DEBUG_LOG_ERROR("GLSL parse failed (stage={}):\n{}",
-                      glslang_stage == EShLangVertex ? "VS" : "FS",
-                      shader.getInfoLog());
+        const char* stage_name = (glslang_stage == EShLangVertex)   ? "VS"
+                               : (glslang_stage == EShLangCompute)  ? "CS" : "FS";
+        DEBUG_LOG_ERROR("GLSL parse failed (stage={}):\n{}", stage_name, shader.getInfoLog());
         return false;
     }
 
@@ -492,6 +506,97 @@ void VulkanShaderManager::InitPostProcessShader() {
     } else {
         DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
     }
+}
+
+// ============================================================================
+// Compute 程序
+// ============================================================================
+
+unsigned int VulkanShaderManager::CreateComputeProgram(const std::string& comp_src) {
+    std::vector<uint32_t> comp_spirv;
+    if (!CompileGlslToSpirv(comp_src, VK_SHADER_STAGE_COMPUTE_BIT, comp_spirv)) {
+        DEBUG_LOG_ERROR("[Vulkan] Compute shader compilation failed");
+        return 0;
+    }
+
+    auto device = context_->device();
+    VulkanComputeProgram prog;
+    prog.comp_module = CreateShaderModule(comp_spirv);
+    if (prog.comp_module == VK_NULL_HANDLE) return 0;
+
+    // Descriptor set layout: binding0 = sampler2D src, binding1 = image2D dst
+    VkDescriptorSetLayoutBinding bindings[2] = {};
+    bindings[0].binding         = 0;
+    bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings[1].binding         = 1;
+    bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo dsl_ci{};
+    dsl_ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dsl_ci.bindingCount = 2;
+    dsl_ci.pBindings    = bindings;
+    if (vkCreateDescriptorSetLayout(device, &dsl_ci, nullptr, &prog.descriptor_set_layout) != VK_SUCCESS) {
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Pipeline layout: descriptor set + push constants (4 floats)
+    VkPushConstantRange pc_range{};
+    pc_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pc_range.offset     = 0;
+    pc_range.size       = sizeof(float) * 4;
+
+    VkPipelineLayoutCreateInfo pl_ci{};
+    pl_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pl_ci.setLayoutCount         = 1;
+    pl_ci.pSetLayouts            = &prog.descriptor_set_layout;
+    pl_ci.pushConstantRangeCount = 1;
+    pl_ci.pPushConstantRanges    = &pc_range;
+    if (vkCreatePipelineLayout(device, &pl_ci, nullptr, &prog.pipeline_layout) != VK_SUCCESS) {
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Compute pipeline
+    VkComputePipelineCreateInfo cp_ci{};
+    cp_ci.sType        = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cp_ci.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    cp_ci.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    cp_ci.stage.module = prog.comp_module;
+    cp_ci.stage.pName  = "main";
+    cp_ci.layout       = prog.pipeline_layout;
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+        vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    unsigned int handle = next_handle_++;
+    compute_programs_[handle] = prog;
+    DEBUG_LOG_INFO("[Vulkan] Compute program created: handle={}", handle);
+    return handle;
+}
+
+void VulkanShaderManager::InitBloomComputeShaders() {
+    bloom_downsample_cs_handle_ = CreateComputeProgram(vulkan_shaders::kBloomDownsampleCS);
+    bloom_upsample_cs_handle_   = CreateComputeProgram(vulkan_shaders::kBloomUpsampleCS);
+    if (bloom_downsample_cs_handle_ && bloom_upsample_cs_handle_) {
+        DEBUG_LOG_INFO("[Vulkan] Bloom CS programs initialized (down={} up={})",
+                       bloom_downsample_cs_handle_, bloom_upsample_cs_handle_);
+    } else {
+        DEBUG_LOG_WARN("[Vulkan] Bloom CS initialization failed (glslang may be unavailable)");
+    }
+}
+
+const VulkanComputeProgram* VulkanShaderManager::GetComputeProgram(unsigned int handle) const {
+    auto it = compute_programs_.find(handle);
+    return it != compute_programs_.end() ? &it->second : nullptr;
 }
 
 } // namespace render

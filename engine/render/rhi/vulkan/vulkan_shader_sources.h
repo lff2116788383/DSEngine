@@ -726,6 +726,92 @@ void main() {
 }
 )";
 
+/// Bloom 降采样 Compute Shader（13-tap Kawase）
+constexpr const char* kBloomDownsampleCS = R"(
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D u_src;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D u_dst;
+
+layout(push_constant) uniform BloomParams {
+    float src_texel_w;
+    float src_texel_h;
+    float dst_texel_w;
+    float dst_texel_h;
+} u_params;
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dst_size  = imageSize(u_dst);
+    if (dst_coord.x >= dst_size.x || dst_coord.y >= dst_size.y) return;
+
+    vec2 uv = (vec2(dst_coord) + 0.5) * vec2(u_params.dst_texel_w, u_params.dst_texel_h);
+    float x = u_params.src_texel_w;
+    float y = u_params.src_texel_h;
+
+    vec3 a = texture(u_src, uv + vec2(-2.0*x,  2.0*y)).rgb;
+    vec3 b = texture(u_src, uv + vec2(  0.0,   2.0*y)).rgb;
+    vec3 c = texture(u_src, uv + vec2( 2.0*x,  2.0*y)).rgb;
+    vec3 d = texture(u_src, uv + vec2(-2.0*x,    0.0)).rgb;
+    vec3 e = texture(u_src, uv).rgb;
+    vec3 f = texture(u_src, uv + vec2( 2.0*x,    0.0)).rgb;
+    vec3 g = texture(u_src, uv + vec2(-2.0*x, -2.0*y)).rgb;
+    vec3 h = texture(u_src, uv + vec2(  0.0,  -2.0*y)).rgb;
+    vec3 i = texture(u_src, uv + vec2( 2.0*x, -2.0*y)).rgb;
+    vec3 j = texture(u_src, uv + vec2(    -x,      y)).rgb;
+    vec3 k = texture(u_src, uv + vec2(     x,      y)).rgb;
+    vec3 l = texture(u_src, uv + vec2(    -x,     -y)).rgb;
+    vec3 m = texture(u_src, uv + vec2(     x,     -y)).rgb;
+
+    vec3 result = e * 0.125
+        + (a + c + g + i) * 0.03125
+        + (b + d + f + h) * 0.0625
+        + (j + k + l + m) * 0.125;
+
+    imageStore(u_dst, dst_coord, vec4(result, 1.0));
+}
+)";
+
+/// Bloom 升采样 Compute Shader（3x3 tent filter）
+constexpr const char* kBloomUpsampleCS = R"(
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D u_src;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D u_dst;
+
+layout(push_constant) uniform BloomParams {
+    float src_texel_w;
+    float src_texel_h;
+    float dst_texel_w;
+    float dst_texel_h;
+} u_params;
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dst_size  = imageSize(u_dst);
+    if (dst_coord.x >= dst_size.x || dst_coord.y >= dst_size.y) return;
+
+    vec2 uv = (vec2(dst_coord) + 0.5) * vec2(u_params.dst_texel_w, u_params.dst_texel_h);
+    float x = u_params.src_texel_w;
+    float y = u_params.src_texel_h;
+
+    vec3 a = texture(u_src, uv + vec2(-x,  y)).rgb;
+    vec3 b = texture(u_src, uv + vec2( 0,  y)).rgb;
+    vec3 c = texture(u_src, uv + vec2( x,  y)).rgb;
+    vec3 d = texture(u_src, uv + vec2(-x,  0)).rgb;
+    vec3 e = texture(u_src, uv).rgb;
+    vec3 f = texture(u_src, uv + vec2( x,  0)).rgb;
+    vec3 g = texture(u_src, uv + vec2(-x, -y)).rgb;
+    vec3 h = texture(u_src, uv + vec2( 0, -y)).rgb;
+    vec3 i = texture(u_src, uv + vec2( x, -y)).rgb;
+
+    vec3 result = (e * 4.0 + (b + d + f + h) * 2.0 + (a + c + g + i)) * (1.0 / 16.0);
+    imageStore(u_dst, dst_coord, vec4(result, 1.0));
+}
+)";
+
 } // namespace vulkan_shaders
 } // namespace render
 } // namespace dse

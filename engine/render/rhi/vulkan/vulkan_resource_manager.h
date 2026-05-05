@@ -47,9 +47,14 @@ struct VulkanRenderTarget {
     bool has_depth = false;
     bool generate_mipmaps = false;
 
+    bool is_msaa = false;           ///< 是否启用 MSAA
+    int msaa_samples = 1;            ///< MSAA 采样数（1 或 4）
+    bool allow_uav = false;          ///< 是否支持 Compute Storage 写入
+
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass render_pass = VK_NULL_HANDLE;       ///< RenderTarget 关联的 RenderPass
-    VulkanTexture color_texture;
+    VulkanTexture color_texture;       ///< 1x SRV（MSAA 时为 resolve 目标）
+    VulkanTexture msaa_color_texture;  ///< MSAA 颜色附件（仅 is_msaa=true 时有效）
     VulkanTexture depth_texture;
 };
 
@@ -95,12 +100,16 @@ public:
 
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
-                                     bool generate_mipmaps, bool cube_map);
+                                     bool generate_mipmaps, bool cube_map,
+                                     int msaa_samples = 1, bool allow_uav = false);
     void DeleteRenderTarget(unsigned int handle);
     const VulkanRenderTarget* GetRenderTarget(unsigned int handle) const;
 
     /// 获取渲染目标的颜色附件 ImageView
     VkImageView GetRenderTargetColorImageView(unsigned int handle) const;
+
+    // --- 默认采样器 ---
+    VkSampler default_sampler() const { return default_sampler_; }
 
     // --- Descriptor Pool & Set ---
     VkDescriptorPool descriptor_pool() const { return descriptor_pool_; }
@@ -121,7 +130,8 @@ private:
     /// 创建 VkImage + VkDeviceMemory + VkImageView
     bool CreateVulkanImage(int width, int height, VkFormat format, VkImageTiling tiling,
                            VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-                           VkImageAspectFlags aspect_mask, VulkanTexture& out_texture);
+                           VkImageAspectFlags aspect_mask, VulkanTexture& out_texture,
+                           VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
 
     /// 将数据上传到纹理（使用 staging buffer）
     void UploadTextureData(VulkanTexture& texture, const void* data, size_t data_size);
@@ -138,6 +148,9 @@ private:
 
     // 命令池
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
+
+    // 默认采样器（linear clamp，供 Compute Shader 使用）
+    VkSampler default_sampler_ = VK_NULL_HANDLE;
 
     // Descriptor Pool
     VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;

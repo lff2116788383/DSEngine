@@ -138,9 +138,8 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     UINT quality = 0;
     hr = device_->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT, 4, &quality);
     msaa_4x_quality_ = (SUCCEEDED(hr) && quality > 0) ? quality - 1 : 0;
-    if (msaa_4x_quality_ > 0) {
-        DEBUG_LOG_INFO("[D3D11] MSAA 4x supported (quality={})", msaa_4x_quality_);
-    } else {
+    DEBUG_LOG_INFO("[D3D11] MSAA 4x quality={}", msaa_4x_quality_);
+    if (msaa_4x_quality_ == 0) {
         DEBUG_LOG_INFO("[D3D11] MSAA 4x not supported, will use 1x");
     }
 

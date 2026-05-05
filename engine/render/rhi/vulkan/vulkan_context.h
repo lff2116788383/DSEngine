@@ -109,6 +109,7 @@ public:
     VkSemaphore render_finished_semaphore() const { return render_finished_semaphores_[current_frame_]; }
     VkFence in_flight_fence() const { return in_flight_fences_[current_frame_]; }
     uint32_t current_frame() const { return current_frame_; }
+    bool hdr_enabled() const { return hdr_enabled_; }
 
     /// 获取下一帧 swapchain image（阻塞直到可用）
     /// @return 是否成功获取（VK_SUCCESS 或 VK_SUBOPTIMAL）
@@ -186,6 +187,7 @@ private:
     uint32_t current_image_index_ = 0;
 
     bool enable_validation_ = false;
+    bool hdr_enabled_ = false;
     bool initialized_ = false;
 
     static const std::vector<const char*> kValidationLayers;

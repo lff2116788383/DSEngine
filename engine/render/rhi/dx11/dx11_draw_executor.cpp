@@ -616,9 +616,11 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         const auto* rt = resource_mgr.GetRenderTarget(current_rt_handle_);
         if (rt && rt->color_uav) {
             unsigned int uav_rt = current_rt_handle_;
-            // 解绑当前 RTV，切换到 CS 路径
+            // 解绑当前 RTV，清空 PS SRV（防止 D3D11 Validation Layer UAV 冲突），切换到 CS 路径
             ID3D11RenderTargetView* null_rtv = nullptr;
             dc->OMSetRenderTargets(0, &null_rtv, nullptr);
+            ID3D11ShaderResourceView* null_srvs[8] = {};
+            dc->PSSetShaderResources(0, 8, null_srvs);
 
             UINT dst_w = static_cast<UINT>(rt->width);
             UINT dst_h = static_cast<UINT>(rt->height);

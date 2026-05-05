@@ -463,6 +463,57 @@ TEST(VulkanRenderTargetTest, 默认值) {
     EXPECT_EQ(rt.render_pass, VK_NULL_HANDLE);
 }
 
+// ============================================================
+// Phase C 回归测试（C1 MSAA / C2 HDR / C3 Bloom CS）
+// ============================================================
+
+// C1 — MSAA 新字段默认值
+TEST(VulkanRenderTargetTest, C1_MSAA字段默认值) {
+    VulkanRenderTarget rt;
+    EXPECT_FALSE(rt.is_msaa);
+    EXPECT_EQ(rt.msaa_samples, 1);
+    EXPECT_FALSE(rt.allow_uav);
+    // msaa_color_texture 默认为空
+    EXPECT_EQ(rt.msaa_color_texture.image, VK_NULL_HANDLE);
+    EXPECT_EQ(rt.msaa_color_texture.image_view, VK_NULL_HANDLE);
+    EXPECT_EQ(rt.msaa_color_texture.memory, VK_NULL_HANDLE);
+}
+
+// C2 — HDR Context 访问器
+TEST(VulkanContextTest, C2_HDR默认禁用) {
+    VulkanContext ctx;
+    EXPECT_FALSE(ctx.hdr_enabled());
+}
+
+// C3 — Bloom CS 句柄默认值
+TEST(VulkanShaderManagerTest, C3_BloomCS句柄默认为零) {
+    VulkanShaderManager mgr;
+    EXPECT_EQ(mgr.bloom_downsample_cs_handle(), 0u);
+    EXPECT_EQ(mgr.bloom_upsample_cs_handle(), 0u);
+}
+
+// C3 — GetComputeProgram 无效句柄返回 nullptr
+TEST(VulkanShaderManagerTest, C3_GetComputeProgram无效句柄返回nullptr) {
+    VulkanShaderManager mgr;
+    EXPECT_EQ(mgr.GetComputeProgram(0), nullptr);
+    EXPECT_EQ(mgr.GetComputeProgram(999), nullptr);
+}
+
+// C3 — VulkanComputeProgram 默认值
+TEST(VulkanComputeProgramTest, C3_默认值) {
+    VulkanComputeProgram prog;
+    EXPECT_EQ(prog.comp_module, VK_NULL_HANDLE);
+    EXPECT_EQ(prog.pipeline, VK_NULL_HANDLE);
+    EXPECT_EQ(prog.pipeline_layout, VK_NULL_HANDLE);
+    EXPECT_EQ(prog.descriptor_set_layout, VK_NULL_HANDLE);
+}
+
+// C1 — VulkanResourceManager 新增 default_sampler 默认空
+TEST(VulkanResourceManagerTest, C1_default_sampler未初始化为NULL) {
+    VulkanResourceManager mgr;
+    EXPECT_EQ(mgr.default_sampler(), VK_NULL_HANDLE);
+}
+
 TEST(VulkanShaderProgramTest, 默认值) {
     VulkanShaderProgram prog;
     EXPECT_EQ(prog.vert_module, VK_NULL_HANDLE);

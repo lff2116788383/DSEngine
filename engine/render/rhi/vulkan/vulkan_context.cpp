@@ -491,6 +491,7 @@ bool VulkanContext::CreateSwapchain(int width, int height) {
     SwapchainSupportDetails swapchain_support = QuerySwapchainSupport(physical_device_);
 
     surface_format_ = ChooseSwapSurfaceFormat(swapchain_support.formats);
+    hdr_enabled_ = (surface_format_.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT);
     VkPresentModeKHR present_mode = ChooseSwapPresentMode(swapchain_support.present_modes);
     swapchain_extent_ = ChooseSwapExtent(swapchain_support.capabilities, width, height);
 
@@ -545,18 +546,28 @@ bool VulkanContext::CreateSwapchain(int width, int height) {
     if (!CreateImageViews()) return false;
     if (!CreateSwapchainFramebuffers()) return false;
 
-    DEBUG_LOG_INFO("[Vulkan] Swapchain created: {}x{} format={} images={}",
+    DEBUG_LOG_INFO("[Vulkan] Swapchain created: {}x{} format={} colorspace={} hdr={} images={}",
         swapchain_extent_.width, swapchain_extent_.height,
-        static_cast<int>(surface_format_.format), image_count);
+        static_cast<int>(surface_format_.format),
+        static_cast<int>(surface_format_.colorSpace),
+        hdr_enabled_ ? "yes" : "no", image_count);
     return true;
 }
 
 VkSurfaceFormatKHR VulkanContext::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available) {
-    // 优先 B8G8R8A8_SRGB + SRGB nonlinear
-    for (const auto& format : available) {
-        if (format.format == VK_FORMAT_B8G8R8A8_SRGB &&
-            format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return format;
+    // 优先 HDR10: R16G16B16A16_SFLOAT 或 A2B10G10R10 + HDR10_ST2084
+    for (const auto& fmt : available) {
+        if ((fmt.format == VK_FORMAT_R16G16B16A16_SFLOAT ||
+             fmt.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) &&
+            fmt.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
+            return fmt;
+        }
+    }
+    // 次选 SRGB SDR
+    for (const auto& fmt : available) {
+        if (fmt.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return fmt;
         }
     }
     return available[0];

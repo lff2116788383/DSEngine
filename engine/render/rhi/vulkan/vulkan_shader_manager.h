@@ -46,6 +46,14 @@ struct ShaderReflection {
     bool has_push_constant = false;
 };
 
+/// Compute 着色器程序（Bloom CS）
+struct VulkanComputeProgram {
+    VkShaderModule comp_module = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+};
+
 /// 着色器程序句柄对应的 Vulkan 对象集合
 struct VulkanShaderProgram {
     VkShaderModule vert_module = VK_NULL_HANDLE;
@@ -101,12 +109,23 @@ public:
     /// 初始化后处理着色器（直通/全屏四边形）
     void InitPostProcessShader();
 
+    /// 初始化 Bloom Compute 着色器
+    void InitBloomComputeShaders();
+
+    /// 从 GLSL 源码创建 Compute 程序，返回句柄（0 = 失败）
+    unsigned int CreateComputeProgram(const std::string& comp_src);
+
+    /// 查询 Compute 程序
+    const VulkanComputeProgram* GetComputeProgram(unsigned int handle) const;
+
     // --- 内置着色器访问器 ---
     unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
     unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
     unsigned int particle_shader_handle() const { return particle_shader_handle_; }
     unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
     unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
+    unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
+    unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
 
     /// 着色器程序计数
     std::size_t programs_created() const { return programs_created_; }
@@ -157,6 +176,11 @@ private:
     unsigned int particle_shader_handle_ = 0;
     unsigned int sprite_shader_handle_ = 0;
     unsigned int postprocess_shader_handle_ = 0;
+    unsigned int bloom_downsample_cs_handle_ = 0;
+    unsigned int bloom_upsample_cs_handle_ = 0;
+
+    /// Compute 着色器程序
+    std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

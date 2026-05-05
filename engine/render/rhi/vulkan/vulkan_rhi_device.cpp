@@ -207,7 +207,8 @@ void VulkanRhiDevice::BeginFrame() {
 
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return resource_mgr_.CreateRenderTarget(desc.width, desc.height, desc.has_color, desc.has_depth,
-                                             desc.generate_mipmaps, desc.cube_map);
+                                             desc.generate_mipmaps, desc.cube_map,
+                                             desc.msaa_samples, desc.allow_uav);
 }
 
 unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {

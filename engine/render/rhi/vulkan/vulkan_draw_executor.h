@@ -203,6 +203,13 @@ private:
         unsigned int source_texture,
         VulkanResourceManager& resource_mgr);
 
+    /// Bloom Compute Shader 调度（是另开的 Compute 流程）
+    void DispatchBloomCompute(VkCommandBuffer cmd_buf,
+                              unsigned int cs_handle,
+                              unsigned int src_texture_handle,
+                              unsigned int dst_rt_handle,
+                              VulkanShaderManager& shader_mgr);
+
     VulkanContext* context_ = nullptr;
     VulkanResourceManager* resource_mgr_ = nullptr;
 
@@ -240,6 +247,9 @@ private:
 
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;
+
+    // 当前活跃的 RenderTarget（由 BeginRenderPass 设置）
+    unsigned int current_rt_handle_ = 0;
 
     // 全局阴影/光源状态
     glm::mat4 global_light_space_matrix_[3];

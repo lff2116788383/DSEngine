@@ -606,8 +606,9 @@ void VulkanDrawExecutor::BeginRenderPass(
     VulkanResourceManager& resource_mgr,
     VulkanPipelineStateManager& pipeline_mgr) {
 
-    // 更新帧索引
+    // 更新帧索引和当前 RT 句柄
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
+    current_rt_handle_ = render_pass.render_target;
 
     // 确定 Framebuffer 和 RenderPass
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
@@ -928,7 +929,21 @@ void VulkanDrawExecutor::DrawPostProcess(
     VulkanPipelineStateManager& pipeline_mgr,
     VulkanShaderManager& shader_mgr) {
 
-    // 后处理管线状态：无混合、无深度、无剔除
+    // Bloom CS 路径：绕过图形管线，直接 Dispatch
+    const bool is_bloom_ds = (effect_name == "bloom_downsample");
+    const bool is_bloom_us = (effect_name == "bloom_upsample");
+    if ((is_bloom_ds || is_bloom_us) && current_rt_handle_ != 0) {
+        const unsigned int cs_handle = is_bloom_ds
+            ? shader_mgr.bloom_downsample_cs_handle()
+            : shader_mgr.bloom_upsample_cs_handle();
+        if (cs_handle != 0) {
+            DispatchBloomCompute(cmd_buf, cs_handle, source_texture,
+                                  current_rt_handle_, shader_mgr);
+            return;
+        }
+    }
+
+    // 后处理管线状态：无混合、无深度、无剪裁
     PipelineStateDesc pp_desc;
     pp_desc.blend_enabled = false;
     pp_desc.depth_test_enabled = false;
@@ -1046,6 +1061,105 @@ void VulkanDrawExecutor::BeginFrame() {
 
 void VulkanDrawExecutor::EndFrame() {
     last_frame_stats_ = current_frame_stats_;
+}
+
+// ============================================================================
+// DispatchBloomCompute
+// ============================================================================
+
+void VulkanDrawExecutor::DispatchBloomCompute(
+    VkCommandBuffer cmd_buf,
+    unsigned int cs_handle,
+    unsigned int src_texture_handle,
+    unsigned int dst_rt_handle,
+    VulkanShaderManager& shader_mgr) {
+
+    const VulkanComputeProgram* cs = shader_mgr.GetComputeProgram(cs_handle);
+    if (!cs || cs->pipeline == VK_NULL_HANDLE) return;
+
+    const VulkanTexture*      src_tex = resource_mgr_->GetTexture(src_texture_handle);
+    const VulkanRenderTarget* dst_rt  = resource_mgr_->GetRenderTarget(dst_rt_handle);
+    if (!src_tex || !dst_rt || !dst_rt->allow_uav) return;
+
+    VkDevice device = context_->device();
+
+    // 1. 将 dst image 过渡到 GENERAL（以支持 Storage 写入）
+    VkImageMemoryBarrier to_general{};
+    to_general.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    to_general.oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    to_general.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+    to_general.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_general.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_general.image               = dst_rt->color_texture.image;
+    to_general.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    to_general.srcAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+    to_general.dstAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd_buf,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &to_general);
+
+    // 2. 绑定 Compute Pipeline
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, cs->pipeline);
+
+    // 3. 分配并更新 DescriptorSet
+    VkDescriptorSet desc_set = resource_mgr_->AllocateDescriptorSet(cs->descriptor_set_layout);
+    if (desc_set != VK_NULL_HANDLE) {
+        VkDescriptorImageInfo src_info{};
+        src_info.sampler     = resource_mgr_->default_sampler();
+        src_info.imageView   = src_tex->image_view;
+        src_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkDescriptorImageInfo dst_info{};
+        dst_info.sampler     = VK_NULL_HANDLE;
+        dst_info.imageView   = dst_rt->color_texture.image_view;
+        dst_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        VkWriteDescriptorSet writes[2] = {};
+        writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet          = desc_set;
+        writes[0].dstBinding      = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[0].pImageInfo      = &src_info;
+        writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet          = desc_set;
+        writes[1].dstBinding      = 1;
+        writes[1].descriptorCount = 1;
+        writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[1].pImageInfo      = &dst_info;
+        vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                cs->pipeline_layout, 0, 1, &desc_set, 0, nullptr);
+    }
+
+    // 4. Push constants （texel 大小）
+    struct BloomParams { float src_w, src_h, dst_w, dst_h; };
+    const BloomParams bp {
+        src_tex->width  > 0 ? 1.0f / static_cast<float>(src_tex->width)  : 1.0f,
+        src_tex->height > 0 ? 1.0f / static_cast<float>(src_tex->height) : 1.0f,
+        dst_rt->width   > 0 ? 1.0f / static_cast<float>(dst_rt->width)   : 1.0f,
+        dst_rt->height  > 0 ? 1.0f / static_cast<float>(dst_rt->height)  : 1.0f,
+    };
+    vkCmdPushConstants(cmd_buf, cs->pipeline_layout,
+                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(bp), &bp);
+
+    // 5. Dispatch
+    const uint32_t gx = (static_cast<uint32_t>(dst_rt->width)  + 7) / 8;
+    const uint32_t gy = (static_cast<uint32_t>(dst_rt->height) + 7) / 8;
+    vkCmdDispatch(cmd_buf, gx, gy, 1);
+
+    // 6. 过渡回 SHADER_READ_ONLY
+    VkImageMemoryBarrier to_readonly = to_general;
+    to_readonly.oldLayout    = VK_IMAGE_LAYOUT_GENERAL;
+    to_readonly.newLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    to_readonly.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    to_readonly.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd_buf,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &to_readonly);
+
+    current_frame_stats_.draw_calls++;
 }
 
 } // namespace render
