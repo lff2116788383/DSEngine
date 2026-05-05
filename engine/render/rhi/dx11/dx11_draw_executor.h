@@ -105,6 +105,13 @@ struct DX11SpotLightsCB {
 static_assert(sizeof(DX11SpotLightsCB) % 16 == 0,
               "DX11SpotLightsCB must be 16B aligned");
 
+/// 聚光灯光源空间矩阵（register b6，4×64B = 256B）
+struct DX11SpotMatricesCB {
+    glm::mat4 spot_light_space_matrices[4];
+};
+static_assert(sizeof(DX11SpotMatricesCB) % 16 == 0,
+              "DX11SpotMatricesCB must be 16B aligned");
+
 /**
  * @class DX11DrawExecutor
  * @brief D3D11 绘制执行器
@@ -257,9 +264,10 @@ private:
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;
 
-    // 点光源 / 聚光灯常量缓冲（b4 / b5）
+    // 点光源 / 聚光灯常量缓冲（b4 / b5 / b6）
     ComPtr<ID3D11Buffer> per_point_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_lights_cb_;
+    ComPtr<ID3D11Buffer> per_spot_matrices_cb_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

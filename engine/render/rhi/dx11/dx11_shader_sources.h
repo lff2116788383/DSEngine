@@ -7,10 +7,19 @@
  * - 像素着色器: PSMain
  *
  * 常量缓冲布局约定（与 DX11DrawExecutor CB 对齐）：
- *   b0: PerFrame CB   (vp, view, camera_pos)
- *   b1: PerObject CB  (model, skinned, morph_enabled)
- *   b2: PerScene CB   (方向光/阴影参数)
- *   b3: PerMaterial CB (材质参数)
+ *   b0: PerFrame CB       (vp, view, camera_pos)
+ *   b1: PerObject CB      (model, skinned, morph_enabled)
+ *   b2: PerScene CB       (方向光/阴影参数)
+ *   b3: PerMaterial CB    (材质参数)
+ *   b4: PointLights CB    (点光源数组 208B)
+ *   b5: SpotLights CB     (聚光灯数组 272B)
+ *   b6: SpotMatrices CB   (聚光灯光源空间矩阵 256B)
+ *
+ * 纹理寄存器布局：
+ *   t0-t4:  PBR 材质贴图 (albedo/normal/mr/emissive/occlusion)
+ *   t5-t7:  CSM 阴影贴图 (方向光3级联)
+ *   t8-t11: 点光源立方体阴影贴图 (TextureCube)
+ *   t12-t15: 聚光灯阴影贴图 (Texture2D PCF)
  */
 
 #ifndef DSE_RENDER_DX11_SHADER_SOURCES_H
@@ -184,6 +193,10 @@ cbuffer SpotLights : register(b5) {
     SpotLightEntry u_spot_lights[4];
 };
 
+cbuffer SpotMatrices : register(b6) {
+    float4x4 u_spot_light_space_matrices[4];
+};
+
 Texture2D u_texture : register(t0);
 Texture2D u_normal_map : register(t1);
 Texture2D u_metallic_roughness_map : register(t2);
@@ -196,6 +209,10 @@ TextureCube u_point_shadow_map0 : register(t8);
 TextureCube u_point_shadow_map1 : register(t9);
 TextureCube u_point_shadow_map2 : register(t10);
 TextureCube u_point_shadow_map3 : register(t11);
+Texture2D u_spot_shadow_map0 : register(t12);
+Texture2D u_spot_shadow_map1 : register(t13);
+Texture2D u_spot_shadow_map2 : register(t14);
+Texture2D u_spot_shadow_map3 : register(t15);
 
 SamplerState u_sampler : register(s0);
 SamplerComparisonState u_cmp_sampler : register(s1);
@@ -332,6 +349,51 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float NdotL = max(dot(N, L), 0.0);
     float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
     float3 Lo = (kD * surface_albedo / PI + specular) * light_color_and_ambient.rgb * light_params.x * NdotL * (1.0 - shadow);
+
+    // 聚光灯 PBR 循环
+    [loop] for (int si = 0; si < u_spot_light_count; ++si) {
+        SpotLightEntry sl = u_spot_lights[si];
+        float3 Ls = sl.position - input.fragPos;
+        float dist_s = length(Ls);
+        if (dist_s >= sl.radius) continue;
+        float atten_s = saturate(1.0 - (dist_s * dist_s) / (sl.radius * sl.radius));
+        atten_s *= atten_s;
+        float3 Lsdir = Ls / max(dist_s, 0.0001);
+        float theta_s = dot(Lsdir, normalize(-sl.direction));
+        float outerCos = cos(radians(sl.outer_cone));
+        float innerCos = cos(radians(sl.inner_cone));
+        float epsilon_s = max(innerCos - outerCos, 0.0001);
+        float cone = saturate((theta_s - outerCos) / epsilon_s);
+        if (cone <= 0.0) continue;
+        float3 Hs = normalize(V + Lsdir);
+        float NDFs = DistributionGGX(N, Hs, roughness);
+        float Gs   = GeometrySmith(N, V, Lsdir, roughness);
+        float3 Fs  = fresnelSchlick(max(dot(Hs, V), 0.0), F0);
+        float3 specS = (NDFs * Gs * Fs) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, Lsdir), 0.0) + 0.0001, 0.0001);
+        float3 kDs = (float3(1.0, 1.0, 1.0) - Fs) * (1.0 - metallic);
+        float NdotLs = max(dot(N, Lsdir), 0.0);
+        float sl_shadow = 0.0;
+        if (sl.cast_shadow != 0) {
+            float4x4 lsm = (sl.shadow_index == 1) ? u_spot_light_space_matrices[1] :
+                           (sl.shadow_index == 2) ? u_spot_light_space_matrices[2] :
+                           (sl.shadow_index >= 3) ? u_spot_light_space_matrices[3] :
+                                                    u_spot_light_space_matrices[0];
+            float4 fragPosLS = mul(lsm, float4(input.fragPos, 1.0));
+            float3 sproj = fragPosLS.xyz / fragPosLS.w;
+            sproj.x = sproj.x * 0.5 + 0.5;
+            sproj.y = -sproj.y * 0.5 + 0.5;
+            if (sproj.z <= 1.0 && sproj.x >= 0.0 && sproj.x <= 1.0 && sproj.y >= 0.0 && sproj.y <= 1.0) {
+                float sbias = max(0.003 * (1.0 - dot(N, Lsdir)), 0.0005);
+                float lit_s = 0.0;
+                if      (sl.shadow_index == 0) lit_s = SampleShadowPCF(u_spot_shadow_map0, u_cmp_sampler, sproj, sbias);
+                else if (sl.shadow_index == 1) lit_s = SampleShadowPCF(u_spot_shadow_map1, u_cmp_sampler, sproj, sbias);
+                else if (sl.shadow_index == 2) lit_s = SampleShadowPCF(u_spot_shadow_map2, u_cmp_sampler, sproj, sbias);
+                else                           lit_s = SampleShadowPCF(u_spot_shadow_map3, u_cmp_sampler, sproj, sbias);
+                sl_shadow = clamp((1.0 - lit_s) * light_params.y, 0.0, 1.0);
+            }
+        }
+        Lo += (kDs * surface_albedo / PI + specS) * sl.color * sl.intensity * atten_s * cone * NdotLs * (1.0 - sl_shadow);
+    }
 
     // 点光源 PBR 循环
     [loop] for (int pi = 0; pi < u_point_light_count; ++pi) {

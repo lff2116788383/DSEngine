@@ -24,8 +24,9 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_object_cb_ = CreateConstantBuffer(sizeof(DX11PerObjectCB));
     per_scene_cb_ = CreateConstantBuffer(sizeof(DX11PerSceneCB));
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
-    per_point_lights_cb_ = CreateConstantBuffer(sizeof(DX11PointLightsCB));
-    per_spot_lights_cb_  = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
+    per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
+    per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
+    per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
 
     // 初始化全局光源矩阵
     for (int i = 0; i < 3; ++i)
@@ -56,6 +57,7 @@ void DX11DrawExecutor::Shutdown() {
     per_material_cb_.Reset();
     per_point_lights_cb_.Reset();
     per_spot_lights_cb_.Reset();
+    per_spot_matrices_cb_.Reset();
 
     sprite_quad_vbo_.Reset();
     sprite_quad_ibo_.Reset();
@@ -521,6 +523,23 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             if (global_point_shadow_map_[i] != 0) {
                 const auto* sm = resource_mgr.GetTexture(global_point_shadow_map_[i]);
                 if (sm) dc->PSSetShaderResources(8 + i, 1, sm->srv.GetAddressOf());
+            }
+        }
+
+        // 填充聚光灯光源空间矩阵 CB（b6）并绑定
+        {
+            DX11SpotMatricesCB sm_cb{};
+            for (int i = 0; i < 4; ++i)
+                sm_cb.spot_light_space_matrices[i] = global_spot_light_space_matrix_[i];
+            UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
+            dc->PSSetConstantBuffers(6, 1, per_spot_matrices_cb_.GetAddressOf());
+        }
+
+        // 绑定聚光灯阴影贴图到 t12~t15
+        for (int i = 0; i < 4; ++i) {
+            if (global_spot_shadow_map_[i] != 0) {
+                const auto* sm = resource_mgr.GetTexture(global_spot_shadow_map_[i]);
+                if (sm) dc->PSSetShaderResources(12 + i, 1, sm->srv.GetAddressOf());
             }
         }
     }

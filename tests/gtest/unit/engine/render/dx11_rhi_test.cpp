@@ -23,6 +23,7 @@
 #include "engine/render/rhi/dx11/dx11_pipeline_state_manager.h"
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 #include "engine/render/rhi/dx11/dx11_draw_executor.h"
+#include "engine/render/rhi/dx11/dx11_shader_sources.h"
 #endif
 
 #include <glm/glm.hpp>
@@ -401,6 +402,35 @@ TEST(SpotLightCBTest, J3_SpotLightEntry大小正确) {
 TEST(SpotLightCBTest, J3_默认count为零) {
     DX11SpotLightsCB cb{};
     EXPECT_EQ(cb.count, 0);
+}
+
+// ============================================================
+// Phase L: DX11 kPbrPS 聚光灯着色器字符串校验（无 GPU）
+// ============================================================
+
+TEST(SpotLightShaderTest, L_聚光灯PBR循环存在) {
+    std::string src(dse::render::dx11_shaders::kPbrPS);
+    EXPECT_NE(src.find("u_spot_light_count"), std::string::npos)
+        << "kPbrPS should contain spot light count loop";
+}
+
+TEST(SpotLightShaderTest, L_锥角衰减计算存在) {
+    std::string src(dse::render::dx11_shaders::kPbrPS);
+    EXPECT_NE(src.find("outer_cone"), std::string::npos)
+        << "kPbrPS should compute cone attenuation using outer_cone";
+    EXPECT_NE(src.find("inner_cone"), std::string::npos)
+        << "kPbrPS should compute cone attenuation using inner_cone";
+}
+
+TEST(SpotLightShaderTest, L_聚光灯阴影贴图t12声明存在) {
+    std::string src(dse::render::dx11_shaders::kPbrPS);
+    EXPECT_NE(src.find("register(t12)"), std::string::npos)
+        << "kPbrPS should declare spot shadow map at t12";
+}
+
+TEST(SpotLightShaderTest, L_SpotMatricesCB大小正确) {
+    EXPECT_EQ(sizeof(DX11SpotMatricesCB), 256u);
+    EXPECT_EQ(sizeof(DX11SpotMatricesCB) % 16u, 0u);
 }
 
 #endif // DSE_ENABLE_D3D11
