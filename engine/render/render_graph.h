@@ -40,7 +40,14 @@
 #include "engine/render/rhi/rhi_types.h"
 
 class CommandBuffer;
+class OpenGLCommandBuffer;
 class RhiDevice;
+
+namespace dse {
+namespace core {
+class JobSystem;
+} // namespace core
+} // namespace dse
 
 namespace dse {
 namespace render {
@@ -131,9 +138,14 @@ public:
     /// @return true 编译成功，false 存在循环依赖
     bool Compile();
 
-    /// 执行编译后的渲染图
+    /// 执行编译后的渲染图（单线程，顺序执行）
     /// @param cmd_buffer 命令缓冲区
     void Execute(CommandBuffer& cmd_buffer);
+
+    /// 并行执行编译后的渲染图（波次内并行录制，波次间顺序提交）
+    /// @param primary 主命令缓冲区（用于最终合并和提交）
+    /// @param job_system 作业系统
+    void ExecuteParallel(OpenGLCommandBuffer& primary, dse::core::JobSystem& job_system);
 
     /// 重置渲染图（清空所有 Pass 和资源声明）
     void Reset();
@@ -200,6 +212,9 @@ private:
 
     /// 编译后的执行顺序（pass id 列表）
     std::vector<uint32_t> compiled_order_;
+
+    /// 编译后的波次（同一波次内的 Pass 无相互依赖，可并行录制）
+    std::vector<std::vector<uint32_t>> compiled_waves_;
 
     /// pass id → passes_ 索引映射（Compile 时构建，Execute 时 O(1) 查找）
     std::unordered_map<uint32_t, size_t> pass_id_to_idx_;

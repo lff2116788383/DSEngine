@@ -33,7 +33,7 @@
 具体方向：
 1. **Vulkan RHI 后端** — 新增 `VulkanRhiDevice`，复用 `CommandBuffer` 抽象。这是引擎从"能跑"到"能上生产"的关键分水岭
 2. ✅ **RenderGraph ↔ FramePipeline 深度整合** — 硬编码 pass 顺序已迁移到 RenderGraph DAG 驱动（5 阶段全部完成）
-3. **多线程命令提交** — `CommandBuffer` 已有前端录制/后端提交分离，但尚未并行化。利用 `JobSystem` 做 parallel command recording
+3. ✅ **多线程命令提交** — 波次并行录制 + 顺序提交（利用 `JobSystem` 做 parallel command recording）
 
 ### ✅ P0：资产管线异步化 + 热重载（已完成）
 
@@ -213,6 +213,48 @@
 | `engine/core/module.h` | IModule 新增 RegisterRenderPasses() |
 | `engine/runtime/frame_pipeline.h` | 新增 render_pass_context_ / registered_passes_ 成员 |
 | `engine/runtime/frame_pipeline.cpp` | BuildRenderGraphInternal 重构为 Pass 注册 + Setup 循环 |
+
+---
+
+## 当前完成：多线程命令提交
+
+> 状态：已完成
+
+### 实施内容
+
+1. ✅ **CommandBuffer 延迟阴影贴图绑定**
+   - `CommandBuffer` 新增 `DeferSetGlobalShadowMap` / `DeferSetGlobalSpotShadowMap` / `DeferSetGlobalPointShadowMap` 纯虚方法
+   - `OpenGLCommandBuffer` 实现录制端：记录 `DeferShadowMapCmd`，Execute 时回放到 Device
+   - `VulkanCommandBuffer` 实现：直接委托到 Device（Vulkan 无前端/后端分离）
+   - 3 个阴影 Pass 迁移为使用 `cmd_buffer.DeferSetGlobal*()` 替代直接 `rhi_device->SetGlobal*()`
+
+2. ✅ **OpenGLCommandBuffer::AppendFrom()**
+   - 将 secondary buffer 的全部录制命令（含 order 偏移重算）追加到 primary buffer
+   - 支持波次内多个 Pass 并行录制后合并
+
+3. ✅ **RenderGraph 波次计算 + 并行执行**
+   - `Compile()` 新增 Step 8：按依赖深度将 Pass 分组为波次（`compiled_waves_`）
+   - `ExecuteParallel(OpenGLCommandBuffer&, JobSystem&)`：
+     - 单 Pass 波次：直接主线程录制（零开销）
+     - 多 Pass 波次：每个 Pass 录制到独立 secondary buffer → JobSystem 并行 → Wait → AppendFrom 合并
+   - 自动回退：非 OpenGL 或无 JobSystem 时退回 `Execute()` 顺序路径
+
+4. ✅ **FramePipeline 集成**
+   - `ExecuteRenderGraphInternal()` 自动检测 JobSystem + OpenGLCommandBuffer 可用性
+   - 可用时走 `ExecuteParallel()` 并行路径，否则回退顺序执行
+
+### 变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/render/rhi/rhi_device.h` | CommandBuffer 新增 3 个 Defer 虚方法 + OpenGLCommandBuffer AppendFrom + DeferShadowMapCmd |
+| `engine/render/rhi/rhi_device.cpp` | DeferSetGlobal* 录制实现 + AppendFrom + Execute 回放 shadow 命令 |
+| `engine/render/rhi/vulkan/vulkan_rhi_device.h` | VulkanCommandBuffer 新增 3 个 Defer override |
+| `engine/render/rhi/vulkan/vulkan_rhi_device.cpp` | VulkanCommandBuffer Defer 实现（委托到 Device） |
+| `engine/render/passes/builtin_passes.cpp` | 3 个阴影 Pass 迁移到 cmd_buffer.DeferSetGlobal*() |
+| `engine/render/render_graph.h` | 新增 ExecuteParallel + compiled_waves_ + forward declarations |
+| `engine/render/render_graph.cpp` | 波次计算 + ExecuteParallel 实现 |
+| `engine/runtime/frame_pipeline.cpp` | ExecuteRenderGraphInternal 自动选择并行/顺序路径 |
 
 ---
 

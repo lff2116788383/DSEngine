@@ -104,6 +104,18 @@ void VulkanCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>&
         device_->state_mgr(), device_->shader_mgr());
 }
 
+void VulkanCommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
+    if (device_) device_->SetGlobalShadowMap(index, texture_handle);
+}
+
+void VulkanCommandBuffer::DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
+    if (device_) device_->SetGlobalSpotShadowMap(index, texture_handle);
+}
+
+void VulkanCommandBuffer::DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
+    if (device_) device_->SetGlobalPointShadowMap(index, texture_handle);
+}
+
 void VulkanCommandBuffer::Reset() {
     vk_command_buffer_ = VK_NULL_HANDLE;
     view_ = glm::mat4(1.0f);

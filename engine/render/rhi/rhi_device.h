@@ -50,6 +50,11 @@ public:
     virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
     virtual void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) = 0;
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
+
+    /// 延迟阴影贴图绑定命令（Pass 中调用，Submit 时回放到 Device）
+    virtual void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
 };
 
 /**
@@ -72,9 +77,15 @@ public:
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
     void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
+    void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
+    void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override;
+    void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override;
 
     void Execute(OpenGLRhiDevice* device);
     void Reset();
+
+    /// 将 other 的所有录制命令追加到当前缓冲（用于合并 secondary buffers）
+    void AppendFrom(OpenGLCommandBuffer& other);
 
 private:
     struct ClearCmd { uint64_t order; glm::vec4 color; };
@@ -146,7 +157,15 @@ private:
     std::vector<DrawMeshBatchCmd> draw_mesh_batch_cmds_;
     std::vector<DrawSkyboxCmd> draw_skybox_cmds_;
     std::vector<DrawPostProcessCmd> draw_post_process_cmds_;
+    struct DeferShadowMapCmd {
+        uint64_t order;
+        unsigned int index;
+        unsigned int texture_handle;
+        int shadow_type; // 0=CSM, 1=Spot, 2=Point
+    };
+
     std::vector<DrawParticles3DCmd> draw_particles3d_cmds_;
+    std::vector<DeferShadowMapCmd> defer_shadow_map_cmds_;
 };
 
 /**

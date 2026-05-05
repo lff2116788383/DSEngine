@@ -117,7 +117,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetGlobalFloatArray("u_cascade_splits", cascade_splits);
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        ctx_.rhi_device->SetGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
+        cmd_buffer.DeferSetGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
     }
 }
 
@@ -161,7 +161,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
         cmd_buffer.EndRenderPass();
         spot_light_space_matrices.push_back(light_proj * light_view_mat);
-        ctx_.rhi_device->SetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
+        cmd_buffer.DeferSetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
         ++shadow_slot;
     }
     cmd_buffer.SetGlobalMat4Array("u_spot_light_space_matrices", spot_light_space_matrices);
@@ -219,7 +219,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             cmd_buffer.EndRenderPass();
         }
 
-        ctx_.rhi_device->SetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
+        cmd_buffer.DeferSetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
         ++shadow_slot;
     }
 }

@@ -88,6 +88,40 @@ void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>&
     draw_particles3d_cmds_.push_back({next_cmd_order_++, items, view, projection});
 }
 
+void OpenGLCommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
+    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 0});
+}
+
+void OpenGLCommandBuffer::DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
+    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 1});
+}
+
+void OpenGLCommandBuffer::DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
+    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 2});
+}
+
+void OpenGLCommandBuffer::AppendFrom(OpenGLCommandBuffer& other) {
+    const uint64_t offset = next_cmd_order_;
+    auto rebase = [offset](uint64_t order) { return order + offset; };
+
+    for (auto& c : other.begin_render_pass_cmds_)   { c.order = rebase(c.order); begin_render_pass_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.end_render_pass_cmds_)     { c.order = rebase(c.order); end_render_pass_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.set_pipeline_state_cmds_)   { c.order = rebase(c.order); set_pipeline_state_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.set_global_mat4_cmds_)      { c.order = rebase(c.order); set_global_mat4_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.set_global_mat4_array_cmds_){ c.order = rebase(c.order); set_global_mat4_array_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.set_global_float_array_cmds_){ c.order = rebase(c.order); set_global_float_array_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.clear_cmds_)               { c.order = rebase(c.order); clear_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_batch_cmds_)           { c.order = rebase(c.order); draw_batch_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_mesh_batch_cmds_)      { c.order = rebase(c.order); draw_mesh_batch_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_skybox_cmds_)          { c.order = rebase(c.order); draw_skybox_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_post_process_cmds_)    { c.order = rebase(c.order); draw_post_process_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_particles3d_cmds_)     { c.order = rebase(c.order); draw_particles3d_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.defer_shadow_map_cmds_)     { c.order = rebase(c.order); defer_shadow_map_cmds_.push_back(std::move(c)); }
+
+    next_cmd_order_ = offset + other.next_cmd_order_;
+    other.Reset();
+}
+
 void OpenGLCommandBuffer::Reset() {
     begin_render_pass_cmds_.clear();
     end_render_pass_cmds_.clear();
@@ -101,6 +135,7 @@ void OpenGLCommandBuffer::Reset() {
     draw_skybox_cmds_.clear();
     draw_post_process_cmds_.clear();
     draw_particles3d_cmds_.clear();
+    defer_shadow_map_cmds_.clear();
     next_cmd_order_ = 0;
 }
 
@@ -147,6 +182,9 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     }
     for (size_t i = 0; i < draw_particles3d_cmds_.size(); ++i) {
         commands.push_back({draw_particles3d_cmds_[i].order, 12, i});
+    }
+    for (size_t i = 0; i < defer_shadow_map_cmds_.size(); ++i) {
+        commands.push_back({defer_shadow_map_cmds_[i].order, 13, i});
     }
     std::sort(commands.begin(), commands.end(), [](const CommandRef& a, const CommandRef& b) {
         return a.order < b.order;
@@ -197,6 +235,15 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].source_texture, draw_post_process_cmds_[cmd.index].effect_name, draw_post_process_cmds_[cmd.index].params);
         } else if (cmd.type == 12) {
             device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
+        } else if (cmd.type == 13) {
+            const auto& sc = defer_shadow_map_cmds_[cmd.index];
+            if (sc.shadow_type == 0) {
+                device->SetGlobalShadowMap(sc.index, sc.texture_handle);
+            } else if (sc.shadow_type == 1) {
+                device->SetGlobalSpotShadowMap(sc.index, sc.texture_handle);
+            } else if (sc.shadow_type == 2) {
+                device->SetGlobalPointShadowMap(sc.index, sc.texture_handle);
+            }
         }
     }
     Reset();

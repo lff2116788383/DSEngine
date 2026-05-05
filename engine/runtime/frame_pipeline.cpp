@@ -19,6 +19,7 @@
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
+#include "engine/core/job_system.h"
 #include "engine/scene/scene.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -701,7 +702,13 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    render_graph_dag_.Execute(cmd_buffer);
+    auto* job_system = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
+    auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
+    if (job_system && gl_cmd) {
+        render_graph_dag_.ExecuteParallel(*gl_cmd, *job_system);
+    } else {
+        render_graph_dag_.Execute(cmd_buffer);
+    }
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {
