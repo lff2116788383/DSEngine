@@ -24,6 +24,9 @@ glm::vec2 Input::swipe_delta_={0,0};
 glm::vec2 Input::previous_swipe_delta_={0,0};
 float Input::mouse_scroll_=0.0f;
 bool Input::device_shaking_=false;
+std::array<std::array<float, 6>, 4> Input::gamepad_axes_{};
+std::array<bool, 4> Input::gamepad_connected_{};
+float Input::gamepad_dead_zone_=0.15f;
 
 bool Input::GetKey(unsigned short key_code) {
     return key_event_map_.count(key_code)>0;
@@ -126,6 +129,38 @@ bool Input::IsDeviceShaking() {
     return device_shaking_;
 }
 
+void Input::RecordGamepadAxis(int gamepad_id, int axis, float value) {
+    if (gamepad_id < 0 || gamepad_id >= kMaxGamepads) return;
+    if (axis < 0 || axis >= kMaxAxes) return;
+    gamepad_axes_[gamepad_id][axis] = value;
+}
+
+float Input::GetGamepadAxis(int gamepad_id, int axis) {
+    if (gamepad_id < 0 || gamepad_id >= kMaxGamepads) return 0.0f;
+    if (axis < 0 || axis >= kMaxAxes) return 0.0f;
+    float val = gamepad_axes_[gamepad_id][axis];
+    if (std::abs(val) < gamepad_dead_zone_) return 0.0f;
+    return val;
+}
+
+void Input::SetGamepadConnected(int gamepad_id, bool connected) {
+    if (gamepad_id < 0 || gamepad_id >= kMaxGamepads) return;
+    gamepad_connected_[gamepad_id] = connected;
+}
+
+bool Input::IsGamepadConnected(int gamepad_id) {
+    if (gamepad_id < 0 || gamepad_id >= kMaxGamepads) return false;
+    return gamepad_connected_[gamepad_id];
+}
+
+void Input::SetGamepadDeadZone(float dead_zone) {
+    gamepad_dead_zone_ = dead_zone;
+}
+
+float Input::GetGamepadDeadZone() {
+    return gamepad_dead_zone_;
+}
+
 void Input::Reset() {
     key_event_map_.clear();
     key_event_map_current_frame_.clear();
@@ -138,4 +173,7 @@ void Input::Reset() {
     previous_swipe_delta_ = {0, 0};
     mouse_scroll_ = 0.0f;
     device_shaking_ = false;
+    for (auto& axes : gamepad_axes_) axes.fill(0.0f);
+    gamepad_connected_.fill(false);
+    gamepad_dead_zone_ = 0.15f;
 }

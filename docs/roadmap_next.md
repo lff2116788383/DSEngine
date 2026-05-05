@@ -19,7 +19,7 @@
 | **Audio** | 2 文件 | ★★★★☆ | 21 unit | miniaudio 封装 + 3D Listener/衰减模型/遮挡 |
 | **Runtime** | 15 文件 | ★★★★☆ | 有测试 | FramePipeline/EngineApp 成熟 |
 | **Profiler** | 6 文件 | ★★★★☆ | 43 unit | CPU/Memory/Render 三线 + Chrome Trace 导出 + 性能基线 |
-| **Input** | 2 文件 | ★★★☆☆ | 无独立测试 | 基础键鼠，缺 gamepad/手势 |
+| **Input** | 6 文件 | ★★★★☆ | 46 unit | 键鼠+Gamepad+ActionMapping+录制回放 |
 | **3D Demo** | 32 个 | ★★★★★ | verify_all.bat | 覆盖极广 |
 
 ---
@@ -161,12 +161,49 @@
 | `engine/profiler/render_profiler.cpp` | EndFrame 记录帧事件、Reset 清除、ExportChromeTrace 实现 |
 | `tests/gtest/unit/engine/profiler/profiler_test.cpp` | 新增 16 个测试（Chrome Trace 格式验证 ×12 + 性能基线 ×4） |
 
-### 🔹 P2：Input 系统增强
+### ✅ P2：Input 系统增强（已完成）
+
+**原因**: 基础键鼠已有，但缺少 Gamepad、动作映射和录制回放，无法支持手柄玩家和自动化测试。
 
 具体方向：
-1. **Gamepad 支持** — XInput / SDL Gamepad
-2. **Action Mapping** — 抽象 input → action 映射，支持运行时 rebind
-3. **Input Recording/Playback** — 用于测试回放
+1. ✅ **Gamepad 支持** — 15 个 XInput 布局按钮（A/B/X/Y/LB/RB/Back/Start/Thumbs/DPad/Guide）+ 6 轴（双摇杆+双扳机）+ 4 手柄独立 + 死区过滤
+2. ✅ **Action Mapping** — 抽象 action→key 映射，Register/Remove/Bind/Unbind/UnbindAll，运行时 rebind，多键 OR 逻辑
+3. ✅ **Input Recording/Playback** — InputRecorder 录制事件 + JSON 导入导出，InputPlayer 时间线回放到 Input 系统
+
+#### 实施内容
+
+1. ✅ **Gamepad 基础设施**
+   - `key_code.h` 新增 `GAMEPAD_BUTTON_A`~`GAMEPAD_BUTTON_GUIDE`（15 个按钮）+ `GamepadAxis` 枚举（6 轴）
+   - `Input` 新增 `RecordGamepadAxis/GetGamepadAxis/SetGamepadConnected/IsGamepadConnected/SetGamepadDeadZone/GetGamepadDeadZone`
+   - 支持 4 手柄独立状态，默认 0.15 死区过滤，越界 ID 安全
+
+2. ✅ **ActionMapping 动作映射** (`action_mapping.h/.cpp`)
+   - `RegisterAction/RemoveAction/HasAction` 动作生命周期
+   - `BindKey/UnbindKey/UnbindAll` 键位绑定管理
+   - `GetAction/GetActionDown/GetActionUp` 查询动作状态（多键 OR 逻辑）
+   - `GetBindings/GetAllActions/GetActionCount` 内省
+   - 运行时 rebind：先 Unbind 旧键再 Bind 新键
+
+3. ✅ **InputRecorder/InputPlayer** (`input_recorder.h/.cpp`)
+   - `InputRecorder`: StartRecording/StopRecording/RecordEvent/Clear/ExportJSON/ImportJSON
+   - `InputPlayer`: Load/Start/Stop/Update/IsPlaying/IsFinished
+   - JSON 格式：`[{"ts":0.000,"key":65,"action":1}, ...]`
+   - Update 按时间线顺序回放事件到 `Input::RecordKey()`
+
+4. ✅ **新增 38 个单元测试**（720 总测试零回归）
+
+#### 变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/input/key_code.h` | 新增 15 个 Gamepad 按钮 + GamepadAxis 枚举 |
+| `engine/input/input.h` | 新增 Gamepad 轴/连接/死区 API + 成员 |
+| `engine/input/input.cpp` | 实现 Gamepad API，Reset 清除 Gamepad 状态 |
+| `engine/input/action_mapping.h` | 新增 ActionMapping 类声明 |
+| `engine/input/action_mapping.cpp` | ActionMapping 实现 |
+| `engine/input/input_recorder.h` | 新增 InputRecorder + InputPlayer 声明 |
+| `engine/input/input_recorder.cpp` | InputRecorder/InputPlayer 实现 |
+| `tests/gtest/unit/engine/input/input_test.cpp` | 新增 38 个测试 |
 
 ---
 

@@ -10,6 +10,7 @@
 #ifndef UNTITLED_INPUT_H
 #define UNTITLED_INPUT_H
 
+#include <array>
 #include <unordered_map>
 #include "glm/glm.hpp"
 
@@ -135,6 +136,13 @@ public:
      * 清除所有按键映射、鼠标位置、滚轮值和设备摇晃标记，
      * 使 Input 回到等价于进程刚启动的初始状态。
      */
+    static void RecordGamepadAxis(int gamepad_id, int axis, float value);
+    static float GetGamepadAxis(int gamepad_id, int axis);
+    static void SetGamepadConnected(int gamepad_id, bool connected);
+    static bool IsGamepadConnected(int gamepad_id);
+    static void SetGamepadDeadZone(float dead_zone);
+    static float GetGamepadDeadZone();
+
     static void Reset();
 
 private:
@@ -153,6 +161,12 @@ private:
 
     static float mouse_scroll_; ///< 鼠标滚轮滚动值
     static bool device_shaking_; ///< 当前帧是否触发摇晃判定
+
+    static constexpr int kMaxGamepads = 4;
+    static constexpr int kMaxAxes = 6;
+    static std::array<std::array<float, 6>, 4> gamepad_axes_;
+    static std::array<bool, 4> gamepad_connected_;
+    static float gamepad_dead_zone_;
 
 };
 
