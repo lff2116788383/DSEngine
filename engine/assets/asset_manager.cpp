@@ -14,6 +14,12 @@
 #include <fstream>
 #include <rapidjson/document.h>
 #include "bundle/bundle.h"
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 extern "C" {
 #include "aes.h"
 }
@@ -75,6 +81,7 @@ std::string ResolveAssetPathImpl(const std::string& path, const std::string& dat
 AssetManager::AssetManager() = default;
 
 AssetManager::~AssetManager() {
+    StopFileWatcher();
     // 在成员容器析构前主动释放，避免静态 CRT Debug 堆在 DLL 卸载/测试进程退出阶段
     // 再处理跨模块分配过的 STL 节点时触发 debug_heap 链表断言。
     ReleaseGpuResources();
@@ -412,6 +419,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         textures_[cache_key] = tex;
         gpu_texture_handles_.insert(handle);
     }
+    TouchLru(cache_key, static_cast<std::size_t>(width) * height * 4u);
     return tex;
 }
 
@@ -520,6 +528,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::stri
         cubemaps_[cache_key] = cubemap;
         gpu_cubemap_handles_.insert(handle);
     }
+    TouchLru(cache_key, static_cast<std::size_t>(width) * height * 4u * 6u);
     return cubemap;
 }
 
@@ -577,11 +586,13 @@ std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& p
         return nullptr;
     }
 
+    const std::size_t clip_bytes = file_data.size();
     auto clip = std::make_shared<AudioClipAsset>(load_path, std::move(file_data));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         audio_clips_[cache_key] = clip;
     }
+    TouchLru(cache_key, clip_bytes);
     return clip;
 }
 
@@ -607,11 +618,13 @@ std::shared_ptr<DmeshAsset> AssetManager::LoadDmesh(const std::string& path) {
         return nullptr;
     }
 
+    const std::size_t dmesh_bytes = file_data.size();
     auto dmesh = std::make_shared<DmeshAsset>(load_path, std::move(file_data));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         dmeshes_[cache_key] = dmesh;
     }
+    TouchLru(cache_key, dmesh_bytes);
     return dmesh;
 }
 
@@ -637,11 +650,13 @@ std::shared_ptr<DanimAsset> AssetManager::LoadDanim(const std::string& path) {
         return nullptr;
     }
 
+    const std::size_t danim_bytes = file_data.size();
     auto danim = std::make_shared<DanimAsset>(load_path, std::move(file_data));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         danims_[cache_key] = danim;
     }
+    TouchLru(cache_key, danim_bytes);
     return danim;
 }
 
@@ -667,11 +682,13 @@ std::shared_ptr<DskelAsset> AssetManager::LoadDskel(const std::string& path) {
         return nullptr;
     }
 
+    const std::size_t dskel_bytes = file_data.size();
     auto dskel = std::make_shared<DskelAsset>(load_path, std::move(file_data));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         dskels_[cache_key] = dskel;
     }
+    TouchLru(cache_key, dskel_bytes);
     return dskel;
 }
 
@@ -1044,4 +1061,458 @@ std::size_t AssetManager::PendingMainThreadCallbacks() {
 std::size_t AssetManager::PendingMainThreadCallbacksHighWatermark() {
     std::lock_guard<std::mutex> lock(callback_mutex_);
     return pending_callbacks_high_watermark_;
+}
+
+// ============================================================
+// 异步加载：Dmesh / Danim / Dskel / AudioClip / Material
+// ============================================================
+
+namespace {
+template<typename AssetT, typename CacheMap>
+void AsyncLoadBinaryAsset(
+    AssetManager* mgr,
+    CacheMap& cache,
+    std::mutex& cache_mutex,
+    std::mutex& callback_mutex,
+    std::deque<std::function<void()>>& pending_callbacks,
+    dse::core::JobSystem* job_system,
+    dse::core::EventBus* event_bus,
+    const std::string& path,
+    const std::string& cache_key,
+    std::function<void(std::shared_ptr<AssetT>)> callback)
+{
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        auto it = cache.find(cache_key);
+        if (it != cache.end()) {
+            if (auto shared = it->second.lock()) {
+                if (callback) callback(shared);
+                PublishResourceLoaded(event_bus, cache_key, true);
+                return;
+            }
+        }
+    }
+
+    auto worker = [mgr, &cache, &cache_mutex, &callback_mutex, &pending_callbacks, path, cache_key, callback, event_bus]() {
+        std::vector<uint8_t> file_data;
+        if (!mgr->LoadFileToMemory(path, file_data)) {
+            DEBUG_LOG_ERROR("Failed to async load binary asset: {}", path);
+            if (callback) {
+                std::lock_guard<std::mutex> lock(callback_mutex);
+                pending_callbacks.push_back([callback]() { callback(nullptr); });
+            }
+            PublishResourceLoaded(event_bus, cache_key, false);
+            return;
+        }
+
+        auto asset = std::make_shared<AssetT>(path, std::move(file_data));
+        std::lock_guard<std::mutex> lock(callback_mutex);
+        pending_callbacks.push_back([&cache, &cache_mutex, cache_key, asset, callback, event_bus]() {
+            {
+                std::lock_guard<std::mutex> cachelock(cache_mutex);
+                cache[cache_key] = asset;
+            }
+            if (callback) {
+                callback(asset);
+            }
+            PublishResourceLoaded(event_bus, cache_key, true);
+        });
+    };
+
+    if (job_system) {
+        job_system->Execute(worker);
+    } else {
+        worker();
+    }
+}
+} // namespace
+
+void AssetManager::LoadDmeshAsync(const std::string& path, std::function<void(std::shared_ptr<DmeshAsset>)> callback) {
+    const std::string cache_key = NormalizeAssetPath(path).empty() ? NormalizePath(path) : NormalizeAssetPath(path);
+    AsyncLoadBinaryAsset<DmeshAsset>(this, dmeshes_, cache_mutex_, callback_mutex_,
+        pending_main_thread_callbacks_, GetJobSystem(), GetEventBus(), path, cache_key, std::move(callback));
+}
+
+void AssetManager::LoadDanimAsync(const std::string& path, std::function<void(std::shared_ptr<DanimAsset>)> callback) {
+    const std::string cache_key = NormalizeAssetPath(path).empty() ? NormalizePath(path) : NormalizeAssetPath(path);
+    AsyncLoadBinaryAsset<DanimAsset>(this, danims_, cache_mutex_, callback_mutex_,
+        pending_main_thread_callbacks_, GetJobSystem(), GetEventBus(), path, cache_key, std::move(callback));
+}
+
+void AssetManager::LoadDskelAsync(const std::string& path, std::function<void(std::shared_ptr<DskelAsset>)> callback) {
+    const std::string cache_key = NormalizeAssetPath(path).empty() ? NormalizePath(path) : NormalizeAssetPath(path);
+    AsyncLoadBinaryAsset<DskelAsset>(this, dskels_, cache_mutex_, callback_mutex_,
+        pending_main_thread_callbacks_, GetJobSystem(), GetEventBus(), path, cache_key, std::move(callback));
+}
+
+void AssetManager::LoadAudioClipAsync(const std::string& path, std::function<void(std::shared_ptr<AudioClipAsset>)> callback) {
+    const std::string cache_key = NormalizeAssetPath(path).empty() ? NormalizePath(path) : NormalizeAssetPath(path);
+    AsyncLoadBinaryAsset<AudioClipAsset>(this, audio_clips_, cache_mutex_, callback_mutex_,
+        pending_main_thread_callbacks_, GetJobSystem(), GetEventBus(), path, cache_key, std::move(callback));
+}
+
+void AssetManager::LoadMaterialAsync(const std::string& dmat_path, std::size_t material_index,
+                                     std::function<void(std::shared_ptr<MaterialAsset>)> callback) {
+    dse::core::JobSystem* job_system = GetJobSystem();
+    dse::core::EventBus* event_bus = GetEventBus();
+
+    auto worker = [this, dmat_path, material_index, callback, event_bus]() {
+        std::lock_guard<std::mutex> lock(callback_mutex_);
+        pending_main_thread_callbacks_.push_back([this, dmat_path, material_index, callback, event_bus]() {
+            auto mat = LoadMaterialInstanceFromDmat(dmat_path, material_index);
+            if (callback) {
+                callback(mat);
+            }
+            PublishResourceLoaded(event_bus, dmat_path, mat != nullptr);
+        });
+    };
+
+    if (job_system) {
+        job_system->Execute(worker);
+    } else {
+        worker();
+    }
+}
+
+// ============================================================
+// LRU 淘汰与内存预算
+// ============================================================
+
+void AssetManager::TouchLru(const std::string& cache_key, std::size_t estimated_bytes) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto it = lru_entries_.find(cache_key);
+    if (it != lru_entries_.end()) {
+        it->second.last_access = std::chrono::steady_clock::now();
+        return;
+    }
+    LruEntry entry;
+    entry.cache_key = cache_key;
+    entry.estimated_bytes = estimated_bytes;
+    entry.last_access = std::chrono::steady_clock::now();
+    lru_entries_[cache_key] = entry;
+    estimated_memory_usage_ += estimated_bytes;
+}
+
+void AssetManager::RemoveLru(const std::string& cache_key) {
+    auto it = lru_entries_.find(cache_key);
+    if (it != lru_entries_.end()) {
+        if (estimated_memory_usage_ >= it->second.estimated_bytes) {
+            estimated_memory_usage_ -= it->second.estimated_bytes;
+        } else {
+            estimated_memory_usage_ = 0;
+        }
+        lru_entries_.erase(it);
+    }
+}
+
+void AssetManager::SetMemoryBudget(std::size_t budget_bytes) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    memory_budget_bytes_ = budget_bytes;
+}
+
+std::size_t AssetManager::EstimatedMemoryUsage() const {
+    // cache_mutex_ 不是 mutable，但此处仅读取原子级别可接受的估算值
+    // 为保持 const 正确性，使用 const_cast（内部实现细节，不影响外部语义）
+    auto& self = const_cast<AssetManager&>(*this);
+    std::lock_guard<std::mutex> lock(self.cache_mutex_);
+    return estimated_memory_usage_;
+}
+
+std::size_t AssetManager::EvictLRU() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    if (memory_budget_bytes_ == 0 || estimated_memory_usage_ <= memory_budget_bytes_) {
+        return 0;
+    }
+
+    // 收集所有 LRU 条目并按 last_access 排序（最早的优先淘汰）
+    std::vector<LruEntry*> entries;
+    entries.reserve(lru_entries_.size());
+    for (auto& pair : lru_entries_) {
+        entries.push_back(&pair.second);
+    }
+    std::sort(entries.begin(), entries.end(), [](const LruEntry* a, const LruEntry* b) {
+        return a->last_access < b->last_access;
+    });
+
+    std::size_t evicted = 0;
+    for (auto* entry : entries) {
+        if (estimated_memory_usage_ <= memory_budget_bytes_) {
+            break;
+        }
+        const std::string& key = entry->cache_key;
+
+        // 尝试从各缓存表中驱逐（仅驱逐已无外部引用的条目）
+        bool evicted_entry = false;
+        auto tex_it = textures_.find(key);
+        if (tex_it != textures_.end() && tex_it->second.expired()) {
+            textures_.erase(tex_it);
+            evicted_entry = true;
+        }
+        auto cubemap_it = cubemaps_.find(key);
+        if (cubemap_it != cubemaps_.end() && cubemap_it->second.expired()) {
+            cubemaps_.erase(cubemap_it);
+            evicted_entry = true;
+        }
+        auto dmesh_it = dmeshes_.find(key);
+        if (dmesh_it != dmeshes_.end() && dmesh_it->second.expired()) {
+            dmeshes_.erase(dmesh_it);
+            evicted_entry = true;
+        }
+        auto danim_it = danims_.find(key);
+        if (danim_it != danims_.end() && danim_it->second.expired()) {
+            danims_.erase(danim_it);
+            evicted_entry = true;
+        }
+        auto dskel_it = dskels_.find(key);
+        if (dskel_it != dskels_.end() && dskel_it->second.expired()) {
+            dskels_.erase(dskel_it);
+            evicted_entry = true;
+        }
+        auto audio_it = audio_clips_.find(key);
+        if (audio_it != audio_clips_.end() && audio_it->second.expired()) {
+            audio_clips_.erase(audio_it);
+            evicted_entry = true;
+        }
+
+        if (evicted_entry) {
+            if (estimated_memory_usage_ >= entry->estimated_bytes) {
+                estimated_memory_usage_ -= entry->estimated_bytes;
+            } else {
+                estimated_memory_usage_ = 0;
+            }
+            ++evicted;
+            // RemoveLru inline — will erase from map after loop
+        }
+    }
+
+    // 清理已驱逐条目的 LRU 记录
+    for (auto it = lru_entries_.begin(); it != lru_entries_.end(); ) {
+        const std::string& key = it->first;
+        bool still_alive = false;
+        if (textures_.count(key)) still_alive = true;
+        if (cubemaps_.count(key)) still_alive = true;
+        if (dmeshes_.count(key)) still_alive = true;
+        if (danims_.count(key)) still_alive = true;
+        if (dskels_.count(key)) still_alive = true;
+        if (audio_clips_.count(key)) still_alive = true;
+        if (!still_alive) {
+            it = lru_entries_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    return evicted;
+}
+
+// ============================================================
+// 热重载：文件监听
+// ============================================================
+
+void AssetManager::StartFileWatcher() {
+    if (file_watcher_running_.load()) {
+        return;
+    }
+    file_watcher_running_.store(true);
+    file_watcher_thread_ = std::thread(&AssetManager::FileWatcherLoop, this);
+}
+
+void AssetManager::StopFileWatcher() {
+    file_watcher_running_.store(false);
+    if (file_watcher_thread_.joinable()) {
+        file_watcher_thread_.join();
+    }
+}
+
+void AssetManager::FileWatcherLoop() {
+#ifdef _WIN32
+    const std::string data_root = GetDataRoot();
+    if (data_root.empty()) {
+        DEBUG_LOG_WARN("FileWatcher: data root is empty, watcher exiting");
+        file_watcher_running_.store(false);
+        return;
+    }
+
+    std::wstring wide_path;
+    {
+        std::filesystem::path fs_path(data_root);
+        wide_path = fs_path.wstring();
+    }
+
+    HANDLE dir_handle = CreateFileW(
+        wide_path.c_str(),
+        FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+        nullptr);
+
+    if (dir_handle == INVALID_HANDLE_VALUE) {
+        DEBUG_LOG_ERROR("FileWatcher: failed to open directory handle for {}", data_root);
+        file_watcher_running_.store(false);
+        return;
+    }
+
+    DEBUG_LOG_INFO("FileWatcher: started monitoring {}", data_root);
+
+    OVERLAPPED overlapped{};
+    overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!overlapped.hEvent) {
+        DEBUG_LOG_ERROR("FileWatcher: failed to create event object");
+        CloseHandle(dir_handle);
+        file_watcher_running_.store(false);
+        return;
+    }
+
+    alignas(DWORD) char buffer[4096];
+    while (file_watcher_running_.load()) {
+        ResetEvent(overlapped.hEvent);
+        BOOL result = ReadDirectoryChangesW(
+            dir_handle,
+            buffer,
+            sizeof(buffer),
+            TRUE,
+            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
+            nullptr,
+            &overlapped,
+            nullptr);
+
+        if (!result && GetLastError() != ERROR_IO_PENDING) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+
+        // 每 200ms 检查一次是否需要退出
+        while (file_watcher_running_.load()) {
+            DWORD wait_result = WaitForSingleObject(overlapped.hEvent, 200);
+            if (wait_result == WAIT_OBJECT_0) break;   // IO 完成
+            if (wait_result == WAIT_TIMEOUT) continue;  // 超时，检查 running flag
+            break; // 出错
+        }
+
+        if (!file_watcher_running_.load()) {
+            CancelIo(dir_handle);
+            break;
+        }
+
+        DWORD bytes_returned = 0;
+        if (!GetOverlappedResult(dir_handle, &overlapped, &bytes_returned, FALSE) || bytes_returned == 0) {
+            continue;
+        }
+
+        DWORD offset = 0;
+        do {
+            auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer + offset);
+            if (info->Action == FILE_ACTION_MODIFIED || info->Action == FILE_ACTION_ADDED) {
+                std::wstring wname(info->FileName, info->FileNameLength / sizeof(WCHAR));
+                std::string relative = std::filesystem::path(wname).generic_string();
+
+                {
+                    std::lock_guard<std::mutex> lock(hot_reload_mutex_);
+                    if (std::find(pending_hot_reloads_.begin(), pending_hot_reloads_.end(), relative) == pending_hot_reloads_.end()) {
+                        pending_hot_reloads_.push_back(relative);
+                        DEBUG_LOG_INFO("FileWatcher: queued hot-reload for {}", relative);
+                    }
+                }
+            }
+            if (info->NextEntryOffset == 0) break;
+            offset += info->NextEntryOffset;
+        } while (offset < bytes_returned);
+    }
+
+    CloseHandle(overlapped.hEvent);
+    CloseHandle(dir_handle);
+#else
+    DEBUG_LOG_WARN("FileWatcher: not implemented on this platform");
+    while (file_watcher_running_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+#endif
+    DEBUG_LOG_INFO("FileWatcher: stopped");
+}
+
+std::size_t AssetManager::PumpHotReloads() {
+    std::vector<std::string> reloads;
+    {
+        std::lock_guard<std::mutex> lock(hot_reload_mutex_);
+        reloads.swap(pending_hot_reloads_);
+    }
+
+    if (reloads.empty()) {
+        return 0;
+    }
+
+    std::size_t reloaded = 0;
+    for (const auto& relative_path : reloads) {
+        const std::string logical = NormalizeAssetPath(relative_path);
+        const std::string cache_key = logical.empty() ? NormalizePath(relative_path) : logical;
+
+        bool did_reload = false;
+
+        // 纹理热重载
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            auto tex_it = textures_.find(cache_key);
+            if (tex_it != textures_.end()) {
+                textures_.erase(tex_it);
+                RemoveLru(cache_key);
+                did_reload = true;
+            }
+        }
+        if (did_reload) {
+            auto reloaded_tex = LoadTexture(relative_path);
+            if (reloaded_tex) {
+                DEBUG_LOG_INFO("HotReload: reloaded texture {}", relative_path);
+                ++reloaded;
+            }
+            dse::core::EventBus* bus = GetEventBus();
+            if (bus) {
+                bus->Publish<dse::core::ResourceLoadedEvent>(cache_key, reloaded_tex != nullptr);
+            }
+            continue;
+        }
+
+        // Dmesh 热重载
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            auto it = dmeshes_.find(cache_key);
+            if (it != dmeshes_.end()) {
+                dmeshes_.erase(it);
+                RemoveLru(cache_key);
+                did_reload = true;
+            }
+        }
+        if (did_reload) {
+            auto reloaded_asset = LoadDmesh(relative_path);
+            if (reloaded_asset) {
+                DEBUG_LOG_INFO("HotReload: reloaded dmesh {}", relative_path);
+                ++reloaded;
+            }
+            continue;
+        }
+
+        // AudioClip 热重载
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            auto it = audio_clips_.find(cache_key);
+            if (it != audio_clips_.end()) {
+                audio_clips_.erase(it);
+                RemoveLru(cache_key);
+                did_reload = true;
+            }
+        }
+        if (did_reload) {
+            auto reloaded_asset = LoadAudioClip(relative_path);
+            if (reloaded_asset) {
+                DEBUG_LOG_INFO("HotReload: reloaded audio clip {}", relative_path);
+                ++reloaded;
+            }
+            continue;
+        }
+
+        DEBUG_LOG_INFO("HotReload: no cached asset matched for {}", relative_path);
+    }
+
+    return reloaded;
 }

@@ -485,6 +485,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
+    asset_manager.PumpHotReloads();
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
 
     dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);

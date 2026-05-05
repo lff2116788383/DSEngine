@@ -15,6 +15,9 @@
 #include <vector>
 #include <deque>
 #include <cstddef>
+#include <atomic>
+#include <chrono>
+#include <thread>
 #include <glm/glm.hpp>
 class RhiDevice;
 namespace dse::core {
@@ -393,15 +396,44 @@ public:
      */
     bool LoadFileToMemory(const std::string& path, std::vector<uint8_t>& out_data);
 
-    // Async load texture using JobSystem
+    // Async load using JobSystem (disk I/O on worker, GPU upload on main thread via PumpMainThreadCallbacks)
     /**
-     * @brief 执行 LoadTextureAsync 操作
-     * @param path 参数说明
-     * @param std::function<void(std::shared_ptr<TextureAsset> 参数说明
-     * @example
-     * // AssetManager::LoadTextureAsync(...);
+     * @brief 异步加载纹理，磁盘 IO 在工作线程完成，GPU 上传在主线程通过 PumpMainThreadCallbacks 调度
+     * @param path 纹理文件路径
+     * @param callback 加载完成后的回调，在主线程执行
      */
     void LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback);
+    /**
+     * @brief 异步加载 .dmesh 资产
+     * @param path dmesh 文件路径
+     * @param callback 加载完成后的回调，在主线程执行
+     */
+    void LoadDmeshAsync(const std::string& path, std::function<void(std::shared_ptr<DmeshAsset>)> callback);
+    /**
+     * @brief 异步加载 .danim 动画资产
+     * @param path danim 文件路径
+     * @param callback 加载完成后的回调，在主线程执行
+     */
+    void LoadDanimAsync(const std::string& path, std::function<void(std::shared_ptr<DanimAsset>)> callback);
+    /**
+     * @brief 异步加载 .dskel 骨架资产
+     * @param path dskel 文件路径
+     * @param callback 加载完成后的回调，在主线程执行
+     */
+    void LoadDskelAsync(const std::string& path, std::function<void(std::shared_ptr<DskelAsset>)> callback);
+    /**
+     * @brief 异步加载音频切片资产
+     * @param path 音频文件路径
+     * @param callback 加载完成后的回调，在主线程执行
+     */
+    void LoadAudioClipAsync(const std::string& path, std::function<void(std::shared_ptr<AudioClipAsset>)> callback);
+    /**
+     * @brief 异步加载 .dmat 材质资产
+     * @param dmat_path dmat 文件路径
+     * @param material_index 材质索引
+     * @param callback 加载完成后的回调，在主线程执行
+     */
+    void LoadMaterialAsync(const std::string& dmat_path, std::size_t material_index, std::function<void(std::shared_ptr<MaterialAsset>)> callback);
     /**
      * @brief 执行 PumpMainThreadCallbacks 操作
      * @param static_cast<std::size_t>(-1 参数说明
@@ -440,6 +472,37 @@ public:
     void UnloadUnused();
     void ReleaseGpuResources();
 
+    // --- LRU 淘汰与内存预算 ---
+    /**
+     * @brief 设置资源内存预算（字节），超出时按 LRU 淘汰最久未访问的资源
+     * @param budget_bytes 预算字节数，0 表示不限制
+     */
+    void SetMemoryBudget(std::size_t budget_bytes);
+    /**
+     * @brief 获取当前追踪的资源内存占用估算（字节）
+     */
+    std::size_t EstimatedMemoryUsage() const;
+    /**
+     * @brief 按 LRU 策略淘汰资源，直到内存占用降至预算以内
+     * @return 本次淘汰的资源数量
+     */
+    std::size_t EvictLRU();
+
+    // --- 热重载（文件监听）---
+    /**
+     * @brief 启动文件监听线程，监听 data root 目录的文件变更
+     */
+    void StartFileWatcher();
+    /**
+     * @brief 停止文件监听线程
+     */
+    void StopFileWatcher();
+    /**
+     * @brief 在主线程中处理待热重载的资源（应在 PumpMainThreadCallbacks 附近调用）
+     * @return 本次重载的资源数量
+     */
+    std::size_t PumpHotReloads();
+
     AssetManager();
     ~AssetManager();
 
@@ -474,6 +537,25 @@ private:
     std::deque<std::function<void()>> pending_main_thread_callbacks_;
     std::size_t pending_callbacks_high_watermark_ = 0;
     bool callback_backlog_warned_ = false;
+
+    // --- LRU 淘汰 ---
+    struct LruEntry {
+        std::string cache_key;
+        std::size_t estimated_bytes = 0;
+        std::chrono::steady_clock::time_point last_access;
+    };
+    std::unordered_map<std::string, LruEntry> lru_entries_;
+    std::size_t memory_budget_bytes_ = 0;
+    std::size_t estimated_memory_usage_ = 0;
+    void TouchLru(const std::string& cache_key, std::size_t estimated_bytes);
+    void RemoveLru(const std::string& cache_key);
+
+    // --- 热重载 ---
+    std::thread file_watcher_thread_;
+    std::atomic<bool> file_watcher_running_{false};
+    std::mutex hot_reload_mutex_;
+    std::vector<std::string> pending_hot_reloads_;
+    void FileWatcherLoop();
 };
 
 #endif

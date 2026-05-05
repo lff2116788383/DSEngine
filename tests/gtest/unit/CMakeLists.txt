@@ -47,6 +47,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/scene/raw_scene_data_test.cpp
     # engine/assets
     engine/assets/asset_manager_test.cpp
+    engine/assets/asset_pipeline_async_test.cpp
     # engine/profiler
     engine/profiler/profiler_test.cpp
     # engine/runtime
@@ -59,11 +60,11 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     modules/gameplay_2d/particle_system_2d_test.cpp
     modules/gameplay_2d/tilemap_system_test.cpp
     modules/gameplay_2d/localization_system_test.cpp
-    # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine）
+    # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine�?
     modules/gameplay_3d/animation_state_machine_test.cpp
 )
 
-# 3D 模块测试需要 DSE_Gameplay3D 库（条件编译）
+# 3D 模块测试需�?DSE_Gameplay3D 库（条件编译�?
 if(DSE_ENABLE_3D)
     target_sources(${DSE_GTEST_UNIT_TARGET} PRIVATE
         modules/gameplay_3d/steering_system_test.cpp
@@ -99,7 +100,7 @@ if(DSE_ENABLE_3D)
     target_link_libraries(${DSE_GTEST_UNIT_TARGET} PRIVATE DSE_Gameplay3D)
 endif()
 
-# PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
+# PhysX 运行�?DLL 复制（仅�?PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     add_custom_command(TARGET ${DSE_GTEST_UNIT_TARGET} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

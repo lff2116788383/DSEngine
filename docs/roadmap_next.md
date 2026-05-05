@@ -1,6 +1,6 @@
 # DSEngine 引擎下一步路线图
 
-> 生成日期：2026-05-04
+> 生成日期：2026-05-05
 > 排除项：编辑器（不在此路线图范围内）
 
 ---
@@ -14,7 +14,7 @@
 | **Physics3D** | 2 文件 | ★★★★☆ | 1 unit + 1 集成 | PhysX 集成完整，刚体/角色/raycast |
 | **Physics2D** | 2 文件 | ★★★☆☆ | 1 集成 | 有基本碰撞，缺 joint/motor |
 | **Scripting/Lua** | 22 文件 | ★★★★★ | 5 集成 | Binding 覆盖最全（ECS/3D/物理/粒子/UI/动画/Spine） |
-| **Asset** | 4 文件 | ★★★☆☆ | 1 unit + 2 集成 | 仅同步加载，缺异步管线/热重载 |
+| **Asset** | 4 文件 | ★★★★☆ | 2 unit + 2 集成 | 异步加载全资源类型 + LRU 淘汰 + 文件热重载 |
 | **Scene** | 6 文件 | ★★★★☆ | 有序列化 | 有 prefab/序列化/空间划分 |
 | **Audio** | 2 文件 | ★★★☆☆ | 无独立测试 | miniaudio 封装，缺 3D 空间化 C++ API |
 | **Runtime** | 15 文件 | ★★★★☆ | 有测试 | FramePipeline/EngineApp 成熟 |
@@ -35,14 +35,14 @@
 2. **RenderGraph ↔ FramePipeline 深度整合** — 当前 `frame_pipeline.cpp` 有 1000+ 行，把硬编码的 pass 顺序迁移到 RenderGraph DAG 驱动，实现自动剔除和 barrier
 3. **多线程命令提交** — `CommandBuffer` 已有前端录制/后端提交分离，但尚未并行化。利用 `JobSystem` 做 parallel command recording
 
-### 🔥 P0：资产管线异步化 + 热重载
+### ✅ P0：资产管线异步化 + 热重载（已完成）
 
 **原因**: 当前 `AssetManager` 全部同步加载，32 个 demo 启动时会有明显卡顿。且无热重载能力，改资源必须重启。
 
 具体方向：
-1. **异步加载队列** — 利用现有 `JobSystem`，将 `.dmesh/.dmat/.png` 加载分帧摊开，加载完成后通过 `EventBus` 通知
-2. **热重载 Watcher** — 监听 `data/` 目录文件变更，自动 reload 对应 asset（纹理/材质/脚本）
-3. **资源引用计数 + LRU 淘汰** — 当前资源只进不出，长时间运行会 OOM
+1. ✅ **异步加载队列** — 利用现有 `JobSystem`，将 `.dmesh/.dmat/.png/.danim/.dskel/.wav` 加载分帧摊开，加载完成后通过 `EventBus` 通知
+2. ✅ **热重载 Watcher** — 监听 `data/` 目录文件变更（Windows `ReadDirectoryChangesW` overlapped I/O），自动 reload 对应 asset（纹理/Mesh/音频）
+3. ✅ **LRU 淘汰 + 内存预算** — 为资源添加 `LruEntry`（字节估算 + 最近访问时间戳），`SetMemoryBudget()` / `EvictLRU()` 超预算时淘汰最久未用且已无外部引用的资源
 
 ### ⭐ P1：场景系统增强
 
@@ -133,7 +133,38 @@
   - 优化器未接入：`ENABLE_OPT=OFF`，不依赖 SPIRV-Tools，减少编译时间
 - **SPIRV-Reflect**：完整反射能力，后续替代当前简化版反射（规划中）
 
-### 待完成项
+---
+
+## 当前执行：资产管线异步化 + 热重载
+
+> 状态：已完成
+
+### 实施清单
+
+1. ✅ 分析现有 `AssetManager` 代码结构与 `LoadTextureAsync` 模式
+2. ✅ 扩展异步加载到全资源类型：`LoadDmeshAsync` / `LoadDanimAsync` / `LoadDskelAsync` / `LoadAudioClipAsync` / `LoadMaterialAsync`
+3. ✅ 实现 LRU 淘汰：`TouchLru()` / `RemoveLru()` / `SetMemoryBudget()` / `EstimatedMemoryUsage()` / `EvictLRU()`
+4. ✅ 实现文件热重载：`StartFileWatcher()` / `StopFileWatcher()` / `PumpHotReloads()`（Windows overlapped I/O，非阻塞 200ms 超时轮询）
+5. ✅ 集成到 `FramePipeline::RunUpdateInternal()`：每帧调用 `PumpHotReloads()`
+6. ✅ 新增 `kResourceHotReloaded` EventId
+7. ✅ 新增 52 个单元测试覆盖（LRU / 异步扩展 / 热重载生命周期）
+8. ✅ 修复 `AssetManagerFakeRhiDevice` 缺少阴影/光源虚函数的预存问题
+9. ✅ 编译通过 + 全测试通过（exit code 0）
+
+### 变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/assets/asset_manager.h` | 新增异步加载 / LRU / 热重载 API 声明 |
+| `engine/assets/asset_manager.cpp` | 实现全部新功能 + overlapped I/O 文件监听 |
+| `engine/core/event_id.h` | 新增 `kResourceHotReloaded` |
+| `engine/runtime/frame_pipeline.cpp` | 集成 `PumpHotReloads()` |
+| `tests/gtest/unit/engine/assets/asset_pipeline_async_test.cpp` | 新增 17 个测试 |
+| `tests/gtest/unit/engine/assets/asset_manager_test.cpp` | 修复 FakeRhiDevice 缺失虚函数 |
+
+---
+
+### 待完成项（Vulkan）
 
 - [x] 运行时 RHI 后端选择（OpenGL ↔ Vulkan 切换）
 - [x] glslang 源码接入 `depends/` + CMake 条件编译

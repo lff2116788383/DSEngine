@@ -56,6 +56,7 @@ namespace events {
     constexpr EventId kResourceLoadFailed = MakeEventId("ResourceLoadFailed");
     constexpr EventId kTextureReady    = MakeEventId("TextureReady");
     constexpr EventId kShaderCompiled  = MakeEventId("ShaderCompiled");
+    constexpr EventId kResourceHotReloaded = MakeEventId("ResourceHotReloaded");
 
     // --- 场景/实体事件 ---
     constexpr EventId kSceneLifecycle  = MakeEventId("SceneLifecycle");
