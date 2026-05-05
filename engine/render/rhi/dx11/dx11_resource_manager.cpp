@@ -40,6 +40,7 @@ void DX11ResourceManager::Shutdown() {
 unsigned int DX11ResourceManager::CreateTexture2D(int width, int height,
                                                     const unsigned char* rgba8_data,
                                                     bool linear_filter) {
+    if (!device_) return 0;
     DX11Texture tex;
     tex.width = width;
     tex.height = height;
@@ -226,84 +227,155 @@ const DX11Buffer* DX11ResourceManager::GetBuffer(unsigned int handle) const {
 // ============================================================
 
 unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
-                                                       bool generate_mipmaps, bool /*cube_map*/) {
+                                                       bool generate_mipmaps, bool /*cube_map*/,
+                                                       int msaa_samples, bool allow_uav) {
+    if (!device_) return 0;
+
+    // MSAA 有效性检查：HDR 格式才支持 MSAA；未初始化时 msaa_4x_quality==0
+    const bool use_hdr = context_ ? context_->hdr_enabled() : false;
+    const DXGI_FORMAT color_fmt = use_hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    const UINT msaa_quality = (context_ && msaa_samples > 1) ? context_->msaa_4x_quality() : 0;
+    const bool use_msaa = (msaa_samples > 1) && (msaa_quality > 0);
+    const UINT actual_samples = use_msaa ? static_cast<UINT>(msaa_samples) : 1;
+
     DX11RenderTarget rt;
     rt.width = width;
     rt.height = height;
     rt.has_color = has_color;
     rt.has_depth = has_depth;
     rt.generate_mipmaps = generate_mipmaps;
+    rt.is_msaa = use_msaa;
+    rt.msaa_samples = use_msaa ? msaa_samples : 1;
 
-    // 颜色附件
+    // ---- 颜色附件 ----
     if (has_color) {
+        // 1. 颜色纹理（MSAA 时为多重采样纹理，只绑定 RTV）
         D3D11_TEXTURE2D_DESC td{};
-        td.Width = static_cast<UINT>(width);
+        td.Width  = static_cast<UINT>(width);
         td.Height = static_cast<UINT>(height);
         td.MipLevels = 1;
         td.ArraySize = 1;
-        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        td.SampleDesc.Count = 1;
+        td.Format = color_fmt;
+        td.SampleDesc.Count   = actual_samples;
+        td.SampleDesc.Quality = use_msaa ? msaa_quality : 0;
         td.Usage = D3D11_USAGE_DEFAULT;
-        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        td.BindFlags = D3D11_BIND_RENDER_TARGET;
+        if (!use_msaa) {
+            td.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+            if (allow_uav) td.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+        }
 
         HRESULT hr = device_->CreateTexture2D(&td, nullptr, rt.color_texture.GetAddressOf());
-        if (FAILED(hr)) return 0;
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] CreateTexture2D (color) failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return 0;
+        }
 
         hr = device_->CreateRenderTargetView(rt.color_texture.Get(), nullptr, rt.color_rtv.GetAddressOf());
         if (FAILED(hr)) return 0;
 
-        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-        srv_desc.Format = td.Format;
-        srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = 1;
-        hr = device_->CreateShaderResourceView(rt.color_texture.Get(), &srv_desc, rt.color_srv.GetAddressOf());
-        if (FAILED(hr)) return 0;
+        if (use_msaa) {
+            // 2. Resolve 目标（1x，SRV 在此纹理上）
+            D3D11_TEXTURE2D_DESC resolve_td = td;
+            resolve_td.SampleDesc.Count   = 1;
+            resolve_td.SampleDesc.Quality = 0;
+            resolve_td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            if (allow_uav) resolve_td.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
-        // 为颜色纹理注册一个纹理句柄
-        DX11Texture color_tex;
-        color_tex.texture = rt.color_texture;
-        color_tex.srv = rt.color_srv;
-        color_tex.width = width;
-        color_tex.height = height;
-        rt.color_texture_handle = next_texture_handle_++;
-        textures_[rt.color_texture_handle] = std::move(color_tex);
+            hr = device_->CreateTexture2D(&resolve_td, nullptr, rt.color_resolve_texture.GetAddressOf());
+            if (FAILED(hr)) return 0;
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.Format = color_fmt;
+            srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            srv_desc.Texture2D.MipLevels = 1;
+            hr = device_->CreateShaderResourceView(rt.color_resolve_texture.Get(), &srv_desc,
+                                                    rt.color_srv.GetAddressOf());
+            if (FAILED(hr)) return 0;
+
+            if (allow_uav) {
+                D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+                uav_desc.Format = color_fmt;
+                uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+                device_->CreateUnorderedAccessView(rt.color_resolve_texture.Get(), &uav_desc,
+                                                    rt.color_uav.GetAddressOf());
+            }
+
+            DX11Texture color_tex;
+            color_tex.texture = rt.color_resolve_texture;
+            color_tex.srv     = rt.color_srv;
+            color_tex.width   = width;
+            color_tex.height  = height;
+            rt.color_texture_handle = next_texture_handle_++;
+            textures_[rt.color_texture_handle] = std::move(color_tex);
+        } else {
+            // 非 MSAA：SRV 和可选 UAV 直接在颜色纹理上
+            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.Format = color_fmt;
+            srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            srv_desc.Texture2D.MipLevels = 1;
+            hr = device_->CreateShaderResourceView(rt.color_texture.Get(), &srv_desc,
+                                                    rt.color_srv.GetAddressOf());
+            if (FAILED(hr)) return 0;
+
+            if (allow_uav) {
+                D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+                uav_desc.Format = color_fmt;
+                uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+                device_->CreateUnorderedAccessView(rt.color_texture.Get(), &uav_desc,
+                                                    rt.color_uav.GetAddressOf());
+            }
+
+            DX11Texture color_tex;
+            color_tex.texture = rt.color_texture;
+            color_tex.srv     = rt.color_srv;
+            color_tex.width   = width;
+            color_tex.height  = height;
+            rt.color_texture_handle = next_texture_handle_++;
+            textures_[rt.color_texture_handle] = std::move(color_tex);
+        }
     }
 
-    // 深度附件
+    // ---- 深度附件 ----
     if (has_depth) {
         D3D11_TEXTURE2D_DESC td{};
-        td.Width = static_cast<UINT>(width);
+        td.Width  = static_cast<UINT>(width);
         td.Height = static_cast<UINT>(height);
         td.MipLevels = 1;
         td.ArraySize = 1;
         td.Format = DXGI_FORMAT_R24G8_TYPELESS;
-        td.SampleDesc.Count = 1;
+        td.SampleDesc.Count   = actual_samples;
+        td.SampleDesc.Quality = use_msaa ? msaa_quality : 0;
         td.Usage = D3D11_USAGE_DEFAULT;
-        td.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+        td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        if (!use_msaa) td.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 
         HRESULT hr = device_->CreateTexture2D(&td, nullptr, rt.depth_texture.GetAddressOf());
         if (FAILED(hr)) return 0;
 
         D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
         dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+        dsv_desc.ViewDimension = use_msaa ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
         hr = device_->CreateDepthStencilView(rt.depth_texture.Get(), &dsv_desc, rt.depth_dsv.GetAddressOf());
         if (FAILED(hr)) return 0;
 
-        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-        srv_desc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-        srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = 1;
-        hr = device_->CreateShaderResourceView(rt.depth_texture.Get(), &srv_desc, rt.depth_srv.GetAddressOf());
-        if (FAILED(hr)) return 0;
+        if (!use_msaa) {
+            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+            srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            srv_desc.Texture2D.MipLevels = 1;
+            hr = device_->CreateShaderResourceView(rt.depth_texture.Get(), &srv_desc,
+                                                    rt.depth_srv.GetAddressOf());
+            if (FAILED(hr)) return 0;
 
-        DX11Texture depth_tex;
-        depth_tex.texture = rt.depth_texture;
-        depth_tex.srv = rt.depth_srv;
-        depth_tex.width = width;
-        depth_tex.height = height;
-        rt.depth_texture_handle = next_texture_handle_++;
-        textures_[rt.depth_texture_handle] = std::move(depth_tex);
+            DX11Texture depth_tex;
+            depth_tex.texture = rt.depth_texture;
+            depth_tex.srv     = rt.depth_srv;
+            depth_tex.width   = width;
+            depth_tex.height  = height;
+            rt.depth_texture_handle = next_texture_handle_++;
+            textures_[rt.depth_texture_handle] = std::move(depth_tex);
+        }
     }
 
     unsigned int handle = next_render_target_handle_++;
@@ -388,6 +460,100 @@ unsigned int DX11ResourceManager::CreateVertexArray() {
 
 void DX11ResourceManager::DeleteVertexArray(unsigned int handle) {
     vertex_arrays_.erase(handle);
+}
+
+// ============================================================
+// 异步纹理上传
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateTexture2DAsync(int width, int height) {
+    if (!device_) return 0;
+
+    // 主线程创建空 GPU 纹理（内容由后续 FlushPendingUploads 填充）
+    const bool use_hdr = context_ ? context_->hdr_enabled() : false;
+    const DXGI_FORMAT fmt = DXGI_FORMAT_R8G8B8A8_UNORM; // 纹理始终用 8 位色
+    (void)use_hdr;
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width  = static_cast<UINT>(width);
+    td.Height = static_cast<UINT>(height);
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = fmt;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    ComPtr<ID3D11Texture2D> gpu_tex;
+    HRESULT hr = device_->CreateTexture2D(&td, nullptr, gpu_tex.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = fmt;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+
+    DX11Texture tex;
+    hr = device_->CreateShaderResourceView(gpu_tex.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    tex.texture = gpu_tex;
+    tex.width   = width;
+    tex.height  = height;
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    return handle;
+}
+
+void DX11ResourceManager::QueueTextureUpload(unsigned int handle, int width, int height,
+                                              const unsigned char* rgba8_data) {
+    if (!device_ || !rgba8_data) return;
+
+    // 工作线程只写 CPU staging 纹理，不调用 D3D11 API
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width  = static_cast<UINT>(width);
+    td.Height = static_cast<UINT>(height);
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_STAGING;
+    td.BindFlags = 0;
+    td.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = rgba8_data;
+    init_data.SysMemPitch = static_cast<UINT>(width * 4);
+
+    ComPtr<ID3D11Texture2D> staging;
+    HRESULT hr = device_->CreateTexture2D(&td, &init_data, staging.GetAddressOf());
+    if (FAILED(hr)) return;
+
+    PendingUpload upload;
+    upload.handle  = handle;
+    upload.staging = staging;
+    upload.width   = width;
+    upload.height  = height;
+
+    std::lock_guard<std::mutex> lock(pending_uploads_mutex_);
+    pending_uploads_.push(std::move(upload));
+}
+
+void DX11ResourceManager::FlushPendingUploads() {
+    if (!dc_) return;
+
+    std::lock_guard<std::mutex> lock(pending_uploads_mutex_);
+    while (!pending_uploads_.empty()) {
+        auto& upload = pending_uploads_.front();
+
+        auto it = textures_.find(upload.handle);
+        if (it != textures_.end() && it->second.texture && upload.staging) {
+            dc_->CopyResource(it->second.texture.Get(), upload.staging.Get());
+        }
+
+        pending_uploads_.pop();
+    }
 }
 
 } // namespace render

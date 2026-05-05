@@ -70,6 +70,8 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     bool initialized() const { return initialized_; }
+    bool hdr_enabled() const { return hdr_enabled_; }
+    UINT msaa_4x_quality() const { return msaa_4x_quality_; }
 
     /// Feature Level 转可读字符串
     std::string FeatureLevelString() const;
@@ -91,6 +93,8 @@ private:
     int width_ = 0;
     int height_ = 0;
     bool initialized_ = false;
+    bool hdr_enabled_ = false;     ///< SwapChain 是否使用 R16G16B16A16_FLOAT
+    UINT msaa_4x_quality_ = 0;    ///< MSAA 4x 质量等级（0 = 不支持）
 };
 
 } // namespace render

@@ -78,11 +78,14 @@ struct RenderTargetDesc {
     bool has_depth = false;
     bool generate_mipmaps = false;  ///< Bloom Downsample 需要 mipmap
     bool cube_map = false;
+    int msaa_samples = 1;           ///< MSAA 采样数（1 = 禁用，4 = 4x MSAA）
+    bool allow_uav = false;         ///< 颜色附件是否支持 UAV（Compute Shader 写入）
 
     bool operator==(const RenderTargetDesc& o) const {
         return width == o.width && height == o.height &&
                has_color == o.has_color && has_depth == o.has_depth &&
-               generate_mipmaps == o.generate_mipmaps && cube_map == o.cube_map;
+               generate_mipmaps == o.generate_mipmaps && cube_map == o.cube_map &&
+               msaa_samples == o.msaa_samples && allow_uav == o.allow_uav;
     }
 };
 

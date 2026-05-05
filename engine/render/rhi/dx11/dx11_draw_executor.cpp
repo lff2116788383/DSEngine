@@ -263,6 +263,9 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
                                          DX11PipelineStateManager& pipeline_mgr) {
     ID3D11DeviceContext* dc = context_->device_context();
 
+    // 记录当前 RT 句柄，供 EndRenderPass MSAA resolve 使用
+    current_rt_handle_ = render_pass.render_target;
+
     ID3D11RenderTargetView* rtv = nullptr;
     ID3D11DepthStencilView* dsv = nullptr;
 
@@ -313,6 +316,18 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
 
 void DX11DrawExecutor::EndRenderPass() {
     is_depth_only_pass_ = false;
+    // MSAA resolve：将多重采样颜色纹理 resolve 到 1x resolve 纹理
+    if (current_rt_handle_ != 0 && resource_mgr_) {
+        const auto* rt = resource_mgr_->GetRenderTarget(current_rt_handle_);
+        if (rt && rt->is_msaa && rt->color_texture && rt->color_resolve_texture) {
+            const bool use_hdr = context_ ? context_->hdr_enabled() : false;
+            DXGI_FORMAT fmt = use_hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+            context_->device_context()->ResolveSubresource(
+                rt->color_resolve_texture.Get(), 0,
+                rt->color_texture.Get(), 0, fmt);
+        }
+    }
+    current_rt_handle_ = 0;
 }
 
 // ============================================================
@@ -591,6 +606,34 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
                                          DX11ResourceManager& resource_mgr) {
     ID3D11DeviceContext* dc = context_->device_context();
 
+    // Compute Shader 路径：bloom 降采样/升采样
+    const bool is_bloom_cs = (effect_name == "bloom_downsample" || effect_name == "bloom_upsample");
+    if (is_bloom_cs && current_rt_handle_ != 0) {
+        const unsigned int cs_handle = (effect_name == "bloom_downsample")
+            ? shader_mgr.bloom_downsample_cs_handle()
+            : shader_mgr.bloom_upsample_cs_handle();
+
+        const auto* rt = resource_mgr.GetRenderTarget(current_rt_handle_);
+        if (rt && rt->color_uav) {
+            unsigned int uav_rt = current_rt_handle_;
+            // 解绑当前 RTV，切换到 CS 路径
+            ID3D11RenderTargetView* null_rtv = nullptr;
+            dc->OMSetRenderTargets(0, &null_rtv, nullptr);
+
+            UINT dst_w = static_cast<UINT>(rt->width);
+            UINT dst_h = static_cast<UINT>(rt->height);
+            UINT tx = (dst_w + 7) / 8;
+            UINT ty = (dst_h + 7) / 8;
+            DispatchCompute(cs_handle, source_texture, uav_rt, tx, ty, shader_mgr, resource_mgr);
+
+            // 重新绑定 RTV（EndRenderPass 会解绑并 resolve）
+            ID3D11RenderTargetView* rtv = rt->color_rtv.Get();
+            dc->OMSetRenderTargets(rtv ? 1 : 0, rtv ? &rtv : &null_rtv, rt->depth_dsv.Get());
+            return;
+        }
+    }
+
+    // 标准全屏四边形路径
     const auto* program = shader_mgr.GetProgram(shader_mgr.postprocess_shader_handle());
     if (!program) return;
     dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
@@ -613,6 +656,56 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
 
     dc->DrawIndexed(6, 0, 0);
     current_frame_stats_.draw_calls++;
+}
+
+void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
+                                        unsigned int srv_texture_handle,
+                                        unsigned int uav_rt_handle,
+                                        UINT threads_x, UINT threads_y,
+                                        DX11ShaderManager& shader_mgr,
+                                        DX11ResourceManager& resource_mgr) {
+    if (!context_) return;
+    ID3D11DeviceContext* dc = context_->device_context();
+
+    const auto* prog = shader_mgr.GetComputeProgram(cs_handle);
+    if (!prog || !prog->cs) return;
+
+    // 更新 BloomParams CB（src 和 dst texel size）
+    const auto* src_tex = resource_mgr.GetTexture(srv_texture_handle);
+    const auto* dst_rt  = resource_mgr.GetRenderTarget(uav_rt_handle);
+    if (prog->params_cb && src_tex && dst_rt) {
+        struct BloomParams { float src_w, src_h, dst_w, dst_h; } bp;
+        bp.src_w = 1.0f / static_cast<float>(src_tex->width > 0 ? src_tex->width : 1);
+        bp.src_h = 1.0f / static_cast<float>(src_tex->height > 0 ? src_tex->height : 1);
+        bp.dst_w = 1.0f / static_cast<float>(dst_rt->width > 0 ? dst_rt->width : 1);
+        bp.dst_h = 1.0f / static_cast<float>(dst_rt->height > 0 ? dst_rt->height : 1);
+
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (SUCCEEDED(dc->Map(prog->params_cb.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+            memcpy(mapped.pData, &bp, sizeof(bp));
+            dc->Unmap(prog->params_cb.Get(), 0);
+        }
+        ID3D11Buffer* cbs[] = {prog->params_cb.Get()};
+        dc->CSSetConstantBuffers(0, 1, cbs);
+    }
+
+    // 绑定 CS + SRV + UAV
+    dc->CSSetShader(prog->cs.Get(), nullptr, 0);
+    if (src_tex && src_tex->srv) {
+        dc->CSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
+    }
+    if (dst_rt && dst_rt->color_uav) {
+        dc->CSSetUnorderedAccessViews(0, 1, dst_rt->color_uav.GetAddressOf(), nullptr);
+    }
+
+    dc->Dispatch(threads_x, threads_y, 1);
+
+    // 解绑 UAV / SRV
+    ID3D11UnorderedAccessView* null_uav = nullptr;
+    ID3D11ShaderResourceView* null_srv = nullptr;
+    dc->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+    dc->CSSetShaderResources(0, 1, &null_srv);
+    dc->CSSetShader(nullptr, nullptr, 0);
 }
 
 void DX11DrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& items,

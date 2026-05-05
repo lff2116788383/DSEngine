@@ -119,6 +119,13 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
+    void DispatchCompute(unsigned int cs_handle,
+                          unsigned int srv_texture_handle,
+                          unsigned int uav_rt_handle,
+                          UINT threads_x, UINT threads_y,
+                          DX11ShaderManager& shader_mgr,
+                          DX11ResourceManager& resource_mgr);
+
     // --- 全局阴影/光源矩阵 ---
     void SetGlobalShadowMap(unsigned int index, unsigned int handle) {
         if (index < 3) global_shadow_map_[index] = handle;
@@ -201,6 +208,9 @@ private:
 
     // 阴影 pass 检测（深度 only 渲染目标 = shadow pass）
     bool is_depth_only_pass_ = false;
+
+    // 当前渲染目标句柄（MSAA resolve 使用）
+    unsigned int current_rt_handle_ = 0;
 
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;

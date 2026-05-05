@@ -500,6 +500,99 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Bloom Compute Shader: 降采样（Downsample）
+// ============================================================
+// t0: 源纹理 (SRV), u0: 目标纹理 (UAV)
+// 每个线程组 8x8，覆盖目标尺寸
+
+constexpr const char* kBloomDownsampleCS = R"(
+Texture2D<float4> src_tex : register(t0);
+RWTexture2D<float4> dst_tex : register(u0);
+
+SamplerState linear_sampler
+{
+    Filter   = MIN_MAG_MIP_LINEAR;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+cbuffer BloomParams : register(b0) {
+    float2 src_texel_size;  // 1.0 / src 尺寸
+    float2 dst_texel_size;  // 1.0 / dst 尺寸
+};
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatch_id : SV_DispatchThreadID)
+{
+    // 目标像素中心 UV
+    float2 uv = (dispatch_id.xy + 0.5) * dst_texel_size;
+
+    // 13-tap Kawase 降采样
+    float4 s = float4(0, 0, 0, 0);
+    float2 hp = src_texel_size * 0.5;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2(-hp.x,  hp.y) * 2, 0) * 0.125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( hp.x,  hp.y) * 2, 0) * 0.125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2(-hp.x, -hp.y) * 2, 0) * 0.125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( hp.x, -hp.y) * 2, 0) * 0.125;
+    s += src_tex.SampleLevel(linear_sampler, uv, 0)                           * 0.125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2(-hp.x,  0   ), 0)   * 0.0625;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( hp.x,  0   ), 0)   * 0.0625;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( 0,     hp.y), 0)   * 0.0625;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( 0,    -hp.y), 0)   * 0.0625;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2(-hp.x,  hp.y), 0)   * 0.03125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( hp.x,  hp.y), 0)   * 0.03125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2(-hp.x, -hp.y), 0)   * 0.03125;
+    s += src_tex.SampleLevel(linear_sampler, uv + float2( hp.x, -hp.y), 0)   * 0.03125;
+
+    dst_tex[dispatch_id.xy] = s;
+}
+)";
+
+// ============================================================
+// Bloom Compute Shader: 升采样（Upsample / Tent filter）
+// ============================================================
+
+constexpr const char* kBloomUpsampleCS = R"(
+Texture2D<float4> src_tex : register(t0);
+RWTexture2D<float4> dst_tex : register(u0);
+
+SamplerState linear_sampler
+{
+    Filter   = MIN_MAG_MIP_LINEAR;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+cbuffer BloomParams : register(b0) {
+    float2 src_texel_size;
+    float2 dst_texel_size;
+};
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatch_id : SV_DispatchThreadID)
+{
+    float2 uv = (dispatch_id.xy + 0.5) * dst_texel_size;
+
+    // 3x3 tent 升采样
+    float2 s = src_texel_size;
+    float4 t = float4(0, 0, 0, 0);
+    t += src_tex.SampleLevel(linear_sampler, uv + float2(-s.x,  s.y), 0) * 1.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( 0,    s.y), 0) * 2.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( s.x,  s.y), 0) * 1.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2(-s.x,  0  ), 0) * 2.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( 0,    0  ), 0) * 4.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( s.x,  0  ), 0) * 2.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2(-s.x, -s.y), 0) * 1.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( 0,   -s.y), 0) * 2.0;
+    t += src_tex.SampleLevel(linear_sampler, uv + float2( s.x, -s.y), 0) * 1.0;
+    t /= 16.0;
+
+    // 累加到目标（叠加模式）
+    dst_tex[dispatch_id.xy] += t;
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

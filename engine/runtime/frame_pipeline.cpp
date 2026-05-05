@@ -213,7 +213,16 @@ bool FramePipeline::Init() {
 
     
     // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
-    render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, true}); // Enable depth for scene pass
+    // msaa_samples=4：开启 4x MSAA（不支持时 resource_mgr 自动降级为 1x）
+    {
+        RenderTargetDesc scene_desc{};
+        scene_desc.width = render_width;
+        scene_desc.height = render_height;
+        scene_desc.has_color = true;
+        scene_desc.has_depth = true;
+        scene_desc.msaa_samples = 4;
+        render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget(scene_desc);
+    }
     render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
     render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
     
@@ -230,11 +239,19 @@ bool FramePipeline::Init() {
     }
     
     // Create mip chain for Dual Filter Bloom (5 levels)
+    // allow_uav=true：允许 CS 写入（D3D11 Bloom Compute Shader 路径使用）
     if (render_resources_.pp_bloom_mip_rts.empty()) {
         int mip_width = render_width / 2;
         int mip_height = render_height / 2;
         for (int i = 0; i < 5; ++i) {
-            render_resources_.pp_bloom_mip_rts.push_back(runtime_context_.rhi_device->CreateRenderTarget({mip_width, mip_height, true, false, false}));
+            RenderTargetDesc bloom_mip_desc{};
+            bloom_mip_desc.width = mip_width;
+            bloom_mip_desc.height = mip_height;
+            bloom_mip_desc.has_color = true;
+            bloom_mip_desc.has_depth = false;
+            bloom_mip_desc.allow_uav = true;
+            render_resources_.pp_bloom_mip_rts.push_back(
+                runtime_context_.rhi_device->CreateRenderTarget(bloom_mip_desc));
             mip_width /= 2;
             mip_height /= 2;
             if (mip_width < 1) mip_width = 1;

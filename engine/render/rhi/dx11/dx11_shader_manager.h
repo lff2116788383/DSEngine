@@ -34,6 +34,12 @@ struct DX11ShaderProgram {
     ComPtr<ID3DBlob> ps_blob;
 };
 
+/// D3D11 Compute Shader 程序封装
+struct DX11ComputeProgram {
+    ComPtr<ID3D11ComputeShader> cs;
+    ComPtr<ID3D11Buffer> params_cb;   ///< BloomParams CB（float2 src + float2 dst）
+};
+
 /**
  * @class DX11ShaderManager
  * @brief D3D11 着色器管理器
@@ -58,6 +64,12 @@ public:
     /// 查询着色器程序
     const DX11ShaderProgram* GetProgram(unsigned int handle) const;
 
+    /// 从 HLSL 源码创建 Compute Shader，返回句柄（0 = 失败）
+    unsigned int CreateComputeProgram(const std::string& cs_src);
+
+    /// 查询 Compute Shader 程序
+    const DX11ComputeProgram* GetComputeProgram(unsigned int handle) const;
+
     /// 初始化内置着色器
     void InitBuiltinShaders();
 
@@ -71,6 +83,8 @@ public:
     unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
     unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
     unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
+    unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
+    unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -94,12 +108,18 @@ private:
     unsigned int sprite_shader_handle_ = 0;
     unsigned int postprocess_shader_handle_ = 0;
     unsigned int shadow_shader_handle_ = 0;
+    unsigned int bloom_downsample_cs_handle_ = 0;
+    unsigned int bloom_upsample_cs_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;
 
     /// 着色器句柄 → InputLayout 映射
     std::unordered_map<unsigned int, ComPtr<ID3D11InputLayout>> input_layouts_;
+
+    /// Compute Shader 程序映射
+    std::unordered_map<unsigned int, DX11ComputeProgram> compute_programs_;
+    unsigned int next_cs_handle_ = 850000;
 };
 
 } // namespace render

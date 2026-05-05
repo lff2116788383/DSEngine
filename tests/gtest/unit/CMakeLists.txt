@@ -42,6 +42,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/render/render_graph_test.cpp
     engine/render/rhi_types_test.cpp
     engine/render/vulkan_rhi_test.cpp
+    engine/render/dx11_rhi_test.cpp
     # engine/scene
     engine/scene/octree_test.cpp
     engine/scene/quad_tree_test.cpp
@@ -97,6 +98,10 @@ if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)
     target_include_directories(${DSE_GTEST_UNIT_TARGET} PRIVATE
         ${DSE_VULKAN_INCLUDE_DIR}
     )
+endif()
+# D3D11 compile definition propagation (for dx11_rhi_test.cpp)
+if(DSE_ENABLE_D3D11 AND WIN32)
+    target_compile_definitions(${DSE_GTEST_UNIT_TARGET} PRIVATE DSE_ENABLE_D3D11)
 endif()
 if(MSVC)
     target_compile_options(${DSE_GTEST_UNIT_TARGET} PRIVATE /utf-8)

@@ -205,6 +205,54 @@ void DX11ShaderManager::InitBuiltinShaders() {
         };
         CreateInputLayoutForShader(shadow_shader_handle_, layout, 7);
     }
+
+    // ---- Bloom Compute Shaders ----
+    bloom_downsample_cs_handle_ = CreateComputeProgram(dx11_shaders::kBloomDownsampleCS);
+    if (bloom_downsample_cs_handle_)
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom downsample CS created: {}", bloom_downsample_cs_handle_);
+
+    bloom_upsample_cs_handle_ = CreateComputeProgram(dx11_shaders::kBloomUpsampleCS);
+    if (bloom_upsample_cs_handle_)
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created: {}", bloom_upsample_cs_handle_);
+}
+
+// ============================================================
+// Compute Shader 管理
+// ============================================================
+
+unsigned int DX11ShaderManager::CreateComputeProgram(const std::string& cs_src) {
+    if (!context_) return 0;
+    ID3D11Device* device = context_->device();
+    if (!device) return 0;
+
+    auto cs_blob = CompileShader(cs_src, "CSMain", "cs_5_0");
+    if (!cs_blob) return 0;
+
+    DX11ComputeProgram prog;
+    HRESULT hr = device->CreateComputeShader(cs_blob->GetBufferPointer(), cs_blob->GetBufferSize(),
+                                              nullptr, prog.cs.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateComputeShader failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    // 创建 BloomParams 常量缓冲（float2 + float2 = 16 字节）
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth = 16;
+    bd.Usage = D3D11_USAGE_DYNAMIC;
+    bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    device->CreateBuffer(&bd, nullptr, prog.params_cb.GetAddressOf());
+
+    unsigned int handle = next_cs_handle_++;
+    compute_programs_[handle] = std::move(prog);
+    ++programs_created_;
+    return handle;
+}
+
+const DX11ComputeProgram* DX11ShaderManager::GetComputeProgram(unsigned int handle) const {
+    auto it = compute_programs_.find(handle);
+    return it != compute_programs_.end() ? &it->second : nullptr;
 }
 
 } // namespace render

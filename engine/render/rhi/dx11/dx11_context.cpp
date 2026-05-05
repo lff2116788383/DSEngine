@@ -75,21 +75,6 @@ bool DX11Context::Resize(int width, int height) {
 }
 
 bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug) {
-    DXGI_SWAP_CHAIN_DESC scd{};
-    scd.BufferCount = 2;
-    scd.BufferDesc.Width = static_cast<UINT>(width);
-    scd.BufferDesc.Height = static_cast<UINT>(height);
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    scd.BufferDesc.RefreshRate.Numerator = 60;
-    scd.BufferDesc.RefreshRate.Denominator = 1;
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.OutputWindow = static_cast<HWND>(window_handle);
-    scd.SampleDesc.Count = 1;
-    scd.SampleDesc.Quality = 0;
-    scd.Windowed = TRUE;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-    scd.Flags = 0;
-
     UINT create_flags = 0;
     if (enable_debug) {
         create_flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -103,24 +88,60 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     };
     UINT num_feature_levels = ARRAYSIZE(feature_levels);
 
+    // HDR 尝试路径：R16G16B16A16_FLOAT + FLIP_DISCARD（Windows 10+）
+    DXGI_SWAP_CHAIN_DESC scd{};
+    scd.BufferCount = 2;
+    scd.BufferDesc.Width = static_cast<UINT>(width);
+    scd.BufferDesc.Height = static_cast<UINT>(height);
+    scd.BufferDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    scd.BufferDesc.RefreshRate.Numerator = 60;
+    scd.BufferDesc.RefreshRate.Denominator = 1;
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.OutputWindow = static_cast<HWND>(window_handle);
+    scd.SampleDesc.Count = 1;
+    scd.SampleDesc.Quality = 0;
+    scd.Windowed = TRUE;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.Flags = 0;
+
     HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        nullptr,                    // adapter (default)
-        D3D_DRIVER_TYPE_HARDWARE,   // driver type
-        nullptr,                    // software rasterizer
-        create_flags,               // flags
-        feature_levels,             // feature levels
-        num_feature_levels,         // num feature levels
-        D3D11_SDK_VERSION,          // SDK version
-        &scd,                       // swap chain desc
-        swapchain_.GetAddressOf(),
-        device_.GetAddressOf(),
-        &feature_level_,
-        context_.GetAddressOf()
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+        create_flags, feature_levels, num_feature_levels,
+        D3D11_SDK_VERSION, &scd,
+        swapchain_.GetAddressOf(), device_.GetAddressOf(),
+        &feature_level_, context_.GetAddressOf()
     );
 
-    if (FAILED(hr)) {
-        DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: 0x{:08X}", static_cast<unsigned>(hr));
-        return false;
+    if (SUCCEEDED(hr)) {
+        hdr_enabled_ = true;
+        DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)");
+    } else {
+        // SDR 回退：R8G8B8A8_UNORM + DISCARD
+        scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        hr = D3D11CreateDeviceAndSwapChain(
+            nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+            create_flags, feature_levels, num_feature_levels,
+            D3D11_SDK_VERSION, &scd,
+            swapchain_.GetAddressOf(), device_.GetAddressOf(),
+            &feature_level_, context_.GetAddressOf()
+        );
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return false;
+        }
+        hdr_enabled_ = false;
+        DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, DISCARD)");
+    }
+
+    // MSAA 4x 支持查询（在设备创建后）
+    UINT quality = 0;
+    hr = device_->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT, 4, &quality);
+    msaa_4x_quality_ = (SUCCEEDED(hr) && quality > 0) ? quality - 1 : 0;
+    if (msaa_4x_quality_ > 0) {
+        DEBUG_LOG_INFO("[D3D11] MSAA 4x supported (quality={})", msaa_4x_quality_);
+    } else {
+        DEBUG_LOG_INFO("[D3D11] MSAA 4x not supported, will use 1x");
     }
 
     return true;

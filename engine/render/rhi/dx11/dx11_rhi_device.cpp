@@ -170,10 +170,12 @@ void DX11RhiDevice::Shutdown() {
 
 void DX11RhiDevice::BeginFrame() {
     current_frame_stats_ = RenderStats{};
+    resource_mgr_.FlushPendingUploads();
     draw_executor_.BeginFrame();
 
     // 清除后备缓冲区
     ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
     ID3D11RenderTargetView* rtv = context_.backbuffer_rtv();
     ID3D11DepthStencilView* dsv = context_.backbuffer_dsv();
     if (rtv) {
@@ -198,7 +200,7 @@ void DX11RhiDevice::BeginFrame() {
 unsigned int DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return resource_mgr_.CreateRenderTarget(
         desc.width, desc.height, desc.has_color, desc.has_depth,
-        desc.generate_mipmaps, desc.cube_map);
+        desc.generate_mipmaps, desc.cube_map, desc.msaa_samples, desc.allow_uav);
 }
 
 unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
