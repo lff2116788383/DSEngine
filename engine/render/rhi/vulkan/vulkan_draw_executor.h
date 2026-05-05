@@ -57,6 +57,35 @@ struct VulkanPerMaterialUBO {
     glm::vec4 flags;            ///< x=has_normal_map, y=has_metallic_roughness_map, z=has_emissive_map, w=has_occlusion_map
 };
 
+/// PointLights UBO（set=1, binding=1，与 GLSL std140 PointLights block 对齐）
+struct VulkanPointLightsUBO {
+    int  u_point_light_count;
+    int  _pad0, _pad1, _pad2;
+    struct Entry {
+        glm::vec3 color;     float intensity;
+        glm::vec3 position;  float radius;
+        int cast_shadow;     int shadow_index;
+        glm::vec2 _pad;
+    } lights[4];
+};
+static_assert(sizeof(VulkanPointLightsUBO) % 16 == 0,
+              "VulkanPointLightsUBO must be 16B aligned");
+
+/// SpotLights UBO（set=1, binding=2，与 GLSL std140 SpotLights block 对齐）
+struct VulkanSpotLightsUBO {
+    int  u_spot_light_count;
+    int  _pad0, _pad1, _pad2;
+    struct Entry {
+        glm::vec3 color;       float intensity;
+        glm::vec3 position;    float radius;
+        glm::vec3 direction;   float inner_cone;
+        float outer_cone;      int cast_shadow;
+        int shadow_index;      float _pad2;
+    } lights[4];
+};
+static_assert(sizeof(VulkanSpotLightsUBO) % 16 == 0,
+              "VulkanSpotLightsUBO must be 16B aligned");
+
 /**
  * @class VulkanDrawExecutor
  * @brief Vulkan 绘制执行器
@@ -175,7 +204,10 @@ private:
     /// 更新 PerMaterial UBO 数据并写入缓冲
     void UpdatePerMaterialUBO(const MeshDrawItem& item);
 
-    /// 为 3D mesh 绘制分配并更新 DescriptorSet（Set 0/1/2）
+    /// 更新 PointLights/SpotLights UBO 数据并写入缓冲
+    void UpdatePointSpotLightUBOs(const MeshDrawItem& item);
+
+    /// 为 3D mesh 绘制分配并更新 DescriptorSet（Set 0/1/2/3）
     VkDescriptorSet AllocateAndUpdateMeshDescriptorSets(
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
@@ -244,6 +276,10 @@ private:
     VkDeviceMemory per_scene_ubo_mem_[MAX_FRAMES] = {};
     VkBuffer per_material_ubo_[MAX_FRAMES] = {};
     VkDeviceMemory per_material_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer       per_point_lights_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory per_point_lights_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer       per_spot_lights_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory per_spot_lights_ubo_mem_[MAX_FRAMES] = {};
 
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;

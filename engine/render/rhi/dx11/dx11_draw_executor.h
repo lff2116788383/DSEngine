@@ -66,6 +66,45 @@ struct DX11PerMaterialCB {
     glm::vec4 flags;
 };
 
+/// PointLight 单条目（每条 48B，3 × 16B，与 kPbrPS b4 对齐）
+struct DX11PointLightEntry {
+    glm::vec3 color;     float intensity;
+    glm::vec3 position;  float radius;
+    int cast_shadow;     int shadow_index;
+    int _pad0;           int _pad1;
+};
+static_assert(sizeof(DX11PointLightEntry) % 16 == 0,
+              "DX11PointLightEntry must be 16B aligned");
+
+/// PointLights 常量缓冲（register b4，总大小 208B）
+struct DX11PointLightsCB {
+    int count;
+    int _p0, _p1, _p2;
+    DX11PointLightEntry lights[4];
+};
+static_assert(sizeof(DX11PointLightsCB) % 16 == 0,
+              "DX11PointLightsCB must be 16B aligned");
+
+/// SpotLight 单条目（每条 64B，4 × 16B，与 kPbrPS b5 对齐）
+struct DX11SpotLightEntry {
+    glm::vec3 color;       float intensity;
+    glm::vec3 position;    float radius;
+    glm::vec3 direction;   float inner_cone;
+    float outer_cone;      int cast_shadow;
+    int shadow_index;      float _pad0;
+};
+static_assert(sizeof(DX11SpotLightEntry) % 16 == 0,
+              "DX11SpotLightEntry must be 16B aligned");
+
+/// SpotLights 常量缓冲（register b5，总大小 272B）
+struct DX11SpotLightsCB {
+    int count;
+    int _p0, _p1, _p2;
+    DX11SpotLightEntry lights[4];
+};
+static_assert(sizeof(DX11SpotLightsCB) % 16 == 0,
+              "DX11SpotLightsCB must be 16B aligned");
+
 /**
  * @class DX11DrawExecutor
  * @brief D3D11 绘制执行器
@@ -217,6 +256,10 @@ private:
 
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;
+
+    // 点光源 / 聚光灯常量缓冲（b4 / b5）
+    ComPtr<ID3D11Buffer> per_point_lights_cb_;
+    ComPtr<ID3D11Buffer> per_spot_lights_cb_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

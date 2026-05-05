@@ -159,6 +159,31 @@ cbuffer PerMaterial : register(b3) {
     float4 mat_flags;
 };
 
+struct PointLightEntry {
+    float3 color;     float intensity;
+    float3 position;  float radius;
+    int cast_shadow;  int shadow_index;
+    int _pad0;        int _pad1;
+};
+cbuffer PointLights : register(b4) {
+    int u_point_light_count;
+    int _pl_pad0, _pl_pad1, _pl_pad2;
+    PointLightEntry u_point_lights[4];
+};
+
+struct SpotLightEntry {
+    float3 color;       float intensity;
+    float3 position;    float radius;
+    float3 direction;   float inner_cone;
+    float outer_cone;   int cast_shadow;
+    int shadow_index;   float _pad0;
+};
+cbuffer SpotLights : register(b5) {
+    int u_spot_light_count;
+    int _sl_pad0, _sl_pad1, _sl_pad2;
+    SpotLightEntry u_spot_lights[4];
+};
+
 Texture2D u_texture : register(t0);
 Texture2D u_normal_map : register(t1);
 Texture2D u_metallic_roughness_map : register(t2);
@@ -167,6 +192,10 @@ Texture2D u_occlusion_map : register(t4);
 Texture2D u_shadow_map0 : register(t5);
 Texture2D u_shadow_map1 : register(t6);
 Texture2D u_shadow_map2 : register(t7);
+TextureCube u_point_shadow_map0 : register(t8);
+TextureCube u_point_shadow_map1 : register(t9);
+TextureCube u_point_shadow_map2 : register(t10);
+TextureCube u_point_shadow_map3 : register(t11);
 
 SamplerState u_sampler : register(s0);
 SamplerComparisonState u_cmp_sampler : register(s1);
@@ -303,6 +332,35 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float NdotL = max(dot(N, L), 0.0);
     float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
     float3 Lo = (kD * surface_albedo / PI + specular) * light_color_and_ambient.rgb * light_params.x * NdotL * (1.0 - shadow);
+
+    // 点光源 PBR 循环
+    [loop] for (int pi = 0; pi < u_point_light_count; ++pi) {
+        PointLightEntry pl = u_point_lights[pi];
+        float3 Lp = pl.position - input.fragPos;
+        float dist = length(Lp);
+        if (dist >= pl.radius) continue;
+        float atten = 1.0 / max(dist * dist, 0.0001);
+        float3 Ldir = Lp / max(dist, 0.0001);
+        float3 Hp = normalize(V + Ldir);
+        float NDFp = DistributionGGX(N, Hp, roughness);
+        float Gp   = GeometrySmith(N, V, Ldir, roughness);
+        float3 Fp  = fresnelSchlick(max(dot(Hp, V), 0.0), F0);
+        float3 specP = (NDFp * Gp * Fp) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, Ldir), 0.0) + 0.0001, 0.0001);
+        float3 kDp = (float3(1.0, 1.0, 1.0) - Fp) * (1.0 - metallic);
+        float NdotLp = max(dot(N, Ldir), 0.0);
+        float pl_shadow = 0.0;
+        if (pl.cast_shadow != 0) {
+            float3 sampleDir = input.fragPos - pl.position;
+            float closestDepth = 0.0;
+            if      (pl.shadow_index == 0) closestDepth = u_point_shadow_map0.Sample(u_sampler, sampleDir).r;
+            else if (pl.shadow_index == 1) closestDepth = u_point_shadow_map1.Sample(u_sampler, sampleDir).r;
+            else if (pl.shadow_index == 2) closestDepth = u_point_shadow_map2.Sample(u_sampler, sampleDir).r;
+            else                           closestDepth = u_point_shadow_map3.Sample(u_sampler, sampleDir).r;
+            float currentDepth = dist / pl.radius;
+            pl_shadow = (currentDepth - 0.005 > closestDepth) ? 1.0 : 0.0;
+        }
+        Lo += (kDp * surface_albedo / PI + specP) * pl.color * pl.intensity * atten * NdotLp * (1.0 - pl_shadow);
+    }
 
     float3 ambient = float3(light_color_and_ambient.w, light_color_and_ambient.w, light_color_and_ambient.w) * surface_albedo * ao;
     float3 color = ambient + Lo + mat_emissive.rgb;

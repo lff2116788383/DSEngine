@@ -211,6 +211,10 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                                 per_scene_ubo_[i], per_scene_ubo_mem_[i]);
         CreateUBOBufferInternal(device, physical_device, sizeof(VulkanPerMaterialUBO),
                                 per_material_ubo_[i], per_material_ubo_mem_[i]);
+        CreateUBOBufferInternal(device, physical_device, sizeof(VulkanPointLightsUBO),
+                                per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
+        CreateUBOBufferInternal(device, physical_device, sizeof(VulkanSpotLightsUBO),
+                                per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
 
     // --- 白色纹理 ---
@@ -246,6 +250,8 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
         destroy_buffer(per_frame_ubo_[i], per_frame_ubo_mem_[i]);
         destroy_buffer(per_scene_ubo_[i], per_scene_ubo_mem_[i]);
         destroy_buffer(per_material_ubo_[i], per_material_ubo_mem_[i]);
+        destroy_buffer(per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
+        destroy_buffer(per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
 
     if (white_texture_handle_ != 0) {
@@ -312,6 +318,45 @@ void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
                   0, sizeof(VulkanPerMaterialUBO), &ubo);
 }
 
+void VulkanDrawExecutor::UpdatePointSpotLightUBOs(const MeshDrawItem& item) {
+    uint32_t fi = current_frame_index_;
+
+    VulkanPointLightsUBO pl_ubo{};
+    pl_ubo.u_point_light_count = static_cast<int>(
+        (std::min)(item.point_lights.size(), (size_t)4));
+    for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
+        const auto& src = item.point_lights[i];
+        auto& dst = pl_ubo.lights[i];
+        dst.color        = src.color;
+        dst.intensity    = src.intensity;
+        dst.position     = src.position;
+        dst.radius       = src.radius;
+        dst.cast_shadow  = src.cast_shadow ? 1 : 0;
+        dst.shadow_index = src.shadow_index;
+    }
+    WriteToBuffer(context_->device(), per_point_lights_ubo_mem_[fi],
+                  0, sizeof(pl_ubo), &pl_ubo);
+
+    VulkanSpotLightsUBO sl_ubo{};
+    sl_ubo.u_spot_light_count = static_cast<int>(
+        (std::min)(item.spot_lights.size(), (size_t)4));
+    for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
+        const auto& src = item.spot_lights[i];
+        auto& dst = sl_ubo.lights[i];
+        dst.color        = src.color;
+        dst.intensity    = src.intensity;
+        dst.position     = src.position;
+        dst.radius       = src.radius;
+        dst.direction    = src.direction;
+        dst.inner_cone   = src.inner_cone;
+        dst.outer_cone   = src.outer_cone;
+        dst.cast_shadow  = src.cast_shadow ? 1 : 0;
+        dst.shadow_index = src.shadow_index;
+    }
+    WriteToBuffer(context_->device(), per_spot_lights_ubo_mem_[fi],
+                  0, sizeof(sl_ubo), &sl_ubo);
+}
+
 // ============================================================================
 // DescriptorSet 分配与更新
 // ============================================================================
@@ -325,16 +370,17 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
 
-    // 程序应有 3 个 set layout（Set 0=PerFrame, Set 1=PerScene, Set 2=PerMaterial+Samplers）
+    // 程序至少需要 3 个 set layout（Set 0=PerFrame, Set 1=PerScene+Lights, Set 2=PerMaterial+Samplers， Set 3=点光阴影）
     if (program->descriptor_set_layouts.size() < 3) {
         DEBUG_LOG_WARN("Mesh shader program has insufficient descriptor set layouts ({})",
                        program->descriptor_set_layouts.size());
         return VK_NULL_HANDLE;
     }
 
-    // 为每个 set 分配一个 DescriptorSet
-    VkDescriptorSet sets[3] = {};
-    for (int s = 0; s < 3; ++s) {
+    // 为每个 set 分配一个 DescriptorSet（最多 4 个）
+    VkDescriptorSet sets[4] = {};
+    const int set_count = static_cast<int>(program->descriptor_set_layouts.size());
+    for (int s = 0; s < set_count; ++s) {
         sets[s] = resource_mgr.AllocateDescriptorSet(program->descriptor_set_layouts[s]);
         if (sets[s] == VK_NULL_HANDLE) {
             DEBUG_LOG_WARN("Failed to allocate descriptor set for set {}", s);
@@ -360,7 +406,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
 
-    // --- Set 1: PerScene UBO ---
+    // --- Set 1: PerScene UBO (binding 0) ---
     {
         VkDescriptorBufferInfo buf_info{};
         buf_info.buffer = per_scene_ubo_[fi];
@@ -375,6 +421,40 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write.pBufferInfo = &buf_info;
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+
+    // --- Set 1 binding 1: PointLights UBO ---
+    {
+        VkDescriptorBufferInfo pl_buf{};
+        pl_buf.buffer = per_point_lights_ubo_[fi];
+        pl_buf.offset = 0;
+        pl_buf.range  = sizeof(VulkanPointLightsUBO);
+
+        VkWriteDescriptorSet pl_write{};
+        pl_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        pl_write.dstSet          = sets[1];
+        pl_write.dstBinding      = 1;
+        pl_write.descriptorCount = 1;
+        pl_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pl_write.pBufferInfo     = &pl_buf;
+        vkUpdateDescriptorSets(device, 1, &pl_write, 0, nullptr);
+    }
+
+    // --- Set 1 binding 2: SpotLights UBO ---
+    {
+        VkDescriptorBufferInfo sl_buf{};
+        sl_buf.buffer = per_spot_lights_ubo_[fi];
+        sl_buf.offset = 0;
+        sl_buf.range  = sizeof(VulkanSpotLightsUBO);
+
+        VkWriteDescriptorSet sl_write{};
+        sl_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        sl_write.dstSet          = sets[1];
+        sl_write.dstBinding      = 2;
+        sl_write.descriptorCount = 1;
+        sl_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        sl_write.pBufferInfo     = &sl_buf;
+        vkUpdateDescriptorSets(device, 1, &sl_write, 0, nullptr);
     }
 
     // --- Set 2: PerMaterial UBO + 采样器 ---
@@ -474,6 +554,40 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         }
         if (has_shadow) all_writes.push_back(shadow_write);
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
+    }
+
+    // --- Set 3 binding 0: 点光源立方体阴影贴图 (u_point_shadow_maps[4]) ---
+    if (set_count >= 4 && sets[3] != VK_NULL_HANDLE) {
+        VkDescriptorImageInfo point_shadow_infos[4] = {};
+        VkWriteDescriptorSet  point_shadow_write{};
+        bool has_point_shadow = false;
+        {
+            VkSampler lin_sampler = resource_mgr.default_sampler();
+            for (int i = 0; i < 4; ++i) {
+                unsigned int ps_handle = global_point_shadow_map_[i];
+                const VulkanTexture* ps_tex = (ps_handle != 0)
+                    ? resource_mgr.GetTexture(ps_handle) : nullptr;
+                VkImageView view = ps_tex ? ps_tex->image_view : VK_NULL_HANDLE;
+                if (view == VK_NULL_HANDLE) {
+                    const VulkanTexture* white = resource_mgr.GetTexture(white_texture_handle_);
+                    view = white ? white->image_view : VK_NULL_HANDLE;
+                }
+                point_shadow_infos[i].sampler     = lin_sampler;
+                point_shadow_infos[i].imageView   = view;
+                point_shadow_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+            if (point_shadow_infos[0].imageView != VK_NULL_HANDLE) {
+                point_shadow_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                point_shadow_write.dstSet          = sets[3];
+                point_shadow_write.dstBinding      = 0;
+                point_shadow_write.dstArrayElement = 0;
+                point_shadow_write.descriptorCount = 4;
+                point_shadow_write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                point_shadow_write.pImageInfo      = point_shadow_infos;
+                has_point_shadow = true;
+            }
+        }
+        if (has_point_shadow) vkUpdateDescriptorSets(device, 1, &point_shadow_write, 0, nullptr);
     }
 
     // 绑定所有 DescriptorSet
@@ -859,6 +973,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
         UpdatePerFrameUBO(view, projection, {});
         UpdatePerSceneUBO(item);
         UpdatePerMaterialUBO(item);
+        UpdatePointSpotLightUBOs(item);
 
         // 分配并绑定 DescriptorSet
         AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr);

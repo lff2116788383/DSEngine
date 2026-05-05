@@ -373,4 +373,34 @@ TEST(ComparisonSamplerTest, LESS_EQUAL比较函数值正确) {
     EXPECT_EQ(static_cast<int>(D3D11_COMPARISON_LESS_EQUAL), 4);
 }
 
+// ============================================================
+// Phase J: DX11 PointLight/SpotLight CB 结构体验证
+// ============================================================
+
+TEST(PointLightCBTest, J3_PointLightsCB大小16B对齐) {
+    EXPECT_EQ(sizeof(DX11PointLightsCB) % 16u, 0u);
+}
+
+TEST(PointLightCBTest, J3_PointLightEntry大小正确) {
+    EXPECT_EQ(sizeof(DX11PointLightEntry), 48u);
+}
+
+TEST(PointLightCBTest, J3_默认count为零) {
+    DX11PointLightsCB cb{};
+    EXPECT_EQ(cb.count, 0);
+}
+
+TEST(SpotLightCBTest, J3_SpotLightsCB大小16B对齐) {
+    EXPECT_EQ(sizeof(DX11SpotLightsCB) % 16u, 0u);
+}
+
+TEST(SpotLightCBTest, J3_SpotLightEntry大小正确) {
+    EXPECT_EQ(sizeof(DX11SpotLightEntry), 64u);
+}
+
+TEST(SpotLightCBTest, J3_默认count为零) {
+    DX11SpotLightsCB cb{};
+    EXPECT_EQ(cb.count, 0);
+}
+
 #endif // DSE_ENABLE_D3D11

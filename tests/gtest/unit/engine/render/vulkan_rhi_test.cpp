@@ -553,6 +553,36 @@ TEST(DescriptorBindingInfoTest, 相等比较) {
     EXPECT_FALSE(a == b);
 }
 
+// ============================================================
+// Phase J: VulkanPointLights/SpotLights UBO 结构体验证
+// ============================================================
+
+TEST(VulkanPointLightUBOTest, J1_结构体大小16B对齐) {
+    EXPECT_EQ(sizeof(VulkanPointLightsUBO) % 16u, 0u);
+}
+
+TEST(VulkanPointLightUBOTest, J1_Entry大小正确) {
+    EXPECT_EQ(sizeof(VulkanPointLightsUBO::Entry), 48u);
+}
+
+TEST(VulkanPointLightUBOTest, J1_默认count为零) {
+    VulkanPointLightsUBO ubo{};
+    EXPECT_EQ(ubo.u_point_light_count, 0);
+}
+
+TEST(VulkanSpotLightsUBOTest, J1_结构体大小16B对齐) {
+    EXPECT_EQ(sizeof(VulkanSpotLightsUBO) % 16u, 0u);
+}
+
+TEST(VulkanSpotLightsUBOTest, J1_Entry大小正确) {
+    EXPECT_EQ(sizeof(VulkanSpotLightsUBO::Entry), 64u);
+}
+
+TEST(VulkanSpotLightsUBOTest, J1_默认count为零) {
+    VulkanSpotLightsUBO ubo{};
+    EXPECT_EQ(ubo.u_spot_light_count, 0);
+}
+
 #endif // DSE_ENABLE_VULKAN
 
 // ============================================================

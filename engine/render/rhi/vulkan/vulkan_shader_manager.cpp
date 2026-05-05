@@ -246,8 +246,10 @@ bool VulkanShaderManager::ReflectSpirv(
     out_reflection.bindings = {
         // Set 0: PerFrame
         {0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1},
-        // Set 1: PerScene
+        // Set 1: PerScene + PointLights + SpotLights
         {1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1},
+        {1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // PointLights
+        {1, 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // SpotLights
         // Set 2: PerMaterial + 纹理
         {2, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1},
         {2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // albedo
@@ -258,6 +260,8 @@ bool VulkanShaderManager::ReflectSpirv(
         // 阴影贴图
         {2, 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3}, // shadow_map[3]
         {2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // spot_shadow_map[4]
+        // Set 3: 点光源立方体阴影贴图（手动比较深度）
+        {3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // u_point_shadow_maps[4]
     };
 
     out_reflection.has_push_constant = true;
