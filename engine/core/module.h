@@ -8,7 +8,18 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 
+#include <memory>
+#include <vector>
+
 class AssetManager;
+
+namespace dse {
+namespace render {
+class RenderGraph;
+class IRenderPass;
+struct RenderPassContext;
+} // namespace render
+} // namespace dse
 
 namespace dse {
 namespace core {
@@ -63,6 +74,20 @@ public:
      * 与 Scene Pass 分离以保证 UI 不被深度测试影响
      */
     virtual void OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {}
+
+    /**
+     * @brief 模块向 RenderGraph 注册自定义渲染 Pass
+     *
+     * 引擎在 BuildRenderGraph 时调用此方法，模块可创建自己的 IRenderPass 实例
+     * 并添加到 out_passes。引擎将自动调用 Setup() 和管理生命周期。
+     * @param graph 当前帧的渲染图
+     * @param ctx 共享渲染上下文
+     * @param out_passes 模块创建的 Pass 实例输出容器
+     */
+    virtual void RegisterRenderPasses(
+        dse::render::RenderGraph& graph,
+        dse::render::RenderPassContext& ctx,
+        std::vector<std::unique_ptr<dse::render::IRenderPass>>& out_passes) {}
 
     /**
      * @brief 模块关闭，释放资源

@@ -77,6 +77,12 @@ struct RenderTargetDesc {
     bool has_depth = false;
     bool generate_mipmaps = false;  ///< Bloom Downsample 需要 mipmap
     bool cube_map = false;
+
+    bool operator==(const RenderTargetDesc& o) const {
+        return width == o.width && height == o.height &&
+               has_color == o.has_color && has_depth == o.has_depth &&
+               generate_mipmaps == o.generate_mipmaps && cube_map == o.cube_map;
+    }
 };
 
 /// 管线状态描述符（RHI 无关）

@@ -36,8 +36,11 @@
 #include <unordered_set>
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
+#include "engine/render/rhi/rhi_types.h"
 
 class CommandBuffer;
+class RhiDevice;
 
 namespace dse {
 namespace render {
@@ -81,10 +84,27 @@ public:
     RenderGraph(const RenderGraph&) = delete;
     RenderGraph& operator=(const RenderGraph&) = delete;
 
-    /// 声明一个渲染资源
+    /// 声明一个纯逻辑渲染资源（不管理物理 RT，向后兼容）
     /// @param name 资源名称（如 "scene_color", "shadow_depth"）
     /// @return 资源句柄
     RenderResourceHandle DeclareResource(const std::string& name);
+
+    /// 声明一个图内管理的瞬态资源，Compile 时自动分配/释放 RT
+    /// @param name 资源名称
+    /// @param desc RT 描述符
+    /// @return 资源句柄
+    RenderResourceHandle DeclareTransient(const std::string& name, const RenderTargetDesc& desc);
+
+    /// 导入一个外部已分配的 RT（如 default framebuffer、编辑器共享纹理）
+    /// @param name 资源名称
+    /// @param rt_handle 已分配的 RT 句柄
+    /// @return 资源句柄
+    RenderResourceHandle ImportResource(const std::string& name, unsigned int rt_handle);
+
+    /// 查询资源对应的物理 RT 句柄（Pass lambda 内使用）
+    /// @param resource 资源句柄
+    /// @return RT handle，无物理绑定时返回 0
+    unsigned int GetResourceRT(RenderResourceHandle resource) const;
 
     /// 添加一个渲染 Pass（返回 PassBuilder 风格的引用以支持链式调用）
     /// @param name Pass 名称
@@ -104,7 +124,10 @@ public:
     /// @param resource 必须保留的外部输出资源
     void MarkOutput(RenderResourceHandle resource);
 
-    /// 编译渲染图（拓扑排序 + 无用 Pass 剔除）
+    /// 设置 RHI 设备（用于 Compile 时自动分配瞬态 RT）
+    void SetRhiDevice(RhiDevice* device);
+
+    /// 编译渲染图（拓扑排序 + 无用 Pass 剔除 + 瞬态 RT 分配）
     /// @return true 编译成功，false 存在循环依赖
     bool Compile();
 
@@ -127,10 +150,22 @@ public:
     bool is_compiled() const { return is_compiled_; }
 
 private:
+    /// 资源类型
+    enum class ResourceType : uint8_t {
+        Logical,    ///< 纯逻辑（无物理 RT，向后兼容）
+        Transient,  ///< 图内管理（Compile 时分配，Reset 时释放）
+        Imported    ///< 外部导入（图不管理生命周期）
+    };
+
     /// 内部资源节点
     struct ResourceNode {
         uint32_t id = 0;
         std::string name;
+        ResourceType type = ResourceType::Logical;
+        RenderTargetDesc desc{};        ///< Transient 类型的 RT 描述
+        unsigned int rt_handle = 0;      ///< 实际分配的 GPU RT（Transient/Imported）
+        int first_use = -1;             ///< 生命周期：编译顺序中的首次使用位置
+        int last_use = -1;              ///< 生命周期：编译顺序中的最后使用位置
         /// 写入此资源的 Pass（最后一个写入者，用于依赖推断）
         std::vector<RenderPassHandle> writers;
         /// 读取此资源的 Pass 列表
@@ -165,6 +200,12 @@ private:
 
     /// 编译后的执行顺序（pass id 列表）
     std::vector<uint32_t> compiled_order_;
+
+    /// pass id → passes_ 索引映射（Compile 时构建，Execute 时 O(1) 查找）
+    std::unordered_map<uint32_t, size_t> pass_id_to_idx_;
+
+    /// RHI 设备指针（用于 Transient RT 分配，可为 null）
+    RhiDevice* rhi_device_ = nullptr;
 
     bool is_compiled_ = false;
 };

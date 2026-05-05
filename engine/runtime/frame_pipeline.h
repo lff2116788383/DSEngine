@@ -42,6 +42,9 @@
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/business_runtime_bridge.h"
 #include "engine/render/render_graph.h"
+#include "engine/render/passes/render_pass_interface.h"
+#include "engine/render/passes/render_pass_context.h"
+#include "engine/render/passes/builtin_passes.h"
 
 class AssetManager;
 
@@ -249,6 +252,12 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
+
+    /// 渲染 Pass 共享上下文
+    dse::render::RenderPassContext render_pass_context_;
+
+    /// 已注册的渲染 Pass（按注册顺序，DAG 排序由 RenderGraph 决定）
+    std::vector<std::unique_ptr<dse::render::IRenderPass>> registered_passes_;
 };
 
 #endif

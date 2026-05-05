@@ -26,11 +26,71 @@ RenderResourceHandle RenderGraph::DeclareResource(const std::string& name) {
     ResourceNode node;
     node.id = id;
     node.name = name;
+    node.type = ResourceType::Logical;
     resources_.push_back(std::move(node));
 
     RenderResourceHandle handle{id};
     resource_by_name_[name] = handle;
     return handle;
+}
+
+RenderResourceHandle RenderGraph::DeclareTransient(const std::string& name, const RenderTargetDesc& desc) {
+    auto it = resource_by_name_.find(name);
+    if (it != resource_by_name_.end()) {
+        return it->second;
+    }
+
+    uint32_t id = next_resource_id_++;
+    ResourceNode node;
+    node.id = id;
+    node.name = name;
+    node.type = ResourceType::Transient;
+    node.desc = desc;
+    resources_.push_back(std::move(node));
+
+    RenderResourceHandle handle{id};
+    resource_by_name_[name] = handle;
+    return handle;
+}
+
+RenderResourceHandle RenderGraph::ImportResource(const std::string& name, unsigned int rt_handle) {
+    auto it = resource_by_name_.find(name);
+    if (it != resource_by_name_.end()) {
+        // Update the handle if re-importing
+        for (auto& res : resources_) {
+            if (res.id == it->second.id) {
+                res.rt_handle = rt_handle;
+                res.type = ResourceType::Imported;
+            }
+        }
+        return it->second;
+    }
+
+    uint32_t id = next_resource_id_++;
+    ResourceNode node;
+    node.id = id;
+    node.name = name;
+    node.type = ResourceType::Imported;
+    node.rt_handle = rt_handle;
+    resources_.push_back(std::move(node));
+
+    RenderResourceHandle handle{id};
+    resource_by_name_[name] = handle;
+    return handle;
+}
+
+unsigned int RenderGraph::GetResourceRT(RenderResourceHandle resource) const {
+    if (!resource.is_valid()) return 0;
+    for (const auto& res : resources_) {
+        if (res.id == resource.id) {
+            return res.rt_handle;
+        }
+    }
+    return 0;
+}
+
+void RenderGraph::SetRhiDevice(RhiDevice* device) {
+    rhi_device_ = device;
 }
 
 // ============================================================
@@ -228,16 +288,84 @@ bool RenderGraph::Compile() {
         }
     }
 
-    // ---- 4. 标记被剔除的 Pass 并生成编译顺序 ----
+    // ---- 4. 构建 id→index 映射（Execute 阶段 O(1) 查找） ----
+    pass_id_to_idx_.clear();
+    pass_id_to_idx_.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        pass_id_to_idx_[passes_[i].id] = i;
+    }
+
+    // ---- 5. 标记被剔除的 Pass 并生成编译顺序 ----
     for (auto& p : passes_) {
         p.is_culled = (reachable.find(p.id) == reachable.end());
     }
 
     for (uint32_t pass_id : topo_order) {
-        for (const auto& p : passes_) {
-            if (p.id == pass_id && !p.is_culled) {
-                compiled_order_.push_back(pass_id);
-                break;
+        auto it = pass_id_to_idx_.find(pass_id);
+        if (it != pass_id_to_idx_.end() && !passes_[it->second].is_culled) {
+            compiled_order_.push_back(pass_id);
+        }
+    }
+
+    // ---- 6. 生命周期分析：计算每个资源的 [first_use, last_use] ----
+    for (auto& res : resources_) {
+        res.first_use = -1;
+        res.last_use = -1;
+    }
+    for (int order_idx = 0; order_idx < static_cast<int>(compiled_order_.size()); ++order_idx) {
+        uint32_t pass_id = compiled_order_[order_idx];
+        auto pit = pass_id_to_idx_.find(pass_id);
+        if (pit == pass_id_to_idx_.end()) continue;
+        const auto& p = passes_[pit->second];
+        auto update_lifetime = [&](const RenderResourceHandle& rh) {
+            for (auto& res : resources_) {
+                if (res.id == rh.id) {
+                    if (res.first_use < 0) res.first_use = order_idx;
+                    res.last_use = order_idx;
+                    break;
+                }
+            }
+        };
+        for (const auto& r : p.reads)  update_lifetime(r);
+        for (const auto& w : p.writes) update_lifetime(w);
+    }
+
+    // ---- 7. 为 Transient 资源分配物理 RT（带别名复用） ----
+    if (rhi_device_) {
+        // 按 first_use 排序的 transient 资源索引
+        std::vector<size_t> transient_indices;
+        for (size_t i = 0; i < resources_.size(); ++i) {
+            if (resources_[i].type == ResourceType::Transient && resources_[i].first_use >= 0) {
+                transient_indices.push_back(i);
+            }
+        }
+        std::sort(transient_indices.begin(), transient_indices.end(),
+            [this](size_t a, size_t b) { return resources_[a].first_use < resources_[b].first_use; });
+
+        // 空闲池：{rt_handle, desc, available_after_order_idx}
+        struct FreeSlot {
+            unsigned int rt_handle;
+            RenderTargetDesc desc;
+            int free_after;
+        };
+        std::vector<FreeSlot> free_pool;
+
+        for (size_t idx : transient_indices) {
+            auto& res = resources_[idx];
+            // 尝试从空闲池中找到 desc 匹配且已释放的 RT
+            bool reused = false;
+            for (auto it = free_pool.begin(); it != free_pool.end(); ++it) {
+                if (it->free_after < res.first_use && it->desc == res.desc) {
+                    res.rt_handle = it->rt_handle;
+                    // 更新此 slot 的释放时间
+                    it->free_after = res.last_use;
+                    reused = true;
+                    break;
+                }
+            }
+            if (!reused) {
+                res.rt_handle = rhi_device_->CreateRenderTarget(res.desc);
+                free_pool.push_back({res.rt_handle, res.desc, res.last_use});
             }
         }
     }
@@ -282,10 +410,11 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
     }
 
     for (uint32_t pass_id : compiled_order_) {
-        for (const auto& p : passes_) {
-            if (p.id == pass_id && p.execute) {
+        auto it = pass_id_to_idx_.find(pass_id);
+        if (it != pass_id_to_idx_.end()) {
+            auto& p = passes_[it->second];
+            if (p.execute) {
                 p.execute(cmd_buffer);
-                break;
             }
         }
     }
@@ -304,11 +433,14 @@ size_t RenderGraph::culled_pass_count() const {
 }
 
 void RenderGraph::Reset() {
+    // Transient RT 由图管理，但释放需要 RHI，此处仅清空记录。
+    // 实际 GPU 资源由 RhiDevice 在 Shutdown 时统一回收。
     passes_.clear();
     resources_.clear();
     resource_by_name_.clear();
     output_resources_.clear();
     compiled_order_.clear();
+    pass_id_to_idx_.clear();
     next_resource_id_ = 1;
     next_pass_id_ = 1;
     is_compiled_ = false;

@@ -32,7 +32,7 @@
 
 具体方向：
 1. **Vulkan RHI 后端** — 新增 `VulkanRhiDevice`，复用 `CommandBuffer` 抽象。这是引擎从"能跑"到"能上生产"的关键分水岭
-2. **RenderGraph ↔ FramePipeline 深度整合** — 当前 `frame_pipeline.cpp` 有 1000+ 行，把硬编码的 pass 顺序迁移到 RenderGraph DAG 驱动，实现自动剔除和 barrier
+2. ✅ **RenderGraph ↔ FramePipeline 深度整合** — 硬编码 pass 顺序已迁移到 RenderGraph DAG 驱动（5 阶段全部完成）
 3. **多线程命令提交** — `CommandBuffer` 已有前端录制/后端提交分离，但尚未并行化。利用 `JobSystem` 做 parallel command recording
 
 ### ✅ P0：资产管线异步化 + 热重载（已完成）
@@ -161,6 +161,58 @@
 | `engine/runtime/frame_pipeline.cpp` | 集成 `PumpHotReloads()` |
 | `tests/gtest/unit/engine/assets/asset_pipeline_async_test.cpp` | 新增 17 个测试 |
 | `tests/gtest/unit/engine/assets/asset_manager_test.cpp` | 修复 FakeRhiDevice 缺失虚函数 |
+
+---
+
+## 当前完成：RenderGraph ↔ FramePipeline 深度整合
+
+> 状态：已完成（5 阶段全部完成）
+
+### 实施阶段
+
+1. ✅ **Phase 1: 依赖完整性 + Execute 效率优化**
+   - `scene_pass` 补充 `PassRead(prez_depth)` 确保 PreZ 在拓扑排序中先于 Scene
+   - `Execute()` 改用 `pass_id → index` 哈希表，从 O(n²) 降至 O(n)
+   - Bloom mip chain 拆分为 5 个独立资源声明（`bloom_mip0`~`bloom_mip4`），支持更精准的 Pass 剔除
+
+2. ✅ **Phase 2: RenderGraphResource 物理绑定**
+   - `ResourceNode` 扩展 `ResourceType`（Logical / Transient / Imported）
+   - 新增 `DeclareTransient(name, RenderTargetDesc)` — 图内管理的瞬态 RT，Compile 时自动分配
+   - 新增 `ImportResource(name, rt_handle)` — 导入外部已分配 RT（如 default framebuffer）
+   - 新增 `GetResourceRT(handle)` — Pass lambda 内查询物理 RT
+   - 新增 `SetRhiDevice(RhiDevice*)` — 注入 RHI 设备供 Transient RT 分配
+   - Compile 阶段加入生命周期分析（`first_use` / `last_use`）
+
+3. ✅ **Phase 3: Pass 提取为独立 IRenderPass 类**
+   - 定义 `IRenderPass` 接口：`Setup(RenderGraph&)` + `Execute(CommandBuffer&)` + `GetName()`
+   - 定义 `RenderPassContext` 共享上下文：携带 World/RHI/RT/PipelineState/Module 指针及子系统回调
+   - 9 个内置 Pass 拆分为独立类：`PreZPass`, `CSMShadowPass`, `SpotShadowPass`, `PointShadowPass`, `ForwardScenePass`, `BloomPass`, `UIPass`, `CompositePass`, `PresentPass`
+   - `BuildRenderGraphInternal()` 从 ~450 行内联 lambda 缩减为 ~80 行注册 + Setup 循环
+
+4. ✅ **Phase 4: 模块动态 Pass 注册**
+   - `IModule` 新增 `RegisterRenderPasses(RenderGraph&, RenderPassContext&, out_passes)` 虚方法
+   - `BuildRenderGraphInternal()` 在内置 Pass 注册后调用每个模块的 `RegisterRenderPasses()`
+   - 模块创建的 Pass 统一由引擎管理生命周期和 Setup/Execute 调度
+
+5. ✅ **Phase 5: Transient RT 别名复用**
+   - `RenderTargetDesc` 新增 `operator==` 用于描述符匹配
+   - Compile 阶段按 `first_use` 排序 Transient 资源，通过空闲池进行 desc 匹配的 RT 别名复用
+   - 生命周期无重叠且 desc 相同的 Transient 资源共享同一物理 RT，减少显存占用
+
+### 新增/变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/render/render_graph.h` | 扩展 ResourceType / DeclareTransient / ImportResource / GetResourceRT / SetRhiDevice / lifetime 字段 / pass_id_to_idx_ |
+| `engine/render/render_graph.cpp` | 新增资源声明方法 / 生命周期分析 / Transient RT 别名分配 / O(1) Execute |
+| `engine/render/rhi/rhi_types.h` | RenderTargetDesc 新增 `operator==` |
+| `engine/render/passes/render_pass_interface.h` | IRenderPass 抽象基类 |
+| `engine/render/passes/render_pass_context.h` | RenderPassContext 共享上下文 |
+| `engine/render/passes/builtin_passes.h` | 9 个内置 Pass 类声明 |
+| `engine/render/passes/builtin_passes.cpp` | 9 个内置 Pass 实现（从 frame_pipeline.cpp 提取） |
+| `engine/core/module.h` | IModule 新增 RegisterRenderPasses() |
+| `engine/runtime/frame_pipeline.h` | 新增 render_pass_context_ / registered_passes_ 成员 |
+| `engine/runtime/frame_pipeline.cpp` | BuildRenderGraphInternal 重构为 Pass 注册 + Setup 循环 |
 
 ---
 

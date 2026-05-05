@@ -612,428 +612,81 @@ void FramePipeline::BuildRenderGraph() {
 }
 
 void FramePipeline::BuildRenderGraphInternal() {
-    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_dag_.Reset();
+    registered_passes_.clear();
 
-    // ---- 声明渲染资源 ----
-    auto prez_depth    = render_graph_dag_.DeclareResource("prez_depth");
-    auto shadow_depth  = render_graph_dag_.DeclareResource("shadow_depth");
-    auto spot_shadow   = render_graph_dag_.DeclareResource("spot_shadow");
-    auto point_shadow  = render_graph_dag_.DeclareResource("point_shadow");
-    auto scene_color   = render_graph_dag_.DeclareResource("scene_color");
-    auto scene_depth   = render_graph_dag_.DeclareResource("scene_depth");
-    auto ui_color      = render_graph_dag_.DeclareResource("ui_color");
-    auto bloom_extract = render_graph_dag_.DeclareResource("bloom_extract");
-    auto bloom_mip0    = render_graph_dag_.DeclareResource("bloom_mip0");
-    auto main_color    = render_graph_dag_.DeclareResource("main_color");
+    // ---- 填充 RenderPassContext ----
+    render_pass_context_.world = runtime_context_.world;
+    render_pass_context_.asset_manager = runtime_context_.asset_manager;
+    render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
+    render_pass_context_.editor_mode = runtime_context_.editor_mode;
 
-    // 标记外部输出：最终合成和场景颜色（编辑器需要）
+    render_pass_context_.pipeline_states.sprite    = render_resources_.sprite_pipeline_state;
+    render_pass_context_.pipeline_states.mesh      = render_resources_.mesh_pipeline_state;
+    render_pass_context_.pipeline_states.prez      = render_resources_.prez_pipeline_state;
+    render_pass_context_.pipeline_states.shadow    = render_resources_.shadow_pipeline_state;
+    render_pass_context_.pipeline_states.composite = render_resources_.composite_pipeline_state;
+
+    render_pass_context_.render_targets.main     = render_resources_.main_render_target;
+    render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
+    render_pass_context_.render_targets.ui       = render_resources_.ui_render_target;
+    render_pass_context_.render_targets.prez     = render_resources_.prez_render_target;
+    for (int i = 0; i < CSM_CASCADES; ++i) {
+        render_pass_context_.render_targets.shadow[i] = render_resources_.shadow_render_target[i];
+    }
+    for (int i = 0; i < 4; ++i) {
+        render_pass_context_.render_targets.spot_shadow[i]  = render_resources_.spot_shadow_render_target[i];
+        render_pass_context_.render_targets.point_shadow[i] = render_resources_.point_shadow_render_target[i];
+    }
+    render_pass_context_.render_targets.bloom_extract = render_resources_.pp_bloom_extract_rt;
+    render_pass_context_.render_targets.bloom_mips    = render_resources_.pp_bloom_mip_rts;
+
+    render_pass_context_.modules.clear();
+    for (auto& mod : modules_) {
+        if (mod.instance) {
+            render_pass_context_.modules.push_back({mod.instance});
+        }
+    }
+
+    render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
+        gameplay2d_module_.OnRenderScene(world, cmd);
+    };
+    render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h) {
+        gameplay2d_module_.OnRenderUI(world, cmd, w, h);
+    };
+    render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
+        mesh_render_system_.Render(world, cmd);
+    };
+
+    // ---- 声明外部输出 ----
+    auto main_color  = render_graph_dag_.DeclareResource("main_color");
+    auto scene_color = render_graph_dag_.DeclareResource("scene_color");
     render_graph_dag_.MarkOutput(main_color);
     render_graph_dag_.MarkOutput(scene_color);
 
-    // ---- 0. PreZ Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("prez_pass");
-        render_graph_dag_.PassWrite(pass, prez_depth);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.BeginRenderPass({render_resources_.prez_render_target, glm::vec4(0.0f), true});
-            auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
-            entt::entity selected_camera3d = entt::null;
-            int selected_priority3d = std::numeric_limits<int>::min();
-            for (auto entity : camera3d_view) {
-                auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-                if (camera.enabled && camera.priority > selected_priority3d) {
-                    selected_camera3d = entity;
-                    selected_priority3d = camera.priority;
-                }
-            }
-            if (selected_camera3d != entt::null) {
-                auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-                glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
-                                                        static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                        camera.near_clip, camera.far_clip);
-                glm::mat4 view = glm::mat4(1.0f);
-                if (runtime_context_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
-                    auto& transform = runtime_context_.world->registry().get<TransformComponent>(selected_camera3d);
-                    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                    view = glm::lookAt(transform.position, transform.position + front, up);
-                }
-                cmd_buffer.SetCamera(view, projection);
-                cmd_buffer.SetPipelineState(render_resources_.prez_pipeline_state);
-                
-                for (auto& mod : modules_) {
-                    if (mod.instance) {
-                        mod.instance->OnRenderPreZ(*runtime_context_.world, cmd_buffer);
-                    }
-                }
-            }
-            cmd_buffer.EndRenderPass();
-        });
-    }
-
-    // ---- 1. Shadow Map Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("shadow_pass");
-        render_graph_dag_.PassWrite(pass, shadow_depth);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            auto light_view = runtime_context_.world->registry().view<dse::DirectionalLight3DComponent>();
-            if (light_view.begin() == light_view.end()) return;
-            auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
-            if (!light.enabled || !light.cast_shadow) return;
-
-            std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
-            std::vector<float> cascade_splits(CSM_CASCADES);
-
-            for (int i = 0; i < CSM_CASCADES; ++i) {
-                cmd_buffer.BeginRenderPass({render_resources_.shadow_render_target[i], glm::vec4(1.0f), true});
-                
-                float size = 20.0f * std::pow(2.0f, static_cast<float>(i));
-                glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, 200.0f);
-                glm::vec3 light_pos = -glm::normalize(light.direction) * 100.0f;
-                glm::mat4 light_view_mat = glm::lookAt(light_pos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                
-                light_space_matrices[i] = light_proj * light_view_mat;
-                cascade_splits[i] = light.cascade_splits[i];
-
-                cmd_buffer.SetCamera(light_view_mat, light_proj);
-                cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
-                
-                for (auto& mod : modules_) {
-                    if (mod.instance) {
-                        mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, i, light_view_mat, light_proj);
-                    }
-                }
-                
-                cmd_buffer.EndRenderPass();
-            }
-
-            cmd_buffer.SetGlobalMat4Array("u_light_space_matrices", light_space_matrices);
-            cmd_buffer.SetGlobalFloatArray("u_cascade_splits", cascade_splits);
-
-            for (int i = 0; i < CSM_CASCADES; ++i) {
-                runtime_context_.rhi_device->SetGlobalShadowMap(i, runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.shadow_render_target[i]));
-            }
-        });
-    }
-
-    // ---- Spot Shadow Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("spot_shadow_pass");
-        render_graph_dag_.PassWrite(pass, spot_shadow);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            auto spot_light_view = runtime_context_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
-            std::vector<glm::mat4> spot_light_space_matrices;
-            spot_light_space_matrices.reserve(4);
-            int shadow_slot = 0;
-            for (auto entity : spot_light_view) {
-                auto& light = spot_light_view.get<dse::SpotLightComponent>(entity);
-                if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || render_resources_.spot_shadow_render_target[shadow_slot] == 0) {
-                    continue;
-                }
-
-                auto& transform = spot_light_view.get<TransformComponent>(entity);
-                const glm::vec3 forward = glm::normalize(transform.rotation * light.direction);
-                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                if (std::abs(glm::dot(forward, up)) > 0.98f) {
-                    up = glm::vec3(0.0f, 0.0f, 1.0f);
-                }
-                const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + forward, up);
-                const glm::mat4 light_proj = glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
-                cmd_buffer.BeginRenderPass({render_resources_.spot_shadow_render_target[shadow_slot], glm::vec4(1.0f), true});
-                cmd_buffer.SetCamera(light_view_mat, light_proj);
-                cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
-                for (auto& mod : modules_) {
-                    if (mod.instance) {
-                        mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, CSM_CASCADES, light_view_mat, light_proj);
-                    }
-                }
-                cmd_buffer.EndRenderPass();
-                spot_light_space_matrices.push_back(light_proj * light_view_mat);
-                runtime_context_.rhi_device->SetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.spot_shadow_render_target[shadow_slot]));
-                ++shadow_slot;
-            }
-            cmd_buffer.SetGlobalMat4Array("u_spot_light_space_matrices", spot_light_space_matrices);
-        });
-    }
-
-    // ---- Point Shadow Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("point_shadow_pass");
-        render_graph_dag_.PassWrite(pass, point_shadow);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            auto point_light_view = runtime_context_.world->registry().view<TransformComponent, dse::PointLightComponent>();
-            int shadow_slot = 0;
-            for (auto entity : point_light_view) {
-                auto& light = point_light_view.get<dse::PointLightComponent>(entity);
-                if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || render_resources_.point_shadow_render_target[shadow_slot] == 0) {
-                    continue;
-                }
-
-                auto& transform = point_light_view.get<TransformComponent>(entity);
-                const glm::mat4 light_proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
-                static const glm::vec3 face_directions[6] = {
-                    glm::vec3(1.0f, 0.0f, 0.0f),
-                    glm::vec3(-1.0f, 0.0f, 0.0f),
-                    glm::vec3(0.0f, 1.0f, 0.0f),
-                    glm::vec3(0.0f, -1.0f, 0.0f),
-                    glm::vec3(0.0f, 0.0f, 1.0f),
-                    glm::vec3(0.0f, 0.0f, -1.0f)
-                };
-                static const glm::vec3 face_ups[6] = {
-                    glm::vec3(0.0f, -1.0f, 0.0f),
-                    glm::vec3(0.0f, -1.0f, 0.0f),
-                    glm::vec3(0.0f, 0.0f, 1.0f),
-                    glm::vec3(0.0f, 0.0f, -1.0f),
-                    glm::vec3(0.0f, -1.0f, 0.0f),
-                    glm::vec3(0.0f, -1.0f, 0.0f)
-                };
-
-                for (int face = 0; face < 6; ++face) {
-                    const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + face_directions[face], face_ups[face]);
-                    cmd_buffer.BeginRenderPass({render_resources_.point_shadow_render_target[shadow_slot], glm::vec4(1.0f), true});
-                    cmd_buffer.SetCamera(light_view_mat, light_proj);
-                    cmd_buffer.SetPipelineState(render_resources_.shadow_pipeline_state);
-                    for (auto& mod : modules_) {
-                        if (mod.instance) {
-                            mod.instance->OnRenderShadow(*runtime_context_.world, cmd_buffer, CSM_CASCADES + 1 + face, light_view_mat, light_proj);
-                        }
-                    }
-                    cmd_buffer.EndRenderPass();
-                }
-
-
-                runtime_context_.rhi_device->SetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), runtime_context_.rhi_device->GetRenderTargetDepthTexture(render_resources_.point_shadow_render_target[shadow_slot]));
-                ++shadow_slot;
-            }
-        });
-    }
- 
-    // ---- 2. Main Scene Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("scene_pass");
-        render_graph_dag_.PassRead(pass, shadow_depth);
-        render_graph_dag_.PassRead(pass, spot_shadow);
-        render_graph_dag_.PassRead(pass, point_shadow);
-        render_graph_dag_.PassWrite(pass, scene_color);
-        render_graph_dag_.PassWrite(pass, scene_depth);
-        render_graph_dag_.PassSetExecute(pass, [this, &asset_manager](CommandBuffer& cmd_buffer) {
-            cmd_buffer.BeginRenderPass({render_resources_.scene_render_target, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
-            auto camera3d_view = runtime_context_.world->registry().view<dse::Camera3DComponent>();
-            entt::entity selected_camera3d = entt::null;
-            int selected_priority3d = std::numeric_limits<int>::min();
-            std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
-            for (auto entity : camera3d_view) {
-                auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-                if (!camera.enabled) {
-                    continue;
-                }
-                const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
-                if (selected_camera3d == entt::null ||
-                    camera.priority > selected_priority3d ||
-                    (camera.priority == selected_priority3d && entity_id < selected_id3d)) {
-                    selected_camera3d = entity;
-                    selected_priority3d = camera.priority;
-                    selected_id3d = entity_id;
-                }
-            }
-
-            if (selected_camera3d != entt::null) {
-                auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-                glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
-                                                        static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                        camera.near_clip, camera.far_clip);
-                glm::mat4 view = glm::mat4(1.0f);
-                if (runtime_context_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
-                    auto& transform = runtime_context_.world->registry().get<TransformComponent>(selected_camera3d);
-                    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                    view = glm::lookAt(transform.position, transform.position + front, up);
-                }
-                cmd_buffer.SetCamera(view, projection);
-                
-                auto skybox_view = runtime_context_.world->registry().view<dse::SkyboxComponent>();
-                for (auto sky_entity : skybox_view) {
-                    auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-                    if (!skybox.enabled) {
-                        continue;
-                    }
-                    if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
-                        if (auto cubemap = asset_manager.LoadCubemapDirectory(skybox.cubemap_path)) {
-                            skybox.cubemap_handle = cubemap->GetHandle();
-                        }
-                    }
-                    if (skybox.cubemap_handle != 0) {
-                        cmd_buffer.DrawSkybox(skybox.cubemap_handle);
-                    }
-                    break;
-                }
-            } else {
-                auto camera_view = runtime_context_.world->registry().view<CameraComponent>();
-                entt::entity selected_camera = entt::null;
-                int selected_priority = std::numeric_limits<int>::min();
-                std::uint32_t selected_id = std::numeric_limits<std::uint32_t>::max();
-                for (auto entity : camera_view) {
-                    auto& camera = camera_view.get<CameraComponent>(entity);
-                    if (!camera.enabled) {
-                        continue;
-                    }
-                    const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
-                    if (selected_camera == entt::null ||
-                        camera.priority > selected_priority ||
-                        (camera.priority == selected_priority && entity_id < selected_id)) {
-                        selected_camera = entity;
-                        selected_priority = camera.priority;
-                        selected_id = entity_id;
-                    }
-                }
-                if (selected_camera != entt::null) {
-                    auto& camera = camera_view.get<CameraComponent>(selected_camera);
-                    cmd_buffer.SetCamera(camera.view, camera.projection);
-                }
-            }
-            
-            cmd_buffer.SetPipelineState(render_resources_.mesh_pipeline_state);
-
-            if (modules_.empty()) {
-                mesh_render_system_.Render(*runtime_context_.world, cmd_buffer);
-            }
-            for (auto& mod : modules_) {
-                if (mod.instance) {
-                    mod.instance->OnRenderScene(*runtime_context_.world, cmd_buffer);
-                }
-            }
-            
-            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
-            gameplay2d_module_.OnRenderScene(*runtime_context_.world, cmd_buffer);
-            cmd_buffer.EndRenderPass();
-        });
-    }
-
-    // ---- Post Process Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("post_process_pass");
-        render_graph_dag_.PassRead(pass, scene_color);
-        render_graph_dag_.PassWrite(pass, bloom_extract);
-        render_graph_dag_.PassWrite(pass, bloom_mip0);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
-            bool pp_enabled = false;
-            dse::PostProcessComponent pp_config;
-            for (auto entity : pp_view) {
-                if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
-                    pp_enabled = true;
-                    pp_config = pp_view.get<dse::PostProcessComponent>(entity);
-                    break;
-                }
-            }
-
-            if (!pp_enabled || !pp_config.bloom_enabled) {
-                return;
-            }
-
-            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
-            cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_extract_rt, glm::vec4(0.0f), false});
-            const unsigned int scene_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
-            cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_extract", {pp_config.bloom_threshold});
-            cmd_buffer.EndRenderPass();
-
-            unsigned int current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_extract_rt);
-            int mip_w = Screen::width() / 2;
-            int mip_h = Screen::height() / 2;
-            for (size_t i = 0; i < render_resources_.pp_bloom_mip_rts.size(); ++i) {
-                cmd_buffer.BeginRenderPass({render_resources_.pp_bloom_mip_rts[i], glm::vec4(0.0f), false});
-                cmd_buffer.DrawPostProcess(current_src, "bloom_downsample", {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)});
-                cmd_buffer.EndRenderPass();
-                current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
-                mip_w /= 2;
-                mip_h /= 2;
-                if (mip_w < 1) mip_w = 1;
-                if (mip_h < 1) mip_h = 1;
-            }
-
-            for (int i = static_cast<int>(render_resources_.pp_bloom_mip_rts.size()) - 1; i > 0; --i) {
-                unsigned int target_rt = render_resources_.pp_bloom_mip_rts[i - 1];
-                current_src = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts[i]);
-                cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
-                cmd_buffer.DrawPostProcess(current_src, "bloom_upsample", {0.005f});
-                cmd_buffer.EndRenderPass();
-            }
-        });
-    }
-
-    // ---- UI Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("ui_pass");
-        render_graph_dag_.PassWrite(pass, ui_color);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
-            cmd_buffer.BeginRenderPass({render_resources_.ui_render_target, glm::vec4(0.0f), true});
-            gameplay2d_module_.OnRenderUI(*runtime_context_.world, cmd_buffer, Screen::width(), Screen::height());
-            cmd_buffer.EndRenderPass();
-        });
-    }
-
-    // ---- Composite Pass ----
-    {
-        auto pass = render_graph_dag_.AddPass("composite_pass");
-        render_graph_dag_.PassRead(pass, scene_color);
-        render_graph_dag_.PassRead(pass, ui_color);
-        render_graph_dag_.PassRead(pass, bloom_mip0);
-        render_graph_dag_.PassWrite(pass, main_color);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            const unsigned int scene_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
-            const unsigned int ui_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.ui_render_target);
-            
-            auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
-            bool pp_enabled = false;
-            dse::PostProcessComponent pp_config;
-            for (auto entity : pp_view) {
-                if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
-                    pp_enabled = true;
-                    pp_config = pp_view.get<dse::PostProcessComponent>(entity);
-                    break;
-                }
-            }
-
-            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
-            cmd_buffer.BeginRenderPass({render_resources_.main_render_target, glm::vec4(0.0f), true});
-
-            if (pp_enabled && pp_config.bloom_enabled) {
-                const unsigned int blur_v_color = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.pp_bloom_mip_rts.empty() ? 0 : render_resources_.pp_bloom_mip_rts[0]);
-                cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
-            } else {
-                cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
-            }
-
-            glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
-            cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
-
-            cmd_buffer.SetPipelineState(render_resources_.sprite_pipeline_state);
-            SpriteDrawItem ui_quad;
-            ui_quad.texture_handle = ui_color_tex;
-            ui_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
-            ui_quad.model = glm::scale(ui_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
-            ui_quad.color = glm::vec4(1.0f);
-            cmd_buffer.DrawBatch({ui_quad});
-            cmd_buffer.EndRenderPass();
-        });
-    }
-
-    // ---- Present Pass (仅 runtime 模式) ----
+    // ---- 注册内置 Pass ----
+    registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     if (!runtime_context_.editor_mode) {
-        auto pass = render_graph_dag_.AddPass("present_pass");
-        render_graph_dag_.PassRead(pass, main_color);
-        render_graph_dag_.PassSetExecute(pass, [this](CommandBuffer& cmd_buffer) {
-            const unsigned int main_color_tex = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
-            if (main_color_tex == 0) {
-                return;
-            }
-            cmd_buffer.SetPipelineState(render_resources_.composite_pipeline_state);
-            cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
-            cmd_buffer.DrawPostProcess(main_color_tex, "copy", {});
-            cmd_buffer.EndRenderPass();
-        });
+        registered_passes_.push_back(std::make_unique<dse::render::PresentPass>(render_pass_context_));
+    }
+
+    // ---- 模块动态注册自定义 Pass ----
+    for (auto& mod : modules_) {
+        if (mod.instance) {
+            mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
+        }
+    }
+
+    // ---- 所有 Pass 在 RenderGraph 上声明依赖 ----
+    for (auto& pass : registered_passes_) {
+        pass->Setup(render_graph_dag_);
     }
 
     // 编译 DAG（拓扑排序 + 无用 Pass 剔除）
