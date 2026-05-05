@@ -85,6 +85,7 @@ public:
     unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
     unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
     unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
+    unsigned int bloom_composite_shader_handle() const { return bloom_composite_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -110,6 +111,7 @@ private:
     unsigned int shadow_shader_handle_ = 0;
     unsigned int bloom_downsample_cs_handle_ = 0;
     unsigned int bloom_upsample_cs_handle_ = 0;
+    unsigned int bloom_composite_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

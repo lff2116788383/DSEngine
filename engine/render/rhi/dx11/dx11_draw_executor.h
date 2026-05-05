@@ -202,6 +202,9 @@ private:
     ComPtr<ID3D11Buffer> postprocess_vbo_;
     ComPtr<ID3D11Buffer> postprocess_ibo_;
 
+    // Bloom 合成参数 CB（exposure + bloomIntensity）
+    ComPtr<ID3D11Buffer> bloom_composite_params_cb_;
+
     // 粒子公告板四边形（静态 VBO+IBO）
     ComPtr<ID3D11Buffer> particle_quad_vbo_;
     ComPtr<ID3D11Buffer> particle_quad_ibo_;

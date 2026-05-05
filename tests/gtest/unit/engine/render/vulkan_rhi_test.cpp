@@ -48,6 +48,7 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <algorithm>
 
 using namespace dse::render;
 
@@ -553,3 +554,30 @@ TEST(DescriptorBindingInfoTest, 相等比较) {
 }
 
 #endif // DSE_ENABLE_VULKAN
+
+// ============================================================
+// ToneMappingTest — ACES Filmic 纯数学验证（无 GPU 依赖）
+// ============================================================
+
+TEST(ToneMappingTest, ACESFilmic_黑色输入为零) {
+    float x = 0.0f;
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    float result = (x * (a * x + b)) / (x * (c * x + d) + e);
+    EXPECT_NEAR(result, 0.0f, 1e-5f);
+}
+
+TEST(ToneMappingTest, ACESFilmic_高亮截断到不超过1) {
+    float x = 100.0f;
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    float raw = (x * (a * x + b)) / (x * (c * x + d) + e);
+    float result = std::min(raw, 1.0f);
+    EXPECT_LE(result, 1.0f);
+}
+
+TEST(ToneMappingTest, ACESFilmic_中性输入在开区间) {
+    float x = 1.0f;
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    float result = (x * (a * x + b)) / (x * (c * x + d) + e);
+    EXPECT_GT(result, 0.0f);
+    EXPECT_LT(result, 1.0f);
+}

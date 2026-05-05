@@ -704,18 +704,24 @@ void main() {
 }
 )";
 
-/// Bloom 合成
+/// Bloom 合成（ACES Filmic Tone Mapping + Gamma）
 constexpr const char* kBloomCompositeFS = R"(
 uniform sampler2D bloomBlur;
 uniform float exposure;
 uniform float bloomIntensity;
+
+vec3 AcesFilmic(vec3 x) {
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 void main() {
-    vec3 hdrColor = texture(screenTexture, vTexCoords).rgb;
+    vec3 color = texture(screenTexture, vTexCoords).rgb;
     vec3 bloomColor = texture(bloomBlur, vTexCoords).rgb;
-    hdrColor += bloomColor * bloomIntensity;
-    vec3 result = vec3(1.0) - exp(-hdrColor * exposure);
-    result = pow(result, vec3(1.0 / 2.2));
-    FragColor = vec4(result, 1.0);
+    color += bloomColor * bloomIntensity;
+    color = AcesFilmic(color * exposure);
+    color = pow(color, vec3(1.0 / 2.2));
+    FragColor = vec4(color, 1.0);
 }
 )";
 

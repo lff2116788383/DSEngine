@@ -593,6 +593,41 @@ void CSMain(uint3 dispatch_id : SV_DispatchThreadID)
 }
 )";
 
+// ============================================================
+// Bloom 合成着色器（ACES Filmic Tone Mapping + Gamma）
+// ============================================================
+
+constexpr const char* kBloomCompositePS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D bloomBlur     : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer BloomCompositeParams : register(b0) {
+    float exposure;
+    float bloomIntensity;
+    float2 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float3 AcesFilmic(float3 x) {
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float3 bloom = bloomBlur.Sample(u_sampler, input.uv).rgb;
+    color += bloom * bloomIntensity;
+    color = AcesFilmic(color * exposure);
+    color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    return float4(color, 1.0f);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

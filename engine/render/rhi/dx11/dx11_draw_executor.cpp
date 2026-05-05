@@ -635,6 +635,62 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         }
     }
 
+    // bloom_composite 专用路径：ACES Filmic Tone Mapping
+    if (effect_name == "bloom_composite") {
+        const auto* comp_prog = shader_mgr.GetProgram(shader_mgr.bloom_composite_shader_handle());
+        if (!comp_prog) return;
+        dc->VSSetShader(comp_prog->vertex_shader.Get(), nullptr, 0);
+        dc->PSSetShader(comp_prog->pixel_shader.Get(), nullptr, 0);
+        auto* layout = shader_mgr.GetInputLayout(shader_mgr.bloom_composite_shader_handle());
+        if (layout) dc->IASetInputLayout(layout);
+        dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        const auto* src_tex = resource_mgr.GetTexture(source_texture);
+        if (src_tex) {
+            dc->PSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
+            dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* bloom_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (bloom_tex) dc->PSSetShaderResources(1, 1, bloom_tex->srv.GetAddressOf());
+        }
+
+        // 懒惰创建 bloom composite 参数 CB
+        if (!bloom_composite_params_cb_ && context_->device()) {
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage          = D3D11_USAGE_DYNAMIC;
+            bd.ByteWidth      = 16;
+            bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            struct InitParams { float exposure; float bloomIntensity; float _pad[2]; } init{1.0f, 0.5f, 0, 0};
+            D3D11_SUBRESOURCE_DATA sd{};
+            sd.pSysMem = &init;
+            context_->device()->CreateBuffer(&bd, &sd, bloom_composite_params_cb_.GetAddressOf());
+        }
+        if (bloom_composite_params_cb_) {
+            struct BloomCompositeParams { float exposure; float bloomIntensity; float _pad[2]; } cp{};
+            cp.exposure       = (params.size() >= 2) ? params[1] : 1.0f;
+            cp.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(bloom_composite_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &cp, sizeof(cp));
+                dc->Unmap(bloom_composite_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, bloom_composite_params_cb_.GetAddressOf());
+        }
+
+        UINT stride = sizeof(float) * 4;
+        UINT offset = 0;
+        dc->IASetVertexBuffers(0, 1, postprocess_vbo_.GetAddressOf(), &stride, &offset);
+        dc->IASetIndexBuffer(postprocess_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
+        dc->DrawIndexed(6, 0, 0);
+        current_frame_stats_.draw_calls++;
+
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
     // 标准全屏四边形路径
     const auto* program = shader_mgr.GetProgram(shader_mgr.postprocess_shader_handle());
     if (!program) return;

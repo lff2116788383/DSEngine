@@ -27,6 +27,7 @@ void DX11ShaderManager::Shutdown() {
     sprite_shader_handle_ = 0;
     postprocess_shader_handle_ = 0;
     shadow_shader_handle_ = 0;
+    bloom_composite_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -214,6 +215,17 @@ void DX11ShaderManager::InitBuiltinShaders() {
     bloom_upsample_cs_handle_ = CreateComputeProgram(dx11_shaders::kBloomUpsampleCS);
     if (bloom_upsample_cs_handle_)
         DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created: {}", bloom_upsample_cs_handle_);
+
+    // ---- Bloom Composite 着色器（ACES Filmic Tone Mapping）----
+    bloom_composite_shader_handle_ = CreateProgram(dx11_shaders::kPostProcessVS, dx11_shaders::kBloomCompositePS);
+    if (bloom_composite_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom composite shader created: {}", bloom_composite_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(bloom_composite_shader_handle_, layout, 2);
+    }
 }
 
 // ============================================================
