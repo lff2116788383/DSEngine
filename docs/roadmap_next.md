@@ -408,3 +408,13 @@
 - [x] Vulkan 后处理着色器独立化（PostProcess 专用着色器 + DrawPostProcess 使用）
 - [x] RenderTarget 像素回读（ReadRenderTargetColorRgba8 via vkCmdCopyImageToBuffer）
 - [x] 通过现有 3D Demo 验证 Vulkan 渲染路径
+- [x] Phase A1: DX11 MSAA 质量级日志
+- [x] Phase A2: DX11 HDR SwapChain（R16G16B16A16_FLOAT 回退 R8G8B8A8_UNORM）
+- [x] Phase A3: DX11 Bloom CS UAV/SRV 解绑审计
+- [x] Phase B: MockCommandBuffer 补全 DeferSetGlobal* 纯虚 MOCK_METHOD
+- [x] Phase C1: Vulkan MSAA 4x（msaa_color_texture + Resolve 附件 + RenderPass pResolveAttachments）
+- [x] Phase C2: Vulkan HDR 表面格式（ChooseSwapSurfaceFormat 优先 R16G16B16A16_SFLOAT）
+- [x] Phase C3: Vulkan Bloom Compute Shader（13-tap Kawase 降采样 + 3x3 tent 升采样）
+- [x] Phase D2: VulkanRhiDevice 启动时调用 InitBloomComputeShaders()
+- [x] Phase E1: BloomPass + CompositePass 集成测试（MockCommandBuffer EXPECT_CALL 验证调用顺序）
+- [x] Phase E2: ACES Filmic Tone Mapping（DX11 kBloomCompositePS + Vulkan kBloomCompositeFS 替换 Reinhard）
