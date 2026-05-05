@@ -13,6 +13,7 @@ namespace profiler {
 struct ProfileSample {
     std::string name;
     double duration_ms = 0.0;
+    double timestamp_us = 0.0;
     int depth = 0;
 };
 
@@ -52,6 +53,8 @@ public:
 
     std::string ExportCSV() const;
     std::string ExportJSON() const;
+    std::string ExportChromeTrace() const;
+    const std::vector<ProfileSample>& GetAllSamples() const { return trace_samples_; }
 
 private:
     struct ActiveSample {
@@ -66,6 +69,8 @@ private:
     FrameStats frame_stats_;
     std::chrono::high_resolution_clock::time_point frame_start_;
     double total_frame_time_ms_ = 0.0;
+    std::vector<ProfileSample> trace_samples_;
+    std::chrono::high_resolution_clock::time_point origin_time_ = std::chrono::high_resolution_clock::now();
     std::mutex mutex_;
 };
 

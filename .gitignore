@@ -39,9 +39,6 @@ CTestTestfile.cmake
 *.core
 *.dmp
 
-# 保留工程脚本，避免被 *.txt 误伤
-!**/CMakeLists.txt
-
 # 二进制与库文件
 *.exe
 *.dll
@@ -164,3 +161,4 @@ desktop.ini
 # 其他本地文本输出
 rustup-init.exe
 *.txt
+!**/CMakeLists.txt

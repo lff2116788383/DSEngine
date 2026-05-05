@@ -5,6 +5,7 @@
 
 #include "engine/profiler/memory_profiler.h"
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 
 namespace dse {
@@ -24,6 +25,16 @@ void MemoryProfiler::RecordAlloc(const std::string& tag, size_t size_bytes, void
     current_usage_ += size_bytes;
     active_alloc_count_++;
     peak_usage_ = std::max(peak_usage_, current_usage_);
+
+    MemoryTraceEvent evt;
+    evt.timestamp_us = std::chrono::duration<double, std::micro>(
+        std::chrono::high_resolution_clock::now() - origin_time_
+    ).count();
+    evt.tag = tag;
+    evt.size_bytes = size_bytes;
+    evt.is_alloc = true;
+    evt.running_total = current_usage_;
+    trace_events_.push_back(evt);
 }
 
 void MemoryProfiler::RecordFree(const std::string& tag, size_t size_bytes, void* /*address*/) {
@@ -38,6 +49,16 @@ void MemoryProfiler::RecordFree(const std::string& tag, size_t size_bytes, void*
     total_freed_ += size_bytes;
     current_usage_ = (size_bytes <= current_usage_) ? (current_usage_ - size_bytes) : 0;
     active_alloc_count_ = std::max(0, active_alloc_count_ - 1);
+
+    MemoryTraceEvent evt;
+    evt.timestamp_us = std::chrono::duration<double, std::micro>(
+        std::chrono::high_resolution_clock::now() - origin_time_
+    ).count();
+    evt.tag = tag;
+    evt.size_bytes = size_bytes;
+    evt.is_alloc = false;
+    evt.running_total = current_usage_;
+    trace_events_.push_back(evt);
 }
 
 MemorySnapshot MemoryProfiler::GetSnapshot() const {
@@ -70,6 +91,8 @@ void MemoryProfiler::Reset() {
     current_usage_ = 0;
     peak_usage_ = 0;
     active_alloc_count_ = 0;
+    trace_events_.clear();
+    origin_time_ = std::chrono::high_resolution_clock::now();
 }
 
 std::string MemoryProfiler::ExportCSV() const {
@@ -85,6 +108,34 @@ std::string MemoryProfiler::ExportCSV() const {
             << cat.alloc_count << ","
             << cat.free_count << "\n";
     }
+    return oss.str();
+}
+
+std::string MemoryProfiler::ExportChromeTrace() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::ostringstream oss;
+    oss << "[\n";
+    bool first = true;
+    for (const auto& evt : trace_events_) {
+        if (!first) oss << ",\n";
+        first = false;
+        oss << "{\"name\":\"" << (evt.is_alloc ? "alloc" : "free") << ":" << evt.tag << "\""
+            << ",\"cat\":\"memory\""
+            << ",\"ph\":\"i\""
+            << ",\"ts\":" << std::fixed << std::setprecision(1) << evt.timestamp_us
+            << ",\"pid\":1"
+            << ",\"tid\":1"
+            << ",\"s\":\"g\""
+            << ",\"args\":{\"size\":" << evt.size_bytes << "}}";
+        oss << ",\n{\"name\":\"memory_usage\""
+            << ",\"cat\":\"memory\""
+            << ",\"ph\":\"C\""
+            << ",\"ts\":" << std::fixed << std::setprecision(1) << evt.timestamp_us
+            << ",\"pid\":1"
+            << ",\"tid\":1"
+            << ",\"args\":{\"bytes\":" << evt.running_total << "}}";
+    }
+    oss << "\n]";
     return oss.str();
 }
 

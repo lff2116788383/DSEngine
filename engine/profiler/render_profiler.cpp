@@ -5,6 +5,7 @@
 
 #include "engine/profiler/render_profiler.h"
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 
 namespace dse {
@@ -30,6 +31,13 @@ void RenderProfiler::EndFrame() {
     accumulated_.peak_draw_calls = std::max(accumulated_.peak_draw_calls, current_frame_.draw_calls);
     accumulated_.peak_triangles = std::max(accumulated_.peak_triangles, current_frame_.triangle_count);
     accumulated_.peak_vertices = std::max(accumulated_.peak_vertices, current_frame_.vertex_count);
+
+    RenderFrameEvent evt;
+    evt.timestamp_us = std::chrono::duration<double, std::micro>(
+        std::chrono::high_resolution_clock::now() - origin_time_
+    ).count();
+    evt.stats = current_frame_;
+    frame_events_.push_back(evt);
 }
 
 void RenderProfiler::RecordDrawCall(int vertex_count, int triangle_count) {
@@ -68,6 +76,8 @@ void RenderProfiler::Reset() {
     current_frame_ = RenderFrameStats{};
     last_frame_ = RenderFrameStats{};
     accumulated_ = RenderAccumulatedStats{};
+    frame_events_.clear();
+    origin_time_ = std::chrono::high_resolution_clock::now();
 }
 
 std::string RenderProfiler::ExportCSV() const {
@@ -85,6 +95,35 @@ std::string RenderProfiler::ExportCSV() const {
     oss << "TextureBinds," << last_frame_.texture_binds << ",0,0\n";
     oss << "ShaderSwitches," << last_frame_.shader_switches << ",0,0\n";
     oss << "TextureMemoryKB," << (last_frame_.texture_memory / 1024) << ",0,0\n";
+    return oss.str();
+}
+
+std::string RenderProfiler::ExportChromeTrace() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::ostringstream oss;
+    oss << "[\n";
+    bool first = true;
+    for (const auto& evt : frame_events_) {
+        if (!first) oss << ",\n";
+        first = false;
+        oss << "{\"name\":\"render_stats\""
+            << ",\"cat\":\"render\""
+            << ",\"ph\":\"C\""
+            << ",\"ts\":" << std::fixed << std::setprecision(1) << evt.timestamp_us
+            << ",\"pid\":1"
+            << ",\"tid\":1"
+            << ",\"args\":{"
+            << "\"draw_calls\":" << evt.stats.draw_calls
+            << ",\"triangles\":" << evt.stats.triangle_count
+            << ",\"vertices\":" << evt.stats.vertex_count
+            << ",\"sprites\":" << evt.stats.sprite_count
+            << ",\"batches\":" << evt.stats.batch_count
+            << ",\"texture_binds\":" << evt.stats.texture_binds
+            << ",\"shader_switches\":" << evt.stats.shader_switches
+            << ",\"texture_memory\":" << evt.stats.texture_memory
+            << "}}";
+    }
+    oss << "\n]";
     return oss.str();
 }
 

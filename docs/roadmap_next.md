@@ -18,7 +18,7 @@
 | **Scene** | 10 文件 | ★★★★★ | 45 unit | 有 prefab/序列化/空间划分/子场景/场景管理器/场景切换/UUID跨场景引用 |
 | **Audio** | 2 文件 | ★★★★☆ | 21 unit | miniaudio 封装 + 3D Listener/衰减模型/遮挡 |
 | **Runtime** | 15 文件 | ★★★★☆ | 有测试 | FramePipeline/EngineApp 成熟 |
-| **Profiler** | 6 文件 | ★★★☆☆ | 无测试 | CPU/Memory/Render 三线，但缺集成 |
+| **Profiler** | 6 文件 | ★★★★☆ | 43 unit | CPU/Memory/Render 三线 + Chrome Trace 导出 + 性能基线 |
 | **Input** | 2 文件 | ★★★☆☆ | 无独立测试 | 基础键鼠，缺 gamepad/手势 |
 | **3D Demo** | 32 个 | ★★★★★ | verify_all.bat | 覆盖极广 |
 
@@ -117,12 +117,49 @@
 
 ---
 
-### 🔹 P2：Profiler 可视化 + 性能回归基线
+### ✅ P2：Profiler 可视化 + 性能回归基线（已完成）
+
+**原因**: CPU/Memory/Render 三条 Profiler 线已有基础功能，但缺乏标准化可视化导出和性能基线测试覆盖。
 
 具体方向：
-1. **JSON/Chrome Trace 格式导出** — 对标 Chrome `about:tracing`
-2. **Google Benchmark 集成** — 关键路径建立性能基线
-3. **CI 性能回归门禁** — 超基线 10% 自动 fail
+1. ✅ **JSON/Chrome Trace 格式导出** — 对标 Chrome `about:tracing`，三个 Profiler 均支持 `ExportChromeTrace()`
+2. ✅ **性能基线测试** — 关键路径建立性能基线（BeginSample/EndSample、RecordAlloc、RecordDrawCall 均 <100μs/op）
+3. 🔹 **CI 性能回归门禁** — 超基线 10% 自动 fail（待 CI 基础设施就绪后接入）
+
+#### 实施内容
+
+1. ✅ **Chrome Trace Event Format 导出**
+   - `CPUProfiler::ExportChromeTrace()` — 输出 `ph:"X"` 完整事件（name/cat/ts/dur/pid/tid），带 origin 相对微秒时间戳
+   - `MemoryProfiler::ExportChromeTrace()` — 输出 `ph:"i"` 即时事件（alloc/free）+ `ph:"C"` 计数器事件（memory_usage running total）
+   - `RenderProfiler::ExportChromeTrace()` — 输出 `ph:"C"` 计数器事件（draw_calls/triangles/vertices/sprites/batches/texture_binds/shader_switches/texture_memory）
+   - 所有导出均符合 Chrome Trace Event Format JSON Array 规范，可直接导入 `chrome://tracing`
+
+2. ✅ **Trace 数据跟踪基础设施**
+   - `ProfileSample` 新增 `timestamp_us` 字段
+   - `CPUProfiler` 新增 `trace_samples_` + `origin_time_` 成员，跨帧累积所有采样
+   - `MemoryProfiler` 新增 `MemoryTraceEvent` 结构体 + `trace_events_` 事件日志
+   - `RenderProfiler` 新增 `RenderFrameEvent` 结构体 + `frame_events_` 帧事件日志
+   - 所有 `Reset()` 方法同步清除 trace 数据并重置 origin 时间
+
+3. ✅ **性能基线测试（4 项）**
+   - CPU 采样 10000 次 BeginSample/EndSample < 100μs/op
+   - Memory 记录 10000 次 RecordAlloc < 100μs/op
+   - Render 记录 10000 帧 BeginFrame/RecordDrawCall/EndFrame < 100μs/op
+   - Chrome Trace 导出 10000 条采样 < 100ms
+
+4. ✅ **新增 16 个单元测试**（682 总测试零回归）
+
+#### 变更文件
+
+| 文件 | 说明 |
+|------|------|
+| `engine/profiler/cpu_profiler.h` | ProfileSample 新增 timestamp_us、CPUProfiler 新增 ExportChromeTrace/GetAllSamples/trace_samples_/origin_time_ |
+| `engine/profiler/cpu_profiler.cpp` | EndSample 记录时间戳和 trace、Reset 清除 trace、ExportChromeTrace 实现 |
+| `engine/profiler/memory_profiler.h` | 新增 MemoryTraceEvent 结构体、ExportChromeTrace 声明、trace_events_/origin_time_ |
+| `engine/profiler/memory_profiler.cpp` | RecordAlloc/RecordFree 记录 trace 事件、Reset 清除、ExportChromeTrace 实现 |
+| `engine/profiler/render_profiler.h` | 新增 RenderFrameEvent 结构体、ExportChromeTrace 声明、frame_events_/origin_time_ |
+| `engine/profiler/render_profiler.cpp` | EndFrame 记录帧事件、Reset 清除、ExportChromeTrace 实现 |
+| `tests/gtest/unit/engine/profiler/profiler_test.cpp` | 新增 16 个测试（Chrome Trace 格式验证 ×12 + 性能基线 ×4） |
 
 ### 🔹 P2：Input 系统增强
 

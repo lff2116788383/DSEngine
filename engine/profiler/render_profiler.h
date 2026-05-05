@@ -1,10 +1,12 @@
 #ifndef DSE_RENDER_PROFILER_H
 #define DSE_RENDER_PROFILER_H
 
+#include <chrono>
 #include <cstddef>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace dse {
 namespace profiler {
@@ -33,6 +35,11 @@ struct RenderAccumulatedStats {
     long long total_vertices = 0;
 };
 
+struct RenderFrameEvent {
+    double timestamp_us = 0.0;
+    RenderFrameStats stats;
+};
+
 class RenderProfiler {
 public:
     RenderProfiler() = default;
@@ -49,11 +56,14 @@ public:
     const RenderAccumulatedStats& GetAccumulatedStats() const { return accumulated_; }
     void Reset();
     std::string ExportCSV() const;
+    std::string ExportChromeTrace() const;
 
 private:
     RenderFrameStats current_frame_;
     RenderFrameStats last_frame_;
     RenderAccumulatedStats accumulated_;
+    std::vector<RenderFrameEvent> frame_events_;
+    std::chrono::high_resolution_clock::time_point origin_time_ = std::chrono::high_resolution_clock::now();
     mutable std::mutex mutex_;
 };
 

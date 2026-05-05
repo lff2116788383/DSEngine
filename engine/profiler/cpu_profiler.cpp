@@ -34,8 +34,12 @@ void CPUProfiler::EndSample() {
     ProfileSample sample;
     sample.name = active.name;
     sample.duration_ms = duration_ms;
+    sample.timestamp_us = std::chrono::duration<double, std::micro>(
+        active.start_time - origin_time_
+    ).count();
     sample.depth = active.depth;
     current_frame_samples_.push_back(sample);
+    trace_samples_.push_back(sample);
     
     // Update stats
     auto& stat = stats_[active.name];
@@ -81,6 +85,8 @@ void CPUProfiler::Reset() {
     stats_.clear();
     frame_stats_ = FrameStats{};
     total_frame_time_ms_ = 0.0;
+    trace_samples_.clear();
+    origin_time_ = std::chrono::high_resolution_clock::now();
 }
 
 std::string CPUProfiler::ExportCSV() const {
@@ -121,6 +127,26 @@ std::string CPUProfiler::ExportJSON() const {
             << "}";
     }
     oss << "\n  ]\n}";
+    return oss.str();
+}
+
+std::string CPUProfiler::ExportChromeTrace() const {
+    std::ostringstream oss;
+    oss << "[\n";
+    bool first = true;
+    for (const auto& s : trace_samples_) {
+        if (!first) oss << ",\n";
+        first = false;
+        double dur_us = s.duration_ms * 1000.0;
+        oss << "{\"name\":\"" << s.name << "\""
+            << ",\"cat\":\"cpu\""
+            << ",\"ph\":\"X\""
+            << ",\"ts\":" << std::fixed << std::setprecision(1) << s.timestamp_us
+            << ",\"dur\":" << std::fixed << std::setprecision(1) << dur_us
+            << ",\"pid\":1"
+            << ",\"tid\":1}";
+    }
+    oss << "\n]";
     return oss.str();
 }
 
