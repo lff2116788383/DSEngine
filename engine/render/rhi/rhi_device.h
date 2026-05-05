@@ -178,6 +178,10 @@ private:
 class RhiDevice {
 public:
     virtual ~RhiDevice() = default;
+
+    /// 在窗口创建后初始化设备（D3D11/Vulkan 需要 HWND；OpenGL 默认已就绪）
+    virtual bool InitDevice(void* window_handle, int width, int height) { (void)window_handle; (void)width; (void)height; return true; }
+
     virtual void Shutdown() = 0;
     virtual void BeginFrame() = 0;
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;

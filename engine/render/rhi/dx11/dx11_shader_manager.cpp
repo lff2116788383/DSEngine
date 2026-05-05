@@ -17,6 +17,7 @@ void DX11ShaderManager::Init(DX11Context* context) {
 }
 
 void DX11ShaderManager::Shutdown() {
+    input_layouts_.clear();
     programs_.clear();
     programs_created_ = 0;
     programs_destroyed_ = 0;
@@ -97,31 +98,113 @@ const DX11ShaderProgram* DX11ShaderManager::GetProgram(unsigned int handle) cons
     return it != programs_.end() ? &it->second : nullptr;
 }
 
+void DX11ShaderManager::CreateInputLayoutForShader(unsigned int handle,
+                                                     const D3D11_INPUT_ELEMENT_DESC* elements,
+                                                     UINT count) {
+    auto it = programs_.find(handle);
+    if (it == programs_.end() || !it->second.vs_blob) return;
+
+    ComPtr<ID3D11InputLayout> layout;
+    HRESULT hr = context_->device()->CreateInputLayout(
+        elements, count,
+        it->second.vs_blob->GetBufferPointer(),
+        it->second.vs_blob->GetBufferSize(),
+        layout.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateInputLayout failed for shader {}: 0x{:08X}",
+                        handle, static_cast<unsigned>(hr));
+        return;
+    }
+    input_layouts_[handle] = std::move(layout);
+}
+
+ID3D11InputLayout* DX11ShaderManager::GetInputLayout(unsigned int shader_handle) const {
+    auto it = input_layouts_.find(shader_handle);
+    return it != input_layouts_.end() ? it->second.Get() : nullptr;
+}
+
 void DX11ShaderManager::InitBuiltinShaders() {
-    // 精灵着色器
+    // ---- 精灵着色器 ----
     sprite_shader_handle_ = CreateProgram(dx11_shaders::kSpriteVS, dx11_shaders::kSpritePS);
-    if (sprite_shader_handle_)
+    if (sprite_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin sprite shader created: {}", sprite_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,       0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(sprite_shader_handle_, layout, 3);
+    }
 
-    // PBR 着色器
+    // ---- PBR 着色器 ----
     pbr_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kPbrPS);
-    if (pbr_shader_handle_)
+    if (pbr_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin PBR shader created: {}", pbr_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION",     0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR",        0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD",     0, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL",       0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TANGENT",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(pbr_shader_handle_, layout, 7);
+    }
 
-    // 天空盒着色器
+    // ---- 天空盒着色器 ----
     skybox_shader_handle_ = CreateProgram(dx11_shaders::kSkyboxVS, dx11_shaders::kSkyboxPS);
-    if (skybox_shader_handle_)
+    if (skybox_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin skybox shader created: {}", skybox_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(skybox_shader_handle_, layout, 1);
+    }
 
-    // 粒子着色器
+    // ---- 粒子着色器 ----
     particle_shader_handle_ = CreateProgram(dx11_shaders::kParticleVS, dx11_shaders::kParticlePS);
-    if (particle_shader_handle_)
+    if (particle_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin particle shader created: {}", particle_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            // Per-vertex (slot 0): float3 pos + float2 uv
+            {"POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
+            {"TEXCOORD",   0, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0},
+            // Per-instance (slot 1): float3 iPos + float4 iCol + float iSize
+            {"INST_POS",   0, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+            {"INST_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 12, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+            {"INST_SIZE",  0, DXGI_FORMAT_R32_FLOAT,           1, 28, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+        };
+        CreateInputLayoutForShader(particle_shader_handle_, layout, 5);
+    }
 
-    // 后处理着色器
+    // ---- 后处理着色器 ----
     postprocess_shader_handle_ = CreateProgram(dx11_shaders::kPostProcessVS, dx11_shaders::kPostProcessPassthroughPS);
-    if (postprocess_shader_handle_)
+    if (postprocess_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin postprocess shader created: {}", postprocess_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(postprocess_shader_handle_, layout, 2);
+    }
+
+    // ---- 阴影着色器 ----
+    shadow_shader_handle_ = CreateProgram(dx11_shaders::kShadowVS, dx11_shaders::kShadowPS);
+    if (shadow_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin shadow shader created: {}", shadow_shader_handle_);
+        // 复用 PBR 顶点格式（BatchVertex）
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION",     0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR",        0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD",     0, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL",       0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TANGENT",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(shadow_shader_handle_, layout, 7);
+    }
 }
 
 } // namespace render

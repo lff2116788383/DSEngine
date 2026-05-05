@@ -151,6 +151,13 @@ private:
     /// 更新常量缓冲数据
     void UpdateConstantBuffer(ID3D11Buffer* buffer, const void* data, UINT size);
 
+    /// 初始化几何缓冲（精灵/天空盒/后处理/粒子）
+    void InitGeometryBuffers();
+
+    /// 动态 VBO/IBO 容量保证
+    void EnsureMeshVBOCapacity(size_t needed_bytes);
+    void EnsureMeshIBOCapacity(size_t needed_bytes);
+
     DX11Context* context_ = nullptr;
     DX11ResourceManager* resource_mgr_ = nullptr;
 
@@ -169,6 +176,34 @@ private:
     unsigned int global_shadow_map_[3] = {};
     unsigned int global_spot_shadow_map_[4] = {};
     unsigned int global_point_shadow_map_[4] = {};
+
+    // --- 几何缓冲 ---
+    // 精灵四边形（动态 VBO，静态 IBO）
+    ComPtr<ID3D11Buffer> sprite_quad_vbo_;
+    ComPtr<ID3D11Buffer> sprite_quad_ibo_;
+
+    // 网格（动态，按需扩容）
+    ComPtr<ID3D11Buffer> mesh_dynamic_vbo_;
+    ComPtr<ID3D11Buffer> mesh_dynamic_ibo_;
+    size_t mesh_vbo_capacity_ = 0;
+    size_t mesh_ibo_capacity_ = 0;
+
+    // 天空盒立方体（静态）
+    ComPtr<ID3D11Buffer> skybox_vbo_;
+
+    // 后处理全屏四边形（静态）
+    ComPtr<ID3D11Buffer> postprocess_vbo_;
+    ComPtr<ID3D11Buffer> postprocess_ibo_;
+
+    // 粒子公告板四边形（静态 VBO+IBO）
+    ComPtr<ID3D11Buffer> particle_quad_vbo_;
+    ComPtr<ID3D11Buffer> particle_quad_ibo_;
+
+    // 阴影 pass 检测（深度 only 渲染目标 = shadow pass）
+    bool is_depth_only_pass_ = false;
+
+    // 阴影采样器（用于 PBR pass 采样 shadow map）
+    ComPtr<ID3D11SamplerState> shadow_sampler_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

@@ -93,6 +93,7 @@ public:
     ~DX11RhiDevice() = default;
 
     // --- RhiDevice 接口 ---
+    bool InitDevice(void* window_handle, int width, int height) override;
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;

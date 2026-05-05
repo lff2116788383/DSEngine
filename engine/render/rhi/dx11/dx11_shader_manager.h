@@ -61,6 +61,9 @@ public:
     /// 初始化内置着色器
     void InitBuiltinShaders();
 
+    /// 获取着色器对应的 InputLayout（由 InitBuiltinShaders 创建）
+    ID3D11InputLayout* GetInputLayout(unsigned int shader_handle) const;
+
     // --- 内置着色器访问器 ---
     unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
     unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
@@ -77,6 +80,9 @@ private:
     ComPtr<ID3DBlob> CompileShader(const std::string& source, const std::string& entry_point,
                                     const std::string& target);
 
+    /// 为指定着色器创建 InputLayout
+    void CreateInputLayoutForShader(unsigned int handle, const D3D11_INPUT_ELEMENT_DESC* elements, UINT count);
+
     DX11Context* context_ = nullptr;
 
     std::unordered_map<unsigned int, DX11ShaderProgram> programs_;
@@ -91,6 +97,9 @@ private:
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;
+
+    /// 着色器句柄 → InputLayout 映射
+    std::unordered_map<unsigned int, ComPtr<ID3D11InputLayout>> input_layouts_;
 };
 
 } // namespace render

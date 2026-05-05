@@ -91,6 +91,12 @@ public:
     void EnableEditorMode(bool enable);
 
     /**
+     * @brief 注入平台原生窗口句柄（Win32 HWND），D3D11/Vulkan 后端初始化时需要
+     * @param handle Win32 HWND（或其他平台的等价指针）
+     */
+    void SetNativeWindowHandle(void* handle);
+
+    /**
      * @brief 注入当前激活的实体世界
      * @param world 世界对象指针
      */

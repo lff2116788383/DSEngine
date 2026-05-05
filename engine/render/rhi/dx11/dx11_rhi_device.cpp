@@ -119,6 +119,10 @@ void DX11CommandBuffer::Reset() {
 // DX11RhiDevice 实现
 // ============================================================
 
+bool DX11RhiDevice::InitDevice(void* window_handle, int width, int height) {
+    return InitD3D11(window_handle, width, height, false);
+}
+
 bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool enable_debug) {
     if (initialized_) return true;
 
@@ -167,6 +171,28 @@ void DX11RhiDevice::Shutdown() {
 void DX11RhiDevice::BeginFrame() {
     current_frame_stats_ = RenderStats{};
     draw_executor_.BeginFrame();
+
+    // 清除后备缓冲区
+    ID3D11DeviceContext* dc = context_.device_context();
+    ID3D11RenderTargetView* rtv = context_.backbuffer_rtv();
+    ID3D11DepthStencilView* dsv = context_.backbuffer_dsv();
+    if (rtv) {
+        float clear_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        dc->ClearRenderTargetView(rtv, clear_color);
+    }
+    if (dsv) {
+        dc->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    }
+    // 绑定后备缓冲区为默认渲染目标
+    dc->OMSetRenderTargets(1, &rtv, dsv);
+
+    // 设置默认 Viewport
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(context_.width());
+    vp.Height = static_cast<float>(context_.height());
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    dc->RSSetViewports(1, &vp);
 }
 
 unsigned int DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
@@ -267,6 +293,9 @@ void DX11RhiDevice::EndFrame() {
 
     draw_executor_.EndFrame();
     last_frame_stats_ = current_frame_stats_;
+
+    // Present 交换链
+    context_.Present(true);
 }
 
 const RenderStats& DX11RhiDevice::LastFrameStats() const {

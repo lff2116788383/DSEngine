@@ -7,8 +7,13 @@
 #include "engine/runtime/engine_app.h"
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scene/scene.h"
+#include "engine/render/rhi/rhi_factory.h"
 #include <GLFW/glfw3.h>
 #include <glad/gl.h>
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include <iostream>
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
@@ -230,9 +235,17 @@ bool EngineInstance::Init() {
             return false;
         }
 
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        // 根据 RHI 后端选择 GLFW 窗口 client API
+        const auto rhi_backend = dse::render::ResolveRhiBackendFromEnv();
+        const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
+                                       rhi_backend != RhiBackend::Vulkan);
+        if (needs_gl_context) {
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        } else {
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        }
 
         GLFWwindow* window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
         if (!window) {
@@ -241,17 +254,30 @@ bool EngineInstance::Init() {
             return false;
         }
 
-        glfwMakeContextCurrent(window);
-        if (!gladLoadGL(glfwGetProcAddress)) {
-            std::cerr << "Failed to initialize OpenGL (glad)\n";
-            glfwDestroyWindow(window);
-            glfwTerminate();
-            return false;
+        if (needs_gl_context) {
+            glfwMakeContextCurrent(window);
+            if (!gladLoadGL(glfwGetProcAddress)) {
+                std::cerr << "Failed to initialize OpenGL (glad)\n";
+                glfwDestroyWindow(window);
+                glfwTerminate();
+                return false;
+            }
         }
+
         int framebuffer_width = config_.window_width;
         int framebuffer_height = config_.window_height;
-        glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
+        if (needs_gl_context) {
+            glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
+        }
         Screen::set_width_height(framebuffer_width, framebuffer_height);
+        glfw_window_ = window;
+
+        // 注入平台窗口句柄（D3D11/Vulkan 需要在 FramePipeline::Init 中使用）
+#ifdef _WIN32
+        if (!needs_gl_context) {
+            pipeline_->SetNativeWindowHandle((void*)glfwGetWin32Window(window));
+        }
+#endif
     } else {
         // 在编辑器模式下，gladLoadGL 通常已经在编辑器主程序中初始化过了，
         // 但由于引擎是 DLL，exe 中的 glad 初始化不会影响 DLL 中的 glad 函数指针，
@@ -348,7 +374,9 @@ void EngineInstance::Tick() {
 void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
 
-    GLFWwindow* current_window = glfwGetCurrentContext();
+    GLFWwindow* current_window = glfw_window_
+        ? static_cast<GLFWwindow*>(glfw_window_)
+        : glfwGetCurrentContext();
 
     pipeline_->SetWindowTitleSetter(nullptr);
     pipeline_->Shutdown();
@@ -401,7 +429,9 @@ void EngineInstance::Shutdown() {
 int EngineInstance::Run() {
     if (!Init()) return -1;
 
-    GLFWwindow* window = glfwGetCurrentContext();
+    GLFWwindow* window = glfw_window_
+        ? static_cast<GLFWwindow*>(glfw_window_)
+        : glfwGetCurrentContext();
     if (!window) {
         std::cerr << "No current GLFW context found\n";
         return -1;
@@ -409,7 +439,7 @@ int EngineInstance::Run() {
 
     int max_frames = 0;
     if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
-        max_frames = std::max(0, std::atoi(env_max_frames));
+        max_frames = (std::max)(0, std::atoi(env_max_frames));
     }
     int frame_counter = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -422,7 +452,10 @@ int EngineInstance::Run() {
 
         Tick();
 
-        glfwSwapBuffers(window);
+        // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 glfwSwapBuffers
+        if (glfwGetCurrentContext() != nullptr) {
+            glfwSwapBuffers(window);
+        }
         frame_counter += 1;
         if (max_frames > 0 && frame_counter >= max_frames) {
             std::cout << "DSE_MAX_FRAMES reached: " << frame_counter << std::endl;

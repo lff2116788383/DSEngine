@@ -155,6 +155,17 @@ bool FramePipeline::Init() {
     const auto rhi_backend = dse::render::ResolveRhiBackendFromEnv();
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
     DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
+
+    // D3D11 / Vulkan 后端需要用平台窗口句柄完成设备初始化
+    if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
+        const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
+        const int init_h = Screen::height() > 0 ? Screen::height() : 720;
+        if (!runtime_context_.rhi_device->InitDevice(runtime_context_.native_window_handle, init_w, init_h)) {
+            DEBUG_LOG_ERROR("FramePipeline init failed: RhiDevice::InitDevice returned false");
+            return false;
+        }
+    }
+
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
@@ -715,6 +726,10 @@ void FramePipeline::EnableEditorMode(bool enable) {
     if (!initialized_) {
         runtime_context_.editor_mode = enable;
     }
+}
+
+void FramePipeline::SetNativeWindowHandle(void* handle) {
+    runtime_context_.native_window_handle = handle;
 }
 
 void FramePipeline::SetWorld(World* world) {

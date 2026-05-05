@@ -100,6 +100,8 @@ private:
     float accumulator_ = 0.0f;
     float fixed_time_step_ = 0.02f;
     bool is_initialized_ = false;
+    /// 保存 GLFW 窗口指针（D3D11 后端无 GL 上下文，不能用 glfwGetCurrentContext 获取）
+    void* glfw_window_ = nullptr;
 };
 
 int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility
