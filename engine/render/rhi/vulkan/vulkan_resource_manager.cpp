@@ -50,6 +50,24 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
         DEBUG_LOG_WARN("[Vulkan] Failed to create default sampler");
     }
 
+    // 创建阴影比较采样器（sampler2DShadow PCF 要求 compareEnable=VK_TRUE）
+    VkSamplerCreateInfo shadow_sampler_ci{};
+    shadow_sampler_ci.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    shadow_sampler_ci.magFilter     = VK_FILTER_LINEAR;
+    shadow_sampler_ci.minFilter     = VK_FILTER_LINEAR;
+    shadow_sampler_ci.addressModeU  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    shadow_sampler_ci.addressModeV  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    shadow_sampler_ci.addressModeW  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    shadow_sampler_ci.mipmapMode    = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    shadow_sampler_ci.anisotropyEnable = VK_FALSE;
+    shadow_sampler_ci.maxAnisotropy = 1.0f;
+    shadow_sampler_ci.compareEnable = VK_TRUE;
+    shadow_sampler_ci.compareOp     = VK_COMPARE_OP_LESS_OR_EQUAL;
+    shadow_sampler_ci.borderColor   = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    if (vkCreateSampler(device_, &shadow_sampler_ci, nullptr, &shadow_comparison_sampler_) != VK_SUCCESS) {
+        DEBUG_LOG_WARN("[Vulkan] Failed to create shadow comparison sampler");
+    }
+
     initialized_ = true;
     DEBUG_LOG_INFO("[Vulkan] ResourceManager initialized");
     return true;
@@ -97,6 +115,11 @@ void VulkanResourceManager::Shutdown() {
     if (default_sampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(device_, default_sampler_, nullptr);
         default_sampler_ = VK_NULL_HANDLE;
+    }
+
+    if (shadow_comparison_sampler_ != VK_NULL_HANDLE) {
+        vkDestroySampler(device_, shadow_comparison_sampler_, nullptr);
+        shadow_comparison_sampler_ = VK_NULL_HANDLE;
     }
 
     if (command_pool_ != VK_NULL_HANDLE) {

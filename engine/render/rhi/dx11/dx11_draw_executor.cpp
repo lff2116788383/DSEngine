@@ -31,15 +31,15 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
 
     InitGeometryBuffers();
 
-    // 创建阴影采样器（点采样 + Clamp 寻址）
+    // 创建 PCF 比较采样器（SamplerComparisonState s1，与 kPbrPS 声明匹配）
     {
         D3D11_SAMPLER_DESC sd{};
-        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        sd.MaxLOD = D3D11_FLOAT32_MAX;
+        sd.Filter         = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+        sd.AddressU       = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+        sd.MaxLOD         = D3D11_FLOAT32_MAX;
         context_->device()->CreateSamplerState(&sd, shadow_sampler_.GetAddressOf());
     }
 

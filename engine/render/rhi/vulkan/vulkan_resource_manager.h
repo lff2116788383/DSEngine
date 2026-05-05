@@ -111,6 +111,9 @@ public:
     // --- 默认采样器 ---
     VkSampler default_sampler() const { return default_sampler_; }
 
+    // --- 阴影比较采样器（compareEnable=VK_TRUE，用于 sampler2DShadow PCF）---
+    VkSampler shadow_comparison_sampler() const { return shadow_comparison_sampler_; }
+
     // --- Descriptor Pool & Set ---
     VkDescriptorPool descriptor_pool() const { return descriptor_pool_; }
 
@@ -151,6 +154,9 @@ private:
 
     // 默认采样器（linear clamp，供 Compute Shader 使用）
     VkSampler default_sampler_ = VK_NULL_HANDLE;
+
+    // 阴影比较采样器（compareEnable=VK_TRUE，compareOp=LESS_OR_EQUAL，供 sampler2DShadow PCF）
+    VkSampler shadow_comparison_sampler_ = VK_NULL_HANDLE;
 
     // Descriptor Pool
     VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;

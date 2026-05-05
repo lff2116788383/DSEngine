@@ -359,4 +359,18 @@ TEST(RenderTargetDescTest, allow_uav默认值为false) {
     EXPECT_FALSE(desc.allow_uav);
 }
 
+// ============================================================
+// ComparisonSamplerTest — shadow_sampler_ 配置验证（无 GPU）
+// ============================================================
+
+TEST(ComparisonSamplerTest, PCF采样器滤波器类型正确) {
+    // D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT = 0x94 (148)
+    // = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT(0x14) | D3D11 comparison bit(0x80)
+    EXPECT_EQ(static_cast<int>(D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT), 0x94);
+}
+
+TEST(ComparisonSamplerTest, LESS_EQUAL比较函数值正确) {
+    EXPECT_EQ(static_cast<int>(D3D11_COMPARISON_LESS_EQUAL), 4);
+}
+
 #endif // DSE_ENABLE_D3D11

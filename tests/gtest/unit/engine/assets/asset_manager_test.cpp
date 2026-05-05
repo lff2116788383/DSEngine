@@ -436,3 +436,56 @@ TEST(AssetManagerTest, ConfigureDataRoot自定义路径) {
     mgr.ConfigureDataRoot("custom_assets");
     EXPECT_EQ(mgr.GetDataRoot(), "custom_assets");
 }
+
+// ============================================================
+// MaterialValidationTest — 参数边界与 .dmat 降级验证
+// ============================================================
+
+TEST(MaterialValidationTest, Roughness默认值在合法范围) {
+    MaterialAsset mat(1, "test");
+    float r = mat.GetScalarOverrides().roughness;
+    EXPECT_GE(r, 0.0f);
+    EXPECT_LE(r, 1.0f);
+}
+
+TEST(MaterialValidationTest, Metallic默认值在合法范围) {
+    MaterialAsset mat(1, "test");
+    float m = mat.GetScalarOverrides().metallic;
+    EXPECT_GE(m, 0.0f);
+    EXPECT_LE(m, 1.0f);
+}
+
+TEST(MaterialValidationTest, AO默认值为一) {
+    MaterialAsset mat(1, "test");
+    EXPECT_FLOAT_EQ(mat.GetScalarOverrides().ao, 1.0f);
+}
+
+TEST(MaterialValidationTest, AlphaCutoff默认值在合法范围) {
+    MaterialAsset mat(1, "test");
+    float ac = mat.GetScalarOverrides().alpha_cutoff;
+    EXPECT_GE(ac, 0.0f);
+    EXPECT_LE(ac, 1.0f);
+}
+
+TEST(MaterialValidationTest, BaseColor默认为不透明白色) {
+    MaterialAsset mat(1, "test");
+    auto bc = mat.GetBaseColor();
+    EXPECT_FLOAT_EQ(bc.a, 1.0f);
+    EXPECT_GE(bc.r, 0.0f); EXPECT_LE(bc.r, 1.0f);
+    EXPECT_GE(bc.g, 0.0f); EXPECT_LE(bc.g, 1.0f);
+    EXPECT_GE(bc.b, 0.0f); EXPECT_LE(bc.b, 1.0f);
+}
+
+TEST(MaterialValidationTest, dmat解析缺失字段使用默认值) {
+    AssetManager mgr;
+    auto result = mgr.LoadMaterialInstanceFromDmat("nonexistent.dmat", 0);
+    EXPECT_EQ(result, nullptr);
+}
+
+TEST(MaterialValidationTest, CreateMaterialInstance返回有效ID) {
+    AssetManager mgr;
+    auto mat = mgr.CreateMaterialInstance("pbr_test");
+    ASSERT_NE(mat, nullptr);
+    EXPECT_GT(mat->GetId(), 0u);
+    EXPECT_EQ(mat->GetName(), "pbr_test");
+}

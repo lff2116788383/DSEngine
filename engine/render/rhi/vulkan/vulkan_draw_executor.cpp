@@ -433,6 +433,37 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             write_count++;
         }
 
+        // 绑定 CSM 阴影贴图到 binding 6（sampler2DShadow，使用比较采样器）
+        VkDescriptorImageInfo shadow_image_infos[3] = {};
+        VkWriteDescriptorSet shadow_write{};
+        bool has_shadow = false;
+        {
+            VkSampler cmp_sampler = resource_mgr.shadow_comparison_sampler();
+            for (int i = 0; i < 3; ++i) {
+                unsigned int sm_handle = global_shadow_map_[i];
+                const VulkanTexture* sm_tex = (sm_handle != 0)
+                    ? resource_mgr.GetTexture(sm_handle) : nullptr;
+                VkImageView view = sm_tex ? sm_tex->image_view : VK_NULL_HANDLE;
+                if (view == VK_NULL_HANDLE) {
+                    const VulkanTexture* white = resource_mgr.GetTexture(white_texture_handle_);
+                    view = white ? white->image_view : VK_NULL_HANDLE;
+                }
+                shadow_image_infos[i].sampler     = cmp_sampler;
+                shadow_image_infos[i].imageView   = view;
+                shadow_image_infos[i].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            }
+            if (shadow_image_infos[0].imageView != VK_NULL_HANDLE) {
+                shadow_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                shadow_write.dstSet          = sets[2];
+                shadow_write.dstBinding      = 6;
+                shadow_write.dstArrayElement = 0;
+                shadow_write.descriptorCount = 3;
+                shadow_write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                shadow_write.pImageInfo      = shadow_image_infos;
+                has_shadow = true;
+            }
+        }
+
         // 合并写入
         std::vector<VkWriteDescriptorSet> all_writes;
         all_writes.push_back(mat_write);
@@ -441,6 +472,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
                 all_writes.push_back(tex_writes[i]);
             }
         }
+        if (has_shadow) all_writes.push_back(shadow_write);
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
     }
 

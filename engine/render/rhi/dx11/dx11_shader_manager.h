@@ -86,7 +86,6 @@ public:
     unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
     unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
     unsigned int bloom_composite_shader_handle() const { return bloom_composite_shader_handle_; }
-    ID3D11SamplerState* comparison_sampler() const { return comparison_sampler_.Get(); }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -124,8 +123,6 @@ private:
     std::unordered_map<unsigned int, DX11ComputeProgram> compute_programs_;
     unsigned int next_cs_handle_ = 850000;
 
-    /// D3D11_COMPARISON_LESS_EQUAL 比较采样器（用于 PCF 阴影）
-    ComPtr<ID3D11SamplerState> comparison_sampler_;
 };
 
 } // namespace render
