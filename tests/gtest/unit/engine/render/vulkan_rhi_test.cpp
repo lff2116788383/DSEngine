@@ -44,6 +44,7 @@
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_draw_executor.h"
+#include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
 #endif
 
 #include <glm/glm.hpp>
@@ -581,6 +582,41 @@ TEST(VulkanSpotLightsUBOTest, J1_Entry大小正确) {
 TEST(VulkanSpotLightsUBOTest, J1_默认count为零) {
     VulkanSpotLightsUBO ubo{};
     EXPECT_EQ(ubo.u_spot_light_count, 0);
+}
+
+// ============================================================
+// Phase K: GLSL 着色器字符串关键声明验证（无 GPU 依赖）
+// ============================================================
+
+TEST(VulkanGLSLShaderTest, K_PointLightsUBO声明存在) {
+    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    EXPECT_NE(src.find("set = 1, binding = 1"), std::string::npos)
+        << "kPbrFragment should declare PointLights UBO at set=1 binding=1";
+}
+
+TEST(VulkanGLSLShaderTest, K_SpotLightsUBO声明存在) {
+    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    EXPECT_NE(src.find("set = 1, binding = 2"), std::string::npos)
+        << "kPbrFragment should declare SpotLights UBO at set=1 binding=2";
+}
+
+TEST(VulkanGLSLShaderTest, K_点光源立方体阴影采样器声明存在) {
+    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    EXPECT_NE(src.find("u_point_shadow_maps"), std::string::npos)
+        << "kPbrFragment should declare u_point_shadow_maps samplerCube";
+}
+
+TEST(VulkanGLSLShaderTest, K_SpotLight使用float_pad非vec2_pad) {
+    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    // SpotLight 含有 outer_cone 字段；在 outer_cone 之后到下一个 "};" 之间
+    // 必须是 float _pad 而非 vec2 _pad（vec2 对齐会使 stride 从 64B 变成 80B）
+    auto outer_pos = src.find("float outer_cone;");
+    ASSERT_NE(outer_pos, std::string::npos) << "outer_cone field not found in kPbrFragment";
+    auto struct_end = src.find("};", outer_pos);
+    ASSERT_NE(struct_end, std::string::npos);
+    auto vec2_pos = src.find("vec2 _pad", outer_pos);
+    EXPECT_TRUE(vec2_pos == std::string::npos || vec2_pos > struct_end)
+        << "SpotLight._pad must be float, not vec2 (stride must be 64B not 80B)";
 }
 
 #endif // DSE_ENABLE_VULKAN

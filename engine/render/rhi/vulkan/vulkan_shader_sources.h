@@ -12,8 +12,11 @@
  * Descriptor Set 布局约定（与 SPIR-V 反射 fallback 一致）：
  *   Set 0, Binding 0: PerFrame UBO    (vp, view, camera_pos)
  *   Set 1, Binding 0: PerScene UBO    (方向光/阴影参数)
+ *   Set 1, Binding 1: PointLights UBO (点光源数组 208B std140)
+ *   Set 1, Binding 2: SpotLights UBO  (聚光灯数组 272B std140)
  *   Set 2, Binding 0: PerMaterial UBO (材质参数)
  *   Set 2, Binding 1-7: 采样器        (albedo/normal/mr/emissive/occlusion/shadow/spot_shadow)
+ *   Set 3, Binding 0: 点光源立方体阴影 samplerCube[4]
  *   Push Constant: 逐对象 model matrix + 骨骼/变形标记
  */
 
@@ -187,7 +190,7 @@ struct SpotLight {
     float outer_cone;
     int cast_shadow;
     int shadow_index;
-    vec2 _pad;
+    float _pad;  // NOTE: must be float (not vec2) to keep stride=64B matching C++ VulkanSpotLightsUBO::Entry
 };
 #define MAX_SPOT_LIGHTS 4
 layout(std140, set = 1, binding = 2) uniform SpotLights {
