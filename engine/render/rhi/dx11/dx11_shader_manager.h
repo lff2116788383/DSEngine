@@ -1,0 +1,99 @@
+/**
+ * @file dx11_shader_manager.h
+ * @brief D3D11 着色器管理器 — HLSL 运行时编译与着色器程序管理
+ *
+ * 职责：
+ * 1. HLSL 源码通过 D3DCompile 编译为字节码
+ * 2. 创建 ID3D11VertexShader + ID3D11PixelShader
+ * 3. 保存编译后的 VS 字节码用于 InputLayout 创建
+ * 4. 内置着色器初始化（PBR/天空盒/粒子/精灵/后处理）
+ */
+
+#ifndef DSE_RENDER_DX11_SHADER_MANAGER_H
+#define DSE_RENDER_DX11_SHADER_MANAGER_H
+
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#include <wrl/client.h>
+#include <unordered_map>
+#include <string>
+#include <vector>
+
+namespace dse {
+namespace render {
+
+using Microsoft::WRL::ComPtr;
+
+class DX11Context;
+
+/// D3D11 着色器程序封装
+struct DX11ShaderProgram {
+    ComPtr<ID3D11VertexShader> vertex_shader;
+    ComPtr<ID3D11PixelShader> pixel_shader;
+    ComPtr<ID3DBlob> vs_blob;   ///< VS 编译字节码，用于创建 InputLayout
+    ComPtr<ID3DBlob> ps_blob;
+};
+
+/**
+ * @class DX11ShaderManager
+ * @brief D3D11 着色器管理器
+ */
+class DX11ShaderManager {
+public:
+    DX11ShaderManager() = default;
+    ~DX11ShaderManager() = default;
+
+    /// 初始化
+    void Init(DX11Context* context);
+
+    /// 清理所有着色器资源
+    void Shutdown();
+
+    /// 从 HLSL 源码创建着色器程序，返回句柄（0 = 失败）
+    unsigned int CreateProgram(const std::string& vert_src, const std::string& frag_src);
+
+    /// 销毁着色器程序
+    void DeleteProgram(unsigned int handle);
+
+    /// 查询着色器程序
+    const DX11ShaderProgram* GetProgram(unsigned int handle) const;
+
+    /// 初始化内置着色器
+    void InitBuiltinShaders();
+
+    // --- 内置着色器访问器 ---
+    unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
+    unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
+    unsigned int particle_shader_handle() const { return particle_shader_handle_; }
+    unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
+    unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
+    unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
+
+    std::size_t programs_created() const { return programs_created_; }
+    std::size_t programs_destroyed() const { return programs_destroyed_; }
+
+private:
+    /// 编译 HLSL 源码
+    ComPtr<ID3DBlob> CompileShader(const std::string& source, const std::string& entry_point,
+                                    const std::string& target);
+
+    DX11Context* context_ = nullptr;
+
+    std::unordered_map<unsigned int, DX11ShaderProgram> programs_;
+    unsigned int next_handle_ = 840000;
+
+    unsigned int pbr_shader_handle_ = 0;
+    unsigned int skybox_shader_handle_ = 0;
+    unsigned int particle_shader_handle_ = 0;
+    unsigned int sprite_shader_handle_ = 0;
+    unsigned int postprocess_shader_handle_ = 0;
+    unsigned int shadow_shader_handle_ = 0;
+
+    std::size_t programs_created_ = 0;
+    std::size_t programs_destroyed_ = 0;
+};
+
+} // namespace render
+} // namespace dse
+
+#endif // DSE_RENDER_DX11_SHADER_MANAGER_H

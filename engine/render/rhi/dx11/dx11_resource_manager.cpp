@@ -1,0 +1,394 @@
+/**
+ * @file dx11_resource_manager.cpp
+ * @brief DX11ResourceManager 实现 — D3D11 GPU 资源的创建/销毁/更新
+ */
+
+#include "engine/render/rhi/dx11/dx11_resource_manager.h"
+#include "engine/render/rhi/dx11/dx11_context.h"
+#include "engine/base/debug.h"
+
+#include <cstring>
+
+namespace dse {
+namespace render {
+
+bool DX11ResourceManager::Init(DX11Context* context) {
+    context_ = context;
+    device_ = context->device();
+    dc_ = context->device_context();
+    initialized_ = true;
+    DEBUG_LOG_INFO("[D3D11] ResourceManager initialized");
+    return true;
+}
+
+void DX11ResourceManager::Shutdown() {
+    if (!initialized_) return;
+
+    textures_.clear();
+    buffers_.clear();
+    render_targets_.clear();
+    vertex_arrays_.clear();
+
+    initialized_ = false;
+    DEBUG_LOG_INFO("[D3D11] ResourceManager shutdown");
+}
+
+// ============================================================
+// 纹理
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateTexture2D(int width, int height,
+                                                    const unsigned char* rgba8_data,
+                                                    bool linear_filter) {
+    DX11Texture tex;
+    tex.width = width;
+    tex.height = height;
+    tex.is_cube = false;
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = static_cast<UINT>(width);
+    td.Height = static_cast<UINT>(height);
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = rgba8_data;
+    init_data.SysMemPitch = static_cast<UINT>(width * 4);
+
+    HRESULT hr = device_->CreateTexture2D(&td, rgba8_data ? &init_data : nullptr, tex.texture.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateTexture2D failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    // SRV
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = td.Format;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+    hr = device_->CreateShaderResourceView(tex.texture.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    // Sampler
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter = linear_filter ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_MIP_POINT;
+    sd.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.MaxAnisotropy = 1;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    return handle;
+}
+
+unsigned int DX11ResourceManager::CreateTextureCube(int width, int height,
+                                                      const unsigned char* const rgba8_faces[6],
+                                                      bool linear_filter) {
+    DX11Texture tex;
+    tex.width = width;
+    tex.height = height;
+    tex.is_cube = true;
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = static_cast<UINT>(width);
+    td.Height = static_cast<UINT>(height);
+    td.MipLevels = 1;
+    td.ArraySize = 6;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    td.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+    D3D11_SUBRESOURCE_DATA init_data[6]{};
+    bool has_data = (rgba8_faces != nullptr);
+    if (has_data) {
+        for (int i = 0; i < 6; ++i) {
+            init_data[i].pSysMem = rgba8_faces[i];
+            init_data[i].SysMemPitch = static_cast<UINT>(width * 4);
+        }
+    }
+
+    HRESULT hr = device_->CreateTexture2D(&td, has_data ? init_data : nullptr, tex.texture.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = td.Format;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    srv_desc.TextureCube.MipLevels = 1;
+    hr = device_->CreateShaderResourceView(tex.texture.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter = linear_filter ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_MIP_POINT;
+    sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxAnisotropy = 1;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    return handle;
+}
+
+void DX11ResourceManager::DeleteTexture(unsigned int handle) {
+    textures_.erase(handle);
+}
+
+const DX11Texture* DX11ResourceManager::GetTexture(unsigned int handle) const {
+    auto it = textures_.find(handle);
+    return it != textures_.end() ? &it->second : nullptr;
+}
+
+// ============================================================
+// 缓冲区
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    DX11Buffer buf;
+    buf.size = size;
+    buf.is_dynamic = is_dynamic;
+    buf.is_index = is_index;
+
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth = static_cast<UINT>(size);
+    bd.BindFlags = is_index ? D3D11_BIND_INDEX_BUFFER : D3D11_BIND_VERTEX_BUFFER;
+
+    if (is_dynamic) {
+        bd.Usage = D3D11_USAGE_DYNAMIC;
+        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    } else {
+        bd.Usage = D3D11_USAGE_DEFAULT;
+    }
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = data;
+
+    HRESULT hr = device_->CreateBuffer(&bd, data ? &init_data : nullptr, buf.buffer.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateBuffer failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    unsigned int handle = next_buffer_handle_++;
+    buffers_[handle] = std::move(buf);
+    return handle;
+}
+
+void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool /*is_index*/) {
+    auto it = buffers_.find(handle);
+    if (it == buffers_.end()) return;
+    auto& buf = it->second;
+
+    if (buf.is_dynamic) {
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        HRESULT hr = dc_->Map(buf.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (SUCCEEDED(hr)) {
+            memcpy(static_cast<unsigned char*>(mapped.pData) + offset, data, size);
+            dc_->Unmap(buf.buffer.Get(), 0);
+        }
+    } else {
+        D3D11_BOX box{};
+        box.left = static_cast<UINT>(offset);
+        box.right = static_cast<UINT>(offset + size);
+        box.top = 0;
+        box.bottom = 1;
+        box.front = 0;
+        box.back = 1;
+        dc_->UpdateSubresource(buf.buffer.Get(), 0, &box, data, 0, 0);
+    }
+}
+
+void DX11ResourceManager::DeleteBuffer(unsigned int handle) {
+    buffers_.erase(handle);
+}
+
+const DX11Buffer* DX11ResourceManager::GetBuffer(unsigned int handle) const {
+    auto it = buffers_.find(handle);
+    return it != buffers_.end() ? &it->second : nullptr;
+}
+
+// ============================================================
+// 渲染目标
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
+                                                       bool generate_mipmaps, bool /*cube_map*/) {
+    DX11RenderTarget rt;
+    rt.width = width;
+    rt.height = height;
+    rt.has_color = has_color;
+    rt.has_depth = has_depth;
+    rt.generate_mipmaps = generate_mipmaps;
+
+    // 颜色附件
+    if (has_color) {
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width = static_cast<UINT>(width);
+        td.Height = static_cast<UINT>(height);
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Usage = D3D11_USAGE_DEFAULT;
+        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+        HRESULT hr = device_->CreateTexture2D(&td, nullptr, rt.color_texture.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        hr = device_->CreateRenderTargetView(rt.color_texture.Get(), nullptr, rt.color_rtv.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+        srv_desc.Format = td.Format;
+        srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.Texture2D.MipLevels = 1;
+        hr = device_->CreateShaderResourceView(rt.color_texture.Get(), &srv_desc, rt.color_srv.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        // 为颜色纹理注册一个纹理句柄
+        DX11Texture color_tex;
+        color_tex.texture = rt.color_texture;
+        color_tex.srv = rt.color_srv;
+        color_tex.width = width;
+        color_tex.height = height;
+        rt.color_texture_handle = next_texture_handle_++;
+        textures_[rt.color_texture_handle] = std::move(color_tex);
+    }
+
+    // 深度附件
+    if (has_depth) {
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width = static_cast<UINT>(width);
+        td.Height = static_cast<UINT>(height);
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_R24G8_TYPELESS;
+        td.SampleDesc.Count = 1;
+        td.Usage = D3D11_USAGE_DEFAULT;
+        td.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+
+        HRESULT hr = device_->CreateTexture2D(&td, nullptr, rt.depth_texture.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+        dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+        hr = device_->CreateDepthStencilView(rt.depth_texture.Get(), &dsv_desc, rt.depth_dsv.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+        srv_desc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.Texture2D.MipLevels = 1;
+        hr = device_->CreateShaderResourceView(rt.depth_texture.Get(), &srv_desc, rt.depth_srv.GetAddressOf());
+        if (FAILED(hr)) return 0;
+
+        DX11Texture depth_tex;
+        depth_tex.texture = rt.depth_texture;
+        depth_tex.srv = rt.depth_srv;
+        depth_tex.width = width;
+        depth_tex.height = height;
+        rt.depth_texture_handle = next_texture_handle_++;
+        textures_[rt.depth_texture_handle] = std::move(depth_tex);
+    }
+
+    unsigned int handle = next_render_target_handle_++;
+    render_targets_[handle] = std::move(rt);
+    return handle;
+}
+
+void DX11ResourceManager::DeleteRenderTarget(unsigned int handle) {
+    auto it = render_targets_.find(handle);
+    if (it == render_targets_.end()) return;
+
+    auto& rt = it->second;
+    if (rt.color_texture_handle) textures_.erase(rt.color_texture_handle);
+    if (rt.depth_texture_handle) textures_.erase(rt.depth_texture_handle);
+
+    render_targets_.erase(it);
+}
+
+const DX11RenderTarget* DX11ResourceManager::GetRenderTarget(unsigned int handle) const {
+    auto it = render_targets_.find(handle);
+    return it != render_targets_.end() ? &it->second : nullptr;
+}
+
+unsigned int DX11ResourceManager::GetRenderTargetColorTextureHandle(unsigned int handle) const {
+    auto it = render_targets_.find(handle);
+    return it != render_targets_.end() ? it->second.color_texture_handle : 0;
+}
+
+unsigned int DX11ResourceManager::GetRenderTargetDepthTextureHandle(unsigned int handle) const {
+    auto it = render_targets_.find(handle);
+    return it != render_targets_.end() ? it->second.depth_texture_handle : 0;
+}
+
+DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(unsigned int handle) const {
+    ReadbackResult result;
+    auto it = render_targets_.find(handle);
+    if (it == render_targets_.end() || !it->second.color_texture) return result;
+
+    auto& rt = it->second;
+    result.width = rt.width;
+    result.height = rt.height;
+
+    // 创建 staging 纹理用于回读
+    D3D11_TEXTURE2D_DESC td{};
+    rt.color_texture->GetDesc(&td);
+    td.Usage = D3D11_USAGE_STAGING;
+    td.BindFlags = 0;
+    td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    td.MiscFlags = 0;
+
+    ComPtr<ID3D11Texture2D> staging;
+    HRESULT hr = device_->CreateTexture2D(&td, nullptr, staging.GetAddressOf());
+    if (FAILED(hr)) return result;
+
+    dc_->CopyResource(staging.Get(), rt.color_texture.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = dc_->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) return result;
+
+    result.pixels.resize(rt.width * rt.height * 4);
+    const unsigned char* src = static_cast<const unsigned char*>(mapped.pData);
+    for (int y = 0; y < rt.height; ++y) {
+        memcpy(result.pixels.data() + y * rt.width * 4,
+               src + y * mapped.RowPitch,
+               rt.width * 4);
+    }
+    dc_->Unmap(staging.Get(), 0);
+
+    return result;
+}
+
+// ============================================================
+// 顶点数组（D3D11 无 VAO 概念，占位实现）
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateVertexArray() {
+    unsigned int handle = next_vao_handle_++;
+    vertex_arrays_[handle] = DX11VertexArray{handle};
+    return handle;
+}
+
+void DX11ResourceManager::DeleteVertexArray(unsigned int handle) {
+    vertex_arrays_.erase(handle);
+}
+
+} // namespace render
+} // namespace dse

@@ -29,6 +29,7 @@ option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
 option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
+option(DSE_ENABLE_D3D11 "Enable D3D11 RHI backend" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
@@ -181,6 +182,11 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
+# D3D11 RHI 后端源文件仅在启用时编译
+if(NOT DSE_ENABLE_D3D11)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/dx11/.*\\.cpp$")
+endif()
+
 
 if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
@@ -302,6 +308,14 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
             ${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib
             ${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib>
     )
+endif()
+# --- D3D11 RHI 后端 ---
+if(DSE_ENABLE_D3D11 AND WIN32)
+    add_definitions(-D DSE_ENABLE_D3D11)
+    target_link_libraries(dse_engine PRIVATE d3d11 dxgi d3dcompiler dxguid)
+elseif(DSE_ENABLE_D3D11 AND NOT WIN32)
+    message(WARNING "DSE_ENABLE_D3D11=ON but platform is not Windows. D3D11 backend will be disabled.")
+    set(DSE_ENABLE_D3D11 OFF)
 endif()
 # --- Vulkan RHI 后端 ---
 if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)

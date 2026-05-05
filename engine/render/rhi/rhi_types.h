@@ -28,6 +28,7 @@
 enum class RhiBackend : unsigned int {
     OpenGL = 0,
     Vulkan = 1,
+    D3D11  = 2,
     Default = OpenGL  ///< 默认使用 OpenGL 后端
 };
 
