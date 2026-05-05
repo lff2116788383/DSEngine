@@ -13,6 +13,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/ecs/gameplay3d_ecs_integration_test.cpp
     # engine/physics
     engine/physics/physics2d_collision_event_integration_test.cpp
+    engine/physics/physics2d_joint_integration_test.cpp
     engine/physics/physics3d_ecs_integration_test.cpp
     # engine/render
     engine/render/rendergraph_integration_test.cpp

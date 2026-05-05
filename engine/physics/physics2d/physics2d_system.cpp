@@ -7,6 +7,10 @@
 #include "engine/ecs/physics_2d.h"
 #include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
+#include <box2d/b2_revolute_joint.h>
+#include <box2d/b2_distance_joint.h>
+#include <box2d/b2_prismatic_joint.h>
+#include <box2d/b2_weld_joint.h>
 #include <glm/gtx/quaternion.hpp>
 #include <cmath>
 
@@ -125,6 +129,10 @@ void Physics2DSystem::Init(World& world) {
     auto rb_view = world.registry().view<RigidBody2DComponent>();
     for (auto entity : rb_view) {
         rb_view.get<RigidBody2DComponent>(entity).runtime_body = nullptr;
+    }
+    auto joint_view_init = world.registry().view<Joint2DComponent>();
+    for (auto entity : joint_view_init) {
+        joint_view_init.get<Joint2DComponent>(entity).runtime_joint = nullptr;
     }
 
     physics_world_ = new b2World(b2Vec2(0.0f, -9.81f));
@@ -245,6 +253,80 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         }
     }
 
+    // 1.5 Create Box2D joints for new Joint2DComponents
+    static constexpr float kDeg2Rad = 3.14159265359f / 180.0f;
+    auto joint_view = world.registry().view<Joint2DComponent>();
+    for (auto entity : joint_view) {
+        auto& jc = joint_view.get<Joint2DComponent>(entity);
+        if (jc.runtime_joint != nullptr) continue;
+        b2Body* bodyA = nullptr;
+        b2Body* bodyB = nullptr;
+        if (world.registry().valid(jc.entity_a) &&
+            world.registry().all_of<RigidBody2DComponent>(jc.entity_a)) {
+            bodyA = world.registry().get<RigidBody2DComponent>(jc.entity_a).runtime_body;
+        }
+        if (world.registry().valid(jc.entity_b) &&
+            world.registry().all_of<RigidBody2DComponent>(jc.entity_b)) {
+            bodyB = world.registry().get<RigidBody2DComponent>(jc.entity_b).runtime_body;
+        }
+        if (bodyA == nullptr || bodyB == nullptr) continue;
+        b2Vec2 anchorA_world = bodyA->GetWorldPoint(b2Vec2{jc.anchor_a.x, jc.anchor_a.y});
+        b2Vec2 anchorB_world = bodyB->GetWorldPoint(b2Vec2{jc.anchor_b.x, jc.anchor_b.y});
+        switch (jc.type) {
+            case Joint2DType::Revolute: {
+                b2RevoluteJointDef def;
+                def.bodyA = bodyA;
+                def.bodyB = bodyB;
+                def.localAnchorA = b2Vec2{jc.anchor_a.x, jc.anchor_a.y};
+                def.localAnchorB = b2Vec2{jc.anchor_b.x, jc.anchor_b.y};
+                def.referenceAngle = bodyB->GetAngle() - bodyA->GetAngle();
+                def.collideConnected = jc.collide_connected;
+                def.enableLimit = jc.enable_limit;
+                def.lowerAngle = jc.lower_angle * kDeg2Rad;
+                def.upperAngle = jc.upper_angle * kDeg2Rad;
+                def.enableMotor = jc.enable_motor;
+                def.motorSpeed = jc.motor_speed * kDeg2Rad;
+                def.maxMotorTorque = jc.max_motor_torque;
+                jc.runtime_joint = physics_world_->CreateJoint(&def);
+                break;
+            }
+            case Joint2DType::Distance: {
+                b2DistanceJointDef def;
+                def.Initialize(bodyA, bodyB, anchorA_world, anchorB_world);
+                def.collideConnected = jc.collide_connected;
+                def.minLength = jc.min_length;
+                def.maxLength = jc.max_length;
+                def.stiffness = jc.stiffness;
+                def.damping = jc.damping;
+                jc.runtime_joint = physics_world_->CreateJoint(&def);
+                break;
+            }
+            case Joint2DType::Prismatic: {
+                b2PrismaticJointDef def;
+                b2Vec2 axis{jc.prismatic_axis.x, jc.prismatic_axis.y};
+                float axisLen = axis.Length();
+                if (axisLen > 0.0001f) { axis.x /= axisLen; axis.y /= axisLen; }
+                def.Initialize(bodyA, bodyB, anchorA_world, axis);
+                def.collideConnected = jc.collide_connected;
+                def.enableLimit = jc.enable_limit;
+                def.lowerTranslation = jc.lower_translation;
+                def.upperTranslation = jc.upper_translation;
+                def.enableMotor = jc.enable_motor;
+                def.motorSpeed = jc.prismatic_motor_speed;
+                def.maxMotorForce = jc.max_motor_force;
+                jc.runtime_joint = physics_world_->CreateJoint(&def);
+                break;
+            }
+            case Joint2DType::Weld: {
+                b2WeldJointDef def;
+                def.Initialize(bodyA, bodyB, anchorA_world);
+                def.collideConnected = jc.collide_connected;
+                jc.runtime_joint = physics_world_->CreateJoint(&def);
+                break;
+            }
+        }
+    }
+
     // 2. Step the physics world
     physics_world_->Step(fixed_delta_time, velocity_iterations_, position_iterations_);
 
@@ -301,6 +383,17 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
             rb.velocity.x = velocity.x;
             rb.velocity.y = velocity.y;
         }
+    }
+}
+
+void Physics2DSystem::DestroyJoint(World& world, Entity entity) {
+    if (physics_world_ == nullptr) return;
+    if (!world.registry().valid(entity)) return;
+    if (!world.registry().all_of<Joint2DComponent>(entity)) return;
+    auto& jc = world.registry().get<Joint2DComponent>(entity);
+    if (jc.runtime_joint != nullptr) {
+        physics_world_->DestroyJoint(jc.runtime_joint);
+        jc.runtime_joint = nullptr;
     }
 }
 

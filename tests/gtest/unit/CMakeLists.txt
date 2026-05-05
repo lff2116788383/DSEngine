@@ -38,6 +38,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/audio/audio_3d_spatial_test.cpp
     # engine/physics
     engine/physics/physics3d_system_test.cpp
+    engine/physics/physics2d_joint_test.cpp
     # engine/render
     engine/render/render_graph_test.cpp
     engine/render/rhi_types_test.cpp

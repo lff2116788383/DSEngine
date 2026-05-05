@@ -55,6 +55,13 @@ public:
      */
     bool Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal);
 
+    /**
+     * @brief 销毁指定实体上 Joint2DComponent 对应的 Box2D 关节
+     * @param world 实体世界
+     * @param entity 拥有 Joint2DComponent 的实体
+     */
+    void DestroyJoint(World& world, Entity entity);
+
 private:
     using ContactPair = std::tuple<Entity, Entity, bool>;
 

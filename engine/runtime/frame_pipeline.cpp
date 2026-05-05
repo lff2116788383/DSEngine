@@ -160,8 +160,20 @@ bool FramePipeline::Init() {
     if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
         const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
         const int init_h = Screen::height() > 0 ? Screen::height() : 720;
-        if (!runtime_context_.rhi_device->InitDevice(runtime_context_.native_window_handle, init_w, init_h)) {
-            DEBUG_LOG_ERROR("FramePipeline init failed: RhiDevice::InitDevice returned false");
+        bool init_ok = false;
+        try {
+            init_ok = runtime_context_.rhi_device->InitDevice(
+                runtime_context_.native_window_handle, init_w, init_h);
+        } catch (const std::exception& e) {
+            DEBUG_LOG_ERROR("FramePipeline [{}] InitDevice exception: {}",
+                dse::render::RhiBackendToString(rhi_backend), e.what());
+        } catch (...) {
+            DEBUG_LOG_ERROR("FramePipeline [{}] InitDevice unknown exception",
+                dse::render::RhiBackendToString(rhi_backend));
+        }
+        if (!init_ok) {
+            DEBUG_LOG_ERROR("FramePipeline init failed: [{}] InitDevice returned false",
+                dse::render::RhiBackendToString(rhi_backend));
             return false;
         }
     }
