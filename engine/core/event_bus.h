@@ -79,6 +79,26 @@ struct SceneLifecycleEvent : public Event {
 };
 
 /**
+ * @struct SubSceneLoadedEvent
+ * @brief 子场景加载完成事件
+ */
+struct SubSceneLoadedEvent : public Event {
+    explicit SubSceneLoadedEvent(const std::string& scene_path) : path(scene_path) {}
+    std::string path;
+    static constexpr EventId kEventId = events::kSubSceneLoaded;
+};
+
+/**
+ * @struct SubSceneUnloadedEvent
+ * @brief 子场景卸载完成事件
+ */
+struct SubSceneUnloadedEvent : public Event {
+    explicit SubSceneUnloadedEvent(const std::string& scene_path) : path(scene_path) {}
+    std::string path;
+    static constexpr EventId kEventId = events::kSubSceneUnloaded;
+};
+
+/**
  * @class IEventCallback
  * @brief 事件回调接口基类
  */

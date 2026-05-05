@@ -99,6 +99,10 @@ namespace events {
     constexpr EventId kFrameEnd        = MakeEventId("FrameEnd");
     constexpr EventId kModuleLoaded    = MakeEventId("ModuleLoaded");
     constexpr EventId kModuleUnloaded  = MakeEventId("ModuleUnloaded");
+
+    // --- 子场景事件 ---
+    constexpr EventId kSubSceneLoaded   = MakeEventId("SubSceneLoaded");
+    constexpr EventId kSubSceneUnloaded = MakeEventId("SubSceneUnloaded");
 } // namespace events
 
 } // namespace core

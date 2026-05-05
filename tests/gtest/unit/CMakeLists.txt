@@ -45,6 +45,10 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/scene/quad_tree_test.cpp
     engine/scene/transform_system_test.cpp
     engine/scene/raw_scene_data_test.cpp
+    engine/scene/sub_scene_test.cpp
+    engine/scene/scene_manager_test.cpp
+    engine/scene/scene_transition_test.cpp
+    engine/scene/uuid_cross_scene_test.cpp
     # engine/assets
     engine/assets/asset_manager_test.cpp
     engine/assets/asset_pipeline_async_test.cpp

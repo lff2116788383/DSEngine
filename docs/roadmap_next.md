@@ -15,7 +15,7 @@
 | **Physics2D** | 2 文件 | ★★★☆☆ | 1 集成 | 有基本碰撞，缺 joint/motor |
 | **Scripting/Lua** | 22 文件 | ★★★★★ | 5 集成 | Binding 覆盖最全（ECS/3D/物理/粒子/UI/动画/Spine） |
 | **Asset** | 4 文件 | ★★★★☆ | 2 unit + 2 集成 | 异步加载全资源类型 + LRU 淘汰 + 文件热重载 |
-| **Scene** | 6 文件 | ★★★★☆ | 有序列化 | 有 prefab/序列化/空间划分 |
+| **Scene** | 10 文件 | ★★★★★ | 45 unit | 有 prefab/序列化/空间划分/子场景/场景管理器/场景切换/UUID跨场景引用 |
 | **Audio** | 2 文件 | ★★★☆☆ | 无独立测试 | miniaudio 封装，缺 3D 空间化 C++ API |
 | **Runtime** | 15 文件 | ★★★★☆ | 有测试 | FramePipeline/EngineApp 成熟 |
 | **Profiler** | 6 文件 | ★★★☆☆ | 无测试 | CPU/Memory/Render 三线，但缺集成 |
@@ -44,14 +44,15 @@
 2. ✅ **热重载 Watcher** — 监听 `data/` 目录文件变更（Windows `ReadDirectoryChangesW` overlapped I/O），自动 reload 对应 asset（纹理/Mesh/音频）
 3. ✅ **LRU 淘汰 + 内存预算** — 为资源添加 `LruEntry`（字节估算 + 最近访问时间戳），`SetMemoryBudget()` / `EvictLRU()` 超预算时淘汰最久未用且已无外部引用的资源
 
-### ⭐ P1：场景系统增强
+### ✅ P1：场景系统增强（已完成）
 
 **原因**: 当前 `Scene` 序列化/反序列化已有，但缺子场景（Level Streaming）和 LOD 切换。
 
 具体方向：
-1. **子场景/Level Streaming** — 加载/卸载子场景，共享 World 的 ECS registry 但独立管理生命周期
-2. **场景对象引用** — 跨 scene 的 Entity 引用，当前只有 entity ID
-3. **运行时 Scene 状态机** — 场景切换过渡（fade/additive load）
+1. ✅ **子场景/Level Streaming** — `SubScene` 类（`engine/scene/sub_scene.h/.cpp`），共享 World ECS registry 独立管理 Entity 生命周期，支持 Load/Unload（11 tests）
+2. ✅ **SceneManager** — `SceneManager` 类（`engine/scene/scene_manager.h/.cpp`），管理多 SubScene，支持同步/异步加载（JobSystem）、EventBus 事件通知、ServiceLocator 注册（15 tests）
+3. ✅ **运行时 Scene 状态机** — `TransitionTo(path, TransitionMode)` 支持 Instant/Additive/Fade 三种过渡模式，Fade 含 FadingOut→Loading→FadingIn 状态机（8 tests）
+4. ✅ **跨场景 Entity 引用** — `UUIDComponent`（`engine/ecs/uuid_component.h`）+ `SceneManager::ResolveReference(uuid)` 在所有已加载 SubScene 中查找 Entity（11 tests）
 
 ### ⭐ P1：音频 3D 空间化 C++ 层
 
