@@ -21,6 +21,10 @@
 #include <gmock/gmock.h>
 #include "engine/render/render_graph.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/passes/builtin_passes.h"
+#include "engine/render/passes/render_pass_context.h"
+#include "engine/ecs/world.h"
+#include "engine/ecs/components_3d.h"
 #include <vector>
 #include <string>
 
@@ -287,4 +291,150 @@ TEST_F(RenderGraphIntegrationTest, 只有MarkOutput无Pass编译通过) {
 
     EXPECT_TRUE(graph.Compile());
     EXPECT_EQ(graph.compiled_pass_count(), 0u);
+}
+
+// ============================================================
+// Stub RhiDevice：无 GPU，GetRenderTargetColorTexture 固定返回 42
+// ============================================================
+
+class StubRhiDevice : public RhiDevice {
+    RenderStats stats_{};
+public:
+    void Shutdown() override {}
+    void BeginFrame() override {}
+    unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }
+    unsigned int GetRenderTargetColorTexture(unsigned int) const override { return 42; }
+    unsigned int GetRenderTargetDepthTexture(unsigned int) const override { return 0; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int) const override { return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int) const override { return {}; }
+    unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override { return 0; }
+    unsigned int CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return 0; }
+    void DeleteTexture(unsigned int) override {}
+    unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 0; }
+    void DeleteShaderProgram(unsigned int) override {}
+    unsigned int CreatePipelineState(const PipelineStateDesc&) override { return 0; }
+    unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 0; }
+    void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
+    void DeleteBuffer(unsigned int) override {}
+    unsigned int CreateVertexArray() override { return 0; }
+    void DeleteVertexArray(unsigned int) override {}
+    std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
+    void Submit(std::shared_ptr<CommandBuffer>) override {}
+    void EndFrame() override {}
+    const RenderStats& LastFrameStats() const override { return stats_; }
+    void SetGlobalShadowMap(unsigned int, unsigned int) override {}
+    void SetGlobalSpotShadowMap(unsigned int, unsigned int) override {}
+    void SetGlobalPointShadowMap(unsigned int, unsigned int) override {}
+    void SetGlobalLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
+    void SetGlobalCascadeSplit(unsigned int, float) override {}
+    void SetGlobalSpotLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
+};
+
+// ============================================================
+// BloomPassTest
+// ============================================================
+
+class BloomPassTest : public ::testing::Test {
+protected:
+    World world;
+    StubRhiDevice rhi_dev;
+    dse::render::RenderPassContext ctx;
+
+    void SetUp() override {
+        ctx.world       = &world;
+        ctx.rhi_device  = &rhi_dev;
+        ctx.render_targets.scene         = 1;
+        ctx.render_targets.bloom_extract = 2;
+        ctx.render_targets.bloom_mips    = {3, 4, 5, 6, 7};
+    }
+};
+
+TEST_F(BloomPassTest, BloomPass_Disabled_不调用DrawPostProcess) {
+    auto e = world.registry().create();
+    dse::PostProcessComponent pp;
+    pp.enabled       = true;
+    pp.bloom_enabled = false;
+    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+
+    ::testing::NiceMock<MockCommandBuffer> mock;
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::_, ::testing::_)).Times(0);
+
+    dse::render::BloomPass pass(ctx);
+    pass.Execute(mock);
+}
+
+TEST_F(BloomPassTest, BloomPass_Enabled_调用downsample和upsample) {
+    auto e = world.registry().create();
+    dse::PostProcessComponent pp;
+    pp.enabled         = true;
+    pp.bloom_enabled   = true;
+    pp.bloom_threshold = 0.8f;
+    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+
+    ::testing::NiceMock<MockCommandBuffer> mock;
+    // 兜底：允许 bloom_extract 等其他效果自由调用
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::_, ::testing::_))
+        .Times(::testing::AnyNumber());
+    // 具体验证
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_downsample"), ::testing::_))
+        .Times(::testing::AtLeast(1));
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_upsample"), ::testing::_))
+        .Times(::testing::AtLeast(1));
+    EXPECT_CALL(mock, BeginRenderPass(::testing::_))
+        .Times(::testing::AtLeast(6));
+
+    dse::render::BloomPass pass(ctx);
+    pass.Execute(mock);
+}
+
+// ============================================================
+// CompositePassTest
+// ============================================================
+
+class CompositePassTest : public ::testing::Test {
+protected:
+    World world;
+    StubRhiDevice rhi_dev;
+    dse::render::RenderPassContext ctx;
+
+    void SetUp() override {
+        ctx.world       = &world;
+        ctx.rhi_device  = &rhi_dev;
+        ctx.render_targets.scene = 1;
+        ctx.render_targets.ui    = 2;
+        ctx.render_targets.main  = 3;
+        ctx.render_targets.bloom_mips = {4};
+    }
+};
+
+TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
+    auto e = world.registry().create();
+    dse::PostProcessComponent pp;
+    pp.enabled       = true;
+    pp.bloom_enabled = false;
+    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+
+    ::testing::NiceMock<MockCommandBuffer> mock;
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("copy"), ::testing::_))
+        .Times(1);
+
+    dse::render::CompositePass pass(ctx);
+    pass.Execute(mock);
+}
+
+TEST_F(CompositePassTest, CompositePass_BloomEnabled_使用bloom_composite) {
+    auto e = world.registry().create();
+    dse::PostProcessComponent pp;
+    pp.enabled         = true;
+    pp.bloom_enabled   = true;
+    pp.bloom_intensity = 0.5f;
+    pp.exposure        = 1.0f;
+    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+
+    ::testing::NiceMock<MockCommandBuffer> mock;
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_composite"), ::testing::_))
+        .Times(1);
+
+    dse::render::CompositePass pass(ctx);
+    pass.Execute(mock);
 }
