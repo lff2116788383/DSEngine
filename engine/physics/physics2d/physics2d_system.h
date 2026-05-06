@@ -62,6 +62,26 @@ public:
      */
     void DestroyJoint(World& world, Entity entity);
 
+    /**
+     * @brief 运行时设置铰链关节马达角速度（度/秒）
+     */
+    void SetRevoluteMotorSpeed(World& world, Entity joint_entity, float speed);
+
+    /**
+     * @brief 运行时设置铰链关节马达最大扭矩
+     */
+    void SetRevoluteMotorTorque(World& world, Entity joint_entity, float max_torque);
+
+    /**
+     * @brief 运行时设置棱柱关节马达线速度
+     */
+    void SetPrismaticMotorSpeed(World& world, Entity joint_entity, float speed);
+
+    /**
+     * @brief 运行时设置棱柱关节马达最大力
+     */
+    void SetPrismaticMotorForce(World& world, Entity joint_entity, float max_force);
+
 private:
     using ContactPair = std::tuple<Entity, Entity, bool>;
 

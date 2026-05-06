@@ -77,3 +77,26 @@ TEST(Joint2DComponentTest, 默认不碰撞已连接刚体) {
     Joint2DComponent jc;
     EXPECT_FALSE(jc.collide_connected);
 }
+
+// ============================================================
+// 马达参数运行时可修改（字段层面）
+// ============================================================
+
+TEST(Joint2DComponentTest, 铰链马达参数可赋值) {
+    Joint2DComponent jc;
+    jc.enable_motor = true;
+    jc.motor_speed = 180.0f;
+    jc.max_motor_torque = 10.0f;
+    EXPECT_TRUE(jc.enable_motor);
+    EXPECT_FLOAT_EQ(jc.motor_speed, 180.0f);
+    EXPECT_FLOAT_EQ(jc.max_motor_torque, 10.0f);
+}
+
+TEST(Joint2DComponentTest, 棱柱马达参数可赋值) {
+    Joint2DComponent jc;
+    jc.enable_motor = true;
+    jc.prismatic_motor_speed = 2.5f;
+    jc.max_motor_force = 50.0f;
+    EXPECT_FLOAT_EQ(jc.prismatic_motor_speed, 2.5f);
+    EXPECT_FLOAT_EQ(jc.max_motor_force, 50.0f);
+}

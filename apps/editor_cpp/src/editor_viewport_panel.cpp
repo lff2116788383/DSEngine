@@ -6,6 +6,8 @@
 #include "ImGuizmo.h"
 #include "editor_scene_camera.h"
 #include "editor_shortcuts.h"
+#include "editor_tilemap_panel.h"
+#include "editor_terrain_panel.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -37,7 +39,29 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
     ImVec2 scene_panel_size = ImGui::GetContentRegionAvail();
     ImVec2 window_pos = ImGui::GetWindowPos();
 
-    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver()) {
+    // Tilemap / Terrain paint handling (must run before entity picking to consume clicks)
+    bool paint_consumed = false;
+    if (ImGui::IsWindowHovered()) {
+        const float tm_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
+        EditorCamera& tm_cam = GetEditorCamera();
+        glm::mat4 tm_view = tm_cam.GetViewMatrix();
+        glm::mat4 tm_proj = tm_cam.GetProjectionMatrix(tm_aspect);
+        paint_consumed = HandleTilemapViewportPaint(
+            context.registry,
+            glm::vec2(window_pos.x, window_pos.y),
+            glm::vec2(scene_panel_size.x, scene_panel_size.y),
+            tm_view, tm_proj);
+        if (!paint_consumed) {
+            paint_consumed = HandleTerrainViewportSculpt(
+                context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                tm_view, tm_proj,
+                ImGui::GetIO().DeltaTime);
+        }
+    }
+
+    if (!paint_consumed && ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver()) {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float x = (mouse_pos.x - window_pos.x) - scene_panel_size.x / 2.0f;
         float y = (mouse_pos.y - window_pos.y) - scene_panel_size.y / 2.0f;
@@ -69,6 +93,24 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
 
     if (context.texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)context.texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
+
+        // Tilemap grid overlay + Terrain brush overlay
+        {
+            const float ov_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
+            EditorCamera& ov_cam = GetEditorCamera();
+            glm::mat4 ov_view = ov_cam.GetViewMatrix();
+            glm::mat4 ov_proj = ov_cam.GetProjectionMatrix(ov_aspect);
+            DrawTilemapGridOverlay(
+                context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+            DrawTerrainBrushOverlay(
+                context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+        }
 
         if (context.selected_entity != entt::null && context.registry.all_of<TransformComponent>(context.selected_entity)) {
             ImGuizmo::SetOrthographic(false);
@@ -124,6 +166,7 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                     entt::entity ent = gizmo_state.entity;
 
                     auto& undo_mgr = GetUndoRedoManager();
+                    std::string merge_id = "gizmo_transform_" + std::to_string(static_cast<uint32_t>(ent));
                     auto cmd = std::make_unique<LambdaCommand>(
                         "Gizmo Transform",
                         [&reg = context.registry, ent, final_pos, final_rot, final_scale]() {
@@ -143,13 +186,11 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                                 t.scale = old_scale;
                                 t.dirty = true;
                             }
-                        }
+                        },
+                        merge_id
                     );
-                    // Push without executing (transform is already applied)
-                    undo_mgr.Execute(std::move(cmd), false);
-                    // Undo + redo just set the values, but execute already set final values.
-                    // We need a "push without execute" approach. Let's use a workaround:
-                    // Actually Execute() sets final values which are already set, so it's fine.
+                    // Execute sets final values (already applied), try_merge merges consecutive drags
+                    undo_mgr.Execute(std::move(cmd), true);
                 }
             }
             gizmo_state.was_using = is_using;

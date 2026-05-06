@@ -7,6 +7,7 @@
 #include "imgui_internal.h"
 #include "editor_console_panel.h"
 #include "editor_icons.h"
+#include "editor_tilemap_panel.h"
 
 #include <fstream>
 #include <string>
@@ -499,29 +500,7 @@ void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity) 
 }
 
 void DrawTilePalettePanel(const EditorAuxPanelsContext& context) {
-    ImGui::Begin("Tile Palette");
-    if (!context.is_2d) {
-        ImGui::TextDisabled("Tile Palette is only available in 2D mode.");
-    } else {
-        ImGui::Button("Active Brush", ImVec2(120, 24)); ImGui::SameLine();
-        ImGui::Button("Paint", ImVec2(60, 24)); ImGui::SameLine();
-        ImGui::Button("Erase", ImVec2(60, 24));
-
-        ImGui::Separator();
-        ImGui::Text("Select a tilemap to start painting.");
-
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        for (int y = 0; y < 4; y++) {
-            for (int x = 0; x < 6; x++) {
-                draw_list->AddRectFilled(
-                    ImVec2(p.x + x * 32, p.y + y * 32),
-                    ImVec2(p.x + x * 32 + 30, p.y + y * 32 + 30),
-                    IM_COL32(80 + (x + y) * 10, 100 + x * 10, 120 + y * 10, 255));
-            }
-        }
-    }
-    ImGui::End();
+    DrawTilemapEditorPanel(context.registry, context.selected_entity);
 }
 
 } // namespace dse::editor

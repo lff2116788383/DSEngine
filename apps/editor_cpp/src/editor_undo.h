@@ -95,19 +95,35 @@ public:
     LambdaCommand(
         const std::string& description,
         std::function<void()> execute_fn,
-        std::function<void()> undo_fn
+        std::function<void()> undo_fn,
+        const std::string& merge_id = ""
     ) : description_(description)
       , execute_fn_(execute_fn)
-      , undo_fn_(undo_fn) {}
+      , undo_fn_(undo_fn)
+      , merge_id_(merge_id) {}
 
     void Execute() override { execute_fn_(); }
     void Undo() override { undo_fn_(); }
     std::string GetDescription() const override { return description_; }
 
+    bool MergeWith(const ICommand* other) override {
+        if (merge_id_.empty()) return false;
+        auto* typed = dynamic_cast<const LambdaCommand*>(other);
+        if (typed && typed->merge_id_ == merge_id_) {
+            // Keep our undo (earliest state), take their execute (latest state)
+            execute_fn_ = typed->execute_fn_;
+            return true;
+        }
+        return false;
+    }
+
+    const std::string& GetMergeId() const { return merge_id_; }
+
 private:
     std::string description_;
     std::function<void()> execute_fn_;
     std::function<void()> undo_fn_;
+    std::string merge_id_;
 };
 
 /**

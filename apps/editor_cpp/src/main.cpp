@@ -65,6 +65,7 @@
 #include "editor_material_panel.h"
 #include "editor_prefab.h"
 #include "editor_preferences_panel.h"
+#include "editor_terrain_panel.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -449,6 +450,7 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::DrawAnimationPanel(registry, selected_entity);
     dse::editor::DrawMaterialPanel(registry, selected_entity);
     dse::editor::DrawTilePalettePanel(aux_panels_context);
+    dse::editor::DrawTerrainEditorPanel(registry, selected_entity);
 
     // Preferences panel (toggled from Window menu)
     dse::editor::DrawPreferencesPanel(&s_show_preferences);

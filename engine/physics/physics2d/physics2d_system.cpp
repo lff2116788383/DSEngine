@@ -432,6 +432,46 @@ void Physics2DSystem::DestroyJoint(World& world, Entity entity) {
     }
 }
 
+void Physics2DSystem::SetRevoluteMotorSpeed(World& world, Entity joint_entity, float speed) {
+    if (!world.registry().valid(joint_entity)) return;
+    if (!world.registry().all_of<Joint2DComponent>(joint_entity)) return;
+    auto& jc = world.registry().get<Joint2DComponent>(joint_entity);
+    jc.motor_speed = speed;
+    if (jc.runtime_joint != nullptr && jc.type == Joint2DType::Revolute) {
+        static_cast<b2RevoluteJoint*>(jc.runtime_joint)->SetMotorSpeed(glm::radians(speed));
+    }
+}
+
+void Physics2DSystem::SetRevoluteMotorTorque(World& world, Entity joint_entity, float max_torque) {
+    if (!world.registry().valid(joint_entity)) return;
+    if (!world.registry().all_of<Joint2DComponent>(joint_entity)) return;
+    auto& jc = world.registry().get<Joint2DComponent>(joint_entity);
+    jc.max_motor_torque = max_torque;
+    if (jc.runtime_joint != nullptr && jc.type == Joint2DType::Revolute) {
+        static_cast<b2RevoluteJoint*>(jc.runtime_joint)->SetMaxMotorTorque(max_torque);
+    }
+}
+
+void Physics2DSystem::SetPrismaticMotorSpeed(World& world, Entity joint_entity, float speed) {
+    if (!world.registry().valid(joint_entity)) return;
+    if (!world.registry().all_of<Joint2DComponent>(joint_entity)) return;
+    auto& jc = world.registry().get<Joint2DComponent>(joint_entity);
+    jc.prismatic_motor_speed = speed;
+    if (jc.runtime_joint != nullptr && jc.type == Joint2DType::Prismatic) {
+        static_cast<b2PrismaticJoint*>(jc.runtime_joint)->SetMotorSpeed(speed);
+    }
+}
+
+void Physics2DSystem::SetPrismaticMotorForce(World& world, Entity joint_entity, float max_force) {
+    if (!world.registry().valid(joint_entity)) return;
+    if (!world.registry().all_of<Joint2DComponent>(joint_entity)) return;
+    auto& jc = world.registry().get<Joint2DComponent>(joint_entity);
+    jc.max_motor_force = max_force;
+    if (jc.runtime_joint != nullptr && jc.type == Joint2DType::Prismatic) {
+        static_cast<b2PrismaticJoint*>(jc.runtime_joint)->SetMaxMotorForce(max_force);
+    }
+}
+
 bool Physics2DSystem::Raycast(const glm::vec2& start, const glm::vec2& end, Entity& out_entity, glm::vec2& out_point, glm::vec2& out_normal) {
     if (physics_world_ == nullptr) return false;
 

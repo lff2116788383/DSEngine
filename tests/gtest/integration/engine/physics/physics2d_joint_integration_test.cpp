@@ -164,3 +164,81 @@ TEST_F(Physics2DJointIntegrationTest, Reinit后关节重建) {
     sys.Init(world);  // 再次 Init 应重置并重建
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
+
+// ============================================================
+// 马达运行时调速 API
+// ============================================================
+
+TEST_F(Physics2DJointIntegrationTest, 铰链马达运行时调速) {
+    auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
+    auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
+    Entity jEnt = world.CreateEntity();
+    Joint2DComponent jc;
+    jc.type             = Joint2DType::Revolute;
+    jc.entity_a         = bodyA;
+    jc.entity_b         = bodyB;
+    jc.enable_motor     = true;
+    jc.motor_speed      = 45.0f;
+    jc.max_motor_torque = 5.0f;
+    world.registry().emplace<Joint2DComponent>(jEnt, jc);
+
+    sys.Init(world);
+    ASSERT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
+
+    sys.SetRevoluteMotorSpeed(world, jEnt, 180.0f);
+    EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).motor_speed, 180.0f);
+
+    sys.SetRevoluteMotorTorque(world, jEnt, 20.0f);
+    EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_torque, 20.0f);
+}
+
+TEST_F(Physics2DJointIntegrationTest, 棱柱马达运行时调速) {
+    auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
+    auto bodyB  = MakeBody(world, 0.0f, 1.0f, RigidBody2DType::Dynamic);
+    Entity jEnt = world.CreateEntity();
+    Joint2DComponent jc;
+    jc.type                  = Joint2DType::Prismatic;
+    jc.entity_a              = bodyA;
+    jc.entity_b              = bodyB;
+    jc.prismatic_axis        = {0.0f, 1.0f};
+    jc.enable_motor          = true;
+    jc.prismatic_motor_speed = 1.0f;
+    jc.max_motor_force       = 10.0f;
+    world.registry().emplace<Joint2DComponent>(jEnt, jc);
+
+    sys.Init(world);
+    ASSERT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
+
+    sys.SetPrismaticMotorSpeed(world, jEnt, 5.0f);
+    EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).prismatic_motor_speed, 5.0f);
+
+    sys.SetPrismaticMotorForce(world, jEnt, 100.0f);
+    EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_force, 100.0f);
+}
+
+TEST_F(Physics2DJointIntegrationTest, 马达调速对无效实体不崩溃) {
+    sys.Init(world);
+    // 无效实体 — 应静默返回
+    sys.SetRevoluteMotorSpeed(world, entt::null, 100.0f);
+    sys.SetRevoluteMotorTorque(world, entt::null, 100.0f);
+    sys.SetPrismaticMotorSpeed(world, entt::null, 100.0f);
+    sys.SetPrismaticMotorForce(world, entt::null, 100.0f);
+    SUCCEED();  // 不崩溃即通过
+}
+
+TEST_F(Physics2DJointIntegrationTest, 马达调速对类型不匹配关节不崩溃) {
+    auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
+    auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
+    Entity jEnt = world.CreateEntity();
+    Joint2DComponent jc;
+    jc.type     = Joint2DType::Weld;  // Weld 不是 Revolute/Prismatic
+    jc.entity_a = bodyA;
+    jc.entity_b = bodyB;
+    world.registry().emplace<Joint2DComponent>(jEnt, jc);
+
+    sys.Init(world);
+    // 在 Weld 上调 Revolute/Prismatic API — 应静默返回
+    sys.SetRevoluteMotorSpeed(world, jEnt, 100.0f);
+    sys.SetPrismaticMotorSpeed(world, jEnt, 100.0f);
+    SUCCEED();
+}

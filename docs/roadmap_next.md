@@ -1,7 +1,35 @@
 # DSEngine 引擎下一步路线图
 
-> 生成日期：2026-05-05
-> 排除项：编辑器（不在此路线图范围内）
+> 生成日期：2026-05-05  
+> 更新日期：2026-05-06  
+> ~~排除项：编辑器（不在此路线图范围内）~~ → 编辑器已纳入
+
+---
+
+## Editor Phase 5 进度
+
+> 状态：Phase 5 P1/P2 已完成，质量收尾项已完成
+
+### ✅ 已完成
+
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| Gizmo 拖拽 Undo 合并 | `editor_undo.h`, `editor_viewport_panel.cpp` | `LambdaCommand` merge_id + `UndoRedoManager` try_merge，连续拖拽合并为单条 undo |
+| Tilemap 笔刷绘制 | `editor_tilemap_panel.h/cpp` | 瓦片选择网格、Paint/Erase/FloodFill 笔刷、Viewport 网格叠加 + 实时鼠标绘制、地图尺寸调整 |
+| 地形笔刷高度绘制 | `editor_terrain_panel.h/cpp` | Raise/Lower/Smooth/Flatten 四种笔刷、可调半径/强度/衰减、Viewport 圆形叠加（外圈+内衰减圈+十字准心）、Splat 层选择（UI 占位） |
+| Physics2D 马达运行时 API | `physics2d_system.h/cpp` | `SetRevoluteMotorSpeed/Torque` + `SetPrismaticMotorSpeed/Force` 4 个 API + 单元/集成测试 |
+| SDK 验证 | `scripts/verify_sdk.ps1` | Debug 配置完整流程 PASS（打包→安装→消费者编译） |
+
+### ⬜ 待完成（下一会话优先）
+
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Gizmo 多选同时拖动 | P3 | `SelectionManager` 多选时 Gizmo 显示中心点，拖动批量平移 |
+| Asset Browser 缩略图预览 | P3 | `.png/.jpg` 用 stb_image 加载为 ImGui 纹理，Grid 视图显示 |
+| Splat Map 纹理绘制 | P2 | 地形多层纹理混合笔刷（需 splat texture 资源管理） |
+| Tilemap Undo/Redo | P3 | 记录 tile 修改前后状态到 UndoRedoManager |
+| Terrain Undo/Redo | P3 | 记录 height_data 修改区域快照 |
+| Scene Viewport 拾取改进 | P3 | 用 Color ID pass 替换当前距离拾取 |
 
 ---
 
@@ -12,7 +40,7 @@
 | **ECS** | 17 文件 | ★★★★☆ | 15 unit + 集成 | 组件齐全，World/API 成熟 |
 | **渲染/RHI** | 16 文件(OpenGL+Vulkan) | ★★★★★ | 57 unit + 2 集成 | 双后端(OpenGL+Vulkan)，RenderGraph DAG，RHI 工厂，Vulkan 端到端验证 |
 | **Physics3D** | 2 文件 | ★★★★☆ | 1 unit + 1 集成 | PhysX 集成完整，刚体/角色/raycast |
-| **Physics2D** | 2 文件 | ★★★☆☆ | 1 集成 | 有基本碰撞，缺 joint/motor |
+| **Physics2D** | 2 文件 | ★★★★☆ | 2 unit + 2 集成 | 碰撞+Joint(4类)+运行时马达API |
 | **Scripting/Lua** | 22 文件 | ★★★★★ | 5 集成 | Binding 覆盖最全（ECS/3D/物理/粒子/UI/动画/Spine） |
 | **Asset** | 4 文件 | ★★★★☆ | 2 unit + 2 集成 | 异步加载全资源类型 + LRU 淘汰 + 文件热重载 |
 | **Scene** | 10 文件 | ★★★★★ | 45 unit | 有 prefab/序列化/空间划分/子场景/场景管理器/场景切换/UUID跨场景引用 |
