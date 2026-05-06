@@ -25,6 +25,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_material_panel.cpp
     src/editor_prefab.cpp
     src/editor_preferences_panel.cpp
+    src/editor_audio_panel.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp
@@ -37,7 +38,7 @@ add_executable(dse_editor_cpp WIN32
 
 if(MSVC)
     set_target_properties(dse_editor_cpp PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
-    target_compile_options(dse_editor_cpp PRIVATE /utf-8)
+    target_compile_options(dse_editor_cpp PRIVATE /utf-8 /Zc:preprocessor)
     set_property(TARGET dse_editor_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 

@@ -4,6 +4,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/audio.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -35,6 +36,47 @@ namespace {
 bool IsInspectorReadOnly(const EditorInspectorPanelContext& context) {
     return IsEditorInPlayMode() && !context.is_2d;
 }
+
+// Undo helper: captures old value on IsItemActivated, pushes PropertyChangeCommand on IsItemDeactivatedAfterEdit.
+// Only one ImGui item can be active at a time, so a single static per-type is safe.
+template<typename T>
+void InspectorUndoCheck(const char* desc, T& current_value, entt::entity entity, std::function<void(const T&)> setter) {
+    static T s_old_val{};
+    static entt::entity s_ent = entt::null;
+    if (ImGui::IsItemActivated()) {
+        s_old_val = current_value;
+        s_ent = entity;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && s_ent == entity) {
+        T old_v = s_old_val;
+        T new_v = current_value;
+        GetUndoRedoManager().Execute(
+            std::make_unique<PropertyChangeCommand<T>>(desc, old_v, new_v, setter), true);
+    }
+}
+
+// Helper to create a component property setter without comma-containing lambdas.
+// This avoids MSVC traditional preprocessor issues with commas in lambda captures inside macros.
+template<typename Comp, typename Field>
+std::function<void(const Field&)> MakeCompSetter(entt::registry& reg, entt::entity ent, Field Comp::*member) {
+    return [&reg, ent, member](const Field& v) {
+        if (reg.valid(ent) && reg.all_of<Comp>(ent))
+            reg.get<Comp>(ent).*member = v;
+    };
+}
+
+// Same as INSPECTOR_PROPERTY but with undo tracking between widget and NextColumn.
+// Uses variadic args for setter because lambdas with capture lists contain commas
+// that confuse MSVC's traditional preprocessor.
+#define INSPECTOR_PROPERTY_U(label, widget_code, desc, current_val, ent, ...) \
+    ImGui::AlignTextToFramePadding(); \
+    ImGui::Text(label); \
+    ImGui::NextColumn(); \
+    ImGui::SetNextItemWidth(-1); \
+    widget_code; \
+    InspectorUndoCheck(desc, current_val, ent, __VA_ARGS__); \
+    ImGui::NextColumn();
+
 
 // Draw a small colored square label (X=red, Y=green, Z=blue) before a DragFloat
 void DrawColoredAxisLabel(const char* label, const ImVec4& color) {
@@ -307,10 +349,13 @@ void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
     ImGui::NextColumn();
 
     float color[4] = {sprite.color.r, sprite.color.g, sprite.color.b, sprite.color.a};
-    INSPECTOR_PROPERTY("Color", if (ImGui::ColorEdit4("##color", color)) {
-        sprite.color = glm::vec4(color[0], color[1], color[2], color[3]);
-        MarkSpriteRendererDirty(sprite);
-    });
+    INSPECTOR_PROPERTY_U("Color",
+        if (ImGui::ColorEdit4("##color", color)) {
+            sprite.color = glm::vec4(color[0], color[1], color[2], color[3]);
+            MarkSpriteRendererDirty(sprite);
+        },
+        "Sprite.Color", sprite.color, context.selected_entity,
+        MakeCompSetter<SpriteRendererComponent>(context.registry, context.selected_entity, &SpriteRendererComponent::color));
 
     ImGui::Columns(1);
 }
@@ -341,9 +386,10 @@ void DrawRigidBody2DSection(EditorInspectorPanelContext& context) {
         MarkRigidBody2DDirty(rb2d);
     });
 
-    INSPECTOR_PROPERTY("Gravity", if (ImGui::DragFloat("##grav", &rb2d.gravity_scale, 0.1f)) {
-        MarkRigidBody2DDirty(rb2d);
-    });
+    INSPECTOR_PROPERTY_U("Gravity",
+        if (ImGui::DragFloat("##grav", &rb2d.gravity_scale, 0.1f)) { MarkRigidBody2DDirty(rb2d); },
+        "RigidBody2D.Gravity", rb2d.gravity_scale, context.selected_entity,
+        MakeCompSetter<RigidBody2DComponent>(context.registry, context.selected_entity, &RigidBody2DComponent::gravity_scale));
     ImGui::Columns(1);
 }
 
@@ -366,15 +412,35 @@ void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Mesh Path", if (ImGui::InputText("##mesh_path", mesh_buf, sizeof(mesh_buf))) {
         mesh.mesh_path = mesh_buf;
     });
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            const char* path = static_cast<const char*>(payload->Data);
+            std::string p(path);
+            if (p.ends_with(".obj") || p.ends_with(".fbx") || p.ends_with(".gltf") || p.ends_with(".glb") || p.ends_with(".dae")) {
+                mesh.mesh_path = p;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     INSPECTOR_PROPERTY("Material Instance", ImGui::DragScalar("##mat_inst", ImGuiDataType_U32, &mesh.material_instance_id, 1.0f, nullptr, nullptr, "%u"));
     ImGui::Separator();
     ImGui::Text("Material Overrides (PBR)");
-    INSPECTOR_PROPERTY("Albedo Tint", ImGui::ColorEdit4("##mesh_color", glm::value_ptr(mesh.color)));
-    INSPECTOR_PROPERTY("Emissive", ImGui::ColorEdit3("##mesh_emissive", glm::value_ptr(mesh.emissive)));
-    INSPECTOR_PROPERTY("Metallic", ImGui::SliderFloat("##mesh_metallic", &mesh.metallic, 0.0f, 1.0f));
-    INSPECTOR_PROPERTY("Roughness", ImGui::SliderFloat("##mesh_roughness", &mesh.roughness, 0.0f, 1.0f));
-    INSPECTOR_PROPERTY("Ambient Occlusion", ImGui::SliderFloat("##mesh_ao", &mesh.ao, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY_U("Albedo Tint", ImGui::ColorEdit4("##mesh_color", glm::value_ptr(mesh.color)),
+        "Mesh.AlbedoTint", mesh.color, context.selected_entity,
+        MakeCompSetter<dse::MeshRendererComponent>(context.registry, context.selected_entity, &dse::MeshRendererComponent::color));
+    INSPECTOR_PROPERTY_U("Emissive", ImGui::ColorEdit3("##mesh_emissive", glm::value_ptr(mesh.emissive)),
+        "Mesh.Emissive", mesh.emissive, context.selected_entity,
+        MakeCompSetter<dse::MeshRendererComponent>(context.registry, context.selected_entity, &dse::MeshRendererComponent::emissive));
+    INSPECTOR_PROPERTY_U("Metallic", ImGui::SliderFloat("##mesh_metallic", &mesh.metallic, 0.0f, 1.0f),
+        "Mesh.Metallic", mesh.metallic, context.selected_entity,
+        MakeCompSetter<dse::MeshRendererComponent>(context.registry, context.selected_entity, &dse::MeshRendererComponent::metallic));
+    INSPECTOR_PROPERTY_U("Roughness", ImGui::SliderFloat("##mesh_roughness", &mesh.roughness, 0.0f, 1.0f),
+        "Mesh.Roughness", mesh.roughness, context.selected_entity,
+        MakeCompSetter<dse::MeshRendererComponent>(context.registry, context.selected_entity, &dse::MeshRendererComponent::roughness));
+    INSPECTOR_PROPERTY_U("Ambient Occlusion", ImGui::SliderFloat("##mesh_ao", &mesh.ao, 0.0f, 1.0f),
+        "Mesh.AO", mesh.ao, context.selected_entity,
+        MakeCompSetter<dse::MeshRendererComponent>(context.registry, context.selected_entity, &dse::MeshRendererComponent::ao));
     ImGui::Separator();
     INSPECTOR_PROPERTY("Receive Shadow", ImGui::Checkbox("##receive_shadow", &mesh.receive_shadow));
 
@@ -396,10 +462,18 @@ void DrawCamera3DSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 110.0f);
     BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##cam3d_enabled", &camera.enabled));
-    INSPECTOR_PROPERTY("Priority", ImGui::DragInt("##cam3d_priority", &camera.priority, 1));
-    INSPECTOR_PROPERTY("FOV", ImGui::DragFloat("##cam3d_fov", &camera.fov, 1.0f, 10.0f, 170.0f));
-    INSPECTOR_PROPERTY("Near Clip", ImGui::DragFloat("##cam3d_near", &camera.near_clip, 0.05f, 0.01f, 10.0f));
-    INSPECTOR_PROPERTY("Far Clip", ImGui::DragFloat("##cam3d_far", &camera.far_clip, 10.0f, 10.0f, 10000.0f));
+    INSPECTOR_PROPERTY_U("Priority", ImGui::DragInt("##cam3d_priority", &camera.priority, 1),
+        "Camera3D.Priority", camera.priority, context.selected_entity,
+        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::priority));
+    INSPECTOR_PROPERTY_U("FOV", ImGui::DragFloat("##cam3d_fov", &camera.fov, 1.0f, 10.0f, 170.0f),
+        "Camera3D.FOV", camera.fov, context.selected_entity,
+        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::fov));
+    INSPECTOR_PROPERTY_U("Near Clip", ImGui::DragFloat("##cam3d_near", &camera.near_clip, 0.05f, 0.01f, 10.0f),
+        "Camera3D.NearClip", camera.near_clip, context.selected_entity,
+        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::near_clip));
+    INSPECTOR_PROPERTY_U("Far Clip", ImGui::DragFloat("##cam3d_far", &camera.far_clip, 10.0f, 10.0f, 10000.0f),
+        "Camera3D.FarClip", camera.far_clip, context.selected_entity,
+        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::far_clip));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -418,10 +492,18 @@ void DrawDirectionalLightSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 110.0f);
     BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##dirlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY("Direction", ImGui::DragFloat3("##dirlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f));
-    INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##dirlight_color", glm::value_ptr(light.color)));
-    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##dirlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
-    INSPECTOR_PROPERTY("Ambient", ImGui::DragFloat("##dirlight_amb", &light.ambient_intensity, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY_U("Direction", ImGui::DragFloat3("##dirlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f),
+        "DirLight.Direction", light.direction, context.selected_entity,
+        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::direction));
+    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##dirlight_color", glm::value_ptr(light.color)),
+        "DirLight.Color", light.color, context.selected_entity,
+        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::color));
+    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##dirlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
+        "DirLight.Intensity", light.intensity, context.selected_entity,
+        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::intensity));
+    INSPECTOR_PROPERTY_U("Ambient", ImGui::DragFloat("##dirlight_amb", &light.ambient_intensity, 0.05f, 0.0f, 1.0f),
+        "DirLight.Ambient", light.ambient_intensity, context.selected_entity,
+        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::ambient_intensity));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -440,10 +522,18 @@ void DrawPointLightSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 110.0f);
     BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##ptlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##ptlight_color", glm::value_ptr(light.color)));
-    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##ptlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
-    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##ptlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f));
-    INSPECTOR_PROPERTY("Falloff", ImGui::DragFloat("##ptlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f));
+    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##ptlight_color", glm::value_ptr(light.color)),
+        "PointLight.Color", light.color, context.selected_entity,
+        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::color));
+    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##ptlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
+        "PointLight.Intensity", light.intensity, context.selected_entity,
+        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::intensity));
+    INSPECTOR_PROPERTY_U("Radius", ImGui::DragFloat("##ptlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f),
+        "PointLight.Radius", light.radius, context.selected_entity,
+        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::radius));
+    INSPECTOR_PROPERTY_U("Falloff", ImGui::DragFloat("##ptlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f),
+        "PointLight.Falloff", light.falloff, context.selected_entity,
+        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::falloff));
     INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##ptlight_shadow", &light.cast_shadow));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
@@ -463,13 +553,27 @@ void DrawSpotLightSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 110.0f);
     BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##spotlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY("Direction", ImGui::DragFloat3("##spotlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f));
-    INSPECTOR_PROPERTY("Color", ImGui::ColorEdit3("##spotlight_color", glm::value_ptr(light.color)));
-    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##spotlight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
-    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##spotlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f));
-    INSPECTOR_PROPERTY("Falloff", ImGui::DragFloat("##spotlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f));
-    INSPECTOR_PROPERTY("Inner Cone", ImGui::DragFloat("##spotlight_inner", &light.inner_cone_angle, 0.25f, 0.0f, 89.0f));
-    INSPECTOR_PROPERTY("Outer Cone", ImGui::DragFloat("##spotlight_outer", &light.outer_cone_angle, 0.25f, 0.0f, 89.0f));
+    INSPECTOR_PROPERTY_U("Direction", ImGui::DragFloat3("##spotlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f),
+        "SpotLight.Direction", light.direction, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::direction));
+    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##spotlight_color", glm::value_ptr(light.color)),
+        "SpotLight.Color", light.color, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::color));
+    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##spotlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
+        "SpotLight.Intensity", light.intensity, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::intensity));
+    INSPECTOR_PROPERTY_U("Radius", ImGui::DragFloat("##spotlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f),
+        "SpotLight.Radius", light.radius, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::radius));
+    INSPECTOR_PROPERTY_U("Falloff", ImGui::DragFloat("##spotlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f),
+        "SpotLight.Falloff", light.falloff, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::falloff));
+    INSPECTOR_PROPERTY_U("Inner Cone", ImGui::DragFloat("##spotlight_inner", &light.inner_cone_angle, 0.25f, 0.0f, 89.0f),
+        "SpotLight.InnerCone", light.inner_cone_angle, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::inner_cone_angle));
+    INSPECTOR_PROPERTY_U("Outer Cone", ImGui::DragFloat("##spotlight_outer", &light.outer_cone_angle, 0.25f, 0.0f, 89.0f),
+        "SpotLight.OuterCone", light.outer_cone_angle, context.selected_entity,
+        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::outer_cone_angle));
     INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##spotlight_shadow", &light.cast_shadow));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
@@ -489,9 +593,15 @@ void DrawSkyLightSection(EditorInspectorPanelContext& context) {
     ImGui::SetColumnWidth(0, 110.0f);
     BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##skylight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY("Up Color", ImGui::ColorEdit3("##skylight_up", glm::value_ptr(light.up_color)));
-    INSPECTOR_PROPERTY("Down Color", ImGui::ColorEdit3("##skylight_down", glm::value_ptr(light.down_color)));
-    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##skylight_int", &light.intensity, 0.05f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY_U("Up Color", ImGui::ColorEdit3("##skylight_up", glm::value_ptr(light.up_color)),
+        "SkyLight.UpColor", light.up_color, context.selected_entity,
+        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::up_color));
+    INSPECTOR_PROPERTY_U("Down Color", ImGui::ColorEdit3("##skylight_down", glm::value_ptr(light.down_color)),
+        "SkyLight.DownColor", light.down_color, context.selected_entity,
+        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::down_color));
+    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##skylight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
+        "SkyLight.Intensity", light.intensity, context.selected_entity,
+        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::intensity));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -516,6 +626,12 @@ void DrawSkyboxSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Cubemap Path", if (ImGui::InputText("##skybox_path", path_buf, sizeof(path_buf))) {
         skybox.cubemap_path = path_buf;
     });
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            skybox.cubemap_path = static_cast<const char*>(payload->Data);
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
@@ -541,6 +657,13 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Skeleton Path", if (ImGui::InputText("##anim_skel", skel_buf, sizeof(skel_buf))) {
         animator.dskel_path = skel_buf;
     });
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            std::string p(static_cast<const char*>(payload->Data));
+            if (p.ends_with(".dskel")) animator.dskel_path = p;
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     if (animator.state_machine) {
         ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "[FSM Active]");
@@ -570,6 +693,13 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
         INSPECTOR_PROPERTY("Anim Path", if (ImGui::InputText("##anim_path", anim_buf, sizeof(anim_buf))) {
             animator.danim_path = anim_buf;
         });
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                std::string p(static_cast<const char*>(payload->Data));
+                if (p.ends_with(".danim")) animator.danim_path = p;
+            }
+            ImGui::EndDragDropTarget();
+        }
         INSPECTOR_PROPERTY("Speed", ImGui::DragFloat("##anim_speed", &animator.speed, 0.1f, 0.0f, 10.0f));
         INSPECTOR_PROPERTY("Loop", ImGui::Checkbox("##anim_loop", &animator.loop));
         INSPECTOR_PROPERTY("Use Blend Tree", ImGui::Checkbox("##anim_tree", &animator.use_anim_tree));
@@ -1065,6 +1195,13 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     }
     if (ImGui::MenuItem("Post Process (3D)") && !context.registry.all_of<dse::PostProcessComponent>(context.selected_entity)) {
         context.registry.emplace<dse::PostProcessComponent>(context.selected_entity);
+    }
+    ImGui::Separator();
+    if (ImGui::MenuItem("Audio Source") && !context.registry.all_of<AudioSourceComponent>(context.selected_entity)) {
+        context.registry.emplace<AudioSourceComponent>(context.selected_entity);
+    }
+    if (ImGui::MenuItem("Audio Listener") && !context.registry.all_of<AudioListenerComponent>(context.selected_entity)) {
+        context.registry.emplace<AudioListenerComponent>(context.selected_entity);
     }
     ImGui::Separator();
     if (ImGui::MenuItem("UI Anchor") && !context.registry.all_of<UIAnchorComponent>(context.selected_entity)) {

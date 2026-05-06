@@ -30,6 +30,8 @@
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
+#include "engine/base/time.h"
+#include "engine/input/input.h"
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 #include "engine/profiler/render_profiler.h"
@@ -66,6 +68,7 @@
 #include "editor_prefab.h"
 #include "editor_preferences_panel.h"
 #include "editor_terrain_panel.h"
+#include "editor_audio_panel.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -373,6 +376,9 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
     if (read_only) {
         ImGui::TextDisabled("Play 模式下已禁用 UI Layout Inspector 编辑。请退出 Play 后修改 UI 布局组件。");
     }
+
+    // Audio Source / Audio Listener section
+    dse::editor::DrawAudioSection(registry, entity);
 }
 
 void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_texture, unsigned int game_texture) {
@@ -451,6 +457,9 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::DrawMaterialPanel(registry, selected_entity);
     dse::editor::DrawTilePalettePanel(aux_panels_context);
     dse::editor::DrawTerrainEditorPanel(registry, selected_entity);
+
+    // Audio section is drawn inside the Inspector via DrawInspectorPanel callback
+    // Audio range overlay is drawn in DrawSceneViewportPanel below
 
     // Preferences panel (toggled from Window menu)
     dse::editor::DrawPreferencesPanel(&s_show_preferences);
@@ -605,10 +614,18 @@ int main() {
                 engine_instance.pipeline()->DisableEditorCamera();
             }
 
-            // Tick Engine
+            // Tick Engine (Edit mode skips FixedUpdate and business logic for performance)
             {
                 dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EngineTick");
-                engine_instance.Tick();
+                if (GetEditorState() == EditorState::Edit) {
+                    Time::Update();
+                    // Skip FixedUpdate (physics) and Update (business logic / scripting / AI)
+                    // Only render + Input
+                    engine_instance.pipeline()->Render();
+                    Input::Update();
+                } else {
+                    engine_instance.Tick();
+                }
             }
 
             unsigned int scene_texture = engine_instance.pipeline()->GetSceneTextureId();

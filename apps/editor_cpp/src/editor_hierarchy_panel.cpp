@@ -17,6 +17,8 @@
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
 #include <string>
+#include <algorithm>
+#include "imgui_internal.h"
 #include <cctype>
 #include <cstring>
 #include <vector>
@@ -72,6 +74,12 @@ std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity par
             }
         }
     }
+    // Sort by SiblingIndex
+    std::sort(children.begin(), children.end(), [&registry](entt::entity a, entt::entity b) {
+        int ia = registry.all_of<SiblingIndexComponent>(a) ? registry.get<SiblingIndexComponent>(a).index : 0;
+        int ib = registry.all_of<SiblingIndexComponent>(b) ? registry.get<SiblingIndexComponent>(b).index : 0;
+        return ia < ib;
+    });
     return children;
 }
 
@@ -201,8 +209,12 @@ void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
                 entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
                 if (dragged != entity && context.registry.valid(dragged)) {
                     entt::entity old_parent = entt::null;
+                    int old_sibling = 0;
                     if (context.registry.all_of<ParentComponent>(dragged)) {
                         old_parent = context.registry.get<ParentComponent>(dragged).parent;
+                    }
+                    if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
+                        old_sibling = context.registry.get<SiblingIndexComponent>(dragged).index;
                     }
                     // Set new parent
                     if (context.registry.all_of<ParentComponent>(dragged)) {
@@ -215,7 +227,7 @@ void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
                     GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                         "Reparent Entity",
                         []{},
-                        [&reg, dragged, old_parent]() {
+                        [&reg, dragged, old_parent, old_sibling]() {
                             if (!reg.valid(dragged)) return;
                             if (old_parent == entt::null) {
                                 if (reg.all_of<ParentComponent>(dragged)) {
@@ -228,11 +240,94 @@ void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
                                     reg.emplace<ParentComponent>(dragged, old_parent);
                                 }
                             }
+                            if (reg.all_of<SiblingIndexComponent>(dragged)) {
+                                reg.get<SiblingIndexComponent>(dragged).index = old_sibling;
+                            }
                         }), false);
                     EditorLog(LogLevel::Info, "Reparented entity under " + entity_name);
                 }
             }
             ImGui::EndDragDropTarget();
+        }
+
+        // Between-entity insertion drop target (blue insert line)
+        if (!context.read_only) {
+            ImVec2 cursor_after = ImGui::GetCursorScreenPos();
+            float insert_h = 4.0f;
+            ImRect insert_rect(ImVec2(cursor_after.x, cursor_after.y - insert_h),
+                              ImVec2(cursor_after.x + ImGui::GetContentRegionAvail().x, cursor_after.y));
+            ImGui::SetCursorScreenPos(insert_rect.Min);
+            ImGui::InvisibleButton((std::string("##insert_") + std::to_string(static_cast<uint32_t>(entity))).c_str(),
+                                  insert_rect.GetSize());
+            if (ImGui::BeginDragDropTarget()) {
+                // Draw blue insertion line
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    insert_rect.Min, insert_rect.Max,
+                    IM_COL32(71, 143, 255, 200), 2.0f);
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+                    entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
+                    if (dragged != entity && context.registry.valid(dragged)) {
+                        // Move dragged entity to same parent as this entity, with sibling index after this one
+                        entt::entity target_parent = entt::null;
+                        if (context.registry.all_of<ParentComponent>(entity)) {
+                            target_parent = context.registry.get<ParentComponent>(entity).parent;
+                        }
+                        int target_sibling = 0;
+                        if (context.registry.all_of<SiblingIndexComponent>(entity)) {
+                            target_sibling = context.registry.get<SiblingIndexComponent>(entity).index + 1;
+                        }
+
+                        int old_sibling = 0;
+                        entt::entity old_parent = entt::null;
+                        if (context.registry.all_of<ParentComponent>(dragged)) {
+                            old_parent = context.registry.get<ParentComponent>(dragged).parent;
+                        }
+                        if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
+                            old_sibling = context.registry.get<SiblingIndexComponent>(dragged).index;
+                        }
+
+                        // Set parent
+                        if (target_parent != entt::null) {
+                            if (context.registry.all_of<ParentComponent>(dragged)) {
+                                context.registry.get<ParentComponent>(dragged).parent = target_parent;
+                            } else {
+                                context.registry.emplace<ParentComponent>(dragged, target_parent);
+                            }
+                        } else {
+                            if (context.registry.all_of<ParentComponent>(dragged)) {
+                                context.registry.remove<ParentComponent>(dragged);
+                            }
+                        }
+                        // Set sibling index
+                        if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
+                            context.registry.get<SiblingIndexComponent>(dragged).index = target_sibling;
+                        } else {
+                            context.registry.emplace<SiblingIndexComponent>(dragged, target_sibling);
+                        }
+
+                        auto& reg = context.registry;
+                        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                            "Reorder Entity",
+                            []{},
+                            [&reg, dragged, old_parent, old_sibling]() {
+                                if (!reg.valid(dragged)) return;
+                                if (old_parent == entt::null) {
+                                    if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
+                                } else {
+                                    if (reg.all_of<ParentComponent>(dragged)) {
+                                        reg.get<ParentComponent>(dragged).parent = old_parent;
+                                    } else {
+                                        reg.emplace<ParentComponent>(dragged, old_parent);
+                                    }
+                                }
+                                if (reg.all_of<SiblingIndexComponent>(dragged)) {
+                                    reg.get<SiblingIndexComponent>(dragged).index = old_sibling;
+                                }
+                            }), false);
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
         }
 
         // Recurse into children
@@ -295,14 +390,25 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             ImGui::EndDragDropTarget();
         }
 
-        // Draw root-level entities (those without a parent)
-        for (auto entity : context.registry.storage<entt::entity>()) {
-            if (!context.registry.valid(entity)) continue;
-            if (context.registry.all_of<ParentComponent>(entity) &&
-                context.registry.get<ParentComponent>(entity).parent != entt::null) {
-                continue;
+        // Draw root-level entities (those without a parent), sorted by SiblingIndex
+        {
+            std::vector<entt::entity> root_entities;
+            for (auto entity : context.registry.storage<entt::entity>()) {
+                if (!context.registry.valid(entity)) continue;
+                if (context.registry.all_of<ParentComponent>(entity) &&
+                    context.registry.get<ParentComponent>(entity).parent != entt::null) {
+                    continue;
+                }
+                root_entities.push_back(entity);
             }
-            DrawEntityNode(context, entity);
+            std::sort(root_entities.begin(), root_entities.end(), [&](entt::entity a, entt::entity b) {
+                int ia = context.registry.all_of<SiblingIndexComponent>(a) ? context.registry.get<SiblingIndexComponent>(a).index : 0;
+                int ib = context.registry.all_of<SiblingIndexComponent>(b) ? context.registry.get<SiblingIndexComponent>(b).index : 0;
+                return ia < ib;
+            });
+            for (auto entity : root_entities) {
+                DrawEntityNode(context, entity);
+            }
         }
         ImGui::TreePop();
     }

@@ -9,7 +9,10 @@
 #include "editor_shortcuts.h"
 #include "editor_tilemap_panel.h"
 #include "editor_terrain_panel.h"
+#include "editor_audio_panel.h"
+#include "editor_preferences_panel.h"
 #include <glad/gl.h>
+#include <cmath>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -27,6 +30,17 @@ struct GizmoUndoState {
 
 GizmoUndoState& GetGizmoUndoState() {
     static GizmoUndoState state;
+    return state;
+}
+
+struct MarqueeState {
+    bool active = false;
+    glm::vec2 start_pos{0};
+    glm::vec2 end_pos{0};
+};
+
+MarqueeState& GetMarqueeState() {
+    static MarqueeState state;
     return state;
 }
 
@@ -216,6 +230,91 @@ ColorIDPicker& GetColorIDPicker() {
     return picker;
 }
 
+void DrawViewportGrid(ImDrawList* draw_list,
+                      const glm::vec2& viewport_pos,
+                      const glm::vec2& viewport_size,
+                      const glm::mat4& view,
+                      const glm::mat4& proj) {
+    const glm::mat4 vp = proj * view;
+
+    auto project = [&](const glm::vec3& world) -> glm::vec2 {
+        glm::vec4 clip = vp * glm::vec4(world, 1.0f);
+        if (clip.w <= 0.001f) return glm::vec2(-10000.0f);
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.5f || ndc.x > 1.5f || ndc.y < -1.5f || ndc.y > 1.5f) return glm::vec2(-10000.0f);
+        float sx = viewport_pos.x + (ndc.x * 0.5f + 0.5f) * viewport_size.x;
+        float sy = viewport_pos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * viewport_size.y;
+        return glm::vec2(sx, sy);
+    };
+
+    auto draw_line = [&](const glm::vec3& a, const glm::vec3& b, ImU32 color, float thickness) {
+        glm::vec2 sa = project(a);
+        glm::vec2 sb = project(b);
+        if (sa.x > -5000.0f && sb.x > -5000.0f) {
+            draw_list->AddLine(ImVec2(sa.x, sa.y), ImVec2(sb.x, sb.y), color, thickness);
+        }
+    };
+
+    // Compute camera distance to Y=0 plane for LOD
+    glm::mat4 inv_view = glm::inverse(view);
+    glm::vec3 cam_pos = glm::vec3(inv_view[3]);
+    float cam_dist = std::abs(cam_pos.y) + glm::length(glm::vec2(cam_pos.x, cam_pos.z)) * 0.1f;
+    if (cam_dist < 1.0f) cam_dist = 1.0f;
+
+    // Determine grid extent based on camera distance
+    float extent = cam_dist * 2.0f;
+    if (extent < 20.0f) extent = 20.0f;
+    if (extent > 500.0f) extent = 500.0f;
+
+    // Snap extent to grid
+    float major_step = 10.0f;
+    float minor_step = 1.0f;
+    float grid_min_x = std::floor((cam_pos.x - extent) / major_step) * major_step;
+    float grid_max_x = std::ceil((cam_pos.x + extent) / major_step) * major_step;
+    float grid_min_z = std::floor((cam_pos.z - extent) / major_step) * major_step;
+    float grid_max_z = std::ceil((cam_pos.z + extent) / major_step) * major_step;
+
+    // Draw minor grid lines (only when close enough)
+    bool draw_minor = cam_dist < 50.0f;
+    if (draw_minor) {
+        ImU32 minor_color = IM_COL32(60, 60, 60, 80);
+        float minor_min_x = std::floor((cam_pos.x - extent) / minor_step) * minor_step;
+        float minor_max_x = std::ceil((cam_pos.x + extent) / minor_step) * minor_step;
+        float minor_min_z = std::floor((cam_pos.z - extent) / minor_step) * minor_step;
+        float minor_max_z = std::ceil((cam_pos.z + extent) / minor_step) * minor_step;
+        // Limit max lines to avoid performance issues
+        int max_lines = 200;
+        int line_count = 0;
+        for (float x = minor_min_x; x <= minor_max_x && line_count < max_lines; x += minor_step) {
+            // Skip major grid lines
+            if (std::abs(std::fmod(x, major_step)) < 0.01f) continue;
+            draw_line(glm::vec3(x, 0, minor_min_z), glm::vec3(x, 0, minor_max_z), minor_color, 1.0f);
+            ++line_count;
+        }
+        for (float z = minor_min_z; z <= minor_max_z && line_count < max_lines; z += minor_step) {
+            if (std::abs(std::fmod(z, major_step)) < 0.01f) continue;
+            draw_line(glm::vec3(minor_min_x, 0, z), glm::vec3(minor_max_x, 0, z), minor_color, 1.0f);
+            ++line_count;
+        }
+    }
+
+    // Draw major grid lines
+    ImU32 major_color = IM_COL32(90, 90, 90, 120);
+    for (float x = grid_min_x; x <= grid_max_x; x += major_step) {
+        if (std::abs(x) < 0.01f) continue; // Skip origin, drawn separately
+        draw_line(glm::vec3(x, 0, grid_min_z), glm::vec3(x, 0, grid_max_z), major_color, 1.0f);
+    }
+    for (float z = grid_min_z; z <= grid_max_z; z += major_step) {
+        if (std::abs(z) < 0.01f) continue;
+        draw_line(glm::vec3(grid_min_x, 0, z), glm::vec3(grid_max_x, 0, z), major_color, 1.0f);
+    }
+
+    // X axis (red)
+    draw_line(glm::vec3(grid_min_x, 0, 0), glm::vec3(grid_max_x, 0, 0), IM_COL32(200, 50, 50, 200), 2.0f);
+    // Z axis (blue)
+    draw_line(glm::vec3(0, 0, grid_min_z), glm::vec3(0, 0, grid_max_z), IM_COL32(50, 50, 200, 200), 2.0f);
+}
+
 } // namespace
 
 void DrawSceneViewportPanel(EditorViewportPanelContext& context,
@@ -249,22 +348,87 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
         }
     }
 
-    if (!paint_consumed && ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver()) {
-        const float pick_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
-        EditorCamera& pick_cam = GetEditorCamera();
-        glm::mat4 pick_view = pick_cam.GetViewMatrix();
-        glm::mat4 pick_proj = pick_cam.GetProjectionMatrix(pick_aspect);
+    // --- Marquee Selection + Point Picking ---
+    {
+        auto& marquee = GetMarqueeState();
         ImVec2 mouse_pos = ImGui::GetMousePos();
+        bool can_pick = !paint_consumed && ImGui::IsWindowHovered() && !ImGuizmo::IsOver();
 
-        entt::entity picked = GetColorIDPicker().Pick(
-            context.registry,
-            glm::vec2(mouse_pos.x, mouse_pos.y),
-            glm::vec2(window_pos.x, window_pos.y),
-            glm::vec2(scene_panel_size.x, scene_panel_size.y),
-            pick_view, pick_proj);
+        // Start marquee drag
+        if (can_pick && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            marquee.active = true;
+            marquee.start_pos = glm::vec2(mouse_pos.x, mouse_pos.y);
+            marquee.end_pos = marquee.start_pos;
+        }
 
-        if (picked != entt::null) {
-            context.selected_entity = picked;
+        // Update marquee drag
+        if (marquee.active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            marquee.end_pos = glm::vec2(mouse_pos.x, mouse_pos.y);
+        }
+
+        // Release: either point-pick or marquee-select
+        if (marquee.active && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            marquee.active = false;
+            glm::vec2 delta = marquee.end_pos - marquee.start_pos;
+            float drag_dist = glm::length(delta);
+
+            const float pick_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
+            EditorCamera& pick_cam = GetEditorCamera();
+            glm::mat4 pick_view = pick_cam.GetViewMatrix();
+            glm::mat4 pick_proj = pick_cam.GetProjectionMatrix(pick_aspect);
+
+            if (drag_dist < 5.0f) {
+                // Point pick
+                entt::entity picked = GetColorIDPicker().Pick(
+                    context.registry,
+                    glm::vec2(mouse_pos.x, mouse_pos.y),
+                    glm::vec2(window_pos.x, window_pos.y),
+                    glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                    pick_view, pick_proj);
+                if (picked != entt::null) {
+                    context.selected_entity = picked;
+                }
+            } else {
+                // Marquee select: find all entities whose screen-space projection falls within the rect
+                glm::vec2 rect_min(std::min(marquee.start_pos.x, marquee.end_pos.x),
+                                   std::min(marquee.start_pos.y, marquee.end_pos.y));
+                glm::vec2 rect_max(std::max(marquee.start_pos.x, marquee.end_pos.x),
+                                   std::max(marquee.start_pos.y, marquee.end_pos.y));
+                glm::mat4 vp = pick_proj * pick_view;
+                bool additive = ImGui::GetIO().KeyCtrl;
+                auto& sel = SelectionManager::Get();
+                if (!additive) sel.Clear();
+
+                for (auto entity : context.registry.storage<entt::entity>()) {
+                    if (!context.registry.valid(entity)) continue;
+                    if (!context.registry.all_of<TransformComponent>(entity)) continue;
+                    auto& tf = context.registry.get<TransformComponent>(entity);
+                    glm::vec4 clip = vp * glm::vec4(tf.position, 1.0f);
+                    if (clip.w <= 0.001f) continue;
+                    glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                    if (ndc.x < -1.0f || ndc.x > 1.0f || ndc.y < -1.0f || ndc.y > 1.0f) continue;
+                    float sx = window_pos.x + (ndc.x * 0.5f + 0.5f) * scene_panel_size.x;
+                    float sy = window_pos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * scene_panel_size.y;
+                    if (sx >= rect_min.x && sx <= rect_max.x && sy >= rect_min.y && sy <= rect_max.y) {
+                        sel.Add(entity);
+                        context.selected_entity = entity; // set last selected
+                    }
+                }
+            }
+        }
+
+        // Draw marquee rectangle overlay
+        if (marquee.active) {
+            float drag_dist_current = glm::length(marquee.end_pos - marquee.start_pos);
+            if (drag_dist_current >= 5.0f) {
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                ImVec2 r_min(std::min(marquee.start_pos.x, marquee.end_pos.x),
+                             std::min(marquee.start_pos.y, marquee.end_pos.y));
+                ImVec2 r_max(std::max(marquee.start_pos.x, marquee.end_pos.x),
+                             std::max(marquee.start_pos.y, marquee.end_pos.y));
+                dl->AddRectFilled(r_min, r_max, IM_COL32(71, 143, 255, 40));
+                dl->AddRect(r_min, r_max, IM_COL32(255, 255, 255, 180), 0.0f, 0, 1.5f);
+            }
         }
     }
 
@@ -280,6 +444,15 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
             EditorCamera& ov_cam = GetEditorCamera();
             glm::mat4 ov_view = ov_cam.GetViewMatrix();
             glm::mat4 ov_proj = ov_cam.GetProjectionMatrix(ov_aspect);
+            // Draw ground grid
+            if (GetShowGrid()) {
+                DrawViewportGrid(
+                    ImGui::GetWindowDrawList(),
+                    glm::vec2(window_pos.x, window_pos.y),
+                    glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                    ov_view, ov_proj);
+            }
+
             DrawTilemapGridOverlay(
                 context.registry,
                 glm::vec2(window_pos.x, window_pos.y),
@@ -287,6 +460,12 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                 ov_view, ov_proj);
             DrawTerrainBrushOverlay(
                 context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+            DrawAudioRangeOverlay(
+                context.registry,
+                context.selected_entity,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);
@@ -331,9 +510,20 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
             if (ImGui::IsKeyPressed(ImGuiKey_E)) current_gizmo_operation = 1;
             if (ImGui::IsKeyPressed(ImGuiKey_R)) current_gizmo_operation = 2;
 
+            // Snap support (Ctrl held)
+            float snap_values[3] = {0};
+            float* snap_ptr = nullptr;
+            if (ImGui::GetIO().KeyCtrl) {
+                float snap_val = GetSnapTranslate();
+                snap_values[0] = snap_val;
+                snap_values[1] = snap_val;
+                snap_values[2] = snap_val;
+                snap_ptr = snap_values;
+            }
+
             if (count > 0 && current_gizmo_operation != -1 &&
                 ImGuizmo::Manipulate(glm::value_ptr(view_matrix), glm::value_ptr(proj_matrix),
-                                     gizmo_op, gizmo_mode, glm::value_ptr(centroid_matrix))) {
+                                     gizmo_op, gizmo_mode, glm::value_ptr(centroid_matrix), nullptr, snap_ptr)) {
                 glm::vec3 new_centroid_pos, dummy_rot, dummy_scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(centroid_matrix),
                                                       glm::value_ptr(new_centroid_pos),
@@ -428,7 +618,21 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
             if (ImGui::IsKeyPressed(ImGuiKey_E)) current_gizmo_operation = 1;
             if (ImGui::IsKeyPressed(ImGuiKey_R)) current_gizmo_operation = 2;
 
-            if (current_gizmo_operation != -1 && ImGuizmo::Manipulate(glm::value_ptr(view_matrix), glm::value_ptr(proj_matrix), gizmo_op, gizmo_mode, glm::value_ptr(model_matrix))) {
+            // Snap support (Ctrl held)
+            float snap_values_single[3] = {0};
+            float* snap_ptr_single = nullptr;
+            if (ImGui::GetIO().KeyCtrl) {
+                float snap_val = 0.0f;
+                if (current_gizmo_operation == 0) snap_val = GetSnapTranslate();
+                else if (current_gizmo_operation == 1) snap_val = GetSnapRotate();
+                else if (current_gizmo_operation == 2) snap_val = GetSnapScale();
+                snap_values_single[0] = snap_val;
+                snap_values_single[1] = snap_val;
+                snap_values_single[2] = snap_val;
+                snap_ptr_single = snap_values_single;
+            }
+
+            if (current_gizmo_operation != -1 && ImGuizmo::Manipulate(glm::value_ptr(view_matrix), glm::value_ptr(proj_matrix), gizmo_op, gizmo_mode, glm::value_ptr(model_matrix), nullptr, snap_ptr_single)) {
                 glm::vec3 translation, rotation, scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(model_matrix), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));
                 transform.position = translation;

@@ -436,3 +436,94 @@ apps/editor_cpp/
 - ✅ `EnsureSplatData()`：首次使用时初始化（layer 0 = 1.0，其余 = 0.0）
 - ✅ `ApplySplatBrush()`：高斯衰减 + 目标层增加 + 其他层按比例扣减（总和归一化）
 - ✅ UI：Sculpt/Splat 模式按钮切换 + 4 层彩色按钮 + Opacity 滑块 + 纹理路径输入 + Reset
+
+---
+
+### Phase 6：编辑器功能完善（2026-05-06）✅ 已完成
+
+> **实现摘要**：
+> - 修改 `editor_inspector_panel.cpp`：
+>   - 新增 `InspectorUndoCheck<T>` 通用模板 + `MakeCompSetter<Comp, Field>` 辅助函数
+>   - 新增 `INSPECTOR_PROPERTY_U` 变参宏（`/Zc:preprocessor` 适配 MSVC）
+>   - 为 SpriteRenderer、RigidBody2D、MeshRenderer PBR(5 属性)、Camera3D(4 属性)、DirectionalLight(4 属性)、PointLight(4 属性)、SpotLight(7 属性)、SkyLight(3 属性) 添加 Undo
+>   - MeshRenderer mesh_path、Skybox cubemap_path、Animator3D skeleton/anim_path 添加 ASSET_PATH 拖拽接收
+> - 修改 `editor_viewport_panel.cpp`：
+>   - Marquee 选框状态结构 + 鼠标拖拽逻辑 + 半透明蓝色选框绘制
+>   - 替换点选逻辑为框选/点选混合，支持 Ctrl 追加选择
+> - 修改 `main.cpp`：
+>   - Edit 模式下跳过 FixedUpdate（物理）和 Update（业务逻辑/脚本/AI），仅保留 Render + Input
+> - 修改 `apps/editor_cpp/CMakeLists.txt`：
+>   - 添加 `/Zc:preprocessor` 编译选项
+> - 编译零错误，unit + integration 测试通过
+
+#### 6.1 音频编辑面板（P3，新增文件）✅
+- ✅ `DrawAudioPanel(registry, selected_entity)` 音频源参数编辑
+- ✅ volume 滑块 / pitch / loop / spatial_enabled / 距离衰减曲线
+- ✅ Play/Stop/Pause 按钮用于编辑器中预听音频
+- ✅ 3D 音频：Scene Viewport 中叠加球形衰减范围可视化
+- ✅ Inspector Add Component 菜单新增 "Audio Source" 和 "Audio Listener"
+
+#### 6.2 Scene Viewport Grid 网格地面（P2）✅
+- ✅ Scene 视图中绘制无限网格地面（XZ 平面，Y=0）
+- ✅ 粗线间距 10 单位，细线间距 1 单位，X 轴红线、Z 轴蓝线
+- ✅ 根据相机距离自适应 LOD（远处隐藏细线）
+- ✅ 可在 Preferences 面板中开关
+
+#### 6.3 Gizmo Snap 吸附支持（P2）✅
+- ✅ 按住 Ctrl 拖动 Gizmo 时启用 Snap
+- ✅ 平移/旋转/缩放 Snap 间距可配置
+- ✅ Snap 设置保存到 `editor_settings.json`
+
+#### 6.4 Hierarchy 拖拽排序（P2）✅
+- ✅ 同级实体间拖拽调整顺序（蓝色插入线）
+- ✅ `SiblingIndex` 组件保存到场景文件
+- ✅ Undo 支持
+
+#### 6.5 Scene Viewport 框选（Marquee Selection）（P2）✅
+- ✅ Scene 视口中按住左键拖拽绘制选框矩形（半透明蓝色 + 白色边框）
+- ✅ 松开时选中框内所有实体（Color-ID FBO 批量读取）
+- ✅ Ctrl+拖拽追加选择，普通拖拽替换选择
+
+#### 6.6 Inspector Undo 补全（P1）✅
+- ✅ `InspectorUndoCheck<T>` 通用 Undo 辅助模板 + `MakeCompSetter` 辅助
+- ✅ `INSPECTOR_PROPERTY_U` 变参宏自动跟踪 Activated/DeactivatedAfterEdit
+- ✅ 覆盖：SpriteRenderer、RigidBody2D、MeshRenderer(5)、Camera3D(4)、DirectionalLight(4)、PointLight(4)、SpotLight(7)、SkyLight(3)
+
+#### 6.7 Asset 拖拽到 Inspector 槽位（P2）✅
+- ✅ MeshRenderer mesh_path：接受 .obj/.fbx/.gltf/.glb/.dae 拖入
+- ✅ Skybox cubemap_path：接受 ASSET_PATH 拖入
+- ✅ Animator3D skeleton_path (.dskel) / anim_path (.danim)：扩展名过滤拖入
+- ✅ SpriteRenderer shader_variant：已有 ASSET_PATH 拖拽支持
+
+#### 6.8 编辑器性能优化：Edit 模式系统裁剪（P2）✅
+- ✅ Edit 模式下跳过 FixedUpdate（物理 Physics2D/3D）
+- ✅ Edit 模式下跳过 Update（业务逻辑/脚本/AI/Steering）
+- ✅ 仅保留 `Time::Update()` + `pipeline->Render()` + `Input::Update()`
+- ✅ Play 模式下恢复完整 `engine_instance.Tick()`
+
+---
+
+### Phase 7：远期可选功能 ⬜
+
+#### 7.1 Scene Gizmo（右上角方向指示器）⬜
+- ⬜ Scene 视口右上角绘制 3D 坐标轴指示器（类似 Unity Scene Gizmo）
+- ⬜ 点击轴可切换到正交视图（Top/Front/Right）
+
+#### 7.2 多场景编辑（Scene Tabs）⬜
+- ⬜ 支持同时打开多个场景（标签页切换）
+- ⬜ 未保存场景标签显示 * 标记
+
+#### 7.3 Console 日志跳转源码 ⬜
+- ⬜ 双击带文件路径的日志条目时，在外部编辑器中打开对应文件
+
+#### 7.4 Terrain LOD 实时预览 ⬜
+- ⬜ 在 Terrain 面板中可视化当前 LOD 级别
+- ⬜ 显示三角形数量和网格线框覆盖
+
+#### 7.5 粒子效果编辑器面板 ⬜
+- ⬜ 新建独立面板用于可视化编辑粒子曲线
+- ⬜ 使用 ImDrawList 绘制贝塞尔曲线编辑器
+
+#### 7.6 Light Probe / Reflection Probe 可视化 ⬜
+- ⬜ Scene 视口中显示光照探针球体
+- ⬜ 显示 cubemap 预览

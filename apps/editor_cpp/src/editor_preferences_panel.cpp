@@ -7,6 +7,19 @@
 
 namespace dse::editor {
 
+namespace {
+    int s_theme_index = 0; // 0=Dark, 1=Light
+    bool s_show_grid = true;
+    float s_snap_translate = 0.5f;
+    float s_snap_rotate = 15.0f;
+    float s_snap_scale = 0.1f;
+} // namespace
+
+bool GetShowGrid() { return s_show_grid; }
+float GetSnapTranslate() { return s_snap_translate; }
+float GetSnapRotate() { return s_snap_rotate; }
+float GetSnapScale() { return s_snap_scale; }
+
 void DrawPreferencesPanel(bool* p_open) {
     if (!p_open || !*p_open) return;
 
@@ -15,12 +28,6 @@ void DrawPreferencesPanel(bool* p_open) {
         ImGui::End();
         return;
     }
-
-    static int s_theme_index = 0; // 0=Dark, 1=Light
-    static bool s_show_grid = true;
-    static float s_snap_translate = 1.0f;
-    static float s_snap_rotate = 15.0f;
-    static float s_snap_scale = 0.1f;
 
     if (ImGui::CollapsingHeader(MDI_ICON_PALETTE "  Appearance", ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* themes[] = { "Dark (Default)", "Light" };
