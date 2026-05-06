@@ -4,6 +4,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     engine_core_services_smoke_test.cpp
     lua_host_smoke_test.cpp
     runtime_lifecycle_smoke_test.cpp
+    vulkan_rhi_smoke_test.cpp
 )
 
 target_include_directories(${DSE_GTEST_SMOKE_TARGET}
@@ -27,6 +28,27 @@ target_link_libraries(${DSE_GTEST_SMOKE_TARGET}
         GTest::gmock
         dse_engine
 )
+
+# Vulkan 冒烟测试依赖（仅当 Vulkan 启用时添加头文件路径）
+if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)
+    if(DSE_VULKAN_HEADERS_FROM_SOURCE)
+        target_include_directories(${DSE_GTEST_SMOKE_TARGET} PRIVATE ${DSE_VULKAN_INCLUDE_DIR})
+        target_link_libraries(${DSE_GTEST_SMOKE_TARGET} PRIVATE Vulkan::Headers)
+    endif()
+    if(DSE_VULKAN_LOADER_FROM_SOURCE)
+        target_link_libraries(${DSE_GTEST_SMOKE_TARGET} PRIVATE Vulkan::Loader)
+    elseif(DSE_VULKAN_FROM_SYSTEM)
+        target_include_directories(${DSE_GTEST_SMOKE_TARGET} PRIVATE ${Vulkan_INCLUDE_DIRS})
+        target_link_libraries(${DSE_GTEST_SMOKE_TARGET} PRIVATE Vulkan::Vulkan)
+    endif()
+    if(DSE_HAS_GLSLANG)
+        target_include_directories(${DSE_GTEST_SMOKE_TARGET} PRIVATE
+            ${DSE_GLSLANG_INCLUDE_DIR}
+            ${DSE_GLSLANG_INCLUDE_DIR}/glslang/Include
+            ${DSE_GLSLANG_INCLUDE_DIR}/SPIRV
+        )
+    endif()
+endif()
 
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)

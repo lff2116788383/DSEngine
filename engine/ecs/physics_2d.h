@@ -72,6 +72,22 @@ struct BoxCollider2DComponent {
 };
 
 /**
+ * @struct CircleCollider2DComponent
+ * @brief 2D 圆形碰撞体组件，定义物理形状和材质属性
+ */
+struct CircleCollider2DComponent {
+    float radius = 0.5f;                                ///< 碰撞体半径
+    glm::vec2 offset = glm::vec2(0.0f, 0.0f);            ///< 相对实体的偏移
+    float density = 1.0f;                                ///< 密度 (影响质量)
+    float friction = 0.3f;                               ///< 摩擦系数
+    float restitution = 0.0f;                            ///< 恢复系数 (弹性)
+    bool is_trigger = false;                             ///< 是否为触发器 (仅检测不产生物理力)
+
+    // Internal Box2D runtime fixture pointer
+    b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
+};
+
+/**
  * @enum Joint2DType
  * @brief 2D 关节类型
  */

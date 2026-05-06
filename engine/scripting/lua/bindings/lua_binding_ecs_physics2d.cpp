@@ -139,6 +139,135 @@ int L_EcsPollCollisionEvent(lua_State* L) {
     return 4;
 }
 
+int L_EcsAddCircleCollider(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float radius = helper::CheckFloat(L, 2);
+    float density = helper::OptFloat(L, 3, 1.0f);
+    float friction = helper::OptFloat(L, 4, 0.3f);
+    float restitution = helper::OptFloat(L, 5, 0.0f);
+    auto& collider = world->registry().emplace_or_replace<CircleCollider2DComponent>(e);
+    collider.radius = radius;
+    collider.density = density;
+    collider.friction = friction;
+    collider.restitution = restitution;
+    return 0;
+}
+
+int L_EcsSetCircleColliderTrigger(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool is_trigger = helper::CheckBool(L, 2);
+    auto* collider = helper::TryGetComponent<CircleCollider2DComponent>(*world, e);
+    if (!collider) return 0;
+    collider->is_trigger = is_trigger;
+    if (collider->runtime_fixture != nullptr) {
+        collider->runtime_fixture->SetSensor(is_trigger);
+    }
+    return 0;
+}
+
+// ============================================================
+// Joint2DComponent 绑定
+// ============================================================
+
+/// add_joint_2d(entity, type_int, entity_a, entity_b,
+///              anchor_ax, anchor_ay, anchor_bx, anchor_by,
+///              collide_connected)
+/// type: 0=Revolute, 1=Distance, 2=Prismatic, 3=Weld
+int L_EcsAddJoint2D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int type_int = helper::CheckInt(L, 2);
+    Entity entity_a = helper::CheckEntity(L, 3);
+    Entity entity_b = helper::CheckEntity(L, 4);
+    float ax = helper::OptFloat(L, 5, 0.0f);
+    float ay = helper::OptFloat(L, 6, 0.0f);
+    float bx = helper::OptFloat(L, 7, 0.0f);
+    float by = helper::OptFloat(L, 8, 0.0f);
+    bool collide = helper::OptBool(L, 9, false);
+
+    auto& jc = world->registry().emplace_or_replace<Joint2DComponent>(e);
+    jc.runtime_joint = nullptr;
+    switch (type_int) {
+        case 0: jc.type = Joint2DType::Revolute; break;
+        case 1: jc.type = Joint2DType::Distance; break;
+        case 2: jc.type = Joint2DType::Prismatic; break;
+        case 3: jc.type = Joint2DType::Weld; break;
+        default: jc.type = Joint2DType::Revolute; break;
+    }
+    jc.entity_a = entity_a;
+    jc.entity_b = entity_b;
+    jc.anchor_a = glm::vec2(ax, ay);
+    jc.anchor_b = glm::vec2(bx, by);
+    jc.collide_connected = collide;
+    return 0;
+}
+
+/// set_joint_2d_revolute(entity, enable_limit, lower_deg, upper_deg,
+///                       enable_motor, motor_speed_deg, max_torque)
+int L_EcsSetJoint2DRevolute(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->enable_limit     = helper::OptBool(L, 2, false);
+    jc->lower_angle      = helper::OptFloat(L, 3, 0.0f);
+    jc->upper_angle      = helper::OptFloat(L, 4, 0.0f);
+    jc->enable_motor     = helper::OptBool(L, 5, false);
+    jc->motor_speed      = helper::OptFloat(L, 6, 0.0f);
+    jc->max_motor_torque = helper::OptFloat(L, 7, 0.0f);
+    return 0;
+}
+
+/// set_joint_2d_distance(entity, min_len, max_len, stiffness, damping)
+int L_EcsSetJoint2DDistance(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->min_length = helper::OptFloat(L, 2, 0.0f);
+    jc->max_length = helper::OptFloat(L, 3, 1.0f);
+    jc->stiffness  = helper::OptFloat(L, 4, 0.0f);
+    jc->damping    = helper::OptFloat(L, 5, 0.0f);
+    return 0;
+}
+
+/// set_joint_2d_prismatic(entity, axis_x, axis_y,
+///                        enable_limit, lower, upper,
+///                        enable_motor, motor_speed, max_force)
+int L_EcsSetJoint2DPrismatic(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->prismatic_axis        = glm::vec2(helper::OptFloat(L, 2, 1.0f), helper::OptFloat(L, 3, 0.0f));
+    jc->enable_limit          = helper::OptBool(L, 4, false);
+    jc->lower_translation     = helper::OptFloat(L, 5, 0.0f);
+    jc->upper_translation     = helper::OptFloat(L, 6, 0.0f);
+    jc->enable_motor          = helper::OptBool(L, 7, false);
+    jc->prismatic_motor_speed = helper::OptFloat(L, 8, 0.0f);
+    jc->max_motor_force       = helper::OptFloat(L, 9, 0.0f);
+    return 0;
+}
+
+/// destroy_joint_2d(entity) — 销毁关节
+int L_EcsDestroyJoint2D(lua_State* L) {
+    auto* physics = dse::core::ServiceLocator::Instance().Get<Physics2DSystem>();
+    if (!physics) return 0;
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    physics->DestroyJoint(*world, e);
+    return 0;
+}
+
 int L_EcsAddTilemap(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -181,6 +310,13 @@ void RegisterEcsPhysics2DBindings(lua_State* L) {
         {"set_rigid_body_velocity", L_EcsSetRigidBodyVelocity},
         {"add_box_collider",        L_EcsAddBoxCollider},
         {"set_box_collider_trigger", L_EcsSetBoxColliderTrigger},
+        {"add_circle_collider",     L_EcsAddCircleCollider},
+        {"set_circle_collider_trigger", L_EcsSetCircleColliderTrigger},
+        {"add_joint_2d",            L_EcsAddJoint2D},
+        {"set_joint_2d_revolute",   L_EcsSetJoint2DRevolute},
+        {"set_joint_2d_distance",   L_EcsSetJoint2DDistance},
+        {"set_joint_2d_prismatic",  L_EcsSetJoint2DPrismatic},
+        {"destroy_joint_2d",        L_EcsDestroyJoint2D},
         {"raycast_2d",              L_EcsRaycast2D},
         {"poll_collision_event",    L_EcsPollCollisionEvent},
         {"add_tilemap",             L_EcsAddTilemap},

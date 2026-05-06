@@ -14,6 +14,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     # engine/physics
     engine/physics/physics2d_collision_event_integration_test.cpp
     engine/physics/physics2d_joint_integration_test.cpp
+    engine/physics/physics2d_circle_collider_integration_test.cpp
     engine/physics/physics3d_ecs_integration_test.cpp
     # engine/render
     engine/render/rendergraph_integration_test.cpp
@@ -26,6 +27,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/scripting/lua_ecs_integration_test.cpp
     engine/scripting/lua_binding_3d_integration_test.cpp
     engine/scripting/lua_binding_audio_integration_test.cpp
+    engine/scripting/lua_binding_physics2d_integration_test.cpp
     # engine/audio
     engine/audio/audio_asset_integration_test.cpp
     # modules

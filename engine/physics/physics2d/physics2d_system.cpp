@@ -130,6 +130,10 @@ void Physics2DSystem::Init(World& world) {
     for (auto entity : rb_view) {
         rb_view.get<RigidBody2DComponent>(entity).runtime_body = nullptr;
     }
+    auto circle_collider_view = world.registry().view<CircleCollider2DComponent>();
+    for (auto entity : circle_collider_view) {
+        circle_collider_view.get<CircleCollider2DComponent>(entity).runtime_fixture = nullptr;
+    }
     auto joint_view_init = world.registry().view<Joint2DComponent>();
     for (auto entity : joint_view_init) {
         joint_view_init.get<Joint2DComponent>(entity).runtime_joint = nullptr;
@@ -168,6 +172,19 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         }
     }
 
+    auto circle_col_view = world.registry().view<CircleCollider2DComponent>();
+    for (auto entity : circle_col_view) {
+        auto& collider = circle_col_view.get<CircleCollider2DComponent>(entity);
+        if (!world.registry().all_of<RigidBody2DComponent>(entity)) {
+            collider.runtime_fixture = nullptr;
+            continue;
+        }
+        auto& rb = world.registry().get<RigidBody2DComponent>(entity);
+        if (!IsValidBody(rb.runtime_body)) {
+            collider.runtime_fixture = nullptr;
+        }
+    }
+
     auto rb_view = world.registry().view<RigidBody2DComponent>();
     for (auto entity : rb_view) {
         auto& rb = rb_view.get<RigidBody2DComponent>(entity);
@@ -175,6 +192,9 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
             rb.runtime_body = nullptr;
             if (world.registry().all_of<BoxCollider2DComponent>(entity)) {
                 world.registry().get<BoxCollider2DComponent>(entity).runtime_fixture = nullptr;
+            }
+            if (world.registry().all_of<CircleCollider2DComponent>(entity)) {
+                world.registry().get<CircleCollider2DComponent>(entity).runtime_fixture = nullptr;
             }
         }
     }
@@ -213,6 +233,21 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                 fixture_def.restitution = bc.restitution;
                 fixture_def.isSensor = bc.is_trigger;
                 bc.runtime_fixture = rb.runtime_body->CreateFixture(&fixture_def);
+            }
+
+            if (world.registry().all_of<CircleCollider2DComponent>(entity)) {
+                auto& cc = world.registry().get<CircleCollider2DComponent>(entity);
+                b2CircleShape circle_shape;
+                circle_shape.m_radius = cc.radius * std::max(transform.scale.x, transform.scale.y);
+                circle_shape.m_p = b2Vec2{cc.offset.x, cc.offset.y};
+
+                b2FixtureDef fixture_def;
+                fixture_def.shape = &circle_shape;
+                fixture_def.density = cc.density;
+                fixture_def.friction = cc.friction;
+                fixture_def.restitution = cc.restitution;
+                fixture_def.isSensor = cc.is_trigger;
+                cc.runtime_fixture = rb.runtime_body->CreateFixture(&fixture_def);
             }
 
             rb.runtime_body->SetLinearVelocity(b2Vec2{rb.velocity.x, rb.velocity.y});
