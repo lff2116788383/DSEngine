@@ -7,6 +7,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     # engine/core
     engine/core/eventbus_servicelocator_integration_test.cpp
     engine/core/jobsystem_eventbus_integration_test.cpp
+    # engine/input
+    engine/input/input_actionmapping_integration_test.cpp
     # engine/ecs
     engine/ecs/ecs_physics2d_integration_test.cpp
     engine/ecs/ecs_transform_integration_test.cpp
@@ -16,6 +18,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/physics/physics2d_joint_integration_test.cpp
     engine/physics/physics2d_circle_collider_integration_test.cpp
     engine/physics/physics3d_ecs_integration_test.cpp
+    # engine/profiler
+    engine/profiler/profiler_jobsystem_integration_test.cpp
     # engine/render
     engine/render/rendergraph_integration_test.cpp
     engine/render/render_scene_integration_test.cpp
@@ -28,6 +32,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/scripting/lua_binding_3d_integration_test.cpp
     engine/scripting/lua_binding_audio_integration_test.cpp
     engine/scripting/lua_binding_physics2d_integration_test.cpp
+    # engine/runtime
+    engine/runtime/runtime_subsystem_integration_test.cpp
     # engine/audio
     engine/audio/audio_asset_integration_test.cpp
     # modules
