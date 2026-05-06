@@ -20,6 +20,9 @@ add_executable(dse_editor_cpp WIN32
     src/editor_theme.cpp
     src/editor_toolbar.cpp
     src/editor_viewport_panel.cpp
+    src/editor_material_panel.cpp
+    src/editor_prefab.cpp
+    src/editor_preferences_panel.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp

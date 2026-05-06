@@ -14,6 +14,7 @@ struct EditorShellContext {
     entt::registry& registry;
     entt::entity& selected_entity;
     bool read_only = false;
+    bool* show_preferences = nullptr;
 };
 
 void BeginEditorShell();

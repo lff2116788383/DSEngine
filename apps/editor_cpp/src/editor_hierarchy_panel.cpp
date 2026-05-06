@@ -11,6 +11,7 @@
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
 #include "editor_selection.h"
+#include "editor_prefab.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -18,6 +19,8 @@
 #include <string>
 #include <cctype>
 #include <cstring>
+#include <vector>
+#include <filesystem>
 
 namespace dse::editor {
 
@@ -59,6 +62,189 @@ bool MatchesSearchFilter(const std::string& name) {
     return lower_name.find(lower_filter) != std::string::npos;
 }
 
+std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity parent) {
+    std::vector<entt::entity> children;
+    for (auto entity : registry.storage<entt::entity>()) {
+        if (!registry.valid(entity)) continue;
+        if (registry.all_of<ParentComponent>(entity)) {
+            if (registry.get<ParentComponent>(entity).parent == parent) {
+                children.push_back(entity);
+            }
+        }
+    }
+    return children;
+}
+
+void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
+    if (!context.registry.valid(entity)) return;
+
+    std::string entity_name = "Entity " + std::to_string(static_cast<uint32_t>(entity));
+    if (context.registry.all_of<EditorNameComponent>(entity)) {
+        entity_name = context.registry.get<EditorNameComponent>(entity).name;
+    }
+
+    if (!MatchesSearchFilter(entity_name)) return;
+
+    // Prefab instance suffix
+    bool is_prefab = IsPrefabInstance(context.registry, entity);
+    std::string suffix = is_prefab ? " (Prefab)" : "";
+
+    const char* type_icon = GetEntityTypeIcon(context.registry, entity);
+    auto& selection = SelectionManager::Get();
+    const bool is_selected = selection.Contains(entity);
+    const bool is_renaming = (s_renaming_entity == entity);
+
+    std::vector<entt::entity> children = GetChildren(context.registry, entity);
+    bool has_children = !children.empty();
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow;
+    if (is_selected) flags |= ImGuiTreeNodeFlags_Selected;
+    if (!has_children) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+
+    // Draw rounded highlight for selected entity
+    if (is_selected) {
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+        float item_width = ImGui::GetContentRegionAvail().x;
+        float item_height = ImGui::GetTextLineHeightWithSpacing();
+        ImU32 highlight_color = is_prefab ? IM_COL32(50, 180, 100, 80) : IM_COL32(71, 143, 255, 80);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            cursor_pos,
+            ImVec2(cursor_pos.x + item_width, cursor_pos.y + item_height),
+            highlight_color, 4.0f);
+    }
+
+    if (is_renaming) {
+        ImGui::TextUnformatted(type_icon);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1);
+        ImGui::SetKeyboardFocusHere();
+
+        auto commit_rename = [&](entt::entity ent) {
+            if (s_rename_buf[0] != '\0') {
+                std::string old_name = entity_name;
+                std::string new_name = s_rename_buf;
+                if (context.registry.all_of<EditorNameComponent>(ent)) {
+                    context.registry.get<EditorNameComponent>(ent).name = new_name;
+                } else {
+                    context.registry.emplace<EditorNameComponent>(ent, new_name);
+                }
+                auto& reg = context.registry;
+                GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                    "Rename Entity",
+                    []{},
+                    [&reg, ent, old_name]() {
+                        if (reg.valid(ent) && reg.all_of<EditorNameComponent>(ent)) {
+                            reg.get<EditorNameComponent>(ent).name = old_name;
+                        }
+                    }), false);
+            }
+            s_renaming_entity = entt::null;
+        };
+
+        if (ImGui::InputText("##rename", s_rename_buf, sizeof(s_rename_buf),
+                             ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+            commit_rename(entity);
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            s_renaming_entity = entt::null;
+        } else if (!ImGui::IsItemActive() && s_renaming_entity == entity &&
+                   ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()) {
+            commit_rename(entity);
+        }
+    } else {
+        std::string display_name = std::string(type_icon) + "  " + entity_name + suffix;
+        bool node_open = ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
+
+        // Click handling
+        if (ImGui::IsItemClicked()) {
+            auto& sel = SelectionManager::Get();
+            if (ImGui::GetIO().KeyCtrl) {
+                sel.Toggle(entity);
+                context.selected_entity = sel.GetPrimary();
+            } else if (ImGui::GetIO().KeyShift && s_last_clicked_entity != entt::null) {
+                sel.Clear();
+                bool in_range = false;
+                for (auto e : context.registry.storage<entt::entity>()) {
+                    if (!context.registry.valid(e)) continue;
+                    if (e == entity || e == s_last_clicked_entity) {
+                        sel.Add(e);
+                        if (in_range) break;
+                        in_range = true;
+                        continue;
+                    }
+                    if (in_range) sel.Add(e);
+                }
+                context.selected_entity = entity;
+            } else {
+                sel.SetSingle(entity);
+                context.selected_entity = entity;
+            }
+            s_last_clicked_entity = entity;
+        }
+
+        // Double-click to rename
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) && !context.read_only) {
+            s_renaming_entity = entity;
+            std::strncpy(s_rename_buf, entity_name.c_str(), sizeof(s_rename_buf) - 1);
+            s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
+        }
+
+        // Drag source
+        if (!context.read_only && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &entity, sizeof(entt::entity));
+            ImGui::Text("%s", entity_name.c_str());
+            ImGui::EndDragDropSource();
+        }
+
+        // Drop target: reparent dragged entity under this one
+        if (!context.read_only && ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+                entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
+                if (dragged != entity && context.registry.valid(dragged)) {
+                    entt::entity old_parent = entt::null;
+                    if (context.registry.all_of<ParentComponent>(dragged)) {
+                        old_parent = context.registry.get<ParentComponent>(dragged).parent;
+                    }
+                    // Set new parent
+                    if (context.registry.all_of<ParentComponent>(dragged)) {
+                        context.registry.get<ParentComponent>(dragged).parent = entity;
+                    } else {
+                        context.registry.emplace<ParentComponent>(dragged, entity);
+                    }
+                    // Undo support
+                    auto& reg = context.registry;
+                    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                        "Reparent Entity",
+                        []{},
+                        [&reg, dragged, old_parent]() {
+                            if (!reg.valid(dragged)) return;
+                            if (old_parent == entt::null) {
+                                if (reg.all_of<ParentComponent>(dragged)) {
+                                    reg.remove<ParentComponent>(dragged);
+                                }
+                            } else {
+                                if (reg.all_of<ParentComponent>(dragged)) {
+                                    reg.get<ParentComponent>(dragged).parent = old_parent;
+                                } else {
+                                    reg.emplace<ParentComponent>(dragged, old_parent);
+                                }
+                            }
+                        }), false);
+                    EditorLog(LogLevel::Info, "Reparented entity under " + entity_name);
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        // Recurse into children
+        if (has_children && node_open) {
+            for (auto child : children) {
+                DrawEntityNode(context, child);
+            }
+            ImGui::TreePop();
+        }
+    }
+}
+
 } // namespace
 
 void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
@@ -73,128 +259,50 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
     bool hierarchy_clicked = ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0);
 
     if (ImGui::TreeNodeEx("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (auto entity : context.registry.storage<entt::entity>()) {
-            if (!context.registry.valid(entity)) {
-                continue;
+        // Drop target on Scene root: unparent entity or instantiate prefab
+        if (!context.read_only && ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                std::string asset_path(static_cast<const char*>(payload->Data));
+                if (asset_path.size() > 8 && asset_path.substr(asset_path.size() - 8) == ".dprefab") {
+                    std::filesystem::path full_path = std::filesystem::current_path() / "samples" / "lua" / "data" / asset_path;
+                    entt::entity new_ent = InstantiatePrefab(context.world, context.registry, full_path.string());
+                    if (new_ent != entt::null) {
+                        context.selected_entity = new_ent;
+                        EditorLog(LogLevel::Info, "Instantiated prefab: " + asset_path);
+                    }
+                }
             }
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+                entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
+                if (context.registry.valid(dragged) && context.registry.all_of<ParentComponent>(dragged)) {
+                    entt::entity old_parent = context.registry.get<ParentComponent>(dragged).parent;
+                    context.registry.remove<ParentComponent>(dragged);
+                    auto& reg = context.registry;
+                    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                        "Unparent Entity",
+                        []{},
+                        [&reg, dragged, old_parent]() {
+                            if (!reg.valid(dragged)) return;
+                            if (reg.all_of<ParentComponent>(dragged)) {
+                                reg.get<ParentComponent>(dragged).parent = old_parent;
+                            } else {
+                                reg.emplace<ParentComponent>(dragged, old_parent);
+                            }
+                        }), false);
+                    EditorLog(LogLevel::Info, "Unparented entity");
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
 
+        // Draw root-level entities (those without a parent)
+        for (auto entity : context.registry.storage<entt::entity>()) {
+            if (!context.registry.valid(entity)) continue;
             if (context.registry.all_of<ParentComponent>(entity) &&
                 context.registry.get<ParentComponent>(entity).parent != entt::null) {
                 continue;
             }
-
-            std::string entity_name = "Entity " + std::to_string(static_cast<uint32_t>(entity));
-            if (context.registry.all_of<EditorNameComponent>(entity)) {
-                entity_name = context.registry.get<EditorNameComponent>(entity).name;
-            }
-
-            // Filter by search
-            if (!MatchesSearchFilter(entity_name)) {
-                continue;
-            }
-
-            const char* type_icon = GetEntityTypeIcon(context.registry, entity);
-            auto& selection = SelectionManager::Get();
-            const bool is_selected = selection.Contains(entity);
-            const bool is_renaming = (s_renaming_entity == entity);
-
-            // Draw rounded highlight rectangle for selected entity
-            if (is_selected) {
-                ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-                float item_width = ImGui::GetContentRegionAvail().x;
-                float item_height = ImGui::GetTextLineHeightWithSpacing();
-                ImU32 highlight_color = IM_COL32(71, 143, 255, 80);
-                ImGui::GetWindowDrawList()->AddRectFilled(
-                    cursor_pos,
-                    ImVec2(cursor_pos.x + item_width, cursor_pos.y + item_height),
-                    highlight_color, 4.0f);
-            }
-
-            if (is_renaming) {
-                // Inline rename mode
-                ImGui::TextUnformatted(type_icon);
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(-1);
-                ImGui::SetKeyboardFocusHere();
-
-                auto commit_rename = [&](entt::entity ent) {
-                    if (s_rename_buf[0] != '\0') {
-                        std::string old_name = entity_name;
-                        std::string new_name = s_rename_buf;
-                        if (context.registry.all_of<EditorNameComponent>(ent)) {
-                            context.registry.get<EditorNameComponent>(ent).name = new_name;
-                        } else {
-                            context.registry.emplace<EditorNameComponent>(ent, new_name);
-                        }
-                        auto& reg = context.registry;
-                        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                            "Rename Entity",
-                            []{},
-                            [&reg, ent, old_name]() {
-                                if (reg.valid(ent) && reg.all_of<EditorNameComponent>(ent)) {
-                                    reg.get<EditorNameComponent>(ent).name = old_name;
-                                }
-                            }), false);
-                    }
-                    s_renaming_entity = entt::null;
-                };
-
-                if (ImGui::InputText("##rename", s_rename_buf, sizeof(s_rename_buf),
-                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-                    commit_rename(entity);
-                } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                    s_renaming_entity = entt::null;
-                } else if (!ImGui::IsItemActive() && s_renaming_entity == entity &&
-                           ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()) {
-                    commit_rename(entity);
-                }
-            } else {
-                std::string display_name = std::string(type_icon) + "  " + entity_name;
-                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf |
-                                           ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                           ImGuiTreeNodeFlags_SpanAvailWidth;
-                if (is_selected) {
-                    flags |= ImGuiTreeNodeFlags_Selected;
-                }
-
-                ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
-                if (ImGui::IsItemClicked()) {
-                    auto& sel = SelectionManager::Get();
-                    if (ImGui::GetIO().KeyCtrl) {
-                        // Ctrl+Click: toggle entity in multi-selection
-                        sel.Toggle(entity);
-                        context.selected_entity = sel.GetPrimary();
-                    } else if (ImGui::GetIO().KeyShift && s_last_clicked_entity != entt::null) {
-                        // Shift+Click: range select
-                        sel.Clear();
-                        bool in_range = false;
-                        for (auto e : context.registry.storage<entt::entity>()) {
-                            if (!context.registry.valid(e)) continue;
-                            if (e == entity || e == s_last_clicked_entity) {
-                                sel.Add(e);
-                                if (in_range) break;
-                                in_range = true;
-                                continue;
-                            }
-                            if (in_range) sel.Add(e);
-                        }
-                        context.selected_entity = entity;
-                    } else {
-                        // Normal click: single select
-                        sel.SetSingle(entity);
-                        context.selected_entity = entity;
-                    }
-                    s_last_clicked_entity = entity;
-                    hierarchy_clicked = false;
-                }
-
-                // Double-click to rename
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) && !context.read_only) {
-                    s_renaming_entity = entity;
-                    std::strncpy(s_rename_buf, entity_name.c_str(), sizeof(s_rename_buf) - 1);
-                    s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
-                }
-            }
+            DrawEntityNode(context, entity);
         }
         ImGui::TreePop();
     }
@@ -270,6 +378,20 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 context.selected_entity = new_ent;
             }
             ImGui::EndMenu();
+        }
+        if (context.selected_entity != entt::null && ImGui::MenuItem("Save as Prefab", nullptr, false, !context.read_only)) {
+            std::string prefab_name = "Entity";
+            if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
+                prefab_name = context.registry.get<EditorNameComponent>(context.selected_entity).name;
+            }
+            std::filesystem::path prefab_dir = std::filesystem::current_path() / "samples" / "lua" / "data" / "prefabs";
+            std::filesystem::create_directories(prefab_dir);
+            std::string prefab_path = (prefab_dir / (prefab_name + ".dprefab")).string();
+            if (SaveEntityAsPrefab(context.registry, context.selected_entity, prefab_path)) {
+                EditorLog(LogLevel::Info, "Saved prefab: " + prefab_path);
+            } else {
+                EditorLog(LogLevel::Error, "Failed to save prefab");
+            }
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Delete Entity", nullptr, false, !context.read_only)) {
             entt::entity to_delete = context.selected_entity;

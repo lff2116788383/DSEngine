@@ -23,7 +23,7 @@ struct EditorAuxPanelsContext {
 void DrawProjectPanel();
 void DrawConsolePanel();
 void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context);
-void DrawAnimationPanel();
+void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity);
 void DrawTilePalettePanel(const EditorAuxPanelsContext& context);
 
 } // namespace dse::editor

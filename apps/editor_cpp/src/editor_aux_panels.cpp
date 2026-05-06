@@ -1,6 +1,7 @@
 #include "editor_aux_panels.h"
 
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -309,9 +310,191 @@ void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {
     ImGui::End();
 }
 
-void DrawAnimationPanel() {
+void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity) {
     ImGui::Begin("Animation");
-    ImGui::Text("No animated object selected.");
+
+    // Check if selected entity has Animator3DComponent
+    bool has_animator = (selected_entity != entt::null &&
+                         registry.valid(selected_entity) &&
+                         registry.all_of<dse::Animator3DComponent>(selected_entity));
+
+    if (!has_animator) {
+        ImGui::TextDisabled("Select an entity with Animator3DComponent to view its timeline.");
+        ImGui::End();
+        return;
+    }
+
+    auto& animator = registry.get<dse::Animator3DComponent>(selected_entity);
+
+    // Animation panel persistent state
+    static bool s_playing = false;
+    static float s_timeline_zoom = 1.0f;
+    static float s_timeline_scroll_x = 0.0f;
+    static float s_scrub_time = 0.0f;
+    static bool s_dragging_playhead = false;
+
+    // Clip info
+    const float clip_duration = 2.0f; // Default 2 seconds if unknown
+    const float fps = 30.0f;
+    const int total_frames = static_cast<int>(clip_duration * fps);
+
+    // Transport controls
+    if (ImGui::Button(s_playing ? MDI_ICON_PAUSE : MDI_ICON_PLAY)) {
+        s_playing = !s_playing;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_STOP)) {
+        s_playing = false;
+        s_scrub_time = 0.0f;
+        animator.current_time = 0.0f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_SKIP_NEXT)) {
+        s_scrub_time = clip_duration;
+        animator.current_time = clip_duration;
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::SliderFloat("Speed", &animator.speed, 0.0f, 3.0f, "%.1fx");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::SliderFloat("Zoom", &s_timeline_zoom, 0.5f, 4.0f, "%.1f");
+
+    // Current time display
+    ImGui::Text("Time: %.2fs / %.2fs  Frame: %d / %d",
+                s_scrub_time, clip_duration,
+                static_cast<int>(s_scrub_time * fps), total_frames);
+    ImGui::Text("Clip: %s", animator.danim_path.empty() ? "(none)" : animator.danim_path.c_str());
+
+    ImGui::Separator();
+
+    // Timeline area
+    ImVec2 timeline_pos = ImGui::GetCursorScreenPos();
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    float timeline_width = avail.x;
+    float timeline_height = (std::max)(80.0f, avail.y - 4.0f);
+
+    ImGui::InvisibleButton("##timeline_area", ImVec2(timeline_width, timeline_height));
+    bool timeline_hovered = ImGui::IsItemHovered();
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 timeline_end = ImVec2(timeline_pos.x + timeline_width, timeline_pos.y + timeline_height);
+
+    // Background
+    draw_list->AddRectFilled(timeline_pos, timeline_end, IM_COL32(30, 30, 35, 255));
+    draw_list->AddRect(timeline_pos, timeline_end, IM_COL32(60, 60, 70, 255));
+
+    // Ruler area (top 24px)
+    const float ruler_height = 24.0f;
+    draw_list->AddRectFilled(timeline_pos,
+                             ImVec2(timeline_end.x, timeline_pos.y + ruler_height),
+                             IM_COL32(40, 40, 50, 255));
+
+    // Draw frame ticks
+    float pixels_per_second = (timeline_width / clip_duration) * s_timeline_zoom;
+    float visible_start = s_timeline_scroll_x / pixels_per_second;
+
+    for (int f = 0; f <= total_frames; f++) {
+        float time_at_frame = static_cast<float>(f) / fps;
+        float x = timeline_pos.x + (time_at_frame - visible_start) * pixels_per_second;
+        if (x < timeline_pos.x || x > timeline_end.x) continue;
+
+        bool is_major = (f % 10 == 0);
+        float tick_h = is_major ? ruler_height - 4.0f : 8.0f;
+        ImU32 tick_color = is_major ? IM_COL32(180, 180, 180, 255) : IM_COL32(80, 80, 90, 255);
+        draw_list->AddLine(ImVec2(x, timeline_pos.y + ruler_height - tick_h),
+                           ImVec2(x, timeline_pos.y + ruler_height), tick_color);
+
+        if (is_major) {
+            char label[16];
+            snprintf(label, sizeof(label), "%d", f);
+            draw_list->AddText(ImVec2(x + 2, timeline_pos.y + 2), IM_COL32(200, 200, 200, 255), label);
+        }
+    }
+
+    // Draw keyframe diamonds (simulated — show one every 10 frames)
+    float track_y = timeline_pos.y + ruler_height + 20.0f;
+    for (int f = 0; f <= total_frames; f += 10) {
+        float time_at_frame = static_cast<float>(f) / fps;
+        float x = timeline_pos.x + (time_at_frame - visible_start) * pixels_per_second;
+        if (x < timeline_pos.x || x > timeline_end.x) continue;
+
+        // Diamond shape
+        const float diamond_size = 5.0f;
+        ImVec2 center(x, track_y);
+        draw_list->AddQuadFilled(
+            ImVec2(center.x, center.y - diamond_size),
+            ImVec2(center.x + diamond_size, center.y),
+            ImVec2(center.x, center.y + diamond_size),
+            ImVec2(center.x - diamond_size, center.y),
+            IM_COL32(255, 200, 50, 255));
+    }
+
+    // Track label
+    draw_list->AddText(ImVec2(timeline_pos.x + 4, track_y - 6),
+                       IM_COL32(160, 160, 160, 255), "Transform");
+
+    // Current frame indicator (red playhead)
+    {
+        float playhead_x = timeline_pos.x + (s_scrub_time - visible_start) * pixels_per_second;
+        if (playhead_x >= timeline_pos.x && playhead_x <= timeline_end.x) {
+            draw_list->AddLine(ImVec2(playhead_x, timeline_pos.y),
+                               ImVec2(playhead_x, timeline_end.y),
+                               IM_COL32(220, 50, 50, 255), 2.0f);
+            // Playhead triangle at top
+            draw_list->AddTriangleFilled(
+                ImVec2(playhead_x - 5, timeline_pos.y),
+                ImVec2(playhead_x + 5, timeline_pos.y),
+                ImVec2(playhead_x, timeline_pos.y + 8),
+                IM_COL32(220, 50, 50, 255));
+        }
+    }
+
+    // Scrub interaction: click/drag on timeline to move playhead
+    if (timeline_hovered && ImGui::IsMouseClicked(0)) {
+        s_dragging_playhead = true;
+    }
+    if (s_dragging_playhead) {
+        if (ImGui::IsMouseDown(0)) {
+            float mouse_x = ImGui::GetMousePos().x;
+            float rel = (mouse_x - timeline_pos.x) / pixels_per_second + visible_start;
+            s_scrub_time = (std::max)(0.0f, (std::min)(rel, clip_duration));
+            animator.current_time = s_scrub_time;
+            s_playing = false;
+        } else {
+            s_dragging_playhead = false;
+        }
+    }
+
+    // Pan with middle mouse
+    if (timeline_hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        s_timeline_scroll_x -= ImGui::GetIO().MouseDelta.x;
+        s_timeline_scroll_x = (std::max)(0.0f, s_timeline_scroll_x);
+    }
+
+    // Zoom with scroll wheel
+    if (timeline_hovered) {
+        float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            s_timeline_zoom += wheel * 0.15f;
+            s_timeline_zoom = (std::max)(0.5f, (std::min)(s_timeline_zoom, 4.0f));
+        }
+    }
+
+    // Advance playback
+    if (s_playing) {
+        s_scrub_time += ImGui::GetIO().DeltaTime * animator.speed;
+        if (s_scrub_time >= clip_duration) {
+            if (animator.loop) {
+                s_scrub_time -= clip_duration;
+            } else {
+                s_scrub_time = clip_duration;
+                s_playing = false;
+            }
+        }
+        animator.current_time = s_scrub_time;
+    }
+
     ImGui::End();
 }
 

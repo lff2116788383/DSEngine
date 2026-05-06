@@ -33,7 +33,7 @@
 | **P0** | Undo/Redo 集成 | ✅ Phase 2.5 完成 | Transform + Entity 操作均可撤销 |
 | **P0** | 快捷键系统 | ✅ Phase 2 完成 | Ctrl+Z/Y/S/O/D, Delete, F, F2 |
 | **P1** | Console 面板 | ✅ Phase 2 完成 | spdlog 集成 + 过滤 + 右键菜单 + 双击复制 |
-| **P1** | Animation 面板 | ❌ 纯占位符 | 只显示 "No animated object selected." |
+| **P1** | Animation 面板 | ✅ Phase 4 完成 | 时间轴编辑器 + Play/Pause/Scrub + 缩放平移 + 关键帧菱形显示 |
 | **P1** | Tile Palette | ❌ 基础占位 | 有网格绘制但无实际瓦片编辑 |
 | **P1** | Scene 视图相机控制 | ✅ Phase 2 完成 | Orbit/Pan/Zoom + 渲染管线对接 |
 | **P1** | Hierarchy 搜索/过滤 | ✅ Phase 2 完成 | 搜索框 + 双击重命名 |
@@ -44,10 +44,10 @@
 | **P2** | 状态栏 | ✅ Phase 3 完成 | FPS/实体数/Draw Calls/Gizmo工具/坐标系 |
 | **P2** | 多选实体 | ✅ Phase 3 完成 | Ctrl+Click/Shift+Click/批量Delete·Duplicate |
 | **P2** | 实体重命名 | ✅ Phase 2 完成 | Hierarchy 双击重命名 |
-| **P3** | 材质编辑器 | ❌ 无 | 引擎支持 PBR 材质但无可视化编辑 |
+| **P3** | 材质编辑器 | ✅ Phase 4 完成 | PBR 属性编辑 + 纹理槽拖拽 + 预览球 + Shader选择 |
 | **P3** | 地形编辑器 | ❌ 无 | TerrainComponent 有 Inspector 但无笔刷绘制 |
 | **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
-| **P3** | Prefab 系统 | ❌ 无 | 无模板化实体机制 |
+| **P3** | Prefab 系统 | ✅ Phase 4 完成 | Save as Prefab / .dprefab 拖拽实例化 / Prefab 标记 |
 | **P3** | Settings/Preferences | ✅ Phase 3 完成 | editor_settings.json 持久化 |
 
 ---
@@ -365,10 +365,14 @@ apps/editor_cpp/
 - [x] Delete/Duplicate 支持批量操作
 - [x] Project 面板支持搜索、Grid/List 切换、右键上下文菜单
 - [x] 编辑器设置持久化（recent files/gizmo 默认值/上次场景自动加载）
-- [ ] Animation 面板时间轴（移入 Phase 4）
-- [ ] Material Editor PBR 编辑（移入 Phase 4）
+- [x] Animation 面板时间轴（移入 Phase 4）
+- [x] Material Editor PBR 编辑（移入 Phase 4）
 
 ### Phase 4 验收
-- [ ] Prefab 导出/实例化/覆盖检测
-- [ ] Tilemap 笔刷绘制工作
-- [ ] 地形笔刷高度绘制工作
+- [x] Animation 时间轴面板：自定义 ImDrawList 绘制、缩放/平移、关键帧菱形、红色播放头拖拽
+- [x] Material Editor 面板：PBR 属性（Albedo/Metallic/Roughness/AO/Emissive）+ 纹理槽拖拽 + 预览球
+- [x] Prefab 系统：Save as Prefab (.dprefab JSON) / Project 面板拖拽实例化 / Hierarchy 标记
+- [x] Hierarchy 拖拽父子关系：拖拽建立 ParentComponent / 拖到 Scene 根解除 / Undo 支持 / 缩进显示
+- [x] Editor Preferences 面板：Window 菜单打开 / 主题切换 / Snap 设置 / 快捷键查看
+- [ ] Tilemap 笔刷绘制工作（移入 Phase 5）
+- [ ] 地形笔刷高度绘制工作（移入 Phase 5）

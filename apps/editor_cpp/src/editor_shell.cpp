@@ -47,6 +47,7 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
     ImGui::DockBuilderDockWindow("Toolbar", dock_id_top);
     ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
     ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+    ImGui::DockBuilderDockWindow("Material", dock_id_right);
     ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
     ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
     ImGui::DockBuilderDockWindow("Animation", dock_id_bottom);
@@ -175,6 +176,9 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
+        if (context.show_preferences && ImGui::MenuItem("Preferences")) {
+            *context.show_preferences = true;
+        }
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();

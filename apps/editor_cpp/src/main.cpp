@@ -62,6 +62,9 @@
 #include "editor_scene_camera.h"
 #include "editor_status_bar.h"
 #include "editor_settings.h"
+#include "editor_material_panel.h"
+#include "editor_prefab.h"
+#include "editor_preferences_panel.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -400,8 +403,10 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     }
     last_editor_state = GetEditorState();
 
+    static bool s_show_preferences = false;
+
     dse::editor::BeginEditorShell();
-    dse::editor::EditorShellContext shell_context{engine, registry, selected_entity, GetEditorState() == EditorState::Play};
+    dse::editor::EditorShellContext shell_context{engine, registry, selected_entity, GetEditorState() == EditorState::Play, &s_show_preferences};
     dse::editor::DrawEditorMainMenu(shell_context);
 
     // Process global keyboard shortcuts
@@ -441,8 +446,12 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
 
     dse::editor::EditorProfilerContext profiler_context{g_cpu_profiler, g_memory_profiler, g_render_profiler};
     dse::editor::DrawProfilerPanel(profiler_context);
-    dse::editor::DrawAnimationPanel();
+    dse::editor::DrawAnimationPanel(registry, selected_entity);
+    dse::editor::DrawMaterialPanel(registry, selected_entity);
     dse::editor::DrawTilePalettePanel(aux_panels_context);
+
+    // Preferences panel (toggled from Window menu)
+    dse::editor::DrawPreferencesPanel(&s_show_preferences);
 
     dse::editor::EditorViewportPanelContext scene_viewport_context{registry, selected_entity, scene_texture};
     dse::editor::DrawSceneViewportPanel(scene_viewport_context, g_current_gizmo_operation, g_current_gizmo_mode, BuildActiveCameraMatrices);
