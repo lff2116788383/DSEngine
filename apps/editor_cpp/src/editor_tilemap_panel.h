@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
@@ -19,6 +20,10 @@ struct TilemapEditorState {
     entt::entity active_tilemap = entt::null;
     bool editing_active = false;
     int brush_size = 1;
+
+    // Undo state: tracked during a paint stroke
+    bool painting = false;
+    std::vector<int> tiles_snapshot;
 };
 
 TilemapEditorState& GetTilemapEditorState();

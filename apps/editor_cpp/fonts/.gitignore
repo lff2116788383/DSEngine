@@ -1,7 +1,5 @@
-*.ttf
-*.otf
-*.woff
-*.woff2
+# 临时下载目录（download_fonts.ps1 产生）
 inter_tmp/
 noto_tmp/
 fa_tmp/
+*.zip

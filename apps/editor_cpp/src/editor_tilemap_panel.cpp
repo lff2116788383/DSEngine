@@ -344,19 +344,56 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
 
     bool mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool mouse_clicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-    if (!mouse_down) return false;
 
     auto& tm = registry.get<TilemapComponent>(state.active_tilemap);
     auto& tf = registry.get<TransformComponent>(state.active_tilemap);
 
+    // Handle stroke end -> push undo
+    if (!mouse_down && state.painting) {
+        state.painting = false;
+        if (state.tiles_snapshot != tm.tiles) {
+            std::vector<int> old_tiles = state.tiles_snapshot;
+            std::vector<int> new_tiles = tm.tiles;
+            entt::entity ent = state.active_tilemap;
+            auto& undo_mgr = GetUndoRedoManager();
+            auto cmd = std::make_unique<LambdaCommand>(
+                "Tilemap Paint",
+                [&reg = registry, ent, new_tiles]() {
+                    if (reg.valid(ent) && reg.all_of<TilemapComponent>(ent)) {
+                        auto& t = reg.get<TilemapComponent>(ent);
+                        t.tiles = new_tiles;
+                        t.dirty = true;
+                    }
+                },
+                [&reg = registry, ent, old_tiles]() {
+                    if (reg.valid(ent) && reg.all_of<TilemapComponent>(ent)) {
+                        auto& t = reg.get<TilemapComponent>(ent);
+                        t.tiles = old_tiles;
+                        t.dirty = true;
+                    }
+                }
+            );
+            undo_mgr.Execute(std::move(cmd), false);
+        }
+        return false;
+    }
+
+    if (!mouse_down) return false;
+
     if (tm.width <= 0 || tm.height <= 0) return false;
+
+    // Snapshot on stroke start
+    if (mouse_clicked && !state.painting) {
+        state.painting = true;
+        state.tiles_snapshot = tm.tiles;
+    }
 
     ImVec2 mouse = ImGui::GetMousePos();
     glm::vec3 world_mouse = ScreenToWorld(glm::vec2(mouse.x, mouse.y), view, proj,
                                            window_pos, panel_size, tf.position.z);
 
     int cx, cy;
-    if (!WorldToTilemapCell(world_mouse, tm, tf, cx, cy)) return false;
+    if (!WorldToTilemapCell(world_mouse, tm, tf, cx, cy)) return true;
 
     int half_brush = state.brush_size / 2;
     bool changed = false;
@@ -364,9 +401,8 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
     if (state.active_tool == TilemapBrushTool::FloodFill) {
         // Only on click, not drag
         if (!mouse_clicked) return true;
-        std::vector<int> backup = tm.tiles;
         FloodFillTiles(tm, cx, cy, state.selected_tile_id);
-        if (backup != tm.tiles) {
+        if (state.tiles_snapshot != tm.tiles) {
             tm.dirty = true;
             changed = true;
         }

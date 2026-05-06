@@ -34,7 +34,7 @@
 | **P0** | 快捷键系统 | ✅ Phase 2 完成 | Ctrl+Z/Y/S/O/D, Delete, F, F2 |
 | **P1** | Console 面板 | ✅ Phase 2 完成 | spdlog 集成 + 过滤 + 右键菜单 + 双击复制 |
 | **P1** | Animation 面板 | ✅ Phase 4 完成 | 时间轴编辑器 + Play/Pause/Scrub + 缩放平移 + 关键帧菱形显示 |
-| **P1** | Tile Palette | ❌ 基础占位 | 有网格绘制但无实际瓦片编辑 |
+| **P1** | Tile Palette | ✅ Phase 5 完成 | 瓦片笔刷/填充/橡皮 + 多尺寸笔刷 + 网格覆盖 + Undo |
 | **P1** | Scene 视图相机控制 | ✅ Phase 2 完成 | Orbit/Pan/Zoom + 渲染管线对接 |
 | **P1** | Hierarchy 搜索/过滤 | ✅ Phase 2 完成 | 搜索框 + 双击重命名 |
 | **P1** | 文件对话框 | ✅ Phase 2 完成 | Windows 原生 OPENFILENAMEW |
@@ -43,9 +43,10 @@
 | **P2** | Edit/Window 菜单 | ✅ Phase 2 完成 | Undo/Redo 菜单项 + 灰度状态 |
 | **P2** | 状态栏 | ✅ Phase 3 完成 | FPS/实体数/Draw Calls/Gizmo工具/坐标系 |
 | **P2** | 多选实体 | ✅ Phase 3 完成 | Ctrl+Click/Shift+Click/批量Delete·Duplicate |
+| **P2** | Gizmo 多选同时拖动 | ✅ Phase 5 完成 | 中心点 Gizmo + delta 批量应用 + Undo |
 | **P2** | 实体重命名 | ✅ Phase 2 完成 | Hierarchy 双击重命名 |
 | **P3** | 材质编辑器 | ✅ Phase 4 完成 | PBR 属性编辑 + 纹理槽拖拽 + 预览球 + Shader选择 |
-| **P3** | 地形编辑器 | ❌ 无 | TerrainComponent 有 Inspector 但无笔刷绘制 |
+| **P3** | 地形编辑器 | ✅ Phase 5 完成 | 高度笔刷(Raise/Lower/Smooth/Flatten) + Splat Map 纹理绘制 + Undo |
 | **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
 | **P3** | Prefab 系统 | ✅ Phase 4 完成 | Save as Prefab / .dprefab 拖拽实例化 / Prefab 标记 |
 | **P3** | Settings/Preferences | ✅ Phase 3 完成 | editor_settings.json 持久化 |
@@ -231,7 +232,7 @@ F         → Focus Selected ✅
 - ✅ Hierarchy 面板：Ctrl+Click 切换选择、Shift+Click 范围选、普通点击单选
 - ✅ Inspector 面板：多选时显示选中数量 + Transform 平均值
 - ✅ Delete/Duplicate 快捷键支持批量操作
-- ⬜ Gizmo 多选同时拖动（待后续优化）
+- ✅ Gizmo 多选同时拖动（Phase 5：中心点矩阵 + delta 批量平移 + Undo）
 
 #### 3.4 Asset Browser（Project 面板升级）✅
 - ✅ 网格视图 + 列表视图切换（Grid/List 按钮）
@@ -240,7 +241,7 @@ F         → Focus Selected ✅
 - ✅ 右键菜单：重命名 / 删除 / 复制路径 / 在 Explorer 中显示
 - ✅ 内联重命名（Enter 确认 / Esc 取消）
 - ✅ 拖拽文件到 Scene（`ASSET_PATH` payload）
-- ⬜ 缩略图预览（待后续，需 GPU 纹理加载）
+- ✅ 缩略图预览（stb_image + GL 纹理缓存，支持 .png/.jpg/.bmp/.tga）
 
 #### 3.5 编辑器配置持久化 ✅
 - ✅ `editor_settings.json`（rapidjson 序列化）保存到 `bin/` 目录
@@ -374,5 +375,64 @@ apps/editor_cpp/
 - [x] Prefab 系统：Save as Prefab (.dprefab JSON) / Project 面板拖拽实例化 / Hierarchy 标记
 - [x] Hierarchy 拖拽父子关系：拖拽建立 ParentComponent / 拖到 Scene 根解除 / Undo 支持 / 缩进显示
 - [x] Editor Preferences 面板：Window 菜单打开 / 主题切换 / Snap 设置 / 快捷键查看
-- [ ] Tilemap 笔刷绘制工作（移入 Phase 5）
-- [ ] 地形笔刷高度绘制工作（移入 Phase 5）
+
+### Phase 5 验收
+- [x] Gizmo 多选同时拖动：centroid 计算 + ImGuizmo 虚拟矩阵 + delta 批量平移 + Undo
+- [x] Asset Browser 缩略图预览：stb_image 加载 + GL 纹理缓存 + 目录切换释放
+- [x] Tilemap 绘制 Undo：笔触开始 snapshot tiles、松开 push LambdaCommand
+- [x] Terrain 雕刻 Undo：笔触开始 snapshot height_data、松开 push LambdaCommand（merge_id）
+- [x] Scene Viewport Color-ID 拾取：FBO + GLSL 着色器 + entity ID→RGB 编码 + glReadPixels
+- [x] Splat Map 地形纹理绘制：4层 RGBA splat_data + 高斯笔刷 + 权重归一化 + Undo
+- [x] Terrain 面板 Sculpt/Splat 模式切换 + 层选择 + Opacity 滑块 + 纹理路径输入 + Reset
+
+---
+
+### Phase 5：编辑器深度功能（2026-05-06）✅ 已完成
+
+> **实施记录**：
+> - 修改 `editor_viewport_panel.cpp`：
+>   - 多选 Gizmo：centroid 计算 → ImGuizmo 虚拟矩阵 → delta 批量平移 → Undo（merge_id=gizmo_multi_transform）
+>   - Color-ID FBO 拾取：`ColorIDPicker` 结构体（FBO + GLSL 着色器 + entity ID→RGB 编码 + glReadPixels），替换原始距离拾取
+> - 修改 `editor_aux_panels.cpp`：
+>   - Asset Browser Grid 视图缩略图：stb_image 加载 + GL 纹理缓存 + 目录切换清理
+> - 修改 `editor_tilemap_panel.h/cpp`：
+>   - Tilemap 绘制 Undo：`painting` 状态跟踪 + `tiles_snapshot` + LambdaCommand
+> - 修改 `editor_terrain_panel.h/cpp`：
+>   - Terrain 雕刻 Undo：`height_snapshot` + LambdaCommand（merge_id=terrain_sculpt_XXX）
+>   - Splat Map 纹理绘制：`ApplySplatBrush` 高斯笔刷权重归一化 + `splat_snapshot` Undo
+>   - Sculpt/Splat 模式切换 UI + 层选择 + Opacity 滑块 + 纹理路径输入 + Reset
+> - 修改 `engine/ecs/components_3d.h`：
+>   - `TerrainComponent` 新增 `splat_data`（4 float/vertex）、`splat_texture_paths[4]`、`splat_texture_handles[4]`、`splat_dirty`
+> - 字体文件提交到仓库（`apps/editor_cpp/fonts/*.ttf`）
+> - 编译零错误，unit + integration 测试 100% 通过
+
+#### 5.1 Gizmo 多选同时拖动 ✅
+- ✅ `SelectionManager::IsMultiSelect()` 检测多选状态
+- ✅ 计算所有选中实体 Transform 的中心点（centroid）
+- ✅ 用 centroid 矩阵驱动 `ImGuizmo::Manipulate`（仅支持平移）
+- ✅ 计算 delta 并应用到所有选中实体
+- ✅ Undo：`LambdaCommand` 包含所有实体 before/after 快照（merge_id=gizmo_multi_transform）
+
+#### 5.2 Asset Browser 缩略图预览 ✅
+- ✅ Grid 视图中图片文件（.png/.jpg/.jpeg/.bmp/.tga）显示缩略图
+- ✅ `stb_image` 加载 + `glGenTextures` 创建 GL 纹理
+- ✅ `ThumbnailEntry` 缓存（path→texture_id），目录切换时 `glDeleteTextures` 释放
+
+#### 5.3 Tilemap/Terrain Undo 支持 ✅
+- ✅ Tilemap：`painting` + `tiles_snapshot`，笔触结束 push `LambdaCommand`
+- ✅ Terrain 雕刻：`height_snapshot`，笔触结束 push `LambdaCommand`（merge_id=terrain_sculpt_XXX）
+- ✅ Terrain Splat：`splat_snapshot`，笔触结束 push `LambdaCommand`（merge_id=terrain_splat_XXX）
+
+#### 5.4 Scene Viewport Color-ID 拾取 ✅
+- ✅ `ColorIDPicker` 结构体：FBO（RGBA8 + Depth24）+ GLSL 330 着色器
+- ✅ Entity ID 编码为 RGB 颜色（+1 偏移避免与 clear 冲突）
+- ✅ 屏幕空间投影：VP 矩阵 → NDC → 屏幕坐标 → 14px 色块
+- ✅ `glReadPixels` 单点读取 → 解码 entity
+- ✅ GL 状态保存/恢复（FBO/Viewport/Blend）
+
+#### 5.5 Splat Map 地形纹理绘制 ✅
+- ✅ `TerrainComponent` 新增 `splat_data`（resolution_x × resolution_z × 4 float）
+- ✅ 4 层纹理路径 + texture handles
+- ✅ `EnsureSplatData()`：首次使用时初始化（layer 0 = 1.0，其余 = 0.0）
+- ✅ `ApplySplatBrush()`：高斯衰减 + 目标层增加 + 其他层按比例扣减（总和归一化）
+- ✅ UI：Sculpt/Splat 模式按钮切换 + 4 层彩色按钮 + Opacity 滑块 + 纹理路径输入 + Reset

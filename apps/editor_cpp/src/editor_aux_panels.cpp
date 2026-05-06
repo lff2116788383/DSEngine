@@ -9,6 +9,9 @@
 #include "editor_icons.h"
 #include "editor_tilemap_panel.h"
 
+#include <glad/gl.h>
+#include "stb/stb_image.h"
+
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -47,6 +50,59 @@ std::filesystem::path& GetCurrentProjectPanelPath() {
     return current_path;
 }
 
+// --- Thumbnail cache ---
+struct ThumbnailEntry {
+    unsigned int texture_id = 0;
+    int width = 0;
+    int height = 0;
+};
+
+std::unordered_map<std::string, ThumbnailEntry>& GetThumbnailCache() {
+    static std::unordered_map<std::string, ThumbnailEntry> cache;
+    return cache;
+}
+
+std::string& GetThumbnailCacheDir() {
+    static std::string dir;
+    return dir;
+}
+
+void ClearThumbnailCache() {
+    auto& cache = GetThumbnailCache();
+    for (auto& [path, entry] : cache) {
+        if (entry.texture_id != 0) {
+            glDeleteTextures(1, &entry.texture_id);
+        }
+    }
+    cache.clear();
+}
+
+bool IsImageExtension(const std::string& ext) {
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga";
+}
+
+unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
+    int w, h, channels;
+    unsigned char* data = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+    if (!data) return 0;
+
+    unsigned int tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(data);
+
+    auto& cache = GetThumbnailCache();
+    cache[path.string()] = {tex, w, h};
+    return tex;
+}
+
 } // namespace
 
 namespace dse::editor {
@@ -70,6 +126,15 @@ void DrawProjectPanel() {
         s_grid_view = !s_grid_view;
     }
     ImGui::Separator();
+
+    // Clear thumbnail cache when directory changes
+    {
+        std::string& cached_dir = GetThumbnailCacheDir();
+        if (cached_dir != current_path.string()) {
+            ClearThumbnailCache();
+            cached_dir = current_path.string();
+        }
+    }
 
     // Breadcrumb / Back navigation
     if (current_path != base_data_path) {
@@ -145,9 +210,35 @@ void DrawProjectPanel() {
 
                 ImGui::BeginGroup();
                 ImVec2 p = ImGui::GetCursorScreenPos();
-                ImU32 bg_color = entry.is_directory() ? IM_COL32(60, 80, 120, 180) : IM_COL32(60, 60, 70, 180);
-                ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + cell_size - 8, p.y + cell_size - 24), bg_color, 4.0f);
-                ImGui::Dummy(ImVec2(cell_size - 8, cell_size - 24));
+                const float thumb_w = cell_size - 8;
+                const float thumb_h = cell_size - 24;
+
+                // Check if this is an image file for thumbnail display
+                std::string ext = path.extension().string();
+                for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                bool is_image = !entry.is_directory() && IsImageExtension(ext);
+
+                if (is_image) {
+                    auto& cache = GetThumbnailCache();
+                    auto it = cache.find(path.string());
+                    unsigned int tex_id = 0;
+                    if (it != cache.end()) {
+                        tex_id = it->second.texture_id;
+                    } else {
+                        tex_id = LoadThumbnailTexture(path);
+                    }
+                    if (tex_id != 0) {
+                        ImGui::Image((ImTextureID)(intptr_t)tex_id, ImVec2(thumb_w, thumb_h));
+                    } else {
+                        ImU32 bg_color = IM_COL32(80, 60, 80, 180);
+                        ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + thumb_w, p.y + thumb_h), bg_color, 4.0f);
+                        ImGui::Dummy(ImVec2(thumb_w, thumb_h));
+                    }
+                } else {
+                    ImU32 bg_color = entry.is_directory() ? IM_COL32(60, 80, 120, 180) : IM_COL32(60, 60, 70, 180);
+                    ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + thumb_w, p.y + thumb_h), bg_color, 4.0f);
+                    ImGui::Dummy(ImVec2(thumb_w, thumb_h));
+                }
 
                 // Truncate long filenames
                 std::string display_name = filename.size() > 10 ? filename.substr(0, 9) + "..." : filename;

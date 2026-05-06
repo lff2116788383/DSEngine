@@ -232,6 +232,12 @@ struct TerrainComponent {
     // Frustum Culling visibility
     bool visible = true;
     
+    // Splat map: 4-layer texture weights per vertex (R=layer0, G=layer1, B=layer2, A=layer3)
+    std::vector<float> splat_data;           // size = resolution_x * resolution_z * 4
+    std::string splat_texture_paths[4];      // texture path per layer
+    unsigned int splat_texture_handles[4] = {0, 0, 0, 0};
+    bool splat_dirty = true;
+
     // Internal state
     bool is_dirty = true;
     std::vector<float> height_data;

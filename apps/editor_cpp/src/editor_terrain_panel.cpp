@@ -3,12 +3,15 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "editor_icons.h"
+#include "editor_undo.h"
+#include "editor_shortcuts.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace dse::editor {
 
@@ -170,6 +173,84 @@ static void ApplyBrush(TerrainComponent& terrain,
 }
 
 // ---------------------------------------------------------------------------
+// Splat map painting
+// ---------------------------------------------------------------------------
+
+static void EnsureSplatData(TerrainComponent& terrain) {
+    int required = terrain.resolution_x * terrain.resolution_z * 4;
+    if (static_cast<int>(terrain.splat_data.size()) != required) {
+        terrain.splat_data.resize(required, 0.0f);
+        // Initialize layer 0 to 1.0 (default base layer)
+        for (int i = 0; i < terrain.resolution_x * terrain.resolution_z; i++) {
+            terrain.splat_data[i * 4 + 0] = 1.0f;
+            terrain.splat_data[i * 4 + 1] = 0.0f;
+            terrain.splat_data[i * 4 + 2] = 0.0f;
+            terrain.splat_data[i * 4 + 3] = 0.0f;
+        }
+    }
+}
+
+static void ApplySplatBrush(TerrainComponent& terrain,
+                             const TransformComponent& tf,
+                             const glm::vec3& world_hit,
+                             const TerrainEditorState& state,
+                             float delta_time) {
+    EnsureSplatData(terrain);
+    if (terrain.resolution_x < 2 || terrain.resolution_z < 2) return;
+
+    float gx, gz;
+    WorldToTerrainGrid(world_hit, terrain, tf, gx, gz);
+
+    float dx_world = terrain.width / static_cast<float>(terrain.resolution_x - 1);
+    float dz_world = terrain.depth / static_cast<float>(terrain.resolution_z - 1);
+
+    int radius_cells_x = static_cast<int>(std::ceil(state.brush_radius / dx_world));
+    int radius_cells_z = static_cast<int>(std::ceil(state.brush_radius / dz_world));
+    int center_x = static_cast<int>(std::round(gx));
+    int center_z = static_cast<int>(std::round(gz));
+
+    float opacity = state.splat_brush_opacity * delta_time * 30.0f;
+    int layer = std::clamp(state.active_splat_layer, 0, 3);
+
+    for (int z = center_z - radius_cells_z; z <= center_z + radius_cells_z; z++) {
+        for (int x = center_x - radius_cells_x; x <= center_x + radius_cells_x; x++) {
+            if (x < 0 || x >= terrain.resolution_x || z < 0 || z >= terrain.resolution_z) continue;
+
+            float wx = static_cast<float>(x) * dx_world - terrain.width * 0.5f + tf.position.x;
+            float wz = static_cast<float>(z) * dz_world - terrain.depth * 0.5f + tf.position.z;
+            float dist = std::sqrt((wx - world_hit.x) * (wx - world_hit.x) +
+                                   (wz - world_hit.z) * (wz - world_hit.z));
+            float w = GaussianFalloff(dist, state.brush_radius, state.brush_falloff);
+            if (w <= 0.0f) continue;
+
+            int base = (z * terrain.resolution_x + x) * 4;
+            float add = w * opacity;
+
+            // Increase target layer, decrease others proportionally so sum stays ~1.0
+            float old_val = terrain.splat_data[base + layer];
+            float new_val = std::min(old_val + add, 1.0f);
+            float actual_add = new_val - old_val;
+            terrain.splat_data[base + layer] = new_val;
+
+            // Subtract from other layers proportionally
+            float others_sum = 0.0f;
+            for (int l = 0; l < 4; l++) {
+                if (l != layer) others_sum += terrain.splat_data[base + l];
+            }
+            if (others_sum > 0.0f && actual_add > 0.0f) {
+                for (int l = 0; l < 4; l++) {
+                    if (l != layer) {
+                        float ratio = terrain.splat_data[base + l] / others_sum;
+                        terrain.splat_data[base + l] = std::max(0.0f, terrain.splat_data[base + l] - actual_add * ratio);
+                    }
+                }
+            }
+        }
+    }
+    terrain.splat_dirty = true;
+}
+
+// ---------------------------------------------------------------------------
 // Panel drawing
 // ---------------------------------------------------------------------------
 
@@ -242,23 +323,67 @@ void DrawTerrainEditorPanel(entt::registry& registry, entt::entity selected_enti
         }
 
         ImGui::Separator();
-        ImGui::Text("Splat Layer: %d", state.active_splat_layer);
-        for (int i = 0; i < 4; i++) {
-            if (i > 0) ImGui::SameLine();
-            char lbl[16]; snprintf(lbl, sizeof(lbl), "L%d", i);
-            bool sel = (state.active_splat_layer == i);
-            if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.6f, 0.8f, 1.0f));
-            if (ImGui::Button(lbl, ImVec2(32, 24))) {
-                state.active_splat_layer = i;
-            }
-            if (sel) ImGui::PopStyleColor();
+
+        // Mode toggle: Sculpt vs Splat Paint
+        {
+            bool sculpt_active = !state.splat_paint_mode;
+            bool splat_active = state.splat_paint_mode;
+            if (sculpt_active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+            if (ImGui::Button("Sculpt", ImVec2(80, 24))) state.splat_paint_mode = false;
+            if (sculpt_active) ImGui::PopStyleColor();
+            ImGui::SameLine();
+            if (splat_active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.5f, 0.2f, 1.0f));
+            if (ImGui::Button("Splat Paint", ImVec2(80, 24))) state.splat_paint_mode = true;
+            if (splat_active) ImGui::PopStyleColor();
         }
-        ImGui::TextDisabled("(Splat painting requires splat map textures)");
+
+        if (state.splat_paint_mode) {
+            ImGui::Separator();
+            ImGui::Text("Splat Layer: %d", state.active_splat_layer);
+            const ImVec4 layer_colors[4] = {
+                ImVec4(0.8f, 0.3f, 0.3f, 1.0f),
+                ImVec4(0.3f, 0.8f, 0.3f, 1.0f),
+                ImVec4(0.3f, 0.3f, 0.8f, 1.0f),
+                ImVec4(0.8f, 0.8f, 0.3f, 1.0f),
+            };
+            for (int i = 0; i < 4; i++) {
+                if (i > 0) ImGui::SameLine();
+                char lbl[16]; snprintf(lbl, sizeof(lbl), "L%d", i);
+                bool sel = (state.active_splat_layer == i);
+                if (sel) ImGui::PushStyleColor(ImGuiCol_Button, layer_colors[i]);
+                if (ImGui::Button(lbl, ImVec2(32, 24))) {
+                    state.active_splat_layer = i;
+                }
+                if (sel) ImGui::PopStyleColor();
+            }
+
+            ImGui::SliderFloat("Opacity", &state.splat_brush_opacity, 0.01f, 1.0f, "%.2f");
+
+            // Splat texture path inputs
+            for (int i = 0; i < 4; i++) {
+                char label[32]; snprintf(label, sizeof(label), "Layer %d Tex", i);
+                char buf[256] = "";
+                std::strncpy(buf, terrain.splat_texture_paths[i].c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText(label, buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    terrain.splat_texture_paths[i] = buf;
+                }
+            }
+        }
 
         ImGui::Separator();
         if (ImGui::Button("Reset Heights to 0")) {
             std::fill(terrain.height_data.begin(), terrain.height_data.end(), 0.0f);
             terrain.is_dirty = true;
+        }
+        if (state.splat_paint_mode && ImGui::Button("Reset Splat to Layer 0")) {
+            EnsureSplatData(terrain);
+            for (int i = 0; i < terrain.resolution_x * terrain.resolution_z; i++) {
+                terrain.splat_data[i * 4 + 0] = 1.0f;
+                terrain.splat_data[i * 4 + 1] = 0.0f;
+                terrain.splat_data[i * 4 + 2] = 0.0f;
+                terrain.splat_data[i * 4 + 3] = 0.0f;
+            }
+            terrain.splat_dirty = true;
         }
 
     } else {
@@ -359,10 +484,71 @@ bool HandleTerrainViewportSculpt(entt::registry& registry,
     if (io.KeyAlt) return false; // Alt = orbit
 
     bool mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    if (!mouse_down) {
+
+    // Handle stroke end -> push undo
+    if (!mouse_down && state.painting) {
         state.painting = false;
+        auto& terrain = registry.get<TerrainComponent>(state.active_terrain);
+        entt::entity ent = state.active_terrain;
+        auto& undo_mgr = GetUndoRedoManager();
+
+        if (state.splat_paint_mode) {
+            // Splat undo
+            if (state.splat_snapshot != terrain.splat_data) {
+                std::vector<float> old_splat = state.splat_snapshot;
+                std::vector<float> new_splat = terrain.splat_data;
+                std::string merge_id = "terrain_splat_" + std::to_string(static_cast<uint32_t>(ent));
+                auto cmd = std::make_unique<LambdaCommand>(
+                    "Terrain Splat Paint",
+                    [&reg = registry, ent, new_splat]() {
+                        if (reg.valid(ent) && reg.all_of<TerrainComponent>(ent)) {
+                            auto& t = reg.get<TerrainComponent>(ent);
+                            t.splat_data = new_splat;
+                            t.splat_dirty = true;
+                        }
+                    },
+                    [&reg = registry, ent, old_splat]() {
+                        if (reg.valid(ent) && reg.all_of<TerrainComponent>(ent)) {
+                            auto& t = reg.get<TerrainComponent>(ent);
+                            t.splat_data = old_splat;
+                            t.splat_dirty = true;
+                        }
+                    },
+                    merge_id
+                );
+                undo_mgr.Execute(std::move(cmd), true);
+            }
+        } else {
+            // Height sculpt undo
+            if (state.height_snapshot != terrain.height_data) {
+                std::vector<float> old_heights = state.height_snapshot;
+                std::vector<float> new_heights = terrain.height_data;
+                std::string merge_id = "terrain_sculpt_" + std::to_string(static_cast<uint32_t>(ent));
+                auto cmd = std::make_unique<LambdaCommand>(
+                    "Terrain Sculpt",
+                    [&reg = registry, ent, new_heights]() {
+                        if (reg.valid(ent) && reg.all_of<TerrainComponent>(ent)) {
+                            auto& t = reg.get<TerrainComponent>(ent);
+                            t.height_data = new_heights;
+                            t.is_dirty = true;
+                        }
+                    },
+                    [&reg = registry, ent, old_heights]() {
+                        if (reg.valid(ent) && reg.all_of<TerrainComponent>(ent)) {
+                            auto& t = reg.get<TerrainComponent>(ent);
+                            t.height_data = old_heights;
+                            t.is_dirty = true;
+                        }
+                    },
+                    merge_id
+                );
+                undo_mgr.Execute(std::move(cmd), true);
+            }
+        }
         return false;
     }
+
+    if (!mouse_down) return false;
 
     auto& terrain = registry.get<TerrainComponent>(state.active_terrain);
     auto& tf = registry.get<TransformComponent>(state.active_terrain);
@@ -378,8 +564,22 @@ bool HandleTerrainViewportSculpt(entt::registry& registry,
     float lz = hit.z - tf.position.z;
     if (std::abs(lx) > half_w || std::abs(lz) > half_d) return false;
 
-    state.painting = true;
-    ApplyBrush(terrain, tf, hit, state, delta_time);
+    // Snapshot on stroke start
+    if (!state.painting) {
+        state.painting = true;
+        if (state.splat_paint_mode) {
+            EnsureSplatData(terrain);
+            state.splat_snapshot = terrain.splat_data;
+        } else {
+            state.height_snapshot = terrain.height_data;
+        }
+    }
+
+    if (state.splat_paint_mode) {
+        ApplySplatBrush(terrain, tf, hit, state, delta_time);
+    } else {
+        ApplyBrush(terrain, tf, hit, state, delta_time);
+    }
     return true;
 }
 

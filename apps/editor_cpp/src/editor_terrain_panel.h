@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
@@ -23,7 +24,13 @@ struct TerrainEditorState {
     bool painting = false;            // Mouse is held down and painting
 
     // Splat layer editing
+    bool splat_paint_mode = false;    // true = painting splat, false = sculpting heights
     int active_splat_layer = 0;       // 0-3
+    float splat_brush_opacity = 0.5f; // splat paint opacity
+
+    // Undo state: snapshot at stroke start
+    std::vector<float> height_snapshot;
+    std::vector<float> splat_snapshot;
 };
 
 TerrainEditorState& GetTerrainEditorState();
