@@ -5,9 +5,18 @@ endif()
 if(POLICY CMP0175)
     cmake_policy(SET CMP0175 OLD)
 endif()
-project(DSEngine C CXX)
+project(DSEngine VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
+# 生成版本头文件 dse_version.h（从 .in 模板）
+configure_file(
+    ${CMAKE_SOURCE_DIR}/engine/dse_version.h.in
+    ${CMAKE_BINARY_DIR}/generated/engine/dse_version.h
+    @ONLY
+)
+# 让源码编译时能 #include "engine/dse_version.h"
+include_directories(${CMAKE_BINARY_DIR}/generated)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -393,12 +402,8 @@ function(dse_apply_config_postfix target_name)
 endfunction()
 
 dse_apply_config_postfix(dse_engine)
-if(MSVC)
-    set_target_properties(dse_engine PROPERTIES
-        IMPORT_SUFFIX "_debug.lib"
-        IMPORT_PREFIX ""
-    )
-endif()
+# IMPORT_SUFFIX / PREFIX 由 dse_apply_config_postfix 的 DEBUG_POSTFIX 等属性自动处理，
+# 不再硬编码为 _debug.lib，否则 Release 配置也会链接到 _debug.lib。
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -466,32 +471,110 @@ if(MSVC)
 endif()
 
 
+# ---------------------------------------------------------------------------
+# PUBLIC interface include directories（供下游 target_link_libraries 自动继承）
+# BUILD_INTERFACE  : 源码编译时使用的路径
+# INSTALL_INTERFACE: SDK 安装后消费者使用的路径
+# ---------------------------------------------------------------------------
+target_include_directories(dse_engine PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/engine>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/modules>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/depends/glm>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/depends/glm_ext>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/engine>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/modules>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/glm>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/glm_ext>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/entt/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/box2d/include>
+)
+
+# ---------------------------------------------------------------------------
+# Install rules
+# ---------------------------------------------------------------------------
+
+# 1. 引擎目标（DLL/LIB）
 install(TARGETS dse_engine
     EXPORT DSEngineTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  COMPONENT sdk
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  COMPONENT sdk
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  COMPONENT sdk
 )
 
+# 2. 引擎公共头文件
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/engine/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/engine
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/engine
+    COMPONENT sdk
     FILES_MATCHING PATTERN "*.h"
+    PATTERN "*.h.in" EXCLUDE
 )
-
+# 2b. CMake 生成的版本头文件
+install(FILES ${CMAKE_BINARY_DIR}/generated/engine/dse_version.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/engine
+    COMPONENT sdk
+)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/modules/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/modules
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/modules
+    COMPONENT sdk
     FILES_MATCHING PATTERN "*.h"
 )
 
+# 3. 第三方依赖公共头文件（仅公共 API 中被引用的）
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/depends/glm/glm/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/glm/glm
+    COMPONENT sdk
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/depends/glm_ext/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/glm_ext
+    COMPONENT sdk
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/entt/src
+    COMPONENT sdk
+    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/box2d/include
+    COMPONENT sdk
+    FILES_MATCHING PATTERN "*.h"
+)
+
+# 4. Lua 脚本
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/script/
     DESTINATION ${CMAKE_INSTALL_DATADIR}/DSEngine/script
+    COMPONENT sdk
     FILES_MATCHING PATTERN "*.lua"
 )
 
+# 5. 导出目标文件
 install(EXPORT DSEngineTargets
     FILE DSEngineTargets.cmake
     NAMESPACE DSEngine::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/DSEngine
+    COMPONENT sdk
+)
+
+# 6. 生成并安装 Package Config 文件
+configure_package_config_file(
+    ${CMAKE_SOURCE_DIR}/cmake/DSEngineConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/DSEngineConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/DSEngine
+)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/DSEngineConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/DSEngineConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/DSEngineConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/DSEngine
+    COMPONENT sdk
 )
 
 enable_testing()

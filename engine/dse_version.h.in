@@ -1,0 +1,14 @@
+/**
+ * @file dse_version.h
+ * @brief DSEngine 版本宏，由 CMake configure_file 自动生成。
+ */
+
+#ifndef DSE_VERSION_H
+#define DSE_VERSION_H
+
+#define DSE_VERSION_MAJOR @DSEngine_VERSION_MAJOR@
+#define DSE_VERSION_MINOR @DSEngine_VERSION_MINOR@
+#define DSE_VERSION_PATCH @DSEngine_VERSION_PATCH@
+#define DSE_VERSION_STRING "@DSEngine_VERSION@"
+
+#endif // DSE_VERSION_H
