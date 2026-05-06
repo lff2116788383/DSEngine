@@ -60,6 +60,8 @@
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
 #include "editor_scene_camera.h"
+#include "editor_status_bar.h"
+#include "editor_settings.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -446,6 +448,9 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::DrawSceneViewportPanel(scene_viewport_context, g_current_gizmo_operation, g_current_gizmo_mode, BuildActiveCameraMatrices);
     dse::editor::DrawGameViewportPanel(game_texture);
 
+    dse::editor::EditorStatusBarContext status_bar_context{g_cpu_profiler, g_render_profiler, registry, g_current_gizmo_operation, g_current_gizmo_mode};
+    dse::editor::DrawStatusBar(status_bar_context);
+
     dse::editor::EndEditorShell();
 }
 
@@ -552,6 +557,20 @@ int main() {
         EnsureEditorLocalizationData();
         dse::editor::InstallEditorLogSink();
 
+        // Load editor settings and restore state
+        dse::editor::EditorSettings editor_settings = dse::editor::LoadEditorSettings();
+        g_current_gizmo_operation = editor_settings.default_gizmo_operation;
+        g_current_gizmo_mode = editor_settings.default_gizmo_mode;
+
+        // Auto-load last opened scene
+        if (!editor_settings.last_scene_path.empty() && editor_settings.last_scene_path != "Untitled") {
+            if (std::filesystem::exists(editor_settings.last_scene_path)) {
+                World& world = engine_instance.pipeline()->world();
+                LoadScene(world.registry(), editor_settings.last_scene_path);
+                dse::editor::SetCurrentScenePath(editor_settings.last_scene_path);
+            }
+        }
+
         std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
         // Main loop
@@ -657,6 +676,13 @@ int main() {
             g_render_profiler.EndFrame();
             g_cpu_profiler.EndFrame();
         }
+
+        // Save editor settings before shutdown
+        editor_settings.last_scene_path = dse::editor::GetCurrentScenePath();
+        editor_settings.default_gizmo_operation = g_current_gizmo_operation;
+        editor_settings.default_gizmo_mode = g_current_gizmo_mode;
+        dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
+        dse::editor::SaveEditorSettings(editor_settings);
 
         engine_instance.Shutdown();
     }

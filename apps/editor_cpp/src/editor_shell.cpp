@@ -9,6 +9,7 @@
 #include "editor_shortcuts.h"
 #include "editor_file_dialog.h"
 #include "editor_console_panel.h"
+#include "editor_settings.h"
 
 namespace dse::editor {
 
@@ -111,7 +112,26 @@ void DrawEditorMainMenu(EditorShellContext& context) {
                 context.selected_entity = entt::null;
                 SetCurrentScenePath(path);
                 EditorLog(LogLevel::Info, "Scene loaded: " + path);
+                EditorSettings settings = LoadEditorSettings();
+                AddRecentFile(settings, path);
+                SaveEditorSettings(settings);
             }
+        }
+        if (ImGui::BeginMenu("Recent Files", !context.read_only)) {
+            EditorSettings settings = LoadEditorSettings();
+            if (settings.recent_files.empty()) {
+                ImGui::TextDisabled("No recent files");
+            } else {
+                for (const auto& recent : settings.recent_files) {
+                    if (ImGui::MenuItem(recent.c_str())) {
+                        LoadScene(context.registry, recent);
+                        context.selected_entity = entt::null;
+                        SetCurrentScenePath(recent);
+                        EditorLog(LogLevel::Info, "Scene loaded: " + recent);
+                    }
+                }
+            }
+            ImGui::EndMenu();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {

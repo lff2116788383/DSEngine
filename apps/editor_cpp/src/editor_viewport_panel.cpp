@@ -5,10 +5,28 @@
 #include "imgui.h"
 #include "ImGuizmo.h"
 #include "editor_scene_camera.h"
+#include "editor_shortcuts.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace dse::editor {
+
+namespace {
+
+struct GizmoUndoState {
+    bool was_using = false;
+    entt::entity entity = entt::null;
+    glm::vec3 initial_position{0.0f};
+    glm::quat initial_rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 initial_scale{1.0f};
+};
+
+GizmoUndoState& GetGizmoUndoState() {
+    static GizmoUndoState state;
+    return state;
+}
+
+} // namespace
 
 void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                             int& current_gizmo_operation,
@@ -84,6 +102,57 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                 transform.scale = scale;
                 transform.dirty = true;
             }
+
+            // Gizmo Undo/Redo tracking
+            auto& gizmo_state = GetGizmoUndoState();
+            const bool is_using = ImGuizmo::IsUsing();
+            if (is_using && !gizmo_state.was_using) {
+                // Started using gizmo - capture initial state
+                gizmo_state.entity = context.selected_entity;
+                gizmo_state.initial_position = transform.position;
+                gizmo_state.initial_rotation = transform.rotation;
+                gizmo_state.initial_scale = transform.scale;
+            } else if (!is_using && gizmo_state.was_using) {
+                // Stopped using gizmo - push undo command
+                if (gizmo_state.entity == context.selected_entity && context.registry.valid(gizmo_state.entity)) {
+                    const glm::vec3 final_pos = transform.position;
+                    const glm::quat final_rot = transform.rotation;
+                    const glm::vec3 final_scale = transform.scale;
+                    const glm::vec3 old_pos = gizmo_state.initial_position;
+                    const glm::quat old_rot = gizmo_state.initial_rotation;
+                    const glm::vec3 old_scale = gizmo_state.initial_scale;
+                    entt::entity ent = gizmo_state.entity;
+
+                    auto& undo_mgr = GetUndoRedoManager();
+                    auto cmd = std::make_unique<LambdaCommand>(
+                        "Gizmo Transform",
+                        [&reg = context.registry, ent, final_pos, final_rot, final_scale]() {
+                            if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                auto& t = reg.get<TransformComponent>(ent);
+                                t.position = final_pos;
+                                t.rotation = final_rot;
+                                t.scale = final_scale;
+                                t.dirty = true;
+                            }
+                        },
+                        [&reg = context.registry, ent, old_pos, old_rot, old_scale]() {
+                            if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                auto& t = reg.get<TransformComponent>(ent);
+                                t.position = old_pos;
+                                t.rotation = old_rot;
+                                t.scale = old_scale;
+                                t.dirty = true;
+                            }
+                        }
+                    );
+                    // Push without executing (transform is already applied)
+                    undo_mgr.Execute(std::move(cmd), false);
+                    // Undo + redo just set the values, but execute already set final values.
+                    // We need a "push without execute" approach. Let's use a workaround:
+                    // Actually Execute() sets final values which are already set, so it's fine.
+                }
+            }
+            gizmo_state.was_using = is_using;
         }
     } else {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();

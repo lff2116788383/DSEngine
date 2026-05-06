@@ -15,6 +15,7 @@
 #include "editor_file_dialog.h"
 #include "editor_console_panel.h"
 #include "editor_shell.h"
+#include "editor_selection.h"
 
 namespace dse::editor {
 
@@ -166,12 +167,36 @@ void ProcessShortcuts(ShortcutContext& context) {
     // --- Entity operations (blocked in Play mode) ---
     if (!context.read_only) {
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, ImGuiInputFlags_RouteGlobal)) {
-            DuplicateSelectedEntity(context);
-            EditorLog(LogLevel::Info, "Entity duplicated");
+            auto& sel = SelectionManager::Get();
+            if (sel.IsMultiSelect()) {
+                auto entities = sel.GetAll();
+                for (auto ent : entities) {
+                    context.selected_entity = ent;
+                    DuplicateSelectedEntity(context);
+                }
+                EditorLog(LogLevel::Info, "Duplicated " + std::to_string(entities.size()) + " entities");
+            } else {
+                DuplicateSelectedEntity(context);
+                EditorLog(LogLevel::Info, "Entity duplicated");
+            }
         }
         if (ImGui::Shortcut(ImGuiKey_Delete, ImGuiInputFlags_RouteGlobal)) {
-            DeleteSelectedEntity(context);
-            EditorLog(LogLevel::Info, "Entity deleted");
+            auto& sel = SelectionManager::Get();
+            if (sel.IsMultiSelect()) {
+                auto entities = sel.GetAll();
+                for (auto ent : entities) {
+                    if (context.registry.valid(ent)) {
+                        context.world.DestroyEntity(ent);
+                    }
+                }
+                sel.Clear();
+                context.selected_entity = entt::null;
+                EditorLog(LogLevel::Info, "Deleted " + std::to_string(entities.size()) + " entities");
+            } else {
+                DeleteSelectedEntity(context);
+                sel.Clear();
+                EditorLog(LogLevel::Info, "Entity deleted");
+            }
         }
         if (ImGui::Shortcut(ImGuiKey_F2, ImGuiInputFlags_RouteGlobal)) {
             // F2 rename: handled by focusing the Inspector name field

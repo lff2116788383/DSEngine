@@ -38,17 +38,17 @@
 | **P1** | Scene 视图相机控制 | ✅ Phase 2 完成 | Orbit/Pan/Zoom + 渲染管线对接 |
 | **P1** | Hierarchy 搜索/过滤 | ✅ Phase 2 完成 | 搜索框 + 双击重命名 |
 | **P1** | 文件对话框 | ✅ Phase 2 完成 | Windows 原生 OPENFILENAMEW |
-| **P2** | Project 面板增强 | ❌ 无缩略图/搜索/重命名/删除 | 只有基础目录浏览 |
+| **P2** | Project 面板增强 | ✅ Phase 3 完成 | 搜索/Grid·List/右键菜单/Explorer集成 |
 | **P2** | Toolbar 图标化 | ✅ Phase 1 完成 | MDI 图标 + 彩色背景 |
 | **P2** | Edit/Window 菜单 | ✅ Phase 2 完成 | Undo/Redo 菜单项 + 灰度状态 |
-| **P2** | 状态栏 | ❌ 无 | 无 FPS/实体数量/内存等实时信息 |
-| **P2** | 多选实体 | ❌ 无 | 仅支持单选 |
+| **P2** | 状态栏 | ✅ Phase 3 完成 | FPS/实体数/Draw Calls/Gizmo工具/坐标系 |
+| **P2** | 多选实体 | ✅ Phase 3 完成 | Ctrl+Click/Shift+Click/批量Delete·Duplicate |
 | **P2** | 实体重命名 | ✅ Phase 2 完成 | Hierarchy 双击重命名 |
 | **P3** | 材质编辑器 | ❌ 无 | 引擎支持 PBR 材质但无可视化编辑 |
 | **P3** | 地形编辑器 | ❌ 无 | TerrainComponent 有 Inspector 但无笔刷绘制 |
 | **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
 | **P3** | Prefab 系统 | ❌ 无 | 无模板化实体机制 |
-| **P3** | Settings/Preferences | ❌ 无 | 无编辑器配置持久化 |
+| **P3** | Settings/Preferences | ✅ Phase 3 完成 | editor_settings.json 持久化 |
 
 ---
 
@@ -200,30 +200,58 @@ F         → Focus Selected ✅
 
 ---
 
-### Phase 3：进阶面板（预计 7-10 天）
+### Phase 3：进阶面板实现 ✅ 已完成
 
-#### 3.1 Animation 面板
-- 时间轴控件（自定义绘制）
-- 关键帧显示与编辑
-- 动画曲线编辑器（参考 ImNodes 风格）
-- Animator3DComponent 参数绑定
-- Play/Pause/Scrub 控制
+> **实施记录 (2026-05-06)**：
+> - 新增 `editor_status_bar.cpp/h`：固定高度底部状态栏（FPS/实体数/Draw Calls/Gizmo工具/坐标系）
+> - 新增 `editor_selection.h`：`SelectionManager` 单例，管理多选实体列表
+> - 新增 `editor_settings.cpp/h`：编辑器配置 JSON 持久化（rapidjson，保存到 bin/editor_settings.json）
+> - 修改 `editor_viewport_panel.cpp`：Gizmo 拖拽 Undo/Redo 集成（开始记录→结束 push LambdaCommand）
+> - 修改 `editor_hierarchy_panel.cpp`：Ctrl+Click 多选 / Shift+Click 范围选
+> - 修改 `editor_inspector_panel.cpp`：多选时显示选中数量 + Transform 平均值
+> - 修改 `editor_shortcuts.cpp`：Delete/Duplicate 支持批量操作
+> - 修改 `editor_aux_panels.cpp`：Project 面板增强（搜索框/Grid·List切换/排序/右键菜单/Explorer集成）
+> - 修改 `editor_shell.cpp`：File 菜单新增 "Recent Files" 子菜单
+> - 修改 `main.cpp`：启动加载设置+自动恢复上次场景，退出保存设置
+> - 编译验证通过 (Debug, MSVC)
 
-#### 3.2 Asset Browser（Project 面板升级）
-- 网格视图 + 列表视图切换
-- 缩略图预览（纹理/材质/模型）
-- 搜索框 + 类型过滤
-- 右键菜单：重命名/删除/复制路径/在资源管理器中显示
-- 文件拖入 Scene 直接创建实体
-- 文件监控（`std::filesystem` 轮询或平台 API）
+#### 3.1 Status Bar（底部状态栏）✅
+- ✅ 固定高度 24px，覆盖窗口最下方（NoDocking）
+- ✅ 显示 FPS | 实体数量 | Draw Calls | 当前 Gizmo 工具 | 坐标系(Local/World)
+- ✅ 数据来源：`g_cpu_profiler.GetFrameStats()` / `g_render_profiler.GetCurrentFrameStats()`
 
-#### 3.3 Material Editor
-- 可视化 PBR 属性编辑（Albedo/Metallic/Roughness/Normal）
-- 纹理槽拖拽赋值
-- 实时预览球
+#### 3.2 Gizmo 拖拽 Undo/Redo 集成 ✅
+- ✅ 使用 `ImGuizmo::IsUsing()` 检测拖拽开始/结束
+- ✅ 开始时记录初始 Transform（position/rotation/scale）
+- ✅ 结束时 push `LambdaCommand`（execute=设为终值，undo=恢复初值）
+- ✅ 避免每帧 push（只在"上帧 using → 本帧 not using"时提交一次）
 
-#### 3.4 Status Bar
-- 底部状态栏：FPS | 实体数 | Draw Calls | 内存 | 当前工具 | 坐标系
+#### 3.3 多选实体支持 ✅
+- ✅ `SelectionManager` 单例管理 `std::vector<entt::entity>`
+- ✅ Hierarchy 面板：Ctrl+Click 切换选择、Shift+Click 范围选、普通点击单选
+- ✅ Inspector 面板：多选时显示选中数量 + Transform 平均值
+- ✅ Delete/Duplicate 快捷键支持批量操作
+- ⬜ Gizmo 多选同时拖动（待后续优化）
+
+#### 3.4 Asset Browser（Project 面板升级）✅
+- ✅ 网格视图 + 列表视图切换（Grid/List 按钮）
+- ✅ 文件搜索框（大小写不敏感子串匹配）
+- ✅ 文件/文件夹排序（目录优先 + 字母序）
+- ✅ 右键菜单：重命名 / 删除 / 复制路径 / 在 Explorer 中显示
+- ✅ 内联重命名（Enter 确认 / Esc 取消）
+- ✅ 拖拽文件到 Scene（`ASSET_PATH` payload）
+- ⬜ 缩略图预览（待后续，需 GPU 纹理加载）
+
+#### 3.5 编辑器配置持久化 ✅
+- ✅ `editor_settings.json`（rapidjson 序列化）保存到 `bin/` 目录
+- ✅ 持久化内容：Recent Files 列表、上次场景路径、Gizmo 默认工具/坐标系
+- ✅ 启动时自动加载上次场景
+- ✅ File → Recent Files 子菜单
+- ✅ 退出时自动保存
+
+#### 3.6 Animation 面板 / Material Editor（未实现，移入 Phase 4）
+- ⬜ 时间轴控件 + 关键帧编辑
+- ⬜ PBR 材质可视化编辑
 
 ### Phase 4：高级功能（预计 10+ 天，按需）
 
@@ -284,6 +312,8 @@ apps/editor_cpp/
 │   ├── editor_scene_camera.cpp/h     # ★ 新增：编辑器场景相机
 │   ├── editor_console_panel.cpp/h    # ★ 新增：替代占位 Console
 │   ├── editor_status_bar.cpp/h       # ★ 新增：底部状态栏
+│   ├── editor_selection.h            # ★ 新增：多选实体管理器
+│   ├── editor_settings.cpp/h         # ★ 新增：编辑器配置持久化
 │   ├── editor_toolbar.cpp/h          # 改造：图标化
 │   ├── editor_hierarchy_panel.cpp/h  # 改造：搜索 + 重命名 + 拖拽
 │   ├── editor_inspector_panel.cpp/h  # 改造：美化 + Undo 集成
@@ -329,10 +359,14 @@ apps/editor_cpp/
 - [x] 窗口标题显示当前场景文件名
 
 ### Phase 3 验收
-- [ ] Animation 面板显示时间轴和关键帧
-- [ ] Project 面板支持缩略图和搜索
-- [ ] Material Editor 可编辑 PBR 参数
-- [ ] 状态栏实时显示 FPS/实体数
+- [x] 状态栏实时显示 FPS/实体数/Draw Calls/Gizmo工具
+- [x] Gizmo 拖拽操作可 Undo/Redo
+- [x] Hierarchy 支持 Ctrl+Click 多选、Shift+Click 范围选
+- [x] Delete/Duplicate 支持批量操作
+- [x] Project 面板支持搜索、Grid/List 切换、右键上下文菜单
+- [x] 编辑器设置持久化（recent files/gizmo 默认值/上次场景自动加载）
+- [ ] Animation 面板时间轴（移入 Phase 4）
+- [ ] Material Editor PBR 编辑（移入 Phase 4）
 
 ### Phase 4 验收
 - [ ] Prefab 导出/实例化/覆盖检测

@@ -10,6 +10,7 @@
 #include "editor_icons.h"
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
+#include "editor_selection.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -26,6 +27,7 @@ namespace {
 static char s_search_filter[128] = "";
 static entt::entity s_renaming_entity = entt::null;
 static char s_rename_buf[64] = "";
+static entt::entity s_last_clicked_entity = entt::null;
 
 const char* GetEntityTypeIcon(entt::registry& registry, entt::entity entity) {
     if (registry.all_of<dse::Camera3DComponent>(entity) || registry.all_of<CameraComponent>(entity)) {
@@ -92,7 +94,8 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             }
 
             const char* type_icon = GetEntityTypeIcon(context.registry, entity);
-            const bool is_selected = (context.selected_entity == entity);
+            auto& selection = SelectionManager::Get();
+            const bool is_selected = selection.Contains(entity);
             const bool is_renaming = (s_renaming_entity == entity);
 
             // Draw rounded highlight rectangle for selected entity
@@ -156,7 +159,32 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
 
                 ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
                 if (ImGui::IsItemClicked()) {
-                    context.selected_entity = entity;
+                    auto& sel = SelectionManager::Get();
+                    if (ImGui::GetIO().KeyCtrl) {
+                        // Ctrl+Click: toggle entity in multi-selection
+                        sel.Toggle(entity);
+                        context.selected_entity = sel.GetPrimary();
+                    } else if (ImGui::GetIO().KeyShift && s_last_clicked_entity != entt::null) {
+                        // Shift+Click: range select
+                        sel.Clear();
+                        bool in_range = false;
+                        for (auto e : context.registry.storage<entt::entity>()) {
+                            if (!context.registry.valid(e)) continue;
+                            if (e == entity || e == s_last_clicked_entity) {
+                                sel.Add(e);
+                                if (in_range) break;
+                                in_range = true;
+                                continue;
+                            }
+                            if (in_range) sel.Add(e);
+                        }
+                        context.selected_entity = entity;
+                    } else {
+                        // Normal click: single select
+                        sel.SetSingle(entity);
+                        context.selected_entity = entity;
+                    }
+                    s_last_clicked_entity = entity;
                     hierarchy_clicked = false;
                 }
 
@@ -173,6 +201,7 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
 
     if (hierarchy_clicked) {
         context.selected_entity = entt::null;
+        SelectionManager::Get().Clear();
     }
 
     if (ImGui::BeginPopupContextWindow()) {

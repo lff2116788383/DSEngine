@@ -18,6 +18,7 @@
 #include "editor_toolbar.h"
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
+#include "editor_selection.h"
 
 namespace dse::editor {
 
@@ -1087,7 +1088,33 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
 void DrawInspectorPanel(EditorInspectorPanelContext& context,
                         void (*draw_ui_layout_inspector)(entt::registry&, entt::entity)) {
     ImGui::Begin("Inspector");
-    if (context.selected_entity != entt::null && context.registry.valid(context.selected_entity)) {
+
+    auto& selection = SelectionManager::Get();
+    if (selection.IsMultiSelect()) {
+        ImGui::Text("%d entities selected", selection.Count());
+        ImGui::Separator();
+
+        // Show average transform of all selected entities
+        glm::vec3 avg_pos(0.0f);
+        glm::vec3 avg_scale(0.0f);
+        int transform_count = 0;
+        for (auto ent : selection.GetAll()) {
+            if (context.registry.valid(ent) && context.registry.all_of<TransformComponent>(ent)) {
+                auto& t = context.registry.get<TransformComponent>(ent);
+                avg_pos += t.position;
+                avg_scale += t.scale;
+                transform_count++;
+            }
+        }
+        if (transform_count > 0) {
+            avg_pos /= static_cast<float>(transform_count);
+            avg_scale /= static_cast<float>(transform_count);
+            ImGui::Text("Average Position: (%.2f, %.2f, %.2f)", avg_pos.x, avg_pos.y, avg_pos.z);
+            ImGui::Text("Average Scale: (%.2f, %.2f, %.2f)", avg_scale.x, avg_scale.y, avg_scale.z);
+        }
+        ImGui::Separator();
+        ImGui::TextDisabled("Multi-selection: individual editing disabled");
+    } else if (context.selected_entity != entt::null && context.registry.valid(context.selected_entity)) {
         DrawInspectorHeader(context);
         DrawTransformSection(context);
         DrawSpriteRendererSection(context);
