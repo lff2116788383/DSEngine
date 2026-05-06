@@ -6,10 +6,14 @@ endif()
 add_executable(dse_editor_cpp WIN32
     src/main.cpp
     src/editor_aux_panels.cpp
+    src/editor_console_panel.cpp
+    src/editor_file_dialog.cpp
     src/editor_hierarchy_panel.cpp
+    src/editor_scene_camera.cpp
     src/editor_inspector_panel.cpp
     src/editor_profiler_panel.cpp
     src/editor_scene_io.cpp
+    src/editor_shortcuts.cpp
     src/editor_shell.cpp
     src/editor_theme.cpp
     src/editor_toolbar.cpp
@@ -49,7 +53,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends
 )
 
-target_link_libraries(dse_editor_cpp PRIVATE dse_engine opengl32)
+target_link_libraries(dse_editor_cpp PRIVATE dse_engine opengl32 comdlg32)
 
 # 将编译产物放到 bin 目录下
 set_target_properties(dse_editor_cpp PROPERTIES 

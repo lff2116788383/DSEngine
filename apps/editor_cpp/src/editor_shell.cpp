@@ -6,6 +6,8 @@
 #include "imgui_internal.h"
 
 #include "editor_scene_io.h"
+#include "editor_shortcuts.h"
+#include "editor_file_dialog.h"
 
 namespace dse::editor {
 namespace {
@@ -87,15 +89,21 @@ void DrawEditorMainMenu(EditorShellContext& context) {
             context.selected_entity = entt::null;
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !context.read_only)) {
-            LoadScene(context.registry, "scene.json");
-            context.selected_entity = entt::null;
+            std::string path = dse::editor::OpenSceneFileDialog();
+            if (!path.empty()) {
+                LoadScene(context.registry, path);
+                context.selected_entity = entt::null;
+            }
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {
             SaveScene(context.registry, "scene.json");
         }
-        if (ImGui::MenuItem("Save As...", nullptr, false, !context.read_only)) {
-            SaveScene(context.registry, "scene.json");
+        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !context.read_only)) {
+            std::string path = dse::editor::SaveSceneFileDialog();
+            if (!path.empty()) {
+                SaveScene(context.registry, path);
+            }
         }
         if (context.read_only) {
             ImGui::TextDisabled("Play 模式下已禁用场景文件读写。");
@@ -107,6 +115,21 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
+        auto& undo_mgr = dse::editor::GetUndoRedoManager();
+        std::string undo_label = "Undo";
+        if (undo_mgr.CanUndo()) {
+            undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
+        }
+        if (ImGui::MenuItem(undo_label.c_str(), "Ctrl+Z", false, undo_mgr.CanUndo())) {
+            undo_mgr.Undo();
+        }
+        std::string redo_label = "Redo";
+        if (undo_mgr.CanRedo()) {
+            redo_label += " (" + undo_mgr.GetRedoDescription() + ")";
+        }
+        if (ImGui::MenuItem(redo_label.c_str(), "Ctrl+Y", false, undo_mgr.CanRedo())) {
+            undo_mgr.Redo();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {

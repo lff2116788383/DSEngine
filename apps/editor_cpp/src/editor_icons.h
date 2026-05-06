@@ -44,3 +44,11 @@
 #define MDI_ICON_CREATION               "\xef\x97\x91" // U+F5D1 fa-atom - Particle
 #define MDI_ICON_FORMAT_TEXT            "\xef\x80\xb1" // U+F031 fa-font - UILabel
 #define MDI_ICON_POST_PROCESS           "\xef\x94\xab" // U+F52B fa-wand-magic-sparkles - PostProcess
+
+// Console panel icons
+#define MDI_ICON_INFORMATION            "\xef\x81\x9a" // U+F05A fa-circle-info
+#define MDI_ICON_ALERT                  "\xef\x81\xb1" // U+F071 fa-triangle-exclamation
+#define MDI_ICON_CLOSE_CIRCLE           "\xef\x81\x97" // U+F057 fa-circle-xmark
+
+// Hierarchy search
+#define MDI_ICON_MAGNIFY                "\xef\x80\x82" // U+F002 fa-magnifying-glass

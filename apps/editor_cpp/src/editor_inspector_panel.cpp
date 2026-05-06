@@ -895,6 +895,10 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     if (ImGui::Button("Add Component", ImVec2(120, 30))) {
         ImGui::OpenPopup("AddComponentPopup");
     }
+    if (read_only) {
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("Play 模式下已禁用 3D Inspector 编辑。请退出 Play 后修改 3D 组件。");
+    }
 
     if (!ImGui::BeginPopup("AddComponentPopup")) {
         return;
@@ -977,10 +981,6 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     }
 
     ImGui::EndPopup();
-    if (read_only) {
-        ImGui::EndDisabled();
-        ImGui::TextDisabled("Play 模式下已禁用 3D Inspector 编辑。请退出 Play 后修改 3D 组件。");
-    }
 }
 
 } // namespace

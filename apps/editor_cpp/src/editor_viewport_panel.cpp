@@ -4,6 +4,7 @@
 #include "engine/ecs/components_3d.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
+#include "editor_scene_camera.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -45,6 +46,9 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
         }
     }
 
+    // Process editor camera input while Scene window is active
+    ProcessEditorCameraInput(GetEditorCamera());
+
     if (context.texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)context.texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
 
@@ -53,13 +57,10 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
             ImGuizmo::SetDrawlist();
             ImGuizmo::SetRect(window_pos.x, window_pos.y, scene_panel_size.x, scene_panel_size.y);
 
-            glm::mat4 view_matrix(1.0f);
-            glm::mat4 proj_matrix(1.0f);
             const float panel_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
-            if (!build_active_camera_matrices || !build_active_camera_matrices(context.registry, panel_aspect, view_matrix, proj_matrix)) {
-                view_matrix = glm::lookAt(glm::vec3(0, 0, 10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-                proj_matrix = glm::perspective(glm::radians(45.0f), panel_aspect, 0.1f, 1000.0f);
-            }
+            EditorCamera& editor_cam = GetEditorCamera();
+            glm::mat4 view_matrix = editor_cam.GetViewMatrix();
+            glm::mat4 proj_matrix = editor_cam.GetProjectionMatrix(panel_aspect);
 
             auto& transform = context.registry.get<TransformComponent>(context.selected_entity);
             glm::mat4 model_matrix = transform.local_to_world;

@@ -108,11 +108,12 @@ void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
 
     ImGui::SetCursorPosX(10 + 4 * 36 + 20);
     static bool is2D = false;
-    if (is2D) {
+    const bool was2D = is2D;
+    if (was2D) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
     }
     if (ImGui::Button("2D", ImVec2(32, 24))) { is2D = !is2D; }
-    if (is2D) {
+    if (was2D) {
         ImGui::PopStyleColor();
     }
 

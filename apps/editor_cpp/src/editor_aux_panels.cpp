@@ -3,6 +3,7 @@
 #include "engine/ecs/components_2d.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "imgui.h"
+#include "editor_console_panel.h"
 
 #include <fstream>
 #include <string>
@@ -108,12 +109,7 @@ void DrawProjectPanel() {
 }
 
 void DrawConsolePanel() {
-    ImGui::Begin("Console");
-    ImGui::Text("[Info] Engine initialized successfully.");
-    ImGui::Text("[Info] Loaded default scene.");
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[Warning] Missing texture 'skybox_diffuse'.");
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "[Error] Failed to load shader 'standard_pbr.glsl'.");
-    ImGui::End();
+    DrawConsolePanelImpl();
 }
 
 void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {

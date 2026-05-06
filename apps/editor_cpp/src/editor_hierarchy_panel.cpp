@@ -13,11 +13,58 @@
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
 #include <string>
+#include <cctype>
+#include <cstring>
 
 namespace dse::editor {
 
+namespace {
+
+// Hierarchy panel persistent state
+static char s_search_filter[128] = "";
+static entt::entity s_renaming_entity = entt::null;
+static char s_rename_buf[64] = "";
+
+const char* GetEntityTypeIcon(entt::registry& registry, entt::entity entity) {
+    if (registry.all_of<dse::Camera3DComponent>(entity) || registry.all_of<CameraComponent>(entity)) {
+        return MDI_ICON_VIDEO;
+    } else if (registry.all_of<dse::DirectionalLight3DComponent>(entity) ||
+               registry.all_of<dse::PointLightComponent>(entity) ||
+               registry.all_of<dse::SpotLightComponent>(entity)) {
+        return MDI_ICON_LIGHTBULB;
+    } else if (registry.all_of<dse::MeshRendererComponent>(entity)) {
+        return MDI_ICON_SPHERE;
+    } else if (registry.all_of<UIRendererComponent>(entity)) {
+        return MDI_ICON_IMAGE;
+    } else if (registry.all_of<dse::ParticleSystem3DComponent>(entity) ||
+               registry.all_of<ParticleEmitterComponent>(entity)) {
+        return MDI_ICON_CREATION;
+    } else if (registry.all_of<dse::TerrainComponent>(entity)) {
+        return MDI_ICON_TERRAIN;
+    }
+    return MDI_ICON_CUBE_OUTLINE;
+}
+
+bool MatchesSearchFilter(const std::string& name) {
+    if (s_search_filter[0] == '\0') return true;
+    // Case-insensitive substring match
+    std::string lower_name = name;
+    std::string lower_filter = s_search_filter;
+    for (auto& c : lower_name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (auto& c : lower_filter) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return lower_name.find(lower_filter) != std::string::npos;
+}
+
+} // namespace
+
 void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
     ImGui::Begin("Hierarchy");
+
+    // Search bar
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputTextWithHint("##hierarchy_search", MDI_ICON_MAGNIFY "  Search entities...", s_search_filter, sizeof(s_search_filter));
+
+    ImGui::Separator();
 
     bool hierarchy_clicked = ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0);
 
@@ -37,51 +84,79 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 entity_name = context.registry.get<EditorNameComponent>(entity).name;
             }
 
-            // Determine entity type icon based on components
-            const char* type_icon = MDI_ICON_CUBE_OUTLINE; // default
-            if (context.registry.all_of<dse::Camera3DComponent>(entity) || context.registry.all_of<CameraComponent>(entity)) {
-                type_icon = MDI_ICON_VIDEO;
-            } else if (context.registry.all_of<dse::DirectionalLight3DComponent>(entity) ||
-                       context.registry.all_of<dse::PointLightComponent>(entity) ||
-                       context.registry.all_of<dse::SpotLightComponent>(entity)) {
-                type_icon = MDI_ICON_LIGHTBULB;
-            } else if (context.registry.all_of<dse::MeshRendererComponent>(entity)) {
-                type_icon = MDI_ICON_SPHERE;
-            } else if (context.registry.all_of<UIRendererComponent>(entity)) {
-                type_icon = MDI_ICON_IMAGE;
-            } else if (context.registry.all_of<dse::ParticleSystem3DComponent>(entity) ||
-                       context.registry.all_of<ParticleEmitterComponent>(entity)) {
-                type_icon = MDI_ICON_CREATION;
-            } else if (context.registry.all_of<dse::TerrainComponent>(entity)) {
-                type_icon = MDI_ICON_TERRAIN;
+            // Filter by search
+            if (!MatchesSearchFilter(entity_name)) {
+                continue;
             }
 
-            std::string display_name = std::string(type_icon) + "  " + entity_name;
-
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf |
-                                       ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                       ImGuiTreeNodeFlags_SpanAvailWidth;
+            const char* type_icon = GetEntityTypeIcon(context.registry, entity);
             const bool is_selected = (context.selected_entity == entity);
-            if (is_selected) {
-                flags |= ImGuiTreeNodeFlags_Selected;
-            }
+            const bool is_renaming = (s_renaming_entity == entity);
 
             // Draw rounded highlight rectangle for selected entity
             if (is_selected) {
                 ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
                 float item_width = ImGui::GetContentRegionAvail().x;
                 float item_height = ImGui::GetTextLineHeightWithSpacing();
-                ImU32 highlight_color = IM_COL32(71, 143, 255, 80); // accent blue at 30%
+                ImU32 highlight_color = IM_COL32(71, 143, 255, 80);
                 ImGui::GetWindowDrawList()->AddRectFilled(
                     cursor_pos,
                     ImVec2(cursor_pos.x + item_width, cursor_pos.y + item_height),
                     highlight_color, 4.0f);
             }
 
-            ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
-            if (ImGui::IsItemClicked()) {
-                context.selected_entity = entity;
-                hierarchy_clicked = false;
+            if (is_renaming) {
+                // Inline rename mode
+                ImGui::TextUnformatted(type_icon);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(-1);
+                ImGui::SetKeyboardFocusHere();
+                if (ImGui::InputText("##rename", s_rename_buf, sizeof(s_rename_buf),
+                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                    // Commit rename
+                    if (s_rename_buf[0] != '\0') {
+                        if (context.registry.all_of<EditorNameComponent>(entity)) {
+                            context.registry.get<EditorNameComponent>(entity).name = s_rename_buf;
+                        } else {
+                            context.registry.emplace<EditorNameComponent>(entity, std::string(s_rename_buf));
+                        }
+                    }
+                    s_renaming_entity = entt::null;
+                } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                    s_renaming_entity = entt::null;
+                } else if (!ImGui::IsItemActive() && s_renaming_entity == entity &&
+                           ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()) {
+                    // Clicked elsewhere — commit
+                    if (s_rename_buf[0] != '\0') {
+                        if (context.registry.all_of<EditorNameComponent>(entity)) {
+                            context.registry.get<EditorNameComponent>(entity).name = s_rename_buf;
+                        } else {
+                            context.registry.emplace<EditorNameComponent>(entity, std::string(s_rename_buf));
+                        }
+                    }
+                    s_renaming_entity = entt::null;
+                }
+            } else {
+                std::string display_name = std::string(type_icon) + "  " + entity_name;
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf |
+                                           ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                           ImGuiTreeNodeFlags_SpanAvailWidth;
+                if (is_selected) {
+                    flags |= ImGuiTreeNodeFlags_Selected;
+                }
+
+                ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
+                if (ImGui::IsItemClicked()) {
+                    context.selected_entity = entity;
+                    hierarchy_clicked = false;
+                }
+
+                // Double-click to rename
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) && !context.read_only) {
+                    s_renaming_entity = entity;
+                    std::strncpy(s_rename_buf, entity_name.c_str(), sizeof(s_rename_buf) - 1);
+                    s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
+                }
             }
         }
         ImGui::TreePop();

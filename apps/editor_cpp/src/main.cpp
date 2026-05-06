@@ -57,6 +57,8 @@
 #include "editor_shared_components.h"
 #include "editor_theme.h"
 #include "editor_icons.h"
+#include "editor_shortcuts.h"
+#include "editor_console_panel.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -399,6 +401,10 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::EditorShellContext shell_context{engine, registry, selected_entity, GetEditorState() == EditorState::Play};
     dse::editor::DrawEditorMainMenu(shell_context);
 
+    // Process global keyboard shortcuts
+    dse::editor::ShortcutContext shortcut_ctx{world, registry, selected_entity, GetEditorState() == EditorState::Play};
+    dse::editor::ProcessShortcuts(shortcut_ctx);
+
     DrawEditorToolbar(engine, registry, selected_entity);
 
     // Panels (Unity-style layout)
@@ -543,6 +549,7 @@ int main() {
         }
 
         EnsureEditorLocalizationData();
+        dse::editor::InstallEditorLogSink();
 
         std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
