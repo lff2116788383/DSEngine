@@ -12,6 +12,7 @@
 #include "editor_audio_panel.h"
 #include "editor_preferences_panel.h"
 #include <glad/gl.h>
+#include <algorithm>
 #include <cmath>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -315,6 +316,83 @@ void DrawViewportGrid(ImDrawList* draw_list,
     draw_line(glm::vec3(0, 0, grid_min_z), glm::vec3(0, 0, grid_max_z), IM_COL32(50, 50, 200, 200), 2.0f);
 }
 
+// --- Scene Gizmo (top-right 3D axis indicator) ---
+void DrawSceneGizmo(ImDrawList* draw_list,
+                    const ImVec2& viewport_pos,
+                    const ImVec2& viewport_size,
+                    const glm::mat4& view) {
+    const float gizmo_size = 45.0f;
+    const float margin = 18.0f;
+    // Center of the gizmo widget
+    ImVec2 center(viewport_pos.x + viewport_size.x - gizmo_size - margin,
+                  viewport_pos.y + margin + gizmo_size);
+
+    // Extract rotation-only part of view matrix (upper-left 3x3)
+    glm::mat3 rot(view);
+
+    // World axes projected through camera rotation
+    struct AxisInfo { glm::vec3 dir; ImU32 color; const char* label; float yaw; float pitch; };
+    AxisInfo axes[3] = {
+        { {1,0,0}, IM_COL32(220, 60, 60, 255),  "X",  glm::radians(90.0f),  0.0f },           // Right
+        { {0,1,0}, IM_COL32(100, 200, 60, 255),  "Y",  0.0f,                  glm::radians(89.0f) }, // Top
+        { {0,0,1}, IM_COL32(60, 120, 255, 255),  "Z",  0.0f,                  0.0f },           // Front
+    };
+
+    // Sort by projected depth (draw back-to-front)
+    struct Projected { int idx; glm::vec3 screen; float depth; };
+    Projected proj[3];
+    for (int i = 0; i < 3; ++i) {
+        glm::vec3 transformed = rot * axes[i].dir;
+        proj[i] = { i, transformed, transformed.z };
+    }
+    // Simple bubble sort for 3 elements (back first = smaller z)
+    for (int i = 0; i < 2; ++i)
+        for (int j = i + 1; j < 3; ++j)
+            if (proj[i].depth > proj[j].depth) std::swap(proj[i], proj[j]);
+
+    // Background circle
+    draw_list->AddCircleFilled(center, gizmo_size + 4.0f, IM_COL32(30, 30, 30, 160), 32);
+    draw_list->AddCircle(center, gizmo_size + 4.0f, IM_COL32(80, 80, 80, 120), 32, 1.5f);
+
+    EditorCamera& cam = GetEditorCamera();
+    ImVec2 mouse = ImGui::GetMousePos();
+
+    for (int i = 0; i < 3; ++i) {
+        int ai = proj[i].idx;
+        glm::vec3 s = proj[i].screen;
+        // Screen endpoint: x goes right, y goes up (ImGui y is down so negate)
+        ImVec2 end(center.x + s.x * gizmo_size, center.y - s.y * gizmo_size);
+
+        // Fade lines that point away from camera
+        float alpha_factor = 0.4f + 0.6f * std::max(0.0f, std::min(1.0f, (s.z + 1.0f) * 0.5f));
+        ImU32 col = axes[ai].color;
+        int r = (col >> 0) & 0xFF, g = (col >> 8) & 0xFF, b = (col >> 16) & 0xFF;
+        ImU32 line_col = IM_COL32((int)(r * alpha_factor), (int)(g * alpha_factor), (int)(b * alpha_factor), 255);
+
+        draw_list->AddLine(center, end, line_col, 2.5f);
+
+        // Axis tip circle + label
+        float tip_radius = 10.0f;
+        bool hovered = false;
+        float dx = mouse.x - end.x, dy = mouse.y - end.y;
+        if (dx * dx + dy * dy <= tip_radius * tip_radius + 25.0f) hovered = true;
+
+        ImU32 tip_col = hovered ? IM_COL32(255, 255, 100, 255) : line_col;
+        draw_list->AddCircleFilled(end, tip_radius, tip_col, 16);
+
+        // Label text
+        ImVec2 text_size = ImGui::CalcTextSize(axes[ai].label);
+        draw_list->AddText(ImVec2(end.x - text_size.x * 0.5f, end.y - text_size.y * 0.5f),
+                           IM_COL32(255, 255, 255, 255), axes[ai].label);
+
+        // Click to snap view
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            cam.yaw = axes[ai].yaw;
+            cam.pitch = axes[ai].pitch;
+        }
+    }
+}
+
 } // namespace
 
 void DrawSceneViewportPanel(EditorViewportPanelContext& context,
@@ -469,6 +547,9 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);
+
+            // Scene Gizmo (top-right axis indicator)
+            DrawSceneGizmo(ImGui::GetWindowDrawList(), window_pos, scene_panel_size, ov_view);
         }
 
         // --- Gizmo: Multi-select or Single-select ---

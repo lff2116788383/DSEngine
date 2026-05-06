@@ -503,11 +503,24 @@ apps/editor_cpp/
 
 ---
 
-### Phase 7：远期可选功能 ⬜
+### Phase 7：远期可选功能（2026-05-06 起）
 
-#### 7.1 Scene Gizmo（右上角方向指示器）⬜
-- ⬜ Scene 视口右上角绘制 3D 坐标轴指示器（类似 Unity Scene Gizmo）
-- ⬜ 点击轴可切换到正交视图（Top/Front/Right）
+> **实施记录**：
+> - 修改 `editor_viewport_panel.cpp`：
+>   - 新增 `DrawSceneGizmo()` 函数：右上角 3D 坐标轴指示器
+>   - 使用 view 矩阵旋转部分投影世界轴到屏幕空间
+>   - 深度排序（back-to-front）确保正确遮挡
+>   - 半透明圆形背景 + X(红)/Y(绿)/Z(蓝) 轴线 + 圆形轴端 + 标签
+>   - 鼠标悬停轴端高亮（黄色），点击切换视角（X→Right, Y→Top, Z→Front）
+>   - 集成到 Scene 视口覆盖层绘制流程，在 Grid/Overlay 之后调用
+
+#### 7.1 Scene Gizmo（右上角方向指示器）✅
+- ✅ Scene 视口右上角绘制 3D 坐标轴指示器（类似 Unity Scene Gizmo）
+- ✅ 使用 ImDrawList 绘制 3 条轴线 + 圆形轴端 + X/Y/Z 标签
+- ✅ 深度排序（back-to-front）确保轴线正确遮挡
+- ✅ 鼠标悬停轴端高亮（黄色圆圈）
+- ✅ 点击轴端切换到对应视角：X→Right（yaw=90°）、Y→Top（pitch=89°）、Z→Front（yaw=0°, pitch=0°）
+- ✅ 与 `EditorCamera` 联动（直接设置 yaw/pitch）
 
 #### 7.2 多场景编辑（Scene Tabs）⬜
 - ⬜ 支持同时打开多个场景（标签页切换）
