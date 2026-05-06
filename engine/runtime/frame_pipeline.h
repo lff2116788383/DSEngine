@@ -158,6 +158,18 @@ public:
     void SetAssetManager(AssetManager* asset_manager);
 
     /**
+     * @brief 设置编辑器相机矩阵，覆盖 Scene 渲染目标使用的相机
+     * @param view 视图矩阵
+     * @param projection 投影矩阵
+     */
+    void SetEditorCamera(const glm::mat4& view, const glm::mat4& projection);
+
+    /**
+     * @brief 禁用编辑器相机覆盖，恢复使用游戏相机
+     */
+    void DisableEditorCamera();
+
+    /**
      * @brief 获取渲染管线中场景纹理的句柄 (用于编辑器集成)
      * @return 纹理 ID
      */

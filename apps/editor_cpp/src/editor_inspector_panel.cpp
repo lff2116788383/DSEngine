@@ -16,6 +16,8 @@
 
 #include "editor_shared_components.h"
 #include "editor_toolbar.h"
+#include "editor_shortcuts.h"
+#include "editor_console_panel.h"
 
 namespace dse::editor {
 
@@ -141,13 +143,46 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
         return;
     }
 
+    // Undo/Redo: track values at edit start
+    static glm::vec3 s_edit_start_pos{0};
+    static glm::vec3 s_edit_start_rot{0};
+    static glm::vec3 s_edit_start_scale{1};
+    static entt::entity s_edit_entity = entt::null;
+
+    const entt::entity current_entity = context.selected_entity;
+
     // Position with colored X/Y/Z
     ImGui::Text("Position");
     float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
+    if (ImGui::IsItemActive() == false && ImGui::IsMouseClicked(0)) {
+        // Will be captured below per-widget
+    }
+    ImGui::PushID("##pos_undo");
     if (DrawVec3WithColorLabels("##pos", pos)) {
         transform.position = glm::vec3(pos[0], pos[1], pos[2]);
         transform.dirty = true;
     }
+    if (ImGui::IsItemActivated()) {
+        s_edit_start_pos = transform.position;
+        s_edit_entity = current_entity;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+        glm::vec3 old_val = s_edit_start_pos;
+        glm::vec3 new_val = transform.position;
+        entt::entity ent = current_entity;
+        auto& reg = context.registry;
+        auto cmd = std::make_unique<PropertyChangeCommand<glm::vec3>>(
+            "Transform.Position",
+            old_val, new_val,
+            [&reg, ent](const glm::vec3& v) {
+                if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                    reg.get<TransformComponent>(ent).position = v;
+                    reg.get<TransformComponent>(ent).dirty = true;
+                }
+            });
+        GetUndoRedoManager().Execute(std::move(cmd), true);
+    }
+    ImGui::PopID();
 
     // Rotation
     glm::vec3 euler = glm::degrees(glm::eulerAngles(transform.rotation));
@@ -155,27 +190,91 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
     if (context.is_2d) {
         ImGui::Text("Rotation");
         ImGui::SetNextItemWidth(-1);
+        if (ImGui::IsItemActivated()) {
+            s_edit_start_rot = euler;
+            s_edit_entity = current_entity;
+        }
         if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
             euler.z = rot[2];
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+            glm::vec3 old_euler = s_edit_start_rot;
+            glm::vec3 new_euler = euler;
+            entt::entity ent = current_entity;
+            auto& reg = context.registry;
+            auto cmd = std::make_unique<PropertyChangeCommand<glm::vec3>>(
+                "Transform.Rotation",
+                old_euler, new_euler,
+                [&reg, ent](const glm::vec3& v) {
+                    if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                        reg.get<TransformComponent>(ent).rotation = glm::quat(glm::radians(v));
+                        reg.get<TransformComponent>(ent).dirty = true;
+                    }
+                });
+            GetUndoRedoManager().Execute(std::move(cmd), true);
+        }
     } else {
         ImGui::Text("Rotation");
+        ImGui::PushID("##rot_undo");
         if (DrawVec3WithColorLabels("##rot", rot)) {
             euler = glm::vec3(rot[0], rot[1], rot[2]);
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
         }
+        if (ImGui::IsItemActivated()) {
+            s_edit_start_rot = glm::degrees(glm::eulerAngles(transform.rotation));
+            s_edit_entity = current_entity;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+            glm::vec3 old_euler = s_edit_start_rot;
+            glm::vec3 new_euler = glm::vec3(rot[0], rot[1], rot[2]);
+            entt::entity ent = current_entity;
+            auto& reg = context.registry;
+            auto cmd = std::make_unique<PropertyChangeCommand<glm::vec3>>(
+                "Transform.Rotation",
+                old_euler, new_euler,
+                [&reg, ent](const glm::vec3& v) {
+                    if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                        reg.get<TransformComponent>(ent).rotation = glm::quat(glm::radians(v));
+                        reg.get<TransformComponent>(ent).dirty = true;
+                    }
+                });
+            GetUndoRedoManager().Execute(std::move(cmd), true);
+        }
+        ImGui::PopID();
     }
 
     // Scale with colored X/Y/Z
     ImGui::Text("Scale");
+    ImGui::PushID("##scale_undo");
     float scale[3] = {transform.scale.x, transform.scale.y, transform.scale.z};
     if (DrawVec3WithColorLabels("##scale", scale)) {
         transform.scale = glm::vec3(scale[0], scale[1], scale[2]);
         transform.dirty = true;
     }
+    if (ImGui::IsItemActivated()) {
+        s_edit_start_scale = transform.scale;
+        s_edit_entity = current_entity;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+        glm::vec3 old_val = s_edit_start_scale;
+        glm::vec3 new_val = transform.scale;
+        entt::entity ent = current_entity;
+        auto& reg = context.registry;
+        auto cmd = std::make_unique<PropertyChangeCommand<glm::vec3>>(
+            "Transform.Scale",
+            old_val, new_val,
+            [&reg, ent](const glm::vec3& v) {
+                if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                    reg.get<TransformComponent>(ent).scale = v;
+                    reg.get<TransformComponent>(ent).dirty = true;
+                }
+            });
+        GetUndoRedoManager().Execute(std::move(cmd), true);
+    }
+    ImGui::PopID();
 }
 
 void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {

@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <vector>
+#include <glm/glm.hpp>
 
 class World;
 class AssetManager;
@@ -59,6 +60,11 @@ struct RenderPassContext {
         dse::core::IModule* instance = nullptr;
     };
     std::vector<ModuleRef> modules;
+
+    /// 编辑器相机覆盖（编辑器模式下 Scene 视图使用编辑器相机替代游戏相机）
+    bool use_editor_camera = false;
+    glm::mat4 editor_view = glm::mat4(1.0f);
+    glm::mat4 editor_projection = glm::mat4(1.0f);
 
     /// FramePipeline 拥有的子系统回调（避免 Pass 直接依赖 FramePipeline）
     std::function<void(World&, CommandBuffer&)> render_2d_scene;

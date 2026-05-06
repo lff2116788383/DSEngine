@@ -25,25 +25,25 @@
 | Play 模式 | `editor_toolbar.cpp` | ✅ 完整 | 进入时备份 registry，退出时恢复 |
 | 国际化预览 | `editor_aux_panels.cpp` | ✅ 完整 | 多语言切换 + 参数预览 + 应用到 UILabel |
 
-### 未完成 / 缺失功能 ❌
+### 未完成 / 缺失功能
 
 | 优先级 | 模块 | 现状 | 说明 |
 |---|---|---|---|
-| **P0** | 自定义字体 + 图标字体 | ❌ 使用 ImGui 默认字体 | 观感差距的最大来源 |
-| **P0** | Undo/Redo 集成 | ❌ 框架存在但未接入 UI | Inspector 修改无法撤销 |
-| **P0** | 快捷键系统 | ❌ 仅 W/E/R 切换 Gizmo | 无 Ctrl+Z/Y/S/C/V |
-| **P1** | Console 面板 | ❌ 纯占位符 | 只有 3 行静态文本，无实际日志 |
+| **P0** | 自定义字体 + 图标字体 | ✅ Phase 1 完成 | Inter + NotoSansSC + FA6 Solid |
+| **P0** | Undo/Redo 集成 | ✅ Phase 2.5 完成 | Transform + Entity 操作均可撤销 |
+| **P0** | 快捷键系统 | ✅ Phase 2 完成 | Ctrl+Z/Y/S/O/D, Delete, F, F2 |
+| **P1** | Console 面板 | ✅ Phase 2 完成 | spdlog 集成 + 过滤 + 右键菜单 + 双击复制 |
 | **P1** | Animation 面板 | ❌ 纯占位符 | 只显示 "No animated object selected." |
 | **P1** | Tile Palette | ❌ 基础占位 | 有网格绘制但无实际瓦片编辑 |
-| **P1** | Scene 视图相机控制 | ❌ 无 | 无法在 Scene 视图中平移/旋转/缩放相机 |
-| **P1** | Hierarchy 搜索/过滤 | ❌ 无 | 实体多时难以定位 |
-| **P1** | 文件对话框 | ❌ 硬编码 "scene.json" | Save As 和 Open 实际指向同一文件 |
+| **P1** | Scene 视图相机控制 | ✅ Phase 2 完成 | Orbit/Pan/Zoom + 渲染管线对接 |
+| **P1** | Hierarchy 搜索/过滤 | ✅ Phase 2 完成 | 搜索框 + 双击重命名 |
+| **P1** | 文件对话框 | ✅ Phase 2 完成 | Windows 原生 OPENFILENAMEW |
 | **P2** | Project 面板增强 | ❌ 无缩略图/搜索/重命名/删除 | 只有基础目录浏览 |
-| **P2** | Toolbar 图标化 | ❌ 文本标签 [H][M][R][S] | 应使用图标字体 |
-| **P2** | Edit/Window 菜单 | ❌ 菜单为空 | Edit 无 Undo/Redo/Preferences |
+| **P2** | Toolbar 图标化 | ✅ Phase 1 完成 | MDI 图标 + 彩色背景 |
+| **P2** | Edit/Window 菜单 | ✅ Phase 2 完成 | Undo/Redo 菜单项 + 灰度状态 |
 | **P2** | 状态栏 | ❌ 无 | 无 FPS/实体数量/内存等实时信息 |
 | **P2** | 多选实体 | ❌ 无 | 仅支持单选 |
-| **P2** | 实体重命名 | ❌ Hierarchy 中不可直接重命名 | 需切到 Inspector 改 |
+| **P2** | 实体重命名 | ✅ Phase 2 完成 | Hierarchy 双击重命名 |
 | **P3** | 材质编辑器 | ❌ 无 | 引擎支持 PBR 材质但无可视化编辑 |
 | **P3** | 地形编辑器 | ❌ 无 | TerrainComponent 有 Inspector 但无笔刷绘制 |
 | **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
@@ -102,53 +102,103 @@
 - ✅ 实体名前增加类型图标（Camera/Light/Mesh/UI/Particle/Terrain 等，基于组件检测）
 - ✅ 选中行高亮用圆角矩形 + accent blue (30% alpha)
 
-### Phase 2：核心功能补全（预计 5-7 天）
+### Phase 2：核心功能补全（预计 5-7 天）✅ 已完成
 
-#### 2.1 Undo/Redo 集成
-- 全局 `UndoRedoManager` 实例
-- Inspector 所有属性修改通过 `PropertyChangeCommand` 提交
-- Hierarchy 创建/删除/复制通过 `LambdaCommand` 提交
-- Gizmo 拖拽通过 Merge 机制合并连续操作
+> **实施记录 (2026-05-06)**：
+> - 新增 `editor_shortcuts.cpp/h`：全局快捷键系统（Ctrl+Z/Y/S/O/D, Delete, F, F2）
+> - 新增 `editor_undo.h`：Command Pattern 框架（ICommand/PropertyChange/Lambda/Compound/UndoRedoManager）
+> - 新增 `editor_scene_camera.cpp/h`：编辑器场景相机（Orbit/Pan/Zoom/Focus）
+> - 新增 `editor_console_panel.cpp/h`：spdlog 集成 Console 面板（级别过滤/搜索/Clear/Auto-scroll）
+> - 新增 `editor_file_dialog.cpp/h`：Windows 原生文件对话框（OPENFILENAMEW）
+> - 修改 `editor_hierarchy_panel.cpp`：搜索框过滤 + 双击重命名（Enter 确认/Esc 取消）
+> - 修改 `editor_shell.cpp`：Edit 菜单 Undo/Redo 项（灰度状态/命令名显示）
+> - 修改 `editor_viewport_panel.cpp`：集成编辑器相机输入处理
+> - 修改 `main.cpp`：安装 EditorLogSink、调用快捷键处理
+> - 编译验证通过 (Debug, MSVC)
 
-#### 2.2 快捷键系统
+#### 2.1 Undo/Redo 集成 ✅
+- ✅ 全局 `UndoRedoManager` 实例（`GetUndoRedoManager()` 单例）
+- ✅ Inspector Transform 修改通过 `PropertyChangeCommand` 提交（Position/Rotation/Scale）
+- ✅ Hierarchy 创建/删除/复制/重命名通过 `LambdaCommand` 提交
+- ⬜ Gizmo 拖拽通过 Merge 机制合并连续操作（待后续优化）
+
+#### 2.2 快捷键系统 ✅
 ```
-Ctrl+Z    → Undo
-Ctrl+Y    → Redo
-Ctrl+S    → Save Scene
-Ctrl+Shift+S → Save As
-Ctrl+O    → Open Scene
-Ctrl+D    → Duplicate Entity
-Delete    → Delete Entity
-F2        → Rename Entity
-F         → Focus Selected (Scene camera fly-to)
+Ctrl+Z    → Undo           ✅
+Ctrl+Y    → Redo           ✅
+Ctrl+S    → Save Scene     ✅
+Ctrl+Shift+S → Save As    ✅
+Ctrl+O    → Open Scene     ✅
+Ctrl+D    → Duplicate Entity ✅
+Delete    → Delete Entity  ✅
+F2        → Rename Entity  ✅
+F         → Focus Selected ✅
 ```
 
-#### 2.3 Scene 视图相机
-- 右键拖拽 → 旋转 (Orbit)
-- 中键拖拽 → 平移 (Pan)
-- 滚轮 → 缩放 (Zoom)
-- Alt+左键 → Orbit（Maya 风格可选）
-- F 键 → 聚焦选中实体
-- 编辑器相机独立于游戏相机
+#### 2.3 Scene 视图相机 ✅
+- ✅ 右键拖拽 → 旋转 (Orbit)
+- ✅ 中键拖拽 → 平移 (Pan)
+- ✅ 滚轮 → 缩放 (Zoom)
+- ⬜ Alt+左键 → Orbit（Maya 风格，待后续）
+- ✅ F 键 → 聚焦选中实体
+- ✅ 编辑器相机独立于游戏相机
 
-#### 2.4 文件对话框
-- 集成 **tinyfiledialogs**（单头文件，MIT，跨平台）或 Windows 原生 `IFileDialog`
-- Open Scene → 打开 `.json` 文件
-- Save As → 选择保存路径
-- 维护 Recent Files 列表（持久化到 `editor_config.json`）
+#### 2.4 文件对话框 ✅
+- ✅ 使用 Windows 原生 `OPENFILENAMEW` API
+- ✅ Open Scene → 打开 `.json` / `.dscene` 文件
+- ✅ Save As → 选择保存路径
+- ⬜ Recent Files 列表（待后续优化）
 
-#### 2.5 Console 面板实现
-- 集成引擎日志系统（spdlog 已在 depends 中）
-- 添加 `EditorLogSink`（spdlog custom sink）收集日志
-- 显示 Info/Warning/Error + 颜色 + 时间戳
-- 支持过滤（按级别、按关键字）
-- Clear 按钮
-- 自动滚动到底部
+#### 2.5 Console 面板实现 ✅
+- ✅ 集成引擎日志系统（spdlog custom sink → `EditorLogSink`）
+- ✅ 显示 Info/Warning/Error + 颜色 + 时间戳 + 级别图标
+- ✅ 支持过滤（按级别 toggle + 搜索框关键字）
+- ✅ Clear 按钮
+- ✅ 自动滚动到底部
+- ✅ 右键上下文菜单（Copy All / Clear）
+- ✅ 双击日志条目自动复制到剪贴板
 
-#### 2.6 Hierarchy 增强
-- 搜索框（实时过滤实体名）
-- 双击重命名
-- 拖拽排序 / 父子关系调整
+#### 2.6 Hierarchy 增强 ✅
+- ✅ 搜索框（实时过滤实体名）
+- ✅ 双击重命名（Enter 确认 / Esc 取消 / 点击其他区域确认）
+- ⬜ 拖拽排序 / 父子关系调整（待后续）
+
+### Phase 2.5：运行时验证 + 质量打磨 ✅ 已完成
+
+> **实施记录 (2026-05-06)**：
+> 在 Phase 2 功能代码完成后，执行运行时验证并深度打磨集成质量。
+
+#### 2.5.1 Undo/Redo 深度集成 ✅
+- ✅ Inspector Transform（Position/Rotation/Scale）修改时 push `PropertyChangeCommand`
+  - 使用 `ImGui::IsItemActivated()` 记录编辑起始值
+  - 使用 `ImGui::IsItemDeactivatedAfterEdit()` 检测编辑提交
+- ✅ Hierarchy 操作 push `LambdaCommand`：
+  - Create Entity → undo = destroy
+  - Delete Entity → undo = recreate（保存 name + transform）
+  - Duplicate Entity → undo = destroy clone
+  - Rename Entity → undo = restore old name
+- ✅ Ctrl+Z/Y 验证正常工作
+
+#### 2.5.2 Console 面板增强 ✅
+- ✅ 右键上下文菜单：Copy All、Clear
+- ✅ 双击日志条目 → 自动复制到系统剪贴板
+- ✅ 关键操作添加 `EditorLog` 调用：
+  - 场景 New/Open/Save/Save As
+  - 实体 Create/Delete/Duplicate
+
+#### 2.5.3 Scene 相机与渲染管线对接 ✅
+- ✅ `RenderPassContext` 新增 `use_editor_camera` / `editor_view` / `editor_projection` 字段
+- ✅ `ForwardScenePass::Execute` 在 editor 模式下优先使用编辑器相机矩阵
+- ✅ `FramePipeline::SetEditorCamera()` / `DisableEditorCamera()` 公共接口
+- ✅ `main.cpp` 每帧注入编辑器相机（Edit 模式），Play 模式自动切回游戏相机
+
+#### 2.5.4 样式与 UX 打磨 ✅
+- ✅ 窗口标题显示当前场景文件名 + 编辑器状态（`[PLAYING]`/`[PAUSED]`）
+- ✅ `GetCurrentScenePath()` / `SetCurrentScenePath()` 全局追踪
+- ✅ Play 模式下：Hierarchy 禁用创建/删除/复制、Inspector 禁用编辑、Scene 相机切回游戏相机
+- ✅ 文件操作全部同步更新窗口标题
+
+---
 
 ### Phase 3：进阶面板（预计 7-10 天）
 
@@ -263,11 +313,20 @@ apps/editor_cpp/
 - [ ] 截图对比改造前后效果
 
 ### Phase 2 验收
-- [ ] Ctrl+Z/Y 可撤销/重做 Inspector 属性修改
-- [ ] Ctrl+S 保存场景，Ctrl+O 弹出文件对话框打开场景
-- [ ] Scene 视图可右键旋转/中键平移/滚轮缩放
-- [ ] Console 面板显示引擎实际日志
-- [ ] Hierarchy 搜索框可过滤实体
+- [x] Ctrl+Z/Y 可撤销/重做 Inspector 属性修改
+- [x] Ctrl+S 保存场景，Ctrl+O 弹出文件对话框打开场景
+- [x] Scene 视图可右键旋转/中键平移/滚轮缩放
+- [x] Console 面板显示引擎实际日志
+- [x] Hierarchy 搜索框可过滤实体
+
+### Phase 2.5 验收
+- [x] Undo/Redo 深度集成：Transform 属性修改可撤销
+- [x] Undo/Redo 深度集成：实体创建/删除/复制/重命名可撤销
+- [x] Console 右键菜单 Copy All / Clear 正常工作
+- [x] Console 双击复制到剪贴板
+- [x] 编辑器相机视角反映到 Scene 渲染纹理
+- [x] Play 模式切回游戏相机
+- [x] 窗口标题显示当前场景文件名
 
 ### Phase 3 验收
 - [ ] Animation 面板显示时间轴和关键帧

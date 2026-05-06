@@ -13,6 +13,8 @@
 #include "editor_toolbar.h"
 #include "editor_scene_camera.h"
 #include "editor_file_dialog.h"
+#include "editor_console_panel.h"
+#include "editor_shell.h"
 
 namespace dse::editor {
 
@@ -139,11 +141,15 @@ void ProcessShortcuts(ShortcutContext& context) {
     if (!context.read_only) {
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal)) {
             SaveScene(context.registry, "scene.json");
+            SetCurrentScenePath("scene.json");
+            EditorLog(LogLevel::Info, "Scene saved: scene.json");
         }
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, ImGuiInputFlags_RouteGlobal)) {
             std::string path = SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(context.registry, path);
+                SetCurrentScenePath(path);
+                EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal)) {
@@ -151,6 +157,8 @@ void ProcessShortcuts(ShortcutContext& context) {
             if (!path.empty()) {
                 LoadScene(context.registry, path);
                 context.selected_entity = entt::null;
+                SetCurrentScenePath(path);
+                EditorLog(LogLevel::Info, "Scene loaded: " + path);
             }
         }
     }
@@ -159,9 +167,11 @@ void ProcessShortcuts(ShortcutContext& context) {
     if (!context.read_only) {
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, ImGuiInputFlags_RouteGlobal)) {
             DuplicateSelectedEntity(context);
+            EditorLog(LogLevel::Info, "Entity duplicated");
         }
         if (ImGui::Shortcut(ImGuiKey_Delete, ImGuiInputFlags_RouteGlobal)) {
             DeleteSelectedEntity(context);
+            EditorLog(LogLevel::Info, "Entity deleted");
         }
         if (ImGui::Shortcut(ImGuiKey_F2, ImGuiInputFlags_RouteGlobal)) {
             // F2 rename: handled by focusing the Inspector name field

@@ -59,6 +59,7 @@
 #include "editor_icons.h"
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
+#include "editor_scene_camera.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -561,6 +562,19 @@ int main() {
 
             glfwPollEvents();
 
+            // Update editor camera in render pipeline (Edit mode only)
+            if (GetEditorState() == EditorState::Edit) {
+                int fb_w, fb_h;
+                glfwGetFramebufferSize(window, &fb_w, &fb_h);
+                float aspect = (fb_h > 0) ? static_cast<float>(fb_w) / static_cast<float>(fb_h) : 1.7777f;
+                auto& editor_cam = dse::editor::GetEditorCamera();
+                engine_instance.pipeline()->SetEditorCamera(
+                    editor_cam.GetViewMatrix(),
+                    editor_cam.GetProjectionMatrix(aspect));
+            } else {
+                engine_instance.pipeline()->DisableEditorCamera();
+            }
+
             // Tick Engine
             {
                 dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EngineTick");
@@ -603,6 +617,17 @@ int main() {
             {
                 dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "DrawEditorUI");
                 DrawEditorUI(engine_instance, scene_texture, game_texture);
+            }
+
+            // Update window title with scene name and editor state
+            {
+                std::string title = "DSEngine Editor - " + dse::editor::GetCurrentScenePath();
+                if (GetEditorState() == EditorState::Play) {
+                    title += " [PLAYING]";
+                } else if (GetEditorState() == EditorState::Pause) {
+                    title += " [PAUSED]";
+                }
+                glfwSetWindowTitle(window, title.c_str());
             }
 
             // Rendering

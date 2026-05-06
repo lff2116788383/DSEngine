@@ -248,6 +248,27 @@ void ForwardScenePass::Setup(RenderGraph& graph) {
 
 void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
+
+    // Editor camera override: use editor view/proj for Scene render target
+    if (ctx_.editor_mode && ctx_.use_editor_camera) {
+        cmd_buffer.SetCamera(ctx_.editor_view, ctx_.editor_projection);
+
+        // Still render skybox if present
+        auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
+        for (auto sky_entity : skybox_view) {
+            auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
+            if (!skybox.enabled) continue;
+            if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
+                if (auto cubemap = ctx_.asset_manager->LoadCubemapDirectory(skybox.cubemap_path)) {
+                    skybox.cubemap_handle = cubemap->GetHandle();
+                }
+            }
+            if (skybox.cubemap_handle != 0) {
+                cmd_buffer.DrawSkybox(skybox.cubemap_handle);
+            }
+            break;
+        }
+    } else {
     auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
     entt::entity selected_camera3d = entt::null;
     int selected_priority3d = std::numeric_limits<int>::min();
@@ -321,6 +342,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             cmd_buffer.SetCamera(camera.view, camera.projection);
         }
     }
+    } // end else (non-editor camera)
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
 

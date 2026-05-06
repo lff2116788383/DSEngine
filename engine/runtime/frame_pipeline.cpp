@@ -845,6 +845,16 @@ void FramePipeline::SetBusinessMode(BusinessMode mode) {
     runtime_context_.business_mode = mode;
 }
 
+void FramePipeline::SetEditorCamera(const glm::mat4& view, const glm::mat4& projection) {
+    render_pass_context_.use_editor_camera = true;
+    render_pass_context_.editor_view = view;
+    render_pass_context_.editor_projection = projection;
+}
+
+void FramePipeline::DisableEditorCamera() {
+    render_pass_context_.use_editor_camera = false;
+}
+
 void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
     if (initialized_) {
         return;

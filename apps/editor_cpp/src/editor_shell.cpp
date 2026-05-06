@@ -8,8 +8,22 @@
 #include "editor_scene_io.h"
 #include "editor_shortcuts.h"
 #include "editor_file_dialog.h"
+#include "editor_console_panel.h"
 
 namespace dse::editor {
+
+namespace {
+static std::string s_current_scene_path = "Untitled";
+} // forward declare for use below
+
+const std::string& GetCurrentScenePath() {
+    return s_current_scene_path;
+}
+
+void SetCurrentScenePath(const std::string& path) {
+    s_current_scene_path = path;
+}
+
 namespace {
 
 void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
@@ -87,22 +101,30 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         if (ImGui::MenuItem("New Scene", nullptr, false, !context.read_only)) {
             context.registry.clear();
             context.selected_entity = entt::null;
+            SetCurrentScenePath("Untitled");
+            EditorLog(LogLevel::Info, "New scene created");
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !context.read_only)) {
             std::string path = dse::editor::OpenSceneFileDialog();
             if (!path.empty()) {
                 LoadScene(context.registry, path);
                 context.selected_entity = entt::null;
+                SetCurrentScenePath(path);
+                EditorLog(LogLevel::Info, "Scene loaded: " + path);
             }
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {
             SaveScene(context.registry, "scene.json");
+            SetCurrentScenePath("scene.json");
+            EditorLog(LogLevel::Info, "Scene saved: scene.json");
         }
         if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !context.read_only)) {
             std::string path = dse::editor::SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(context.registry, path);
+                SetCurrentScenePath(path);
+                EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
         if (context.read_only) {

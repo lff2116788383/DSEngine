@@ -250,12 +250,35 @@ void DrawConsolePanelImpl() {
                 ImGui::SameLine();
                 ImGui::TextUnformatted(entry.message.c_str());
                 ImGui::PopStyleColor();
+
+                // Double-click to copy entry to clipboard
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    std::string clipboard_text = "[" + entry.timestamp + "] " + GetLevelTag(entry.level) + entry.message;
+                    ImGui::SetClipboardText(clipboard_text.c_str());
+                }
             }
         }
     }
 
     if (GetAutoScroll() && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
         ImGui::SetScrollHereY(1.0f);
+    }
+
+    // Right-click context menu
+    if (ImGui::BeginPopupContextWindow("ConsoleContextMenu")) {
+        if (ImGui::MenuItem("Copy All")) {
+            std::lock_guard<std::mutex> lock(GetLogMutex());
+            std::string all_text;
+            for (const auto& entry : GetLogBuffer()) {
+                all_text += "[" + entry.timestamp + "] " + GetLevelTag(entry.level) + entry.message + "\n";
+            }
+            ImGui::SetClipboardText(all_text.c_str());
+        }
+        if (ImGui::MenuItem("Clear")) {
+            std::lock_guard<std::mutex> lock(GetLogMutex());
+            GetLogBuffer().clear();
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::EndChild();

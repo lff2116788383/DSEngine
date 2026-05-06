@@ -8,6 +8,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
+#include "editor_shortcuts.h"
+#include "editor_console_panel.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -111,30 +113,37 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(-1);
                 ImGui::SetKeyboardFocusHere();
-                if (ImGui::InputText("##rename", s_rename_buf, sizeof(s_rename_buf),
-                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-                    // Commit rename
+
+                auto commit_rename = [&](entt::entity ent) {
                     if (s_rename_buf[0] != '\0') {
-                        if (context.registry.all_of<EditorNameComponent>(entity)) {
-                            context.registry.get<EditorNameComponent>(entity).name = s_rename_buf;
+                        std::string old_name = entity_name;
+                        std::string new_name = s_rename_buf;
+                        if (context.registry.all_of<EditorNameComponent>(ent)) {
+                            context.registry.get<EditorNameComponent>(ent).name = new_name;
                         } else {
-                            context.registry.emplace<EditorNameComponent>(entity, std::string(s_rename_buf));
+                            context.registry.emplace<EditorNameComponent>(ent, new_name);
                         }
+                        auto& reg = context.registry;
+                        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                            "Rename Entity",
+                            []{},
+                            [&reg, ent, old_name]() {
+                                if (reg.valid(ent) && reg.all_of<EditorNameComponent>(ent)) {
+                                    reg.get<EditorNameComponent>(ent).name = old_name;
+                                }
+                            }), false);
                     }
                     s_renaming_entity = entt::null;
+                };
+
+                if (ImGui::InputText("##rename", s_rename_buf, sizeof(s_rename_buf),
+                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                    commit_rename(entity);
                 } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                     s_renaming_entity = entt::null;
                 } else if (!ImGui::IsItemActive() && s_renaming_entity == entity &&
                            ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()) {
-                    // Clicked elsewhere — commit
-                    if (s_rename_buf[0] != '\0') {
-                        if (context.registry.all_of<EditorNameComponent>(entity)) {
-                            context.registry.get<EditorNameComponent>(entity).name = s_rename_buf;
-                        } else {
-                            context.registry.emplace<EditorNameComponent>(entity, std::string(s_rename_buf));
-                        }
-                    }
-                    s_renaming_entity = entt::null;
+                    commit_rename(entity);
                 }
             } else {
                 std::string display_name = std::string(type_icon) + "  " + entity_name;
@@ -172,6 +181,16 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
             context.registry.emplace<TransformComponent>(new_ent);
             context.selected_entity = new_ent;
+            EditorLog(LogLevel::Info, "Created entity: New Entity");
+            auto& world_ref = context.world;
+            auto& sel_ref = context.selected_entity;
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                "Create Empty Entity",
+                []{},
+                [&world_ref, &sel_ref, new_ent]() {
+                    world_ref.DestroyEntity(new_ent);
+                    if (sel_ref == new_ent) sel_ref = entt::null;
+                }), false);
         }
         if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
             auto new_ent = context.world.CreateEntity();
@@ -224,8 +243,30 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
             ImGui::EndMenu();
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Delete Entity", nullptr, false, !context.read_only)) {
-            context.world.DestroyEntity(context.selected_entity);
+            entt::entity to_delete = context.selected_entity;
+            std::string deleted_name = "Entity";
+            if (context.registry.all_of<EditorNameComponent>(to_delete)) {
+                deleted_name = context.registry.get<EditorNameComponent>(to_delete).name;
+            }
+            TransformComponent deleted_transform{};
+            if (context.registry.all_of<TransformComponent>(to_delete)) {
+                deleted_transform = context.registry.get<TransformComponent>(to_delete);
+            }
+            context.world.DestroyEntity(to_delete);
             context.selected_entity = entt::null;
+            EditorLog(LogLevel::Info, "Deleted entity: " + deleted_name);
+            auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
+            auto& sel_ref = context.selected_entity;
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                "Delete Entity: " + deleted_name,
+                []{},
+                [&world_ref, &reg_ref, &sel_ref, deleted_name, deleted_transform]() {
+                    auto restored = world_ref.CreateEntity();
+                    reg_ref.emplace<EditorNameComponent>(restored, deleted_name);
+                    reg_ref.emplace<TransformComponent>(restored, deleted_transform);
+                    sel_ref = restored;
+                }), false);
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
             const entt::entity source = context.selected_entity;
@@ -306,6 +347,16 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 context.registry.get<TransformComponent>(new_ent).dirty = true;
             }
             context.selected_entity = new_ent;
+            EditorLog(LogLevel::Info, "Duplicated entity");
+            auto& world_ref = context.world;
+            auto& sel_ref = context.selected_entity;
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                "Duplicate Entity",
+                []{},
+                [&world_ref, &sel_ref, new_ent]() {
+                    world_ref.DestroyEntity(new_ent);
+                    if (sel_ref == new_ent) sel_ref = entt::null;
+                }), false);
         }
         if (context.read_only) {
             ImGui::Separator();

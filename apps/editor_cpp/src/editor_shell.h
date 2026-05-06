@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <entt/entt.hpp>
 
 namespace dse::runtime {
@@ -18,5 +19,9 @@ struct EditorShellContext {
 void BeginEditorShell();
 void EndEditorShell();
 void DrawEditorMainMenu(EditorShellContext& context);
+
+/// Get/Set the current scene file path (for window title display)
+const std::string& GetCurrentScenePath();
+void SetCurrentScenePath(const std::string& path);
 
 } // namespace dse::editor
