@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "imgui.h"
+#include "imgui_internal.h"
+#include "editor_icons.h"
 #include "editor_profiler_panel.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_2d.h"
@@ -85,29 +87,18 @@ void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
 
     ImGui::SetCursorPosX(10);
 
-    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == -1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[H]", ImVec2(32, 24))) { g_current_gizmo_operation = -1; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hand Tool (H)");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
+    auto tool_button = [](const char* icon, const char* tooltip, int op_id, int& current_op) {
+        ImGui::PushStyleColor(ImGuiCol_Button, current_op == op_id ? ImGui::GetStyle().Colors[ImGuiCol_ButtonActive] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+        if (ImGui::Button(icon, ImVec2(32, 24))) { current_op = op_id; }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+    };
 
-    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 0 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[M]", ImVec2(32, 24))) { g_current_gizmo_operation = 0; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Translate Tool (W)");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 1 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[R]", ImVec2(32, 24))) { g_current_gizmo_operation = 1; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rotate Tool (E)");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, g_current_gizmo_operation == 2 ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button("[S]", ImVec2(32, 24))) { g_current_gizmo_operation = 2; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scale Tool (R)");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
+    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, "Hand Tool (H)", -1, g_current_gizmo_operation);
+    tool_button(MDI_ICON_ARROW_ALL, "Translate Tool (W)", 0, g_current_gizmo_operation);
+    tool_button(MDI_ICON_ROTATE_3D_VARIANT, "Rotate Tool (E)", 1, g_current_gizmo_operation);
+    tool_button(MDI_ICON_RESIZE, "Scale Tool (R)", 2, g_current_gizmo_operation);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
     if (ImGui::Button(g_current_gizmo_mode == 0 ? "Local" : "World", ImVec2(48, 24))) { g_current_gizmo_mode = 1 - g_current_gizmo_mode; }
@@ -125,25 +116,30 @@ void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
         ImGui::PopStyleColor();
     }
 
+    // Vertical separator between tool group and play controls
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
     ImGui::SetCursorPosX((avail_width / 2.0f) - 60);
 
     if (g_editor_state == EditorState::Edit) {
-        if (ImGui::Button(">", ImVec2(32, 24))) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.18f, 1.0f));
+        if (ImGui::Button(MDI_ICON_PLAY "##play", ImVec2(32, 24))) {
             EnterPlayMode(registry);
         }
+        ImGui::PopStyleColor();
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-        if (ImGui::Button("[]", ImVec2(32, 24))) {
+        if (ImGui::Button(MDI_ICON_STOP "##stop", ImVec2(32, 24))) {
             ExitPlayMode(registry, selected_entity);
         }
         ImGui::PopStyleColor();
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("||", ImVec2(32, 24))) {}
+    if (ImGui::Button(MDI_ICON_PAUSE "##pause", ImVec2(32, 24))) {}
     ImGui::SameLine();
-    if (ImGui::Button(">|", ImVec2(32, 24))) {}
+    if (ImGui::Button(MDI_ICON_SKIP_NEXT "##step", ImVec2(32, 24))) {}
 
     ImGui::SameLine();
     ImGui::SetCursorPosX(avail_width - 320);

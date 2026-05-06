@@ -55,75 +55,10 @@
 #include "editor_viewport_panel.h"
 
 #include "editor_shared_components.h"
+#include "editor_theme.h"
+#include "editor_icons.h"
 
-void SetupImGuiStyle() {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4* colors = style.Colors;
-
-    // Deep tech dark theme based on Editor_UI_Architecture.md
-    colors[ImGuiCol_Text]                   = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
-    colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-    colors[ImGuiCol_WindowBg]               = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
-    colors[ImGuiCol_ChildBg]                = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
-    colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.08f, 0.10f, 0.94f);
-    colors[ImGuiCol_Border]                 = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_FrameBg]                = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.20f, 0.20f, 0.24f, 1.00f);
-    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.25f, 0.25f, 0.30f, 1.00f);
-    colors[ImGuiCol_TitleBg]                = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
-    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.02f, 0.02f, 0.02f, 0.53f);
-    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
-    colors[ImGuiCol_CheckMark]              = ImVec4(0.00f, 0.66f, 1.00f, 1.00f); // Tech Blue
-    colors[ImGuiCol_SliderGrab]             = ImVec4(0.00f, 0.66f, 1.00f, 1.00f);
-    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.00f, 0.50f, 0.80f, 1.00f);
-    colors[ImGuiCol_Button]                 = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.00f, 0.66f, 1.00f, 0.80f); // Tech Blue hover
-    colors[ImGuiCol_ButtonActive]           = ImVec4(0.00f, 0.50f, 0.80f, 1.00f);
-    colors[ImGuiCol_Header]                 = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.00f, 0.66f, 1.00f, 0.40f);
-    colors[ImGuiCol_HeaderActive]           = ImVec4(0.00f, 0.66f, 1.00f, 0.80f);
-    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.00f, 0.66f, 1.00f, 0.78f);
-    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.00f, 0.66f, 1.00f, 1.00f);
-    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.00f, 0.66f, 1.00f, 0.20f);
-    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.00f, 0.66f, 1.00f, 0.67f);
-    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.00f, 0.66f, 1.00f, 0.95f);
-    colors[ImGuiCol_Tab]                    = ImVec4(0.11f, 0.11f, 0.13f, 1.00f);
-    colors[ImGuiCol_TabHovered]             = ImVec4(0.00f, 0.66f, 1.00f, 0.80f);
-    colors[ImGuiCol_TabActive]              = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
-    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
-    colors[ImGuiCol_DockingPreview]         = ImVec4(0.54f, 0.17f, 0.89f, 0.70f); // Neon Purple for docking preview
-    colors[ImGuiCol_DockingEmptyBg]         = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
-    
-    style.WindowPadding = ImVec2(8.0f, 8.0f);
-    style.FramePadding = ImVec2(6.0f, 4.0f);
-    style.ItemSpacing = ImVec2(6.0f, 4.0f);
-    style.ItemInnerSpacing = ImVec2(4.0f, 4.0f);
-    style.IndentSpacing = 20.0f;
-    style.ScrollbarSize = 12.0f;
-    style.GrabMinSize = 10.0f;
-
-    style.WindowRounding = 4.0f;
-    style.ChildRounding = 4.0f;
-    style.FrameRounding = 3.0f;
-    style.PopupRounding = 4.0f;
-    style.ScrollbarRounding = 6.0f;
-    style.GrabRounding = 3.0f;
-    style.TabRounding = 3.0f;
-    
-    style.WindowBorderSize = 1.0f;
-    style.ChildBorderSize = 1.0f;
-    style.PopupBorderSize = 1.0f;
-    style.FrameBorderSize = 0.0f;
-    style.TabBorderSize = 0.0f;
-}
+// Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
 extern std::vector<std::string> g_editor_languages;
 extern int g_editor_language_index;
@@ -282,7 +217,7 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
     const bool read_only = GetEditorState() == EditorState::Play;
 
     if (registry.all_of<UIAnchorComponent>(entity)) {
-        if (ImGui::CollapsingHeader("UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(MDI_ICON_IMAGE "  UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& anchor = registry.get<UIAnchorComponent>(entity);
             const char* anchor_types[] = {
                 "Center", "TopLeft", "TopCenter", "TopRight",
@@ -309,7 +244,7 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
     }
 
     if (registry.all_of<UIGridLayoutComponent>(entity)) {
-        if (ImGui::CollapsingHeader("UI Grid Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(MDI_ICON_SHAPE "  UI Grid Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& grid = registry.get<UIGridLayoutComponent>(entity);
             ImGui::BeginDisabled(read_only);
             ImGui::DragInt("Columns", &grid.columns, 0.1f, 0, 100);
@@ -341,7 +276,7 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
     }
 
     if (registry.all_of<UICanvasScalerComponent>(entity)) {
-        if (ImGui::CollapsingHeader("UI Canvas Scaler", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(MDI_ICON_RESIZE "  UI Canvas Scaler", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& scaler = registry.get<UICanvasScalerComponent>(entity);
             ImGui::BeginDisabled(read_only);
             ImGui::DragFloat2("Reference Resolution", glm::value_ptr(scaler.reference_resolution), 1.0f);
@@ -364,7 +299,7 @@ void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
     }
 
     if (registry.all_of<UIAnimationComponent>(entity)) {
-        if (ImGui::CollapsingHeader("UI Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(MDI_ICON_ANIMATION "  UI Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto& anim = registry.get<UIAnimationComponent>(entity);
             ImGui::BeginDisabled(read_only);
 
@@ -560,9 +495,15 @@ int main() {
     static std::string imgui_ini_path = (GetEditorBinPath() / "editor_layout.ini").string();
     io.IniFilename = imgui_ini_path.c_str();
 
-    // Setup Dear ImGui style
+    // Setup Dear ImGui style (Hazel-inspired dark theme)
     ImGui::StyleColorsDark();
-    SetupImGuiStyle();
+    dse::editor::SetupEditorStyle();
+
+    // Load custom fonts (Inter + NotoSansSC + MDI icons)
+    {
+        std::filesystem::path fonts_dir = GetProjectRootPath() / "apps" / "editor_cpp" / "fonts";
+        dse::editor::LoadEditorFonts(fonts_dir);
+    }
 
     // When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
     ImGuiStyle& style = ImGui::GetStyle();
@@ -598,7 +539,6 @@ int main() {
     {
         dse::runtime::EngineInstance engine_instance(engine_config);
         if (!engine_instance.Init()) {
-            std::cerr << "Failed to initialize DSEngine in Editor." << std::endl;
             return -1;
         }
 

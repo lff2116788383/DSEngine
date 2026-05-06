@@ -11,6 +11,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_profiler_panel.cpp
     src/editor_scene_io.cpp
     src/editor_shell.cpp
+    src/editor_theme.cpp
     src/editor_toolbar.cpp
     src/editor_viewport_panel.cpp
     ${DSE_GLAD_SOURCE}

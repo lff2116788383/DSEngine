@@ -1,0 +1,273 @@
+# DSEngine Editor 改造路线图
+
+> 基于当前 `apps/editor_cpp/` 代码审查结果，制定分阶段改造计划。
+> 技术路线：**ImGui 深度美化 + 功能补全**，不更换 UI 框架。
+
+---
+
+## 一、当前编辑器现状审查
+
+### 已完成功能 ✅
+
+| 模块 | 文件 | 状态 | 备注 |
+|---|---|---|---|
+| Docking 布局 | `editor_shell.cpp` | ✅ 完整 | Unity 风格：左 Hierarchy、右 Inspector、中 Scene/Game、下 Project/Console/Profiler |
+| 自定义主题 | `main.cpp:59-126` | ✅ 基础 | 暗色科技风 + 蓝色强调色，但无自定义字体/图标 |
+| Hierarchy 面板 | `editor_hierarchy_panel.cpp` (210行) | ✅ 基础 | 实体列表/选择/右键创建(Empty/UI/3D)/删除/复制 |
+| Inspector 面板 | `editor_inspector_panel.cpp` (975行) | ✅ 丰富 | Transform/Sprite/Camera2D·3D/RigidBody/UI组件/Particle/Animator/Terrain/PostProcess等 |
+| Scene Viewport | `editor_viewport_panel.cpp` (123行) | ✅ 基础 | 渲染纹理显示 + ImGuizmo(移动/旋转/缩放) + 2D点选 |
+| Game Viewport | 同上 | ✅ 基础 | 渲染纹理显示 |
+| Toolbar | `editor_toolbar.cpp` (171行) | ✅ 基础 | Gizmo工具/Local·World/2D·3D/Play·Stop·Pause/语言切换 |
+| Project 面板 | `editor_aux_panels.cpp` | ✅ 基础 | 目录浏览/文件拖拽/右键创建文件夹·脚本·材质 |
+| Profiler 面板 | `editor_profiler_panel.cpp` (259行) | ✅ 完整 | CPU/Memory/Render 三维度 + 历史曲线 + 导出 |
+| Scene IO | `editor_scene_io.cpp` (64KB) | ✅ 完整 | JSON 序列化/反序列化所有组件 |
+| Undo 系统 | `editor_undo.h` (282行) | ✅ 框架完成 | Command Pattern: PropertyChange/Lambda/Compound/Manager |
+| Play 模式 | `editor_toolbar.cpp` | ✅ 完整 | 进入时备份 registry，退出时恢复 |
+| 国际化预览 | `editor_aux_panels.cpp` | ✅ 完整 | 多语言切换 + 参数预览 + 应用到 UILabel |
+
+### 未完成 / 缺失功能 ❌
+
+| 优先级 | 模块 | 现状 | 说明 |
+|---|---|---|---|
+| **P0** | 自定义字体 + 图标字体 | ❌ 使用 ImGui 默认字体 | 观感差距的最大来源 |
+| **P0** | Undo/Redo 集成 | ❌ 框架存在但未接入 UI | Inspector 修改无法撤销 |
+| **P0** | 快捷键系统 | ❌ 仅 W/E/R 切换 Gizmo | 无 Ctrl+Z/Y/S/C/V |
+| **P1** | Console 面板 | ❌ 纯占位符 | 只有 3 行静态文本，无实际日志 |
+| **P1** | Animation 面板 | ❌ 纯占位符 | 只显示 "No animated object selected." |
+| **P1** | Tile Palette | ❌ 基础占位 | 有网格绘制但无实际瓦片编辑 |
+| **P1** | Scene 视图相机控制 | ❌ 无 | 无法在 Scene 视图中平移/旋转/缩放相机 |
+| **P1** | Hierarchy 搜索/过滤 | ❌ 无 | 实体多时难以定位 |
+| **P1** | 文件对话框 | ❌ 硬编码 "scene.json" | Save As 和 Open 实际指向同一文件 |
+| **P2** | Project 面板增强 | ❌ 无缩略图/搜索/重命名/删除 | 只有基础目录浏览 |
+| **P2** | Toolbar 图标化 | ❌ 文本标签 [H][M][R][S] | 应使用图标字体 |
+| **P2** | Edit/Window 菜单 | ❌ 菜单为空 | Edit 无 Undo/Redo/Preferences |
+| **P2** | 状态栏 | ❌ 无 | 无 FPS/实体数量/内存等实时信息 |
+| **P2** | 多选实体 | ❌ 无 | 仅支持单选 |
+| **P2** | 实体重命名 | ❌ Hierarchy 中不可直接重命名 | 需切到 Inspector 改 |
+| **P3** | 材质编辑器 | ❌ 无 | 引擎支持 PBR 材质但无可视化编辑 |
+| **P3** | 地形编辑器 | ❌ 无 | TerrainComponent 有 Inspector 但无笔刷绘制 |
+| **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
+| **P3** | Prefab 系统 | ❌ 无 | 无模板化实体机制 |
+| **P3** | Settings/Preferences | ❌ 无 | 无编辑器配置持久化 |
+
+---
+
+## 二、分阶段改造计划
+
+### Phase 1：视觉焕新（预计 3-5 天）✅ 已完成
+
+**目标**：不改功能逻辑，纯视觉升级，让编辑器看起来专业。
+
+> **实施记录 (2026-05-06)**：
+> - 新增 `editor_theme.h/cpp`：封装字体加载（Inter + NotoSansSC + MDI 合并）+ Hazel 风格暗色主题
+> - 新增 `editor_icons.h`：MDI 图标 codepoint 常量子集
+> - 新增 `fonts/download_fonts.ps1`：一键下载所需字体
+> - 修改 `main.cpp`：集成字体加载 + 主题迁移
+> - 修改 `editor_toolbar.cpp`：图标化按钮 + 竖向分隔线
+> - 修改 `editor_inspector_panel.cpp`：组件头图标前缀 + Vec3 彩色 XYZ 标签
+> - 修改 `editor_hierarchy_panel.cpp`：实体类型图标 + 选中行圆角高亮
+> - 修改 `CMakeLists.txt`：加入 editor_theme.cpp
+> - 编译验证通过 (Debug, MSVC)
+
+#### 1.1 自定义字体集成 ✅
+- ✅ 集成 **Inter** 作为 UI 主字体（16px，清晰的无衬线体）
+- ✅ 集成 **Noto Sans SC** 作为中文 fallback
+- ✅ 集成 **Material Design Icons** 作为图标字体（merge 到字体 atlas）
+- ✅ 字体文件放入 `apps/editor_cpp/fonts/`（含下载脚本）
+
+#### 1.2 主题精调 ✅
+- ✅ 迁移 `SetupImGuiStyle()` → `editor_theme.cpp::SetupEditorStyle()`
+  - ✅ 参考 Hazel Engine 暗色主题
+  - ✅ 强调色调整为 `(0.28,0.56,1)`
+- ✅ 增大圆角 `WindowRounding=6, FrameRounding=4`
+- ✅ 统一间距：`ItemSpacing=(8,6)`, `FramePadding=(8,5)`
+
+#### 1.3 Toolbar 图标化 ✅
+- ✅ 替换 `[H][M][R][S]` 为 MDI 图标（cursor, arrow-all, rotate-3d, resize）
+- ✅ Play/Stop/Pause/Step 使用 MDI 图标 + 彩色背景
+- ✅ 分组用 `ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical)` 视觉分隔
+
+#### 1.4 Inspector 美化 ✅
+- ✅ 所有 Component 折叠头使用 MDI 图标前缀（19 个组件全覆盖）
+- ✅ Transform Vec3 编辑器使用 `DrawVec3WithColorLabels` — X(红)/Y(绿)/Z(蓝) 彩色方块标签
+
+#### 1.5 Hierarchy 美化 ✅
+- ✅ 实体名前增加类型图标（Camera/Light/Mesh/UI/Particle/Terrain 等，基于组件检测）
+- ✅ 选中行高亮用圆角矩形 + accent blue (30% alpha)
+
+### Phase 2：核心功能补全（预计 5-7 天）
+
+#### 2.1 Undo/Redo 集成
+- 全局 `UndoRedoManager` 实例
+- Inspector 所有属性修改通过 `PropertyChangeCommand` 提交
+- Hierarchy 创建/删除/复制通过 `LambdaCommand` 提交
+- Gizmo 拖拽通过 Merge 机制合并连续操作
+
+#### 2.2 快捷键系统
+```
+Ctrl+Z    → Undo
+Ctrl+Y    → Redo
+Ctrl+S    → Save Scene
+Ctrl+Shift+S → Save As
+Ctrl+O    → Open Scene
+Ctrl+D    → Duplicate Entity
+Delete    → Delete Entity
+F2        → Rename Entity
+F         → Focus Selected (Scene camera fly-to)
+```
+
+#### 2.3 Scene 视图相机
+- 右键拖拽 → 旋转 (Orbit)
+- 中键拖拽 → 平移 (Pan)
+- 滚轮 → 缩放 (Zoom)
+- Alt+左键 → Orbit（Maya 风格可选）
+- F 键 → 聚焦选中实体
+- 编辑器相机独立于游戏相机
+
+#### 2.4 文件对话框
+- 集成 **tinyfiledialogs**（单头文件，MIT，跨平台）或 Windows 原生 `IFileDialog`
+- Open Scene → 打开 `.json` 文件
+- Save As → 选择保存路径
+- 维护 Recent Files 列表（持久化到 `editor_config.json`）
+
+#### 2.5 Console 面板实现
+- 集成引擎日志系统（spdlog 已在 depends 中）
+- 添加 `EditorLogSink`（spdlog custom sink）收集日志
+- 显示 Info/Warning/Error + 颜色 + 时间戳
+- 支持过滤（按级别、按关键字）
+- Clear 按钮
+- 自动滚动到底部
+
+#### 2.6 Hierarchy 增强
+- 搜索框（实时过滤实体名）
+- 双击重命名
+- 拖拽排序 / 父子关系调整
+
+### Phase 3：进阶面板（预计 7-10 天）
+
+#### 3.1 Animation 面板
+- 时间轴控件（自定义绘制）
+- 关键帧显示与编辑
+- 动画曲线编辑器（参考 ImNodes 风格）
+- Animator3DComponent 参数绑定
+- Play/Pause/Scrub 控制
+
+#### 3.2 Asset Browser（Project 面板升级）
+- 网格视图 + 列表视图切换
+- 缩略图预览（纹理/材质/模型）
+- 搜索框 + 类型过滤
+- 右键菜单：重命名/删除/复制路径/在资源管理器中显示
+- 文件拖入 Scene 直接创建实体
+- 文件监控（`std::filesystem` 轮询或平台 API）
+
+#### 3.3 Material Editor
+- 可视化 PBR 属性编辑（Albedo/Metallic/Roughness/Normal）
+- 纹理槽拖拽赋值
+- 实时预览球
+
+#### 3.4 Status Bar
+- 底部状态栏：FPS | 实体数 | Draw Calls | 内存 | 当前工具 | 坐标系
+
+### Phase 4：高级功能（预计 10+ 天，按需）
+
+#### 4.1 Prefab 系统
+- 将实体导出为 `.dprefab` 文件
+- 从 Prefab 实例化（保持引用关系）
+- Prefab 覆盖高亮显示
+
+#### 4.2 Tile Map 编辑器
+- 瓦片集加载与选择
+- 笔刷/填充/橡皮擦工具
+- 多层 Tilemap 支持
+- 与 2D 物理碰撞自动绑定
+
+#### 4.3 地形编辑器
+- 高度图笔刷绘制
+- 纹理绘制（Splat Map）
+- 地形尺寸/分辨率设置
+
+#### 4.4 音频编辑面板
+- AudioSource 组件参数编辑
+- 3D 音频区域可视化
+- 音频文件预览播放
+
+#### 4.5 Settings/Preferences
+- 编辑器配置面板
+- 主题切换（深色/浅色/自定义）
+- 快捷键自定义
+- 网格显示设置
+- 配置持久化到 `editor_settings.json`
+
+---
+
+## 三、第三方依赖清单
+
+| 库 | 用途 | 许可 | 集成方式 |
+|---|---|---|---|
+| [Inter Font](https://github.com/rsms/inter) | UI 主字体 | OFL | 字体文件 |
+| [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC) | 中文字体 | OFL | 字体文件 |
+| [Material Design Icons](https://github.com/google/material-design-icons) | 图标字体 | Apache 2.0 | .ttf merge 到 atlas |
+| [tinyfiledialogs](https://sourceforge.net/projects/tinyfiledialogs/) | 原生文件对话框 | Zlib | 单 .c/.h |
+| [IconFontCppHeaders](https://github.com/juliettef/IconFontCppHeaders) | 图标字体常量定义 | Zlib | 单 .h |
+
+所有依赖均免费、MIT/Zlib/OFL/Apache 许可，符合轻量引擎定位。
+
+---
+
+## 四、文件结构规划
+
+```
+apps/editor_cpp/
+├── src/
+│   ├── main.cpp                      # 主循环（已有）
+│   ├── editor_shell.cpp/h            # Docking 框架（已有）
+│   ├── editor_theme.cpp/h            # ★ 新增：主题 + 字体管理
+│   ├── editor_icons.h                # ★ 新增：图标常量定义
+│   ├── editor_shortcuts.cpp/h        # ★ 新增：快捷键系统
+│   ├── editor_scene_camera.cpp/h     # ★ 新增：编辑器场景相机
+│   ├── editor_console_panel.cpp/h    # ★ 新增：替代占位 Console
+│   ├── editor_status_bar.cpp/h       # ★ 新增：底部状态栏
+│   ├── editor_toolbar.cpp/h          # 改造：图标化
+│   ├── editor_hierarchy_panel.cpp/h  # 改造：搜索 + 重命名 + 拖拽
+│   ├── editor_inspector_panel.cpp/h  # 改造：美化 + Undo 集成
+│   ├── editor_viewport_panel.cpp/h   # 改造：场景相机控制
+│   ├── editor_aux_panels.cpp/h       # 改造：Project 面板升级
+│   ├── editor_profiler_panel.cpp/h   # 已完成，微调美化
+│   ├── editor_scene_io.cpp/h         # 已完成
+│   ├── editor_undo.h                 # 已完成框架
+│   └── editor_shared_components.h    # 已有
+├── fonts/
+│   ├── Inter-Regular.ttf
+│   ├── Inter-Bold.ttf
+│   ├── NotoSansSC-Regular.ttf
+│   └── MaterialIcons-Regular.ttf
+```
+
+---
+
+## 五、里程碑与验收标准
+
+### Phase 1 验收
+- [ ] 编辑器启动后使用 Inter 字体，中文正常显示
+- [ ] Toolbar 使用图标替代文字标签
+- [ ] Inspector 的 Vec3 属性带 X/Y/Z 彩色标签
+- [ ] Component 标题带图标前缀
+- [ ] 截图对比改造前后效果
+
+### Phase 2 验收
+- [ ] Ctrl+Z/Y 可撤销/重做 Inspector 属性修改
+- [ ] Ctrl+S 保存场景，Ctrl+O 弹出文件对话框打开场景
+- [ ] Scene 视图可右键旋转/中键平移/滚轮缩放
+- [ ] Console 面板显示引擎实际日志
+- [ ] Hierarchy 搜索框可过滤实体
+
+### Phase 3 验收
+- [ ] Animation 面板显示时间轴和关键帧
+- [ ] Project 面板支持缩略图和搜索
+- [ ] Material Editor 可编辑 PBR 参数
+- [ ] 状态栏实时显示 FPS/实体数
+
+### Phase 4 验收
+- [ ] Prefab 导出/实例化/覆盖检测
+- [ ] Tilemap 笔刷绘制工作
+- [ ] 地形笔刷高度绘制工作

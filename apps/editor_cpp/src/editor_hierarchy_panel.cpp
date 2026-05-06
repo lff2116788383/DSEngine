@@ -6,6 +6,8 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "imgui.h"
+#include "imgui_internal.h"
+#include "editor_icons.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -35,14 +37,48 @@ void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
                 entity_name = context.registry.get<EditorNameComponent>(entity).name;
             }
 
+            // Determine entity type icon based on components
+            const char* type_icon = MDI_ICON_CUBE_OUTLINE; // default
+            if (context.registry.all_of<dse::Camera3DComponent>(entity) || context.registry.all_of<CameraComponent>(entity)) {
+                type_icon = MDI_ICON_VIDEO;
+            } else if (context.registry.all_of<dse::DirectionalLight3DComponent>(entity) ||
+                       context.registry.all_of<dse::PointLightComponent>(entity) ||
+                       context.registry.all_of<dse::SpotLightComponent>(entity)) {
+                type_icon = MDI_ICON_LIGHTBULB;
+            } else if (context.registry.all_of<dse::MeshRendererComponent>(entity)) {
+                type_icon = MDI_ICON_SPHERE;
+            } else if (context.registry.all_of<UIRendererComponent>(entity)) {
+                type_icon = MDI_ICON_IMAGE;
+            } else if (context.registry.all_of<dse::ParticleSystem3DComponent>(entity) ||
+                       context.registry.all_of<ParticleEmitterComponent>(entity)) {
+                type_icon = MDI_ICON_CREATION;
+            } else if (context.registry.all_of<dse::TerrainComponent>(entity)) {
+                type_icon = MDI_ICON_TERRAIN;
+            }
+
+            std::string display_name = std::string(type_icon) + "  " + entity_name;
+
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf |
                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
                                        ImGuiTreeNodeFlags_SpanAvailWidth;
-            if (context.selected_entity == entity) {
+            const bool is_selected = (context.selected_entity == entity);
+            if (is_selected) {
                 flags |= ImGuiTreeNodeFlags_Selected;
             }
 
-            ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", entity_name.c_str());
+            // Draw rounded highlight rectangle for selected entity
+            if (is_selected) {
+                ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+                float item_width = ImGui::GetContentRegionAvail().x;
+                float item_height = ImGui::GetTextLineHeightWithSpacing();
+                ImU32 highlight_color = IM_COL32(71, 143, 255, 80); // accent blue at 30%
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    cursor_pos,
+                    ImVec2(cursor_pos.x + item_width, cursor_pos.y + item_height),
+                    highlight_color, 4.0f);
+            }
+
+            ImGui::TreeNodeEx((void*)(uintptr_t)entity, flags, "%s", display_name.c_str());
             if (ImGui::IsItemClicked()) {
                 context.selected_entity = entity;
                 hierarchy_clicked = false;

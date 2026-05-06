@@ -6,6 +6,8 @@
 #include "engine/ecs/components_3d_particle.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
 #include "imgui.h"
+#include "imgui_internal.h"
+#include "editor_icons.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <cstring>
@@ -29,6 +31,51 @@ namespace {
 
 bool IsInspectorReadOnly(const EditorInspectorPanelContext& context) {
     return IsEditorInPlayMode() && !context.is_2d;
+}
+
+// Draw a small colored square label (X=red, Y=green, Z=blue) before a DragFloat
+void DrawColoredAxisLabel(const char* label, const ImVec4& color) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    float size = ImGui::GetFrameHeight();
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + size, pos.y + size),
+        ImGui::ColorConvertFloat4ToU32(color), 2.0f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + size + 4.0f);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("%s", label);
+}
+
+// Draw Vec3 property with colored X/Y/Z labels
+bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
+    bool changed = false;
+    float line_width = ImGui::GetContentRegionAvail().x;
+    float field_width = (line_width - 3 * (ImGui::GetFrameHeight() + 4.0f + ImGui::CalcTextSize("X").x + 8.0f)) / 3.0f;
+    if (field_width < 30.0f) field_width = 30.0f;
+
+    ImGui::PushID(id);
+
+    // X (red)
+    DrawColoredAxisLabel("X", ImVec4(0.85f, 0.20f, 0.20f, 1.0f));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(field_width);
+    if (ImGui::DragFloat("##x", &v[0], speed)) changed = true;
+    ImGui::SameLine();
+
+    // Y (green)
+    DrawColoredAxisLabel("Y", ImVec4(0.30f, 0.75f, 0.20f, 1.0f));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(field_width);
+    if (ImGui::DragFloat("##y", &v[1], speed)) changed = true;
+    ImGui::SameLine();
+
+    // Z (blue)
+    DrawColoredAxisLabel("Z", ImVec4(0.20f, 0.40f, 0.90f, 1.0f));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(field_width);
+    if (ImGui::DragFloat("##z", &v[2], speed)) changed = true;
+
+    ImGui::PopID();
+    return changed;
 }
 
 void BeginInspectorReadOnlyScope(const EditorInspectorPanelContext& context) {
@@ -90,42 +137,45 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
     }
 
     auto& transform = context.registry.get<TransformComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_AXIS_ARROW "  Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
-    ImGui::Columns(2, "transform_cols", false);
-    ImGui::SetColumnWidth(0, 80.0f);
-
+    // Position with colored X/Y/Z
+    ImGui::Text("Position");
     float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
-    INSPECTOR_PROPERTY("Position", if (ImGui::DragFloat3("##pos", pos, 0.1f)) {
+    if (DrawVec3WithColorLabels("##pos", pos)) {
         transform.position = glm::vec3(pos[0], pos[1], pos[2]);
         transform.dirty = true;
-    });
+    }
 
+    // Rotation
     glm::vec3 euler = glm::degrees(glm::eulerAngles(transform.rotation));
     float rot[3] = {euler.x, euler.y, euler.z};
     if (context.is_2d) {
-        INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
+        ImGui::Text("Rotation");
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
             euler.z = rot[2];
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
-        });
+        }
     } else {
-        INSPECTOR_PROPERTY("Rotation", if (ImGui::DragFloat3("##rot", rot, 0.1f)) {
+        ImGui::Text("Rotation");
+        if (DrawVec3WithColorLabels("##rot", rot)) {
             euler = glm::vec3(rot[0], rot[1], rot[2]);
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
-        });
+        }
     }
 
+    // Scale with colored X/Y/Z
+    ImGui::Text("Scale");
     float scale[3] = {transform.scale.x, transform.scale.y, transform.scale.z};
-    INSPECTOR_PROPERTY("Scale", if (ImGui::DragFloat3("##scale", scale, 0.1f)) {
+    if (DrawVec3WithColorLabels("##scale", scale)) {
         transform.scale = glm::vec3(scale[0], scale[1], scale[2]);
         transform.dirty = true;
-    });
-
-    ImGui::Columns(1);
+    }
 }
 
 void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
@@ -134,7 +184,7 @@ void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
     }
 
     auto& sprite = context.registry.get<SpriteRendererComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_PALETTE "  Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -171,7 +221,7 @@ void DrawRigidBody2DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& rb2d = context.registry.get<RigidBody2DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("RigidBody 2D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_RUN "  RigidBody 2D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -203,7 +253,7 @@ void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
     }
 
     auto& mesh = context.registry.get<dse::MeshRendererComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_SPHERE "  Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -238,7 +288,7 @@ void DrawCamera3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& camera = context.registry.get<dse::Camera3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Camera 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_VIDEO "  Camera 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -260,7 +310,7 @@ void DrawDirectionalLightSection(EditorInspectorPanelContext& context) {
     }
 
     auto& light = context.registry.get<dse::DirectionalLight3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_WEATHER_SUNNY "  Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -282,7 +332,7 @@ void DrawPointLightSection(EditorInspectorPanelContext& context) {
     }
 
     auto& light = context.registry.get<dse::PointLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Point Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Point Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -305,7 +355,7 @@ void DrawSpotLightSection(EditorInspectorPanelContext& context) {
     }
 
     auto& light = context.registry.get<dse::SpotLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Spot Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Spot Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -331,7 +381,7 @@ void DrawSkyLightSection(EditorInspectorPanelContext& context) {
     }
 
     auto& light = context.registry.get<dse::SkyLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_WEATHER_SUNNY "  Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -352,7 +402,7 @@ void DrawSkyboxSection(EditorInspectorPanelContext& context) {
     }
 
     auto& skybox = context.registry.get<dse::SkyboxComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Skybox", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_VIEW_IN_AR "  Skybox", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -377,7 +427,7 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& animator = context.registry.get<dse::Animator3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Animator 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_ANIMATION "  Animator 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -480,7 +530,7 @@ void DrawFreeCameraControllerSection(EditorInspectorPanelContext& context) {
     }
 
     auto& controller = context.registry.get<dse::FreeCameraControllerComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Free Camera Controller", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_VIDEO "  Free Camera Controller", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -502,7 +552,7 @@ void DrawTerrainSection(EditorInspectorPanelContext& context) {
     }
 
     auto& terrain = context.registry.get<dse::TerrainComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Terrain", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_TERRAIN "  Terrain", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -532,7 +582,7 @@ void DrawUILabelSection(EditorInspectorPanelContext& context) {
     }
 
     auto& label = context.registry.get<UILabelComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("UI Label", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_FORMAT_TEXT "  UI Label", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -632,7 +682,7 @@ void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
     }
 
     auto& emitter = context.registry.get<ParticleEmitterComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Particle Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_CREATION "  Particle Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -707,7 +757,7 @@ void DrawRigidBody3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& rb = context.registry.get<dse::RigidBody3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("RigidBody 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_RUN "  RigidBody 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -734,7 +784,7 @@ void DrawBoxCollider3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& collider = context.registry.get<dse::BoxCollider3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Box Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_CUBE_OUTLINE "  Box Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -756,7 +806,7 @@ void DrawSphereCollider3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& collider = context.registry.get<dse::SphereCollider3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Sphere Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_SPHERE "  Sphere Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -778,7 +828,7 @@ void DrawParticleSystem3DSection(EditorInspectorPanelContext& context) {
     }
 
     auto& ps = context.registry.get<dse::ParticleSystem3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Particle System 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_CREATION "  Particle System 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -815,7 +865,7 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
     }
 
     auto& pp = context.registry.get<dse::PostProcessComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader("Post Processing", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::CollapsingHeader(MDI_ICON_POST_PROCESS "  Post Processing", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 

@@ -1,0 +1,7 @@
+*.ttf
+*.otf
+*.woff
+*.woff2
+inter_tmp/
+noto_tmp/
+fa_tmp/
