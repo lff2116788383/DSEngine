@@ -59,8 +59,8 @@
 **目标**：不改功能逻辑，纯视觉升级，让编辑器看起来专业。
 
 > **实施记录 (2026-05-06)**：
-> - 新增 `editor_theme.h/cpp`：封装字体加载（Inter + NotoSansSC + MDI 合并）+ Hazel 风格暗色主题
-> - 新增 `editor_icons.h`：MDI 图标 codepoint 常量子集
+> - 新增 `editor_theme.h/cpp`：封装字体加载（Inter + NotoSansSC + FA6 合并）+ Hazel 风格暗色主题
+> - 新增 `editor_icons.h`：Font Awesome 6 Solid 图标 codepoint 常量子集（UTF-8 编码）
 > - 新增 `fonts/download_fonts.ps1`：一键下载所需字体
 > - 修改 `main.cpp`：集成字体加载 + 主题迁移
 > - 修改 `editor_toolbar.cpp`：图标化按钮 + 竖向分隔线
@@ -68,6 +68,13 @@
 > - 修改 `editor_hierarchy_panel.cpp`：实体类型图标 + 选中行圆角高亮
 > - 修改 `CMakeLists.txt`：加入 editor_theme.cpp
 > - 编译验证通过 (Debug, MSVC)
+>
+> **Bug Fix (2026-05-06)**：
+> - 修复启动即 abort 的崩溃：移除 `editor_theme.cpp` 中的 `io.Fonts->Build()` 调用
+> - 根因：ImGui 1.92 引入 `ImGuiBackendFlags_RendererHasTextures`，新版后端自动管理字体图集构建，
+>   手动调用 `Build()` 会设置 `PreloadedAllGlyphsRanges=true`，导致 `ImGui::NewFrame()` 内部
+>   `IM_ASSERT_USER_ERROR` 断言失败（`imgui_draw.cpp:2774`）
+> - 同时清理了调试代码（文件日志、SIGABRT handler、SEH filter 等）
 
 #### 1.1 自定义字体集成 ✅
 - ✅ 集成 **Inter** 作为 UI 主字体（16px，清晰的无衬线体）
@@ -248,10 +255,11 @@ apps/editor_cpp/
 ## 五、里程碑与验收标准
 
 ### Phase 1 验收
-- [ ] 编辑器启动后使用 Inter 字体，中文正常显示
-- [ ] Toolbar 使用图标替代文字标签
-- [ ] Inspector 的 Vec3 属性带 X/Y/Z 彩色标签
-- [ ] Component 标题带图标前缀
+- [x] 编辑器启动后使用 Inter 字体，中文正常显示
+- [x] Toolbar 使用图标替代文字标签
+- [x] Inspector 的 Vec3 属性带 X/Y/Z 彩色标签
+- [x] Component 标题带图标前缀
+- [x] 启动无崩溃，主循环正常运行
 - [ ] 截图对比改造前后效果
 
 ### Phase 2 验收

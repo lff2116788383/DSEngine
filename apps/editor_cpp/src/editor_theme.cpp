@@ -79,7 +79,9 @@ bool LoadEditorFonts(const std::filesystem::path& fonts_dir) {
         g_editor_fonts.bold = g_editor_fonts.regular;
     }
 
-    io.Fonts->Build();
+    // NOTE: Do NOT call io.Fonts->Build() here.
+    // ImGui 1.92+ backends with ImGuiBackendFlags_RendererHasTextures
+    // handle font atlas building automatically during NewFrame().
     return g_editor_fonts.regular != nullptr;
 }
 
