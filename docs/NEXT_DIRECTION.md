@@ -106,9 +106,9 @@ apps/tools/asset_builder/
 
 ### 内容
 
-1. **README.md 重写** — Quick Start (克隆→构建→运行编辑器→新建场景)
-2. **docs/GETTING_STARTED.md** — 详细构建指南 (依赖/CMake 选项/IDE 配置)
-3. **docs/LUA_API.md** — Lua binding 参考文档（自动从 binding 代码生成）
+1. **README.md 重写** ✅ — Quick Start (克隆→构建→运行编辑器→新建场景)
+2. **docs/GETTING_STARTED.md** ✅ — 详细构建指南 (依赖/CMake 选项/IDE 配置)
+3. **docs/LUA_API.md** ✅ — Lua binding 参考文档（自动从 14 个 binding 源文件生成，~145 个 API）
 4. **docs/ARCHITECTURE.md** — 引擎架构图 (模块依赖/数据流)
 5. **截图/GIF** — 编辑器 UI 截图（满足 ROADMAP 最后一项验收标准）
 
