@@ -139,8 +139,8 @@ apps/tools/asset_builder/
 ## 建议执行顺序
 
 ```
-Session 1: P0-B Lua Console (REPL) — 编辑器面板 + 执行引擎
-Session 2: P0-B Lua 热重载 — 利用现有 hot-reload 基础设施
+Session 1: P0-B Lua Console (REPL) — 编辑器面板 + 执行引擎 ✅
+Session 2: P0-B Lua 热重载 — Edit 模式 PumpLuaScriptHotReloads ✅
 Session 3: P0-A Asset Packing (.dpak) — pak_writer + pak_loader
 Session 4: P0-A Standalone exe — apps/standalone/ + CMake
 Session 5: P0-A Editor Build 对话框 — File → Build Game
