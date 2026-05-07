@@ -5,6 +5,7 @@
 --------------------------------------------------------------------------------
 local Config = require("script.config")
 local Audio  = require("script.audio")
+local HUD    = require("script.hud")
 
 local app = dse.app
 local ecs = dse.ecs
@@ -88,6 +89,7 @@ function GameFlow.enter_result()
     fade_alpha = 0
     restart_cooldown = 1.0  -- 1 秒后才允许重启
     Audio.play_bgm("result")  -- KF: ModeResult::OnCompleteLoading → kResultBgm
+    HUD.hide()
 
     -- 创建 Result UI
     if not result_ui then

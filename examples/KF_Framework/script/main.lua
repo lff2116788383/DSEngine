@@ -45,6 +45,7 @@ local Player   = require("script.player")
 local Enemy    = require("script.enemy")
 local GameFlow = require("script.gameflow")
 local Audio    = require("script.audio")
+local HUD      = require("script.hud")
 
 --------------------------------------------------------------------------------
 -- Awake
@@ -63,6 +64,7 @@ function Awake()
     Enemy.spawn(600, 0, -1200)
     Enemy.spawn(-400, 0, 800)
 
+    HUD.setup()
     GameFlow.setup()
 
     print("[KF_Framework] Phase 1~7 loaded.")
@@ -124,6 +126,9 @@ function Update(dt)
             data.hit_this_attack = false
         end
     end
+
+    -- HUD 更新
+    HUD.update(Player.get_hp(), Config.PLAYER.max_hp)
 
     -- Phase 6: 检查战斗结束条件
     GameFlow.check_battle_end(Player.is_dead(), Enemy.alive_count())

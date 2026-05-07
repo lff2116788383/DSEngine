@@ -325,6 +325,73 @@ int L_UiGetJoystickY(lua_State* L) {
 }
 }
 
+int L_UiSetPosition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float x = static_cast<float>(luaL_checknumber(L, 2));
+    float y = static_cast<float>(luaL_checknumber(L, 3));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.position = glm::vec2(x, y);
+    }
+    return 0;
+}
+
+int L_UiSetSize(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float w = static_cast<float>(luaL_checknumber(L, 2));
+    float h = static_cast<float>(luaL_checknumber(L, 3));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.size = glm::vec2(w, h);
+    }
+    return 0;
+}
+
+int L_UiSetAnchor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float ax = static_cast<float>(luaL_checknumber(L, 2));
+    float ay = static_cast<float>(luaL_checknumber(L, 3));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.anchor_min = glm::vec2(ax, ay);
+        ui.anchor_max = glm::vec2(ax, ay);
+    }
+    return 0;
+}
+
+int L_UiSetColor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float r = static_cast<float>(luaL_checknumber(L, 2));
+    float g = static_cast<float>(luaL_checknumber(L, 3));
+    float b = static_cast<float>(luaL_checknumber(L, 4));
+    float a = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.color = glm::vec4(r, g, b, a);
+    }
+    return 0;
+}
+
+int L_UiSetVisible(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool vis = lua_toboolean(L, 2) != 0;
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.visible = vis;
+    }
+    return 0;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -345,6 +412,11 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("add_joystick", L_UiAddJoystick);
     set_fn("get_joystick_x", L_UiGetJoystickX);
     set_fn("get_joystick_y", L_UiGetJoystickY);
+    set_fn("set_position", L_UiSetPosition);
+    set_fn("set_size", L_UiSetSize);
+    set_fn("set_anchor", L_UiSetAnchor);
+    set_fn("set_color", L_UiSetColor);
+    set_fn("set_visible", L_UiSetVisible);
 }
 
 }

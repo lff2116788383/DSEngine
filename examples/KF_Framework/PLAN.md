@@ -512,10 +512,11 @@ end
 ```
 
 **验收标准：**
-- [ ] 完整 Title → Battle → Result → Title 循环
-- [ ] 每个画面有对应 BGM
-- [ ] 战斗中显示 HP 条
-- [ ] Fade 过渡自然
+- [x] Battle → Result 流程（玩家死亡→DEFEAT / 全敌消灭→VICTORY）
+- [x] 每个画面有对应 BGM（game.wav / result.wav）
+- [ ] 战斗中显示 HP 条（待实现）
+- [ ] Fade 过渡自然（待实现）
+- [ ] Title 画面（待实现，需要 title 纹理）
 
 ---
 
@@ -535,9 +536,13 @@ end
 - 阴影质量调整
 
 **验收标准：**
-- [ ] 所有交互有音效反馈
-- [ ] 3D 音源距离衰减正常
-- [ ] 场景视觉丰富度达标
+- [x] 玩家攻击音效（sord_attack + attack_voice 1-3随机）
+- [x] 玩家格挡音效（block.wav）
+- [x] 玩家受伤/死亡音效（damage_voice 1-2随机 / death_voice）
+- [x] 敌人命中/死亡/警告音效（zombie_beat / zombie_death / zombie_warning）
+- [x] BGM 切换（game → result）
+- [ ] 3D 音源距离衰减（待实现）
+- [x] 场景视觉丰富度达标（18种装饰物 + 天空盒 + 后处理）
 
 ---
 
@@ -560,14 +565,14 @@ examples/KF_Framework/
 │   ├── setup_assets.py        # 复制纹理/音频
 │   ├── kf_to_gltf.py         # KF 二进制 → glTF 2.0 转换器（备用）
 │   └── batch_convert.py       # KF 二进制批量转换（备用）
-├── scripts/
-│   ├── main.lua               # 入口脚本 + 模式管理
-│   ├── player.lua             # 玩家控制器
-│   ├── enemy_zombie.lua       # Zombie AI
-│   ├── combat.lua             # 战斗系统
-│   ├── ui_manager.lua         # UI 管理
-│   ├── camera_controller.lua  # 第三人称摄像机
-│   └── config.lua             # 游戏参数配置
+├── script/
+│   ├── main.lua               # 入口脚本 (Phase 1~7 组装)
+│   ├── config.lua             # 全局配置 & 资产路径 & 游戏参数
+│   ├── scene.lua              # Phase 1 场景搭建
+│   ├── player.lua             # Phase 2+3 Knight FSM + 输入 + 摄像机
+│   ├── enemy.lua              # Phase 4 Mutant AI
+│   ├── gameflow.lua           # Phase 6 游戏流程状态机
+│   └── audio.lua              # Phase 7 音效管理
 ├── assets/                    # 直接从 KF_Framework 复制的原始资产
 │   ├── textures/              # .jpg/.png/.tga（直接复制）
 │   ├── audio/
