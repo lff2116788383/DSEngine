@@ -4,6 +4,7 @@
  */
 
 #include "engine/assets/asset_manager.h"
+#include "engine/assets/pak_reader.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
@@ -105,6 +106,37 @@ AssetManager::~AssetManager() {
         material_names_.clear();
         vfs_files_.clear();
     }
+}
+
+bool AssetManager::MountPak(const std::string& pak_path) {
+    auto reader = std::make_shared<dse::pak::PakReader>();
+    if (!reader->Open(pak_path)) {
+        return false;
+    }
+    mounted_paks_.push_back(std::move(reader));
+    DEBUG_LOG_INFO("[AssetManager] Mounted pak: {}", pak_path);
+    return true;
+}
+
+void AssetManager::UnmountAllPaks() {
+    mounted_paks_.clear();
+    DEBUG_LOG_INFO("[AssetManager] Unmounted all paks");
+}
+
+bool AssetManager::HasMountedPak() const {
+    return !mounted_paks_.empty();
+}
+
+bool AssetManager::ReadFromPak(const std::string& relative_path, std::vector<uint8_t>& out_data) const {
+    // Normalize path separators to forward slash for pak lookup
+    std::string normalized = relative_path;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    for (auto it = mounted_paks_.rbegin(); it != mounted_paks_.rend(); ++it) {
+        if ((*it)->ReadFile(normalized, out_data)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 TextureAsset::TextureAsset(const std::string& path, unsigned int handle, int width, int height, int channels)

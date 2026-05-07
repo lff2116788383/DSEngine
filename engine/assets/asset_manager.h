@@ -24,6 +24,9 @@ namespace dse::core {
 class EventBus;
 class JobSystem;
 }
+namespace dse::pak {
+class PakReader;
+}
 
 /**
  * @class TextureAsset
@@ -506,6 +509,15 @@ public:
     AssetManager();
     ~AssetManager();
 
+    /// Mount a .dpak archive. Assets found in pak take priority over loose files.
+    bool MountPak(const std::string& pak_path);
+
+    /// Unmount all pak archives.
+    void UnmountAllPaks();
+
+    /// Check if any pak is mounted.
+    bool HasMountedPak() const;
+
 private:
     
     std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
@@ -556,6 +568,10 @@ private:
     std::mutex hot_reload_mutex_;
     std::vector<std::string> pending_hot_reloads_;
     void FileWatcherLoop();
+
+    // --- Pak archives ---
+    std::vector<std::shared_ptr<dse::pak::PakReader>> mounted_paks_;
+    bool ReadFromPak(const std::string& relative_path, std::vector<uint8_t>& out_data) const;
 };
 
 #endif
