@@ -52,3 +52,6 @@
 
 // Hierarchy search
 #define MDI_ICON_MAGNIFY                "\xef\x80\x82" // U+F002 fa-magnifying-glass
+
+// Lua Console
+#define MDI_ICON_CODE                   "\xef\x84\xa1" // U+F121 fa-code

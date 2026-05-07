@@ -57,6 +57,14 @@ void ShutdownLuaRuntime();
 
 size_t GetLuaMemoryUsage();
 
+/**
+ * @brief 在当前 Lua 虚拟机中执行一段字符串代码（用于编辑器 REPL）
+ * @param code 要执行的 Lua 代码字符串
+ * @param out_result 执行结果或错误信息（可为 nullptr）
+ * @return 执行成功返回 true，语法/运行错误返回 false
+ */
+bool ExecuteLuaString(const char* code, std::string* out_result = nullptr);
+
 }
 
 #endif

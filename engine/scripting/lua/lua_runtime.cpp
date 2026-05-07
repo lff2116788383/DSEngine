@@ -502,4 +502,62 @@ size_t GetLuaMemoryUsage() {
     return State().lua_memory_usage;
 }
 
+bool ExecuteLuaString(const char* code, std::string* out_result) {
+    auto& state = State();
+    if (!state.state) {
+        if (out_result) *out_result = "[error] Lua VM not initialized";
+        return false;
+    }
+    lua_State* L = state.state;
+    int top = lua_gettop(L);
+
+    // Try "return <code>" first to evaluate expressions
+    std::string expr_code = std::string("return ") + code;
+    int load_result = luaL_loadstring(L, expr_code.c_str());
+    if (load_result != 0) {
+        lua_pop(L, 1);
+        // Fall back to raw statement
+        load_result = luaL_loadstring(L, code);
+        if (load_result != 0) {
+            if (out_result) *out_result = lua_tostring(L, -1);
+            lua_settop(L, top);
+            return false;
+        }
+    }
+
+    int call_result = lua_pcall(L, 0, LUA_MULTRET, 0);
+    if (call_result != 0) {
+        if (out_result) *out_result = lua_tostring(L, -1);
+        lua_settop(L, top);
+        return false;
+    }
+
+    // Collect return values
+    int nresults = lua_gettop(L) - top;
+    if (out_result) {
+        out_result->clear();
+        for (int i = 1; i <= nresults; ++i) {
+            if (i > 1) out_result->append("\t");
+            int idx = top + i;
+            if (lua_isstring(L, idx)) {
+                out_result->append(lua_tostring(L, idx));
+            } else if (lua_isnumber(L, idx)) {
+                out_result->append(std::to_string(lua_tonumber(L, idx)));
+            } else if (lua_isboolean(L, idx)) {
+                out_result->append(lua_toboolean(L, idx) ? "true" : "false");
+            } else if (lua_isnil(L, idx)) {
+                out_result->append("nil");
+            } else {
+                out_result->append(luaL_typename(L, idx));
+                out_result->append(": ");
+                char addr[32];
+                std::snprintf(addr, sizeof(addr), "%p", lua_topointer(L, idx));
+                out_result->append(addr);
+            }
+        }
+    }
+    lua_settop(L, top);
+    return true;
+}
+
 }
