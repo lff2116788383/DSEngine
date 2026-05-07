@@ -456,6 +456,9 @@ if(DSE_BUILD_EDITOR)
     add_subdirectory(apps/editor_cpp)
 endif()
 
+# Standalone game runtime (no editor UI)
+add_subdirectory(apps/standalone)
+
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
     apps/tools/asset_builder/main.cpp
