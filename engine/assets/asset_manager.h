@@ -326,6 +326,19 @@ public:
      */
     std::shared_ptr<CubemapAsset> LoadCubemapDirectory(const std::string& directory_path);
     /**
+     * @brief 从单张全景图(equirectangular)加载天空盒立方体贴图。
+     * @param image_path 等距柱状投影全景图路径 (宽高比 2:1 最佳, 如 .jpg/.png/.hdr)
+     * @param face_size  生成的每面分辨率 (默认 512, 即 512×512×6)
+     * @return 成功时返回 CubemapAsset；图片加载失败或 RHI 未就绪时返回 nullptr
+     */
+    std::shared_ptr<CubemapAsset> LoadCubemapPanorama(const std::string& image_path, int face_size = 512);
+    /**
+     * @brief 智能加载天空盒: 如果路径是目录则按6面加载, 如果是文件则按全景图加载。
+     * @param path 目录路径或单张全景图路径
+     * @return CubemapAsset 或 nullptr
+     */
+    std::shared_ptr<CubemapAsset> LoadCubemap(const std::string& path);
+    /**
      * @brief 执行 LoadShader 操作
      * @param name 参数说明
      * @param vert_src 参数说明

@@ -259,7 +259,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
             if (!skybox.enabled) continue;
             if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
-                if (auto cubemap = ctx_.asset_manager->LoadCubemapDirectory(skybox.cubemap_path)) {
+                if (auto cubemap = ctx_.asset_manager->LoadCubemap(skybox.cubemap_path)) {
                     skybox.cubemap_handle = cubemap->GetHandle();
                 }
             }
@@ -309,7 +309,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 continue;
             }
             if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
-                if (auto cubemap = ctx_.asset_manager->LoadCubemapDirectory(skybox.cubemap_path)) {
+                if (auto cubemap = ctx_.asset_manager->LoadCubemap(skybox.cubemap_path)) {
                     skybox.cubemap_handle = cubemap->GetHandle();
                 }
             }

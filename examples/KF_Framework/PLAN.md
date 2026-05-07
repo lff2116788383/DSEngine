@@ -9,6 +9,39 @@
 
 ---
 
+## 0. KF → DSE 坐标/比例转换规则（已验证，禁止修改）
+
+> ⚠️ **AI 注意**: 以下转换规则经过反复验证（解析 demo.stage 二进制 + 截图对比），是最终结论。
+> 如需调整场景，仅修改各 Lua 模块中的具体数值，不要改动此规则区块。
+
+| 项目 | KF_Framework (DX9 LH) | DSEngine (OpenGL RH) | 转换公式 |
+|------|----------------------|---------------------|---------|
+| **坐标系** | 左手系, 单位≈米 | 右手系, 单位=厘米 | `DSE_pos = KF_pos × 100, DSE_z = -KF_z` |
+| **模型比例** | 角色 ~1.7m | 角色 ~172u (cm) | FBX 导入后天然 cm 单位 |
+| **缩放规则** | 所有模型 scale=(1,1,1) | 建筑/栅栏/岩石/桶: `scale=1.0` | FBX 与角色同为 cm 单位 |
+| **Pine_tree 例外** | scale=1.0 | `scale=0.1` | FBX 原始尺寸异常大 ~5000u, 目标 ~500u |
+| **旋转** | quaternion(x,y,z,w) | euler_y 度 | `DSE_euler_y = -原始Y轴旋转角度` |
+| **光照方向** | (-1, -4, +1) | (-1, -4, -1) | Z 取反 |
+| **摄像机** | distance=5, offsetY=3.5, pitch=15° | pos=(0,350,500), pitch=-15°, fov=60° | ×100 + Z取反 |
+| **移动速度** | moveSpeed=10 | 1000 | ×100 |
+| **跳跃速度** | jumpSpeed=20 | 2000 | ×100 |
+| **阴影** | offset=(20,80,-20), range=20, far=200 | shadow_range=800, distance=3000, far=15000 | ×100 + Z取反 |
+
+**数据来源**:
+- `data\stage\demo.stage` — 二进制文件: 18种模型的精确 position/rotation/scale
+- `source_code\camera\third_person_camera.h` — 摄像机参数
+- `source_code\game_object\stage_spawner.cpp` — 场景加载逻辑
+- `source_code\light\light.cpp` — 灯光颜色/方向
+
+**Lua 模块拆分**:
+- `script/config.lua` — 全局配置 & 资产路径 & 游戏参数
+- `script/scene.lua` — Phase 1 场景搭建
+- `script/player.lua` — Phase 2+3 Knight 角色 + 摄像机
+- `script/enemy.lua` — Phase 4 Mutant 敌人 AI
+- `script/main.lua` — 入口，组装各模块
+
+---
+
 ## 1. 原始项目分析
 
 ### 1.1 游戏流程
@@ -323,9 +356,9 @@ dse.ecs.add_animator_3d_transition(player, "run", "idle", 0.2, false, 1.0,
 ```
 
 **验收标准：**
-- [ ] Knight 模型加载并显示
-- [ ] Idle/Run 动画切换流畅
-- [ ] 至少 3 个状态可正确过渡
+- [x] Knight 模型加载并显示
+- [x] Idle/Run 动画切换流畅
+- [x] 至少 3 个状态可正确过渡（13 个状态 + 完整 FSM）
 
 ---
 
@@ -372,10 +405,10 @@ end
 ```
 
 **验收标准：**
-- [ ] WASD 移动，角色面朝移动方向
-- [ ] 空格跳跃有物理效果
-- [ ] 攻击动画可触发
-- [ ] 摄像机第三人称跟随
+- [x] WASD 移动，角色面朝移动方向
+- [x] 空格跳跃有物理效果
+- [x] 攻击动画可触发
+- [x] 摄像机第三人称跟随（KF rig/pivot 层级精确复刻）
 
 ---
 
@@ -400,10 +433,10 @@ Any → (HP≤0) → Dying (终态)
 - 多个 Zombie 生成
 
 **验收标准：**
-- [ ] Zombie 在玩家靠近时开始追踪
-- [ ] 近距离触发攻击动画
-- [ ] 被攻击后有受击反馈
-- [ ] 3-5 个 Zombie 同时运行
+- [x] Mutant 在玩家靠近时开始追踪 (detect_range=1500)
+- [x] 近距离触发攻击动画 (attack_range=200)
+- [x] 被攻击后有受击反馈 (damaged 状态 + 硬直)
+- [x] 4 个 Mutant 同时运行
 
 ---
 
@@ -438,10 +471,10 @@ zombie_params = {
 ```
 
 **验收标准：**
-- [ ] 玩家攻击可命中敌人并扣血
-- [ ] 敌人攻击可命中玩家并扣血
-- [ ] 敌人 HP 归零后死亡动画 + 销毁
-- [ ] 所有敌人死亡或玩家死亡 → 触发结局
+- [x] 玩家攻击可命中敌人并扣血 (前方120°扇形 + 距离检测)
+- [x] 敌人攻击可命中玩家并扣血 (距离 + 攻击帧窗口)
+- [x] 敌人 HP 归零后死亡动画
+- [ ] 所有敌人死亡或玩家死亡 → 触发结局 (Phase 6)
 
 ---
 

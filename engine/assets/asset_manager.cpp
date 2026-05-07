@@ -564,6 +564,151 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::stri
     return cubemap;
 }
 
+std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapPanorama(const std::string& image_path, int face_size) {
+    const std::string logical_path = NormalizeAssetPath(image_path);
+    const std::string resolved_path = ResolveAssetPath(image_path);
+    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(image_path) : NormalizePath(resolved_path)) : logical_path;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = cubemaps_.find(cache_key);
+        if (it != cubemaps_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    // Load the equirectangular panorama image
+    std::vector<unsigned char> pano_pixels;
+    int pano_w = 0, pano_h = 0, pano_ch = 0;
+    if (!LoadImageRgba(image_path, pano_pixels, pano_w, pano_h, pano_ch)) {
+        DEBUG_LOG_ERROR("Failed to load panorama image: {}", image_path);
+        return nullptr;
+    }
+
+    if (face_size <= 0) face_size = 512;
+
+    // Allocate 6 faces
+    const size_t face_bytes = static_cast<size_t>(face_size) * face_size * 4;
+    std::vector<std::vector<unsigned char>> faces(6);
+    for (auto& f : faces) f.resize(face_bytes);
+
+    // Equirectangular → cubemap conversion (CPU)
+    // Face order: 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z, 5=-Z
+    const float half = static_cast<float>(face_size) * 0.5f;
+    const float inv_half = 1.0f / half;
+    const float pi = 3.14159265358979f;
+    const float two_pi = 2.0f * pi;
+
+    for (int face = 0; face < 6; ++face) {
+        unsigned char* dst = faces[face].data();
+        for (int y = 0; y < face_size; ++y) {
+            for (int x = 0; x < face_size; ++x) {
+                // Normalized face coordinates [-1, +1]
+                const float fx = (static_cast<float>(x) + 0.5f) * inv_half - 1.0f;
+                const float fy = 1.0f - (static_cast<float>(y) + 0.5f) * inv_half;
+
+                // Compute 3D direction for this face/pixel
+                float dx = 0.0f, dy = 0.0f, dz = 0.0f;
+                switch (face) {
+                    case 0: dx =  1.0f; dy = fy; dz = -fx; break; // +X
+                    case 1: dx = -1.0f; dy = fy; dz =  fx; break; // -X
+                    case 2: dx =  fx;   dy =  1.0f; dz = -fy; break; // +Y
+                    case 3: dx =  fx;   dy = -1.0f; dz =  fy; break; // -Y
+                    case 4: dx =  fx;   dy = fy; dz =  1.0f; break; // +Z
+                    case 5: dx = -fx;   dy = fy; dz = -1.0f; break; // -Z
+                }
+
+                // Direction → spherical → equirectangular UV
+                const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+                const float nx = dx / len;
+                const float ny = dy / len;
+                const float nz = dz / len;
+
+                // theta: azimuth angle, phi: elevation angle
+                const float theta = std::atan2(nz, nx); // [-pi, pi]
+                const float phi = std::asin(std::clamp(ny, -1.0f, 1.0f)); // [-pi/2, pi/2]
+
+                // UV in equirectangular image
+                float u = (theta + pi) / two_pi; // [0, 1]
+                float v = 0.5f - phi / pi;       // [0, 1], top=0
+
+                // Bilinear sample from panorama
+                const float px_f = u * static_cast<float>(pano_w) - 0.5f;
+                const float py_f = v * static_cast<float>(pano_h) - 0.5f;
+                const int px0 = static_cast<int>(std::floor(px_f));
+                const int py0 = static_cast<int>(std::floor(py_f));
+                const float fx_frac = px_f - static_cast<float>(px0);
+                const float fy_frac = py_f - static_cast<float>(py0);
+
+                auto sample = [&](int sx, int sy) -> const unsigned char* {
+                    sx = ((sx % pano_w) + pano_w) % pano_w;
+                    sy = std::clamp(sy, 0, pano_h - 1);
+                    return &pano_pixels[(static_cast<size_t>(sy) * pano_w + sx) * 4];
+                };
+
+                const unsigned char* s00 = sample(px0, py0);
+                const unsigned char* s10 = sample(px0 + 1, py0);
+                const unsigned char* s01 = sample(px0, py0 + 1);
+                const unsigned char* s11 = sample(px0 + 1, py0 + 1);
+
+                const size_t dst_offset = (static_cast<size_t>(y) * face_size + x) * 4;
+                for (int c = 0; c < 4; ++c) {
+                    const float top = static_cast<float>(s00[c]) * (1.0f - fx_frac) + static_cast<float>(s10[c]) * fx_frac;
+                    const float bot = static_cast<float>(s01[c]) * (1.0f - fx_frac) + static_cast<float>(s11[c]) * fx_frac;
+                    const float val = top * (1.0f - fy_frac) + bot * fy_frac;
+                    dst[dst_offset + c] = static_cast<unsigned char>(std::clamp(val + 0.5f, 0.0f, 255.0f));
+                }
+            }
+        }
+    }
+
+    const unsigned char* face_ptrs[6] = {
+        faces[0].data(), faces[1].data(), faces[2].data(),
+        faces[3].data(), faces[4].data(), faces[5].data()
+    };
+
+    unsigned int handle = 0;
+    {
+        std::lock_guard<std::mutex> lock(config_mutex_);
+        if (rhi_device_) {
+            handle = rhi_device_->CreateTextureCube(face_size, face_size, face_ptrs, true);
+        }
+    }
+
+    if (handle == 0) {
+        DEBUG_LOG_ERROR("Failed to create cubemap from panorama via RHI: {}", image_path);
+        return nullptr;
+    }
+
+    auto cubemap = std::make_shared<CubemapAsset>(image_path, handle, face_size, face_size);
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        cubemaps_[cache_key] = cubemap;
+        gpu_cubemap_handles_.insert(handle);
+    }
+    TouchLru(cache_key, static_cast<std::size_t>(face_size) * face_size * 4u * 6u);
+    DEBUG_LOG_INFO("Loaded panorama skybox: {} ({}x{} per face)", image_path, face_size, face_size);
+    return cubemap;
+}
+
+std::shared_ptr<CubemapAsset> AssetManager::LoadCubemap(const std::string& path) {
+    const std::string resolved = ResolveAssetPath(path);
+    const std::string& check_path = resolved.empty() ? path : resolved;
+
+    // If path is a directory → 6-face loading
+    if (std::filesystem::exists(check_path) && std::filesystem::is_directory(check_path)) {
+        return LoadCubemapDirectory(path);
+    }
+    // If path is a file → panorama loading
+    if (std::filesystem::exists(check_path) && std::filesystem::is_regular_file(check_path)) {
+        return LoadCubemapPanorama(path);
+    }
+
+    DEBUG_LOG_ERROR("Cubemap path not found (neither directory nor file): {}", path);
+    return nullptr;
+}
+
 std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
