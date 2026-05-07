@@ -223,46 +223,10 @@ if(NOT DSE_ENABLE_3D)
 endif()
 
 if(DSE_ENABLE_3D)
+    # Gameplay3D 全部编入 dse_engine，避免跨 DLL EnTT 模板实例化导致的内存损坏。
+    # 不再构建 DSE_Gameplay3D.dll。
     file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
-    list(APPEND engine_cpp
-        "modules/gameplay_3d/rendering/mesh_render_system.cpp"
-        "modules/gameplay_3d/animation/animation_state_machine.cpp"
-    )
-
-    add_library(DSE_Gameplay3D SHARED ${gameplay_3d_cpp})
-
-
-    target_include_directories(DSE_Gameplay3D PRIVATE
-        ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/engine
-        ${CMAKE_SOURCE_DIR}/modules
-        ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
-        ${CMAKE_SOURCE_DIR}/depends/glm
-    )
-    
-    target_compile_definitions(DSE_Gameplay3D PRIVATE
-        DSE_GAMEPLAY3D_EXPORTS
-        $<$<BOOL:${DSE_HAS_PHYSX_LIBS}>:DSE_HAS_PHYSX_LIBS=1>
-    )
-
-
-    if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
-        target_include_directories(DSE_Gameplay3D PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
-        target_link_directories(DSE_Gameplay3D PRIVATE
-            $<$<CONFIG:Debug>:${PHYSX_DLL_DIR_DEBUG}>
-            $<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLL_DIR_RELEASE}>
-        )
-        target_link_libraries(DSE_Gameplay3D PRIVATE ${PHYSX_LIBS})
-    endif()
-    set_target_properties(DSE_Gameplay3D PROPERTIES OUTPUT_NAME "DSE_Gameplay3D")
-    
-    if(WIN32)
-        set_target_properties(DSE_Gameplay3D PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    endif()
-    
-    if (MSVC)
-        set_property(TARGET DSE_Gameplay3D PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    endif()
+    list(APPEND engine_cpp ${gameplay_3d_cpp})
 endif()
 
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
@@ -368,9 +332,6 @@ if(WIN32)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
-
-
-
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /utf-8 /wd5033 /wd4834)
 endif()
@@ -380,10 +341,6 @@ target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
     ${CMAKE_SOURCE_DIR}/depends/glad/include
 )
-
-if(DSE_ENABLE_3D)
-    target_link_libraries(DSE_Gameplay3D PRIVATE dse_engine)
-endif()
 
 if(EXISTS "${BOX2D_ROOT}/include")
     target_include_directories(dse_engine PRIVATE "${BOX2D_ROOT}/include")
@@ -411,14 +368,7 @@ else()
     add_definitions(-D _DEBUG)
 endif ()
 
-if(DSE_ENABLE_3D)
-    dse_apply_config_postfix(DSE_Gameplay3D)
-    install(TARGETS DSE_Gameplay3D
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    )
-endif()
+# DSE_Gameplay3D 已静态编入 dse_engine，无需独立 install 规则。
 
 function(dse_copy_runtime_assets target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD

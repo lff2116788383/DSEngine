@@ -349,43 +349,11 @@ bool FramePipeline::Init() {
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
 #ifdef DSE_ENABLE_3D
     if (enable_gameplay3d) {
-        auto lib_3d = std::make_unique<dse::core::DynamicLibrary>();
-        const std::vector<std::string> candidates = {
-            "DSE_Gameplay3D_debug",
-            "DSE_Gameplay3D_release",
-            "DSE_Gameplay3D_relwithdebinfo",
-            "DSE_Gameplay3D_minsizerel",
-            "DSE_Gameplay3D"
-        };
-        bool loaded = false;
-        for (const auto& candidate : candidates) {
-            if (lib_3d->Load(candidate)) {
-                DEBUG_LOG_INFO("FramePipeline init: loaded 3D module candidate {}", candidate);
-                loaded = true;
-                break;
-            }
-        }
-        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module load result={}", loaded);
-        if (loaded) {
-            using CreateModuleFunc = dse::core::IModule*(*)();
-            using DestroyModuleFunc = void(*)(dse::core::IModule*);
-            auto create_func = reinterpret_cast<CreateModuleFunc>(lib_3d->GetSymbol("CreateModule"));
-            auto destroy_func = reinterpret_cast<DestroyModuleFunc>(lib_3d->GetSymbol("DestroyModule"));
-            if (create_func && destroy_func) {
-                dse::core::IModule* module_instance = create_func();
-                if (module_instance) {
-                    DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module instance created");
-                    if (!module_instance->OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
-                        DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D module OnInit returned false");
-                        destroy_func(module_instance);
-                    } else {
-                        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module OnInit OK");
-                        modules_.push_back({std::move(lib_3d), module_instance, destroy_func});
-                    }
-                } else {
-                    DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D CreateModule returned null");
-                }
-            }
+        if (!gameplay3d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
+            DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D module OnInit returned false");
+        } else {
+            DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module OnInit OK (static)");
+            builtin_gameplay3d_enabled_ = true;
         }
     }
 #else
@@ -445,7 +413,12 @@ void FramePipeline::Shutdown() {
     render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     gameplay2d_module_.OnShutdown(*runtime_context_.world);
-#ifndef DSE_ENABLE_3D
+#ifdef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        gameplay3d_module_.OnShutdown(*runtime_context_.world);
+        builtin_gameplay3d_enabled_ = false;
+    }
+#else
     if (builtin_gameplay3d_enabled_) {
         particle3d_system_.Shutdown(*runtime_context_.world);
         particle3d_system_.SetAssetManager(nullptr);
@@ -688,6 +661,11 @@ void FramePipeline::BuildRenderGraphInternal() {
             render_pass_context_.modules.push_back({mod.instance});
         }
     }
+#ifdef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        render_pass_context_.modules.push_back({&gameplay3d_module_});
+    }
+#endif
 
     render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
         gameplay2d_module_.OnRenderScene(world, cmd);
@@ -724,6 +702,11 @@ void FramePipeline::BuildRenderGraphInternal() {
             mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
         }
     }
+#ifdef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        gameplay3d_module_.RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
+    }
+#endif
 
     // ---- 所有 Pass 在 RenderGraph 上声明依赖 ----
     for (auto& pass : registered_passes_) {
@@ -742,13 +725,10 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    auto* job_system = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
-    auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
-    if (job_system && gl_cmd) {
-        render_graph_dag_.ExecuteParallel(*gl_cmd, *job_system);
-    } else {
-        render_graph_dag_.Execute(cmd_buffer);
-    }
+    // 渲染 Pass 的 Execute() 内部通过 registry.view<>() 访问 ECS，
+    // 而 EnTT registry 非线程安全（assure() 可能触发 pools_ 重新分配）。
+    // 在实现 Pass 数据隔离（预缓存 view 结果）之前，使用串行执行保证正确性。
+    render_graph_dag_.Execute(cmd_buffer);
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {

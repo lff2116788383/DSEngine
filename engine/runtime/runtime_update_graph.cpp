@@ -25,6 +25,11 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, float delta_time) {
             mod.instance->OnUpdate(world, delta_time);
         }
     }
+#ifdef DSE_ENABLE_3D
+    if (pipeline.builtin_gameplay3d_enabled_) {
+        pipeline.gameplay3d_module_.OnUpdate(world, delta_time);
+    }
+#endif
 }
 
 void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_time) {
@@ -38,6 +43,11 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
             mod.instance->OnFixedUpdate(world, fixed_delta_time);
         }
     }
+#ifdef DSE_ENABLE_3D
+    if (pipeline.builtin_gameplay3d_enabled_) {
+        pipeline.gameplay3d_module_.OnFixedUpdate(world, fixed_delta_time);
+    }
+#endif
 
 #ifdef DSE_ENABLE_3D
 #if defined(DSE_ENABLE_PHYSX)

@@ -28,7 +28,9 @@
 #include "modules/gameplay_2d/spine/spine_system.h"
 #include "modules/gameplay_2d/gameplay_2d_module.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
-#ifndef DSE_ENABLE_3D
+#ifdef DSE_ENABLE_3D
+#include "modules/gameplay_3d/gameplay_3d_module.h"
+#else
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -240,7 +242,10 @@ private:
     dse::physics3d::Physics3DSystem physics3d_system_;
     bool physics3d_system_initialized_ = false;
 #endif
-#ifndef DSE_ENABLE_3D
+#ifdef DSE_ENABLE_3D
+    dse::gameplay3d::Gameplay3DModule gameplay3d_module_;
+    bool builtin_gameplay3d_enabled_ = false;
+#else
     dse::gameplay3d::Particle3DSystem particle3d_system_;
     dse::gameplay3d::SteeringSystem steering_system_;
     dse::gameplay3d::AnimatorSystem animator3d_system_;

@@ -171,9 +171,9 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
     }
 
     DEBUG_LOG_INFO("EngineInstance init: startup scene regression begin");
-    const bool scene_round_trip_ok = scene::RunSceneRoundTripRegressionSample(RuntimeOutputPathInBin("scene_roundtrip_regression.json"));
+    const bool scene_round_trip_ok = ::scene::RunSceneRoundTripRegressionSample(RuntimeOutputPathInBin("scene_roundtrip_regression.json"));
     DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
-    const bool scene_backward_compat_ok = scene::RunSceneBackwardCompatibilityRegressionSample(RuntimeOutputPathInBin("scene_backward_compat_regression.json"));
+    const bool scene_backward_compat_ok = ::scene::RunSceneBackwardCompatibilityRegressionSample(RuntimeOutputPathInBin("scene_backward_compat_regression.json"));
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     return scene_round_trip_ok && scene_backward_compat_ok;
 }

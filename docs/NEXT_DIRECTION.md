@@ -152,6 +152,102 @@ tests/gtest/integration/editor/
 
 ---
 
+## P1-C: RenderGraph 安全并行执行
+
+### 背景
+
+当前 `RenderGraph::ExecuteParallel()` 已被禁用（改为串行 `Execute()`），
+原因是渲染 Pass 内部通过 `registry.view<>()` 访问 EnTT registry，而 EnTT 非线程安全。
+详见 `examples/KF_Framework/TROUBLESHOOTING.md` §10。
+
+### 当前影响
+
+- **OpenGL 后端**：无性能损失（GL 本身单线程，命令录制 <0.1ms）
+- **DX11/Vulkan 后端**：原本就走串行路径，无变化
+
+### 何时需要恢复并行
+
+| 条件 | 说明 |
+|------|------|
+| Vulkan/DX12 后端投入使用 | 这些 API 真正支持多线程命令录制（独立 CommandPool/CommandAllocator） |
+| 场景规模 50+ Pass | 波次内 Pass 数量足够多，并行才能均摊线程调度开销 |
+| CPU 录制耗时 >2ms | 当前场景远低于此阈值，无需优化 |
+
+### 实施方案：PassViewCache 预构建
+
+**核心思路**：主线程预构建所有 view（触发 `assure()` 完成 pool 初始化），
+工作线程只做只读迭代（EnTT 保证线程安全）。
+
+**Step 1**: 定义 PassViewCache 结构
+
+```cpp
+// engine/render/pass_view_cache.h
+#pragma once
+#include <entt/entt.hpp>
+
+struct PassViewCache {
+    // 阴影 Pass 需要的 view
+    entt::view<TransformComponent, dse::PointLightComponent>       point_lights;
+    entt::view<TransformComponent, dse::SpotLightComponent>        spot_lights;
+    entt::view<TransformComponent, dse::DirectionalLightComponent> dir_lights;
+    // 几何 Pass 需要的 view
+    entt::view<TransformComponent, dse::MeshRendererComponent>     meshes;
+    // 未来扩展...
+};
+```
+
+**Step 2**: 在 ExecuteParallel 之前主线程填充
+
+```cpp
+// engine/render/render_graph.cpp
+void RenderGraph::ExecuteParallel(CommandBuffer& primary, JobSystem& job_system,
+                                   entt::registry& registry) {
+    // 主线程：预构建 view（安全，assure() 完成所有 pool 初始化）
+    PassViewCache cache;
+    cache.point_lights = registry.view<TransformComponent, PointLightComponent>();
+    cache.spot_lights  = registry.view<TransformComponent, SpotLightComponent>();
+    cache.dir_lights   = registry.view<TransformComponent, DirectionalLightComponent>();
+    cache.meshes       = registry.view<TransformComponent, MeshRendererComponent>();
+
+    for (const auto& wave : compiled_waves_) {
+        // ... 并行执行，Pass 使用 cache 而非直接访问 registry
+    }
+}
+```
+
+**Step 3**: Pass 改用 cache 引用
+
+```cpp
+// 修改前（不安全）
+void PointShadowPass::Execute(CommandBuffer& cmd) {
+    auto view = ctx_.world->registry().view<TransformComponent, PointLightComponent>();
+    for (auto entity : view) { ... }
+}
+
+// 修改后（安全）
+void PointShadowPass::Execute(CommandBuffer& cmd, const PassViewCache& cache) {
+    for (auto entity : cache.point_lights) { ... }
+}
+```
+
+### 注意事项
+
+1. **不可在工作线程中修改 registry**（增删组件/实体）——如需修改，用命令队列延迟到主线程
+2. **view 构建后不可新增组件类型**——新类型会触发 `pools_` 重新分配
+3. **view 的生命周期**：cache 必须在整个并行执行期间保持有效（不能是局部 view 对象被 move）
+4. **性能预期**：Vulkan 大场景下可减少 2-5ms CPU 帧时间；中小场景收益不明显
+
+### 预计工作量
+
+| 子任务 | 估时 |
+|--------|------|
+| 定义 PassViewCache + 修改 RenderGraph 接口 | 2h |
+| 修改所有 Pass（~8 个）改用 cache | 4h |
+| 测试（多线程正确性 + 性能对比） | 2h |
+| **总计** | **~1 天** |
+
+---
+
 ## P2: 跨平台与网络（远期）
 
 - **Linux**: 替换 `OPENFILENAMEW` → tinyfiledialogs, 替换 `ReadDirectoryChangesW` → inotify

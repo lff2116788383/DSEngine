@@ -221,3 +221,173 @@ danim v2 布局: [AnimHeader] [AnimChannelDesc × N] [名称表: u32 total + (u1
 | `engine/assets/compiler/raw_scene_data.h` | AnimChannelDesc / BoneDesc / SkelHeader / AnimHeader 结构体定义 |
 | `engine/assets/compiler/importer.cpp` | CookToDanim / CookToDskel — v2 格式写入（含名称表和对齐填充） |
 | `examples/KF_Framework/script/main.lua` | Demo 入口脚本，相机/灯光/模型/动画配置 |
+
+---
+
+## 9. EnTT 跨 DLL 模板实例化崩溃（ACCESS_VIOLATION / fast_mod 断言）
+
+**现象**: Release 模式下 KF_Framework Demo 启动时 ~20% 概率崩溃，
+异常为 `ACCESS_VIOLATION (0xC0000005)` 或 EnTT `fast_mod` 中 `is_power_of_two(mod)` 断言失败。
+
+### 根因
+
+`DSE_Gameplay3D.dll` 与 `dse_engine.dll` 各自独立实例化 EnTT 头文件模板
+（`dense_map`/`sparse_set`/`basic_registry` 等）。配合 `WINDOWS_EXPORT_ALL_SYMBOLS ON`，
+Windows loader 非确定地将同名模板符号解析到不同 DLL 的副本，导致：
+
+1. 一个 DLL 中的内联函数调用另一个 DLL 中的 `bucket_count()`
+2. 内存布局/内联决策不一致，访问到错误的字段偏移
+3. `bucket_count()` 返回非 2 的幂值 → `fast_mod` 断言失败
+4. 或直接读到垃圾内存 → ACCESS_VIOLATION
+
+**修复**: 将 `DSE_Gameplay3D` 所有源文件静态编入 `dse_engine`，彻底消除 DLL 边界。
+
+```cmake
+# CMakeLists.txt — DSE_ENABLE_3D=ON 时
+file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
+list(APPEND engine_cpp ${gameplay_3d_cpp})
+# 不再构建 DSE_Gameplay3D.dll
+```
+
+**关键修改文件**:
+
+| 文件 | 修改内容 |
+|------|----------|
+| `CMakeLists.txt` | 移除 `add_library(DSE_Gameplay3D SHARED)`，所有 gameplay_3d 源文件编入 engine_cpp |
+| `engine/runtime/frame_pipeline.h` | `#ifdef DSE_ENABLE_3D` 时添加 `Gameplay3DModule gameplay3d_module_` 成员 |
+| `engine/runtime/frame_pipeline.cpp` | DLL 加载代码替换为直接调用 `gameplay3d_module_.OnInit/OnShutdown` |
+| `engine/runtime/runtime_update_graph.cpp` | Update/FixedUpdate 中直接调用 `gameplay3d_module_` |
+| `modules/gameplay_3d/gameplay_3d_module.cpp` | 移除 `CreateModule`/`DestroyModule` DLL 工厂函数 |
+| `engine/runtime/engine_app.cpp` | `scene::Foo` → `::scene::Foo`（修复传递包含引入的命名空间歧义） |
+
+**效果**: 崩溃率从 ~20% 降至 ~10%（DLL 边界消除后仍有残留崩溃，见下节）。
+
+**教训**: EnTT 等头文件库在跨 DLL 场景下极易产生 ODR 违规和模板实例化不一致。
+除非明确需要热重载，3D 模块应直接编入引擎主库。
+
+---
+
+## 10. RenderGraph 并行执行导致堆破坏（多线程竞争条件）
+
+**现象**: 完成 DLL 边界修复后仍有 ~10% 崩溃率（Release），~2% 崩溃率（Debug）。
+Release 崩溃为 `0xC0000374: 堆已损坏`，Debug 崩溃为 MSVC 断言 `vector iterators incompatible`。
+
+### 根因
+
+`RenderGraph::ExecuteParallel()` 将同一波次的多个渲染 Pass 通过 `JobSystem` 并行执行。
+`PointShadowPass::Execute()`、`CSMShadowPass::Execute()` 等 Pass 内部调用
+`registry.view<TransformComponent, PointLightComponent>()` 访问 EnTT registry。
+
+EnTT 的 `basic_registry` **非线程安全**：`registry.view<>()` 内部调用 `assure<T>()`，
+该函数在组件类型首次使用时会向 `pools_` vector 执行 `push_back`（懒初始化）。
+多个工作线程并发调用 `assure()` 时，vector 重新分配导致迭代器/指针失效。
+
+**完整崩溃调用栈**:
+```
+JobSystem::WorkerThread(int index)                       ← 工作线程
+  → RenderGraph::ExecuteParallel::lambda()               ← 并行任务
+    → PointShadowPass::Execute(cmd_buffer) 行 182        ← 渲染 Pass
+      → registry.view<Transform, PointLight>()           ← 访问 ECS
+        → registry.assure<PointLightComponent>(id) 行 266
+          → sparse_set::type() 行 1090                   ← this = 0xFFFFFFFFFFFFFFB7 💥
+```
+
+**Debug 模式 MSVC 迭代器检查**直接捕获了竞争：`Expression: vector iterators incompatible`。
+
+### 为什么 Debug 崩溃率极低
+
+Debug CRT 堆有额外保护页和填充字节，使得并发重新分配后旧指针碰巧仍指向可读内存的概率更高。
+Release 堆紧凑分配，旧指针更容易命中已释放的页面。
+
+### 修复
+
+将 `ExecuteParallel` 替换为串行 `Execute`：
+
+```cpp
+// engine/runtime/frame_pipeline.cpp
+void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
+    // 渲染 Pass 的 Execute() 内部通过 registry.view<>() 访问 ECS，
+    // 而 EnTT registry 非线程安全（assure() 可能触发 pools_ 重新分配）。
+    // 在实现 Pass 数据隔离（预缓存 view 结果）之前，使用串行执行保证正确性。
+    render_graph_dag_.Execute(cmd_buffer);
+}
+```
+
+**效果**: Release 连续 100 次运行 0 崩溃（之前 ~10%）。
+
+### 性能影响
+
+**对当前 OpenGL 后端无影响**：
+
+- `ExecuteParallel` 本身只对 `OpenGLCommandBuffer` 生效（DX11/Vulkan 原本就走串行 `Execute`）
+- OpenGL 是单线程 API，"并行录制"只是在 CPU 侧缓存命令列表，最终仍在主线程提交
+- 命令录制本身开销极小（<0.1ms），不是帧时间瓶颈
+
+### 未来恢复并行的条件与方案
+
+**何时值得做并行**:
+- 切换到 **Vulkan/DX12** 后端（真正支持多线程命令录制，各有独立 CommandPool）
+- 场景规模达到 **50+ 渲染 Pass** 且 CPU 录制耗时 >2ms
+
+**安全并行实现方案**（预计工作量 1-2 天）:
+
+在 `ExecuteParallel` 之前，**主线程预构建所有 view**，将结果缓存传入 Pass：
+
+```cpp
+// 主线程（安全）
+struct PassViewCache {
+    entt::view<TransformComponent, PointLightComponent> point_lights;
+    entt::view<TransformComponent, SpotLightComponent>  spot_lights;
+    entt::view<TransformComponent, DirectionalLightComponent> dir_lights;
+    entt::view<TransformComponent, MeshRendererComponent> meshes;
+};
+PassViewCache cache;
+cache.point_lights = registry.view<TransformComponent, PointLightComponent>();
+// ... 预构建其他 view
+
+// 工作线程：Pass 只使用 cache（只读迭代，EnTT 保证安全）
+void PointShadowPass::Execute(CommandBuffer& cmd, const PassViewCache& cache) {
+    for (auto entity : cache.point_lights) { ... }
+}
+```
+
+这样 `assure()` 在主线程完成（安全），工作线程只做只读迭代（EnTT 保证线程安全）。
+
+---
+
+## 11. 调试经验总结
+
+### Release 崩溃无 PDB 符号
+
+默认 Release 构建不生成 PDB，调用栈只显示地址。解决方案：
+- **方法 A**: 用 Debug 版本复现（有完整 PDB + MSVC 迭代器检查）
+- **方法 B**: 用 `RelWithDebInfo` 构建（Release 优化 + PDB）
+- **方法 C**: 为 Release 添加 `/Z7` 编译选项
+
+### 自动化稳定性测试脚本
+
+```powershell
+$env:DSE_MAX_FRAMES = "5"
+$env:DSE_STARTUP_SCENE_REGRESSION = "0"
+$crashed = 0; $ok = 0
+for ($i = 1; $i -le 50; $i++) {
+    $proc = Start-Process -FilePath "bin\DSEngine_Game_release.exe" `
+        -ArgumentList "--script=examples\KF_Framework\script\main.lua" `
+        -PassThru -WindowStyle Hidden
+    $exited = $proc.WaitForExit(15000)
+    if (-not $exited) { $proc.Kill(); $crashed++ }
+    elseif ($proc.ExitCode -ne 0) { $crashed++ }
+    else { $ok++ }
+}
+Write-Host "OK=$ok Crashed=$crashed"
+```
+
+### Debug 模式的迭代器检查（_ITERATOR_DEBUG_LEVEL）
+
+MSVC Debug 模式自动启用 `_ITERATOR_DEBUG_LEVEL=2`，会在以下场景立即断言：
+- 使用一个 vector 的迭代器操作另一个 vector
+- 迭代器指向已析构/已 move 的容器
+- 迭代器越界
+
+这是定位 Release 堆破坏 (`0xC0000374`) 根因的最有效工具——
+**同一个 bug 在 Debug 下触发迭代器断言，在 Release 下触发堆损坏**。
