@@ -36,7 +36,21 @@ enum class ParticleCurveType {
     Linear,     ///< 线性插值
     EaseIn,     ///< 缓入
     EaseOut,    ///< 缓出
-    EaseInOut   ///< 缓入缓出
+    EaseInOut,  ///< 缓入缓出
+    Custom      ///< 自定义关键帧曲线
+};
+
+/**
+ * @struct ParticleCurve
+ * @brief 标量粒子曲线，适用于尺寸、透明度、速度缩放等生命周期参数
+ */
+/**
+ * @struct CurveKeyframe
+ * @brief 自定义曲线关键帧（时间+值），用于 Custom 曲线类型
+ */
+struct CurveKeyframe {
+    float time = 0.0f;   ///< 归一化时间 [0, 1]
+    float value = 0.0f;  ///< 曲线值
 };
 
 /**
@@ -48,9 +62,22 @@ struct ParticleCurve {
     ParticleCurveType type = ParticleCurveType::Linear; ///< 曲线类型
     float start_value = 1.0f;                           ///< 生命周期起始值
     float end_value = 0.0f;                             ///< 生命周期结束值
+    std::vector<CurveKeyframe> keyframes;               ///< 自定义关键帧（仅 Custom 类型使用）
 
     float Evaluate(float t) const {
         t = std::clamp(t, 0.0f, 1.0f);
+        if (type == ParticleCurveType::Custom && keyframes.size() >= 2) {
+            // Linear interpolation between sorted keyframes
+            if (t <= keyframes.front().time) return keyframes.front().value;
+            if (t >= keyframes.back().time) return keyframes.back().value;
+            for (size_t i = 0; i + 1 < keyframes.size(); ++i) {
+                if (t >= keyframes[i].time && t <= keyframes[i + 1].time) {
+                    float seg_t = (t - keyframes[i].time) / (keyframes[i + 1].time - keyframes[i].time);
+                    return glm::mix(keyframes[i].value, keyframes[i + 1].value, seg_t);
+                }
+            }
+            return keyframes.back().value;
+        }
         float shaped_t = t;
         switch (type) {
         case ParticleCurveType::Linear:
@@ -69,6 +96,8 @@ struct ParticleCurve {
                 const float k = -2.0f * t + 2.0f;
                 shaped_t = 1.0f - (k * k) * 0.5f;
             }
+            break;
+        default:
             break;
         }
         return glm::mix(start_value, end_value, shaped_t);

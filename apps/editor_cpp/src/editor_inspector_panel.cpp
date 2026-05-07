@@ -20,6 +20,7 @@
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"
 #include "editor_selection.h"
+#include "editor_particle_panel.h"
 
 namespace dse::editor {
 
@@ -802,6 +803,35 @@ void DrawTerrainSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Depth", if (ImGui::DragFloat("##terrain_depth", &terrain.depth, 1.0f, 10.0f, 1000.0f)) { terrain.is_dirty = true; });
     INSPECTOR_PROPERTY("Max Height", if (ImGui::DragFloat("##terrain_height", &terrain.max_height, 0.5f, 1.0f, 200.0f)) { terrain.is_dirty = true; });
     INSPECTOR_PROPERTY("Dynamic LOD", ImGui::Checkbox("##terrain_lod", &terrain.use_dynamic_lod));
+
+    if (terrain.use_dynamic_lod) {
+        INSPECTOR_PROPERTY("LOD Levels", ImGui::DragInt("##terrain_lod_levels", &terrain.max_lod_levels, 0.1f, 1, 8));
+        INSPECTOR_PROPERTY("LOD Dist Factor", ImGui::DragFloat("##terrain_lod_dist", &terrain.lod_distance_factor, 1.0f, 5.0f, 500.0f));
+
+        ImGui::Separator();
+        ImGui::Text("LOD Preview"); ImGui::NextColumn(); ImGui::NextColumn();
+        INSPECTOR_PROPERTY("Current LOD", ImGui::Text("%d / %d", terrain.current_lod, terrain.max_lod_levels - 1));
+
+        // Show triangle count for current LOD
+        unsigned int tri_count = 0;
+        if (terrain.current_lod < static_cast<int>(terrain.lod_index_counts.size())) {
+            tri_count = terrain.lod_index_counts[terrain.current_lod] / 3;
+        } else if (terrain.index_count > 0) {
+            tri_count = terrain.index_count / 3;
+        }
+        INSPECTOR_PROPERTY("Triangles", ImGui::Text("%u", tri_count));
+        INSPECTOR_PROPERTY("Resolution", ImGui::Text("%d x %d", terrain.resolution_x, terrain.resolution_z));
+
+        // LOD level bar visualization
+        ImGui::NextColumn(); ImGui::NextColumn();
+        float lod_frac = terrain.max_lod_levels > 1
+            ? static_cast<float>(terrain.current_lod) / static_cast<float>(terrain.max_lod_levels - 1)
+            : 0.0f;
+        ImGui::ProgressBar(lod_frac, ImVec2(-1, 0),
+            (std::string("LOD ") + std::to_string(terrain.current_lod)).c_str());
+        ImGui::NextColumn();
+    }
+
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -942,7 +972,7 @@ void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
     auto draw_curve_inspector = [&emitter](const char* label_text, ParticleCurve& curve, float min_val, float max_val) {
         INSPECTOR_PROPERTY(label_text, if (ImGui::Checkbox((std::string("##enabled_") + label_text).c_str(), &curve.enabled)) { MarkParticleEmitterDirty(emitter); });
         if (curve.enabled) {
-            const char* curve_types[] = { "Linear", "EaseIn", "EaseOut", "EaseInOut" };
+            const char* curve_types[] = { "Linear", "EaseIn", "EaseOut", "EaseInOut", "Custom" };
             int current_type = static_cast<int>(curve.type);
             INSPECTOR_PROPERTY("  Type", if (ImGui::Combo((std::string("##type_") + label_text).c_str(), &current_type, curve_types, IM_ARRAYSIZE(curve_types))) {
                 curve.type = static_cast<ParticleCurveType>(current_type);
@@ -1258,6 +1288,7 @@ void DrawInspectorPanel(EditorInspectorPanelContext& context,
         DrawRigidBody2DSection(context);
         DrawUILabelSection(context);
         DrawParticleEmitterSection(context);
+        DrawParticleCurveEditor(context.registry, context.selected_entity);
         DrawMeshRendererSection(context);
         DrawCamera3DSection(context);
         DrawDirectionalLightSection(context);

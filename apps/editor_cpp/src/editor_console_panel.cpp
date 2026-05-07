@@ -8,6 +8,12 @@
 #include <mutex>
 #include <chrono>
 #include <cstdio>
+#include <regex>
+#include <filesystem>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/callback_sink.h>
@@ -136,6 +142,52 @@ bool ShouldShowEntry(const LogEntry& entry) {
     return true;
 }
 
+/// Try to extract a file path + line number from a log message and open in external editor.
+/// Supports patterns: "path/file.ext:123", "path\file.ext(123)", "path/file.ext line 123"
+/// Returns true if a file was found and open was attempted.
+bool TryOpenSourceFromLog(const std::string& message) {
+    // Pattern 1: file.ext:line (common in gcc/clang/spdlog output)
+    // Pattern 2: file.ext(line) (MSVC style)
+    // Regex matches paths with extensions like .cpp, .h, .lua, .py, .txt
+    static const std::regex path_line_regex(
+        R"(([A-Za-z]:[\\/][\w\\/.\-]+\.\w+|[\w./\\\-]+\.\w+)[:\(](\d+))",
+        std::regex::optimize);
+
+    std::smatch match;
+    if (!std::regex_search(message, match, path_line_regex)) {
+        return false;
+    }
+
+    std::string file_path = match[1].str();
+    std::string line_str = match[2].str();
+
+    // Normalize path separators
+    std::replace(file_path.begin(), file_path.end(), '/', '\\');
+
+    // If relative path, try to resolve against project root
+    if (file_path.size() < 2 || file_path[1] != ':') {
+        // Try current working directory or a known project root
+        wchar_t cwd[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, cwd);
+        std::filesystem::path full = std::filesystem::path(cwd) / file_path;
+        if (std::filesystem::exists(full)) {
+            file_path = full.string();
+        }
+    }
+
+    // Try to open with VS Code (most common for engine dev)
+    std::string vscode_cmd = "code --goto \"" + file_path + ":" + line_str + "\"";
+    int result = std::system(vscode_cmd.c_str());
+    if (result == 0) {
+        return true;
+    }
+
+    // Fallback: open file with default associated application
+    std::wstring wide_path(file_path.begin(), file_path.end());
+    ShellExecuteW(nullptr, L"open", wide_path.c_str(), nullptr, nullptr, SW_SHOW);
+    return true;
+}
+
 } // namespace
 
 void EditorLog(LogLevel level, const std::string& message) {
@@ -251,10 +303,12 @@ void DrawConsolePanelImpl() {
                 ImGui::TextUnformatted(entry.message.c_str());
                 ImGui::PopStyleColor();
 
-                // Double-click to copy entry to clipboard
+                // Double-click: jump to source if file path found, else copy to clipboard
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    std::string clipboard_text = "[" + entry.timestamp + "] " + GetLevelTag(entry.level) + entry.message;
-                    ImGui::SetClipboardText(clipboard_text.c_str());
+                    if (!TryOpenSourceFromLog(entry.message)) {
+                        std::string clipboard_text = "[" + entry.timestamp + "] " + GetLevelTag(entry.level) + entry.message;
+                        ImGui::SetClipboardText(clipboard_text.c_str());
+                    }
                 }
             }
         }

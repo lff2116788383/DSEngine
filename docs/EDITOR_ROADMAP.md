@@ -562,16 +562,22 @@ apps/editor_cpp/
 - ✅ 窗口标题显示当前标签页名 + dirty 标记 + 标签页序号
 - ✅ Play 模式下隐藏标签页栏（防止切换破坏运行状态）
 
-#### 7.3 Console 日志跳转源码 ⬜
-- ⬜ 双击带文件路径的日志条目时，在外部编辑器中打开对应文件
+#### 7.3 Console 日志跳转源码 ✅
+- ✅ 双击带文件路径的日志条目时，在外部编辑器中打开对应文件
+- ✅ 支持 `file.ext:line` 和 `file.ext(line)` 两种格式
+- ✅ 优先使用 VS Code (`code --goto`)，fallback 到系统默认关联程序
 
-#### 7.4 Terrain LOD 实时预览 ⬜
-- ⬜ 在 Terrain 面板中可视化当前 LOD 级别
-- ⬜ 显示三角形数量和网格线框覆盖
+#### 7.4 Terrain LOD 实时预览 ✅
+- ✅ 在 Terrain Inspector 中可视化当前 LOD 级别 (ProgressBar + 数字)
+- ✅ 显示当前 LOD 三角形数量和网格分辨率
+- ✅ 可调节 LOD Levels 和 Distance Factor 参数
 
-#### 7.5 粒子效果编辑器面板 ⬜
-- ⬜ 新建独立面板用于可视化编辑粒子曲线
-- ⬜ 使用 ImDrawList 绘制贝塞尔曲线编辑器
+#### 7.5 粒子效果编辑器面板 ✅
+- ✅ 新建独立面板用于可视化编辑粒子曲线 (`editor_particle_panel.h/cpp`)
+- ✅ 使用 ImDrawList 绘制贝塞尔曲线编辑器 (Size/Alpha/Speed/Color over Lifetime)
+- ✅ 支持 Custom 曲线类型：左键拖拽控制点、右键添加/删除控制点
+- ✅ 实时预览 + Undo/Redo 支持 (LambdaCommand)
+- ✅ 集成到 Inspector 面板 (选中 ParticleEmitter 实体时自动显示)
 
 #### 7.6 Light Probe / Reflection Probe 可视化 ⬜
 - ⬜ Scene 视口中显示光照探针球体
