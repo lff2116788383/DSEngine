@@ -1,6 +1,6 @@
 -- KF_Framework Demo — 主入口
 -- Phase 1: 场景  |  Phase 2: Knight FSM  |  Phase 3: 摄像机跟随 + 跳跃
--- Phase 4: Mutant AI  |  Phase 5: 战斗系统
+-- Phase 4: Mutant AI  |  Phase 5: 战斗系统  |  Phase 6: 游戏流程  |  Phase 7: 音效
 --
 --------------------------------------------------------------------------------
 -- ⚠️ AI 注意: 以下转换规则区块为经过反复验证的最终结论，禁止修改！
@@ -39,10 +39,12 @@
 local app = dse.app
 
 -- 模块加载
-local Config = require("script.config")
-local Scene  = require("script.scene")
-local Player = require("script.player")
-local Enemy  = require("script.enemy")
+local Config   = require("script.config")
+local Scene    = require("script.scene")
+local Player   = require("script.player")
+local Enemy    = require("script.enemy")
+local GameFlow = require("script.gameflow")
+local Audio    = require("script.audio")
 
 --------------------------------------------------------------------------------
 -- Awake
@@ -52,6 +54,7 @@ function Awake()
     app.set_data_root("examples/KF_Framework")
 
     Scene.setup()
+    Audio.setup()
     Player.setup()
 
     -- 生成 4 只 Mutant (KF原始敌人位置 ×100, z取反)
@@ -60,7 +63,9 @@ function Awake()
     Enemy.spawn(600, 0, -1200)
     Enemy.spawn(-400, 0, 800)
 
-    print("[KF_Framework] Phase 1~5 loaded.")
+    GameFlow.setup()
+
+    print("[KF_Framework] Phase 1~7 loaded.")
     print("[KF_Framework] Controls: WASD=move, Shift=run, Space=jump, LMB=attack, RMB=block, Q=kick, E=cast")
 end
 
@@ -69,6 +74,12 @@ end
 --------------------------------------------------------------------------------
 function Update(dt)
     if dt > 0.1 then dt = 0.1 end
+
+    -- Phase 6: 游戏流程更新
+    GameFlow.update(dt)
+
+    -- Result 状态下冻结游戏逻辑
+    if GameFlow.get_state() ~= GameFlow.STATE_BATTLE then return end
 
     Player.update(dt)
 
@@ -113,4 +124,7 @@ function Update(dt)
             data.hit_this_attack = false
         end
     end
+
+    -- Phase 6: 检查战斗结束条件
+    GameFlow.check_battle_end(Player.is_dead(), Enemy.alive_count())
 end

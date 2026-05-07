@@ -79,6 +79,20 @@ Config.ASSET = {
     tex_pine        = "assets/textures/Pine_tree.png",
     tex_fence       = "assets/textures/Medieval house_wood.jpg",
     tex_med_house1  = "assets/textures/Medieval_house_1_House_D.tga",
+    -- 音频 (Phase 7)
+    bgm_game        = "assets/audio/bgm/game.wav",
+    bgm_result      = "assets/audio/bgm/result.wav",
+    se_sord_attack   = "assets/audio/se/sord_attack.wav",
+    se_attack_voice1 = "assets/audio/se/attack_voice_1.wav",
+    se_attack_voice2 = "assets/audio/se/attack_voice_2.wav",
+    se_attack_voice3 = "assets/audio/se/attack_voice_3.wav",
+    se_block         = "assets/audio/se/block.wav",
+    se_damage_voice1 = "assets/audio/se/damage_voice_1.wav",
+    se_damage_voice2 = "assets/audio/se/damage_voice_2.wav",
+    se_death_voice   = "assets/audio/se/death_voice.wav",
+    se_zombie_beat   = "assets/audio/se/zombie_beat.wav",
+    se_zombie_warning= "assets/audio/se/zombie_warning.wav",
+    se_zombie_death  = "assets/audio/se/zombie_death.wav",
 }
 
 -- 玩家参数 (KF原始 ×100)

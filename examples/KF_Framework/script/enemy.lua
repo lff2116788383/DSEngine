@@ -3,6 +3,7 @@
 -- AI 状态: idle → detect → chase → attack → (受击/死亡)
 --------------------------------------------------------------------------------
 local Config = require("script.config")
+local Audio  = require("script.audio")
 local ASSET = Config.ASSET
 local ENEMY = Config.ENEMY
 local COND = {
@@ -86,10 +87,12 @@ function Enemy.damage(data, amount)
     if data.state == "dead" then return end
     local dmg = math.max(1, amount - ENEMY.defence)
     data.hp = data.hp - dmg
+    Audio.play_se("zombie_beat")
     if data.hp <= 0 then
         data.hp = 0
         data.state = "dead"
         ecs.set_animator_3d_param_trigger(data.entity, "dead")
+        Audio.play_se("zombie_death")
     else
         data.state = "damaged"
         data.damaged_timer = 0.5
@@ -141,6 +144,7 @@ function Enemy.update_one(data, dt, player_x, player_z)
         if dist < ENEMY.detect_range then
             data.state = "chase"
             ecs.set_animator_3d_param_trigger(data.entity, "roar")
+            Audio.play_se("zombie_warning")
         end
     elseif data.state == "chase" then
         if dist > ENEMY.lose_range then

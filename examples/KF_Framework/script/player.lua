@@ -3,6 +3,7 @@
 -- 角色创建、FSM配置、输入处理、第三人称摄像机
 --------------------------------------------------------------------------------
 local Config = require("script.config")
+local Audio  = require("script.audio")
 local ASSET = Config.ASSET
 local CAM = Config.CAMERA
 local COND = {
@@ -63,8 +64,10 @@ function Player.damage(amount)
         state.hp = 0
         state.dead = true
         ecs.set_animator_3d_param_trigger(knight, "dead")
+        Audio.play_se("death_voice")
     else
         ecs.set_animator_3d_param_trigger(knight, "damaged")
+        Audio.play_damage_voice()
     end
 end
 
@@ -227,9 +230,12 @@ function Player.update(dt)
     -- 攻击/格挡/技能触发器
     if app.get_mouse_left_down() then
         ecs.set_animator_3d_param_trigger(knight, "attack")
+        Audio.play_se("sord_attack")
+        Audio.play_attack_voice()
     end
     if app.get_mouse_right_down() then
         ecs.set_animator_3d_param_trigger(knight, "block")
+        Audio.play_se("block")
     end
     local blocking = app.get_mouse_right() and 1.0 or 0.0
     ecs.set_animator_3d_param_float(knight, "blocking", blocking)
