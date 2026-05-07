@@ -579,6 +579,9 @@ apps/editor_cpp/
 - ✅ 实时预览 + Undo/Redo 支持 (LambdaCommand)
 - ✅ 集成到 Inspector 面板 (选中 ParticleEmitter 实体时自动显示)
 
-#### 7.6 Light Probe / Reflection Probe 可视化 ⬜
-- ⬜ Scene 视口中显示光照探针球体
-- ⬜ 显示 cubemap 预览
+#### 7.6 Light Probe / Reflection Probe 可视化 ✅
+- ✅ 新增 `LightProbeComponent` (SH L2 系数 + 影响半径) 和 `ReflectionProbeComponent` (Cubemap + Box/Sphere)
+- ✅ Scene 视口中显示光照探针球体 (3 正交圆环 wireframe, 黄色标记 "LP")
+- ✅ 反射探针显示球体或 Box Projection wireframe (蓝色标记 "RP")
+- ✅ Inspector 面板: 属性编辑 (半径/分辨率/Box尺寸/SH系数预览)
+- ✅ Add Component 菜单可添加 Light Probe / Reflection Probe

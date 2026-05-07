@@ -272,6 +272,29 @@ struct SteeringComponent {
     glm::vec3 velocity = glm::vec3(0.0f);
 };
 
+/// Light Probe: captures indirect diffuse lighting at a point for GI approximation
+struct LightProbeComponent {
+    bool enabled = true;
+    float influence_radius = 10.0f;       ///< Radius of influence (for blending)
+    glm::vec3 sh_coefficients[9] = {};    ///< SH L2 coefficients (9 vec3 for RGB)
+    bool needs_rebake = true;             ///< Flag for system to rebake
+    bool show_debug = true;               ///< Show debug sphere in editor
+};
+
+/// Reflection Probe: captures environment reflections as a cubemap
+struct ReflectionProbeComponent {
+    bool enabled = true;
+    float influence_radius = 15.0f;       ///< Blend distance
+    float box_size_x = 10.0f;            ///< Box projection extents
+    float box_size_y = 10.0f;
+    float box_size_z = 10.0f;
+    bool use_box_projection = false;
+    int resolution = 128;                 ///< Cubemap face resolution
+    unsigned int cubemap_handle = 0;      ///< GPU cubemap texture
+    bool needs_rebake = true;
+    bool show_debug = true;               ///< Show debug wireframe in editor
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_H

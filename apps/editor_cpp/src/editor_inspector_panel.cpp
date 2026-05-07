@@ -1144,6 +1144,66 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
+void DrawLightProbeSection(EditorInspectorPanelContext& context) {
+    if (!context.registry.all_of<dse::LightProbeComponent>(context.selected_entity)) {
+        return;
+    }
+
+    auto& probe = context.registry.get<dse::LightProbeComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Light Probe", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Columns(2, "lprobe_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##lprobe_en", &probe.enabled));
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##lprobe_rad", &probe.influence_radius, 0.5f, 0.5f, 200.0f));
+    INSPECTOR_PROPERTY("Show Debug", ImGui::Checkbox("##lprobe_debug", &probe.show_debug));
+    INSPECTOR_PROPERTY("Needs Rebake", ImGui::Checkbox("##lprobe_rebake", &probe.needs_rebake));
+
+    // SH coefficient preview (read-only display of first 3 bands)
+    ImGui::Separator();
+    ImGui::Text("SH Coefficients"); ImGui::NextColumn(); ImGui::NextColumn();
+    for (int i = 0; i < 9; ++i) {
+        char label[32];
+        std::snprintf(label, sizeof(label), "SH[%d]", i);
+        INSPECTOR_PROPERTY(label, ImGui::Text("(%.2f, %.2f, %.2f)",
+            probe.sh_coefficients[i].x, probe.sh_coefficients[i].y, probe.sh_coefficients[i].z));
+    }
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawReflectionProbeSection(EditorInspectorPanelContext& context) {
+    if (!context.registry.all_of<dse::ReflectionProbeComponent>(context.selected_entity)) {
+        return;
+    }
+
+    auto& probe = context.registry.get<dse::ReflectionProbeComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_CUBE_OUTLINE "  Reflection Probe", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Columns(2, "rprobe_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##rprobe_en", &probe.enabled));
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##rprobe_rad", &probe.influence_radius, 0.5f, 0.5f, 200.0f));
+    INSPECTOR_PROPERTY("Box Projection", ImGui::Checkbox("##rprobe_box", &probe.use_box_projection));
+    if (probe.use_box_projection) {
+        INSPECTOR_PROPERTY("Box Size X", ImGui::DragFloat("##rprobe_bx", &probe.box_size_x, 0.5f, 0.5f, 200.0f));
+        INSPECTOR_PROPERTY("Box Size Y", ImGui::DragFloat("##rprobe_by", &probe.box_size_y, 0.5f, 0.5f, 200.0f));
+        INSPECTOR_PROPERTY("Box Size Z", ImGui::DragFloat("##rprobe_bz", &probe.box_size_z, 0.5f, 0.5f, 200.0f));
+    }
+    INSPECTOR_PROPERTY("Resolution", ImGui::DragInt("##rprobe_res", &probe.resolution, 1.0f, 32, 2048));
+    INSPECTOR_PROPERTY("Show Debug", ImGui::Checkbox("##rprobe_debug", &probe.show_debug));
+    INSPECTOR_PROPERTY("Needs Rebake", ImGui::Checkbox("##rprobe_rebake", &probe.needs_rebake));
+    INSPECTOR_PROPERTY("Cubemap", ImGui::Text("Handle: %u", probe.cubemap_handle));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
 void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     const bool read_only = IsInspectorReadOnly(context);
     ImGui::Separator();
@@ -1226,6 +1286,12 @@ void DrawAddComponentSection(EditorInspectorPanelContext& context) {
     if (ImGui::MenuItem("Post Process (3D)") && !context.registry.all_of<dse::PostProcessComponent>(context.selected_entity)) {
         context.registry.emplace<dse::PostProcessComponent>(context.selected_entity);
     }
+    if (ImGui::MenuItem("Light Probe") && !context.registry.all_of<dse::LightProbeComponent>(context.selected_entity)) {
+        context.registry.emplace<dse::LightProbeComponent>(context.selected_entity);
+    }
+    if (ImGui::MenuItem("Reflection Probe") && !context.registry.all_of<dse::ReflectionProbeComponent>(context.selected_entity)) {
+        context.registry.emplace<dse::ReflectionProbeComponent>(context.selected_entity);
+    }
     ImGui::Separator();
     if (ImGui::MenuItem("Audio Source") && !context.registry.all_of<AudioSourceComponent>(context.selected_entity)) {
         context.registry.emplace<AudioSourceComponent>(context.selected_entity);
@@ -1304,6 +1370,8 @@ void DrawInspectorPanel(EditorInspectorPanelContext& context,
         DrawSphereCollider3DSection(context);
         DrawParticleSystem3DSection(context);
         DrawPostProcessSection(context);
+        DrawLightProbeSection(context);
+        DrawReflectionProbeSection(context);
         if (draw_ui_layout_inspector) {
             draw_ui_layout_inspector(context.registry, context.selected_entity);
         }

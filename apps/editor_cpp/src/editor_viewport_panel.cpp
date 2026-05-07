@@ -316,6 +316,119 @@ void DrawViewportGrid(ImDrawList* draw_list,
     draw_line(glm::vec3(0, 0, grid_min_z), glm::vec3(0, 0, grid_max_z), IM_COL32(50, 50, 200, 200), 2.0f);
 }
 
+// --- Probe debug overlays (Light Probe sphere + Reflection Probe wireframe) ---
+void DrawProbeOverlays(entt::registry& registry,
+                       const glm::vec2& viewport_pos,
+                       const glm::vec2& viewport_size,
+                       const glm::mat4& view,
+                       const glm::mat4& proj) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const glm::mat4 vp = proj * view;
+
+    // Helper: project world point to screen
+    auto project = [&](const glm::vec3& world_pos) -> ImVec2 {
+        glm::vec4 clip = vp * glm::vec4(world_pos, 1.0f);
+        if (clip.w <= 0.001f) return ImVec2(-9999, -9999);
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        float sx = viewport_pos.x + (ndc.x * 0.5f + 0.5f) * viewport_size.x;
+        float sy = viewport_pos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * viewport_size.y;
+        return ImVec2(sx, sy);
+    };
+
+    // Helper: draw wireframe circle in world space (approximated with line segments)
+    auto draw_circle_3d = [&](const glm::vec3& center, float radius, const glm::vec3& axis, ImU32 color, int segments = 32) {
+        // Build orthonormal basis from axis
+        glm::vec3 up = (std::abs(glm::dot(axis, glm::vec3(0, 1, 0))) < 0.99f)
+                       ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+        glm::vec3 right = glm::normalize(glm::cross(axis, up));
+        glm::vec3 forward = glm::normalize(glm::cross(right, axis));
+
+        ImVec2 prev_pt = project(center + right * radius);
+        for (int i = 1; i <= segments; ++i) {
+            float angle = (static_cast<float>(i) / static_cast<float>(segments)) * 6.2831853f;
+            glm::vec3 pt = center + (right * std::cos(angle) + forward * std::sin(angle)) * radius;
+            ImVec2 screen_pt = project(pt);
+            if (prev_pt.x > -9000 && screen_pt.x > -9000) {
+                draw_list->AddLine(prev_pt, screen_pt, color, 1.5f);
+            }
+            prev_pt = screen_pt;
+        }
+    };
+
+    // Draw Light Probes
+    auto lp_view = registry.view<dse::LightProbeComponent, TransformComponent>();
+    for (auto [entity, probe, transform] : lp_view.each()) {
+        if (!probe.enabled || !probe.show_debug) continue;
+        glm::vec3 pos = transform.position;
+        ImU32 color = IM_COL32(255, 220, 50, 180); // warm yellow
+
+        // Draw 3 orthogonal circles
+        draw_circle_3d(pos, probe.influence_radius, glm::vec3(1, 0, 0), color, 24);
+        draw_circle_3d(pos, probe.influence_radius, glm::vec3(0, 1, 0), color, 24);
+        draw_circle_3d(pos, probe.influence_radius, glm::vec3(0, 0, 1), color, 24);
+
+        // Draw center dot
+        ImVec2 center_screen = project(pos);
+        if (center_screen.x > -9000) {
+            draw_list->AddCircleFilled(center_screen, 5.0f, IM_COL32(255, 220, 50, 220));
+            draw_list->AddText(ImVec2(center_screen.x + 8, center_screen.y - 8),
+                               IM_COL32(255, 220, 50, 200), "LP");
+        }
+    }
+
+    // Draw Reflection Probes
+    auto rp_view = registry.view<dse::ReflectionProbeComponent, TransformComponent>();
+    for (auto [entity, probe, transform] : rp_view.each()) {
+        if (!probe.enabled || !probe.show_debug) continue;
+        glm::vec3 pos = transform.position;
+        ImU32 color = IM_COL32(80, 180, 255, 180); // cool blue
+
+        if (probe.use_box_projection) {
+            // Draw wireframe box
+            glm::vec3 half(probe.box_size_x * 0.5f, probe.box_size_y * 0.5f, probe.box_size_z * 0.5f);
+            glm::vec3 corners[8] = {
+                pos + glm::vec3(-half.x, -half.y, -half.z),
+                pos + glm::vec3( half.x, -half.y, -half.z),
+                pos + glm::vec3( half.x,  half.y, -half.z),
+                pos + glm::vec3(-half.x,  half.y, -half.z),
+                pos + glm::vec3(-half.x, -half.y,  half.z),
+                pos + glm::vec3( half.x, -half.y,  half.z),
+                pos + glm::vec3( half.x,  half.y,  half.z),
+                pos + glm::vec3(-half.x,  half.y,  half.z),
+            };
+            ImVec2 sc[8];
+            for (int i = 0; i < 8; ++i) sc[i] = project(corners[i]);
+            // Bottom face
+            for (int i = 0; i < 4; ++i) {
+                int next = (i + 1) % 4;
+                if (sc[i].x > -9000 && sc[next].x > -9000) draw_list->AddLine(sc[i], sc[next], color, 1.5f);
+            }
+            // Top face
+            for (int i = 4; i < 8; ++i) {
+                int next = 4 + (i - 4 + 1) % 4;
+                if (sc[i].x > -9000 && sc[next].x > -9000) draw_list->AddLine(sc[i], sc[next], color, 1.5f);
+            }
+            // Vertical edges
+            for (int i = 0; i < 4; ++i) {
+                if (sc[i].x > -9000 && sc[i + 4].x > -9000) draw_list->AddLine(sc[i], sc[i + 4], color, 1.5f);
+            }
+        } else {
+            // Draw sphere (3 circles)
+            draw_circle_3d(pos, probe.influence_radius, glm::vec3(1, 0, 0), color, 24);
+            draw_circle_3d(pos, probe.influence_radius, glm::vec3(0, 1, 0), color, 24);
+            draw_circle_3d(pos, probe.influence_radius, glm::vec3(0, 0, 1), color, 24);
+        }
+
+        // Center dot
+        ImVec2 center_screen = project(pos);
+        if (center_screen.x > -9000) {
+            draw_list->AddCircleFilled(center_screen, 5.0f, IM_COL32(80, 180, 255, 220));
+            draw_list->AddText(ImVec2(center_screen.x + 8, center_screen.y - 8),
+                               IM_COL32(80, 180, 255, 200), "RP");
+        }
+    }
+}
+
 // --- Scene Gizmo (top-right 3D axis indicator) ---
 void DrawSceneGizmo(ImDrawList* draw_list,
                     const ImVec2& viewport_pos,
@@ -544,6 +657,11 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
             DrawAudioRangeOverlay(
                 context.registry,
                 context.selected_entity,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+            DrawProbeOverlays(
+                context.registry,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);
