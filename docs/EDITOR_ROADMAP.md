@@ -47,7 +47,7 @@
 | **P2** | 实体重命名 | ✅ Phase 2 完成 | Hierarchy 双击重命名 |
 | **P3** | 材质编辑器 | ✅ Phase 4 完成 | PBR 属性编辑 + 纹理槽拖拽 + 预览球 + Shader选择 |
 | **P3** | 地形编辑器 | ✅ Phase 5 完成 | 高度笔刷(Raise/Lower/Smooth/Flatten) + Splat Map 纹理绘制 + Undo |
-| **P3** | 音频编辑面板 | ❌ 无 | 引擎有 audio 模块但编辑器无面板 |
+| **P3** | 音频编辑面板 | ✅ Phase 6 完成 | AudioSource/Listener 编辑 + 3D 音频范围可视化 |
 | **P3** | Prefab 系统 | ✅ Phase 4 完成 | Save as Prefab / .dprefab 拖拽实例化 / Prefab 标记 |
 | **P3** | Settings/Preferences | ✅ Phase 3 完成 | editor_settings.json 持久化 |
 
@@ -121,7 +121,7 @@
 - ✅ 全局 `UndoRedoManager` 实例（`GetUndoRedoManager()` 单例）
 - ✅ Inspector Transform 修改通过 `PropertyChangeCommand` 提交（Position/Rotation/Scale）
 - ✅ Hierarchy 创建/删除/复制/重命名通过 `LambdaCommand` 提交
-- ⬜ Gizmo 拖拽通过 Merge 机制合并连续操作（待后续优化）
+- ✅ Gizmo 拖拽通过 Merge 机制合并连续操作（merge_id 实现）
 
 #### 2.2 快捷键系统 ✅
 ```
@@ -140,7 +140,7 @@ F         → Focus Selected ✅
 - ✅ 右键拖拽 → 旋转 (Orbit)
 - ✅ 中键拖拽 → 平移 (Pan)
 - ✅ 滚轮 → 缩放 (Zoom)
-- ⬜ Alt+左键 → Orbit（Maya 风格，待后续）
+- ✅ Alt+左键 → Orbit（Maya 风格）
 - ✅ F 键 → 聚焦选中实体
 - ✅ 编辑器相机独立于游戏相机
 
@@ -148,7 +148,7 @@ F         → Focus Selected ✅
 - ✅ 使用 Windows 原生 `OPENFILENAMEW` API
 - ✅ Open Scene → 打开 `.json` / `.dscene` 文件
 - ✅ Save As → 选择保存路径
-- ⬜ Recent Files 列表（待后续优化）
+- ✅ Recent Files 列表（Phase 3.5 实现）
 
 #### 2.5 Console 面板实现 ✅
 - ✅ 集成引擎日志系统（spdlog custom sink → `EditorLogSink`）
@@ -162,7 +162,7 @@ F         → Focus Selected ✅
 #### 2.6 Hierarchy 增强 ✅
 - ✅ 搜索框（实时过滤实体名）
 - ✅ 双击重命名（Enter 确认 / Esc 取消 / 点击其他区域确认）
-- ⬜ 拖拽排序 / 父子关系调整（待后续）
+- ✅ 拖拽排序 / 父子关系调整（Phase 4/6 实现）
 
 ### Phase 2.5：运行时验证 + 质量打磨 ✅ 已完成
 
@@ -250,9 +250,9 @@ F         → Focus Selected ✅
 - ✅ File → Recent Files 子菜单
 - ✅ 退出时自动保存
 
-#### 3.6 Animation 面板 / Material Editor（未实现，移入 Phase 4）
-- ⬜ 时间轴控件 + 关键帧编辑
-- ⬜ PBR 材质可视化编辑
+#### 3.6 Animation 面板 / Material Editor（已在 Phase 4 完成）
+- ✅ 时间轴控件 + 关键帧编辑
+- ✅ PBR 材质可视化编辑
 
 ### Phase 4：高级功能（预计 10+ 天，按需）
 
@@ -342,7 +342,7 @@ apps/editor_cpp/
 - [x] Inspector 的 Vec3 属性带 X/Y/Z 彩色标签
 - [x] Component 标题带图标前缀
 - [x] 启动无崩溃，主循环正常运行
-- [ ] 截图对比改造前后效果
+- [ ] 截图对比改造前后效果（可选，非代码任务）
 
 ### Phase 2 验收
 - [x] Ctrl+Z/Y 可撤销/重做 Inspector 属性修改
