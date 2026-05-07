@@ -144,5 +144,5 @@ Session 2: P0-B Lua 热重载 — Edit 模式 PumpLuaScriptHotReloads ✅
 Session 3: P0-A Asset Packing (.dpak) — pak_format/writer/reader/scanner + AssetManager 集成 ✅
 Session 4: P0-A Standalone exe — apps/standalone/ + /utf-8 修复 ✅
 Session 5: P0-A Editor Build 对话框 — File → Build Game... + BrowseFolderDialog ✅
-Session 6: P1-A 文档 — README + GETTING_STARTED + 截图
+Session 6: P1-A 文档 — README 重写 + GETTING_STARTED.md ✅
 ```
