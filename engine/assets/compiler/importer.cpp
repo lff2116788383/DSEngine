@@ -12,6 +12,8 @@
 #include <limits>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
+#include <functional>
 #include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -672,6 +674,36 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
         out_scene.meshes.push_back(std::move(raw_mesh));
     }
 
+    // If no mesh bones were found but animations exist, discover bones from animation channels
+    if (bone_index_map.empty() && scene->mNumAnimations > 0) {
+        // Collect all node names referenced by animation channels
+        std::unordered_set<std::string> anim_node_names;
+        for (unsigned int ai = 0; ai < scene->mNumAnimations; ++ai) {
+            const aiAnimation* anim = scene->mAnimations[ai];
+            if (!anim) continue;
+            for (unsigned int ci = 0; ci < anim->mNumChannels; ++ci) {
+                if (anim->mChannels[ci])
+                    anim_node_names.insert(anim->mChannels[ci]->mNodeName.C_Str());
+            }
+        }
+        // Walk node tree and register matching nodes as bones
+        std::function<void(const aiNode*)> discover = [&](const aiNode* node) {
+            if (!node) return;
+            const std::string name = node->mName.C_Str();
+            if (anim_node_names.count(name) && bone_index_map.find(name) == bone_index_map.end()) {
+                int idx = static_cast<int>(out_scene.skeleton.size());
+                bone_index_map.emplace(name, idx);
+                RawBone bone;
+                bone.name = name;
+                bone.inverse_bind_matrix = glm::mat4(1.0f);
+                out_scene.skeleton.push_back(bone);
+            }
+            for (unsigned int c = 0; c < node->mNumChildren; ++c)
+                discover(node->mChildren[c]);
+        };
+        discover(scene->mRootNode);
+    }
+
     BuildAssimpBoneHierarchy(scene->mRootNode, -1, bone_index_map, out_scene);
 
     out_scene.animations.reserve(scene->mNumAnimations);
@@ -710,12 +742,10 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
             }
             raw_animation.channels.push_back(std::move(raw_channel));
         }
-        if (!raw_animation.channels.empty()) {
-            out_scene.animations.push_back(std::move(raw_animation));
-        }
+        out_scene.animations.push_back(std::move(raw_animation));
     }
 
-    return !out_scene.meshes.empty();
+    return !out_scene.meshes.empty() || !out_scene.animations.empty();
 }
 
 

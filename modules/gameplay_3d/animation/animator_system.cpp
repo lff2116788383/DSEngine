@@ -101,15 +101,18 @@ struct SampleBuffer {
     std::vector<glm::vec3> positions;
     std::vector<glm::quat> rotations;
     std::vector<glm::vec3> scales;
+    std::vector<bool> touched;
 
     explicit SampleBuffer(uint32_t bone_count)
         : positions(bone_count, glm::vec3(0.0f))
         , rotations(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
-        , scales(bone_count, glm::vec3(1.0f)) {}
+        , scales(bone_count, glm::vec3(1.0f))
+        , touched(bone_count, false) {}
 };
 
 void ApplySamplesToLocalTransforms(const SampleBuffer& sample, std::vector<glm::mat4>& local_transforms, uint32_t bone_count) {
     for (uint32_t i = 0; i < bone_count; ++i) {
+        if (!sample.touched[i]) continue;  // keep bind pose for bones without animation data
         local_transforms[i] = glm::translate(glm::mat4(1.0f), sample.positions[i]) * glm::mat4_cast(sample.rotations[i]) * glm::scale(glm::mat4(1.0f), sample.scales[i]);
     }
 }
@@ -168,7 +171,40 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             }
         }
 
-        // 1. Initialize local transforms with bind pose
+        // 1. Compute bind-pose global transforms from local_transforms (node tree basis).
+        //    These serve as the reference for the "relative deformation" approach:
+        //    final_bone_matrix = anim_global * inv(bind_global)
+        //    This avoids using inverse_bind_matrix which may be inconsistent with
+        //    local_transform when the FBX has an Armature node transform.
+        //    NOTE: Bones may NOT be in topological order (e.g., Mixamo has children before
+        //    parents). We use iterative propagation to handle arbitrary ordering.
+        std::vector<glm::mat4> bind_globals(bone_count);
+        std::vector<bool> computed(bone_count, false);
+        // First pass: identify roots
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            int parent_index = bones[i].parent_index;
+            if (parent_index < 0 || parent_index >= static_cast<int>(bone_count)) {
+                bind_globals[i] = bones[i].local_transform;
+                computed[i] = true;
+            }
+        }
+        // Iterative passes until all computed
+        for (uint32_t pass = 0; pass < bone_count; ++pass) {
+            bool all_done = true;
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (computed[i]) continue;
+                int parent_index = bones[i].parent_index;
+                if (computed[parent_index]) {
+                    bind_globals[i] = bind_globals[parent_index] * bones[i].local_transform;
+                    computed[i] = true;
+                } else {
+                    all_done = false;
+                }
+            }
+            if (all_done) break;
+        }
+
+        // Initialize animated local transforms with bind pose
         std::vector<glm::mat4> local_transforms(bone_count);
         for (uint32_t i = 0; i < bone_count; ++i) {
             local_transforms[i] = bones[i].local_transform;
@@ -199,12 +235,15 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 
                 if (!position_times.empty() && !positions.empty()) {
                     sample.positions[ch.target_node_index] = Interpolate<glm::vec3>(position_times, positions, current_time);
+                    sample.touched[ch.target_node_index] = true;
                 }
                 if (!rotation_times.empty() && !rotations.empty()) {
                     sample.rotations[ch.target_node_index] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
+                    sample.touched[ch.target_node_index] = true;
                 }
                 if (!scale_times.empty() && !scales.empty()) {
                     sample.scales[ch.target_node_index] = Interpolate<glm::vec3>(scale_times, scales, current_time);
+                    sample.touched[ch.target_node_index] = true;
                 }
             }
             return true;
@@ -403,6 +442,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                     auto next_it = states.find(animator.next_state_name);
                     if (next_it != states.end()) {
                         const AnimState& next_state = next_it->second;
+                        
                         float next_duration = 1.0f;
                         SampleBuffer next_sample(bone_count);
                         
@@ -417,6 +457,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                         // Crossfade blend
                         float t = std::clamp(animator.transition_progress, 0.0f, 1.0f);
                         for (uint32_t i = 0; i < bone_count; ++i) {
+                            if (!current_sample.touched[i] && !next_sample.touched[i]) continue;  // keep bind pose
                             glm::vec3 final_p = glm::mix(current_sample.positions[i], next_sample.positions[i], t);
                             glm::quat final_r = glm::slerp(current_sample.rotations[i], next_sample.rotations[i], t);
                             glm::vec3 final_s = glm::mix(current_sample.scales[i], next_sample.scales[i], t);
@@ -448,21 +489,36 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             }
         }
 
-        // 3. Calculate global transforms
+        // 3. Calculate global transforms (handles arbitrary bone ordering)
         std::vector<glm::mat4> global_transforms(bone_count);
+        std::fill(computed.begin(), computed.end(), false);
         for (uint32_t i = 0; i < bone_count; ++i) {
             int parent_index = bones[i].parent_index;
-            if (parent_index >= 0 && parent_index < static_cast<int>(bone_count)) {
-                // Assuming bones are topologically sorted (parent before child)
-                global_transforms[i] = global_transforms[parent_index] * local_transforms[i];
-            } else {
+            if (parent_index < 0 || parent_index >= static_cast<int>(bone_count)) {
                 global_transforms[i] = local_transforms[i];
+                computed[i] = true;
             }
         }
+        for (uint32_t pass = 0; pass < bone_count; ++pass) {
+            bool all_done = true;
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (computed[i]) continue;
+                int parent_index = bones[i].parent_index;
+                if (computed[parent_index]) {
+                    global_transforms[i] = global_transforms[parent_index] * local_transforms[i];
+                    computed[i] = true;
+                } else {
+                    all_done = false;
+                }
+            }
+            if (all_done) break;
+        }
 
-        // 4. Calculate final bone matrices (Global * InverseBind)
+        // 4. Calculate final bone matrices using relative deformation:
+        //    final = anim_global * inv(bind_global)
+        //    At bind pose this produces identity (no deformation).
         for (uint32_t i = 0; i < bone_count; ++i) {
-            animator.final_bone_matrices[i] = global_transforms[i] * bones[i].inverse_bind_matrix;
+            animator.final_bone_matrices[i] = global_transforms[i] * glm::inverse(bind_globals[i]);
         }
     }
 }

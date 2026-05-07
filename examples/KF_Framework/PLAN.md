@@ -4,7 +4,8 @@
 > 目标：展示 DSEngine 全栈能力（渲染 / 物理 / 动画 / 音频 / 输入 / AI / UI）  
 > 工作目录：`examples/KF_Framework/`  
 > 原始项目：`C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\`  
-> 资产策略：**直接复用 KF_Framework 原始资产**（通过 Python 转换工具 → glTF → AssetBuilder → DSEngine 格式）
+> 资产策略：**直接复用 KF_Framework 原始 FBX 资产**（FBX → AssetBuilder → DSEngine 格式）
+> FBX 资产来源：`C:\Users\wenbilin\Desktop\temp_analysis\KF_ModelAnalyzer\data\FBX\`
 
 ---
 
@@ -99,13 +100,33 @@ Title 画面 → [Play Game / Demo Play] → 战斗场景 → Result 画面 → 
 |------|----------|----------|------|
 | **纹理** | .jpg/.png/.tga | ✅ 直接复制 | DSEngine 原生支持 |
 | **音频** | .wav | ✅ 直接复制 | DSEngine 原生支持 |
-| **静态网格** | .mesh (自定义二进制) | 🔧 Python → glTF → AssetBuilder → .dmesh | 格式已逆向 |
-| **蒙皮网格** | .skin (自定义二进制) | 🔧 Python → glTF → AssetBuilder → .dmesh | 含骨骼权重 |
-| **模型层级** | .model (递归节点树) | 🔧 Python 解析 → Lua 生成脚本 | 含 Transform + Mesh/Skin 引用 |
-| **动画** | .motion (逐帧骨骼) | 🔧 Python → glTF animation → AssetBuilder → .danim | 每帧每骨骼 TRS |
+| **角色模型** | .fbx (Mixamo 原始) | ✅ FBX → AssetBuilder → .dmesh + .dskel + .dmat | KF_ModelAnalyzer/data/FBX/ |
+| **角色动画** | .fbx (Mixamo 原始) | ✅ FBX → AssetBuilder → .danim | 每角色独立动画 FBX |
+| **场景静态模型** | .fbx | ✅ FBX → AssetBuilder → .dmesh | Baker_house, Bridge 等 |
 | **关卡数据** | .stage/.enemy/.player | 🔧 手动在 DSEngine 编辑器中重建 | 二进制场景布局 |
 
-### 3.2 已逆向的二进制格式
+### 3.2 FBX 资产来源
+
+KF_Framework 的角色和场景模型均源自 Mixamo/外部 FBX 文件，后经 KF_ModelAnalyzer 工具转换为自定义二进制格式。
+原始 FBX 保存在 `KF_ModelAnalyzer/data/FBX/` 目录中：
+
+| 角色 | 基础模型 FBX | 动画 FBX 数量 | 纹理 |
+|------|-------------|--------------|------|
+| **knight** | `paladin_prop_j_nordstrom.fbx` | 35 个 | diffuse + normal + specular |
+| **mutant** | `mutant.fbx` | 12 个 | diffuse + normal |
+| **zombie** | `derrick.fbx` | 11 个 | diffuse + normal + specular |
+| **场景** | Baker_house, Bridge, Windmill 等 | — | 各自附带 |
+
+> 直接使用原始 FBX 比解析 KF 自定义二进制更可靠，因为 AssetBuilder 原生支持 FBX 导入（通过 Assimp 库）。
+
+### 3.2.1 已逆向的 KF 自定义二进制格式（历史记录）
+
+> 以下格式规格在逆向分析过程中整理，已实现为 `tools/kf_to_gltf.py`。
+> 由于发现原始 FBX 文件可直接使用，当前主要转换路径已切换为 FBX 直通。
+> 保留此节作为参考，未来如需处理仅有 KF 二进制格式的资产仍可使用。
+
+<details>
+<summary>展开查看 KF 二进制格式详情</summary>
 
 **.mesh 格式：**
 ```
@@ -161,48 +182,56 @@ frames[]      :
     scale       : vec3 (float × 3)
 ```
 
+</details>
+
 ### 3.3 转换工具方案
 
+**主要路径（FBX 直通）：**
 ```
-examples/KF_Framework/tools/kf_to_gltf.py
-```
-
-**转换链：**
-```
-KF .mesh/.skin/.model/.motion
-        ↓ (Python 转换器)
-     .glb (glTF 2.0 Binary)
-        ↓ (DSEngine AssetBuilder)
+KF_ModelAnalyzer/data/FBX/*.fbx
+        ↓ (AssetBuilder 命令行，原生支持 FBX)
      .dmesh + .dmat + .dskel + .danim
 ```
 
+直接调用 AssetBuilder 即可，无需额外脚本：
+```bash
+# 转换角色基础模型
+bin/AssetBuilder.exe  KF_ModelAnalyzer/data/FBX/knight/paladin_prop_j_nordstrom.fbx  --out-dir examples/KF_Framework/cooked
+
+# 转换动画
+bin/AssetBuilder.exe  KF_ModelAnalyzer/data/FBX/knight/"Sword And Shield Idle.fbx"  --out-dir examples/KF_Framework/cooked
+```
+
+**备用路径（KF 二进制 → glTF，已实现）：**
+```
+tools/kf_to_gltf.py     # KF 二进制 → glTF 转换器
+tools/batch_convert.py   # KF 二进制批量转换 + AssetBuilder
+```
+
 **优势：**
-- 100% 复用原始资产，截图 1:1 对比
-- 走 DSEngine 标准资产管线，不侵入引擎
-- 格式已完全逆向，Python 实现简单
+- FBX 直通零脚本开销，AssetBuilder 原生支持
+- 纹理内嵌在 FBX 的 .fbm 目录中，可直接使用
 - 纹理/音频直接复制不需转换
 
 ---
 
 ## 4. 分阶段实施计划
 
-### Phase 0: 资产转换工具（预计 1-2 sessions）
+### Phase 0: 资产转换工具（预计 1 session）
 
-**目标：** 编写 Python 转换器，将 KF_Framework 原始二进制资产转为 DSEngine 可用格式
+**目标：** 将 KF_Framework 原始 FBX 资产转为 DSEngine 可用格式
 
 **内容：**
-- `kf_to_gltf.py`：读取 .mesh/.skin/.model/.motion → 输出 .glb
-- 处理静态网格（.mesh → glTF mesh）
-- 处理蒙皮网格（.skin + .model 骨骼层级 → glTF skin + joints）
-- 处理动画（.motion → glTF animation channels）
-- 批量转换脚本：遍历所有资产并调用 AssetBuilder
-- 直接复制纹理 (.jpg/.png/.tga) 和音频 (.wav)
+- AssetBuilder 直接转换 FBX → .dmesh/.dskel/.danim/.dmat（命令行调用）
+- `setup_assets.py`：复制纹理 (.jpg/.png/.tga) 和音频 (.wav)
+- `kf_to_gltf.py` / `batch_convert.py`：备用 KF 二进制转换器（已实现）
 
 **验收标准：**
-- [ ] Knight .model + 全部 .motion → .glb → AssetBuilder → .dmesh + .dskel + .danim
-- [ ] Zombie .model + 全部 .motion → 同上
-- [ ] 场景静态模型 (.mesh) → .dmesh
-- [ ] 纹理/音频文件复制到位
+- [x] Knight FBX → AssetBuilder → .dmesh + .dskel + 36 .danim ✅
+- [x] Zombie FBX → .dmesh + .dskel + 11 .danim ✅
+- [x] Mutant FBX → .dmesh + .dskel + 12 .danim ✅
+- [x] 场景静态模型 FBX → 20 .dmesh ✅
+- [x] 纹理/音频文件复制到位 ✅
 
 ---
 
@@ -495,9 +524,9 @@ end
 ```
 examples/KF_Framework/
 ├── tools/
-│   ├── kf_to_gltf.py         # KF 二进制 → glTF 2.0 转换器
-│   ├── batch_convert.py       # 批量转换 + 调用 AssetBuilder
-│   └── copy_assets.py         # 复制纹理/音频
+│   ├── setup_assets.py        # 复制纹理/音频
+│   ├── kf_to_gltf.py         # KF 二进制 → glTF 2.0 转换器（备用）
+│   └── batch_convert.py       # KF 二进制批量转换（备用）
 ├── scripts/
 │   ├── main.lua               # 入口脚本 + 模式管理
 │   ├── player.lua             # 玩家控制器
@@ -537,10 +566,8 @@ examples/KF_Framework/
 
 | 风险 | 影响 | 对策 |
 |------|------|------|
-| KF .skin 骨骼权重精度丢失 | 中 | 转换时归一化权重，验证 glTF 输出 |
-| .model 骨骼层级→glTF joints 映射 | 高 | 需仔细对照节点名称和 parent 关系 |
-| .motion 帧率差异 | 中 | KF 是逐帧存储，glTF 用关键帧；可保留全帧作为关键帧 |
-| DX9 左手坐标系 vs OpenGL 右手坐标系 | 高 | 转换时翻转 Z 轴（position.z 取反，旋转调整） |
+| FBX 导入坐标系差异 | 中 | AssetBuilder 内部通过 Assimp 库自动处理坐标系转换 |
+| FBX 动画命名不统一 | 低 | fbx_convert.py 中维护 FBX→输出名映射表 |
 | CharacterController 物理表现不稳定 | 中 | 用 rigidbody_3d 替代或调参 |
 | 多 Zombie 同时动画性能 | 低 | DSEngine 已有实例化渲染，5 个 Zombie 应无压力 |
 | Lua 脚本架构复杂度 | 中 | 分文件管理，保持每个文件 <300 行 |
@@ -565,8 +592,8 @@ examples/KF_Framework/
 
 ## 8. 首要行动
 
-1. **编写 Python 转换工具** — `kf_to_gltf.py` 读取 KF 二进制 → 输出 .glb
-2. **批量转换资产** — 运行 AssetBuilder 生成 .dmesh/.dskel/.danim
-3. **复制纹理/音频** — 直接从 KF_Framework 复制到 `examples/KF_Framework/assets/`
+1. ~~**复制纹理/音频**~~ ✅ `setup_assets.py` 已完成
+2. **用 AssetBuilder 转换 knight FBX** — 基础模型 + 动画
+3. **用 AssetBuilder 转换 zombie / 场景 FBX**
 4. **验证加载** — 在 DSEngine standalone 中加载 Knight .dmesh 验证渲染
 5. **Phase 1 实施** — 搭建最小场景

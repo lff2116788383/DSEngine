@@ -1,5 +1,1 @@
-# 资产目录 — 通过 tools/setup_assets.py 从 KF_Framework clone 生成
-assets/
-
-# 转换产物 — 通过 tools/batch_convert.py 生成
-cooked/
+screenshots/

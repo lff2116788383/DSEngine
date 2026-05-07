@@ -116,20 +116,23 @@ int main(int argc, char** argv) {
               << ", Animations=" << scene.animations.size() << std::endl;
 
     MeshCooker cooker;
-    std::cout << "[AssetBuilder] Cooking dmesh: " << output_dmesh_path.string() << std::endl;
-    if (!cooker.CookToDmesh(scene, output_dmesh_path.string())) {
-        std::cerr << "[AssetBuilder] Failed to cook dmesh: " << output_dmesh_path.string() << std::endl;
-        return 1;
-    }
 
     const std::filesystem::path dmat_path = output_dir / (base_name + ".dmat");
     const std::filesystem::path danim_path = output_dir / (base_name + ".danim");
     const std::filesystem::path dskel_path = output_dir / (base_name + ".dskel");
 
-    std::cout << "[AssetBuilder] Cooking dmat: " << dmat_path.string() << std::endl;
-    if (!cooker.CookToDmat(scene, output_dir.string(), base_name)) {
-        std::cerr << "[AssetBuilder] Failed to cook dmat: " << dmat_path.string() << std::endl;
-        return 1;
+    if (scene.meshes.empty()) {
+        std::cout << "[AssetBuilder] Skip dmesh/dmat: no mesh data in source." << std::endl;
+    } else {
+        std::cout << "[AssetBuilder] Cooking dmesh: " << output_dmesh_path.string() << std::endl;
+        if (!cooker.CookToDmesh(scene, output_dmesh_path.string())) {
+            std::cerr << "[AssetBuilder] Failed to cook dmesh: " << output_dmesh_path.string() << std::endl;
+            return 1;
+        }
+        std::cout << "[AssetBuilder] Cooking dmat: " << dmat_path.string() << std::endl;
+        if (!cooker.CookToDmat(scene, output_dir.string(), base_name)) {
+            std::cerr << "[AssetBuilder] Warning: no material data, skipping dmat." << std::endl;
+        }
     }
 
     if (scene.animations.empty()) {

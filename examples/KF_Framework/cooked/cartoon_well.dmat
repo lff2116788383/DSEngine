@@ -1,0 +1,38 @@
+{
+  "materials": [
+    {
+      "name": "main_well",
+      "base_color": [0.588, 0.588, 0.588, 1],
+      "metallic": 0,
+      "roughness": 0.858579,
+      "emissive": [0, 0, 0],
+      "normal_scale": 1,
+      "occlusion_strength": 1,
+      "alpha_cutoff": 0.5,
+      "double_sided": false,
+      "alpha_test": false,
+      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/KF_ModelAnalyzer/3D/Well/Unitiy/Well_diffuse.png",
+      "normal_texture": "",
+      "metallic_roughness_texture": "",
+      "emissive_texture": "",
+      "occlusion_texture": ""
+    },
+    {
+      "name": "Material #0",
+      "base_color": [0.588, 0.588, 0.588, 1],
+      "metallic": 0,
+      "roughness": 0.858579,
+      "emissive": [0, 0, 0],
+      "normal_scale": 1,
+      "occlusion_strength": 1,
+      "alpha_cutoff": 0.5,
+      "double_sided": false,
+      "alpha_test": false,
+      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/KF_ModelAnalyzer/3D/Well/Well_diffuse.png",
+      "normal_texture": "",
+      "metallic_roughness_texture": "",
+      "emissive_texture": "",
+      "occlusion_texture": ""
+    }
+  ]
+}
