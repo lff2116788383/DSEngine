@@ -25,7 +25,7 @@
 | **P0** | Game Build/Export 管线 | 引擎有完整 runtime+editor，但无法打包为可发布游戏 |
 | **P0** | Lua 热重载 + 调试体验 | 22 个 Lua binding 是引擎最大脚本面，编辑器缺 REPL/热重载按钮 |
 | **P1** | 示例/文档完善 | 32 个 3D demo 丰富，但缺入门教程和 API 文档 |
-| **P1** | 测试稳定性 | 720+ 单元测试，但编辑器无自动化 UI 测试 |
+| **P1** ✅ | 测试稳定性 | 12 个编辑器功能测试 + 218 集成测试全部通过 |
 | **P2** | 跨平台 (Linux/macOS) | 当前仅 Windows MSVC，可渐进支持 |
 | **P2** | 网络/多人同步 | 如需联网游戏，需 ECS 网络同步层 |
 
@@ -114,17 +114,41 @@ apps/tools/asset_builder/
 
 ---
 
-## P1-B: 编辑器自动化测试
+## P1-B: 编辑器自动化测试 ✅
 
 ### 目标
-防止编辑器回归，利用现有 Input Recording 做 UI 回归测试。
+防止编辑器回归，无头功能测试直接调用编辑器 API 验证核心功能。
 
-### 方案
+### 实施结果
 
-1. 录制典型操作序列（创建实体/拖拽 Gizmo/Undo/Save）为 JSON
-2. `--headless` 模式启动编辑器，回放录制序列
-3. 验证最终 registry 状态（实体数/Transform 值）
-4. CI 集成（GitHub Actions / local `verify_all.bat`）
+采用 **无头功能测试** 方案（直接 API 调用，非 GUI 模拟），已完成全部集成：
+
+1. **CLI 参数支持** — `main.cpp` 支持 `--headless`（隐藏窗口）、`--scene`（指定场景）、`--max-frames`（帧数限制自动退出）、`--replay`/`--verify`（预留）
+2. **EditorTestHarness** — `editor_test_harness.h/cpp`：CLI 参数解析 + 测试配置
+3. **RegistrySnapshot** — `editor_snapshot.h/cpp`：注册表快照导出为 JSON + 差异比较（float 容差）
+4. **GTest 功能测试** — 12 个测试用例，覆盖：
+   - 实体创建/销毁
+   - Undo/Redo（PropertyChange / Lambda / Compound / Merge / History+Clear）
+   - 场景 Save/Load 往返
+   - Prefab 保存/实例化往返
+   - SceneTabManager 标签切换/脏状态
+   - 注册表快照导出/比较
+   - CLI 参数解析
+   - CopyRegistry 深拷贝
+5. **CI 集成** — `verify_all.bat` 步骤 3b 独立运行 `EditorFunctional*` 测试
+
+### 测试结果
+- **12/12 编辑器测试全部通过**
+- **218/218 集成测试无回归**（含 206 个原有测试）
+
+### 新增文件
+```
+apps/editor_cpp/src/editor_test_harness.h/cpp   # CLI 解析 + 测试配置
+apps/editor_cpp/src/editor_snapshot.h/cpp        # 注册表快照导出/比较
+tests/gtest/integration/editor/
+├── editor_functional_test.cpp                   # 12 个 GTest 用例
+└── editor_test_stubs.cpp                        # 无头测试桩（UndoRedo/EditorLog/ScenePath）
+```
 
 ---
 
@@ -145,4 +169,5 @@ Session 3: P0-A Asset Packing (.dpak) — pak_format/writer/reader/scanner + Ass
 Session 4: P0-A Standalone exe — apps/standalone/ + /utf-8 修复 ✅
 Session 5: P0-A Editor Build 对话框 — File → Build Game... + BrowseFolderDialog ✅
 Session 6: P1-A 文档 — README 重写 + GETTING_STARTED.md ✅
+Session 7: P1-B 编辑器自动化测试 — 无头功能测试 12 用例 + CI 集成 ✅
 ```

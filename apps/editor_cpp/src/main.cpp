@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include "editor_test_harness.h"
+
 #if defined(_WIN32)
 #include <Windows.h>
 #endif
@@ -485,7 +487,12 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::EndEditorShell();
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    // --- Parse automation / test CLI args ---
+    auto test_config = dse::editor::test::ParseEditorTestArgs(argc, argv);
+    const bool headless = test_config.headless;
+    int frames_remaining = headless ? test_config.max_frames : -1; // -1 = unlimited
+
     // Allocate a console for WIN32 app so we can see crash output
     #if defined(_WIN32)
     AllocConsole();
@@ -493,7 +500,7 @@ int main() {
     freopen("CONOUT$", "w", stderr);
     #endif
     
-    std::cerr << "[Editor] Starting..." << std::endl;
+    std::cerr << "[Editor] Starting..." << (headless ? " (headless)" : "") << std::endl;
     
     if (!glfwInit()) {
         std::cerr << "[Editor] glfwInit() failed!" << std::endl;
@@ -503,6 +510,9 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if (headless) {
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    }
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
     if (!window) {
@@ -593,11 +603,16 @@ int main() {
         g_current_gizmo_operation = editor_settings.default_gizmo_operation;
         g_current_gizmo_mode = editor_settings.default_gizmo_mode;
 
+        // CLI --scene override
+        if (!test_config.scene_path.empty()) {
+            editor_settings.last_scene_path = test_config.scene_path;
+        }
+
         // Initialize scene tab manager
         dse::editor::SceneTabManager::Get().Init(
             editor_settings.last_scene_path.empty() ? "Untitled" : editor_settings.last_scene_path);
 
-        // Auto-load last opened scene
+        // Auto-load last opened scene (or --scene override)
         if (!editor_settings.last_scene_path.empty() && editor_settings.last_scene_path != "Untitled") {
             if (std::filesystem::exists(editor_settings.last_scene_path)) {
                 World& world = engine_instance.pipeline()->world();
@@ -609,7 +624,8 @@ int main() {
         std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
         // Main loop
-        while (!glfwWindowShouldClose(window)) {
+        while (!glfwWindowShouldClose(window) && frames_remaining != 0) {
+            if (frames_remaining > 0) --frames_remaining;
             g_cpu_profiler.BeginFrame();
             g_render_profiler.BeginFrame();
             g_memory_profiler.Reset();

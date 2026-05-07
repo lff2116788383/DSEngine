@@ -30,6 +30,8 @@ add_executable(dse_editor_cpp WIN32
     src/editor_lua_console.cpp
     src/editor_build_game.cpp
     src/editor_scene_tabs.cpp
+    src/editor_test_harness.cpp
+    src/editor_snapshot.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp

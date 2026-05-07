@@ -38,6 +38,14 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/audio/audio_asset_integration_test.cpp
     # modules
     modules/module_lifecycle_integration_test.cpp
+    # editor (headless functional tests)
+    editor/editor_functional_test.cpp
+    editor/editor_test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_snapshot.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_io.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_prefab.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_tabs.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
@@ -48,6 +56,10 @@ target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
         ${CMAKE_SOURCE_DIR}/depends
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
         ${CMAKE_SOURCE_DIR}/depends/glm
+        ${CMAKE_SOURCE_DIR}/depends/rapidjson/include
+        ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src
+        ${CMAKE_SOURCE_DIR}/depends/imgui
+        ${CMAKE_SOURCE_DIR}/depends/imgui/backends
 )
 
 target_compile_features(${DSE_GTEST_INTEGRATION_TARGET} PRIVATE cxx_std_20)

@@ -133,6 +133,27 @@ if !ERRORLEVEL! neq 0 (
 echo.
 
 :: ============================================================
+:: 步骤 3b: 编辑器功能测试 (EditorFunctional filter)
+:: ============================================================
+set /a TOTAL_STEPS+=1
+echo [3b] 编辑器功能测试 (EditorFunctional)...
+
+if exist "%BUILD_DIR%\tests\gtest\integration\Debug\dse_gtest_integration_tests.exe" (
+    "%BUILD_DIR%\tests\gtest\integration\Debug\dse_gtest_integration_tests.exe" --gtest_filter="EditorFunctional*" --gtest_print_time=1
+    if !ERRORLEVEL! neq 0 (
+        echo [FAIL] 编辑器功能测试未全部通过!
+        set /a FAIL_COUNT+=1
+    ) else (
+        echo [OK] 编辑器功能测试全部通过。
+        set /a PASS_COUNT+=1
+    )
+) else (
+    echo [SKIP] dse_gtest_integration_tests.exe 未找到，跳过编辑器功能测试。
+    set /a SKIP_COUNT+=1
+)
+echo.
+
+:: ============================================================
 :: 步骤 4: 构建 Lua 运行时
 :: ============================================================
 :lua_build
