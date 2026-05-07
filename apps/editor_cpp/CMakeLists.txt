@@ -28,6 +28,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_audio_panel.cpp
     src/editor_particle_panel.cpp
     src/editor_lua_console.cpp
+    src/editor_build_game.cpp
     src/editor_scene_tabs.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp

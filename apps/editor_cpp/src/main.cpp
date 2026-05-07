@@ -72,6 +72,7 @@
 #include "editor_audio_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
+#include "editor_build_game.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -466,6 +467,7 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::DrawTilePalettePanel(aux_panels_context);
     dse::editor::DrawTerrainEditorPanel(registry, selected_entity);
     dse::editor::DrawLuaConsolePanel();
+    dse::editor::DrawBuildGameDialog();
 
     // Audio section is drawn inside the Inspector via DrawInspectorPanel callback
     // Audio range overlay is drawn in DrawSceneViewportPanel below

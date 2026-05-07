@@ -11,6 +11,7 @@
 #include "editor_console_panel.h"
 #include "editor_settings.h"
 #include "editor_scene_tabs.h"
+#include "editor_build_game.h"
 
 namespace dse::editor {
 
@@ -158,6 +159,10 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         }
         if (context.read_only) {
             ImGui::TextDisabled("Play 模式下已禁用场景文件读写。");
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Build Game...", nullptr, false, !context.read_only)) {
+            OpenBuildGameDialog();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {

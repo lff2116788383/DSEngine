@@ -63,6 +63,38 @@ std::string SaveSceneFileDialog() {
     return {};
 }
 
+std::string BrowseFolderDialog(const char* title) {
+    std::string result;
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    IFileDialog* pfd = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (SUCCEEDED(hr)) {
+        DWORD options;
+        pfd->GetOptions(&options);
+        pfd->SetOptions(options | FOS_PICKFOLDERS | FOS_NOCHANGEDIR);
+        // Convert title to wide
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, title, -1, nullptr, 0);
+        std::wstring wtitle(wlen, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle.data(), wlen);
+        pfd->SetTitle(wtitle.c_str());
+        hr = pfd->Show(nullptr);
+        if (SUCCEEDED(hr)) {
+            IShellItem* psi = nullptr;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR path = nullptr;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                    result = WideToUtf8(path);
+                    CoTaskMemFree(path);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+    CoUninitialize();
+    return result;
+}
+
 } // namespace dse::editor
 
 #else
@@ -70,5 +102,6 @@ std::string SaveSceneFileDialog() {
 namespace dse::editor {
 std::string OpenSceneFileDialog() { return {}; }
 std::string SaveSceneFileDialog() { return {}; }
+std::string BrowseFolderDialog(const char*) { return {}; }
 } // namespace dse::editor
 #endif
