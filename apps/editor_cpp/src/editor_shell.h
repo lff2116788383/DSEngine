@@ -21,6 +21,9 @@ void BeginEditorShell();
 void EndEditorShell();
 void DrawEditorMainMenu(EditorShellContext& context);
 
+/// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
+void DrawSceneTabBar(entt::registry& registry);
+
 /// Get/Set the current scene file path (for window title display)
 const std::string& GetCurrentScenePath();
 void SetCurrentScenePath(const std::string& path);

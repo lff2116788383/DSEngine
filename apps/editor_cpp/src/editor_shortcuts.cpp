@@ -16,6 +16,8 @@
 #include "editor_console_panel.h"
 #include "editor_shell.h"
 #include "editor_selection.h"
+#include "editor_scene_tabs.h"
+#include "editor_settings.h"
 
 namespace dse::editor {
 
@@ -140,26 +142,44 @@ void ProcessShortcuts(ShortcutContext& context) {
 
     // --- Scene file operations (blocked in Play mode) ---
     if (!context.read_only) {
+        auto& tab_mgr = SceneTabManager::Get();
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, ImGuiInputFlags_RouteGlobal)) {
+            tab_mgr.NewScene(context.registry);
+            context.selected_entity = entt::null;
+        }
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal)) {
-            SaveScene(context.registry, "scene.json");
-            SetCurrentScenePath("scene.json");
-            EditorLog(LogLevel::Info, "Scene saved: scene.json");
+            const std::string& current_path = tab_mgr.GetActiveFilePath();
+            if (current_path.empty()) {
+                std::string path = SaveSceneFileDialog();
+                if (!path.empty()) {
+                    SaveScene(context.registry, path);
+                    tab_mgr.SetCurrentPath(path);
+                    tab_mgr.MarkClean();
+                    EditorLog(LogLevel::Info, "Scene saved: " + path);
+                }
+            } else {
+                SaveScene(context.registry, current_path);
+                tab_mgr.MarkClean();
+                EditorLog(LogLevel::Info, "Scene saved: " + current_path);
+            }
         }
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, ImGuiInputFlags_RouteGlobal)) {
             std::string path = SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(context.registry, path);
-                SetCurrentScenePath(path);
+                tab_mgr.SetCurrentPath(path);
+                tab_mgr.MarkClean();
                 EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
         if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal)) {
             std::string path = OpenSceneFileDialog();
             if (!path.empty()) {
-                LoadScene(context.registry, path);
+                tab_mgr.OpenScene(context.registry, path);
                 context.selected_entity = entt::null;
-                SetCurrentScenePath(path);
-                EditorLog(LogLevel::Info, "Scene loaded: " + path);
+                EditorSettings settings = LoadEditorSettings();
+                AddRecentFile(settings, path);
+                SaveEditorSettings(settings);
             }
         }
     }

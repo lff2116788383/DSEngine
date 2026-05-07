@@ -69,6 +69,7 @@
 #include "editor_preferences_panel.h"
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
+#include "editor_scene_tabs.h"
 
 // Theme & font setup moved to editor_theme.cpp (SetupEditorStyle / LoadEditorFonts)
 
@@ -416,6 +417,11 @@ void DrawEditorUI(dse::runtime::EngineInstance& engine, unsigned int scene_textu
     dse::editor::EditorShellContext shell_context{engine, registry, selected_entity, GetEditorState() == EditorState::Play, &s_show_preferences};
     dse::editor::DrawEditorMainMenu(shell_context);
 
+    // Scene tabs (multi-scene editing)
+    if (GetEditorState() == EditorState::Edit) {
+        dse::editor::DrawSceneTabBar(registry);
+    }
+
     // Process global keyboard shortcuts
     dse::editor::ShortcutContext shortcut_ctx{world, registry, selected_entity, GetEditorState() == EditorState::Play};
     dse::editor::ProcessShortcuts(shortcut_ctx);
@@ -582,6 +588,10 @@ int main() {
         g_current_gizmo_operation = editor_settings.default_gizmo_operation;
         g_current_gizmo_mode = editor_settings.default_gizmo_mode;
 
+        // Initialize scene tab manager
+        dse::editor::SceneTabManager::Get().Init(
+            editor_settings.last_scene_path.empty() ? "Untitled" : editor_settings.last_scene_path);
+
         // Auto-load last opened scene
         if (!editor_settings.last_scene_path.empty() && editor_settings.last_scene_path != "Untitled") {
             if (std::filesystem::exists(editor_settings.last_scene_path)) {
@@ -668,7 +678,12 @@ int main() {
 
             // Update window title with scene name and editor state
             {
-                std::string title = "DSEngine Editor - " + dse::editor::GetCurrentScenePath();
+                auto& tab_mgr = dse::editor::SceneTabManager::Get();
+                const std::string scene_name = tab_mgr.GetActiveDisplayName();
+                const int tab_count = tab_mgr.GetTabCount();
+                std::string title = "DSEngine Editor - " + scene_name;
+                if (tab_mgr.GetActiveTab().dirty) title += " *";
+                if (tab_count > 1) title += " [" + std::to_string(tab_mgr.GetActiveIndex() + 1) + "/" + std::to_string(tab_count) + "]";
                 if (GetEditorState() == EditorState::Play) {
                     title += " [PLAYING]";
                 } else if (GetEditorState() == EditorState::Pause) {
@@ -706,7 +721,8 @@ int main() {
         }
 
         // Save editor settings before shutdown
-        editor_settings.last_scene_path = dse::editor::GetCurrentScenePath();
+        editor_settings.last_scene_path = dse::editor::SceneTabManager::Get().GetActiveFilePath();
+        if (editor_settings.last_scene_path.empty()) editor_settings.last_scene_path = dse::editor::GetCurrentScenePath();
         editor_settings.default_gizmo_operation = g_current_gizmo_operation;
         editor_settings.default_gizmo_mode = g_current_gizmo_mode;
         dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());

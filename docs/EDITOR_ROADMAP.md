@@ -315,6 +315,7 @@ apps/editor_cpp/
 │   ├── editor_status_bar.cpp/h       # ★ 新增：底部状态栏
 │   ├── editor_selection.h            # ★ 新增：多选实体管理器
 │   ├── editor_settings.cpp/h         # ★ 新增：编辑器配置持久化
+│   ├── editor_scene_tabs.cpp/h      # ★ 新增：多场景标签页管理器
 │   ├── editor_toolbar.cpp/h          # 改造：图标化
 │   ├── editor_hierarchy_panel.cpp/h  # 改造：搜索 + 重命名 + 拖拽
 │   ├── editor_inspector_panel.cpp/h  # 改造：美化 + Undo 集成
@@ -522,9 +523,44 @@ apps/editor_cpp/
 - ✅ 点击轴端切换到对应视角：X→Right（yaw=90°）、Y→Top（pitch=89°）、Z→Front（yaw=0°, pitch=0°）
 - ✅ 与 `EditorCamera` 联动（直接设置 yaw/pitch）
 
-#### 7.2 多场景编辑（Scene Tabs）⬜
-- ⬜ 支持同时打开多个场景（标签页切换）
-- ⬜ 未保存场景标签显示 * 标记
+#### 7.2 多场景编辑（Scene Tabs）✅
+
+> **实施记录 (2026-05-07)**：
+> - 新增 `editor_scene_tabs.h/cpp`：`SceneTab` 结构体 + `SceneTabManager` 单例
+>   - `SceneTab`：file_path / display_name / dirty / entt::registry snapshot / has_snapshot
+>   - `SceneTabManager`：Init / NewScene / OpenScene / CloseTab / SwitchTo / DrawTabBar
+>   - Tab 切换通过 `CopyRegistry()` 快照当前 registry 到离开 tab、从目标 tab 恢复到 registry
+>   - DrawTabBar：`ImGuiTabBarFlags_Reorderable | AutoSelectNewTabs | TabListPopupButton | FittingPolicyScroll`
+>   - "+" 尾部按钮新建空场景 tab；右键菜单 Close / Close Others
+>   - `pending_switch_` 变量处理菜单驱动的标签切换（`ImGuiTabItemFlags_SetSelected`）
+>   - `UpdateDirtyState()`：检测 undo 栈增长自动标记 dirty
+> - 修改 `editor_shell.cpp`：
+>   - File 菜单 New Scene / Open Scene / Save / Save As 全部路由到 `SceneTabManager`
+>   - Save 对 Untitled 场景自动弹出 Save As 对话框
+>   - 新增 `DrawSceneTabBar()` 委托到 `SceneTabManager::DrawTabBar()`
+> - 修改 `editor_shell.h`：新增 `DrawSceneTabBar()` 声明
+> - 修改 `editor_shortcuts.cpp`：
+>   - Ctrl+N → `tab_mgr.NewScene()`
+>   - Ctrl+S → 路由到 tab manager（空路径弹出 Save As）
+>   - Ctrl+O → `tab_mgr.OpenScene()`（同时更新 recent files）
+> - 修改 `main.cpp`：
+>   - 启动时 `SceneTabManager::Get().Init()` 初始化首个标签页
+>   - `DrawEditorUI()` 中 Edit 模式下调用 `DrawSceneTabBar(registry)`
+>   - 窗口标题改为 `tab_mgr.GetActiveDisplayName()` + dirty * + [N/M] 页码
+>   - 退出时保存 `tab_mgr.GetActiveFilePath()` 到 editor_settings
+> - 修改 `CMakeLists.txt`：添加 `editor_scene_tabs.cpp`
+> - 编译零错误 (Debug, MSVC)
+
+- ✅ 支持同时打开多个场景（标签页切换）
+- ✅ 未保存场景标签显示 * 标记
+- ✅ `SceneTabManager` 单例管理标签页生命周期（New/Open/Switch/Close）
+- ✅ ImGui TabBar 可拖拽重排序 + "+" 按钮新建 + 右键菜单关闭/关闭其他
+- ✅ 标签页切换时通过 `CopyRegistry` 快照/恢复场景状态
+- ✅ Undo 历史和选中实体在切换时自动重置
+- ✅ File 菜单 New/Open/Save/Save As 全部路由到标签页管理器
+- ✅ Ctrl+N 新建标签页、Ctrl+O 在新标签页打开文件
+- ✅ 窗口标题显示当前标签页名 + dirty 标记 + 标签页序号
+- ✅ Play 模式下隐藏标签页栏（防止切换破坏运行状态）
 
 #### 7.3 Console 日志跳转源码 ⬜
 - ⬜ 双击带文件路径的日志条目时，在外部编辑器中打开对应文件

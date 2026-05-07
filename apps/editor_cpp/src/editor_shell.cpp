@@ -10,6 +10,7 @@
 #include "editor_file_dialog.h"
 #include "editor_console_panel.h"
 #include "editor_settings.h"
+#include "editor_scene_tabs.h"
 
 namespace dse::editor {
 
@@ -100,19 +101,16 @@ void DrawEditorMainMenu(EditorShellContext& context) {
     }
 
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("New Scene", nullptr, false, !context.read_only)) {
-            context.registry.clear();
+        auto& tab_mgr = SceneTabManager::Get();
+        if (ImGui::MenuItem("New Scene", "Ctrl+N", false, !context.read_only)) {
+            tab_mgr.NewScene(context.registry);
             context.selected_entity = entt::null;
-            SetCurrentScenePath("Untitled");
-            EditorLog(LogLevel::Info, "New scene created");
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !context.read_only)) {
             std::string path = dse::editor::OpenSceneFileDialog();
             if (!path.empty()) {
-                LoadScene(context.registry, path);
+                tab_mgr.OpenScene(context.registry, path);
                 context.selected_entity = entt::null;
-                SetCurrentScenePath(path);
-                EditorLog(LogLevel::Info, "Scene loaded: " + path);
                 EditorSettings settings = LoadEditorSettings();
                 AddRecentFile(settings, path);
                 SaveEditorSettings(settings);
@@ -125,10 +123,8 @@ void DrawEditorMainMenu(EditorShellContext& context) {
             } else {
                 for (const auto& recent : settings.recent_files) {
                     if (ImGui::MenuItem(recent.c_str())) {
-                        LoadScene(context.registry, recent);
+                        tab_mgr.OpenScene(context.registry, recent);
                         context.selected_entity = entt::null;
-                        SetCurrentScenePath(recent);
-                        EditorLog(LogLevel::Info, "Scene loaded: " + recent);
                     }
                 }
             }
@@ -136,15 +132,27 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {
-            SaveScene(context.registry, "scene.json");
-            SetCurrentScenePath("scene.json");
-            EditorLog(LogLevel::Info, "Scene saved: scene.json");
+            const std::string& current_path = tab_mgr.GetActiveFilePath();
+            if (current_path.empty()) {
+                std::string path = dse::editor::SaveSceneFileDialog();
+                if (!path.empty()) {
+                    SaveScene(context.registry, path);
+                    tab_mgr.SetCurrentPath(path);
+                    tab_mgr.MarkClean();
+                    EditorLog(LogLevel::Info, "Scene saved: " + path);
+                }
+            } else {
+                SaveScene(context.registry, current_path);
+                tab_mgr.MarkClean();
+                EditorLog(LogLevel::Info, "Scene saved: " + current_path);
+            }
         }
         if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !context.read_only)) {
             std::string path = dse::editor::SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(context.registry, path);
-                SetCurrentScenePath(path);
+                tab_mgr.SetCurrentPath(path);
+                tab_mgr.MarkClean();
                 EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
@@ -182,6 +190,10 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
+}
+
+void DrawSceneTabBar(entt::registry& registry) {
+    SceneTabManager::Get().DrawTabBar(registry);
 }
 
 } // namespace dse::editor
