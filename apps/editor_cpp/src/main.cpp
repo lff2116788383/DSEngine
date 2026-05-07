@@ -32,6 +32,7 @@
 #include "modules/gameplay_3d/animation/animator_system.h"
 #include "engine/base/time.h"
 #include "engine/input/input.h"
+#include "engine/scripting/lua/lua_runtime.h"
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 #include "engine/profiler/render_profiler.h"
@@ -632,7 +633,8 @@ int main() {
                 if (GetEditorState() == EditorState::Edit) {
                     Time::Update();
                     // Skip FixedUpdate (physics) and Update (business logic / scripting / AI)
-                    // Only render + Input
+                    // Only render + Input, but check Lua script hot-reloads
+                    dse::runtime::PumpLuaScriptHotReloads();
                     engine_instance.pipeline()->Render();
                     Input::Update();
                 } else {

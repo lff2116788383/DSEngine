@@ -65,6 +65,12 @@ size_t GetLuaMemoryUsage();
  */
 bool ExecuteLuaString(const char* code, std::string* out_result = nullptr);
 
+/**
+ * @brief 在 Edit 模式下检测已挂载脚本文件变更并热重载（不执行 Update）
+ * @return 本次热重载的脚本数量
+ */
+int PumpLuaScriptHotReloads();
+
 }
 
 #endif

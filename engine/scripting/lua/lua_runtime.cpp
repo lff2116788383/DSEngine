@@ -309,6 +309,9 @@ bool EnsureScriptInstanceLoaded(lua_State* L, int entity_id, const std::string& 
     if (serialized_state_ref != LUA_NOREF) {
         RestoreScriptState(L, instance.table_ref, entity_id, serialized_state_ref);
     }
+    if (hot_reload) {
+        DEBUG_LOG_INFO("[LuaRuntime] Hot-reloaded script: {} (entity={})", script_path, entity_id);
+    }
     return true;
 }
 
@@ -500,6 +503,30 @@ void BroadcastLuaEvent(const char* event_name) {
 
 size_t GetLuaMemoryUsage() {
     return State().lua_memory_usage;
+}
+
+int PumpLuaScriptHotReloads() {
+    auto& state = State();
+    if (!state.state || !state.api_context.world) return 0;
+    auto& registry = state.api_context.world->registry();
+    int reloaded = 0;
+    auto view = registry.view<ScriptComponent>();
+    for (auto entity : view) {
+        auto& sc = view.get<ScriptComponent>(entity);
+        if (!sc.enabled || sc.script_path.empty()) continue;
+        std::uint32_t key = EntityToKey(entity);
+        auto it = state.script_instances.find(key);
+        if (it == state.script_instances.end()) continue;
+        auto& instance = it->second;
+        std::filesystem::file_time_type wt;
+        if (!QueryScriptFileWriteTime(instance.script_path, wt)) continue;
+        if (!instance.has_last_write_time || wt == instance.last_write_time) continue;
+        // File changed — reload
+        if (EnsureScriptInstanceLoaded(state.state, static_cast<int>(key), sc.script_path, instance)) {
+            ++reloaded;
+        }
+    }
+    return reloaded;
 }
 
 bool ExecuteLuaString(const char* code, std::string* out_result) {
