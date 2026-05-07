@@ -90,9 +90,9 @@ TEST(AnimHeaderTest, 默认magic为DSEA) {
     EXPECT_EQ(header.magic[3], 'A');
 }
 
-TEST(AnimHeaderTest, 默认版本为1) {
+TEST(AnimHeaderTest, 默认版本为2) {
     AnimHeader header;
-    EXPECT_EQ(header.version, 1u);
+    EXPECT_EQ(header.version, 2u);
     EXPECT_FLOAT_EQ(header.duration, 0.0f);
     EXPECT_EQ(header.channel_count, 0u);
 }
@@ -105,9 +105,9 @@ TEST(SkelHeaderTest, 默认magic为DSES) {
     EXPECT_EQ(header.magic[3], 'S');
 }
 
-TEST(SkelHeaderTest, 默认版本为1) {
+TEST(SkelHeaderTest, 默认版本为2) {
     SkelHeader header;
-    EXPECT_EQ(header.version, 1u);
+    EXPECT_EQ(header.version, 2u);
     EXPECT_EQ(header.bone_count, 0u);
 }
 

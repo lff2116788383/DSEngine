@@ -100,7 +100,7 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 ---
 
-## 2. 骨骼不匹配（Skeleton Mismatch）
+## 2. 骨骼不匹配（Skeleton Mismatch）— 已通过名称重映射解决
 
 **现象**: 使用 "Sword And Shield *.danim" 动画文件时模型严重折叠。
 
@@ -110,13 +110,59 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 **诊断**: 使用 `tools/check_dskel.py` 对比两个 dskel 的骨骼数和名称。
 
-**解决方案**:
-1. 暂时使用 Paladin 自带的 bind-pose 动画 `paladin_prop_j_nordstrom.danim`
-2. 长期方案：实现骨骼名称重映射（按名称而非索引匹配通道到骨骼）或重新导出动画
+**解决方案 — 骨骼名称重映射（v2 格式）**:
+
+扩展 `.dskel` 和 `.danim` 二进制格式到 v2，在运行时按骨骼名称匹配通道：
+
+1. **dskel v2**: `BoneDesc[]` 之后追加骨骼名称表（per-bone `uint16_t len + chars`）
+2. **danim v2**: `AnimChannelDesc[]` 之后插入通道名称表（`uint32_t total_size` + per-channel `uint16_t len + chars` + 8 字节对齐填充）
+3. **运行时**: 解析 dskel 名称表构建 `bone_name_to_index` 映射，EvaluateClip 中按通道名称查找目标骨骼索引，未匹配的通道自动跳过
+
+```
+dskel v2 布局: [SkelHeader] [BoneDesc × N] [名称表: (u16 len + chars) × N]
+danim v2 布局: [AnimHeader] [AnimChannelDesc × N] [名称表: u32 total + (u16 len + chars) × N + padding] [关键帧数据]
+```
+
+**关键文件**:
+- `engine/assets/compiler/raw_scene_data.h` — `RawAnimationChannel.target_node_name`、版本号 → 2
+- `engine/assets/compiler/importer.cpp` — `CookToDanim`/`CookToDskel` 写入名称表
+- `modules/gameplay_3d/animation/animator_system.cpp` — 解析名称表 + 重映射逻辑
 
 ---
 
-## 3. 诊断工具使用指南
+## 3. v2 格式对齐崩溃（Name Table Alignment）
+
+**现象**: 使用跨骨骼动画时 Release 模式间歇性 ACCESS_VIOLATION (0xC0000005)，Debug 模式不崩溃。
+
+**根因**: danim v2 名称表大小可变（取决于骨骼名称长度总和），如果名称表字节数不是 4/8 的倍数，
+后续关键帧数据的起始偏移不对齐。例如 SaS Idle 名称表为 726 字节 → 关键帧起始偏移 3238，
+`3238 % 4 = 2`，导致 `reinterpret_cast<const float*>` 产生未对齐指针。
+
+- Debug 模式不使用 SIMD → 不崩溃
+- Release 模式 MSVC 自动向量化生成 SSE 指令 → 要求对齐 → 崩溃
+
+**修复（两层防御）**:
+
+1. **写入端对齐**: `CookToDanim` 中名称表末尾填充到 8 字节边界
+   ```cpp
+   while (name_table_blob.size() % 8 != 0)
+       name_table_blob.push_back(0);
+   ```
+2. **读取端 memcpy**: `EvaluateClip` 中用 `memcpy` 替代 `reinterpret_cast` 读取关键帧数据，
+   彻底消除未对齐指针的未定义行为
+   ```cpp
+   // 安全读取（替代 reinterpret_cast 迭代器构造）
+   std::vector<glm::vec3> positions(key_count);
+   std::memcpy(positions.data(), data + offset, key_count * sizeof(glm::vec3));
+   ```
+3. **偏移量边界检查**: 读取前验证所有偏移量 + 数据大小不超过文件尺寸
+
+**教训**: 在二进制格式中插入可变长度段时，必须保证后续数据的对齐。对 `float`/`vec3`/`quat`
+至少 4 字节对齐，对 SIMD 安全建议 8 或 16 字节对齐。
+
+---
+
+## 4. 诊断工具使用指南
 
 | 工具 | 用途 |
 |------|------|
@@ -127,7 +173,7 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 ---
 
-## 4. 构建注意事项
+## 5. 构建注意事项
 
 - **CMake 目标名**: `dse_standalone`（不是 `DSEngine_Game`）
 - **输出路径**: `bin/DSEngine_Game_release.exe`
@@ -136,7 +182,7 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 ---
 
-## 5. 资产来源与重新获取
+## 6. 资产来源与重新获取
 
 以下资产目录已被 gitignore，不入库。需要时按来源重新获取。
 
@@ -158,7 +204,7 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 ---
 
-## 6. 资产管线注意事项
+## 7. 资产管线注意事项
 
 - **dmat 路径问题**: AssetBuilder 生成的 `.dmat` 包含绝对路径，运行时可能无法找到纹理。
   解决方案：在 Lua 中手动绑定纹理（`set_mesh_material` + `set_mesh_texture`）
@@ -167,10 +213,11 @@ for (pass = 0; pass < bone_count; ++pass) {
 
 ---
 
-## 7. 关键代码位置
+## 8. 关键代码位置
 
 | 文件 | 关键内容 |
 |------|----------|
-| `modules/gameplay_3d/animation/animator_system.cpp` | AnimatorSystem::Update — 动画求值和骨骼矩阵计算 |
-| `engine/assets/compiler/raw_scene_data.h` | AnimChannelDesc / BoneDesc / SkelHeader 结构体定义 |
+| `modules/gameplay_3d/animation/animator_system.cpp` | AnimatorSystem::Update — 动画求值、骨骼名称重映射和骨骼矩阵计算 |
+| `engine/assets/compiler/raw_scene_data.h` | AnimChannelDesc / BoneDesc / SkelHeader / AnimHeader 结构体定义 |
+| `engine/assets/compiler/importer.cpp` | CookToDanim / CookToDskel — v2 格式写入（含名称表和对齐填充） |
 | `examples/KF_Framework/script/main.lua` | Demo 入口脚本，相机/灯光/模型/动画配置 |

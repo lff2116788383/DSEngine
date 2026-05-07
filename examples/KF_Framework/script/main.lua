@@ -51,10 +51,12 @@ local audio = dse.audio
 local KNIGHT_MESH  = "cooked/paladin_prop_j_nordstrom.dmesh"
 local KNIGHT_DMAT  = "cooked/paladin_prop_j_nordstrom.dmat"
 local KNIGHT_DSKEL = "cooked/paladin_prop_j_nordstrom.dskel"
--- NOTE: Sword And Shield *.danim 的骨骼索引与 paladin dskel 不匹配 (52 vs 54 bones,
--- 不同排序), 使用这些动画会导致模型折叠。暂用 paladin 自带的 bind-pose 动画。
--- TODO: 重新编译动画或添加骨骼重映射支持。
-local KNIGHT_ANIM  = "cooked/paladin_prop_j_nordstrom.danim"
+-- 骨骼名称重映射 (dskel/danim v2) 已实现，Sword And Shield 52 骨骼动画
+-- 可正确映射到 Paladin 54 骨骼模型。
+local KNIGHT_ANIM_IDLE  = "cooked/Sword And Shield Idle.danim"
+local KNIGHT_ANIM_WALK  = "cooked/Sword And Shield Walk.danim"
+local KNIGHT_ANIM_RUN   = "cooked/Sword And Shield Run.danim"
+local KNIGHT_ANIM_ATTACK = "cooked/Sword And Shield Attack.danim"
 
 local KNIGHT_TEX_DIFFUSE = "assets/textures/Paladin_diffuse.png"
 local KNIGHT_TEX_NORMAL  = "assets/textures/Paladin_normal.png"
@@ -127,8 +129,8 @@ function Awake()
     ecs.set_mesh_texture(knight, "albedo", KNIGHT_TEX_DIFFUSE)
     ecs.set_mesh_texture(knight, "normal", KNIGHT_TEX_NORMAL)
 
-    -- Animation: legacy 单动画模式 (paladin 自带 bind-pose 动画, 骨骼匹配)
-    ecs.add_animator_3d(knight, KNIGHT_ANIM, KNIGHT_DSKEL)
+    -- Animation: Idle 动画 (骨骼名称重映射: 52ch → 54 bones)
+    ecs.add_animator_3d(knight, KNIGHT_ANIM_IDLE, KNIGHT_DSKEL)
 
     -- 6. Post-processing (bloom)
     post_process = ecs.create_entity()

@@ -469,6 +469,9 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
             // 查找对应的骨骼索引 (target_node_index)
             int node_idx = channel.target_node;
             raw_channel.target_node_index = -1;
+            if (node_idx >= 0 && node_idx < static_cast<int>(model.nodes.size())) {
+                raw_channel.target_node_name = model.nodes[node_idx].name;
+            }
             if (!model.skins.empty()) {
                 const auto& skin = model.skins[0];
                 auto it_joint = std::find(skin.joints.begin(), skin.joints.end(), node_idx);
@@ -721,12 +724,14 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
             if (!channel) {
                 continue;
             }
-            auto bone_it = bone_index_map.find(channel->mNodeName.C_Str());
+            const std::string channel_bone_name = channel->mNodeName.C_Str();
+            auto bone_it = bone_index_map.find(channel_bone_name);
             if (bone_it == bone_index_map.end()) {
                 continue;
             }
             RawAnimationChannel raw_channel;
             raw_channel.target_node_index = bone_it->second;
+            raw_channel.target_node_name = channel_bone_name;
             for (unsigned int key_index = 0; key_index < channel->mNumPositionKeys; ++key_index) {
                 raw_channel.time_keys.push_back(static_cast<float>(channel->mPositionKeys[key_index].mTime / ticks_per_second));
                 const aiVector3D& value = channel->mPositionKeys[key_index].mValue;
@@ -880,7 +885,7 @@ bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& outpu
     if (!out) return false;
     
     AnimHeader header;
-    header.version = 1;
+    header.version = 2;
     header.duration = anim.duration;
     header.channel_count = static_cast<uint32_t>(anim.channels.size());
     
@@ -889,6 +894,26 @@ bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& outpu
     std::vector<glm::vec3> all_positions;
     std::vector<glm::quat> all_rotations;
     std::vector<glm::vec3> all_scales;
+    
+    // Build channel name table blob: uint32_t total_size + per-channel (uint16_t len + chars)
+    std::vector<uint8_t> name_table_blob;
+    {
+        // Reserve space for uint32_t total_size header
+        name_table_blob.resize(sizeof(uint32_t), 0);
+        for (const auto& ch : anim.channels) {
+            const std::string& name = ch.target_node_name;
+            uint16_t name_len = static_cast<uint16_t>(name.size());
+            name_table_blob.push_back(static_cast<uint8_t>(name_len & 0xFF));
+            name_table_blob.push_back(static_cast<uint8_t>((name_len >> 8) & 0xFF));
+            name_table_blob.insert(name_table_blob.end(), name.begin(), name.end());
+        }
+        // Pad to 8-byte alignment so keyframe data after this blob is SIMD-safe
+        while (name_table_blob.size() % 8 != 0) {
+            name_table_blob.push_back(0);
+        }
+        uint32_t total_size = static_cast<uint32_t>(name_table_blob.size());
+        std::memcpy(name_table_blob.data(), &total_size, sizeof(uint32_t));
+    }
     
     for (const auto& ch : anim.channels) {
         AnimChannelDesc desc_item;
@@ -913,8 +938,8 @@ bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& outpu
         channel_descs.push_back(desc_item);
     }
     
-    // 修正偏移量，加上前面的 Header 和 Descs 大小
-    uint64_t base_offset = sizeof(AnimHeader) + channel_descs.size() * sizeof(AnimChannelDesc);
+    // 修正偏移量，加上前面的 Header + Descs + NameTable 大小
+    uint64_t base_offset = sizeof(AnimHeader) + channel_descs.size() * sizeof(AnimChannelDesc) + name_table_blob.size();
     uint64_t current_offset = base_offset;
     
     for (auto& desc_item : channel_descs) {
@@ -936,9 +961,10 @@ bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& outpu
         if (desc_item.scale_offset > 0 || !all_scales.empty()) desc_item.scale_offset += current_offset;
     }
     
-    // Write
+    // Write: Header + ChannelDescs + NameTable + Keyframe data
     out.write(reinterpret_cast<const char*>(&header), sizeof(AnimHeader));
     out.write(reinterpret_cast<const char*>(channel_descs.data()), channel_descs.size() * sizeof(AnimChannelDesc));
+    out.write(reinterpret_cast<const char*>(name_table_blob.data()), name_table_blob.size());
     if (!all_times.empty()) out.write(reinterpret_cast<const char*>(all_times.data()), all_times.size() * sizeof(float));
     if (!all_positions.empty()) out.write(reinterpret_cast<const char*>(all_positions.data()), all_positions.size() * sizeof(glm::vec3));
     if (!all_rotations.empty()) out.write(reinterpret_cast<const char*>(all_rotations.data()), all_rotations.size() * sizeof(glm::quat));
@@ -955,7 +981,7 @@ bool MeshCooker::CookToDskel(const RawSceneData& scene, const std::string& outpu
     if (!out) return false;
     
     SkelHeader header;
-    header.version = 1;
+    header.version = 2;
     header.bone_count = static_cast<uint32_t>(scene.skeleton.size());
     
     std::vector<BoneDesc> bone_descs;
@@ -968,8 +994,18 @@ bool MeshCooker::CookToDskel(const RawSceneData& scene, const std::string& outpu
         bone_descs.push_back(desc);
     }
     
+    // Build bone name table blob: per-bone (uint16_t len + chars)
+    std::vector<uint8_t> name_table_blob;
+    for (const auto& bone : scene.skeleton) {
+        uint16_t name_len = static_cast<uint16_t>(bone.name.size());
+        name_table_blob.push_back(static_cast<uint8_t>(name_len & 0xFF));
+        name_table_blob.push_back(static_cast<uint8_t>((name_len >> 8) & 0xFF));
+        name_table_blob.insert(name_table_blob.end(), bone.name.begin(), bone.name.end());
+    }
+    
     out.write(reinterpret_cast<const char*>(&header), sizeof(SkelHeader));
     out.write(reinterpret_cast<const char*>(bone_descs.data()), bone_descs.size() * sizeof(BoneDesc));
+    out.write(reinterpret_cast<const char*>(name_table_blob.data()), name_table_blob.size());
     
     return true;
 }

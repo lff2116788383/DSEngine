@@ -11,8 +11,8 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_0bc8c097-8c7b-4e2f-b8de-a4b0162714d8.fbm/Paladin_diffuse.png",
-      "normal_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_0bc8c097-8c7b-4e2f-b8de-a4b0162714d8.fbm/Paladin_normal.png",
+      "base_color_texture": "C:/Users/Administrator/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_0bc8c097-8c7b-4e2f-b8de-a4b0162714d8.fbm/Paladin_diffuse.png",
+      "normal_texture": "C:/Users/Administrator/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_0bc8c097-8c7b-4e2f-b8de-a4b0162714d8.fbm/Paladin_normal.png",
       "metallic_roughness_texture": "",
       "emissive_texture": "",
       "occlusion_texture": ""

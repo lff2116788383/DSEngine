@@ -5,7 +5,9 @@
 #include "engine/assets/compiler/raw_scene_data.h"
 #include <glm/gtx/quaternion.hpp>
 #include <algorithm>
+#include <cstring>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace dse {
 namespace gameplay3d {
@@ -73,8 +75,9 @@ std::vector<float> BuildKeyTimes(const uint8_t* data, const asset::compiler::Ani
         return {};
     }
 
-    const float* all_times = reinterpret_cast<const float*>(data + ch.time_offset);
-    return std::vector<float>(all_times, all_times + key_count);
+    std::vector<float> result(key_count);
+    std::memcpy(result.data(), data + ch.time_offset, key_count * sizeof(float));
+    return result;
 }
 
 float AdvanceClipTime(float current_time, float delta_time, float speed, float duration, bool loop) {
@@ -160,6 +163,21 @@ void AnimatorSystem::Update(World& world, float delta_time) {
         const asset::compiler::BoneDesc* bones = reinterpret_cast<const asset::compiler::BoneDesc*>(skel_data + sizeof(asset::compiler::SkelHeader));
         uint32_t bone_count = std::min(skel_header->bone_count, static_cast<uint32_t>(MAX_BONES));
 
+        // Parse dskel v2 bone name table for cross-skeleton remapping
+        std::unordered_map<std::string, int> bone_name_to_index;
+        if (skel_header->version >= 2) {
+            const uint8_t* name_ptr = skel_data + sizeof(asset::compiler::SkelHeader) + bone_count * sizeof(asset::compiler::BoneDesc);
+            const uint8_t* skel_end = skel_data + dskel->GetData().size();
+            for (uint32_t bi = 0; bi < bone_count && name_ptr + 2 <= skel_end; ++bi) {
+                uint16_t name_len = static_cast<uint16_t>(name_ptr[0] | (name_ptr[1] << 8));
+                name_ptr += 2;
+                if (name_ptr + name_len > skel_end) break;
+                std::string bname(reinterpret_cast<const char*>(name_ptr), name_len);
+                name_ptr += name_len;
+                bone_name_to_index[bname] = static_cast<int>(bi);
+            }
+        }
+
         if (animator.final_bone_matrices.size() < bone_count) {
             animator.final_bone_matrices.resize(bone_count, glm::mat4(1.0f));
             // 首次 resize 时输出诊断：确认骨骼数，供 verify_lua_3d_demos.py 检测 final_bones=48
@@ -217,33 +235,74 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             if (!danim || danim->GetData().empty()) return false;
             
             const uint8_t* data = danim->GetData().data();
+            const size_t data_size = danim->GetData().size();
             const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
             if (!IsValidAnimHeader(header)) return false;
             out_duration = header->duration;
-            
             const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
+
+            // Parse danim v2 channel name table for cross-skeleton remapping
+            std::vector<std::string> channel_names;
+            if (header->version >= 2 && !bone_name_to_index.empty()) {
+                const uint8_t* nt_ptr = data + sizeof(asset::compiler::AnimHeader) + header->channel_count * sizeof(asset::compiler::AnimChannelDesc);
+                if (nt_ptr + sizeof(uint32_t) <= data + data_size) {
+                    uint32_t nt_total = 0;
+                    std::memcpy(&nt_total, nt_ptr, sizeof(uint32_t));
+                    const uint8_t* np = nt_ptr + sizeof(uint32_t);
+                    const uint8_t* ne = nt_ptr + nt_total;
+                    if (ne > data + data_size) ne = data + data_size;
+                    channel_names.reserve(header->channel_count);
+                    for (uint32_t ci = 0; ci < header->channel_count && np + 2 <= ne; ++ci) {
+                        uint16_t nl = static_cast<uint16_t>(np[0] | (np[1] << 8));
+                        np += 2;
+                        if (np + nl > ne) break;
+                        channel_names.emplace_back(reinterpret_cast<const char*>(np), nl);
+                        np += nl;
+                    }
+                }
+            }
             for (uint32_t i = 0; i < header->channel_count; ++i) {
                 const auto& ch = channels[i];
-                if (ch.target_node_index < 0 || ch.target_node_index >= static_cast<int>(bone_count)) continue;
+
+                // Resolve target bone index: prefer name-based remap, fall back to index
+                int target_bone = ch.target_node_index;
+                if (i < static_cast<uint32_t>(channel_names.size()) && !channel_names[i].empty()) {
+                    auto name_it = bone_name_to_index.find(channel_names[i]);
+                    if (name_it != bone_name_to_index.end()) {
+                        target_bone = name_it->second;
+                    } else {
+                        continue;  // bone not found in target skeleton, skip
+                    }
+                }
+                if (target_bone < 0 || target_bone >= static_cast<int>(bone_count)) continue;
                 
+                // Bounds check all offsets before reading
+                if (ch.time_offset + ch.position_key_count * sizeof(float) > data_size) continue;
+                if (ch.position_offset + ch.position_key_count * sizeof(glm::vec3) > data_size) continue;
+                if (ch.rotation_offset + ch.rotation_key_count * sizeof(glm::quat) > data_size) continue;
+                if (ch.scale_offset + ch.scale_key_count * sizeof(glm::vec3) > data_size) continue;
+
                 std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
                 std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
                 std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
-                std::vector<glm::vec3> positions(reinterpret_cast<const glm::vec3*>(data + ch.position_offset), reinterpret_cast<const glm::vec3*>(data + ch.position_offset) + ch.position_key_count);
-                std::vector<glm::quat> rotations(reinterpret_cast<const glm::quat*>(data + ch.rotation_offset), reinterpret_cast<const glm::quat*>(data + ch.rotation_offset) + ch.rotation_key_count);
-                std::vector<glm::vec3> scales(reinterpret_cast<const glm::vec3*>(data + ch.scale_offset), reinterpret_cast<const glm::vec3*>(data + ch.scale_offset) + ch.scale_key_count);
+                std::vector<glm::vec3> positions(ch.position_key_count);
+                std::memcpy(positions.data(), data + ch.position_offset, ch.position_key_count * sizeof(glm::vec3));
+                std::vector<glm::quat> rotations(ch.rotation_key_count);
+                std::memcpy(rotations.data(), data + ch.rotation_offset, ch.rotation_key_count * sizeof(glm::quat));
+                std::vector<glm::vec3> scales(ch.scale_key_count);
+                std::memcpy(scales.data(), data + ch.scale_offset, ch.scale_key_count * sizeof(glm::vec3));
                 
                 if (!position_times.empty() && !positions.empty()) {
-                    sample.positions[ch.target_node_index] = Interpolate<glm::vec3>(position_times, positions, current_time);
-                    sample.touched[ch.target_node_index] = true;
+                    sample.positions[target_bone] = Interpolate<glm::vec3>(position_times, positions, current_time);
+                    sample.touched[target_bone] = true;
                 }
                 if (!rotation_times.empty() && !rotations.empty()) {
-                    sample.rotations[ch.target_node_index] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
-                    sample.touched[ch.target_node_index] = true;
+                    sample.rotations[target_bone] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
+                    sample.touched[target_bone] = true;
                 }
                 if (!scale_times.empty() && !scales.empty()) {
-                    sample.scales[ch.target_node_index] = Interpolate<glm::vec3>(scale_times, scales, current_time);
-                    sample.touched[ch.target_node_index] = true;
+                    sample.scales[target_bone] = Interpolate<glm::vec3>(scale_times, scales, current_time);
+                    sample.touched[target_bone] = true;
                 }
             }
             return true;

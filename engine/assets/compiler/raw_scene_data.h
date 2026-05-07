@@ -71,6 +71,7 @@ struct RawMaterial {
 
 struct RawAnimationChannel {
     int target_node_index = -1;
+    std::string target_node_name;  // bone name for cross-skeleton remapping
     std::vector<float> time_keys;
     std::vector<glm::vec3> position_keys;
     std::vector<glm::quat> rotation_keys;
@@ -117,7 +118,7 @@ struct SubMeshDesc {
 
 struct AnimHeader {
     char magic[4] = {'D', 'S', 'E', 'A'};
-    uint32_t version = 1;
+    uint32_t version = 2;  // v2: channel name table between descs and keyframe data
     float duration = 0.0f;
     uint32_t channel_count = 0;
 };
@@ -135,7 +136,7 @@ struct AnimChannelDesc {
 
 struct SkelHeader {
     char magic[4] = {'D', 'S', 'E', 'S'};
-    uint32_t version = 1;
+    uint32_t version = 2;  // v2: bone name table appended after BoneDesc array
     uint32_t bone_count = 0;
 };
 
