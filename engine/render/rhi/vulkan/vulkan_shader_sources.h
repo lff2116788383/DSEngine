@@ -343,6 +343,25 @@ void main() {
         return;
     }
 
+    // Half-Lambert shading mode (KF-style, light_params.w == 2.0)
+    if (light_params.w == 2.0) {
+        vec3 L = normalize(-u_light_direction);
+        vec3 V_hl = normalize(u_camera_pos - vFragPos);
+        vec3 R = reflect(u_light_direction, N);
+        float half_lambert = dot(N, L) * 0.5 + 0.5;
+        vec3 diffuse_color = texColor.rgb * vColor.rgb * u_material_albedo * half_lambert;
+        float spec_brightness = pow(max(dot(R, V_hl), 0.0), 100.0);
+        vec3 spec_tex = u_has_metallic_roughness_map
+            ? texture(u_metallic_roughness_map, vTexCoord).rgb
+            : vec3(0.0);
+        vec3 specular_color = spec_tex * spec_brightness;
+        float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
+        float shadow_multiplier = 1.0 - shadow * 0.5;
+        vec3 color = (diffuse_color + specular_color) * shadow_multiplier;
+        FragColor = vec4(color, 1.0);
+        return;
+    }
+
     vec3 surface_albedo = pow(texColor.rgb * vColor.rgb * u_material_albedo, vec3(2.2));
     float metallic = clamp(u_material_metallic, 0.0, 1.0);
     float roughness = clamp(u_material_roughness, 0.04, 1.0);

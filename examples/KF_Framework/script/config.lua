@@ -27,6 +27,7 @@ Config.ASSET = {
     knight_dskel    = "cooked/paladin_prop_j_nordstrom.dskel",
     knight_tex_diff = "assets/textures/Paladin_diffuse.png",
     knight_tex_norm = "assets/textures/Paladin_normal.png",
+    knight_tex_spec = "assets/textures/Paladin_specular.png",
     -- Knight 动画
     anim_idle       = "cooked/Sword And Shield Idle.danim",
     anim_walk       = "cooked/Sword And Shield Walk.danim",

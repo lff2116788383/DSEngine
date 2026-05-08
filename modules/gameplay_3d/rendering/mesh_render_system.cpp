@@ -684,6 +684,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.sorting_layer = mesh_renderer.sorting_layer;
         item.order_in_layer = mesh_renderer.order_in_layer;
         item.lighting_enabled = resolved_shader_variant != "MESH_UNLIT";
+        if (resolved_shader_variant == "MESH_HALFLAMBERT") {
+            item.shading_mode = 2;  // Half-Lambert (KF-style)
+        }
         
         if (world.registry().all_of<Animator3DComponent>(entity)) {
             const auto& animator = world.registry().get<Animator3DComponent>(entity);

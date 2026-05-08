@@ -322,6 +322,25 @@ float4 PSMain(PSInput input) : SV_TARGET {
         return float4(result, texColor.a * input.color.a);
     }
 
+    // Half-Lambert shading mode (KF-style, light_params.w == 2.0)
+    if (light_params.w == 2.0) {
+        float3 L = normalize(-light_dir_and_enabled.xyz);
+        float3 V_hl = normalize(camera_pos.xyz - input.fragPos);
+        float3 R = reflect(light_dir_and_enabled.xyz, N);
+        float half_lambert = dot(N, L) * 0.5 + 0.5;
+        float3 diffuse_color = albedo_color * half_lambert;
+        float spec_brightness = pow(max(dot(R, V_hl), 0.0), 100.0);
+        bool has_mr_map_hl = (mat_flags.y != 0.0);
+        float3 spec_tex = has_mr_map_hl
+            ? u_metallic_roughness_map.Sample(u_sampler, input.uv).rgb
+            : float3(0.0, 0.0, 0.0);
+        float3 specular_color = spec_tex * spec_brightness;
+        float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
+        float shadow_multiplier = 1.0 - shadow * 0.5;
+        float3 color = (diffuse_color + specular_color) * shadow_multiplier;
+        return float4(color, 1.0);
+    }
+
     float3 surface_albedo = pow(albedo_color, float3(2.2, 2.2, 2.2));
     float metallic = saturate(mat_albedo.w);
     float roughness = clamp(mat_roughness_ao.x, 0.04, 1.0);

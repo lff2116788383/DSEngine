@@ -120,10 +120,11 @@ function Player.setup()
     ecs.add_transform(knight, 0, 0, 0)
     ecs.add_mesh_renderer(knight, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(knight, ASSET.knight_mesh)
-    ecs.set_mesh_shader_variant(knight, "MESH_LIT")
+    ecs.set_mesh_shader_variant(knight, "MESH_HALFLAMBERT")
     ecs.set_mesh_material(knight, 0.0, 0.45, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
     ecs.set_mesh_texture(knight, "albedo", ASSET.knight_tex_diff)
     ecs.set_mesh_texture(knight, "normal", ASSET.knight_tex_norm)
+    ecs.set_mesh_texture(knight, "metallic_roughness", ASSET.knight_tex_spec)
 
     -- Animator FSM
     ecs.add_animator_3d(knight, ASSET.anim_idle, ASSET.knight_dskel)

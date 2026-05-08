@@ -439,7 +439,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             first.light_color, first.ambient_intensity);
         scene_data.light_params = glm::vec4(
             first.light_intensity, first.shadow_strength,
-            first.receive_shadow ? 1.0f : 0.0f, 0.0f);
+            first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
         scene_data.cascade_splits = glm::vec4(
             global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
         for (int i = 0; i < 3; ++i)

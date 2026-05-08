@@ -28,7 +28,7 @@ local function add_mesh(mesh_path, x, y, z, sx, sy, sz, ry, tex_path)
     end
     ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(e, mesh_path)
-    ecs.set_mesh_shader_variant(e, "MESH_LIT")
+    ecs.set_mesh_shader_variant(e, "MESH_HALFLAMBERT")
     ecs.set_mesh_material(e, 0.0, 0.55, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
     if tex_path then
         ecs.set_mesh_texture(e, "albedo", tex_path)
@@ -61,7 +61,7 @@ function Scene.setup()
     local ground = ecs.create_entity()
     ecs.add_transform(ground, 0, -2, 0, 20000, 4, 20000)
     ecs.add_mesh_renderer(ground, 0.28, 0.35, 0.22, 1.0, cube_verts(), cube_idx())
-    ecs.set_mesh_shader_variant(ground, "MESH_LIT")
+    ecs.set_mesh_shader_variant(ground, "MESH_HALFLAMBERT")
     ecs.set_mesh_material(ground, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
     ecs.set_mesh_texture(ground, "albedo", ASSET.ground_tex)
 

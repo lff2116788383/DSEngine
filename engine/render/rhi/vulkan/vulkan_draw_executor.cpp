@@ -290,7 +290,7 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
     ubo.light_dir_and_enabled = glm::vec4(item.light_direction, item.lighting_enabled ? 1.0f : 0.0f);
     ubo.light_color_and_ambient = glm::vec4(item.light_color, item.ambient_intensity);
     ubo.light_params = glm::vec4(item.light_intensity, item.shadow_strength,
-                                  item.receive_shadow ? 1.0f : 0.0f, 0.0f);
+                                  item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(item.shading_mode));
     ubo.cascade_splits = glm::vec4(global_cascade_splits_[0], global_cascade_splits_[1],
                                     global_cascade_splits_[2], 0.0f);
     for (int i = 0; i < 3; ++i) {

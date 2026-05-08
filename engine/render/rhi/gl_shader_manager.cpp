@@ -136,7 +136,7 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
     // --- 片段着色器（PBR + CSM + 点光源/聚光灯 + 阴影） ---
     // UBO 化后：PerFrame/PerScene/PerMaterial 从 UBO 获取，纹理/骨骼等保留独立 uniform
-    const char* fragment_shader = R"(
+    const std::string fragment_shader = std::string(R"(
         #version 330 core
         out vec4 FragColor;
 
@@ -357,6 +357,40 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 return;
             }
 
+            // ============================================================
+            // Half-Lambert shading mode (KF-style, light_params.w == 2.0)
+            // No gamma workflow, no tone mapping, Half-Lambert diffuse,
+            // Phong specular, soft shadows (max 50% darkening)
+            // ============================================================
+            if (light_params.w == 2.0) {
+                vec3 L = normalize(-u_light_direction);
+                vec3 V_hl = normalize(u_camera_pos - FragPos);
+                vec3 R = reflect(u_light_direction, N);
+
+                // Half-Lambert diffuse: tex * half_lambert (KF original)
+                float half_lambert = dot(N, L) * 0.5 + 0.5;
+                vec3 diffuse_color = texColor.rgb * ourColor.rgb * u_material_albedo * half_lambert;
+
+                // Phong specular: KF original uses power=100
+                float spec_brightness = pow(max(dot(R, V_hl), 0.0), 100.0);
+                // KF original: specular = tex2D(specular_texture, uv).rgb * brightness
+                vec3 spec_tex = u_has_metallic_roughness_map
+                    ? texture(u_metallic_roughness_map, TexCoord).rgb
+                    : vec3(0.0);
+                vec3 specular_color = spec_tex * spec_brightness;
+
+                // Shadow: KF original: computeShadow() * -0.5 + 1.0 → range [0.5, 1.0]
+                float shadow = ShadowCalculation(FragPos, FragPosViewSpace, N, L);
+                float shadow_multiplier = 1.0 - shadow * 0.5;
+
+                vec3 color = (diffuse_color + specular_color) * shadow_multiplier;
+
+                // No tone mapping, no gamma correction, no ambient — KF original style
+                FragColor = vec4(color, 1.0);
+                return;
+            }
+
+    )") + std::string(R"(
             vec3 surface_albedo = pow(texColor.rgb * ourColor.rgb * u_material_albedo, vec3(2.2));
             float metallic = clamp(u_material_metallic, 0.0, 1.0);
             float roughness = clamp(u_material_roughness, 0.04, 1.0);
@@ -490,9 +524,9 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
             FragColor = vec4(color, texColor.a * ourColor.a);
         }
-    )";
+    )");
 
-    pbr_shader_handle_ = CompileProgram(vertex_shader, fragment_shader);
+    pbr_shader_handle_ = CompileProgram(vertex_shader, fragment_shader.c_str());
     programs_created_ += 1;
     CachePBRLocations();
 }

@@ -445,7 +445,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     PerSceneUBO per_scene;
     per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
-    per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, 0.0f);
+    per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
     per_scene.cascade_splits = glm::vec4(global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
     for (int i = 0; i < 3; ++i) {
         per_scene.light_space_matrices[i] = global_light_space_matrix_[i];
@@ -464,6 +464,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     unsigned int last_emissive_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_occlusion_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_blend_mode = std::numeric_limits<unsigned int>::max();
+    int last_shading_mode = first_item.shading_mode;
 
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
@@ -669,6 +670,13 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 current_frame_stats_.material_switches += 1;
             }
             last_blend_mode = item.blend_mode;
+        }
+
+        // Re-upload PerScene UBO when shading mode changes (PBR vs HalfLambert)
+        if (item.shading_mode != last_shading_mode) {
+            per_scene.light_params.w = static_cast<float>(item.shading_mode);
+            ubo_mgr.UploadPerScene(per_scene);
+            last_shading_mode = item.shading_mode;
         }
 
         // 双面材质
