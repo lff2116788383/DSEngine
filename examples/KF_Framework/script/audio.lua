@@ -21,15 +21,19 @@ local SE = {
     attack_voice2  = ASSET.se_attack_voice2,
     attack_voice3  = ASSET.se_attack_voice3,
     block          = ASSET.se_block,
+    guard_voice    = ASSET.se_guard_voice,
     damage_voice1  = ASSET.se_damage_voice1,
     damage_voice2  = ASSET.se_damage_voice2,
     death_voice    = ASSET.se_death_voice,
     zombie_beat    = ASSET.se_zombie_beat,
     zombie_warning = ASSET.se_zombie_warning,
     zombie_death   = ASSET.se_zombie_death,
+    submit         = ASSET.se_submit,
+    cursor         = ASSET.se_cursor,
 }
 
 local BGM = {
+    title  = ASSET.bgm_title,
     game   = ASSET.bgm_game,
     result = ASSET.bgm_result,
 }
@@ -66,10 +70,13 @@ function Audio.play_se(name)
     end
 end
 
--- 随机播放攻击语音 (KF: kAttackVoice1Se ~ kAttackVoice3Se)
-function Audio.play_attack_voice()
-    local r = math.random(1, 3)
-    Audio.play_se("attack_voice" .. r)
+-- 播放攻击语音 — KF 源码: step1→voice1, step2→voice2, step3→voice3
+function Audio.play_attack_voice(step)
+    if step and step >= 1 and step <= 3 then
+        Audio.play_se("attack_voice" .. step)
+    else
+        Audio.play_se("attack_voice" .. math.random(1, 3))
+    end
 end
 
 -- 随机播放受伤语音 (KF: kDamageVoice1Se ~ kDamageVoice2Se)

@@ -80,8 +80,11 @@ Config.ASSET = {
     tex_fence       = "assets/textures/Medieval house_wood.jpg",
     tex_med_house1  = "assets/textures/Medieval_house_1_House_D.tga",
     -- 音频 (Phase 7)
+    bgm_title       = "assets/audio/bgm/title.wav",
     bgm_game        = "assets/audio/bgm/game.wav",
     bgm_result      = "assets/audio/bgm/result.wav",
+    se_submit        = "assets/audio/se/submit.wav",
+    se_cursor        = "assets/audio/se/cursor.wav",
     se_sord_attack   = "assets/audio/se/sord_attack.wav",
     se_attack_voice1 = "assets/audio/se/attack_voice_1.wav",
     se_attack_voice2 = "assets/audio/se/attack_voice_2.wav",
@@ -92,6 +95,7 @@ Config.ASSET = {
     se_death_voice   = "assets/audio/se/death_voice.wav",
     se_zombie_beat   = "assets/audio/se/zombie_beat.wav",
     se_zombie_warning= "assets/audio/se/zombie_warning.wav",
+    se_guard_voice   = "assets/audio/se/guard_voice.wav",
     se_zombie_death  = "assets/audio/se/zombie_death.wav",
 }
 
@@ -105,13 +109,14 @@ Config.PLAYER = {
     max_hp      = 100,
     attack      = 15,
     defence     = 3,
+    invincible_time = 0.5,  -- KF: kInvincibleTime = 0.5f
 }
 
 -- 敌人参数
 Config.ENEMY = {
     move_speed    = 400.0,
     turn_speed    = 360.0,
-    detect_range  = 1500.0,  -- 15m × 100
+    detect_range  = 1000.0,  -- KF: warning_range_=10.0f × 100
     attack_range  = 200.0,   -- 2m × 100
     lose_range    = 2500.0,  -- 25m × 100
     max_hp        = 30,

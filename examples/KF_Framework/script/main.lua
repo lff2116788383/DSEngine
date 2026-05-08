@@ -46,6 +46,7 @@ local Enemy    = require("script.enemy")
 local GameFlow = require("script.gameflow")
 local Audio    = require("script.audio")
 local HUD      = require("script.hud")
+local Fade     = require("script.fade")
 
 --------------------------------------------------------------------------------
 -- Awake
@@ -65,6 +66,7 @@ function Awake()
     Enemy.spawn(-400, 0, 800)
 
     HUD.setup()
+    Fade.setup()
     GameFlow.setup()
 
     print("[KF_Framework] Phase 1~7 loaded.")
@@ -77,11 +79,15 @@ end
 function Update(dt)
     if dt > 0.1 then dt = 0.1 end
 
+    -- Fade 过渡更新 (KF: fade_system.cpp)
+    Fade.update(dt)
+
     -- Phase 6: 游戏流程更新
     GameFlow.update(dt)
 
-    -- Result 状态下冻结游戏逻辑
+    -- Result 状态或 Fade 过渡中冻结游戏逻辑 (KF: TimeScale=0 during fade)
     if GameFlow.get_state() ~= GameFlow.STATE_BATTLE then return end
+    if Fade.is_fading() then return end
 
     Player.update(dt)
 

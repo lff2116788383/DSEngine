@@ -28,6 +28,7 @@ local state = {
     grounded = true,
     hp = Config.PLAYER.max_hp,
     dead = false,
+    invincible_timer = 0.0,  -- KF: kInvincibleTime = 0.5f
 }
 
 function Player.get_entity() return knight end
@@ -56,10 +57,26 @@ function Player.is_attacking()
     return false
 end
 
+-- KF 源码: block_state.OnDamaged 不调用 ReceiveDamage, 格挡=100%免疫
+-- KF 源码: impact_state.OnDamaged 有 kInvincibleTime=0.5s
+-- KF 源码: ReceiveDamage 直接 life-damage, defence_未参与计算
 function Player.damage(amount)
     if state.dead then return end
-    local dmg = math.max(1, amount - Config.PLAYER.defence)
+    if state.invincible_timer > 0 then return end
+
+    -- 格挡检测: KF block_state.OnDamaged → 不扣血, 播放 block+guard_voice
+    local ok, anim_state = ecs.get_animator_3d_state(knight)
+    if ok and (anim_state == "block" or anim_state == "block_idle") then
+        Audio.play_se("block")
+        Audio.play_se("guard_voice")
+        state.invincible_timer = Config.PLAYER.invincible_time
+        return
+    end
+
+    -- 非格挡: 直接扣血 (KF: ReceiveDamage 无 defence 计算)
+    local dmg = amount
     state.hp = state.hp - dmg
+    state.invincible_timer = Config.PLAYER.invincible_time  -- 受击无敌 0.5s
     if state.hp <= 0 then
         state.hp = 0
         state.dead = true
@@ -67,6 +84,8 @@ function Player.damage(amount)
         Audio.play_se("death_voice")
     else
         ecs.set_animator_3d_param_trigger(knight, "damaged")
+        -- KF: impact_state.Init → Play(kZombieBeatSe) + Play(kDamageVoice1Se + rand(0,2))
+        Audio.play_se("zombie_beat")
         Audio.play_damage_voice()
     end
 end
@@ -170,6 +189,11 @@ function Player.update(dt)
     if not knight or state.dead then return end
     if dt > 0.1 then dt = 0.1 end
 
+    -- 受击无敌计时器
+    if state.invincible_timer > 0 then
+        state.invincible_timer = state.invincible_timer - dt
+    end
+
     -- 输入
     local move_x, move_z = 0, 0
     if app.get_key(87)  then move_z =  1 end  -- W
@@ -230,8 +254,17 @@ function Player.update(dt)
     -- 攻击/格挡/技能触发器
     if app.get_mouse_left_down() then
         ecs.set_animator_3d_param_trigger(knight, "attack")
+        -- KF 源码: 攻击语音在各 step state 的 kBeginAttackFrame 触发
+        -- 此处简化: 触发时根据当前动画状态推断 step
+        local ok2, cur_anim = ecs.get_animator_3d_state(knight)
+        local step = 1
+        if ok2 then
+            if cur_anim == "attack1" then step = 2
+            elseif cur_anim == "attack2" then step = 3
+            end
+        end
         Audio.play_se("sord_attack")
-        Audio.play_attack_voice()
+        Audio.play_attack_voice(step)
     end
     if app.get_mouse_right_down() then
         ecs.set_animator_3d_param_trigger(knight, "block")

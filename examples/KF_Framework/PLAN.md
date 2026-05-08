@@ -546,14 +546,177 @@ end
 
 ---
 
-### Phase 8: 扩展（可选）
+### Phase 8: 源码对齐精修（源码验证后）
 
-- 添加 Mutant 角色（可切换角色）
+> 以下任务基于 KF_Framework 源码逐文件验证后整理。
+> 源码路径: `C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\source_code\`
+
+#### 8.1 格挡 = 100% 免疫 + Guard Voice（已验证）
+
+**KF 源码**: `player_knight_block_state.cpp:75-83`
+```cpp
+void PlayerKnightBlockState::OnDamaged(PlayerController& player, const float& damage)
+{
+    if (player.GetAnimator().GetIsDamaged()) return;
+    player.GetAnimator().SetDamaged(true);
+    // Se — 注意: 不调用 ReceiveDamage(), 格挡时零伤害
+    sound_system.Play(kBlockSe);
+    sound_system.Play(kGuardVoiceSe);
+}
+```
+
+**修改**: `player.lua` → `Player.damage()` 检测当前是否在 block/block_idle 状态:
+- 格挡中 → 不扣血，播放 block.wav + guard_voice.wav
+- 非格挡 → 正常扣血
+- `config.lua` 添加 `se_guard_voice` 路径
+
+**验收**: 格挡状态下受击 HP 不减，听到 block + guard_voice 音效
+
+---
+
+#### 8.2 攻击语音对应步骤（已验证）
+
+**KF 源码**:
+- `light_attack_step1_state.cpp:74`: `Play(kAttackVoice1Se)` + `Play(kSordAttackSe)`
+- `light_attack_step2_state.cpp:73`: `Play(kAttackVoice2Se)` + `Play(kSordAttackSe)`
+- `light_attack_step3_state.cpp:63`: `Play(kAttackVoice3Se)` + `Play(kSordAttackSe)`
+
+**修改**: `player.lua` → 攻击触发时根据当前 FSM 状态名选择语音:
+- 当前为 attack1 → attack_voice1, attack2 → attack_voice2, attack3 → attack_voice3
+- 移除 `Audio.play_attack_voice()` 的随机逻辑
+
+---
+
+#### 8.3 受击无敌时间（已验证）
+
+**KF 源码**: `player_knight_impact_state.h:51`
+```cpp
+static constexpr float kInvincibleTime = 0.5f;
+```
+`player_knight_impact_state.cpp:65`: 无敌期间内再次受击无效。
+
+**修改**: `player.lua` 添加 `invincible_timer`, 受击后 0.5 秒内不再受伤。
+
+---
+
+#### 8.4 受击音效修正（已验证）
+
+**KF 源码**: `player_knight_impact_state.cpp:27-28`
+```cpp
+sound_system.Play(kZombieBeatSe);      // 被打中时的打击音效
+sound_system.Play(static_cast<SoundEffectLabel>(kDamageVoice1Se + Random::Range(0, 2)));
+```
+
+**修改**: `player.lua` → `Player.damage()` 中，非格挡受击时同时播放 zombie_beat + 随机 damage_voice。
+当前实现只播 damage_voice，缺少 zombie_beat。
+
+---
+
+#### 8.5 死亡延迟进入 Result（已验证）
+
+**KF 源码**: `mode_demo.h:30` + `mode_demo.cpp:91-95`
+```cpp
+static constexpr float kWaitTime = 8.0f;
+// プレイヤーが死んだらリザルトにいく
+if (player->GetCurrentStateName().find(L"Death") != String::npos)
+    time_counter_ = kWaitTime;
+// エネミーが全滅 → 短延迟
+if (main_system.GetActorObserver().GetEnemys().empty())
+    time_counter_ = GameTime::kTimeInterval;  // 约1帧
+```
+
+**修改**: `gameflow.lua` → 玩家死亡延迟改为 8.0 秒（当前 2.0 秒），敌人全灭改为 ~0.1 秒。
+
+---
+
+#### 8.6 Fade 过渡系统（已验证）
+
+**KF 源码**: `fade_system.cpp`
+- `FadeTo(next_mode, fade_time=1.0f)` — 触发转场
+- FadeOut: alpha 0→1, 持续 fade_time(1s), 同时 TimeScale→0 冻结游戏
+- FadeWait: 等待资源加载（DSE 不需要）
+- FadeIn: alpha 1→0, 持续 fade_time(1s), 恢复 TimeScale=1
+- 实现: 全屏黑色 2D 多边形, 修改 material.diffuse.a
+
+**修改**: 新建 `script/fade.lua` 模块:
+- 全屏黑色 UIRenderer (z_order=200, 最顶层)
+- `Fade.fade_out(duration, callback)` — alpha 0→1, 完成后回调
+- `Fade.fade_in(duration, callback)` — alpha 1→0, 完成后回调
+- `gameflow.lua` 在模式切换时: fade_out(1s) → 切换 → fade_in(1s)
+
+---
+
+#### 8.7 Title 画面（已验证）
+
+**KF 源码**: `mode_title.cpp`
+- Camera + DirectionalLight 初始化
+- 全屏背景图 "title" 纹理
+- 两个按钮: "play_game.png"(左) + "demo_play.png"(右), 初始左选中=白, 右=灰
+- 左右键切换: 播放 kCursorSe, 选中→白 / 未选中→灰
+- 确认键: 播放 kSubmitSe, 延迟 kWaitTime 后 FadeTo(ModeDemo/ModeDemoPlay)
+- BGM: kTitleBgm
+
+**修改**: `gameflow.lua` 扩展 Title 状态:
+- 固定摄像机俯瞰场景
+- 居中标题文字 + "Press Enter to Start" (DSE 无 title 纹理, 用 rich_text 替代)
+- Enter/Space → kSubmitSe → fade_out → 进入 battle
+- BGM: title.wav
+
+**注意**: DSE 目前无 scene unload, Title 和 Battle 共用同一场景, Title 时隐藏角色/敌人。
+
+---
+
+#### 8.8 Result 画面完善（已验证）
+
+**KF 源码**: `mode_result.cpp`
+- 全屏背景图 "result" 纹理
+- "press_any_key" 闪烁按钮 (FlashButtonController)
+- 任意键 → kSubmitSe → 延迟 → FadeTo(ModeTitle)
+- BGM: kResultBgm
+
+**修改**: `gameflow.lua` Result 状态:
+- 添加 kSubmitSe 音效（当前缺失）
+- "Press Any Key" 文字闪烁效果
+- 按键 → submit.wav → fade_out → 重置/回 Title
+
+---
+
+#### 8.9 数值平衡对齐
+
+当前问题: 3/4 只敌人在 detect_range(1500) 内, 玩家开局约 10 秒死亡。
+
+**KF 源码对比**:
+- `enemy_controller.h:18`: `warning_range_(10.0f)` = DSE 1000 (当前 detect_range=1500, 偏大)
+- `ActorController::ReceiveDamage`: `life - damage`, **defence_ 未参与计算** (无减伤)
+- `player_knight_impact_state.h:51`: 受击无敌 0.5s
+- `mode_demo.h:30`: 死亡→Result 延迟 8s
+
+**修改**:
+- `config.lua`: `detect_range = 1000` (对齐 KF warning_range=10×100)
+- `config.lua`: 移除 defence 减伤（原版无此机制）或保留作为 DSE 增强
+- 添加受击无敌 0.5s (8.3)
+- 调整敌人初始位置或数量
+
+---
+
+#### ~~8.10 以下功能 KF 源码已定义但未实际调用，不实现~~
+
+| 功能 | 枚举定义位置 | 调用情况 |
+|------|------------|---------|
+| `kBeginVoiceSe` | `sound_system.h:31` | 全代码无 Play() 调用 |
+| `kPinchVoiceSe` | `sound_system.h:36` | 全代码无 Play() 调用 |
+| 敌人重生 | — | `mode_demo.cpp:97`: 全灭→Result, 无重生 |
+
+---
+
+### Phase 9: 扩展（可选）
+
+- 添加 Zombie 角色（KF 原版敌人）
 - 添加 Juggernaut Boss 战
-- 添加更多场景装饰
 - 手柄支持
 - 粒子特效（攻击火花/血液）
 - 技能特效（Magic/Skill 动画）
+- DemoPlay 回放模式
 
 ---
 
