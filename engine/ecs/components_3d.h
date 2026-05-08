@@ -44,6 +44,7 @@ struct MeshRendererComponent {
     std::vector<float> temp_uvs;
     std::vector<float> temp_normals;
     std::vector<float> temp_tangents;
+    int dmesh_vertex_stride = 20;  ///< v1=20 (no color), v2=24 (with RGBA color at [20-23])
 };
 
 struct BoundingBoxComponent {

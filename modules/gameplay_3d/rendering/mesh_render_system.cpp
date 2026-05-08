@@ -492,7 +492,8 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                     const uint32_t* indices = reinterpret_cast<const uint32_t*>(data + header->index_data_offset);
                     const float* vertices = reinterpret_cast<const float*>(data + header->vertex_data_offset);
                     
-                    constexpr int kDmeshVertexFloatStride = 20;
+                    const int kDmeshVertexFloatStride = (header->version >= 2) ? 24 : 20;
+                    mesh_renderer.dmesh_vertex_stride = kDmeshVertexFloatStride;
                     mesh_renderer.temp_vertices.reserve(static_cast<std::size_t>(header->vertex_count) * kDmeshVertexFloatStride);
                     for (uint32_t i = 0; i < header->vertex_count; ++i) {
                         for (int j = 0; j < kDmeshVertexFloatStride; ++j) {
@@ -521,7 +522,7 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                         mesh_renderer.temp_indices.clear();
                         return;
                     }
-                    update_bounding_box(mesh_renderer.temp_vertices, kDmeshVertexFloatStride);
+                    update_bounding_box(mesh_renderer.temp_vertices, mesh_renderer.dmesh_vertex_stride);
                     return;
                 }
             }
@@ -783,7 +784,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             const bool has_lua_uvs = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_uvs.size() == vertex_count_from_pos3 * 2;
             const bool has_lua_normals = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_normals.size() == vertex_count_from_pos3 * 3;
             const bool has_lua_tangents = !is_dmesh_format && vertex_count_from_pos3 > 0 && mesh_renderer.temp_tangents.size() == vertex_count_from_pos3 * 3;
-            size_t stride = is_dmesh_format ? 20 : 3;
+            size_t stride = is_dmesh_format ? static_cast<size_t>(mesh_renderer.dmesh_vertex_stride) : 3;
             if (mesh_renderer.temp_vertices.size() % stride != 0) {
                 continue;
             }
@@ -937,6 +938,15 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                         );
                     } else {
                         bv.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+                    }
+                    // dmesh v2: per-vertex color at [20-23], multiply with item.color
+                    if (stride >= 24) {
+                        bv.color = item.color * glm::vec4(
+                            mesh_renderer.temp_vertices[i * stride + 20],
+                            mesh_renderer.temp_vertices[i * stride + 21],
+                            mesh_renderer.temp_vertices[i * stride + 22],
+                            mesh_renderer.temp_vertices[i * stride + 23]
+                        );
                     }
                 } else {
                     normal = has_lua_normals

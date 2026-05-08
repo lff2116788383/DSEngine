@@ -540,6 +540,7 @@ struct RuntimeVertex {
     glm::vec4 weights;
     glm::ivec4 joints;
     glm::vec4 tangent;
+    glm::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
@@ -632,6 +633,10 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
             if (mesh->HasTextureCoords(0)) {
                 const aiVector3D& texcoord = mesh->mTextureCoords[0][vertex_index];
                 raw_mesh.texcoords.emplace_back(texcoord.x, texcoord.y);
+            }
+            if (mesh->HasVertexColors(0)) {
+                const aiColor4D& c = mesh->mColors[0][vertex_index];
+                raw_mesh.colors.emplace_back(c.r, c.g, c.b, c.a);
             }
         }
 
@@ -760,10 +765,19 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
     
     std::ofstream out(output_path, std::ios::binary);
     if (!out) return false;
+
+    // Detect if any mesh has per-vertex colors → use v2 format
+    bool has_any_colors = false;
+    for (const auto& mesh : scene.meshes) {
+        if (!mesh.colors.empty()) { has_any_colors = true; break; }
+    }
     
     MeshHeader header;
-    header.version = 1;
+    header.version = has_any_colors ? 2 : 1;
     header.attribute_mask = static_cast<uint32_t>(VertexAttribute::Position | VertexAttribute::Normal | VertexAttribute::Tangent | VertexAttribute::TexCoord | VertexAttribute::Joints | VertexAttribute::Weights);
+    if (has_any_colors) {
+        header.attribute_mask |= static_cast<uint32_t>(VertexAttribute::Color);
+    }
     header.submesh_count = static_cast<uint32_t>(scene.meshes.size());
     
     std::vector<RuntimeVertex> all_vertices;
@@ -800,6 +814,9 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
 
             if (i < mesh.tangents.size()) v.tangent = mesh.tangents[i];
             else v.tangent = glm::vec4(1, 0, 0, 1); // Default tangent X-axis
+
+            if (i < mesh.colors.size()) v.color = mesh.colors[i];
+            // else: default white (1,1,1,1) from initializer
             
             all_vertices.push_back(v);
         }
@@ -815,20 +832,31 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
     
     header.vertex_count = static_cast<uint32_t>(all_vertices.size());
     header.index_count = static_cast<uint32_t>(all_indices.size());
+
+    // v1: 80 bytes/vertex (20 floats), v2: 96 bytes/vertex (24 floats)
+    const size_t vertex_byte_size = has_any_colors ? sizeof(RuntimeVertex) : (sizeof(RuntimeVertex) - sizeof(glm::vec4));
     
     uint64_t current_offset = sizeof(MeshHeader);
     header.submesh_data_offset = current_offset;
     current_offset += submeshes.size() * sizeof(SubMeshDesc);
     
     header.vertex_data_offset = current_offset;
-    current_offset += all_vertices.size() * sizeof(RuntimeVertex);
+    current_offset += all_vertices.size() * vertex_byte_size;
     
     header.index_data_offset = current_offset;
     
     // Write
     out.write(reinterpret_cast<const char*>(&header), sizeof(MeshHeader));
     out.write(reinterpret_cast<const char*>(submeshes.data()), submeshes.size() * sizeof(SubMeshDesc));
-    out.write(reinterpret_cast<const char*>(all_vertices.data()), all_vertices.size() * sizeof(RuntimeVertex));
+    if (has_any_colors) {
+        // v2: write full RuntimeVertex including color
+        out.write(reinterpret_cast<const char*>(all_vertices.data()), all_vertices.size() * sizeof(RuntimeVertex));
+    } else {
+        // v1: write each vertex without the trailing color field
+        for (const auto& v : all_vertices) {
+            out.write(reinterpret_cast<const char*>(&v), vertex_byte_size);
+        }
+    }
     out.write(reinterpret_cast<const char*>(all_indices.data()), all_indices.size() * sizeof(uint32_t));
     
     return true;

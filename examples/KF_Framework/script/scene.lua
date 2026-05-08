@@ -45,7 +45,7 @@ function Scene.setup()
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
          0.8, 0.8, 0.8, 1.0, 0.2, 0.35)
-    ecs.set_directional_light_shadow(sun, true, 0.4, 800, 3000, 15000)
+    ecs.set_directional_light_shadow(sun, true, 1.0, 800, 3000, 15000)
 
     -- 2. Sky light
     local sky_light = ecs.create_entity()
@@ -105,8 +105,7 @@ function Scene.setup()
 
     -- 6. Post-processing
     local pp = ecs.create_entity()
-    ecs.add_post_process(pp, true, 1.0, 0.8, 1.0)
-    ecs.set_post_process_color(pp, true, 1.0, 2.2)
+    ecs.add_post_process(pp, false, 1.0, 0.8, 1.0)
 end
 
 return Scene

@@ -226,6 +226,9 @@ def main():
     env["DSE_SCREENSHOT_PATH"] = str(png_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
     env["DSE_DATA_ROOT"] = str(kf_dir)
+    env["DSE_AUTO_BATTLE"] = "1"
+    env["DSE_STARTUP_LUA"] = str(lua_script)
+    env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
 
     cmd = [str(exe), f"--script={lua_script}"]
     print(f"[verify_scene] Running: {' '.join(cmd)}")

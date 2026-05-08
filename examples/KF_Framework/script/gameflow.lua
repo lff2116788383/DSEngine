@@ -83,6 +83,12 @@ function GameFlow.setup()
     GameFlow.create_title_ui()
     Audio.play_bgm("title")  -- KF: ModeTitle::OnCompleteLoading → kTitleBgm
     Fade.start_with_loading()  -- KF: 启动时从 Loading 动画开始
+
+    -- 自动截图模式: 跳过 Title 直接进入 Battle (verify_scene.py 用)
+    if os.getenv("DSE_AUTO_BATTLE") then
+        AutoPlay.set_enabled(true)
+        title_confirm_timer = 0.5  -- 等半秒让场景加载完
+    end
 end
 
 --------------------------------------------------------------------------------
