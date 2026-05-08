@@ -7,6 +7,9 @@ local Config = require("script.config")
 local Audio  = require("script.audio")
 local HUD    = require("script.hud")
 local Fade   = require("script.fade")
+local Player   = require("script.player")
+local Enemy    = require("script.enemy")
+local AutoPlay = require("script.autoplay")
 
 local app    = dse.app
 local ecs    = dse.ecs
@@ -177,6 +180,10 @@ function GameFlow.enter_battle()
     Fade.fade_out(1.0, function()
         state = "battle"
         result_timer = 0
+        -- 软重置玩家和敌人 (KF: ModeDemo 重建场景)
+        Player.reset()
+        Enemy.reset_all()
+        AutoPlay.reset()
         GameFlow.hide_title_ui()
         HUD.show()
         Audio.play_bgm("game")  -- KF: ModeDemo::OnCompleteLoading → kGameBgm

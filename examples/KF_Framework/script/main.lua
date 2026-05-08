@@ -47,6 +47,7 @@ local GameFlow = require("script.gameflow")
 local Audio    = require("script.audio")
 local HUD      = require("script.hud")
 local Fade     = require("script.fade")
+local AutoPlay = require("script.autoplay")
 
 --------------------------------------------------------------------------------
 -- Awake
@@ -72,6 +73,7 @@ function Awake()
 
     print("[KF_Framework] Phase 1~8 loaded. Title → Battle → Result → Title")
     print("[KF_Framework] Controls: WASD=move, Shift=run, Space=jump, LMB=attack, RMB=block, Q=kick, E=cast")
+    print("[KF_Framework] F5=Toggle DemoPlay (AI auto-battle)")
 end
 
 --------------------------------------------------------------------------------
@@ -79,6 +81,12 @@ end
 --------------------------------------------------------------------------------
 function Update(dt)
     if dt > 0.1 then dt = 0.1 end
+
+    -- F5: DemoPlay 切换 (KF: ModeDemoPlay)
+    if app.get_key_down(294) then  -- F5
+        AutoPlay.toggle()
+        print("[KF_Framework] DemoPlay: " .. (AutoPlay.is_enabled() and "ON" or "OFF"))
+    end
 
     -- Fade 过渡更新 (KF: fade_system.cpp)
     Fade.update(dt)

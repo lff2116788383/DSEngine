@@ -81,6 +81,26 @@ function Enemy.spawn(x, y, z)
 end
 
 --------------------------------------------------------------------------------
+-- 软重置所有敌人 (回到出生点, 满血, idle 状态)
+--------------------------------------------------------------------------------
+function Enemy.reset_all()
+    for _, data in ipairs(Enemy.instances) do
+        data.hp = ENEMY.max_hp
+        data.state = "idle"
+        data.facing_yaw = 0
+        data.attack_cooldown = 0
+        data.damaged_timer = 0
+        data.hit_this_attack = false
+        -- 回到出生位置
+        ecs.set_transform_position(data.entity, data.spawn_x, 0, data.spawn_z)
+        ecs.set_transform_rotation(data.entity, 0, 0, 0)
+        -- 重置动画到 idle
+        ecs.set_animator_3d_state(data.entity, "idle", 1.0, true)
+        ecs.set_animator_3d_param_float(data.entity, "speed", 0)
+    end
+end
+
+--------------------------------------------------------------------------------
 -- 对敌人造成伤害
 --------------------------------------------------------------------------------
 function Enemy.damage(data, amount)

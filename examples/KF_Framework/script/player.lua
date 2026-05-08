@@ -2,8 +2,9 @@
 -- KF_Framework — 玩家 Knight (Phase 2+3)
 -- 角色创建、FSM配置、输入处理、第三人称摄像机
 --------------------------------------------------------------------------------
-local Config = require("script.config")
-local Audio  = require("script.audio")
+local Config   = require("script.config")
+local Audio    = require("script.audio")
+local AutoPlay = require("script.autoplay")
 local ASSET = Config.ASSET
 local CAM = Config.CAMERA
 local COND = {
@@ -30,6 +31,26 @@ local state = {
     dead = false,
     invincible_timer = 0.0,  -- KF: kInvincibleTime = 0.5f
 }
+
+--------------------------------------------------------------------------------
+-- 软重置 (用于 Result → Title → Battle 重新开始)
+--------------------------------------------------------------------------------
+function Player.reset()
+    if not knight then return end
+    state.hp = Config.PLAYER.max_hp
+    state.dead = false
+    state.speed = 0.0
+    state.facing_yaw = 0.0
+    state.velocity_y = 0.0
+    state.grounded = true
+    state.invincible_timer = 0.0
+    -- 重置位置到原点
+    ecs.set_transform_position(knight, 0, 0, 0)
+    ecs.set_transform_rotation(knight, 0, 0, 0)
+    -- 重置动画到 idle
+    ecs.set_animator_3d_state(knight, "idle", 1.0, true)
+    ecs.set_animator_3d_param_float(knight, "speed", 0)
+end
 
 function Player.get_entity() return knight end
 function Player.get_position()
@@ -194,13 +215,19 @@ function Player.update(dt)
         state.invincible_timer = state.invincible_timer - dt
     end
 
-    -- 输入
+    -- 输入 (手动 or AutoPlay AI)
     local move_x, move_z = 0, 0
-    if app.get_key(87)  then move_z =  1 end  -- W
-    if app.get_key(83)  then move_z = -1 end  -- S
-    if app.get_key(65)  then move_x = -1 end  -- A
-    if app.get_key(68)  then move_x =  1 end  -- D
-    local running = app.get_key(340) or app.get_key(344)
+    local running = false
+    local ai_attack, ai_block = false, false
+    if AutoPlay.is_enabled() then
+        move_x, move_z, running, ai_attack, ai_block = AutoPlay.get_input(dt, knight)
+    else
+        if app.get_key(87)  then move_z =  1 end  -- W
+        if app.get_key(83)  then move_z = -1 end  -- S
+        if app.get_key(65)  then move_x = -1 end  -- A
+        if app.get_key(68)  then move_x =  1 end  -- D
+        running = app.get_key(340) or app.get_key(344)
+    end
     local raw_speed = math.sqrt(move_x * move_x + move_z * move_z)
 
     -- 归一化速度
@@ -252,7 +279,10 @@ function Player.update(dt)
     end
 
     -- 攻击/格挡/技能触发器
-    if app.get_mouse_left_down() then
+    local do_attack = ai_attack or app.get_mouse_left_down()
+    local do_block_down = ai_block or app.get_mouse_right_down()
+    local do_block_hold = ai_block or app.get_mouse_right()
+    if do_attack then
         ecs.set_animator_3d_param_trigger(knight, "attack")
         -- KF 源码: 攻击语音在各 step state 的 kBeginAttackFrame 触发
         -- 此处简化: 触发时根据当前动画状态推断 step
@@ -266,11 +296,11 @@ function Player.update(dt)
         Audio.play_se("sord_attack")
         Audio.play_attack_voice(step)
     end
-    if app.get_mouse_right_down() then
+    if do_block_down then
         ecs.set_animator_3d_param_trigger(knight, "block")
         Audio.play_se("block")
     end
-    local blocking = app.get_mouse_right() and 1.0 or 0.0
+    local blocking = do_block_hold and 1.0 or 0.0
     ecs.set_animator_3d_param_float(knight, "blocking", blocking)
     if app.get_key_down(81) then ecs.set_animator_3d_param_trigger(knight, "kick") end
     if app.get_key_down(69) then ecs.set_animator_3d_param_trigger(knight, "cast") end
