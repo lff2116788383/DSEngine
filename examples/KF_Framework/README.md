@@ -46,7 +46,17 @@ examples/KF_Framework/
 │   ├── check_danim.py      # danim 动画通道诊断
 │   └── compare_skeletons.py# 两个 dskel 拓扑对比
 ├── script/                 # 游戏 Lua 脚本
-│   └── main.lua            # Demo 入口
+│   ├── main.lua            # 入口 + Update 循环
+│   ├── config.lua          # 全局配置 & 资产路径
+│   ├── scene.lua           # 场景搭建 (地面/树木/照明)
+│   ├── player.lua          # Knight FSM + 输入 + 摄像机
+│   ├── enemy.lua           # Mutant AI (巡逻/追击/攻击)
+│   ├── gameflow.lua        # 游戏流程 (Title→Battle→Result)
+│   ├── audio.lua           # 音效/BGM 管理
+│   ├── hud.lua             # 血条 HUD
+│   ├── fade.lua            # Fade 过渡系统
+│   └── autoplay.lua        # DemoPlay 自动战斗 AI
+├── font/                   # 位图字体 (bitmap_font.png)
 ├── assets/                 # 原始资产（纹理、FBX 源文件）
 │   ├── textures/           # 纹理（直接从 KF_Framework 复制）
 │   ├── fbx/                # FBX 模型/动画源文件
@@ -67,6 +77,29 @@ examples/KF_Framework/
 - **渲染**: KF HLSL → DSEngine 内建 PBR
 - **动画**: FBX 动画 → AssetBuilder → .danim
 - **FBX 来源**: KF_ModelAnalyzer/data/FBX/ — 包含 knight、mutant、zombie 及场景模型
+
+## 操作控制
+
+| 按键 | 功能 |
+|------|------|
+| WASD | 移动 |
+| Shift | 奔跑 |
+| Space | 跳跃 |
+| LMB | 攻击 (连击三段) |
+| RMB | 格挡 (100% 免伤) |
+| Q | 踢击 |
+| E | 施法 |
+| Enter | Title 画面开始游戏 |
+| F5 | 切换 DemoPlay AI 自动战斗 |
+
+## 游戏流程
+
+```
+Title (标题 BGM) → Enter → Fade → Battle (战斗 BGM) → 死亡/全灭 → Fade → Result (结算 BGM) → Any Key → Fade → Title
+```
+
+- **软重置**: 每次从 Title 进入 Battle 时自动重置玩家 HP/位置和敌人状态
+- **DemoPlay**: F5 开启后 AI 自动控制玩家寻敌/攻击/格挡 (KF: ModeDemoPlay)
 
 ## 截图对比
 

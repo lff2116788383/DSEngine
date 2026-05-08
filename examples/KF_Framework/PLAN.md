@@ -737,7 +737,9 @@ examples/KF_Framework/
 │   ├── gameflow.lua           # Phase 6+8 游戏流程 (Title→Battle→Result)
 │   ├── audio.lua              # Phase 7 音效管理
 │   ├── hud.lua                # Phase 6 血条 HUD
-│   └── fade.lua               # Phase 8.6 Fade 过渡系统
+│   ├── fade.lua               # Phase 8.6 Fade 过渡系统
+│   └── autoplay.lua           # DemoPlay 自动战斗 AI (F5 切换)
+├── font/                      # 位图字体 (bitmap_font.png)
 ├── assets/                    # 直接从 KF_Framework 复制的原始资产
 │   ├── textures/              # .jpg/.png/.tga（直接复制）
 │   ├── audio/
