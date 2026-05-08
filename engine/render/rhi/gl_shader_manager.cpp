@@ -390,6 +390,39 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 return;
             }
 
+            // ============================================================
+            // Half-Lambert STATIC shading mode (KF default_pixel_shader)
+            // Formula: (mat_diffuse * hl * light_diffuse + specular + emissive) * tex * vtx_color * shadow
+            // ============================================================
+            if (light_params.w == 3.0) {
+                vec3 L = normalize(-u_light_direction);
+                vec3 V_st = normalize(u_camera_pos - FragPos);
+                vec3 R = reflect(u_light_direction, N);
+
+                // Half-Lambert diffuse with material_diffuse and light_diffuse
+                float half_lambert = dot(N, L) * 0.5 + 0.5;
+                vec3 diffuse = u_material_albedo * half_lambert * u_light_color;
+
+                // Phong specular from material properties (roughness_ao.x repurposed as power)
+                float spec_power = max(u_material_roughness, 1.0);
+                vec3 spec_color = vec3(u_material_metallic);
+                vec3 specular = spec_color * pow(max(dot(R, V_st), 0.0), spec_power);
+
+                // Emissive
+                vec3 emissive_val = u_material_emissive;
+
+                // Combine: (diffuse + specular + emissive) * texture * vertex_color
+                vec3 material_color = diffuse + specular + emissive_val;
+                vec3 color = material_color * texColor.rgb * ourColor.rgb;
+
+                // Shadow: KF original: computeShadow() * -0.5 + 1.0 → range [0.5, 1.0]
+                float shadow = ShadowCalculation(FragPos, FragPosViewSpace, N, L);
+                float shadow_multiplier = 1.0 - shadow * 0.5;
+
+                FragColor = vec4(color * shadow_multiplier, texColor.a * ourColor.a);
+                return;
+            }
+
     )") + std::string(R"(
             vec3 surface_albedo = pow(texColor.rgb * ourColor.rgb * u_material_albedo, vec3(2.2));
             float metallic = clamp(u_material_metallic, 0.0, 1.0);

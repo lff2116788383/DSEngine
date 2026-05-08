@@ -430,22 +430,20 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 
     // 更新 PerScene CB
-    {
-        const auto& first = items[0];
-        DX11PerSceneCB scene_data{};
-        scene_data.light_dir_and_enabled = glm::vec4(
-            first.light_direction, first.lighting_enabled ? 1.0f : 0.0f);
-        scene_data.light_color_and_ambient = glm::vec4(
-            first.light_color, first.ambient_intensity);
-        scene_data.light_params = glm::vec4(
-            first.light_intensity, first.shadow_strength,
-            first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
-        scene_data.cascade_splits = glm::vec4(
-            global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
-        for (int i = 0; i < 3; ++i)
-            scene_data.light_space_matrices[i] = global_light_space_matrix_[i];
-        UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
-    }
+    const auto& first = items[0];
+    DX11PerSceneCB scene_data{};
+    scene_data.light_dir_and_enabled = glm::vec4(
+        first.light_direction, first.lighting_enabled ? 1.0f : 0.0f);
+    scene_data.light_color_and_ambient = glm::vec4(
+        first.light_color, first.ambient_intensity);
+    scene_data.light_params = glm::vec4(
+        first.light_intensity, first.shadow_strength,
+        first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
+    scene_data.cascade_splits = glm::vec4(
+        global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
+    for (int i = 0; i < 3; ++i)
+        scene_data.light_space_matrices[i] = global_light_space_matrix_[i];
+    UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
     // 选择着色器：深度 only pass 使用 shadow shader，否则使用 PBR
     unsigned int shader_handle = is_depth_only_pass_
@@ -598,6 +596,12 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             item.emissive_map_handle != 0 ? 1.0f : 0.0f,
             item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
         UpdateConstantBuffer(per_material_cb_.Get(), &mat_data, sizeof(mat_data));
+
+        // Re-upload PerScene CB when shading mode changes per item
+        if (item.shading_mode != static_cast<int>(scene_data.light_params.w)) {
+            scene_data.light_params.w = static_cast<float>(item.shading_mode);
+            UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
+        }
 
         // 绑定纹理（t0 反照/漫反射，t1 法线，t2 MR，t3 发光，t4 AO）
         const auto* tex = resource_mgr.GetTexture(item.texture_handle);

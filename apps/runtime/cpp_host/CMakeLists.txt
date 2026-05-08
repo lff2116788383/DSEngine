@@ -9,6 +9,7 @@ dse_apply_config_postfix(DSEngine_example_cpp)
 
 if (MSVC)
     set_property(TARGET DSEngine_example_cpp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(DSEngine_example_cpp PRIVATE /utf-8)
 endif()
 
 

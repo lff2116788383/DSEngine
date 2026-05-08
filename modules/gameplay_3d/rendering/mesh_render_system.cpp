@@ -685,7 +685,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.order_in_layer = mesh_renderer.order_in_layer;
         item.lighting_enabled = resolved_shader_variant != "MESH_UNLIT";
         if (resolved_shader_variant == "MESH_HALFLAMBERT") {
-            item.shading_mode = 2;  // Half-Lambert (KF-style)
+            item.shading_mode = 2;  // Half-Lambert skin (KF knight/zombie)
+        } else if (resolved_shader_variant == "MESH_HALFLAMBERT_STATIC") {
+            item.shading_mode = 3;  // Half-Lambert static (KF default shader)
         }
         
         if (world.registry().all_of<Animator3DComponent>(entity)) {

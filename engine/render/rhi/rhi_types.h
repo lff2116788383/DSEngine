@@ -162,7 +162,7 @@ struct MeshDrawItem {
     int order_in_layer = 0;
 
     bool lighting_enabled = false;
-    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert (KF-style)
+    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin (KF knight/zombie), 3=HalfLambert-Static (KF default)
     glm::vec3 material_albedo = glm::vec3(1.0f);
     float material_metallic = 0.0f;
     float material_roughness = 1.0f;

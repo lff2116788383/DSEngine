@@ -8,6 +8,7 @@ dse_apply_config_postfix(dse_example_lua)
 
 if (MSVC)
     set_property(TARGET dse_example_lua PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(dse_example_lua PRIVATE /utf-8)
 endif()
 
 
