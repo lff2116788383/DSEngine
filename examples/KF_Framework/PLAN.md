@@ -551,7 +551,7 @@ end
 > 以下任务基于 KF_Framework 源码逐文件验证后整理。
 > 源码路径: `C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\source_code\`
 
-#### 8.1 格挡 = 100% 免疫 + Guard Voice（已验证）
+#### 8.1 格挡 = 100% 免疫 + Guard Voice（已验证） ✅
 
 **KF 源码**: `player_knight_block_state.cpp:75-83`
 ```cpp
@@ -574,7 +574,7 @@ void PlayerKnightBlockState::OnDamaged(PlayerController& player, const float& da
 
 ---
 
-#### 8.2 攻击语音对应步骤（已验证）
+#### 8.2 攻击语音对应步骤（已验证） ✅
 
 **KF 源码**:
 - `light_attack_step1_state.cpp:74`: `Play(kAttackVoice1Se)` + `Play(kSordAttackSe)`
@@ -587,7 +587,7 @@ void PlayerKnightBlockState::OnDamaged(PlayerController& player, const float& da
 
 ---
 
-#### 8.3 受击无敌时间（已验证）
+#### 8.3 受击无敌时间（已验证） ✅
 
 **KF 源码**: `player_knight_impact_state.h:51`
 ```cpp
@@ -599,7 +599,7 @@ static constexpr float kInvincibleTime = 0.5f;
 
 ---
 
-#### 8.4 受击音效修正（已验证）
+#### 8.4 受击音效修正（已验证） ✅
 
 **KF 源码**: `player_knight_impact_state.cpp:27-28`
 ```cpp
@@ -612,7 +612,7 @@ sound_system.Play(static_cast<SoundEffectLabel>(kDamageVoice1Se + Random::Range(
 
 ---
 
-#### 8.5 死亡延迟进入 Result（已验证）
+#### 8.5 死亡延迟进入 Result（已验证） ✅
 
 **KF 源码**: `mode_demo.h:30` + `mode_demo.cpp:91-95`
 ```cpp
@@ -629,7 +629,7 @@ if (main_system.GetActorObserver().GetEnemys().empty())
 
 ---
 
-#### 8.6 Fade 过渡系统（已验证）
+#### 8.6 Fade 过渡系统（已验证） ✅
 
 **KF 源码**: `fade_system.cpp`
 - `FadeTo(next_mode, fade_time=1.0f)` — 触发转场
@@ -646,7 +646,7 @@ if (main_system.GetActorObserver().GetEnemys().empty())
 
 ---
 
-#### 8.7 Title 画面（已验证）
+#### 8.7 Title 画面（已验证） ✅
 
 **KF 源码**: `mode_title.cpp`
 - Camera + DirectionalLight 初始化
@@ -666,7 +666,7 @@ if (main_system.GetActorObserver().GetEnemys().empty())
 
 ---
 
-#### 8.8 Result 画面完善（已验证）
+#### 8.8 Result 画面完善（已验证） ✅
 
 **KF 源码**: `mode_result.cpp`
 - 全屏背景图 "result" 纹理
@@ -681,7 +681,7 @@ if (main_system.GetActorObserver().GetEnemys().empty())
 
 ---
 
-#### 8.9 数值平衡对齐
+#### 8.9 数值平衡对齐 ✅
 
 当前问题: 3/4 只敌人在 detect_range(1500) 内, 玩家开局约 10 秒死亡。
 
@@ -734,8 +734,10 @@ examples/KF_Framework/
 │   ├── scene.lua              # Phase 1 场景搭建
 │   ├── player.lua             # Phase 2+3 Knight FSM + 输入 + 摄像机
 │   ├── enemy.lua              # Phase 4 Mutant AI
-│   ├── gameflow.lua           # Phase 6 游戏流程状态机
-│   └── audio.lua              # Phase 7 音效管理
+│   ├── gameflow.lua           # Phase 6+8 游戏流程 (Title→Battle→Result)
+│   ├── audio.lua              # Phase 7 音效管理
+│   ├── hud.lua                # Phase 6 血条 HUD
+│   └── fade.lua               # Phase 8.6 Fade 过渡系统
 ├── assets/                    # 直接从 KF_Framework 复制的原始资产
 │   ├── textures/              # .jpg/.png/.tga（直接复制）
 │   ├── audio/

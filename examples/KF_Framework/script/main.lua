@@ -66,10 +66,11 @@ function Awake()
     Enemy.spawn(-400, 0, 800)
 
     HUD.setup()
+    HUD.hide()  -- Title 状态下隐藏 HUD, enter_battle 时显示
     Fade.setup()
-    GameFlow.setup()
+    GameFlow.setup()  -- 进入 Title 状态 + title BGM + fade_in
 
-    print("[KF_Framework] Phase 1~7 loaded.")
+    print("[KF_Framework] Phase 1~8 loaded. Title → Battle → Result → Title")
     print("[KF_Framework] Controls: WASD=move, Shift=run, Space=jump, LMB=attack, RMB=block, Q=kick, E=cast")
 end
 
