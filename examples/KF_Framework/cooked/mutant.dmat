@@ -11,8 +11,8 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_504d602f-9542-4dbb-918e-e67f49ba9e85.fbm/Mutant_diffuse.png",
-      "normal_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_504d602f-9542-4dbb-918e-e67f49ba9e85.fbm/Mutant_normal.png",
+      "base_color_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_504d602f-9542-4dbb-918e-e67f49ba9e85.fbm/Mutant_diffuse.png",
+      "normal_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_504d602f-9542-4dbb-918e-e67f49ba9e85.fbm/Mutant_normal.png",
       "metallic_roughness_texture": "",
       "emissive_texture": "",
       "occlusion_texture": ""

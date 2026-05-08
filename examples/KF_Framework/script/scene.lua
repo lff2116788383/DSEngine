@@ -29,7 +29,7 @@ local function add_mesh(mesh_path, x, y, z, sx, sy, sz, ry, tex_path)
     ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(e, mesh_path)
     ecs.set_mesh_shader_variant(e, "MESH_HALFLAMBERT_STATIC")
-    ecs.set_mesh_material(e, 0.3, 20.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
+    ecs.set_mesh_material(e, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, false)
     if tex_path then
         ecs.set_mesh_texture(e, "albedo", tex_path)
     end
@@ -44,7 +44,7 @@ function Scene.setup()
     local ld = math.sqrt(1+16+1)
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
-         0.8, 0.8, 0.8, 1.5, 0.3, 0.35)
+         0.8, 0.8, 0.8, 1.0, 0.2, 0.35)
     ecs.set_directional_light_shadow(sun, true, 0.4, 800, 3000, 15000)
 
     -- 2. Sky light
@@ -62,7 +62,7 @@ function Scene.setup()
     ecs.add_transform(ground, 0, -2, 0, 20000, 4, 20000)
     ecs.add_mesh_renderer(ground, 0.28, 0.35, 0.22, 1.0, cube_verts(), cube_idx())
     ecs.set_mesh_shader_variant(ground, "MESH_HALFLAMBERT_STATIC")
-    ecs.set_mesh_material(ground, 0.3, 20.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
+    ecs.set_mesh_material(ground, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
     ecs.set_mesh_texture(ground, "albedo", ASSET.ground_tex)
 
     -- 5. 场景装饰物 (demo.stage 精确位置, 战斗区中心偏移 (10,0,15))
@@ -71,10 +71,10 @@ function Scene.setup()
     add_mesh(ASSET.tavern, 661, 0, -6455, 1, 1, 1, -63, ASSET.tex_tavern)
     add_mesh(ASSET.med_house1, 5145, 0, -287, 1, 1, 1, -114, ASSET.tex_med_house1)
     add_mesh(ASSET.windmill, 8449, 1920, -7212, 1, 1, 1, 38, ASSET.tex_windmill)
-    add_mesh(ASSET.med_house, 1499, 0, 2371, 1, 1, 1, 19, nil)
+    add_mesh(ASSET.med_house, 1499, 0, 2371, 1, 1, 1, 19, ASSET.tex_med_house1)
     add_mesh(ASSET.med_house1, 3741, 0, -6697, 1, 1, 1, -157, ASSET.tex_med_house1)
-    add_mesh(ASSET.bridge, -3774, 0, 3767, 1, 1, 1, -38, nil)
-    add_mesh(ASSET.well, -965, 318, -4507, 1, 1, 1, 0, nil)
+    add_mesh(ASSET.bridge, -3774, 0, 3767, 1, 1, 1, -38, ASSET.tex_bridge)
+    add_mesh(ASSET.well, -965, 318, -4507, 1, 1, 1, 0, ASSET.tex_well)
 
     -- Fences
     add_mesh(ASSET.fence, -1284, 0, -1943, 1, 1, 1, -44, ASSET.tex_fence)
@@ -100,6 +100,8 @@ function Scene.setup()
     add_mesh(ASSET.pine_tree, -2030, 0, -1627, ts, ts, ts, 0, ASSET.tex_pine)
     add_mesh(ASSET.pine_tree, -1898, 0, -2719, ts, ts, ts, 0, ASSET.tex_pine)
     add_mesh(ASSET.pine_tree, -944, 84, -3107, ts, ts, ts, 0, ASSET.tex_pine)
+    add_mesh(ASSET.pine_tree, 8473, 1420, -4504, ts, ts, ts, 0, ASSET.tex_pine)
+    add_mesh(ASSET.pine_tree, 4274, 195, 1688, ts, ts, ts, 0, ASSET.tex_pine)
 
     -- 6. Post-processing
     local pp = ecs.create_entity()

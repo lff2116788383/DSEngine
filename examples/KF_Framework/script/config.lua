@@ -80,6 +80,8 @@ Config.ASSET = {
     tex_pine        = "assets/textures/Pine_tree.png",
     tex_fence       = "assets/textures/Medieval house_wood.jpg",
     tex_med_house1  = "assets/textures/Medieval_house_1_House_D.tga",
+    tex_bridge      = "assets/textures/Bridge.jpg",
+    tex_well        = "assets/textures/well.jpg",
     -- 音频 (Phase 7)
     bgm_title       = "assets/audio/bgm/title.wav",
     bgm_game        = "assets/audio/bgm/game.wav",

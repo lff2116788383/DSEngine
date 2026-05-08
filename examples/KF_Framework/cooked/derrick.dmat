@@ -11,8 +11,8 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_diffuse.png",
-      "normal_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_normal.png",
+      "base_color_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_diffuse.png",
+      "normal_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_normal.png",
       "metallic_roughness_texture": "",
       "emissive_texture": "",
       "occlusion_texture": ""
@@ -28,8 +28,8 @@
       "alpha_cutoff": 0.5,
       "double_sided": false,
       "alpha_test": false,
-      "base_color_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/1/Police Zombie_diffuse.png",
-      "normal_texture": "C:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_normal.png",
+      "base_color_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/1/Police Zombie_diffuse.png",
+      "normal_texture": "c:/Users/wenbilin/Desktop/temp_analysis/home/app/mixamo-mini/tmp/skins_cdb6f04d-e8fb-4a6f-b4df-a816ca4251d4.fbm/Police Zombie_normal.png",
       "metallic_roughness_texture": "",
       "emissive_texture": "",
       "occlusion_texture": ""
