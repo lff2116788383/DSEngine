@@ -430,7 +430,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
     } else {
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
 
     // === PerFrame UBO：每帧上传一次 ===
@@ -1048,6 +1048,12 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(result, 1.0);
             }
         )";
+    } else if (effect_name == "ui_overlay") {
+        fs_src += R"(
+            void main() {
+                FragColor = texture(screenTexture, TexCoords);
+            }
+        )";
     } else {
         fs_src += R"(
             void main() {
@@ -1084,11 +1090,15 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     }
 
     glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
+    if (effect_name == "ui_overlay") {
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        glDisable(GL_BLEND);
+    }
     glBindVertexArray(pp_vao_handle_);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
-    glEnable(GL_DEPTH_TEST);
 }
 
 // ============================================================
@@ -1117,6 +1127,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     // 2D 精灵不需要光照/材质，填充默认值
     PerSceneUBO per_scene{};
     per_scene.light_dir_and_enabled.w = 0.0f;  // lighting_enabled = false
+    per_scene.light_params.w = 1.0f;  // skip_tonemapping = true (UI sprites are already sRGB)
     ubo_mgr.UploadPerScene(per_scene);
 
     PerMaterialUBO per_mat{};
@@ -1132,7 +1143,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
     } else {
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
     glUniform1i(loc.texture, 0);
     if (loc.model >= 0) {
@@ -1165,7 +1176,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
             glBlendFunc(GL_DST_COLOR, GL_ZERO);
             return;
         }
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     };
     apply_blend(current_blend_mode, current_shader_variant);
 

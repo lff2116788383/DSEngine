@@ -315,8 +315,10 @@ float4 PSMain(PSInput input) : SV_TARGET {
         if (has_emissive_map) {
             result += u_emissive_map.Sample(u_sampler, input.uv).rgb * mat_emissive.rgb;
         }
-        result = result / (result + float3(1.0, 1.0, 1.0));
-        result = pow(result, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
+        if (light_params.w == 0.0) {
+            result = result / (result + float3(1.0, 1.0, 1.0));
+            result = pow(result, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
+        }
         return float4(result, texColor.a * input.color.a);
     }
 

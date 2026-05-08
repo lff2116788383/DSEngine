@@ -349,8 +349,10 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 if (u_has_emissive_map) {
                     result += texture(u_emissive_map, TexCoord).rgb * u_material_emissive;
                 }
-                result = result / (result + vec3(1.0));
-                result = pow(result, vec3(1.0/2.2));
+                if (light_params.w == 0.0) {
+                    result = result / (result + vec3(1.0));
+                    result = pow(result, vec3(1.0/2.2));
+                }
                 FragColor = vec4(result, texColor.a * ourColor.a);
                 return;
             }

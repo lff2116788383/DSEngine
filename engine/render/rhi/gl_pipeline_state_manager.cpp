@@ -35,7 +35,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     if (it == pipeline_states_.end()) {
         // 未找到状态时回退到默认混合状态
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         return;
     }
 
@@ -51,7 +51,8 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         }
     }
     if (state.blend_enabled && (state.blend_src != cached.blend_src || state.blend_dst != cached.blend_dst)) {
-        glBlendFunc(ToGLBlendFactor(state.blend_src), ToGLBlendFactor(state.blend_dst));
+        glBlendFuncSeparate(ToGLBlendFactor(state.blend_src), ToGLBlendFactor(state.blend_dst),
+                            GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
 
     // --- 深度测试 Diff ---

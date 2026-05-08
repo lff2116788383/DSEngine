@@ -760,6 +760,21 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // ui_overlay: 需要 alpha 混合
+    if (effect_name == "ui_overlay") {
+        PipelineStateDesc ui_pp_desc;
+        ui_pp_desc.blend_enabled = true;
+        ui_pp_desc.blend_src = BlendFactor::SrcAlpha;
+        ui_pp_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+        ui_pp_desc.depth_test_enabled = false;
+        ui_pp_desc.depth_write_enabled = false;
+        ui_pp_desc.culling_enabled = false;
+        unsigned int ui_pp_state = pipeline_mgr.CreatePipelineState(ui_pp_desc);
+        if (ui_pp_state != 0) {
+            pipeline_mgr.ApplyPipelineState(ui_pp_state, dc);
+        }
+    }
+
     // 标准全屏四边形路径
     const auto* program = shader_mgr.GetProgram(shader_mgr.postprocess_shader_handle());
     if (!program) return;

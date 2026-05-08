@@ -116,10 +116,10 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
     }
 
     std::sort(items.begin(), items.end(), [](const SpriteDrawItem& a, const SpriteDrawItem& b) {
-        if (a.texture_handle != b.texture_handle) {
-            return a.texture_handle < b.texture_handle;
+        if (a.order_in_layer != b.order_in_layer) {
+            return a.order_in_layer < b.order_in_layer;
         }
-        return a.order_in_layer < b.order_in_layer;
+        return a.texture_handle < b.texture_handle;
     });
     
     // Orthographic projection matching screen pixels, origin at bottom-left

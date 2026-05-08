@@ -494,16 +494,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
     }
 
-    glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(Screen::width()), 0.0f, static_cast<float>(Screen::height()), -1.0f, 1.0f);
-    cmd_buffer.SetCamera(glm::mat4(1.0f), ortho);
-
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.sprite);
-    SpriteDrawItem ui_quad;
-    ui_quad.texture_handle = ui_color_tex;
-    ui_quad.model = glm::translate(glm::mat4(1.0f), glm::vec3(Screen::width() * 0.5f, Screen::height() * 0.5f, 0.0f));
-    ui_quad.model = glm::scale(ui_quad.model, glm::vec3(Screen::width(), Screen::height(), 1.0f));
-    ui_quad.color = glm::vec4(1.0f);
-    cmd_buffer.DrawBatch({ui_quad});
+    cmd_buffer.DrawPostProcess(ui_color_tex, "ui_overlay", {});
     cmd_buffer.EndRenderPass();
 }
 

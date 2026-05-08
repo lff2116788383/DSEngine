@@ -392,6 +392,21 @@ int L_UiSetVisible(lua_State* L) {
     return 0;
 }
 
+int L_UiSetUv(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    float u = static_cast<float>(luaL_checknumber(L, 2));
+    float v = static_cast<float>(luaL_checknumber(L, 3));
+    float w = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float h = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.uv = glm::vec4(u, v, w, h);
+    }
+    return 0;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -417,6 +432,7 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("set_anchor", L_UiSetAnchor);
     set_fn("set_color", L_UiSetColor);
     set_fn("set_visible", L_UiSetVisible);
+    set_fn("set_uv", L_UiSetUv);
 }
 
 }

@@ -1090,9 +1090,11 @@ void VulkanDrawExecutor::DrawPostProcess(
         }
     }
 
-    // 后处理管线状态：无混合、无深度、无剪裁
+    // 后处理管线状态：无深度、无剪裁；ui_overlay 需要 alpha 混合
     PipelineStateDesc pp_desc;
-    pp_desc.blend_enabled = false;
+    pp_desc.blend_enabled = (effect_name == "ui_overlay");
+    pp_desc.blend_src = BlendFactor::SrcAlpha;
+    pp_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
     pp_desc.depth_test_enabled = false;
     pp_desc.depth_write_enabled = false;
     pp_desc.culling_enabled = false;
