@@ -125,6 +125,9 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) override;
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
 
+    bool NeedsTextureYFlip() const override { return false; }
+    bool NeedsReadbackYFlip() const override { return false; }
+
     /// 初始化 D3D11 上下文
     bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false);
 

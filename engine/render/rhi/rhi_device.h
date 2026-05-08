@@ -214,6 +214,11 @@ public:
     virtual void SetGlobalCascadeSplit(unsigned int index, float split) = 0;
     void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { SetGlobalSpotLightSpaceMatrix(0, mat); }
     virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
+
+    /// OpenGL textures need Y-flip on load (bottom-left origin); D3D11/Vulkan don't
+    virtual bool NeedsTextureYFlip() const { return true; }
+    /// OpenGL readback is bottom-up and needs flip; D3D11/Vulkan readback is top-down
+    virtual bool NeedsReadbackYFlip() const { return true; }
 };
 
 /**

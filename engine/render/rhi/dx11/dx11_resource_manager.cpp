@@ -8,9 +8,35 @@
 #include "engine/base/debug.h"
 
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 
 namespace dse {
 namespace render {
+
+static float HalfToFloat(uint16_t h) {
+    uint32_t sign = static_cast<uint32_t>(h >> 15) << 31;
+    uint32_t exponent = (h >> 10) & 0x1Fu;
+    uint32_t mantissa = h & 0x3FFu;
+    uint32_t f;
+    if (exponent == 0) {
+        if (mantissa == 0) {
+            f = sign;
+        } else {
+            exponent = 1;
+            while (!(mantissa & 0x400u)) { mantissa <<= 1; exponent--; }
+            mantissa &= 0x3FFu;
+            f = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+        }
+    } else if (exponent == 31) {
+        f = sign | 0x7F800000u | (mantissa << 13);
+    } else {
+        f = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+    }
+    float result;
+    std::memcpy(&result, &f, 4);
+    return result;
+}
 
 bool DX11ResourceManager::Init(DX11Context* context) {
     context_ = context;
@@ -438,10 +464,24 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
 
     result.pixels.resize(rt.width * rt.height * 4);
     const unsigned char* src = static_cast<const unsigned char*>(mapped.pData);
-    for (int y = 0; y < rt.height; ++y) {
-        memcpy(result.pixels.data() + y * rt.width * 4,
-               src + y * mapped.RowPitch,
-               rt.width * 4);
+    if (td.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+        for (int y = 0; y < rt.height; ++y) {
+            const uint16_t* row = reinterpret_cast<const uint16_t*>(src + y * mapped.RowPitch);
+            unsigned char* dst = result.pixels.data() + y * rt.width * 4;
+            for (int x = 0; x < rt.width; ++x) {
+                for (int c = 0; c < 4; ++c) {
+                    float f = HalfToFloat(row[x * 4 + c]);
+                    f = (std::max)(0.0f, (std::min)(1.0f, f));
+                    dst[x * 4 + c] = static_cast<unsigned char>(f * 255.0f + 0.5f);
+                }
+            }
+        }
+    } else {
+        for (int y = 0; y < rt.height; ++y) {
+            std::memcpy(result.pixels.data() + y * rt.width * 4,
+                   src + y * mapped.RowPitch,
+                   rt.width * 4);
+        }
     }
     dc_->Unmap(staging.Get(), 0);
 

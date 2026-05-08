@@ -126,6 +126,10 @@ void VulkanCommandBuffer::Reset() {
 // VulkanRhiDevice 实现
 // ============================================================
 
+bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
+    return InitVulkan(window_handle, width, height, false);
+}
+
 void VulkanRhiDevice::EnsureInitialized() {
     if (initialized_) return;
 

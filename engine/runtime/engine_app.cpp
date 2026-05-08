@@ -111,7 +111,9 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
         return false;
     }
 
-    FlipImageRowsRgba8(readback.pixels, readback.width, readback.height);
+    if (pipeline.NeedsReadbackYFlip()) {
+        FlipImageRowsRgba8(readback.pixels, readback.width, readback.height);
+    }
     std::filesystem::create_directories(std::filesystem::path(screenshot_path).parent_path());
     if (stbi_write_png(screenshot_path.c_str(), readback.width, readback.height, 4, readback.pixels.data(), readback.width * 4) == 0) {
         std::cerr << "Failed to write screenshot png: " << screenshot_path << "\n";

@@ -213,8 +213,8 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
         blend_attachment.srcColorBlendFactor = ToVkBlendFactor(state.desc.blend_src);
         blend_attachment.dstColorBlendFactor = ToVkBlendFactor(state.desc.blend_dst);
         blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-        blend_attachment.srcAlphaBlendFactor = ToVkBlendFactor(state.desc.blend_src);
-        blend_attachment.dstAlphaBlendFactor = ToVkBlendFactor(state.desc.blend_dst);
+        blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
     }
 

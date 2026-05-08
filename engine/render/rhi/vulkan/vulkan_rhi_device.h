@@ -100,6 +100,7 @@ public:
     ~VulkanRhiDevice() = default;
 
     // --- RhiDevice 接口 ---
+    bool InitDevice(void* window_handle, int width, int height) override;
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
@@ -148,6 +149,9 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
+
+    bool NeedsTextureYFlip() const override { return false; }
+    bool NeedsReadbackYFlip() const override { return false; }
 
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }

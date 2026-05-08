@@ -20,13 +20,13 @@ bool DX11Context::Init(void* window_handle, int width, int height, bool enable_d
         return false;
     }
 
+    width_ = width;
+    height_ = height;
+
     if (!CreateBackbufferViews()) {
         DEBUG_LOG_ERROR("[D3D11] Failed to create backbuffer views");
         return false;
     }
-
-    width_ = width;
-    height_ = height;
     initialized_ = true;
 
     DEBUG_LOG_INFO("[D3D11] Context initialized — Feature Level: {}", FeatureLevelString());

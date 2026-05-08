@@ -279,7 +279,20 @@ copy screenshots\scene_capture.png tools\scene_temp.png
 - [x] **UI颜色发白**: PBR shader 非光照路径用 light_params.w 标志跳过 tone mapping (三后端)
 - [x] **管线状态不同步**: 移除 DrawPostProcess 中的直接 glEnable(GL_DEPTH_TEST) 调用
 - [x] **UI 尺寸硬编码**: gameflow.lua 改为 app.get_screen_width()/height()
-- **已验证**: OpenGL 后端 ✅ | DX11 后端 ❌ 待验证 | Vulkan 后端 ❌ 待验证
+- **已验证**: OpenGL 后端 ✅ | DX11 后端 ✅ | Vulkan 后端 ⚠️ 崩溃(不影响 UI fix)
+
+#### DX11 额外修复 (2025-05-08)
+- [x] `dx11_context.cpp`: width_/height_ 赋值提前到 CreateBackbufferViews() 之前，修复深度纹理 0x0 创建失败
+- [x] `dx11_resource_manager.cpp`: ReadRenderTargetColor 添加 R16G16B16A16_FLOAT→RGBA8 转换 (HalfToFloat)，修复 HDR 截图乱码
+- [x] `rhi_device.h`: 添加 NeedsTextureYFlip()/NeedsReadbackYFlip() 虚方法
+- [x] `dx11_rhi_device.h`: 重写返回 false (D3D11 top-left origin 不需要翻转)
+- [x] `asset_manager.cpp`: 纹理加载 stbi flip 改为按后端条件判断
+- [x] `engine_app.cpp`: 截图回读翻转改为按后端条件判断
+
+#### Vulkan 额外修复 (2025-05-08)
+- [x] `vulkan_rhi_device.h/.cpp`: 添加 InitDevice() override，修复设备未初始化导致 vkCreateImage 失败
+- [x] `vulkan_rhi_device.h`: NeedsTextureYFlip()/NeedsReadbackYFlip() 返回 false
+- [ ] Vulkan 后端渲染阶段仍有 access violation 崩溃，需单独排查
 
 ### P0 — 已完成 ✅
 - [x] Title 背景 title.jpg 全屏

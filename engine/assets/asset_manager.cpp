@@ -422,7 +422,10 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     }
 
     int width, height, channels;
-    stbi_set_flip_vertically_on_load(true);
+    {
+        std::lock_guard<std::mutex> lock(config_mutex_);
+        stbi_set_flip_vertically_on_load(rhi_device_ ? rhi_device_->NeedsTextureYFlip() : true);
+    }
     unsigned char* data = stbi_load_from_memory(file_data.data(), file_data.size(), &width, &height, &channels, 4);
     
     if (!data) {
@@ -909,7 +912,10 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         }
 
         int width, height, channels;
-        stbi_set_flip_vertically_on_load(true);
+        {
+            std::lock_guard<std::mutex> lock(config_mutex_);
+            stbi_set_flip_vertically_on_load(rhi_device_ ? rhi_device_->NeedsTextureYFlip() : true);
+        }
         unsigned char* data = stbi_load_from_memory(file_data.data(), file_data.size(), &width, &height, &channels, 4);
         
         if (!data) {
