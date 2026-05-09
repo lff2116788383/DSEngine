@@ -2,6 +2,7 @@
 #include "engine/assets/pak_reader.h"
 #include "engine/base/debug.h"
 
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <iostream>
@@ -12,6 +13,7 @@ struct StandaloneConfig {
     std::string scene_path  = "main.dscene";
     std::string pak_path;
     std::string lua_script  = "main.lua";
+    std::string rhi_backend;   // --rhi=opengl|d3d11|vulkan
     int width  = 1280;
     int height = 720;
     std::string title = "DSEngine Game";
@@ -27,6 +29,8 @@ StandaloneConfig ParseArgs(int argc, char** argv) {
             cfg.pak_path = arg.substr(6);
         } else if (arg.rfind("--script=", 0) == 0) {
             cfg.lua_script = arg.substr(9);
+        } else if (arg.rfind("--rhi=", 0) == 0) {
+            cfg.rhi_backend = arg.substr(6);
         } else if (arg.rfind("--width=", 0) == 0) {
             cfg.width = std::atoi(arg.substr(8).c_str());
         } else if (arg.rfind("--height=", 0) == 0) {
@@ -54,6 +58,15 @@ std::string FindPakNextToExe(const char* argv0) {
 
 int main(int argc, char** argv) {
     auto cfg = ParseArgs(argc, argv);
+
+    // --rhi= 命令行参数覆盖环境变量 DSE_RHI_BACKEND
+    if (!cfg.rhi_backend.empty()) {
+#ifdef _WIN32
+        _putenv_s("DSE_RHI_BACKEND", cfg.rhi_backend.c_str());
+#else
+        setenv("DSE_RHI_BACKEND", cfg.rhi_backend.c_str(), 1);
+#endif
+    }
 
     // Auto-detect .dpak next to executable if not specified
     if (cfg.pak_path.empty()) {
