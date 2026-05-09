@@ -31,9 +31,9 @@ function Scene.setup()
     ecs.add_skybox(skybox_ent, ASSET.skybox_pano)
 
     -- 4. Ground (demoField.mesh from KF, converted to .dmesh)
-    -- Z-flip: dmesh retains KF's original Z; scale_z=-100 flips to DSE coordinates
+    -- kf_to_gltf.py already flipped Z in vertex data; no need to flip again
     local ground = ecs.create_entity()
-    ecs.add_transform(ground, 0, 0, 0, 100, 100, -100)
+    ecs.add_transform(ground, 0, 0, 0, 100, 100, 100)
     ecs.add_mesh_renderer(ground, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(ground, "cooked/demoField.dmesh")
     ecs.set_mesh_shader_variant(ground, "MESH_HALFLAMBERT_STATIC")
