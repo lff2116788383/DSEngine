@@ -10,13 +10,15 @@ local ecs = dse.ecs
 local Scene = {}
 
 function Scene.setup()
-    -- 1. Directional light (boosted to match KF's DX9 fixed-pipeline brightness)
+    -- 1. Directional light — exact KF parameters:
+    --    light_diffuse = (0.8, 0.8, 0.8), ambient = (0.2, 0.2, 0.2) [unused in HL shader]
+    --    direction = (-1, -4, +1).Normalized() → DSE Z-flip → (-1, -4, -1)
     local sun = ecs.create_entity()
     ecs.add_transform(sun, 0, 0, 0)
     local ld = math.sqrt(1+16+1)
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
-         0.92, 0.88, 0.84, 0.85, 0.30, 0.35)
+         0.8, 0.8, 0.8, 1.0, 0.20, 0.35)
     ecs.set_directional_light_shadow(sun, true, 1.0, 800, 3000, 15000)
 
     -- 2. Sky light

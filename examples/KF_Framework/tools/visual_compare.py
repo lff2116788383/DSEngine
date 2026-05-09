@@ -202,28 +202,42 @@ def bring_to_front(hwnd):
     user32.SetForegroundWindow(hwnd)
     time.sleep(0.3)
 
+PW_CLIENTONLY = 0x1
+PW_RENDERFULLCONTENT = 0x2
+
 def capture_window_gdi(hwnd):
-    """DX9 窗口截图 → (width, height, [row_bytes...])"""
-    bring_to_front(hwnd)
+    """窗口截图 (纯后台: 不抢焦点, 不要求窗口在最前面)"""
+    # 优先 GetClientRect, 回退 GetWindowRect (后台/最小化时仍有效)
     crect = wt.RECT()
     user32.GetClientRect(hwnd, ctypes.byref(crect))
     w, h = crect.right, crect.bottom
+    use_window_rect = False
     if w <= 0 or h <= 0:
-        raise RuntimeError(f"Invalid client rect: {w}x{h}")
-    pt = wt.POINT(0, 0)
-    user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        wrect = wt.RECT()
+        user32.GetWindowRect(hwnd, ctypes.byref(wrect))
+        w = wrect.right - wrect.left
+        h = wrect.bottom - wrect.top
+        use_window_rect = True
+        print(f"  [capture] ClientRect=0, using WindowRect={w}x{h}")
+    if w <= 0 or h <= 0:
+        raise RuntimeError(f"Invalid rect: {w}x{h}")
+
+    # PrintWindow: 后台截图, 不需要窗口在前台
     hdc_scr = user32.GetDC(None)
     hdc_mem = gdi32.CreateCompatibleDC(hdc_scr)
     hbmp = gdi32.CreateCompatibleBitmap(hdc_scr, w, h)
+    user32.ReleaseDC(None, hdc_scr)
     old = gdi32.SelectObject(hdc_mem, hbmp)
-    gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_scr, pt.x, pt.y, SRCCOPY)
+    pw_flags = PW_RENDERFULLCONTENT if use_window_rect else (PW_CLIENTONLY | PW_RENDERFULLCONTENT)
+    user32.PrintWindow(hwnd, hdc_mem, pw_flags)
+
     bmi = BITMAPINFOHEADER()
     bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
     bmi.biWidth = w; bmi.biHeight = -h; bmi.biPlanes = 1; bmi.biBitCount = 32
     buf = ctypes.create_string_buffer(w * h * 4)
     gdi32.GetDIBits(hdc_mem, hbmp, 0, h, buf, ctypes.byref(bmi), DIB_RGB_COLORS)
     gdi32.SelectObject(hdc_mem, old); gdi32.DeleteObject(hbmp)
-    gdi32.DeleteDC(hdc_mem); user32.ReleaseDC(None, hdc_scr)
+    gdi32.DeleteDC(hdc_mem)
     raw = buf.raw
     rows = []
     for y in range(h):
@@ -307,7 +321,7 @@ def send_key(hwnd, vk, hold_ms=120):
 #  Step 1: 截取 KF 原版
 # ============================================================================
 
-def capture_kf(exe_path, out_path, wait_title=3.0, battle_mode=True, battle_wait=5.0, manual=False):
+def capture_kf(exe_path, out_path, wait_title=3.0, battle_mode=True, battle_wait=5.0, manual=False, demo_play=False):
     print(f"\n{'='*60}")
     print(f"  Step 1: Capture KF Original")
     print(f"{'='*60}")
@@ -365,13 +379,17 @@ def capture_kf(exe_path, out_path, wait_title=3.0, battle_mode=True, battle_wait
             print("  ╚═══════════════════════════════════════════════════╝")
             input("  >> 准备好后按 Enter 截图...")
         else:
-            print(f"  Auto battle mode: injecting keys via SendInput...")
-            # 多次尝试发送 Space (默认选中 PLAY GAME)
+            mode_name = "DEMO PLAY" if demo_play else "PLAY GAME"
+            print(f"  Auto mode: injecting keys for [{mode_name}]...")
             for attempt in range(3):
                 bring_to_front(hwnd)
                 time.sleep(0.3)
+                if demo_play:
+                    # DEMO PLAY: Right → 选中第二项, 然后 Space 确认
+                    send_key(hwnd, VK_RIGHT, 150)
+                    time.sleep(0.3)
                 n = send_key(hwnd, VK_SPACE, 150)
-                print(f"    Attempt {attempt+1}: SendInput returned {n} (1=success)")
+                print(f"    Attempt {attempt+1}: SendInput returned {n} (1=success) [{mode_name}]")
                 if n == 1:
                     break
                 time.sleep(0.5)
@@ -379,28 +397,38 @@ def capture_kf(exe_path, out_path, wait_title=3.0, battle_mode=True, battle_wait
             time.sleep(battle_wait)
 
     # 重新搜索窗口 (模式切换可能重建窗口)
-    if proc.poll() is not None:
-        print(f"  [ERROR] KF process exited (code={proc.returncode})")
+    poll = proc.poll()
+    if poll is not None:
+        print(f"  [ERROR] KF process exited (code={poll})")
         return False
-    for _ in range(50):
+    print(f"  Process alive, searching window...")
+
+    # 纯后台截图: 不抢焦点, 不 ShowWindow
+    captured = False
+    for attempt in range(80):
         hwnd = find_window_by_pid(proc.pid)
         if hwnd:
-            rect = wt.RECT()
-            user32.GetClientRect(hwnd, ctypes.byref(rect))
-            if rect.right > 400 and rect.bottom > 300:
-                break
-            hwnd = None
-        time.sleep(0.1)
-    if not hwnd:
-        print("  [ERROR] Window lost after battle transition!")
+            try:
+                w, h, rows = capture_window_gdi(hwnd)
+                if w > 100 and h > 100:
+                    write_png(out_path, w, h, rows)
+                    print(f"  Saved: {out_path} ({w}x{h})")
+                    captured = True
+                    break
+            except RuntimeError as e:
+                if attempt < 3 or attempt % 20 == 0:
+                    print(f"    [{attempt}] {e}, retrying...")
+        else:
+            if attempt % 20 == 0:
+                print(f"    [{attempt}] no visible window found")
+        if proc.poll() is not None:
+            print(f"  [ERROR] KF exited (code={proc.returncode})")
+            return False
+        time.sleep(0.2)
+    if not captured:
+        print("  [ERROR] Failed to capture KF window!")
         proc.terminate()
         return False
-
-    bring_to_front(hwnd)
-    time.sleep(0.5)
-    w, h, rows = capture_window_gdi(hwnd)
-    write_png(out_path, w, h, rows)
-    print(f"  Saved: {out_path} ({w}x{h})")
 
     proc.terminate()
     try:
@@ -414,7 +442,7 @@ def capture_kf(exe_path, out_path, wait_title=3.0, battle_mode=True, battle_wait
 #  Step 2: 截取 DSEngine
 # ============================================================================
 
-def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60):
+def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60, demo_play=False):
     print(f"\n{'='*60}")
     print(f"  Step 2: Capture DSEngine")
     print(f"{'='*60}")
@@ -434,7 +462,7 @@ def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60):
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
     env["DSE_DATA_ROOT"] = str(kf_dir)
-    env["DSE_AUTO_BATTLE"] = "1"  # 1=PlayGame(no AI), 2=DemoPlay(AI)
+    env["DSE_AUTO_BATTLE"] = "2" if demo_play else "1"  # 1=PlayGame(no AI), 2=DemoPlay(AI)
     env["DSE_STARTUP_LUA"] = str(lua_script)
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
 
@@ -645,6 +673,7 @@ def main():
                         default=r"C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\KF_Framework_Release.exe")
     parser.add_argument("--kf-wait", type=float, default=4.0, help="KF Title 加载等待秒数")
     parser.add_argument("--battle-wait", type=float, default=10.0, help="KF 进入战斗后等待秒数 (需要足够时间完成fade+加载)")
+    parser.add_argument("--demo-play", action="store_true", help="KF 进入 DEMO PLAY 模式 (而非 PLAY GAME)")
     parser.add_argument("--manual", action="store_true", help="KF 手动操作模式 (DirectInput 注入失败时使用)")
     parser.add_argument("--auto-input", action="store_true", default=True, help="KF 自动键盘注入模式 (默认)")
     parser.add_argument("--dse-frames", type=int, default=180, help="DSEngine 运行帧数")
@@ -669,10 +698,10 @@ def main():
     do_cmp = not args.kf_only and not args.dse_only
 
     if do_kf:
-        capture_kf(args.kf_exe, kf_png, args.kf_wait, battle, args.battle_wait, args.manual)
+        capture_kf(args.kf_exe, kf_png, args.kf_wait, battle, args.battle_wait, args.manual, args.demo_play)
 
     if do_dse:
-        capture_dse(engine_root, kf_dir, dse_png, args.dse_frames, args.timeout)
+        capture_dse(engine_root, kf_dir, dse_png, args.dse_frames, args.timeout, args.demo_play)
 
     if do_cmp:
         compare_screenshots(kf_png, dse_png, report, heatmap)
