@@ -1,5 +1,6 @@
-import struct
-f = open(r"c:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\data\MATERIAL\demoField.material", "rb")
+import struct, sys
+path = sys.argv[1] if len(sys.argv) > 1 else r"c:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\data\MATERIAL\demoField.material"
+f = open(path, "rb")
 d = f.read(); f.close()
 off = 0
 for i in range(16):
