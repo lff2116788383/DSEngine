@@ -7,6 +7,8 @@ local Audio         = require("script.audio")
 local TerrainHeight = require("script.terrain_height")
 local ASSET = Config.ASSET
 local ENEMY = Config.ENEMY
+local ui = dse.ui
+local app = dse.app
 local COND = {
     GREATER = Config.COND_GREATER,
     LESS    = Config.COND_LESS,
@@ -18,6 +20,12 @@ local ecs = dse.ecs
 
 local Enemy = {}
 Enemy.instances = {}
+
+-- HP bar 参数 (KF: EnemyUiController)
+local HP_BAR_W = 80       -- 血条宽度 (屏幕像素)
+local HP_BAR_H = 8        -- 血条高度
+local HP_OFFSET_Y = 400   -- 头顶偏移 (世界单位, KF: 4.0×100)
+local HP_DISPLAY_DIST = 5000  -- 显示距离 (KF: 50×100)
 
 -- 单个敌人的数据
 local function new_enemy_data(entity, x, z, params)
@@ -36,6 +44,9 @@ local function new_enemy_data(entity, x, z, params)
         damaged_timer = 0,
         spawn_x = x,
         spawn_z = z,
+        -- HP bar UI entities
+        hp_bg = nil,
+        hp_fill = nil,
     }
 end
 
@@ -82,6 +93,7 @@ function Enemy.spawn(x, y, z, params)
     tr("idle", "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
     tr("run",  "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
     tr("punch","dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
+    tr("roar", "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
 
     ecs.set_animator_3d_state(e, "idle", 1.0, true)
 
@@ -154,12 +166,16 @@ function Enemy.update_one(data, dt, player_x, player_z)
     local ex, ey, ez = ecs.get_transform_position(data.entity)
     local dist = distance_xz(ex, ez, player_x, player_z)
 
-    -- 受击硬直
+    -- 受击硬直 (KF: ZombieImpactState — 恢复后根据距离决定下一状态)
     if data.state == "damaged" then
         data.damaged_timer = data.damaged_timer - dt
         ecs.set_animator_3d_param_float(data.entity, "speed", 0)
         if data.damaged_timer <= 0 then
-            data.state = "idle"
+            if dist < data.warning_range then
+                data.state = "chase"
+            else
+                data.state = "idle"
+            end
         end
         return
     end
@@ -247,6 +263,97 @@ function Enemy.alive_count()
         end
     end
     return count
+end
+
+--------------------------------------------------------------------------------
+-- 敌人 HP 条 UI (KF: EnemyUiController — 3D 世界空间血条)
+-- 每帧根据敌人世界位置投影到屏幕空间, 更新 UI 位置/宽度/可见性
+--------------------------------------------------------------------------------
+function Enemy.setup_hp_bars()
+    for _, data in ipairs(Enemy.instances) do
+        if not data.hp_bg then
+            -- 背景条 (深红)
+            data.hp_bg = ecs.create_entity()
+            ecs.add_transform(data.hp_bg, 0, 0, 0)
+            ui.add_renderer(data.hp_bg, 0, 0.2, 0.05, 0.05, 0.7, 45, HP_BAR_W + 4, HP_BAR_H + 4)
+            ui.set_anchor(data.hp_bg, 0.0, 0.0)  -- 左下角锚点 (手动定位)
+            ui.set_visible(data.hp_bg, false)
+        end
+        if not data.hp_fill then
+            -- 填充条 (红色, KF: enemy_life material = Color::kRed)
+            data.hp_fill = ecs.create_entity()
+            ecs.add_transform(data.hp_fill, 0, 0, 0)
+            ui.add_renderer(data.hp_fill, 0, 0.9, 0.15, 0.15, 1.0, 46, HP_BAR_W, HP_BAR_H)
+            ui.set_anchor(data.hp_fill, 0.0, 0.0)
+            ui.set_visible(data.hp_fill, false)
+        end
+    end
+end
+
+function Enemy.update_hp_bars(player_x, player_z)
+    local screen_w = app.get_screen_width()
+    local screen_h = app.get_screen_height()
+    for _, data in ipairs(Enemy.instances) do
+        if not data.hp_bg or not data.hp_fill then goto continue end
+
+        -- 死亡或满血: 隐藏
+        if data.state == "dead" or data.hp >= data.max_hp then
+            ui.set_visible(data.hp_bg, false)
+            ui.set_visible(data.hp_fill, false)
+            goto continue
+        end
+
+        -- 距离检查 (KF: kSquareDisplayDistance = 50²)
+        local ex, ey, ez = ecs.get_transform_position(data.entity)
+        local dx = ex - player_x
+        local dz = ez - player_z
+        local dist = math.sqrt(dx * dx + dz * dz)
+        if dist > HP_DISPLAY_DIST then
+            ui.set_visible(data.hp_bg, false)
+            ui.set_visible(data.hp_fill, false)
+            goto continue
+        end
+
+        -- 投影到屏幕 (头顶位置)
+        local sx, sy, vis = ecs.world_to_screen(ex, ey + HP_OFFSET_Y, ez)
+        if not vis then
+            ui.set_visible(data.hp_bg, false)
+            ui.set_visible(data.hp_fill, false)
+            goto continue
+        end
+
+        -- 透视缩放: 近处大, 远处小 (基准距离 1000)
+        local scale = math.max(0.3, math.min(1.5, 1000.0 / (dist + 100)))
+        local bar_w = HP_BAR_W * scale
+        local bar_h = HP_BAR_H * scale
+
+        -- 居中定位 (锚点=左下, 需偏移)
+        local px_bg = sx - (bar_w + 4) * 0.5
+        local py_bg = screen_h - sy - (bar_h + 4) * 0.5  -- UI Y 从底部算
+
+        ui.set_position(data.hp_bg, px_bg, py_bg)
+        ui.set_size(data.hp_bg, bar_w + 4, bar_h + 4)
+        ui.set_visible(data.hp_bg, true)
+
+        -- 填充条 (按 HP 比例缩放宽度)
+        local ratio = math.max(0, data.hp / data.max_hp)
+        ui.set_position(data.hp_fill, px_bg + 2, py_bg + 2)
+        ui.set_size(data.hp_fill, bar_w * ratio, bar_h)
+        ui.set_visible(data.hp_fill, true)
+
+        ::continue::
+    end
+end
+
+function Enemy.hide_hp_bars()
+    for _, data in ipairs(Enemy.instances) do
+        if data.hp_bg then ui.set_visible(data.hp_bg, false) end
+        if data.hp_fill then ui.set_visible(data.hp_fill, false) end
+    end
+end
+
+function Enemy.show_hp_bars()
+    -- HP bars show/hide is controlled by update_hp_bars per-frame
 end
 
 return Enemy

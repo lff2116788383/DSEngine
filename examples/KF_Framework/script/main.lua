@@ -37,6 +37,7 @@
 --------------------------------------------------------------------------------
 
 local app = dse.app
+local ecs = dse.ecs
 
 -- 模块加载
 local Config   = require("script.config")
@@ -48,6 +49,28 @@ local Audio    = require("script.audio")
 local HUD      = require("script.hud")
 local Fade     = require("script.fade")
 local AutoPlay = require("script.autoplay")
+
+-- 风车旋转 (KF: WindmillController)
+local windmill_fans = {}    -- Fan entity list
+local WINDMILL_SPEED = 45.0 -- 度/秒 (KF: 原版旋转速度)
+local windmill_angle = 0    -- 累计旋转角度
+
+-- KF: CollisionDetector::SphereCollision — 球体碰撞推开
+local function resolve_sphere_collision(e1, r1, e2, r2)
+    local x1, y1, z1 = ecs.get_transform_position(e1)
+    local x2, y2, z2 = ecs.get_transform_position(e2)
+    local dx = x2 - x1
+    local dz = z2 - z1
+    local dist = math.sqrt(dx * dx + dz * dz)
+    local min_dist = r1 + r2
+    if dist < min_dist and dist > 0.01 then
+        local overlap = (min_dist - dist) * 0.5
+        local nx = dx / dist
+        local nz = dz / dist
+        ecs.set_transform_position(e1, x1 - nx * overlap, y1, z1 - nz * overlap)
+        ecs.set_transform_position(e2, x2 + nx * overlap, y2, z2 + nz * overlap)
+    end
+end
 
 --------------------------------------------------------------------------------
 -- Awake
@@ -74,6 +97,16 @@ function Awake()
     HUD.setup()
     HUD.hide()  -- Title 状态下隐藏 HUD, enter_battle 时显示
     Fade.setup()
+
+    -- 敌人 HP 条初始化
+    Enemy.setup_hp_bars()
+
+    -- 风车 Fan 实体查找 (KF: WindmillController 旋转 Fan 子物体)
+    windmill_fans = ecs.find_entities_by_mesh_path("cooked/Fan_0.dmesh")
+    if #windmill_fans > 0 then
+        print("[KF_Framework] Windmill fans found: " .. #windmill_fans)
+    end
+
     GameFlow.setup()  -- 进入 Title 状态 + title BGM + fade_in
 
     print("[KF_Framework] Phase 1~8 loaded. Title → Battle → Result → Title")
@@ -99,8 +132,18 @@ function Update(dt)
     -- Phase 6: 游戏流程更新
     GameFlow.update(dt)
 
+    -- 风车旋转 (KF: WindmillController::Update — 全状态运行)
+    windmill_angle = windmill_angle + WINDMILL_SPEED * dt
+    if windmill_angle > 360 then windmill_angle = windmill_angle - 360 end
+    for _, fan in ipairs(windmill_fans) do
+        ecs.set_transform_rotation(fan, 0, 0, windmill_angle)
+    end
+
     -- Result 状态或 Fade 过渡中冻结游戏逻辑 (KF: TimeScale=0 during fade)
-    if GameFlow.get_state() ~= GameFlow.STATE_BATTLE then return end
+    if GameFlow.get_state() ~= GameFlow.STATE_BATTLE then
+        Enemy.hide_hp_bars()
+        return
+    end
     if Fade.is_fading() then return end
 
     Player.update(dt)
@@ -108,6 +151,33 @@ function Update(dt)
     -- 敌人 AI 更新
     local px, py, pz = Player.get_position()
     Enemy.update_all(dt, px, py, pz)
+
+    -- KF: CollisionDetector — 角色间球体碰撞
+    local p_ent = Player.get_entity()
+    local p_r = Config.PLAYER.collision_radius
+    local e_r = Config.ENEMY.collision_radius
+    for _, data in ipairs(Enemy.instances) do
+        if data.state ~= "dead" then
+            resolve_sphere_collision(p_ent, p_r, data.entity, e_r)
+        end
+    end
+    for i = 1, #Enemy.instances do
+        local a = Enemy.instances[i]
+        if a.state ~= "dead" then
+            for j = i + 1, #Enemy.instances do
+                local b = Enemy.instances[j]
+                if b.state ~= "dead" then
+                    resolve_sphere_collision(a.entity, e_r, b.entity, e_r)
+                end
+            end
+        end
+    end
+
+    -- 更新碰撞后的玩家位置
+    px, py, pz = Player.get_position()
+
+    -- 敌人 HP 条更新 (KF: EnemyUiController::Update)
+    Enemy.update_hp_bars(px, pz)
 
     -- Phase 5: 战斗判定 — 敌人攻击命中玩家
     if not Player.is_dead() then
@@ -148,8 +218,9 @@ function Update(dt)
     end
 
     -- HUD 更新
-    HUD.update(Player.get_hp(), Config.PLAYER.max_hp)
+    HUD.update(Player.get_hp(), Config.PLAYER.max_hp, dt)
 
     -- Phase 6: 检查战斗结束条件
     GameFlow.check_battle_end(Player.is_dead(), Enemy.alive_count())
+
 end

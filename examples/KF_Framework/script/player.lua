@@ -156,11 +156,14 @@ function Player.setup()
     local function tr(from, to, dur, exit, exit_t, conds)
         ecs.add_animator_3d_transition(knight, from, to, dur, exit, exit_t, conds)
     end
-    -- idle ↔ walk ↔ run
-    tr("idle", "walk", 0.167, false, 1.0, {{"speed", COND.GREATER, 0.1}})
-    tr("walk", "idle", 0.167, false, 1.0, {{"speed", COND.LESS, 0.1}})
-    tr("walk", "run",  0.167, false, 1.0, {{"speed", COND.GREATER, 0.7}})
-    tr("run",  "walk", 0.167, false, 1.0, {{"speed", COND.LESS, 0.7}})
+    -- idle ↔ walk ↔ run (KF: movement > 0.5f 触发 run)
+    -- FSM 按注册顺序匹配, idle→run 在 idle→walk 之前 (键盘 speed=1.0 直接进run)
+    tr("idle", "run",  0.167, false, 1.0, {{"speed", COND.GREATER, 0.5}})
+    tr("idle", "walk", 0.167, false, 1.0, {{"speed", COND.GREATER, 0.01}})
+    tr("walk", "idle", 0.167, false, 1.0, {{"speed", COND.LESS, 0.01}})
+    tr("walk", "run",  0.167, false, 1.0, {{"speed", COND.GREATER, 0.5}})
+    tr("run",  "idle", 0.167, false, 1.0, {{"speed", COND.LESS, 0.01}})
+    tr("run",  "walk", 0.167, false, 1.0, {{"speed", COND.LESS, 0.5}})
     -- attack
     tr("idle", "attack1", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
     tr("walk", "attack1", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
@@ -211,8 +214,17 @@ function Player.setup()
     print("[KF_Framework] Knight + Camera ready. 13 states configured.")
 end
 
+-- KF 移动参数 (actor_parameter.h / game_object_spawner.cpp)
+local KF_MOVE_SPEED = 1500.0      -- KF: 10.0 × 100=1000, ×1.5 补偿感知差异
+local KF_MIN_TURN = math.pi        -- KF: π rad/sec (180°/s)
+local KF_MAX_TURN = math.pi * 2.0  -- KF: 2π rad/sec (360°/s)
+-- 简单场地边界 (KF: FieldCollider 限制活动区域)
+local FIELD_MIN_X, FIELD_MAX_X = -20000, 20000
+local FIELD_MIN_Z, FIELD_MAX_Z = -20000, 20000
+
 --------------------------------------------------------------------------------
 -- 每帧更新: 输入 → 移动 → FSM → 摄像机跟随
+-- KF: PlayerState::UpdateInput → ActorController::Move
 --------------------------------------------------------------------------------
 function Player.update(dt)
     if not knight or state.dead then return end
@@ -223,48 +235,88 @@ function Player.update(dt)
         state.invincible_timer = state.invincible_timer - dt
     end
 
-    -- 输入 (手动 or AutoPlay AI)
+    -- 输入 (KF: PlayerState::UpdateInput — 摄像机相对方向)
     local move_x, move_z = 0, 0
-    local running = false
     local ai_attack, ai_block = false, false
     if AutoPlay.is_enabled() then
-        move_x, move_z, running, ai_attack, ai_block = AutoPlay.get_input(dt, knight)
+        local _running
+        move_x, move_z, _running, ai_attack, ai_block = AutoPlay.get_input(dt, knight)
     else
-        if app.get_key(87)  then move_z = -1 end  -- W (forward = -Z in DSE = +Z in KF)
-        if app.get_key(83)  then move_z =  1 end  -- S (backward = +Z in DSE)
-        if app.get_key(65)  then move_x = -1 end  -- A
-        if app.get_key(68)  then move_x =  1 end  -- D
-        running = app.get_key(340) or app.get_key(344)
-    end
-    local raw_speed = math.sqrt(move_x * move_x + move_z * move_z)
+        -- 键盘原始输入 (摄像机本地空间)
+        local input_fwd, input_right = 0, 0
+        if app.get_key(87)  then input_fwd   = input_fwd + 1 end    -- W (forward)
+        if app.get_key(83)  then input_fwd   = input_fwd - 1 end    -- S (backward)
+        if app.get_key(65)  then input_right = input_right - 1 end  -- A (left)
+        if app.get_key(68)  then input_right = input_right + 1 end  -- D (right)
 
-    -- 归一化速度
-    local norm_speed = 0.0
-    if raw_speed > 0.01 then
-        norm_speed = running and 1.0 or 0.5
+        -- KF: movement = camera.Right * axis.x + camera.Forward * axis.y
+        -- 将摄像机空间输入转换到世界空间
+        if camera and (input_fwd ~= 0 or input_right ~= 0) then
+            local cx, _, cz = ecs.get_transform_position(camera)
+            local px, _, pz = ecs.get_transform_position(knight)
+            local dx = px - cx
+            local dz = pz - cz
+            local d = math.sqrt(dx * dx + dz * dz)
+            if d > 0.001 then
+                -- 摄像机前方 (XZ 平面, 从摄像机指向玩家)
+                local fwd_x = dx / d
+                local fwd_z = dz / d
+                -- 摄像机右方 = cross(forward, up)
+                local right_x = -fwd_z
+                local right_z = fwd_x
+                move_x = right_x * input_right + fwd_x * input_fwd
+                move_z = right_z * input_right + fwd_z * input_fwd
+            end
+        end
     end
-    state.speed = norm_speed
-    ecs.set_animator_3d_param_float(knight, "speed", norm_speed)
 
-    -- 移动 + 朝向
-    if raw_speed > 0.01 then
-        local nx = move_x / raw_speed
-        local nz = move_z / raw_speed
-        -- 朝向插值
+    -- KF: move_amount = min(movement.Magnitude(), 1.0) * movement_multiplier
+    local raw_mag = math.sqrt(move_x * move_x + move_z * move_z)
+    local move_amount = math.min(raw_mag, 1.0)  -- keyboard: ~0.707 (diagonal) or 1.0
+
+    -- KF: animator.SetMovement(move_amount) — 驱动 walk/run 动画
+    -- walk→run: movement > 0.5f (KF motion_state 阈值), 键盘 amount=1.0 永远触发 run
+    state.speed = move_amount
+    ecs.set_animator_3d_param_float(knight, "speed", move_amount)
+
+    -- KF: ActorController::Move — 旋转 + 前方移动
+    if move_amount > 0.01 then
+        local nx = move_x / raw_mag
+        local nz = move_z / raw_mag
+
+        -- KF: 输入方向转为本地空间角度差
         local target_yaw = math.deg(math.atan(nx, nz))
         local yaw_diff = target_yaw - state.facing_yaw
         while yaw_diff > 180 do yaw_diff = yaw_diff - 360 end
         while yaw_diff < -180 do yaw_diff = yaw_diff + 360 end
-        local max_turn = Config.PLAYER.turn_speed * dt
-        if math.abs(yaw_diff) < max_turn then
-            state.facing_yaw = target_yaw
-        else
-            state.facing_yaw = state.facing_yaw + max_turn * (yaw_diff > 0 and 1 or -1)
+
+        -- KF: turn_speed = Lerp(minTurn, maxTurn, move_amount)
+        local turn_speed = KF_MIN_TURN + (KF_MAX_TURN - KF_MIN_TURN) * move_amount
+
+        -- KF: RotateByYaw(rotation_y * turn_speed * dt)
+        -- rotation_y (rad) × turn_speed (rad/s) × dt (s) = 比例控制器
+        local rotation_y_rad = math.rad(yaw_diff)
+        local delta_yaw = math.deg(rotation_y_rad * turn_speed * dt)
+
+        -- 防止过冲
+        if math.abs(delta_yaw) > math.abs(yaw_diff) then
+            delta_yaw = yaw_diff
         end
-        -- 位移
-        local spd = running and Config.PLAYER.run_speed or Config.PLAYER.move_speed
+        state.facing_yaw = state.facing_yaw + delta_yaw
+
+        -- KF: 沿角色前方移动 (forward * move_amount * move_speed * dt)
+        local yaw_rad = math.rad(state.facing_yaw)
+        local fwd_x = math.sin(yaw_rad)
+        local fwd_z = math.cos(yaw_rad)
         local px, py, pz = ecs.get_transform_position(knight)
-        ecs.set_transform_position(knight, px + nx * spd * dt, py, pz + nz * spd * dt)
+        local new_x = px + fwd_x * move_amount * KF_MOVE_SPEED * dt
+        local new_z = pz + fwd_z * move_amount * KF_MOVE_SPEED * dt
+
+        -- 场地边界限制 (KF: FieldCollider)
+        new_x = math.max(FIELD_MIN_X, math.min(FIELD_MAX_X, new_x))
+        new_z = math.max(FIELD_MIN_Z, math.min(FIELD_MAX_Z, new_z))
+
+        ecs.set_transform_position(knight, new_x, py, new_z)
     end
     ecs.set_transform_rotation(knight, 0, state.facing_yaw, 0)
 

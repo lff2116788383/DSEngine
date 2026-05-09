@@ -89,6 +89,7 @@ Config.PLAYER = {
     attack      = 1,        -- KF: ActorParameter default attack_=1
     defence     = 1,        -- KF: ActorParameter default defence_=1
     invincible_time = 0.5,  -- KF: kInvincibleTime = 0.5f
+    collision_radius = 50.0, -- KF: kCollisionRadius ~0.5 × 100
 }
 
 -- 敌人参数 (KF: EnemyController + EnemyZombieFollowState)
@@ -104,6 +105,7 @@ Config.ENEMY = {
     max_hp        = 3,       -- KF: demo.enemy param[0]=3 (默认敌人)
     attack        = 1,       -- KF: demo.enemy param[2]=1
     defence       = 1,       -- KF: demo.enemy param[3]=1
+    collision_radius = 50.0, -- KF: kCollisionRadius ~0.5 × 100
 }
 
 -- 摄像机参数 (KF third_person_camera.h + camera.cpp)

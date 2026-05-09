@@ -99,6 +99,7 @@ public:
     bool GetBool(const std::string& name) const;
 
     const std::unordered_map<std::string, AnimState>& GetStates() const { return states_; }
+    std::unordered_map<std::string, AnimState>& GetStatesMutable() { return states_; }
     const std::string& GetDefaultState() const { return default_state_; }
     const std::unordered_map<std::string, AnimParameter>& GetParameters() const { return parameters_; }
     

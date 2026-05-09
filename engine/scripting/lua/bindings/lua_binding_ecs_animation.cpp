@@ -230,7 +230,7 @@ int L_EcsAddAnimator3DTransition(lua_State* L) {
     if (!animator || !animator->state_machine) return 0;
 
     auto& fsm = *animator->state_machine;
-    auto states = const_cast<std::unordered_map<std::string, gameplay3d::AnimState>&>(fsm.GetStates());
+    auto& states = fsm.GetStatesMutable();
     auto it = states.find(from_state);
     if (it == states.end()) return 0;
 
