@@ -87,16 +87,32 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
     if (!light.enabled || !light.cast_shadow) return;
 
+    // Find main camera position to center shadow maps on the scene
+    glm::vec3 shadow_center(0.0f);
+    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera3d_view) {
+        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+        if (camera.enabled && ctx_.world->registry().all_of<TransformComponent>(entity)) {
+            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            shadow_center = transform.position + front * 50.0f;
+            break;
+        }
+    }
+
     std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
     std::vector<float> cascade_splits(CSM_CASCADES);
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
 
-        float size = 20.0f * std::pow(2.0f, static_cast<float>(i));
-        glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, 200.0f);
-        glm::vec3 light_pos = -glm::normalize(light.direction) * 100.0f;
-        glm::mat4 light_view_mat = glm::lookAt(light_pos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        // Use cascade_splits to scale ortho projection size
+        float size = light.cascade_splits[i];
+        float far_dist = size * 4.0f;
+        glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+        glm::vec3 light_dir_n = glm::normalize(light.direction);
+        glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
+        glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
 
         light_space_matrices[i] = light_proj * light_view_mat;
         cascade_splits[i] = light.cascade_splits[i];

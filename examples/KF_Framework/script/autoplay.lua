@@ -73,13 +73,12 @@ function AutoPlay.get_input(dt, knight_entity)
         nz = dz / len
     end
 
-    local move_x, move_z = 0, 0
-    local running = false
+    -- KF DemoPlay 行为: 骑士不移动 (demo_play.log 移动量全为零),
+    -- 只在近距离时攻击/格挡, 敌人主动接近骑士
     local attack = false
     local block = false
 
     local attack_range = 280.0   -- 略大于战斗判定距离
-    local close_range = 400.0
 
     if dist < attack_range then
         -- 近距离: 攻击或格挡
@@ -89,25 +88,16 @@ function AutoPlay.get_input(dt, knight_entity)
         elseif attack_timer <= 0 then
             attack = true
             attack_timer = 0.6  -- 连击间隔
-            -- 偶尔格挡 (20% 概率, 敌人在攻击时)
+            -- 偶尔格挡 (30% 概率, 敌人在攻击时)
             if target.state == "attack" and math.random() < 0.3 then
                 block_timer = 0.8
                 block = true
                 attack = false
             end
         end
-    elseif dist < close_range then
-        -- 中距离: 走向敌人
-        move_x = nx
-        move_z = nz
-    else
-        -- 远距离: 跑向敌人
-        move_x = nx
-        move_z = nz
-        running = true
     end
 
-    return move_x, move_z, running, attack, block
+    return 0, 0, false, attack, block
 end
 
 function AutoPlay.reset()

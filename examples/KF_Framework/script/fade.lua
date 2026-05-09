@@ -222,4 +222,21 @@ function Fade.is_fading()
     return fade_state ~= "none"
 end
 
+--------------------------------------------------------------------------------
+-- 强制清除 (自动截图模式用, 立即移除黑幕和 loading)
+--------------------------------------------------------------------------------
+function Fade.force_clear()
+    fade_state = "none"
+    fade_timer = 0
+    fade_callback = nil
+    if fade_entity then
+        ui.set_visible(fade_entity, false)
+        ui.set_color(fade_entity, 0, 0, 0, 0)
+    end
+    if loading_entity then
+        ui.set_visible(loading_entity, false)
+        ui.set_color(loading_entity, 1, 1, 1, 0)
+    end
+end
+
 return Fade

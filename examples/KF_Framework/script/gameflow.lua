@@ -84,16 +84,26 @@ function GameFlow.setup()
     Audio.play_bgm("title")  -- KF: ModeTitle::OnCompleteLoading → kTitleBgm
     Fade.start_with_loading()  -- KF: 启动时从 Loading 动画开始
 
-    -- 自动截图模式: 跳过 Title 直接进入 Battle
+    -- 自动截图模式: 跳过 Title 和 Fade 直接进入 Battle
     if os.getenv("DSE_AUTO_BATTLE") then
-        -- DSE_AUTO_BATTLE=2 → DemoPlay (AI自动战斗, 匹配KF DEMO PLAY模式)
+        -- DSE_AUTO_BATTLE=2 → DemoPlay (KF录制回放, 骑士不动)
         -- DSE_AUTO_BATTLE=1 → PlayGame (无AI, 匹配KF PLAY GAME模式)
         if os.getenv("DSE_AUTO_BATTLE") == "2" then
             AutoPlay.set_enabled(true)
         else
             AutoPlay.set_enabled(false)
         end
-        title_confirm_timer = 0.5  -- 等半秒让场景加载完
+        -- 跳过 Fade 过渡, 直接进入战斗 (避免截图时黑幕遮罩)
+        Fade.force_clear()
+        state = "battle"
+        result_timer = 0
+        Player.reset()
+        Enemy.reset_all()
+        AutoPlay.reset()
+        GameFlow.hide_title_ui()
+        HUD.show()
+        Audio.play_bgm("game")
+        print("[KF_Framework] Battle start!")
     end
 end
 
