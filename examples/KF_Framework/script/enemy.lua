@@ -37,7 +37,8 @@ end
 --------------------------------------------------------------------------------
 function Enemy.spawn(x, y, z)
     local e = ecs.create_entity()
-    ecs.add_transform(e, x, y, z)
+    -- Scale=2.0: KF mutant.model RootNode scale=0.02 (same as knight)
+    ecs.add_transform(e, x, y, z, 2.0, 2.0, 2.0)
     ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(e, ASSET.mutant_mesh)
     ecs.set_mesh_shader_variant(e, "MESH_HALFLAMBERT")

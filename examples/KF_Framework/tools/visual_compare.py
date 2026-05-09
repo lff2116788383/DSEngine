@@ -642,7 +642,7 @@ def main():
     parser.add_argument("--compare-only", action="store_true", help="仅对比已有截图")
     parser.add_argument("--title", action="store_true", help="截取标题画面 (默认: 战斗)")
     parser.add_argument("--kf-exe", type=str,
-                        default=r"C:\Users\Administrator\Desktop\temp_analysis\KF_Framework\KF_Framework_Release.exe")
+                        default=r"C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\KF_Framework_Release.exe")
     parser.add_argument("--kf-wait", type=float, default=4.0, help="KF Title 加载等待秒数")
     parser.add_argument("--battle-wait", type=float, default=4.0, help="KF 进入战斗后等待秒数")
     parser.add_argument("--manual", action="store_true", help="KF 手动操作模式 (DirectInput 注入失败时使用)")

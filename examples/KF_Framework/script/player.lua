@@ -118,7 +118,9 @@ function Player.setup()
     -- Knight entity
     knight = ecs.create_entity()
     -- KF demo.player: (-82.5767, 0, -95.4176) → DSE: ×100, z取反
-    ecs.add_transform(knight, -8258, 0, 9542)
+    -- Scale=2.0: KF knight.model RootNode scale=0.02, mesh vertices in cm (172cm)
+    -- KF game height = 172×0.02=3.44 → DSE = 3.44×100=344; 344/172=2.0
+    ecs.add_transform(knight, -8258, 0, 9542, 2.0, 2.0, 2.0)
     ecs.set_transform_rotation(knight, 0, 180, 0)  -- face -Z (scene forward after Z-flip)
     ecs.add_mesh_renderer(knight, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(knight, ASSET.knight_mesh)

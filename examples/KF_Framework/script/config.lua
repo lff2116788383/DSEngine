@@ -4,7 +4,7 @@
 --------------------------------------------------------------------------------
 -- KF_Framework (DX9 LH)  ↔  DSEngine (OpenGL RH) 转换对照表
 -- ▌位置转换: DSE_pos = KF_pos × 100, DSE_z = -KF_z
--- ▌模型比例: FBX cm 单位, 角色 ~172u (1.7m)
+-- ▌模型比例: FBX cm 单位, 角色 ~172u (1.7m), KF .model RootNode scale=0.02 → DSE scale=2.0
 -- ▌缩放规则: 场景模型 scale=1.0, Pine_tree scale=0.1
 -- ▌旋转转换: DSE euler_y = -原始Y轴角度
 -- ▌运动: KF moveSpeed=10 → DSE 1000
