@@ -42,6 +42,13 @@ local loading_uv_w = 1.0 / LOADING_COLS  -- 0.5
 local loading_uv_h = 1.0 / LOADING_ROWS  -- 0.0667
 local WAIT_MIN_TIME = 1.5   -- 最小等待时间 (让 loading 动画充分播放)
 
+-- Loading 位置震动参数
+local LOADING_BASE_X = 408       -- KF: position.x = 408
+local LOADING_BASE_Y = -276      -- KF: position.y = 276 (屏幕中心坐标, DSE 取反)
+local LOADING_BOUNCE_AMP = 4.0   -- 上下振幅 (像素)
+local LOADING_BOUNCE_FREQ = 3.0  -- 振动频率 (Hz)
+local loading_bounce_time = 0    -- 累计时间
+
 --------------------------------------------------------------------------------
 -- 初始化
 --------------------------------------------------------------------------------
@@ -77,6 +84,7 @@ function Fade.start_with_loading()
     ui.set_color(fade_entity, 0, 0, 0, 1)
     -- 显示 loading
     loading_frame_counter = 0
+    loading_bounce_time = 0
     if loading_entity then
         ui.set_visible(loading_entity, true)
         ui.set_color(loading_entity, 1, 1, 1, 1)
@@ -124,8 +132,9 @@ end
 --------------------------------------------------------------------------------
 -- Loading 动画帧更新 (KF: Scroll2dController)
 --------------------------------------------------------------------------------
-local function update_loading_uv()
+local function update_loading_uv(dt)
     if not loading_entity then return end
+    -- UV 滚动 (KF: Scroll2dController)
     local real_frame = math.floor(loading_frame_counter / LOADING_FPP)
     local col = real_frame % LOADING_COLS
     local row = math.floor(real_frame / LOADING_COLS) % LOADING_ROWS
@@ -134,6 +143,11 @@ local function update_loading_uv()
     local v = 1.0 - row * loading_uv_h - loading_uv_h
     ui.set_uv(loading_entity, u, v, loading_uv_w, loading_uv_h)
     loading_frame_counter = (loading_frame_counter + 1) % (LOADING_TOTAL * LOADING_FPP)
+
+    -- 位置上下震动
+    loading_bounce_time = loading_bounce_time + (dt or 0)
+    local offset_y = math.sin(loading_bounce_time * LOADING_BOUNCE_FREQ * 2 * math.pi) * LOADING_BOUNCE_AMP
+    ui.set_position(loading_entity, LOADING_BASE_X, LOADING_BASE_Y + offset_y)
 end
 
 --------------------------------------------------------------------------------
@@ -151,6 +165,7 @@ function Fade.update(dt)
             fade_state = "wait_out"
             wait_timer = 0
             loading_frame_counter = 0
+            loading_bounce_time = 0
             -- 显示 loading, alpha=0 准备淡入
             if loading_entity then
                 ui.set_visible(loading_entity, true)
@@ -161,7 +176,7 @@ function Fade.update(dt)
     -- WaitOut: Loading 淡入 (alpha 0→1, 0.5s)
     elseif fade_state == "wait_out" then
         wait_timer = wait_timer + dt
-        update_loading_uv()
+        update_loading_uv(dt)
         if loading_entity then
             local a = math.min(1.0, wait_timer / wait_fade_time)
             ui.set_color(loading_entity, 1, 1, 1, a)
@@ -180,7 +195,7 @@ function Fade.update(dt)
     -- Wait: Loading 动画持续播放 (KF: 等待 IsCompleteLoading, DSE: 最小等待时间)
     elseif fade_state == "wait" then
         wait_timer = wait_timer + dt
-        update_loading_uv()
+        update_loading_uv(dt)
         if wait_timer >= WAIT_MIN_TIME then
             fade_state = "wait_in"
             wait_timer = wait_fade_time
@@ -189,7 +204,7 @@ function Fade.update(dt)
     -- WaitIn: Loading 淡出 (alpha 1→0, 0.5s)
     elseif fade_state == "wait_in" then
         wait_timer = wait_timer - dt
-        update_loading_uv()
+        update_loading_uv(dt)
         if loading_entity then
             local a = math.max(0.0, wait_timer / wait_fade_time)
             ui.set_color(loading_entity, 1, 1, 1, a)
