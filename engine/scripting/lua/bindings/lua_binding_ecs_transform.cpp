@@ -55,6 +55,19 @@ int L_EcsSetTransformRotation(lua_State* L) {
     return 0;
 }
 
+int L_EcsGetTransformRotation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* transform = helper::TryGetComponentConst<TransformComponent>(*world, e);
+    if (!transform) return 0;
+    glm::vec3 euler = glm::degrees(glm::eulerAngles(transform->rotation));
+    lua_pushnumber(L, static_cast<lua_Number>(euler.x));
+    lua_pushnumber(L, static_cast<lua_Number>(euler.y));
+    lua_pushnumber(L, static_cast<lua_Number>(euler.z));
+    return 3;
+}
+
 } // namespace
 
 void RegisterEcsTransformBindings(lua_State* L) {
@@ -64,6 +77,7 @@ void RegisterEcsTransformBindings(lua_State* L) {
         {"get_transform_position",   L_EcsGetTransformPosition},
         {"set_transform_position",   L_EcsSetTransformPosition},
         {"set_transform_rotation",   L_EcsSetTransformRotation},
+        {"get_transform_rotation",   L_EcsGetTransformRotation},
     });
 }
 

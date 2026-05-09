@@ -50,9 +50,10 @@ local HUD      = require("script.hud")
 local Fade     = require("script.fade")
 local AutoPlay = require("script.autoplay")
 
--- 风车旋转 (KF: WindmillController)
+-- 风车旋转 (KF: WindmillController, rotate_speed_=0.1 rad/s)
 local windmill_fans = {}    -- Fan entity list
-local WINDMILL_SPEED = 45.0 -- 度/秒 (KF: 原版旋转速度)
+local windmill_fan_orig_rot = {}  -- Fan 原始旋转 (rx, ry, rz)
+local WINDMILL_SPEED = math.deg(0.1)  -- KF: 0.1 rad/s = 5.73°/s
 local windmill_angle = 0    -- 累计旋转角度
 
 -- KF: CollisionDetector::SphereCollision — 球体碰撞推开
@@ -103,6 +104,10 @@ function Awake()
 
     -- 风车 Fan 实体查找 (KF: WindmillController 旋转 Fan 子物体)
     windmill_fans = ecs.find_entities_by_mesh_path("cooked/Fan_0.dmesh")
+    for _, fan in ipairs(windmill_fans) do
+        local rx, ry, rz = ecs.get_transform_rotation(fan)
+        table.insert(windmill_fan_orig_rot, {rx, ry, rz})
+    end
     if #windmill_fans > 0 then
         print("[KF_Framework] Windmill fans found: " .. #windmill_fans)
     end
@@ -132,11 +137,14 @@ function Update(dt)
     -- Phase 6: 游戏流程更新
     GameFlow.update(dt)
 
-    -- 风车旋转 (KF: WindmillController::Update — 全状态运行)
+    -- 风车旋转 (KF: WindmillController::Update — 全状态运行, RotateByRoll)
     windmill_angle = windmill_angle + WINDMILL_SPEED * dt
     if windmill_angle > 360 then windmill_angle = windmill_angle - 360 end
-    for _, fan in ipairs(windmill_fans) do
-        ecs.set_transform_rotation(fan, 0, 0, windmill_angle)
+    for i, fan in ipairs(windmill_fans) do
+        local orig = windmill_fan_orig_rot[i]
+        if orig then
+            ecs.set_transform_rotation(fan, orig[1], orig[2], orig[3] + windmill_angle)
+        end
     end
 
     -- Result 状态或 Fade 过渡中冻结游戏逻辑 (KF: TimeScale=0 during fade)
@@ -176,8 +184,9 @@ function Update(dt)
     -- 更新碰撞后的玩家位置
     px, py, pz = Player.get_position()
 
-    -- 敌人 HP 条更新 (KF: EnemyUiController::Update)
-    Enemy.update_hp_bars(px, pz)
+    -- 敌人 HP 条更新 (KF: EnemyUiController::Update — 使用摄像机位置计算距离)
+    local cam_x, cam_y, cam_z = Player.get_camera_position()
+    Enemy.update_hp_bars(cam_x, cam_y, cam_z)
 
     -- Phase 5: 战斗判定 — 敌人攻击命中玩家
     if not Player.is_dead() then

@@ -114,7 +114,7 @@ Config.CAMERA = {
     offset_y     = 350.0,   -- kOffsetY=3.5 × 100
     pitch        = -15.0,   -- kPitchDefault=15° (DSE 负值=俯视)
     fov          = 75.0,    -- camera.cpp: fov_=75°/180°×π
-    lerp_speed   = 8.0,     -- ~kMoveLerpTime=0.075 对应
+    lerp_speed   = 4.5,     -- kMoveLerpTime=0.075 × 60fps = 4.5
     near_clip    = 10.0,    -- 0.1m × 100
     far_clip     = 100000.0,-- 1000m × 100
 }

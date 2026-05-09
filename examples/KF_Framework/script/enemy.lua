@@ -290,24 +290,25 @@ function Enemy.setup_hp_bars()
     end
 end
 
-function Enemy.update_hp_bars(player_x, player_z)
+function Enemy.update_hp_bars(cam_x, cam_y, cam_z)
     local screen_w = app.get_screen_width()
     local screen_h = app.get_screen_height()
     for _, data in ipairs(Enemy.instances) do
         if not data.hp_bg or not data.hp_fill then goto continue end
 
-        -- 死亡或满血: 隐藏
-        if data.state == "dead" or data.hp >= data.max_hp then
+        -- 死亡: 隐藏 (KF: 不检查满血, 始终显示)
+        if data.state == "dead" then
             ui.set_visible(data.hp_bg, false)
             ui.set_visible(data.hp_fill, false)
             goto continue
         end
 
-        -- 距离检查 (KF: kSquareDisplayDistance = 50²)
+        -- 距离检查: 使用摄像机位置 (KF: camera_position, kSquareDisplayDistance=50²)
         local ex, ey, ez = ecs.get_transform_position(data.entity)
-        local dx = ex - player_x
-        local dz = ez - player_z
-        local dist = math.sqrt(dx * dx + dz * dz)
+        local dx = ex - cam_x
+        local dy = ey - cam_y
+        local dz = ez - cam_z
+        local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
         if dist > HP_DISPLAY_DIST then
             ui.set_visible(data.hp_bg, false)
             ui.set_visible(data.hp_fill, false)

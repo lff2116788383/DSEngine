@@ -129,7 +129,8 @@ local function update_loading_uv()
     local col = real_frame % LOADING_COLS
     local row = math.floor(real_frame / LOADING_COLS) % LOADING_ROWS
     local u = col * loading_uv_w
-    local v = row * loading_uv_h
+    -- V-flip 补偿: stbi_set_flip_vertically_on_load(true) 使 v=0 对应图片底部
+    local v = 1.0 - row * loading_uv_h - loading_uv_h
     ui.set_uv(loading_entity, u, v, loading_uv_w, loading_uv_h)
     loading_frame_counter = (loading_frame_counter + 1) % (LOADING_TOTAL * LOADING_FPP)
 end
