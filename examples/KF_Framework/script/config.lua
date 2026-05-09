@@ -117,6 +117,14 @@ Config.CAMERA = {
     lerp_speed   = 4.5,     -- kMoveLerpTime=0.075 × 60fps = 4.5
     near_clip    = 10.0,    -- 0.1m × 100
     far_clip     = 100000.0,-- 1000m × 100
+    -- KF: third_person_camera.h 旋转参数
+    rotation_speed  = 0.05,  -- kRotationSpeed = 0.05f
+    rotation_lerp   = 0.1,   -- kRotationLerpTime = 0.1f
+    rotation_min    = 0.2,   -- kStartRotationMin = 0.2f (deadzone)
+    pitch_min       = -5.0,  -- kPitchMin = -5°
+    pitch_max       = 60.0,  -- kPitchMax = 60°
+    distance_min    = 200.0, -- kDistanceMin = 2.0 × 100
+    distance_max    = 1000.0,-- kDistanceMax = 10.0 × 100
 }
 
 return Config

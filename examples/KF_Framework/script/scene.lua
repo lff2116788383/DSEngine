@@ -11,20 +11,23 @@ local Scene = {}
 
 function Scene.setup()
     -- 1. Directional light — exact KF parameters:
-    --    light_diffuse = (0.8, 0.8, 0.8), ambient = (0.2, 0.2, 0.2) [unused in HL shader]
+    --    light_diffuse = (0.8, 0.8, 0.8), ambient = Color::kGray=(0.5,0.5,0.5)
     --    direction = (-1, -4, +1).Normalized() → DSE Z-flip → (-1, -4, -1)
     local sun = ecs.create_entity()
     ecs.add_transform(sun, 0, 0, 0)
     local ld = math.sqrt(1+16+1)
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
-         0.8, 0.8, 0.8, 1.0, 0.20, 0.35)
-    ecs.set_directional_light_shadow(sun, true, 1.0, 800, 3000, 15000)
+         0.8, 0.8, 0.8, 1.0, 0.50, 1.0)
+    -- KF: offset=(20,80,-20), range=20, far=200, bias=1e-5
+    -- DSE CSM: cascade_splits ×100 of KF far=200 → 20000
+    ecs.set_directional_light_shadow(sun, true, 1.0, 800, 4000, 20000)
 
     -- 2. Sky light
     local sky_light = ecs.create_entity()
     ecs.add_transform(sky_light, 0, 0, 0)
-    ecs.add_sky_light(sky_light, 0.38, 0.45, 0.55, 0.12, 0.11, 0.10, 1.1)
+    -- KF 无 sky_light，降低 intensity 补偿 PBR 与 HL 的差异
+    ecs.add_sky_light(sky_light, 0.38, 0.45, 0.55, 0.12, 0.11, 0.10, 0.3)
 
     -- 3. Skybox (全景图) — rotate 180° to compensate for camera Z-flip
     local skybox_ent = ecs.create_entity()

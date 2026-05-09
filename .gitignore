@@ -162,3 +162,7 @@ desktop.ini
 rustup-init.exe
 *.txt
 !**/CMakeLists.txt
+
+# KF_Framework 截图对比 (允许跟踪)
+!examples/KF_Framework/screenshots/
+!examples/KF_Framework/screenshots/**

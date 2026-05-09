@@ -31,6 +31,11 @@ local state = {
     hp = Config.PLAYER.max_hp,
     dead = false,
     invincible_timer = 0.0,  -- KF: kInvincibleTime = 0.5f
+    -- KF: ThirdPersonCamera independent rotation
+    cam_yaw = 180.0,         -- 初始与角色朝向一致
+    cam_pitch = 15.0,         -- KF: kPitchDefault=15°
+    cam_yaw_speed = 0.0,      -- 平滑旋转速度
+    cam_pitch_speed = 0.0,
 }
 
 --------------------------------------------------------------------------------
@@ -45,6 +50,10 @@ function Player.reset()
     state.velocity_y = 0.0
     state.grounded = true
     state.invincible_timer = 0.0
+    state.cam_yaw = 180.0
+    state.cam_pitch = 15.0
+    state.cam_yaw_speed = 0.0
+    state.cam_pitch_speed = 0.0
     -- 重置位置到 KF demo.player 初始位置 (Y 从地形高度查询)
     local spawn_y = TerrainHeight.get_height(-8258, 9542)
     ecs.set_transform_position(knight, -8258, spawn_y, 9542)
@@ -219,7 +228,7 @@ function Player.setup()
 end
 
 -- KF 移动参数 (actor_parameter.h / game_object_spawner.cpp)
-local KF_MOVE_SPEED = 1500.0      -- KF: 10.0 × 100=1000, ×1.5 补偿感知差异
+local KF_MOVE_SPEED = 1000.0      -- KF: 10.0 × 100=1000 (精确对齐源码)
 local KF_MIN_TURN = math.pi        -- KF: π rad/sec (180°/s)
 local KF_MAX_TURN = math.pi * 2.0  -- KF: 2π rad/sec (360°/s)
 -- 简单场地边界 (KF: FieldCollider 限制活动区域)
@@ -320,7 +329,9 @@ function Player.update(dt)
         new_x = math.max(FIELD_MIN_X, math.min(FIELD_MAX_X, new_x))
         new_z = math.max(FIELD_MIN_Z, math.min(FIELD_MAX_Z, new_z))
 
-        ecs.set_transform_position(knight, new_x, py, new_z)
+        -- 地形高度跟随
+        local new_y = TerrainHeight.get_height(new_x, new_z)
+        ecs.set_transform_position(knight, new_x, new_y, new_z)
     end
     ecs.set_transform_rotation(knight, 0, state.facing_yaw, 0)
 
@@ -393,18 +404,69 @@ function Player.update_camera(dt)
     if not camera or not knight then return end
     local px, py, pz = ecs.get_transform_position(knight)
 
+    -- KF: ThirdPersonCamera::Update — 鼠标/摇杆旋转
+    local mouse_dx = app.get_mouse_swipe_dx() or 0
+    local mouse_dy = app.get_mouse_swipe_dy() or 0
+
+    -- KF: if (fabs(rotation) > kStartRotationMin) amount = kRotationSpeed * rotation
+    local yaw_amount = 0
+    local pitch_amount = 0
+    if math.abs(mouse_dx) > CAM.rotation_min then
+        yaw_amount = CAM.rotation_speed * mouse_dx
+    end
+    if math.abs(mouse_dy) > CAM.rotation_min then
+        pitch_amount = CAM.rotation_speed * mouse_dy
+    end
+
+    -- KF: Lerp 平滑 (kRotationLerpTime = 0.1)
+    state.cam_yaw_speed = state.cam_yaw_speed + (yaw_amount - state.cam_yaw_speed) * CAM.rotation_lerp
+    state.cam_pitch_speed = state.cam_pitch_speed + (pitch_amount - state.cam_pitch_speed) * CAM.rotation_lerp
+
+    -- 应用旋转
+    state.cam_yaw = state.cam_yaw - state.cam_yaw_speed  -- 鼠标左移→yaw增大（左转）
+    state.cam_pitch = state.cam_pitch + state.cam_pitch_speed  -- 鼠标上移→pitch增大（抬头）
+
+    -- KF: pitch 限制 (kPitchMin=-5, kPitchMax=60)
+    state.cam_pitch = math.max(CAM.pitch_min, math.min(CAM.pitch_max, state.cam_pitch))
+
     -- KF rig/pivot 计算 (转换到 DSE)
     -- pitch 将 distance 分解为水平和垂直分量
-    local pitch_rad = math.rad(-CAM.pitch)  -- CAM.pitch=-15, 取绝对值15°
+    local pitch_rad = math.rad(state.cam_pitch)
     local behind_dist = CAM.distance * math.cos(pitch_rad)  -- 水平距离 (后方)
     local up_extra    = CAM.distance * math.sin(pitch_rad)  -- 额外高度 (pitch 抬升)
 
-    -- 目标位置: 角色后方 + 上方 (绕角色朝向旋转)
-    -- 我们的游戏: yaw=0 → 面朝+Z, "后方" = -Z
-    local yaw_rad = math.rad(state.facing_yaw)
+    -- 目标位置: 角色后方 + 上方 (绕 cam_yaw 旋转, 不再绑定 facing_yaw)
+    local yaw_rad = math.rad(state.cam_yaw)
     local cam_x = px - math.sin(yaw_rad) * behind_dist
     local cam_y = py + CAM.offset_y + up_extra
     local cam_z = pz - math.cos(yaw_rad) * behind_dist
+
+    -- KF: kCollisionRadius=0.1f — 摄像机碰撞检测 (P10)
+    -- 从 pivot 点向摄像机目标位置发射射线，碰到障碍就拉近
+    local KF_COLLISION_RADIUS = 10.0  -- 0.1 × 100
+    local pivot_x, pivot_y, pivot_z = px, py + CAM.offset_y, pz
+    local ray_dx = cam_x - pivot_x
+    local ray_dy = cam_y - pivot_y
+    local ray_dz = cam_z - pivot_z
+    local ray_len = math.sqrt(ray_dx * ray_dx + ray_dy * ray_dy + ray_dz * ray_dz)
+    if ray_len > 0.01 then
+        -- physics_3d_raycast 返回: hit, entity, hx,hy,hz, nx,ny,nz, dist
+        local hit, _, _, _, _, _, _, _, hit_dist = ecs.physics_3d_raycast(
+            pivot_x, pivot_y, pivot_z,
+            ray_dx, ray_dy, ray_dz,
+            ray_len)
+        if hit and hit_dist and hit_dist < ray_len then
+            local ratio = math.max(0.0, hit_dist - KF_COLLISION_RADIUS) / ray_len
+            cam_x = pivot_x + ray_dx * ratio
+            cam_y = pivot_y + ray_dy * ratio
+            cam_z = pivot_z + ray_dz * ratio
+        end
+    end
+    -- 地形碰撞: 防止摄像机穿入地面
+    local terrain_cam_y = TerrainHeight.get_height(cam_x, cam_z)
+    if cam_y < terrain_cam_y + KF_COLLISION_RADIUS then
+        cam_y = terrain_cam_y + KF_COLLISION_RADIUS
+    end
 
     -- 平滑插值 (KF: kMoveLerpTime = 0.075)
     local cx, cy, cz = ecs.get_transform_position(camera)
@@ -422,10 +484,10 @@ function Player.update_camera(dt)
     local dy = look_y - new_y
     local dz = pz - new_z
     local dist_xz = math.sqrt(dx * dx + dz * dz)
-    local cam_yaw = math.deg(math.atan(-dx, -dz))
-    local cam_pitch = math.deg(math.atan(dy, dist_xz))
+    local final_yaw = math.deg(math.atan(-dx, -dz))
+    local final_pitch = math.deg(math.atan(dy, dist_xz))
 
-    ecs.set_transform_rotation(camera, cam_pitch, cam_yaw, 0)
+    ecs.set_transform_rotation(camera, final_pitch, final_yaw, 0)
 end
 
 return Player

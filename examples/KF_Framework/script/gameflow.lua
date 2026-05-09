@@ -194,6 +194,13 @@ function GameFlow.update(dt)
             if result_timer <= 0 then
                 GameFlow.enter_result()
             end
+        else
+            -- KF: mode_demo.cpp:103-108 — Enter 跳过战斗直接进 Result
+            if app.get_key_down(257) or app.get_key_down(256) then  -- Enter / Escape
+                Audio.play_se("submit")
+                result_text = "SKIP"
+                result_timer = 0.017  -- KF: GameTime::kTimeInterval ≈ 1帧
+            end
         end
 
     elseif state == "result" then

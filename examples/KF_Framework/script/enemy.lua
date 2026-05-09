@@ -38,10 +38,12 @@ local function new_enemy_data(entity, x, z, params)
         def = params.defence or ENEMY.defence,
         warning_range = params.warning_range or ENEMY.detect_range,  -- DSE units
         patrol_range = params.patrol_range or 2000,
-        state = "idle",  -- idle / chase / attack / damaged / dead
+        state = "idle",  -- idle / chase / attack / damaged / dead / return
         facing_yaw = 0,
         attack_cooldown = 0,
         damaged_timer = 0,
+        dead_timer = 0,
+        hit_player_this_attack = false,
         spawn_x = x,
         spawn_z = z,
         -- HP bar UI entities
@@ -82,15 +84,23 @@ function Enemy.spawn(x, y, z, params)
     local function tr(from, to, dur, exit, exit_t, conds)
         ecs.add_animator_3d_transition(e, from, to, dur, exit, exit_t, conds)
     end
-    tr("idle", "run",   0.167, false, 1.0, {{"speed", COND.GREATER, 0.1}})
-    tr("run",  "idle",  0.167, false, 1.0, {{"speed", COND.LESS, 0.1}})
+    -- KF: follow/walk 都用 movement=0.1 → walk 动画; 高速追击用 run
+    -- idle ↔ walk ↔ run 三级切换 (FSM 按注册顺序匹配, idle→run 优先于 idle→walk)
+    tr("idle", "run",   0.167, false, 1.0, {{"speed", COND.GREATER, 0.5}})
+    tr("idle", "walk",  0.167, false, 1.0, {{"speed", COND.GREATER, 0.05}})
+    tr("walk", "idle",  0.167, false, 1.0, {{"speed", COND.LESS, 0.05}})
+    tr("walk", "run",   0.167, false, 1.0, {{"speed", COND.GREATER, 0.5}})
+    tr("run",  "walk",  0.167, false, 1.0, {{"speed", COND.LESS, 0.5}})
+    tr("run",  "idle",  0.167, false, 1.0, {{"speed", COND.LESS, 0.05}})
     tr("idle", "punch", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
+    tr("walk", "punch", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
     tr("run",  "punch", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
     tr("punch", "idle", 0.167, true, 0.9, {})
     tr("idle", "roar",  0.167, false, 1.0, {{"roar", COND.IF, 0}})
     tr("roar", "idle",  0.167, true, 0.9, {})
     -- damage → idle handled by timer (no explicit "damaged" anim state for mutant)
     tr("idle", "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
+    tr("walk", "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
     tr("run",  "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
     tr("punch","dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
     tr("roar", "dying", 0.083, false, 1.0, {{"dead", COND.IF, 0}})
@@ -128,7 +138,10 @@ end
 --------------------------------------------------------------------------------
 function Enemy.damage(data, amount)
     if data.state == "dead" then return end
-    local dmg = math.max(1, amount - (data.def or ENEMY.defence))
+    -- KF: enemy_zombie_damaged_state.cpp:64 — kInvincibleTime=0.3s 内忽略伤害
+    if data.state == "damaged" and data.damaged_timer > 0 then return end
+    -- KF: actor_controller.cpp:119 — ReceiveDamage 无 defence 计算
+    local dmg = amount
     data.hp = data.hp - dmg
     Audio.play_se("zombie_beat")
     if data.hp <= 0 then
@@ -138,7 +151,7 @@ function Enemy.damage(data, amount)
         Audio.play_se("zombie_death")
     else
         data.state = "damaged"
-        data.damaged_timer = 0.5
+        data.damaged_timer = 0.3  -- KF: kInvincibleTime = 0.3f
     end
 end
 
@@ -156,7 +169,15 @@ end
 --------------------------------------------------------------------------------
 function Enemy.update_all(dt, player_x, player_y, player_z)
     for _, data in ipairs(Enemy.instances) do
-        if data.state ~= "dead" then
+        if data.state == "dead" then
+            -- KF: enemy_zombie_dying_state.cpp — kWaitTime=10.0s 后 SetAlive(false)
+            data.dead_timer = (data.dead_timer or 0) + dt
+            if data.dead_timer >= 10.0 and not data.hidden then
+                -- DSE 无 SetAlive API, 移到地下隐藏
+                ecs.set_transform_position(data.entity, 0, -9999, 0)
+                data.hidden = true
+            end
+        else
             Enemy.update_one(data, dt, player_x, player_z)
         end
     end
@@ -171,10 +192,12 @@ function Enemy.update_one(data, dt, player_x, player_z)
         data.damaged_timer = data.damaged_timer - dt
         ecs.set_animator_3d_param_float(data.entity, "speed", 0)
         if data.damaged_timer <= 0 then
+            -- KF: damaged_state.cpp:47-53 — 有目标→follow, 无目标→walk
             if dist < data.warning_range then
                 data.state = "chase"
             else
-                data.state = "idle"
+                data.state = "return"
+                ecs.set_animator_3d_param_float(data.entity, "speed", 0.3)
             end
         end
         return
@@ -196,10 +219,11 @@ function Enemy.update_one(data, dt, player_x, player_z)
         end
     elseif data.state == "chase" then
         -- KF: lose_range = warning_range * 1.5
+        -- KF: enemy_zombie_follow_state.cpp:42-49 — 脱离追击后进 walk (return)
         local lose_range = data.warning_range * 1.5
         if dist > lose_range then
-            data.state = "idle"
-            ecs.set_animator_3d_param_float(data.entity, "speed", 0)
+            data.state = "return"
+            ecs.set_animator_3d_param_float(data.entity, "speed", 0.3)  -- walk anim
         elseif dist < ENEMY.attack_range and data.attack_cooldown <= 0 then
             data.state = "attack"
             ecs.set_animator_3d_param_trigger(data.entity, "attack")
@@ -231,6 +255,33 @@ function Enemy.update_one(data, dt, player_x, player_z)
         if data.attack_cooldown <= 0 then
             data.state = "chase"
         end
+    elseif data.state == "return" then
+        -- KF: EnemyZombieWalkState — 向出生点移动, kMovementMultiplier=0.1, kArriveDistance=1.0
+        local dx = data.spawn_x - ex
+        local dz = data.spawn_z - ez
+        local dist_to_spawn = math.sqrt(dx * dx + dz * dz)
+        if dist_to_spawn < 100 then  -- KF: kArriveDistance=1.0 × 100
+            data.state = "idle"
+            ecs.set_animator_3d_param_float(data.entity, "speed", 0)
+        else
+            -- walk animation (speed=0.3 → walk 动画)
+            ecs.set_animator_3d_param_float(data.entity, "speed", 0.3)
+            dx, dz = dx / dist_to_spawn, dz / dist_to_spawn
+            -- KF: walk/follow 都用 kMovementMultiplier=0.1, 即 move_speed 相同
+            local spd = ENEMY.move_speed
+            local new_x = ex + dx * spd * dt
+            local new_z = ez + dz * spd * dt
+            local new_y = TerrainHeight.get_height(new_x, new_z)
+            ecs.set_transform_position(data.entity, new_x, new_y, new_z)
+            local target_yaw = math.deg(math.atan(dx, dz))
+            data.facing_yaw = target_yaw
+            ecs.set_transform_rotation(data.entity, 0, target_yaw, 0)
+        end
+        -- KF: EnemyZombieWalkState::OnTrigger — return 途中发现玩家进 chase
+        if dist < data.warning_range then
+            data.state = "chase"
+            Audio.play_se("zombie_warning")
+        end
     end
 end
 
@@ -241,12 +292,19 @@ function Enemy.check_attacks(player_x, player_z)
     local hits = {}
     for _, data in ipairs(Enemy.instances) do
         if data.state == "attack" and data.attack_cooldown > 1.2 then
-            -- 攻击帧 (cooldown 刚开始的前0.3秒)
-            local ex, _, ez = ecs.get_transform_position(data.entity)
-            local dist = distance_xz(ex, ez, player_x, player_z)
-            if dist < ENEMY.attack_range * 1.5 then
-                table.insert(hits, data.atk or ENEMY.attack)
+            -- KF: Collider Awake/Sleep 确保每次攻击只命中一次
+            if not data.hit_player_this_attack then
+                local ex, _, ez = ecs.get_transform_position(data.entity)
+                local dist = distance_xz(ex, ez, player_x, player_z)
+                if dist < ENEMY.attack_range * 1.5 then
+                    table.insert(hits, data.atk or ENEMY.attack)
+                    data.hit_player_this_attack = true
+                end
             end
+        end
+        -- 攻击结束时重置命中标记
+        if data.state ~= "attack" then
+            data.hit_player_this_attack = false
         end
     end
     return hits
