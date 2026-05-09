@@ -40,6 +40,7 @@ local LOADING_FPP = 2          -- game-frames per pattern
 local loading_frame_counter = 0
 local loading_uv_w = 1.0 / LOADING_COLS  -- 0.5
 local loading_uv_h = 1.0 / LOADING_ROWS  -- 0.0667
+local WAIT_MIN_TIME = 1.5   -- 最小等待时间 (让 loading 动画充分播放)
 
 --------------------------------------------------------------------------------
 -- 初始化
@@ -80,10 +81,10 @@ function Fade.start_with_loading()
         ui.set_visible(loading_entity, true)
         ui.set_color(loading_entity, 1, 1, 1, 1)
     end
-    -- 直接进入 wait_in 状态 (Loading 淡出 → FadeIn)
-    fade_state = "wait_in"
+    -- 进入 wait 状态 (Loading 动画全透明度播放, KF: kFadeWait)
+    fade_state = "wait"
     fade_duration = 1.0
-    wait_timer = wait_fade_time
+    wait_timer = 0
     fade_callback = nil
 end
 
@@ -167,6 +168,7 @@ function Fade.update(dt)
         end
         if wait_timer >= wait_fade_time then
             fade_state = "wait"
+            wait_timer = 0
             -- 执行回调 (KF: MainSystem::Change → 切换 Mode)
             if fade_callback then
                 local cb = fade_callback
@@ -175,12 +177,14 @@ function Fade.update(dt)
             end
         end
 
-    -- Wait: Loading 动画持续播放 (DSE 无异步加载, 直接进入 WaitIn)
+    -- Wait: Loading 动画持续播放 (KF: 等待 IsCompleteLoading, DSE: 最小等待时间)
     elseif fade_state == "wait" then
+        wait_timer = wait_timer + dt
         update_loading_uv()
-        -- DSE 无异步资源加载, 短暂停留后进入淡出
-        fade_state = "wait_in"
-        wait_timer = wait_fade_time
+        if wait_timer >= WAIT_MIN_TIME then
+            fade_state = "wait_in"
+            wait_timer = wait_fade_time
+        end
 
     -- WaitIn: Loading 淡出 (alpha 1→0, 0.5s)
     elseif fade_state == "wait_in" then
