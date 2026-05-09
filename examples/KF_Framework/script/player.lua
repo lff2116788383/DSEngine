@@ -2,9 +2,10 @@
 -- KF_Framework — 玩家 Knight (Phase 2+3)
 -- 角色创建、FSM配置、输入处理、第三人称摄像机
 --------------------------------------------------------------------------------
-local Config   = require("script.config")
-local Audio    = require("script.audio")
-local AutoPlay = require("script.autoplay")
+local Config        = require("script.config")
+local Audio         = require("script.audio")
+local AutoPlay      = require("script.autoplay")
+local TerrainHeight = require("script.terrain_height")
 local ASSET = Config.ASSET
 local CAM = Config.CAMERA
 local COND = {
@@ -44,8 +45,9 @@ function Player.reset()
     state.velocity_y = 0.0
     state.grounded = true
     state.invincible_timer = 0.0
-    -- 重置位置到 KF demo.player 初始位置
-    ecs.set_transform_position(knight, -8258, 0, 9542)
+    -- 重置位置到 KF demo.player 初始位置 (Y 从地形高度查询)
+    local spawn_y = TerrainHeight.get_height(-8258, 9542)
+    ecs.set_transform_position(knight, -8258, spawn_y, 9542)
     ecs.set_transform_rotation(knight, 0, 180, 0)  -- face -Z (scene forward)
     -- 重置动画到 idle
     ecs.set_animator_3d_state(knight, "idle", 1.0, true)
@@ -120,7 +122,8 @@ function Player.setup()
     -- KF demo.player: (-82.5767, 0, -95.4176) → DSE: ×100, z取反
     -- Scale=2.0: KF knight.model RootNode scale=0.02, mesh vertices in cm (172cm)
     -- KF game height = 172×0.02=3.44 → DSE = 3.44×100=344; 344/172=2.0
-    ecs.add_transform(knight, -8258, 0, 9542, 2.0, 2.0, 2.0)
+    local spawn_y = TerrainHeight.get_height(-8258, 9542)
+    ecs.add_transform(knight, -8258, spawn_y, 9542, 2.0, 2.0, 2.0)
     ecs.set_transform_rotation(knight, 0, 180, 0)  -- face -Z (scene forward after Z-flip)
     ecs.add_mesh_renderer(knight, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(knight, ASSET.knight_mesh)
@@ -265,22 +268,30 @@ function Player.update(dt)
     end
     ecs.set_transform_rotation(knight, 0, state.facing_yaw, 0)
 
-    -- 简易跳跃物理
-    if app.get_key_down(32) and state.grounded then
-        state.velocity_y = Config.PLAYER.jump_speed
-        state.grounded = false
-        ecs.set_animator_3d_param_trigger(knight, "jump")
-    end
-    if not state.grounded then
-        state.velocity_y = state.velocity_y + Config.PLAYER.gravity * dt
+    -- 地形高度跟随 (KF: FieldCollider + RayCast + Rigidbody gravity)
+    do
         local px, py, pz = ecs.get_transform_position(knight)
-        local new_y = py + state.velocity_y * dt
-        if new_y <= 0 then
-            new_y = 0
-            state.velocity_y = 0
-            state.grounded = true
+        local terrain_y = TerrainHeight.get_height(px, pz)
+
+        -- 简易跳跃物理
+        if app.get_key_down(32) and state.grounded then
+            state.velocity_y = Config.PLAYER.jump_speed
+            state.grounded = false
+            ecs.set_animator_3d_param_trigger(knight, "jump")
         end
-        ecs.set_transform_position(knight, px, new_y, pz)
+        if not state.grounded then
+            state.velocity_y = state.velocity_y + Config.PLAYER.gravity * dt
+            local new_y = py + state.velocity_y * dt
+            if new_y <= terrain_y then
+                new_y = terrain_y
+                state.velocity_y = 0
+                state.grounded = true
+            end
+            ecs.set_transform_position(knight, px, new_y, pz)
+        else
+            -- 贴地: 跟随地形高度
+            ecs.set_transform_position(knight, px, terrain_y, pz)
+        end
     end
 
     -- 攻击/格挡/技能触发器

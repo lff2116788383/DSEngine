@@ -77,29 +77,33 @@ Config.ASSET = {
     se_zombie_death  = "assets/audio/se/zombie_death.wav",
 }
 
--- 玩家参数 (KF原始 ×100)
+-- 玩家参数 (KF: CreatePlayer, actor_parameter.h)
+-- 空间值 ×100, 非空间值保持原始
 Config.PLAYER = {
-    move_speed  = 800.0,
-    run_speed   = 1400.0,
-    turn_speed  = 720.0,
-    jump_speed  = 2000.0,
-    gravity     = -4900.0,  -- 0.5g ≈ -4.9m/s² × 100²
-    max_hp      = 100,
-    attack      = 15,
-    defence     = 3,
+    move_speed  = 1000.0,   -- KF: 10.0 × 100
+    run_speed   = 1400.0,   -- KF 无 run (knight 没有 run state但 DSE 保留)
+    turn_speed  = 720.0,    -- KF: minTurn=π, maxTurn=2π (DSE 简化为度/秒)
+    jump_speed  = 2000.0,   -- KF: 20.0 × 100
+    gravity     = -4900.0,  -- KF: gravity_multiplier=4.0 × 9.8 × 100
+    max_hp      = 10,       -- KF: ActorParameter default max_life_=10
+    attack      = 1,        -- KF: ActorParameter default attack_=1
+    defence     = 1,        -- KF: ActorParameter default defence_=1
     invincible_time = 0.5,  -- KF: kInvincibleTime = 0.5f
 }
 
--- 敌人参数
+-- 敌人参数 (KF: EnemyController + EnemyZombieFollowState)
+-- follow_state: kMovementMultiplier=0.1, move_speed=10 → effective=1.0 KF → 100 DSE
+-- attack_range: kAttackRange=2.0 → 200 DSE
+-- lose_range: warning_range * kWarningRangeMultiplier(1.5) (per-enemy)
 Config.ENEMY = {
-    move_speed    = 400.0,
+    move_speed    = 100.0,   -- KF: 0.1 * 10.0 × 100
     turn_speed    = 360.0,
-    detect_range  = 1000.0,  -- KF: warning_range_=10.0f × 100
-    attack_range  = 200.0,   -- 2m × 100
-    lose_range    = 2500.0,  -- 25m × 100
-    max_hp        = 30,
-    attack        = 8,
-    defence       = 1,
+    detect_range  = 1670.0,  -- KF: 默认 warning_range_=10 × 100, 但每敌人独立
+    attack_range  = 200.0,   -- KF: kAttackRange=2.0 × 100
+    lose_range    = 2500.0,  -- KF: warning_range * 1.5 × 100, 每敌人独立
+    max_hp        = 3,       -- KF: demo.enemy param[0]=3 (默认敌人)
+    attack        = 1,       -- KF: demo.enemy param[2]=1
+    defence       = 1,       -- KF: demo.enemy param[3]=1
 }
 
 -- 摄像机参数 (KF third_person_camera.h + camera.cpp)

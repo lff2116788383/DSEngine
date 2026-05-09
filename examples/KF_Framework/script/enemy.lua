@@ -2,8 +2,9 @@
 -- KF_Framework — 敌人 Mutant AI (Phase 4)
 -- AI 状态: idle → detect → chase → attack → (受击/死亡)
 --------------------------------------------------------------------------------
-local Config = require("script.config")
-local Audio  = require("script.audio")
+local Config        = require("script.config")
+local Audio         = require("script.audio")
+local TerrainHeight = require("script.terrain_height")
 local ASSET = Config.ASSET
 local ENEMY = Config.ENEMY
 local COND = {
@@ -19,10 +20,16 @@ local Enemy = {}
 Enemy.instances = {}
 
 -- 单个敌人的数据
-local function new_enemy_data(entity, x, z)
+local function new_enemy_data(entity, x, z, params)
+    params = params or {}
     return {
         entity = entity,
-        hp = ENEMY.max_hp,
+        hp = params.max_hp or ENEMY.max_hp,
+        max_hp = params.max_hp or ENEMY.max_hp,
+        atk = params.attack or ENEMY.attack,
+        def = params.defence or ENEMY.defence,
+        warning_range = params.warning_range or ENEMY.detect_range,  -- DSE units
+        patrol_range = params.patrol_range or 2000,
         state = "idle",  -- idle / chase / attack / damaged / dead
         facing_yaw = 0,
         attack_cooldown = 0,
@@ -35,10 +42,12 @@ end
 --------------------------------------------------------------------------------
 -- 创建一个 Mutant 敌人
 --------------------------------------------------------------------------------
-function Enemy.spawn(x, y, z)
+function Enemy.spawn(x, y, z, params)
     local e = ecs.create_entity()
     -- Scale=2.0: KF mutant.model RootNode scale=0.02 (same as knight)
-    ecs.add_transform(e, x, y, z, 2.0, 2.0, 2.0)
+    -- Y from terrain height (KF: enemy spawns with Y from demo.enemy, then Rigidbody falls onto terrain)
+    local terrain_y = TerrainHeight.get_height(x, z)
+    ecs.add_transform(e, x, terrain_y, z, 2.0, 2.0, 2.0)
     ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(e, ASSET.mutant_mesh)
     ecs.set_mesh_shader_variant(e, "MESH_HALFLAMBERT")
@@ -76,7 +85,7 @@ function Enemy.spawn(x, y, z)
 
     ecs.set_animator_3d_state(e, "idle", 1.0, true)
 
-    local data = new_enemy_data(e, x, z)
+    local data = new_enemy_data(e, x, z, params)
     table.insert(Enemy.instances, data)
     return data
 end
@@ -86,14 +95,15 @@ end
 --------------------------------------------------------------------------------
 function Enemy.reset_all()
     for _, data in ipairs(Enemy.instances) do
-        data.hp = ENEMY.max_hp
+        data.hp = data.max_hp
         data.state = "idle"
         data.facing_yaw = 0
         data.attack_cooldown = 0
         data.damaged_timer = 0
         data.hit_this_attack = false
-        -- 回到出生位置
-        ecs.set_transform_position(data.entity, data.spawn_x, 0, data.spawn_z)
+        -- 回到出生位置 (地形高度跟随)
+        local sy = TerrainHeight.get_height(data.spawn_x, data.spawn_z)
+        ecs.set_transform_position(data.entity, data.spawn_x, sy, data.spawn_z)
         ecs.set_transform_rotation(data.entity, 0, 0, 0)
         -- 重置动画到 idle
         ecs.set_animator_3d_state(data.entity, "idle", 1.0, true)
@@ -106,7 +116,7 @@ end
 --------------------------------------------------------------------------------
 function Enemy.damage(data, amount)
     if data.state == "dead" then return end
-    local dmg = math.max(1, amount - ENEMY.defence)
+    local dmg = math.max(1, amount - (data.def or ENEMY.defence))
     data.hp = data.hp - dmg
     Audio.play_se("zombie_beat")
     if data.hp <= 0 then
@@ -162,13 +172,16 @@ function Enemy.update_one(data, dt, player_x, player_z)
     -- AI 状态切换
     if data.state == "idle" then
         ecs.set_animator_3d_param_float(data.entity, "speed", 0)
-        if dist < ENEMY.detect_range then
+        -- KF: 检测范围为每敌人独立的 warning_range
+        if dist < data.warning_range then
             data.state = "chase"
             ecs.set_animator_3d_param_trigger(data.entity, "roar")
             Audio.play_se("zombie_warning")
         end
     elseif data.state == "chase" then
-        if dist > ENEMY.lose_range then
+        -- KF: lose_range = warning_range * 1.5
+        local lose_range = data.warning_range * 1.5
+        if dist > lose_range then
             data.state = "idle"
             ecs.set_animator_3d_param_float(data.entity, "speed", 0)
         elseif dist < ENEMY.attack_range and data.attack_cooldown <= 0 then
@@ -185,9 +198,12 @@ function Enemy.update_one(data, dt, player_x, player_z)
                 dx = dx / len
                 dz = dz / len
             end
-            -- 移动
+            -- 移动 (地形高度跟随)
             local spd = ENEMY.move_speed
-            ecs.set_transform_position(data.entity, ex + dx * spd * dt, ey, ez + dz * spd * dt)
+            local new_x = ex + dx * spd * dt
+            local new_z = ez + dz * spd * dt
+            local new_y = TerrainHeight.get_height(new_x, new_z)
+            ecs.set_transform_position(data.entity, new_x, new_y, new_z)
             -- 朝向
             local target_yaw = math.deg(math.atan(dx, dz))
             data.facing_yaw = target_yaw
@@ -213,7 +229,7 @@ function Enemy.check_attacks(player_x, player_z)
             local ex, _, ez = ecs.get_transform_position(data.entity)
             local dist = distance_xz(ex, ez, player_x, player_z)
             if dist < ENEMY.attack_range * 1.5 then
-                table.insert(hits, ENEMY.attack)
+                table.insert(hits, data.atk or ENEMY.attack)
             end
         end
     end

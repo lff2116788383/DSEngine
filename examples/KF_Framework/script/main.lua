@@ -61,10 +61,15 @@ function Awake()
     Player.setup()
 
     -- 生成 4 只 Mutant (KF demo.enemy 原始位置 ×100, z取反)
-    Enemy.spawn(929, 51, -2026)    -- KF(9.2874, 0.5089, 20.2551)
-    Enemy.spawn(8506, 1372, -4654) -- KF(85.0641, 13.7187, 46.5436)
-    Enemy.spawn(1777, 214, -2297)  -- KF(17.7730, 2.1420, 22.9686)
-    Enemy.spawn(3519, 0, -4338)    -- KF(35.1884, 0.0000, 43.3823)
+    -- 每敌人独立参数来自 KF demo.enemy: warning_range, patrol_range, ActorParameter
+    Enemy.spawn(929, 51, -2026, {    -- KF(9.29, 0.51, 20.26)
+        warning_range = 1670, patrol_range = 2530, max_hp = 3, attack = 1, defence = 1})
+    Enemy.spawn(8506, 1372, -4654, { -- KF(85.06, 13.72, 46.54)
+        warning_range = 2200, patrol_range = 1430, max_hp = 5, attack = 2, defence = 1})
+    Enemy.spawn(1777, 214, -2297, {  -- KF(17.77, 2.14, 22.97)
+        warning_range = 1960, patrol_range = 2290, max_hp = 3, attack = 1, defence = 1})
+    Enemy.spawn(3519, 0, -4338, {    -- KF(35.19, 0.00, 43.38)
+        warning_range = 1960, patrol_range = 1550, max_hp = 3, attack = 1, defence = 1})
 
     HUD.setup()
     HUD.hide()  -- Title 状态下隐藏 HUD, enter_battle 时显示
