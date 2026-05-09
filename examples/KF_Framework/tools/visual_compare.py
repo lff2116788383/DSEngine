@@ -434,7 +434,7 @@ def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60):
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
     env["DSE_DATA_ROOT"] = str(kf_dir)
-    env["DSE_AUTO_BATTLE"] = "1"
+    env["DSE_AUTO_BATTLE"] = "2"  # 2=DemoPlay(AI), 1=PlayGame(no AI)
     env["DSE_STARTUP_LUA"] = str(lua_script)
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
 

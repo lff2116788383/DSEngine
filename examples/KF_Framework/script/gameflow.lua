@@ -84,10 +84,15 @@ function GameFlow.setup()
     Audio.play_bgm("title")  -- KF: ModeTitle::OnCompleteLoading → kTitleBgm
     Fade.start_with_loading()  -- KF: 启动时从 Loading 动画开始
 
-    -- 自动截图模式: 跳过 Title 直接进入 Battle (verify_scene.py 用)
-    -- KF PLAY GAME mode: 玩家由键盘控制, 无AI移动. 此处仅跳过Title.
+    -- 自动截图模式: 跳过 Title 直接进入 Battle
     if os.getenv("DSE_AUTO_BATTLE") then
-        AutoPlay.set_enabled(false)
+        -- DSE_AUTO_BATTLE=2 → DemoPlay (AI自动战斗, 匹配KF DEMO PLAY模式)
+        -- DSE_AUTO_BATTLE=1 → PlayGame (无AI, 匹配KF PLAY GAME模式)
+        if os.getenv("DSE_AUTO_BATTLE") == "2" then
+            AutoPlay.set_enabled(true)
+        else
+            AutoPlay.set_enabled(false)
+        end
         title_confirm_timer = 0.5  -- 等半秒让场景加载完
     end
 end
