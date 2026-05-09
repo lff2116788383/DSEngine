@@ -8,6 +8,7 @@ KF FieldCollider 格式:
   Vector3[] vertexes (10201 个)
 顶点排列: Z 外循环 (0..100), X 内循环 (0..100)
 KF 坐标: x ∈ [-150, 150], z ∈ [-150, 150]
+顶点 Z 方向: iz=0 → z=+150, iz=100 → z=-150 (递减!)
 DSE 坐标: DSE_x = KF_x * 100, DSE_z = -KF_z * 100, DSE_y = KF_y * 100
 """
 import struct
@@ -45,12 +46,12 @@ def main():
     # 生成 Lua 文件
     # 存储为 1D 数组 (Lua 1-indexed), 按 row-major (z=0..100, x=0..100)
     # Lua 访问: heights[iz * cols + ix + 1]
-    with open(OUT_PATH, "w") as f:
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
         f.write("--------------------------------------------------------------------------------\n")
         f.write("-- 地形高度表 (自动生成, 勿手动修改)\n")
         f.write("-- 来源: KF demo.field (FieldCollider 顶点数据)\n")
         f.write("-- 网格: 101x101, block_size=3.0, 范围 KF[-150,150]\n")
-        f.write("-- KF 坐标: grid_x = (kf_x + 150) / 3, grid_z = (kf_z + 150) / 3\n")
+        f.write("-- KF 坐标: grid_x = (kf_x + 150) / 3, grid_z = (150 - kf_z) / 3\n")
         f.write("-- DSE 坐标: kf_x = dse_x / 100, kf_z = -dse_z / 100\n")
         f.write("-- 高度: KF_y → DSE_y = KF_y * 100\n")
         f.write("--------------------------------------------------------------------------------\n\n")
@@ -59,7 +60,7 @@ def main():
         f.write(f"TerrainHeight.rows = {rows}\n")
         f.write(f"TerrainHeight.block_size = {bsx}\n")
         f.write(f"TerrainHeight.origin_x = -150.0  -- KF min X\n")
-        f.write(f"TerrainHeight.origin_z = -150.0  -- KF min Z\n")
+        f.write(f"TerrainHeight.origin_z = 150.0   -- KF max Z (顶点Z从+150递减到-150)\n")
         f.write(f"TerrainHeight.scale = 100.0       -- KF → DSE 缩放\n\n")
 
         f.write("-- 高度数据 (KF Y 值, row-major: z=0..100 外循环, x=0..100 内循环)\n")
@@ -84,7 +85,7 @@ def main():
         f.write("\n")
         f.write("    -- KF → 网格索引 (浮点)\n")
         f.write("    local gx = (kf_x - TerrainHeight.origin_x) / TerrainHeight.block_size\n")
-        f.write("    local gz = (kf_z - TerrainHeight.origin_z) / TerrainHeight.block_size\n")
+        f.write("    local gz = (TerrainHeight.origin_z - kf_z) / TerrainHeight.block_size\n")
         f.write("\n")
         f.write("    -- 钳制到网格范围\n")
         f.write("    local max_idx = TerrainHeight.cols - 1  -- 100\n")

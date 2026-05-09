@@ -434,7 +434,7 @@ def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60):
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
     env["DSE_DATA_ROOT"] = str(kf_dir)
-    env["DSE_AUTO_BATTLE"] = "2"  # 2=DemoPlay(AI), 1=PlayGame(no AI)
+    env["DSE_AUTO_BATTLE"] = "1"  # 1=PlayGame(no AI), 2=DemoPlay(AI)
     env["DSE_STARTUP_LUA"] = str(lua_script)
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
 
@@ -644,7 +644,7 @@ def main():
     parser.add_argument("--kf-exe", type=str,
                         default=r"C:\Users\wenbilin\Desktop\temp_analysis\KF_Framework\KF_Framework_Release.exe")
     parser.add_argument("--kf-wait", type=float, default=4.0, help="KF Title 加载等待秒数")
-    parser.add_argument("--battle-wait", type=float, default=4.0, help="KF 进入战斗后等待秒数")
+    parser.add_argument("--battle-wait", type=float, default=10.0, help="KF 进入战斗后等待秒数 (需要足够时间完成fade+加载)")
     parser.add_argument("--manual", action="store_true", help="KF 手动操作模式 (DirectInput 注入失败时使用)")
     parser.add_argument("--auto-input", action="store_true", default=True, help="KF 自动键盘注入模式 (默认)")
     parser.add_argument("--dse-frames", type=int, default=180, help="DSEngine 运行帧数")
