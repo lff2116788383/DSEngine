@@ -8,6 +8,8 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/scene/scene.h"
+#include "engine/scene/sub_scene.h"
+#include "engine/assets/asset_manager.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -49,6 +51,31 @@ int L_EcsLoadScene(lua_State* L) {
     return 2;
 }
 
+int L_EcsLoadSubScene(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "world_unavailable");
+        return 2;
+    }
+    const char* path = luaL_checkstring(L, 1);
+    AssetManager& am = GetAssetManager();
+    std::string resolved = am.GetDataRoot();
+    if (!resolved.empty() && resolved.back() != '/' && resolved.back() != '\\') {
+        resolved += '/';
+    }
+    resolved += path;
+    scene::SubScene sub;
+    const bool ok = sub.Load(*world, am, resolved);
+    lua_pushboolean(L, ok ? 1 : 0);
+    if (ok) {
+        lua_pushinteger(L, static_cast<lua_Integer>(sub.EntityCount()));
+    } else {
+        lua_pushstring(L, "sub_scene_load_failed");
+    }
+    return 2;
+}
+
 int L_EcsFindEntitiesByMeshPath(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -77,6 +104,7 @@ void RegisterEcsCoreBindings(lua_State* L) {
     RegisterBindings(L, {
         {"create_entity",              L_EcsCreateEntity},
         {"load_scene",                 L_EcsLoadScene},
+        {"load_sub_scene",             L_EcsLoadSubScene},
         {"find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath},
     });
 }

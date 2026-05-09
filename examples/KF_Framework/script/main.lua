@@ -60,11 +60,11 @@ function Awake()
     Audio.setup()
     Player.setup()
 
-    -- 生成 4 只 Mutant (KF原始敌人位置 ×100, z取反)
-    Enemy.spawn(929, 0, -2026)   -- KF(9.29, 0.51, 20.26)
-    Enemy.spawn(-800, 0, -500)
-    Enemy.spawn(600, 0, -1200)
-    Enemy.spawn(-400, 0, 800)
+    -- 生成 4 只 Mutant (KF demo.enemy 原始位置 ×100, z取反)
+    Enemy.spawn(929, 51, -2026)    -- KF(9.2874, 0.5089, 20.2551)
+    Enemy.spawn(8506, 1372, -4654) -- KF(85.0641, 13.7187, 46.5436)
+    Enemy.spawn(1777, 214, -2297)  -- KF(17.7730, 2.1420, 22.9686)
+    Enemy.spawn(3519, 0, -4338)    -- KF(35.1884, 0.0000, 43.3823)
 
     HUD.setup()
     HUD.hide()  -- Title 状态下隐藏 HUD, enter_battle 时显示

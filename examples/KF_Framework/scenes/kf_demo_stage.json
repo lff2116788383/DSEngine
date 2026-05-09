@@ -1,0 +1,2301 @@
+{
+  "name": "kf_demo_stage",
+  "material_schema_version": 2,
+  "entities": [
+    {
+      "id": 1,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            4914.830017089844,
+            0.0,
+            -757.422399520874
+          ],
+          "rotation": [
+            -0.0,
+            -0.9543571472167969,
+            0.0,
+            0.29866766929626465
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Baker_house_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/Baker_house.jpg"
+        }
+      },
+      "_label": "Baker_house"
+    },
+    {
+      "id": 2,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            35.17807722091675,
+            317.80505180358887,
+            -6006.744766235352
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/water_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "cartoon_well_water_0"
+    },
+    {
+      "id": 3,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            35.17807722091675,
+            317.80505180358887,
+            -6006.744766235352
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/w_bn_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "cartoon_well_w_bn_0"
+    },
+    {
+      "id": 4,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            35.17807722091675,
+            317.80505180358887,
+            -6006.744766235352
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/w_bin_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "cartoon_well_w_bin_0"
+    },
+    {
+      "id": 5,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            35.17807722091675,
+            317.80505180358887,
+            -6006.744766235352
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/w_bin_1.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "cartoon_well_w_bin_1"
+    },
+    {
+      "id": 6,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            1660.544204711914,
+            0.0,
+            -7954.763031005859
+          ],
+          "rotation": [
+            -0.0,
+            -0.5235394835472107,
+            0.0,
+            0.852001428604126
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Decor_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Fancy_Tavern_Decor_0"
+    },
+    {
+      "id": 7,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            1660.544204711914,
+            0.0,
+            -7954.763031005859
+          ],
+          "rotation": [
+            -0.0,
+            -0.5235394835472107,
+            0.0,
+            0.852001428604126
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fancy_tavern_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Fancy_Tavern_Fancy_tavern_0"
+    },
+    {
+      "id": 8,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -284.2003345489502,
+            0.18596744630485773,
+            -3442.747116088867
+          ],
+          "rotation": [
+            -0.0,
+            -0.37648576498031616,
+            0.0,
+            0.9264224171638489
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fence_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/fence.jpg"
+        }
+      },
+      "_label": "Fence_0"
+    },
+    {
+      "id": 9,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            268.2729959487915,
+            50.72060823440552,
+            -4033.7093353271484
+          ],
+          "rotation": [
+            -0.0,
+            -0.37648576498031616,
+            0.0,
+            0.9264224171638489
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fence_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/fence.jpg"
+        }
+      },
+      "_label": "Fence_1"
+    },
+    {
+      "id": 10,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            814.4656181335449,
+            127.51652002334595,
+            -4618.239212036133
+          ],
+          "rotation": [
+            -0.0,
+            -0.37648576498031616,
+            0.0,
+            0.9264224171638489
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fence_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/fence.jpg"
+        }
+      },
+      "_label": "Fence_2"
+    },
+    {
+      "id": 11,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            1306.0385704040527,
+            156.47302865982056,
+            -5144.316101074219
+          ],
+          "rotation": [
+            -0.0,
+            -0.475911408662796,
+            0.0,
+            0.879493236541748
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fence_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/fence.jpg"
+        }
+      },
+      "_label": "Fence_3"
+    },
+    {
+      "id": 12,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            4740.905380249023,
+            0.0,
+            -8196.610260009766
+          ],
+          "rotation": [
+            -0.0,
+            -0.9814723134040833,
+            0.0,
+            0.1916041374206543
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/house_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "House"
+    },
+    {
+      "id": 13,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -2773.5580444335938,
+            0.0,
+            2266.549491882324
+          ],
+          "rotation": [
+            -0.0,
+            -0.32451602816581726,
+            0.0,
+            0.9458801746368408
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Model_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval Bridge_Model_0"
+    },
+    {
+      "id": 14,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -2773.5580444335938,
+            0.0,
+            2266.549491882324
+          ],
+          "rotation": [
+            -0.0,
+            -0.32451602816581726,
+            0.0,
+            0.9458801746368408
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Model_1.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval Bridge_Model_1"
+    },
+    {
+      "id": 15,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -2773.5580444335938,
+            0.0,
+            2266.549491882324
+          ],
+          "rotation": [
+            -0.0,
+            -0.32451602816581726,
+            0.0,
+            0.9458801746368408
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Model_2.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval Bridge_Model_2"
+    },
+    {
+      "id": 16,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -2773.5580444335938,
+            0.0,
+            2266.549491882324
+          ],
+          "rotation": [
+            -0.0,
+            -0.32451602816581726,
+            0.0,
+            0.9458801746368408
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Model_3.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval Bridge_Model_3"
+    },
+    {
+      "id": 17,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/Wall.jpg"
+        }
+      },
+      "_label": "Medieval house_Mesh1_0"
+    },
+    {
+      "id": 18,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_1.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval house_Mesh1_1"
+    },
+    {
+      "id": 19,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_2.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval house_Mesh1_2"
+    },
+    {
+      "id": 20,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_3.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval house_Mesh1_3"
+    },
+    {
+      "id": 21,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_4.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval house_Mesh1_4"
+    },
+    {
+      "id": 22,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_5.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval house_Mesh1_5"
+    },
+    {
+      "id": 23,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            2499.1641998291016,
+            0.0,
+            870.5039978027344
+          ],
+          "rotation": [
+            -0.0,
+            -0.1648368388414383,
+            -0.0,
+            -0.9863208532333374
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Mesh1_6.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/Roof.jpg"
+        }
+      },
+      "_label": "Medieval house_Mesh1_6"
+    },
+    {
+      "id": 24,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            6144.910430908203,
+            0.0,
+            -1786.5869522094727
+          ],
+          "rotation": [
+            -0.0,
+            -0.8371217250823975,
+            0.0,
+            0.5470166802406311
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Med_house_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_house_1"
+    },
+    {
+      "id": 25,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9448.607635498047,
+            1920.0000762939453,
+            -8711.693572998047
+          ],
+          "rotation": [
+            -0.0,
+            -0.3246035575866699,
+            -0.0,
+            -0.9458501935005188
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/WindMill_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_Windmill_WindMill_0"
+    },
+    {
+      "id": 26,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9448.607635498047,
+            1920.0000762939453,
+            -8711.693572998047
+          ],
+          "rotation": [
+            -0.0,
+            -0.3246035575866699,
+            -0.0,
+            -0.9458501935005188
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Fan_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_Windmill_Fan_0"
+    },
+    {
+      "id": 27,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9448.607635498047,
+            1920.0000762939453,
+            -8711.693572998047
+          ],
+          "rotation": [
+            -0.0,
+            -0.3246035575866699,
+            -0.0,
+            -0.9458501935005188
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Ornament_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_Windmill_Ornament_0"
+    },
+    {
+      "id": 28,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9448.607635498047,
+            1920.0000762939453,
+            -8711.693572998047
+          ],
+          "rotation": [
+            -0.0,
+            -0.3246035575866699,
+            -0.0,
+            -0.9458501935005188
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Ext_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_Windmill_Ext_0"
+    },
+    {
+      "id": 29,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9448.607635498047,
+            1920.0000762939453,
+            -8711.693572998047
+          ],
+          "rotation": [
+            -0.0,
+            -0.3246035575866699,
+            -0.0,
+            -0.9458501935005188
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Lamp_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "Medieval_Windmill_Lamp_0"
+    },
+    {
+      "id": 30,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            3241.2803649902344,
+            0.0,
+            -6376.734924316406
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Rock-1_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "rock_1"
+    },
+    {
+      "id": 31,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            3656.9568634033203,
+            407.0823669433594,
+            -1750.0574111938477
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Rock-2_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "rock_2"
+    },
+    {
+      "id": 32,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -1.5013396739959717,
+            164.77885246276855,
+            -5174.228668212891
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/Rock-3_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true
+        }
+      },
+      "_label": "rock_3"
+    },
+    {
+      "id": 33,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            3792.810821533203,
+            332.8150987625122,
+            -1173.9538192749023
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_0_tree_1_trunk_0"
+    },
+    {
+      "id": 34,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            3792.810821533203,
+            332.8150987625122,
+            -1173.9538192749023
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_0_tree_1_canopy_0"
+    },
+    {
+      "id": 35,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            718.4021949768066,
+            0.0,
+            -7022.6898193359375
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_1_tree_1_trunk_0"
+    },
+    {
+      "id": 36,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            718.4021949768066,
+            0.0,
+            -7022.6898193359375
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_1_tree_1_canopy_0"
+    },
+    {
+      "id": 37,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -860.1814270019531,
+            0.0,
+            -5362.548446655273
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_2_tree_1_trunk_0"
+    },
+    {
+      "id": 38,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -860.1814270019531,
+            0.0,
+            -5362.548446655273
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_2_tree_1_canopy_0"
+    },
+    {
+      "id": 39,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -1205.7863235473633,
+            0.0,
+            -2322.587776184082
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_3_tree_1_trunk_0"
+    },
+    {
+      "id": 40,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -1205.7863235473633,
+            0.0,
+            -2322.587776184082
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_3_tree_1_canopy_0"
+    },
+    {
+      "id": 41,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            626.9147872924805,
+            1.7206458374857903,
+            557.5962066650391
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_4_tree_1_trunk_0"
+    },
+    {
+      "id": 42,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            626.9147872924805,
+            1.7206458374857903,
+            557.5962066650391
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_4_tree_1_canopy_0"
+    },
+    {
+      "id": 43,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            8813.04702758789,
+            1274.403953552246,
+            -3770.1045989990234
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_5_tree_1_trunk_0"
+    },
+    {
+      "id": 44,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            8813.04702758789,
+            1274.403953552246,
+            -3770.1045989990234
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_5_tree_1_canopy_0"
+    },
+    {
+      "id": 45,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9473.20556640625,
+            1419.999122619629,
+            -6003.857803344727
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_6_tree_1_trunk_0"
+    },
+    {
+      "id": 46,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            9473.20556640625,
+            1419.999122619629,
+            -6003.857803344727
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_6_tree_1_canopy_0"
+    },
+    {
+      "id": 47,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            1321.9923973083496,
+            654.0328025817871,
+            2883.23917388916
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_7_tree_1_trunk_0"
+    },
+    {
+      "id": 48,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            1321.9923973083496,
+            654.0328025817871,
+            2883.23917388916
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_7_tree_1_canopy_0"
+    },
+    {
+      "id": 49,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -31.448587775230408,
+            434.0672969818115,
+            4739.495086669922
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_8_tree_1_trunk_0"
+    },
+    {
+      "id": 50,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -31.448587775230408,
+            434.0672969818115,
+            4739.495086669922
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_8_tree_1_canopy_0"
+    },
+    {
+      "id": 51,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            5274.175643920898,
+            194.78551149368286,
+            187.7185344696045
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_9_tree_1_trunk_0"
+    },
+    {
+      "id": 52,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            5274.175643920898,
+            194.78551149368286,
+            187.7185344696045
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_9_tree_1_canopy_0"
+    },
+    {
+      "id": 53,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -1030.2343368530273,
+            0.0,
+            -3126.957130432129
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_10_tree_1_trunk_0"
+    },
+    {
+      "id": 54,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -1030.2343368530273,
+            0.0,
+            -3126.957130432129
+          ],
+          "rotation": [
+            -0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_10_tree_1_canopy_0"
+    },
+    {
+      "id": 55,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -897.6816177368164,
+            0.0,
+            -4218.9422607421875
+          ],
+          "rotation": [
+            -0.0,
+            -0.7720116376876831,
+            0.0,
+            0.6356083750724792
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_11_tree_1_trunk_0"
+    },
+    {
+      "id": 56,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -897.6816177368164,
+            0.0,
+            -4218.9422607421875
+          ],
+          "rotation": [
+            -0.0,
+            -0.7720116376876831,
+            0.0,
+            0.6356083750724792
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_11_tree_1_canopy_0"
+    },
+    {
+      "id": 57,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            56.011414527893066,
+            84.14514660835266,
+            -4606.84700012207
+          ],
+          "rotation": [
+            -0.0,
+            -0.999616265296936,
+            -0.0,
+            -0.027700262144207954
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_trunk_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/trunk.jpg"
+        }
+      },
+      "_label": "tree_1_12_tree_1_trunk_0"
+    },
+    {
+      "id": 58,
+      "components": {
+        "TransformComponent": {
+          "position": [
+            56.011414527893066,
+            84.14514660835266,
+            -4606.84700012207
+          ],
+          "rotation": [
+            -0.0,
+            -0.999616265296936,
+            -0.0,
+            -0.027700262144207954
+          ],
+          "scale": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "MeshRendererComponent": {
+          "mesh_path": "cooked/tree_1_canopy_0.dmesh",
+          "shader_variant": "MESH_HALFLAMBERT_STATIC",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "metallic": 0.0,
+          "roughness": 1.0,
+          "ao": 1.0,
+          "receive_shadow": true,
+          "visible": true,
+          "_texture_hint": "assets/textures/stage/branch.tga"
+        }
+      },
+      "_label": "tree_1_12_tree_1_canopy_0"
+    }
+  ]
+}

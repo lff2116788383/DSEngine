@@ -143,6 +143,20 @@ def flip_indices(indices):
     return result
 
 
+def strip_to_triangles(indices):
+    """TRIANGLE_STRIP → TRIANGLE_LIST 转换 (跳过退化三角形)"""
+    result = []
+    for i in range(len(indices) - 2):
+        a, b, c = indices[i], indices[i+1], indices[i+2]
+        if a == b or b == c or a == c:
+            continue  # 退化三角形 (strip restart)
+        if i % 2 == 0:
+            result.extend([a, b, c])
+        else:
+            result.extend([a, c, b])  # 奇数三角形翻转绕序
+    return result
+
+
 # ============================================================================
 #  KF .mesh 读取
 # ============================================================================
@@ -173,6 +187,10 @@ def read_mesh_file(path: Path):
         colors.append(color)
 
     indices = [r.read_uint16() for _ in range(index_count)]
+
+    if draw_type == KF_TRIANGLE_STRIP:
+        indices = strip_to_triangles(indices)
+
     indices = flip_indices(indices)
 
     return positions, normals, uvs, colors, indices

@@ -314,7 +314,14 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 }
             }
             if (skybox.cubemap_handle != 0) {
+                // Apply skybox entity rotation to view (allows Lua to rotate skybox)
+                if (ctx_.world->registry().all_of<TransformComponent>(sky_entity)) {
+                    auto& sky_tf = ctx_.world->registry().get<TransformComponent>(sky_entity);
+                    glm::mat4 sky_inv_rot = glm::mat4_cast(glm::conjugate(sky_tf.rotation));
+                    cmd_buffer.SetCamera(view * sky_inv_rot, projection);
+                }
                 cmd_buffer.DrawSkybox(skybox.cubemap_handle);
+                cmd_buffer.SetCamera(view, projection);
             }
             break;
         }

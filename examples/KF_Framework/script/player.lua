@@ -24,7 +24,7 @@ local knight = nil
 local camera = nil
 local state = {
     speed = 0.0,
-    facing_yaw = 0.0,
+    facing_yaw = 180.0,  -- face -Z (= KF's +Z forward after Z-flip)
     velocity_y = 0.0,
     grounded = true,
     hp = Config.PLAYER.max_hp,
@@ -40,13 +40,13 @@ function Player.reset()
     state.hp = Config.PLAYER.max_hp
     state.dead = false
     state.speed = 0.0
-    state.facing_yaw = 0.0
+    state.facing_yaw = 180.0
     state.velocity_y = 0.0
     state.grounded = true
     state.invincible_timer = 0.0
-    -- 重置位置到原点
-    ecs.set_transform_position(knight, 0, 0, 0)
-    ecs.set_transform_rotation(knight, 0, 0, 0)
+    -- 重置位置到 KF demo.player 初始位置
+    ecs.set_transform_position(knight, -8258, 0, 9542)
+    ecs.set_transform_rotation(knight, 0, 180, 0)  -- face -Z (scene forward)
     -- 重置动画到 idle
     ecs.set_animator_3d_state(knight, "idle", 1.0, true)
     ecs.set_animator_3d_param_float(knight, "speed", 0)
@@ -117,7 +117,9 @@ end
 function Player.setup()
     -- Knight entity
     knight = ecs.create_entity()
-    ecs.add_transform(knight, 0, 0, 0)
+    -- KF demo.player: (-82.5767, 0, -95.4176) → DSE: ×100, z取反
+    ecs.add_transform(knight, -8258, 0, 9542)
+    ecs.set_transform_rotation(knight, 0, 180, 0)  -- face -Z (scene forward after Z-flip)
     ecs.add_mesh_renderer(knight, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(knight, ASSET.knight_mesh)
     ecs.set_mesh_shader_variant(knight, "MESH_HALFLAMBERT")
@@ -197,8 +199,8 @@ function Player.setup()
     local pitch_rad = math.rad(-CAM.pitch)
     local init_behind = CAM.distance * math.cos(pitch_rad)
     local init_up = CAM.distance * math.sin(pitch_rad)
-    ecs.add_transform(camera, 0, CAM.offset_y + init_up, -init_behind)
-    ecs.set_transform_rotation(camera, CAM.pitch, 180, 0)  -- 面朝+Z (DSE默认-Z, 需转180°)
+    ecs.add_transform(camera, -8258, CAM.offset_y + init_up, 9542 + init_behind)
+    ecs.set_transform_rotation(camera, CAM.pitch, 0, 0)  -- 面朝-Z (DSE默认, 场景前方)
     ecs.add_camera_3d(camera, CAM.fov, 0, CAM.near_clip, CAM.far_clip)
 
     print("[KF_Framework] Knight + Camera ready. 13 states configured.")
@@ -223,8 +225,8 @@ function Player.update(dt)
     if AutoPlay.is_enabled() then
         move_x, move_z, running, ai_attack, ai_block = AutoPlay.get_input(dt, knight)
     else
-        if app.get_key(87)  then move_z =  1 end  -- W
-        if app.get_key(83)  then move_z = -1 end  -- S
+        if app.get_key(87)  then move_z = -1 end  -- W (forward = -Z in DSE = +Z in KF)
+        if app.get_key(83)  then move_z =  1 end  -- S (backward = +Z in DSE)
         if app.get_key(65)  then move_x = -1 end  -- A
         if app.get_key(68)  then move_x =  1 end  -- D
         running = app.get_key(340) or app.get_key(344)

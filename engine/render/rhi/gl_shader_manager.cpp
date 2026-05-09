@@ -400,8 +400,9 @@ void GLShaderManager::InitBuiltinPBRShader() {
                 vec3 R = reflect(u_light_direction, N);
 
                 // Half-Lambert diffuse with material_diffuse and light_diffuse
+                // Note: Half-Lambert [0.5,1.0] already provides built-in ambient (50% minimum)
                 float half_lambert = dot(N, L) * 0.5 + 0.5;
-                vec3 diffuse = u_material_albedo * half_lambert * u_light_color;
+                vec3 diffuse = u_material_albedo * half_lambert * u_light_color * u_light_intensity;
 
                 // Phong specular from material properties (roughness_ao.x repurposed as power)
                 float spec_power = max(u_material_roughness, 1.0);

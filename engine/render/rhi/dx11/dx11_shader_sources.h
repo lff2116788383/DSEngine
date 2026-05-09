@@ -347,7 +347,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 V_st = normalize(camera_pos.xyz - input.fragPos);
         float3 R = reflect(light_dir_and_enabled.xyz, N);
         float half_lambert = dot(N, L) * 0.5 + 0.5;
-        float3 diffuse = mat_albedo.rgb * half_lambert * light_color_and_ambient.rgb;
+        float3 diffuse = mat_albedo.rgb * half_lambert * light_color_and_ambient.rgb * light_params.x;
         float spec_power = max(mat_roughness_ao.x, 1.0);
         float3 spec_color = float3(mat_albedo.w, mat_albedo.w, mat_albedo.w);
         float3 specular = spec_color * pow(max(dot(R, V_st), 0.0), spec_power);

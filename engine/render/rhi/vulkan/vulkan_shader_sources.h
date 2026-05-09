@@ -368,7 +368,7 @@ void main() {
         vec3 V_st = normalize(u_camera_pos - vFragPos);
         vec3 R = reflect(u_light_direction, N);
         float half_lambert = dot(N, L) * 0.5 + 0.5;
-        vec3 diffuse = u_material_albedo * half_lambert * u_light_color;
+        vec3 diffuse = u_material_albedo * half_lambert * u_light_color * u_light_intensity;
         float spec_power = max(u_material_roughness, 1.0);
         vec3 spec_color = vec3(u_material_metallic);
         vec3 specular = spec_color * pow(max(dot(R, V_st), 0.0), spec_power);

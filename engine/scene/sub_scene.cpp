@@ -167,15 +167,56 @@ bool SubScene::Load(World& world, AssetManager& asset_manager, const std::string
             world.registry().emplace<UUIDComponent>(entity, uuid_comp);
         }
 
-        // MeshRendererComponent
+        // MeshRendererComponent (full property support, matching Scene::Deserialize)
         if (components.HasMember("MeshRendererComponent") && components["MeshRendererComponent"].IsObject()) {
             const auto& mesh_json = components["MeshRendererComponent"];
             dse::MeshRendererComponent mesh;
             if (mesh_json.HasMember("mesh_path") && mesh_json["mesh_path"].IsString()) {
                 mesh.mesh_path = mesh_json["mesh_path"].GetString();
             }
+            if (mesh_json.HasMember("shader_variant") && mesh_json["shader_variant"].IsString()) {
+                mesh.shader_variant = mesh_json["shader_variant"].GetString();
+            }
+            if (mesh_json.HasMember("color") && mesh_json["color"].IsArray() && mesh_json["color"].Size() == 4) {
+                const auto& c = mesh_json["color"].GetArray();
+                mesh.color = glm::vec4(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat(), c[3].GetFloat());
+            }
+            if (mesh_json.HasMember("emissive") && mesh_json["emissive"].IsArray() && mesh_json["emissive"].Size() == 3) {
+                const auto& e = mesh_json["emissive"].GetArray();
+                mesh.emissive = glm::vec3(e[0].GetFloat(), e[1].GetFloat(), e[2].GetFloat());
+            }
+            if (mesh_json.HasMember("metallic") && mesh_json["metallic"].IsNumber()) {
+                mesh.metallic = mesh_json["metallic"].GetFloat();
+            }
+            if (mesh_json.HasMember("roughness") && mesh_json["roughness"].IsNumber()) {
+                mesh.roughness = mesh_json["roughness"].GetFloat();
+            }
+            if (mesh_json.HasMember("ao") && mesh_json["ao"].IsNumber()) {
+                mesh.ao = mesh_json["ao"].GetFloat();
+            }
+            if (mesh_json.HasMember("normal_strength") && mesh_json["normal_strength"].IsNumber()) {
+                mesh.normal_strength = mesh_json["normal_strength"].GetFloat();
+            }
+            if (mesh_json.HasMember("material_alpha_cutoff") && mesh_json["material_alpha_cutoff"].IsNumber()) {
+                mesh.material_alpha_cutoff = mesh_json["material_alpha_cutoff"].GetFloat();
+            }
+            if (mesh_json.HasMember("material_alpha_test") && mesh_json["material_alpha_test"].IsBool()) {
+                mesh.material_alpha_test = mesh_json["material_alpha_test"].GetBool();
+            }
+            if (mesh_json.HasMember("material_double_sided") && mesh_json["material_double_sided"].IsBool()) {
+                mesh.material_double_sided = mesh_json["material_double_sided"].GetBool();
+            }
+            if (mesh_json.HasMember("receive_shadow") && mesh_json["receive_shadow"].IsBool()) {
+                mesh.receive_shadow = mesh_json["receive_shadow"].GetBool();
+            }
             if (mesh_json.HasMember("visible") && mesh_json["visible"].IsBool()) {
                 mesh.visible = mesh_json["visible"].GetBool();
+            }
+            if (mesh_json.HasMember("sorting_layer") && mesh_json["sorting_layer"].IsInt()) {
+                mesh.sorting_layer = mesh_json["sorting_layer"].GetInt();
+            }
+            if (mesh_json.HasMember("order_in_layer") && mesh_json["order_in_layer"].IsInt()) {
+                mesh.order_in_layer = mesh_json["order_in_layer"].GetInt();
             }
             world.registry().emplace<dse::MeshRendererComponent>(entity, mesh);
         }

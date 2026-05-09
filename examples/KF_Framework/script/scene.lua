@@ -9,99 +9,85 @@ local ecs = dse.ecs
 
 local Scene = {}
 
--- 辅助
-local function cube_verts()
-    return { -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5,
-             -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5 }
-end
-local function cube_idx()
-    return { 0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4 }
-end
-
-local decorations = {}
-
-local function add_mesh(mesh_path, x, y, z, sx, sy, sz, ry, tex_path)
-    local e = ecs.create_entity()
-    ecs.add_transform(e, x, y, z, sx, sy, sz)
-    if ry and ry ~= 0 then
-        ecs.set_transform_rotation(e, 0, ry, 0)
-    end
-    ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
-    ecs.set_mesh_path(e, mesh_path)
-    ecs.set_mesh_shader_variant(e, "MESH_HALFLAMBERT_STATIC")
-    ecs.set_mesh_material(e, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, false)
-    if tex_path then
-        ecs.set_mesh_texture(e, "albedo", tex_path)
-    end
-    table.insert(decorations, e)
-    return e
-end
-
 function Scene.setup()
-    -- 1. Directional light
+    -- 1. Directional light (boosted to match KF's DX9 fixed-pipeline brightness)
     local sun = ecs.create_entity()
     ecs.add_transform(sun, 0, 0, 0)
     local ld = math.sqrt(1+16+1)
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
-         0.8, 0.8, 0.8, 1.0, 0.2, 0.35)
+         0.92, 0.88, 0.84, 0.85, 0.30, 0.35)
     ecs.set_directional_light_shadow(sun, true, 1.0, 800, 3000, 15000)
 
     -- 2. Sky light
     local sky_light = ecs.create_entity()
     ecs.add_transform(sky_light, 0, 0, 0)
-    ecs.add_sky_light(sky_light, 0.35, 0.45, 0.60, 0.10, 0.10, 0.08, 1.2)
+    ecs.add_sky_light(sky_light, 0.38, 0.45, 0.55, 0.12, 0.11, 0.10, 1.1)
 
-    -- 3. Skybox (全景图)
+    -- 3. Skybox (全景图) — rotate 180° to compensate for camera Z-flip
     local skybox_ent = ecs.create_entity()
     ecs.add_transform(skybox_ent, 0, 0, 0)
+    ecs.set_transform_rotation(skybox_ent, 0, 180, 0)
     ecs.add_skybox(skybox_ent, ASSET.skybox_pano)
 
-    -- 4. Ground
+    -- 4. Ground (demoField.mesh from KF, converted to .dmesh)
+    -- Z-flip: dmesh retains KF's original Z; scale_z=-100 flips to DSE coordinates
     local ground = ecs.create_entity()
-    ecs.add_transform(ground, 0, -2, 0, 20000, 4, 20000)
-    ecs.add_mesh_renderer(ground, 0.28, 0.35, 0.22, 1.0, cube_verts(), cube_idx())
+    ecs.add_transform(ground, 0, 0, 0, 100, 100, -100)
+    ecs.add_mesh_renderer(ground, 1.0, 1.0, 1.0, 1.0)
+    ecs.set_mesh_path(ground, "cooked/demoField.dmesh")
     ecs.set_mesh_shader_variant(ground, "MESH_HALFLAMBERT_STATIC")
     ecs.set_mesh_material(ground, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
     ecs.set_mesh_texture(ground, "albedo", ASSET.ground_tex)
 
-    -- 5. 场景装饰物 (demo.stage 精确位置, 战斗区中心偏移 (10,0,15))
-    -- Buildings
-    add_mesh(ASSET.baker_house, 3915, 0, 743, 1, 1, 1, -145, ASSET.tex_baker)
-    add_mesh(ASSET.tavern, 661, 0, -6455, 1, 1, 1, -63, ASSET.tex_tavern)
-    add_mesh(ASSET.med_house1, 5145, 0, -287, 1, 1, 1, -114, ASSET.tex_med_house1)
-    add_mesh(ASSET.windmill, 8449, 1920, -7212, 1, 1, 1, 38, ASSET.tex_windmill)
-    add_mesh(ASSET.med_house, 1499, 0, 2371, 1, 1, 1, 19, ASSET.tex_med_house1)
-    add_mesh(ASSET.med_house1, 3741, 0, -6697, 1, 1, 1, -157, ASSET.tex_med_house1)
-    add_mesh(ASSET.bridge, -3774, 0, 3767, 1, 1, 1, -38, ASSET.tex_bridge)
-    add_mesh(ASSET.well, -965, 318, -4507, 1, 1, 1, 0, ASSET.tex_well)
+    -- 5. 场景装饰物 — 从 DSE 原生 JSON 场景加载 (demo.stage 精确位置)
+    local ok, count = ecs.load_sub_scene("scenes/kf_demo_stage.json")
+    if ok then
+        print("[Scene] Loaded kf_demo_stage.json: " .. tostring(count) .. " entities")
+    else
+        print("[Scene] WARNING: Failed to load kf_demo_stage.json: " .. tostring(count))
+    end
 
-    -- Fences
-    add_mesh(ASSET.fence, -1284, 0, -1943, 1, 1, 1, -44, ASSET.tex_fence)
-    add_mesh(ASSET.fence, -732, 51, -2534, 1, 1, 1, -44, ASSET.tex_fence)
-    add_mesh(ASSET.fence, -186, 128, -3118, 1, 1, 1, -44, ASSET.tex_fence)
-    add_mesh(ASSET.fence, 306, 156, -3644, 1, 1, 1, -56, ASSET.tex_fence)
-
-    -- Rocks
-    add_mesh(ASSET.rock1, 2241, 0, -4877, 1, 1, 1, 0, ASSET.tex_rock)
-    add_mesh(ASSET.rock2, 2657, 407, -250, 1, 1, 1, 0, ASSET.tex_rock)
-    add_mesh(ASSET.rock3, -1002, 165, -3674, 1, 1, 1, 0, ASSET.tex_rock)
-
-    -- Trees (pine FBX 异常大, scale=0.1)
-    local ts = 0.1
-    add_mesh(ASSET.pine_tree, 2793, 333, 326, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -282, 0, -5523, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -1860, 0, -3863, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -2206, 0, -823, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -373, 2, 2058, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, 7813, 1274, -2270, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, 322, 654, 4383, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -1031, 434, 6239, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -2030, 0, -1627, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -1898, 0, -2719, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, -944, 84, -3107, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, 8473, 1420, -4504, ts, ts, ts, 0, ASSET.tex_pine)
-    add_mesh(ASSET.pine_tree, 4274, 195, 1688, ts, ts, ts, 0, ASSET.tex_pine)
+    -- 为加载的 mesh 实体设置纹理 (texture handles 是运行时概念, JSON 无法存储路径)
+    local tex_map = {
+        ["cooked/Baker_house_0.dmesh"] = "assets/textures/stage/Baker_house.jpg",
+        ["cooked/Decor_0.dmesh"]       = "assets/textures/stage/Fancy_Tavern_Decor.png",
+        ["cooked/Ext_0.dmesh"]         = "assets/textures/stage/WindmillAtlas.tga",
+        ["cooked/Fan_0.dmesh"]         = "assets/textures/stage/WindmillAtlas.tga",
+        ["cooked/Fancy_tavern_0.dmesh"]= "assets/textures/stage/Fancy_Tavern.jpg",
+        ["cooked/Fence_0.dmesh"]       = "assets/textures/stage/fence.jpg",
+        ["cooked/Lamp_0.dmesh"]        = "assets/textures/stage/WindmillAtlas.tga",
+        ["cooked/Med_house_0.dmesh"]   = "assets/textures/stage/Medieval_house_1_House_D.tga",
+        ["cooked/Mesh1_0.dmesh"]       = "assets/textures/stage/Wall.jpg",
+        ["cooked/Mesh1_1.dmesh"]       = "assets/textures/stage/Medieval house_wood.jpg",
+        ["cooked/Mesh1_2.dmesh"]       = "assets/textures/stage/Medieval house_door.jpg",
+        ["cooked/Mesh1_3.dmesh"]       = "assets/textures/stage/Medieval house_end.jpg",
+        ["cooked/Mesh1_4.dmesh"]       = "assets/textures/stage/Medieval house_window.jpg",
+        ["cooked/Mesh1_5.dmesh"]       = "assets/textures/stage/Medieval house_concrete.jpg",
+        ["cooked/Mesh1_6.dmesh"]       = "assets/textures/stage/Roof.jpg",
+        ["cooked/Model_0.dmesh"]       = "assets/textures/stage/Bridge.jpg",
+        ["cooked/Model_1.dmesh"]       = "assets/textures/stage/Bridge_Main.jpg",
+        ["cooked/Model_2.dmesh"]       = "assets/textures/stage/road_stone.jpg",
+        ["cooked/Model_3.dmesh"]       = "assets/textures/stage/wall.jpg",
+        ["cooked/Ornament_0.dmesh"]    = "assets/textures/stage/WindmillAtlas.tga",
+        ["cooked/Rock-1_0.dmesh"]      = "assets/textures/stage/RockCliff.jpg",
+        ["cooked/Rock-2_0.dmesh"]      = "assets/textures/stage/RockCliff.jpg",
+        ["cooked/Rock-3_0.dmesh"]      = "assets/textures/stage/RockCliff.jpg",
+        ["cooked/WindMill_0.dmesh"]    = "assets/textures/stage/WindmillAtlas.tga",
+        ["cooked/house_0.dmesh"]       = "assets/textures/stage/house.jpg",
+        ["cooked/tree_1_canopy_0.dmesh"] = "assets/textures/stage/branch.tga",
+        ["cooked/tree_1_trunk_0.dmesh"]  = "assets/textures/stage/trunk.jpg",
+        ["cooked/w_bin_0.dmesh"]       = "assets/textures/stage/well.jpg",
+        ["cooked/w_bin_1.dmesh"]       = "assets/textures/stage/well.jpg",
+        ["cooked/w_bn_0.dmesh"]        = "assets/textures/stage/well.jpg",
+        ["cooked/water_0.dmesh"]       = "assets/textures/stage/well.jpg",
+    }
+    for mesh_path, tex_path in pairs(tex_map) do
+        local found = ecs.find_entities_by_mesh_path(mesh_path)
+        for _, e in ipairs(found) do
+            ecs.set_mesh_texture(e, "albedo", tex_path)
+        end
+    end
 
     -- 6. Post-processing
     local pp = ecs.create_entity()
