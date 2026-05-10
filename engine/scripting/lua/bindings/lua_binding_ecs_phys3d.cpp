@@ -345,13 +345,98 @@ int L_EcsCharacterController3DMove(lua_State* L) {
         return 5;
     }
 #endif
-    // 无 PhysX 时回退：直接修改 Transform
+    // 无 PhysX 时回退：地形贴地 + 碰撞体推开 + 着地检测
     World* world = GetWorld();
     if (world) {
         auto* transform = helper::TryGetComponent<TransformComponent>(*world, e);
         if (transform) {
-            transform->position += glm::vec3(dx, dy, dz);
+            auto* cc = helper::TryGetComponent<CharacterController3DComponent>(*world, e);
+            glm::vec3 original_pos = transform->position;
+            glm::vec3 new_pos = original_pos + glm::vec3(dx, dy, dz);
+            uint8_t cflags = 0;
+
+            // 碰撞体推开 — 将角色视为球体
+            float char_radius = cc ? cc->radius : 0.3f;
+            float char_half_h = cc ? cc->height * 0.5f : 0.5f;
+            glm::vec3 sphere_c = new_pos + glm::vec3(0, char_radius + char_half_h, 0);
+
+            // Box 碰撞体
+            auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
+            for (auto other : box_view) {
+                if (other == e) continue;
+                const auto& bt = box_view.get<TransformComponent>(other);
+                const auto& bc = box_view.get<BoxCollider3DComponent>(other);
+                glm::vec3 bc_center = bt.position + bc.center;
+                glm::vec3 half = glm::abs(bt.scale * bc.size) * 0.5f;
+                glm::vec3 bmin = bc_center - half;
+                glm::vec3 bmax = bc_center + half;
+                glm::vec3 closest;
+                closest.x = std::max(bmin.x, std::min(sphere_c.x, bmax.x));
+                closest.y = std::max(bmin.y, std::min(sphere_c.y, bmax.y));
+                closest.z = std::max(bmin.z, std::min(sphere_c.z, bmax.z));
+                glm::vec3 diff = sphere_c - closest;
+                float dist_sq = glm::dot(diff, diff);
+                if (dist_sq < char_radius * char_radius && dist_sq > 1e-8f) {
+                    float d = std::sqrt(dist_sq);
+                    glm::vec3 n = diff / d;
+                    float overlap = char_radius - d;
+                    new_pos += n * overlap;
+                    sphere_c += n * overlap;
+                    cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
+                }
+            }
+
+            // Sphere 碰撞体
+            auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
+            for (auto other : sph_view) {
+                if (other == e) continue;
+                const auto& st = sph_view.get<TransformComponent>(other);
+                const auto& sc = sph_view.get<SphereCollider3DComponent>(other);
+                glm::vec3 oc = st.position + sc.center;
+                float max_s = std::max(std::fabs(st.scale.x),
+                              std::max(std::fabs(st.scale.y), std::fabs(st.scale.z)));
+                float or_ = sc.radius * max_s;
+                glm::vec3 diff = sphere_c - oc;
+                float d = glm::length(diff);
+                float md = char_radius + or_;
+                if (d < md && d > 1e-6f) {
+                    glm::vec3 n = diff / d;
+                    float overlap_val = md - d;
+                    new_pos += n * overlap_val;
+                    sphere_c += n * overlap_val;
+                    cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
+                }
+            }
+
+            // 地形高度贴地
+            bool grounded = false;
+            float terrain_y = -1e10f;
+            auto hm_view = world->registry().view<TerrainHeightmapComponent>();
+            for (auto te : hm_view) {
+                const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
+                float h = hm.GetHeight(new_pos.x, new_pos.z);
+                if (h > terrain_y) terrain_y = h;
+            }
+            if (terrain_y > -1e9f && new_pos.y <= terrain_y) {
+                new_pos.y = terrain_y;
+                grounded = true;
+                cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Down);
+            }
+
+            transform->position = new_pos;
             transform->dirty = true;
+
+            glm::vec3 vel = (dt > 1e-6f) ? (new_pos - original_pos) / dt : glm::vec3(0);
+            if (cc) {
+                cc->is_grounded = grounded;
+                cc->collision_flags = static_cast<CharacterCollisionFlag>(cflags);
+                cc->velocity = vel;
+            }
+
+            lua_pushboolean(L, grounded ? 1 : 0);
+            helper::PushVec3(L, vel);
+            lua_pushinteger(L, static_cast<lua_Integer>(cflags));
+            return 5;
         }
     }
     lua_pushboolean(L, 0);
@@ -423,6 +508,171 @@ int L_EcsCharacterController3DGetPosition(lua_State* L) {
     return 3;
 }
 
+// ============================================================
+// TerrainHeightmap 绑定
+// ============================================================
+
+/// add_terrain_heightmap(entity, origin_x, origin_z, block_size, cols, rows, [scale, flip_z])
+int L_EcsAddTerrainHeightmap(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float ox = helper::CheckFloat(L, 2);
+    float oz = helper::CheckFloat(L, 3);
+    float bs = helper::CheckFloat(L, 4);
+    int cols = helper::CheckInt(L, 5);
+    int rows = helper::CheckInt(L, 6);
+    float sc = helper::OptFloat(L, 7, 1.0f);
+    bool fz = helper::OptBool(L, 8, false);
+    auto& hm = world->registry().emplace_or_replace<TerrainHeightmapComponent>(e);
+    hm.origin_x = ox;
+    hm.origin_z = oz;
+    hm.block_size = bs;
+    hm.cols = cols;
+    hm.rows = rows;
+    hm.scale = sc;
+    hm.flip_z = fz;
+    return 0;
+}
+
+/// terrain_heightmap_set_data(entity, table)
+int L_EcsTerrainHeightmapSetData(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* hm = helper::TryGetComponent<TerrainHeightmapComponent>(*world, e);
+    if (!hm) return 0;
+    luaL_checktype(L, 2, LUA_TTABLE);
+    int n = static_cast<int>(lua_rawlen(L, 2));
+    hm->heights.resize(n);
+    for (int i = 0; i < n; ++i) {
+        lua_rawgeti(L, 2, i + 1);
+        hm->heights[i] = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+    return 0;
+}
+
+/// terrain_get_height(world_x, world_z) -> height_y
+int L_EcsTerrainGetHeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0.0); return 1; }
+    float wx = helper::CheckFloat(L, 1);
+    float wz = helper::CheckFloat(L, 2);
+    float best_y = 0.0f;
+    bool found = false;
+    auto view = world->registry().view<TerrainHeightmapComponent>();
+    for (auto te : view) {
+        const auto& hm = view.get<TerrainHeightmapComponent>(te);
+        float h = hm.GetHeight(wx, wz);
+        if (!found || h > best_y) { best_y = h; found = true; }
+    }
+    helper::PushFloat(L, best_y);
+    return 1;
+}
+
+// ============================================================
+// Overlap Query 绑定
+// ============================================================
+
+/// physics_3d_overlap_sphere(cx, cy, cz, radius) -> {entity1, entity2, ...}
+int L_Physics3DOverlapSphere(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_newtable(L); return 1; }
+    float cx = helper::CheckFloat(L, 1);
+    float cy = helper::CheckFloat(L, 2);
+    float cz = helper::CheckFloat(L, 3);
+    float radius = helper::CheckFloat(L, 4);
+    glm::vec3 center(cx, cy, cz);
+    float r2 = radius * radius;
+
+    lua_newtable(L);
+    int idx = 1;
+
+    auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
+    for (auto entity : box_view) {
+        const auto& t = box_view.get<TransformComponent>(entity);
+        const auto& c = box_view.get<BoxCollider3DComponent>(entity);
+        glm::vec3 bc = t.position + c.center;
+        glm::vec3 half = glm::abs(t.scale * c.size) * 0.5f;
+        glm::vec3 bmin = bc - half, bmax = bc + half;
+        glm::vec3 closest;
+        closest.x = std::max(bmin.x, std::min(center.x, bmax.x));
+        closest.y = std::max(bmin.y, std::min(center.y, bmax.y));
+        closest.z = std::max(bmin.z, std::min(center.z, bmax.z));
+        glm::vec3 diff = center - closest;
+        if (glm::dot(diff, diff) <= r2) {
+            helper::PushEntity(L, entity);
+            lua_rawseti(L, -2, idx++);
+        }
+    }
+
+    auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
+    for (auto entity : sph_view) {
+        const auto& t = sph_view.get<TransformComponent>(entity);
+        const auto& c = sph_view.get<SphereCollider3DComponent>(entity);
+        glm::vec3 sc = t.position + c.center;
+        float max_s = std::max(std::fabs(t.scale.x),
+                      std::max(std::fabs(t.scale.y), std::fabs(t.scale.z)));
+        float sr = c.radius * max_s;
+        float combined = radius + sr;
+        glm::vec3 diff = center - sc;
+        if (glm::dot(diff, diff) <= combined * combined) {
+            helper::PushEntity(L, entity);
+            lua_rawseti(L, -2, idx++);
+        }
+    }
+
+    return 1;
+}
+
+/// physics_3d_overlap_box(min_x, min_y, min_z, max_x, max_y, max_z) -> {entity1, entity2, ...}
+int L_Physics3DOverlapBox(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_newtable(L); return 1; }
+    glm::vec3 qmin = helper::CheckVec3(L, 1);
+    glm::vec3 qmax = helper::CheckVec3(L, 4);
+
+    lua_newtable(L);
+    int idx = 1;
+
+    auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
+    for (auto entity : box_view) {
+        const auto& t = box_view.get<TransformComponent>(entity);
+        const auto& c = box_view.get<BoxCollider3DComponent>(entity);
+        glm::vec3 bc = t.position + c.center;
+        glm::vec3 half = glm::abs(t.scale * c.size) * 0.5f;
+        glm::vec3 bmin = bc - half, bmax = bc + half;
+        if (qmin.x <= bmax.x && qmax.x >= bmin.x &&
+            qmin.y <= bmax.y && qmax.y >= bmin.y &&
+            qmin.z <= bmax.z && qmax.z >= bmin.z) {
+            helper::PushEntity(L, entity);
+            lua_rawseti(L, -2, idx++);
+        }
+    }
+
+    auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
+    for (auto entity : sph_view) {
+        const auto& t = sph_view.get<TransformComponent>(entity);
+        const auto& c = sph_view.get<SphereCollider3DComponent>(entity);
+        glm::vec3 sc = t.position + c.center;
+        float max_s = std::max(std::fabs(t.scale.x),
+                      std::max(std::fabs(t.scale.y), std::fabs(t.scale.z)));
+        float sr = c.radius * max_s;
+        glm::vec3 closest;
+        closest.x = std::max(qmin.x, std::min(sc.x, qmax.x));
+        closest.y = std::max(qmin.y, std::min(sc.y, qmax.y));
+        closest.z = std::max(qmin.z, std::min(sc.z, qmax.z));
+        glm::vec3 diff = sc - closest;
+        if (glm::dot(diff, diff) <= sr * sr) {
+            helper::PushEntity(L, entity);
+            lua_rawseti(L, -2, idx++);
+        }
+    }
+
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsPhysics3DBindings(lua_State* L) {
@@ -442,6 +692,11 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"character_controller_3d_jump",         L_EcsCharacterController3DJump},
         {"character_controller_3d_is_grounded",  L_EcsCharacterController3DIsGrounded},
         {"character_controller_3d_get_position", L_EcsCharacterController3DGetPosition},
+        {"add_terrain_heightmap",          L_EcsAddTerrainHeightmap},
+        {"terrain_heightmap_set_data",     L_EcsTerrainHeightmapSetData},
+        {"terrain_get_height",             L_EcsTerrainGetHeight},
+        {"physics_3d_overlap_sphere",      L_Physics3DOverlapSphere},
+        {"physics_3d_overlap_box",         L_Physics3DOverlapBox},
     });
 }
 

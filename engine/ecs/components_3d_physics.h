@@ -92,6 +92,55 @@ struct CharacterController3DComponent {
     void* runtime_controller = nullptr;
 };
 
+/// 地形高度图组件 — 存储网格化高度数据，提供 C++ 双线性插值查询
+struct TerrainHeightmapComponent {
+    float origin_x = 0.0f;     ///< 网格原点 X（本地单位）
+    float origin_z = 0.0f;     ///< 网格原点 Z（本地单位）
+    float block_size = 1.0f;   ///< 网格单元大小（本地单位）
+    float scale = 1.0f;        ///< 本地 → 世界缩放因子
+    bool flip_z = false;       ///< 若 true，世界 Z = -本地 Z
+    int cols = 0;              ///< 列数
+    int rows = 0;              ///< 行数
+    std::vector<float> heights; ///< 行主序高度数据（rows × cols，本地 Y 值）
+
+    /// 查询世界坐标处的地形高度（返回世界 Y）
+    float GetHeight(float world_x, float world_z) const {
+        if (cols <= 1 || rows <= 1 || static_cast<int>(heights.size()) < cols * rows)
+            return 0.0f;
+
+        float local_x = world_x / scale;
+        float local_z = flip_z ? (-world_z / scale) : (world_z / scale);
+
+        float gx = (local_x - origin_x) / block_size;
+        float gz = (origin_z - local_z) / block_size;
+
+        float max_col = static_cast<float>(cols - 1);
+        float max_row = static_cast<float>(rows - 1);
+        if (gx < 0.0f) gx = 0.0f; if (gx > max_col) gx = max_col;
+        if (gz < 0.0f) gz = 0.0f; if (gz > max_row) gz = max_row;
+
+        int ix = static_cast<int>(gx);
+        int iz = static_cast<int>(gz);
+        float fx = gx - static_cast<float>(ix);
+        float fz = gz - static_cast<float>(iz);
+
+        if (ix >= cols - 1) { ix = cols - 2; fx = 1.0f; }
+        if (iz >= rows - 1) { iz = rows - 2; fz = 1.0f; }
+
+        float h00 = heights[iz * cols + ix];
+        float h10 = heights[iz * cols + ix + 1];
+        float h01 = heights[(iz + 1) * cols + ix];
+        float h11 = heights[(iz + 1) * cols + ix + 1];
+
+        float h = h00 * (1.0f - fx) * (1.0f - fz)
+                + h10 * fx * (1.0f - fz)
+                + h01 * (1.0f - fx) * fz
+                + h11 * fx * fz;
+
+        return h * scale;
+    }
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_PHYSICS_H

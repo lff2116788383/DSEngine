@@ -228,6 +228,9 @@ function Player.setup()
     ecs.set_transform_rotation(camera, CAM.pitch, 0, 0)  -- 面朝-Z (DSE默认, 场景前方)
     ecs.add_camera_3d(camera, CAM.fov, 0, CAM.near_clip, CAM.far_clip)
 
+    -- CharacterController3D — C++ 回退自动处理建筑碰撞 + 地形贴地
+    ecs.add_character_controller_3d(knight, Config.PLAYER.collision_radius, 170, 45, 30)
+
     print("[KF_Framework] Knight + Camera ready. 13 states configured.")
 end
 
@@ -238,23 +241,6 @@ local KF_MAX_TURN = math.pi * 2.0  -- KF: 2π rad/sec (360°/s)
 -- 简单场地边界 (KF: FieldCollider 限制活动区域)
 local FIELD_MIN_X, FIELD_MAX_X = -20000, 20000
 local FIELD_MIN_Z, FIELD_MAX_Z = -20000, 20000
-
--- 建筑碰撞 AABB: {min_x, min_z, max_x, max_z}
--- 从 kf_demo_stage.json 实体位置估算
-local BUILDING_AABBS = {
-    -- Medieval house (castle): center (2499, 870)
-    {2000, 400, 3000, 1400},
-    -- Baker_house: center (4914, -757)
-    {4500, -1200, 5300, -300},
-    -- Medieval_house_1: center (6144, -1786)
-    {5700, -2200, 6600, -1300},
-    -- Fancy_Tavern: center (1660, -7954)
-    {1200, -8400, 2100, -7500},
-    -- House: center (4740, -8196)
-    {4300, -8600, 5200, -7800},
-    -- cartoon_well: center (35, -6006)
-    {-150, -6200, 220, -5810},
-}
 
 --------------------------------------------------------------------------------
 -- 每帧更新: 输入 → 移动 → FSM → 摄像机跟随
@@ -334,7 +320,8 @@ function Player.update(dt)
     state.speed = move_amount
     ecs.set_animator_3d_param_float(knight, "speed", move_amount)
 
-    -- KF: ActorController::Move — 旋转 + 前方移动
+    -- KF: ActorController::Move — 旋转 + 位移计算
+    local disp_x, disp_z = 0, 0
     if move_amount > 0.01 then
         local nx = move_x / raw_mag
         local nz = move_z / raw_mag
@@ -349,7 +336,6 @@ function Player.update(dt)
         local turn_speed = KF_MIN_TURN + (KF_MAX_TURN - KF_MIN_TURN) * move_amount
 
         -- KF: RotateByYaw(rotation_y * turn_speed * dt)
-        -- rotation_y (rad) × turn_speed (rad/s) × dt (s) = 比例控制器
         local rotation_y_rad = math.rad(yaw_diff)
         local delta_yaw = math.deg(rotation_y_rad * turn_speed * dt)
 
@@ -363,64 +349,37 @@ function Player.update(dt)
         local yaw_rad = math.rad(state.facing_yaw)
         local fwd_x = math.sin(yaw_rad)
         local fwd_z = math.cos(yaw_rad)
-        local px, py, pz = ecs.get_transform_position(knight)
-        local new_x = px + fwd_x * move_amount * KF_MOVE_SPEED * dt
-        local new_z = pz + fwd_z * move_amount * KF_MOVE_SPEED * dt
+        disp_x = fwd_x * move_amount * KF_MOVE_SPEED * dt
+        disp_z = fwd_z * move_amount * KF_MOVE_SPEED * dt
 
         -- 场地边界限制 (KF: FieldCollider)
-        new_x = math.max(FIELD_MIN_X, math.min(FIELD_MAX_X, new_x))
-        new_z = math.max(FIELD_MIN_Z, math.min(FIELD_MAX_Z, new_z))
-
-        -- 建筑碰撞 (KF: CollisionDetector + OBB/AABB)
-        local CR = Config.PLAYER.collision_radius
-        for _, box in ipairs(BUILDING_AABBS) do
-            local bx0, bz0, bx1, bz1 = box[1], box[2], box[3], box[4]
-            if new_x + CR > bx0 and new_x - CR < bx1 and new_z + CR > bz0 and new_z - CR < bz1 then
-                local dx_left  = (bx0 - CR) - new_x
-                local dx_right = (bx1 + CR) - new_x
-                local dz_back  = (bz0 - CR) - new_z
-                local dz_front = (bz1 + CR) - new_z
-                local min_dx = math.abs(dx_left) < math.abs(dx_right) and dx_left or dx_right
-                local min_dz = math.abs(dz_back) < math.abs(dz_front) and dz_back or dz_front
-                if math.abs(min_dx) < math.abs(min_dz) then
-                    new_x = new_x + min_dx
-                else
-                    new_z = new_z + min_dz
-                end
-            end
-        end
-
-        -- 地形高度跟随
-        local new_y = TerrainHeight.get_height(new_x, new_z)
-        ecs.set_transform_position(knight, new_x, new_y, new_z)
+        local px, _, pz = ecs.get_transform_position(knight)
+        local new_x = math.max(FIELD_MIN_X, math.min(FIELD_MAX_X, px + disp_x))
+        local new_z = math.max(FIELD_MIN_Z, math.min(FIELD_MAX_Z, pz + disp_z))
+        disp_x = new_x - px
+        disp_z = new_z - pz
     end
     ecs.set_transform_rotation(knight, 0, state.facing_yaw, 0)
 
-    -- 地形高度跟随 (KF: FieldCollider + RayCast + Rigidbody gravity)
-    do
-        local px, py, pz = ecs.get_transform_position(knight)
-        local terrain_y = TerrainHeight.get_height(px, pz)
-
-        -- 简易跳跃物理
-        if app.get_key_down(32) and state.grounded then
-            state.velocity_y = Config.PLAYER.jump_speed
-            state.grounded = false
-            ecs.set_animator_3d_param_trigger(knight, "jump")
-        end
-        if not state.grounded then
-            state.velocity_y = state.velocity_y + Config.PLAYER.gravity * dt
-            local new_y = py + state.velocity_y * dt
-            if new_y <= terrain_y then
-                new_y = terrain_y
-                state.velocity_y = 0
-                state.grounded = true
-            end
-            ecs.set_transform_position(knight, px, new_y, pz)
-        else
-            -- 贴地: 跟随地形高度
-            ecs.set_transform_position(knight, px, terrain_y, pz)
-        end
+    -- 跳跃触发
+    if app.get_key_down(32) and state.grounded then
+        state.velocity_y = Config.PLAYER.jump_speed
+        state.grounded = false
+        ecs.set_animator_3d_param_trigger(knight, "jump")
     end
+
+    -- 重力
+    if not state.grounded then
+        state.velocity_y = state.velocity_y + Config.PLAYER.gravity * dt
+    end
+    local disp_y = state.grounded and 0 or (state.velocity_y * dt)
+
+    -- CharacterController3D: 建筑碰撞 + 地形贴地 + 着地检测 (C++ 回退)
+    local is_grounded = ecs.character_controller_3d_move(knight, disp_x, disp_y, disp_z)
+    if is_grounded and state.velocity_y < 0 then
+        state.velocity_y = 0
+    end
+    state.grounded = is_grounded
 
     -- 攻击/格挡/技能触发器
     -- KF 原版: J=LightAttack(B), K=StrongAttack(X), L=Guard(LB)

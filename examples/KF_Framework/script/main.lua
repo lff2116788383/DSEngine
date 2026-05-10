@@ -49,6 +49,7 @@ local Audio    = require("script.audio")
 local HUD      = require("script.hud")
 local Fade     = require("script.fade")
 local AutoPlay = require("script.autoplay")
+local TerrainHeight = require("script.terrain_height")
 
 -- 风车旋转 (KF: WindmillController, rotate_speed_=0.1 rad/s)
 local windmill_fans = {}    -- Fan entity list
@@ -82,6 +83,7 @@ function Awake()
 
     Scene.setup()
     Audio.setup()
+    TerrainHeight.setup()  -- C++ 高度图组件初始化（必须在 Player/Enemy 之前）
     Player.setup()
 
     -- 生成 4 只 Mutant (KF demo.enemy 原始位置 ×100, z取反)

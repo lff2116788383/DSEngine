@@ -121,52 +121,29 @@ TerrainHeight.data = {
   0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,1.0000,3.0000,3.0000,3.0000,5.0000,5.0000,5.0000,9.0000,8.0000,8.0000,7.0000,6.0000,20.0000,15.0000,15.0000,15.0000,15.0000,15.0000,15.0000,0.0000,0.0000,0.0000,22.0000,22.0000,22.0000,22.0000,22.0000,47.0000,47.0000,25.0000,25.0000,25.0000,25.0000,56.0000,56.0000,56.0000,56.0000,44.0000,44.0000,44.0000,44.0000,44.0000,44.0000,13.0000,22.0000,22.0000,22.0000,9.0000,9.0000,9.0000,9.0000,9.0000,33.0000,33.0000,24.0000,24.0000,24.0000,24.0000,47.0000,47.0000,47.0000,23.0000,23.0000,23.0000,23.0000,
 }
 
+local ecs = dse.ecs
+
 --------------------------------------------------------------------------------
--- 根据 DSE 世界坐标 (wx, wz) 查询地形高度 (返回 DSE Y)
--- 使用双线性插值
+-- 初始化 C++ 地形高度图组件（Awake 中调用一次）
+--------------------------------------------------------------------------------
+function TerrainHeight.setup()
+    local terrain = ecs.create_entity()
+    ecs.add_transform(terrain, 0, 0, 0)
+    ecs.add_terrain_heightmap(terrain,
+        TerrainHeight.origin_x, TerrainHeight.origin_z,
+        TerrainHeight.block_size, TerrainHeight.cols, TerrainHeight.rows,
+        TerrainHeight.scale, true)  -- flip_z = true (DSE_z = -KF_z)
+    ecs.terrain_heightmap_set_data(terrain, TerrainHeight.data)
+    TerrainHeight.entity = terrain
+    TerrainHeight.data = nil  -- 释放 Lua 侧数据 (~80KB)
+    print("[TerrainHeight] C++ heightmap initialized: " .. TerrainHeight.cols .. "x" .. TerrainHeight.rows)
+end
+
+--------------------------------------------------------------------------------
+-- 查询地形高度（委托 C++ 双线性插值）
 --------------------------------------------------------------------------------
 function TerrainHeight.get_height(wx, wz)
-    -- DSE → KF 坐标
-    local kf_x = wx / TerrainHeight.scale
-    local kf_z = -wz / TerrainHeight.scale
-
-    -- KF → 网格索引 (浮点)
-    local gx = (kf_x - TerrainHeight.origin_x) / TerrainHeight.block_size
-    local gz = (TerrainHeight.origin_z - kf_z) / TerrainHeight.block_size
-
-    -- 钳制到网格范围
-    local max_idx = TerrainHeight.cols - 1  -- 100
-    if gx < 0 then gx = 0 end
-    if gx > max_idx then gx = max_idx end
-    if gz < 0 then gz = 0 end
-    if gz > max_idx then gz = max_idx end
-
-    -- 双线性插值
-    local ix = math.floor(gx)
-    local iz = math.floor(gz)
-    local fx = gx - ix
-    local fz = gz - iz
-
-    -- 防止越界
-    if ix >= max_idx then ix = max_idx - 1; fx = 1.0 end
-    if iz >= max_idx then iz = max_idx - 1; fz = 1.0 end
-
-    -- 四个角的高度 (Lua 1-indexed)
-    local d = TerrainHeight.data
-    local c = TerrainHeight.cols
-    local h00 = d[iz * c + ix + 1]
-    local h10 = d[iz * c + ix + 2]
-    local h01 = d[(iz + 1) * c + ix + 1]
-    local h11 = d[(iz + 1) * c + ix + 2]
-
-    -- 双线性插值
-    local h = h00 * (1 - fx) * (1 - fz)
-            + h10 * fx * (1 - fz)
-            + h01 * (1 - fx) * fz
-            + h11 * fx * fz
-
-    -- KF Y → DSE Y
-    return h * TerrainHeight.scale
+    return ecs.terrain_get_height(wx, wz)
 end
 
 return TerrainHeight

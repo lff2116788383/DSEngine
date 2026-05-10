@@ -94,7 +94,22 @@ function Scene.setup()
         end
     end
 
-    -- 6. Post-processing
+    -- 6. 建筑碰撞体 (BoxCollider3D, 替代 player.lua 硬编码 AABB)
+    local building_colliders = {
+        {cx=2500, cz=900,  sx=1000, sy=1500, sz=1000},  -- Medieval house (castle)
+        {cx=4900, cz=-750, sx=800,  sy=1500, sz=900},   -- Baker_house
+        {cx=6150, cz=-1750,sx=900,  sy=1500, sz=900},   -- Medieval_house_1
+        {cx=1650, cz=-7950,sx=900,  sy=1500, sz=900},   -- Fancy_Tavern
+        {cx=4750, cz=-8200,sx=900,  sy=1500, sz=800},   -- House
+        {cx=35,   cz=-6006,sx=370,  sy=500,  sz=390},   -- cartoon_well
+    }
+    for _, b in ipairs(building_colliders) do
+        local coll = ecs.create_entity()
+        ecs.add_transform(coll, b.cx, b.sy * 0.5, b.cz)
+        ecs.add_box_collider_3d(coll, b.sx, b.sy, b.sz)
+    end
+
+    -- 7. Post-processing
     local pp = ecs.create_entity()
     ecs.add_post_process(pp, false, 1.0, 0.8, 1.0)
 end
