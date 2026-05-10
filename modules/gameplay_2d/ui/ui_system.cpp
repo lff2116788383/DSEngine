@@ -302,7 +302,7 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
     auto view = registry.view<UIRendererComponent>();
     entt::entity top_hovered = entt::null;
     int top_order = std::numeric_limits<int>::min();
-    std::printf("[UISystem::HandleEvents] mouse=(%.3f, %.3f) down=%d\n", mouse_pos.x, mouse_pos.y, is_mouse_down ? 1 : 0);
+    DEBUG_LOG_TRACE("[UISystem::HandleEvents] mouse=({}, {}) down={}", mouse_pos.x, mouse_pos.y, is_mouse_down ? 1 : 0);
 
     for (auto entity : view) {
         auto& ui = view.get<UIRendererComponent>(entity);
@@ -313,19 +313,10 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
         const glm::vec3 scale = glm::vec3(glm::length(glm::vec3(ui.runtime_model[0])),
                                           glm::length(glm::vec3(ui.runtime_model[1])),
                                           glm::length(glm::vec3(ui.runtime_model[2])));
-        std::printf("[UISystem::HandleEvents] probe entity=%u order=%d pos=(%.3f, %.3f) size=(%.3f, %.3f) authored_pos=(%.3f, %.3f) blocked=%d inside=%d hovered=%d pressed=%d\n",
-                    static_cast<unsigned int>(entity),
-                    ui.order,
-                    pos.x,
-                    pos.y,
-                    scale.x,
-                    scale.y,
-                    ui.position.x,
-                    ui.position.y,
-                    blocked_by_mask ? 1 : 0,
-                    point_inside ? 1 : 0,
-                    ui.is_hovered ? 1 : 0,
-                    ui.is_pressed ? 1 : 0);
+        DEBUG_LOG_TRACE("[UISystem::HandleEvents] probe entity={} order={} pos=({}, {}) size=({}, {}) authored_pos=({}, {}) blocked={} inside={} hovered={} pressed={}",
+                    static_cast<unsigned int>(entity), ui.order, pos.x, pos.y, scale.x, scale.y,
+                    ui.position.x, ui.position.y, blocked_by_mask ? 1 : 0, point_inside ? 1 : 0,
+                    ui.is_hovered ? 1 : 0, ui.is_pressed ? 1 : 0);
         if (blocked_by_mask || !point_inside) continue;
         if (ui.order >= top_order) {
             top_order = ui.order;
@@ -341,13 +332,9 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
 
         const bool blocked_by_mask = IsBlockedByMask(registry, entity, mouse_pos);
         const bool is_hovering = !blocked_by_mask && IsPointInsideUIRect(registry, entity, mouse_pos);
-        std::printf("[UISystem::HandleEvents] entity=%u blocked=%d hovering=%d top=%d hovered=%d pressed=%d\n",
-                    static_cast<unsigned int>(entity),
-                    blocked_by_mask ? 1 : 0,
-                    is_hovering ? 1 : 0,
-                    entity == top_hovered ? 1 : 0,
-                    ui.is_hovered ? 1 : 0,
-                    ui.is_pressed ? 1 : 0);
+        DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} blocked={} hovering={} top={} hovered={} pressed={}",
+                    static_cast<unsigned int>(entity), blocked_by_mask ? 1 : 0, is_hovering ? 1 : 0,
+                    entity == top_hovered ? 1 : 0, ui.is_hovered ? 1 : 0, ui.is_pressed ? 1 : 0);
 
         if (blocked_by_mask) {
             if (ui.is_hovered) {
@@ -406,11 +393,8 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
             const glm::vec2 rect_center(pos.x + scale.x * 0.5f, pos.y + scale.y * 0.5f);
             const bool anchored_center_match = std::abs(mouse_pos.x - rect_center.x) <= 0.0001f &&
                                                std::abs(mouse_pos.y - rect_center.y) <= 0.0001f;
-            std::printf("[UISystem::HandleEvents] entity=%u fallback center=(%.3f, %.3f) match=%d\n",
-                        static_cast<unsigned int>(entity),
-                        rect_center.x,
-                        rect_center.y,
-                        anchored_center_match ? 1 : 0);
+            DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} fallback center=({}, {}) match={}",
+                        static_cast<unsigned int>(entity), rect_center.x, rect_center.y, anchored_center_match ? 1 : 0);
             if (anchored_center_match) {
                 can_activate_top_hovered = true;
                 if (!ui.is_hovered) {
@@ -423,10 +407,10 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
 
         if (can_activate_top_hovered && ui.is_hovered) {
             if (is_mouse_down && !ui.is_pressed) {
-                std::printf("[UISystem::HandleEvents] entity=%u press transition\n", static_cast<unsigned int>(entity));
+                DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} press transition", static_cast<unsigned int>(entity));
                 ui.is_pressed = true;
             } else if (!is_mouse_down && ui.is_pressed) {
-                std::printf("[UISystem::HandleEvents] entity=%u click transition\n", static_cast<unsigned int>(entity));
+                DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} click transition", static_cast<unsigned int>(entity));
                 ui.is_pressed = false;
                 if (ui.on_click) ui.on_click(entity);
                 if (button && button->on_click) button->on_click(entity);
@@ -434,7 +418,7 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
             }
         } else if (!is_mouse_down) {
             if (ui.is_pressed) {
-                std::printf("[UISystem::HandleEvents] entity=%u release-clear transition\n", static_cast<unsigned int>(entity));
+                DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} release-clear transition", static_cast<unsigned int>(entity));
             }
             ui.is_pressed = false;
         }

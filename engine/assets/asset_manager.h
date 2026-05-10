@@ -333,8 +333,14 @@ public:
      */
     std::shared_ptr<CubemapAsset> LoadCubemapPanorama(const std::string& image_path, int face_size = 512);
     /**
-     * @brief 智能加载天空盒: 如果路径是目录则按6面加载, 如果是文件则按全景图加载。
-     * @param path 目录路径或单张全景图路径
+     * @brief 从水平十字展开图(horizontal cross)加载天空盒立方体贴图。
+     * @param image_path 4×3 网格的十字展开图路径 (宽高比 4:3)
+     * @return 成功时返回 CubemapAsset；图片加载失败或 RHI 未就绪时返回 nullptr
+     */
+    std::shared_ptr<CubemapAsset> LoadCubemapCross(const std::string& image_path);
+    /**
+     * @brief 智能加载天空盒: 目录→6面, 4:3文件→十字展开, 其他文件→全景图。
+     * @param path 目录路径或单张图片路径
      * @return CubemapAsset 或 nullptr
      */
     std::shared_ptr<CubemapAsset> LoadCubemap(const std::string& path);

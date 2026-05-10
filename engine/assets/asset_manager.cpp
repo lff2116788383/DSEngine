@@ -695,6 +695,113 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapPanorama(const std::strin
     return cubemap;
 }
 
+std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapCross(const std::string& image_path) {
+    const std::string logical_path = NormalizeAssetPath(image_path);
+    const std::string resolved_path = ResolveAssetPath(image_path);
+    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(image_path) : NormalizePath(resolved_path)) : logical_path;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = cubemaps_.find(cache_key);
+        if (it != cubemaps_.end()) {
+            if (auto shared = it->second.lock()) {
+                return shared;
+            }
+        }
+    }
+
+    // Load the cross layout image
+    std::vector<unsigned char> cross_pixels;
+    int cross_w = 0, cross_h = 0, cross_ch = 0;
+    if (!LoadImageRgba(image_path, cross_pixels, cross_w, cross_h, cross_ch)) {
+        DEBUG_LOG_ERROR("Failed to load cross layout image: {}", image_path);
+        return nullptr;
+    }
+
+    // Horizontal cross: 4 columns × 3 rows
+    const int face_w = cross_w / 4;
+    const int face_h = cross_h / 3;
+    if (face_w <= 0 || face_h <= 0) {
+        DEBUG_LOG_ERROR("Cross layout image too small: {}x{}", cross_w, cross_h);
+        return nullptr;
+    }
+
+    // Extract 6 faces from the horizontal cross layout:
+    //   Row 0:          [top]
+    //   Row 1: [right] [back] [left] [front]
+    //   Row 2:          [bottom]
+    // OpenGL cubemap face order: 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z, 5=-Z
+    // KF layout (from mesh_manager.cpp UV mapping):
+    //   col=0,row=1 → right  (+X)
+    //   col=1,row=1 → back   (-Z)
+    //   col=2,row=1 → left   (-X)
+    //   col=3,row=1 → front  (+Z)
+    //   col=1,row=0 → top    (+Y)
+    //   col=1,row=2 → bottom (-Y)
+    struct FaceRegion { int col; int row; };
+    const FaceRegion regions[6] = {
+        {0, 1}, // +X (right)
+        {2, 1}, // -X (left)
+        {1, 0}, // +Y (top)
+        {1, 2}, // -Y (bottom)
+        {3, 1}, // +Z (front)
+        {1, 1}, // -Z (back)
+    };
+
+    const size_t face_bytes = static_cast<size_t>(face_w) * face_h * 4;
+    std::vector<std::vector<unsigned char>> faces(6);
+    for (int face = 0; face < 6; ++face) {
+        faces[face].resize(face_bytes);
+        const int src_x0 = regions[face].col * face_w;
+        const int src_y0 = regions[face].row * face_h;
+        // +Y (face 2) and -Y (face 3) need 180° rotation to match OpenGL cubemap convention
+        const bool rotate_180 = (face == 2 || face == 3);
+        for (int y = 0; y < face_h; ++y) {
+            const size_t src_offset = (static_cast<size_t>(src_y0 + y) * cross_w + src_x0) * 4;
+            if (!rotate_180) {
+                const size_t dst_offset = static_cast<size_t>(y) * face_w * 4;
+                std::memcpy(faces[face].data() + dst_offset, cross_pixels.data() + src_offset, static_cast<size_t>(face_w) * 4);
+            } else {
+                // 180° rotation: dst(x,y) = src(w-1-x, h-1-y)
+                const int dst_y = face_h - 1 - y;
+                for (int x = 0; x < face_w; ++x) {
+                    const int dst_x = face_w - 1 - x;
+                    const size_t si = src_offset + static_cast<size_t>(x) * 4;
+                    const size_t di = (static_cast<size_t>(dst_y) * face_w + dst_x) * 4;
+                    std::memcpy(faces[face].data() + di, cross_pixels.data() + si, 4);
+                }
+            }
+        }
+    }
+
+    const unsigned char* face_ptrs[6] = {
+        faces[0].data(), faces[1].data(), faces[2].data(),
+        faces[3].data(), faces[4].data(), faces[5].data()
+    };
+
+    unsigned int handle = 0;
+    {
+        std::lock_guard<std::mutex> lock(config_mutex_);
+        if (rhi_device_) {
+            handle = rhi_device_->CreateTextureCube(face_w, face_h, face_ptrs, true);
+        }
+    }
+
+    if (handle == 0) {
+        DEBUG_LOG_ERROR("Failed to create cubemap from cross layout via RHI: {}", image_path);
+        return nullptr;
+    }
+
+    auto cubemap = std::make_shared<CubemapAsset>(image_path, handle, face_w, face_h);
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        cubemaps_[cache_key] = cubemap;
+        gpu_cubemap_handles_.insert(handle);
+    }
+    TouchLru(cache_key, face_bytes * 6u);
+    DEBUG_LOG_INFO("Loaded cross layout skybox: {} ({}x{} per face)", image_path, face_w, face_h);
+    return cubemap;
+}
+
 std::shared_ptr<CubemapAsset> AssetManager::LoadCubemap(const std::string& path) {
     const std::string resolved = ResolveAssetPath(path);
     const std::string& check_path = resolved.empty() ? path : resolved;
@@ -703,8 +810,21 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemap(const std::string& path)
     if (std::filesystem::exists(check_path) && std::filesystem::is_directory(check_path)) {
         return LoadCubemapDirectory(path);
     }
-    // If path is a file → panorama loading
+    // If path is a file → detect layout by aspect ratio
     if (std::filesystem::exists(check_path) && std::filesystem::is_regular_file(check_path)) {
+        // Probe image dimensions to detect cross layout (4:3) vs panorama (2:1)
+        std::vector<uint8_t> file_data;
+        int probe_w = 0, probe_h = 0, probe_ch = 0;
+        if (LoadFileToMemory(check_path, file_data)) {
+            stbi_info_from_memory(file_data.data(), static_cast<int>(file_data.size()), &probe_w, &probe_h, &probe_ch);
+        }
+        // Horizontal cross: width/height ≈ 4/3 (1.33), tolerance 1.2~1.5
+        if (probe_w > 0 && probe_h > 0) {
+            const float aspect = static_cast<float>(probe_w) / static_cast<float>(probe_h);
+            if (aspect >= 1.2f && aspect <= 1.5f) {
+                return LoadCubemapCross(path);
+            }
+        }
         return LoadCubemapPanorama(path);
     }
 

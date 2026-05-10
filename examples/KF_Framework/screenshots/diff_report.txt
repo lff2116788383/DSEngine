@@ -2,26 +2,26 @@
   KF_Framework Visual Comparison Report
 ============================================================
   Compare area:      1280x720
-  RMSE (global):     22.03 / 255
-  Mean |diff| R:     11.15
-  Mean |diff| G:     9.16
-  Mean |diff| B:     7.26
+  RMSE (global):     22.71 / 255
+  Mean |diff| R:     11.71
+  Mean |diff| G:     9.48
+  Mean |diff| B:     7.71
   Max channel diff:  231
 
   Pixel error distribution:
-    err   <5:    587831 px  ( 63.8%)  cum  63.8%
-    err  <10:    164754 px  ( 17.9%)  cum  81.7%
-    err  <20:     71482 px  (  7.8%)  cum  89.4%
-    err  <40:     38595 px  (  4.2%)  cum  93.6%
-    err  <80:     34826 px  (  3.8%)  cum  97.4%
-    err >=80:     24112 px  (  2.6%)  cum 100.0%
+    err   <5:    583612 px  ( 63.3%)  cum  63.3%
+    err  <10:    161386 px  ( 17.5%)  cum  80.8%
+    err  <20:     65784 px  (  7.1%)  cum  88.0%
+    err  <40:     41939 px  (  4.6%)  cum  92.5%
+    err  <80:     48873 px  (  5.3%)  cum  97.8%
+    err >=80:     20006 px  (  2.2%)  cum 100.0%
 
   Luminance:
     KF  mean:  132.3
-    DSE mean:  133.9
-    Diff:      +1.6
+    DSE mean:  133.8
+    Diff:      +1.5
     KF  dark(<30):   1.2%   bright(>200): 0.3%
-    DSE dark(<30):   1.3%   bright(>200): 0.3%
+    DSE dark(<30):   1.7%   bright(>200): 0.5%
 
   ✓ Visual match is reasonable (RMSE < 60, luminance close)
 ============================================================

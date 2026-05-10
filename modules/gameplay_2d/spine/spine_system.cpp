@@ -208,9 +208,8 @@ RuntimeHandlePtr BuildRuntime(SpineRendererComponent& comp, AssetManager& asset_
 } // namespace
 
 SpineSystem::~SpineSystem() {
-    std::printf("[spine-system] ~SpineSystem this=%p asset_manager=%p\n",
+    DEBUG_LOG_TRACE("[spine-system] ~SpineSystem this={} asset_manager={}",
                 static_cast<void*>(this), static_cast<void*>(asset_manager_));
-    std::fflush(stdout);
 }
 
 void SpineSystem::CleanupComponent(SpineRendererComponent& comp) {
@@ -250,23 +249,18 @@ void SpineSystem::SetAssetManager(AssetManager* asset_manager) {
 
 void SpineSystem::DebugInstanceNoopProbe(entt::registry& registry, float dt) {
     (void)registry;
-    std::printf("[spine-probe] instance begin this=%p dt=%f\n", static_cast<void*>(this), static_cast<double>(dt));
-    std::fflush(stdout);
-    std::printf("[spine-probe] instance end this=%p\n", static_cast<void*>(this));
-    std::fflush(stdout);
+    DEBUG_LOG_TRACE("[spine-probe] instance begin this={} dt={}", static_cast<void*>(this), static_cast<double>(dt));
+    DEBUG_LOG_TRACE("[spine-probe] instance end this={}", static_cast<void*>(this));
 }
 
 void SpineSystem::DebugNoopProbe(entt::registry& registry, float dt) {
     (void)registry;
-    std::printf("[spine-probe] static begin dt=%f\n", static_cast<double>(dt));
-    std::fflush(stdout);
-    std::printf("[spine-probe] static end\n");
-    std::fflush(stdout);
+    DEBUG_LOG_TRACE("[spine-probe] static begin dt={}", static_cast<double>(dt));
+    DEBUG_LOG_TRACE("[spine-probe] static end");
 }
 
 void SpineSystem::Update(entt::registry& registry, float dt) {
-    std::printf("[spine-update] begin this=%p dt=%f\n", static_cast<void*>(this), static_cast<double>(dt));
-    std::fflush(stdout);
+    DEBUG_LOG_TRACE("[spine-update] begin this={} dt={}", static_cast<void*>(this), static_cast<double>(dt));
     auto view = registry.view<SpineRendererComponent>();
     for (auto entity : view) {
         auto& comp = view.get<SpineRendererComponent>(entity);
@@ -275,17 +269,9 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
         auto* runtime = GetRuntime(comp);
         const bool has_runtime = runtime && runtime->animation_state && runtime->skeleton;
         const bool needs_spine_assets = has_complete_paths && !has_runtime;
-        std::printf("[spine-update] entity=%u comp=%p runtime=%p has_complete_paths=%d has_runtime=%d needs_assets=%d current_animation=%s dirty=%d visible=%d\n",
-                    static_cast<unsigned>(entity),
-                    static_cast<void*>(&comp),
-                    static_cast<void*>(runtime),
-                    has_complete_paths ? 1 : 0,
-                    has_runtime ? 1 : 0,
-                    needs_spine_assets ? 1 : 0,
-                    comp.current_animation.c_str(),
-                    comp.dirty_animation ? 1 : 0,
-                    comp.visible ? 1 : 0);
-        std::fflush(stdout);
+        DEBUG_LOG_TRACE("[spine-update] entity={} has_paths={} has_runtime={} needs_assets={} anim={} dirty={} visible={}",
+                    static_cast<unsigned>(entity), has_complete_paths ? 1 : 0, has_runtime ? 1 : 0,
+                    needs_spine_assets ? 1 : 0, comp.current_animation, comp.dirty_animation ? 1 : 0, comp.visible ? 1 : 0);
 
         if (needs_spine_assets) {
             auto& asset_manager = RequireAssetManager(asset_manager_);
@@ -312,15 +298,10 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
         }
 
         runtime = GetRuntime(comp);
-        std::printf("[spine-update] post-build entity=%u runtime=%p anim_state=%p skeleton=%p\n",
-                    static_cast<unsigned>(entity),
-                    static_cast<void*>(runtime),
-                    runtime ? static_cast<void*>(runtime->animation_state.get()) : nullptr,
-                    runtime ? static_cast<void*>(runtime->skeleton.get()) : nullptr);
-        std::fflush(stdout);
+        DEBUG_LOG_TRACE("[spine-update] post-build entity={} runtime={}",
+                    static_cast<unsigned>(entity), static_cast<void*>(runtime));
     }
-    std::printf("[spine-update] end this=%p\n", static_cast<void*>(this));
-    std::fflush(stdout);
+    DEBUG_LOG_TRACE("[spine-update] end this={}", static_cast<void*>(this));
 }
 
 void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {

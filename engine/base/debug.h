@@ -61,6 +61,7 @@ std::string Format(const char* format, Args&&... args) {
 
 } // namespace dse::debug
 
+#define DEBUG_LOG_TRACE(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Trace, dse::debug::Format(__VA_ARGS__)); } } while(0)
 #define DEBUG_LOG_INFO(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Info, dse::debug::Format(__VA_ARGS__)); } } while(0)
 #define DEBUG_LOG_WARN(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Warn, dse::debug::Format(__VA_ARGS__)); } } while(0)
 #define DEBUG_LOG_ERROR(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Error, dse::debug::Format(__VA_ARGS__)); } } while(0)
