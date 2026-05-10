@@ -42,6 +42,8 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
     sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     sampler_ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     sampler_ci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_ci.minLod = 0.0f;
+    sampler_ci.maxLod = VK_LOD_CLAMP_NONE;
     sampler_ci.anisotropyEnable = VK_FALSE;
     sampler_ci.maxAnisotropy = 1.0f;
     sampler_ci.compareEnable = VK_FALSE;
@@ -59,6 +61,8 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
     shadow_sampler_ci.addressModeV  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     shadow_sampler_ci.addressModeW  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     shadow_sampler_ci.mipmapMode    = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    shadow_sampler_ci.minLod        = 0.0f;
+    shadow_sampler_ci.maxLod        = VK_LOD_CLAMP_NONE;
     shadow_sampler_ci.anisotropyEnable = VK_FALSE;
     shadow_sampler_ci.maxAnisotropy = 1.0f;
     shadow_sampler_ci.compareEnable = VK_TRUE;
@@ -182,11 +186,11 @@ unsigned int VulkanResourceManager::CreateTexture2D(int width, int height, const
     tex.width = width;
     tex.height = height;
     tex.channels = 4;
-    tex.format = VK_FORMAT_R8G8B8A8_SRGB;
+    tex.format = VK_FORMAT_R8G8B8A8_UNORM;
 
     VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    if (!CreateVulkanImage(width, height, VK_FORMAT_R8G8B8A8_SRGB,
+    if (!CreateVulkanImage(width, height, VK_FORMAT_R8G8B8A8_UNORM,
                            VK_IMAGE_TILING_OPTIMAL, usage,
                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                            VK_IMAGE_ASPECT_COLOR_BIT, tex)) {
@@ -208,14 +212,14 @@ unsigned int VulkanResourceManager::CreateTextureCube(int width, int height, con
     tex.width = width;
     tex.height = height;
     tex.channels = 4;
-    tex.format = VK_FORMAT_R8G8B8A8_SRGB;
+    tex.format = VK_FORMAT_R8G8B8A8_UNORM;
 
     // 创建立方体纹理图像
     VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     image_info.extent.width = static_cast<uint32_t>(width);
     image_info.extent.height = static_cast<uint32_t>(height);
     image_info.extent.depth = 1;
@@ -322,7 +326,7 @@ unsigned int VulkanResourceManager::CreateTextureCube(int width, int height, con
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_info.image = tex.image;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    view_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    view_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     view_info.components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
                             VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
     view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -529,7 +533,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     rt.is_msaa = use_msaa;
     rt.msaa_samples = use_msaa ? 4 : 1;
 
-    const VkFormat color_format = VK_FORMAT_R8G8B8A8_SRGB;
+    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
 
     // ---- 颜色附件 ----
     if (has_color) {
@@ -651,12 +655,28 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     subpass.pDepthStencilAttachment = has_depth ? &depth_ref : nullptr;
     subpass.pResolveAttachments     = (has_color && use_msaa) ? &resolve_ref : nullptr;
 
+    VkSubpassDependency dep{};
+    dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
+    dep.dstSubpass    = 0;
+    dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                      | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                      | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                      | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                      | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                      | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                      | VK_ACCESS_SHADER_READ_BIT;
+
     VkRenderPassCreateInfo rp_info{};
     rp_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     rp_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     rp_info.pAttachments    = attachments.data();
     rp_info.subpassCount    = 1;
     rp_info.pSubpasses      = &subpass;
+    rp_info.dependencyCount = 1;
+    rp_info.pDependencies   = &dep;
 
     if (vkCreateRenderPass(device_, &rp_info, nullptr, &rt.render_pass) != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create render pass for render target");
@@ -722,6 +742,11 @@ const VulkanRenderTarget* VulkanResourceManager::GetRenderTarget(unsigned int ha
 VkImageView VulkanResourceManager::GetRenderTargetColorImageView(unsigned int handle) const {
     auto it = render_targets_.find(handle);
     return it != render_targets_.end() ? it->second.color_texture.image_view : VK_NULL_HANDLE;
+}
+
+VkImageView VulkanResourceManager::GetRenderTargetDepthImageView(unsigned int handle) const {
+    auto it = render_targets_.find(handle);
+    return it != render_targets_.end() ? it->second.depth_texture.image_view : VK_NULL_HANDLE;
 }
 
 // ============================================================
@@ -907,15 +932,15 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 bool VulkanResourceManager::CreateDescriptorPool() {
     // 池大小：覆盖所有描述符类型，每帧最大用量估算
     std::vector<VkDescriptorPoolSize> pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         256},  // PerFrame/PerScene/PerMaterial UBO
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024}, // 纹理采样器
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},  // PerFrame/PerScene/PerMaterial UBO
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192}, // 纹理采样器
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},   // Bloom Compute UAV
     };
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 640;  // 每帧最多 640 个 DescriptorSet
+    pool_info.maxSets = 4096;  // 每帧最多 4096 个 DescriptorSet
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
 
@@ -924,8 +949,14 @@ bool VulkanResourceManager::CreateDescriptorPool() {
         return false;
     }
 
-    DEBUG_LOG_INFO("[Vulkan] Descriptor pool created (maxSets=512)");
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pool created (maxSets=4096)");
     return true;
+}
+
+void VulkanResourceManager::ResetDescriptorPool() {
+    if (descriptor_pool_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkResetDescriptorPool(device_, descriptor_pool_, 0);
+    }
 }
 
 VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayout layout) {

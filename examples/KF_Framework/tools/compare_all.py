@@ -19,6 +19,7 @@ shots = {
     "DX11_HDR": os.path.join(engine_root, "screenshots/dx11_hdr.png"),
     "DX11_SDR": os.path.join(engine_root, "screenshots/dx11_sdr.png"),
     "OpenGL":   os.path.join(engine_root, "screenshots/opengl.png"),
+    "Vulkan":   os.path.join(engine_root, "screenshots/vulkan.png"),
 }
 
 kf = np.array(Image.open(kf_path).resize((1280, 720)))[:, :, :3].astype(float)
@@ -44,7 +45,7 @@ for name, img in imgs.items():
     compare(name + " vs KF", img, kf)
 
 # cross-compare
-pairs = [("DX11_HDR", "DX11_SDR"), ("DX11_HDR", "OpenGL"), ("DX11_SDR", "OpenGL")]
+pairs = [("DX11_HDR", "DX11_SDR"), ("DX11_HDR", "OpenGL"), ("DX11_SDR", "OpenGL"), ("OpenGL", "Vulkan")]
 for a, b in pairs:
     compare(a + " vs " + b, imgs[a], imgs[b])
 

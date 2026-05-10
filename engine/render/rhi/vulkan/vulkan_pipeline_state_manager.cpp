@@ -79,13 +79,13 @@ void VulkanPipelineStateManager::Init(VulkanContext* context,
 void VulkanPipelineStateManager::Shutdown() {
     auto device = context_->device();
 
-    // 销毁所有 VkPipeline
-    for (auto& [handle, state] : pipeline_states_) {
-        if (state.pipeline != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device, state.pipeline, nullptr);
+    // 销毁所有缓存的 VkPipeline（复合键缓存）
+    for (auto& [key, pipeline] : pipeline_cache_) {
+        if (pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(device, pipeline, nullptr);
         }
-        // RenderPass 由缓存管理，不在此处销毁
     }
+    pipeline_cache_.clear();
     pipeline_states_.clear();
 
     // 销毁 RenderPass 缓存
@@ -127,16 +127,20 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     VkRenderPass render_pass,
     const std::vector<VkVertexInputBindingDescription>& vertex_bindings,
     const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
-    VkExtent2D extent) {
+    VkExtent2D extent,
+    VkSampleCountFlagBits samples,
+    uint32_t color_attachment_count) {
 
     auto it = pipeline_states_.find(handle);
     if (it == pipeline_states_.end()) return VK_NULL_HANDLE;
 
     auto& state = it->second;
 
-    // 如果已有 Pipeline 且关联的 RenderPass 一致，直接返回
-    if (state.pipeline != VK_NULL_HANDLE && state.render_pass == render_pass) {
-        return state.pipeline;
+    // 复合键查找缓存：同一 handle 在不同 renderPass/samples 下各自有独立的 VkPipeline
+    PipelineCacheKey cache_key{ handle, render_pass, samples };
+    auto cache_it = pipeline_cache_.find(cache_key);
+    if (cache_it != pipeline_cache_.end()) {
+        return cache_it->second;
     }
 
     if (!shader_program) return VK_NULL_HANDLE;
@@ -184,7 +188,9 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = ToVkCullMode(state.desc.cull_face);
+    rasterizer.cullMode = state.desc.culling_enabled
+                             ? ToVkCullMode(state.desc.cull_face)
+                             : VK_CULL_MODE_NONE;
     rasterizer.frontFace = ToVkFrontFace();
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.lineWidth = 1.0f;
@@ -193,7 +199,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     VkPipelineMultisampleStateCreateInfo multisample{};
     multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisample.sampleShadingEnable = VK_FALSE;
-    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisample.rasterizationSamples = samples;
 
     // --- Depth Stencil ---
     VkPipelineDepthStencilStateCreateInfo depth_stencil{};
@@ -221,6 +227,9 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     VkPipelineColorBlendStateCreateInfo blend{};
     blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend.logicOpEnable = VK_FALSE;
+    // NOTE: Vulkan spec 要求 attachmentCount 匹配 subpass colorAttachmentCount，
+    // 但某些 NVIDIA 驱动在 attachmentCount=0 时崩溃。暂时始终设为 1，多余的状态会被忽略。
+    (void)color_attachment_count;
     blend.attachmentCount = 1;
     blend.pAttachments = &blend_attachment;
 
@@ -255,14 +264,14 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
         return VK_NULL_HANDLE;
     }
 
-    // 销毁旧 Pipeline（如果存在）
-    if (state.pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(device, state.pipeline, nullptr);
-    }
+    // 存入复合键缓存（不销毁旧 pipeline，它可能仍被 command buffer 引用）
+    pipeline_cache_[cache_key] = pipeline;
 
+    // 同步更新 state（兼容旧的单 pipeline 查询接口）
     state.pipeline = pipeline;
     state.render_pass = render_pass;
     state.pipeline_layout = shader_program->pipeline_layout;
+    state.samples = samples;
 
     DEBUG_LOG_INFO("[Vulkan] Created VkPipeline for state handle {}", handle);
     return pipeline;

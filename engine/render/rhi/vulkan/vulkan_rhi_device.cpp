@@ -53,6 +53,30 @@ void VulkanCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
 
 void VulkanCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+
+    // 将 pending 的阴影/光源全局数据派发到 draw executor
+    {
+        auto it = pending_mat4_array_.find("u_light_space_matrices");
+        if (it != pending_mat4_array_.end()) {
+            for (size_t i = 0; i < it->second.size() && i < 3; ++i)
+                device_->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
+        }
+    }
+    {
+        auto it = pending_float_array_.find("u_cascade_splits");
+        if (it != pending_float_array_.end()) {
+            for (size_t i = 0; i < it->second.size() && i < 3; ++i)
+                device_->SetGlobalCascadeSplit(static_cast<unsigned int>(i), it->second[i]);
+        }
+    }
+    {
+        auto it = pending_mat4_array_.find("u_spot_light_space_matrices");
+        if (it != pending_mat4_array_.end()) {
+            for (size_t i = 0; i < it->second.size() && i < 4; ++i)
+                device_->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
+        }
+    }
+
     device_->draw_executor().DrawMeshBatch(
         vk_command_buffer_, items, view_, projection_,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
@@ -127,7 +151,7 @@ void VulkanCommandBuffer::Reset() {
 // ============================================================
 
 bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
-    return InitVulkan(window_handle, width, height, false);
+    return InitVulkan(window_handle, width, height, true); // TODO: validation ON for debugging
 }
 
 void VulkanRhiDevice::EnsureInitialized() {
@@ -207,8 +231,10 @@ void VulkanRhiDevice::BeginFrame() {
     current_frame_stats_ = RenderStats{};
     pending_command_buffers_.clear();
     draw_executor_.BeginFrame();
-    // 获取下一帧 swapchain image
+    // 获取下一帧 swapchain image（内部等待 fence，确保 GPU 完成上一帧）
     context_.AcquireNextImage();
+    // fence 已完成后，安全重置 descriptor pool
+    resource_mgr_.ResetDescriptorPool();
 }
 
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
@@ -441,11 +467,13 @@ void VulkanRhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
     if (!vk_cmd || vk_cmd->GetVkCommandBuffer() == VK_NULL_HANDLE) return;
 
     // 结束命令缓冲录制
+    DEBUG_LOG_INFO("[Vulkan] Submit: vkEndCommandBuffer");
     VkResult end_result = vkEndCommandBuffer(vk_cmd->GetVkCommandBuffer());
     if (end_result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] vkEndCommandBuffer failed: {}", static_cast<int>(end_result));
         return;
     }
+    DEBUG_LOG_INFO("[Vulkan] Submit: vkEndCommandBuffer OK");
 
     // 收集本帧所有已提交的命令缓冲
     pending_command_buffers_.push_back(vk_cmd->GetVkCommandBuffer());
@@ -459,7 +487,9 @@ void VulkanRhiDevice::EndFrame() {
 
     // 提交本帧所有录制的命令缓冲 + present
     if (!pending_command_buffers_.empty()) {
+        DEBUG_LOG_INFO("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", pending_command_buffers_.size());
         context_.PresentFrame(pending_command_buffers_);
+        DEBUG_LOG_INFO("[Vulkan] EndFrame: PresentFrame OK");
         pending_command_buffers_.clear();
     }
 

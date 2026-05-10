@@ -150,7 +150,7 @@ public:
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
 
-    bool NeedsTextureYFlip() const override { return false; }
+    bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
     /// Vulkan: Y-flip (NDC Y-down) + Z remap ([-1,1] → [0,1])

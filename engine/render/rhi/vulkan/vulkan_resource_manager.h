@@ -108,6 +108,9 @@ public:
     /// 获取渲染目标的颜色附件 ImageView
     VkImageView GetRenderTargetColorImageView(unsigned int handle) const;
 
+    /// 获取渲染目标的深度附件 ImageView
+    VkImageView GetRenderTargetDepthImageView(unsigned int handle) const;
+
     // --- 默认采样器 ---
     VkSampler default_sampler() const { return default_sampler_; }
 
@@ -121,6 +124,9 @@ public:
     /// @param layout 需要匹配的 VkDescriptorSetLayout
     /// @return 新分配的 VkDescriptorSet（VK_NULL_HANDLE 表示失败）
     VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout layout);
+
+    /// 重置 DescriptorPool（每帧开始时调用，释放所有已分配的 DescriptorSet）
+    void ResetDescriptorPool();
 
     /// 创建 DescriptorPool（在 Init 中自动调用）
     bool CreateDescriptorPool();

@@ -212,13 +212,25 @@ private:
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
         const MeshDrawItem& item,
-        VulkanResourceManager& resource_mgr);
+        VulkanResourceManager& resource_mgr,
+        VkDeviceSize bone_offset = 0,
+        VkDeviceSize per_frame_offset = 0,
+        VkDeviceSize per_scene_offset = 0,
+        VkDeviceSize per_material_offset = 0,
+        VkDeviceSize per_pl_offset = 0,
+        VkDeviceSize per_sl_offset = 0);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
         unsigned int cubemap_texture_handle,
+        VulkanResourceManager& resource_mgr);
+
+    /// 分配全部 4 个 DescriptorSet 并填充 dummy 数据，返回 sets vector
+    /// override_set: 如果 >= 0，在该 set 的 override_binding 处写入 override_tex
+    std::vector<VkDescriptorSet> AllocateAllSetsWithDummies(
+        const VulkanShaderProgram* program,
         VulkanResourceManager& resource_mgr);
 
     /// 为粒子绘制分配并更新 DescriptorSet
@@ -280,12 +292,32 @@ private:
     VkDeviceMemory per_point_lights_ubo_mem_[MAX_FRAMES] = {};
     VkBuffer       per_spot_lights_ubo_[MAX_FRAMES] = {};
     VkDeviceMemory per_spot_lights_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer       bone_matrices_ubo_ = VK_NULL_HANDLE;
+    VkDeviceMemory bone_matrices_ubo_mem_ = VK_NULL_HANDLE;
+    VkBuffer       morph_weights_ubo_ = VK_NULL_HANDLE;
+    VkDeviceMemory morph_weights_ubo_mem_ = VK_NULL_HANDLE;
 
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;
 
-    // 当前活跃的 RenderTarget（由 BeginRenderPass 设置）
+    // 当前活跃的 RenderTarget 和 RenderPass（由 BeginRenderPass 设置）
     unsigned int current_rt_handle_ = 0;
+    VkRenderPass current_render_pass_ = VK_NULL_HANDLE;
+    VkSampleCountFlagBits current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+    uint32_t current_color_attachment_count_ = 1;
+    VkDeviceSize mesh_vbo_offset_ = 0;   ///< 当前帧 mesh VBO 写入偏移
+    VkDeviceSize mesh_ibo_offset_ = 0;   ///< 当前帧 mesh IBO 写入偏移
+    VkDeviceSize bone_matrices_offset_ = 0; ///< 当前帧 bone matrices UBO 写入偏移
+    VkDeviceSize per_frame_ubo_offset_ = 0;   ///< 当前帧 per-frame UBO 写入偏移（每个 batch 一个 slot）
+    VkDeviceSize per_scene_ubo_offset_ = 0;   ///< 当前帧 per-scene UBO 写入偏移（每个 item 一个 slot）
+    VkDeviceSize per_material_ubo_offset_ = 0; ///< 当前帧 per-material UBO 写入偏移
+    VkDeviceSize per_point_lights_ubo_offset_ = 0;
+    VkDeviceSize per_spot_lights_ubo_offset_ = 0;
+    static constexpr VkDeviceSize kUboSlotAlignment = 256; ///< UBO offset 对齐（覆盖大多数 GPU 的 minUniformBufferOffsetAlignment）
+    unsigned int nocull_pipeline_state_ = 0; ///< 双面材质无剔除管线状态句柄
+    int render_pass_counter_ = 0;
+    int max_render_passes_ = -1;  // -1 = 无限制
+    bool skip_current_pass_ = false;
 
     // 全局阴影/光源状态
     glm::mat4 global_light_space_matrix_[3];

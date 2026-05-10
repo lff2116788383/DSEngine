@@ -135,8 +135,15 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = signal_semaphores;
 
+    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueueSubmit frame={} imgIdx={} cmdCount={}",
+                   current_frame_, current_image_index_, submit_info.commandBufferCount);
+
     VkResult result = vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]);
-    if (result != VK_SUCCESS) return result;
+    if (result != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] vkQueueSubmit failed: {}", static_cast<int>(result));
+        return result;
+    }
+    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueueSubmit OK");
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -148,7 +155,9 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     present_info.pSwapchains = swapchains;
     present_info.pImageIndices = &current_image_index_;
 
+    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueuePresentKHR");
     result = vkQueuePresentKHR(present_queue_, &present_info);
+    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueuePresentKHR result={}", static_cast<int>(result));
     return result;
 }
 
@@ -555,15 +564,14 @@ bool VulkanContext::CreateSwapchain(int width, int height) {
 }
 
 VkSurfaceFormatKHR VulkanContext::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available) {
-    // 优先 HDR10: R16G16B16A16_SFLOAT 或 A2B10G10R10 + HDR10_ST2084
+    // 优先 UNORM SDR（渲染管线在 sRGB 空间工作，与 OpenGL 一致，无自动 gamma 转换）
     for (const auto& fmt : available) {
-        if ((fmt.format == VK_FORMAT_R16G16B16A16_SFLOAT ||
-             fmt.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) &&
-            fmt.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
+        if (fmt.format == VK_FORMAT_B8G8R8A8_UNORM &&
+            fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return fmt;
         }
     }
-    // 次选 SRGB SDR
+    // 次选 SRGB（不推荐，会导致双重 gamma）
     for (const auto& fmt : available) {
         if (fmt.format == VK_FORMAT_B8G8R8A8_SRGB &&
             fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {

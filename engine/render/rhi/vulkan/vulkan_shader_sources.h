@@ -505,18 +505,16 @@ constexpr const char* kSkyboxVertex = R"(#version 450
 layout(location = 0) in vec3 aPos;
 layout(location = 0) out vec3 vTexCoords;
 
-layout(std140, set = 0, binding = 0) uniform PerFrame {
+layout(push_constant) uniform PushConstants {
     mat4 vp;
-    mat4 view;
-    vec4 camera_pos;
-};
+} pc;
 
 void main() {
     vTexCoords = aPos;
-    // 去除平移，仅保留旋转
-    mat4 rotView = mat4(mat3(view));
-    vec4 pos = vp * vec4(aPos, 1.0);
-    gl_Position = pos.xyww;
+    // 放大立方体使其大于近平面（near_clip=10 时顶点距离必须 > 10）
+    vec4 pos = pc.vp * vec4(aPos * 10000.0, 1.0);
+    // Vulkan NDC z∈[0,1]: z=w*0.999 保持在最远深度但不被裁剪
+    gl_Position = vec4(pos.xy, pos.w * 0.999, pos.w);
 }
 )";
 
@@ -599,18 +597,13 @@ layout(location = 2) in vec4 aColor;
 layout(location = 0) out vec4 vColor;
 layout(location = 1) out vec2 vTexCoord;
 
-layout(std140, set = 0, binding = 0) uniform PerFrame {
-    mat4 vp;
-    mat4 view;
-    vec4 camera_pos;
-};
-
 layout(push_constant) uniform PushConstants {
     mat4 model;
+    mat4 vp;
 } pc;
 
 void main() {
-    gl_Position = vp * pc.model * vec4(aPos, 0.0, 1.0);
+    gl_Position = pc.vp * pc.model * vec4(aPos, 0.0, 1.0);
     vColor = aColor;
     vTexCoord = aTexCoord;
 }

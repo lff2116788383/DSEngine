@@ -29,6 +29,7 @@ struct VulkanPipelineState {
     VkPipeline pipeline = VK_NULL_HANDLE;       ///< 已创建的 Vulkan 管线对象
     VkRenderPass render_pass = VK_NULL_HANDLE;   ///< 关联的 RenderPass
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE; ///< 关联的 PipelineLayout
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT; ///< MSAA 采样数
     unsigned int shader_program_handle = 0;      ///< 关联的着色器程序
 };
 
@@ -66,7 +67,9 @@ public:
         VkRenderPass render_pass,
         const std::vector<VkVertexInputBindingDescription>& vertex_bindings,
         const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
-        VkExtent2D extent);
+        VkExtent2D extent,
+        VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
+        uint32_t color_attachment_count = 1);
 
     /// 查询管线状态
     const PipelineStateDesc* GetPipelineState(unsigned int handle) const;
@@ -107,6 +110,25 @@ private:
     std::unordered_map<unsigned int, VulkanPipelineState> pipeline_states_;
     unsigned int next_handle_ = 530000;
     unsigned int active_pipeline_state_ = 0;
+
+    /// Pipeline 复合缓存键：(handle, renderPass, samples)
+    struct PipelineCacheKey {
+        unsigned int handle;
+        VkRenderPass render_pass;
+        VkSampleCountFlagBits samples;
+        bool operator==(const PipelineCacheKey& o) const {
+            return handle == o.handle && render_pass == o.render_pass && samples == o.samples;
+        }
+    };
+    struct PipelineCacheKeyHash {
+        size_t operator()(const PipelineCacheKey& k) const {
+            size_t h = std::hash<unsigned int>()(k.handle);
+            h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.render_pass)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<int>()(static_cast<int>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+    std::unordered_map<PipelineCacheKey, VkPipeline, PipelineCacheKeyHash> pipeline_cache_;
 
     /// VkRenderPass 缓存
     struct RenderPassKeyHash {

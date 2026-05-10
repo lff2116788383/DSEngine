@@ -260,6 +260,9 @@ bool VulkanShaderManager::ReflectSpirv(
         // 阴影贴图
         {2, 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3}, // shadow_map[3]
         {2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // spot_shadow_map[4]
+        // BoneMatrices / MorphWeights（VS 使用，即使未 skinned 也需声明以匹配 SPIR-V 布局）
+        {2, 8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1}, // BoneMatrices
+        {2, 9, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1}, // MorphWeights
         // Set 3: 点光源立方体阴影贴图（手动比较深度）
         {3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // u_point_shadow_maps[4]
     };
@@ -285,15 +288,28 @@ VkPipelineLayout VulkanShaderManager::CreatePipelineLayout(const ShaderReflectio
         sets[b.set].push_back(b);
     }
 
-    // 为每个 set 创建 VkDescriptorSetLayout
+    // 为每个 set 创建 VkDescriptorSetLayout（包含空洞 set 的空 layout）
+    uint32_t max_set = sets.empty() ? 0 : sets.rbegin()->first;
     std::vector<VkDescriptorSetLayout> set_layouts;
-    for (auto& [set_index, bindings] : sets) {
-        VkDescriptorSetLayout layout = GetOrCreateDescriptorSetLayout(bindings, set_index);
-        if (layout == VK_NULL_HANDLE) {
-            DEBUG_LOG_ERROR("Failed to create descriptor set layout for set {}", set_index);
-            return VK_NULL_HANDLE;
+    for (uint32_t s = 0; s <= max_set; ++s) {
+        auto it = sets.find(s);
+        if (it != sets.end()) {
+            VkDescriptorSetLayout layout = GetOrCreateDescriptorSetLayout(it->second, s);
+            if (layout == VK_NULL_HANDLE) {
+                DEBUG_LOG_ERROR("Failed to create descriptor set layout for set {}", s);
+                return VK_NULL_HANDLE;
+            }
+            set_layouts.push_back(layout);
+        } else {
+            // 创建空 layout 填充空洞
+            VkDescriptorSetLayoutCreateInfo empty_ci{};
+            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            empty_ci.bindingCount = 0;
+            empty_ci.pBindings = nullptr;
+            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
+            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
+            set_layouts.push_back(empty_layout);
         }
-        set_layouts.push_back(layout);
     }
 
     // 创建 PipelineLayout
@@ -409,15 +425,27 @@ unsigned int VulkanShaderManager::CreateProgram(
     program.pipeline_layout = pipeline_layout;
     program.reflection = reflection;
 
-    // 收集 descriptor set layouts
+    // 收集 descriptor set layouts（填充空洞 set 的空 layout，与 pipeline layout 对齐）
     std::map<uint32_t, std::vector<DescriptorBindingInfo>> sets;
     for (const auto& b : reflection.bindings) {
         sets[b.set].push_back(b);
     }
-    for (auto& [set_index, bindings] : sets) {
-        VkDescriptorSetLayout layout = GetOrCreateDescriptorSetLayout(bindings, set_index);
-        if (layout != VK_NULL_HANDLE) {
-            program.descriptor_set_layouts.push_back(layout);
+    uint32_t max_set = sets.empty() ? 0 : sets.rbegin()->first;
+    for (uint32_t s = 0; s <= max_set; ++s) {
+        auto it = sets.find(s);
+        if (it != sets.end()) {
+            VkDescriptorSetLayout layout = GetOrCreateDescriptorSetLayout(it->second, s);
+            if (layout != VK_NULL_HANDLE) {
+                program.descriptor_set_layouts.push_back(layout);
+            }
+        } else {
+            VkDescriptorSetLayoutCreateInfo empty_ci{};
+            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            empty_ci.bindingCount = 0;
+            empty_ci.pBindings = nullptr;
+            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
+            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
+            program.descriptor_set_layouts.push_back(empty_layout);
         }
     }
 

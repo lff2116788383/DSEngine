@@ -357,6 +357,8 @@ void EngineInstance::Tick() {
 
     Time::Update();
     float dt = Time::delta_time();
+    // 防止初始化/加载导致第一帧 dt 过大（Vulkan 初始化比 OpenGL 慢，首帧 dt 可能数秒）
+    if (dt > 0.1f) dt = 0.1f;
 
     // Clamp accumulator to prevent spiral-of-death when dt is very large
     // (e.g. after a loading stall or breakpoint). Allow at most 10 fixed steps per frame.
