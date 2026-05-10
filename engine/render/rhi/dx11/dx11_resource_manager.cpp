@@ -465,6 +465,7 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
     result.pixels.resize(rt.width * rt.height * 4);
     const unsigned char* src = static_cast<const unsigned char*>(mapped.pData);
     if (td.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+        // PBR shader 输出已在 gamma 空间，直接 clamp [0,1] → uint8
         for (int y = 0; y < rt.height; ++y) {
             const uint16_t* row = reinterpret_cast<const uint16_t*>(src + y * mapped.RowPitch);
             unsigned char* dst = result.pixels.data() + y * rt.width * 4;

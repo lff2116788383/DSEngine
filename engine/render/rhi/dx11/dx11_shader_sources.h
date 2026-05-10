@@ -104,6 +104,10 @@ cbuffer PerObject : register(b1) {
     int _pad1;
 };
 
+cbuffer BoneMatrices : register(b7) {
+    float4x4 u_bone_matrices[100];
+};
+
 struct VSInput {
     float3 pos       : POSITION;
     float4 color     : COLOR0;
@@ -127,14 +131,23 @@ struct VSOutput {
 
 VSOutput VSMain(VSInput input) {
     VSOutput output;
-    float4 worldPos = mul(model, float4(input.pos, 1.0));
+
+    float4x4 skinMatrix = model;
+    if (skinned) {
+        skinMatrix = u_bone_matrices[int(input.boneIdx[0])] * input.boneWts[0] +
+                     u_bone_matrices[int(input.boneIdx[1])] * input.boneWts[1] +
+                     u_bone_matrices[int(input.boneIdx[2])] * input.boneWts[2] +
+                     u_bone_matrices[int(input.boneIdx[3])] * input.boneWts[3];
+    }
+
+    float4 worldPos = mul(skinMatrix, float4(input.pos, 1.0));
     output.pos = mul(vp, worldPos);
     output.fragPos = worldPos.xyz;
     output.fragPosView = mul(view, worldPos).xyz;
     output.color = input.color;
     output.uv = input.uv;
 
-    float3x3 normalMatrix = (float3x3)model;
+    float3x3 normalMatrix = (float3x3)skinMatrix;
     float3 N = normalize(mul(normalMatrix, input.normal));
     float3 T = normalize(mul(normalMatrix, input.tangent));
     T = normalize(T - dot(T, N) * N);
@@ -626,6 +639,10 @@ cbuffer PerObject : register(b1) {
     int _pad1;
 };
 
+cbuffer BoneMatrices : register(b7) {
+    float4x4 u_bone_matrices[100];
+};
+
 struct VSInput {
     float3 pos       : POSITION;
     float4 color     : COLOR0;
@@ -642,7 +659,14 @@ struct VSOutput {
 
 VSOutput VSMain(VSInput input) {
     VSOutput output;
-    output.pos = mul(vp, mul(model, float4(input.pos, 1.0)));
+    float4x4 skinMatrix = model;
+    if (skinned) {
+        skinMatrix = u_bone_matrices[int(input.boneIdx[0])] * input.boneWts[0] +
+                     u_bone_matrices[int(input.boneIdx[1])] * input.boneWts[1] +
+                     u_bone_matrices[int(input.boneIdx[2])] * input.boneWts[2] +
+                     u_bone_matrices[int(input.boneIdx[3])] * input.boneWts[3];
+    }
+    output.pos = mul(vp, mul(skinMatrix, float4(input.pos, 1.0)));
     return output;
 }
 )";

@@ -12,10 +12,10 @@
 namespace dse {
 namespace render {
 
-bool DX11Context::Init(void* window_handle, int width, int height, bool enable_debug) {
+bool DX11Context::Init(void* window_handle, int width, int height, bool enable_debug, bool force_sdr) {
     if (initialized_) return true;
 
-    if (!CreateDeviceAndSwapChain(window_handle, width, height, enable_debug)) {
+    if (!CreateDeviceAndSwapChain(window_handle, width, height, enable_debug, force_sdr)) {
         DEBUG_LOG_ERROR("[D3D11] Failed to create device and swap chain");
         return false;
     }
@@ -74,7 +74,7 @@ bool DX11Context::Resize(int width, int height) {
     return CreateBackbufferViews();
 }
 
-bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug) {
+bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug, bool force_sdr) {
     UINT create_flags = 0;
     if (enable_debug) {
         create_flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -89,11 +89,12 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     UINT num_feature_levels = ARRAYSIZE(feature_levels);
 
     // HDR 尝试路径：R16G16B16A16_FLOAT + FLIP_DISCARD（Windows 10+）
+    // force_sdr=true 时跳过 HDR 尝试，直接走 SDR 回退路径
     DXGI_SWAP_CHAIN_DESC scd{};
     scd.BufferCount = 2;
     scd.BufferDesc.Width = static_cast<UINT>(width);
     scd.BufferDesc.Height = static_cast<UINT>(height);
-    scd.BufferDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    scd.BufferDesc.Format = force_sdr ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_R16G16B16A16_FLOAT;
     scd.BufferDesc.RefreshRate.Numerator = 60;
     scd.BufferDesc.RefreshRate.Denominator = 1;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -101,7 +102,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     scd.SampleDesc.Count = 1;
     scd.SampleDesc.Quality = 0;
     scd.Windowed = TRUE;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.SwapEffect = force_sdr ? DXGI_SWAP_EFFECT_DISCARD : DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.Flags = 0;
 
     HRESULT hr = D3D11CreateDeviceAndSwapChain(
@@ -113,8 +114,12 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     );
 
     if (SUCCEEDED(hr)) {
-        hdr_enabled_ = true;
-        DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)");
+        hdr_enabled_ = !force_sdr;
+        if (force_sdr) {
+            DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, forced via DSE_FORCE_SDR)");
+        } else {
+            DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)");
+        }
     } else {
         // SDR 回退：R8G8B8A8_UNORM + DISCARD
         scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;

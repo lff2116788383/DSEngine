@@ -125,7 +125,7 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) override;
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
 
-    bool NeedsTextureYFlip() const override { return false; }
+    bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
     /// DX11: Z remap only ([-1,1] → [0,1]), Y stays up
@@ -139,7 +139,7 @@ public:
     }
 
     /// 初始化 D3D11 上下文
-    bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false);
+    bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false, bool force_sdr = false);
 
     // --- 子系统访问器 ---
     DX11Context& context() { return context_; }

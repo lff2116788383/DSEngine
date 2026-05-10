@@ -46,7 +46,8 @@ public:
     /// @param width 窗口宽度
     /// @param height 窗口高度
     /// @param enable_debug 是否启用 D3D11 调试层
-    bool Init(void* window_handle, int width, int height, bool enable_debug = false);
+    /// @param force_sdr 强制使用 SDR (R8G8B8A8) 交换链，跳过 HDR 尝试
+    bool Init(void* window_handle, int width, int height, bool enable_debug = false, bool force_sdr = false);
 
     /// 关闭并释放所有 D3D11 资源
     void Shutdown();
@@ -77,7 +78,7 @@ public:
     std::string FeatureLevelString() const;
 
 private:
-    bool CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug);
+    bool CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug, bool force_sdr);
     bool CreateBackbufferViews();
     void ReleaseBackbufferViews();
 

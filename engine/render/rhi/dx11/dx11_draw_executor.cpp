@@ -27,6 +27,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
+    bone_matrices_cb_      = CreateConstantBuffer(100 * sizeof(glm::mat4)); // MAX_BONES=100, 6400B
 
     // 初始化全局光源矩阵
     for (int i = 0; i < 3; ++i)
@@ -44,6 +45,45 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
         sd.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
         sd.MaxLOD         = D3D11_FLOAT32_MAX;
         context_->device()->CreateSamplerState(&sd, shadow_sampler_.GetAddressOf());
+    }
+
+    // 天空盒深度状态：LEQUAL + 禁止深度写入（与 OpenGL glDepthFunc(GL_LEQUAL) 对应）
+    {
+        D3D11_DEPTH_STENCIL_DESC dsd{};
+        dsd.DepthEnable    = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dsd.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
+        dsd.StencilEnable  = FALSE;
+        context_->device()->CreateDepthStencilState(&dsd, skybox_dss_.GetAddressOf());
+    }
+
+    // 1×1 白色 fallback 纹理（与 OpenGL white_texture 对齐，texture_handle=0 时使用）
+    {
+        unsigned char white_pixel[4] = {255, 255, 255, 255};
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width = 1;
+        td.Height = 1;
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Usage = D3D11_USAGE_IMMUTABLE;
+        td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA init_data{};
+        init_data.pSysMem = white_pixel;
+        init_data.SysMemPitch = 4;
+        ComPtr<ID3D11Texture2D> white_tex;
+        context_->device()->CreateTexture2D(&td, &init_data, white_tex.GetAddressOf());
+        if (white_tex) {
+            context_->device()->CreateShaderResourceView(white_tex.Get(), nullptr, white_texture_srv_.GetAddressOf());
+        }
+        D3D11_SAMPLER_DESC sd{};
+        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+        sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.MaxLOD = D3D11_FLOAT32_MAX;
+        context_->device()->CreateSamplerState(&sd, white_texture_sampler_.GetAddressOf());
     }
 
     initialized_ = true;
@@ -71,6 +111,10 @@ void DX11DrawExecutor::Shutdown() {
     particle_quad_vbo_.Reset();
     particle_quad_ibo_.Reset();
     shadow_sampler_.Reset();
+    skybox_dss_.Reset();
+    white_texture_srv_.Reset();
+    white_texture_sampler_.Reset();
+    bone_matrices_cb_.Reset();
 
     initialized_ = false;
     DEBUG_LOG_INFO("[D3D11] DrawExecutor shutdown");
@@ -373,13 +417,23 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
 
     for (const auto& item : items) {
         // 构建精灵四边形顶点: float2 pos + float2 uv + float4 color = 32B
-        float u0 = item.uv.x, v0 = item.uv.y, u1 = item.uv.z, v1 = item.uv.w;
+        // UV 解释逻辑与 OpenGL DrawBatch 保持一致
+        float u_min = item.uv.x, v_min = item.uv.y;
+        float u_max, v_max;
+        if (item.uv.z > 0.0f && item.uv.w > 0.0f) {
+            const bool use_max_uv = item.uv.z > item.uv.x && item.uv.w > item.uv.y;
+            u_max = use_max_uv ? item.uv.z : (item.uv.x + item.uv.z);
+            v_max = use_max_uv ? item.uv.w : (item.uv.y + item.uv.w);
+        } else {
+            u_min = 0.0f; v_min = 0.0f; u_max = 1.0f; v_max = 1.0f;
+        }
         float r = item.color.r, g = item.color.g, b = item.color.b, a = item.color.a;
+        // V 方向与 OpenGL 一致: BL=(u_min, v_min), TR=(u_max, v_max)
         float verts[4 * 8] = {
-            -0.5f, -0.5f, u0, v1, r, g, b, a,
-             0.5f, -0.5f, u1, v1, r, g, b, a,
-             0.5f,  0.5f, u1, v0, r, g, b, a,
-            -0.5f,  0.5f, u0, v0, r, g, b, a,
+            -0.5f, -0.5f, u_min, v_min, r, g, b, a,
+             0.5f, -0.5f, u_max, v_min, r, g, b, a,
+             0.5f,  0.5f, u_max, v_max, r, g, b, a,
+            -0.5f,  0.5f, u_min, v_max, r, g, b, a,
         };
 
         // 上传动态 VBO
@@ -401,11 +455,14 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         obj_data.morph_enabled = 0;
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
-        // 绑定纹理
-        const auto* tex = resource_mgr.GetTexture(item.texture_handle);
+        // 绑定纹理（handle=0 时使用白色 fallback，与 OpenGL 一致）
+        const auto* tex = (item.texture_handle != 0) ? resource_mgr.GetTexture(item.texture_handle) : nullptr;
         if (tex) {
             dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
             dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
+        } else if (white_texture_srv_) {
+            dc->PSSetShaderResources(0, 1, white_texture_srv_.GetAddressOf());
+            dc->PSSetSamplers(0, 1, white_texture_sampler_.GetAddressOf());
         }
 
         dc->DrawIndexed(6, 0, 0);
@@ -426,7 +483,10 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     DX11PerFrameCB frame_data;
     frame_data.vp = projection * view;
     frame_data.view = view;
-    frame_data.camera_pos = glm::vec4(0.0f);
+    {
+        glm::mat4 inv_view = glm::inverse(view);
+        frame_data.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
+    }
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 
     // 更新 PerScene CB
@@ -584,6 +644,16 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         obj_data.morph_enabled = item.morph_enabled ? 1 : 0;
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
+        // 骨骼矩阵（b7）— 蒙皮网格需要
+        if (item.skinned && !item.bone_matrices.empty() && bone_matrices_cb_) {
+            const size_t count = (std::min)(item.bone_matrices.size(), static_cast<size_t>(100));
+            glm::mat4 bone_buf[100];
+            memset(bone_buf, 0, sizeof(bone_buf));
+            memcpy(bone_buf, item.bone_matrices.data(), count * sizeof(glm::mat4));
+            UpdateConstantBuffer(bone_matrices_cb_.Get(), bone_buf, sizeof(bone_buf));
+            dc->VSSetConstantBuffers(7, 1, bone_matrices_cb_.GetAddressOf());
+        }
+
         // PerMaterial
         DX11PerMaterialCB mat_data{};
         mat_data.albedo = glm::vec4(item.material_albedo, item.material_metallic);
@@ -666,12 +736,36 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
         dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
     }
 
+    // 切换深度状态为 LEQUAL + 禁止写入（天空盒在 z=1.0 处绘制）
+    ComPtr<ID3D11DepthStencilState> prev_dss;
+    UINT prev_stencil_ref = 0;
+    dc->OMGetDepthStencilState(prev_dss.GetAddressOf(), &prev_stencil_ref);
+    dc->OMSetDepthStencilState(skybox_dss_.Get(), 0);
+
+    // 天空盒需要禁用面剔除（前一个 pass 可能是 CullFront 的 shadow pass）
+    ComPtr<ID3D11RasterizerState> prev_rs;
+    dc->RSGetState(prev_rs.GetAddressOf());
+    {
+        D3D11_RASTERIZER_DESC rd{};
+        rd.FillMode = D3D11_FILL_SOLID;
+        rd.CullMode = D3D11_CULL_NONE;
+        rd.FrontCounterClockwise = TRUE;
+        rd.DepthClipEnable = TRUE;
+        ComPtr<ID3D11RasterizerState> no_cull_rs;
+        context_->device()->CreateRasterizerState(&rd, no_cull_rs.GetAddressOf());
+        if (no_cull_rs) dc->RSSetState(no_cull_rs.Get());
+    }
+
     UINT stride = sizeof(float) * 3;
     UINT offset = 0;
     dc->IASetVertexBuffers(0, 1, skybox_vbo_.GetAddressOf(), &stride, &offset);
 
     dc->Draw(36, 0);
     current_frame_stats_.draw_calls++;
+
+    // 恢复之前的深度和光栅化状态
+    dc->RSSetState(prev_rs.Get());
+    dc->OMSetDepthStencilState(prev_dss.Get(), prev_stencil_ref);
 }
 
 void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,

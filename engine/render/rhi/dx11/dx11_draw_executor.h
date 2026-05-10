@@ -264,10 +264,20 @@ private:
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;
 
+    // 1×1 白色 fallback 纹理（texture_handle=0 时使用，与 OpenGL 行为一致）
+    ComPtr<ID3D11ShaderResourceView> white_texture_srv_;
+    ComPtr<ID3D11SamplerState> white_texture_sampler_;
+
+    // 天空盒深度状态（LEQUAL + no depth write）
+    ComPtr<ID3D11DepthStencilState> skybox_dss_;
+
     // 点光源 / 聚光灯常量缓冲（b4 / b5 / b6）
     ComPtr<ID3D11Buffer> per_point_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_matrices_cb_;
+
+    // 骨骼矩阵常量缓冲（b7, MAX_BONES=100, 6400B）
+    ComPtr<ID3D11Buffer> bone_matrices_cb_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

@@ -290,7 +290,9 @@ bool EngineInstance::Init() {
         Screen::set_width_height(config_.window_width, config_.window_height);
     }
 
-    GLFWwindow* current_window = glfwGetCurrentContext();
+    GLFWwindow* current_window = glfw_window_
+        ? static_cast<GLFWwindow*>(glfw_window_)
+        : glfwGetCurrentContext();
     if (current_window) {
         if (!config_.enable_editor) {
             glfwSetKeyCallback(current_window, KeyCallback);

@@ -12,6 +12,8 @@
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
 #include "engine/base/debug.h"
 
+#include <cstdlib>
+
 namespace dse {
 namespace render {
 
@@ -73,10 +75,26 @@ void DX11CommandBuffer::SetGlobalMat4(const std::string& name, const glm::mat4& 
 
 void DX11CommandBuffer::SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) {
     pending_mat4_array_[name] = values;
+    if (!device_) return;
+    if (name == "u_light_space_matrices") {
+        for (size_t i = 0; i < values.size() && i < 3; ++i) {
+            device_->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), values[i]);
+        }
+    } else if (name == "u_spot_light_space_matrices") {
+        for (size_t i = 0; i < values.size() && i < 4; ++i) {
+            device_->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), values[i]);
+        }
+    }
 }
 
 void DX11CommandBuffer::SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) {
     pending_float_array_[name] = values;
+    if (!device_) return;
+    if (name == "u_cascade_splits") {
+        for (size_t i = 0; i < values.size() && i < 3; ++i) {
+            device_->SetGlobalCascadeSplit(static_cast<unsigned int>(i), values[i]);
+        }
+    }
 }
 
 void DX11CommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
@@ -120,13 +138,15 @@ void DX11CommandBuffer::Reset() {
 // ============================================================
 
 bool DX11RhiDevice::InitDevice(void* window_handle, int width, int height) {
-    return InitD3D11(window_handle, width, height, false);
+    const char* sdr_env = std::getenv("DSE_FORCE_SDR");
+    bool force_sdr = sdr_env && (sdr_env[0] == '1' || sdr_env[0] == 'y' || sdr_env[0] == 'Y');
+    return InitD3D11(window_handle, width, height, false, force_sdr);
 }
 
-bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool enable_debug) {
+bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool enable_debug, bool force_sdr) {
     if (initialized_) return true;
 
-    if (!context_.Init(window_handle, width, height, enable_debug)) {
+    if (!context_.Init(window_handle, width, height, enable_debug, force_sdr)) {
         DEBUG_LOG_ERROR("[D3D11] Context init failed");
         return false;
     }
