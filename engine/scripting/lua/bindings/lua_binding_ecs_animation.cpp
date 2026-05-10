@@ -299,6 +299,16 @@ int L_EcsSetAnimator3DParamTrigger(lua_State* L) {
     return 0;
 }
 
+int L_EcsSetAnimator3DLockRootMotion(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
+    if (!animator) return 0;
+    animator->lock_root_motion = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -320,6 +330,7 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"add_animator_3d_transition", L_EcsAddAnimator3DTransition},
         {"set_animator_3d_param_float",  L_EcsSetAnimator3DParamFloat},
         {"set_animator_3d_param_trigger", L_EcsSetAnimator3DParamTrigger},
+        {"set_animator_3d_lock_root_motion", L_EcsSetAnimator3DLockRootMotion},
     });
 }
 

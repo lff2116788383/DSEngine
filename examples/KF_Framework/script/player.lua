@@ -84,11 +84,14 @@ function Player.is_attacking()
     if not knight or state.dead then return false end
     local ok, state_name, norm_time = ecs.get_animator_3d_state(knight)
     if not ok then return false end
-    if state_name == "attack1" or state_name == "attack2" or state_name == "attack3"
-       or state_name == "kick" then
-        if norm_time >= 0.3 and norm_time <= 0.6 then
-            return true
-        end
+    if state_name == "attack1" then
+        return norm_time >= 0.70 and norm_time <= 0.96
+    elseif state_name == "attack2" then
+        return norm_time >= 0.667 and norm_time <= 0.933
+    elseif state_name == "attack3" then
+        return norm_time >= 0.446 and norm_time <= 0.694
+    elseif state_name == "kick" then
+        return norm_time >= 0.3 and norm_time <= 0.6
     end
     return false
 end
@@ -148,15 +151,16 @@ function Player.setup()
 
     -- Animator FSM
     ecs.add_animator_3d(knight, ASSET.anim_idle, ASSET.knight_dskel)
+    ecs.set_animator_3d_lock_root_motion(knight, true)
     ecs.init_animator_3d_fsm(knight)
 
     -- States
     ecs.add_animator_3d_state(knight, "idle",       ASSET.anim_idle,       true,  1.0)
     ecs.add_animator_3d_state(knight, "walk",       ASSET.anim_walk,       true,  1.0)
-    ecs.add_animator_3d_state(knight, "run",        ASSET.anim_run,        true,  1.2)
-    ecs.add_animator_3d_state(knight, "attack1",    ASSET.anim_attack1,    false, 1.3)
-    ecs.add_animator_3d_state(knight, "attack2",    ASSET.anim_attack2,    false, 1.3)
-    ecs.add_animator_3d_state(knight, "attack3",    ASSET.anim_attack3,    false, 1.4)
+    ecs.add_animator_3d_state(knight, "run",        ASSET.anim_run,        true,  1.0)
+    ecs.add_animator_3d_state(knight, "attack1",    ASSET.anim_attack1,    false, 1.0)
+    ecs.add_animator_3d_state(knight, "attack2",    ASSET.anim_attack2,    false, 1.0)
+    ecs.add_animator_3d_state(knight, "attack3",    ASSET.anim_attack3,    false, 1.0)
     ecs.add_animator_3d_state(knight, "block",      ASSET.anim_block,      false, 1.0)
     ecs.add_animator_3d_state(knight, "block_idle", ASSET.anim_block_idle, true,  1.0)
     ecs.add_animator_3d_state(knight, "jump",       ASSET.anim_jump,       false, 1.0)
@@ -181,11 +185,11 @@ function Player.setup()
     tr("idle", "attack1", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
     tr("walk", "attack1", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
     tr("run",  "attack1", 0.083, false, 1.0, {{"attack", COND.IF, 0}})
-    tr("attack1", "attack2", 0.02, true, 0.85, {{"attack", COND.IF, 0}})
-    tr("attack2", "attack3", 0.02, true, 0.85, {{"attack", COND.IF, 0}})
-    tr("attack1", "idle", 0.167, true, 0.95, {})
-    tr("attack2", "idle", 0.167, true, 0.95, {})
-    tr("attack3", "idle", 0.167, true, 0.95, {})
+    tr("attack1", "attack2", 0.017, true, 0.98, {{"attack", COND.IF, 0}})
+    tr("attack2", "attack3", 0.017, true, 0.97, {{"attack", COND.IF, 0}})
+    tr("attack1", "idle", 0.333, true, 1.0, {})
+    tr("attack2", "idle", 0.333, true, 1.0, {})
+    tr("attack3", "idle", 0.167, true, 1.0, {})
     -- block
     tr("idle", "block", 0.083, false, 1.0, {{"block", COND.IF, 0}})
     tr("walk", "block", 0.083, false, 1.0, {{"block", COND.IF, 0}})
@@ -234,6 +238,23 @@ local KF_MAX_TURN = math.pi * 2.0  -- KF: 2π rad/sec (360°/s)
 -- 简单场地边界 (KF: FieldCollider 限制活动区域)
 local FIELD_MIN_X, FIELD_MAX_X = -20000, 20000
 local FIELD_MIN_Z, FIELD_MAX_Z = -20000, 20000
+
+-- 建筑碰撞 AABB: {min_x, min_z, max_x, max_z}
+-- 从 kf_demo_stage.json 实体位置估算
+local BUILDING_AABBS = {
+    -- Medieval house (castle): center (2499, 870)
+    {2000, 400, 3000, 1400},
+    -- Baker_house: center (4914, -757)
+    {4500, -1200, 5300, -300},
+    -- Medieval_house_1: center (6144, -1786)
+    {5700, -2200, 6600, -1300},
+    -- Fancy_Tavern: center (1660, -7954)
+    {1200, -8400, 2100, -7500},
+    -- House: center (4740, -8196)
+    {4300, -8600, 5200, -7800},
+    -- cartoon_well: center (35, -6006)
+    {-150, -6200, 220, -5810},
+}
 
 --------------------------------------------------------------------------------
 -- 每帧更新: 输入 → 移动 → FSM → 摄像机跟随
@@ -287,6 +308,27 @@ function Player.update(dt)
     local raw_mag = math.sqrt(move_x * move_x + move_z * move_z)
     local move_amount = math.min(raw_mag, 1.0)  -- keyboard: ~0.707 (diagonal) or 1.0
 
+    -- KF: movement_multiplier (actor_state Init/Update)
+    -- attack steps: 0.25 before kBeginAttackFrame, then 0.0
+    -- block/impact/death/cast: 0.0
+    do
+        local ok_ms, cur_st, cur_nt = ecs.get_animator_3d_state(knight)
+        if ok_ms then
+            local mult = 1.0
+            if cur_st == "attack1" then
+                mult = cur_nt < 0.70 and 0.25 or 0.0
+            elseif cur_st == "attack2" then
+                mult = cur_nt < 0.667 and 0.25 or 0.0
+            elseif cur_st == "attack3" then
+                mult = cur_nt < 0.612 and 0.25 or 0.0
+            elseif cur_st == "block" or cur_st == "block_idle"
+                or cur_st == "impact" or cur_st == "death" or cur_st == "cast" then
+                mult = 0.0
+            end
+            move_amount = move_amount * mult
+        end
+    end
+
     -- KF: animator.SetMovement(move_amount) — 驱动 walk/run 动画
     -- walk→run: movement > 0.5f (KF motion_state 阈值), 键盘 amount=1.0 永远触发 run
     state.speed = move_amount
@@ -329,6 +371,25 @@ function Player.update(dt)
         new_x = math.max(FIELD_MIN_X, math.min(FIELD_MAX_X, new_x))
         new_z = math.max(FIELD_MIN_Z, math.min(FIELD_MAX_Z, new_z))
 
+        -- 建筑碰撞 (KF: CollisionDetector + OBB/AABB)
+        local CR = Config.PLAYER.collision_radius
+        for _, box in ipairs(BUILDING_AABBS) do
+            local bx0, bz0, bx1, bz1 = box[1], box[2], box[3], box[4]
+            if new_x + CR > bx0 and new_x - CR < bx1 and new_z + CR > bz0 and new_z - CR < bz1 then
+                local dx_left  = (bx0 - CR) - new_x
+                local dx_right = (bx1 + CR) - new_x
+                local dz_back  = (bz0 - CR) - new_z
+                local dz_front = (bz1 + CR) - new_z
+                local min_dx = math.abs(dx_left) < math.abs(dx_right) and dx_left or dx_right
+                local min_dz = math.abs(dz_back) < math.abs(dz_front) and dz_back or dz_front
+                if math.abs(min_dx) < math.abs(min_dz) then
+                    new_x = new_x + min_dx
+                else
+                    new_z = new_z + min_dz
+                end
+            end
+        end
+
         -- 地形高度跟随
         local new_y = TerrainHeight.get_height(new_x, new_z)
         ecs.set_transform_position(knight, new_x, new_y, new_z)
@@ -362,9 +423,11 @@ function Player.update(dt)
     end
 
     -- 攻击/格挡/技能触发器
-    local do_attack = ai_attack or app.get_mouse_left_down()
-    local do_block_down = ai_block or app.get_mouse_right_down()
-    local do_block_hold = ai_block or app.get_mouse_right()
+    -- KF 原版: J=LightAttack(B), K=StrongAttack(X), L=Guard(LB)
+    local do_attack = ai_attack or app.get_mouse_left_down() or app.get_key_down(74)   -- J
+    local do_strong = app.get_key_down(75)                                               -- K
+    local do_block_down = ai_block or app.get_mouse_right_down() or app.get_key_down(76) -- L
+    local do_block_hold = ai_block or app.get_mouse_right() or app.get_key(76)           -- L hold
     if do_attack then
         ecs.set_animator_3d_param_trigger(knight, "attack")
         -- KF 源码: 攻击语音在各 step state 的 kBeginAttackFrame 触发
@@ -378,6 +441,10 @@ function Player.update(dt)
         end
         Audio.play_se("sord_attack")
         Audio.play_attack_voice(step)
+    end
+    if do_strong then
+        ecs.set_animator_3d_param_trigger(knight, "kick")
+        Audio.play_se("sord_attack")
     end
     if do_block_down then
         ecs.set_animator_3d_param_trigger(knight, "block")

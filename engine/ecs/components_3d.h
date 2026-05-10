@@ -191,6 +191,11 @@ struct Animator3DComponent {
     float transition_duration = 0.0f;
     float next_state_time = 0.0f;
 
+    // Root motion lock: when true, the motion-root bone (first child of the
+    // skeleton root) has its position locked to the bind pose, preventing
+    // animation root motion from visually shifting the mesh.
+    bool lock_root_motion = false;
+
     std::vector<glm::mat4> final_bone_matrices; // Palette uploaded to GPU
 };
 

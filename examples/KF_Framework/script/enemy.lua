@@ -70,6 +70,7 @@ function Enemy.spawn(x, y, z, params)
 
     -- Animator FSM
     ecs.add_animator_3d(e, ASSET.mutant_idle, ASSET.mutant_dskel)
+    ecs.set_animator_3d_lock_root_motion(e, true)
     ecs.init_animator_3d_fsm(e)
 
     ecs.add_animator_3d_state(e, "idle",    ASSET.mutant_idle,   true,  1.0)
@@ -341,7 +342,7 @@ function Enemy.setup_hp_bars()
             -- 填充条 (红色, KF: enemy_life material = Color::kRed)
             data.hp_fill = ecs.create_entity()
             ecs.add_transform(data.hp_fill, 0, 0, 0)
-            ui.add_renderer(data.hp_fill, 0, 0.9, 0.15, 0.15, 1.0, 46, HP_BAR_W, HP_BAR_H)
+            ui.add_renderer(data.hp_fill, 0, 1.0, 0.0, 0.0, 1.0, 46, HP_BAR_W, HP_BAR_H)
             ui.set_anchor(data.hp_fill, 0.0, 0.0)
             ui.set_visible(data.hp_fill, false)
         end

@@ -548,6 +548,34 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             }
         }
 
+        // Root motion lock: prevent animation-driven hip translation from
+        // shifting the mesh.  Lock ONLY the "Hips" bone (the motion root)
+        // position to bind pose.  Other bones keep full animation.
+        if (animator.lock_root_motion) {
+            bool locked = false;
+            // Primary: find bone named "Hips" via dskel v2 name table
+            if (!bone_name_to_index.empty()) {
+                for (const auto& [name, idx] : bone_name_to_index) {
+                    if (name.find("Hips") != std::string::npos && idx >= 0 && idx < static_cast<int>(bone_count)) {
+                        glm::vec3 bind_pos(bones[idx].local_transform[3]);
+                        local_transforms[idx][3] = glm::vec4(bind_pos, 1.0f);
+                        locked = true;
+                        break;
+                    }
+                }
+            }
+            // Fallback: lock root bones (depth 0) only
+            if (!locked) {
+                for (uint32_t i = 0; i < bone_count; ++i) {
+                    int pi = bones[i].parent_index;
+                    if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+                        glm::vec3 bind_pos(bones[i].local_transform[3]);
+                        local_transforms[i][3] = glm::vec4(bind_pos, 1.0f);
+                    }
+                }
+            }
+        }
+
         // 3. Calculate global transforms (handles arbitrary bone ordering)
         std::vector<glm::mat4> global_transforms(bone_count);
         std::fill(computed.begin(), computed.end(), false);
