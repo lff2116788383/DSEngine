@@ -279,7 +279,7 @@ float ShadowCalculation(vec3 fragPosWorldSpace, vec3 fragPosViewSpace, vec3 norm
     }
     vec4 fragPosLightSpace = light_space_matrices[cascadeIndex] * vec4(fragPosWorldSpace, 1.0);
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
     if(projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
@@ -291,7 +291,7 @@ float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal
     if (shadowIndex < 0 || shadowIndex >= 4) return 0.0;
     vec4 fragPosLightSpace = u_spot_light_space_matrices[shadowIndex] * vec4(fragPosWorldSpace, 1.0);
     vec3 projCoords = fragPosLightSpace.xyz / max(fragPosLightSpace.w, 0.0001);
-    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
     if (projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
     float currentDepth = projCoords.z;

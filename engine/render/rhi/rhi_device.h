@@ -219,6 +219,11 @@ public:
     virtual bool NeedsTextureYFlip() const { return true; }
     /// OpenGL readback is bottom-up and needs flip; D3D11/Vulkan readback is top-down
     virtual bool NeedsReadbackYFlip() const { return true; }
+
+    /// Clip-space correction matrix to convert from OpenGL NDC convention
+    /// (Y-up, Z∈[-1,1]) to the target API convention.
+    /// OpenGL: identity. Vulkan: Y-flip + Z remap. DX11: Z remap only.
+    virtual glm::mat4 GetProjectionCorrection() const { return glm::mat4(1.0f); }
 };
 
 /**

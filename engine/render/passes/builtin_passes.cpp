@@ -36,6 +36,7 @@ void PreZPass::Setup(RenderGraph& graph) {
 
 void PreZPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.prez, glm::vec4(0.0f), true});
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
     entt::entity selected_camera3d = entt::null;
     int selected_priority3d = std::numeric_limits<int>::min();
@@ -48,7 +49,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
     }
     if (selected_camera3d != entt::null) {
         auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-        glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 camera.near_clip, camera.far_clip);
         glm::mat4 view = glm::mat4(1.0f);
@@ -82,6 +83,7 @@ void CSMShadowPass::Setup(RenderGraph& graph) {
 }
 
 void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
     if (light_view.begin() == light_view.end()) return;
     auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
@@ -109,7 +111,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         // Use cascade_splits to scale ortho projection size
         float size = light.cascade_splits[i];
         float far_dist = size * 4.0f;
-        glm::mat4 light_proj = glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+        glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
         glm::vec3 light_dir_n = glm::normalize(light.direction);
         glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
         glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -149,6 +151,7 @@ void SpotShadowPass::Setup(RenderGraph& graph) {
 }
 
 void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto spot_light_view = ctx_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
     std::vector<glm::mat4> spot_light_space_matrices;
     spot_light_space_matrices.reserve(4);
@@ -166,7 +169,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
             up = glm::vec3(0.0f, 0.0f, 1.0f);
         }
         const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + forward, up);
-        const glm::mat4 light_proj = glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
         cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[shadow_slot], glm::vec4(1.0f), true});
         cmd_buffer.SetCamera(light_view_mat, light_proj);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
@@ -195,6 +198,7 @@ void PointShadowPass::Setup(RenderGraph& graph) {
 }
 
 void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto point_light_view = ctx_.world->registry().view<TransformComponent, dse::PointLightComponent>();
     int shadow_slot = 0;
     for (auto entity : point_light_view) {
@@ -204,7 +208,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         auto& transform = point_light_view.get<TransformComponent>(entity);
-        const glm::mat4 light_proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
         static const glm::vec3 face_directions[6] = {
             glm::vec3(1.0f, 0.0f, 0.0f),
             glm::vec3(-1.0f, 0.0f, 0.0f),
@@ -306,7 +310,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
     if (selected_camera3d != entt::null) {
         auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-        glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 camera.near_clip, camera.far_clip);
         glm::mat4 view = glm::mat4(1.0f);

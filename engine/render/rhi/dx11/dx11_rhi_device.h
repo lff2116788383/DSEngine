@@ -128,6 +128,16 @@ public:
     bool NeedsTextureYFlip() const override { return false; }
     bool NeedsReadbackYFlip() const override { return false; }
 
+    /// DX11: Z remap only ([-1,1] → [0,1]), Y stays up
+    glm::mat4 GetProjectionCorrection() const override {
+        return glm::mat4(
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.5f, 0.0f,
+            0.0f, 0.0f, 0.5f, 1.0f
+        );
+    }
+
     /// 初始化 D3D11 上下文
     bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false);
 

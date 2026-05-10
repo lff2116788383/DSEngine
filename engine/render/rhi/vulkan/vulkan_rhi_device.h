@@ -153,6 +153,17 @@ public:
     bool NeedsTextureYFlip() const override { return false; }
     bool NeedsReadbackYFlip() const override { return false; }
 
+    /// Vulkan: Y-flip (NDC Y-down) + Z remap ([-1,1] → [0,1])
+    glm::mat4 GetProjectionCorrection() const override {
+        // row-major construction: column 0, column 1, column 2, column 3
+        return glm::mat4(
+            1.0f,  0.0f, 0.0f, 0.0f,
+            0.0f, -1.0f, 0.0f, 0.0f,
+            0.0f,  0.0f, 0.5f, 0.0f,
+            0.0f,  0.0f, 0.5f, 1.0f
+        );
+    }
+
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }
     VulkanResourceManager& resource_mgr() { return resource_mgr_; }
