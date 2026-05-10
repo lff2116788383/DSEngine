@@ -61,8 +61,8 @@ VkCullModeFlagBits VulkanPipelineStateManager::ToVkCullMode(CullFace face) {
 }
 
 VkFrontFace VulkanPipelineStateManager::ToVkFrontFace() {
-    // DSEngine 使用逆时针（CCW）为正面，与 Vulkan 默认一致
-    return VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    // 投影修正矩阵包含 Y-flip，屏幕空间三角形绕序从 CCW 变为 CW
+    return VK_FRONT_FACE_CLOCKWISE;
 }
 
 // ============================================================================
@@ -185,7 +185,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.cullMode = ToVkCullMode(state.desc.cull_face);
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.frontFace = ToVkFrontFace();
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.lineWidth = 1.0f;
 

@@ -27,7 +27,7 @@ public:
     void OnFixedUpdate(World& world, float fixed_delta_time) override;
     void OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) override;
     void OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) override;
-    void OnRenderScene(World& world, CommandBuffer& cmd_buffer) override;
+    void OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f)) override;
     void OnShutdown(World& world) override;
 
 private:

@@ -639,9 +639,12 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
                                     DX11ResourceManager& resource_mgr) {
     ID3D11DeviceContext* dc = context_->device_context();
 
+    // 去除 view 平移，仅保留旋转（与 OpenGL 行为一致）
+    glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
+
     DX11PerFrameCB frame_data;
-    frame_data.vp = projection * view;
-    frame_data.view = view;
+    frame_data.vp = projection * skybox_view;
+    frame_data.view = skybox_view;
     frame_data.camera_pos = glm::vec4(0.0f);
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 

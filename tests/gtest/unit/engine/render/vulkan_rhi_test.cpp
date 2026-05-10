@@ -619,6 +619,33 @@ TEST(VulkanGLSLShaderTest, K_SpotLight使用float_pad非vec2_pad) {
         << "SpotLight._pad must be float, not vec2 (stride must be 64B not 80B)";
 }
 
+// ============================================================
+// RHI 统一回归测试
+// ============================================================
+
+TEST(VulkanPipelineStateManagerTest, FrontFace为CW因投影YFlip) {
+    // 投影修正矩阵包含 Y-flip → 屏幕空间绕序 CCW→CW
+    EXPECT_EQ(VulkanPipelineStateManager::ToVkFrontFace(), VK_FRONT_FACE_CLOCKWISE);
+}
+
+TEST(VulkanProjectionCorrectionTest, YFlip行列值正确) {
+    VulkanRhiDevice device;
+    glm::mat4 corr = device.GetProjectionCorrection();
+    // row 0: (1, 0, 0, 0)
+    EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
+    // row 1: (0, -1, 0, 0) — Y-flip
+    EXPECT_FLOAT_EQ(corr[1][1], -1.0f);
+    // row 2,3: Z remap (0.5, 0.5)
+    EXPECT_FLOAT_EQ(corr[2][2], 0.5f);
+    EXPECT_FLOAT_EQ(corr[3][2], 0.5f);
+}
+
+TEST(VulkanSkyboxShaderTest, 采样方向使用aPos) {
+    std::string src(dse::render::vulkan_shaders::kSkyboxVertex);
+    EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
+        << "Skybox VS should use raw vertex position as cubemap sampling direction";
+}
+
 #endif // DSE_ENABLE_VULKAN
 
 // ============================================================

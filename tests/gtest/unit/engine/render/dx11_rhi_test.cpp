@@ -433,4 +433,26 @@ TEST(SpotLightShaderTest, L_SpotMatricesCB大小正确) {
     EXPECT_EQ(sizeof(DX11SpotMatricesCB) % 16u, 0u);
 }
 
+// ============================================================
+// RHI 统一回归测试
+// ============================================================
+
+TEST(DX11ProjectionCorrectionTest, ZRemapOnly无YFlip) {
+    DX11RhiDevice device;
+    glm::mat4 corr = device.GetProjectionCorrection();
+    // row 0: (1, 0, 0, 0)
+    EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
+    // row 1: (0, 1, 0, 0) — NO Y-flip (DX11 Y-up same as OpenGL)
+    EXPECT_FLOAT_EQ(corr[1][1], 1.0f);
+    // row 2,3: Z remap (0.5, 0.5)
+    EXPECT_FLOAT_EQ(corr[2][2], 0.5f);
+    EXPECT_FLOAT_EQ(corr[3][2], 0.5f);
+}
+
+TEST(DX11SkyboxShaderTest, 采样方向使用inputPos) {
+    std::string src(dse::render::dx11_shaders::kSkyboxVS);
+    EXPECT_NE(src.find("output.uv = input.pos"), std::string::npos)
+        << "Skybox VS should use raw vertex position as cubemap sampling direction";
+}
+
 #endif // DSE_ENABLE_D3D11

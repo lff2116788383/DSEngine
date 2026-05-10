@@ -271,7 +271,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
     // Editor camera override: use editor view/proj for Scene render target
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        cmd_buffer.SetCamera(ctx_.editor_view, ctx_.editor_projection);
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
 
         // Still render skybox if present
         auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
@@ -367,7 +368,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         }
         if (selected_camera != entt::null) {
             auto& camera = camera_view.get<CameraComponent>(selected_camera);
-            cmd_buffer.SetCamera(camera.view, camera.projection);
+            const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();
+            cmd_buffer.SetCamera(camera.view, clip_correction_2d * camera.projection);
         }
     }
     } // end else (non-editor camera)
@@ -377,9 +379,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     if (ctx_.modules.empty() && ctx_.render_meshes) {
         ctx_.render_meshes(*ctx_.world, cmd_buffer);
     }
+    const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     for (auto& mod : ctx_.modules) {
         if (mod.instance) {
-            mod.instance->OnRenderScene(*ctx_.world, cmd_buffer);
+            mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
         }
     }
 
@@ -474,7 +477,8 @@ void UIPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.sprite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ui, glm::vec4(0.0f), true});
     if (ctx_.render_2d_ui) {
-        ctx_.render_2d_ui(*ctx_.world, cmd_buffer, Screen::width(), Screen::height());
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        ctx_.render_2d_ui(*ctx_.world, cmd_buffer, Screen::width(), Screen::height(), clip_correction);
     }
     cmd_buffer.EndRenderPass();
 }

@@ -1049,8 +1049,9 @@ void VulkanDrawExecutor::DrawSkybox(
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
 
-    // 更新 PerFrame UBO 并分配 DescriptorSet
-    UpdatePerFrameUBO(view, projection, {});
+    // 更新 PerFrame UBO 并分配 DescriptorSet（去除 view 平移，仅保留旋转）
+    glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
+    UpdatePerFrameUBO(skybox_view, projection, {});
     AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, skybox_program, cubemap_texture_handle,
                                            *resource_mgr_);
 

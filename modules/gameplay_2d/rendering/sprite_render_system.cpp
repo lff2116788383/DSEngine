@@ -58,7 +58,7 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     cmd_buffer.DrawBatch(items);
 }
 
-void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {
+void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
     std::vector<SpriteDrawItem> items;
     auto view = world.registry().view<UIRendererComponent>();
     
@@ -123,7 +123,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
     });
     
     // Orthographic projection matching screen pixels, origin at bottom-left
-    glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(screen_width), 0.0f, static_cast<float>(screen_height), -1.0f, 1.0f);
+    glm::mat4 ortho = clip_correction * glm::ortho(0.0f, static_cast<float>(screen_width), 0.0f, static_cast<float>(screen_height), -1.0f, 1.0f);
     glm::mat4 view_mat = glm::mat4(1.0f);
     
     cmd_buffer.SetCamera(view_mat, ortho);

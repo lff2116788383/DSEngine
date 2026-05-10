@@ -45,7 +45,7 @@ void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
     mesh_render_system_.Render(world, cmd_buffer);
 }
 
-void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer) {
+void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
 
@@ -75,7 +75,7 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer) {
 
     if (!p_items.empty() && selected_camera3d != entt::null) {
         auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-        glm::mat4 projection = glm::perspective(glm::radians(camera.fov),
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
                                                 16.0f / 9.0f,
                                                 camera.near_clip, camera.far_clip);
         glm::mat4 view = glm::mat4(1.0f);

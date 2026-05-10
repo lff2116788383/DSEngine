@@ -68,7 +68,7 @@ struct RenderPassContext {
 
     /// FramePipeline 拥有的子系统回调（避免 Pass 直接依赖 FramePipeline）
     std::function<void(World&, CommandBuffer&)> render_2d_scene;
-    std::function<void(World&, CommandBuffer&, int, int)> render_2d_ui;
+    std::function<void(World&, CommandBuffer&, int, int, const glm::mat4&)> render_2d_ui;
     std::function<void(World&, CommandBuffer&)> render_meshes;
 };
 

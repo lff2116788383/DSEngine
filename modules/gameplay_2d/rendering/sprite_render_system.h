@@ -36,7 +36,7 @@ public:
      * @param screen_width 当前屏幕宽度
      * @param screen_height 当前屏幕高度
      */
-    void Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height);
+    void Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f));
 };
 
 #endif

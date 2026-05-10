@@ -670,8 +670,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
         gameplay2d_module_.OnRenderScene(world, cmd);
     };
-    render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h) {
-        gameplay2d_module_.OnRenderUI(world, cmd, w, h);
+    render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
+        gameplay2d_module_.OnRenderUI(world, cmd, w, h, clip);
     };
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
         mesh_render_system_.Render(world, cmd);

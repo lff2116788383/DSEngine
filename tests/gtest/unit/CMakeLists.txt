@@ -115,9 +115,7 @@ target_link_libraries(${DSE_GTEST_UNIT_TARGET}
         dse_engine
 )
 
-if(DSE_ENABLE_3D)
-    target_link_libraries(${DSE_GTEST_UNIT_TARGET} PRIVATE DSE_Gameplay3D)
-endif()
+# DSE_Gameplay3D 已静态编入 dse_engine，无需额外链接
 
 # PhysX 运行时DLL 复制（仅当PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)

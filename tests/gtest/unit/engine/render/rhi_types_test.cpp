@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/rhi/rhi_device.h"
 #include <glm/glm.hpp>
 
 // ============================================================
@@ -94,6 +95,21 @@ TEST(Particle3DDrawItemTest, 默认值) {
     EXPECT_EQ(item.material_instance_id, 0u);
     EXPECT_EQ(item.particle_count, 0);
     EXPECT_EQ(item.instance_vbo, 0u);
+}
+
+// ============================================================
+// 渲染统计
+// ============================================================
+
+// ============================================================
+// RHI 统一回归测试 — OpenGL ProjectionCorrection
+// ============================================================
+
+TEST(OpenGLProjectionCorrectionTest, 返回Identity) {
+    // OpenGL 不需要投影修正，应返回单位矩阵
+    OpenGLRhiDevice device;
+    glm::mat4 corr = device.GetProjectionCorrection();
+    EXPECT_EQ(corr, glm::mat4(1.0f));
 }
 
 // ============================================================

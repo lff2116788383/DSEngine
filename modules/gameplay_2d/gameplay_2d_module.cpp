@@ -53,14 +53,15 @@ void Gameplay2DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
     (void)light_proj;
 }
 
-void Gameplay2DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer) {
+void Gameplay2DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
+    (void)clip_correction;
     sprite_render_system_.Render(world, cmd_buffer);
     spine_system_.Render(world, cmd_buffer);
     particle_system_.Render(world, cmd_buffer);
 }
 
-void Gameplay2DModule::OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {
-    ui_render_system_.Render(world, cmd_buffer, screen_width, screen_height);
+void Gameplay2DModule::OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
+    ui_render_system_.Render(world, cmd_buffer, screen_width, screen_height, clip_correction);
 }
 
 void Gameplay2DModule::OnShutdown(World& world) {

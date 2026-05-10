@@ -65,7 +65,7 @@ public:
     /**
      * @brief 模块渲染：Scene (主场景渲染阶段)
      */
-    virtual void OnRenderScene(World& world, CommandBuffer& cmd_buffer) {}
+    virtual void OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f)) {}
 
     /**
      * @brief 模块渲染：UI (独立于场景的 UI 渲染阶段)
@@ -73,7 +73,7 @@ public:
      * UI 渲染通常使用独立的正交投影和 RenderTarget，
      * 与 Scene Pass 分离以保证 UI 不被深度测试影响
      */
-    virtual void OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height) {}
+    virtual void OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f)) {}
 
     /**
      * @brief 模块向 RenderGraph 注册自定义渲染 Pass
