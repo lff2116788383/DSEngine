@@ -1,7 +1,7 @@
 # DSSL — DS Shading Language 设计方案
 
 > DSEngine 自定义着色语言，面向游戏开发者的表面材质编程接口。
-> 更新日期: 2025-05-11
+> 更新日期: 2026-05-12
 
 ---
 
@@ -340,15 +340,23 @@ void postprocess() {
 
 ## 四、前置依赖
 
-> **✅ 前置依赖已满足（2026-05-11）。**
+> **✅ 全部前置依赖已满足（2026-05-12）。**
 >
-> 三后端统一 Shader 改造已完成并合入 master（commit d142240）。
-> DSSL transpiler 输出的 GLSL 450 可直接喂给 `tools/shader_compiler`。
-> 代码模板中的 UBO layout（set/binding 编号、字段名）须与 `engine/render/shaders/src/pbr.frag` 对齐。
+> 1. 三后端统一 Shader 改造已完成并合入 master（commit d142240）。
+>    DSSL transpiler 输出的 GLSL 450 可直接喂给 `tools/shader_compiler`。
+> 2. **Clustered Forward+ 已完成**（commit c671275 + ff703f0）。
+>    `pbr.frag` 光源遍历已改为 SSBO + cluster 查找，模板代码已稳定，无二次返工风险。
+> 3. SSAO / FXAA / CSM 级联过渡均已实现，可作为 DSSL 模板参考。
 >
-> **注意**：若先实施 Clustered Forward+（`docs/RENDER_PIPELINE_OPTIMIZATION.md` Phase 1），
-> `pbr.frag` 的光源遍历将大改（UBO → SSBO + cluster 查找）。建议 DSSL 在 Clustered Forward+
-> 完成后再实施，以避免模板代码二次返工。
+> 代码模板中的 layout 须与 `engine/render/shaders/src/pbr.frag` 对齐：
+> - Set 0: PerFrame UBO
+> - Set 1 binding 0: PerScene UBO
+> - Set 1 binding 1-2: PointLight/SpotLight SSBO
+> - Set 1 binding 3-4: ClusterInfo/LightIndex SSBO
+> - Set 1 binding 5: LightProbeData UBO
+> - Set 2: PerMaterial UBO + 采样器 + 阴影贴图 + 骨骼/Morph UBO
+>
+> **可立即开始实施。**
 
 ---
 
