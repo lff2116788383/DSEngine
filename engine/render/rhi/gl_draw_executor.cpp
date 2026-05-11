@@ -453,6 +453,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     }
     ubo_mgr.UploadPerScene(per_scene);
 
+
     // 绑定所有 UBO
     ubo_mgr.BindAll();
 
@@ -612,43 +613,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         );
         ubo_mgr.UploadPerMaterial(per_mat);
 
-        // 点光源 UBO
-        {
-            PointLightsUBO pl_ubo{};
-            pl_ubo.u_point_light_count = std::min(static_cast<int>(item.point_lights.size()), kMaxPointLightsUBO);
-            for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
-                auto& dst = pl_ubo.u_point_lights[i];
-                auto& src = item.point_lights[i];
-                dst.color = src.color; dst.intensity = src.intensity;
-                dst.position = src.position; dst.radius = src.radius;
-                dst.cast_shadow = src.cast_shadow ? 1 : 0;
-                dst.shadow_index = src.shadow_index;
-            }
-            ubo_mgr.UploadPointLights(pl_ubo);
-        }
+        // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 绑定）
+        // 仅绑定点光源阴影贴图
         for (int i = 0; i < 4; ++i) {
             if (loc.point_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE9 + i);
                 glBindTexture(GL_TEXTURE_CUBE_MAP, global_point_shadow_map_[i]);
                 glUniform1i(loc.point_shadow_map[i], 9 + i);
             }
-        }
-
-        // 聚光灯 UBO
-        {
-            SpotLightsUBO sl_ubo{};
-            sl_ubo.u_spot_light_count = std::min(static_cast<int>(item.spot_lights.size()), kMaxSpotLightsUBO);
-            for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
-                auto& dst = sl_ubo.u_spot_lights[i];
-                auto& src = item.spot_lights[i];
-                dst.color = src.color; dst.intensity = src.intensity;
-                dst.position = src.position; dst.radius = src.radius;
-                dst.direction = src.direction; dst.inner_cone = src.inner_cone;
-                dst.outer_cone = src.outer_cone;
-                dst.cast_shadow = src.cast_shadow ? 1 : 0;
-                dst.shadow_index = src.shadow_index;
-            }
-            ubo_mgr.UploadSpotLights(sl_ubo);
         }
 
         // 聚光灯空间矩阵 UBO

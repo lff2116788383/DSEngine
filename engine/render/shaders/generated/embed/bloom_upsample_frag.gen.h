@@ -136,16 +136,16 @@ static const uint32_t kbloom_upsample_frag_spv[] = {
 static const size_t kbloom_upsample_frag_spv_size = 982;
 
 // OpenGL GLSL 330
-static const char* kbloom_upsample_frag_glsl330 = R"(#version 330
+static const char* kbloom_upsample_frag_glsl330 = R"(#version 430
 
-layout(std140) uniform BloomParams
+layout(binding = 2, std140) uniform BloomParams
 {
     float filterRadius;
 } _11;
 
-uniform sampler2D screenTexture;
+layout(binding = 1) uniform sampler2D screenTexture;
 
-in vec2 vTexCoords;
+layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 
 void main()

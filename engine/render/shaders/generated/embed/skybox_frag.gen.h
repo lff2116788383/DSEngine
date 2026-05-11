@@ -32,12 +32,12 @@ static const uint32_t kskybox_frag_spv[] = {
 static const size_t kskybox_frag_spv_size = 149;
 
 // OpenGL GLSL 330
-static const char* kskybox_frag_glsl330 = R"(#version 330
+static const char* kskybox_frag_glsl330 = R"(#version 430
 
-uniform samplerCube skybox;
+layout(binding = 1) uniform samplerCube skybox;
 
 layout(location = 0) out vec4 FragColor;
-in vec3 vTexCoords;
+layout(location = 0) in vec3 vTexCoords;
 
 void main()
 {

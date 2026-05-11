@@ -45,9 +45,9 @@ static const uint32_t kpostprocess_vert_spv[] = {
 static const size_t kpostprocess_vert_spv_size = 253;
 
 // OpenGL GLSL 330
-static const char* kpostprocess_vert_glsl330 = R"(#version 330
+static const char* kpostprocess_vert_glsl330 = R"(#version 430
 
-out vec2 vTexCoords;
+layout(location = 0) out vec2 vTexCoords;
 layout(location = 1) in vec2 aTexCoords;
 layout(location = 0) in vec2 aPos;
 

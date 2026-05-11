@@ -38,13 +38,13 @@ static const uint32_t ksprite_frag_spv[] = {
 static const size_t ksprite_frag_spv_size = 196;
 
 // OpenGL GLSL 330
-static const char* ksprite_frag_glsl330 = R"(#version 330
+static const char* ksprite_frag_glsl330 = R"(#version 430
 
-uniform sampler2D u_texture;
+layout(binding = 1) uniform sampler2D u_texture;
 
-in vec2 vTexCoord;
+layout(location = 1) in vec2 vTexCoord;
 layout(location = 0) out vec4 FragColor;
-in vec4 vColor;
+layout(location = 0) in vec4 vColor;
 
 void main()
 {

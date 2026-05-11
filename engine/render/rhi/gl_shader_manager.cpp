@@ -105,8 +105,9 @@ void GLShaderManager::CachePBRLocations() {
     BindUBOBlock(h, "PerFrame",       UBOBindingPoint::PerFrame,      loc.per_frame_block_index);
     BindUBOBlock(h, "PerScene",       UBOBindingPoint::PerScene,      loc.per_scene_block_index);
     BindUBOBlock(h, "PerMaterial",    UBOBindingPoint::PerMaterial,   loc.per_material_block_index);
-    BindUBOBlock(h, "PointLights",    UBOBindingPoint::PointLights,   loc.point_lights_block_index);
-    BindUBOBlock(h, "SpotLights",     UBOBindingPoint::SpotLights,    loc.spot_lights_block_index);
+    // PointLights/SpotLights 已改为 SSBO，通过 layout(binding=N) 自动绑定
+    loc.point_lights_block_index = GL_INVALID_INDEX;
+    loc.spot_lights_block_index  = GL_INVALID_INDEX;
     BindUBOBlock(h, "SpotLightData",  UBOBindingPoint::SpotLightData, loc.spot_light_data_block_index);
     BindUBOBlock(h, "BoneMatrices",   UBOBindingPoint::BoneMatrices,  loc.bone_matrices_block_index);
     BindUBOBlock(h, "MorphWeights",   UBOBindingPoint::MorphWeights,  loc.morph_weights_block_index);

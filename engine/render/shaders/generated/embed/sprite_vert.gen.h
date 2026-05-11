@@ -63,14 +63,14 @@ static const uint32_t ksprite_vert_spv[] = {
 static const size_t ksprite_vert_spv_size = 392;
 
 // OpenGL GLSL 330
-static const char* ksprite_vert_glsl330 = R"(#version 330
+static const char* ksprite_vert_glsl330 = R"(#version 430
 
 uniform mat4 u_model;
 uniform mat4 u_vp;
 layout(location = 0) in vec2 aPos;
-out vec4 vColor;
+layout(location = 0) out vec4 vColor;
 layout(location = 2) in vec4 aColor;
-out vec2 vTexCoord;
+layout(location = 1) out vec2 vTexCoord;
 layout(location = 1) in vec2 aTexCoord;
 
 void main()

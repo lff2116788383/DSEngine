@@ -56,10 +56,10 @@ static const uint32_t kskybox_vert_spv[] = {
 static const size_t kskybox_vert_spv_size = 340;
 
 // OpenGL GLSL 330
-static const char* kskybox_vert_glsl330 = R"(#version 330
+static const char* kskybox_vert_glsl330 = R"(#version 430
 
 uniform mat4 u_vp;
-out vec3 vTexCoords;
+layout(location = 0) out vec3 vTexCoords;
 layout(location = 0) in vec3 aPos;
 
 void main()

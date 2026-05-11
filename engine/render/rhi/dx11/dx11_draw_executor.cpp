@@ -538,43 +538,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             dc->PSSetSamplers(1, 1, shadow_sampler_.GetAddressOf());
         }
 
-        // 展开点光源/聚光灯 CB 并绑定到 b4/b5
-        if (!items.empty()) {
-            DX11PointLightsCB pl_cb{};
-            pl_cb.count = static_cast<int>(
-                (std::min)(items[0].point_lights.size(), (size_t)64));
-            for (int i = 0; i < pl_cb.count; ++i) {
-                const auto& src = items[0].point_lights[i];
-                auto& dst = pl_cb.lights[i];
-                dst.color        = src.color;
-                dst.intensity    = src.intensity;
-                dst.position     = src.position;
-                dst.radius       = src.radius;
-                dst.cast_shadow  = src.cast_shadow ? 1 : 0;
-                dst.shadow_index = src.shadow_index;
-            }
-            UpdateConstantBuffer(per_point_lights_cb_.Get(), &pl_cb, sizeof(pl_cb));
-            dc->PSSetConstantBuffers(4, 1, per_point_lights_cb_.GetAddressOf());
-
-            DX11SpotLightsCB sl_cb{};
-            sl_cb.count = static_cast<int>(
-                (std::min)(items[0].spot_lights.size(), (size_t)64));
-            for (int i = 0; i < sl_cb.count; ++i) {
-                const auto& src = items[0].spot_lights[i];
-                auto& dst = sl_cb.lights[i];
-                dst.color        = src.color;
-                dst.intensity    = src.intensity;
-                dst.position     = src.position;
-                dst.radius       = src.radius;
-                dst.direction    = src.direction;
-                dst.inner_cone   = src.inner_cone;
-                dst.outer_cone   = src.outer_cone;
-                dst.cast_shadow  = src.cast_shadow ? 1 : 0;
-                dst.shadow_index = src.shadow_index;
-            }
-            UpdateConstantBuffer(per_spot_lights_cb_.Get(), &sl_cb, sizeof(sl_cb));
-            dc->PSSetConstantBuffers(5, 1, per_spot_lights_cb_.GetAddressOf());
-        }
+        // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 中 BindSSBO 到 t17/t18）
 
         // 绑定点光源立方体阴影贴图到 t8~t11
         for (int i = 0; i < 4; ++i) {

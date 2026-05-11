@@ -126,10 +126,10 @@ static bool CompileToSpirv(const std::string& source, EShLanguage stage,
 }
 
 // ============================================================================
-// spirv-cross: SPIR-V → GLSL 330
+// spirv-cross: SPIR-V → GLSL 430 (variable names kept as 'glsl330' for compat)
 // ============================================================================
 
-// 后处理: 将 GLSL 330 中的 "struct PushConstants {...}; uniform PushConstants pc;"
+// 后处理: 将 GLSL 430 中的 "struct PushConstants {...}; uniform PushConstants pc;"
 // 展平为独立 uniform 声明，将 "pc.member" 替换为 "member"。
 static std::string FlattenPushConstantsInGLSL(const std::string& src) {
     std::string result = src;
@@ -209,7 +209,7 @@ static std::string CrossCompileToGLSL330(const std::vector<uint32_t>& spirv,
     try {
         spirv_cross::CompilerGLSL compiler(spirv);
         spirv_cross::CompilerGLSL::Options options;
-        options.version = 330;
+        options.version = 430;
         options.es = false;
         options.vulkan_semantics = false;
         options.enable_420pack_extension = false;
@@ -254,6 +254,24 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
         spirv_cross::CompilerGLSL::Options glsl_options;
         glsl_options.vulkan_semantics = false;
         compiler.set_common_options(glsl_options);
+
+        // SSBO (storage buffers) → SRV t16+ 避免与纹理 t-register 冲突
+        auto resources = compiler.get_shader_resources();
+        for (auto& ssbo : resources.storage_buffers) {
+            uint32_t set = compiler.get_decoration(ssbo.id, spv::DecorationDescriptorSet);
+            uint32_t binding = compiler.get_decoration(ssbo.id, spv::DecorationBinding);
+            spirv_cross::HLSLResourceBinding hlsl_binding;
+            hlsl_binding.stage = compiler.get_execution_model();
+            hlsl_binding.desc_set = set;
+            hlsl_binding.binding = binding;
+            hlsl_binding.srv.register_space = 0;
+            hlsl_binding.srv.register_binding = 16 + binding; // t16+
+            hlsl_binding.uav.register_space = 0;
+            hlsl_binding.uav.register_binding = 16 + binding;
+            hlsl_binding.cbv = {};
+            hlsl_binding.sampler = {};
+            compiler.add_hlsl_resource_binding(hlsl_binding);
+        }
 
         return compiler.compile();
     } catch (const spirv_cross::CompilerError& e) {

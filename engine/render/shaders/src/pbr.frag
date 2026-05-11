@@ -60,13 +60,13 @@ struct PointLight {
     int shadow_index;
     vec2 _pad;
 };
-#define MAX_POINT_LIGHTS 64
-layout(std140, set = 1, binding = 1) uniform PointLights {
+#define MAX_POINT_LIGHTS 256
+layout(std430, set = 1, binding = 1) readonly buffer PointLightSSBO {
     int u_point_light_count;
     int _pl_pad0;
     int _pl_pad1;
     int _pl_pad2;
-    PointLight u_point_lights[MAX_POINT_LIGHTS];
+    PointLight u_point_lights[];
 };
 
 struct SpotLight {
@@ -81,13 +81,13 @@ struct SpotLight {
     int shadow_index;
     float _pad;  // NOTE: must be float (not vec2) to keep stride=64B matching C++ VulkanSpotLightsUBO::Entry
 };
-#define MAX_SPOT_LIGHTS 64
-layout(std140, set = 1, binding = 2) uniform SpotLights {
+#define MAX_SPOT_LIGHTS 256
+layout(std430, set = 1, binding = 2) readonly buffer SpotLightSSBO {
     int u_spot_light_count;
     int _sl_pad0;
     int _sl_pad1;
     int _sl_pad2;
-    SpotLight u_spot_lights[MAX_SPOT_LIGHTS];
+    SpotLight u_spot_lights[];
 };
 
 const float PI = 3.14159265359;

@@ -454,36 +454,55 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
 
-    // --- Set 1 binding 1: PointLights UBO ---
+    // --- Set 1 binding 1: PointLights SSBO ---
     {
         VkDescriptorBufferInfo pl_buf{};
-        pl_buf.buffer = per_point_lights_ubo_[fi];
-        pl_buf.offset = per_pl_offset;
-        pl_buf.range  = sizeof(VulkanPointLightsUBO);
+        auto pl_it = bound_ssbos_.find(1); // binding 1 = PointLightSSBO
+        const VulkanBuffer* pl_ssbo = (pl_it != bound_ssbos_.end())
+            ? resource_mgr.GetSSBO(pl_it->second) : nullptr;
+        if (pl_ssbo && pl_ssbo->buffer != VK_NULL_HANDLE) {
+            pl_buf.buffer = pl_ssbo->buffer;
+            pl_buf.offset = 0;
+            pl_buf.range  = pl_ssbo->size;
+        } else {
+            // fallback: 空 SSBO（避免 descriptor 未初始化）
+            pl_buf.buffer = per_point_lights_ubo_[fi];
+            pl_buf.offset = 0;
+            pl_buf.range  = 16; // 仅 header (count=0)
+        }
 
         VkWriteDescriptorSet pl_write{};
         pl_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         pl_write.dstSet          = sets[1];
         pl_write.dstBinding      = 1;
         pl_write.descriptorCount = 1;
-        pl_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pl_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         pl_write.pBufferInfo     = &pl_buf;
         vkUpdateDescriptorSets(device, 1, &pl_write, 0, nullptr);
     }
 
-    // --- Set 1 binding 2: SpotLights UBO ---
+    // --- Set 1 binding 2: SpotLights SSBO ---
     {
         VkDescriptorBufferInfo sl_buf{};
-        sl_buf.buffer = per_spot_lights_ubo_[fi];
-        sl_buf.offset = per_sl_offset;
-        sl_buf.range  = sizeof(VulkanSpotLightsUBO);
+        auto sl_it = bound_ssbos_.find(2); // binding 2 = SpotLightSSBO
+        const VulkanBuffer* sl_ssbo = (sl_it != bound_ssbos_.end())
+            ? resource_mgr.GetSSBO(sl_it->second) : nullptr;
+        if (sl_ssbo && sl_ssbo->buffer != VK_NULL_HANDLE) {
+            sl_buf.buffer = sl_ssbo->buffer;
+            sl_buf.offset = 0;
+            sl_buf.range  = sl_ssbo->size;
+        } else {
+            sl_buf.buffer = per_spot_lights_ubo_[fi];
+            sl_buf.offset = 0;
+            sl_buf.range  = 16;
+        }
 
         VkWriteDescriptorSet sl_write{};
         sl_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         sl_write.dstSet          = sets[1];
         sl_write.dstBinding      = 2;
         sl_write.descriptorCount = 1;
-        sl_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        sl_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         sl_write.pBufferInfo     = &sl_buf;
         vkUpdateDescriptorSets(device, 1, &sl_write, 0, nullptr);
     }
@@ -738,6 +757,16 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         w.pBufferInfo = &dummy_ubo_info;
         writes.push_back(w);
     };
+    auto push_ssbo = [&](VkDescriptorSet dstSet, uint32_t binding) {
+        VkWriteDescriptorSet w{};
+        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        w.dstSet = dstSet;
+        w.dstBinding = binding;
+        w.descriptorCount = 1;
+        w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        w.pBufferInfo = &dummy_ubo_info;
+        writes.push_back(w);
+    };
     auto push_img = [&](VkDescriptorSet dstSet, uint32_t binding, uint32_t count) -> size_t {
         size_t base = img_pool.size();
         for (uint32_t j = 0; j < count; ++j) img_pool.push_back(dummy_img_info);
@@ -764,11 +793,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         push_ubo(sets[0], 0);
     }
 
-    // Set 1 (layouts[1]): PerScene(b0) + PointLights(b1) + SpotLights(b2)
+    // Set 1 (layouts[1]): PerScene(b0) + PointLightSSBO(b1) + SpotLightSSBO(b2)
     if (set_count > 1) {
         push_ubo(sets[1], 0);
-        push_ubo(sets[1], 1);
-        push_ubo(sets[1], 2);
+        push_ssbo(sets[1], 1);
+        push_ssbo(sets[1], 2);
     }
 
     // Set 2 (layouts[2]): PerMaterial(b0) + textures(b1-5) + shadow(b6,b7) + bone(b8,b9)
@@ -882,6 +911,16 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         w.pBufferInfo = &dummy_ubo;
         writes.push_back(w);
     };
+    auto push_ssbo2 = [&](uint32_t set_idx, uint32_t binding) {
+        VkWriteDescriptorSet w{};
+        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        w.dstSet = sets[set_idx];
+        w.dstBinding = binding;
+        w.descriptorCount = 1;
+        w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        w.pBufferInfo = &dummy_ubo;
+        writes.push_back(w);
+    };
     auto push_img = [&](uint32_t set_idx, uint32_t binding, uint32_t count) {
         size_t base = img_pool.size();
         for (uint32_t j = 0; j < count; ++j) img_pool.push_back(dummy_img);
@@ -898,8 +937,8 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     // Set 0: binding 0 (PerFrame UBO)
     if (set_count > 0) push_ubo(0, 0);
 
-    // Set 1: binding 0 (PerScene), 1 (PointLights), 2 (SpotLights)
-    if (set_count > 1) { push_ubo(1, 0); push_ubo(1, 1); push_ubo(1, 2); }
+    // Set 1: binding 0 (PerScene UBO), 1 (PointLightSSBO), 2 (SpotLightSSBO)
+    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); }
 
     // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-9 (bones/morph UBO)
     if (set_count > 2) {
@@ -1434,15 +1473,13 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 更新 per-item UBO 数据（每个 item 独立 slot，避免 GPU 延迟执行覆盖）
         VkDeviceSize cur_scene_offset    = per_scene_ubo_offset_;
         VkDeviceSize cur_material_offset = per_material_ubo_offset_;
-        VkDeviceSize cur_pl_offset       = per_point_lights_ubo_offset_;
-        VkDeviceSize cur_sl_offset       = per_spot_lights_ubo_offset_;
+        VkDeviceSize cur_pl_offset       = 0; // 光源数据由 SSBO 提供，不再 per-draw UBO
+        VkDeviceSize cur_sl_offset       = 0;
         UpdatePerSceneUBO(item);
         UpdatePerMaterialUBO(item);
-        UpdatePointSpotLightUBOs(item);
+        // 光源数据由 LightBuffer SSBO 提供，跳过 per-draw UBO 上传
         per_scene_ubo_offset_        += kUboSlotAlignment;
         per_material_ubo_offset_     += kUboSlotAlignment;
-        per_point_lights_ubo_offset_ += kLightUboSlotAlignment;
-        per_spot_lights_ubo_offset_  += kLightUboSlotAlignment;
 
         // 上传骨骼矩阵到 UBO（累积偏移，避免 GPU 延迟执行时覆盖前面 mesh 的数据）
         VkDeviceSize cur_bone_offset = bone_matrices_offset_;

@@ -226,19 +226,19 @@ static const uint32_t kpbr_vert_spv[] = {
 static const size_t kpbr_vert_spv_size = 1701;
 
 // OpenGL GLSL 330
-static const char* kpbr_vert_glsl330 = R"(#version 330
+static const char* kpbr_vert_glsl330 = R"(#version 430
 
-layout(std140) uniform BoneMatrices
+layout(binding = 8, std140) uniform BoneMatrices
 {
     mat4 u_bone_matrices[100];
 } _36;
 
-layout(std140) uniform MorphWeights
+layout(binding = 9, std140) uniform MorphWeights
 {
     float u_morph_weights[4];
 } _138;
 
-layout(std140) uniform PerFrame
+layout(binding = 0, std140) uniform PerFrame
 {
     mat4 vp;
     mat4 view;
@@ -252,15 +252,15 @@ layout(location = 6) in vec4 aBoneIndices;
 layout(location = 5) in vec4 aBoneWeights;
 layout(location = 0) in vec3 aPos;
 layout(location = 3) in vec3 aNormal;
-out vec3 vFragPos;
-out vec3 vFragPosViewSpace;
-out vec4 vColor;
+layout(location = 2) out vec3 vFragPos;
+layout(location = 7) out vec3 vFragPosViewSpace;
+layout(location = 0) out vec4 vColor;
 layout(location = 1) in vec4 aColor;
-out vec2 vTexCoord;
+layout(location = 1) out vec2 vTexCoord;
 layout(location = 2) in vec2 aTexCoord;
 layout(location = 4) in vec3 aTangent;
-out mat3 vTBN;
-out vec3 vNormal;
+layout(location = 4) out mat3 vTBN;
+layout(location = 3) out vec3 vNormal;
 
 void main()
 {

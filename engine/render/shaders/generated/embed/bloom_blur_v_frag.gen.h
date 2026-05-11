@@ -87,13 +87,13 @@ static const uint32_t kbloom_blur_v_frag_spv[] = {
 static const size_t kbloom_blur_v_frag_spv_size = 587;
 
 // OpenGL GLSL 330
-static const char* kbloom_blur_v_frag_glsl330 = R"(#version 330
+static const char* kbloom_blur_v_frag_glsl330 = R"(#version 430
 
 const float _69[5] = float[](0.227026998996734619140625, 0.19459460675716400146484375, 0.121621601283550262451171875, 0.054053999483585357666015625, 0.01621600054204463958740234375);
 
-uniform sampler2D screenTexture;
+layout(binding = 1) uniform sampler2D screenTexture;
 
-in vec2 vTexCoords;
+layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 
 void main()

@@ -94,9 +94,9 @@ static const uint32_t kparticle_vert_spv[] = {
 static const size_t kparticle_vert_spv_size = 640;
 
 // OpenGL GLSL 330
-static const char* kparticle_vert_glsl330 = R"(#version 330
+static const char* kparticle_vert_glsl330 = R"(#version 430
 
-layout(std140) uniform PerFrame
+layout(binding = 0, std140) uniform PerFrame
 {
     mat4 vp;
     mat4 view;
@@ -106,9 +106,9 @@ layout(std140) uniform PerFrame
 layout(location = 2) in vec3 iPos;
 layout(location = 0) in vec3 aPos;
 layout(location = 4) in float iSize;
-out vec4 vParticleColor;
+layout(location = 0) out vec4 vParticleColor;
 layout(location = 3) in vec4 iColor;
-out vec2 vTexCoord;
+layout(location = 1) out vec2 vTexCoord;
 layout(location = 1) in vec2 aTexCoord;
 
 void main()

@@ -190,6 +190,11 @@ public:
 
     unsigned int white_texture_handle() const { return white_texture_handle_; }
 
+    /// 设置当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
+    void SetBoundSSBOs(const std::unordered_map<unsigned int, unsigned int>& ssbos) {
+        bound_ssbos_ = ssbos;
+    }
+
 private:
     /// 创建单个 UBO 缓冲区（host-visible + coherent）
     bool CreateUBOBuffer(VkDeviceSize size, VkBuffer& out_buf, VkDeviceMemory& out_mem);
@@ -334,6 +339,9 @@ private:
     unsigned int global_shadow_map_[3] = {};
     unsigned int global_spot_shadow_map_[4] = {};
     unsigned int global_point_shadow_map_[4] = {};
+
+    // 当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
+    std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

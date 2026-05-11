@@ -194,10 +194,7 @@ static const uint32_t kbloom_downsample_comp_spv[] = {
 static const size_t kbloom_downsample_comp_spv_size = 1446;
 
 // OpenGL GLSL 330
-static const char* kbloom_downsample_comp_glsl330 = R"(#version 330
-#extension GL_ARB_compute_shader : require
-#extension GL_ARB_shader_image_load_store : require
-#extension GL_ARB_shader_image_size : require
+static const char* kbloom_downsample_comp_glsl330 = R"(#version 430
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct BloomParams
@@ -210,8 +207,8 @@ struct BloomParams
 
 uniform BloomParams u_params;
 
-layout(rgba16f) uniform writeonly image2D u_dst;
-uniform sampler2D u_src;
+layout(binding = 1, rgba16f) uniform writeonly image2D u_dst;
+layout(binding = 0) uniform sampler2D u_src;
 
 void main()
 {

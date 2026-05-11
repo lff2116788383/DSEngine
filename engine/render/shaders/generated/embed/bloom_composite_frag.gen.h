@@ -93,18 +93,18 @@ static const uint32_t kbloom_composite_frag_spv[] = {
 static const size_t kbloom_composite_frag_spv_size = 637;
 
 // OpenGL GLSL 330
-static const char* kbloom_composite_frag_glsl330 = R"(#version 330
+static const char* kbloom_composite_frag_glsl330 = R"(#version 430
 
-layout(std140) uniform BloomParams
+layout(binding = 3, std140) uniform BloomParams
 {
     float exposure;
     float bloomIntensity;
 } _73;
 
-uniform sampler2D screenTexture;
-uniform sampler2D bloomBlur;
+layout(binding = 1) uniform sampler2D screenTexture;
+layout(binding = 2) uniform sampler2D bloomBlur;
 
-in vec2 vTexCoords;
+layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 
 vec3 AcesFilmic(vec3 x)
