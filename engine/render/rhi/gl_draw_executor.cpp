@@ -1037,19 +1037,143 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     } else if (effect_name == "bloom_composite") {
         fs_src += R"(
             uniform sampler2D bloomBlur;
+            uniform sampler2D ssaoTexture;
             uniform float exposure;
             uniform float bloomIntensity;
+            uniform int u_ssao_enabled;
             vec3 AcesFilmic(vec3 x) {
                 float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
                 return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
             }
             void main() {
-                vec3 hdrColor = texture(screenTexture, TexCoords).rgb;      
+                vec3 hdrColor = texture(screenTexture, TexCoords).rgb;
+                if (u_ssao_enabled != 0) {
+                    float ao = texture(ssaoTexture, TexCoords).r;
+                    hdrColor *= ao;
+                }
                 vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
                 hdrColor += bloomColor * bloomIntensity;
                 vec3 result = AcesFilmic(hdrColor * exposure);
                 result = pow(result, vec3(1.0 / 2.2));
                 FragColor = vec4(result, 1.0);
+            }
+        )";
+    } else if (effect_name == "ssao") {
+        fs_src += R"(
+            uniform float u_radius;
+            uniform float u_bias;
+            uniform float u_near;
+            uniform float u_far;
+            uniform vec2 u_screen_size;
+            float linearizeDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+            vec3 reconstructNormal(vec2 uv) {
+                vec2 texel = 1.0 / u_screen_size;
+                float dc = linearizeDepth(texture(screenTexture, uv).r);
+                float dl = linearizeDepth(texture(screenTexture, uv - vec2(texel.x, 0.0)).r);
+                float dr = linearizeDepth(texture(screenTexture, uv + vec2(texel.x, 0.0)).r);
+                float db = linearizeDepth(texture(screenTexture, uv - vec2(0.0, texel.y)).r);
+                float dt = linearizeDepth(texture(screenTexture, uv + vec2(0.0, texel.y)).r);
+                vec3 n = normalize(vec3(dl - dr, db - dt, 2.0 * texel.x * dc));
+                return n;
+            }
+            const vec3 kernel[16] = vec3[](
+                vec3( 0.5381, 0.1856,-0.4319), vec3( 0.1379, 0.2486, 0.4430),
+                vec3( 0.3371, 0.5679,-0.0057), vec3(-0.6999,-0.0451,-0.0019),
+                vec3( 0.0689,-0.1598,-0.8547), vec3( 0.0560, 0.0069,-0.1843),
+                vec3(-0.0146, 0.1402, 0.0762), vec3( 0.0100,-0.1924,-0.0344),
+                vec3(-0.3577,-0.5301,-0.4358), vec3(-0.3169, 0.1063, 0.0158),
+                vec3( 0.0103,-0.5869, 0.0046), vec3(-0.0897,-0.4940, 0.3287),
+                vec3( 0.7119,-0.0154,-0.0918), vec3(-0.0533, 0.0596,-0.5411),
+                vec3( 0.0352,-0.0631, 0.5460), vec3(-0.4776, 0.2847,-0.0271)
+            );
+            void main() {
+                float depth = texture(screenTexture, TexCoords).r;
+                if (depth >= 1.0) { FragColor = vec4(1.0); return; }
+                float linDepth = linearizeDepth(depth);
+                vec3 normal = reconstructNormal(TexCoords);
+                float occlusion = 0.0;
+                float rScale = u_radius / linDepth;
+                for (int i = 0; i < 16; ++i) {
+                    vec3 sampleDir = kernel[i];
+                    if (dot(sampleDir, normal) < 0.0) sampleDir = -sampleDir;
+                    vec2 sampleUV = TexCoords + sampleDir.xy * rScale * (1.0 / u_screen_size);
+                    float sampleDepth = linearizeDepth(texture(screenTexture, sampleUV).r);
+                    float rangeCheck = smoothstep(0.0, 1.0, u_radius / abs(linDepth - sampleDepth));
+                    if (sampleDepth < linDepth - u_bias) occlusion += rangeCheck;
+                }
+                occlusion = 1.0 - (occlusion / 16.0);
+                FragColor = vec4(vec3(occlusion), 1.0);
+            }
+        )";
+    } else if (effect_name == "ssao_blur") {
+        fs_src += R"(
+            void main() {
+                vec2 texelSize = 1.0 / vec2(textureSize(screenTexture, 0));
+                float result = 0.0;
+                for (int x = -2; x <= 2; ++x) {
+                    for (int y = -2; y <= 2; ++y) {
+                        vec2 offset = vec2(float(x), float(y)) * texelSize;
+                        result += texture(screenTexture, TexCoords + offset).r;
+                    }
+                }
+                FragColor = vec4(vec3(result / 25.0), 1.0);
+            }
+        )";
+    } else if (effect_name == "ssao_apply") {
+        fs_src += R"(
+            uniform sampler2D ssaoTexture;
+            uniform float exposure;
+            vec3 AcesFilmic(vec3 x) {
+                float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+                return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+            }
+            void main() {
+                vec3 hdrColor = texture(screenTexture, TexCoords).rgb;
+                float ao = texture(ssaoTexture, TexCoords).r;
+                hdrColor *= ao;
+                vec3 result = AcesFilmic(hdrColor * exposure);
+                result = pow(result, vec3(1.0 / 2.2));
+                FragColor = vec4(result, 1.0);
+            }
+        )";
+    } else if (effect_name == "fxaa") {
+        fs_src += R"(
+            uniform vec2 u_resolution;
+            float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+            void main() {
+                vec2 texel = 1.0 / u_resolution;
+                float lumaM  = luma(texture(screenTexture, TexCoords).rgb);
+                float lumaNW = luma(texture(screenTexture, TexCoords + vec2(-1.0,-1.0) * texel).rgb);
+                float lumaNE = luma(texture(screenTexture, TexCoords + vec2( 1.0,-1.0) * texel).rgb);
+                float lumaSW = luma(texture(screenTexture, TexCoords + vec2(-1.0, 1.0) * texel).rgb);
+                float lumaSE = luma(texture(screenTexture, TexCoords + vec2( 1.0, 1.0) * texel).rgb);
+                float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+                float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+                float lumaRange = lumaMax - lumaMin;
+                if (lumaRange < max(0.0312, lumaMax * 0.125)) {
+                    FragColor = texture(screenTexture, TexCoords);
+                    return;
+                }
+                vec2 dir;
+                dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+                dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+                float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.25 * 0.25, 1.0/128.0);
+                float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+                dir = min(vec2(8.0), max(vec2(-8.0), dir * rcpDirMin)) * texel;
+                vec3 rgbA = 0.5 * (
+                    texture(screenTexture, TexCoords + dir * (1.0/3.0 - 0.5)).rgb +
+                    texture(screenTexture, TexCoords + dir * (2.0/3.0 - 0.5)).rgb);
+                vec3 rgbB = rgbA * 0.5 + 0.25 * (
+                    texture(screenTexture, TexCoords + dir * -0.5).rgb +
+                    texture(screenTexture, TexCoords + dir *  0.5).rgb);
+                float lumaB = luma(rgbB);
+                if (lumaB < lumaMin || lumaB > lumaMax)
+                    FragColor = vec4(rgbA, 1.0);
+                else
+                    FragColor = vec4(rgbB, 1.0);
             }
         )";
     } else if (effect_name == "ui_overlay") {
@@ -1091,6 +1215,27 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         if (params.size() >= 3) {
             glUniform1f(glGetUniformLocation(shader, "bloomIntensity"), params[2]);
         }
+        if (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0) {
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[3]));
+            glUniform1i(glGetUniformLocation(shader, "ssaoTexture"), 2);
+            glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 1);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 0);
+        }
+    } else if (effect_name == "ssao" && params.size() >= 6) {
+        glUniform1f(glGetUniformLocation(shader, "u_radius"), params[0]);
+        glUniform1f(glGetUniformLocation(shader, "u_bias"), params[1]);
+        glUniform1f(glGetUniformLocation(shader, "u_near"), params[2]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"), params[3]);
+        glUniform2f(glGetUniformLocation(shader, "u_screen_size"), params[4], params[5]);
+    } else if (effect_name == "ssao_apply" && params.size() >= 2) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "ssaoTexture"), 1);
+        glUniform1f(glGetUniformLocation(shader, "exposure"), params[1]);
+    } else if (effect_name == "fxaa" && params.size() >= 2) {
+        glUniform2f(glGetUniformLocation(shader, "u_resolution"), params[0], params[1]);
     }
 
     glDisable(GL_DEPTH_TEST);

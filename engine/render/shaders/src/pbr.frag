@@ -90,6 +90,26 @@ layout(std430, set = 1, binding = 2) readonly buffer SpotLightSSBO {
     SpotLight u_spot_lights[];
 };
 
+// Clustered Forward+: cluster 网格参数 + 每 cluster 光源列表
+struct ClusterInfoEntry {
+    uint offset;
+    uint point_count;
+    uint spot_count;
+    uint _pad;
+};
+layout(std430, set = 1, binding = 3) readonly buffer ClusterInfoSSBO {
+    uint cluster_tiles_x;
+    uint cluster_tiles_y;
+    uint cluster_z_slices;
+    float cluster_near;
+    float cluster_far;
+    uint _ci_pad0, _ci_pad1, _ci_pad2;
+    ClusterInfoEntry cluster_infos[];
+};
+layout(std430, set = 1, binding = 4) readonly buffer LightIndexSSBO {
+    uint light_indices[];
+};
+
 const float PI = 3.14159265359;
 
 // UBO 字段便捷访问别名
@@ -310,8 +330,24 @@ void main() {
         Lo += (kD * surface_albedo / PI + specular) * u_light_color * u_light_intensity * NdotL * (1.0 - shadow);
     }
 
-    // 点光源
-    for(int i = 0; i < u_point_light_count; ++i) {
+    // Clustered Forward+: 定位当前 fragment 所属 cluster
+    int cl_tx = int(gl_FragCoord.x) / 16;  // kClusterTileSize
+    int cl_ty = int(gl_FragCoord.y) / 16;
+    float cl_linear_z = max(-vFragPosViewSpace.z, 0.0001);
+    float cl_log_ratio = log(cluster_far / max(cluster_near, 0.0001));
+    int cl_tz = (cl_log_ratio > 0.0) ? clamp(int(log(cl_linear_z / max(cluster_near, 0.0001)) / cl_log_ratio * float(cluster_z_slices)), 0, int(cluster_z_slices) - 1) : 0;
+    int cl_idx = (cl_tz * int(cluster_tiles_y) + cl_ty) * int(cluster_tiles_x) + cl_tx;
+    // 边界保护
+    int cl_total = int(cluster_tiles_x) * int(cluster_tiles_y) * int(cluster_z_slices);
+    cl_idx = clamp(cl_idx, 0, max(cl_total - 1, 0));
+    uint cl_offset = cluster_infos[cl_idx].offset;
+    uint cl_point_count = cluster_infos[cl_idx].point_count;
+    uint cl_spot_count  = cluster_infos[cl_idx].spot_count;
+
+    // 点光源 — 只遍历当前 cluster 分配的光源
+    for(uint ci = 0u; ci < cl_point_count; ++ci) {
+        int i = int(light_indices[cl_offset + ci]);
+        if (i >= u_point_light_count) continue;
         vec3 L = normalize(u_point_lights[i].position - vFragPos);
         vec3 H = normalize(V + L);
         float distance = length(u_point_lights[i].position - vFragPos);
@@ -335,8 +371,10 @@ void main() {
         Lo += (kD * surface_albedo / PI + specular) * radiance * NdotL * (1.0 - point_shadow);
     }
 
-    // 聚光灯
-    for(int i = 0; i < u_spot_light_count; ++i) {
+    // 聚光灯 — 只遍历当前 cluster 分配的光源
+    for(uint si = 0u; si < cl_spot_count; ++si) {
+        int i = int(light_indices[cl_offset + cl_point_count + si]);
+        if (i >= u_spot_light_count) continue;
         vec3 L = normalize(u_spot_lights[i].position - vFragPos);
         vec3 H = normalize(V + L);
         float distance = length(u_spot_lights[i].position - vFragPos);

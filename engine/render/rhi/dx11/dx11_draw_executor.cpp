@@ -769,13 +769,18 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         }
     }
 
-    // bloom_composite 专用路径：ACES Filmic Tone Mapping
+    // bloom_composite 专用路径：ACES Filmic Tone Mapping (+可选 SSAO)
     if (effect_name == "bloom_composite") {
-        const auto* comp_prog = shader_mgr.GetProgram(shader_mgr.bloom_composite_shader_handle());
+        // params[3] 非零 → SSAO 启用，使用带 SSAO 的合成 shader
+        const bool has_ssao = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0);
+        const unsigned int shader_h = has_ssao
+            ? shader_mgr.bloom_composite_ssao_shader_handle()
+            : shader_mgr.bloom_composite_shader_handle();
+        const auto* comp_prog = shader_mgr.GetProgram(shader_h);
         if (!comp_prog) return;
         dc->VSSetShader(comp_prog->vertex_shader.Get(), nullptr, 0);
         dc->PSSetShader(comp_prog->pixel_shader.Get(), nullptr, 0);
-        auto* layout = shader_mgr.GetInputLayout(shader_mgr.bloom_composite_shader_handle());
+        auto* layout = shader_mgr.GetInputLayout(shader_h);
         if (layout) dc->IASetInputLayout(layout);
         dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -788,23 +793,28 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* bloom_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
             if (bloom_tex) dc->PSSetShaderResources(1, 1, bloom_tex->srv.GetAddressOf());
         }
+        if (has_ssao) {
+            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[3]));
+            if (ao_tex) dc->PSSetShaderResources(2, 1, ao_tex->srv.GetAddressOf());
+        }
 
-        // 懒惰创建 bloom composite 参数 CB
+        // 懒惰创建 bloom composite 参数 CB（16B → 扩展为 16B，含 ssaoEnabled）
         if (!bloom_composite_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage          = D3D11_USAGE_DYNAMIC;
             bd.ByteWidth      = 16;
             bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-            struct InitParams { float exposure; float bloomIntensity; float _pad[2]; } init{1.0f, 0.5f, 0, 0};
+            struct InitParams { float exposure; float bloomIntensity; int ssaoEnabled; float _pad; } init{1.0f, 0.5f, 0, 0};
             D3D11_SUBRESOURCE_DATA sd{};
             sd.pSysMem = &init;
             context_->device()->CreateBuffer(&bd, &sd, bloom_composite_params_cb_.GetAddressOf());
         }
         if (bloom_composite_params_cb_) {
-            struct BloomCompositeParams { float exposure; float bloomIntensity; float _pad[2]; } cp{};
+            struct BloomCompositeParams { float exposure; float bloomIntensity; int ssaoEnabled; float _pad; } cp{};
             cp.exposure       = (params.size() >= 2) ? params[1] : 1.0f;
             cp.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
+            cp.ssaoEnabled    = has_ssao ? 1 : 0;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(bloom_composite_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &cp, sizeof(cp));
@@ -820,6 +830,100 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         dc->DrawIndexed(6, 0, 0);
         current_frame_stats_.draw_calls++;
 
+        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+        dc->PSSetShaderResources(1, 2, null_srvs);
+        return;
+    }
+
+    // 辅助：懒惰创建通用 PP 参数 CB（32B）
+    auto ensure_pp_params_cb = [&]() {
+        if (!pp_params_cb_ && context_->device()) {
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage = D3D11_USAGE_DYNAMIC;
+            bd.ByteWidth = 32;
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            context_->device()->CreateBuffer(&bd, nullptr, pp_params_cb_.GetAddressOf());
+        }
+    };
+
+    // 辅助：绑定指定的后处理 shader 并绘制全屏四边形
+    auto draw_dedicated_pp = [&](unsigned int shader_handle) {
+        const auto* prog = shader_mgr.GetProgram(shader_handle);
+        if (!prog) return;
+        dc->VSSetShader(prog->vertex_shader.Get(), nullptr, 0);
+        dc->PSSetShader(prog->pixel_shader.Get(), nullptr, 0);
+        auto* lay = shader_mgr.GetInputLayout(shader_handle);
+        if (lay) dc->IASetInputLayout(lay);
+        dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        const auto* src_tex = resource_mgr.GetTexture(source_texture);
+        if (src_tex) {
+            dc->PSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
+            dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
+        }
+        UINT s = sizeof(float) * 4, o = 0;
+        dc->IASetVertexBuffers(0, 1, postprocess_vbo_.GetAddressOf(), &s, &o);
+        dc->IASetIndexBuffer(postprocess_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
+        dc->DrawIndexed(6, 0, 0);
+        current_frame_stats_.draw_calls++;
+    };
+
+    // FXAA 专用路径
+    if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 2) {
+            struct { float w, h, _p0, _p1; } fp{params[0], params[1], 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &fp, sizeof(fp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.fxaa_shader_handle());
+        return;
+    }
+
+    // SSAO 专用路径
+    if (effect_name == "ssao" && shader_mgr.ssao_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 6) {
+            struct { float radius, bias, near_p, far_p, sw, sh, _p0, _p1; } sp{
+                params[0], params[1], params[2], params[3], params[4], params[5], 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &sp, sizeof(sp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.ssao_shader_handle());
+        return;
+    }
+
+    // SSAO Blur 专用路径
+    if (effect_name == "ssao_blur" && shader_mgr.ssao_blur_shader_handle()) {
+        draw_dedicated_pp(shader_mgr.ssao_blur_shader_handle());
+        return;
+    }
+
+    // SSAO Apply 专用路径（带第二张纹理）
+    if (effect_name == "ssao_apply" && shader_mgr.ssao_apply_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 2) {
+            struct { float exposure, _p0, _p1, _p2; } ap{params[1], 0, 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &ap, sizeof(ap));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (ao_tex) dc->PSSetShaderResources(1, 1, ao_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.ssao_apply_shader_handle());
         ID3D11ShaderResourceView* null_srv = nullptr;
         dc->PSSetShaderResources(1, 1, &null_srv);
         return;

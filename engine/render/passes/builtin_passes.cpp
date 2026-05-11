@@ -497,12 +497,14 @@ void CompositePass::Setup(RenderGraph& graph) {
     auto scene_color = graph.DeclareResource("scene_color");
     auto ui_color    = graph.DeclareResource("ui_color");
     auto bloom_mip0  = graph.DeclareResource("bloom_mip0");
+    auto ssao_color  = graph.DeclareResource("ssao_color");
     auto main_color  = graph.DeclareResource("main_color");
 
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, ui_color);
     graph.PassRead(pass, bloom_mip0);
+    graph.PassRead(pass, ssao_color);
     graph.PassWrite(pass, main_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
@@ -522,17 +524,136 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         }
     }
 
+    // 获取 SSAO 纹理（如果启用）
+    unsigned int ssao_tex = 0;
+    if (pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur != 0) {
+        ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
+    }
+
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
     if (pp_enabled && pp_config.bloom_enabled) {
         const unsigned int blur_v_color = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips.empty() ? 0 : ctx_.render_targets.bloom_mips[0]);
-        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity});
+        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex)});
     } else {
-        cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+        if (ssao_tex != 0) {
+            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure});
+        } else {
+            cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+        }
     }
 
     cmd_buffer.DrawPostProcess(ui_color_tex, "ui_overlay", {});
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// SSAOPass
+// ============================================================
+
+void SSAOPass::Setup(RenderGraph& graph) {
+    auto prez_depth = graph.DeclareResource("prez_depth");
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto ssao_color = graph.DeclareResource("ssao_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, prez_depth);
+    graph.PassRead(pass, scene_color);
+    graph.PassWrite(pass, ssao_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool ssao_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.ssao_enabled) {
+            ssao_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    if (!ssao_enabled || ctx_.render_targets.ssao == 0 || ctx_.render_targets.ssao_blur == 0) {
+        return;
+    }
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    // 获取相机投影矩阵参数
+    float near_plane = 0.1f, far_plane = 10000.0f;
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            break;
+        }
+    }
+
+    // Pass 1: SSAO 计算（半分辨率）
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao, glm::vec4(1.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "ssao", {
+        pp_config.ssao_radius,
+        pp_config.ssao_bias,
+        near_plane,
+        far_plane,
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height())
+    });
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: 双边模糊
+    const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
+    cmd_buffer.DrawPostProcess(ssao_tex, "ssao_blur", {});
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// FXAAPass
+// ============================================================
+
+void FXAAPass::Setup(RenderGraph& graph) {
+    auto main_color  = graph.DeclareResource("main_color");
+    auto fxaa_color  = graph.DeclareResource("fxaa_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, main_color);
+    graph.PassWrite(pass, fxaa_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool fxaa_enabled = false;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.fxaa_enabled) {
+            fxaa_enabled = true;
+            break;
+        }
+    }
+
+    if (!fxaa_enabled || ctx_.render_targets.fxaa == 0) {
+        return;
+    }
+
+    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    if (main_color_tex == 0) return;
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.fxaa, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(main_color_tex, "fxaa", {
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height())
+    });
     cmd_buffer.EndRenderPass();
 }
 
@@ -542,19 +663,28 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
 
 void PresentPass::Setup(RenderGraph& graph) {
     auto main_color = graph.DeclareResource("main_color");
+    auto fxaa_color = graph.DeclareResource("fxaa_color");
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, main_color);
+    graph.PassRead(pass, fxaa_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
 void PresentPass::Execute(CommandBuffer& cmd_buffer) {
-    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    if (main_color_tex == 0) {
+    // 优先使用 FXAA 输出，否则用 main_color
+    unsigned int present_tex = 0;
+    if (ctx_.render_targets.fxaa != 0) {
+        present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fxaa);
+    }
+    if (present_tex == 0) {
+        present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    }
+    if (present_tex == 0) {
         return;
     }
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(main_color_tex, "copy", {});
+    cmd_buffer.DrawPostProcess(present_tex, "copy", {});
     cmd_buffer.EndRenderPass();
 }
 

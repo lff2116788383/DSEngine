@@ -507,6 +507,58 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &sl_write, 0, nullptr);
     }
 
+    // --- Set 1 binding 3: ClusterInfo SSBO ---
+    {
+        VkDescriptorBufferInfo ci_buf{};
+        auto ci_it = bound_ssbos_.find(3); // binding 3 = ClusterInfoSSBO
+        const VulkanBuffer* ci_ssbo = (ci_it != bound_ssbos_.end())
+            ? resource_mgr.GetSSBO(ci_it->second) : nullptr;
+        if (ci_ssbo && ci_ssbo->buffer != VK_NULL_HANDLE) {
+            ci_buf.buffer = ci_ssbo->buffer;
+            ci_buf.offset = 0;
+            ci_buf.range  = ci_ssbo->size;
+        } else {
+            ci_buf.buffer = per_point_lights_ubo_[fi];
+            ci_buf.offset = 0;
+            ci_buf.range  = 16;
+        }
+
+        VkWriteDescriptorSet ci_write{};
+        ci_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        ci_write.dstSet          = sets[1];
+        ci_write.dstBinding      = 3;
+        ci_write.descriptorCount = 1;
+        ci_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        ci_write.pBufferInfo     = &ci_buf;
+        vkUpdateDescriptorSets(device, 1, &ci_write, 0, nullptr);
+    }
+
+    // --- Set 1 binding 4: LightIndex SSBO ---
+    {
+        VkDescriptorBufferInfo li_buf{};
+        auto li_it = bound_ssbos_.find(4); // binding 4 = LightIndexSSBO
+        const VulkanBuffer* li_ssbo = (li_it != bound_ssbos_.end())
+            ? resource_mgr.GetSSBO(li_it->second) : nullptr;
+        if (li_ssbo && li_ssbo->buffer != VK_NULL_HANDLE) {
+            li_buf.buffer = li_ssbo->buffer;
+            li_buf.offset = 0;
+            li_buf.range  = li_ssbo->size;
+        } else {
+            li_buf.buffer = per_point_lights_ubo_[fi];
+            li_buf.offset = 0;
+            li_buf.range  = 16;
+        }
+
+        VkWriteDescriptorSet li_write{};
+        li_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        li_write.dstSet          = sets[1];
+        li_write.dstBinding      = 4;
+        li_write.descriptorCount = 1;
+        li_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        li_write.pBufferInfo     = &li_buf;
+        vkUpdateDescriptorSets(device, 1, &li_write, 0, nullptr);
+    }
+
     // --- Set 2: PerMaterial UBO + 采样器 ---
     {
         // PerMaterial UBO (binding 0)
@@ -793,11 +845,13 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         push_ubo(sets[0], 0);
     }
 
-    // Set 1 (layouts[1]): PerScene(b0) + PointLightSSBO(b1) + SpotLightSSBO(b2)
+    // Set 1 (layouts[1]): PerScene(b0) + PointLightSSBO(b1) + SpotLightSSBO(b2) + ClusterInfo(b3) + LightIndex(b4)
     if (set_count > 1) {
         push_ubo(sets[1], 0);
         push_ssbo(sets[1], 1);
         push_ssbo(sets[1], 2);
+        push_ssbo(sets[1], 3);
+        push_ssbo(sets[1], 4);
     }
 
     // Set 2 (layouts[2]): PerMaterial(b0) + textures(b1-5) + shadow(b6,b7) + bone(b8,b9)
@@ -937,8 +991,8 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     // Set 0: binding 0 (PerFrame UBO)
     if (set_count > 0) push_ubo(0, 0);
 
-    // Set 1: binding 0 (PerScene UBO), 1 (PointLightSSBO), 2 (SpotLightSSBO)
-    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); }
+    // Set 1: binding 0 (PerScene UBO), 1-2 (Point/SpotLightSSBO), 3-4 (ClusterInfo/LightIndex SSBO)
+    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); push_ssbo2(1, 3); push_ssbo2(1, 4); }
 
     // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-9 (bones/morph UBO)
     if (set_count > 2) {
@@ -1666,8 +1720,16 @@ void VulkanDrawExecutor::DrawPostProcess(
     }
     unsigned int pp_state = needs_blend ? pp_blend_pipeline_state_ : pp_pipeline_state_;
 
-    // 优先使用专用后处理着色器，fallback 到 PBR 着色器
-    const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(shader_mgr.postprocess_shader_handle());
+    // 根据 effect 名称选择专用着色器
+    unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
+    if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle())
+        selected_shader_handle = shader_mgr.fxaa_shader_handle();
+    else if (effect_name == "ssao" && shader_mgr.ssao_shader_handle())
+        selected_shader_handle = shader_mgr.ssao_shader_handle();
+    else if (effect_name == "ssao_blur" && shader_mgr.ssao_blur_shader_handle())
+        selected_shader_handle = shader_mgr.ssao_blur_shader_handle();
+
+    const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
         pp_program = shader_mgr.GetProgram(shader_mgr.pbr_shader_handle());
     }
@@ -1699,6 +1761,19 @@ void VulkanDrawExecutor::DrawPostProcess(
     if (pp_program) {
         AllocateAndUpdatePostProcessDescriptorSets(cmd_buf, pp_program,
                                                     source_texture, *resource_mgr_);
+    }
+
+    // 传递 push constants（FXAA: resolution, SSAO: 6 params）
+    if (pp_program && pp_program->pipeline_layout != VK_NULL_HANDLE) {
+        if (effect_name == "fxaa" && params.size() >= 2) {
+            float pc[2] = {params[0], params[1]};
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "ssao" && params.size() >= 6) {
+            float pc[6] = {params[0], params[1], params[2], params[3], params[4], params[5]};
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        }
     }
 
     // 绑定后处理 VBO（全屏四边形，6 顶点）

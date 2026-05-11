@@ -251,6 +251,9 @@ private:
     // Bloom 合成参数 CB（exposure + bloomIntensity）
     ComPtr<ID3D11Buffer> bloom_composite_params_cb_;
 
+    // 通用后处理参数 CB（32B，各效果共用）
+    ComPtr<ID3D11Buffer> pp_params_cb_;
+
     // 粒子公告板四边形（静态 VBO+IBO）
     ComPtr<ID3D11Buffer> particle_quad_vbo_;
     ComPtr<ID3D11Buffer> particle_quad_ibo_;

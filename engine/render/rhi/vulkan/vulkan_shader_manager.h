@@ -134,6 +134,9 @@ public:
     unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
     unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
     unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
+    unsigned int fxaa_shader_handle() const { return fxaa_shader_handle_; }
+    unsigned int ssao_shader_handle() const { return ssao_shader_handle_; }
+    unsigned int ssao_blur_shader_handle() const { return ssao_blur_shader_handle_; }
 
     /// 着色器程序计数
     std::size_t programs_created() const { return programs_created_; }
@@ -186,6 +189,9 @@ private:
     unsigned int postprocess_shader_handle_ = 0;
     unsigned int bloom_downsample_cs_handle_ = 0;
     unsigned int bloom_upsample_cs_handle_ = 0;
+    unsigned int fxaa_shader_handle_ = 0;
+    unsigned int ssao_shader_handle_ = 0;
+    unsigned int ssao_blur_shader_handle_ = 0;
 
     /// Compute 着色器程序
     std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;

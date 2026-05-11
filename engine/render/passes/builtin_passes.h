@@ -79,6 +79,28 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- SSAO Pass ----
+class SSAOPass : public IRenderPass {
+public:
+    explicit SSAOPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "ssao_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
+// ---- FXAA Pass ----
+class FXAAPass : public IRenderPass {
+public:
+    explicit FXAAPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "fxaa_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- UI Pass ----
 class UIPass : public IRenderPass {
 public:

@@ -15,6 +15,10 @@ struct RenderPipelineResources {
     unsigned int pp_bloom_extract_rt = 0;
     std::vector<unsigned int> pp_bloom_mip_rts;
 
+    unsigned int pp_ssao_rt = 0;       // 半分辨率 AO
+    unsigned int pp_ssao_blur_rt = 0;  // 模糊后 AO
+    unsigned int pp_fxaa_rt = 0;       // FXAA 输出
+
     unsigned int sprite_pipeline_state = 0;
     unsigned int mesh_pipeline_state = 0;
     unsigned int prez_pipeline_state = 0;
@@ -38,6 +42,9 @@ struct RenderPipelineResources {
         }
         pp_bloom_extract_rt = 0;
         pp_bloom_mip_rts.clear();
+        pp_ssao_rt = 0;
+        pp_ssao_blur_rt = 0;
+        pp_fxaa_rt = 0;
         sprite_pipeline_state = 0;
         mesh_pipeline_state = 0;
         prez_pipeline_state = 0;

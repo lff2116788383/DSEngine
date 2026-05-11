@@ -34,6 +34,17 @@ static constexpr unsigned int kSSBOBindingLightIndices  = 4;
 static constexpr int kClusterTileSize = 16;
 static constexpr int kClusterZSlices  = 24;
 
+/// SSBO 头部 — 嵌入 cluster 网格参数，shader 直接读取（32 bytes）
+struct ClusterGridHeader {
+    uint32_t tiles_x;
+    uint32_t tiles_y;
+    uint32_t z_slices;
+    float    near_plane;
+    float    far_plane;
+    uint32_t _pad0, _pad1, _pad2;
+};
+static_assert(sizeof(ClusterGridHeader) == 32, "ClusterGridHeader must be 32 bytes");
+
 /// 每 cluster 元数据（16 bytes，与 SSBO std430 对齐）
 struct ClusterInfo {
     uint32_t offset;       ///< light_indices 数组中的起始偏移
@@ -94,6 +105,7 @@ private:
     int screen_height_ = 0;
 
     // CPU 端数据
+    ClusterGridHeader header_{};
     std::vector<ClusterInfo> cluster_infos_;
     std::vector<uint32_t> light_indices_;
 

@@ -107,22 +107,35 @@ void ClusterGrid::Build(const glm::mat4& view, const glm::mat4& projection,
             light_indices_.push_back(si);
         }
     }
+
+    // 填充 SSBO 头部
+    header_.tiles_x    = static_cast<uint32_t>(tiles_x_);
+    header_.tiles_y    = static_cast<uint32_t>(tiles_y_);
+    header_.z_slices   = static_cast<uint32_t>(kClusterZSlices);
+    header_.near_plane = near_plane;
+    header_.far_plane  = far_plane;
+    header_._pad0 = header_._pad1 = header_._pad2 = 0;
 }
 
 void ClusterGrid::Upload() {
     if (!device_) return;
 
+    const size_t header_bytes = sizeof(ClusterGridHeader);
     const size_t info_bytes = cluster_infos_.size() * sizeof(ClusterInfo);
+    const size_t total_info_bytes = header_bytes + info_bytes;
     const size_t index_bytes = light_indices_.empty() ? sizeof(uint32_t) : light_indices_.size() * sizeof(uint32_t);
 
-    // ClusterInfo SSBO
-    if (info_bytes > cluster_info_capacity_bytes_) {
+    // ClusterInfo SSBO = header + ClusterInfo[]
+    if (total_info_bytes > cluster_info_capacity_bytes_) {
         if (cluster_info_ssbo_ != 0) device_->DeleteSSBO(cluster_info_ssbo_);
-        cluster_info_capacity_bytes_ = info_bytes;
-        cluster_info_ssbo_ = device_->CreateSSBO(info_bytes, nullptr);
+        cluster_info_capacity_bytes_ = total_info_bytes;
+        cluster_info_ssbo_ = device_->CreateSSBO(total_info_bytes, nullptr);
     }
-    if (cluster_info_ssbo_ != 0 && !cluster_infos_.empty()) {
-        device_->UpdateSSBO(cluster_info_ssbo_, 0, info_bytes, cluster_infos_.data());
+    if (cluster_info_ssbo_ != 0) {
+        device_->UpdateSSBO(cluster_info_ssbo_, 0, header_bytes, &header_);
+        if (!cluster_infos_.empty()) {
+            device_->UpdateSSBO(cluster_info_ssbo_, header_bytes, info_bytes, cluster_infos_.data());
+        }
     }
 
     // Light index SSBO

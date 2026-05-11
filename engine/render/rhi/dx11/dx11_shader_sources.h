@@ -809,6 +809,231 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// FXAA 像素着色器
+// ============================================================
+
+constexpr const char* kFxaaPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+cbuffer FxaaParams : register(b0) {
+    float2 u_resolution;
+    float2 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float2 texel = 1.0 / u_resolution;
+    float lumaM  = luma(screenTexture.Sample(u_sampler, input.uv).rgb);
+    float lumaNW = luma(screenTexture.Sample(u_sampler, input.uv + float2(-1.0,-1.0) * texel).rgb);
+    float lumaNE = luma(screenTexture.Sample(u_sampler, input.uv + float2( 1.0,-1.0) * texel).rgb);
+    float lumaSW = luma(screenTexture.Sample(u_sampler, input.uv + float2(-1.0, 1.0) * texel).rgb);
+    float lumaSE = luma(screenTexture.Sample(u_sampler, input.uv + float2( 1.0, 1.0) * texel).rgb);
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    float lumaRange = lumaMax - lumaMin;
+    if (lumaRange < max(0.0312, lumaMax * 0.125)) {
+        return screenTexture.Sample(u_sampler, input.uv);
+    }
+    float2 dir;
+    dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+    float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.25 * 0.25, 1.0/128.0);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = min(float2(8.0,8.0), max(float2(-8.0,-8.0), dir * rcpDirMin)) * texel;
+    float3 rgbA = 0.5 * (
+        screenTexture.Sample(u_sampler, input.uv + dir * (1.0/3.0 - 0.5)).rgb +
+        screenTexture.Sample(u_sampler, input.uv + dir * (2.0/3.0 - 0.5)).rgb);
+    float3 rgbB = rgbA * 0.5 + 0.25 * (
+        screenTexture.Sample(u_sampler, input.uv + dir * -0.5).rgb +
+        screenTexture.Sample(u_sampler, input.uv + dir *  0.5).rgb);
+    float lumaB = luma(rgbB);
+    if (lumaB < lumaMin || lumaB > lumaMax)
+        return float4(rgbA, 1.0);
+    else
+        return float4(rgbB, 1.0);
+}
+)";
+
+// ============================================================
+// SSAO 像素着色器
+// ============================================================
+
+constexpr const char* kSsaoPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+cbuffer SsaoParams : register(b0) {
+    float u_radius;
+    float u_bias;
+    float u_near;
+    float u_far;
+    float2 u_screen_size;
+    float2 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+float3 reconstructNormal(float2 uv) {
+    float2 texel = 1.0 / u_screen_size;
+    float dc = linearizeDepth(screenTexture.Sample(u_sampler, uv).r);
+    float dl = linearizeDepth(screenTexture.Sample(u_sampler, uv - float2(texel.x, 0.0)).r);
+    float dr = linearizeDepth(screenTexture.Sample(u_sampler, uv + float2(texel.x, 0.0)).r);
+    float db = linearizeDepth(screenTexture.Sample(u_sampler, uv - float2(0.0, texel.y)).r);
+    float dt = linearizeDepth(screenTexture.Sample(u_sampler, uv + float2(0.0, texel.y)).r);
+    return normalize(float3(dl - dr, db - dt, 2.0 * texel.x * dc));
+}
+
+static const float3 kernel[16] = {
+    float3( 0.5381, 0.1856,-0.4319), float3( 0.1379, 0.2486, 0.4430),
+    float3( 0.3371, 0.5679,-0.0057), float3(-0.6999,-0.0451,-0.0019),
+    float3( 0.0689,-0.1598,-0.8547), float3( 0.0560, 0.0069,-0.1843),
+    float3(-0.0146, 0.1402, 0.0762), float3( 0.0100,-0.1924,-0.0344),
+    float3(-0.3577,-0.5301,-0.4358), float3(-0.3169, 0.1063, 0.0158),
+    float3( 0.0103,-0.5869, 0.0046), float3(-0.0897,-0.4940, 0.3287),
+    float3( 0.7119,-0.0154,-0.0918), float3(-0.0533, 0.0596,-0.5411),
+    float3( 0.0352,-0.0631, 0.5460), float3(-0.4776, 0.2847,-0.0271)
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    if (depth >= 1.0) return float4(1.0, 1.0, 1.0, 1.0);
+    float linDepth = linearizeDepth(depth);
+    float3 normal = reconstructNormal(input.uv);
+    float occlusion = 0.0;
+    float rScale = u_radius / linDepth;
+    for (int i = 0; i < 16; ++i) {
+        float3 sampleDir = kernel[i];
+        if (dot(sampleDir, normal) < 0.0) sampleDir = -sampleDir;
+        float2 sampleUV = input.uv + sampleDir.xy * rScale * (1.0 / u_screen_size);
+        float sampleDepth = linearizeDepth(screenTexture.Sample(u_sampler, sampleUV).r);
+        float rangeCheck = smoothstep(0.0, 1.0, u_radius / abs(linDepth - sampleDepth));
+        if (sampleDepth < linDepth - u_bias) occlusion += rangeCheck;
+    }
+    occlusion = 1.0 - (occlusion / 16.0);
+    return float4(occlusion, occlusion, occlusion, 1.0);
+}
+)";
+
+// ============================================================
+// SSAO 模糊像素着色器
+// ============================================================
+
+constexpr const char* kSsaoBlurPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    uint w, h;
+    screenTexture.GetDimensions(w, h);
+    float2 texelSize = 1.0 / float2(w, h);
+    float result = 0.0;
+    for (int x = -2; x <= 2; ++x) {
+        for (int y = -2; y <= 2; ++y) {
+            float2 offset = float2(x, y) * texelSize;
+            result += screenTexture.Sample(u_sampler, input.uv + offset).r;
+        }
+    }
+    float v = result / 25.0;
+    return float4(v, v, v, 1.0);
+}
+)";
+
+// ============================================================
+// SSAO 应用像素着色器（带 tone mapping）
+// ============================================================
+
+constexpr const char* kSsaoApplyPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D ssaoTexture   : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer SsaoApplyParams : register(b0) {
+    float exposure;
+    float3 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float3 AcesFilmic(float3 x) {
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 hdrColor = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float ao = ssaoTexture.Sample(u_sampler, input.uv).r;
+    hdrColor *= ao;
+    float3 result = AcesFilmic(hdrColor * exposure);
+    result = pow(max(result, 0.0f), 1.0 / 2.2);
+    return float4(result, 1.0);
+}
+)";
+
+// ============================================================
+// Bloom Composite + SSAO 像素着色器
+// ============================================================
+
+constexpr const char* kBloomCompositeSsaoPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D bloomBlur     : register(t1);
+Texture2D ssaoTexture   : register(t2);
+SamplerState u_sampler  : register(s0);
+
+cbuffer BloomCompositeSsaoParams : register(b0) {
+    float exposure;
+    float bloomIntensity;
+    int ssaoEnabled;
+    float _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float3 AcesFilmic(float3 x) {
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
+    if (ssaoEnabled) {
+        float ao = ssaoTexture.Sample(u_sampler, input.uv).r;
+        color *= ao;
+    }
+    float3 bloom = bloomBlur.Sample(u_sampler, input.uv).rgb;
+    color += bloom * bloomIntensity;
+    color = AcesFilmic(color * exposure);
+    color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    return float4(color, 1.0f);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

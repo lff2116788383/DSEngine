@@ -28,6 +28,11 @@ void DX11ShaderManager::Shutdown() {
     postprocess_shader_handle_ = 0;
     shadow_shader_handle_ = 0;
     bloom_composite_shader_handle_ = 0;
+    bloom_composite_ssao_shader_handle_ = 0;
+    fxaa_shader_handle_ = 0;
+    ssao_shader_handle_ = 0;
+    ssao_blur_shader_handle_ = 0;
+    ssao_apply_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -226,6 +231,25 @@ void DX11ShaderManager::InitBuiltinShaders() {
         };
         CreateInputLayoutForShader(bloom_composite_shader_handle_, layout, 2);
     }
+
+    // ---- FXAA shader ----
+    auto create_pp_shader = [&](const char* ps_src, const char* name) -> unsigned int {
+        unsigned int h = CreateProgram(dx11_shaders::kPostProcessVS, ps_src);
+        if (h) {
+            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created: {}", name, h);
+            D3D11_INPUT_ELEMENT_DESC layout[] = {
+                {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            };
+            CreateInputLayoutForShader(h, layout, 2);
+        }
+        return h;
+    };
+    fxaa_shader_handle_ = create_pp_shader(dx11_shaders::kFxaaPS, "fxaa");
+    ssao_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoPS, "ssao");
+    ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");
+    ssao_apply_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoApplyPS, "ssao_apply");
+    bloom_composite_ssao_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoPS, "bloom_composite_ssao");
 }
 
 // ============================================================

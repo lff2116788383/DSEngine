@@ -86,10 +86,13 @@ struct PostProcessComponent {
     float exposure = 1.0f;
     float gamma = 2.2f;
     
-    // SSAO - Placeholder for future
+    // SSAO
     bool ssao_enabled = false;
     float ssao_radius = 0.5f;
     float ssao_bias = 0.025f;
+
+    // FXAA
+    bool fxaa_enabled = true;
 };
 
 #define CSM_CASCADES 3

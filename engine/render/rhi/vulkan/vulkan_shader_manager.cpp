@@ -264,6 +264,8 @@ bool VulkanShaderManager::ReflectSpirv(
         {1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1},
         {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // PointLightSSBO
         {1, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // SpotLightSSBO
+        {1, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // ClusterInfoSSBO
+        {1, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // LightIndexSSBO
         // Set 2: PerMaterial + 纹理
         {2, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1},
         {2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // albedo
@@ -620,6 +622,36 @@ void VulkanShaderManager::InitPostProcessShader() {
         DEBUG_LOG_ERROR("Vulkan post-process shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
+    }
+
+    // FXAA shader（运行时 GLSL → SPIR-V）
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kFxaaFS;
+        fxaa_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (fxaa_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] FXAA shader created: handle={}", fxaa_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] FXAA shader creation failed");
+    }
+
+    // SSAO shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsaoFS;
+        ssao_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (ssao_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] SSAO shader created: handle={}", ssao_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] SSAO shader creation failed");
+    }
+
+    // SSAO Blur shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsaoBlurFS;
+        ssao_blur_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (ssao_blur_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] SSAO blur shader created: handle={}", ssao_blur_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] SSAO blur shader creation failed");
     }
 }
 

@@ -769,6 +769,119 @@ void main() {
 }
 )";
 
+/// FXAA
+constexpr const char* kFxaaFS = R"(
+layout(push_constant) uniform FxaaParams {
+    vec2 u_resolution;
+};
+
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+void main() {
+    vec2 texel = 1.0 / u_resolution;
+    float lumaM  = luma(texture(screenTexture, vTexCoords).rgb);
+    float lumaNW = luma(texture(screenTexture, vTexCoords + vec2(-1.0,-1.0) * texel).rgb);
+    float lumaNE = luma(texture(screenTexture, vTexCoords + vec2( 1.0,-1.0) * texel).rgb);
+    float lumaSW = luma(texture(screenTexture, vTexCoords + vec2(-1.0, 1.0) * texel).rgb);
+    float lumaSE = luma(texture(screenTexture, vTexCoords + vec2( 1.0, 1.0) * texel).rgb);
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    float lumaRange = lumaMax - lumaMin;
+    if (lumaRange < max(0.0312, lumaMax * 0.125)) {
+        FragColor = texture(screenTexture, vTexCoords);
+        return;
+    }
+    vec2 dir;
+    dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+    float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.25 * 0.25, 1.0/128.0);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = min(vec2(8.0), max(vec2(-8.0), dir * rcpDirMin)) * texel;
+    vec3 rgbA = 0.5 * (
+        texture(screenTexture, vTexCoords + dir * (1.0/3.0 - 0.5)).rgb +
+        texture(screenTexture, vTexCoords + dir * (2.0/3.0 - 0.5)).rgb);
+    vec3 rgbB = rgbA * 0.5 + 0.25 * (
+        texture(screenTexture, vTexCoords + dir * -0.5).rgb +
+        texture(screenTexture, vTexCoords + dir *  0.5).rgb);
+    float lumaB = luma(rgbB);
+    if (lumaB < lumaMin || lumaB > lumaMax)
+        FragColor = vec4(rgbA, 1.0);
+    else
+        FragColor = vec4(rgbB, 1.0);
+}
+)";
+
+/// SSAO
+constexpr const char* kSsaoFS = R"(
+layout(push_constant) uniform SsaoParams {
+    float u_radius;
+    float u_bias;
+    float u_near;
+    float u_far;
+    vec2 u_screen_size;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+vec3 reconstructNormal(vec2 uv) {
+    vec2 texel = 1.0 / u_screen_size;
+    float dc = linearizeDepth(texture(screenTexture, uv).r);
+    float dl = linearizeDepth(texture(screenTexture, uv - vec2(texel.x, 0.0)).r);
+    float dr = linearizeDepth(texture(screenTexture, uv + vec2(texel.x, 0.0)).r);
+    float db = linearizeDepth(texture(screenTexture, uv - vec2(0.0, texel.y)).r);
+    float dt = linearizeDepth(texture(screenTexture, uv + vec2(0.0, texel.y)).r);
+    return normalize(vec3(dl - dr, db - dt, 2.0 * texel.x * dc));
+}
+
+const vec3 kernel[16] = vec3[](
+    vec3( 0.5381, 0.1856,-0.4319), vec3( 0.1379, 0.2486, 0.4430),
+    vec3( 0.3371, 0.5679,-0.0057), vec3(-0.6999,-0.0451,-0.0019),
+    vec3( 0.0689,-0.1598,-0.8547), vec3( 0.0560, 0.0069,-0.1843),
+    vec3(-0.0146, 0.1402, 0.0762), vec3( 0.0100,-0.1924,-0.0344),
+    vec3(-0.3577,-0.5301,-0.4358), vec3(-0.3169, 0.1063, 0.0158),
+    vec3( 0.0103,-0.5869, 0.0046), vec3(-0.0897,-0.4940, 0.3287),
+    vec3( 0.7119,-0.0154,-0.0918), vec3(-0.0533, 0.0596,-0.5411),
+    vec3( 0.0352,-0.0631, 0.5460), vec3(-0.4776, 0.2847,-0.0271)
+);
+
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    if (depth >= 1.0) { FragColor = vec4(1.0); return; }
+    float linDepth = linearizeDepth(depth);
+    vec3 normal = reconstructNormal(vTexCoords);
+    float occlusion = 0.0;
+    float rScale = u_radius / linDepth;
+    for (int i = 0; i < 16; ++i) {
+        vec3 sampleDir = kernel[i];
+        if (dot(sampleDir, normal) < 0.0) sampleDir = -sampleDir;
+        vec2 sampleUV = vTexCoords + sampleDir.xy * rScale * (1.0 / u_screen_size);
+        float sampleDepth = linearizeDepth(texture(screenTexture, sampleUV).r);
+        float rangeCheck = smoothstep(0.0, 1.0, u_radius / abs(linDepth - sampleDepth));
+        if (sampleDepth < linDepth - u_bias) occlusion += rangeCheck;
+    }
+    occlusion = 1.0 - (occlusion / 16.0);
+    FragColor = vec4(vec3(occlusion), 1.0);
+}
+)";
+
+/// SSAO Blur
+constexpr const char* kSsaoBlurFS = R"(
+void main() {
+    vec2 texelSize = 1.0 / vec2(textureSize(screenTexture, 0));
+    float result = 0.0;
+    for (int x = -2; x <= 2; ++x) {
+        for (int y = -2; y <= 2; ++y) {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+            result += texture(screenTexture, vTexCoords + offset).r;
+        }
+    }
+    FragColor = vec4(vec3(result / 25.0), 1.0);
+}
+)";
+
 /// Bloom 降采样 Compute Shader（13-tap Kawase）
 constexpr const char* kBloomDownsampleCS = R"(
 #version 450

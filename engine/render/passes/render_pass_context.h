@@ -58,6 +58,9 @@ struct RenderPassContext {
         unsigned int point_shadow[4] = {0, 0, 0, 0};
         unsigned int bloom_extract = 0;
         std::vector<unsigned int> bloom_mips;
+        unsigned int ssao = 0;
+        unsigned int ssao_blur = 0;
+        unsigned int fxaa = 0;
     } render_targets;
 
     /// 已加载的动态模块实例列表

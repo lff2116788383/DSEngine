@@ -1140,6 +1140,16 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
     INSPECTOR_PROPERTY("Bloom Enabled", ImGui::Checkbox("##pp_bloom_en", &pp.bloom_enabled));
     INSPECTOR_PROPERTY("Threshold", ImGui::DragFloat("##pp_bloom_thresh", &pp.bloom_threshold, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##pp_bloom_int", &pp.bloom_intensity, 0.05f, 0.0f, 10.0f));
+    ImGui::Separator();
+    ImGui::Text("SSAO");
+    ImGui::NextColumn(); ImGui::NextColumn();
+    INSPECTOR_PROPERTY("SSAO Enabled", ImGui::Checkbox("##pp_ssao_en", &pp.ssao_enabled));
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##pp_ssao_rad", &pp.ssao_radius, 0.01f, 0.01f, 5.0f));
+    INSPECTOR_PROPERTY("Bias", ImGui::DragFloat("##pp_ssao_bias", &pp.ssao_bias, 0.001f, 0.0f, 0.5f));
+    ImGui::Separator();
+    ImGui::Text("FXAA");
+    ImGui::NextColumn(); ImGui::NextColumn();
+    INSPECTOR_PROPERTY("FXAA Enabled", ImGui::Checkbox("##pp_fxaa_en", &pp.fxaa_enabled));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }

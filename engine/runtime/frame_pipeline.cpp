@@ -271,6 +271,21 @@ bool FramePipeline::Init() {
         }
     }
 
+    // SSAO: 半分辨率单通道 RT
+    if (render_resources_.pp_ssao_rt == 0) {
+        render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width / 2, render_height / 2, true, false, false});
+    }
+    if (render_resources_.pp_ssao_blur_rt == 0) {
+        render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width / 2, render_height / 2, true, false, false});
+    }
+    // FXAA: 全分辨率 RT
+    if (render_resources_.pp_fxaa_rt == 0) {
+        render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
+
     PipelineStateDesc sprite_desc;
     sprite_desc.blend_enabled = true;
     sprite_desc.blend_src = BlendFactor::SrcAlpha;
@@ -699,6 +714,9 @@ void FramePipeline::BuildRenderGraphInternal() {
     }
     render_pass_context_.render_targets.bloom_extract = render_resources_.pp_bloom_extract_rt;
     render_pass_context_.render_targets.bloom_mips    = render_resources_.pp_bloom_mip_rts;
+    render_pass_context_.render_targets.ssao      = render_resources_.pp_ssao_rt;
+    render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
+    render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
 
     render_pass_context_.modules.clear();
     for (auto& mod : modules_) {
@@ -735,8 +753,10 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::FXAAPass>(render_pass_context_));
     if (!runtime_context_.editor_mode) {
         registered_passes_.push_back(std::make_unique<dse::render::PresentPass>(render_pass_context_));
     }

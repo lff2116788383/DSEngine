@@ -887,6 +887,42 @@ int L_EcsSetPostProcessColor(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessSSAO(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->ssao_enabled = lua_isnoneornil(L, 2) ? pp->ssao_enabled : helper::CheckBool(L, 2);
+    pp->ssao_radius = helper::OptFloat(L, 3, pp->ssao_radius);
+    pp->ssao_bias = helper::OptFloat(L, 4, pp->ssao_bias);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_EcsSetPostProcessFXAA(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->fxaa_enabled = lua_isnoneornil(L, 2) ? pp->fxaa_enabled : helper::CheckBool(L, 2);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -910,7 +946,8 @@ int L_EcsGetPostProcessState(lua_State* L) {
     helper::PushBool(L, pp->ssao_enabled);
     helper::PushFloat(L, pp->ssao_radius);
     helper::PushFloat(L, pp->ssao_bias);
-    return 11;
+    helper::PushBool(L, pp->fxaa_enabled);
+    return 12;
 }
 
 // ============================================================
@@ -1112,6 +1149,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"add_post_process",          L_EcsAddPostProcess},
         {"set_post_process_bloom",    L_EcsSetPostProcessBloom},
         {"set_post_process_color",    L_EcsSetPostProcessColor},
+        {"set_post_process_ssao",     L_EcsSetPostProcessSSAO},
+        {"set_post_process_fxaa",     L_EcsSetPostProcessFXAA},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},
