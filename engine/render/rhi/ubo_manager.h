@@ -45,6 +45,21 @@ public:
     /// 上传 PerMaterial 数据（每材质切换时调用）
     void UploadPerMaterial(const PerMaterialUBO& data);
 
+    /// 上传 PointLights 数据（每次 DrawMeshBatch）
+    void UploadPointLights(const PointLightsUBO& data);
+
+    /// 上传 SpotLights 数据（每次 DrawMeshBatch）
+    void UploadSpotLights(const SpotLightsUBO& data);
+
+    /// 上传 SpotLightData 数据（聚光灯空间矩阵）
+    void UploadSpotLightData(const SpotLightDataUBO& data);
+
+    /// 上传 BoneMatrices 数据（每次 DrawMeshBatch）
+    void UploadBoneMatrices(const BoneMatricesUBO& data);
+
+    /// 上传 MorphWeights 数据（每次 DrawMeshBatch）
+    void UploadMorphWeights(const MorphWeightsUBO& data);
+
     /// 绑定所有 UBO 到对应的 binding point
     void BindAll() const;
 
@@ -56,6 +71,11 @@ public:
     unsigned int per_frame_buffer() const { return per_frame_buffer_; }
     unsigned int per_scene_buffer() const { return per_scene_buffer_; }
     unsigned int per_material_buffer() const { return per_material_buffer_; }
+    unsigned int point_lights_buffer() const { return point_lights_buffer_; }
+    unsigned int spot_lights_buffer() const { return spot_lights_buffer_; }
+    unsigned int spot_light_data_buffer() const { return spot_light_data_buffer_; }
+    unsigned int bone_matrices_buffer() const { return bone_matrices_buffer_; }
+    unsigned int morph_weights_buffer() const { return morph_weights_buffer_; }
 
     bool initialized() const { return initialized_; }
 
@@ -69,6 +89,11 @@ private:
     unsigned int per_frame_buffer_ = 0;
     unsigned int per_scene_buffer_ = 0;
     unsigned int per_material_buffer_ = 0;
+    unsigned int point_lights_buffer_ = 0;
+    unsigned int spot_lights_buffer_ = 0;
+    unsigned int spot_light_data_buffer_ = 0;
+    unsigned int bone_matrices_buffer_ = 0;
+    unsigned int morph_weights_buffer_ = 0;
 
     bool initialized_ = false;
 };

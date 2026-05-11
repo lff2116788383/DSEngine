@@ -129,6 +129,81 @@ static bool CompileToSpirv(const std::string& source, EShLanguage stage,
 // spirv-cross: SPIR-V → GLSL 330
 // ============================================================================
 
+// 后处理: 将 GLSL 330 中的 "struct PushConstants {...}; uniform PushConstants pc;"
+// 展平为独立 uniform 声明，将 "pc.member" 替换为 "member"。
+static std::string FlattenPushConstantsInGLSL(const std::string& src) {
+    std::string result = src;
+
+    // 查找 "struct PushConstants" block
+    auto struct_pos = result.find("struct PushConstants");
+    if (struct_pos == std::string::npos) return result;
+
+    // 找到对应的 '{' 和 '}'
+    auto brace_open = result.find('{', struct_pos);
+    auto brace_close = result.find("};", brace_open);
+    if (brace_open == std::string::npos || brace_close == std::string::npos) return result;
+
+    // 提取 struct 成员列表
+    std::string members_block = result.substr(brace_open + 1, brace_close - brace_open - 1);
+
+    // 解析每个成员 "TYPE NAME;"
+    std::vector<std::pair<std::string, std::string>> members; // (type, name)
+    std::istringstream mss(members_block);
+    std::string line;
+    while (std::getline(mss, line)) {
+        // 去空白
+        size_t start = line.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) continue;
+        line = line.substr(start);
+        if (line.empty() || line[0] == '/') continue;  // 跳过注释/空行
+        // 期望 "TYPE NAME;"
+        auto semi = line.find(';');
+        if (semi == std::string::npos) continue;
+        std::string decl = line.substr(0, semi);
+        auto last_space = decl.find_last_of(" \t");
+        if (last_space == std::string::npos) continue;
+        std::string type = decl.substr(0, last_space);
+        std::string name = decl.substr(last_space + 1);
+        // 去 type 末尾空白
+        while (!type.empty() && (type.back() == ' ' || type.back() == '\t'))
+            type.pop_back();
+        members.push_back({type, name});
+    }
+
+    // 生成独立 uniform 声明
+    std::string uniform_block;
+    for (auto& [type, name] : members) {
+        uniform_block += "uniform " + type + " " + name + ";\n";
+    }
+
+    // 删除 "struct PushConstants {...};\n"
+    auto struct_end = brace_close + 2; // 跳过 "};"
+    while (struct_end < result.size() && (result[struct_end] == '\n' || result[struct_end] == '\r'))
+        struct_end++;
+    result.erase(struct_pos, struct_end - struct_pos);
+
+    // 删除 "uniform PushConstants pc;\n"
+    auto uniform_pos = result.find("uniform PushConstants pc;");
+    if (uniform_pos != std::string::npos) {
+        auto uniform_end = uniform_pos + std::string("uniform PushConstants pc;").size();
+        while (uniform_end < result.size() && (result[uniform_end] == '\n' || result[uniform_end] == '\r'))
+            uniform_end++;
+        result.replace(uniform_pos, uniform_end - uniform_pos, uniform_block);
+    }
+
+    // 替换所有 "pc.member" → "member"
+    for (auto& [type, name] : members) {
+        std::string from = "pc." + name;
+        size_t pos = 0;
+        while ((pos = result.find(from, pos)) != std::string::npos) {
+            result.replace(pos, from.size(), name);
+            pos += name.size();
+        }
+    }
+
+    return result;
+}
+
 static std::string CrossCompileToGLSL330(const std::vector<uint32_t>& spirv,
                                           EShLanguage stage) {
     try {
@@ -140,13 +215,22 @@ static std::string CrossCompileToGLSL330(const std::vector<uint32_t>& spirv,
         options.enable_420pack_extension = false;
         compiler.set_common_options(options);
 
-        // 将 push_constant 映射为普通 uniform
         auto resources = compiler.get_shader_resources();
+
+        // 将 push_constant 映射为普通 uniform
         for (auto& pc : resources.push_constant_buffers) {
             compiler.set_decoration(pc.id, spv::DecorationBinding, 0);
         }
 
-        return compiler.compile();
+        // BoneMatrices / MorphWeights / PointLights / SpotLights 保持为 UBO 块
+        // OpenGL 后端将通过 glBindBufferBase 绑定（与 PerFrame/PerScene/PerMaterial 一致）
+
+        std::string glsl = compiler.compile();
+
+        // 后处理: 展平 PushConstants struct → 独立 uniform
+        glsl = FlattenPushConstantsInGLSL(glsl);
+
+        return glsl;
     } catch (const spirv_cross::CompilerError& e) {
         std::cerr << "[ERROR] spirv-cross GLSL: " << e.what() << "\n";
         return "";

@@ -18,6 +18,7 @@
 #include <functional>
 #include <cstddef>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <sstream>
 
@@ -611,53 +612,64 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         );
         ubo_mgr.UploadPerMaterial(per_mat);
 
-        // 点光源（暂保留独立 uniform）
-        int point_count = std::min(static_cast<int>(item.point_lights.size()), 4);
-        if (loc.point_light_count != -1) glUniform1i(loc.point_light_count, point_count);
-        for (int i = 0; i < point_count; ++i) {
-            glUniform3f(loc.point_lights[i].color, item.point_lights[i].color.r, item.point_lights[i].color.g, item.point_lights[i].color.b);
-            glUniform3f(loc.point_lights[i].position, item.point_lights[i].position.x, item.point_lights[i].position.y, item.point_lights[i].position.z);
-            glUniform1f(loc.point_lights[i].intensity, item.point_lights[i].intensity);
-            glUniform1f(loc.point_lights[i].radius, item.point_lights[i].radius);
-            if (loc.point_lights[i].cast_shadow != -1) glUniform1i(loc.point_lights[i].cast_shadow, item.point_lights[i].cast_shadow ? 1 : 0);
-            if (loc.point_lights[i].shadow_index != -1) glUniform1i(loc.point_lights[i].shadow_index, item.point_lights[i].shadow_index);
+        // 点光源 UBO
+        {
+            PointLightsUBO pl_ubo{};
+            pl_ubo.u_point_light_count = std::min(static_cast<int>(item.point_lights.size()), 4);
+            for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
+                auto& dst = pl_ubo.u_point_lights[i];
+                auto& src = item.point_lights[i];
+                dst.color = src.color; dst.intensity = src.intensity;
+                dst.position = src.position; dst.radius = src.radius;
+                dst.cast_shadow = src.cast_shadow ? 1 : 0;
+                dst.shadow_index = src.shadow_index;
+            }
+            ubo_mgr.UploadPointLights(pl_ubo);
         }
         for (int i = 0; i < 4; ++i) {
-            const int location = glGetUniformLocation(shader_mgr.pbr_shader_handle(), ("u_point_shadow_maps[" + std::to_string(i) + "]").c_str());
-            if (location != -1) {
+            if (loc.point_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE9 + i);
                 glBindTexture(GL_TEXTURE_CUBE_MAP, global_point_shadow_map_[i]);
-                glUniform1i(location, 9 + i);
+                glUniform1i(loc.point_shadow_map[i], 9 + i);
             }
         }
 
-        // 聚光灯（暂保留独立 uniform）
-        int spot_count = std::min(static_cast<int>(item.spot_lights.size()), 4);
-        if (loc.spot_light_count != -1) glUniform1i(loc.spot_light_count, spot_count);
-        for (int i = 0; i < spot_count; ++i) {
-            glUniform3f(loc.spot_lights[i].color, item.spot_lights[i].color.r, item.spot_lights[i].color.g, item.spot_lights[i].color.b);
-            glUniform3f(loc.spot_lights[i].position, item.spot_lights[i].position.x, item.spot_lights[i].position.y, item.spot_lights[i].position.z);
-            glUniform3f(loc.spot_lights[i].direction, item.spot_lights[i].direction.x, item.spot_lights[i].direction.y, item.spot_lights[i].direction.z);
-            glUniform1f(loc.spot_lights[i].intensity, item.spot_lights[i].intensity);
-            glUniform1f(loc.spot_lights[i].radius, item.spot_lights[i].radius);
-            glUniform1f(loc.spot_lights[i].inner_cone, item.spot_lights[i].inner_cone);
-            glUniform1f(loc.spot_lights[i].outer_cone, item.spot_lights[i].outer_cone);
-            if (loc.spot_lights[i].cast_shadow != -1) glUniform1i(loc.spot_lights[i].cast_shadow, item.spot_lights[i].cast_shadow ? 1 : 0);
-            if (loc.spot_lights[i].shadow_index != -1) glUniform1i(loc.spot_lights[i].shadow_index, item.spot_lights[i].shadow_index);
+        // 聚光灯 UBO
+        {
+            SpotLightsUBO sl_ubo{};
+            sl_ubo.u_spot_light_count = std::min(static_cast<int>(item.spot_lights.size()), 4);
+            for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
+                auto& dst = sl_ubo.u_spot_lights[i];
+                auto& src = item.spot_lights[i];
+                dst.color = src.color; dst.intensity = src.intensity;
+                dst.position = src.position; dst.radius = src.radius;
+                dst.direction = src.direction; dst.inner_cone = src.inner_cone;
+                dst.outer_cone = src.outer_cone;
+                dst.cast_shadow = src.cast_shadow ? 1 : 0;
+                dst.shadow_index = src.shadow_index;
+            }
+            ubo_mgr.UploadSpotLights(sl_ubo);
         }
 
-        // CSM 阴影贴图（保留独立 uniform - 采样器无法入 UBO）
+        // 聚光灯空间矩阵 UBO
+        {
+            SpotLightDataUBO sld_ubo{};
+            for (int i = 0; i < 4; ++i)
+                sld_ubo.u_spot_light_space_matrices[i] = global_spot_light_space_matrix_[i];
+            ubo_mgr.UploadSpotLightData(sld_ubo);
+        }
+
+        // CSM 阴影贴图（sampler2DShadow 需要硬件深度比较）
         for (int i = 0; i < 3; ++i) {
             if (loc.shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE2 + i);
                 glBindTexture(GL_TEXTURE_2D, global_shadow_map_[i]);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
                 glUniform1i(loc.shadow_map[i], 2 + i);
             }
         }
         for (int i = 0; i < 4; ++i) {
-            if (loc.spot_light_space_matrix[i] != -1) {
-                glUniformMatrix4fv(loc.spot_light_space_matrix[i], 1, GL_FALSE, glm::value_ptr(global_spot_light_space_matrix_[i]));
-            }
             if (loc.spot_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE5 + i);
                 glBindTexture(GL_TEXTURE_2D, global_spot_shadow_map_[i]);
@@ -695,20 +707,27 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glCullFace(GL_BACK);
         }
 
-        // 骨骼动画（逐对象 uniform）
+        // 骨骼动画（push constant → 独立 uniform + BoneMatrices UBO）
         if (loc.skinned != -1) {
             glUniform1i(loc.skinned, item.skinned ? 1 : 0);
         }
-        if (item.skinned && loc.bone_matrices != -1 && !item.bone_matrices.empty()) {
-            glUniformMatrix4fv(loc.bone_matrices, static_cast<GLsizei>(std::min(item.bone_matrices.size(), static_cast<size_t>(100))), GL_FALSE, glm::value_ptr(item.bone_matrices[0]));
+        if (item.skinned && !item.bone_matrices.empty()) {
+            BoneMatricesUBO bm_ubo{};
+            size_t count = std::min(item.bone_matrices.size(), static_cast<size_t>(kMaxBones));
+            std::memcpy(bm_ubo.u_bone_matrices, item.bone_matrices.data(), count * sizeof(glm::mat4));
+            ubo_mgr.UploadBoneMatrices(bm_ubo);
         }
 
-        // 变形目标（逐对象 uniform）
+        // 变形目标（push constant → 独立 uniform + MorphWeights UBO）
         if (loc.morph_enabled != -1) {
             glUniform1i(loc.morph_enabled, item.morph_enabled ? 1 : 0);
         }
-        if (item.morph_enabled && loc.morph_weights != -1 && !item.morph_weights.empty()) {
-            glUniform1fv(loc.morph_weights, static_cast<GLsizei>(std::min(item.morph_weights.size(), static_cast<size_t>(4))), item.morph_weights.data());
+        if (item.morph_enabled && !item.morph_weights.empty()) {
+            MorphWeightsUBO mw_ubo{};
+            size_t count = std::min(item.morph_weights.size(), static_cast<size_t>(kMaxMorphTargets));
+            for (size_t i = 0; i < count; ++i)
+                mw_ubo.u_morph_weights[i] = glm::vec4(item.morph_weights[i], 0.0f, 0.0f, 0.0f);
+            ubo_mgr.UploadMorphWeights(mw_ubo);
         }
 
         // 模型矩阵（逐对象 uniform）
@@ -889,9 +908,10 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     const auto& skybox_loc = shader_mgr.skybox_locations();
     glDepthFunc(GL_LEQUAL);
     glUseProgram(shader_mgr.skybox_shader_handle());
+    // 合成 VP 矩阵：移除平移分量后乘以投影
     glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
-    glUniformMatrix4fv(skybox_loc.view, 1, GL_FALSE, glm::value_ptr(skybox_view));
-    glUniformMatrix4fv(skybox_loc.projection, 1, GL_FALSE, glm::value_ptr(projection));
+    glm::mat4 vp = projection * skybox_view;
+    glUniformMatrix4fv(skybox_loc.vp, 1, GL_FALSE, glm::value_ptr(vp));
 
     glBindVertexArray(skybox_vao_handle_);
     glActiveTexture(GL_TEXTURE0);
@@ -1047,11 +1067,15 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
             uniform sampler2D bloomBlur;
             uniform float exposure;
             uniform float bloomIntensity;
+            vec3 AcesFilmic(vec3 x) {
+                float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+                return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+            }
             void main() {
                 vec3 hdrColor = texture(screenTexture, TexCoords).rgb;      
                 vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
                 hdrColor += bloomColor * bloomIntensity;
-                vec3 result = vec3(1.0) - exp(-hdrColor * exposure);
+                vec3 result = AcesFilmic(hdrColor * exposure);
                 result = pow(result, vec3(1.0 / 2.2));
                 FragColor = vec4(result, 1.0);
             }
@@ -1307,14 +1331,8 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
 
     const auto& p_loc = shader_mgr.particle_locations();
     glUseProgram(shader_mgr.particle_shader_handle());
-    glm::mat4 vp = projection * view;
-    glUniformMatrix4fv(p_loc.vp, 1, GL_FALSE, glm::value_ptr(vp));
+    // 粒子着色器使用 PerFrame UBO（vp + view），相机方向由着色器从 view 矩阵提取
     glUniform1i(p_loc.texture, 0);
-
-    glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
-    glm::vec3 camera_up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-    glUniform3fv(glGetUniformLocation(shader_mgr.particle_shader_handle(), "u_camera_right"), 1, glm::value_ptr(camera_right));
-    glUniform3fv(glGetUniformLocation(shader_mgr.particle_shader_handle(), "u_camera_up"), 1, glm::value_ptr(camera_up));
 
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);

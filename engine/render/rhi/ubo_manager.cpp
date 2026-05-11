@@ -22,6 +22,17 @@ void UBOManager::Init() {
     per_scene_buffer_ = CreateUBO(sizeof(PerSceneUBO), &scene_data, UBOBindingPoint::PerScene);
     per_material_buffer_ = CreateUBO(sizeof(PerMaterialUBO), &material_data, UBOBindingPoint::PerMaterial);
 
+    PointLightsUBO pl{};
+    SpotLightsUBO sl{};
+    SpotLightDataUBO sld{};
+    BoneMatricesUBO bm{};
+    MorphWeightsUBO mw{};
+    point_lights_buffer_ = CreateUBO(sizeof(PointLightsUBO), &pl, UBOBindingPoint::PointLights);
+    spot_lights_buffer_ = CreateUBO(sizeof(SpotLightsUBO), &sl, UBOBindingPoint::SpotLights);
+    spot_light_data_buffer_ = CreateUBO(sizeof(SpotLightDataUBO), &sld, UBOBindingPoint::SpotLightData);
+    bone_matrices_buffer_ = CreateUBO(sizeof(BoneMatricesUBO), &bm, UBOBindingPoint::BoneMatrices);
+    morph_weights_buffer_ = CreateUBO(sizeof(MorphWeightsUBO), &mw, UBOBindingPoint::MorphWeights);
+
     initialized_ = true;
 }
 
@@ -39,6 +50,12 @@ void UBOManager::Shutdown() {
     if (per_material_buffer_ != 0) {
         glDeleteBuffers(1, &per_material_buffer_);
         per_material_buffer_ = 0;
+    }
+    unsigned int* extra[] = { &point_lights_buffer_, &spot_lights_buffer_,
+                              &spot_light_data_buffer_, &bone_matrices_buffer_,
+                              &morph_weights_buffer_ };
+    for (auto* p : extra) {
+        if (*p != 0) { glDeleteBuffers(1, p); *p = 0; }
     }
 
     initialized_ = false;
@@ -62,18 +79,53 @@ void UBOManager::UploadPerMaterial(const PerMaterialUBO& data) {
     }
 }
 
+void UBOManager::UploadPointLights(const PointLightsUBO& data) {
+    if (point_lights_buffer_ != 0)
+        UpdateUBO(point_lights_buffer_, sizeof(PointLightsUBO), &data);
+}
+
+void UBOManager::UploadSpotLights(const SpotLightsUBO& data) {
+    if (spot_lights_buffer_ != 0)
+        UpdateUBO(spot_lights_buffer_, sizeof(SpotLightsUBO), &data);
+}
+
+void UBOManager::UploadSpotLightData(const SpotLightDataUBO& data) {
+    if (spot_light_data_buffer_ != 0)
+        UpdateUBO(spot_light_data_buffer_, sizeof(SpotLightDataUBO), &data);
+}
+
+void UBOManager::UploadBoneMatrices(const BoneMatricesUBO& data) {
+    if (bone_matrices_buffer_ != 0)
+        UpdateUBO(bone_matrices_buffer_, sizeof(BoneMatricesUBO), &data);
+}
+
+void UBOManager::UploadMorphWeights(const MorphWeightsUBO& data) {
+    if (morph_weights_buffer_ != 0)
+        UpdateUBO(morph_weights_buffer_, sizeof(MorphWeightsUBO), &data);
+}
+
 void UBOManager::BindAll() const {
     Bind(UBOBindingPoint::PerFrame);
     Bind(UBOBindingPoint::PerScene);
     Bind(UBOBindingPoint::PerMaterial);
+    Bind(UBOBindingPoint::PointLights);
+    Bind(UBOBindingPoint::SpotLights);
+    Bind(UBOBindingPoint::SpotLightData);
+    Bind(UBOBindingPoint::BoneMatrices);
+    Bind(UBOBindingPoint::MorphWeights);
 }
 
 void UBOManager::Bind(UBOBindingPoint binding) const {
     unsigned int buffer = 0;
     switch (binding) {
-        case UBOBindingPoint::PerFrame:   buffer = per_frame_buffer_; break;
-        case UBOBindingPoint::PerScene:   buffer = per_scene_buffer_; break;
-        case UBOBindingPoint::PerMaterial: buffer = per_material_buffer_; break;
+        case UBOBindingPoint::PerFrame:      buffer = per_frame_buffer_; break;
+        case UBOBindingPoint::PerScene:      buffer = per_scene_buffer_; break;
+        case UBOBindingPoint::PerMaterial:   buffer = per_material_buffer_; break;
+        case UBOBindingPoint::PointLights:   buffer = point_lights_buffer_; break;
+        case UBOBindingPoint::SpotLights:    buffer = spot_lights_buffer_; break;
+        case UBOBindingPoint::SpotLightData: buffer = spot_light_data_buffer_; break;
+        case UBOBindingPoint::BoneMatrices:  buffer = bone_matrices_buffer_; break;
+        case UBOBindingPoint::MorphWeights:  buffer = morph_weights_buffer_; break;
         default: return;
     }
     if (buffer != 0) {

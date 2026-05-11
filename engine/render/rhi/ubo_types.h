@@ -27,10 +27,15 @@ namespace render {
 
 /// UBO 绑定点枚举 - 与 GLSL uniform block binding 对应
 enum class UBOBindingPoint : unsigned int {
-    PerFrame   = 0,   ///< 每帧更新的相机/投影数据
-    PerScene   = 1,   ///< 每帧更新的光照/阴影数据
-    PerMaterial = 2,   ///< 每材质更新的 PBR 参数
-    Count      = 3,   ///< 绑定点总数
+    PerFrame        = 0,  ///< 每帧更新的相机/投影数据
+    PerScene        = 1,  ///< 每帧更新的光照/阴影数据
+    PerMaterial     = 2,  ///< 每材质更新的 PBR 参数
+    PointLights     = 3,  ///< 点光源数据
+    SpotLights      = 4,  ///< 聚光灯数据
+    SpotLightData   = 5,  ///< 聚光灯空间矩阵
+    BoneMatrices    = 6,  ///< 骨骼矩阵
+    MorphWeights    = 7,  ///< 变形目标权重
+    Count           = 8,  ///< 绑定点总数
 };
 
 // ============================================================
@@ -116,6 +121,76 @@ struct PerMaterialUBO {
     glm::vec4 flags;            ///< x = has_normal_map, y = has_metallic_roughness_map, z = has_emissive_map, w = has_occlusion_map (均为 0.0/1.0)
 };
 static_assert(sizeof(PerMaterialUBO) == 64, "PerMaterialUBO must be 64 bytes for std140 layout");
+
+// ============================================================
+// PointLights UBO (binding = 3)
+// ============================================================
+
+struct PointLightEntry {
+    glm::vec3 color;   float intensity;
+    glm::vec3 position; float radius;
+    int cast_shadow;   int shadow_index;
+    glm::vec2 _pad;
+};
+static_assert(sizeof(PointLightEntry) == 48, "PointLightEntry must be 48 bytes for std140");
+
+struct PointLightsUBO {
+    int u_point_light_count;
+    int _pad0, _pad1, _pad2;
+    PointLightEntry u_point_lights[4];
+};
+static_assert(sizeof(PointLightsUBO) == 208, "PointLightsUBO must be 208 bytes for std140");
+
+// ============================================================
+// SpotLights UBO (binding = 4)
+// ============================================================
+
+struct SpotLightEntry {
+    glm::vec3 color;   float intensity;
+    glm::vec3 position; float radius;
+    glm::vec3 direction; float inner_cone;
+    float outer_cone;
+    int cast_shadow;   int shadow_index;
+    float _pad;
+};
+static_assert(sizeof(SpotLightEntry) == 64, "SpotLightEntry must be 64 bytes for std140");
+
+struct SpotLightsUBO {
+    int u_spot_light_count;
+    int _pad0, _pad1, _pad2;
+    SpotLightEntry u_spot_lights[4];
+};
+static_assert(sizeof(SpotLightsUBO) == 272, "SpotLightsUBO must be 272 bytes for std140");
+
+// ============================================================
+// SpotLightData UBO (binding = 5)
+// ============================================================
+
+struct SpotLightDataUBO {
+    glm::mat4 u_spot_light_space_matrices[4];
+};
+static_assert(sizeof(SpotLightDataUBO) == 256, "SpotLightDataUBO must be 256 bytes");
+
+// ============================================================
+// BoneMatrices UBO (binding = 6)
+// ============================================================
+
+static constexpr int kMaxBones = 100;
+struct BoneMatricesUBO {
+    glm::mat4 u_bone_matrices[kMaxBones];
+};
+static_assert(sizeof(BoneMatricesUBO) == 6400, "BoneMatricesUBO must be 6400 bytes");
+
+// ============================================================
+// MorphWeights UBO (binding = 7)
+// std140 规则: float 数组每元素占 16 bytes
+// ============================================================
+
+static constexpr int kMaxMorphTargets = 4;
+struct MorphWeightsUBO {
+    glm::vec4 u_morph_weights[kMaxMorphTargets]; ///< 只用 .x 分量
+};
+static_assert(sizeof(MorphWeightsUBO) == 64, "MorphWeightsUBO must be 64 bytes for std140");
 
 } // namespace render
 } // namespace dse

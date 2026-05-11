@@ -23,11 +23,16 @@ namespace render {
 /// UBO 化后：PerFrame/PerScene/PerMaterial 中的 uniform 不再需要独立 location
 struct PBRShaderLocations {
     // --- UBO block indices（用于 glUniformBlockBinding） ---
-    unsigned int per_frame_block_index = 0;     ///< PerFrame UBO block index
-    unsigned int per_scene_block_index = 0;     ///< PerScene UBO block index
-    unsigned int per_material_block_index = 0;  ///< PerMaterial UBO block index
+    unsigned int per_frame_block_index = 0;
+    unsigned int per_scene_block_index = 0;
+    unsigned int per_material_block_index = 0;
+    unsigned int point_lights_block_index = 0;
+    unsigned int spot_lights_block_index = 0;
+    unsigned int spot_light_data_block_index = 0;
+    unsigned int bone_matrices_block_index = 0;
+    unsigned int morph_weights_block_index = 0;
 
-    // --- 独立 uniform location（纹理采样器/逐对象数据） ---
+    // --- 纹理采样器 uniform location ---
     int texture = -1;
     int normal_map = -1;
     int metallic_roughness_map = -1;
@@ -35,48 +40,23 @@ struct PBRShaderLocations {
     int occlusion_map = -1;
     int shadow_map[3] = {-1, -1, -1};
     int spot_shadow_map[4] = {-1, -1, -1, -1};
-    int spot_light_space_matrix[4] = {-1, -1, -1, -1};
-    int model = -1;                    ///< 模型矩阵（逐对象）
+    int point_shadow_map[4] = {-1, -1, -1, -1};
+
+    // --- 逐对象 uniform（从 push constants 展平） ---
+    int model = -1;
     int skinned = -1;
-    int bone_matrices = -1;
     int morph_enabled = -1;
-    int morph_weights = -1;
-    int point_light_count = -1;
-
-    struct PointLightLoc {
-        int color = -1;
-        int position = -1;
-        int intensity = -1;
-        int radius = -1;
-        int cast_shadow = -1;
-        int shadow_index = -1;
-    } point_lights[4];
-
-    int spot_light_count = -1;
-
-    struct SpotLightLoc {
-        int color = -1;
-        int position = -1;
-        int direction = -1;
-        int intensity = -1;
-        int radius = -1;
-        int inner_cone = -1;
-        int outer_cone = -1;
-        int cast_shadow = -1;
-        int shadow_index = -1;
-    } spot_lights[4];
 };
 
 /// 天空盒着色器 uniform location 缓存
 struct SkyboxShaderLocations {
-    int view = -1;
-    int projection = -1;
+    int vp = -1;     ///< 合并的 view-projection 矩阵
     int tex = -1;
 };
 
 /// 粒子着色器 uniform location 缓存
 struct ParticleShaderLocations {
-    int vp = -1;
+    unsigned int per_frame_block_index = 0;  ///< PerFrame UBO
     int texture = -1;
 };
 

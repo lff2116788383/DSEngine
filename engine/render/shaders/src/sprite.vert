@@ -9,12 +9,12 @@ layout(location = 0) out vec4 vColor;
 layout(location = 1) out vec2 vTexCoord;
 
 layout(push_constant) uniform PushConstants {
-    mat4 model;
-    mat4 vp;
+    mat4 u_model;
+    mat4 u_vp;
 } pc;
 
 void main() {
-    gl_Position = pc.vp * pc.model * vec4(aPos, 0.0, 1.0);
+    gl_Position = pc.u_vp * pc.u_model * vec4(aPos, 0.0, 1.0);
     vColor = aColor;
     vTexCoord = aTexCoord;
 }
