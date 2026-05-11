@@ -226,6 +226,11 @@ public:
     /// OpenGL: identity. Vulkan: Y-flip + Z remap. DX11: Z remap only.
     virtual glm::mat4 GetProjectionCorrection() const { return glm::mat4(1.0f); }
 
+    /// Shadow-sampling correction: same as GetProjectionCorrection() but WITHOUT
+    /// Z remap, so the shader can consistently remap Z from [-1,1] to [0,1].
+    /// OpenGL: identity (same).  Vulkan: Y-flip only.  DX11: identity.
+    virtual glm::mat4 GetShadowSampleCorrection() const { return glm::mat4(1.0f); }
+
     // --- SSBO (Shader Storage Buffer Object) 接口 ---
     // Clustered Forward+ 所需：光源列表 + Cluster 映射表
     // OpenGL: GL_SHADER_STORAGE_BUFFER (GL 4.3+)

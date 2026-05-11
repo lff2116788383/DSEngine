@@ -61,8 +61,9 @@ VkCullModeFlagBits VulkanPipelineStateManager::ToVkCullMode(CullFace face) {
 }
 
 VkFrontFace VulkanPipelineStateManager::ToVkFrontFace() {
-    // 投影修正矩阵包含 Y-flip，屏幕空间三角形绕序从 CCW 变为 CW
-    return VK_FRONT_FACE_CLOCKWISE;
+    // 投影修正矩阵的 Y-flip 与 Vulkan viewport Y 方向互相抵消，
+    // 帧缓冲中三角形绕序仍为 CCW（与 OpenGL 一致）
+    return VK_FRONT_FACE_COUNTER_CLOCKWISE;
 }
 
 // ============================================================================

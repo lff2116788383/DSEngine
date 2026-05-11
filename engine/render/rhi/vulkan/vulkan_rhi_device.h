@@ -176,6 +176,17 @@ public:
         );
     }
 
+    /// Shadow sampling: Y-flip only, NO Z remap.
+    /// Shader will remap Z from [-1,1] to [0,1] uniformly.
+    glm::mat4 GetShadowSampleCorrection() const override {
+        return glm::mat4(
+            1.0f,  0.0f, 0.0f, 0.0f,
+            0.0f, -1.0f, 0.0f, 0.0f,
+            0.0f,  0.0f, 1.0f, 0.0f,
+            0.0f,  0.0f, 0.0f, 1.0f
+        );
+    }
+
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }
     VulkanResourceManager& resource_mgr() { return resource_mgr_; }

@@ -107,13 +107,13 @@ public:
         if (index < 4) global_point_shadow_map_[index] = handle;
     }
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-        if (index < 3) global_light_space_matrix_[index] = kNdcZBias_ * mat;
+        if (index < 3) global_light_space_matrix_[index] = mat;
     }
     void SetGlobalCascadeSplit(unsigned int index, float split) {
         if (index < 3) global_cascade_splits_[index] = split;
     }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-        if (index < 4) global_spot_light_space_matrix_[index] = kNdcZBias_ * mat;
+        if (index < 4) global_spot_light_space_matrix_[index] = mat;
     }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
         for (int i = 0; i < 9; ++i) global_light_probe_sh_[i] = sh[i];
@@ -185,12 +185,6 @@ private:
 
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;
-
-    // OpenGL NDC Z bias: remap [-1,1] → [0,1] so projCoords.z matches depth buffer range
-    static constexpr float kZBiasData_[16] = {
-        1,0,0,0,  0,1,0,0,  0,0,0.5f,0,  0,0,0.5f,1
-    };
-    const glm::mat4 kNdcZBias_ = glm::make_mat4(kZBiasData_);
 
     // 全局阴影/光源状态
     glm::mat4 global_light_space_matrix_[3];

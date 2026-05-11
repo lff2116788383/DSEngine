@@ -145,6 +145,12 @@ public:
         );
     }
 
+    /// Shadow sampling: identity (no Z remap).
+    /// Shader will remap Z from [-1,1] to [0,1] uniformly.
+    glm::mat4 GetShadowSampleCorrection() const override {
+        return glm::mat4(1.0f);
+    }
+
     /// 初始化 D3D11 上下文
     bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false, bool force_sdr = false);
 

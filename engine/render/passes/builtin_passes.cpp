@@ -86,6 +86,7 @@ void CSMShadowPass::Setup(RenderGraph& graph) {
 
 void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+    const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
     if (light_view.begin() == light_view.end()) return;
     auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
@@ -118,7 +119,10 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
         glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
 
-        light_space_matrices[i] = light_proj * light_view_mat;
+        // Sampling matrix uses shadow_sample_correction (no Z remap)
+        // so shader can uniformly remap Z from [-1,1] to [0,1]
+        glm::mat4 sample_proj = shadow_sample_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+        light_space_matrices[i] = sample_proj * light_view_mat;
         cascade_splits[i] = light.cascade_splits[i];
 
         cmd_buffer.SetCamera(light_view_mat, light_proj);
@@ -154,6 +158,7 @@ void SpotShadowPass::Setup(RenderGraph& graph) {
 
 void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+    const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     auto spot_light_view = ctx_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
     std::vector<glm::mat4> spot_light_space_matrices;
     spot_light_space_matrices.reserve(4);
@@ -181,7 +186,9 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
             }
         }
         cmd_buffer.EndRenderPass();
-        spot_light_space_matrices.push_back(light_proj * light_view_mat);
+        // Sampling matrix: no Z remap, shader remaps Z uniformly
+        const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+        spot_light_space_matrices.push_back(sample_proj * light_view_mat);
         cmd_buffer.DeferSetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
         ++shadow_slot;
     }
