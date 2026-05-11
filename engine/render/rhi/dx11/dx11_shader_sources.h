@@ -278,15 +278,7 @@ float SampleShadowPCF(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
     return shadow / 9.0;
 }
 
-float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, float3 lightDir) {
-    bool receive = (light_params.z != 0.0);
-    if (!receive) return 0.0;
-
-    float viewDepth = abs(fragPosView.z);
-    int ci = 2;
-    if (viewDepth < cascade_splits.x)      ci = 0;
-    else if (viewDepth < cascade_splits.y) ci = 1;
-
+float ShadowForCascade(int ci, float3 fragPosWorld, float3 normal, float3 lightDir) {
     float4 fragPosLS;
     if (ci == 0)      fragPosLS = mul(light_space_matrices[0], float4(fragPosWorld, 1.0));
     else if (ci == 1) fragPosLS = mul(light_space_matrices[1], float4(fragPosWorld, 1.0));
@@ -304,7 +296,32 @@ float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, 
     if (ci == 0)      lit = SampleShadowPCF(u_shadow_map0, u_cmp_sampler, proj, bias);
     else if (ci == 1) lit = SampleShadowPCF(u_shadow_map1, u_cmp_sampler, proj, bias);
     else              lit = SampleShadowPCF(u_shadow_map2, u_cmp_sampler, proj, bias);
-    return clamp((1.0 - lit) * light_params.y, 0.0, 1.0);
+    return 1.0 - lit;
+}
+
+float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, float3 lightDir) {
+    bool receive = (light_params.z != 0.0);
+    if (!receive) return 0.0;
+
+    float viewDepth = abs(fragPosView.z);
+    int ci = 2;
+    if (viewDepth < cascade_splits.x)      ci = 0;
+    else if (viewDepth < cascade_splits.y) ci = 1;
+
+    float shadow = ShadowForCascade(ci, fragPosWorld, normal, lightDir);
+
+    // 级联边界 smoothstep 混合：在当前级联范围末尾 20% 区域混合到下一级
+    if (ci < 2) {
+        float splitEnd = (ci == 0) ? cascade_splits.x : cascade_splits.y;
+        float blendStart = splitEnd * 0.8;
+        if (viewDepth > blendStart) {
+            float blendFactor = smoothstep(blendStart, splitEnd, viewDepth);
+            float nextShadow = ShadowForCascade(ci + 1, fragPosWorld, normal, lightDir);
+            shadow = lerp(shadow, nextShadow, blendFactor);
+        }
+    }
+
+    return clamp(shadow * light_params.y, 0.0, 1.0);
 }
 
 float4 PSMain(PSInput input) : SV_TARGET {

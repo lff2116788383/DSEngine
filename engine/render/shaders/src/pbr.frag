@@ -177,23 +177,41 @@ float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
     return shadow / 9.0;
 }
 
+float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {
+    vec4 fragPosLightSpace = light_space_matrices[idx] * vec4(fragPosWorldSpace, 1.0);
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
+    if (projCoords.z > 1.0) return 0.0;
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+    float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
+    float lit = SampleShadowPCF(u_shadow_maps[idx], projCoords, bias);
+    return 1.0 - lit;
+}
+
 float ShadowCalculation(vec3 fragPosWorldSpace, vec3 fragPosViewSpace, vec3 normal, vec3 lightDir) {
     if (!u_receive_shadow) return 0.0;
+    float viewDepth = abs(fragPosViewSpace.z);
     int cascadeIndex = CSM_CASCADES - 1;
     for (int i = 0; i < CSM_CASCADES - 1; ++i) {
-        if (abs(fragPosViewSpace.z) < u_cascade_splits[i]) {
+        if (viewDepth < u_cascade_splits[i]) {
             cascadeIndex = i;
             break;
         }
     }
-    vec4 fragPosLightSpace = light_space_matrices[cascadeIndex] * vec4(fragPosWorldSpace, 1.0);
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords.xy = projCoords.xy * 0.5 + 0.5;
-    if(projCoords.z > 1.0) return 0.0;
-    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
-    float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-    float lit = SampleShadowPCF(u_shadow_maps[cascadeIndex], projCoords, bias);
-    return clamp((1.0 - lit) * u_shadow_strength, 0.0, 1.0);
+    float shadow = ShadowForCascade(cascadeIndex, fragPosWorldSpace, normal, lightDir);
+
+    // 级联边界 smoothstep 混合：在当前级联范围末尾 20% 区域混合到下一级
+    if (cascadeIndex < CSM_CASCADES - 1) {
+        float splitEnd = u_cascade_splits[cascadeIndex];
+        float blendStart = splitEnd * 0.8;
+        if (viewDepth > blendStart) {
+            float blendFactor = smoothstep(blendStart, splitEnd, viewDepth);
+            float nextShadow = ShadowForCascade(cascadeIndex + 1, fragPosWorldSpace, normal, lightDir);
+            shadow = mix(shadow, nextShadow, blendFactor);
+        }
+    }
+
+    return clamp(shadow * u_shadow_strength, 0.0, 1.0);
 }
 
 float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {

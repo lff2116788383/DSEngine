@@ -112,9 +112,12 @@
 
 ### Phase 3: 阴影质量
 
-9. **CSM 级联过渡**
-   - 修改 `pbr.frag` 的 `ShadowCalculation()` — 在级联边界 smoothstep 混合两级 shadow
-   - ~20 行改动
+9. ✅ **CSM 级联过渡** （已完成 2026-05-11）
+   - 提取 `ShadowForCascade()` 辅助函数（单级联阴影采样）
+   - `ShadowCalculation()` 在级联范围末尾 20% 区域 `smoothstep` 混合到下一级
+   - GLSL (`pbr.frag`) + HLSL (`dx11_shader_sources.h`) 同步修改
+   - SPIR-V 重新编译（pbr.frag 39KB→44KB）
+   - 验证: OpenGL RMSE 22.5, DX11 23.4, Vulkan 24.5 (vs KF), 850/850 测试通过
 
 ## 关键文件清单
 
