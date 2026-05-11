@@ -340,13 +340,15 @@ void postprocess() {
 
 ## 四、前置依赖
 
-> **⚠️ DSSL 的实现依赖「三后端统一 Shader」改造完成。**
+> **✅ 前置依赖已满足（2026-05-11）。**
 >
-> DSSL transpiler 输出的 GLSL 450 需要喂给统一后的 `tools/shader_compiler`。
-> 代码模板中的 UBO layout（set/binding 编号、字段名）必须与统一后的 `pbr.frag` 对齐。
+> 三后端统一 Shader 改造已完成并合入 master（commit d142240）。
+> DSSL transpiler 输出的 GLSL 450 可直接喂给 `tools/shader_compiler`。
+> 代码模板中的 UBO layout（set/binding 编号、字段名）须与 `engine/render/shaders/src/pbr.frag` 对齐。
 >
-> 当前远程机器正在 master 分支推进此工作（详见 `docs/shader_unification_plan.md`）。
-> **DSSL 实施应在 shader 统一合入 master 后，从 master 拉出 `feature/dssl` 分支开始。**
+> **注意**：若先实施 Clustered Forward+（`docs/RENDER_PIPELINE_OPTIMIZATION.md` Phase 1），
+> `pbr.frag` 的光源遍历将大改（UBO → SSBO + cluster 查找）。建议 DSSL 在 Clustered Forward+
+> 完成后再实施，以避免模板代码二次返工。
 
 ---
 

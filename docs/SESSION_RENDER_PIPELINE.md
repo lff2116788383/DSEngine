@@ -7,9 +7,9 @@
 
 ## 项目信息
 
-- **仓库**: `c:\Users\wenbilin\Desktop\Engine\DSEngine`
-- **分支**: `feature/render-pipeline`（从 master 7c0608a fork）
-- **切换分支**: `git checkout feature/render-pipeline`
+- **仓库**: `c:\Users\Administrator\Desktop\Engine\DSEngine`
+- **分支**: `feature/render-pipeline`（需 rebase 到 master d142240）
+- **切换分支**: `git checkout feature/render-pipeline && git rebase master`
 
 ## 你的任务
 
@@ -17,7 +17,9 @@
 
 ## 前置条件
 
-⚠️ 远程机器正在 master 分支进行「三后端统一 Shader」改造（SPIRV-Cross 离线编译）。**在该工作合入 master 之前，先做不涉及 shader 修改的基础设施准备工作**。如果 shader 统一已完成（检查 `engine/render/shaders/src/pbr.frag` 是否已是正式使用的唯一 PBR 源码，且三后端 ShaderManager 已加载生成的头文件），则可直接开始全部 Phase。
+✅ 三后端统一 Shader 改造已完成并合入 master（commit d142240, 2026-05-11）。
+`engine/render/shaders/src/pbr.frag` 是唯一 PBR 源码，三后端 ShaderManager 均加载生成的头文件。
+**可直接开始全部 Phase。**
 
 ## 实施顺序
 

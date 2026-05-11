@@ -50,8 +50,8 @@ for (i = 0; i < spot_light_count; i++)       // 最多 4 盏聚光灯
 | 组件 | 状态 | 说明 |
 |------|------|------|
 | RenderGraph DAG | ✅ 可用 | 依赖声明、拓扑排序、自动剔除、瞬态资源、波次并行 |
-| Compute Shader | ⚠️ 仅 Vulkan | Bloom downsample/upsample 使用 CS，OpenGL/DX11 用 fragment fallback |
-| 三后端 RHI | ⚠️ 基本可用 | OpenGL 稳定，Vulkan/DX11 近期仍有修复 |
+| Compute Shader | ⚠️ Vulkan + DX11 | Bloom downsample/upsample 使用 CS，OpenGL 用 fragment fallback |
+| 三后端 RHI | ✅ 已稳定 | OpenGL/Vulkan/DX11 视觉对比 RMSE 22-24，亮度一致（2026-05-11 验证） |
 | 统一 Shader 编译 | ✅ 新增 | GLSL → SPIRV-Cross → 多后端，消除手写三份着色器 |
 | CommandBuffer | ✅ 可用 | 延迟提交、排序、合并绘制调用 |
 
@@ -78,14 +78,14 @@ for (i = 0; i < spot_light_count; i++)       // 最多 4 盏聚光灯
 | 光源上限 | 4+4+1 | 数百 | 数千 | 无实际限制 | 数百 |
 | GBuffer | ❌ | ❌ (Forward+无需) | ✅ | ✅ | ✅ (Deferred 可选) |
 | GPU Driven | ❌ | ⚠️ 部分 | ✅ SRP Batcher | ✅ Nanite | ❌ |
-| Compute 管线 | ⚠️ 仅 Vulkan Bloom | ✅ | ✅ | ✅ 深度依赖 | ✅ |
+| Compute 管线 | ⚠️ Vulkan + DX11 Bloom | ✅ | ✅ | ✅ 深度依赖 | ✅ |
 
 ### 2.2 后处理对比
 
 | 效果 | DSEngine | Unity URP | Unreal 5 | Godot 4 |
 |------|----------|-----------|----------|---------|
 | Bloom | ✅ | ✅ | ✅ | ✅ |
-| Tonemapping | ✅ Reinhard 硬编码 | ✅ ACES/多算法 | ✅ | ✅ |
+| Tonemapping | ✅ PBR 内 Reinhard + Bloom ACES Filmic | ✅ ACES/多算法 | ✅ | ✅ |
 | SSAO | ❌ placeholder | ✅ | ✅ GTAO | ✅ |
 | SSR | ❌ | ❌ (HDRP有) | ✅ | ✅ |
 | TAA/FXAA | ❌ | ✅ | ✅ TSR | ✅ |
@@ -116,16 +116,14 @@ for (i = 0; i < spot_light_count; i++)       // 最多 4 盏聚光灯
 
 ## 三、前置依赖
 
-> **⚠️ 本方案所有 Phase 均依赖「三后端统一 Shader」改造完成。**
+> **✅ 前置依赖已满足（2026-05-11）。**
 >
-> 当前远程机器正在 master 分支进行 SPIRV-Cross 统一 Shader 工作（详见 `docs/shader_unification_plan.md`）。
-> 该工作将三后端各自内嵌的 shader 源码统一为 `engine/render/shaders/src/` 下的单份 GLSL 450 源文件，
-> 通过 `tools/shader_compiler` 离线编译为 SPIR-V / GLSL 330 / HLSL SM5。
+> 三后端统一 Shader 改造已完成并合入 master（commit d142240）。
+> `engine/render/shaders/src/` 下的单份 GLSL 450 源文件通过 `tools/shader_compiler` 离线编译为
+> SPIR-V / GLSL 330 / HLSL SM5，三后端 ShaderManager 均加载生成的头文件。
 >
-> **本方案的所有 shader 修改（pbr.frag 光源遍历、新增 SSAO/FXAA shader 等）必须在统一后的
-> 单份源码上进行，不能在旧的三份独立 shader 上改。**
->
-> 预计前置完成后再开始实施。
+> **本方案的所有 shader 修改（pbr.frag 光源遍历、新增 SSAO/FXAA shader 等）直接在
+> 统一源码上进行。可立即开始实施。**
 
 ---
 
