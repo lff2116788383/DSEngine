@@ -84,6 +84,11 @@ public:
     /// 从 GLSL 源码创建着色器程序，返回句柄（0 = 失败）
     unsigned int CreateProgram(const std::string& vert_src, const std::string& frag_src);
 
+    /// 从预编译 SPIR-V 创建着色器程序（跳过 glslang 编译）
+    unsigned int CreateProgramFromSpirv(
+        const uint32_t* vert_spv, size_t vert_word_count,
+        const uint32_t* frag_spv, size_t frag_word_count);
+
     /// 销毁着色器程序
     void DeleteProgram(unsigned int handle);
 
@@ -114,6 +119,9 @@ public:
 
     /// 从 GLSL 源码创建 Compute 程序，返回句柄（0 = 失败）
     unsigned int CreateComputeProgram(const std::string& comp_src);
+
+    /// 从预编译 SPIR-V 创建 Compute 程序
+    unsigned int CreateComputeProgramFromSpirv(const uint32_t* comp_spv, size_t comp_word_count);
 
     /// 查询 Compute 程序
     const VulkanComputeProgram* GetComputeProgram(unsigned int handle) const;

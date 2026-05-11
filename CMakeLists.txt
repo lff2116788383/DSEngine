@@ -61,6 +61,9 @@ if(DSE_ENABLE_VULKAN)
     include(cmake/CMakeLists.txt.glslang)
 endif()
 
+# SPIRV-Cross 源码集成（shader 交叉编译工具）
+include(cmake/CMakeLists.txt.spirv_cross)
+
 # 注意：DSE_ENABLE_PHYSX 宏定义移至 Physx cmake include 之后，
 # 因为 DSE_HAS_PHYSX_LIBS 在 cmake/CMakeLists.txt.Physx 中才被设置。
 
@@ -423,6 +426,44 @@ if(MSVC)
     set_property(TARGET AssetBuilder PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
+# 工具链：ShaderCompiler (GLSL 450 → SPIR-V / GLSL 330 / HLSL)
+if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
+    add_subdirectory(tools/shader_compiler)
+
+    # --- Shader 离线编译：构建时自动执行 ---
+    set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/engine/render/shaders/src")
+    set(SHADER_GEN_DIR "${CMAKE_SOURCE_DIR}/engine/render/shaders/generated")
+
+    file(GLOB SHADER_SOURCE_FILES
+        "${SHADER_SRC_DIR}/*.vert"
+        "${SHADER_SRC_DIR}/*.frag"
+        "${SHADER_SRC_DIR}/*.comp"
+    )
+
+    # 生成的 embed 头文件列表（用于依赖跟踪）
+    set(GENERATED_SHADER_HEADERS "")
+    foreach(_shader ${SHADER_SOURCE_FILES})
+        get_filename_component(_name ${_shader} NAME_WE)
+        get_filename_component(_ext ${_shader} LAST_EXT)
+        string(SUBSTRING ${_ext} 1 -1 _ext_clean)
+        list(APPEND GENERATED_SHADER_HEADERS "${SHADER_GEN_DIR}/embed/${_name}_${_ext_clean}.gen.h")
+    endforeach()
+
+    add_custom_command(
+        OUTPUT ${GENERATED_SHADER_HEADERS}
+        COMMAND dse_shader_compiler
+            --input-dir "${SHADER_SRC_DIR}"
+            --output-dir "${SHADER_GEN_DIR}"
+            --target all --embed
+        DEPENDS dse_shader_compiler ${SHADER_SOURCE_FILES}
+        COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 330 / HLSL)"
+        VERBATIM
+    )
+
+    add_custom_target(dse_compile_shaders DEPENDS ${GENERATED_SHADER_HEADERS})
+    add_dependencies(dse_engine dse_compile_shaders)
+    target_include_directories(dse_engine PRIVATE "${SHADER_GEN_DIR}")
+endif()
 
 # ---------------------------------------------------------------------------
 # PUBLIC interface include directories（供下游 target_link_libraries 自动继承）

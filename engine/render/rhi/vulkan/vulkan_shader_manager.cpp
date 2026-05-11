@@ -14,6 +14,20 @@
 #include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
 #include "engine/base/debug.h"
 
+// 离线编译生成的 SPIR-V 内嵌头文件
+#include "embed/pbr_vert.gen.h"
+#include "embed/pbr_frag.gen.h"
+#include "embed/skybox_vert.gen.h"
+#include "embed/skybox_frag.gen.h"
+#include "embed/particle_vert.gen.h"
+#include "embed/particle_frag.gen.h"
+#include "embed/sprite_vert.gen.h"
+#include "embed/sprite_frag.gen.h"
+#include "embed/postprocess_vert.gen.h"
+#include "embed/postprocess_passthrough_frag.gen.h"
+#include "embed/bloom_downsample_comp.gen.h"
+#include "embed/bloom_upsample_comp.gen.h"
+
 // glslang 运行时编译支持
 #ifdef DSE_HAS_GLSLANG
 #include <glslang/Public/ShaderLang.h>
@@ -456,6 +470,68 @@ unsigned int VulkanShaderManager::CreateProgram(
     return handle;
 }
 
+unsigned int VulkanShaderManager::CreateProgramFromSpirv(
+    const uint32_t* vert_spv, size_t vert_word_count,
+    const uint32_t* frag_spv, size_t frag_word_count) {
+
+    std::vector<uint32_t> vert_spirv(vert_spv, vert_spv + vert_word_count);
+    std::vector<uint32_t> frag_spirv(frag_spv, frag_spv + frag_word_count);
+
+    VkShaderModule vert_module = CreateShaderModule(vert_spirv);
+    VkShaderModule frag_module = CreateShaderModule(frag_spirv);
+    if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
+        if (vert_module) vkDestroyShaderModule(context_->device(), vert_module, nullptr);
+        if (frag_module) vkDestroyShaderModule(context_->device(), frag_module, nullptr);
+        return 0;
+    }
+
+    ShaderReflection reflection;
+    ReflectSpirv(vert_spirv, frag_spirv, reflection);
+
+    VkPipelineLayout pipeline_layout = CreatePipelineLayout(reflection);
+    if (pipeline_layout == VK_NULL_HANDLE) {
+        vkDestroyShaderModule(context_->device(), vert_module, nullptr);
+        vkDestroyShaderModule(context_->device(), frag_module, nullptr);
+        return 0;
+    }
+
+    unsigned int handle = next_handle_++;
+    VulkanShaderProgram program;
+    program.vert_module = vert_module;
+    program.frag_module = frag_module;
+    program.pipeline_layout = pipeline_layout;
+    program.reflection = reflection;
+
+    std::map<uint32_t, std::vector<DescriptorBindingInfo>> sets;
+    for (const auto& b : reflection.bindings) {
+        sets[b.set].push_back(b);
+    }
+    uint32_t max_set = sets.empty() ? 0 : sets.rbegin()->first;
+    for (uint32_t s = 0; s <= max_set; ++s) {
+        auto it = sets.find(s);
+        if (it != sets.end()) {
+            VkDescriptorSetLayout layout = GetOrCreateDescriptorSetLayout(it->second, s);
+            if (layout != VK_NULL_HANDLE) {
+                program.descriptor_set_layouts.push_back(layout);
+            }
+        } else {
+            VkDescriptorSetLayoutCreateInfo empty_ci{};
+            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            empty_ci.bindingCount = 0;
+            empty_ci.pBindings = nullptr;
+            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
+            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
+            program.descriptor_set_layouts.push_back(empty_layout);
+        }
+    }
+
+    programs_[handle] = std::move(program);
+    programs_created_++;
+
+    DEBUG_LOG_INFO("Created Vulkan shader program #{} (pre-compiled SPIR-V)", handle);
+    return handle;
+}
+
 void VulkanShaderManager::DeleteProgram(unsigned int handle) {
     auto it = programs_.find(handle);
     if (it == programs_.end()) return;
@@ -488,53 +564,60 @@ const VulkanShaderProgram* VulkanShaderManager::GetProgram(unsigned int handle) 
 // ============================================================================
 
 void VulkanShaderManager::InitBuiltinPBRShader() {
-    pbr_shader_handle_ = CreateProgram(
-        vulkan_shaders::kPbrVertex, vulkan_shaders::kPbrFragment);
+    using namespace dse::render::generated_shaders;
+    pbr_shader_handle_ = CreateProgramFromSpirv(
+        kpbr_vert_spv, kpbr_vert_spv_size,
+        kpbr_frag_spv, kpbr_frag_spv_size);
     if (pbr_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan PBR shader compilation failed");
+        DEBUG_LOG_ERROR("Vulkan PBR shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan PBR shader created: handle={}", pbr_shader_handle_);
     }
 }
 
 void VulkanShaderManager::InitSkyboxShader() {
-    skybox_shader_handle_ = CreateProgram(
-        vulkan_shaders::kSkyboxVertex, vulkan_shaders::kSkyboxFragment);
+    using namespace dse::render::generated_shaders;
+    skybox_shader_handle_ = CreateProgramFromSpirv(
+        kskybox_vert_spv, kskybox_vert_spv_size,
+        kskybox_frag_spv, kskybox_frag_spv_size);
     if (skybox_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan skybox shader compilation failed");
+        DEBUG_LOG_ERROR("Vulkan skybox shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan skybox shader created: handle={}", skybox_shader_handle_);
     }
 }
 
 void VulkanShaderManager::InitParticleShader() {
-    particle_shader_handle_ = CreateProgram(
-        vulkan_shaders::kParticleVertex, vulkan_shaders::kParticleFragment);
+    using namespace dse::render::generated_shaders;
+    particle_shader_handle_ = CreateProgramFromSpirv(
+        kparticle_vert_spv, kparticle_vert_spv_size,
+        kparticle_frag_spv, kparticle_frag_spv_size);
     if (particle_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan particle shader compilation failed");
+        DEBUG_LOG_ERROR("Vulkan particle shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan particle shader created: handle={}", particle_shader_handle_);
     }
 }
 
 void VulkanShaderManager::InitSpriteShader() {
-    sprite_shader_handle_ = CreateProgram(
-        vulkan_shaders::kSpriteVertex, vulkan_shaders::kSpriteFragment);
+    using namespace dse::render::generated_shaders;
+    sprite_shader_handle_ = CreateProgramFromSpirv(
+        ksprite_vert_spv, ksprite_vert_spv_size,
+        ksprite_frag_spv, ksprite_frag_spv_size);
     if (sprite_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan sprite shader compilation failed");
+        DEBUG_LOG_ERROR("Vulkan sprite shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan sprite shader created: handle={}", sprite_shader_handle_);
     }
 }
 
 void VulkanShaderManager::InitPostProcessShader() {
-    // 使用后处理专用着色器（全屏四边形 VS + 直通 FS）
-    std::string pp_frag = std::string(vulkan_shaders::kPostProcessHeader) +
-                          vulkan_shaders::kPostProcessPassthroughFS;
-    postprocess_shader_handle_ = CreateProgram(
-        vulkan_shaders::kPostProcessVertex, pp_frag);
+    using namespace dse::render::generated_shaders;
+    postprocess_shader_handle_ = CreateProgramFromSpirv(
+        kpostprocess_vert_spv, kpostprocess_vert_spv_size,
+        kpostprocess_passthrough_frag_spv, kpostprocess_passthrough_frag_spv_size);
     if (postprocess_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan post-process shader compilation failed");
+        DEBUG_LOG_ERROR("Vulkan post-process shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
     }
@@ -615,14 +698,86 @@ unsigned int VulkanShaderManager::CreateComputeProgram(const std::string& comp_s
     return handle;
 }
 
+unsigned int VulkanShaderManager::CreateComputeProgramFromSpirv(
+    const uint32_t* comp_spv, size_t comp_word_count) {
+
+    std::vector<uint32_t> comp_spirv(comp_spv, comp_spv + comp_word_count);
+
+    auto device = context_->device();
+    VulkanComputeProgram prog;
+    prog.comp_module = CreateShaderModule(comp_spirv);
+    if (prog.comp_module == VK_NULL_HANDLE) return 0;
+
+    // Descriptor set layout: binding0 = sampler2D src, binding1 = image2D dst
+    VkDescriptorSetLayoutBinding bindings[2] = {};
+    bindings[0].binding         = 0;
+    bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings[1].binding         = 1;
+    bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo dsl_ci{};
+    dsl_ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dsl_ci.bindingCount = 2;
+    dsl_ci.pBindings    = bindings;
+    if (vkCreateDescriptorSetLayout(device, &dsl_ci, nullptr, &prog.descriptor_set_layout) != VK_SUCCESS) {
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Pipeline layout: descriptor set + push constants (4 floats)
+    VkPushConstantRange pc_range{};
+    pc_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pc_range.offset     = 0;
+    pc_range.size       = sizeof(float) * 4;
+
+    VkPipelineLayoutCreateInfo pl_ci{};
+    pl_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pl_ci.setLayoutCount         = 1;
+    pl_ci.pSetLayouts            = &prog.descriptor_set_layout;
+    pl_ci.pushConstantRangeCount = 1;
+    pl_ci.pPushConstantRanges    = &pc_range;
+    if (vkCreatePipelineLayout(device, &pl_ci, nullptr, &prog.pipeline_layout) != VK_SUCCESS) {
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Compute pipeline
+    VkComputePipelineCreateInfo cp_ci{};
+    cp_ci.sType        = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cp_ci.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    cp_ci.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    cp_ci.stage.module = prog.comp_module;
+    cp_ci.stage.pName  = "main";
+    cp_ci.layout       = prog.pipeline_layout;
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+        vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    unsigned int handle = next_handle_++;
+    compute_programs_[handle] = prog;
+    DEBUG_LOG_INFO("[Vulkan] Compute program created (pre-compiled SPIR-V): handle={}", handle);
+    return handle;
+}
+
 void VulkanShaderManager::InitBloomComputeShaders() {
-    bloom_downsample_cs_handle_ = CreateComputeProgram(vulkan_shaders::kBloomDownsampleCS);
-    bloom_upsample_cs_handle_   = CreateComputeProgram(vulkan_shaders::kBloomUpsampleCS);
+    using namespace dse::render::generated_shaders;
+    bloom_downsample_cs_handle_ = CreateComputeProgramFromSpirv(
+        kbloom_downsample_comp_spv, kbloom_downsample_comp_spv_size);
+    bloom_upsample_cs_handle_ = CreateComputeProgramFromSpirv(
+        kbloom_upsample_comp_spv, kbloom_upsample_comp_spv_size);
     if (bloom_downsample_cs_handle_ && bloom_upsample_cs_handle_) {
         DEBUG_LOG_INFO("[Vulkan] Bloom CS programs initialized (down={} up={})",
                        bloom_downsample_cs_handle_, bloom_upsample_cs_handle_);
     } else {
-        DEBUG_LOG_WARN("[Vulkan] Bloom CS initialization failed (glslang may be unavailable)");
+        DEBUG_LOG_WARN("[Vulkan] Bloom CS initialization failed");
     }
 }
 
