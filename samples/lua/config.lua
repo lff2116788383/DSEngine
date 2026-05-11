@@ -198,6 +198,19 @@ Config.demo_3d_render_quality_showcase={
     exposure=1.0,
     gamma=2.2
 }
+Config.demo_3d_fracture={
+    camera_distance=20.0,
+    fragment_count=8
+}
+Config.demo_3d_cloth={
+    camera_distance=14.0,
+    cloth_cols=12,
+    cloth_rows=12
+}
+Config.demo_3d_fluid={
+    camera_distance=18.0,
+    emission_rate=800.0
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

@@ -1,4 +1,7 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
+#include "engine/core/service_locator.h"
+#include "engine/physics/physics3d/physics3d_system.h"
+#include "engine/ecs/components_3d_fluid.h"
 
 namespace dse::gameplay3d {
 
@@ -16,6 +19,13 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     animator_system_.SetAssetManager(asset_manager);
     particle3d_system_.SetAssetManager(asset_manager);
     particle3d_system_.Init(world, rhi_device);
+    fracture_system_.SetAssetManager(asset_manager);
+    cloth_system_.SetAssetManager(asset_manager);
+    fluid_system_.Init(world, rhi_device);
+#if defined(DSE_ENABLE_PHYSX)
+    auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>();
+    fracture_system_.SetPhysics3D(physics3d);
+#endif
     return true;
 }
 
@@ -24,12 +34,13 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     animator_system_.Update(world, delta_time);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
+    fracture_system_.Update(world, delta_time);
+    fluid_system_.Update(world, delta_time);
     frustum_culling_system_.Update(world);
 }
 
 void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
-    (void)world;
-    (void)fixed_delta_time;
+    cloth_system_.FixedUpdate(world, fixed_delta_time);
 }
 
 void Gameplay3DModule::OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {
@@ -58,6 +69,19 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
             item.texture_handle = ps.texture_handle;
             item.particle_count = ps.active_particle_count;
             item.instance_vbo = ps.instance_vbo;
+            p_items.push_back(item);
+        }
+    }
+
+    // Collect fluid emitter particles (same instance format as Particle3D)
+    auto f_view = world.registry().view<dse::FluidEmitterComponent>();
+    for (auto entity : f_view) {
+        const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
+        if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
+            Particle3DDrawItem item;
+            item.texture_handle = 0; // No texture, use color from instance data
+            item.particle_count = static_cast<int>(fluid.active_count);
+            item.instance_vbo = fluid.instance_vbo;
             p_items.push_back(item);
         }
     }
@@ -94,6 +118,10 @@ void Gameplay3DModule::OnShutdown(World& world) {
     mesh_render_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);
     particle3d_system_.SetAssetManager(nullptr);
+    fracture_system_.SetAssetManager(nullptr);
+    fracture_system_.SetPhysics3D(nullptr);
+    cloth_system_.SetAssetManager(nullptr);
+    fluid_system_.Shutdown(world);
 }
 
 } // namespace dse::gameplay3d

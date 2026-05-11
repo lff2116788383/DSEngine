@@ -10,6 +10,9 @@
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"
+#include "modules/gameplay_3d/destruction/fracture_system.h"
+#include "modules/gameplay_3d/cloth/cloth_system.h"
+#include "modules/gameplay_3d/fluid/fluid_system.h"
 
 namespace dse {
 namespace gameplay3d {
@@ -38,6 +41,9 @@ private:
     Particle3DSystem particle3d_system_;
     FreeCameraControllerSystem free_camera_controller_system_;
     SteeringSystem steering_system_;
+    FractureSystem fracture_system_;
+    ClothSystem cloth_system_;
+    FluidSystem fluid_system_;
 };
 
 } // namespace gameplay3d

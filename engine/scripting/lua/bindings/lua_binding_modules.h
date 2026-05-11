@@ -29,6 +29,7 @@ void RegisterEcsPhysics2DBindings(lua_State* L);
 void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);
 void RegisterEcsParticlesBindings(lua_State* L);
+void RegisterEcsGameplay3DBindings(lua_State* L);
 
 }
 

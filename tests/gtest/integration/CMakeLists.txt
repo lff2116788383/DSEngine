@@ -38,6 +38,9 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/audio/audio_asset_integration_test.cpp
     # modules
     modules/module_lifecycle_integration_test.cpp
+    modules/fracture_system_integration_test.cpp
+    modules/cloth_system_integration_test.cpp
+    modules/fluid_system_integration_test.cpp
     # editor (headless functional tests)
     editor/editor_functional_test.cpp
     editor/editor_test_stubs.cpp

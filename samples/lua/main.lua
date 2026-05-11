@@ -106,6 +106,15 @@ elseif game_entry == "3d_asset_pack_showcase" then
 elseif game_entry == "3d_render_quality_showcase" then
     RuntimeEntry = require("3d.3d_render_quality_showcase")
     runtime_config = Config.demo_3d_render_quality_showcase or Config.basic_3d or {}
+elseif game_entry == "3d_fracture" then
+    RuntimeEntry = require("3d.3d_fracture")
+    runtime_config = Config.demo_3d_fracture or Config.basic_3d or {}
+elseif game_entry == "3d_cloth" then
+    RuntimeEntry = require("3d.3d_cloth")
+    runtime_config = Config.demo_3d_cloth or Config.basic_3d or {}
+elseif game_entry == "3d_fluid" then
+    RuntimeEntry = require("3d.3d_fluid")
+    runtime_config = Config.demo_3d_fluid or Config.basic_3d or {}
 elseif game_entry == "phase1_2d_physics_showcase" then
     RuntimeEntry = require("phase1_2d_physics_showcase")
     runtime_config = Config.phase1_2d_physics_showcase or {}

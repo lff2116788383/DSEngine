@@ -29,6 +29,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterEcsPhysics3DBindings(L);
     RegisterEcsAnimationBindings(L);
     RegisterEcsParticlesBindings(L);
+    RegisterEcsGameplay3DBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding

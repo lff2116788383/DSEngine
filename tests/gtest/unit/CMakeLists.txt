@@ -30,6 +30,9 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/ecs/components_2d_test.cpp
     engine/ecs/components_3d_particle_test.cpp
     engine/ecs/components_3d_physics_test.cpp
+    engine/ecs/components_3d_fracture_test.cpp
+    engine/ecs/components_3d_cloth_test.cpp
+    engine/ecs/components_3d_fluid_test.cpp
     engine/ecs/particle_curve_test.cpp
     # engine/input
     engine/input/input_test.cpp
