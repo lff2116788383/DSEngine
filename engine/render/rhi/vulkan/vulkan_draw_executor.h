@@ -172,6 +172,10 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
         if (index < 4) global_spot_light_space_matrix_[index] = mat;
     }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
+        for (int i = 0; i < 9; ++i) global_light_probe_sh_[i] = sh[i];
+        global_light_probe_enabled_ = enabled;
+    }
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -301,6 +305,8 @@ private:
     VkDeviceMemory bone_matrices_ubo_mem_ = VK_NULL_HANDLE;
     VkBuffer       morph_weights_ubo_ = VK_NULL_HANDLE;
     VkDeviceMemory morph_weights_ubo_mem_ = VK_NULL_HANDLE;
+    VkBuffer       light_probe_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory light_probe_ubo_mem_[MAX_FRAMES] = {};
 
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;
@@ -339,6 +345,8 @@ private:
     unsigned int global_shadow_map_[3] = {};
     unsigned int global_spot_shadow_map_[4] = {};
     unsigned int global_point_shadow_map_[4] = {};
+    glm::vec4 global_light_probe_sh_[9] = {};
+    bool global_light_probe_enabled_ = false;
 
     // 当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;

@@ -35,7 +35,8 @@ enum class UBOBindingPoint : unsigned int {
     SpotLightData   = 5,  ///< 聚光灯空间矩阵
     BoneMatrices    = 6,  ///< 骨骼矩阵
     MorphWeights    = 7,  ///< 变形目标权重
-    Count           = 8,  ///< 绑定点总数
+    LightProbeData  = 8,  ///< Light Probe SH 球谐系数
+    Count           = 9,  ///< 绑定点总数
 };
 
 // ============================================================
@@ -195,6 +196,29 @@ struct MorphWeightsUBO {
     glm::vec4 u_morph_weights[kMaxMorphTargets]; ///< 只用 .x 分量
 };
 static_assert(sizeof(MorphWeightsUBO) == 64, "MorphWeightsUBO must be 64 bytes for std140");
+
+// ============================================================
+// LightProbeData UBO (binding = 8)
+// ============================================================
+
+/**
+ * @struct LightProbeDataUBO
+ * @brief Light Probe SH L2 球谐系数，用于间接漫反射光照
+ *
+ * 对应 GLSL:
+ *   layout(std140) uniform LightProbeData {
+ *       vec4 sh_coefficients[9];  // SH L2 系数 (RGB in xyz, w unused)
+ *       vec4 probe_params;        // x = sh_enabled (0.0/1.0), yzw unused
+ *   };
+ *
+ * 更新频率：每帧 1 次（基于相机位置混合最近探针）
+ * 共享范围：PBR 着色器
+ */
+struct LightProbeDataUBO {
+    glm::vec4 sh_coefficients[9]; ///< SH L2 系数 (9 × vec4, 仅 xyz 有效)
+    glm::vec4 probe_params;       ///< x = sh_enabled (0.0/1.0), yzw 未使用
+};
+static_assert(sizeof(LightProbeDataUBO) == 160, "LightProbeDataUBO must be 160 bytes for std140 layout");
 
 } // namespace render
 } // namespace dse

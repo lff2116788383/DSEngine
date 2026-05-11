@@ -31,6 +31,7 @@ struct PBRShaderLocations {
     unsigned int spot_light_data_block_index = 0;
     unsigned int bone_matrices_block_index = 0;
     unsigned int morph_weights_block_index = 0;
+    unsigned int light_probe_data_block_index = 0;
 
     // --- 纹理采样器 uniform location ---
     int texture = -1;

@@ -124,6 +124,7 @@ public:
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
     void SetGlobalCascadeSplit(unsigned int index, float split) override;
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override;
 
     // --- SSBO（Clustered Forward+ 所需） ---
     unsigned int CreateSSBO(size_t size, const void* data) override;

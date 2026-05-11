@@ -28,6 +28,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
     bone_matrices_cb_      = CreateConstantBuffer(100 * sizeof(glm::mat4)); // MAX_BONES=100, 6400B
+    light_probe_data_cb_   = CreateConstantBuffer(sizeof(DX11LightProbeDataCB));
 
     // 初始化全局光源矩阵
     for (int i = 0; i < 3; ++i)
@@ -115,6 +116,7 @@ void DX11DrawExecutor::Shutdown() {
     white_texture_srv_.Reset();
     white_texture_sampler_.Reset();
     bone_matrices_cb_.Reset();
+    light_probe_data_cb_.Reset();
 
     initialized_ = false;
     DEBUG_LOG_INFO("[D3D11] DrawExecutor shutdown");
@@ -548,13 +550,22 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 填充聚光灯光源空间矩阵 CB（b6）并绑定
+        // 填充聊光灯光源空间矩阵 CB（b6）并绑定
         {
             DX11SpotMatricesCB sm_cb{};
             for (int i = 0; i < 4; ++i)
                 sm_cb.spot_light_space_matrices[i] = global_spot_light_space_matrix_[i];
             UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
             dc->PSSetConstantBuffers(6, 1, per_spot_matrices_cb_.GetAddressOf());
+        }
+
+        // 填充 LightProbeData CB（b9）并绑定
+        if (light_probe_data_cb_) {
+            DX11LightProbeDataCB lp_cb{};
+            for (int i = 0; i < 9; ++i) lp_cb.sh_coefficients[i] = global_light_probe_sh_[i];
+            lp_cb.probe_params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+            UpdateConstantBuffer(light_probe_data_cb_.Get(), &lp_cb, sizeof(lp_cb));
+            dc->PSSetConstantBuffers(9, 1, light_probe_data_cb_.GetAddressOf());
         }
 
         // 绑定聚光灯阴影贴图到 t12~t15

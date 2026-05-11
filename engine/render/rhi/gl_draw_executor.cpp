@@ -453,6 +453,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     }
     ubo_mgr.UploadPerScene(per_scene);
 
+    // === LightProbeData UBO: SH 球谐系数 ===
+    LightProbeDataUBO lp_data{};
+    for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_light_probe_sh_[i];
+    lp_data.probe_params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    ubo_mgr.UploadLightProbeData(lp_data);
 
     // 绑定所有 UBO
     ubo_mgr.BindAll();

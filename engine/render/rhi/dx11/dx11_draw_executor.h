@@ -112,6 +112,14 @@ struct DX11SpotMatricesCB {
 static_assert(sizeof(DX11SpotMatricesCB) % 16 == 0,
               "DX11SpotMatricesCB must be 16B aligned");
 
+/// LightProbeData 常量缓冲（register b9，160B）
+struct DX11LightProbeDataCB {
+    glm::vec4 sh_coefficients[9];
+    glm::vec4 probe_params;
+};
+static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
+              "DX11LightProbeDataCB must be 16B aligned");
+
 /**
  * @class DX11DrawExecutor
  * @brief D3D11 绘制执行器
@@ -191,6 +199,10 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
         if (index < 4) global_spot_light_space_matrix_[index] = mat;
     }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
+        for (int i = 0; i < 9; ++i) global_light_probe_sh_[i] = sh[i];
+        global_light_probe_enabled_ = enabled;
+    }
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -229,6 +241,8 @@ private:
     unsigned int global_shadow_map_[3] = {};
     unsigned int global_spot_shadow_map_[4] = {};
     unsigned int global_point_shadow_map_[4] = {};
+    glm::vec4 global_light_probe_sh_[9] = {};
+    bool global_light_probe_enabled_ = false;
 
     // --- 几何缓冲 ---
     // 精灵四边形（动态 VBO，静态 IBO）
@@ -281,6 +295,9 @@ private:
 
     // 骨骼矩阵常量缓冲（b7, MAX_BONES=100, 6400B）
     ComPtr<ID3D11Buffer> bone_matrices_cb_;
+
+    // Light Probe SH 常量缓冲（b9, 160B）
+    ComPtr<ID3D11Buffer> light_probe_data_cb_;
 
     // 渲染统计
     RenderStats current_frame_stats_;

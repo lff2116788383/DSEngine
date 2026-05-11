@@ -111,6 +111,7 @@ void GLShaderManager::CachePBRLocations() {
     BindUBOBlock(h, "SpotLightData",  UBOBindingPoint::SpotLightData, loc.spot_light_data_block_index);
     BindUBOBlock(h, "BoneMatrices",   UBOBindingPoint::BoneMatrices,  loc.bone_matrices_block_index);
     BindUBOBlock(h, "MorphWeights",   UBOBindingPoint::MorphWeights,  loc.morph_weights_block_index);
+    BindUBOBlock(h, "LightProbeData", UBOBindingPoint::LightProbeData, loc.light_probe_data_block_index);
 
     // --- 纹理采样器 uniform location ---
     loc.texture = glGetUniformLocation(h, "u_texture");

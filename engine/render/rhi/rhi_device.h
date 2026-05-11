@@ -214,6 +214,7 @@ public:
     virtual void SetGlobalCascadeSplit(unsigned int index, float split) = 0;
     void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { SetGlobalSpotLightSpaceMatrix(0, mat); }
     virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
+    virtual void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) = 0;
 
     /// OpenGL textures need Y-flip on load (bottom-left origin); D3D11/Vulkan don't
     virtual bool NeedsTextureYFlip() const { return true; }
@@ -308,6 +309,9 @@ public:
     }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
+    }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
+        draw_executor_.SetGlobalLightProbeSH(sh, enabled);
     }
 
     // --- SSBO（Clustered Forward+ 所需） ---

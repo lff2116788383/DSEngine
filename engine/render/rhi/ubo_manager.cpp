@@ -33,6 +33,9 @@ void UBOManager::Init() {
     bone_matrices_buffer_ = CreateUBO(sizeof(BoneMatricesUBO), &bm, UBOBindingPoint::BoneMatrices);
     morph_weights_buffer_ = CreateUBO(sizeof(MorphWeightsUBO), &mw, UBOBindingPoint::MorphWeights);
 
+    LightProbeDataUBO lp{};
+    light_probe_data_buffer_ = CreateUBO(sizeof(LightProbeDataUBO), &lp, UBOBindingPoint::LightProbeData);
+
     initialized_ = true;
 }
 
@@ -53,7 +56,7 @@ void UBOManager::Shutdown() {
     }
     unsigned int* extra[] = { &point_lights_buffer_, &spot_lights_buffer_,
                               &spot_light_data_buffer_, &bone_matrices_buffer_,
-                              &morph_weights_buffer_ };
+                              &morph_weights_buffer_, &light_probe_data_buffer_ };
     for (auto* p : extra) {
         if (*p != 0) { glDeleteBuffers(1, p); *p = 0; }
     }
@@ -104,6 +107,11 @@ void UBOManager::UploadMorphWeights(const MorphWeightsUBO& data) {
         UpdateUBO(morph_weights_buffer_, sizeof(MorphWeightsUBO), &data);
 }
 
+void UBOManager::UploadLightProbeData(const LightProbeDataUBO& data) {
+    if (light_probe_data_buffer_ != 0)
+        UpdateUBO(light_probe_data_buffer_, sizeof(LightProbeDataUBO), &data);
+}
+
 void UBOManager::BindAll() const {
     Bind(UBOBindingPoint::PerFrame);
     Bind(UBOBindingPoint::PerScene);
@@ -113,6 +121,7 @@ void UBOManager::BindAll() const {
     Bind(UBOBindingPoint::SpotLightData);
     Bind(UBOBindingPoint::BoneMatrices);
     Bind(UBOBindingPoint::MorphWeights);
+    Bind(UBOBindingPoint::LightProbeData);
 }
 
 void UBOManager::Bind(UBOBindingPoint binding) const {
@@ -126,6 +135,7 @@ void UBOManager::Bind(UBOBindingPoint binding) const {
         case UBOBindingPoint::SpotLightData: buffer = spot_light_data_buffer_; break;
         case UBOBindingPoint::BoneMatrices:  buffer = bone_matrices_buffer_; break;
         case UBOBindingPoint::MorphWeights:  buffer = morph_weights_buffer_; break;
+        case UBOBindingPoint::LightProbeData: buffer = light_probe_data_buffer_; break;
         default: return;
     }
     if (buffer != 0) {

@@ -350,6 +350,10 @@ void DX11RhiDevice::SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm:
     draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
 }
 
+void DX11RhiDevice::SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
+    draw_executor_.SetGlobalLightProbeSH(sh, enabled);
+}
+
 // --- SSBO ---
 
 unsigned int DX11RhiDevice::CreateSSBO(size_t size, const void* data) {

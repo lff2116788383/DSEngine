@@ -149,6 +149,9 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
+        draw_executor_.SetGlobalLightProbeSH(sh, enabled);
+    }
 
     // --- SSBO（Clustered Forward+ 所需） ---
     unsigned int CreateSSBO(size_t size, const void* data) override;

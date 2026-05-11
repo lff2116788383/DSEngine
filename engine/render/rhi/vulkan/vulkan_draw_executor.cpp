@@ -240,6 +240,16 @@ void VulkanDrawExecutor::InitGeometryBuffers(
         WriteToBuffer(device, morph_weights_ubo_mem_, 0, kMorphWeightsSize, zero_weights);
     }
 
+    // --- LightProbeData UBO（双缓冲，每帧一份） ---
+    constexpr size_t kLightProbeSize = sizeof(glm::vec4) * 10; // 9 SH + 1 params = 160B
+    for (int i = 0; i < MAX_FRAMES; ++i) {
+        CreateUBOBufferInternal(device, physical_device, kLightProbeSize,
+                                light_probe_ubo_[i], light_probe_ubo_mem_[i]);
+        // 初始化为零（probe_params.x = 0 = disabled）
+        glm::vec4 zero_lp[10] = {};
+        WriteToBuffer(device, light_probe_ubo_mem_[i], 0, kLightProbeSize, zero_lp);
+    }
+
     // --- 白色纹理 ---
     unsigned char white_pixel[4] = {255, 255, 255, 255};
     white_texture_handle_ = resource_mgr->CreateTexture2D(1, 1, white_pixel, true);
@@ -278,6 +288,8 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     }
     destroy_buffer(bone_matrices_ubo_, bone_matrices_ubo_mem_);
     destroy_buffer(morph_weights_ubo_, morph_weights_ubo_mem_);
+    for (int i = 0; i < MAX_FRAMES; ++i)
+        destroy_buffer(light_probe_ubo_[i], light_probe_ubo_mem_[i]);
 
     if (white_texture_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_texture_handle_);
@@ -557,6 +569,32 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         li_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         li_write.pBufferInfo     = &li_buf;
         vkUpdateDescriptorSets(device, 1, &li_write, 0, nullptr);
+    }
+
+    // --- Set 1 binding 5: LightProbeData UBO ---
+    {
+        // 写入 SH 数据到当前帧的 UBO
+        struct LightProbeGPU {
+            glm::vec4 sh[9];
+            glm::vec4 params;
+        } lp_data{};
+        for (int i = 0; i < 9; ++i) lp_data.sh[i] = global_light_probe_sh_[i];
+        lp_data.params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+        WriteToBuffer(device, light_probe_ubo_mem_[fi], 0, sizeof(lp_data), &lp_data);
+
+        VkDescriptorBufferInfo lp_buf{};
+        lp_buf.buffer = light_probe_ubo_[fi];
+        lp_buf.offset = 0;
+        lp_buf.range  = sizeof(lp_data);
+
+        VkWriteDescriptorSet lp_write{};
+        lp_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        lp_write.dstSet          = sets[1];
+        lp_write.dstBinding      = 5;
+        lp_write.descriptorCount = 1;
+        lp_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        lp_write.pBufferInfo     = &lp_buf;
+        vkUpdateDescriptorSets(device, 1, &lp_write, 0, nullptr);
     }
 
     // --- Set 2: PerMaterial UBO + 采样器 ---
@@ -991,8 +1029,8 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     // Set 0: binding 0 (PerFrame UBO)
     if (set_count > 0) push_ubo(0, 0);
 
-    // Set 1: binding 0 (PerScene UBO), 1-2 (Point/SpotLightSSBO), 3-4 (ClusterInfo/LightIndex SSBO)
-    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); push_ssbo2(1, 3); push_ssbo2(1, 4); }
+    // Set 1: binding 0 (PerScene UBO), 1-2 (Point/SpotLightSSBO), 3-4 (ClusterInfo/LightIndex SSBO), 5 (LightProbeData UBO)
+    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); push_ssbo2(1, 3); push_ssbo2(1, 4); push_ubo(1, 5); }
 
     // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-9 (bones/morph UBO)
     if (set_count > 2) {

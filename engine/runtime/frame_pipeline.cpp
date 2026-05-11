@@ -591,6 +591,12 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
+    // LightProbe SH: 默认禁用（fallback 到 ambient_intensity），后续由 LightProbe 系统填充
+    {
+        glm::vec4 sh_coeffs[9] = {};
+        runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
+    }
+
     ExecuteRenderGraph(*cmd_buffer);
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));

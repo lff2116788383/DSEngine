@@ -60,6 +60,9 @@ public:
     /// 上传 MorphWeights 数据（每次 DrawMeshBatch）
     void UploadMorphWeights(const MorphWeightsUBO& data);
 
+    /// 上传 LightProbeData 数据（每帧 SH 球谐系数）
+    void UploadLightProbeData(const LightProbeDataUBO& data);
+
     /// 绑定所有 UBO 到对应的 binding point
     void BindAll() const;
 
@@ -76,6 +79,7 @@ public:
     unsigned int spot_light_data_buffer() const { return spot_light_data_buffer_; }
     unsigned int bone_matrices_buffer() const { return bone_matrices_buffer_; }
     unsigned int morph_weights_buffer() const { return morph_weights_buffer_; }
+    unsigned int light_probe_data_buffer() const { return light_probe_data_buffer_; }
 
     bool initialized() const { return initialized_; }
 
@@ -94,6 +98,7 @@ private:
     unsigned int spot_light_data_buffer_ = 0;
     unsigned int bone_matrices_buffer_ = 0;
     unsigned int morph_weights_buffer_ = 0;
+    unsigned int light_probe_data_buffer_ = 0;
 
     bool initialized_ = false;
 };

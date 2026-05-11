@@ -210,6 +210,11 @@ cbuffer SpotMatrices : register(b6) {
     float4x4 u_spot_light_space_matrices[4];
 };
 
+cbuffer LightProbeData : register(b9) {
+    float4 sh_coefficients[9];
+    float4 probe_params;
+};
+
 Texture2D u_texture : register(t0);
 Texture2D u_normal_map : register(t1);
 Texture2D u_metallic_roughness_map : register(t2);
@@ -265,6 +270,19 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness) {
 
 float3 fresnelSchlick(float cosTheta, float3 F0) {
     return F0 + (1.0 - F0) * pow(saturate(1.0 - cosTheta), 5.0);
+}
+
+float3 EvaluateSH(float3 N) {
+    float3 result = sh_coefficients[0].xyz *  0.282095
+                  + sh_coefficients[1].xyz *  0.488603 * N.y
+                  + sh_coefficients[2].xyz *  0.488603 * N.z
+                  + sh_coefficients[3].xyz *  0.488603 * N.x
+                  + sh_coefficients[4].xyz *  1.092548 * N.x * N.y
+                  + sh_coefficients[5].xyz *  1.092548 * N.y * N.z
+                  + sh_coefficients[6].xyz *  0.315392 * (3.0 * N.z * N.z - 1.0)
+                  + sh_coefficients[7].xyz *  1.092548 * N.x * N.z
+                  + sh_coefficients[8].xyz *  0.546274 * (N.x * N.x - N.y * N.y);
+    return max(result, float3(0.0, 0.0, 0.0));
 }
 
 float SampleShadowPCF(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
@@ -564,7 +582,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
         Lo += (kDp * surface_albedo / PI + specP) * pl.color * pl.intensity * atten * NdotLp * (1.0 - pl_shadow);
     }
 
-    float3 ambient = float3(light_color_and_ambient.w, light_color_and_ambient.w, light_color_and_ambient.w) * surface_albedo * ao;
+    float3 sh_irradiance = (probe_params.x > 0.5) ? EvaluateSH(N) : float3(light_color_and_ambient.w, light_color_and_ambient.w, light_color_and_ambient.w);
+    float3 ambient = sh_irradiance * surface_albedo * ao;
     float3 color = ambient + Lo + mat_emissive.rgb;
     color = color / (color + float3(1.0, 1.0, 1.0));
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));

@@ -110,6 +110,13 @@ layout(std430, set = 1, binding = 4) readonly buffer LightIndexSSBO {
     uint light_indices[];
 };
 
+// Set 1: LightProbeData (SH L2 间接漫反射)
+layout(std140, set = 1, binding = 5) uniform LightProbeData {
+    vec4 sh_coefficients[9];
+    vec4 probe_params;
+};
+#define u_sh_enabled (probe_params.x > 0.5)
+
 const float PI = 3.14159265359;
 
 // UBO 字段便捷访问别名
@@ -165,6 +172,19 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 EvaluateSH(vec3 N) {
+    vec3 result = sh_coefficients[0].xyz *  0.282095
+               + sh_coefficients[1].xyz *  0.488603 * N.y
+               + sh_coefficients[2].xyz *  0.488603 * N.z
+               + sh_coefficients[3].xyz *  0.488603 * N.x
+               + sh_coefficients[4].xyz *  1.092548 * N.x * N.y
+               + sh_coefficients[5].xyz *  1.092548 * N.y * N.z
+               + sh_coefficients[6].xyz *  0.315392 * (3.0 * N.z * N.z - 1.0)
+               + sh_coefficients[7].xyz *  1.092548 * N.x * N.z
+               + sh_coefficients[8].xyz *  0.546274 * (N.x * N.x - N.y * N.y);
+    return max(result, vec3(0.0));
 }
 
 float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
@@ -493,7 +513,7 @@ void main() {
     vec3 kS_ambient = F;
     vec3 kD_ambient = 1.0 - kS_ambient;
     kD_ambient *= 1.0 - metallic;
-    vec3 irradiance = vec3(u_ambient_intensity);
+    vec3 irradiance = u_sh_enabled ? EvaluateSH(N) : vec3(u_ambient_intensity);
     vec3 diffuse_ambient = irradiance * surface_albedo;
     vec3 specular_ambient = irradiance * F0 * (1.0 - roughness);
     vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * ao;

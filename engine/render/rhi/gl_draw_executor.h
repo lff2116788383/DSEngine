@@ -115,6 +115,10 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
         if (index < 4) global_spot_light_space_matrix_[index] = kNdcZBias_ * mat;
     }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
+        for (int i = 0; i < 9; ++i) global_light_probe_sh_[i] = sh[i];
+        global_light_probe_enabled_ = enabled;
+    }
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -197,6 +201,8 @@ private:
     unsigned int global_shadow_map_[3];
     unsigned int global_spot_shadow_map_[4] = {0, 0, 0, 0};
     unsigned int global_point_shadow_map_[4] = {0, 0, 0, 0};
+    glm::vec4 global_light_probe_sh_[9] = {};
+    bool global_light_probe_enabled_ = false;
 
     // 渲染统计
     RenderStats current_frame_stats_;
