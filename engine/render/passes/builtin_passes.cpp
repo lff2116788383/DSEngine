@@ -641,7 +641,8 @@ void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
         }
     }
 
-    if (!fxaa_enabled || ctx_.render_targets.fxaa == 0) {
+    ctx_.fxaa_active = fxaa_enabled && ctx_.render_targets.fxaa != 0;
+    if (!ctx_.fxaa_active) {
         return;
     }
 
@@ -671,20 +672,8 @@ void PresentPass::Setup(RenderGraph& graph) {
 }
 
 void PresentPass::Execute(CommandBuffer& cmd_buffer) {
-    // 判断 FXAA 是否真正启用，决定读取 fxaa RT 还是 main RT
-    bool fxaa_active = false;
-    if (ctx_.render_targets.fxaa != 0) {
-        auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-        for (auto entity : pp_view) {
-            auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-            if (pp.enabled && pp.fxaa_enabled) {
-                fxaa_active = true;
-                break;
-            }
-        }
-    }
     unsigned int present_tex = 0;
-    if (fxaa_active) {
+    if (ctx_.fxaa_active) {
         present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fxaa);
     }
     if (present_tex == 0) {

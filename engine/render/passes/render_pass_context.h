@@ -63,6 +63,9 @@ struct RenderPassContext {
         unsigned int fxaa = 0;
     } render_targets;
 
+    /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
+    bool fxaa_active = false;
+
     /// 已加载的动态模块实例列表
     struct ModuleRef {
         dse::core::IModule* instance = nullptr;
