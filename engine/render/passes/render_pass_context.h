@@ -24,6 +24,9 @@ class IModule;
 namespace dse {
 namespace render {
 
+class LightBuffer;
+class ClusterGrid;
+
 /**
  * @struct RenderPassContext
  * @brief 所有 Pass 共享的运行时上下文（非拥有型指针）
@@ -32,6 +35,8 @@ struct RenderPassContext {
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
+    LightBuffer* light_buffer = nullptr;
+    ClusterGrid* cluster_grid = nullptr;
     bool editor_mode = false;
 
     /// 引擎内置系统的访问（通过 FramePipeline 注入）

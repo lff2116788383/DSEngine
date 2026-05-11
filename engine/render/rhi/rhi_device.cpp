@@ -13,6 +13,12 @@
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"
 #include <glad/gl.h>
+
+// GL 4.3 SSBO 常量 — glad/gl.h 仅包含 GL 3.3 定义
+#ifndef GL_SHADER_STORAGE_BUFFER
+#define GL_SHADER_STORAGE_BUFFER 0x90D2
+#endif
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cstddef>
@@ -675,6 +681,36 @@ void OpenGLRhiDevice::RealSubmitDrawPostProcess(unsigned int source_texture, con
 
 void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawParticles3D(items, view, projection, shader_mgr_);
+}
+
+// --- SSBO (Shader Storage Buffer Object) ---
+
+unsigned int OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {
+    unsigned int handle = 0;
+    glGenBuffers(1, &handle);
+    if (handle == 0) return 0;
+    resource_mgr_.ledger().buffers_created += 1;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    return handle;
+}
+
+void OpenGLRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    if (handle == 0) return;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+void OpenGLRhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding_point, handle);
+}
+
+void OpenGLRhiDevice::DeleteSSBO(unsigned int handle) {
+    if (handle == 0) return;
+    glDeleteBuffers(1, &handle);
+    resource_mgr_.ledger().buffers_destroyed += 1;
 }
 
 // --- 资源账本 ---

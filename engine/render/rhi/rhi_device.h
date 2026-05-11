@@ -224,6 +224,31 @@ public:
     /// (Y-up, Z∈[-1,1]) to the target API convention.
     /// OpenGL: identity. Vulkan: Y-flip + Z remap. DX11: Z remap only.
     virtual glm::mat4 GetProjectionCorrection() const { return glm::mat4(1.0f); }
+
+    // --- SSBO (Shader Storage Buffer Object) 接口 ---
+    // Clustered Forward+ 所需：光源列表 + Cluster 映射表
+    // OpenGL: GL_SHADER_STORAGE_BUFFER (GL 4.3+)
+    // Vulkan: VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+    // DX11:   StructuredBuffer + SRV
+
+    /// 创建 SSBO 缓冲区
+    /// @param size 缓冲区大小（字节）
+    /// @param data 初始数据指针（可为 nullptr）
+    /// @return 缓冲区句柄，0 表示失败
+    virtual unsigned int CreateSSBO(size_t size, const void* data) { (void)size; (void)data; return 0; }
+
+    /// 更新 SSBO 数据（子区域）
+    virtual void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+        (void)handle; (void)offset; (void)size; (void)data;
+    }
+
+    /// 将 SSBO 绑定到指定绑定点（SSBO 绑定点与 UBO 独立）
+    virtual void BindSSBO(unsigned int handle, unsigned int binding_point) {
+        (void)handle; (void)binding_point;
+    }
+
+    /// 删除 SSBO 缓冲区
+    virtual void DeleteSSBO(unsigned int handle) { (void)handle; }
 };
 
 /**
@@ -284,6 +309,12 @@ public:
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
+
+    // --- SSBO（Clustered Forward+ 所需） ---
+    unsigned int CreateSSBO(size_t size, const void* data) override;
+    void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void BindSSBO(unsigned int handle, unsigned int binding_point) override;
+    void DeleteSSBO(unsigned int handle) override;
 
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);

@@ -47,6 +47,8 @@
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/passes/builtin_passes.h"
+#include "engine/render/light_buffer.h"
+#include "engine/render/cluster_grid.h"
 
 class AssetManager;
 
@@ -280,6 +282,10 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
+
+    /// Clustered Forward+ 光源缓冲（SSBO）
+    dse::render::LightBuffer light_buffer_;
+    dse::render::ClusterGrid cluster_grid_;
 
     /// 渲染 Pass 共享上下文
     dse::render::RenderPassContext render_pass_context_;

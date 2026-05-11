@@ -60,7 +60,7 @@ struct PointLight {
     int shadow_index;
     vec2 _pad;
 };
-#define MAX_POINT_LIGHTS 4
+#define MAX_POINT_LIGHTS 64
 layout(std140, set = 1, binding = 1) uniform PointLights {
     int u_point_light_count;
     int _pl_pad0;
@@ -81,7 +81,7 @@ struct SpotLight {
     int shadow_index;
     float _pad;  // NOTE: must be float (not vec2) to keep stride=64B matching C++ VulkanSpotLightsUBO::Entry
 };
-#define MAX_SPOT_LIGHTS 4
+#define MAX_SPOT_LIGHTS 64
 layout(std140, set = 1, binding = 2) uniform SpotLights {
     int u_spot_light_count;
     int _sl_pad0;

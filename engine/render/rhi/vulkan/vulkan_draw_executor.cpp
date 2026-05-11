@@ -216,9 +216,9 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                                 per_scene_ubo_[i], per_scene_ubo_mem_[i]);
         CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
                                 per_material_ubo_[i], per_material_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
                                 per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
                                 per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
 
@@ -348,7 +348,7 @@ void VulkanDrawExecutor::UpdatePointSpotLightUBOs(const MeshDrawItem& item) {
 
     VulkanPointLightsUBO pl_ubo{};
     pl_ubo.u_point_light_count = static_cast<int>(
-        (std::min)(item.point_lights.size(), (size_t)4));
+        (std::min)(item.point_lights.size(), (size_t)64));
     for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
         const auto& src = item.point_lights[i];
         auto& dst = pl_ubo.lights[i];
@@ -364,7 +364,7 @@ void VulkanDrawExecutor::UpdatePointSpotLightUBOs(const MeshDrawItem& item) {
 
     VulkanSpotLightsUBO sl_ubo{};
     sl_ubo.u_spot_light_count = static_cast<int>(
-        (std::min)(item.spot_lights.size(), (size_t)4));
+        (std::min)(item.spot_lights.size(), (size_t)64));
     for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
         const auto& src = item.spot_lights[i];
         auto& dst = sl_ubo.lights[i];
@@ -1441,8 +1441,8 @@ void VulkanDrawExecutor::DrawMeshBatch(
         UpdatePointSpotLightUBOs(item);
         per_scene_ubo_offset_        += kUboSlotAlignment;
         per_material_ubo_offset_     += kUboSlotAlignment;
-        per_point_lights_ubo_offset_ += kUboSlotAlignment;
-        per_spot_lights_ubo_offset_  += kUboSlotAlignment;
+        per_point_lights_ubo_offset_ += kLightUboSlotAlignment;
+        per_spot_lights_ubo_offset_  += kLightUboSlotAlignment;
 
         // 上传骨骼矩阵到 UBO（累积偏移，避免 GPU 延迟执行时覆盖前面 mesh 的数据）
         VkDeviceSize cur_bone_offset = bone_matrices_offset_;

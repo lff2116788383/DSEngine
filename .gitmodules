@@ -63,3 +63,6 @@
 [submodule "depends/glslang"]
 	path = depends/glslang
 	url = https://github.com/KhronosGroup/glslang.git
+[submodule "depends/spirv-cross"]
+	path = depends/spirv-cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git

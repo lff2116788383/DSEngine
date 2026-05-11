@@ -66,7 +66,7 @@ struct VulkanPointLightsUBO {
         glm::vec3 position;  float radius;
         int cast_shadow;     int shadow_index;
         glm::vec2 _pad;
-    } lights[4];
+    } lights[64];
 };
 static_assert(sizeof(VulkanPointLightsUBO) % 16 == 0,
               "VulkanPointLightsUBO must be 16B aligned");
@@ -81,7 +81,7 @@ struct VulkanSpotLightsUBO {
         glm::vec3 direction;   float inner_cone;
         float outer_cone;      int cast_shadow;
         int shadow_index;      float _pad2;
-    } lights[4];
+    } lights[64];
 };
 static_assert(sizeof(VulkanSpotLightsUBO) % 16 == 0,
               "VulkanSpotLightsUBO must be 16B aligned");
@@ -314,6 +314,8 @@ private:
     VkDeviceSize per_point_lights_ubo_offset_ = 0;
     VkDeviceSize per_spot_lights_ubo_offset_ = 0;
     static constexpr VkDeviceSize kUboSlotAlignment = 256; ///< UBO offset 对齐（覆盖大多数 GPU 的 minUniformBufferOffsetAlignment）
+    /// 光源 UBO slot 大小：sizeof(VulkanPointLightsUBO)=3088, sizeof(VulkanSpotLightsUBO)=4112，向上对齐到 256 的倍数
+    static constexpr VkDeviceSize kLightUboSlotAlignment = 4352; ///< ceil(4112/256)*256 = 4352
     unsigned int nocull_pipeline_state_ = 0; ///< 双面材质无剔除管线状态句柄
     unsigned int sprite_pipeline_state_ = 0; ///< 2D 精灵管线状态句柄（缓存避免每帧重建）
     unsigned int skybox_pipeline_state_ = 0; ///< 天空盒管线状态句柄

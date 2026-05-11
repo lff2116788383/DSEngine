@@ -542,7 +542,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (!items.empty()) {
             DX11PointLightsCB pl_cb{};
             pl_cb.count = static_cast<int>(
-                (std::min)(items[0].point_lights.size(), (size_t)4));
+                (std::min)(items[0].point_lights.size(), (size_t)64));
             for (int i = 0; i < pl_cb.count; ++i) {
                 const auto& src = items[0].point_lights[i];
                 auto& dst = pl_cb.lights[i];
@@ -558,7 +558,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
             DX11SpotLightsCB sl_cb{};
             sl_cb.count = static_cast<int>(
-                (std::min)(items[0].spot_lights.size(), (size_t)4));
+                (std::min)(items[0].spot_lights.size(), (size_t)64));
             for (int i = 0; i < sl_cb.count; ++i) {
                 const auto& src = items[0].spot_lights[i];
                 auto& dst = sl_cb.lights[i];

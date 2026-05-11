@@ -395,6 +395,10 @@ bool FramePipeline::Init() {
     }
     BuildRenderGraph();
 
+    // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
+    light_buffer_.Init(runtime_context_.rhi_device.get());
+    cluster_grid_.Init(runtime_context_.rhi_device.get());
+
     initialized_ = true;
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
@@ -457,6 +461,9 @@ void FramePipeline::Shutdown() {
         physics3d_system_initialized_ = false;
     }
 #endif
+    cluster_grid_.Shutdown();
+    light_buffer_.Shutdown();
+
     asset_manager.ReleaseGpuResources();
 
     if (runtime_context_.rhi_device) {
@@ -532,6 +539,42 @@ void FramePipeline::RunRenderInternal() {
     auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
     
     dse::runtime::BindRuntimeShadowMaps(*this);
+
+    // Clustered Forward+: 每帧收集光源 → 构建 Cluster → 上传 SSBO
+    if (runtime_context_.world) {
+        light_buffer_.CollectLights(*runtime_context_.world);
+        light_buffer_.Upload();
+
+        // 获取主相机参数用于 cluster 构建
+        auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
+        entt::entity cam_entity = entt::null;
+        int cam_priority = std::numeric_limits<int>::min();
+        for (auto e : cam_view_3d) {
+            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(e);
+            if (cam.enabled && cam.priority > cam_priority) {
+                cam_entity = e;
+                cam_priority = cam.priority;
+            }
+        }
+        if (cam_entity != entt::null) {
+            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
+            const int sw = Screen::width();
+            const int sh = Screen::height();
+            glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
+                static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
+                cam.near_clip, cam.far_clip);
+            glm::mat4 view_mat = glm::mat4(1.0f);
+            if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
+                auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
+                glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                view_mat = glm::lookAt(tf.position, tf.position + front, up);
+            }
+            cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
+                                light_buffer_.point_lights(), light_buffer_.spot_lights());
+            cluster_grid_.Upload();
+        }
+    }
 
     ExecuteRenderGraph(*cmd_buffer);
     
@@ -633,6 +676,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.world = runtime_context_.world;
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
+    render_pass_context_.light_buffer = &light_buffer_;
+    render_pass_context_.cluster_grid = &cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
 
     render_pass_context_.pipeline_states.sprite    = render_resources_.sprite_pipeline_state;

@@ -134,12 +134,14 @@ struct PointLightEntry {
 };
 static_assert(sizeof(PointLightEntry) == 48, "PointLightEntry must be 48 bytes for std140");
 
+static constexpr int kMaxPointLightsUBO = 64;
+
 struct PointLightsUBO {
     int u_point_light_count;
     int _pad0, _pad1, _pad2;
-    PointLightEntry u_point_lights[4];
+    PointLightEntry u_point_lights[kMaxPointLightsUBO];
 };
-static_assert(sizeof(PointLightsUBO) == 208, "PointLightsUBO must be 208 bytes for std140");
+static_assert(sizeof(PointLightsUBO) == 16 + 48 * kMaxPointLightsUBO, "PointLightsUBO size mismatch");
 
 // ============================================================
 // SpotLights UBO (binding = 4)
@@ -155,12 +157,14 @@ struct SpotLightEntry {
 };
 static_assert(sizeof(SpotLightEntry) == 64, "SpotLightEntry must be 64 bytes for std140");
 
+static constexpr int kMaxSpotLightsUBO = 64;
+
 struct SpotLightsUBO {
     int u_spot_light_count;
     int _pad0, _pad1, _pad2;
-    SpotLightEntry u_spot_lights[4];
+    SpotLightEntry u_spot_lights[kMaxSpotLightsUBO];
 };
-static_assert(sizeof(SpotLightsUBO) == 272, "SpotLightsUBO must be 272 bytes for std140");
+static_assert(sizeof(SpotLightsUBO) == 16 + 64 * kMaxSpotLightsUBO, "SpotLightsUBO size mismatch");
 
 // ============================================================
 // SpotLightData UBO (binding = 5)

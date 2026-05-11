@@ -80,7 +80,7 @@ static_assert(sizeof(DX11PointLightEntry) % 16 == 0,
 struct DX11PointLightsCB {
     int count;
     int _p0, _p1, _p2;
-    DX11PointLightEntry lights[4];
+    DX11PointLightEntry lights[64];
 };
 static_assert(sizeof(DX11PointLightsCB) % 16 == 0,
               "DX11PointLightsCB must be 16B aligned");
@@ -100,7 +100,7 @@ static_assert(sizeof(DX11SpotLightEntry) % 16 == 0,
 struct DX11SpotLightsCB {
     int count;
     int _p0, _p1, _p2;
-    DX11SpotLightEntry lights[4];
+    DX11SpotLightEntry lights[64];
 };
 static_assert(sizeof(DX11SpotLightsCB) % 16 == 0,
               "DX11SpotLightsCB must be 16B aligned");

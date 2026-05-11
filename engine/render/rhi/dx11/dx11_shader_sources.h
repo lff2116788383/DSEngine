@@ -190,7 +190,7 @@ struct PointLightEntry {
 cbuffer PointLights : register(b4) {
     int u_point_light_count;
     int _pl_pad0, _pl_pad1, _pl_pad2;
-    PointLightEntry u_point_lights[4];
+    PointLightEntry u_point_lights[64];
 };
 
 struct SpotLightEntry {
@@ -203,7 +203,7 @@ struct SpotLightEntry {
 cbuffer SpotLights : register(b5) {
     int u_spot_light_count;
     int _sl_pad0, _sl_pad1, _sl_pad2;
-    SpotLightEntry u_spot_lights[4];
+    SpotLightEntry u_spot_lights[64];
 };
 
 cbuffer SpotMatrices : register(b6) {

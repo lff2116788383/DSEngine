@@ -145,6 +145,10 @@ cache/
 depends/miniaudio/*.tmp
 cmd-*.txt
 
+# 着色器编译器手动运行产生的重复生成物（正式路径在 shaders/generated/）
+engine/render/rhi/embed/
+engine/render/rhi/spv/
+
 # 参考资料与外部草稿
 ref/
 

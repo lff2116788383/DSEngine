@@ -570,7 +570,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     auto point_light_view = world.registry().view<TransformComponent, PointLightComponent>();
     int next_point_shadow_index = 0;
     for (auto entity : point_light_view) {
-        if (point_lights.size() >= 4) break; // MAX_POINT_LIGHTS = 4
+        if (point_lights.size() >= 64) break; // MAX_POINT_LIGHTS = 64 (Clustered Forward+)
         auto& transform = point_light_view.get<TransformComponent>(entity);
         auto& light = point_light_view.get<PointLightComponent>(entity);
         if (light.enabled) {

@@ -615,7 +615,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // 点光源 UBO
         {
             PointLightsUBO pl_ubo{};
-            pl_ubo.u_point_light_count = std::min(static_cast<int>(item.point_lights.size()), 4);
+            pl_ubo.u_point_light_count = std::min(static_cast<int>(item.point_lights.size()), kMaxPointLightsUBO);
             for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
                 auto& dst = pl_ubo.u_point_lights[i];
                 auto& src = item.point_lights[i];
@@ -637,7 +637,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // 聚光灯 UBO
         {
             SpotLightsUBO sl_ubo{};
-            sl_ubo.u_spot_light_count = std::min(static_cast<int>(item.spot_lights.size()), 4);
+            sl_ubo.u_spot_light_count = std::min(static_cast<int>(item.spot_lights.size()), kMaxSpotLightsUBO);
             for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
                 auto& dst = sl_ubo.u_spot_lights[i];
                 auto& src = item.spot_lights[i];
