@@ -159,7 +159,7 @@ VSOutput VSMain(VSInput input) {
 }
 )";
 
-constexpr const char* kPbrPS = R"(
+constexpr const char* kPbrPS_Part1 = R"(
 cbuffer PerFrame : register(b0) {
     float4x4 vp;
     float4x4 view;
@@ -278,6 +278,73 @@ float SampleShadowPCF(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
     return shadow / 9.0;
 }
 
+// PCSS: Blocker search -> penumbra estimation -> variable-size PCF
+#define PCSS_BLOCKER_SAMPLES 16
+#define PCSS_PCF_SAMPLES 25
+#define PCSS_LIGHT_SIZE 0.04
+
+static const float2 kPoissonDisk16[16] = {
+    float2(-0.94201624, -0.39906216), float2( 0.94558609, -0.76890725),
+    float2(-0.09418410, -0.92938870), float2( 0.34495938,  0.29387760),
+    float2(-0.91588581,  0.45771432), float2(-0.81544232, -0.87912464),
+    float2(-0.38277543,  0.27676845), float2( 0.97484398,  0.75648379),
+    float2( 0.44323325, -0.97511554), float2( 0.53742981, -0.47373420),
+    float2(-0.26496911, -0.41893023), float2( 0.79197514,  0.19090188),
+    float2(-0.24188840,  0.99706507), float2(-0.81409955,  0.91437590),
+    float2( 0.19984126,  0.78641367), float2( 0.14383161, -0.14100790)
+};
+
+static const float2 kPoissonDisk25[25] = {
+    float2(-0.86804624, -0.18409416), float2(-0.60420109, -0.55890725),
+    float2(-0.33418410, -0.83238870), float2(-0.05504062,  0.11387760),
+    float2(-0.76588581,  0.32771432), float2(-0.53544232, -0.22912464),
+    float2(-0.20277543,  0.55676845), float2( 0.06484398,  0.82648379),
+    float2( 0.33323325, -0.67511554), float2( 0.59742981, -0.01373420),
+    float2( 0.85496911,  0.34893023), float2(-0.94197514, -0.69090188),
+    float2(-0.45188840,  0.87706507), float2( 0.18409955,  0.49437590),
+    float2( 0.42984126, -0.35641367), float2( 0.68383161,  0.71100790),
+    float2(-0.14201624,  0.01906216), float2( 0.12558609, -0.94890725),
+    float2( 0.37418410,  0.26938870), float2( 0.61495938, -0.45387760),
+    float2( 0.85588581,  0.03228568), float2(-0.67544232,  0.65087536),
+    float2(-0.36277543, -0.44323155), float2( 0.90484398, -0.24351621),
+    float2(-0.00676675,  0.30488446)
+};
+
+float FindBlockerDepthDX(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
+                          float3 projCoords, float bias, float searchRadius) {
+    float blockerSum = 0.0;
+    int blockerCount = 0;
+    float2 texelSize = 1.0 / float2(2048.0, 2048.0);
+    float receiverDepth = projCoords.z - bias;
+    [unroll] for (int i = 0; i < PCSS_BLOCKER_SAMPLES; ++i) {
+        float2 offset = kPoissonDisk16[i] * searchRadius * texelSize;
+        float sampleLit = shadowMap.SampleCmpLevelZero(cmp_sampler, projCoords.xy + offset, receiverDepth);
+        if (sampleLit < 0.5) {
+            blockerSum += receiverDepth;
+            blockerCount++;
+        }
+    }
+    return blockerCount > 0 ? blockerSum / float(blockerCount) : -1.0;
+}
+
+float PCSS_ShadowDX(Texture2D shadowMap, SamplerComparisonState cmp_sampler,
+                     float3 projCoords, float bias) {
+    float searchRadius = PCSS_LIGHT_SIZE * projCoords.z * 20.0;
+    searchRadius = clamp(searchRadius, 1.0, 12.0);
+    float avgBlockerDepth = FindBlockerDepthDX(shadowMap, cmp_sampler, projCoords, bias, searchRadius);
+    if (avgBlockerDepth < 0.0) return 1.0;
+    float receiverDepth = projCoords.z - bias;
+    float penumbraWidth = (receiverDepth - avgBlockerDepth) / max(avgBlockerDepth, 0.001) * PCSS_LIGHT_SIZE * 40.0;
+    penumbraWidth = clamp(penumbraWidth, 1.0, 10.0);
+    float shadow = 0.0;
+    float2 texelSize = 1.0 / float2(2048.0, 2048.0);
+    [unroll] for (int i = 0; i < PCSS_PCF_SAMPLES; ++i) {
+        float2 offset = kPoissonDisk25[i] * penumbraWidth * texelSize;
+        shadow += shadowMap.SampleCmpLevelZero(cmp_sampler, projCoords.xy + offset, receiverDepth);
+    }
+    return shadow / float(PCSS_PCF_SAMPLES);
+}
+
 float ShadowForCascade(int ci, float3 fragPosWorld, float3 normal, float3 lightDir) {
     float4 fragPosLS;
     if (ci == 0)      fragPosLS = mul(light_space_matrices[0], float4(fragPosWorld, 1.0));
@@ -293,9 +360,9 @@ float ShadowForCascade(int ci, float3 fragPosWorld, float3 normal, float3 lightD
 
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
     float lit = 0.0;
-    if (ci == 0)      lit = SampleShadowPCF(u_shadow_map0, u_cmp_sampler, proj, bias);
-    else if (ci == 1) lit = SampleShadowPCF(u_shadow_map1, u_cmp_sampler, proj, bias);
-    else              lit = SampleShadowPCF(u_shadow_map2, u_cmp_sampler, proj, bias);
+    if (ci == 0)      lit = PCSS_ShadowDX(u_shadow_map0, u_cmp_sampler, proj, bias);
+    else if (ci == 1) lit = PCSS_ShadowDX(u_shadow_map1, u_cmp_sampler, proj, bias);
+    else              lit = PCSS_ShadowDX(u_shadow_map2, u_cmp_sampler, proj, bias);
     return 1.0 - lit;
 }
 
@@ -323,7 +390,9 @@ float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, 
 
     return clamp(shadow * light_params.y, 0.0, 1.0);
 }
+)";
 
+constexpr const char* kPbrPS_Part2 = R"(
 float4 PSMain(PSInput input) : SV_TARGET {
     float4 texColor = u_texture.Sample(u_sampler, input.uv);
     float3 albedo_color = texColor.rgb * input.color.rgb * mat_albedo.rgb;
@@ -419,6 +488,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
     float3 Lo = (kD * surface_albedo / PI + specular) * light_color_and_ambient.rgb * light_params.x * NdotL * (1.0 - shadow);
 
+)" R"(
     // 聚光灯 PBR 循环
     [loop] for (int si = 0; si < u_spot_light_count; ++si) {
         SpotLightEntry sl = u_spot_lights[si];
@@ -464,6 +534,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         Lo += (kDs * surface_albedo / PI + specS) * sl.color * sl.intensity * atten_s * cone * NdotLs * (1.0 - sl_shadow);
     }
 
+)" R"(
     // 点光源 PBR 循环
     [loop] for (int pi = 0; pi < u_point_light_count; ++pi) {
         PointLightEntry pl = u_point_lights[pi];

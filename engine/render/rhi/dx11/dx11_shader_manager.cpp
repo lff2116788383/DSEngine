@@ -143,7 +143,8 @@ void DX11ShaderManager::InitBuiltinShaders() {
     }
 
     // ---- PBR 着色器 ----
-    pbr_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kPbrPS);
+    pbr_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS,
+        std::string(dx11_shaders::kPbrPS_Part1) + dx11_shaders::kPbrPS_Part2);
     if (pbr_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin PBR shader created: {}", pbr_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {

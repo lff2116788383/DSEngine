@@ -409,13 +409,13 @@ TEST(SpotLightCBTest, J3_默认count为零) {
 // ============================================================
 
 TEST(SpotLightShaderTest, L_聚光灯PBR循环存在) {
-    std::string src(dse::render::dx11_shaders::kPbrPS);
+    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
     EXPECT_NE(src.find("u_spot_light_count"), std::string::npos)
         << "kPbrPS should contain spot light count loop";
 }
 
 TEST(SpotLightShaderTest, L_锥角衰减计算存在) {
-    std::string src(dse::render::dx11_shaders::kPbrPS);
+    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
     EXPECT_NE(src.find("outer_cone"), std::string::npos)
         << "kPbrPS should compute cone attenuation using outer_cone";
     EXPECT_NE(src.find("inner_cone"), std::string::npos)
@@ -423,7 +423,7 @@ TEST(SpotLightShaderTest, L_锥角衰减计算存在) {
 }
 
 TEST(SpotLightShaderTest, L_聚光灯阴影贴图t12声明存在) {
-    std::string src(dse::render::dx11_shaders::kPbrPS);
+    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
     EXPECT_NE(src.find("register(t12)"), std::string::npos)
         << "kPbrPS should declare spot shadow map at t12";
 }
