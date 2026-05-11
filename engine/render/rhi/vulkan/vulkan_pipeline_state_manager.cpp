@@ -273,7 +273,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     state.pipeline_layout = shader_program->pipeline_layout;
     state.samples = samples;
 
-    DEBUG_LOG_INFO("[Vulkan] Created VkPipeline for state handle {}", handle);
+    DEBUG_LOG_TRACE("[Vulkan] Created VkPipeline for state handle {}", handle);
     return pipeline;
 }
 

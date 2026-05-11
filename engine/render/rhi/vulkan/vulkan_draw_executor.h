@@ -315,6 +315,10 @@ private:
     VkDeviceSize per_spot_lights_ubo_offset_ = 0;
     static constexpr VkDeviceSize kUboSlotAlignment = 256; ///< UBO offset 对齐（覆盖大多数 GPU 的 minUniformBufferOffsetAlignment）
     unsigned int nocull_pipeline_state_ = 0; ///< 双面材质无剔除管线状态句柄
+    unsigned int sprite_pipeline_state_ = 0; ///< 2D 精灵管线状态句柄（缓存避免每帧重建）
+    unsigned int skybox_pipeline_state_ = 0; ///< 天空盒管线状态句柄
+    unsigned int pp_pipeline_state_ = 0;     ///< 后处理管线状态句柄（无混合）
+    unsigned int pp_blend_pipeline_state_ = 0; ///< 后处理管线状态句柄（alpha 混合，ui_overlay）
     int render_pass_counter_ = 0;
     int max_render_passes_ = -1;  // -1 = 无限制
     bool skip_current_pass_ = false;

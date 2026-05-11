@@ -467,13 +467,13 @@ void VulkanRhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
     if (!vk_cmd || vk_cmd->GetVkCommandBuffer() == VK_NULL_HANDLE) return;
 
     // 结束命令缓冲录制
-    DEBUG_LOG_INFO("[Vulkan] Submit: vkEndCommandBuffer");
+    DEBUG_LOG_TRACE("[Vulkan] Submit: vkEndCommandBuffer");
     VkResult end_result = vkEndCommandBuffer(vk_cmd->GetVkCommandBuffer());
     if (end_result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] vkEndCommandBuffer failed: {}", static_cast<int>(end_result));
         return;
     }
-    DEBUG_LOG_INFO("[Vulkan] Submit: vkEndCommandBuffer OK");
+    DEBUG_LOG_TRACE("[Vulkan] Submit: vkEndCommandBuffer OK");
 
     // 收集本帧所有已提交的命令缓冲
     pending_command_buffers_.push_back(vk_cmd->GetVkCommandBuffer());
@@ -487,9 +487,9 @@ void VulkanRhiDevice::EndFrame() {
 
     // 提交本帧所有录制的命令缓冲 + present
     if (!pending_command_buffers_.empty()) {
-        DEBUG_LOG_INFO("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", pending_command_buffers_.size());
+        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", pending_command_buffers_.size());
         context_.PresentFrame(pending_command_buffers_);
-        DEBUG_LOG_INFO("[Vulkan] EndFrame: PresentFrame OK");
+        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame OK");
         pending_command_buffers_.clear();
     }
 

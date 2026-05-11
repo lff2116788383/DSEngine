@@ -135,7 +135,7 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = signal_semaphores;
 
-    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueueSubmit frame={} imgIdx={} cmdCount={}",
+    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueueSubmit frame={} imgIdx={} cmdCount={}",
                    current_frame_, current_image_index_, submit_info.commandBufferCount);
 
     VkResult result = vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]);
@@ -143,7 +143,7 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
         DEBUG_LOG_ERROR("[Vulkan] vkQueueSubmit failed: {}", static_cast<int>(result));
         return result;
     }
-    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueueSubmit OK");
+    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueueSubmit OK");
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -155,9 +155,9 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     present_info.pSwapchains = swapchains;
     present_info.pImageIndices = &current_image_index_;
 
-    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueuePresentKHR");
+    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueuePresentKHR");
     result = vkQueuePresentKHR(present_queue_, &present_info);
-    DEBUG_LOG_INFO("[Vulkan] PresentFrame: vkQueuePresentKHR result={}", static_cast<int>(result));
+    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueuePresentKHR result={}", static_cast<int>(result));
     return result;
 }
 

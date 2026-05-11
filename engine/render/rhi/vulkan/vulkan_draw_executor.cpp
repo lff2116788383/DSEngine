@@ -1021,12 +1021,12 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
         const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(source_texture);
         if (rt && rt->color_texture.image_view != VK_NULL_HANDLE) {
             src_img.imageView = rt->color_texture.image_view;
-            DEBUG_LOG_INFO("[Vulkan] PostProcess src: RT handle={} imageView={}", source_texture, (void*)rt->color_texture.image_view);
+            DEBUG_LOG_TRACE("[Vulkan] PostProcess src: RT handle={} imageView={}", source_texture, (void*)rt->color_texture.image_view);
         } else {
             const VulkanTexture* tex = resource_mgr.GetTexture(source_texture);
             if (tex) {
                 src_img.imageView = tex->image_view;
-                DEBUG_LOG_INFO("[Vulkan] PostProcess src: Texture handle={} imageView={}", source_texture, (void*)tex->image_view);
+                DEBUG_LOG_TRACE("[Vulkan] PostProcess src: Texture handle={} imageView={}", source_texture, (void*)tex->image_view);
             } else {
                 DEBUG_LOG_WARN("[Vulkan] PostProcess src: handle={} NOT FOUND as RT or Texture, using dummy", source_texture);
             }
@@ -1145,7 +1145,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     // 二分法诊断：跳过超限的 render pass（在 vkCmdBeginRenderPass 之前检查）
     if (max_render_passes_ >= 0 && render_pass_counter_ >= max_render_passes_) {
         skip_current_pass_ = true;
-        DEBUG_LOG_INFO("[Vulkan] BeginRenderPass: SKIPPED rt={} (pass {} >= max {})",
+        DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: SKIPPED rt={} (pass {} >= max {})",
                        render_pass.render_target, render_pass_counter_, max_render_passes_);
         render_pass_counter_++;
         return;
@@ -1162,7 +1162,7 @@ void VulkanDrawExecutor::BeginRenderPass(
             if (rt_info) { rt_has_color = rt_info->has_color; rt_has_depth = rt_info->has_depth; }
         }
         current_color_attachment_count_ = rt_has_color ? 1 : 0;
-        DEBUG_LOG_INFO("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color={} depth={} pass#={}",
+        DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color={} depth={} pass#={}",
                        render_pass.render_target,
                        render_extent.width, render_extent.height,
                        static_cast<int>(current_msaa_samples_),
@@ -1188,11 +1188,11 @@ void VulkanDrawExecutor::BeginRenderPass(
 
 void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
     if (skip_current_pass_) {
-        DEBUG_LOG_INFO("[Vulkan] EndRenderPass: SKIPPED rt={}", current_rt_handle_);
+        DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: SKIPPED rt={}", current_rt_handle_);
         skip_current_pass_ = false;
         return;
     }
-    DEBUG_LOG_INFO("[Vulkan] EndRenderPass: rt={}", current_rt_handle_);
+    DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: rt={}", current_rt_handle_);
     vkCmdEndRenderPass(cmd_buf);
 
     // barrier：确保 color/depth writes 在后续 shader reads 可见
@@ -1224,7 +1224,7 @@ void VulkanDrawExecutor::DrawSpriteBatch(
     VulkanShaderManager& shader_mgr,
     VulkanResourceManager& resource_mgr) {
 
-    DEBUG_LOG_INFO("[Vulkan] DrawSpriteBatch: items={} skip={}", items.size(), skip_current_pass_);
+    DEBUG_LOG_TRACE("[Vulkan] DrawSpriteBatch: items={} skip={}", items.size(), skip_current_pass_);
     if (items.empty() || skip_current_pass_) return;
 
     const VulkanShaderProgram* sprite_program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
@@ -1235,15 +1235,18 @@ void VulkanDrawExecutor::DrawSpriteBatch(
         return;
     }
 
-    // 2D 精灵管线状态：alpha 混合、无深度写、无剔除
-    PipelineStateDesc sprite_desc;
-    sprite_desc.blend_enabled = true;
-    sprite_desc.blend_src = BlendFactor::SrcAlpha;
-    sprite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
-    sprite_desc.depth_test_enabled = false;
-    sprite_desc.depth_write_enabled = false;
-    sprite_desc.culling_enabled = false;
-    unsigned int sprite_state = pipeline_mgr.CreatePipelineState(sprite_desc);
+    // 2D 精灵管线状态：alpha 混合、无深度写、无剔除（缓存 handle 避免每帧重建）
+    if (sprite_pipeline_state_ == 0) {
+        PipelineStateDesc sprite_desc;
+        sprite_desc.blend_enabled = true;
+        sprite_desc.blend_src = BlendFactor::SrcAlpha;
+        sprite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+        sprite_desc.depth_test_enabled = false;
+        sprite_desc.depth_write_enabled = false;
+        sprite_desc.culling_enabled = false;
+        sprite_pipeline_state_ = pipeline_mgr.CreatePipelineState(sprite_desc);
+    }
+    unsigned int sprite_state = sprite_pipeline_state_;
 
     // 使用当前激活的 render pass（可能是离屏 RT 的 render pass）
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
@@ -1526,15 +1529,17 @@ void VulkanDrawExecutor::DrawSkybox(
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    // 天空盒专用管线状态：depth test=LEQUAL, depth write=OFF, no cull
-    // gl_Position.z = w * 0.999 → depth ≈ 0.999, 需要 LEQUAL
-    PipelineStateDesc skybox_desc;
-    skybox_desc.depth_test_enabled = true;
-    skybox_desc.depth_write_enabled = false;
-    skybox_desc.depth_func = CompareFunc::LessEqual;
-    skybox_desc.culling_enabled = false;
-    skybox_desc.blend_enabled = false;
-    unsigned int skybox_state = pipeline_mgr.CreatePipelineState(skybox_desc);
+    // 天空盒专用管线状态：depth test=LEQUAL, depth write=OFF, no cull（缓存 handle 避免每帧重建）
+    if (skybox_pipeline_state_ == 0) {
+        PipelineStateDesc skybox_desc;
+        skybox_desc.depth_test_enabled = true;
+        skybox_desc.depth_write_enabled = false;
+        skybox_desc.depth_func = CompareFunc::LessEqual;
+        skybox_desc.culling_enabled = false;
+        skybox_desc.blend_enabled = false;
+        skybox_pipeline_state_ = pipeline_mgr.CreatePipelineState(skybox_desc);
+    }
+    unsigned int skybox_state = skybox_pipeline_state_;
 
     VkPipeline skybox_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
         skybox_state,
@@ -1585,7 +1590,7 @@ void VulkanDrawExecutor::DrawPostProcess(
     VulkanPipelineStateManager& pipeline_mgr,
     VulkanShaderManager& shader_mgr) {
 
-    DEBUG_LOG_INFO("[Vulkan] DrawPostProcess: effect='{}' source_texture={} skip={}", effect_name, source_texture, skip_current_pass_);
+    DEBUG_LOG_TRACE("[Vulkan] DrawPostProcess: effect='{}' source_texture={} skip={}", effect_name, source_texture, skip_current_pass_);
     if (skip_current_pass_) return;
 
     // Bloom CS 路径：绕过图形管线，直接 Dispatch
@@ -1602,15 +1607,27 @@ void VulkanDrawExecutor::DrawPostProcess(
         }
     }
 
-    // 后处理管线状态：无深度、无剪裁；ui_overlay 需要 alpha 混合
-    PipelineStateDesc pp_desc;
-    pp_desc.blend_enabled = (effect_name == "ui_overlay");
-    pp_desc.blend_src = BlendFactor::SrcAlpha;
-    pp_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
-    pp_desc.depth_test_enabled = false;
-    pp_desc.depth_write_enabled = false;
-    pp_desc.culling_enabled = false;
-    unsigned int pp_state = pipeline_mgr.CreatePipelineState(pp_desc);
+    // 后处理管线状态：无深度、无剪裁；ui_overlay 需要 alpha 混合（缓存 handle 避免每帧重建）
+    const bool needs_blend = (effect_name == "ui_overlay");
+    if (needs_blend && pp_blend_pipeline_state_ == 0) {
+        PipelineStateDesc pp_desc;
+        pp_desc.blend_enabled = true;
+        pp_desc.blend_src = BlendFactor::SrcAlpha;
+        pp_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+        pp_desc.depth_test_enabled = false;
+        pp_desc.depth_write_enabled = false;
+        pp_desc.culling_enabled = false;
+        pp_blend_pipeline_state_ = pipeline_mgr.CreatePipelineState(pp_desc);
+    }
+    if (!needs_blend && pp_pipeline_state_ == 0) {
+        PipelineStateDesc pp_desc;
+        pp_desc.blend_enabled = false;
+        pp_desc.depth_test_enabled = false;
+        pp_desc.depth_write_enabled = false;
+        pp_desc.culling_enabled = false;
+        pp_pipeline_state_ = pipeline_mgr.CreatePipelineState(pp_desc);
+    }
+    unsigned int pp_state = needs_blend ? pp_blend_pipeline_state_ : pp_pipeline_state_;
 
     // 优先使用专用后处理着色器，fallback 到 PBR 着色器
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(shader_mgr.postprocess_shader_handle());
