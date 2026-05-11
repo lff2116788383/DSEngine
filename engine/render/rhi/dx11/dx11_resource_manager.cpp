@@ -52,6 +52,7 @@ void DX11ResourceManager::Shutdown() {
 
     textures_.clear();
     buffers_.clear();
+    ssbos_.clear();
     render_targets_.clear();
     vertex_arrays_.clear();
 
@@ -246,6 +247,70 @@ void DX11ResourceManager::DeleteBuffer(unsigned int handle) {
 const DX11Buffer* DX11ResourceManager::GetBuffer(unsigned int handle) const {
     auto it = buffers_.find(handle);
     return it != buffers_.end() ? &it->second : nullptr;
+}
+
+// ============================================================
+// SSBO (ByteAddressBuffer + Raw SRV)
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
+    unsigned int handle = next_ssbo_handle_++;
+    DX11SSBO ssbo;
+    // ByteAddressBuffer 要求 4 字节对齐
+    ssbo.size = (size + 3) & ~3;
+
+    D3D11_BUFFER_DESC desc{};
+    desc.ByteWidth = static_cast<UINT>(ssbo.size);
+    desc.Usage = D3D11_USAGE_DYNAMIC;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = data;
+
+    HRESULT hr = device_->CreateBuffer(&desc, data ? &init_data : nullptr, ssbo.buffer.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+    srv_desc.BufferEx.FirstElement = 0;
+    srv_desc.BufferEx.NumElements = static_cast<UINT>(ssbo.size / 4);
+    srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+    hr = device_->CreateShaderResourceView(ssbo.buffer.Get(), &srv_desc, ssbo.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    ssbos_[handle] = std::move(ssbo);
+    return handle;
+}
+
+void DX11ResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return;
+
+    // 使用 NO_OVERWRITE 允许多次部分更新（header + data 分开上传）
+    // 首次写入（offset==0）使用 DISCARD，后续使用 NO_OVERWRITE
+    D3D11_MAP map_type = (offset == 0) ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE_NO_OVERWRITE;
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    HRESULT hr = dc_->Map(it->second.buffer.Get(), 0, map_type, 0, &mapped);
+    if (SUCCEEDED(hr)) {
+        memcpy(static_cast<unsigned char*>(mapped.pData) + offset, data, size);
+        dc_->Unmap(it->second.buffer.Get(), 0);
+    }
+}
+
+void DX11ResourceManager::BindSSBO(unsigned int handle, unsigned int binding_point) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return;
+    // 绑定到 PS t-register (slot 16+ 避免与现有纹理冲突)
+    ID3D11ShaderResourceView* srv = it->second.srv.Get();
+    dc_->PSSetShaderResources(16 + binding_point, 1, &srv);
+}
+
+void DX11ResourceManager::DeleteSSBO(unsigned int handle) {
+    ssbos_.erase(handle);
 }
 
 // ============================================================

@@ -150,6 +150,15 @@ public:
         draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
     }
 
+    // --- SSBO（Clustered Forward+ 所需） ---
+    unsigned int CreateSSBO(size_t size, const void* data) override;
+    void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void BindSSBO(unsigned int handle, unsigned int binding_point) override {
+        // 存储绑定状态，实际绑定在 DrawMeshBatch 的 descriptor set 分配中完成
+        bound_ssbos_[binding_point] = handle;
+    }
+    void DeleteSSBO(unsigned int handle) override;
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
@@ -171,6 +180,9 @@ public:
     VulkanShaderManager& shader_mgr() { return shader_mgr_; }
     VulkanDrawExecutor& draw_executor() { return draw_executor_; }
 
+    /// 获取当前帧绑定的 SSBO 状态（binding_point → handle）
+    const std::unordered_map<unsigned int, unsigned int>& bound_ssbos() const { return bound_ssbos_; }
+
 private:
     void EnsureInitialized();
 
@@ -189,6 +201,9 @@ private:
 
     /// 本帧待提交的命令缓冲列表
     std::vector<VkCommandBuffer> pending_command_buffers_;
+
+    /// 当前帧绑定的 SSBO 状态 (binding_point → handle)
+    std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
 
     bool initialized_ = false;
 };

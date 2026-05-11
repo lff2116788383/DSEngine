@@ -350,5 +350,23 @@ void DX11RhiDevice::SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm:
     draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
 }
 
+// --- SSBO ---
+
+unsigned int DX11RhiDevice::CreateSSBO(size_t size, const void* data) {
+    return resource_mgr_.CreateSSBO(size, data);
+}
+
+void DX11RhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateSSBO(handle, offset, size, data);
+}
+
+void DX11RhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
+    resource_mgr_.BindSSBO(handle, binding_point);
+}
+
+void DX11RhiDevice::DeleteSSBO(unsigned int handle) {
+    resource_mgr_.DeleteSSBO(handle);
+}
+
 } // namespace render
 } // namespace dse

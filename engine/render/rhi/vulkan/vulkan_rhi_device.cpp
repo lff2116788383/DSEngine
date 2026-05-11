@@ -77,6 +77,7 @@ void VulkanCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) 
         }
     }
 
+    device_->draw_executor().SetBoundSSBOs(device_->bound_ssbos());
     device_->draw_executor().DrawMeshBatch(
         vk_command_buffer_, items, view_, projection_,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
@@ -421,6 +422,20 @@ void VulkanRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t si
 
 void VulkanRhiDevice::DeleteBuffer(unsigned int handle) {
     resource_mgr_.DeleteBuffer(handle);
+}
+
+// --- SSBO ---
+
+unsigned int VulkanRhiDevice::CreateSSBO(size_t size, const void* data) {
+    return resource_mgr_.CreateSSBO(size, data);
+}
+
+void VulkanRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateSSBO(handle, offset, size, data);
+}
+
+void VulkanRhiDevice::DeleteSSBO(unsigned int handle) {
+    resource_mgr_.DeleteSSBO(handle);
 }
 
 unsigned int VulkanRhiDevice::CreateVertexArray() {

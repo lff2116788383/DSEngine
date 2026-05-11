@@ -14,6 +14,8 @@
 #include "engine/platform/screen.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/core/module.h"
+#include "engine/render/light_buffer.h"
+#include "engine/render/cluster_grid.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 #include <cstdint>
@@ -375,6 +377,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     } // end else (non-editor camera)
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+
+    // Clustered Forward+: 绑定光源 SSBO 和 Cluster 网格 SSBO
+    if (ctx_.light_buffer) ctx_.light_buffer->Bind();
+    if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
     if (ctx_.modules.empty() && ctx_.render_meshes) {
         ctx_.render_meshes(*ctx_.world, cmd_buffer);

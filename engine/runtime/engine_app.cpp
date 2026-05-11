@@ -242,7 +242,7 @@ bool EngineInstance::Init() {
         const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
                                        rhi_backend != RhiBackend::Vulkan);
         if (needs_gl_context) {
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         } else {

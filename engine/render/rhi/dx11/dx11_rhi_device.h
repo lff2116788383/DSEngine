@@ -125,6 +125,12 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) override;
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
 
+    // --- SSBO（Clustered Forward+ 所需） ---
+    unsigned int CreateSSBO(size_t size, const void* data) override;
+    void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void BindSSBO(unsigned int handle, unsigned int binding_point) override;
+    void DeleteSSBO(unsigned int handle) override;
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 

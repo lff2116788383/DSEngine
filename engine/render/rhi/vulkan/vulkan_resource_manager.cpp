@@ -116,6 +116,14 @@ void VulkanResourceManager::Shutdown() {
     }
     buffers_.clear();
 
+    // 销毁所有 SSBO
+    for (auto& [handle, buf] : ssbos_) {
+        if (buf.mapped) vkUnmapMemory(device_, buf.memory);
+        if (buf.buffer != VK_NULL_HANDLE) vkDestroyBuffer(device_, buf.buffer, nullptr);
+        if (buf.memory != VK_NULL_HANDLE) vkFreeMemory(device_, buf.memory, nullptr);
+    }
+    ssbos_.clear();
+
     if (default_sampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(device_, default_sampler_, nullptr);
         default_sampler_ = VK_NULL_HANDLE;
@@ -502,6 +510,72 @@ void VulkanResourceManager::DeleteBuffer(unsigned int handle) {
     if (buf.memory != VK_NULL_HANDLE) vkFreeMemory(device_, buf.memory, nullptr);
 
     buffers_.erase(it);
+}
+
+// ============================================================
+// SSBO (Storage Buffer)
+// ============================================================
+
+unsigned int VulkanResourceManager::CreateSSBO(size_t size, const void* data) {
+    unsigned int handle = next_ssbo_handle_++;
+    VulkanBuffer buf;
+    buf.size = size;
+    buf.is_dynamic = true;
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(device_, &buffer_info, nullptr, &buf.buffer) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device_, buf.buffer, &mem_reqs);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = FindMemoryType(mem_reqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    if (vkAllocateMemory(device_, &alloc_info, nullptr, &buf.memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device_, buf.buffer, nullptr);
+        return 0;
+    }
+    vkBindBufferMemory(device_, buf.buffer, buf.memory, 0);
+    vkMapMemory(device_, buf.memory, 0, size, 0, &buf.mapped);
+
+    if (data && buf.mapped) {
+        memcpy(buf.mapped, data, size);
+    }
+
+    ssbos_[handle] = buf;
+    return handle;
+}
+
+void VulkanResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return;
+    auto& buf = it->second;
+    if (buf.mapped) {
+        memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
+    }
+}
+
+void VulkanResourceManager::DeleteSSBO(unsigned int handle) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return;
+    auto& buf = it->second;
+    if (buf.mapped) vkUnmapMemory(device_, buf.memory);
+    if (buf.buffer != VK_NULL_HANDLE) vkDestroyBuffer(device_, buf.buffer, nullptr);
+    if (buf.memory != VK_NULL_HANDLE) vkFreeMemory(device_, buf.memory, nullptr);
+    ssbos_.erase(it);
+}
+
+const VulkanBuffer* VulkanResourceManager::GetSSBO(unsigned int handle) const {
+    auto it = ssbos_.find(handle);
+    return it != ssbos_.end() ? &it->second : nullptr;
 }
 
 // ============================================================
@@ -934,6 +1008,7 @@ bool VulkanResourceManager::CreateDescriptorPool() {
     std::vector<VkDescriptorPoolSize> pool_sizes = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},  // PerFrame/PerScene/PerMaterial UBO
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192}, // 纹理采样器
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2048}, // PointLight/SpotLight SSBO
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},   // Bloom Compute UAV
     };
 

@@ -66,6 +66,13 @@ struct DX11RenderTarget {
     unsigned int depth_texture_handle = 0;
 };
 
+/// D3D11 SSBO 资源封装（StructuredBuffer + SRV）
+struct DX11SSBO {
+    ComPtr<ID3D11Buffer> buffer;
+    ComPtr<ID3D11ShaderResourceView> srv;
+    size_t size = 0;
+};
+
 /// D3D11 顶点数组模拟（InputLayout + Buffer 绑定组合）
 struct DX11VertexArray {
     unsigned int placeholder = 0;
@@ -97,6 +104,12 @@ public:
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index);
     void DeleteBuffer(unsigned int handle);
     const DX11Buffer* GetBuffer(unsigned int handle) const;
+
+    // --- SSBO (StructuredBuffer + SRV) ---
+    unsigned int CreateSSBO(size_t size, const void* data);
+    void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data);
+    void BindSSBO(unsigned int handle, unsigned int binding_point);
+    void DeleteSSBO(unsigned int handle);
 
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
@@ -131,11 +144,13 @@ private:
 
     std::unordered_map<unsigned int, DX11Texture> textures_;
     std::unordered_map<unsigned int, DX11Buffer> buffers_;
+    std::unordered_map<unsigned int, DX11SSBO> ssbos_;
     std::unordered_map<unsigned int, DX11RenderTarget> render_targets_;
     std::unordered_map<unsigned int, DX11VertexArray> vertex_arrays_;
 
     unsigned int next_texture_handle_ = 800000;
     unsigned int next_buffer_handle_ = 810000;
+    unsigned int next_ssbo_handle_ = 815000;
     unsigned int next_render_target_handle_ = 820000;
     unsigned int next_vao_handle_ = 830000;
 
