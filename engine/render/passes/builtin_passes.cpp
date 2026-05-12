@@ -278,8 +278,11 @@ void ForwardScenePass::Setup(RenderGraph& graph) {
 void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
 
+    bool render_3d = false; // Only render 3D meshes when a valid camera is active
+
     // Editor camera override: use editor view/proj for Scene render target
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
+        render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
 
@@ -319,6 +322,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     if (selected_camera3d != entt::null) {
+        render_3d = true;
         auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
@@ -383,19 +387,21 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     }
     } // end else (non-editor camera)
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+    if (render_3d) {
+        cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
 
-    // Clustered Forward+: 绑定光源 SSBO 和 Cluster 网格 SSBO
-    if (ctx_.light_buffer) ctx_.light_buffer->Bind();
-    if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
+        // Clustered Forward+: 绑定光源 SSBO 和 Cluster 网格 SSBO
+        if (ctx_.light_buffer) ctx_.light_buffer->Bind();
+        if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
-    if (ctx_.modules.empty() && ctx_.render_meshes) {
-        ctx_.render_meshes(*ctx_.world, cmd_buffer);
-    }
-    const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    for (auto& mod : ctx_.modules) {
-        if (mod.instance) {
-            mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
+        if (ctx_.modules.empty() && ctx_.render_meshes) {
+            ctx_.render_meshes(*ctx_.world, cmd_buffer);
+        }
+        const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        for (auto& mod : ctx_.modules) {
+            if (mod.instance) {
+                mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
+            }
         }
     }
 

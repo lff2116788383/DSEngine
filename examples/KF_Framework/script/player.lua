@@ -64,6 +64,7 @@ function Player.reset()
 end
 
 function Player.get_entity() return knight end
+function Player.get_camera_entity() return camera end
 function Player.get_camera_position()
     if not camera then return 0, 0, 0 end
     return ecs.get_transform_position(camera)

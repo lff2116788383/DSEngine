@@ -81,6 +81,9 @@ function GameFlow.setup()
     demo_play_tex = assets.load_texture("assets/textures/ui/demo_play.png")
     press_any_key_tex = assets.load_texture("assets/textures/ui/press_any_key.png")
     GameFlow.create_title_ui()
+    -- 标题状态禁用 3D 相机，阻止 3D 场景渲染到 scene RT（与 KF 原版一致）
+    local cam = Player.get_camera_entity()
+    if cam then ecs.set_camera_enabled(cam, false) end
     Audio.play_bgm("title")  -- KF: ModeTitle::OnCompleteLoading → kTitleBgm
     Fade.start_with_loading()  -- KF: 启动时从 Loading 动画开始
 
@@ -102,6 +105,9 @@ function GameFlow.setup()
         AutoPlay.reset()
         GameFlow.hide_title_ui()
         HUD.show()
+        -- 战斗状态启用 3D 相机
+        local cam2 = Player.get_camera_entity()
+        if cam2 then ecs.set_camera_enabled(cam2, true) end
         Audio.play_bgm("game")
         print("[KF_Framework] Battle start!")
     end
@@ -345,6 +351,9 @@ function GameFlow.enter_battle()
         AutoPlay.reset()
         GameFlow.hide_title_ui()
         HUD.show()
+        -- 战斗状态启用 3D 相机
+        local cam3 = Player.get_camera_entity()
+        if cam3 then ecs.set_camera_enabled(cam3, true) end
         Audio.play_bgm("game")  -- KF: ModeDemo::OnCompleteLoading → kGameBgm
         print("[KF_Framework] Battle start!")
         -- Fade.fade_in 由状态机自动触发 (WaitIn → FadeIn)
@@ -412,6 +421,9 @@ function GameFlow.enter_title()
         -- 显示 Title UI
         GameFlow.show_title_ui()
         GameFlow.update_title_buttons()
+        -- 返回标题时禁用 3D 相机
+        local cam4 = Player.get_camera_entity()
+        if cam4 then ecs.set_camera_enabled(cam4, false) end
         Audio.play_bgm("title")  -- KF: kTitleBgm
         print("[KF_Framework] Back to Title.")
         -- Fade.fade_in 由状态机自动触发 (WaitIn → FadeIn)
