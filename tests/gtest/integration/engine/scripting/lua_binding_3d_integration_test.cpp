@@ -24,6 +24,9 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/core/service_locator.h"
+#include "engine/ecs/components_3d_cloth.h"
+#include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_fracture.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -54,7 +57,7 @@ protected:
     }
 };
 
-TEST_F(LuaBinding3DIntegrationTest, Lua创建3D相机CPlusPlus侧可读取FOV) {
+TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DCameraCppCanReadFov) {
     LuaTempScript startup("test_3d_camera.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -91,7 +94,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua创建3D相机CPlusPlus侧可读取FOV) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua创建3D方向光CPlusPlus侧可读取参数) {
+TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DDirectionalLightCppCanReadParams) {
     LuaTempScript startup("test_3d_light.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -125,7 +128,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua创建3D方向光CPlusPlus侧可读取参
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua创建3D刚体和碰撞体CPlusPlus侧可读取) {
+TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -173,7 +176,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua创建3D刚体和碰撞体CPlusPlus侧可
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua创建3D粒子系统CPlusPlus侧可读取参数) {
+TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DParticleSystemCppCanReadParams) {
     LuaTempScript startup("test_3d_particles.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -208,7 +211,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua创建3D粒子系统CPlusPlus侧可读取
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua创建后处理CPlusPlus侧可读取Bloom参数) {
+TEST_F(LuaBinding3DIntegrationTest, LuaCreatePostProcessCppCanReadBloomParams) {
     LuaTempScript startup("test_3d_postprocess.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -242,7 +245,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua创建后处理CPlusPlus侧可读取Bloom
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua3D球体碰撞体创建CPlusPlus侧可验证) {
+TEST_F(LuaBinding3DIntegrationTest, Lua3DSphereColliderCreateCppCanVerify) {
     LuaTempScript startup("test_3d_sphere_collider.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -278,11 +281,361 @@ TEST_F(LuaBinding3DIntegrationTest, Lua3D球体碰撞体创建CPlusPlus侧可验
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBinding3DIntegrationTest, Lua3D错误参数不崩溃) {
+TEST_F(LuaBinding3DIntegrationTest, LuaConfigureMeshMaterialAndDepthStateCppCanRead) {
+    LuaTempScript startup("test_3d_mesh_material.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_mesh_renderer(e, 0.25, 0.5, 0.75, 0.9)
+            dse.ecs.set_mesh_path(e, "data/meshes/test.dmesh")
+            dse.ecs.set_mesh_shader_variant(e, "MESH_UNLIT")
+            dse.ecs.set_mesh_depth_state(e, false, true)
+            dse.ecs.set_mesh_material(e, 0.2, 0.7, 0.8, 1.0, 0.5, 0.25, 1.2, false, true, 0.9, 0.8, 0.7, 0.6)
+            dse.ecs.set_mesh_material_scalar(e, "material_alpha_cutoff", 0.33)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto view = world.registry().view<MeshRendererComponent>();
+    ASSERT_EQ(view.size(), 1u);
+    for (auto entity : view) {
+        const auto& mesh = view.get<MeshRendererComponent>(entity);
+        EXPECT_EQ(mesh.mesh_path, "data/meshes/test.dmesh");
+        EXPECT_EQ(mesh.shader_variant, "MESH_UNLIT");
+        EXPECT_FALSE(mesh.depth_test_enabled);
+        EXPECT_TRUE(mesh.depth_write_enabled);
+        EXPECT_NEAR(mesh.roughness, 0.7f, 0.001f);
+        EXPECT_NEAR(mesh.metallic, 0.2f, 0.001f);
+        EXPECT_NEAR(mesh.ao, 0.8f, 0.001f);
+        EXPECT_NEAR(mesh.material_alpha_cutoff, 0.33f, 0.001f);
+        EXPECT_NEAR(mesh.normal_strength, 1.2f, 0.001f);
+        EXPECT_FALSE(mesh.receive_shadow);
+        EXPECT_TRUE(mesh.material_double_sided);
+        EXPECT_NEAR(mesh.color.r, 0.9f, 0.001f);
+        EXPECT_NEAR(mesh.color.g, 0.8f, 0.001f);
+        EXPECT_NEAR(mesh.color.b, 0.7f, 0.001f);
+        EXPECT_NEAR(mesh.color.a, 0.6f, 0.001f);
+        EXPECT_NEAR(mesh.emissive.x, 1.0f, 0.001f);
+        EXPECT_NEAR(mesh.emissive.y, 0.5f, 0.001f);
+        EXPECT_NEAR(mesh.emissive.z, 0.25f, 0.001f);
+    }
+
+    ShutdownLuaRuntime();
+}
+
+TEST_F(LuaBinding3DIntegrationTest, LuaConfigureTerrainAndHeightmapCppCanRead) {
+    LuaTempScript startup("test_3d_terrain.lua", R"(
+        function Awake()
+            terrain = dse.ecs.create_entity()
+            dse.ecs.add_transform(terrain, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_terrain(terrain, "", 256.0, 128.0, 42.0)
+            dse.ecs.set_terrain_params(terrain, 9, 7, 3, 18.0, true)
+            dse.ecs.set_terrain_height(terrain, 3, 4, 12.5)
+            dse.ecs.add_terrain_heightmap(terrain, 0.0, 0.0, 2.0, 3, 3, 1.0, false)
+            dse.ecs.terrain_heightmap_set_data(terrain, { 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 })
+            sampled_height = dse.ecs.terrain_get_height(2.0, -2.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto terrain_view = world.registry().view<TerrainComponent>();
+    ASSERT_EQ(terrain_view.size(), 1u);
+    for (auto entity : terrain_view) {
+        const auto& terrain = terrain_view.get<TerrainComponent>(entity);
+        EXPECT_NEAR(terrain.width, 256.0f, 0.001f);
+        EXPECT_NEAR(terrain.depth, 128.0f, 0.001f);
+        EXPECT_NEAR(terrain.max_height, 42.0f, 0.001f);
+        EXPECT_EQ(terrain.resolution_x, 9);
+        EXPECT_EQ(terrain.resolution_z, 7);
+        EXPECT_EQ(terrain.max_lod_levels, 3);
+        EXPECT_NEAR(terrain.lod_distance_factor, 18.0f, 0.001f);
+        EXPECT_TRUE(terrain.is_dirty);
+        ASSERT_GE(terrain.height_data.size(), static_cast<size_t>(9 * 7));
+        EXPECT_NEAR(terrain.height_data[4 * 9 + 3], 12.5f, 0.001f);
+    }
+
+    auto hm_view = world.registry().view<TerrainHeightmapComponent>();
+    ASSERT_EQ(hm_view.size(), 1u);
+    for (auto entity : hm_view) {
+        const auto& hm = hm_view.get<TerrainHeightmapComponent>(entity);
+        EXPECT_EQ(hm.cols, 3);
+        EXPECT_EQ(hm.rows, 3);
+        ASSERT_EQ(hm.heights.size(), 9u);
+        EXPECT_NEAR(hm.GetHeight(2.0f, -2.0f), 4.0f, 0.001f);
+    }
+
+    ShutdownLuaRuntime();
+}
+
+TEST_F(LuaBinding3DIntegrationTest, LuaConfigure3DPhysicsExtendedComponentsCppCanRead) {
+    LuaTempScript startup("test_3d_physics_extended.lua", R"(
+        function Awake()
+            local a = dse.ecs.create_entity()
+            local b = dse.ecs.create_entity()
+            dse.ecs.add_transform(a, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_transform(b, 0.0, 3.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_rigidbody_3d(a, 2, 3.0)
+            dse.ecs.add_capsule_collider_3d(a, 0.35, 1.25, 1)
+            dse.ecs.add_mesh_collider_3d(a, true)
+            dse.ecs.set_collider_trigger(a, true)
+            dse.ecs.set_collider_material(a, 0.4, 0.6)
+            dse.ecs.set_collision_layer(a, 4, 12)
+            dse.ecs.add_joint_3d(a, b, 1, 0.0, 0.5, 0.0)
+            dse.ecs.set_joint_3d_hinge_limits(a, -20.0, 35.0)
+            dse.ecs.set_joint_3d_spring(a, 77.0, 8.0)
+            dse.ecs.set_joint_3d_distance(a, 0.5, 3.5)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto rb_view = world.registry().view<RigidBody3DComponent>();
+    ASSERT_EQ(rb_view.size(), 1u);
+    for (auto entity : rb_view) {
+        const auto& rb = rb_view.get<RigidBody3DComponent>(entity);
+        EXPECT_EQ(rb.collision_layer, 4u);
+        EXPECT_EQ(rb.collision_mask, 12u);
+    }
+
+    auto capsule_view = world.registry().view<CapsuleCollider3DComponent>();
+    ASSERT_EQ(capsule_view.size(), 1u);
+    for (auto entity : capsule_view) {
+        const auto& capsule = capsule_view.get<CapsuleCollider3DComponent>(entity);
+        EXPECT_NEAR(capsule.radius, 0.35f, 0.001f);
+        EXPECT_NEAR(capsule.height, 1.25f, 0.001f);
+        EXPECT_TRUE(capsule.is_trigger);
+        EXPECT_NEAR(capsule.bounciness, 0.6f, 0.001f);
+        EXPECT_NEAR(capsule.friction, 0.4f, 0.001f);
+    }
+
+    auto mesh_col_view = world.registry().view<MeshCollider3DComponent>();
+    ASSERT_EQ(mesh_col_view.size(), 1u);
+    for (auto entity : mesh_col_view) {
+        const auto& mesh_col = mesh_col_view.get<MeshCollider3DComponent>(entity);
+        EXPECT_TRUE(mesh_col.convex);
+        EXPECT_TRUE(mesh_col.is_trigger);
+        EXPECT_NEAR(mesh_col.bounciness, 0.6f, 0.001f);
+        EXPECT_NEAR(mesh_col.friction, 0.4f, 0.001f);
+    }
+
+    auto joint_view = world.registry().view<Joint3DComponent>();
+    ASSERT_EQ(joint_view.size(), 1u);
+    for (auto entity : joint_view) {
+        const auto& joint = joint_view.get<Joint3DComponent>(entity);
+        EXPECT_EQ(joint.type, Joint3DType::Hinge);
+        EXPECT_TRUE(joint.use_limits);
+        EXPECT_NEAR(joint.lower_limit, -20.0f, 0.001f);
+        EXPECT_NEAR(joint.upper_limit, 35.0f, 0.001f);
+        EXPECT_NEAR(joint.spring_stiffness, 77.0f, 0.001f);
+        EXPECT_NEAR(joint.spring_damping, 8.0f, 0.001f);
+        EXPECT_NEAR(joint.min_distance, 0.5f, 0.001f);
+        EXPECT_NEAR(joint.max_distance, 3.5f, 0.001f);
+    }
+
+    ShutdownLuaRuntime();
+}
+
+TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppCanRead) {
+    LuaTempScript startup("test_3d_gameplay_components.lua", R"(
+        function Awake()
+            local collider = dse.ecs.create_entity()
+            dse.ecs.add_transform(collider, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+
+            local cloth = dse.ecs.create_entity()
+            dse.ecs.add_cloth(cloth, 12, 0.65, 0.03, 0.45)
+            dse.ecs.set_cloth_wind(cloth, 1.0, 2.0, 3.0, 0.7)
+            dse.ecs.set_cloth_gravity(cloth, 0.0, -5.0, 0.0)
+            dse.ecs.cloth_pin_vertices(cloth, { 0, 2, 4 })
+            dse.ecs.cloth_add_sphere_collider(cloth, collider, 1.25)
+
+            local fluid = dse.ecs.create_entity()
+            dse.ecs.add_fluid_emitter(fluid, 2, 640.0, 4.5, 3.25)
+            dse.ecs.set_fluid_physics(fluid, 0.2, 0.3, 900.0, 60.0)
+            dse.ecs.set_fluid_rendering(fluid, 0.1, 0.2, 0.3, 0.4, 0.5, 2.5, 0.9)
+            dse.ecs.set_fluid_emit_direction(fluid, 0.0, 1.0, 0.0, 0.12)
+            dse.ecs.set_fluid_floor(fluid, -2.0, 0.55)
+
+            local fracture = dse.ecs.create_entity()
+            dse.ecs.add_fracture(fracture, 1, 16, 700.0, 10.0)
+            dse.ecs.set_fracture_params(fracture, 88.0, 6.0, 2.0, 1.5)
+            dse.ecs.fracture_apply_damage(fracture, 11.0, 1.0, 2.0, 3.0)
+
+            local ragdoll = dse.ecs.create_entity()
+            dse.ecs.add_ragdoll(ragdoll, 21.0, false, 3.0, 4.0)
+            dse.ecs.ragdoll_activate(ragdoll)
+            dse.ecs.set_ragdoll_collision_layer(ragdoll, 8, 15)
+
+            local softbody = dse.ecs.create_entity()
+            dse.ecs.add_softbody(softbody, 0.8, 9, 0.91, 0.7)
+            dse.ecs.softbody_set_gravity(softbody, false, 0.25)
+
+            local vehicle = dse.ecs.create_entity()
+            dse.ecs.add_vehicle(vehicle, 6000.0, 4000.0, 40.0)
+            dse.ecs.vehicle_add_wheel(vehicle, 1.0, -0.5, 1.2, 0.42, true, true, 123.0, 45.0)
+            dse.ecs.vehicle_set_input(vehicle, 2.0, -1.0, -2.0)
+
+            local rope = dse.ecs.create_entity()
+            dse.ecs.add_rope(rope, 6, 0.33, 0.95, 5)
+            dse.ecs.rope_set_gravity(rope, false, 0.2)
+            dse.ecs.rope_set_anchors(rope, 0, collider, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+
+            local buoyancy = dse.ecs.create_entity()
+            dse.ecs.add_buoyancy(buoyancy, 2.5, 15.0, 4.0, 1.5, 0.8)
+            dse.ecs.buoyancy_add_sample_point(buoyancy, 0.0, -0.5, 0.0, 2.0)
+            dse.ecs.buoyancy_set_water_level(buoyancy, 3.5)
+            dse.ecs.buoyancy_set_use_fluid(buoyancy, false)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto cloth_view = world.registry().view<ClothComponent>();
+    ASSERT_EQ(cloth_view.size(), 1u);
+    for (auto entity : cloth_view) {
+        const auto& cloth = cloth_view.get<ClothComponent>(entity);
+        EXPECT_EQ(cloth.solver_iterations, 12u);
+        EXPECT_NEAR(cloth.stiffness, 0.65f, 0.001f);
+        EXPECT_NEAR(cloth.wind_turbulence, 0.7f, 0.001f);
+        EXPECT_NEAR(cloth.gravity.y, -5.0f, 0.001f);
+        ASSERT_EQ(cloth.pinned_vertices.size(), 3u);
+        ASSERT_EQ(cloth.sphere_colliders.size(), 1u);
+        EXPECT_NEAR(cloth.sphere_colliders[0].radius, 1.25f, 0.001f);
+    }
+
+    auto fluid_view = world.registry().view<FluidEmitterComponent>();
+    ASSERT_EQ(fluid_view.size(), 1u);
+    for (auto entity : fluid_view) {
+        const auto& fluid = fluid_view.get<FluidEmitterComponent>(entity);
+        EXPECT_EQ(fluid.shape, FluidEmitterShape::Box);
+        EXPECT_NEAR(fluid.emission_rate, 640.0f, 0.001f);
+        EXPECT_NEAR(fluid.particle_lifetime, 4.5f, 0.001f);
+        EXPECT_NEAR(fluid.emit_direction.y, 1.0f, 0.001f);
+        EXPECT_NEAR(fluid.floor_y, -2.0f, 0.001f);
+        EXPECT_NEAR(fluid.collision_restitution, 0.55f, 0.001f);
+        EXPECT_NEAR(fluid.color.w, 0.4f, 0.001f);
+    }
+
+    auto fracture_view = world.registry().view<FractureComponent>();
+    ASSERT_EQ(fracture_view.size(), 1u);
+    for (auto entity : fracture_view) {
+        const auto& fracture = fracture_view.get<FractureComponent>(entity);
+        EXPECT_EQ(fracture.source, FractureSource::RuntimeVoronoi);
+        EXPECT_EQ(fracture.runtime_fragment_count, 16u);
+        EXPECT_TRUE(fracture.fracture_requested);
+        EXPECT_NEAR(fracture.health, -1.0f, 0.001f);
+        EXPECT_NEAR(fracture.explosion_force, 88.0f, 0.001f);
+        EXPECT_NEAR(fracture.impact_point.z, 3.0f, 0.001f);
+    }
+
+    auto ragdoll_view = world.registry().view<RagdollComponent>();
+    ASSERT_EQ(ragdoll_view.size(), 1u);
+    for (auto entity : ragdoll_view) {
+        const auto& ragdoll = ragdoll_view.get<RagdollComponent>(entity);
+        EXPECT_TRUE(ragdoll.active);
+        EXPECT_FALSE(ragdoll.auto_setup);
+        EXPECT_NEAR(ragdoll.total_mass, 21.0f, 0.001f);
+        EXPECT_EQ(ragdoll.collision_layer, 8u);
+        EXPECT_EQ(ragdoll.collision_mask, 15u);
+    }
+
+    auto softbody_view = world.registry().view<SoftBodyComponent>();
+    ASSERT_EQ(softbody_view.size(), 1u);
+    for (auto entity : softbody_view) {
+        const auto& softbody = softbody_view.get<SoftBodyComponent>(entity);
+        EXPECT_NEAR(softbody.stiffness, 0.8f, 0.001f);
+        EXPECT_EQ(softbody.solver_iterations, 9);
+        EXPECT_FALSE(softbody.use_gravity);
+        EXPECT_NEAR(softbody.gravity_scale, 0.25f, 0.001f);
+    }
+
+    auto vehicle_view = world.registry().view<VehicleComponent>();
+    ASSERT_EQ(vehicle_view.size(), 1u);
+    for (auto entity : vehicle_view) {
+        const auto& vehicle = vehicle_view.get<VehicleComponent>(entity);
+        EXPECT_NEAR(vehicle.max_engine_force, 6000.0f, 0.001f);
+        EXPECT_NEAR(vehicle.max_brake_force, 4000.0f, 0.001f);
+        EXPECT_NEAR(vehicle.max_steer_angle, 40.0f, 0.001f);
+        ASSERT_EQ(vehicle.wheels.size(), 1u);
+        EXPECT_TRUE(vehicle.wheels[0].is_drive_wheel);
+        EXPECT_TRUE(vehicle.wheels[0].is_steer_wheel);
+        EXPECT_NEAR(vehicle.throttle, 1.0f, 0.001f);
+        EXPECT_NEAR(vehicle.brake, 0.0f, 0.001f);
+        EXPECT_NEAR(vehicle.steering, -1.0f, 0.001f);
+    }
+
+    auto rope_view = world.registry().view<RopeComponent>();
+    ASSERT_EQ(rope_view.size(), 1u);
+    for (auto entity : rope_view) {
+        const auto& rope = rope_view.get<RopeComponent>(entity);
+        EXPECT_EQ(rope.segment_count, 6);
+        EXPECT_NEAR(rope.segment_length, 0.33f, 0.001f);
+        EXPECT_FALSE(rope.use_gravity);
+        EXPECT_NEAR(rope.gravity_scale, 0.2f, 0.001f);
+        EXPECT_NEAR(rope.anchor_offset_a.x, 0.1f, 0.001f);
+        EXPECT_NEAR(rope.anchor_offset_b.z, 0.6f, 0.001f);
+    }
+
+    auto buoyancy_view = world.registry().view<BuoyancyComponent>();
+    ASSERT_EQ(buoyancy_view.size(), 1u);
+    for (auto entity : buoyancy_view) {
+        const auto& buoyancy = buoyancy_view.get<BuoyancyComponent>(entity);
+        EXPECT_NEAR(buoyancy.water_level, 3.5f, 0.001f);
+        EXPECT_NEAR(buoyancy.buoyancy_force, 15.0f, 0.001f);
+        EXPECT_FALSE(buoyancy.use_fluid_system);
+        ASSERT_EQ(buoyancy.sample_points.size(), 1u);
+        EXPECT_NEAR(buoyancy.sample_points[0].force_scale, 2.0f, 0.001f);
+    }
+
+    ShutdownLuaRuntime();
+}
+
+TEST_F(LuaBinding3DIntegrationTest, Lua3DErrorArgsNoCrash) {
     LuaTempScript startup("test_3d_error.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
-            -- 传无效参数给 3D API，不应崩溃
+            -- invalid 3D API arguments should not crash
             pcall(dse.ecs.add_camera_3d, e, -1.0, 0)
             pcall(dse.ecs.add_rigidbody_3d, e, -999, -1.0)
             pcall(dse.ecs.add_box_collider_3d, e, 0.0, 0.0, 0.0)

@@ -345,6 +345,7 @@ target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/lua
     ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
     ${CMAKE_SOURCE_DIR}/depends/glad/include
+    ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
 
 if(EXISTS "${BOX2D_ROOT}/include")

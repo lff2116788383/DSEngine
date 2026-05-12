@@ -82,6 +82,7 @@ if(DSE_ENABLE_3D)
         modules/gameplay_3d/frustum_culling_system_test.cpp
         modules/gameplay_3d/animator_system_test.cpp
         modules/gameplay_3d/free_camera_controller_system_test.cpp
+        modules/gameplay_3d/rope_vehicle_system_test.cpp
     )
 endif()
 
