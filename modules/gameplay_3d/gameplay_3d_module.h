@@ -13,6 +13,11 @@
 #include "modules/gameplay_3d/destruction/fracture_system.h"
 #include "modules/gameplay_3d/cloth/cloth_system.h"
 #include "modules/gameplay_3d/fluid/fluid_system.h"
+#include "modules/gameplay_3d/ragdoll/ragdoll_system.h"
+#include "modules/gameplay_3d/softbody/softbody_system.h"
+#include "modules/gameplay_3d/vehicle/vehicle_system.h"
+#include "modules/gameplay_3d/rope/rope_system.h"
+#include "modules/gameplay_3d/buoyancy/buoyancy_system.h"
 
 namespace dse {
 namespace gameplay3d {
@@ -44,6 +49,11 @@ private:
     FractureSystem fracture_system_;
     ClothSystem cloth_system_;
     FluidSystem fluid_system_;
+    RagdollSystem ragdoll_system_;
+    SoftBodySystem softbody_system_;
+    VehicleSystem vehicle_system_;
+    RopeSystem rope_system_;
+    BuoyancySystem buoyancy_system_;
 };
 
 } // namespace gameplay3d

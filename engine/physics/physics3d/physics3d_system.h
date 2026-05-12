@@ -99,6 +99,11 @@ public:
     // 碰撞层设置 API（Task 6）
     void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask);
 
+    // PhysX 底层指针访问（供 Ragdoll/Vehicle 等高级系统使用）
+    void* GetPxPhysics() const { return physics_; }
+    void* GetPxScene() const { return scene_; }
+    void* GetPxCooking() const { return cooking_; }
+
 private:
     physx::PxFoundation* foundation_ = nullptr;
     physx::PxPhysics* physics_ = nullptr;

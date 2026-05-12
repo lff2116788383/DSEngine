@@ -211,6 +211,21 @@ Config.demo_3d_fluid={
     camera_distance=18.0,
     emission_rate=800.0
 }
+Config.demo_3d_ragdoll={
+    camera_distance=12.0
+}
+Config.demo_3d_softbody={
+    camera_distance=12.0
+}
+Config.demo_3d_vehicle={
+    camera_distance=18.0
+}
+Config.demo_3d_rope={
+    camera_distance=15.0
+}
+Config.demo_3d_buoyancy={
+    camera_distance=16.0
+}
 Config.phase2_3d={
     note="legacy_phase2_3d_mvp"
 }

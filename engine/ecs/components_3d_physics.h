@@ -218,6 +218,182 @@ struct TerrainHeightmapComponent {
     }
 };
 
+// ============================================================
+// Ragdoll 布娃娃（Phase 2 — Task 1）
+// ============================================================
+
+/// 布娃娃单骨骼配置
+struct RagdollBoneSetup {
+    int bone_index = -1;           ///< 骨骼索引（对应 dskel）
+    int parent_setup_index = -1;   ///< 父配置索引（-1=根，指向 bone_setups 数组下标）
+    float radius = 0.05f;          ///< 胶囊半径
+    float height = 0.1f;           ///< 胶囊高度（不含半球）
+    float mass = 1.0f;             ///< 质量
+    glm::vec3 offset = glm::vec3(0.0f); ///< 相对骨骼的偏移
+
+    // D6 关节限制
+    float swing_limit_y = 30.0f;   ///< Y轴摆动限制（度）
+    float swing_limit_z = 30.0f;   ///< Z轴摆动限制（度）
+    float twist_limit = 20.0f;     ///< 扭转限制（度）
+};
+
+/// 布娃娃运行时骨骼
+struct RagdollRuntimeBone {
+    void* actor = nullptr;         ///< PxRigidDynamic*
+    void* joint = nullptr;         ///< PxD6Joint*
+    int bone_index = -1;
+};
+
+/// 布娃娃组件
+struct RagdollComponent {
+    bool active = false;           ///< 是否已激活（物理驱动）
+    bool auto_setup = true;        ///< 自动从骨骼层级生成配置
+    float total_mass = 10.0f;      ///< 总质量（auto_setup 时按骨骼长度分配）
+    float joint_stiffness = 0.0f;  ///< 关节弹簧刚度（0=自由摆动）
+    float joint_damping = 50.0f;   ///< 关节阻尼
+
+    uint16_t collision_layer = 0x0002;  ///< 布娃娃碰撞层
+    uint16_t collision_mask  = 0xFFFF;
+
+    std::vector<RagdollBoneSetup> bone_setups;
+    std::vector<RagdollRuntimeBone> runtime_bones;
+    bool initialized = false;
+};
+
+// ============================================================
+// SoftBody 软体模拟（Phase 2 — Task 2）
+// ============================================================
+
+/// PBD 距离约束
+struct SoftBodyDistConstraint {
+    uint32_t i0 = 0, i1 = 0;
+    float rest_length = 0.0f;
+};
+
+/// 软体组件
+struct SoftBodyComponent {
+    bool enabled = true;
+    float stiffness = 0.5f;        ///< 约束刚度 [0,1]
+    int solver_iterations = 4;     ///< PBD 投影迭代次数
+    float damping = 0.99f;         ///< 速度阻尼
+    bool use_gravity = true;
+    float gravity_scale = 1.0f;
+
+    // 粒子数据（从 mesh 顶点初始化）
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> prev_positions;
+    std::vector<glm::vec3> velocities;
+    std::vector<float> inv_masses;   ///< 0 = 固定点
+
+    // 约束
+    std::vector<SoftBodyDistConstraint> constraints;
+    float rest_volume = 0.0f;       ///< 初始体积（用于体积保持）
+    float volume_stiffness = 0.5f;  ///< 体积保持刚度
+
+    bool initialized = false;
+    bool mesh_dirty = false;         ///< 需要回写 mesh 顶点
+};
+
+// ============================================================
+// Vehicle 车辆物理（Phase 2 — Task 3）
+// ============================================================
+
+/// 车轮配置
+struct VehicleWheelConfig {
+    glm::vec3 position = glm::vec3(0.0f);  ///< 相对车体的位置
+    float radius = 0.3f;
+    float suspension_rest_length = 0.3f;
+    float suspension_stiffness = 30000.0f;
+    float suspension_damping = 4500.0f;
+    float friction = 1.5f;
+    bool is_drive_wheel = true;
+    bool is_steer_wheel = false;
+};
+
+/// 车轮运行时状态
+struct VehicleWheelState {
+    float compression = 0.0f;          ///< 悬挂压缩量
+    float angular_velocity = 0.0f;     ///< 车轮角速度
+    float rotation = 0.0f;             ///< 累积旋转角度
+    float steer_angle = 0.0f;          ///< 当前转向角度
+    bool grounded = false;
+    glm::vec3 contact_point = glm::vec3(0.0f);
+    glm::vec3 contact_normal = glm::vec3(0.0f, 1.0f, 0.0f);
+};
+
+/// 车辆组件（Raycast 车辆，不依赖 PhysXVehicle）
+struct VehicleComponent {
+    bool enabled = true;
+    float max_engine_force = 5000.0f;
+    float max_brake_force = 3000.0f;
+    float max_steer_angle = 35.0f;     ///< 最大转向角（度）
+
+    // 输入
+    float throttle = 0.0f;   ///< [-1, 1] 油门/倒车
+    float brake = 0.0f;      ///< [0, 1] 刹车
+    float steering = 0.0f;   ///< [-1, 1] 转向
+
+    std::vector<VehicleWheelConfig> wheels;
+    std::vector<VehicleWheelState> wheel_states;
+
+    float current_speed = 0.0f;  ///< 当前速度 (m/s)
+    bool initialized = false;
+};
+
+// ============================================================
+// Rope 绳索/链条（Phase 2 — Task 4）
+// ============================================================
+
+/// 绳索组件（Verlet 积分）
+struct RopeComponent {
+    bool enabled = true;
+    int segment_count = 10;        ///< 段数
+    float segment_length = 0.2f;   ///< 每段长度
+    float radius = 0.02f;          ///< 碰撞/渲染半径
+    float damping = 0.99f;         ///< 速度阻尼
+    int solver_iterations = 8;     ///< 约束求解迭代
+    bool use_gravity = true;
+    float gravity_scale = 1.0f;
+
+    uint32_t anchor_entity_a = 0;  ///< 锚点实体A（0=世界固定点）
+    uint32_t anchor_entity_b = 0;  ///< 锚点实体B（0=自由端）
+    glm::vec3 anchor_offset_a = glm::vec3(0.0f);
+    glm::vec3 anchor_offset_b = glm::vec3(0.0f);
+    glm::vec3 start_position = glm::vec3(0.0f);  ///< 起始位置（无锚点实体时）
+
+    // Verlet 粒子数据
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> prev_positions;
+
+    bool initialized = false;
+};
+
+// ============================================================
+// Buoyancy 浮力模拟（Phase 2 — Task 5）
+// ============================================================
+
+/// 浮力采样点
+struct BuoyancySamplePoint {
+    glm::vec3 offset = glm::vec3(0.0f);  ///< 相对实体中心的偏移
+    float force_scale = 1.0f;
+};
+
+/// 浮力组件
+struct BuoyancyComponent {
+    bool enabled = true;
+    float water_level = 0.0f;          ///< 全局水面高度（无流体实体时使用）
+    bool use_fluid_system = true;      ///< 尝试从 FluidEmitter 获取水面
+    float buoyancy_force = 10.0f;      ///< 浮力系数
+    float water_drag = 3.0f;           ///< 线性水阻力
+    float water_angular_drag = 1.0f;   ///< 角水阻力
+    float submerge_depth = 1.0f;       ///< 完全淹没所需深度
+
+    std::vector<BuoyancySamplePoint> sample_points;
+
+    // 运行时
+    float submerge_ratio = 0.0f;       ///< 当前淹没比例 [0,1]
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_PHYSICS_H
