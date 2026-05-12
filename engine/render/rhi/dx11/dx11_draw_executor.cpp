@@ -653,6 +653,9 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (tex) {
             dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
             dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
+        } else if (white_texture_srv_) {
+            dc->PSSetShaderResources(0, 1, white_texture_srv_.GetAddressOf());
+            dc->PSSetSamplers(0, 1, white_texture_sampler_.GetAddressOf());
         }
         if (item.normal_map_handle) {
             const auto* nm = resource_mgr.GetTexture(item.normal_map_handle);

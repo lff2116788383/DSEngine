@@ -372,6 +372,7 @@ float ShadowForCascade(int ci, float3 fragPosWorld, float3 normal, float3 lightD
     float3 proj = fragPosLS.xyz / fragPosLS.w;
     proj.x = proj.x * 0.5 + 0.5;
     proj.y = -proj.y * 0.5 + 0.5;
+    proj.z = proj.z * 0.5 + 0.5;
 
     if (proj.z > 1.0) return 0.0;
     if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) return 0.0;
@@ -539,6 +540,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
             float3 sproj = fragPosLS.xyz / fragPosLS.w;
             sproj.x = sproj.x * 0.5 + 0.5;
             sproj.y = -sproj.y * 0.5 + 0.5;
+            sproj.z = sproj.z * 0.5 + 0.5;
             if (sproj.z <= 1.0 && sproj.x >= 0.0 && sproj.x <= 1.0 && sproj.y >= 0.0 && sproj.y <= 1.0) {
                 float sbias = max(0.003 * (1.0 - dot(N, Lsdir)), 0.0005);
                 float lit_s = 0.0;

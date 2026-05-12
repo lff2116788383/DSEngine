@@ -311,12 +311,9 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
     ubo.vp = projection * view;
     ubo.view = view;
 
-    // 从 pending uniforms 中提取 camera_pos
-    auto it = pending_mat4.find("u_camera_pos");
-    if (it != pending_mat4.end()) {
-        // camera_pos 存储为 mat4，取第一列
-        ubo.camera_pos = it->second[0];
-    }
+    // 从 view 矩阵的逆矩阵提取相机世界位置（与 OpenGL 一致）
+    glm::mat4 inv_view = glm::inverse(view);
+    ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
 
     WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
                   per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &ubo);
