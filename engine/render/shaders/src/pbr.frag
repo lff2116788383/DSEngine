@@ -197,6 +197,73 @@ float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
     return shadow / 9.0;
 }
 
+// --- PCSS (Percentage Closer Soft Shadows) ---
+
+const vec2 kPoissonDisk[16] = vec2[](
+    vec2(-0.94201624, -0.39906216),  vec2( 0.94558609, -0.76890725),
+    vec2(-0.09418410, -0.92938870),  vec2( 0.34495938,  0.29387760),
+    vec2(-0.91588581,  0.45771432),  vec2(-0.81544232, -0.87912464),
+    vec2(-0.38277543,  0.27676845),  vec2( 0.97484398,  0.75648379),
+    vec2( 0.44323325, -0.97511554),  vec2( 0.53742981, -0.47373420),
+    vec2(-0.26496911, -0.41893023),  vec2( 0.79197514,  0.19090188),
+    vec2(-0.24188840,  0.99706507),  vec2(-0.81409955,  0.91437590),
+    vec2( 0.19984126,  0.78641367),  vec2( 0.14383161, -0.14100790)
+);
+
+const float PCSS_LIGHT_SIZE    = 0.004;
+const float PCSS_SEARCH_RADIUS = 0.008;
+const int   PCSS_BLOCKER_SEARCH_STEPS = 3;
+
+// 用 sampler2DShadow 的比较结果 + 二分法近似遮挡体深度。
+// texture(shadowMap, vec3(uv, ref)) 在 ref <= stored_depth 时返回 1.0，否则 0.0。
+// 二分搜索 [0, receiverDepth] 中的比较翻转点即为 stored_depth（blocker depth）。
+float FindBlockerDepth(sampler2DShadow shadowMap, vec2 uv, float receiverDepth,
+                       float searchRadius) {
+    float blockerSum = 0.0;
+    int   blockerCount = 0;
+    for (int i = 0; i < 16; ++i) {
+        vec2 sampleUV = uv + kPoissonDisk[i] * searchRadius;
+        float vis = texture(shadowMap, vec3(sampleUV, receiverDepth));
+        if (vis < 0.5) {
+            float lo = 0.0, hi = receiverDepth;
+            for (int b = 0; b < PCSS_BLOCKER_SEARCH_STEPS; ++b) {
+                float mid = (lo + hi) * 0.5;
+                if (texture(shadowMap, vec3(sampleUV, mid)) < 0.5)
+                    hi = mid;
+                else
+                    lo = mid;
+            }
+            blockerSum += (lo + hi) * 0.5;
+            blockerCount++;
+        }
+    }
+    if (blockerCount == 0) return -1.0;
+    return blockerSum / float(blockerCount);
+}
+
+float PCSS_Shadow(sampler2DShadow shadowMap, vec3 projCoords, float bias) {
+    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+    float receiverDepth = projCoords.z - bias;
+
+    // Step 1: Blocker search — 找遮挡体平均深度
+    float avgBlockerDepth = FindBlockerDepth(shadowMap, projCoords.xy, receiverDepth,
+                                              PCSS_SEARCH_RADIUS);
+    if (avgBlockerDepth < 0.0) return 1.0;
+
+    // Step 2: 半影宽度 = lightSize * (dReceiver - dBlocker) / dBlocker
+    float penumbraWidth = PCSS_LIGHT_SIZE * (receiverDepth - avgBlockerDepth)
+                          / max(avgBlockerDepth, 0.0001);
+    float filterRadius = max(penumbraWidth, texelSize.x);
+
+    // Step 3: 可变核 Poisson PCF
+    float shadow = 0.0;
+    for (int i = 0; i < 16; ++i) {
+        vec2 offset = kPoissonDisk[i] * filterRadius;
+        shadow += texture(shadowMap, vec3(projCoords.xy + offset, receiverDepth));
+    }
+    return shadow / 16.0;
+}
+
 float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {
     vec4 fragPosLightSpace = light_space_matrices[idx] * vec4(fragPosWorldSpace, 1.0);
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
@@ -204,7 +271,7 @@ float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightD
     if (projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-    float lit = SampleShadowPCF(u_shadow_maps[idx], projCoords, bias);
+    float lit = PCSS_Shadow(u_shadow_maps[idx], projCoords, bias);
     return clamp((1.0 - lit) * u_shadow_strength, 0.0, 1.0);
 }
 

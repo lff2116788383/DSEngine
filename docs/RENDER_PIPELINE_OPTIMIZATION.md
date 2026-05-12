@@ -106,11 +106,11 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 | 能力 | DSEngine | 主流引擎 |
 |------|----------|----------|
-| 方向光 | CSM 3 级 + PCF 3×3 | CSM 4-8 级 + PCSS/VSM + Contact Shadow |
+| 方向光 | CSM 3 级 + PCSS 软阴影 | CSM 4-8 级 + PCSS/VSM + Contact Shadow |
 | 点光源 | Cubemap Shadow Map | 同上 + 软阴影 |
 | 聚光灯 | 单张 Shadow Map | 同上 |
 | Virtual Shadow Maps | ❌ | Unreal 5 有 |
-| 级联过渡 | ❌ 硬切 | ✅ 渐变混合 |
+| 级联过渡 | ✅ smoothstep 混合 | ✅ 渐变混合 |
 
 ### 2.4 核心差距总结
 
@@ -369,13 +369,18 @@ shadow = mix(shadow_cascade[i], shadow_cascade[i+1], blend);
 
 改动量：~20 行 shader 代码。
 
-#### 4.2 PCSS 软阴影 — ⚠️ 待重新实现
+#### 4.2 PCSS 软阴影 — ✅ 已完成
 
-> **状态**: 曾实现（commit `0b1cc0f`），因 `FindBlockerDepth` 累加 bug 回退为 PCF 3×3。
-> PCSS 死代码已清理（commit `b66a408`），需重新实现。
+> **实现日期**: 2026-05-12
+>
+> `pbr.frag` 新增 PCSS 实现：16 点 Poisson disk 采样、`FindBlockerDepth()` 通过
+> `sampler2DShadow` 比较结果 + 3 步二分法近似遮挡体深度、`PCSS_Shadow()` 根据半影宽度
+> 做可变核 Poisson PCF。`ShadowForCascade()` 从 `SampleShadowPCF()` 切换到 `PCSS_Shadow()`。
+> CSM 级联 smoothstep 混合和 `u_shadow_strength` 保持不变。
+> 三后端验证通过：VK 22.2 / GL 22.3 / DX11 22.1 (vs KF RMSE)，无回归。
 
-替换 PCF 3×3 为 PCSS (Percentage Closer Soft Shadows)：
-- Blocker search → 估算半影宽度 → 可变核 PCF
+已实现 PCSS (Percentage Closer Soft Shadows)：
+- Blocker search (二分法近似) → 估算半影宽度 → 可变核 Poisson PCF
 - 阴影远处柔和、近处锐利，更真实
 
 #### 4.3 Contact Shadow
@@ -421,13 +426,13 @@ Phase 2.1   1 周       SSAO                            ✅ 已完成 (2026-05-1
 Phase 2.2   2-3 天     FXAA                            ✅ 已完成 (2026-05-11)
 Phase 4.1   2-3 天     CSM 级联过渡                    ✅ 已完成 (2026-05-11)
 Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ⚠️ 管线就绪，Bake 未实现
-Phase 4.2   1 周       PCSS 软阴影                     ⚠️ 需重新实现 (FindBlockerDepth bug)
+Phase 4.2   1 周       PCSS 软阴影                     ✅ 已完成 (2026-05-12)
 Phase 3.2   1-2 周     Reflection Probe + IBL          ❌ 未开始
 Phase 2.3   2 周       TAA                             ❌ 未开始
 Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
 ```
 
-**下一步建议执行顺序**：Phase 4.2 (PCSS) → 3.1 (Bake) → 3.2 (IBL) → 2.3 (TAA) → 5 (Deferred)
+**下一步建议执行顺序**：Phase 3.1 (Bake) → 3.2 (IBL) → 4.3 (Contact Shadow) → 2.3 (TAA) → 5 (Deferred)
 
 ---
 
