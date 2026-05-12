@@ -82,8 +82,8 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 |----------|----------|-----------|------------|----------|---------|
 | 管线类型 | Forward (固定) | Forward+ (可编程) | Deferred + Forward (可编程) | Deferred + Forward+ 混合 | Clustered Forward |
 | 管线可选/切换 | ❌ | ✅ 3 套可选 | ✅ | 自动混合 | 2 套可选 |
-| Light Culling | ❌ 暴力遍历 | Clustered | Tiled + Clustered | Tiled/Clustered | Clustered |
-| 光源上限 | 4+4+1 | 数百 | 数千 | 无实际限制 | 数百 |
+| Light Culling | ✅ Clustered Forward+ | Clustered | Tiled + Clustered | Tiled/Clustered | Clustered |
+| 光源上限 | 256+256+1 | 数百 | 数千 | 无实际限制 | 数百 |
 | GBuffer | ❌ | ❌ (Forward+无需) | ✅ | ✅ | ✅ (Deferred 可选) |
 | GPU Driven | ❌ | ⚠️ 部分 | ✅ SRP Batcher | ✅ Nanite | ❌ |
 | Compute 管线 | ⚠️ Vulkan + DX11 Bloom | ✅ | ✅ | ✅ 深度依赖 | ✅ |
@@ -94,9 +94,9 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 |------|----------|-----------|----------|---------|
 | Bloom | ✅ | ✅ | ✅ | ✅ |
 | Tonemapping | ✅ PBR 内 Reinhard + Bloom ACES Filmic | ✅ ACES/多算法 | ✅ | ✅ |
-| SSAO | ❌ placeholder | ✅ | ✅ GTAO | ✅ |
+| SSAO | ✅ 三后端实现 | ✅ | ✅ GTAO | ✅ |
 | SSR | ❌ | ❌ (HDRP有) | ✅ | ✅ |
-| TAA/FXAA | ❌ | ✅ | ✅ TSR | ✅ |
+| TAA/FXAA | ⚠️ FXAA ✅ / TAA ❌ | ✅ | ✅ TSR | ✅ |
 | DOF | ❌ | ✅ | ✅ | ✅ |
 | Motion Blur | ❌ | ✅ | ✅ | ✅ |
 | Auto Exposure | ❌ | ✅ | ✅ | ✅ |
@@ -106,7 +106,7 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 | 能力 | DSEngine | 主流引擎 |
 |------|----------|----------|
-| 方向光 | CSM 3 级 + PCSS 软阴影 | CSM 4-8 级 + PCSS/VSM + Contact Shadow |
+| 方向光 | CSM 3 级 + PCSS 软阴影 ✅ | CSM 4-8 级 + PCSS/VSM + Contact Shadow |
 | 点光源 | Cubemap Shadow Map | 同上 + 软阴影 |
 | 聚光灯 | 单张 Shadow Map | 同上 |
 | Virtual Shadow Maps | ❌ | Unreal 5 有 |
@@ -114,11 +114,11 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 ### 2.4 核心差距总结
 
-1. **光源扩展性**：硬编码 4+4 上限 + 暴力遍历 = 多光源场景不可用
-2. **屏幕空间效果全部缺失**：无 SSAO/SSR/SSGI，因为无 GBuffer 或深度+法线 RT 可读
-3. **后处理栈极薄**：只有 Bloom，无 AA/DOF/Motion Blur
-4. **阴影质量低**：无软阴影、无级联过渡、无 Contact Shadow
-5. **无间接光照**：Light Probe / Reflection Probe 组件已定义但未接入管线
+1. ~~**光源扩展性**~~：✅ 已解决 — Clustered Forward+ 支持 256+256 光源
+2. **屏幕空间效果部分缺失**：✅ SSAO 已实现；❌ SSR/SSGI 未实现
+3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA；❌ TAA/DOF/Motion Blur/Auto Exposure
+4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡；❌ Contact Shadow 未实现
+5. **无间接光照**：Light Probe / Reflection Probe 组件已定义但未接入管线（⚠️ SH 管线已通，Bake 未实现）
 
 ---
 
@@ -425,14 +425,24 @@ Phase 1     2-3 周     Clustered Forward+              ✅ 已完成 (2026-05-1
 Phase 2.1   1 周       SSAO                            ✅ 已完成 (2026-05-11)
 Phase 2.2   2-3 天     FXAA                            ✅ 已完成 (2026-05-11)
 Phase 4.1   2-3 天     CSM 级联过渡                    ✅ 已完成 (2026-05-11)
-Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ⚠️ 管线就绪，Bake 未实现
 Phase 4.2   1 周       PCSS 软阴影                     ✅ 已完成 (2026-05-12)
+Phase 2.4a  1-2 天     Auto Exposure                   ❌ 未开始
+Phase 2.4b  1 天       Color Grading LUT               ❌ 未开始
+Phase 2.4c  0.5 天     Vignette / Film Grain           ❌ 未开始
+Phase 4.3   3 天       Contact Shadow                  ❌ 未开始
+Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ⚠️ 管线就绪，Bake 未实现
 Phase 3.2   1-2 周     Reflection Probe + IBL          ❌ 未开始
 Phase 2.3   2 周       TAA                             ❌ 未开始
 Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
 ```
 
-**下一步建议执行顺序**：Phase 3.1 (Bake) → 3.2 (IBL) → 4.3 (Contact Shadow) → 2.3 (TAA) → 5 (Deferred)
+**下一步建议执行顺序**（编辑器相关暂缓）：
+1. Phase 2.4a-c (低复杂度后处理: Auto Exposure → Color Grading LUT → Vignette)
+2. Phase 4.3 (Contact Shadow)
+3. Phase 3.1 (Light Probe Bake — 运行时部分，不含编辑器 UI)
+4. Phase 3.2 (Reflection Probe + IBL)
+5. Phase 2.3 (TAA)
+6. Phase 5 (Deferred 路径)
 
 ---
 
