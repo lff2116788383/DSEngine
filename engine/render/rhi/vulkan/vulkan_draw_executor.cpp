@@ -1763,6 +1763,14 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.ssao_shader_handle();
     else if (effect_name == "ssao_blur" && shader_mgr.ssao_blur_shader_handle())
         selected_shader_handle = shader_mgr.ssao_blur_shader_handle();
+    else if (effect_name == "lum_compute" && shader_mgr.lum_compute_shader_handle())
+        selected_shader_handle = shader_mgr.lum_compute_shader_handle();
+    else if (effect_name == "lum_adapt" && shader_mgr.lum_adapt_shader_handle())
+        selected_shader_handle = shader_mgr.lum_adapt_shader_handle();
+    else if (effect_name == "tonemapping" && shader_mgr.tonemapping_shader_handle())
+        selected_shader_handle = shader_mgr.tonemapping_shader_handle();
+    else if (effect_name == "bloom_composite" && shader_mgr.bloom_composite_ssao_ae_shader_handle())
+        selected_shader_handle = shader_mgr.bloom_composite_ssao_ae_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1798,7 +1806,7 @@ void VulkanDrawExecutor::DrawPostProcess(
                                                     source_texture, *resource_mgr_);
     }
 
-    // 传递 push constants（FXAA: resolution, SSAO: 6 params）
+    // 传递 push constants
     if (pp_program && pp_program->pipeline_layout != VK_NULL_HANDLE) {
         if (effect_name == "fxaa" && params.size() >= 2) {
             float pc[2] = {params[0], params[1]};
@@ -1808,6 +1816,24 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc[6] = {params[0], params[1], params[2], params[3], params[4], params[5]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "lum_adapt" && params.size() >= 7) {
+            // params: [prevAdaptedTex(ignored here), dt, speed_up, speed_down, min, max, compensation]
+            float pc[6] = {params[1], params[2], params[3], params[4], params[5], params[6]};
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "tonemapping" && params.size() >= 2) {
+            struct { float manual_exposure; int ae_enabled; } pc{params[0],
+                static_cast<unsigned int>(params[1]) != 0 ? 1 : 0};
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "bloom_composite" && params.size() >= 2) {
+            struct { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; } pc{};
+            pc.exposure       = params[1];
+            pc.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
+            pc.ssaoEnabled    = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0) ? 1 : 0;
+            pc.aeEnabled      = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) ? 1 : 0;
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         }
     }
 

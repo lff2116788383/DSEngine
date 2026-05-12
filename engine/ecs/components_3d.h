@@ -91,6 +91,14 @@ struct PostProcessComponent {
     float ssao_radius = 0.5f;
     float ssao_bias = 0.025f;
 
+    // Auto Exposure
+    bool auto_exposure_enabled = false;
+    float exposure_min = 0.1f;
+    float exposure_max = 10.0f;
+    float adaptation_speed_up = 2.0f;
+    float adaptation_speed_down = 1.0f;
+    float exposure_compensation = 0.0f;  // EV offset
+
     // FXAA
     bool fxaa_enabled = true;
 };

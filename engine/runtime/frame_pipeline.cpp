@@ -286,6 +286,18 @@ bool FramePipeline::Init() {
             {render_width, render_height, true, false, false});
     }
 
+    // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
+    if (render_resources_.pp_lum_temp_rt == 0) {
+        render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {64, 64, true, false, false});
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (render_resources_.pp_lum_adapted_rt[i] == 0) {
+            render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget(
+                {1, 1, true, false, false});
+        }
+    }
+
     PipelineStateDesc sprite_desc;
     sprite_desc.blend_enabled = true;
     sprite_desc.blend_src = BlendFactor::SrcAlpha;
@@ -599,6 +611,9 @@ void FramePipeline::RunRenderInternal() {
         runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
     }
 
+    // 每帧更新 Auto Exposure 所需的 delta_time
+    render_pass_context_.delta_time = Time::delta_time();
+
     ExecuteRenderGraph(*cmd_buffer);
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
@@ -725,6 +740,9 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.ssao      = render_resources_.pp_ssao_rt;
     render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
     render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
+    render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
+    render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
+    render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
 
     render_pass_context_.modules.clear();
     for (auto& mod : modules_) {
@@ -762,6 +780,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::AutoExposurePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::FXAAPass>(render_pass_context_));

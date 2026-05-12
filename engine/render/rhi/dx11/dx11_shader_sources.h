@@ -1143,6 +1143,156 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Auto Exposure: Luminance 计算 (64 样本 log 平均)
+// ============================================================
+
+constexpr const char* kLumComputePS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float logSum = 0.0;
+    [unroll]
+    for (int i = 0; i < 8; i++) {
+        [unroll]
+        for (int j = 0; j < 8; j++) {
+            float2 uv = (float2(i, j) + 0.5) / 8.0;
+            float3 c = screenTexture.Sample(u_sampler, uv).rgb;
+            float lum = dot(c, float3(0.2126, 0.7152, 0.0722));
+            logSum += log(max(lum, 0.0001));
+        }
+    }
+    float avgLogLum = logSum / 64.0;
+    return float4(avgLogLum, 0.0, 0.0, 1.0);
+}
+)";
+
+// ============================================================
+// Auto Exposure: EMA 自适应曝光
+// ============================================================
+
+constexpr const char* kLumAdaptPS = R"(
+Texture2D screenTexture  : register(t0);
+Texture2D prevAdaptedTex : register(t1);
+SamplerState u_sampler   : register(s0);
+
+cbuffer LumAdaptParams : register(b0) {
+    float u_dt;
+    float u_speed_up;
+    float u_speed_down;
+    float u_min_exposure;
+    float u_max_exposure;
+    float u_compensation;
+    float2 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float avgLogLum = screenTexture.Sample(u_sampler, float2(0.5, 0.5)).r;
+    float avgLum = exp(avgLogLum);
+    float targetExposure = 0.18 / max(avgLum, 0.001);
+    targetExposure = clamp(targetExposure * exp2(u_compensation), u_min_exposure, u_max_exposure);
+    float prevExposure = prevAdaptedTex.Sample(u_sampler, float2(0.5, 0.5)).r;
+    if (prevExposure <= 0.0) prevExposure = targetExposure;
+    float speed = (targetExposure > prevExposure) ? u_speed_up : u_speed_down;
+    float adapted = prevExposure + (targetExposure - prevExposure) * (1.0 - exp(-u_dt * speed));
+    return float4(adapted, 0.0, 0.0, 1.0);
+}
+)";
+
+// ============================================================
+// Tonemapping (带可选 Auto Exposure)
+// ============================================================
+
+constexpr const char* kTonemappingPS = R"(
+Texture2D screenTexture    : register(t0);
+Texture2D autoExposureTex  : register(t1);
+SamplerState u_sampler     : register(s0);
+
+cbuffer TonemapParams : register(b0) {
+    float u_manual_exposure;
+    int u_auto_exposure_enabled;
+    float2 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float3 AcesFilmic(float3 x) {
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 hdrColor = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float finalExposure = u_manual_exposure;
+    if (u_auto_exposure_enabled) {
+        finalExposure = autoExposureTex.Sample(u_sampler, float2(0.5, 0.5)).r;
+    }
+    float3 result = AcesFilmic(hdrColor * finalExposure);
+    result = pow(max(result, 0.0f), 1.0 / 2.2);
+    return float4(result, 1.0);
+}
+)";
+
+// ============================================================
+// Bloom Composite + SSAO + Auto Exposure 像素着色器
+// ============================================================
+
+constexpr const char* kBloomCompositeSsaoAePS = R"(
+Texture2D screenTexture    : register(t0);
+Texture2D bloomBlur        : register(t1);
+Texture2D ssaoTexture      : register(t2);
+Texture2D autoExposureTex  : register(t3);
+SamplerState u_sampler     : register(s0);
+
+cbuffer BloomCompositeAeParams : register(b0) {
+    float exposure;
+    float bloomIntensity;
+    int ssaoEnabled;
+    int autoExposureEnabled;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float3 AcesFilmic(float3 x) {
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
+    if (ssaoEnabled) {
+        float ao = ssaoTexture.Sample(u_sampler, input.uv).r;
+        color *= ao;
+    }
+    float3 bloom = bloomBlur.Sample(u_sampler, input.uv).rgb;
+    color += bloom * bloomIntensity;
+    float finalExposure = exposure;
+    if (autoExposureEnabled) {
+        finalExposure = autoExposureTex.Sample(u_sampler, float2(0.5, 0.5)).r;
+    }
+    color = AcesFilmic(color * finalExposure);
+    color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    return float4(color, 1.0f);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

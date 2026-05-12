@@ -968,6 +968,103 @@ void main() {
 }
 )";
 
+/// Auto Exposure: Luminance 计算 (64 样本 log 平均)
+constexpr const char* kLumComputeFS = R"(
+void main() {
+    float logSum = 0.0;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            vec2 uv = (vec2(float(i), float(j)) + 0.5) / 8.0;
+            vec3 c = texture(screenTexture, uv).rgb;
+            float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+            logSum += log(max(lum, 0.0001));
+        }
+    }
+    float avgLogLum = logSum / 64.0;
+    FragColor = vec4(avgLogLum, 0.0, 0.0, 1.0);
+}
+)";
+
+/// Auto Exposure: EMA 自适应曝光
+constexpr const char* kLumAdaptFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D prevAdaptedTex;
+layout(push_constant) uniform LumAdaptParams {
+    float u_dt;
+    float u_speed_up;
+    float u_speed_down;
+    float u_min_exposure;
+    float u_max_exposure;
+    float u_compensation;
+};
+void main() {
+    float avgLogLum = texture(screenTexture, vec2(0.5, 0.5)).r;
+    float avgLum = exp(avgLogLum);
+    float targetExposure = 0.18 / max(avgLum, 0.001);
+    targetExposure = clamp(targetExposure * exp2(u_compensation), u_min_exposure, u_max_exposure);
+    float prevExposure = texture(prevAdaptedTex, vec2(0.5, 0.5)).r;
+    if (prevExposure <= 0.0) prevExposure = targetExposure;
+    float speed = (targetExposure > prevExposure) ? u_speed_up : u_speed_down;
+    float adapted = prevExposure + (targetExposure - prevExposure) * (1.0 - exp(-u_dt * speed));
+    FragColor = vec4(adapted, 0.0, 0.0, 1.0);
+}
+)";
+
+/// Tonemapping（带可选 Auto Exposure）
+constexpr const char* kTonemappingFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D autoExposureTex;
+layout(push_constant) uniform TonemapParams {
+    float u_manual_exposure;
+    int u_auto_exposure_enabled;
+};
+vec3 AcesFilmic(vec3 x) {
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+void main() {
+    vec3 hdrColor = texture(screenTexture, vTexCoords).rgb;
+    float finalExposure = u_manual_exposure;
+    if (u_auto_exposure_enabled != 0) {
+        finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
+    }
+    vec3 result = AcesFilmic(hdrColor * finalExposure);
+    result = pow(result, vec3(1.0 / 2.2));
+    FragColor = vec4(result, 1.0);
+}
+)";
+
+/// Bloom Composite + SSAO + Auto Exposure
+constexpr const char* kBloomCompositeSsaoAeFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D bloomBlur;
+layout(set = 2, binding = 3) uniform sampler2D ssaoTexture;
+layout(set = 2, binding = 4) uniform sampler2D autoExposureTex;
+layout(push_constant) uniform BloomCompositeAeParams {
+    float exposure;
+    float bloomIntensity;
+    int ssaoEnabled;
+    int autoExposureEnabled;
+};
+vec3 AcesFilmic(vec3 x) {
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+void main() {
+    vec3 color = texture(screenTexture, vTexCoords).rgb;
+    if (ssaoEnabled != 0) {
+        float ao = texture(ssaoTexture, vTexCoords).r;
+        color *= ao;
+    }
+    vec3 bloomColor = texture(bloomBlur, vTexCoords).rgb;
+    color += bloomColor * bloomIntensity;
+    float finalExposure = exposure;
+    if (autoExposureEnabled != 0) {
+        finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
+    }
+    color = AcesFilmic(color * finalExposure);
+    color = pow(color, vec3(1.0 / 2.2));
+    FragColor = vec4(color, 1.0);
+}
+)";
+
 } // namespace vulkan_shaders
 } // namespace render
 } // namespace dse

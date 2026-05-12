@@ -33,6 +33,10 @@ void DX11ShaderManager::Shutdown() {
     ssao_shader_handle_ = 0;
     ssao_blur_shader_handle_ = 0;
     ssao_apply_shader_handle_ = 0;
+    lum_compute_shader_handle_ = 0;
+    lum_adapt_shader_handle_ = 0;
+    tonemapping_shader_handle_ = 0;
+    bloom_composite_ssao_ae_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -251,6 +255,10 @@ void DX11ShaderManager::InitBuiltinShaders() {
     ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");
     ssao_apply_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoApplyPS, "ssao_apply");
     bloom_composite_ssao_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoPS, "bloom_composite_ssao");
+    lum_compute_shader_handle_ = create_pp_shader(dx11_shaders::kLumComputePS, "lum_compute");
+    lum_adapt_shader_handle_ = create_pp_shader(dx11_shaders::kLumAdaptPS, "lum_adapt");
+    tonemapping_shader_handle_ = create_pp_shader(dx11_shaders::kTonemappingPS, "tonemapping");
+    bloom_composite_ssao_ae_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoAePS, "bloom_composite_ssao_ae");
 }
 
 // ============================================================

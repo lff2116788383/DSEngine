@@ -524,6 +524,7 @@ void CompositePass::Setup(RenderGraph& graph) {
     auto ui_color    = graph.DeclareResource("ui_color");
     auto bloom_mip0  = graph.DeclareResource("bloom_mip0");
     auto ssao_color  = graph.DeclareResource("ssao_color");
+    auto lum_data    = graph.DeclareResource("lum_data");
     auto main_color  = graph.DeclareResource("main_color");
 
     auto pass = graph.AddPass(GetName());
@@ -531,6 +532,7 @@ void CompositePass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, ui_color);
     graph.PassRead(pass, bloom_mip0);
     graph.PassRead(pass, ssao_color);
+    graph.PassRead(pass, lum_data);
     graph.PassWrite(pass, main_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
@@ -556,22 +558,99 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
     }
 
+    // 获取 auto exposure 纹理（如果启用）
+    unsigned int ae_tex = 0;
+    if (ctx_.auto_exposure_active) {
+        // ping-pong 已翻转，当前帧结果在 1 - current_index
+        const int result_idx = 1 - ctx_.lum_ping_pong_index;
+        ae_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[result_idx]);
+    }
+
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
     if (pp_enabled && pp_config.bloom_enabled) {
         const unsigned int blur_v_color = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips.empty() ? 0 : ctx_.render_targets.bloom_mips[0]);
-        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex)});
+        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex), static_cast<float>(ae_tex)});
     } else {
         if (ssao_tex != 0) {
-            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure});
+            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex)});
         } else {
-            cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+            if (ae_tex != 0) {
+                cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex)});
+            } else {
+                cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+            }
         }
     }
 
     cmd_buffer.DrawPostProcess(ui_color_tex, "ui_overlay", {});
     cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// AutoExposurePass
+// ============================================================
+
+void AutoExposurePass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto lum_data    = graph.DeclareResource("lum_data");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassWrite(pass, lum_data);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool ae_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.auto_exposure_enabled) {
+            ae_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    ctx_.auto_exposure_active = ae_enabled;
+    if (!ae_enabled) return;
+    if (ctx_.render_targets.lum_temp == 0 ||
+        ctx_.render_targets.lum_adapted[0] == 0 ||
+        ctx_.render_targets.lum_adapted[1] == 0) return;
+
+    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    if (scene_color_tex == 0) return;
+
+    const int write_idx = ctx_.lum_ping_pong_index;
+    const int read_idx  = 1 - write_idx;
+
+    // Pass 1: 场景 → 64x64 log luminance (8x8 采样网格)
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_temp, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(scene_color_tex, "lum_compute", {});
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: 64x64 → 1x1 adapted exposure (EMA blend with previous frame)
+    const unsigned int lum_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_temp);
+    const unsigned int prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
+
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_adapted[write_idx], glm::vec4(1.0f), true});
+    cmd_buffer.DrawPostProcess(lum_temp_tex, "lum_adapt", {
+        static_cast<float>(prev_adapted_tex),
+        ctx_.delta_time,
+        pp_config.adaptation_speed_up,
+        pp_config.adaptation_speed_down,
+        pp_config.exposure_min,
+        pp_config.exposure_max,
+        pp_config.exposure_compensation
+    });
+    cmd_buffer.EndRenderPass();
+
+    // 翻转 ping-pong
+    ctx_.lum_ping_pong_index = 1 - ctx_.lum_ping_pong_index;
 }
 
 // ============================================================

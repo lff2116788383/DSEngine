@@ -101,6 +101,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Auto Exposure Pass ----
+class AutoExposurePass : public IRenderPass {
+public:
+    explicit AutoExposurePass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "auto_exposure_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- UI Pass ----
 class UIPass : public IRenderPass {
 public:

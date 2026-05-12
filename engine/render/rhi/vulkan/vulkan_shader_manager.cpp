@@ -654,6 +654,46 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] SSAO blur shader creation failed");
     }
+
+    // Lum Compute shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLumComputeFS;
+        lum_compute_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (lum_compute_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] LumCompute shader created: handle={}", lum_compute_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] LumCompute shader creation failed");
+    }
+
+    // Lum Adapt shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLumAdaptFS;
+        lum_adapt_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (lum_adapt_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] LumAdapt shader created: handle={}", lum_adapt_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] LumAdapt shader creation failed");
+    }
+
+    // Tonemapping shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kTonemappingFS;
+        tonemapping_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (tonemapping_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Tonemapping shader created: handle={}", tonemapping_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Tonemapping shader creation failed");
+    }
+
+    // Bloom Composite + SSAO + AE shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kBloomCompositeSsaoAeFS;
+        bloom_composite_ssao_ae_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (bloom_composite_ssao_ae_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] BloomCompositeSsaoAe shader created: handle={}", bloom_composite_ssao_ae_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] BloomCompositeSsaoAe shader creation failed");
+    }
 }
 
 // ============================================================================

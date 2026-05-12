@@ -923,6 +923,28 @@ int L_EcsSetPostProcessFXAA(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessAutoExposure(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->auto_exposure_enabled = lua_isnoneornil(L, 2) ? pp->auto_exposure_enabled : helper::CheckBool(L, 2);
+    pp->exposure_min = helper::OptFloat(L, 3, pp->exposure_min);
+    pp->exposure_max = helper::OptFloat(L, 4, pp->exposure_max);
+    pp->adaptation_speed_up = helper::OptFloat(L, 5, pp->adaptation_speed_up);
+    pp->adaptation_speed_down = helper::OptFloat(L, 6, pp->adaptation_speed_down);
+    pp->exposure_compensation = helper::OptFloat(L, 7, pp->exposure_compensation);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1151,6 +1173,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_color",    L_EcsSetPostProcessColor},
         {"set_post_process_ssao",     L_EcsSetPostProcessSSAO},
         {"set_post_process_fxaa",     L_EcsSetPostProcessFXAA},
+        {"set_post_process_auto_exposure", L_EcsSetPostProcessAutoExposure},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},

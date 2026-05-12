@@ -16,32 +16,13 @@
 | Phase 4.2: PCSS 软阴影 | 2026-05-12 |
 | KF 标题画面 3D 穿透修复 | 2026-05-12 |
 | 三端视觉一致性验证 (RMSE ~22) | 2026-05-12 |
+| Phase 2.4a: Auto Exposure 三后端 | 2026-05-12 |
 
 ---
 
 ## 下一步任务（按优先级排序）
 
-### 任务 1: Auto Exposure (Phase 2.4a) — 预估 1-2 天
-
-**目标**: 根据场景平均亮度自动调整曝光值。
-
-**实现方案**:
-1. 新增 compute pass / fragment pass 计算当前帧平均亮度（luminance histogram 或 log-average）
-2. 用指数移动平均（EMA）平滑过渡，避免闪烁
-3. 输出 `exposure` 值到 `PostProcessComponent` 或全局 UBO
-4. 在 `bloom_composite` / tonemapping 阶段应用 `exposure * color`
-
-**涉及文件**:
-- `engine/render/passes/builtin_passes.h/cpp` — 新增 AutoExposurePass
-- `engine/render/shaders/src/` — 新增 luminance_reduce.comp / auto_exposure.frag
-- `engine/render/rhi/` — 三后端 shader 编译
-- `engine/ecs/components_3d.h` — PostProcessComponent 新增 `auto_exposure_enabled`, `exposure_min`, `exposure_max`, `adaptation_speed`
-
-**验证**: 从室内走到室外时曝光平滑过渡，无闪烁。
-
----
-
-### 任务 2: Color Grading LUT (Phase 2.4b) — 预估 1 天
+### 任务 1: Color Grading LUT (Phase 2.4b) — 预估 1 天
 
 **目标**: 支持 3D LUT 纹理做色彩分级。
 
@@ -59,7 +40,7 @@
 
 ---
 
-### 任务 3: Vignette / Film Grain (Phase 2.4c) — 预估 0.5 天
+### 任务 2: Vignette / Film Grain (Phase 2.4c) — 预估 0.5 天
 
 **目标**: 简单的全屏后处理效果。
 
@@ -71,7 +52,7 @@
 
 ---
 
-### 任务 4: Contact Shadow (Phase 4.3) — 预估 3 天
+### 任务 3: Contact Shadow (Phase 4.3) — 预估 3 天
 
 **目标**: 补充 CSM 分辨率不足区域的近距离微小遮挡细节。
 
@@ -90,7 +71,7 @@
 
 ---
 
-### 任务 5: Light Probe SH Bake (Phase 3.1) — 预估 1-2 周
+### 任务 4: Light Probe SH Bake (Phase 3.1) — 预估 1-2 周
 
 **目标**: 实现运行时 Light Probe SH 数据生成和查询（不含编辑器 UI）。
 
@@ -110,7 +91,7 @@
 
 ---
 
-### 任务 6: Reflection Probe + IBL (Phase 3.2) — 预估 1-2 周
+### 任务 5: Reflection Probe + IBL (Phase 3.2) — 预估 1-2 周
 
 **目标**: 利用 `ReflectionProbeComponent` 实现间接高光。
 
@@ -124,7 +105,7 @@
 
 ---
 
-### 任务 7: TAA (Phase 2.3) — 预估 2 周
+### 任务 6: TAA (Phase 2.3) — 预估 2 周
 
 **前置**: 需 Motion Vector RT（Forward Pass 额外输出）+ Jitter（逐帧抖动投影矩阵）+ 历史帧缓冲。
 

@@ -91,6 +91,10 @@ public:
     unsigned int ssao_shader_handle() const { return ssao_shader_handle_; }
     unsigned int ssao_blur_shader_handle() const { return ssao_blur_shader_handle_; }
     unsigned int ssao_apply_shader_handle() const { return ssao_apply_shader_handle_; }
+    unsigned int lum_compute_shader_handle() const { return lum_compute_shader_handle_; }
+    unsigned int lum_adapt_shader_handle() const { return lum_adapt_shader_handle_; }
+    unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
+    unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -122,6 +126,10 @@ private:
     unsigned int ssao_shader_handle_ = 0;
     unsigned int ssao_blur_shader_handle_ = 0;
     unsigned int ssao_apply_shader_handle_ = 0;
+    unsigned int lum_compute_shader_handle_ = 0;
+    unsigned int lum_adapt_shader_handle_ = 0;
+    unsigned int tonemapping_shader_handle_ = 0;
+    unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

@@ -99,7 +99,7 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 | TAA/FXAA | ⚠️ FXAA ✅ / TAA ❌ | ✅ | ✅ TSR | ✅ |
 | DOF | ❌ | ✅ | ✅ | ✅ |
 | Motion Blur | ❌ | ✅ | ✅ | ✅ |
-| Auto Exposure | ❌ | ✅ | ✅ | ✅ |
+| Auto Exposure | ✅ | ✅ | ✅ | ✅ |
 | Color Grading | ⚠️ 仅 exposure+gamma | ✅ LUT | ✅ LUT | ✅ |
 
 ### 2.3 阴影对比
@@ -116,7 +116,7 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 1. ~~**光源扩展性**~~：✅ 已解决 — Clustered Forward+ 支持 256+256 光源
 2. **屏幕空间效果部分缺失**：✅ SSAO 已实现；❌ SSR/SSGI 未实现
-3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA；❌ TAA/DOF/Motion Blur/Auto Exposure
+3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA + Auto Exposure；❌ TAA/DOF/Motion Blur
 4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡；❌ Contact Shadow 未实现
 5. **无间接光照**：Light Probe / Reflection Probe 组件已定义但未接入管线（⚠️ SH 管线已通，Bake 未实现）
 
@@ -426,7 +426,7 @@ Phase 2.1   1 周       SSAO                            ✅ 已完成 (2026-05-1
 Phase 2.2   2-3 天     FXAA                            ✅ 已完成 (2026-05-11)
 Phase 4.1   2-3 天     CSM 级联过渡                    ✅ 已完成 (2026-05-11)
 Phase 4.2   1 周       PCSS 软阴影                     ✅ 已完成 (2026-05-12)
-Phase 2.4a  1-2 天     Auto Exposure                   ❌ 未开始
+Phase 2.4a  1-2 天     Auto Exposure                   ✅ 已完成 (2026-05-12)
 Phase 2.4b  1 天       Color Grading LUT               ❌ 未开始
 Phase 2.4c  0.5 天     Vignette / Film Grain           ❌ 未开始
 Phase 4.3   3 天       Contact Shadow                  ❌ 未开始

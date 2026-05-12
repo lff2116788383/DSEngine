@@ -61,10 +61,17 @@ struct RenderPassContext {
         unsigned int ssao = 0;
         unsigned int ssao_blur = 0;
         unsigned int fxaa = 0;
+        unsigned int lum_temp = 0;          // 64x64 log luminance
+        unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
     } render_targets;
 
     /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
     bool fxaa_active = false;
+
+    /// Auto Exposure 帧状态
+    int lum_ping_pong_index = 0;          // 当前帧写入哪个 1x1 RT (0 or 1)
+    float delta_time = 0.016f;            // 帧间隔（用于 EMA 平滑）
+    bool auto_exposure_active = false;    // 本帧 auto exposure 是否启用
 
     /// 已加载的动态模块实例列表
     struct ModuleRef {

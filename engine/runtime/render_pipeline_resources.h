@@ -19,6 +19,9 @@ struct RenderPipelineResources {
     unsigned int pp_ssao_blur_rt = 0;  // 模糊后 AO
     unsigned int pp_fxaa_rt = 0;       // FXAA 输出
 
+    unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
+    unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
+
     unsigned int sprite_pipeline_state = 0;
     unsigned int mesh_pipeline_state = 0;
     unsigned int prez_pipeline_state = 0;
@@ -45,6 +48,9 @@ struct RenderPipelineResources {
         pp_ssao_rt = 0;
         pp_ssao_blur_rt = 0;
         pp_fxaa_rt = 0;
+        pp_lum_temp_rt = 0;
+        pp_lum_adapted_rt[0] = 0;
+        pp_lum_adapted_rt[1] = 0;
         sprite_pipeline_state = 0;
         mesh_pipeline_state = 0;
         prez_pipeline_state = 0;
