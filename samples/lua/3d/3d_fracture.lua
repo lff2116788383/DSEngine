@@ -175,12 +175,14 @@ function FractureDemo.Setup(config)
     light_entity = dse.ecs.create_entity()
     dse.ecs.add_directional_light_3d(light_entity, -0.5, -1.0, -0.3, 1.0, 0.95, 0.9, 1.8, 0.3, 0.35)
 
-    -- 地面（宽大，用简单立方体）
+    -- 地面（宽大，用简单立方体 + 物理碰撞体）
     ground = dse.ecs.create_entity()
     dse.ecs.add_transform(ground, 0.0, -0.5, 0.0, 40.0, 1.0, 40.0)
     dse.ecs.add_mesh_renderer(ground, 0.3, 0.3, 0.32, 1.0, simple_cube_v, simple_cube_i)
     dse.ecs.set_mesh_shader_variant(ground, "MESH_LIT")
     dse.ecs.set_mesh_material(ground, 0.0, 0.8, 1.0)
+    dse.ecs.add_box_collider_3d(ground, 40.0, 1.0, 40.0)
+    dse.ecs.add_rigidbody_3d(ground, 0, 0.0) -- Static
 
     -- 创建 6 个方块，从左到右排列，每个延迟 2 秒依次碎裂
     for i, mat in ipairs(materials) do

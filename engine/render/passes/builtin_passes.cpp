@@ -114,10 +114,23 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         // Use cascade_splits to scale ortho projection size
         float size = light.cascade_splits[i];
         float far_dist = size * 4.0f;
-        glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
         glm::vec3 light_dir_n = glm::normalize(light.direction);
-        glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
-        glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
+
+        // Texel snapping: 将 shadow_center 在光空间中对齐到阴影贴图纹素边界，
+        // 避免相机移动时阴影边缘子像素抖动（shadow swimming）
+        constexpr float shadow_map_res = 2048.0f;
+        float texel_world_size = (2.0f * size) / shadow_map_res;
+        glm::mat4 light_view_unsnapped = glm::lookAt(
+            shadow_center - light_dir_n * (far_dist * 0.5f),
+            shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec4 sc_ls = light_view_unsnapped * glm::vec4(shadow_center, 1.0f);
+        sc_ls.x = std::floor(sc_ls.x / texel_world_size) * texel_world_size;
+        sc_ls.y = std::floor(sc_ls.y / texel_world_size) * texel_world_size;
+        glm::vec3 snapped_center = glm::vec3(glm::inverse(light_view_unsnapped) * sc_ls);
+
+        glm::vec3 light_pos = snapped_center - light_dir_n * (far_dist * 0.5f);
+        glm::mat4 light_view_mat = glm::lookAt(light_pos, snapped_center, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
 
         // Sampling matrix uses shadow_sample_correction (no Z remap)
         // so shader can uniformly remap Z from [-1,1] to [0,1]

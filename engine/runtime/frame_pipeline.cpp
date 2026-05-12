@@ -362,6 +362,20 @@ bool FramePipeline::Init() {
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+    // PhysX 3D 物理必须在 Gameplay3D 模块之前初始化并注册到 ServiceLocator，
+    // 否则 FractureSystem::SetPhysics3D() 会拿到 nullptr，导致碎片同时启用
+    // CPU fallback 物理和 PhysX 物理，两套物理交替覆写 transform → 闪烁。
+    if (physics3d_system_.Init(*runtime_context_.world)) {
+        dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
+            std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
+        physics3d_system_initialized_ = true;
+        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem (PhysX) initialized and registered");
+    } else {
+        DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
+    }
+#endif
+
 #ifdef DSE_ENABLE_3D
     if (enable_gameplay3d) {
         if (!gameplay3d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
@@ -378,18 +392,6 @@ bool FramePipeline::Init() {
         particle3d_system_.Init(*runtime_context_.world, runtime_context_.rhi_device.get());
         dse::gameplay3d::AnimatorSystem::SetAssetManager(&asset_manager);
         builtin_gameplay3d_enabled_ = true;
-    }
-#endif
-
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
-    // PhysX 3D 物理由引擎侧统一持有，确保 Lua 绑定查询的是同一个 ServiceLocator 实例。
-    if (physics3d_system_.Init(*runtime_context_.world)) {
-        dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
-            std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
-        physics3d_system_initialized_ = true;
-        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem (PhysX) initialized and registered");
-    } else {
-        DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
     }
 #endif
 

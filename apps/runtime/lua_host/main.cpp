@@ -2,6 +2,12 @@
 #include <filesystem>
 #include <string>
 
+// 强制使用独立显卡（NVIDIA GT 1030）而非集成显卡（Intel UHD 770）
+extern "C" {
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 int main(int argc, char** argv) {
     constexpr int window_width = 800;
     constexpr int window_height = 600;

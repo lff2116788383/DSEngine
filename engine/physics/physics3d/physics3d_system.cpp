@@ -101,6 +101,7 @@ bool Physics3DSystem::Init(World& world) {
     dispatcher_ = new DseCpuDispatcher(2);
     sceneDesc.cpuDispatcher = dispatcher_;
     sceneDesc.filterShader = DseDefaultSimulationFilterShader;
+    sceneDesc.flags |= PxSceneFlag::eENABLE_CCD; // Prevent fast small objects from tunneling
 
     scene_ = physics_->createScene(sceneDesc);
     if (!scene_) {
@@ -184,6 +185,7 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
             } else {
                 PxRigidDynamic* dynamic = physics_->createRigidDynamic(px_transform);
                 dynamic->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, rb.type == RigidBody3DType::Kinematic);
+                dynamic->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_CCD, true);
                 dynamic->setMass(rb.mass);
                 dynamic->setLinearDamping(rb.drag);
                 dynamic->setAngularDamping(rb.angular_drag);
@@ -221,6 +223,20 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
             actor->userData = reinterpret_cast<void*>(static_cast<uintptr_t>(entity));
             scene_->addActor(*actor);
             rb.runtime_body = actor;
+
+            // Apply deferred impulse (e.g. explosion force queued before actor creation)
+            if (rb.has_pending_impulse) {
+                PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
+                if (dyn) {
+                    // Convert impulse to velocity: v = impulse / mass
+                    float m = dyn->getMass();
+                    if (m < 0.001f) m = 0.001f;
+                    glm::vec3 vel = rb.pending_impulse / m;
+                    dyn->setLinearVelocity(PxVec3(vel.x, vel.y, vel.z));
+                }
+                rb.has_pending_impulse = false;
+                rb.pending_impulse = glm::vec3(0.0f);
+            }
         }
 
         // 2. Sync if transform was modified externally
@@ -385,6 +401,21 @@ bool Physics3DSystem::IsGravityEnabled(entt::entity entity) const {
 
     auto& rb = view.get<RigidBody3DComponent>(*it);
     return rb.use_gravity;
+}
+
+void Physics3DSystem::RemoveActor(entt::entity entity) {
+    if (!scene_ || !world_cache_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.runtime_body) {
+        PxRigidActor* actor = static_cast<PxRigidActor*>(rb.runtime_body);
+        scene_->removeActor(*actor);
+        actor->release();
+        rb.runtime_body = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------

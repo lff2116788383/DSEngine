@@ -53,6 +53,7 @@ public:
     glm::vec3 GetVelocity(entt::entity entity) const;
     void SetGravityEnabled(entt::entity entity, bool enabled);
     bool IsGravityEnabled(entt::entity entity) const;
+    void RemoveActor(entt::entity entity);
 
     // 角色控制器 API（基于 PxScene::sweep 的自定义实现，不依赖 PxControllerManager）
     CharacterMoveResult MoveCharacter(entt::entity entity, const glm::vec3& displacement, float min_dist, float delta_time);

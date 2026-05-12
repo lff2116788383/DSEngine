@@ -840,6 +840,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         ++vse1522_depth_diag_frames;
 #endif // DSE_VSE_1522_DIAG
     }
+
 }
 
 // ============================================================

@@ -23,6 +23,10 @@ struct RigidBody3DComponent {
     float gravity_scale = 1.0f;
     bool is_kinematic = false;
 
+    // Deferred impulse: applied once when the PhysX actor is first created
+    glm::vec3 pending_impulse = glm::vec3(0.0f);
+    bool has_pending_impulse = false;
+
     // Backend handle
     void* runtime_body = nullptr;
 };

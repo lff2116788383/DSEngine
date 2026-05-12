@@ -443,9 +443,11 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
         }
 
         // 用唯一键缓存碎片数据
+        // 仅当源 mesh 是 dmesh 格式（stride>=20）时才加 .dmesh 后缀，
+        // 否则让 MeshRenderSystem 走非 dmesh 路径（自动计算法线/UV）
         std::string cache_key = "__runtime_voronoi_" +
             std::to_string(static_cast<uint32_t>(entity)) + "_frag_" +
-            std::to_string(frag_id);
+            std::to_string(frag_id) + (is_dmesh ? ".dmesh" : "");
 
         FragmentDescriptor desc;
         desc.mesh_path = cache_key;
@@ -554,6 +556,8 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
         frag_mr.albedo_texture_handle = albedo_tex;
         frag_mr.normal_texture_handle = normal_tex;
         frag_mr.visible = true;
+        frag_mr.receive_shadow = false; // 碎片间深度极接近，receive_shadow 会导致 shadow acne 闪烁
+        frag_mr.material_double_sided = true; // Voronoi 碎片是开放 mesh，需要双面渲染避免旋转时闪烁
 
         if (frag_desc.runtime_vertex_stride > 0 && !frag_desc.runtime_vertices.empty()) {
             // 运行时 Voronoi 碎片：直接使用内存中的顶点/索引数据
@@ -610,7 +614,11 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
             impulse.y += fc.explosion_force * rb.mass * 0.3f;
 #ifdef DSE_ENABLE_PHYSX
             if (physics3d_) {
-                // Will apply after emplace
+                // PhysX actor 尚未创建，将脉冲存入 pending_impulse，
+                // SyncTransformsToPhysics 创建 actor 时自动应用
+                auto& emplace_rb = world.registry().get<RigidBody3DComponent>(frag_entity);
+                emplace_rb.pending_impulse = impulse;
+                emplace_rb.has_pending_impulse = true;
             } else
 #endif
             {
@@ -625,21 +633,6 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
         tag.angular_velocity = frag_angular;
         tag.cpu_physics = use_cpu_physics;
         world.registry().emplace<FragmentTagComponent>(frag_entity, tag);
-
-#ifdef DSE_ENABLE_PHYSX
-        if (physics3d_ && fc.explosion_force > 0.0f) {
-            glm::vec3 dir = tc.position - (source_pos + fc.impact_point * 0.5f);
-            float dist = glm::length(dir);
-            if (dist > 0.001f) dir /= dist;
-            else {
-                float angle = static_cast<float>(i) / static_cast<float>(fragments.size()) * 6.28318f;
-                dir = glm::vec3(std::cos(angle), 0.5f, std::sin(angle));
-            }
-            glm::vec3 impulse = dir * fc.explosion_force * rb.mass;
-            impulse.y += fc.explosion_force * rb.mass * 0.3f;
-            physics3d_->AddImpulse(frag_entity, impulse);
-        }
-#endif
     }
 
     // Mark source as fractured
@@ -650,10 +643,24 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
     if (world.registry().all_of<MeshRendererComponent>(source_entity)) {
         world.registry().get<MeshRendererComponent>(source_entity).visible = false;
     }
+    // 移除 BoundingBox 防止视锥剔除系统覆盖 visible=false
+    if (world.registry().all_of<BoundingBoxComponent>(source_entity)) {
+        world.registry().remove<BoundingBoxComponent>(source_entity);
+    }
     // Disable source rigid body by making it static and removing collider interaction
     if (world.registry().all_of<RigidBody3DComponent>(source_entity)) {
         auto& rb = world.registry().get<RigidBody3DComponent>(source_entity);
         rb.type = RigidBody3DType::Static;
+        // Destroy existing PhysX actor so it gets recreated as Static
+        // (it was originally created as Dynamic)
+        if (rb.runtime_body) {
+#if defined(DSE_ENABLE_PHYSX)
+            if (physics3d_) {
+                physics3d_->RemoveActor(source_entity);
+            }
+#endif
+            rb.runtime_body = nullptr;
+        }
     }
 
     DEBUG_LOG_INFO("[FractureSystem] Fractured entity {} into {} fragments",

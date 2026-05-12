@@ -1,7 +1,7 @@
 Config={}
 Config.title="DSEngine"
 Config.data_path="data/"
-Config.game_entry="phase1_2d_physics_showcase"
+Config.game_entry="3d_fracture"
 Config.phase1_2d={
     total_boxes=1024,
     spawn_per_frame=64,

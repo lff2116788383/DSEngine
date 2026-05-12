@@ -258,11 +258,28 @@ bool EngineInstance::Init() {
 
         if (needs_gl_context) {
             glfwMakeContextCurrent(window);
+            glfwSwapInterval(1); // Enable VSync to prevent double-buffer flicker
             if (!gladLoadGL(glfwGetProcAddress)) {
                 std::cerr << "Failed to initialize OpenGL (glad)\n";
                 glfwDestroyWindow(window);
                 glfwTerminate();
                 return false;
+            }
+            // 打印当前使用的 GPU 信息
+            const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+            const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+            const char* gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+            DEBUG_LOG_INFO("OpenGL GPU: {} | Vendor: {} | Version: {}",
+                           gl_renderer ? gl_renderer : "unknown",
+                           gl_vendor ? gl_vendor : "unknown",
+                           gl_version ? gl_version : "unknown");
+            // DEBUG: 写入文件以便可靠捕获 GPU 信息
+            if (FILE* f = fopen("gpu_info.txt", "w")) {
+                fprintf(f, "Renderer: %s\nVendor: %s\nVersion: %s\n",
+                        gl_renderer ? gl_renderer : "unknown",
+                        gl_vendor ? gl_vendor : "unknown",
+                        gl_version ? gl_version : "unknown");
+                fclose(f);
             }
         }
 
