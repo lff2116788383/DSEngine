@@ -99,6 +99,10 @@ struct PostProcessComponent {
     float adaptation_speed_down = 1.0f;
     float exposure_compensation = 0.0f;  // EV offset
 
+    // Color Grading LUT
+    unsigned int color_lut_handle = 0;   // 3D LUT texture handle (0 = disabled)
+    float color_lut_intensity = 1.0f;    // blend factor (0 = no LUT, 1 = full LUT)
+
     // FXAA
     bool fxaa_enabled = true;
 };

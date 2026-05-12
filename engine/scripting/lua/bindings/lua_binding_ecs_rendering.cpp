@@ -12,6 +12,8 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/assets/lut_loader.h"
+#include "engine/render/rhi/rhi_device.h"
 #include "engine/platform/screen.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -945,6 +947,49 @@ int L_EcsSetPostProcessAutoExposure(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessColorLut(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const char* path = luaL_optstring(L, 2, nullptr);
+    float intensity = helper::OptFloat(L, 3, 1.0f);
+    pp->color_lut_intensity = intensity;
+    if (path) {
+        auto& am = GetAssetManager();
+        RhiDevice* rhi = am.rhi_device();
+        if (rhi) {
+            // 释放旧的 LUT 纹理
+            if (pp->color_lut_handle != 0) {
+                rhi->DeleteTexture(pp->color_lut_handle);
+                pp->color_lut_handle = 0;
+            }
+            std::string full_path = am.ResolveAssetPath(path);
+            dse::assets::LutData lut;
+            if (dse::assets::LoadCubeLut(full_path, lut) && lut.size > 0 && !lut.rgba8.empty()) {
+                pp->color_lut_handle = rhi->CreateTexture3D(lut.size, lut.size, lut.size, lut.rgba8.data(), true);
+            }
+        }
+    } else {
+        // 清除 LUT 时也释放旧纹理
+        auto& am = GetAssetManager();
+        RhiDevice* rhi = am.rhi_device();
+        if (rhi && pp->color_lut_handle != 0) {
+            rhi->DeleteTexture(pp->color_lut_handle);
+        }
+        pp->color_lut_handle = 0;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1174,6 +1219,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_ssao",     L_EcsSetPostProcessSSAO},
         {"set_post_process_fxaa",     L_EcsSetPostProcessFXAA},
         {"set_post_process_auto_exposure", L_EcsSetPostProcessAutoExposure},
+        {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},

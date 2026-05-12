@@ -1073,13 +1073,18 @@ float4 PSMain(PSInput input) : SV_TARGET {
 // ============================================================
 
 constexpr const char* kSsaoApplyPS = R"(
-Texture2D screenTexture : register(t0);
-Texture2D ssaoTexture   : register(t1);
-SamplerState u_sampler  : register(s0);
+Texture2D screenTexture    : register(t0);
+Texture2D ssaoTexture      : register(t1);
+Texture2D autoExposureTex  : register(t2);
+Texture3D lutTexture       : register(t4);
+SamplerState u_sampler     : register(s0);
+SamplerState u_lut_sampler : register(s1);
 
 cbuffer SsaoApplyParams : register(b0) {
     float exposure;
-    float3 _pad;
+    int autoExposureEnabled;
+    int lutEnabled;
+    float lutIntensity;
 };
 
 struct PSInput {
@@ -1096,8 +1101,16 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float3 hdrColor = screenTexture.Sample(u_sampler, input.uv).rgb;
     float ao = ssaoTexture.Sample(u_sampler, input.uv).r;
     hdrColor *= ao;
-    float3 result = AcesFilmic(hdrColor * exposure);
+    float finalExposure = exposure;
+    if (autoExposureEnabled) {
+        finalExposure = autoExposureTex.Sample(u_sampler, float2(0.5, 0.5)).r;
+    }
+    float3 result = AcesFilmic(hdrColor * finalExposure);
     result = pow(max(result, 0.0f), 1.0 / 2.2);
+    if (lutEnabled) {
+        float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(result)).rgb;
+        result = lerp(result, lutColor, lutIntensity);
+    }
     return float4(result, 1.0);
 }
 )";
@@ -1217,12 +1230,15 @@ float4 PSMain(PSInput input) : SV_TARGET {
 constexpr const char* kTonemappingPS = R"(
 Texture2D screenTexture    : register(t0);
 Texture2D autoExposureTex  : register(t1);
+Texture3D lutTexture       : register(t4);
 SamplerState u_sampler     : register(s0);
+SamplerState u_lut_sampler : register(s1);
 
 cbuffer TonemapParams : register(b0) {
     float u_manual_exposure;
     int u_auto_exposure_enabled;
-    float2 _pad;
+    int u_lut_enabled;
+    float u_lut_intensity;
 };
 
 struct PSInput {
@@ -1243,6 +1259,10 @@ float4 PSMain(PSInput input) : SV_TARGET {
     }
     float3 result = AcesFilmic(hdrColor * finalExposure);
     result = pow(max(result, 0.0f), 1.0 / 2.2);
+    if (u_lut_enabled) {
+        float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(result)).rgb;
+        result = lerp(result, lutColor, u_lut_intensity);
+    }
     return float4(result, 1.0);
 }
 )";
@@ -1256,13 +1276,18 @@ Texture2D screenTexture    : register(t0);
 Texture2D bloomBlur        : register(t1);
 Texture2D ssaoTexture      : register(t2);
 Texture2D autoExposureTex  : register(t3);
+Texture3D lutTexture       : register(t4);
 SamplerState u_sampler     : register(s0);
+SamplerState u_lut_sampler : register(s1);
 
 cbuffer BloomCompositeAeParams : register(b0) {
     float exposure;
     float bloomIntensity;
     int ssaoEnabled;
     int autoExposureEnabled;
+    int lutEnabled;
+    float lutIntensity;
+    float2 _pad2;
 };
 
 struct PSInput {
@@ -1289,6 +1314,38 @@ float4 PSMain(PSInput input) : SV_TARGET {
     }
     color = AcesFilmic(color * finalExposure);
     color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    if (lutEnabled) {
+        float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(color)).rgb;
+        color = lerp(color, lutColor, lutIntensity);
+    }
+    return float4(color, 1.0f);
+}
+)";
+
+// ============================================================
+// Color Grading (LUT only, no tonemapping)
+// ============================================================
+
+constexpr const char* kColorGradingPS = R"(
+Texture2D screenTexture    : register(t0);
+Texture3D lutTexture       : register(t4);
+SamplerState u_sampler     : register(s0);
+SamplerState u_lut_sampler : register(s1);
+
+cbuffer ColorGradingParams : register(b0) {
+    float u_lut_intensity;
+    float3 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(color)).rgb;
+    color = lerp(color, lutColor, u_lut_intensity);
     return float4(color, 1.0f);
 }
 )";

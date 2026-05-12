@@ -95,6 +95,7 @@ public:
     unsigned int lum_adapt_shader_handle() const { return lum_adapt_shader_handle_; }
     unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
     unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
+    unsigned int color_grading_shader_handle() const { return color_grading_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -130,6 +131,7 @@ private:
     unsigned int lum_adapt_shader_handle_ = 0;
     unsigned int tonemapping_shader_handle_ = 0;
     unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
+    unsigned int color_grading_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

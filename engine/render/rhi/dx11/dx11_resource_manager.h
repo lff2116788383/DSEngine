@@ -31,7 +31,9 @@ struct DX11Texture {
     ComPtr<ID3D11SamplerState> sampler;
     int width = 0;
     int height = 0;
+    int depth = 1;
     bool is_cube = false;
+    bool is_3d = false;
 };
 
 /// D3D11 缓冲资源封装
@@ -96,6 +98,7 @@ public:
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter);
+    unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter);
     void DeleteTexture(unsigned int handle);
     const DX11Texture* GetTexture(unsigned int handle) const;
 

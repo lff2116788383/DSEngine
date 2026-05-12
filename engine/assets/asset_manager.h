@@ -295,6 +295,7 @@ public:
      * @param rhi_device 渲染硬件接口实例
      */
     void SetRhiDevice(RhiDevice* rhi_device);
+    RhiDevice* rhi_device() const { return rhi_device_; }
     void SetEventBus(dse::core::EventBus* event_bus);
     void SetJobSystem(dse::core::JobSystem* job_system);
     dse::core::EventBus* GetEventBus() const;

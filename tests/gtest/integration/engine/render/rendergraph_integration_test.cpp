@@ -309,6 +309,7 @@ public:
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int) const override { return {}; }
     unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override { return 0; }
     unsigned int CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return 0; }
+    unsigned int CreateTexture3D(int, int, int, const unsigned char*, bool) override { return 0; }
     void DeleteTexture(unsigned int) override {}
     unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 0; }
     void DeleteShaderProgram(unsigned int) override {}
@@ -328,6 +329,7 @@ public:
     void SetGlobalLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
     void SetGlobalCascadeSplit(unsigned int, float) override {}
     void SetGlobalSpotLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
+    void SetGlobalLightProbeSH(const glm::vec4[9], bool) override {}
 };
 
 // ============================================================
@@ -417,6 +419,8 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
     ::testing::NiceMock<MockCommandBuffer> mock;
     EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("copy"), ::testing::_))
         .Times(1);
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("ui_overlay"), ::testing::_))
+        .Times(1);
 
     dse::render::CompositePass pass(ctx);
     pass.Execute(mock);
@@ -433,6 +437,8 @@ TEST_F(CompositePassTest, CompositePass_BloomEnabled_使用bloom_composite) {
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_composite"), ::testing::_))
+        .Times(1);
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("ui_overlay"), ::testing::_))
         .Times(1);
 
     dse::render::CompositePass pass(ctx);

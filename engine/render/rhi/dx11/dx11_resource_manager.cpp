@@ -172,6 +172,60 @@ unsigned int DX11ResourceManager::CreateTextureCube(int width, int height,
     return handle;
 }
 
+unsigned int DX11ResourceManager::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    if (!device_ || width <= 0 || height <= 0 || depth <= 0) return 0;
+
+    D3D11_TEXTURE3D_DESC td{};
+    td.Width     = static_cast<UINT>(width);
+    td.Height    = static_cast<UINT>(height);
+    td.Depth     = static_cast<UINT>(depth);
+    td.MipLevels = 1;
+    td.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
+    td.Usage     = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem          = rgba8_data;
+    init_data.SysMemPitch      = static_cast<UINT>(width * 4);
+    init_data.SysMemSlicePitch = static_cast<UINT>(width * height * 4);
+
+    ComPtr<ID3D11Texture3D> tex3d;
+    HRESULT hr = device_->CreateTexture3D(&td, rgba8_data ? &init_data : nullptr, tex3d.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateTexture3D failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    DX11Texture tex;
+    tex.width  = width;
+    tex.height = height;
+    tex.depth  = depth;
+    tex.is_3d  = true;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format                    = td.Format;
+    srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE3D;
+    srv_desc.Texture3D.MipLevels       = 1;
+    srv_desc.Texture3D.MostDetailedMip = 0;
+    hr = device_->CreateShaderResourceView(tex3d.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter   = linear_filter ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_MIP_POINT;
+    sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxAnisotropy  = 1;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MaxLOD         = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    return handle;
+}
+
 void DX11ResourceManager::DeleteTexture(unsigned int handle) {
     textures_.erase(handle);
 }

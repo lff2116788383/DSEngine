@@ -566,20 +566,32 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         ae_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[result_idx]);
     }
 
+    // Color Grading LUT
+    float lut_tex = 0.0f;
+    float lut_intensity = 0.0f;
+    if (pp_enabled && pp_config.color_lut_handle != 0) {
+        lut_tex = static_cast<float>(pp_config.color_lut_handle);
+        lut_intensity = pp_config.color_lut_intensity;
+    }
+
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
     if (pp_enabled && pp_config.bloom_enabled) {
         const unsigned int blur_v_color = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips.empty() ? 0 : ctx_.render_targets.bloom_mips[0]);
-        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex), static_cast<float>(ae_tex)});
+        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex), static_cast<float>(ae_tex), lut_tex, lut_intensity});
     } else {
         if (ssao_tex != 0) {
-            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex)});
+            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
         } else {
             if (ae_tex != 0) {
-                cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex)});
+                cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
             } else {
-                cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+                if (lut_tex != 0.0f) {
+                    cmd_buffer.DrawPostProcess(scene_color_tex, "color_grading", {lut_tex, lut_intensity});
+                } else {
+                    cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
+                }
             }
         }
     }

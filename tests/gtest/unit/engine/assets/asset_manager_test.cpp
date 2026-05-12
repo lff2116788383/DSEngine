@@ -43,6 +43,7 @@ public:
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override { (void)width; (void)height; (void)rgba8_faces; (void)linear_filter; return 0; }
+    unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override { (void)width; (void)height; (void)depth; (void)rgba8_data; (void)linear_filter; return 0; }
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override { (void)vert_src; (void)frag_src; return 0; }
     void DeleteShaderProgram(unsigned int program_handle) override { (void)program_handle; }
     unsigned int CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return 0; }
@@ -61,6 +62,7 @@ public:
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override { (void)index; (void)mat; }
     void SetGlobalCascadeSplit(unsigned int index, float split) override { (void)index; (void)split; }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override { (void)index; (void)mat; }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override { (void)sh; (void)enabled; }
 
     std::vector<unsigned int> deleted_textures;
 

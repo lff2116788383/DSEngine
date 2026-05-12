@@ -250,11 +250,13 @@ private:
         VulkanResourceManager& resource_mgr);
 
     /// 为后处理绘制分配并更新 DescriptorSet
+    /// extra_bindings: set2 中额外纹理 {binding, texture_handle} 列表
     VkDescriptorSet AllocateAndUpdatePostProcessDescriptorSets(
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
         unsigned int source_texture,
-        VulkanResourceManager& resource_mgr);
+        VulkanResourceManager& resource_mgr,
+        const std::vector<std::pair<uint32_t, unsigned int>>& extra_bindings = {});
 
     /// Bloom Compute Shader 调度（是另开的 Compute 流程）
     void DispatchBloomCompute(VkCommandBuffer cmd_buf,

@@ -783,13 +783,14 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         }
     }
 
-    // bloom_composite 专用路径：ACES Filmic Tone Mapping (+可选 SSAO / Auto Exposure)
+    // bloom_composite 专用路径：ACES Filmic Tone Mapping (+可选 SSAO / Auto Exposure / LUT)
     if (effect_name == "bloom_composite") {
         const bool has_ssao = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0);
         const bool has_ae   = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0);
-        // 如果有 AE 或 SSAO，使用带 AE 的合成 shader（兼容两者）
+        const bool has_lut  = (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0);
+        // 如果有 AE / SSAO / LUT，使用带 AE 的合成 shader（兼容全部）
         unsigned int shader_h;
-        if (has_ae) {
+        if (has_ae || has_lut) {
             shader_h = shader_mgr.bloom_composite_ssao_ae_shader_handle();
         } else if (has_ssao) {
             shader_h = shader_mgr.bloom_composite_ssao_shader_handle();
@@ -821,25 +822,31 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
             if (ae_tex) dc->PSSetShaderResources(3, 1, ae_tex->srv.GetAddressOf());
         }
+        if (has_lut) {
+            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
+            if (lut_tex) {
+                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+            }
+        }
 
-        // 懒惰创建 bloom composite 参数 CB（16B: exposure, bloomIntensity, ssaoEnabled, aeEnabled）
+        // 懒惰创建 bloom composite 参数 CB（32B: exposure, bloomIntensity, ssaoEnabled, aeEnabled, lutEnabled, lutIntensity, _pad2）
         if (!bloom_composite_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage          = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth      = 16;
+            bd.ByteWidth      = 32;
             bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-            struct InitParams { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; } init{1.0f, 0.5f, 0, 0};
-            D3D11_SUBRESOURCE_DATA sd{};
-            sd.pSysMem = &init;
-            context_->device()->CreateBuffer(&bd, &sd, bloom_composite_params_cb_.GetAddressOf());
+            context_->device()->CreateBuffer(&bd, nullptr, bloom_composite_params_cb_.GetAddressOf());
         }
         if (bloom_composite_params_cb_) {
-            struct BloomCompositeParams { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; } cp{};
+            struct BloomCompositeParams { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; float _pad[2]; } cp{};
             cp.exposure       = (params.size() >= 2) ? params[1] : 1.0f;
             cp.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
             cp.ssaoEnabled    = has_ssao ? 1 : 0;
             cp.aeEnabled      = has_ae ? 1 : 0;
+            cp.lutEnabled     = has_lut ? 1 : 0;
+            cp.lutIntensity   = has_lut ? params[6] : 0.0f;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(bloom_composite_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &cp, sizeof(cp));
@@ -855,8 +862,8 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         dc->DrawIndexed(6, 0, 0);
         current_frame_stats_.draw_calls++;
 
-        ID3D11ShaderResourceView* null_srvs[4] = {nullptr, nullptr, nullptr, nullptr};
-        dc->PSSetShaderResources(1, has_ae ? 3 : 2, null_srvs);
+        ID3D11ShaderResourceView* null_srvs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
+        dc->PSSetShaderResources(1, has_lut ? 4 : (has_ae ? 3 : 2), null_srvs);
         return;
     }
 
@@ -932,11 +939,14 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
-    // SSAO Apply 专用路径（带第二张纹理 + 可选 AE 纹理）
+    // SSAO Apply 专用路径（带 SSAO + 可选 AE + LUT 纹理）
     if (effect_name == "ssao_apply" && shader_mgr.ssao_apply_shader_handle()) {
         ensure_pp_params_cb();
+        const bool has_ae  = (params.size() >= 3 && static_cast<unsigned int>(params[2]) != 0);
+        const bool has_lut = (params.size() >= 5 && static_cast<unsigned int>(params[3]) != 0);
         if (pp_params_cb_ && params.size() >= 2) {
-            struct { float exposure, _p0, _p1, _p2; } ap{params[1], 0, 0, 0};
+            struct { float exposure; int aeEnabled; int lutEnabled; float lutIntensity; } ap{
+                params[1], has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[4] : 0.0f};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &ap, sizeof(ap));
@@ -948,9 +958,20 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
             if (ao_tex) dc->PSSetShaderResources(1, 1, ao_tex->srv.GetAddressOf());
         }
+        if (has_ae) {
+            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[2]));
+            if (ae_tex) dc->PSSetShaderResources(2, 1, ae_tex->srv.GetAddressOf());
+        }
+        if (has_lut) {
+            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[3]));
+            if (lut_tex) {
+                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+            }
+        }
         draw_dedicated_pp(shader_mgr.ssao_apply_shader_handle());
-        ID3D11ShaderResourceView* null_srv = nullptr;
-        dc->PSSetShaderResources(1, 1, &null_srv);
+        ID3D11ShaderResourceView* null_srvs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
+        dc->PSSetShaderResources(1, has_lut ? 4 : (has_ae ? 2 : 1), null_srvs);
         return;
     }
 
@@ -983,13 +1004,14 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
-    // Tonemapping 专用路径（带可选 Auto Exposure 纹理）
+    // Tonemapping 专用路径（带可选 Auto Exposure + LUT 纹理）
     if (effect_name == "tonemapping" && shader_mgr.tonemapping_shader_handle()) {
         ensure_pp_params_cb();
-        const bool has_ae = (params.size() >= 2 && static_cast<unsigned int>(params[1]) != 0);
+        const bool has_ae  = (params.size() >= 2 && static_cast<unsigned int>(params[1]) != 0);
+        const bool has_lut = (params.size() >= 4 && static_cast<unsigned int>(params[2]) != 0);
         if (pp_params_cb_) {
-            struct { float manual_exposure; int ae_enabled; float _p0, _p1; } tp{
-                (params.size() >= 1) ? params[0] : 1.0f, has_ae ? 1 : 0, 0, 0};
+            struct { float manual_exposure; int ae_enabled; int lut_enabled; float lut_intensity; } tp{
+                (params.size() >= 1) ? params[0] : 1.0f, has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[3] : 0.0f};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &tp, sizeof(tp));
@@ -1001,11 +1023,47 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
             if (ae_tex) dc->PSSetShaderResources(1, 1, ae_tex->srv.GetAddressOf());
         }
+        if (has_lut) {
+            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[2]));
+            if (lut_tex) {
+                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+            }
+        }
         draw_dedicated_pp(shader_mgr.tonemapping_shader_handle());
         if (has_ae) {
             ID3D11ShaderResourceView* null_srv = nullptr;
             dc->PSSetShaderResources(1, 1, &null_srv);
         }
+        if (has_lut) {
+            ID3D11ShaderResourceView* null_srv = nullptr;
+            dc->PSSetShaderResources(4, 1, &null_srv);
+        }
+        return;
+    }
+
+    // Color Grading (LUT only) 专用路径
+    if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 2) {
+            struct { float lut_intensity; float _p0, _p1, _p2; } cgp{params[1], 0, 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &cgp, sizeof(cgp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (lut_tex) {
+                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+            }
+        }
+        draw_dedicated_pp(shader_mgr.color_grading_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(4, 1, &null_srv);
         return;
     }
 

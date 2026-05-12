@@ -1081,8 +1081,11 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     } else if (effect_name == "tonemapping") {
         fs_src += R"(
             uniform sampler2D autoExposureTex;
+            uniform sampler3D u_lut;
             uniform float u_manual_exposure;
+            uniform float u_lut_intensity;
             uniform int u_auto_exposure_enabled;
+            uniform int u_lut_enabled;
             vec3 AcesFilmic(vec3 x) {
                 float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
                 return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
@@ -1095,6 +1098,10 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 }
                 vec3 result = AcesFilmic(hdrColor * finalExposure);
                 result = pow(result, vec3(1.0 / 2.2));
+                if (u_lut_enabled != 0) {
+                    vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
+                    result = mix(result, lutColor, u_lut_intensity);
+                }
                 FragColor = vec4(result, 1.0);
             }
         )";
@@ -1103,10 +1110,13 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
             uniform sampler2D bloomBlur;
             uniform sampler2D ssaoTexture;
             uniform sampler2D autoExposureTex;
+            uniform sampler3D u_lut;
             uniform float exposure;
             uniform float bloomIntensity;
+            uniform float u_lut_intensity;
             uniform int u_ssao_enabled;
             uniform int u_auto_exposure_enabled;
+            uniform int u_lut_enabled;
             vec3 AcesFilmic(vec3 x) {
                 float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
                 return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
@@ -1125,6 +1135,10 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 }
                 vec3 result = AcesFilmic(hdrColor * finalExposure);
                 result = pow(result, vec3(1.0 / 2.2));
+                if (u_lut_enabled != 0) {
+                    vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
+                    result = mix(result, lutColor, u_lut_intensity);
+                }
                 FragColor = vec4(result, 1.0);
             }
         )";
@@ -1196,8 +1210,11 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         fs_src += R"(
             uniform sampler2D ssaoTexture;
             uniform sampler2D autoExposureTex;
+            uniform sampler3D u_lut;
             uniform float exposure;
+            uniform float u_lut_intensity;
             uniform int u_auto_exposure_enabled;
+            uniform int u_lut_enabled;
             vec3 AcesFilmic(vec3 x) {
                 float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
                 return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
@@ -1212,7 +1229,22 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 }
                 vec3 result = AcesFilmic(hdrColor * finalExposure);
                 result = pow(result, vec3(1.0 / 2.2));
+                if (u_lut_enabled != 0) {
+                    vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
+                    result = mix(result, lutColor, u_lut_intensity);
+                }
                 FragColor = vec4(result, 1.0);
+            }
+        )";
+    } else if (effect_name == "color_grading") {
+        fs_src += R"(
+            uniform sampler3D u_lut;
+            uniform float u_lut_intensity;
+            void main() {
+                vec3 color = texture(screenTexture, TexCoords).rgb;
+                vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
+                color = mix(color, lutColor, u_lut_intensity);
+                FragColor = vec4(color, 1.0);
             }
         )";
     } else if (effect_name == "fxaa") {
@@ -1300,6 +1332,20 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 0);
         }
+        if (params.size() >= 4 && static_cast<unsigned int>(params[2]) != 0) {
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[2]));
+            glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
+            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[3]);
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 1);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
+        }
+    } else if (effect_name == "color_grading" && params.size() >= 2) {
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
+        glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[1]);
     } else if (effect_name == "bloom_composite") {
         if (params.size() >= 1) {
             glActiveTexture(GL_TEXTURE1);
@@ -1328,6 +1374,15 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 0);
         }
+        if (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0) {
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[5]));
+            glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
+            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[6]);
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 1);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
+        }
     } else if (effect_name == "ssao" && params.size() >= 6) {
         glUniform1f(glGetUniformLocation(shader, "u_radius"), params[0]);
         glUniform1f(glGetUniformLocation(shader, "u_bias"), params[1]);
@@ -1346,6 +1401,15 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 0);
+        }
+        if (params.size() >= 5 && static_cast<unsigned int>(params[3]) != 0) {
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[3]));
+            glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
+            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[4]);
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 1);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
         }
     } else if (effect_name == "fxaa" && params.size() >= 2) {
         glUniform2f(glGetUniformLocation(shader, "u_resolution"), params[0], params[1]);

@@ -349,11 +349,149 @@ unsigned int VulkanResourceManager::CreateTextureCube(int width, int height, con
     return handle;
 }
 
+unsigned int VulkanResourceManager::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    if (width <= 0 || height <= 0 || depth <= 0) return 0;
+
+    unsigned int handle = AllocateTextureHandle();
+    VulkanTexture tex;
+    tex.width    = width;
+    tex.height   = height;
+    tex.depth    = depth;
+    tex.channels = 4;
+    tex.format   = VK_FORMAT_R8G8B8A8_UNORM;
+    tex.is_3d    = true;
+
+    // --- 创建 VkImage (3D) ---
+    VkImageCreateInfo image_info{};
+    image_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType     = VK_IMAGE_TYPE_3D;
+    image_info.format        = VK_FORMAT_R8G8B8A8_UNORM;
+    image_info.extent.width  = static_cast<uint32_t>(width);
+    image_info.extent.height = static_cast<uint32_t>(height);
+    image_info.extent.depth  = static_cast<uint32_t>(depth);
+    image_info.mipLevels     = 1;
+    image_info.arrayLayers   = 1;
+    image_info.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_info.usage         = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.samples       = VK_SAMPLE_COUNT_1_BIT;
+
+    if (vkCreateImage(device_, &image_info, nullptr, &tex.image) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mem_reqs;
+    vkGetImageMemoryRequirements(device_, tex.image, &mem_reqs);
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize  = mem_reqs.size;
+    alloc_info.memoryTypeIndex = FindMemoryType(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(device_, &alloc_info, nullptr, &tex.memory) != VK_SUCCESS) return 0;
+    vkBindImageMemory(device_, tex.image, tex.memory, 0);
+
+    // --- 上传数据 ---
+    if (rgba8_data) {
+        size_t data_size = static_cast<size_t>(width) * height * depth * 4;
+
+        VkBuffer staging_buffer;
+        VkDeviceMemory staging_memory;
+        VkBufferCreateInfo buf_info{};
+        buf_info.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_info.size        = data_size;
+        buf_info.usage       = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        vkCreateBuffer(device_, &buf_info, nullptr, &staging_buffer);
+
+        VkMemoryRequirements staging_reqs;
+        vkGetBufferMemoryRequirements(device_, staging_buffer, &staging_reqs);
+        VkMemoryAllocateInfo staging_alloc{};
+        staging_alloc.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        staging_alloc.allocationSize  = staging_reqs.size;
+        staging_alloc.memoryTypeIndex = FindMemoryType(staging_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vkAllocateMemory(device_, &staging_alloc, nullptr, &staging_memory);
+        vkBindBufferMemory(device_, staging_buffer, staging_memory, 0);
+
+        void* mapped;
+        vkMapMemory(device_, staging_memory, 0, data_size, 0, &mapped);
+        memcpy(mapped, rgba8_data, data_size);
+        vkUnmapMemory(device_, staging_memory);
+
+        VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+        VkImageMemoryBarrier barrier{};
+        barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image                           = tex.image;
+        barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel   = 0;
+        barrier.subresourceRange.levelCount     = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount     = 1;
+        barrier.srcAccessMask                   = 0;
+        barrier.dstAccessMask                   = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        VkBufferImageCopy region{};
+        region.bufferOffset                    = 0;
+        region.bufferRowLength                 = 0;
+        region.bufferImageHeight               = 0;
+        region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel       = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount     = 1;
+        region.imageOffset                     = {0, 0, 0};
+        region.imageExtent                     = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(depth)};
+        vkCmdCopyBufferToImage(cmd, staging_buffer, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+        barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        EndSingleTimeCommands(cmd);
+        vkDestroyBuffer(device_, staging_buffer, nullptr);
+        vkFreeMemory(device_, staging_memory, nullptr);
+    }
+
+    // --- ImageView (3D) ---
+    VkImageViewCreateInfo view_info{};
+    view_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image                           = tex.image;
+    view_info.viewType                        = VK_IMAGE_VIEW_TYPE_3D;
+    view_info.format                          = VK_FORMAT_R8G8B8A8_UNORM;
+    view_info.components                      = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                                                  VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+    view_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseMipLevel   = 0;
+    view_info.subresourceRange.levelCount     = 1;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount     = 1;
+    if (vkCreateImageView(device_, &view_info, nullptr, &tex.image_view) != VK_SUCCESS) return 0;
+
+    // --- Sampler ---
+    VkSamplerCreateInfo sampler_info{};
+    sampler_info.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.magFilter    = linear_filter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    sampler_info.minFilter    = linear_filter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.maxLod       = 0.0f;
+    if (vkCreateSampler(device_, &sampler_info, nullptr, &tex.sampler) != VK_SUCCESS) return 0;
+
+    textures_[handle] = tex;
+    return handle;
+}
+
 void VulkanResourceManager::DeleteTexture(unsigned int handle) {
     auto it = textures_.find(handle);
     if (it == textures_.end()) return;
 
     auto& tex = it->second;
+    if (tex.sampler != VK_NULL_HANDLE) vkDestroySampler(device_, tex.sampler, nullptr);
     if (tex.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, tex.image_view, nullptr);
     if (tex.image != VK_NULL_HANDLE) vkDestroyImage(device_, tex.image, nullptr);
     if (tex.memory != VK_NULL_HANDLE) vkFreeMemory(device_, tex.memory, nullptr);

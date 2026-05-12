@@ -1009,12 +1009,15 @@ void main() {
 }
 )";
 
-/// Tonemapping（带可选 Auto Exposure）
+/// Tonemapping（带可选 Auto Exposure + LUT）
 constexpr const char* kTonemappingFS = R"(
 layout(set = 2, binding = 2) uniform sampler2D autoExposureTex;
+layout(set = 2, binding = 5) uniform sampler3D u_lut;
 layout(push_constant) uniform TonemapParams {
     float u_manual_exposure;
     int u_auto_exposure_enabled;
+    int u_lut_enabled;
+    float u_lut_intensity;
 };
 vec3 AcesFilmic(vec3 x) {
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
@@ -1028,20 +1031,27 @@ void main() {
     }
     vec3 result = AcesFilmic(hdrColor * finalExposure);
     result = pow(result, vec3(1.0 / 2.2));
+    if (u_lut_enabled != 0) {
+        vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
+        result = mix(result, lutColor, u_lut_intensity);
+    }
     FragColor = vec4(result, 1.0);
 }
 )";
 
-/// Bloom Composite + SSAO + Auto Exposure
+/// Bloom Composite + SSAO + Auto Exposure + LUT
 constexpr const char* kBloomCompositeSsaoAeFS = R"(
 layout(set = 2, binding = 2) uniform sampler2D bloomBlur;
 layout(set = 2, binding = 3) uniform sampler2D ssaoTexture;
 layout(set = 2, binding = 4) uniform sampler2D autoExposureTex;
+layout(set = 2, binding = 5) uniform sampler3D u_lut;
 layout(push_constant) uniform BloomCompositeAeParams {
     float exposure;
     float bloomIntensity;
     int ssaoEnabled;
     int autoExposureEnabled;
+    int lutEnabled;
+    float lutIntensity;
 };
 vec3 AcesFilmic(vec3 x) {
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
@@ -1061,6 +1071,24 @@ void main() {
     }
     color = AcesFilmic(color * finalExposure);
     color = pow(color, vec3(1.0 / 2.2));
+    if (lutEnabled != 0) {
+        vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
+        color = mix(color, lutColor, lutIntensity);
+    }
+    FragColor = vec4(color, 1.0);
+}
+)";
+
+/// Color Grading (LUT only, no tonemapping)
+constexpr const char* kColorGradingFS = R"(
+layout(set = 2, binding = 5) uniform sampler3D u_lut;
+layout(push_constant) uniform ColorGradingParams {
+    float u_lut_intensity;
+};
+void main() {
+    vec3 color = texture(screenTexture, vTexCoords).rgb;
+    vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
+    color = mix(color, lutColor, u_lut_intensity);
     FragColor = vec4(color, 1.0);
 }
 )";

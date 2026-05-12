@@ -434,6 +434,23 @@ unsigned int OpenGLRhiDevice::CreateTextureCube(int width, int height, const uns
     return texture_handle;
 }
 
+unsigned int OpenGLRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    if (width <= 0 || height <= 0 || depth <= 0) return 0;
+    unsigned int texture_handle = 0;
+    glGenTextures(1, &texture_handle);
+    resource_mgr_.ledger().textures_created += 1;
+    if (texture_handle == 0) return 0;
+    glBindTexture(GL_TEXTURE_3D, texture_handle);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
+    glBindTexture(GL_TEXTURE_3D, 0);
+    return texture_handle;
+}
+
 void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
     if (texture_handle == 0) {
         return;

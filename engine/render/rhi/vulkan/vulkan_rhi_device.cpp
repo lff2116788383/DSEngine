@@ -390,6 +390,10 @@ unsigned int VulkanRhiDevice::CreateTextureCube(int width, int height, const uns
     return resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter);
 }
 
+unsigned int VulkanRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    return resource_mgr_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter);
+}
+
 void VulkanRhiDevice::DeleteTexture(unsigned int texture_handle) {
     resource_mgr_.DeleteTexture(texture_handle);
 }

@@ -191,6 +191,7 @@ public:
     virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
+    virtual unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
@@ -287,6 +288,7 @@ public:
     void DeleteVertexArray(unsigned int handle) override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
+    unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
     void DeleteTexture(unsigned int texture_handle) override;
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     void DeleteShaderProgram(unsigned int program_handle) override;

@@ -1123,7 +1123,8 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
     VkCommandBuffer cmd_buf,
     const VulkanShaderProgram* program,
     unsigned int source_texture,
-    VulkanResourceManager& resource_mgr) {
+    VulkanResourceManager& resource_mgr,
+    const std::vector<std::pair<uint32_t, unsigned int>>& extra_bindings) {
 
     if (program->descriptor_set_layouts.empty()) return VK_NULL_HANDLE;
 
@@ -1162,6 +1163,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
     }
 
     if (set_count > 2) {
+        std::vector<VkWriteDescriptorSet> writes;
+        std::vector<VkDescriptorImageInfo> extra_imgs(extra_bindings.size());
+
+        // binding 1: screenTexture
         VkWriteDescriptorSet w{};
         w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         w.dstSet          = sets[2];
@@ -1169,7 +1174,45 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
         w.descriptorCount = 1;
         w.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         w.pImageInfo      = &src_img;
-        vkUpdateDescriptorSets(device, 1, &w, 0, nullptr);
+        writes.push_back(w);
+
+        // extra bindings (bloom, ssao, ae, lut 等) — 仅写 shader 反射中存在的 binding
+        for (size_t i = 0; i < extra_bindings.size(); ++i) {
+            auto [binding, tex_handle] = extra_bindings[i];
+            bool binding_exists = false;
+            for (const auto& b : program->reflection.bindings) {
+                if (b.set == 2 && b.binding == binding) { binding_exists = true; break; }
+            }
+            if (!binding_exists) continue;
+            VkDescriptorImageInfo& ei = extra_imgs[i];
+            ei.sampler     = resource_mgr.default_sampler();
+            ei.imageView   = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
+            ei.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            if (tex_handle != 0) {
+                const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(tex_handle);
+                if (rt && rt->color_texture.image_view != VK_NULL_HANDLE) {
+                    ei.imageView = rt->color_texture.image_view;
+                } else {
+                    const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
+                    if (tex) {
+                        ei.imageView = tex->image_view;
+                        if (tex->sampler != VK_NULL_HANDLE) ei.sampler = tex->sampler;
+                    }
+                }
+            }
+
+            VkWriteDescriptorSet ew{};
+            ew.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            ew.dstSet          = sets[2];
+            ew.dstBinding      = binding;
+            ew.descriptorCount = 1;
+            ew.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            ew.pImageInfo      = &extra_imgs[i];
+            writes.push_back(ew);
+        }
+
+        vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1771,6 +1814,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.tonemapping_shader_handle();
     else if (effect_name == "bloom_composite" && shader_mgr.bloom_composite_ssao_ae_shader_handle())
         selected_shader_handle = shader_mgr.bloom_composite_ssao_ae_shader_handle();
+    else if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle())
+        selected_shader_handle = shader_mgr.color_grading_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1800,10 +1845,37 @@ void VulkanDrawExecutor::DrawPostProcess(
         vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pp_pipeline);
     }
 
+    // 构建额外纹理绑定列表 {set2_binding, texture_handle}
+    std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
+    if (effect_name == "bloom_composite") {
+        // binding 2: bloom, binding 3: ssao, binding 4: ae, binding 5: lut
+        unsigned int bloom_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
+        unsigned int ssao_h  = (params.size() >= 4) ? static_cast<unsigned int>(params[3]) : 0;
+        unsigned int ae_h    = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
+        unsigned int lut_h   = (params.size() >= 7) ? static_cast<unsigned int>(params[5]) : 0;
+        extra_bindings = {{2, bloom_h}, {3, ssao_h}, {4, ae_h}, {5, lut_h}};
+    } else if (effect_name == "tonemapping") {
+        unsigned int ae_h  = (params.size() >= 2) ? static_cast<unsigned int>(params[1]) : 0;
+        unsigned int lut_h = (params.size() >= 4) ? static_cast<unsigned int>(params[2]) : 0;
+        extra_bindings = {{2, ae_h}, {5, lut_h}};
+    } else if (effect_name == "ssao_apply") {
+        unsigned int ssao_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
+        unsigned int ae_h   = (params.size() >= 3) ? static_cast<unsigned int>(params[2]) : 0;
+        unsigned int lut_h  = (params.size() >= 5) ? static_cast<unsigned int>(params[3]) : 0;
+        extra_bindings = {{2, ssao_h}, {3, ae_h}, {5, lut_h}};
+    } else if (effect_name == "lum_adapt") {
+        unsigned int prev_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
+        extra_bindings = {{2, prev_h}};
+    } else if (effect_name == "color_grading") {
+        unsigned int lut_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
+        extra_bindings = {{5, lut_h}};
+    }
+
     // 分配并绑定后处理 DescriptorSet
     if (pp_program) {
         AllocateAndUpdatePostProcessDescriptorSets(cmd_buf, pp_program,
-                                                    source_texture, *resource_mgr_);
+                                                    source_texture, *resource_mgr_,
+                                                    extra_bindings);
     }
 
     // 传递 push constants
@@ -1822,16 +1894,25 @@ void VulkanDrawExecutor::DrawPostProcess(
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         } else if (effect_name == "tonemapping" && params.size() >= 2) {
-            struct { float manual_exposure; int ae_enabled; } pc{params[0],
-                static_cast<unsigned int>(params[1]) != 0 ? 1 : 0};
+            struct { float manual_exposure; int ae_enabled; int lut_enabled; float lut_intensity; } pc{};
+            pc.manual_exposure = params[0];
+            pc.ae_enabled = static_cast<unsigned int>(params[1]) != 0 ? 1 : 0;
+            pc.lut_enabled = (params.size() >= 4 && static_cast<unsigned int>(params[2]) != 0) ? 1 : 0;
+            pc.lut_intensity = (params.size() >= 4) ? params[3] : 0.0f;
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "bloom_composite" && params.size() >= 2) {
-            struct { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; } pc{};
+            struct { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; } pc{};
             pc.exposure       = params[1];
             pc.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
             pc.ssaoEnabled    = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0) ? 1 : 0;
             pc.aeEnabled      = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) ? 1 : 0;
+            pc.lutEnabled     = (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0) ? 1 : 0;
+            pc.lutIntensity   = (params.size() >= 7) ? params[6] : 0.0f;
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "color_grading" && params.size() >= 2) {
+            float pc = params[1];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         }
