@@ -3,6 +3,7 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include <string>
 
 namespace dse {
 
@@ -23,6 +24,10 @@ struct RigidBody3DComponent {
     float gravity_scale = 1.0f;
     bool is_kinematic = false;
 
+    // Collision filtering (Task 6)
+    uint16_t collision_layer = 0x0001;  ///< 所属碰撞层
+    uint16_t collision_mask  = 0xFFFF;  ///< 可碰撞的层掩码
+
     // Deferred impulse: applied once when the PhysX actor is first created
     glm::vec3 pending_impulse = glm::vec3(0.0f);
     bool has_pending_impulse = false;
@@ -38,6 +43,11 @@ struct BoxCollider3DComponent {
     float bounciness = 0.0f;
     float friction = 0.5f;
 
+    // Dirty tracking (Task 7)
+    glm::vec3 prev_size = glm::vec3(-1.0f);
+    float prev_bounciness = -1.0f;
+    float prev_friction = -1.0f;
+
     // Backend handle
     void* runtime_shape = nullptr;
 };
@@ -48,6 +58,11 @@ struct SphereCollider3DComponent {
     bool is_trigger = false;
     float bounciness = 0.0f;
     float friction = 0.5f;
+
+    // Dirty tracking (Task 7)
+    float prev_radius = -1.0f;
+    float prev_bounciness = -1.0f;
+    float prev_friction = -1.0f;
 
     // Backend handle
     void* runtime_shape = nullptr;
@@ -61,6 +76,64 @@ struct MeshCollider3DComponent {
 
     // Backend handle
     void* runtime_shape = nullptr;
+};
+
+/// 胶囊碰撞体组件（Task 4）
+struct CapsuleCollider3DComponent {
+    float radius = 0.5f;        ///< 胶囊半径
+    float height = 1.0f;        ///< 胶囊高度（不含半球）
+    glm::vec3 center = glm::vec3(0.0f);
+    int direction = 1;          ///< 轴向: 0=X, 1=Y, 2=Z
+    bool is_trigger = false;
+    float bounciness = 0.0f;
+    float friction = 0.5f;
+
+    // Dirty tracking (Task 7)
+    float prev_radius = -1.0f;
+    float prev_height = -1.0f;
+    float prev_bounciness = -1.0f;
+    float prev_friction = -1.0f;
+
+    // Backend handle
+    void* runtime_shape = nullptr;
+};
+
+/// 物理关节类型（Task 5）
+enum class Joint3DType {
+    Fixed = 0,
+    Hinge = 1,     ///< 铰链关节（PxRevoluteJoint）
+    Spring = 2,    ///< 弹簧关节（PxD6Joint + drive）
+    Distance = 3   ///< 距离关节（PxDistanceJoint）
+};
+
+/// 物理关节组件（Task 5）
+struct Joint3DComponent {
+    Joint3DType type = Joint3DType::Fixed;
+    uint32_t connected_entity_id = 0;  ///< 连接的另一个实体 ID（0=世界锚点）
+    glm::vec3 anchor = glm::vec3(0.0f);         ///< 本体锚点（局部坐标）
+    glm::vec3 connected_anchor = glm::vec3(0.0f); ///< 对方锚点（局部坐标）
+    glm::vec3 axis = glm::vec3(0.0f, 1.0f, 0.0f); ///< 关节轴向
+
+    // Hinge 参数
+    bool use_limits = false;
+    float lower_limit = -45.0f;   ///< 最小角度（度）
+    float upper_limit = 45.0f;    ///< 最大角度（度）
+
+    // Distance 参数
+    float min_distance = 0.0f;
+    float max_distance = 10.0f;
+
+    // Spring 参数
+    float spring_stiffness = 100.0f;
+    float spring_damping = 10.0f;
+
+    // 断裂
+    float break_force = FLT_MAX;   ///< 断裂力（FLT_MAX=不可断裂）
+    float break_torque = FLT_MAX;  ///< 断裂扭矩
+    bool is_broken = false;
+
+    // Backend handle
+    void* runtime_joint = nullptr;
 };
 
 /// 角色控制器碰撞标志位（对应 PhysX PxControllerCollisionFlag）

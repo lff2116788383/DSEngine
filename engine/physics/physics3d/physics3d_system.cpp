@@ -4,7 +4,21 @@
 #include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
 #include <PxPhysicsAPI.h>
+#include <cooking/PxCooking.h>
+// PhysXExtensions_static_64.lib 预编译为 /MTd，与项目 /MD 不兼容
+// Joint 功能需待兼容的 Extensions 库后启用
+// #define DSE_HAS_PHYSX_EXTENSIONS 1
+#ifdef DSE_HAS_PHYSX_EXTENSIONS
+#include <extensions/PxFixedJoint.h>
+#include <extensions/PxRevoluteJoint.h>
+#include <extensions/PxDistanceJoint.h>
+#include <extensions/PxD6Joint.h>
+#endif
 #include <cstdlib>
+#include <cmath>
+#include <cfloat>
+
+namespace { constexpr float kPi = 3.14159265358979323846f; }
 #if defined(_WIN32)
 #include <malloc.h>
 #endif
@@ -46,14 +60,97 @@ public:
     }
 };
 
-/// 自定义默认碰撞过滤 Shader（等价于 PxDefaultSimulationFilterShader）
-/// 所有形状对默认执行碰撞检测，过滤逻辑由场景查询决定。
+// ---------------------------------------------------------------------------
+// Simulation Event Callback（Task 1）
+// ---------------------------------------------------------------------------
+
+class DseSimulationEventCallback : public PxSimulationEventCallback {
+public:
+    std::vector<CollisionEvent> collision_events;
+    std::vector<TriggerEvent> trigger_events;
+
+    void onContact(const PxContactPairHeader& pairHeader, const PxContactPair* pairs, PxU32 nbPairs) override {
+        for (PxU32 i = 0; i < nbPairs; ++i) {
+            const PxContactPair& cp = pairs[i];
+            CollisionEvent evt;
+
+            if (pairHeader.actors[0] && pairHeader.actors[0]->userData)
+                evt.entity_a = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(pairHeader.actors[0]->userData));
+            if (pairHeader.actors[1] && pairHeader.actors[1]->userData)
+                evt.entity_b = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(pairHeader.actors[1]->userData));
+
+            if (cp.events & PxPairFlag::eNOTIFY_TOUCH_FOUND)
+                evt.type = CollisionEvent::Type::Enter;
+            else if (cp.events & PxPairFlag::eNOTIFY_TOUCH_PERSISTS)
+                evt.type = CollisionEvent::Type::Stay;
+            else if (cp.events & PxPairFlag::eNOTIFY_TOUCH_LOST)
+                evt.type = CollisionEvent::Type::Exit;
+            else
+                continue;
+
+            // Extract contact point
+            if (cp.contactCount > 0) {
+                PxContactPairPoint points[1];
+                PxU32 n = cp.extractContacts(points, 1);
+                if (n > 0) {
+                    evt.contact_point = glm::vec3(points[0].position.x, points[0].position.y, points[0].position.z);
+                    evt.contact_normal = glm::vec3(points[0].normal.x, points[0].normal.y, points[0].normal.z);
+                    evt.impulse = glm::length(glm::vec3(points[0].impulse.x, points[0].impulse.y, points[0].impulse.z));
+                }
+            }
+            collision_events.push_back(evt);
+        }
+    }
+
+    void onTrigger(PxTriggerPair* pairs, PxU32 count) override {
+        for (PxU32 i = 0; i < count; ++i) {
+            const PxTriggerPair& tp = pairs[i];
+            if (tp.flags & (PxTriggerPairFlag::eREMOVED_SHAPE_TRIGGER | PxTriggerPairFlag::eREMOVED_SHAPE_OTHER))
+                continue;
+
+            TriggerEvent evt;
+            if (tp.triggerActor && tp.triggerActor->userData)
+                evt.trigger_entity = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(tp.triggerActor->userData));
+            if (tp.otherActor && tp.otherActor->userData)
+                evt.other_entity = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(tp.otherActor->userData));
+
+            evt.type = (tp.status == PxPairFlag::eNOTIFY_TOUCH_FOUND) ? TriggerEvent::Type::Enter : TriggerEvent::Type::Exit;
+            trigger_events.push_back(evt);
+        }
+    }
+
+    void onConstraintBreak(PxConstraintInfo* /*constraints*/, PxU32 /*count*/) override {}
+    void onWake(PxActor** /*actors*/, PxU32 /*count*/) override {}
+    void onSleep(PxActor** /*actors*/, PxU32 /*count*/) override {}
+    void onAdvance(const PxRigidBody* const* /*bodyBuffer*/, const PxTransform* /*poseBuffer*/, const PxU32 /*count*/) override {}
+};
+
+/// 碰撞过滤 Shader（Task 1 + Task 6）
+/// 支持 collision_layer/collision_mask 过滤，启用 contact/trigger 通知
 static PxFilterFlags DseDefaultSimulationFilterShader(
-    PxFilterObjectAttributes /*attributes0*/, PxFilterData /*filterData0*/,
-    PxFilterObjectAttributes /*attributes1*/, PxFilterData /*filterData1*/,
+    PxFilterObjectAttributes attributes0, PxFilterData filterData0,
+    PxFilterObjectAttributes attributes1, PxFilterData filterData1,
     PxPairFlags& pairFlags, const void* /*constantBlock*/, PxU32 /*constantBlockSize*/)
 {
-    pairFlags = PxPairFlag::eCONTACT_DEFAULT;
+    // filterData.word0 = collision_layer, filterData.word1 = collision_mask
+    // Check layer/mask bidirectional
+    if ((filterData0.word0 & filterData1.word1) == 0 &&
+        (filterData1.word0 & filterData0.word1) == 0) {
+        return PxFilterFlag::eSUPPRESS;
+    }
+
+    // Trigger handling
+    if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
+        pairFlags = PxPairFlag::eTRIGGER_DEFAULT;
+        return PxFilterFlag::eDEFAULT;
+    }
+
+    // Contact handling with notifications
+    pairFlags = PxPairFlag::eCONTACT_DEFAULT
+              | PxPairFlag::eNOTIFY_TOUCH_FOUND
+              | PxPairFlag::eNOTIFY_TOUCH_PERSISTS
+              | PxPairFlag::eNOTIFY_TOUCH_LOST
+              | PxPairFlag::eNOTIFY_CONTACT_POINTS;
     return PxFilterFlag::eDEFAULT;
 }
 
@@ -96,11 +193,16 @@ bool Physics3DSystem::Init(World& world) {
         return false;
     }
 
+    // Simulation event callback (Task 1)
+    auto* callback = new DseSimulationEventCallback();
+    simulation_callback_ = callback;
+
     PxSceneDesc sceneDesc(physics_->getTolerancesScale());
     sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
     dispatcher_ = new DseCpuDispatcher(2);
     sceneDesc.cpuDispatcher = dispatcher_;
     sceneDesc.filterShader = DseDefaultSimulationFilterShader;
+    sceneDesc.simulationEventCallback = callback;
     sceneDesc.flags |= PxSceneFlag::eENABLE_CCD; // Prevent fast small objects from tunneling
 
     scene_ = physics_->createScene(sceneDesc);
@@ -111,6 +213,13 @@ bool Physics3DSystem::Init(World& world) {
 
     default_material_ = physics_->createMaterial(0.5f, 0.5f, 0.6f);
 
+    // Cooking (Task 3 — MeshCollider)
+    PxCookingParams cookParams(physics_->getTolerancesScale());
+    cooking_ = PxCreateCooking(PX_PHYSICS_VERSION, *foundation_, cookParams);
+    if (!cooking_) {
+        DEBUG_LOG_ERROR("PxCreateCooking failed!");
+    }
+
     return true;
 }
 
@@ -118,6 +227,16 @@ void Physics3DSystem::Shutdown() {
     DEBUG_LOG_INFO("Physics3DSystem Shutdown");
 
     if (scene_ && world_cache_) {
+        // Release joints (Task 5)
+        auto joint_view = world_cache_->registry().view<Joint3DComponent>();
+        for (auto entity : joint_view) {
+            auto& jc = joint_view.get<Joint3DComponent>(entity);
+            if (jc.runtime_joint) {
+                static_cast<PxBase*>(jc.runtime_joint)->release();
+                jc.runtime_joint = nullptr;
+            }
+        }
+
         auto rb_view = world_cache_->registry().view<RigidBody3DComponent>();
         for (auto entity : rb_view) {
             auto& rb = rb_view.get<RigidBody3DComponent>(entity);
@@ -141,6 +260,28 @@ void Physics3DSystem::Shutdown() {
         }
     }
 
+    // Release material cache (Task 2)
+    for (auto& [key, mat] : material_cache_) {
+        if (mat) mat->release();
+    }
+    material_cache_.clear();
+
+    // Release mesh caches (Task 3)
+    for (auto& [key, mesh] : convex_mesh_cache_) {
+        if (mesh) mesh->release();
+    }
+    convex_mesh_cache_.clear();
+    for (auto& [key, mesh] : triangle_mesh_cache_) {
+        if (mesh) mesh->release();
+    }
+    triangle_mesh_cache_.clear();
+
+    // Release cooking (Task 3)
+    if (cooking_) {
+        cooking_->release();
+        cooking_ = nullptr;
+    }
+
     if (default_material_) {
         default_material_->release();
         default_material_ = nullptr;
@@ -153,6 +294,11 @@ void Physics3DSystem::Shutdown() {
         delete static_cast<DseCpuDispatcher*>(dispatcher_);
         dispatcher_ = nullptr;
     }
+    // Release simulation callback (Task 1)
+    if (simulation_callback_) {
+        delete static_cast<DseSimulationEventCallback*>(simulation_callback_);
+        simulation_callback_ = nullptr;
+    }
     if (physics_) {
         physics_->release();
         physics_ = nullptr;
@@ -162,6 +308,72 @@ void Physics3DSystem::Shutdown() {
         foundation_ = nullptr;
     }
     world_cache_ = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// 材质缓存（Task 2）
+// ---------------------------------------------------------------------------
+
+PxMaterial* Physics3DSystem::GetOrCreateMaterial(float friction, float bounciness) {
+    // Use friction for both static and dynamic friction
+    MaterialKey key{friction, friction, bounciness};
+    auto it = material_cache_.find(key);
+    if (it != material_cache_.end()) return it->second;
+
+    PxMaterial* mat = physics_->createMaterial(friction, friction, bounciness);
+    material_cache_[key] = mat;
+    return mat;
+}
+
+// ---------------------------------------------------------------------------
+// 碰撞层设置（Task 6）
+// ---------------------------------------------------------------------------
+
+void Physics3DSystem::SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) {
+    if (!scene_ || !world_cache_) return;
+
+    auto* rb = world_cache_->registry().try_get<RigidBody3DComponent>(entity);
+    if (!rb) return;
+
+    rb->collision_layer = layer;
+    rb->collision_mask = mask;
+
+    if (rb->runtime_body) {
+        PxRigidActor* actor = static_cast<PxRigidActor*>(rb->runtime_body);
+        PxFilterData fd;
+        fd.word0 = layer;
+        fd.word1 = mask;
+        PxU32 nb = actor->getNbShapes();
+        std::vector<PxShape*> shapes(nb);
+        actor->getShapes(shapes.data(), nb);
+        for (PxU32 i = 0; i < nb; ++i) {
+            shapes[i]->setSimulationFilterData(fd);
+            shapes[i]->setQueryFilterData(fd);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: set filter data on shape from rigid body layer/mask
+// ---------------------------------------------------------------------------
+static void SetShapeFilterData(PxShape* shape, const RigidBody3DComponent& rb) {
+    PxFilterData fd;
+    fd.word0 = rb.collision_layer;
+    fd.word1 = rb.collision_mask;
+    shape->setSimulationFilterData(fd);
+    shape->setQueryFilterData(fd);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: detach all shapes from actor (for dirty re-creation, Task 7)
+// ---------------------------------------------------------------------------
+static void DetachAllShapes(PxRigidActor* actor) {
+    PxU32 nb = actor->getNbShapes();
+    std::vector<PxShape*> shapes(nb);
+    actor->getShapes(shapes.data(), nb);
+    for (PxU32 i = 0; i < nb; ++i) {
+        actor->detachShape(*shapes[i]);
+    }
 }
 
 void Physics3DSystem::SyncTransformsToPhysics(World& world) {
@@ -192,30 +404,172 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
                 actor = dynamic;
             }
             
-            // Attach shapes
+            bool shape_attached = false;
+
+            // BoxCollider3D
             if (world.registry().all_of<BoxCollider3DComponent>(entity)) {
                 auto& box = world.registry().get<BoxCollider3DComponent>(entity);
-                PxShape* shape = physics_->createShape(PxBoxGeometry(box.size.x * 0.5f, box.size.y * 0.5f, box.size.z * 0.5f), *default_material_);
+                PxMaterial* mat = GetOrCreateMaterial(box.friction, box.bounciness);
+                PxShape* shape = physics_->createShape(PxBoxGeometry(box.size.x * 0.5f, box.size.y * 0.5f, box.size.z * 0.5f), *mat);
                 shape->setLocalPose(PxTransform(PxVec3(box.center.x, box.center.y, box.center.z)));
                 if (box.is_trigger) {
                     shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
                     shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
                 }
+                SetShapeFilterData(shape, rb);
                 actor->attachShape(*shape);
                 shape->release();
-            } else if (world.registry().all_of<SphereCollider3DComponent>(entity)) {
+                box.prev_size = box.size;
+                box.prev_bounciness = box.bounciness;
+                box.prev_friction = box.friction;
+                shape_attached = true;
+            }
+
+            // SphereCollider3D
+            if (world.registry().all_of<SphereCollider3DComponent>(entity)) {
                 auto& sphere = world.registry().get<SphereCollider3DComponent>(entity);
-                PxShape* shape = physics_->createShape(PxSphereGeometry(sphere.radius), *default_material_);
+                PxMaterial* mat = GetOrCreateMaterial(sphere.friction, sphere.bounciness);
+                PxShape* shape = physics_->createShape(PxSphereGeometry(sphere.radius), *mat);
                 shape->setLocalPose(PxTransform(PxVec3(sphere.center.x, sphere.center.y, sphere.center.z)));
                 if (sphere.is_trigger) {
                     shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
                     shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
                 }
+                SetShapeFilterData(shape, rb);
                 actor->attachShape(*shape);
                 shape->release();
-            } else {
-                // Default shape if none attached
+                sphere.prev_radius = sphere.radius;
+                sphere.prev_bounciness = sphere.bounciness;
+                sphere.prev_friction = sphere.friction;
+                shape_attached = true;
+            }
+
+            // CapsuleCollider3D (Task 4)
+            if (world.registry().all_of<CapsuleCollider3DComponent>(entity)) {
+                auto& cap = world.registry().get<CapsuleCollider3DComponent>(entity);
+                PxMaterial* mat = GetOrCreateMaterial(cap.friction, cap.bounciness);
+                PxCapsuleGeometry capsule_geo(cap.radius, cap.height * 0.5f);
+                PxShape* shape = physics_->createShape(capsule_geo, *mat);
+                // PhysX capsule default axis is X; rotate for Y or Z
+                PxQuat rot = PxQuat(PxIdentity);
+                if (cap.direction == 1) // Y-axis
+                    rot = PxQuat(kPi * 0.5f, PxVec3(0, 0, 1));
+                else if (cap.direction == 2) // Z-axis
+                    rot = PxQuat(kPi * 0.5f, PxVec3(0, 1, 0));
+                shape->setLocalPose(PxTransform(PxVec3(cap.center.x, cap.center.y, cap.center.z), rot));
+                if (cap.is_trigger) {
+                    shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                    shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                }
+                SetShapeFilterData(shape, rb);
+                actor->attachShape(*shape);
+                shape->release();
+                cap.prev_radius = cap.radius;
+                cap.prev_height = cap.height;
+                cap.prev_bounciness = cap.bounciness;
+                cap.prev_friction = cap.friction;
+                shape_attached = true;
+            }
+
+            // MeshCollider3D (Task 3)
+            if (world.registry().all_of<MeshCollider3DComponent>(entity)) {
+                auto& mc = world.registry().get<MeshCollider3DComponent>(entity);
+                if (!mc.runtime_shape && world.registry().all_of<MeshRendererComponent>(entity)) {
+                    auto& mr = world.registry().get<MeshRendererComponent>(entity);
+                    if (!mr.temp_vertices.empty() && !mr.temp_indices.empty()) {
+                        bool is_dmesh = mr.mesh_path.find(".dmesh") != std::string::npos;
+                        size_t stride = is_dmesh ? static_cast<size_t>(mr.dmesh_vertex_stride) : 3;
+                        size_t vcount = mr.temp_vertices.size() / stride;
+
+                        // Extract positions
+                        std::vector<PxVec3> px_verts(vcount);
+                        for (size_t i = 0; i < vcount; ++i) {
+                            px_verts[i] = PxVec3(
+                                mr.temp_vertices[i * stride + 0],
+                                mr.temp_vertices[i * stride + 1],
+                                mr.temp_vertices[i * stride + 2]);
+                        }
+
+                        // Convert indices to 32-bit
+                        std::vector<PxU32> px_indices(mr.temp_indices.size());
+                        for (size_t i = 0; i < mr.temp_indices.size(); ++i)
+                            px_indices[i] = static_cast<PxU32>(mr.temp_indices[i]);
+
+                        PxMaterial* mat = GetOrCreateMaterial(mc.friction, mc.bounciness);
+
+                        if (mc.convex) {
+                            // Check cache
+                            PxConvexMesh* convex = nullptr;
+                            auto cache_it = convex_mesh_cache_.find(mr.mesh_path);
+                            if (cache_it != convex_mesh_cache_.end()) {
+                                convex = cache_it->second;
+                            } else if (cooking_) {
+                                PxConvexMeshDesc desc;
+                                desc.points.count = static_cast<PxU32>(vcount);
+                                desc.points.stride = sizeof(PxVec3);
+                                desc.points.data = px_verts.data();
+                                desc.flags = PxConvexFlag::eCOMPUTE_CONVEX;
+
+                                convex = cooking_->createConvexMesh(desc, physics_->getPhysicsInsertionCallback());
+                                if (convex && !mr.mesh_path.empty())
+                                    convex_mesh_cache_[mr.mesh_path] = convex;
+                            }
+                            if (convex) {
+                                PxShape* shape = physics_->createShape(PxConvexMeshGeometry(convex), *mat);
+                                if (mc.is_trigger) {
+                                    shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                                    shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                                }
+                                SetShapeFilterData(shape, rb);
+                                actor->attachShape(*shape);
+                                shape->release();
+                                mc.runtime_shape = convex;
+                                shape_attached = true;
+                            }
+                        } else {
+                            // Triangle mesh — only for Static actors
+                            if (rb.type == RigidBody3DType::Static) {
+                                PxTriangleMesh* tri = nullptr;
+                                auto cache_it = triangle_mesh_cache_.find(mr.mesh_path);
+                                if (cache_it != triangle_mesh_cache_.end()) {
+                                    tri = cache_it->second;
+                                } else if (cooking_) {
+                                    PxTriangleMeshDesc desc;
+                                    desc.points.count = static_cast<PxU32>(vcount);
+                                    desc.points.stride = sizeof(PxVec3);
+                                    desc.points.data = px_verts.data();
+                                    desc.triangles.count = static_cast<PxU32>(px_indices.size() / 3);
+                                    desc.triangles.stride = sizeof(PxU32) * 3;
+                                    desc.triangles.data = px_indices.data();
+
+                                    tri = cooking_->createTriangleMesh(desc, physics_->getPhysicsInsertionCallback());
+                                    if (tri && !mr.mesh_path.empty())
+                                        triangle_mesh_cache_[mr.mesh_path] = tri;
+                                }
+                                if (tri) {
+                                    PxShape* shape = physics_->createShape(PxTriangleMeshGeometry(tri), *mat);
+                                    if (mc.is_trigger) {
+                                        shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                                        shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                                    }
+                                    SetShapeFilterData(shape, rb);
+                                    actor->attachShape(*shape);
+                                    shape->release();
+                                    mc.runtime_shape = tri;
+                                    shape_attached = true;
+                                }
+                            } else {
+                                DEBUG_LOG_ERROR("MeshCollider3D: non-convex triangle mesh only supported on Static actors");
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Default shape if nothing attached
+            if (!shape_attached) {
                 PxShape* shape = physics_->createShape(PxBoxGeometry(0.5f, 0.5f, 0.5f), *default_material_);
+                SetShapeFilterData(shape, rb);
                 actor->attachShape(*shape);
                 shape->release();
             }
@@ -228,7 +582,6 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
             if (rb.has_pending_impulse) {
                 PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
                 if (dyn) {
-                    // Convert impulse to velocity: v = impulse / mass
                     float m = dyn->getMass();
                     if (m < 0.001f) m = 0.001f;
                     glm::vec3 vel = rb.pending_impulse / m;
@@ -236,6 +589,91 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
                 }
                 rb.has_pending_impulse = false;
                 rb.pending_impulse = glm::vec3(0.0f);
+            }
+        } else {
+            // --- Runtime dirty detection (Task 7) ---
+            PxRigidActor* actor = static_cast<PxRigidActor*>(rb.runtime_body);
+            bool needs_reshape = false;
+
+            // Check BoxCollider dirty
+            if (world.registry().all_of<BoxCollider3DComponent>(entity)) {
+                auto& box = world.registry().get<BoxCollider3DComponent>(entity);
+                if (box.size != box.prev_size || box.bounciness != box.prev_bounciness || box.friction != box.prev_friction) {
+                    needs_reshape = true;
+                }
+            }
+            // Check SphereCollider dirty
+            if (world.registry().all_of<SphereCollider3DComponent>(entity)) {
+                auto& sphere = world.registry().get<SphereCollider3DComponent>(entity);
+                if (sphere.radius != sphere.prev_radius || sphere.bounciness != sphere.prev_bounciness || sphere.friction != sphere.prev_friction) {
+                    needs_reshape = true;
+                }
+            }
+            // Check CapsuleCollider dirty
+            if (world.registry().all_of<CapsuleCollider3DComponent>(entity)) {
+                auto& cap = world.registry().get<CapsuleCollider3DComponent>(entity);
+                if (cap.radius != cap.prev_radius || cap.height != cap.prev_height ||
+                    cap.bounciness != cap.prev_bounciness || cap.friction != cap.prev_friction) {
+                    needs_reshape = true;
+                }
+            }
+
+            if (needs_reshape && actor) {
+                DetachAllShapes(actor);
+
+                if (world.registry().all_of<BoxCollider3DComponent>(entity)) {
+                    auto& box = world.registry().get<BoxCollider3DComponent>(entity);
+                    PxMaterial* mat = GetOrCreateMaterial(box.friction, box.bounciness);
+                    PxShape* shape = physics_->createShape(PxBoxGeometry(box.size.x * 0.5f, box.size.y * 0.5f, box.size.z * 0.5f), *mat);
+                    shape->setLocalPose(PxTransform(PxVec3(box.center.x, box.center.y, box.center.z)));
+                    if (box.is_trigger) {
+                        shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                        shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                    }
+                    SetShapeFilterData(shape, rb);
+                    actor->attachShape(*shape);
+                    shape->release();
+                    box.prev_size = box.size;
+                    box.prev_bounciness = box.bounciness;
+                    box.prev_friction = box.friction;
+                }
+                if (world.registry().all_of<SphereCollider3DComponent>(entity)) {
+                    auto& sphere = world.registry().get<SphereCollider3DComponent>(entity);
+                    PxMaterial* mat = GetOrCreateMaterial(sphere.friction, sphere.bounciness);
+                    PxShape* shape = physics_->createShape(PxSphereGeometry(sphere.radius), *mat);
+                    shape->setLocalPose(PxTransform(PxVec3(sphere.center.x, sphere.center.y, sphere.center.z)));
+                    if (sphere.is_trigger) {
+                        shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                        shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                    }
+                    SetShapeFilterData(shape, rb);
+                    actor->attachShape(*shape);
+                    shape->release();
+                    sphere.prev_radius = sphere.radius;
+                    sphere.prev_bounciness = sphere.bounciness;
+                    sphere.prev_friction = sphere.friction;
+                }
+                if (world.registry().all_of<CapsuleCollider3DComponent>(entity)) {
+                    auto& cap = world.registry().get<CapsuleCollider3DComponent>(entity);
+                    PxMaterial* mat = GetOrCreateMaterial(cap.friction, cap.bounciness);
+                    PxCapsuleGeometry capsule_geo(cap.radius, cap.height * 0.5f);
+                    PxShape* shape = physics_->createShape(capsule_geo, *mat);
+                    PxQuat rot = PxQuat(PxIdentity);
+                    if (cap.direction == 1) rot = PxQuat(kPi * 0.5f, PxVec3(0, 0, 1));
+                    else if (cap.direction == 2) rot = PxQuat(kPi * 0.5f, PxVec3(0, 1, 0));
+                    shape->setLocalPose(PxTransform(PxVec3(cap.center.x, cap.center.y, cap.center.z), rot));
+                    if (cap.is_trigger) {
+                        shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                        shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+                    }
+                    SetShapeFilterData(shape, rb);
+                    actor->attachShape(*shape);
+                    shape->release();
+                    cap.prev_radius = cap.radius;
+                    cap.prev_height = cap.height;
+                    cap.prev_bounciness = cap.bounciness;
+                    cap.prev_friction = cap.friction;
+                }
             }
         }
 
@@ -286,11 +724,28 @@ void Physics3DSystem::FixedUpdate(World& world, float fixed_delta_time) {
 
     SyncTransformsToPhysics(world);
     SyncCharacterControllers(world, fixed_delta_time);
+    SyncJoints(world);
+
+    // Clear previous frame events (Task 1)
+    collision_events_.clear();
+    trigger_events_.clear();
+    auto* callback = static_cast<DseSimulationEventCallback*>(simulation_callback_);
+    if (callback) {
+        callback->collision_events.clear();
+        callback->trigger_events.clear();
+    }
 
     scene_->simulate(fixed_delta_time);
     scene_->fetchResults(true);
 
+    // Collect events from callback (Task 1)
+    if (callback) {
+        collision_events_ = std::move(callback->collision_events);
+        trigger_events_ = std::move(callback->trigger_events);
+    }
+
     SyncPhysicsToTransforms(world);
+    CheckBrokenJoints(world);
 }
 
 
@@ -721,6 +1176,118 @@ glm::vec3 Physics3DSystem::GetCharacterPosition(entt::entity entity) const {
     return glm::vec3(pos.x, pos.y - cc.radius - cc.height * 0.5f, pos.z);
 }
 
+
+// ---------------------------------------------------------------------------
+// Joint / Constraint 支持（Task 5）
+// 注意：需要 PhysXExtensions 库（当前预编译版 CRT 不兼容，暂时禁用）
+// ---------------------------------------------------------------------------
+
+#ifdef DSE_HAS_PHYSX_EXTENSIONS
+void Physics3DSystem::SyncJoints(World& world) {
+    if (!physics_ || !scene_) return;
+
+    auto view = world.registry().view<Joint3DComponent>();
+    for (auto entity : view) {
+        auto& jc = view.get<Joint3DComponent>(entity);
+        if (jc.runtime_joint || jc.is_broken) continue;
+
+        // Get actor A (this entity must have RigidBody3D)
+        auto* rb_a = world.registry().try_get<RigidBody3DComponent>(entity);
+        if (!rb_a || !rb_a->runtime_body) continue;
+        PxRigidActor* actor_a = static_cast<PxRigidActor*>(rb_a->runtime_body);
+
+        // Get actor B (connected entity, 0 = world anchor)
+        PxRigidActor* actor_b = nullptr;
+        if (jc.connected_entity_id != 0) {
+            entt::entity other = static_cast<entt::entity>(jc.connected_entity_id);
+            if (world.registry().valid(other)) {
+                auto* rb_b = world.registry().try_get<RigidBody3DComponent>(other);
+                if (rb_b && rb_b->runtime_body)
+                    actor_b = static_cast<PxRigidActor*>(rb_b->runtime_body);
+            }
+            if (!actor_b) continue; // connected entity not ready yet
+        }
+
+        PxTransform frame_a(PxVec3(jc.anchor.x, jc.anchor.y, jc.anchor.z));
+        PxTransform frame_b(PxVec3(jc.connected_anchor.x, jc.connected_anchor.y, jc.connected_anchor.z));
+
+        PxJoint* joint = nullptr;
+
+        switch (jc.type) {
+            case Joint3DType::Fixed: {
+                joint = PxFixedJointCreate(*physics_, actor_a, frame_a, actor_b, frame_b);
+                break;
+            }
+            case Joint3DType::Hinge: {
+                auto* rev = PxRevoluteJointCreate(*physics_, actor_a, frame_a, actor_b, frame_b);
+                if (rev && jc.use_limits) {
+                    float lower_rad = jc.lower_limit * (kPi / 180.0f);
+                    float upper_rad = jc.upper_limit * (kPi / 180.0f);
+                    rev->setLimit(PxJointAngularLimitPair(lower_rad, upper_rad));
+                    rev->setRevoluteJointFlag(PxRevoluteJointFlag::eLIMIT_ENABLED, true);
+                }
+                joint = rev;
+                break;
+            }
+            case Joint3DType::Distance: {
+                auto* dist = PxDistanceJointCreate(*physics_, actor_a, frame_a, actor_b, frame_b);
+                if (dist) {
+                    dist->setMinDistance(jc.min_distance);
+                    dist->setMaxDistance(jc.max_distance);
+                    dist->setDistanceJointFlag(PxDistanceJointFlag::eMIN_DISTANCE_ENABLED, true);
+                    dist->setDistanceJointFlag(PxDistanceJointFlag::eMAX_DISTANCE_ENABLED, true);
+                }
+                joint = dist;
+                break;
+            }
+            case Joint3DType::Spring: {
+                auto* d6 = PxD6JointCreate(*physics_, actor_a, frame_a, actor_b, frame_b);
+                if (d6) {
+                    // Free all linear axes with spring drive
+                    d6->setMotion(PxD6Axis::eX, PxD6Motion::eFREE);
+                    d6->setMotion(PxD6Axis::eY, PxD6Motion::eFREE);
+                    d6->setMotion(PxD6Axis::eZ, PxD6Motion::eFREE);
+                    PxD6JointDrive drive(jc.spring_stiffness, jc.spring_damping, PX_MAX_F32, true);
+                    d6->setDrive(PxD6Drive::eX, drive);
+                    d6->setDrive(PxD6Drive::eY, drive);
+                    d6->setDrive(PxD6Drive::eZ, drive);
+                    // Drive target is identity (pull back to anchor)
+                    d6->setDrivePosition(PxTransform(PxIdentity));
+                }
+                joint = d6;
+                break;
+            }
+        }
+
+        if (joint) {
+            if (jc.break_force < FLT_MAX || jc.break_torque < FLT_MAX) {
+                joint->setBreakForce(jc.break_force, jc.break_torque);
+            }
+            jc.runtime_joint = joint;
+        }
+    }
+}
+
+void Physics3DSystem::CheckBrokenJoints(World& world) {
+    auto view = world.registry().view<Joint3DComponent>();
+    for (auto entity : view) {
+        auto& jc = view.get<Joint3DComponent>(entity);
+        if (!jc.runtime_joint || jc.is_broken) continue;
+
+        PxJoint* joint = static_cast<PxJoint*>(jc.runtime_joint);
+        if (joint->getConstraintFlags() & PxConstraintFlag::eBROKEN) {
+            jc.is_broken = true;
+            joint->release();
+            jc.runtime_joint = nullptr;
+            DEBUG_LOG_INFO("[Physics3D] Joint on entity {} has broken", static_cast<uint32_t>(entity));
+        }
+    }
+}
+#else
+// Stub implementations when PhysXExtensions is not available
+void Physics3DSystem::SyncJoints(World& /*world*/) {}
+void Physics3DSystem::CheckBrokenJoints(World& /*world*/) {}
+#endif // DSE_HAS_PHYSX_EXTENSIONS
 
 } // namespace physics3d
 } // namespace dse

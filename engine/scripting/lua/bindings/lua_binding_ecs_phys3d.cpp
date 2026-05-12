@@ -21,6 +21,7 @@ extern "C" {
 
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -572,6 +573,240 @@ int L_EcsTerrainGetHeight(lua_State* L) {
 }
 
 // ============================================================
+// 碰撞/触发事件查询（Task 1）
+// ============================================================
+
+/// physics_3d_get_collision_events() -> table of {type, entity_a, entity_b, px, py, pz, nx, ny, nz, impulse}
+int L_Physics3DGetCollisionEvents(lua_State* L) {
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        const auto& events = physics->GetCollisionEvents();
+        lua_newtable(L);
+        for (size_t i = 0; i < events.size(); ++i) {
+            const auto& e = events[i];
+            lua_newtable(L);
+            lua_pushinteger(L, static_cast<int>(e.type));
+            lua_setfield(L, -2, "type");
+            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.entity_a)));
+            lua_setfield(L, -2, "entity_a");
+            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.entity_b)));
+            lua_setfield(L, -2, "entity_b");
+            lua_pushnumber(L, e.contact_point.x); lua_setfield(L, -2, "px");
+            lua_pushnumber(L, e.contact_point.y); lua_setfield(L, -2, "py");
+            lua_pushnumber(L, e.contact_point.z); lua_setfield(L, -2, "pz");
+            lua_pushnumber(L, e.contact_normal.x); lua_setfield(L, -2, "nx");
+            lua_pushnumber(L, e.contact_normal.y); lua_setfield(L, -2, "ny");
+            lua_pushnumber(L, e.contact_normal.z); lua_setfield(L, -2, "nz");
+            lua_pushnumber(L, e.impulse); lua_setfield(L, -2, "impulse");
+            lua_rawseti(L, -2, static_cast<int>(i + 1));
+        }
+        return 1;
+    }
+#endif
+    lua_newtable(L);
+    return 1;
+}
+
+/// physics_3d_get_trigger_events() -> table of {type, trigger_entity, other_entity}
+int L_Physics3DGetTriggerEvents(lua_State* L) {
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        const auto& events = physics->GetTriggerEvents();
+        lua_newtable(L);
+        for (size_t i = 0; i < events.size(); ++i) {
+            const auto& e = events[i];
+            lua_newtable(L);
+            lua_pushinteger(L, static_cast<int>(e.type));
+            lua_setfield(L, -2, "type");
+            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.trigger_entity)));
+            lua_setfield(L, -2, "trigger_entity");
+            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.other_entity)));
+            lua_setfield(L, -2, "other_entity");
+            lua_rawseti(L, -2, static_cast<int>(i + 1));
+        }
+        return 1;
+    }
+#endif
+    lua_newtable(L);
+    return 1;
+}
+
+// ============================================================
+// MeshCollider3D 绑定（Task 3）
+// ============================================================
+
+/// add_mesh_collider_3d(entity, convex, [is_trigger])
+int L_EcsAddMeshCollider3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool convex = helper::OptBool(L, 2, false);
+    bool is_trigger = helper::OptBool(L, 3, false);
+    auto& mc = world->registry().emplace_or_replace<MeshCollider3DComponent>(e);
+    mc.convex = convex;
+    mc.is_trigger = is_trigger;
+    return 0;
+}
+
+// ============================================================
+// CapsuleCollider3D 绑定（Task 4）
+// ============================================================
+
+/// add_capsule_collider_3d(entity, radius, height, [direction, is_trigger])
+int L_EcsAddCapsuleCollider3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float radius = helper::CheckFloat(L, 2);
+    float height = helper::CheckFloat(L, 3);
+    int direction = helper::OptInt(L, 4, 1); // default Y-axis
+    bool is_trigger = helper::OptBool(L, 5, false);
+    auto& cap = world->registry().emplace_or_replace<CapsuleCollider3DComponent>(e);
+    cap.radius = radius;
+    cap.height = height;
+    cap.direction = direction;
+    cap.is_trigger = is_trigger;
+    return 0;
+}
+
+// ============================================================
+// Joint3D 绑定（Task 5）
+// ============================================================
+
+/// add_joint_3d(entity_a, entity_b_id, type, ax,ay,az, bx,by,bz, [break_force, break_torque])
+int L_EcsAddJoint3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int connected_id = helper::CheckInt(L, 2);
+    int type = helper::OptInt(L, 3, 0);
+    float ax = helper::OptFloat(L, 4, 0.0f);
+    float ay = helper::OptFloat(L, 5, 0.0f);
+    float az = helper::OptFloat(L, 6, 0.0f);
+    float bx = helper::OptFloat(L, 7, 0.0f);
+    float by = helper::OptFloat(L, 8, 0.0f);
+    float bz = helper::OptFloat(L, 9, 0.0f);
+    float bf = helper::OptFloat(L, 10, FLT_MAX);
+    float bt = helper::OptFloat(L, 11, FLT_MAX);
+
+    auto& jc = world->registry().emplace_or_replace<Joint3DComponent>(e);
+    jc.type = static_cast<Joint3DType>(type);
+    jc.connected_entity_id = static_cast<uint32_t>(connected_id);
+    jc.anchor = glm::vec3(ax, ay, az);
+    jc.connected_anchor = glm::vec3(bx, by, bz);
+    jc.break_force = bf;
+    jc.break_torque = bt;
+    return 0;
+}
+
+/// set_joint_3d_hinge_limits(entity, lower_deg, upper_deg)
+int L_EcsSetJoint3DHingeLimits(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint3DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->use_limits = true;
+    jc->lower_limit = helper::CheckFloat(L, 2);
+    jc->upper_limit = helper::CheckFloat(L, 3);
+    return 0;
+}
+
+/// set_joint_3d_spring(entity, stiffness, damping)
+int L_EcsSetJoint3DSpring(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint3DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->spring_stiffness = helper::CheckFloat(L, 2);
+    jc->spring_damping = helper::CheckFloat(L, 3);
+    return 0;
+}
+
+/// set_joint_3d_distance(entity, min_dist, max_dist)
+int L_EcsSetJoint3DDistance(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* jc = helper::TryGetComponent<Joint3DComponent>(*world, e);
+    if (!jc) return 0;
+    jc->min_distance = helper::CheckFloat(L, 2);
+    jc->max_distance = helper::CheckFloat(L, 3);
+    return 0;
+}
+
+/// is_joint_3d_broken(entity) -> bool
+int L_EcsIsJoint3DBroken(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* jc = helper::TryGetComponentConst<Joint3DComponent>(*world, e);
+    lua_pushboolean(L, (jc && jc->is_broken) ? 1 : 0);
+    return 1;
+}
+
+// ============================================================
+// 碰撞层设置（Task 6）
+// ============================================================
+
+/// set_collision_layer(entity, layer, mask)
+int L_EcsSetCollisionLayer(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int layer = helper::CheckInt(L, 2);
+    int mask = helper::CheckInt(L, 3);
+
+    auto* rb = helper::TryGetComponent<RigidBody3DComponent>(*world, e);
+    if (!rb) return 0;
+    rb->collision_layer = static_cast<uint16_t>(layer);
+    rb->collision_mask = static_cast<uint16_t>(mask);
+
+#ifdef DSE_ENABLE_PHYSX
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
+        physics->SetCollisionLayer(e, static_cast<uint16_t>(layer), static_cast<uint16_t>(mask));
+    }
+#endif
+    return 0;
+}
+
+/// set_collider_trigger(entity, is_trigger) — 设置碰撞体 trigger 标志
+int L_EcsSetColliderTrigger(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool trigger = helper::CheckBool(L, 2);
+    if (auto* box = helper::TryGetComponent<BoxCollider3DComponent>(*world, e)) box->is_trigger = trigger;
+    if (auto* sph = helper::TryGetComponent<SphereCollider3DComponent>(*world, e)) sph->is_trigger = trigger;
+    if (auto* cap = helper::TryGetComponent<CapsuleCollider3DComponent>(*world, e)) cap->is_trigger = trigger;
+    if (auto* mc = helper::TryGetComponent<MeshCollider3DComponent>(*world, e)) mc->is_trigger = trigger;
+    return 0;
+}
+
+/// set_collider_material(entity, friction, bounciness)
+int L_EcsSetColliderMaterial(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float friction = helper::CheckFloat(L, 2);
+    float bounciness = helper::CheckFloat(L, 3);
+    if (auto* box = helper::TryGetComponent<BoxCollider3DComponent>(*world, e)) {
+        box->friction = friction; box->bounciness = bounciness;
+    }
+    if (auto* sph = helper::TryGetComponent<SphereCollider3DComponent>(*world, e)) {
+        sph->friction = friction; sph->bounciness = bounciness;
+    }
+    if (auto* cap = helper::TryGetComponent<CapsuleCollider3DComponent>(*world, e)) {
+        cap->friction = friction; cap->bounciness = bounciness;
+    }
+    if (auto* mc = helper::TryGetComponent<MeshCollider3DComponent>(*world, e)) {
+        mc->friction = friction; mc->bounciness = bounciness;
+    }
+    return 0;
+}
+
+// ============================================================
 // Overlap Query 绑定
 // ============================================================
 
@@ -697,6 +932,24 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"terrain_get_height",             L_EcsTerrainGetHeight},
         {"physics_3d_overlap_sphere",      L_Physics3DOverlapSphere},
         {"physics_3d_overlap_box",         L_Physics3DOverlapBox},
+        // Task 1: Collision/Trigger events
+        {"physics_3d_get_collision_events", L_Physics3DGetCollisionEvents},
+        {"physics_3d_get_trigger_events",   L_Physics3DGetTriggerEvents},
+        // Task 3: MeshCollider3D
+        {"add_mesh_collider_3d",            L_EcsAddMeshCollider3D},
+        // Task 4: CapsuleCollider3D
+        {"add_capsule_collider_3d",         L_EcsAddCapsuleCollider3D},
+        // Task 5: Joints
+        {"add_joint_3d",                    L_EcsAddJoint3D},
+        {"set_joint_3d_hinge_limits",       L_EcsSetJoint3DHingeLimits},
+        {"set_joint_3d_spring",             L_EcsSetJoint3DSpring},
+        {"set_joint_3d_distance",           L_EcsSetJoint3DDistance},
+        {"is_joint_3d_broken",              L_EcsIsJoint3DBroken},
+        // Task 6: Collision layers
+        {"set_collision_layer",             L_EcsSetCollisionLayer},
+        // Helpers
+        {"set_collider_trigger",            L_EcsSetColliderTrigger},
+        {"set_collider_material",           L_EcsSetColliderMaterial},
     });
 }
 

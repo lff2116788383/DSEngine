@@ -587,7 +587,15 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
         float approx_size = std::cbrt(frag_desc.volume) * 0.5f;
         if (approx_size < 0.05f) approx_size = 0.05f;
         box.size = glm::vec3(approx_size);
-        box.friction = 0.5f;
+        // Inherit material from source entity's collider (Task 2)
+        if (world.registry().valid(source_entity) && world.registry().all_of<BoxCollider3DComponent>(source_entity)) {
+            auto& src_box = world.registry().get<BoxCollider3DComponent>(source_entity);
+            box.friction = src_box.friction;
+            box.bounciness = src_box.bounciness;
+        } else {
+            box.friction = 0.5f;
+            box.bounciness = 0.0f;
+        }
         world.registry().emplace<BoxCollider3DComponent>(frag_entity, box);
 
         // Fragment tag for lifecycle management
