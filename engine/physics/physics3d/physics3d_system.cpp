@@ -5,9 +5,8 @@
 #include "engine/base/debug.h"
 #include <PxPhysicsAPI.h>
 #include <cooking/PxCooking.h>
-// PhysXExtensions_static_64.lib 预编译为 /MTd，与项目 /MD 不兼容
-// Joint 功能需待兼容的 Extensions 库后启用
-// #define DSE_HAS_PHYSX_EXTENSIONS 1
+// PhysXExtensions: 已从源码编译 /MD 版本
+#define DSE_HAS_PHYSX_EXTENSIONS 1
 #ifdef DSE_HAS_PHYSX_EXTENSIONS
 #include <extensions/PxFixedJoint.h>
 #include <extensions/PxRevoluteJoint.h>
