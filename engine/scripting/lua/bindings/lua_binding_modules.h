@@ -20,6 +20,7 @@ void RegisterUiBindings(lua_State* L);
 void RegisterAssetsBindings(lua_State* L);
 void RegisterAppBindings(lua_State* L);
 void RegisterMetricsBindings(lua_State* L);
+void RegisterDSSLBindings(lua_State* L);
 
 // ECS 子域注册（由 RegisterEcsBindings 内部调用，栈顶需为 ecs 表）
 void RegisterEcsCoreBindings(lua_State* L);

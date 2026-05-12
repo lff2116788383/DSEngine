@@ -1,0 +1,16 @@
+shader_type surface;
+render_mode cull_disabled;
+
+uniform sampler2D albedo_tex : filter_linear_mipmap;
+uniform float wind_strength : range(0.0, 2.0) = 0.5;
+uniform float wind_speed : range(0.0, 5.0) = 2.0;
+
+void vertex() {
+    float wave = sin(VERTEX.x * 2.0 + TIME * wind_speed) * wind_strength;
+    wave *= UV.x;
+    VERTEX.z += wave;
+}
+
+void surface() {
+    ALBEDO = sample(albedo_tex, UV).rgb;
+}

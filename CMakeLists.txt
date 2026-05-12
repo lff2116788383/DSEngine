@@ -465,6 +465,9 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
     target_include_directories(dse_engine PRIVATE "${SHADER_GEN_DIR}")
 endif()
 
+# 工具链：DSSL Compiler (.dssl → GLSL 450)
+add_subdirectory(tools/dssl_compiler)
+
 # ---------------------------------------------------------------------------
 # PUBLIC interface include directories（供下游 target_link_libraries 自动继承）
 # BUILD_INTERFACE  : 源码编译时使用的路径

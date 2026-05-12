@@ -605,3 +605,90 @@ Phase 5      持续     文档 + 示例库 + 开发者指南
 | 语法基础 | **GLSL 子集 + 声明式元数据** | 全新语法 | 降低学习曲线，GLSL 开发者零成本上手 |
 | 光照入口 | **注入式 `light()` 回调** | 完全自定义 | Godot 验证过的模式，平衡灵活性和易用性 |
 | 内置 shader | **保留 GLSL 450 直写** | 全部迁移到 DSSL | 引擎内部需要最大控制力 |
+
+---
+
+## 十、实施状态（2026-05-12 更新）
+
+### ✅ Phase 1 — 解析器 + 代码生成 + CLI + 端到端验证
+
+| 组件 | 文件 | 状态 |
+|------|------|------|
+| DSSL Parser | `tools/dssl_compiler/dssl_parser.h/cpp` | ✅ 完成 |
+| Code Generator | `tools/dssl_compiler/dssl_codegen.h/cpp` | ✅ 完成 |
+| CLI Tool | `tools/dssl_compiler/dssl_compiler.cpp` | ✅ 完成 |
+| CMake 集成 | `CMakeLists.txt` → `add_subdirectory(tools/dssl_compiler)` | ✅ 完成 |
+
+**编译命令**：
+```bash
+# Step 1: .dssl → GLSL 450
+bin/dse_dssl_compiler --input-dir engine/render/shaders/dssl --output-dir engine/render/shaders/dssl/generated --meta
+
+# Step 2: GLSL 450 → SPIR-V / GLSL 330 / HLSL
+bin/dse_shader_compiler --input-dir engine/render/shaders/dssl/generated --output-dir engine/render/shaders/dssl/compiled --embed
+```
+
+### ✅ Phase 2 — 内置模板库
+
+| DSSL 文件 | 类型 | 输出 | 说明 |
+|-----------|------|------|------|
+| `pbr_default.dssl` | surface | vert + frag | PBR 纹理 + ORM |
+| `half_lambert_kf.dssl` | surface | vert + frag | KF 风格自定义 light() |
+| `emissive.dssl` | surface | vert + frag | 自发光材质 |
+| `flag_wave.dssl` | surface | vert + frag | 顶点动画 (vertex() + TIME) |
+| `unlit_default.dssl` | unlit | vert + frag | 无光照 |
+| `grayscale_post.dssl` | postprocess | frag | 全屏灰度后处理 |
+
+**全部 6 DSSL → 11 GLSL 450 → SPIR-V + GLSL 330 + HLSL 零错误通过。**
+
+### ✅ Phase 3 — 运行时 MaterialInstance + Lua 绑定
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| DSSLMaterialInstance | `engine/render/material/dssl_material_instance.h/cpp` | 存储 uniform 值，映射到引擎标准属性 |
+| DSSLMaterialLoader | `engine/render/material/dssl_material_loader.h/cpp` | 从 .dssl 文件创建实例，缓存模板 |
+| Lua 绑定 | `engine/scripting/lua/bindings/lua_binding_dssl.cpp` | 全局 `dssl` 表 |
+
+#### Lua API
+
+```lua
+-- 加载 DSSL 材质（解析 uniform 声明，设置默认值）
+local mat_id = dssl.load_material("path/to/material.dssl")
+
+-- 创建额外实例（共享模板，独立值）
+local mat_id2 = dssl.create_instance("path/to/material.dssl")
+
+-- 设置 uniform 值
+dssl.set_float(mat_id, "roughness", 0.7)
+dssl.set_color(mat_id, "albedo_color", 0.8, 0.3, 0.2, 1.0)
+dssl.set_vec3(mat_id, "emission_color", 1.0, 0.5, 0.0)
+dssl.set_texture(mat_id, "albedo_tex", "textures/brick.png")
+dssl.set_texture_handle(mat_id, "albedo_tex", texture_handle)
+
+-- 读取 uniform 值
+local r = dssl.get_float(mat_id, "roughness")
+local r, g, b, a = dssl.get_color(mat_id, "albedo_color")
+
+-- 应用到 MeshRendererComponent（自动映射到引擎标准属性）
+dssl.apply_material(entity, mat_id)
+```
+
+#### Uniform 名称 → 引擎属性映射
+
+| DSSL Uniform 名称 | 引擎属性 |
+|-------------------|---------|
+| `albedo_color` / `base_color` | `MeshRendererComponent::color` |
+| `emission_color` / `emissive_color` | `MeshRendererComponent::emissive` |
+| `metallic` | `MeshRendererComponent::metallic` |
+| `roughness` | `MeshRendererComponent::roughness` |
+| `ao` | `MeshRendererComponent::ao` |
+| `normal_strength` | `MeshRendererComponent::normal_strength` |
+| `albedo_tex` / `base_texture` | `MeshRendererComponent::albedo_texture_handle` |
+| `normal_tex` / `normal_map` | `MeshRendererComponent::normal_texture_handle` |
+| `orm_tex` / `metallic_roughness_tex` | `MeshRendererComponent::metallic_roughness_texture_handle` |
+| `emissive_tex` / `emission_tex` | `MeshRendererComponent::emissive_texture_handle` |
+| `occlusion_tex` | `MeshRendererComponent::occlusion_texture_handle` |
+
+### Phase 4 — 编辑器 Inspector（暂不实施）
+
+### ✅ Phase 5 — 文档（本文档）

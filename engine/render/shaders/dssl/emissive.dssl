@@ -1,0 +1,13 @@
+shader_type surface;
+render_mode blend_disabled;
+
+uniform vec4 emission_color : color = vec4(1.0, 0.2, 0.0, 1.0);
+uniform float emission_strength : range(0.0, 10.0) = 2.0;
+uniform sampler2D emission_tex : filter_linear_mipmap, black_default;
+
+void surface() {
+    ALBEDO = vec3(0.0);
+    METALLIC = 0.0;
+    ROUGHNESS = 1.0;
+    EMISSION = sample(emission_tex, UV).rgb * emission_color.rgb * emission_strength;
+}

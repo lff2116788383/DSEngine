@@ -39,6 +39,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_setfield(L, -2, "metrics");
 
     lua_setglobal(L, "dse");
+
+    // DSSL 材质系统 — 独立全局表 "dssl"
+    RegisterDSSLBindings(L);
 }
 
 }

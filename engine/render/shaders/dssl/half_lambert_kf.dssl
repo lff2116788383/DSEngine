@@ -1,0 +1,19 @@
+shader_type surface;
+render_mode diffuse_half_lambert, specular_disabled, blend_disabled;
+
+uniform sampler2D albedo_tex : filter_linear_mipmap;
+uniform sampler2D spec_tex : filter_linear_mipmap, black_default;
+
+void surface() {
+    ALBEDO = sample(albedo_tex, UV).rgb * COLOR.rgb;
+    ROUGHNESS = 1.0;
+}
+
+void light() {
+    float half_lambert = dot(WORLD_NORMAL, LIGHT_DIR) * 0.5 + 0.5;
+    DIFFUSE_LIGHT += ALBEDO * half_lambert * LIGHT_COLOR * SHADOW;
+
+    vec3 R = reflect(-LIGHT_DIR, WORLD_NORMAL);
+    float spec = pow(max(dot(R, VIEW_DIR), 0.0), 100.0);
+    SPECULAR_LIGHT += sample(spec_tex, UV).rgb * spec;
+}
