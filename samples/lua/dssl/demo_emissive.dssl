@@ -1,0 +1,16 @@
+// DSSL Demo — 自发光材质
+shader_type surface;
+render_mode blend_disabled;
+
+uniform vec4 albedo_color : color = vec4(0.1, 0.1, 0.1, 1.0);
+uniform vec3 emission_color : color = vec3(1.0, 0.3, 0.0);
+uniform float emission_strength : range(0.0, 10.0) = 3.0;
+uniform float metallic : range(0.0, 1.0) = 0.8;
+uniform float roughness : range(0.04, 1.0) = 0.2;
+
+void surface() {
+    ALBEDO = albedo_color.rgb;
+    METALLIC = metallic;
+    ROUGHNESS = roughness;
+    EMISSION = emission_color * emission_strength;
+}

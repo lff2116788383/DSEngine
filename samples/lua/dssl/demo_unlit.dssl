@@ -1,0 +1,11 @@
+// DSSL Demo — 无光照材质
+shader_type unlit;
+render_mode blend_mix;
+
+uniform vec4 albedo_color : color = vec4(0.0, 0.8, 1.0, 0.8);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+
+void fragment() {
+    vec4 tex = sample(albedo_tex, UV);
+    FRAG_COLOR = tex * albedo_color * COLOR;
+}

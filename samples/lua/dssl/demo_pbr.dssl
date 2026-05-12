@@ -1,0 +1,17 @@
+// DSSL Demo — PBR 材质
+// 验证: load_material → set_color → set_float → set_texture → apply_material
+shader_type surface;
+render_mode blend_disabled, cull_back;
+
+uniform vec4 albedo_color : color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform float metallic : range(0.0, 1.0) = 0.0;
+uniform float roughness : range(0.04, 1.0) = 0.5;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb;
+    ALPHA = tex.a * albedo_color.a;
+    METALLIC = metallic;
+    ROUGHNESS = roughness;
+}
