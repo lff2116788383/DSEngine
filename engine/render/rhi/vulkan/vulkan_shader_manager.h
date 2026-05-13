@@ -143,6 +143,7 @@ public:
     unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
     unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
     unsigned int color_grading_shader_handle() const { return color_grading_shader_handle_; }
+    unsigned int taa_resolve_shader_handle() const { return taa_resolve_shader_handle_; }
 
     /// 着色器程序计数
     std::size_t programs_created() const { return programs_created_; }
@@ -204,6 +205,7 @@ private:
     unsigned int tonemapping_shader_handle_ = 0;
     unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
     unsigned int color_grading_shader_handle_ = 0;
+    unsigned int taa_resolve_shader_handle_ = 0;
 
     /// Compute 着色器程序
     std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;

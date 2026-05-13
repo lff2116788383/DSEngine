@@ -114,8 +114,14 @@ layout(std430, set = 1, binding = 4) readonly buffer LightIndexSSBO {
 layout(std140, set = 1, binding = 5) uniform LightProbeData {
     vec4 sh_coefficients[9];
     vec4 probe_params;
+    // probe_params: x=sh_enabled, y=ibl_enabled, z=unused, w=unused
 };
-#define u_sh_enabled (probe_params.x > 0.5)
+#define u_sh_enabled  (probe_params.x > 0.5)
+#define u_ibl_enabled (probe_params.y > 0.5)
+
+// IBL: Reflection Probe (Set 2, binding 8/9)
+layout(set = 2, binding = 8) uniform samplerCube u_reflection_cubemap;
+layout(set = 2, binding = 9) uniform sampler2D   u_brdf_lut;
 
 const float PI = 3.14159265359;
 
@@ -185,6 +191,20 @@ vec3 EvaluateSH(vec3 N) {
                + sh_coefficients[7].xyz *  1.092548 * N.x * N.z
                + sh_coefficients[8].xyz *  0.546274 * (N.x * N.x - N.y * N.y);
     return max(result, vec3(0.0));
+}
+
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 SampleIBLSpecular(vec3 N, vec3 V, float roughness, vec3 F0) {
+    vec3 R = reflect(-V, N);
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefiltered = textureLod(u_reflection_cubemap, R, roughness * MAX_REFLECTION_LOD).rgb;
+    vec2 brdf = texture(u_brdf_lut, vec2(NdotV, roughness)).rg;
+    return prefiltered * (F * brdf.x + brdf.y);
 }
 
 float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
@@ -510,15 +530,17 @@ void main() {
         Lo += (kD * surface_albedo / PI + specular) * radiance * NdotL * (1.0 - spot_shadow);
     }
 
-    // 环境光
+    // 环境光（SH 间接漫反射 + IBL 间接高光）
     vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
     vec3 kS_ambient = F;
     vec3 kD_ambient = 1.0 - kS_ambient;
     kD_ambient *= 1.0 - metallic;
     vec3 irradiance = u_sh_enabled ? EvaluateSH(N) : vec3(u_ambient_intensity);
-    vec3 diffuse_ambient = irradiance * surface_albedo;
-    vec3 specular_ambient = irradiance * F0 * (1.0 - roughness);
-    vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * ao;
+    vec3 diffuse_ambient = kD_ambient * irradiance * surface_albedo;
+    vec3 specular_ambient = u_ibl_enabled
+        ? SampleIBLSpecular(N, V, roughness, F0)
+        : (irradiance * F0 * (1.0 - roughness));
+    vec3 ambient = (diffuse_ambient + specular_ambient) * ao;
     vec3 color = ambient + Lo + surface_emissive;
 
     color = color / (color + vec3(1.0));

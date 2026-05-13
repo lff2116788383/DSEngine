@@ -49,6 +49,8 @@
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/light_buffer.h"
 #include "engine/render/cluster_grid.h"
+#include "engine/render/light_probe_system.h"
+#include "engine/render/reflection_probe_system.h"
 
 class AssetManager;
 
@@ -286,6 +288,18 @@ private:
     /// Clustered Forward+ 光源缓冲（SSBO）
     dse::render::LightBuffer light_buffer_;
     dse::render::ClusterGrid cluster_grid_;
+
+    /// Light Probe SH Bake 系统
+    dse::render::LightProbeSystem light_probe_system_;
+
+    /// Reflection Probe + IBL 系统
+    dse::render::ReflectionProbeSystem reflection_probe_system_;
+
+    /// TAA 帧计数器（跨帧 jitter 序列）
+    int taa_frame_index_ = 0;
+
+    /// TAA Pass 弱引用（注册后从 registered_passes_ 中查找）
+    dse::render::TAAPass* taa_pass_ = nullptr;
 
     /// 渲染 Pass 共享上下文
     dse::render::RenderPassContext render_pass_context_;

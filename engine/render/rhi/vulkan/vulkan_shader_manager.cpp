@@ -714,6 +714,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] ColorGrading shader creation failed");
     }
+
+    // TAA Resolve shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kTaaResolveFS;
+        taa_resolve_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (taa_resolve_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] TAA Resolve shader created: handle={}", taa_resolve_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] TAA Resolve shader creation failed");
+    }
 }
 
 // ============================================================================

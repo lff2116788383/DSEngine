@@ -1168,6 +1168,43 @@ void main() {
 }
 )";
 
+/// TAA Resolve — 将当前帧与历史帧混合（Variance Clipping 邻域约束）
+constexpr const char* kTaaResolveFS = R"(
+layout(set = 2, binding = 5) uniform sampler2D u_history;
+layout(push_constant) uniform TaaParams {
+    float u_blend_factor;    // 典型值 0.1（90% 历史）
+    float u_jitter_x;
+    float u_jitter_y;
+    int   u_frame_index;
+};
+void main() {
+    vec2 uv = vTexCoords - vec2(u_jitter_x, u_jitter_y);
+    vec3 current = texture(screenTexture, vTexCoords).rgb;
+
+    // 邻域 3×3 方差裁剪（防止 ghosting）
+    vec2 texel = 1.0 / vec2(textureSize(screenTexture, 0));
+    vec3 m1 = vec3(0.0), m2 = vec3(0.0);
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            vec3 s = texture(screenTexture, vTexCoords + vec2(dx, dy) * texel).rgb;
+            m1 += s;
+            m2 += s * s;
+        }
+    }
+    m1 /= 9.0;
+    vec3 sigma = sqrt(max(m2 / 9.0 - m1 * m1, vec3(0.0)));
+    vec3 aabb_min = m1 - 1.25 * sigma;
+    vec3 aabb_max = m1 + 1.25 * sigma;
+
+    // 采样历史帧（双线性，使用去抖动后 uv）
+    vec3 history = texture(u_history, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
+    history = clamp(history, aabb_min, aabb_max);
+
+    float alpha = u_frame_index < 2 ? 1.0 : u_blend_factor;
+    FragColor = vec4(mix(history, current, alpha), 1.0);
+}
+)";
+
 } // namespace vulkan_shaders
 } // namespace render
 } // namespace dse

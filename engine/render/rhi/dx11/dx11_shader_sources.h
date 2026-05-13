@@ -1436,6 +1436,55 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// TAA Resolve 像素着色器 — Variance Clipping
+// ============================================================
+
+constexpr const char* kTaaResolvePS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D u_history     : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer TaaParams : register(b0) {
+    float u_blend_factor;
+    float u_jitter_x;
+    float u_jitter_y;
+    int   u_frame_index;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float2 uv = input.uv - float2(u_jitter_x, u_jitter_y);
+    float3 current = screenTexture.Sample(u_sampler, input.uv).rgb;
+
+    uint tw, th;
+    screenTexture.GetDimensions(tw, th);
+    float2 texel = float2(1.0f / tw, 1.0f / th);
+
+    float3 m1 = 0.0f, m2 = 0.0f;
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            float3 s = screenTexture.Sample(u_sampler, input.uv + float2(dx, dy) * texel).rgb;
+            m1 += s;
+            m2 += s * s;
+        }
+    }
+    m1 /= 9.0f;
+    float3 sigma = sqrt(max(m2 / 9.0f - m1 * m1, 0.0f));
+
+    float2 hist_uv = clamp(uv, 0.0f, 1.0f);
+    float3 history = u_history.Sample(u_sampler, hist_uv).rgb;
+    history = clamp(history, m1 - 1.25f * sigma, m1 + 1.25f * sigma);
+
+    float alpha = (u_frame_index < 2) ? 1.0f : u_blend_factor;
+    return float4(lerp(history, current, alpha), 1.0f);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

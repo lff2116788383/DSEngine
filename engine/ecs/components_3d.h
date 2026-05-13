@@ -117,6 +117,10 @@ struct PostProcessComponent {
     // FXAA
     bool fxaa_enabled = true;
 
+    // TAA (Temporal Anti-Aliasing)
+    bool taa_enabled = false;
+    float taa_blend_factor = 0.1f;
+
     // Contact Shadow
     bool contact_shadow_enabled = false;
     float contact_shadow_strength = 0.5f;

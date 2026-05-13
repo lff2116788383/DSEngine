@@ -62,12 +62,17 @@ struct RenderPassContext {
         unsigned int ssao_blur = 0;
         unsigned int contact_shadow = 0;
         unsigned int fxaa = 0;
+        unsigned int taa = 0;               // TAA resolve 输出 RT
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
     } render_targets;
 
     /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
     bool fxaa_active = false;
+    bool taa_active = false;
+
+    /// TAA jitter（每帧由 TAAPass 更新，注入到投影矩阵）
+    glm::vec2 taa_jitter = {};
 
     /// Auto Exposure 帧状态
     int lum_ping_pong_index = 0;          // 当前帧写入哪个 1x1 RT (0 or 1)

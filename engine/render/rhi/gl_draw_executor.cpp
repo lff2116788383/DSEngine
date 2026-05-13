@@ -1355,6 +1355,32 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     FragColor = vec4(rgbB, 1.0);
             }
         )";
+    } else if (effect_name == "taa_resolve") {
+        fs_src += R"(
+            uniform sampler2D u_history;
+            uniform float u_blend_factor;
+            uniform float u_jitter_x;
+            uniform float u_jitter_y;
+            uniform int u_frame_index;
+            void main() {
+                vec2 uv = TexCoords - vec2(u_jitter_x, u_jitter_y);
+                vec3 current = texture(screenTexture, TexCoords).rgb;
+                vec2 texel = 1.0 / vec2(textureSize(screenTexture, 0));
+                vec3 m1 = vec3(0.0), m2 = vec3(0.0);
+                for (int dx = -1; dx <= 1; ++dx) {
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        vec3 s = texture(screenTexture, TexCoords + vec2(dx, dy) * texel).rgb;
+                        m1 += s; m2 += s * s;
+                    }
+                }
+                m1 /= 9.0;
+                vec3 sigma = sqrt(max(m2 / 9.0 - m1 * m1, vec3(0.0)));
+                vec3 history = texture(u_history, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
+                history = clamp(history, m1 - 1.25 * sigma, m1 + 1.25 * sigma);
+                float alpha = (u_frame_index < 2) ? 1.0 : u_blend_factor;
+                FragColor = vec4(mix(history, current, alpha), 1.0);
+            }
+        )";
     } else if (effect_name == "ui_overlay") {
         fs_src += R"(
             void main() {
@@ -1529,6 +1555,16 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         }
     } else if (effect_name == "fxaa" && params.size() >= 2) {
         glUniform2f(glGetUniformLocation(shader, "u_resolution"), params[0], params[1]);
+    } else if (effect_name == "taa_resolve" && params.size() >= 4) {
+        // params: [history_tex, blend_factor, jitter_x, jitter_y, frame_index]
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_history"), 1);
+        glUniform1f(glGetUniformLocation(shader, "u_blend_factor"), params[1]);
+        glUniform1f(glGetUniformLocation(shader, "u_jitter_x"), params[2]);
+        glUniform1f(glGetUniformLocation(shader, "u_jitter_y"), params[3]);
+        glUniform1i(glGetUniformLocation(shader, "u_frame_index"),
+                    params.size() >= 5 ? static_cast<int>(params[4]) : 0);
     }
 
     glDisable(GL_DEPTH_TEST);

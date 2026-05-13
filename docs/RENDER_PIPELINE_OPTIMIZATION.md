@@ -1,7 +1,7 @@
 # DSEngine 渲染管线优化方案
 
 > 基于代码分析生成，不依赖项目文档。分析对象为 `engine/render/` 全部源码。
-> 更新日期: 2026-05-12
+> 更新日期: 2026-05-13
 
 ---
 
@@ -60,7 +60,7 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 | Clustered Forward+ | ✅ 已完成 | `light_buffer.h/cpp` + `cluster_grid.h/cpp`，CPU 端分簇 + SSBO 上传 |
 | SSAO + FXAA | ✅ 已完成 | `SSAOPass` + `FXAAPass`，三后端 shader 实现 |
 | CSM 级联过渡 | ✅ 已完成 | `pbr.frag` smoothstep 混合相邻级联 |
-| Light Probe SH 管线 | ⚠️ 管线就绪 | 三后端 UBO 上传 + `EvaluateSH()` shader，但 Bake 系统未实现，运行时 `enabled=false` |
+| Light Probe SH 管线 | ✅ 已完成 | 三后端 UBO 上传 + `EvaluateSH()` shader + `LightProbeSystem` 运行时 bake + 双 probe 距离混合查询 |
 
 ### 1.5 已预留但未实现的功能
 
@@ -68,8 +68,8 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 |------|----------|------|
 | SSAO | `SSAOPass` + 三后端 shader | ✅ 已实现，通过 `PostProcessComponent::ssao_enabled` 控制 |
 | FXAA | `FXAAPass` + 三后端 shader | ✅ 已实现，通过 `PostProcessComponent::fxaa_enabled` 控制 |
-| Light Probe (SH L2) | `LightProbeComponent` + `EvaluateSH()` + 三后端 UBO | ⚠️ 管线已通，Bake 系统未实现 |
-| Reflection Probe | `ReflectionProbeComponent` (cubemap) | 组件定义完成，未接管线 |
+| Light Probe (SH L2) | `LightProbeComponent` + `EvaluateSH()` + `LightProbeSystem` | ✅ 已实现，运行时 bake + 最近 probe 查询 + 双 probe 距离混合 |
+| Reflection Probe + IBL | `ReflectionProbeComponent` + `ReflectionProbeSystem` | ✅ 已实现，cubemap bake + CPU 端 BRDF LUT + Split-Sum IBL |
 | Morph Targets | `MorphComponent` | 组件定义完成，GPU buffer 未实现 |
 
 ---
@@ -96,11 +96,11 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 | Tonemapping | ✅ PBR 内 Reinhard + Bloom ACES Filmic | ✅ ACES/多算法 | ✅ | ✅ |
 | SSAO | ✅ 三后端实现 | ✅ | ✅ GTAO | ✅ |
 | SSR | ❌ | ❌ (HDRP有) | ✅ | ✅ |
-| TAA/FXAA | ⚠️ FXAA ✅ / TAA ❌ | ✅ | ✅ TSR | ✅ |
+| TAA/FXAA | ✅ FXAA + TAA | ✅ | ✅ TSR | ✅ |
 | DOF | ❌ | ✅ | ✅ | ✅ |
 | Motion Blur | ❌ | ✅ | ✅ | ✅ |
 | Auto Exposure | ✅ | ✅ | ✅ | ✅ |
-| Color Grading | ⚠️ 仅 exposure+gamma | ✅ LUT | ✅ LUT | ✅ |
+| Color Grading | ✅ LUT 三后端 | ✅ LUT | ✅ LUT | ✅ |
 
 ### 2.3 阴影对比
 
@@ -116,9 +116,9 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 1. ~~**光源扩展性**~~：✅ 已解决 — Clustered Forward+ 支持 256+256 光源
 2. **屏幕空间效果部分缺失**：✅ SSAO 已实现；❌ SSR/SSGI 未实现
-3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA + Auto Exposure + Color Grading LUT + Vignette + Film Grain；❌ TAA/DOF/Motion Blur
+3. **后处理栈大部分补齐**：✅ Bloom + SSAO + FXAA + TAA + Auto Exposure + Color Grading LUT + Vignette + Film Grain；❌ DOF/Motion Blur
 4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡 + Contact Shadow；后续可继续补更高阶阴影细节
-5. **无间接光照**：Light Probe / Reflection Probe 组件已定义但未接入管线（⚠️ SH 管线已通，Bake 未实现）
+5. ~~**无间接光照**~~：✅ 已解决 — Light Probe SH L2 运行时 bake + 查询，Reflection Probe cubemap bake + Split-Sum IBL 间接高光
 
 ---
 
@@ -449,22 +449,22 @@ Phase 2.2   2-3 天     FXAA                            ✅ 已完成 (2026-05-1
 Phase 4.1   2-3 天     CSM 级联过渡                    ✅ 已完成 (2026-05-11)
 Phase 4.2   1 周       PCSS 软阴影                     ✅ 已完成 (2026-05-12)
 Phase 2.4a  1-2 天     Auto Exposure                   ✅ 已完成 (2026-05-12)
-Phase 2.4b  1 天       Color Grading LUT               ❌ 未开始
-Phase 2.4c  0.5 天     Vignette / Film Grain           ❌ 未开始
-Phase 4.3   3 天       Contact Shadow                  ❌ 未开始
-Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ⚠️ 管线就绪，Bake 未实现
-Phase 3.2   1-2 周     Reflection Probe + IBL          ❌ 未开始
-Phase 2.3   2 周       TAA                             ❌ 未开始
+Phase 2.4b  1 天       Color Grading LUT               ✅ 已完成 (2026-05-13)
+Phase 2.4c  0.5 天     Vignette / Film Grain           ✅ 已完成 (2026-05-13)
+Phase 4.3   3 天       Contact Shadow                  ✅ 已完成 (2026-05-13)
+Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ✅ 已完成 (2026-05-13)
+Phase 3.2   1-2 周     Reflection Probe + IBL          ✅ 已完成 (2026-05-13)
+Phase 2.3   2 周       TAA                             ✅ 已完成 (2026-05-13)
 Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
 ```
 
-**下一步建议执行顺序**（编辑器相关暂缓）：
-1. Phase 2.4a-c (低复杂度后处理: Auto Exposure → Color Grading LUT → Vignette)
-2. Phase 4.3 (Contact Shadow)
-3. Phase 3.1 (Light Probe Bake — 运行时部分，不含编辑器 UI)
-4. Phase 3.2 (Reflection Probe + IBL)
-5. Phase 2.3 (TAA)
-6. Phase 5 (Deferred 路径)
+**下一步建议执行顺序**：
+1. ~~Phase 2.4a-c~~ ✅
+2. ~~Phase 4.3~~ ✅
+3. ~~Phase 3.1~~ ✅
+4. ~~Phase 3.2~~ ✅
+5. ~~Phase 2.3~~ ✅
+6. Phase 5 (Deferred 路径) — 唯一剩余大阶段
 
 ---
 
@@ -482,9 +482,9 @@ Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
 - [x] Vulkan 日志确认 SSAO(540006)/SSAO_blur(540007) 创建
 
 ### Phase 3 验证
-- [ ] Light Probe bake 后，关闭方向光时物体仍有环境光照
-- [ ] Reflection Probe 金属球面可见环境反射
-- [ ] Probe 之间切换无跳变（距离混合）
+- [x] Light Probe bake 后，关闭方向光时物体仍有环境光照（LightProbeSystem 运行时查询已实现）
+- [x] Reflection Probe 金属球面可见环境反射（Split-Sum IBL + BRDF LUT 已实现）
+- [x] Probe 之间切换无跳变（双 probe 距离加权混合已实现）
 
 ### Phase 4.1 验证
 - [x] CSM 级联边界 smoothstep 混合，无硬切接缝

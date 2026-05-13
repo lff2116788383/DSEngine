@@ -290,6 +290,11 @@ bool FramePipeline::Init() {
         render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
+    // TAA: 全分辨率 RT
+    if (render_resources_.pp_taa_rt == 0) {
+        render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
 
     // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
     if (render_resources_.pp_lum_temp_rt == 0) {
@@ -433,6 +438,12 @@ bool FramePipeline::Init() {
     light_buffer_.Init(runtime_context_.rhi_device.get());
     cluster_grid_.Init(runtime_context_.rhi_device.get());
 
+    // Light Probe SH Bake 系统初始化
+    light_probe_system_.Init(runtime_context_.rhi_device.get());
+
+    // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
+    reflection_probe_system_.Init(runtime_context_.rhi_device.get());
+
     initialized_ = true;
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
@@ -497,6 +508,9 @@ void FramePipeline::Shutdown() {
 #endif
     cluster_grid_.Shutdown();
     light_buffer_.Shutdown();
+    light_probe_system_.Shutdown();
+    reflection_probe_system_.Shutdown(runtime_context_.rhi_device.get());
+    taa_pass_ = nullptr;
 
     asset_manager.ReleaseGpuResources();
 
@@ -610,10 +624,37 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
-    // LightProbe SH: 默认禁用（fallback 到 ambient_intensity），后续由 LightProbe 系统填充
-    {
+    // Light Probe SH: 查询最近 probe，传给 GPU UBO（无 probe 时 fallback 到 ambient_intensity）
+    if (runtime_context_.world) {
+        glm::vec3 cam_pos(0.0f);
+        auto cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
+        for (auto e : cam_view) {
+            auto& cam = cam_view.get<dse::Camera3DComponent>(e);
+            if (cam.enabled) {
+                cam_pos = cam_view.get<TransformComponent>(e).position;
+                break;
+            }
+        }
+        light_probe_system_.UpdateGlobalSH(*runtime_context_.world,
+                                            runtime_context_.rhi_device.get(), cam_pos);
+    } else {
         glm::vec4 sh_coeffs[9] = {};
         runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
+    }
+
+    // TAA: 预检测 ECS 组件，提前设置 taa_active（ForwardScenePass 需要在场景渲染前知道是否应用 jitter）
+    render_pass_context_.taa_active = false;
+    if (taa_pass_ && runtime_context_.world) {
+        auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
+        for (auto entity : pp_view) {
+            auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+            if (pp.enabled && pp.taa_enabled) {
+                render_pass_context_.taa_active = (render_pass_context_.render_targets.taa != 0);
+                break;
+            }
+        }
+        taa_pass_->UpdateJitter(taa_frame_index_++);
+        render_pass_context_.taa_jitter = taa_pass_->GetCurrentJitter();
     }
 
     // 每帧更新 Auto Exposure 所需的 delta_time
@@ -746,6 +787,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
     render_pass_context_.render_targets.contact_shadow = render_resources_.pp_contact_shadow_rt;
     render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
+    render_pass_context_.render_targets.taa       = render_resources_.pp_taa_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
     render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
     render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
@@ -775,8 +817,10 @@ void FramePipeline::BuildRenderGraphInternal() {
     // ---- 声明外部输出 ----
     auto main_color  = render_graph_dag_.DeclareResource("main_color");
     auto scene_color = render_graph_dag_.DeclareResource("scene_color");
+    auto taa_color   = render_graph_dag_.DeclareResource("taa_color");
     render_graph_dag_.MarkOutput(main_color);
     render_graph_dag_.MarkOutput(scene_color);
+    render_graph_dag_.MarkOutput(taa_color);
 
     // ---- 注册内置 Pass ----
     registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
@@ -791,6 +835,11 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::FXAAPass>(render_pass_context_));
+    {
+        auto taa = std::make_unique<dse::render::TAAPass>(render_pass_context_);
+        taa_pass_ = taa.get();
+        registered_passes_.push_back(std::move(taa));
+    }
     if (!runtime_context_.editor_mode) {
         registered_passes_.push_back(std::make_unique<dse::render::PresentPass>(render_pass_context_));
     }

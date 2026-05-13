@@ -1819,6 +1819,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.color_grading_shader_handle();
     else if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle())
         selected_shader_handle = shader_mgr.contact_shadow_shader_handle();
+    else if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle())
+        selected_shader_handle = shader_mgr.taa_resolve_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1874,6 +1876,9 @@ void VulkanDrawExecutor::DrawPostProcess(
     } else if (effect_name == "color_grading") {
         unsigned int lut_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
         extra_bindings = {{5, lut_h}};
+    } else if (effect_name == "taa_resolve") {
+        unsigned int hist_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
+        extra_bindings = {{5, hist_h}};
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -1955,6 +1960,12 @@ void VulkanDrawExecutor::DrawPostProcess(
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "color_grading" && params.size() >= 2) {
             float pc = params[1];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "taa_resolve" && params.size() >= 4) {
+            struct { float blend_factor, jitter_x, jitter_y; int frame_index; } pc{
+                params[1], params[2], params[3],
+                params.size() >= 5 ? static_cast<int>(params[4]) : 0};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         }

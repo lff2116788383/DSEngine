@@ -39,6 +39,7 @@ void DX11ShaderManager::Shutdown() {
     tonemapping_shader_handle_ = 0;
     bloom_composite_ssao_ae_shader_handle_ = 0;
     color_grading_shader_handle_ = 0;
+    taa_resolve_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -263,6 +264,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
     tonemapping_shader_handle_ = create_pp_shader(dx11_shaders::kTonemappingPS, "tonemapping");
     bloom_composite_ssao_ae_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoAePS, "bloom_composite_ssao_ae");
     color_grading_shader_handle_ = create_pp_shader(dx11_shaders::kColorGradingPS, "color_grading");
+    taa_resolve_shader_handle_ = create_pp_shader(dx11_shaders::kTaaResolvePS, "taa_resolve");
 }
 
 // ============================================================

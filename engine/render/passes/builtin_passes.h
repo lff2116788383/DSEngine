@@ -9,6 +9,7 @@
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_graph.h"
+#include <glm/glm.hpp>
 
 namespace dse {
 namespace render {
@@ -143,6 +144,30 @@ public:
     const char* GetName() const override { return "composite_pass"; }
 private:
     RenderPassContext& ctx_;
+};
+
+// ---- TAA Pass ----
+class TAAPass : public IRenderPass {
+public:
+    explicit TAAPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "taa_pass"; }
+
+    /// 每帧由 frame_pipeline 调用：更新 jitter 偏移
+    void UpdateJitter(int frame_index);
+
+    /// 获取当前帧 jitter 值（供 FramePipeline 修改投影矩阵）
+    glm::vec2 GetCurrentJitter() const { return current_jitter_; }
+
+private:
+    RenderPassContext& ctx_;
+    unsigned int history_rt_ = 0;      ///< 历史帧 RT
+    glm::vec2 current_jitter_ = {};
+    int frame_index_ = 0;
+
+    /// Halton 序列 jitter
+    static float Halton(int index, int base);
 };
 
 // ---- Present Pass (runtime only) ----

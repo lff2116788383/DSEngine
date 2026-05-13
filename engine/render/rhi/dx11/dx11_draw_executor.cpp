@@ -1133,6 +1133,30 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // TAA Resolve 专用路径
+    if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 4) {
+            struct { float blend_factor, jitter_x, jitter_y; int frame_index; } tp{
+                params[1], params[2], params[3],
+                params.size() >= 5 ? static_cast<int>(params[4]) : 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &tp, sizeof(tp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* hist_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (hist_tex) dc->PSSetShaderResources(1, 1, hist_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.taa_resolve_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

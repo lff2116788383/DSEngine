@@ -342,6 +342,13 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 camera.near_clip, camera.far_clip);
+
+        // TAA jitter：对投影矩阵做子像素偏移，使每帧采样位置不同
+        if (ctx_.taa_active) {
+            projection[2][0] += ctx_.taa_jitter.x * 2.0f;
+            projection[2][1] += ctx_.taa_jitter.y * 2.0f;
+        }
+
         glm::mat4 view = glm::mat4(1.0f);
         if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
             auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
@@ -914,7 +921,9 @@ void PresentPass::Setup(RenderGraph& graph) {
 
 void PresentPass::Execute(CommandBuffer& cmd_buffer) {
     unsigned int present_tex = 0;
-    if (ctx_.fxaa_active) {
+    if (ctx_.taa_active) {
+        present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.taa);
+    } else if (ctx_.fxaa_active) {
         present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fxaa);
     }
     if (present_tex == 0) {
@@ -927,6 +936,96 @@ void PresentPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
     cmd_buffer.DrawPostProcess(present_tex, "copy", {});
     cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// TAAPass
+// ============================================================
+
+float TAAPass::Halton(int index, int base) {
+    float result = 0.0f;
+    float f = 1.0f;
+    int i = index;
+    while (i > 0) {
+        f /= static_cast<float>(base);
+        result += f * static_cast<float>(i % base);
+        i = i / base;
+    }
+    return result;
+}
+
+void TAAPass::UpdateJitter(int frame_index) {
+    frame_index_ = frame_index;
+    int seq = (frame_index % 16) + 1;
+    float jx = Halton(seq, 2) - 0.5f;
+    float jy = Halton(seq, 3) - 0.5f;
+    const int sw = Screen::width();
+    const int sh = Screen::height();
+    current_jitter_.x = sw > 0 ? (jx / static_cast<float>(sw)) : 0.0f;
+    current_jitter_.y = sh > 0 ? (jy / static_cast<float>(sh)) : 0.0f;
+}
+
+void TAAPass::Setup(RenderGraph& graph) {
+    auto main_color = graph.DeclareResource("main_color");
+    auto taa_color  = graph.DeclareResource("taa_color");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, main_color);
+    graph.PassWrite(pass, taa_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void TAAPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool taa_enabled = false;
+    float blend_factor = 0.1f;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.taa_enabled) {
+            taa_enabled = true;
+            blend_factor = pp.taa_blend_factor;
+            break;
+        }
+    }
+
+    ctx_.taa_active = taa_enabled && ctx_.render_targets.taa != 0;
+    if (!ctx_.taa_active) {
+        return;
+    }
+
+    // 懒初始化历史 RT
+    if (history_rt_ == 0) {
+        RenderTargetDesc desc;
+        desc.width = Screen::width();
+        desc.height = Screen::height();
+        desc.has_color = true;
+        desc.has_depth = false;
+        history_rt_ = ctx_.rhi_device->CreateRenderTarget(desc);
+    }
+
+    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    if (main_color_tex == 0) return;
+
+    const unsigned int history_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_);
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(main_color_tex, "taa_resolve", {
+        static_cast<float>(history_tex),
+        blend_factor,
+        current_jitter_.x,
+        current_jitter_.y,
+        static_cast<float>(frame_index_)
+    });
+    cmd_buffer.EndRenderPass();
+
+    // 将当前 TAA 输出 blit 到历史 RT（供下一帧使用）
+    const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.taa);
+    if (taa_out_tex != 0 && history_rt_ != 0) {
+        cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+        cmd_buffer.BeginRenderPass({history_rt_, glm::vec4(0.0f), true});
+        cmd_buffer.DrawPostProcess(taa_out_tex, "copy", {});
+        cmd_buffer.EndRenderPass();
+    }
 }
 
 } // namespace render
