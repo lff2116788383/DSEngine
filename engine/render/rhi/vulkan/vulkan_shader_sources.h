@@ -882,6 +882,50 @@ void main() {
 }
 )";
 
+/// Contact Shadow (screen-space ray march toward light direction)
+constexpr const char* kContactShadowFS = R"(
+layout(push_constant) uniform ContactShadowParams {
+    vec3 u_light_dir;
+    float u_near;
+    float u_far;
+    vec2 u_screen_size;
+    float u_strength;
+    float u_step_size;
+    int u_num_steps;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    if (depth >= 1.0) { FragColor = vec4(1.0); return; }
+    float linDepth = linearizeDepth(depth);
+    vec3 lightDir = normalize(u_light_dir);
+    vec2 texelSize = 1.0 / u_screen_size;
+    float occlusion = 0.0;
+    int validSteps = 0;
+    for (int i = 1; i <= u_num_steps; ++i) {
+        float dist = u_step_size * float(i);
+        vec2 sampleUV = vTexCoords + lightDir.xy * texelSize * dist * 50.0;
+        if (sampleUV.x < 0.0 || sampleUV.y < 0.0 || sampleUV.x > 1.0 || sampleUV.y > 1.0) break;
+        float sampleDepth = texture(screenTexture, sampleUV).r;
+        if (sampleDepth >= 1.0) continue;
+        float sampleLin = linearizeDepth(sampleDepth);
+        float diff = sampleLin - linDepth;
+        if (diff > 0.0 && diff < u_step_size) {
+            float k = 1.0 - (diff / u_step_size);
+            occlusion += k * k;
+        }
+        ++validSteps;
+    }
+    float shadow = validSteps > 0 ? 1.0 - clamp(occlusion / float(validSteps) * u_strength, 0.0, 1.0) : 1.0;
+    FragColor = vec4(vec3(shadow), 1.0);
+}
+)";
+
 /// Bloom 降采样 Compute Shader（13-tap Kawase）
 constexpr const char* kBloomDownsampleCS = R"(
 #version 450
@@ -1039,19 +1083,23 @@ void main() {
 }
 )";
 
-/// Bloom Composite + SSAO + Auto Exposure + LUT
+/// Bloom Composite + SSAO + Auto Exposure + LUT + Contact Shadow
 constexpr const char* kBloomCompositeSsaoAeFS = R"(
 layout(set = 2, binding = 2) uniform sampler2D bloomBlur;
 layout(set = 2, binding = 3) uniform sampler2D ssaoTexture;
 layout(set = 2, binding = 4) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D u_lut;
+layout(set = 2, binding = 6) uniform sampler2D contactShadowTex;
 layout(push_constant) uniform BloomCompositeAeParams {
     float exposure;
     float bloomIntensity;
+    int bloomEnabled;
     int ssaoEnabled;
     int autoExposureEnabled;
     int lutEnabled;
     float lutIntensity;
+    int csEnabled;
+    float csStrength;
 };
 vec3 AcesFilmic(vec3 x) {
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
@@ -1063,8 +1111,14 @@ void main() {
         float ao = texture(ssaoTexture, vTexCoords).r;
         color *= ao;
     }
-    vec3 bloomColor = texture(bloomBlur, vTexCoords).rgb;
-    color += bloomColor * bloomIntensity;
+    if (bloomEnabled != 0) {
+        vec3 bloomColor = texture(bloomBlur, vTexCoords).rgb;
+        color += bloomColor * bloomIntensity;
+    }
+    if (csEnabled != 0) {
+        float cs = texture(contactShadowTex, vTexCoords).r;
+        color *= (1.0 - (1.0 - cs) * csStrength);
+    }
     float finalExposure = exposure;
     if (autoExposureEnabled != 0) {
         finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;

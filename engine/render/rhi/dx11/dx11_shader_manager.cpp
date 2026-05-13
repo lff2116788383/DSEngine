@@ -33,6 +33,7 @@ void DX11ShaderManager::Shutdown() {
     ssao_shader_handle_ = 0;
     ssao_blur_shader_handle_ = 0;
     ssao_apply_shader_handle_ = 0;
+    contact_shadow_shader_handle_ = 0;
     lum_compute_shader_handle_ = 0;
     lum_adapt_shader_handle_ = 0;
     tonemapping_shader_handle_ = 0;
@@ -255,6 +256,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
     ssao_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoPS, "ssao");
     ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");
     ssao_apply_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoApplyPS, "ssao_apply");
+    contact_shadow_shader_handle_ = create_pp_shader(dx11_shaders::kContactShadowPS, "contact_shadow");
     bloom_composite_ssao_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoPS, "bloom_composite_ssao");
     lum_compute_shader_handle_ = create_pp_shader(dx11_shaders::kLumComputePS, "lum_compute");
     lum_adapt_shader_handle_ = create_pp_shader(dx11_shaders::kLumAdaptPS, "lum_adapt");

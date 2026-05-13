@@ -90,6 +90,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Contact Shadow Pass ----
+class ContactShadowPass : public IRenderPass {
+public:
+    explicit ContactShadowPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "contact_shadow_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- FXAA Pass ----
 class FXAAPass : public IRenderPass {
 public:

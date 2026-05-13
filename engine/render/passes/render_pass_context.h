@@ -60,6 +60,7 @@ struct RenderPassContext {
         std::vector<unsigned int> bloom_mips;
         unsigned int ssao = 0;
         unsigned int ssao_blur = 0;
+        unsigned int contact_shadow = 0;
         unsigned int fxaa = 0;
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong

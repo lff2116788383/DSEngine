@@ -17,6 +17,7 @@ struct RenderPipelineResources {
 
     unsigned int pp_ssao_rt = 0;       // 半分辨率 AO
     unsigned int pp_ssao_blur_rt = 0;  // 模糊后 AO
+    unsigned int pp_contact_shadow_rt = 0;  // 接触阴影
     unsigned int pp_fxaa_rt = 0;       // FXAA 输出
 
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
@@ -47,6 +48,7 @@ struct RenderPipelineResources {
         pp_bloom_mip_rts.clear();
         pp_ssao_rt = 0;
         pp_ssao_blur_rt = 0;
+        pp_contact_shadow_rt = 0;
         pp_fxaa_rt = 0;
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;

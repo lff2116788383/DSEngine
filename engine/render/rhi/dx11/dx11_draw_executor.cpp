@@ -785,12 +785,14 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
 
     // bloom_composite 专用路径：ACES Filmic Tone Mapping (+可选 SSAO / Auto Exposure / LUT)
     if (effect_name == "bloom_composite") {
-        const bool has_ssao = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0);
-        const bool has_ae   = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0);
-        const bool has_lut  = (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0);
-        // 如果有 AE / SSAO / LUT，使用带 AE 的合成 shader（兼容全部）
+        const bool bloom_enabled = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0);
+        const bool has_ssao = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0);
+        const bool has_ae   = (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0);
+        const bool has_lut  = (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0);
+        const bool has_cs   = (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0);
+        // contact shadow / bloomEnabled 需要完整的 SSAO+AE+LUT 变体（含 contact shadow 绑定和 CB 字段）
         unsigned int shader_h;
-        if (has_ae || has_lut) {
+        if (has_ae || has_lut || has_cs || !bloom_enabled) {
             shader_h = shader_mgr.bloom_composite_ssao_ae_shader_handle();
         } else if (has_ssao) {
             shader_h = shader_mgr.bloom_composite_ssao_shader_handle();
@@ -810,43 +812,50 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             dc->PSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
             dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
         }
-        if (params.size() >= 1) {
+        if (bloom_enabled) {
             const auto* bloom_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
             if (bloom_tex) dc->PSSetShaderResources(1, 1, bloom_tex->srv.GetAddressOf());
         }
         if (has_ssao) {
-            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[3]));
+            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
             if (ao_tex) dc->PSSetShaderResources(2, 1, ao_tex->srv.GetAddressOf());
         }
         if (has_ae) {
-            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
+            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
             if (ae_tex) dc->PSSetShaderResources(3, 1, ae_tex->srv.GetAddressOf());
         }
         if (has_lut) {
-            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
+            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[6]));
             if (lut_tex) {
                 dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
             }
         }
+        if (has_cs) {
+            const auto* cs_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[8]));
+            if (cs_tex) dc->PSSetShaderResources(5, 1, cs_tex->srv.GetAddressOf());
+        }
 
-        // 懒惰创建 bloom composite 参数 CB（32B: exposure, bloomIntensity, ssaoEnabled, aeEnabled, lutEnabled, lutIntensity, _pad2）
+        // 懒惰创建 bloom composite 参数 CB（32B: exposure, bloomIntensity, ssaoEnabled, aeEnabled, lutEnabled, lutIntensity, csEnabled, csStrength）
         if (!bloom_composite_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage          = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth      = 32;
+            bd.ByteWidth      = 48;
             bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             context_->device()->CreateBuffer(&bd, nullptr, bloom_composite_params_cb_.GetAddressOf());
         }
         if (bloom_composite_params_cb_) {
-            struct BloomCompositeParams { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; float _pad[2]; } cp{};
+            struct BloomCompositeParams { float exposure; float bloomIntensity; int bloomEnabled; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; int csEnabled; float csStrength; float _pad[1]; } cp{};
             cp.exposure       = (params.size() >= 2) ? params[1] : 1.0f;
             cp.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
+            cp.bloomEnabled   = bloom_enabled ? 1 : 0;
             cp.ssaoEnabled    = has_ssao ? 1 : 0;
             cp.aeEnabled      = has_ae ? 1 : 0;
             cp.lutEnabled     = has_lut ? 1 : 0;
-            cp.lutIntensity   = has_lut ? params[6] : 0.0f;
+            cp.lutIntensity   = has_lut ? params[7] : 0.0f;
+            cp.csEnabled      = has_cs ? 1 : 0;
+            cp.csStrength     = has_cs ? params[9] : 0.0f;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(bloom_composite_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &cp, sizeof(cp));
@@ -862,17 +871,17 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         dc->DrawIndexed(6, 0, 0);
         current_frame_stats_.draw_calls++;
 
-        ID3D11ShaderResourceView* null_srvs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
-        dc->PSSetShaderResources(1, has_lut ? 4 : (has_ae ? 3 : 2), null_srvs);
+        ID3D11ShaderResourceView* null_srvs[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+        dc->PSSetShaderResources(1, has_cs ? 5 : (has_lut ? 4 : (has_ae ? 3 : 2)), null_srvs);
         return;
     }
 
-    // 辅助：懒惰创建通用 PP 参数 CB（32B）
+    // 辅助：懒惰创建通用 PP 参数 CB（按最大 contact_shadow struct 需求 48B，向上取整到 64B）
     auto ensure_pp_params_cb = [&]() {
         if (!pp_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth = 32;
+            bd.ByteWidth = 64;
             bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             context_->device()->CreateBuffer(&bd, nullptr, pp_params_cb_.GetAddressOf());
@@ -972,6 +981,27 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         draw_dedicated_pp(shader_mgr.ssao_apply_shader_handle());
         ID3D11ShaderResourceView* null_srvs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
         dc->PSSetShaderResources(1, has_lut ? 4 : (has_ae ? 2 : 1), null_srvs);
+        return;
+    }
+
+    // Contact Shadow 专用路径
+    if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 10) {
+            struct ContactShadowParams { float lx, ly, lz; float near_p, far_p; float sw, sh; float strength; float step_size; int num_steps; float _pad; } cp{};
+            cp.lx = params[0]; cp.ly = params[1]; cp.lz = params[2];
+            cp.near_p = params[3]; cp.far_p = params[4];
+            cp.sw = params[5]; cp.sh = params[6];
+            cp.strength = params[7]; cp.num_steps = static_cast<int>(params[8]); cp.step_size = params[9];
+            cp._pad = 0.0f;
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &cp, sizeof(cp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.contact_shadow_shader_handle());
         return;
     }
 

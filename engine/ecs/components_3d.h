@@ -105,6 +105,12 @@ struct PostProcessComponent {
 
     // FXAA
     bool fxaa_enabled = true;
+
+    // Contact Shadow
+    bool contact_shadow_enabled = false;
+    float contact_shadow_strength = 0.5f;
+    int contact_shadow_steps = 16;
+    float contact_shadow_step_size = 0.5f;
 };
 
 #define CSM_CASCADES 3

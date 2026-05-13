@@ -137,6 +137,7 @@ public:
     unsigned int fxaa_shader_handle() const { return fxaa_shader_handle_; }
     unsigned int ssao_shader_handle() const { return ssao_shader_handle_; }
     unsigned int ssao_blur_shader_handle() const { return ssao_blur_shader_handle_; }
+    unsigned int contact_shadow_shader_handle() const { return contact_shadow_shader_handle_; }
     unsigned int lum_compute_shader_handle() const { return lum_compute_shader_handle_; }
     unsigned int lum_adapt_shader_handle() const { return lum_adapt_shader_handle_; }
     unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
@@ -197,6 +198,7 @@ private:
     unsigned int fxaa_shader_handle_ = 0;
     unsigned int ssao_shader_handle_ = 0;
     unsigned int ssao_blur_shader_handle_ = 0;
+    unsigned int contact_shadow_shader_handle_ = 0;
     unsigned int lum_compute_shader_handle_ = 0;
     unsigned int lum_adapt_shader_handle_ = 0;
     unsigned int tonemapping_shader_handle_ = 0;

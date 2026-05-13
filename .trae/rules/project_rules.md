@@ -1,15 +1,16 @@
 # DSEngine 项目开发规则
 
-> 自动生效于 DSEngine 项目上下文
+> 供开发者与 AI 代理参考的详细项目规则文档。Roo Code 等代理建议优先遵循仓库根目录的 [`AGENTS.md`](AGENTS.md)，本文件作为详细补充说明。
 
 ---
 
 ## 一、语言与沟通
 
-- **始终使用中文与用户交流**，代码注释也使用中文
-- 代码注释不要过度，只在关键的架构决策、复杂的算法、或者修复 Bug 时加注释
-- 不要在每行代码上都写注释，保持代码自文档化
-- 用户习惯非正式但专业的技术交流风格，避免过度客套
+- 默认使用中文与用户交流。
+- 代码注释应优先与所在文件现有风格保持一致；中文项目说明可使用中文，接口语义、跨平台约束、第三方库交互说明可保留英文。
+- 代码注释不要过度，只在关键架构决策、复杂算法、兼容性修复或易误用逻辑处添加必要注释。
+- 不要在每行代码上都写注释，保持代码自文档化。
+- 输出风格保持直接、专业，避免无意义客套。
 
 ---
 
@@ -17,40 +18,31 @@
 
 ### 2.1 C++ 编码规范
 
-- **CMake 声明 C++20**（`CMAKE_CXX_STANDARD 20` + `REQUIRED ON`），但实际代码以 C++17 风格为主，C++20 特性仅在必要时才使用（如 `if constexpr (requires {...})`）
+- 根 [`CMakeLists.txt`](CMakeLists.txt) 声明 C++20（`CMAKE_CXX_STANDARD 20` + `REQUIRED ON`），但新增代码优先保持与现有工程一致的保守风格，除非确有必要，不强依赖新的 C++20 语法特性。
 - **命名规范**：
-  - 类名：`PascalCase`（如 `FramePipeline`、`Physics2DSystem`）
-  - 函数/方法：`PascalCase`（如 `CreateEntity`、`FixedUpdate`）
-  - 变量：`snake_case`（如 `fixed_delta_time`、`entity_count_`）
-  - 成员变量：`trailing_underscore`（如 `entity_count_`、`physics_world_`）
-  - 常量/枚举值：`PascalCase` 或 `kCamelCase`（如 `kMaxAccumulator`、`Joint2DType::Revolute`）
+  - 类型：`PascalCase`（如 `FramePipeline`、`EngineInstance`）
+  - 函数/方法：多数为 `PascalCase`
+  - 普通变量：多为 `snake_case`
+  - 成员变量：多为 `trailing_underscore`
+  - 常量/枚举值：遵循现有文件风格，常见为 `PascalCase` 或 `kCamelCase`
 - **头文件风格**：
-  - 使用 `#ifndef` / `#define` / `#endif` 头文件保护宏，前缀 `DSE_`（如 `DSE_PHYSICS2D_SYSTEM_H`）
-  - 不在头文件中写 `using namespace`（`.cpp` 中酌情使用）
-  - 在头文件写完整 Doxygen 风格文档注释（`/** @brief ... */`），包含 `@param`、`@return`、`@example`
-  - .cpp 实现文件中只在文件顶部的 brief 注释中保留描述，函数体内部不写冗余注释，除非逻辑特别复杂
+  - 使用 `#ifndef` / `#define` / `#endif` 头文件保护宏
+  - 不在头文件中写 `using namespace`
+  - 头文件优先轻量，能前向声明就不要额外包含重头文件
+  - 注释风格与现有文件保持一致；只在公共接口、复杂约束、生命周期语义处补必要说明，不要求机械补全完整 Doxygen
 
 ### 2.2 文件组织
 
-- 每个类一对文件：`xxx.h` + `xxx.cpp`
-- 头文件尽量轻量，能用 forward declaration 就别 `#include`
-- .cpp 文件按需 `#include`，不要依赖聚合头文件
+- 优先保持现有目录职责清晰：`apps/`、`modules/`、`engine/`、`depends/` 分层明确。
+- 头文件尽量轻量，能用 forward declaration 就别 `#include`。
+- `.cpp` 文件按需 `#include`，不要依赖无边界的聚合头。
+- 新增文件前先确认同类功能是否已有既定放置目录。
 
 ### 2.3 命名空间
 
-```cpp
-namespace dse {          // 引擎顶级命名空间
-namespace core {          // 核心基础设施
-namespace runtime {       // 运行时
-namespace physics3d {     // 3D 物理
-namespace gameplay3d {    // 3D 玩法模块
-namespace gameplay2d {    // 2D 玩法模块
-// render 相关命名空间在 engine/render/ 内各自定义
-} }
-```
-
-- 全局工具类（如 `Physics2DSystem`）可以不放在命名空间内，直接用类名
-- 不要嵌套过深的命名空间（最多 3 层）
+- 新代码优先遵循现有 `dse::...` 命名空间体系。
+- 个别历史遗留的全局类型可以保持现状，但不要把“无命名空间”当成新增代码的默认选择。
+- 避免为了形式而引入过深命名空间，优先与周边代码保持一致。
 
 ---
 
@@ -58,42 +50,47 @@ namespace gameplay2d {    // 2D 玩法模块
 
 ### 3.1 依赖方向
 
+```text
+apps/  ->  modules/  ->  engine/  ->  depends/
 ```
-apps/  →  modules/  →  engine/  (单向依赖，不允许反向)
-                     →  depends/ (第三方库)
-```
 
-- `apps/`（编辑器、运行时宿主）可以依赖所有下层
-- `modules/`（gameplay_2d、gameplay_3d）只能依赖 `engine/` 和 `depends/`
-- `engine/` 不能依赖 `modules/` 或 `apps/`
-- 所有模块通过 `IModule` 接口与 `FramePipeline` 交互，不硬编码依赖
+- `apps/` 可以依赖所有下层。
+- `modules/` 只能依赖 `engine/` 与 `depends/`。
+- `engine/` 不能依赖 `modules/` 或 `apps/`。
+- 若发现现有代码存在历史性耦合，新增改动不得继续扩大该耦合面。
 
-### 3.2 服务定位器
+### 3.2 服务定位器与运行时生命周期
 
-- 所有核心服务通过 `dse::core::ServiceLocator` 注册和获取
-- **禁止新增全局单例**。现有单例兼容接口已标记 `[[deprecated]]`
-- 服务生命周期由 `EngineInstance` 统一管理（`RegisterRuntimeServices()` / `ResetRuntimeServices()`）
-- 新增服务必须走 `ServiceLocator` 路径
+- 所有核心服务通过 [`ServiceLocator`](engine/core/service_locator.h) 注册和获取。
+- 服务生命周期由 [`EngineInstance`](engine/runtime/engine_app.h) 管理，重点关注 [`RegisterRuntimeServices()`](engine/runtime/engine_app.cpp:183) 与 [`ResetRuntimeServices()`](engine/runtime/engine_app.cpp:206)。
+- 禁止新增不受控的全局单例；兼容入口允许保留，但新逻辑应优先走运行时注入路径。
+- 新增服务优先通过 `ServiceLocator` 接入，而不是把生命周期散落到调用方。
 
 ### 3.3 渲染架构
 
-- 所有新的渲染功能必须基于 `RenderGraph` DAG 架构，添加新的 `IRenderPass` 子类
-- 不允许在 `FramePipeline` 或 `rhi_device` 中硬编码新的渲染 Pass
-- 三后端（OpenGL / Vulkan / D3D11）必须同步更新，新着色器需要在 `gl_draw_executor.cpp`（inline）、`vulkan_shader_sources.h`、`dx11_shader_sources.h` 三处同步
-- 新增 `RhiDevice` 虚方法时，所有后端（含 mock）必须同步实现
+- 新渲染功能优先基于 [`RenderGraph`](engine/render/render_graph.h) + [`IRenderPass`](engine/render/passes/render_pass_interface.h) 扩展。
+- 不要把新的具体渲染逻辑直接硬编码回 [`FramePipeline`](engine/runtime/frame_pipeline.h) 的流程控制代码中。
+- 修改渲染相关功能时，必须同步检查 OpenGL / Vulkan / D3D11 三后端。
+- 新着色器或新后处理参数通常需要同步检查：
+  - CPU 侧参数传递
+  - [`gl_draw_executor.cpp`](engine/render/rhi/gl_draw_executor.cpp) 中的 inline shader / uniform 绑定
+  - [`vulkan_shader_sources.h`](engine/render/rhi/vulkan/vulkan_shader_sources.h)
+  - [`dx11_shader_sources.h`](engine/render/rhi/dx11/dx11_shader_sources.h)
+  - 三后端执行器中的纹理绑定与参数布局
+- 新增 [`RhiDevice`](engine/render/rhi/rhi_device.h) 接口或行为时，所有后端与测试桩都要同步。
 
-### 3.4 物理系统
+### 3.4 模块与运行时更新路径
 
-- 2D 物理使用 Box2D，3D 物理使用 PhysX 4.1
-- 物理系统只负责模拟，不负责渲染——物理体位置通过 ECS `TransformComponent` 同步到渲染
-- 物理引擎的 runtime 指针（如 `b2Body*`、`PxRigidActor*`）存储在对应的 ECS 组件中（如 `RigidBody2DComponent::runtime_body`）
+- 2D / 3D 玩法模块优先沿现有运行时更新路径接入，而不是再设计旧式 DLL 模块边界。
+- [`Gameplay3DModule`](modules/gameplay_3d/gameplay_3d_module.cpp:144) 当前已静态编入 `dse_engine`，不要按旧的独立 DLL 模式设计新依赖。
+- 与 `FramePipeline` 的协作优先沿现有 `IModule`、运行时注入、RenderGraph 注册机制扩展，避免新增硬编码耦合。
 
 ### 3.5 脚本系统
 
-- Lua 绑定使用 sol2 库
-- 新增组件绑定：在 `engine/scripting/lua/bindings/` 对应文件中添加，遵循现有模式（`sol::usertype<T>`）
-- 新增 Lua API 需要在 `docs/LUA_API.md` 同步更新
-- Lua 绑定文件按功能域拆分（`lua_binding_ecs_rendering.cpp`、`lua_binding_ecs_phys3d.cpp` 等）
+- Lua 绑定使用 sol2。
+- 新增组件绑定时，在 [`engine/scripting/lua/bindings/`](engine/scripting/lua/bindings/) 对应文件中添加，遵循现有模式。
+- 对外 Lua API 发生变化时，应同步检查 [`docs/LUA_API.md`](docs/LUA_API.md) 是否需要更新。
+- Lua 绑定文件按功能域拆分，避免一个超大绑定文件承载全部逻辑。
 
 ---
 
@@ -101,21 +98,26 @@ apps/  →  modules/  →  engine/  (单向依赖，不允许反向)
 
 ### 4.1 CMake 配置
 
-- 根 `CMakeLists.txt` 是唯一构建入口，`engine/` 下没有独立 CMakeLists.txt
-- 引擎编译为单个 `DSEngine.dll` 动态库
-- 条件编译开关（均在根 CMakeLists.txt 中定义）：
-  - `DSE_ENABLE_3D` — 3D 运行时（默认 ON）
-  - `DSE_ENABLE_PHYSX` — PhysX 物理（默认 ON）
-  - `DSE_ENABLE_VULKAN` — Vulkan 后端（默认 OFF）
-  - `DSE_ENABLE_D3D11` — D3D11 后端（仅 Windows，默认 ON）
-  - `DSE_ENABLE_SPINE` — Spine 动画（默认 ON）
-  - `DSE_BUILD_GTESTS` — GoogleTest 测试（默认 ON）
-  - `DSE_BUILD_EDITOR` — 构建编辑器（默认 OFF）
+- 根 [`CMakeLists.txt`](CMakeLists.txt) 是唯一构建入口。
+- 当前核心引擎目标是 `dse_engine`；相关宿主程序位于 [`apps/runtime`](apps/runtime/)、[`apps/standalone`](apps/standalone/) 与 [`apps/editor_cpp`](apps/editor_cpp/)。
+- 常见条件编译开关以根 [`CMakeLists.txt`](CMakeLists.txt) 为准，例如：
+  - `DSE_ENABLE_2D`
+  - `DSE_ENABLE_3D`
+  - `DSE_ENABLE_PHYSX`
+  - `DSE_ENABLE_VULKAN`
+  - `DSE_ENABLE_D3D11`
+  - `DSE_ENABLE_SPINE`
+  - `DSE_BUILD_GTESTS`
+  - `DSE_BUILD_EDITOR`
+  - `DSE_BUILD_LAUNCHER`
+- 开关默认值以当前 CMake 配置为准，不要依赖过期文档记忆。
 
 ### 4.2 新增源文件
 
-- 在 `engine/` 或 `modules/` 下新增 .cpp 文件时，CMake 使用 `GLOB_RECURSE` 自动收集，**一般情况下无需修改 CMakeLists.txt**
-- 但如果在 `engine/render/rhi/` 下新增后端子目录，需要在根 CMakeLists.txt 的条件编译块中添加路径
+- 当前 [`CMakeLists.txt`](CMakeLists.txt:189) 通过 `GLOB_RECURSE` 自动收集大量 `engine/` 与 `modules/gameplay_2d/` 源文件。
+- [`modules/gameplay_3d`](modules/gameplay_3d/) 在启用 3D 时会额外被加入 [`dse_engine`](CMakeLists.txt:228)。
+- 一般新增 `.cpp` 不一定需要手改 CMake，但新增目录、条件编译分支、第三方依赖或新 target 时必须检查根 [`CMakeLists.txt`](CMakeLists.txt)。
+- 修改构建规则时，优先保持现有批处理脚本可继续使用。
 
 ---
 
@@ -123,50 +125,48 @@ apps/  →  modules/  →  engine/  (单向依赖，不允许反向)
 
 ### 5.1 测试规范
 
-- 测试框架使用 GoogleTest
-- 测试文件放在 `tests/gtest/unit/`（单元测试）或 `tests/gtest/integration/`（集成测试）
-- 新增功能必须写对应测试才能合入
-- 测试命名：`xxx_test.cpp`，测试用例名 `TEST(TestSuite, TestCase)`
+- 测试框架以 GoogleTest 为主。
+- 测试主要位于 [`tests/gtest/`](tests/gtest/)。
+- 新增功能、关键回归修复、或可独立验证的逻辑改动，应补对应测试。
+- 对不易单测覆盖的渲染/平台路径，至少补最小验证路径或编译验证说明。
 
-### 5.2 覆盖率期望
+### 5.2 覆盖率与质量目标
 
-| 模块 | 最低覆盖率 |
+- 下列覆盖率更适合作为质量目标，而不是每次改动都强制承诺的硬门槛：
+
+| 模块 | 目标覆盖率 |
 |------|:---------:|
-| Core 基础设施（EventBus/JobSystem/ServiceLocator） | 90%+ |
-| ECS（World/组件操作） | 80%+ |
-| 渲染（RHI/RenderGraph） | 70%+ |
+| Core 基础设施（EventBus / JobSystem / ServiceLocator） | 90%+ |
+| ECS（World / 组件操作） | 80%+ |
+| 渲染（RHI / RenderGraph） | 70%+ |
 | 物理 | 70%+ |
 | 场景管理 | 70%+ |
 | Asset 管理 | 70%+ |
 
 ### 5.3 运行测试
 
-```bash
-# 编译并运行所有 gtest（构建目录 build_vs2022，输出到 bin/）
+```bat
 ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
-
-# 快速构建+测试
 build_fast_tests.bat
-
-# 完整验证（GTest + Lua 运行时 + 3D Demo）
 verify_all.bat
 ```
 
+- 默认构建目录优先使用 `build_vs2022`。
+- 如果工作区根目录没有 `CMakeCache.txt`，不要直接对 `.` 执行 `cmake --build`，应先使用已有构建目录或先配置构建目录。
+
 ---
 
-## 六、新增功能的 Checklist
+## 六、新增功能 Checklist
 
-新增任何功能模块前，确认以下事项：
+新增或大改功能前，优先确认：
 
-- [ ] 是否遵循了架构依赖方向（`apps → modules → engine`）？
-- [ ] 是否需要新增 CMake 条件编译开关？
-- [ ] 是否需要新增 ECS 组件（在 `engine/ecs/` 下）？
-- [ ] 是否需要在三后端（GL/Vulkan/D3D11）同步实现？
-- [ ] 是否需要暴露 Lua API（在 `engine/scripting/lua/bindings/` 下）？
-- [ ] 是否需要注册到 `ServiceLocator`？
-- [ ] 是否新增了 IRenderPass（走 RenderGraph 而非硬编码）？
-- [ ] 是否编写了对应的 GTest？
-- [ ] 是否更新了 `dse.h` 聚合头文件（如果新增了公开头文件）？
+- [ ] 是否遵循依赖方向（`apps -> modules -> engine -> depends`）？
+- [ ] 是否应沿现有运行时注入 / `ServiceLocator` / `RenderGraph` 路径扩展？
+- [ ] 是否需要同步修改 OpenGL / Vulkan / D3D11 三后端？
+- [ ] 是否涉及 CPU 参数、shader 参数、执行器绑定三者的一致性？
+- [ ] 是否需要暴露或调整 Lua API？
+- [ ] 是否需要补测试或最小验证路径？
+- [ ] 是否需要更新公开文档或开发说明？
 
 ---
 
@@ -174,137 +174,80 @@ verify_all.bat
 
 ### 7.1 核心架构简图
 
-```
+```text
 EngineInstance (生命周期管理)
 ├── ServiceLocator (依赖注入容器)
 ├── World (ECS 实体世界，基于 EnTT)
 ├── FramePipeline (帧流水线)
-│   ├── IModule (gameplay_2d / gameplay_3d)
-│   │   └── 各子系统（Sprite/UI/Physics/Mesh/Animation...）
+│   ├── Gameplay2D / Gameplay3D 相关运行时系统
 │   ├── RenderGraph (DAG 渲染图)
-│   │   └── IRenderPass (PreZ/Shadow/Scene/Bloom/UI/Composite...)
-│   │       └── CommandBuffer (录制 → RhiDevice 执行)
+│   │   └── IRenderPass (PreZ / Shadow / Scene / Bloom / UI / Composite ...)
 │   └── RhiDevice (RHI 抽象)
-│       ├── OpenGLRhiDevice
-│       ├── VulkanRhiDevice
-│       └── D3D11RhiDevice
-├── EventBus (跨 DLL 安全的事件总线)
-└── JobSystem (线程池 + 工作窃取 + 依赖链)
+│       ├── OpenGL
+│       ├── Vulkan
+│       └── D3D11
+├── EventBus
+└── JobSystem
 ```
 
 ### 7.2 关键文件索引
 
 | 文件 | 说明 |
 |------|------|
-| `engine/runtime/engine_app.h/cpp` | 引擎入口，EngineInstance |
-| `engine/runtime/frame_pipeline.h/cpp` | 帧流水线，主循环调度 |
-| `engine/ecs/world.h/cpp` | ECS 世界 |
-| `engine/core/service_locator.h` | 服务定位器 |
-| `engine/core/event_bus.h/cpp` | 事件总线 |
-| `engine/core/event_id.h` | 事件 ID 定义（所有事件常量集中于此） |
-| `engine/core/job_system.h/cpp` | 作业系统 |
-| `engine/core/module.h` | IModule 接口 |
-| `engine/core/memory_pool.h` | 内存池 |
-| `engine/core/object_pool.h` | 对象池 |
-| `engine/core/dynamic_library.h/cpp` | 动态库加载 |
-| `engine/base/time.h/cpp` | 时间系统 |
-| `engine/base/debug.h/cpp` | 调试日志 |
-| `engine/assets/asset_manager.h/cpp` | 资产管理（异步加载/热重载） |
-| `engine/assets/pak_writer.h/cpp` | PAK 打包 |
-| `engine/assets/pak_reader.h/cpp` | PAK 读取 |
-| `engine/render/render_graph.h/cpp` | DAG 渲染图 |
-| `engine/render/passes/render_pass_interface.h` | IRenderPass 接口 |
-| `engine/render/passes/builtin_passes.h/cpp` | 内置渲染 Pass |
-| `engine/render/rhi/rhi_device.h` | RHI 抽象基类 + CommandBuffer |
-| `engine/render/rhi/rhi_types.h` | RHI 类型定义 |
-| `engine/render/rhi/gl_draw_executor.h/cpp` | OpenGL 绘制执行（含 inline shader） |
-| `engine/render/rhi/ubo_manager.h/cpp` | UBO 管理（PerFrame/PerScene/PerMaterial） |
-| `engine/render/rhi/rhi_factory.h/cpp` | RHI 设备工厂（环境变量 `DSE_RHI_BACKEND`） |
-| `engine/render/rhi/vulkan/vulkan_rhi_device.h/cpp` | Vulkan 后端 |
-| `engine/render/rhi/dx11/dx11_rhi_device.h/cpp` | D3D11 后端 |
-| `engine/physics/physics2d/physics2d_system.h/cpp` | 2D 物理（Box2D） |
-| `engine/physics/physics3d/physics3d_system.h/cpp` | 3D 物理（PhysX） |
-| `engine/ecs/components_3d.h` | 3D 组件（Mesh/Camera/Light/Bbox/PostProcess/Animator） |
-| `engine/ecs/components_3d_physics.h` | 3D 物理组件（RigidBody/Collider/Joint/CharacterController） |
-| `engine/ecs/components_2d.h` | 2D 组件聚合头文件 |
-| `engine/input/input.h/cpp` | 输入系统（键鼠/Gamepad/ActionMapping/录制回放） |
-| `engine/profiler/cpu_profiler.h/cpp` | CPU Profiler（Chrome Trace 导出） |
-| `engine/dse.h` | 引擎公开 API 聚合头文件 |
+| [`engine/runtime/engine_app.h`](engine/runtime/engine_app.h) / [`engine/runtime/engine_app.cpp`](engine/runtime/engine_app.cpp) | 引擎入口，`EngineInstance` |
+| [`engine/runtime/frame_pipeline.h`](engine/runtime/frame_pipeline.h) / [`engine/runtime/frame_pipeline.cpp`](engine/runtime/frame_pipeline.cpp) | 帧流水线，主循环与渲染调度 |
+| [`engine/runtime/runtime_update_graph.cpp`](engine/runtime/runtime_update_graph.cpp) | 运行时 update/fixed update 调度 |
+| [`engine/ecs/world.h`](engine/ecs/world.h) / [`engine/ecs/world.cpp`](engine/ecs/world.cpp) | ECS 世界 |
+| [`engine/core/service_locator.h`](engine/core/service_locator.h) | 服务定位器 |
+| [`engine/render/render_graph.h`](engine/render/render_graph.h) | DAG 渲染图 |
+| [`engine/render/passes/render_pass_interface.h`](engine/render/passes/render_pass_interface.h) | `IRenderPass` 接口 |
+| [`engine/render/passes/builtin_passes.h`](engine/render/passes/builtin_passes.h) / [`engine/render/passes/builtin_passes.cpp`](engine/render/passes/builtin_passes.cpp) | 内置渲染 Pass |
+| [`engine/render/rhi/rhi_device.h`](engine/render/rhi/rhi_device.h) | RHI 抽象基类 + `CommandBuffer` |
+| [`engine/render/rhi/gl_draw_executor.cpp`](engine/render/rhi/gl_draw_executor.cpp) | OpenGL 绘制执行（含 inline shader） |
+| [`engine/render/rhi/vulkan/vulkan_shader_sources.h`](engine/render/rhi/vulkan/vulkan_shader_sources.h) | Vulkan shader 源 |
+| [`engine/render/rhi/dx11/dx11_shader_sources.h`](engine/render/rhi/dx11/dx11_shader_sources.h) | D3D11 shader 源 |
+| [`modules/gameplay_3d/gameplay_3d_module.cpp`](modules/gameplay_3d/gameplay_3d_module.cpp) | Gameplay3D 静态编入说明 |
 
 ### 7.3 构建与运行
 
-```bash
-# 构建目录固定为 build_vs2022，输出到 bin/
-set BUILD_DIR=build_vs2022
-
-# Debug 构建
-cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF
-cmake --build %BUILD_DIR% --config Debug
-
-# Release 构建
-cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF
-cmake --build %BUILD_DIR% --config Release
-
-# 启用 Vulkan 后端
-cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_ENABLE_VULKAN=ON
-
-# 构建编辑器
-cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=ON
-
-# 运行 Lua Runtime Host（输出在 bin/）
-bin\DSEngine_lua_debug.exe --scene=samples\lua\phase2_3d_mvp.lua
-
-# 运行编辑器
-bin\dsengine-editor.exe
-
-# 运行测试（仅 gtest 标签）
-ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure -L gtest
-
-# 快速构建测试
+```bat
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+cmake --build build_vs2022 --config Debug
 build_fast_tests.bat
-
-# 完整验证（构建 + 测试 + Lua demo）
+build_all.bat
 verify_all.bat
 ```
+
+- 如果需要启用特定能力，如 Vulkan / Editor / Launcher，以根 [`CMakeLists.txt`](CMakeLists.txt) 当前选项为准追加开关。
+- 常见可执行文件位于 `bin/`，例如 `DSEngine_lua_debug.exe`、`dsengine-editor.exe`，但具体产物名仍以当前构建结果为准。
 
 ### 7.4 常用构建脚本
 
 | 脚本 | 用途 |
 |------|------|
-| `build_all.bat` | 完整构建（引擎 + 测试 + SDK 安装），支持 `--with-editor` 等参数 |
-| `build_fast_cpp.bat` | 快速构建 C++ runtime 目标 |
-| `build_fast_tests.bat` | 编译并运行所有 GTest |
-| `build_fast_editor.bat` | 快速构建编辑器 |
-| `build_fast_lua.bat` | 快速构建 Lua runtime |
-| `build_fast_sdk.bat` | 打包 SDK |
-| `build_fast_launcher.bat` | 构建 Tauri 启动器 |
-| `verify_all.bat` | 全链路验证（GTest + Lua 构建 + 3D Demo），支持 `--skip-gtest` 等参数 |
-
-### 7.5 开发工作流
-
-```bash
-# 改 C++ 代码 → 测试
-build_fast_tests.bat
-
-# 改渲染 → 验证三后端
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF
-cmake --build build_vs2022 --config Debug --target DSEngine_lua
-bin\DSEngine_lua_debug.exe --scene=samples\lua\phase2_3d_mvp.lua
-
-# 改编辑器 → 构建+运行
-build_fast_editor.bat
-bin\dsengine-editor.exe
-
-# 完整验证（提交前必做）
-verify_all.bat
-```
+| [`build_all.bat`](build_all.bat) | 完整构建与验证入口 |
+| [`build_fast_cpp.bat`](build_fast_cpp.bat) | 快速构建 C++ 目标 |
+| [`build_fast_tests.bat`](build_fast_tests.bat) | 编译并运行 GTest |
+| [`build_fast_editor.bat`](build_fast_editor.bat) | 快速构建编辑器 |
+| [`build_fast_lua.bat`](build_fast_lua.bat) | 快速构建 Lua runtime |
+| [`build_fast_sdk.bat`](build_fast_sdk.bat) | 打包 SDK |
+| [`build_fast_launcher.bat`](build_fast_launcher.bat) | 构建启动器 |
+| [`verify_all.bat`](verify_all.bat) | 全链路验证 |
 
 ---
 
-## 八、已知问题与注意事项
+## 八、当前仓库特别注意事项
 
-- **PhysX Extensions CRT 不匹配已解决**：commit `7917921` 从 PhysX 4.1.2 源码重新编译了 `PhysXExtensions_static_64.lib` / `PhysXPvdSDK_static_64.lib` / `PhysXCharacterKinematic_static_64.lib` 三个库为 `/MD`(Release) / `/MDd`(Debug) 版本，位于 `depends/physx/physx/bin/win.x86_64.vc142.mt/`。`dumpbin /directives` 已验证 CRT 正确。`DSE_HAS_PHYSX_EXTENSIONS` 已启用，Joint 功能（`PxFixedJointCreate`、`PxRevoluteJointCreate`、`PxD6JointCreate`）完全可用。
-- **EnTT 跨 DLL 模板实例化**：所有 ECS 组件操作必须在同一 DLL（`DSEngine.dll`）中完成，不要在编辑器 exe 和引擎 dll 之间传递 `entt::registry` 内的迭代器
-- **Lua 绑定性能**：sol2 在频繁调用的热点路径上有开销，性能敏感处用 C++ 实现后通过 Lua API 调用，而非在 Lua 中实现密集循环
-- **Vulkan 后端默认关闭**：依赖 Vulkan SDK 或子模块，不要求所有开发者启用
-- **编辑器默认关闭**：`DSE_BUILD_EDITOR=ON` 才构建编辑器
+- [`FramePipeline`](engine/runtime/frame_pipeline.h) 仍保留部分兼容入口，但新逻辑优先通过 [`EngineInstance`](engine/runtime/engine_app.h) 与运行时注入路径接入。
+- Gameplay3D 相关代码已静态编入 `dse_engine`，不要按旧 DLL 模块思路设计新依赖。
+- Vulkan 后端默认是可选能力，修改时要注意 `DSE_ENABLE_VULKAN` 条件编译。
+- D3D11 后端仅在 Windows 下启用，修改时注意 `DSE_ENABLE_D3D11` 条件编译。
+- 渲染改动后，至少做受影响目标编译验证；条件允许时补最小运行时验证。
+
+---
+
+## 九、已知问题与说明
+
+- 某些历史文档、示意图、旧注释可能仍保留 DLL 模块化时期的表述；若与当前代码冲突，应以代码现状为准。
+- 构建目录、二进制产物名、条件编译默认值等信息可能随脚本和 CMake 演进而变化，引用时优先核对实际文件。
+- 若本文件与 [`AGENTS.md`](AGENTS.md) 不一致，应优先以 [`AGENTS.md`](AGENTS.md) 的摘要规则和当前代码现状为准。

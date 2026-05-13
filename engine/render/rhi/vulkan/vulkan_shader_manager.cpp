@@ -655,6 +655,16 @@ void VulkanShaderManager::InitPostProcessShader() {
             DEBUG_LOG_WARN("[Vulkan] SSAO blur shader creation failed");
     }
 
+    // Contact Shadow shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kContactShadowFS;
+        contact_shadow_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (contact_shadow_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] ContactShadow shader created: handle={}", contact_shadow_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] ContactShadow shader creation failed");
+    }
+
     // Lum Compute shader
     {
         std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLumComputeFS;

@@ -1109,12 +1109,16 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         fs_src += R"(
             uniform sampler2D bloomBlur;
             uniform sampler2D ssaoTexture;
+            uniform sampler2D contactShadowTex;
             uniform sampler2D autoExposureTex;
             uniform sampler3D u_lut;
             uniform float exposure;
             uniform float bloomIntensity;
             uniform float u_lut_intensity;
+            uniform int u_bloom_enabled;
             uniform int u_ssao_enabled;
+            uniform int u_contact_shadow_enabled;
+            uniform float u_contact_shadow_strength;
             uniform int u_auto_exposure_enabled;
             uniform int u_lut_enabled;
             vec3 AcesFilmic(vec3 x) {
@@ -1127,8 +1131,14 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     float ao = texture(ssaoTexture, TexCoords).r;
                     hdrColor *= ao;
                 }
-                vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
-                hdrColor += bloomColor * bloomIntensity;
+                if (u_bloom_enabled != 0) {
+                    vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
+                    hdrColor += bloomColor * bloomIntensity;
+                }
+                if (u_contact_shadow_enabled != 0) {
+                    float cs = texture(contactShadowTex, TexCoords).r;
+                    hdrColor *= (1.0 - (1.0 - cs) * u_contact_shadow_strength);
+                }
                 float finalExposure = exposure;
                 if (u_auto_exposure_enabled != 0) {
                     finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
@@ -1234,6 +1244,45 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     result = mix(result, lutColor, u_lut_intensity);
                 }
                 FragColor = vec4(result, 1.0);
+            }
+        )";
+    } else if (effect_name == "contact_shadow") {
+        fs_src += R"(
+            uniform vec3 u_light_dir;
+            uniform float u_near;
+            uniform float u_far;
+            uniform vec2 u_screen_size;
+            uniform float u_strength;
+            uniform float u_step_size;
+            uniform int u_num_steps;
+            float linearizeDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+            void main() {
+                float depth = texture(screenTexture, TexCoords).r;
+                if (depth >= 1.0) { FragColor = vec4(1.0); return; }
+                float linDepth = linearizeDepth(depth);
+                vec3 lightDir = normalize(u_light_dir);
+                vec2 texelSize = 1.0 / u_screen_size;
+                float occlusion = 0.0;
+                int validSteps = 0;
+                for (int i = 1; i <= u_num_steps; ++i) {
+                    float dist = u_step_size * float(i);
+                    vec2 sampleUV = TexCoords + lightDir.xy * texelSize * dist * 50.0;
+                    if (sampleUV.x < 0.0 || sampleUV.y < 0.0 || sampleUV.x > 1.0 || sampleUV.y > 1.0) break;
+                    float sampleDepth = texture(screenTexture, sampleUV).r;
+                    if (sampleDepth >= 1.0) continue;
+                    float sampleLin = linearizeDepth(sampleDepth);
+                    float diff = sampleLin - linDepth;
+                    if (diff > 0.0 && diff < u_step_size) {
+                        float k = 1.0 - (diff / u_step_size);
+                        occlusion += k * k;
+                    }
+                    ++validSteps;
+                }
+                float shadow = validSteps > 0 ? 1.0 - clamp(occlusion / float(validSteps) * u_strength, 0.0, 1.0) : 1.0;
+                FragColor = vec4(vec3(shadow), 1.0);
             }
         )";
     } else if (effect_name == "color_grading") {
@@ -1347,10 +1396,14 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
         glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[1]);
     } else if (effect_name == "bloom_composite") {
-        if (params.size() >= 1) {
+        const bool bloom_enabled = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0);
+        if (bloom_enabled) {
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
             glUniform1i(glGetUniformLocation(shader, "bloomBlur"), 1);
+            glUniform1i(glGetUniformLocation(shader, "u_bloom_enabled"), 1);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_bloom_enabled"), 0);
         }
         if (params.size() >= 2) {
             glUniform1f(glGetUniformLocation(shader, "exposure"), params[1]);
@@ -1358,30 +1411,39 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         if (params.size() >= 3) {
             glUniform1f(glGetUniformLocation(shader, "bloomIntensity"), params[2]);
         }
-        if (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0) {
+        if (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) {
             glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[3]));
+            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[4]));
             glUniform1i(glGetUniformLocation(shader, "ssaoTexture"), 2);
             glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 0);
         }
-        if (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) {
+        if (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0) {
             glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[4]));
+            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[5]));
             glUniform1i(glGetUniformLocation(shader, "autoExposureTex"), 3);
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 0);
         }
-        if (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0) {
+        if (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0) {
             glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[5]));
+            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[6]));
             glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
-            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[6]);
+            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[7]);
             glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
+        }
+        if (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0) {
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[8]));
+            glUniform1i(glGetUniformLocation(shader, "contactShadowTex"), 5);
+            glUniform1i(glGetUniformLocation(shader, "u_contact_shadow_enabled"), 1);
+            glUniform1f(glGetUniformLocation(shader, "u_contact_shadow_strength"), params[9]);
+        } else {
+            glUniform1i(glGetUniformLocation(shader, "u_contact_shadow_enabled"), 0);
         }
     } else if (effect_name == "ssao" && params.size() >= 6) {
         glUniform1f(glGetUniformLocation(shader, "u_radius"), params[0]);
@@ -1389,6 +1451,14 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1f(glGetUniformLocation(shader, "u_near"), params[2]);
         glUniform1f(glGetUniformLocation(shader, "u_far"), params[3]);
         glUniform2f(glGetUniformLocation(shader, "u_screen_size"), params[4], params[5]);
+    } else if (effect_name == "contact_shadow" && params.size() >= 10) {
+        glUniform3f(glGetUniformLocation(shader, "u_light_dir"), params[0], params[1], params[2]);
+        glUniform1f(glGetUniformLocation(shader, "u_near"), params[3]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"), params[4]);
+        glUniform2f(glGetUniformLocation(shader, "u_screen_size"), params[5], params[6]);
+        glUniform1f(glGetUniformLocation(shader, "u_strength"), params[7]);
+        glUniform1f(glGetUniformLocation(shader, "u_step_size"), params[9]);
+        glUniform1i(glGetUniformLocation(shader, "u_num_steps"), static_cast<int>(params[8]));
     } else if (effect_name == "ssao_apply" && params.size() >= 2) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));

@@ -1069,6 +1069,61 @@ float4 PSMain(PSInput input) : SV_TARGET {
 )";
 
 // ============================================================
+// Contact Shadow 像素着色器
+// ============================================================
+
+constexpr const char* kContactShadowPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+cbuffer ContactShadowParams : register(b0) {
+    float3 u_light_dir;
+    float u_near;
+    float u_far;
+    float2 u_screen_size;
+    float u_strength;
+    float u_step_size;
+    int u_num_steps;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    if (depth >= 1.0) return float4(1.0, 1.0, 1.0, 1.0);
+    float linDepth = linearizeDepth(depth);
+    float3 lightDir = normalize(u_light_dir);
+    float2 texelSize = 1.0 / u_screen_size;
+    float occlusion = 0.0;
+    int validSteps = 0;
+    for (int i = 1; i <= u_num_steps; ++i) {
+        float dist = u_step_size * float(i);
+        float2 sampleUV = input.uv + lightDir.xy * texelSize * dist * 50.0;
+        if (sampleUV.x < 0.0 || sampleUV.y < 0.0 || sampleUV.x > 1.0 || sampleUV.y > 1.0) break;
+        float sampleDepth = screenTexture.Sample(u_sampler, sampleUV).r;
+        if (sampleDepth >= 1.0) continue;
+        float sampleLin = linearizeDepth(sampleDepth);
+        float diff = sampleLin - linDepth;
+        if (diff > 0.0 && diff < u_step_size) {
+            float k = 1.0 - (diff / u_step_size);
+            occlusion += k * k;
+        }
+        ++validSteps;
+    }
+    float shadow = validSteps > 0 ? 1.0 - clamp(occlusion / float(validSteps) * u_strength, 0.0, 1.0) : 1.0;
+    return float4(shadow, shadow, shadow, 1.0);
+}
+)";
+
+// ============================================================
 // SSAO 应用像素着色器（带 tone mapping）
 // ============================================================
 
@@ -1277,17 +1332,21 @@ Texture2D bloomBlur        : register(t1);
 Texture2D ssaoTexture      : register(t2);
 Texture2D autoExposureTex  : register(t3);
 Texture3D lutTexture       : register(t4);
+Texture2D contactShadowTex : register(t5);
 SamplerState u_sampler     : register(s0);
 SamplerState u_lut_sampler : register(s1);
 
 cbuffer BloomCompositeAeParams : register(b0) {
     float exposure;
     float bloomIntensity;
+    int bloomEnabled;
     int ssaoEnabled;
     int autoExposureEnabled;
     int lutEnabled;
     float lutIntensity;
-    float2 _pad2;
+    int csEnabled;
+    float csStrength;
+    float _pad2;
 };
 
 struct PSInput {
@@ -1306,8 +1365,14 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float ao = ssaoTexture.Sample(u_sampler, input.uv).r;
         color *= ao;
     }
-    float3 bloom = bloomBlur.Sample(u_sampler, input.uv).rgb;
-    color += bloom * bloomIntensity;
+    if (bloomEnabled) {
+        float3 bloom = bloomBlur.Sample(u_sampler, input.uv).rgb;
+        color += bloom * bloomIntensity;
+    }
+    if (csEnabled) {
+        float cs = contactShadowTex.Sample(u_sampler, input.uv).r;
+        color *= (1.0 - (1.0 - cs) * csStrength);
+    }
     float finalExposure = exposure;
     if (autoExposureEnabled) {
         finalExposure = autoExposureTex.Sample(u_sampler, float2(0.5, 0.5)).r;

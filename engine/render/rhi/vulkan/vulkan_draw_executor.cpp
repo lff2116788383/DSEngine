@@ -1816,6 +1816,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.bloom_composite_ssao_ae_shader_handle();
     else if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle())
         selected_shader_handle = shader_mgr.color_grading_shader_handle();
+    else if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle())
+        selected_shader_handle = shader_mgr.contact_shadow_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1848,12 +1850,13 @@ void VulkanDrawExecutor::DrawPostProcess(
     // 构建额外纹理绑定列表 {set2_binding, texture_handle}
     std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
     if (effect_name == "bloom_composite") {
-        // binding 2: bloom, binding 3: ssao, binding 4: ae, binding 5: lut
+        // binding 2: bloom, binding 3: ssao, binding 4: ae, binding 5: lut, binding 6: contact_shadow
         unsigned int bloom_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        unsigned int ssao_h  = (params.size() >= 4) ? static_cast<unsigned int>(params[3]) : 0;
-        unsigned int ae_h    = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
-        unsigned int lut_h   = (params.size() >= 7) ? static_cast<unsigned int>(params[5]) : 0;
-        extra_bindings = {{2, bloom_h}, {3, ssao_h}, {4, ae_h}, {5, lut_h}};
+        unsigned int ssao_h  = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
+        unsigned int ae_h    = (params.size() >= 6) ? static_cast<unsigned int>(params[5]) : 0;
+        unsigned int lut_h   = (params.size() >= 8) ? static_cast<unsigned int>(params[6]) : 0;
+        unsigned int cs_h    = (params.size() >= 10) ? static_cast<unsigned int>(params[8]) : 0;
+        extra_bindings = {{2, bloom_h}, {3, ssao_h}, {4, ae_h}, {5, lut_h}, {6, cs_h}};
     } else if (effect_name == "tonemapping") {
         unsigned int ae_h  = (params.size() >= 2) ? static_cast<unsigned int>(params[1]) : 0;
         unsigned int lut_h = (params.size() >= 4) ? static_cast<unsigned int>(params[2]) : 0;
@@ -1902,13 +1905,24 @@ void VulkanDrawExecutor::DrawPostProcess(
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "bloom_composite" && params.size() >= 2) {
-            struct { float exposure; float bloomIntensity; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; } pc{};
+            struct { float exposure; float bloomIntensity; int bloomEnabled; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; int csEnabled; float csStrength; } pc{};
             pc.exposure       = params[1];
             pc.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
-            pc.ssaoEnabled    = (params.size() >= 4 && static_cast<unsigned int>(params[3]) != 0) ? 1 : 0;
-            pc.aeEnabled      = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) ? 1 : 0;
-            pc.lutEnabled     = (params.size() >= 7 && static_cast<unsigned int>(params[5]) != 0) ? 1 : 0;
-            pc.lutIntensity   = (params.size() >= 7) ? params[6] : 0.0f;
+            pc.bloomEnabled   = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0) ? 1 : 0;
+            pc.ssaoEnabled    = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) ? 1 : 0;
+            pc.aeEnabled      = (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0) ? 1 : 0;
+            pc.lutEnabled     = (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0) ? 1 : 0;
+            pc.lutIntensity   = (params.size() >= 8) ? params[7] : 0.0f;
+            pc.csEnabled      = (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0) ? 1 : 0;
+            pc.csStrength     = (params.size() >= 10) ? params[9] : 0.0f;
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "contact_shadow" && params.size() >= 10) {
+            struct { float light_dir_x, light_dir_y, light_dir_z, near_p, far_p, screen_w, screen_h, strength, step_size; int num_steps; } pc{};
+            pc.light_dir_x = params[0]; pc.light_dir_y = params[1]; pc.light_dir_z = params[2];
+            pc.near_p = params[3]; pc.far_p = params[4];
+            pc.screen_w = params[5]; pc.screen_h = params[6];
+            pc.strength = params[7]; pc.num_steps = static_cast<int>(params[8]); pc.step_size = params[9];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "color_grading" && params.size() >= 2) {

@@ -524,6 +524,7 @@ void CompositePass::Setup(RenderGraph& graph) {
     auto ui_color    = graph.DeclareResource("ui_color");
     auto bloom_mip0  = graph.DeclareResource("bloom_mip0");
     auto ssao_color  = graph.DeclareResource("ssao_color");
+    auto contact_shadow = graph.DeclareResource("contact_shadow");
     auto lum_data    = graph.DeclareResource("lum_data");
     auto main_color  = graph.DeclareResource("main_color");
 
@@ -532,6 +533,7 @@ void CompositePass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, ui_color);
     graph.PassRead(pass, bloom_mip0);
     graph.PassRead(pass, ssao_color);
+    graph.PassRead(pass, contact_shadow);
     graph.PassRead(pass, lum_data);
     graph.PassWrite(pass, main_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
@@ -558,6 +560,12 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
     }
 
+    // 获取 Contact Shadow 纹理（如果启用）
+    unsigned int contact_shadow_tex = 0;
+    if (pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow != 0) {
+        contact_shadow_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.contact_shadow);
+    }
+
     // 获取 auto exposure 纹理（如果启用）
     unsigned int ae_tex = 0;
     if (ctx_.auto_exposure_active) {
@@ -577,9 +585,22 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
-    if (pp_enabled && pp_config.bloom_enabled) {
-        const unsigned int blur_v_color = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips.empty() ? 0 : ctx_.render_targets.bloom_mips[0]);
-        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {static_cast<float>(blur_v_color), pp_config.exposure, pp_config.bloom_intensity, static_cast<float>(ssao_tex), static_cast<float>(ae_tex), lut_tex, lut_intensity});
+    if (pp_enabled && (pp_config.bloom_enabled || contact_shadow_tex != 0)) {
+        const unsigned int bloom_tex = (pp_config.bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
+            ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
+            : 0;
+        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {
+            static_cast<float>(bloom_tex),
+            pp_config.exposure,
+            pp_config.bloom_intensity,
+            pp_config.bloom_enabled ? 1.0f : 0.0f,
+            static_cast<float>(ssao_tex),
+            static_cast<float>(ae_tex),
+            lut_tex,
+            lut_intensity,
+            static_cast<float>(contact_shadow_tex),
+            pp_config.contact_shadow_strength
+        });
     } else {
         if (ssao_tex != 0) {
             cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
@@ -730,6 +751,77 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
     cmd_buffer.DrawPostProcess(ssao_tex, "ssao_blur", {});
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// ContactShadowPass
+// ============================================================
+
+void ContactShadowPass::Setup(RenderGraph& graph) {
+    auto prez_depth = graph.DeclareResource("prez_depth");
+    auto contact_shadow = graph.DeclareResource("contact_shadow");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, contact_shadow);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool cs_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.contact_shadow_enabled) {
+            cs_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    if (!cs_enabled || ctx_.render_targets.contact_shadow == 0) {
+        return;
+    }
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    // 获取主光源方向
+    glm::vec3 light_dir(-0.4f, -1.0f, -0.3f);
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    if (light_view.begin() != light_view.end()) {
+        auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
+        if (light.enabled) {
+            light_dir = glm::normalize(light.direction);
+        }
+    }
+
+    // 获取相机参数
+    float near_plane = 0.1f, far_plane = 10000.0f;
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            break;
+        }
+    }
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.contact_shadow, glm::vec4(1.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "contact_shadow", {
+        light_dir.x, light_dir.y, light_dir.z,
+        near_plane,
+        far_plane,
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height()),
+        pp_config.contact_shadow_strength,
+        static_cast<float>(pp_config.contact_shadow_steps),
+        pp_config.contact_shadow_step_size
+    });
     cmd_buffer.EndRenderPass();
 }
 
