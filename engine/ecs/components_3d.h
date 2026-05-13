@@ -126,6 +126,24 @@ struct PostProcessComponent {
     float contact_shadow_strength = 0.5f;
     int contact_shadow_steps = 16;
     float contact_shadow_step_size = 0.5f;
+
+    // DOF (Depth of Field)
+    bool dof_enabled = false;
+    float dof_focus_distance = 100.0f;   // 对焦距离
+    float dof_focus_range = 50.0f;       // 对焦范围（过渡宽度）
+    float dof_bokeh_radius = 4.0f;       // 散景半径（像素）
+
+    // Motion Blur
+    bool motion_blur_enabled = false;
+    float motion_blur_intensity = 1.0f;  // 模糊强度
+    int motion_blur_samples = 8;         // 采样数
+
+    // SSR (Screen Space Reflections)
+    bool ssr_enabled = false;
+    float ssr_max_distance = 100.0f;     // 最大光线步进距离
+    float ssr_thickness = 0.5f;          // 表面厚度阈值
+    float ssr_step_size = 1.0f;          // 步进大小
+    int ssr_max_steps = 64;              // 最大步数
 };
 
 #define CSM_CASCADES 3

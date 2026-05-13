@@ -170,6 +170,41 @@ private:
     static float Halton(int index, int base);
 };
 
+// ---- DOF Pass ----
+class DOFPass : public IRenderPass {
+public:
+    explicit DOFPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "dof_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
+// ---- Motion Blur Pass ----
+class MotionBlurPass : public IRenderPass {
+public:
+    explicit MotionBlurPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "motion_blur_pass"; }
+private:
+    RenderPassContext& ctx_;
+    glm::mat4 prev_vp_ = glm::mat4(1.0f);
+    bool has_prev_vp_ = false;
+};
+
+// ---- SSR Pass ----
+class SSRPass : public IRenderPass {
+public:
+    explicit SSRPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "ssr_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Present Pass (runtime only) ----
 class PresentPass : public IRenderPass {
 public:

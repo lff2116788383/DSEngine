@@ -40,6 +40,9 @@ void DX11ShaderManager::Shutdown() {
     bloom_composite_ssao_ae_shader_handle_ = 0;
     color_grading_shader_handle_ = 0;
     taa_resolve_shader_handle_ = 0;
+    dof_shader_handle_ = 0;
+    motion_blur_shader_handle_ = 0;
+    ssr_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -265,6 +268,9 @@ void DX11ShaderManager::InitBuiltinShaders() {
     bloom_composite_ssao_ae_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoAePS, "bloom_composite_ssao_ae");
     color_grading_shader_handle_ = create_pp_shader(dx11_shaders::kColorGradingPS, "color_grading");
     taa_resolve_shader_handle_ = create_pp_shader(dx11_shaders::kTaaResolvePS, "taa_resolve");
+    dof_shader_handle_ = create_pp_shader(dx11_shaders::kDofPS, "dof");
+    motion_blur_shader_handle_ = create_pp_shader(dx11_shaders::kMotionBlurPS, "motion_blur");
+    ssr_shader_handle_ = create_pp_shader(dx11_shaders::kSsrPS, "ssr");
 }
 
 // ============================================================

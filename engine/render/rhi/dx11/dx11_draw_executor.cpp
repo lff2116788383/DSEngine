@@ -1157,6 +1157,87 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // DOF 专用路径
+    if (effect_name == "dof" && shader_mgr.dof_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 8) {
+            struct { float focus_distance, focus_range, bokeh_radius, near_p, far_p, screen_w, screen_h, _pad; } dp{
+                params[0], params[1], params[2], params[3], params[4], params[5], params[6], 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &dp, sizeof(dp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 8) {
+            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[7]));
+            if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.dof_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
+    // Motion Blur 专用路径
+    if (effect_name == "motion_blur" && shader_mgr.motion_blur_shader_handle()) {
+        if (!mb_params_cb_ && context_->device()) {
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage = D3D11_USAGE_DYNAMIC;
+            bd.ByteWidth = 80;  // 4 floats + mat4 = 80 bytes
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            context_->device()->CreateBuffer(&bd, nullptr, mb_params_cb_.GetAddressOf());
+        }
+        if (mb_params_cb_ && params.size() >= 20) {
+            struct MBParams { float intensity, num_samples, screen_w, screen_h; float reproj[16]; } mp{};
+            mp.intensity = params[0]; mp.num_samples = params[1];
+            mp.screen_w = params[2]; mp.screen_h = params[3];
+            for (int i = 0; i < 16; ++i) mp.reproj[i] = params[4 + i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(mb_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &mp, sizeof(mp));
+                dc->Unmap(mb_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, mb_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 21) {
+            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[20]));
+            if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.motion_blur_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
+    // SSR 专用路径
+    if (effect_name == "ssr" && shader_mgr.ssr_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 8) {
+            struct { float max_distance, thickness, step_size; int max_steps; float near_p, far_p, screen_w, screen_h; } sp{};
+            sp.max_distance = params[0]; sp.thickness = params[1]; sp.step_size = params[2];
+            sp.max_steps = static_cast<int>(params[3]);
+            sp.near_p = params[4]; sp.far_p = params[5];
+            sp.screen_w = params[6]; sp.screen_h = params[7];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &sp, sizeof(sp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 9) {
+            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[8]));
+            if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.ssr_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

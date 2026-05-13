@@ -1355,6 +1355,124 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     FragColor = vec4(rgbB, 1.0);
             }
         )";
+    } else if (effect_name == "dof") {
+        fs_src += R"(
+            uniform sampler2D u_color_texture;
+            uniform float u_focus_distance;
+            uniform float u_focus_range;
+            uniform float u_bokeh_radius;
+            uniform float u_near;
+            uniform float u_far;
+            uniform float u_screen_w;
+            uniform float u_screen_h;
+            float linearizeDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+            void main() {
+                float depth = texture(screenTexture, TexCoords).r;
+                float lin_depth = linearizeDepth(depth);
+                float coc = clamp(abs(lin_depth - u_focus_distance) / u_focus_range, 0.0, 1.0);
+                vec2 texel = 1.0 / vec2(u_screen_w, u_screen_h);
+                float radius = coc * u_bokeh_radius;
+                vec3 color = vec3(0.0);
+                float total_weight = 0.0;
+                const int SAMPLES = 16;
+                const float GOLDEN_ANGLE = 2.39996323;
+                for (int i = 0; i < SAMPLES; ++i) {
+                    float r = sqrt(float(i) / float(SAMPLES)) * radius;
+                    float theta = float(i) * GOLDEN_ANGLE;
+                    vec2 offset = vec2(cos(theta), sin(theta)) * r * texel;
+                    float sd = linearizeDepth(texture(screenTexture, TexCoords + offset).r);
+                    float sc = clamp(abs(sd - u_focus_distance) / u_focus_range, 0.0, 1.0);
+                    float w = max(sc, coc);
+                    color += texture(u_color_texture, TexCoords + offset).rgb * w;
+                    total_weight += w;
+                }
+                if (total_weight > 0.0) color /= total_weight;
+                else color = texture(u_color_texture, TexCoords).rgb;
+                FragColor = vec4(color, 1.0);
+            }
+        )";
+    } else if (effect_name == "motion_blur") {
+        fs_src += R"(
+            uniform sampler2D u_color_texture;
+            uniform float u_intensity;
+            uniform int u_samples;
+            uniform float u_screen_w;
+            uniform float u_screen_h;
+            uniform mat4 u_reproj;
+            void main() {
+                float depth = texture(screenTexture, TexCoords).r;
+                vec2 ndc = TexCoords * 2.0 - 1.0;
+                float z_ndc = depth * 2.0 - 1.0;
+                vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
+                vec4 prev_clip = u_reproj * clip_pos;
+                prev_clip.xy /= prev_clip.w;
+                vec2 velocity = (ndc - prev_clip.xy) * 0.5 * u_intensity;
+                vec3 color = texture(u_color_texture, TexCoords).rgb;
+                float total = 1.0;
+                for (int i = 1; i < u_samples; ++i) {
+                    float t = float(i) / float(u_samples);
+                    vec2 sample_uv = TexCoords + velocity * t;
+                    if (sample_uv.x >= 0.0 && sample_uv.x <= 1.0 && sample_uv.y >= 0.0 && sample_uv.y <= 1.0) {
+                        color += texture(u_color_texture, sample_uv).rgb;
+                        total += 1.0;
+                    }
+                }
+                FragColor = vec4(color / total, 1.0);
+            }
+        )";
+    } else if (effect_name == "ssr") {
+        fs_src += R"(
+            uniform sampler2D u_color_texture;
+            uniform float u_max_distance;
+            uniform float u_thickness;
+            uniform float u_step_size;
+            uniform int u_max_steps;
+            uniform float u_near;
+            uniform float u_far;
+            uniform float u_screen_w;
+            uniform float u_screen_h;
+            float linearizeDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+            vec3 reconstructNormal(vec2 uv) {
+                vec2 texel = 1.0 / vec2(u_screen_w, u_screen_h);
+                float dc = linearizeDepth(texture(screenTexture, uv).r);
+                float dl = linearizeDepth(texture(screenTexture, uv - vec2(texel.x, 0.0)).r);
+                float dr = linearizeDepth(texture(screenTexture, uv + vec2(texel.x, 0.0)).r);
+                float db = linearizeDepth(texture(screenTexture, uv - vec2(0.0, texel.y)).r);
+                float dt = linearizeDepth(texture(screenTexture, uv + vec2(0.0, texel.y)).r);
+                return normalize(vec3(dl - dr, db - dt, 2.0 * texel.x * dc));
+            }
+            void main() {
+                float depth = texture(screenTexture, TexCoords).r;
+                if (depth >= 1.0) { FragColor = vec4(0.0); return; }
+                float lin_depth = linearizeDepth(depth);
+                vec3 normal = reconstructNormal(TexCoords);
+                vec3 view_dir = normalize(vec3(TexCoords * 2.0 - 1.0, 1.0));
+                vec3 reflect_dir = reflect(view_dir, normal);
+                vec2 texel = 1.0 / vec2(u_screen_w, u_screen_h);
+                vec2 ray_uv = TexCoords;
+                float ray_depth = lin_depth;
+                for (int i = 0; i < u_max_steps; ++i) {
+                    ray_uv += reflect_dir.xy * texel * u_step_size;
+                    if (ray_uv.x < 0.0 || ray_uv.x > 1.0 || ray_uv.y < 0.0 || ray_uv.y > 1.0) break;
+                    float sd = linearizeDepth(texture(screenTexture, ray_uv).r);
+                    ray_depth += reflect_dir.z * u_step_size;
+                    float dd = ray_depth - sd;
+                    if (dd > 0.0 && dd < u_thickness) {
+                        float fade = 1.0 - float(i) / float(u_max_steps);
+                        vec3 hit_color = texture(u_color_texture, ray_uv).rgb;
+                        FragColor = vec4(hit_color * fade, fade);
+                        return;
+                    }
+                }
+                FragColor = vec4(0.0);
+            }
+        )";
     } else if (effect_name == "taa_resolve") {
         fs_src += R"(
             uniform sampler2D u_history;
@@ -1553,6 +1671,38 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
         }
+    } else if (effect_name == "dof" && params.size() >= 8) {
+        glUniform1f(glGetUniformLocation(shader, "u_focus_distance"), params[0]);
+        glUniform1f(glGetUniformLocation(shader, "u_focus_range"), params[1]);
+        glUniform1f(glGetUniformLocation(shader, "u_bokeh_radius"), params[2]);
+        glUniform1f(glGetUniformLocation(shader, "u_near"), params[3]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"), params[4]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[5]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[6]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[7]));
+        glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
+    } else if (effect_name == "motion_blur" && params.size() >= 21) {
+        glUniform1f(glGetUniformLocation(shader, "u_intensity"), params[0]);
+        glUniform1i(glGetUniformLocation(shader, "u_samples"), static_cast<int>(params[1]));
+        glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[2]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[3]);
+        glUniformMatrix4fv(glGetUniformLocation(shader, "u_reproj"), 1, GL_FALSE, &params[4]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[20]));
+        glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
+    } else if (effect_name == "ssr" && params.size() >= 9) {
+        glUniform1f(glGetUniformLocation(shader, "u_max_distance"), params[0]);
+        glUniform1f(glGetUniformLocation(shader, "u_thickness"), params[1]);
+        glUniform1f(glGetUniformLocation(shader, "u_step_size"), params[2]);
+        glUniform1i(glGetUniformLocation(shader, "u_max_steps"), static_cast<int>(params[3]));
+        glUniform1f(glGetUniformLocation(shader, "u_near"), params[4]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"), params[5]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[6]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[7]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[8]));
+        glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
     } else if (effect_name == "fxaa" && params.size() >= 2) {
         glUniform2f(glGetUniformLocation(shader, "u_resolution"), params[0], params[1]);
     } else if (effect_name == "taa_resolve" && params.size() >= 4) {

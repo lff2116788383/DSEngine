@@ -1205,6 +1205,141 @@ void main() {
 }
 )";
 
+// ============================================================
+// DOF (Depth of Field) Fragment Shader
+// ============================================================
+constexpr const char* kDofFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D u_color_texture;
+layout(push_constant) uniform DofParams {
+    float focus_distance;
+    float focus_range;
+    float bokeh_radius;
+    float near_plane;
+    float far_plane;
+    float screen_w;
+    float screen_h;
+};
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+}
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    float lin_depth = linearizeDepth(depth);
+    float coc = clamp(abs(lin_depth - focus_distance) / focus_range, 0.0, 1.0);
+    vec2 texel = 1.0 / vec2(screen_w, screen_h);
+    float radius = coc * bokeh_radius;
+    vec3 color = vec3(0.0);
+    float total_weight = 0.0;
+    const int SAMPLES = 16;
+    const float GOLDEN_ANGLE = 2.39996323;
+    for (int i = 0; i < SAMPLES; ++i) {
+        float r = sqrt(float(i) / float(SAMPLES)) * radius;
+        float theta = float(i) * GOLDEN_ANGLE;
+        vec2 offset = vec2(cos(theta), sin(theta)) * r * texel;
+        float sample_depth = linearizeDepth(texture(screenTexture, vTexCoords + offset).r);
+        float sample_coc = clamp(abs(sample_depth - focus_distance) / focus_range, 0.0, 1.0);
+        float w = max(sample_coc, coc);
+        color += texture(u_color_texture, vTexCoords + offset).rgb * w;
+        total_weight += w;
+    }
+    if (total_weight > 0.0) color /= total_weight;
+    else color = texture(u_color_texture, vTexCoords).rgb;
+    FragColor = vec4(color, 1.0);
+}
+)";
+
+// ============================================================
+// Motion Blur Fragment Shader
+// ============================================================
+constexpr const char* kMotionBlurFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D u_color_texture;
+layout(push_constant) uniform MotionBlurParams {
+    float intensity;
+    float num_samples;
+    float screen_w;
+    float screen_h;
+    mat4 reproj;  // prev_vp * inverse(current_vp), CPU 预计算
+};
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    vec2 ndc = vTexCoords * 2.0 - 1.0;
+    float z_ndc = depth * 2.0 - 1.0;
+    vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
+    vec4 prev_clip = reproj * clip_pos;
+    prev_clip.xy /= prev_clip.w;
+    vec2 velocity = (ndc - prev_clip.xy) * 0.5 * intensity;
+    int samples = max(int(num_samples), 1);
+    vec3 color = texture(u_color_texture, vTexCoords).rgb;
+    float total = 1.0;
+    for (int i = 1; i < samples; ++i) {
+        float t = float(i) / float(samples);
+        vec2 sample_uv = vTexCoords + velocity * t;
+        if (sample_uv.x >= 0.0 && sample_uv.x <= 1.0 && sample_uv.y >= 0.0 && sample_uv.y <= 1.0) {
+            color += texture(u_color_texture, sample_uv).rgb;
+            total += 1.0;
+        }
+    }
+    FragColor = vec4(color / total, 1.0);
+}
+)";
+
+// ============================================================
+// SSR (Screen Space Reflections) Fragment Shader
+// ============================================================
+constexpr const char* kSsrFS = R"(
+layout(set = 2, binding = 2) uniform sampler2D u_color_texture;
+layout(push_constant) uniform SsrParams {
+    float max_distance;
+    float thickness;
+    float step_size;
+    int max_steps;
+    float near_plane;
+    float far_plane;
+    float screen_w;
+    float screen_h;
+};
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+}
+vec3 reconstructNormal(vec2 uv) {
+    vec2 texel = 1.0 / vec2(screen_w, screen_h);
+    float dc = linearizeDepth(texture(screenTexture, uv).r);
+    float dl = linearizeDepth(texture(screenTexture, uv - vec2(texel.x, 0.0)).r);
+    float dr = linearizeDepth(texture(screenTexture, uv + vec2(texel.x, 0.0)).r);
+    float db = linearizeDepth(texture(screenTexture, uv - vec2(0.0, texel.y)).r);
+    float dt = linearizeDepth(texture(screenTexture, uv + vec2(0.0, texel.y)).r);
+    return normalize(vec3(dl - dr, db - dt, 2.0 * texel.x * dc));
+}
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    if (depth >= 1.0) { FragColor = vec4(0.0); return; }
+    float lin_depth = linearizeDepth(depth);
+    vec3 normal = reconstructNormal(vTexCoords);
+    vec3 view_dir = vec3(vTexCoords * 2.0 - 1.0, 1.0);
+    view_dir = normalize(view_dir);
+    vec3 reflect_dir = reflect(view_dir, normal);
+    vec2 texel = 1.0 / vec2(screen_w, screen_h);
+    vec2 ray_uv = vTexCoords;
+    float ray_depth = lin_depth;
+    for (int i = 0; i < max_steps; ++i) {
+        ray_uv += reflect_dir.xy * texel * step_size;
+        if (ray_uv.x < 0.0 || ray_uv.x > 1.0 || ray_uv.y < 0.0 || ray_uv.y > 1.0) break;
+        float sample_depth = linearizeDepth(texture(screenTexture, ray_uv).r);
+        ray_depth += reflect_dir.z * step_size;
+        float depth_diff = ray_depth - sample_depth;
+        if (depth_diff > 0.0 && depth_diff < thickness) {
+            float fade = 1.0 - float(i) / float(max_steps);
+            vec3 hit_color = texture(u_color_texture, ray_uv).rgb;
+            FragColor = vec4(hit_color * fade, fade);
+            return;
+        }
+    }
+    FragColor = vec4(0.0);
+}
+)";
+
 } // namespace vulkan_shaders
 } // namespace render
 } // namespace dse

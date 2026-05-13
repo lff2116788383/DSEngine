@@ -724,6 +724,36 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] TAA Resolve shader creation failed");
     }
+
+    // DOF shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDofFS;
+        dof_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (dof_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] DOF shader created: handle={}", dof_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] DOF shader creation failed");
+    }
+
+    // Motion Blur shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kMotionBlurFS;
+        motion_blur_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (motion_blur_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Motion Blur shader created: handle={}", motion_blur_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Motion Blur shader creation failed");
+    }
+
+    // SSR shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsrFS;
+        ssr_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (ssr_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] SSR shader created: handle={}", ssr_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] SSR shader creation failed");
+    }
 }
 
 // ============================================================================

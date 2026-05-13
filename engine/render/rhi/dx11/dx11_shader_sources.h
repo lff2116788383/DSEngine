@@ -1485,6 +1485,170 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// DOF (Depth of Field) Pixel Shader
+// ============================================================
+constexpr const char* kDofPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D colorTexture  : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer DofParams : register(b0) {
+    float focus_distance;
+    float focus_range;
+    float bokeh_radius;
+    float near_plane;
+    float far_plane;
+    float screen_w;
+    float screen_h;
+    float _pad0;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0f - 1.0f;
+    return (2.0f * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    float lin_depth = linearizeDepth(depth);
+    float coc = saturate(abs(lin_depth - focus_distance) / focus_range);
+    float2 texel = float2(1.0f / screen_w, 1.0f / screen_h);
+    float radius = coc * bokeh_radius;
+    float3 color = float3(0.0f, 0.0f, 0.0f);
+    float total_weight = 0.0f;
+    static const int SAMPLES = 16;
+    static const float GOLDEN_ANGLE = 2.39996323f;
+    for (int i = 0; i < SAMPLES; ++i) {
+        float r = sqrt(float(i) / float(SAMPLES)) * radius;
+        float theta = float(i) * GOLDEN_ANGLE;
+        float2 offset = float2(cos(theta), sin(theta)) * r * texel;
+        float sample_depth = linearizeDepth(screenTexture.Sample(u_sampler, input.uv + offset).r);
+        float sample_coc = saturate(abs(sample_depth - focus_distance) / focus_range);
+        float w = max(sample_coc, coc);
+        color += colorTexture.Sample(u_sampler, input.uv + offset).rgb * w;
+        total_weight += w;
+    }
+    if (total_weight > 0.0f) color /= total_weight;
+    else color = colorTexture.Sample(u_sampler, input.uv).rgb;
+    return float4(color, 1.0f);
+}
+)";
+
+// ============================================================
+// Motion Blur Pixel Shader
+// ============================================================
+constexpr const char* kMotionBlurPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D colorTexture  : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer MotionBlurParams : register(b0) {
+    float intensity;
+    float num_samples;
+    float screen_w;
+    float screen_h;
+    float4x4 reproj;  // prev_vp * inverse(current_vp), CPU 预计算
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    float2 ndc = input.uv * 2.0f - 1.0f;
+    float z_ndc = depth * 2.0f - 1.0f;
+    float4 clip_pos = float4(ndc, z_ndc, 1.0f);
+    float4 prev_clip = mul(clip_pos, reproj);
+    prev_clip.xy /= prev_clip.w;
+    float2 velocity = (ndc - prev_clip.xy) * 0.5f * intensity;
+    int samples = max(int(num_samples), 1);
+    float3 color = colorTexture.Sample(u_sampler, input.uv).rgb;
+    float total = 1.0f;
+    for (int i = 1; i < samples; ++i) {
+        float t = float(i) / float(samples);
+        float2 sample_uv = input.uv + velocity * t;
+        if (sample_uv.x >= 0.0f && sample_uv.x <= 1.0f && sample_uv.y >= 0.0f && sample_uv.y <= 1.0f) {
+            color += colorTexture.Sample(u_sampler, sample_uv).rgb;
+            total += 1.0f;
+        }
+    }
+    return float4(color / total, 1.0f);
+}
+)";
+
+// ============================================================
+// SSR (Screen Space Reflections) Pixel Shader
+// ============================================================
+constexpr const char* kSsrPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D colorTexture  : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer SsrParams : register(b0) {
+    float max_distance;
+    float thickness;
+    float step_size;
+    int max_steps;
+    float near_plane;
+    float far_plane;
+    float screen_w;
+    float screen_h;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float linearizeDepth(float d) {
+    float z = d * 2.0f - 1.0f;
+    return (2.0f * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+}
+
+float3 reconstructNormal(float2 uv) {
+    float2 texel = float2(1.0f / screen_w, 1.0f / screen_h);
+    float dc = linearizeDepth(screenTexture.Sample(u_sampler, uv).r);
+    float dl = linearizeDepth(screenTexture.Sample(u_sampler, uv - float2(texel.x, 0.0f)).r);
+    float dr = linearizeDepth(screenTexture.Sample(u_sampler, uv + float2(texel.x, 0.0f)).r);
+    float db = linearizeDepth(screenTexture.Sample(u_sampler, uv - float2(0.0f, texel.y)).r);
+    float dt = linearizeDepth(screenTexture.Sample(u_sampler, uv + float2(0.0f, texel.y)).r);
+    return normalize(float3(dl - dr, db - dt, 2.0f * texel.x * dc));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    if (depth >= 1.0f) return float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float lin_depth = linearizeDepth(depth);
+    float3 normal = reconstructNormal(input.uv);
+    float3 view_dir = normalize(float3(input.uv * 2.0f - 1.0f, 1.0f));
+    float3 reflect_dir = reflect(view_dir, normal);
+    float2 texel = float2(1.0f / screen_w, 1.0f / screen_h);
+    float2 ray_uv = input.uv;
+    float ray_depth = lin_depth;
+    for (int i = 0; i < max_steps; ++i) {
+        ray_uv += reflect_dir.xy * texel * step_size;
+        if (ray_uv.x < 0.0f || ray_uv.x > 1.0f || ray_uv.y < 0.0f || ray_uv.y > 1.0f) break;
+        float sample_depth = linearizeDepth(screenTexture.Sample(u_sampler, ray_uv).r);
+        ray_depth += reflect_dir.z * step_size;
+        float depth_diff = ray_depth - sample_depth;
+        if (depth_diff > 0.0f && depth_diff < thickness) {
+            float fade = 1.0f - float(i) / float(max_steps);
+            float3 hit_color = colorTexture.Sample(u_sampler, ray_uv).rgb;
+            return float4(hit_color * fade, fade);
+        }
+    }
+    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

@@ -20,6 +20,8 @@ struct RenderPipelineResources {
     unsigned int pp_contact_shadow_rt = 0;  // 接触阴影
     unsigned int pp_fxaa_rt = 0;       // FXAA 输出
     unsigned int pp_taa_rt = 0;        // TAA resolve 输出
+    unsigned int pp_dof_rt = 0;        // DOF 输出
+    unsigned int pp_ssr_rt = 0;        // SSR 输出
 
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
@@ -52,6 +54,8 @@ struct RenderPipelineResources {
         pp_contact_shadow_rt = 0;
         pp_fxaa_rt = 0;
         pp_taa_rt = 0;
+        pp_dof_rt = 0;
+        pp_ssr_rt = 0;
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;
         pp_lum_adapted_rt[1] = 0;

@@ -98,6 +98,9 @@ public:
     unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
     unsigned int color_grading_shader_handle() const { return color_grading_shader_handle_; }
     unsigned int taa_resolve_shader_handle() const { return taa_resolve_shader_handle_; }
+    unsigned int dof_shader_handle() const { return dof_shader_handle_; }
+    unsigned int motion_blur_shader_handle() const { return motion_blur_shader_handle_; }
+    unsigned int ssr_shader_handle() const { return ssr_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -136,6 +139,9 @@ private:
     unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
     unsigned int color_grading_shader_handle_ = 0;
     unsigned int taa_resolve_shader_handle_ = 0;
+    unsigned int dof_shader_handle_ = 0;
+    unsigned int motion_blur_shader_handle_ = 0;
+    unsigned int ssr_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

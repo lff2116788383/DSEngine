@@ -1028,5 +1028,247 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     }
 }
 
+// ============================================================
+// DOFPass
+// ============================================================
+
+void DOFPass::Setup(RenderGraph& graph) {
+    auto main_color  = graph.DeclareResource("main_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto dof_color   = graph.DeclareResource("dof_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, main_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, dof_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void DOFPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool dof_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.dof_enabled) {
+            dof_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    if (!dof_enabled || ctx_.render_targets.dof == 0) return;
+
+    // DOF 运行于 Composite 之后，读 main RT（已完成 tonemapping）
+    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (main_color_tex == 0 || depth_tex == 0) return;
+
+    float near_plane = 0.1f, far_plane = 10000.0f;
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            break;
+        }
+    }
+
+    // Pass 1: DOF → dof RT
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "dof", {
+        pp_config.dof_focus_distance,
+        pp_config.dof_focus_range,
+        pp_config.dof_bokeh_radius,
+        near_plane,
+        far_plane,
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height()),
+        static_cast<float>(main_color_tex)
+    });
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: dof RT → main RT（回写）
+    const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
+    if (dof_tex != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
+        cmd_buffer.DrawPostProcess(dof_tex, "copy", {});
+        cmd_buffer.EndRenderPass();
+    }
+}
+
+// ============================================================
+// MotionBlurPass
+// ============================================================
+
+void MotionBlurPass::Setup(RenderGraph& graph) {
+    auto main_color  = graph.DeclareResource("main_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto mb_color    = graph.DeclareResource("motion_blur_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, main_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, mb_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool mb_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.motion_blur_enabled) {
+            mb_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    if (!mb_enabled || ctx_.render_targets.dof == 0) return;
+
+    // Motion blur 运行于 DOF 之后，读 main RT（已完成 composite + DOF）
+    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (main_color_tex == 0 || depth_tex == 0) return;
+
+    float near_plane = 0.1f, far_plane = 10000.0f;
+    glm::mat4 current_vp = glm::mat4(1.0f);
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(cam.fov),
+                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                near_plane, far_plane);
+            glm::mat4 view = glm::mat4(1.0f);
+            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+                auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                view = glm::lookAt(transform.position, transform.position + front, up);
+            }
+            current_vp = projection * view;
+            break;
+        }
+    }
+
+    if (!has_prev_vp_) {
+        prev_vp_ = current_vp;
+        has_prev_vp_ = true;
+        return;
+    }
+
+    // CPU 预计算重投影矩阵 = prev_vp * inverse(current_vp)
+    // 避免 HLSL 无 inverse() + Vulkan push constant 128B 限制
+    glm::mat4 reproj = prev_vp_ * glm::inverse(current_vp);
+    const float* reproj_ptr = &reproj[0][0];
+
+    std::vector<float> params;
+    params.reserve(24);
+    // [0]: intensity, [1]: samples, [2]: screen_w, [3]: screen_h
+    params.push_back(pp_config.motion_blur_intensity);
+    params.push_back(static_cast<float>(pp_config.motion_blur_samples));
+    params.push_back(static_cast<float>(Screen::width()));
+    params.push_back(static_cast<float>(Screen::height()));
+    // [4..19]: reproj matrix (col-major)
+    for (int i = 0; i < 16; ++i) params.push_back(reproj_ptr[i]);
+    // [20]: color texture handle (main RT, post-composite)
+    params.push_back(static_cast<float>(main_color_tex));
+
+    // Pass 1: motion blur → dof RT（复用为 scratch）
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "motion_blur", params);
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: dof RT → main RT（回写）
+    const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
+    if (mb_tex != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
+        cmd_buffer.DrawPostProcess(mb_tex, "copy", {});
+        cmd_buffer.EndRenderPass();
+    }
+
+    prev_vp_ = current_vp;
+}
+
+// ============================================================
+// SSRPass
+// ============================================================
+
+void SSRPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto ssr_color   = graph.DeclareResource("ssr_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, ssr_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void SSRPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    bool ssr_enabled = false;
+    dse::PostProcessComponent pp_config;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.ssr_enabled) {
+            ssr_enabled = true;
+            pp_config = pp;
+            break;
+        }
+    }
+
+    if (!ssr_enabled || ctx_.render_targets.ssr == 0) return;
+
+    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (scene_color_tex == 0 || depth_tex == 0) return;
+
+    float near_plane = 0.1f, far_plane = 10000.0f;
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            break;
+        }
+    }
+
+    // Pass 1: 渲染 SSR 到半分辨率 ssr RT
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.ssr, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "ssr", {
+        pp_config.ssr_max_distance,
+        pp_config.ssr_thickness,
+        pp_config.ssr_step_size,
+        static_cast<float>(pp_config.ssr_max_steps),
+        near_plane,
+        far_plane,
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height()),
+        static_cast<float>(scene_color_tex)
+    });
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: 将 SSR 结果叠加到 scene RT（利用 SSR alpha 作为混合权重）
+    const unsigned int ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
+    if (ssr_tex != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+        cmd_buffer.DrawPostProcess(ssr_tex, "ui_overlay", {});
+        cmd_buffer.EndRenderPass();
+    }
+}
+
 } // namespace render
 } // namespace dse

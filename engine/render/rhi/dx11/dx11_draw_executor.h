@@ -245,6 +245,9 @@ private:
     // 通用后处理参数 CB（32B，各效果共用）
     ComPtr<ID3D11Buffer> pp_params_cb_;
 
+    // Motion Blur 参数 CB（160B，含两个 mat4）
+    ComPtr<ID3D11Buffer> mb_params_cb_;
+
     // 粒子公告板四边形（静态 VBO+IBO）
     ComPtr<ID3D11Buffer> particle_quad_vbo_;
     ComPtr<ID3D11Buffer> particle_quad_ibo_;
