@@ -208,12 +208,7 @@ if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
 endif()
 
-# PhysX 禁用或缺库时排除 physics3d 相关源文件
-if(NOT DSE_ENABLE_PHYSX)
-    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
-elseif(MSVC AND NOT DSE_HAS_PHYSX_LIBS)
-    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
-endif()
+# PhysX 排除逻辑移至 gameplay_3d append 之后（见下方）
 
 if(NOT DSE_ENABLE_3D)
     list(APPEND engine_cpp
@@ -230,6 +225,16 @@ if(DSE_ENABLE_3D)
     # 不再构建 DSE_Gameplay3D.dll。
     file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
     list(APPEND engine_cpp ${gameplay_3d_cpp})
+endif()
+
+# PhysX 禁用或缺库时排除依赖 Physics3DSystem 的源文件
+# 注意：必须在 gameplay_3d append 之后执行
+if(NOT DSE_ENABLE_PHYSX OR (MSVC AND NOT DSE_HAS_PHYSX_LIBS))
+    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/vehicle/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/buoyancy/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/ragdoll/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/fracture/.*\\.cpp$")
 endif()
 
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")

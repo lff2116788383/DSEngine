@@ -1,6 +1,8 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/core/service_locator.h"
+#ifdef DSE_ENABLE_PHYSX
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #include "engine/ecs/components_3d_fluid.h"
 
 namespace dse::gameplay3d {
@@ -19,11 +21,13 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     animator_system_.SetAssetManager(asset_manager);
     particle3d_system_.SetAssetManager(asset_manager);
     particle3d_system_.Init(world, rhi_device);
-    fracture_system_.SetAssetManager(asset_manager);
     cloth_system_.SetAssetManager(asset_manager);
     fluid_system_.Init(world, rhi_device);
-    ragdoll_system_.SetAssetManager(asset_manager);
     softbody_system_.SetAssetManager(asset_manager);
+#ifdef DSE_ENABLE_PHYSX
+    fracture_system_.SetAssetManager(asset_manager);
+    ragdoll_system_.SetAssetManager(asset_manager);
+#endif
 #if defined(DSE_ENABLE_PHYSX)
     auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>();
     fracture_system_.SetPhysics3D(physics3d);
@@ -39,18 +43,22 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     animator_system_.Update(world, delta_time);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
+#ifdef DSE_ENABLE_PHYSX
     fracture_system_.Update(world, delta_time);
+#endif
     fluid_system_.Update(world, delta_time);
     frustum_culling_system_.Update(world);
 }
 
 void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     cloth_system_.FixedUpdate(world, fixed_delta_time);
-    ragdoll_system_.FixedUpdate(world, fixed_delta_time);
     softbody_system_.FixedUpdate(world, fixed_delta_time);
-    vehicle_system_.FixedUpdate(world, fixed_delta_time);
     rope_system_.FixedUpdate(world, fixed_delta_time);
+#ifdef DSE_ENABLE_PHYSX
+    ragdoll_system_.FixedUpdate(world, fixed_delta_time);
+    vehicle_system_.FixedUpdate(world, fixed_delta_time);
     buoyancy_system_.FixedUpdate(world, fixed_delta_time);
+#endif
 }
 
 void Gameplay3DModule::OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {
@@ -128,15 +136,17 @@ void Gameplay3DModule::OnShutdown(World& world) {
     mesh_render_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);
     particle3d_system_.SetAssetManager(nullptr);
-    fracture_system_.SetAssetManager(nullptr);
-    fracture_system_.SetPhysics3D(nullptr);
     cloth_system_.SetAssetManager(nullptr);
     fluid_system_.Shutdown(world);
+    softbody_system_.SetAssetManager(nullptr);
+#ifdef DSE_ENABLE_PHYSX
+    fracture_system_.SetAssetManager(nullptr);
+    fracture_system_.SetPhysics3D(nullptr);
     ragdoll_system_.SetAssetManager(nullptr);
     ragdoll_system_.SetPhysics3D(nullptr);
-    softbody_system_.SetAssetManager(nullptr);
     vehicle_system_.SetPhysics3D(nullptr);
     buoyancy_system_.SetPhysics3D(nullptr);
+#endif
 }
 
 } // namespace dse::gameplay3d

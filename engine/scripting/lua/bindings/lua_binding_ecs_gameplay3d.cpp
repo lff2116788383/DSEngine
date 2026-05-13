@@ -19,6 +19,7 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // FractureComponent 绑定
 // ============================================================
@@ -95,6 +96,8 @@ int L_EcsFractureIsFractured(lua_State* L) {
     lua_pushboolean(L, (fc && fc->is_fractured) ? 1 : 0);
     return 1;
 }
+
+#endif // DSE_ENABLE_PHYSX
 
 // ============================================================
 // ClothComponent 绑定
@@ -264,6 +267,7 @@ int L_EcsGetFluidParticleCount(lua_State* L) {
     return 1;
 }
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // RagdollComponent 绑定（Phase 2 — Task 1）
 // ============================================================
@@ -327,6 +331,8 @@ int L_EcsSetRagdollCollisionLayer(lua_State* L) {
     return 0;
 }
 
+#endif // DSE_ENABLE_PHYSX
+
 // ============================================================
 // SoftBodyComponent 绑定（Phase 2 — Task 2）
 // ============================================================
@@ -380,6 +386,7 @@ int L_EcsSoftBodyGetParticleCount(lua_State* L) {
     return 1;
 }
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // VehicleComponent 绑定（Phase 2 — Task 3）
 // ============================================================
@@ -450,6 +457,8 @@ int L_EcsVehicleGetWheelCount(lua_State* L) {
     lua_pushinteger(L, v ? static_cast<lua_Integer>(v->wheels.size()) : 0);
     return 1;
 }
+
+#endif // DSE_ENABLE_PHYSX
 
 // ============================================================
 // RopeComponent 绑定（Phase 2 — Task 4）
@@ -522,6 +531,7 @@ int L_EcsRopeSetGravity(lua_State* L) {
     return 0;
 }
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // BuoyancyComponent 绑定（Phase 2 — Task 5）
 // ============================================================
@@ -589,17 +599,21 @@ int L_EcsBuoyancySetUseFluid(lua_State* L) {
     return 0;
 }
 
+#endif // DSE_ENABLE_PHYSX
+
 } // namespace
 
 void RegisterEcsGameplay3DBindings(lua_State* L) {
     using namespace helper;
     RegisterBindings(L, {
+#ifdef DSE_ENABLE_PHYSX
         // 破碎
         {"add_fracture",              L_EcsAddFracture},
         {"set_fracture_params",       L_EcsSetFractureParams},
         {"fracture_apply_damage",     L_EcsFractureApplyDamage},
         {"fracture_trigger",          L_EcsFractureTrigger},
         {"fracture_is_fractured",     L_EcsFractureIsFractured},
+#endif
         // 布料
         {"add_cloth",                 L_EcsAddCloth},
         {"set_cloth_wind",            L_EcsSetClothWind},
@@ -613,34 +627,40 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"set_fluid_emit_direction",  L_EcsSetFluidEmitDirection},
         {"set_fluid_floor",           L_EcsSetFluidFloor},
         {"get_fluid_particle_count",  L_EcsGetFluidParticleCount},
+#ifdef DSE_ENABLE_PHYSX
         // 布娃娃（Phase 2）
         {"add_ragdoll",               L_EcsAddRagdoll},
         {"ragdoll_activate",          L_EcsRagdollActivate},
         {"ragdoll_deactivate",        L_EcsRagdollDeactivate},
         {"ragdoll_is_active",         L_EcsRagdollIsActive},
         {"set_ragdoll_collision_layer", L_EcsSetRagdollCollisionLayer},
+#endif
         // 软体（Phase 2）
         {"add_softbody",              L_EcsAddSoftBody},
         {"softbody_set_gravity",      L_EcsSoftBodySetGravity},
         {"softbody_pin_vertex",       L_EcsSoftBodyPinVertex},
         {"softbody_get_particle_count", L_EcsSoftBodyGetParticleCount},
+#ifdef DSE_ENABLE_PHYSX
         // 车辆（Phase 2）
         {"add_vehicle",               L_EcsAddVehicle},
         {"vehicle_add_wheel",         L_EcsVehicleAddWheel},
         {"vehicle_set_input",         L_EcsVehicleSetInput},
         {"vehicle_get_speed",         L_EcsVehicleGetSpeed},
         {"vehicle_get_wheel_count",   L_EcsVehicleGetWheelCount},
+#endif
         // 绳索（Phase 2）
         {"add_rope",                  L_EcsAddRope},
         {"rope_set_anchors",          L_EcsRopeSetAnchors},
         {"rope_get_positions",        L_EcsRopeGetPositions},
         {"rope_set_gravity",          L_EcsRopeSetGravity},
+#ifdef DSE_ENABLE_PHYSX
         // 浮力（Phase 2）
         {"add_buoyancy",              L_EcsAddBuoyancy},
         {"buoyancy_add_sample_point", L_EcsBuoyancyAddSamplePoint},
         {"buoyancy_set_water_level",  L_EcsBuoyancySetWaterLevel},
         {"buoyancy_get_submerge_ratio", L_EcsBuoyancyGetSubmergeRatio},
         {"buoyancy_set_use_fluid",    L_EcsBuoyancySetUseFluid},
+#endif
     });
 }
 

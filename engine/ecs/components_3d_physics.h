@@ -218,6 +218,7 @@ struct TerrainHeightmapComponent {
     }
 };
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // Ragdoll 布娃娃（Phase 2 — Task 1）
 // ============================================================
@@ -260,6 +261,8 @@ struct RagdollComponent {
     bool initialized = false;
 };
 
+#endif // DSE_ENABLE_PHYSX
+
 // ============================================================
 // SoftBody 软体模拟（Phase 2 — Task 2）
 // ============================================================
@@ -294,6 +297,7 @@ struct SoftBodyComponent {
     bool mesh_dirty = false;         ///< 需要回写 mesh 顶点
 };
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // Vehicle 车辆物理（Phase 2 — Task 3）
 // ============================================================
@@ -340,6 +344,8 @@ struct VehicleComponent {
     bool initialized = false;
 };
 
+#endif // DSE_ENABLE_PHYSX
+
 // ============================================================
 // Rope 绳索/链条（Phase 2 — Task 4）
 // ============================================================
@@ -368,6 +374,7 @@ struct RopeComponent {
     bool initialized = false;
 };
 
+#ifdef DSE_ENABLE_PHYSX
 // ============================================================
 // Buoyancy 浮力模拟（Phase 2 — Task 5）
 // ============================================================
@@ -393,6 +400,8 @@ struct BuoyancyComponent {
     // 运行时
     float submerge_ratio = 0.0f;       ///< 当前淹没比例 [0,1]
 };
+
+#endif // DSE_ENABLE_PHYSX
 
 } // namespace dse
 
