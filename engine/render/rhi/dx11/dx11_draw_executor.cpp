@@ -15,6 +15,57 @@
 
 namespace dse {
 namespace render {
+namespace {
+
+struct CompositeParamsView {
+    enum Index : std::size_t {
+        kBloomTex = 0,
+        kExposure,
+        kBloomIntensity,
+        kBloomEnabled,
+        kSsaoTex,
+        kAutoExposureTex,
+        kLutTex,
+        kLutIntensity,
+        kContactShadowTex,
+        kContactShadowStrength,
+        kVignetteEnabled,
+        kVignetteIntensity,
+        kVignetteRadius,
+        kVignetteSoftness,
+        kFilmGrainEnabled,
+        kFilmGrainIntensity,
+        kFilmGrainTime,
+        kCount
+    };
+
+    explicit CompositeParamsView(const std::vector<float>& in_params)
+        : params(in_params) {}
+
+    bool Has(Index index) const {
+        return params.size() > static_cast<std::size_t>(index);
+    }
+
+    float Float(Index index, float fallback = 0.0f) const {
+        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
+    }
+
+    unsigned int Texture(Index index) const {
+        return static_cast<unsigned int>(Float(index, 0.0f));
+    }
+
+    bool Flag(Index index) const {
+        return Float(index, 0.0f) != 0.0f;
+    }
+
+    bool HasRange(Index last_index) const {
+        return params.size() >= static_cast<std::size_t>(last_index) + 1;
+    }
+
+    const std::vector<float>& params;
+};
+
+} // namespace
 
 void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_mgr) {
     context_ = context;
@@ -785,11 +836,17 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
 
     // bloom_composite 专用路径：ACES Filmic Tone Mapping (+可选 SSAO / Auto Exposure / LUT)
     if (effect_name == "bloom_composite") {
-        const bool bloom_enabled = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0);
-        const bool has_ssao = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0);
-        const bool has_ae   = (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0);
-        const bool has_lut  = (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0);
-        const bool has_cs   = (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0);
+        const CompositeParamsView composite(params);
+        const bool bloom_enabled = composite.Flag(CompositeParamsView::kBloomEnabled) &&
+                                   composite.Texture(CompositeParamsView::kBloomTex) != 0;
+        const unsigned int ssao_tex_handle = composite.Texture(CompositeParamsView::kSsaoTex);
+        const unsigned int ae_tex_handle = composite.Texture(CompositeParamsView::kAutoExposureTex);
+        const unsigned int lut_tex_handle = composite.Texture(CompositeParamsView::kLutTex);
+        const unsigned int cs_tex_handle = composite.Texture(CompositeParamsView::kContactShadowTex);
+        const bool has_ssao = ssao_tex_handle != 0;
+        const bool has_ae   = ae_tex_handle != 0;
+        const bool has_lut  = lut_tex_handle != 0;
+        const bool has_cs   = cs_tex_handle != 0;
         // contact shadow / bloomEnabled 需要完整的 SSAO+AE+LUT 变体（含 contact shadow 绑定和 CB 字段）
         unsigned int shader_h;
         if (has_ae || has_lut || has_cs || !bloom_enabled) {
@@ -813,49 +870,75 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
         }
         if (bloom_enabled) {
-            const auto* bloom_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            const auto* bloom_tex = resource_mgr.GetTexture(composite.Texture(CompositeParamsView::kBloomTex));
             if (bloom_tex) dc->PSSetShaderResources(1, 1, bloom_tex->srv.GetAddressOf());
         }
         if (has_ssao) {
-            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
+            const auto* ao_tex = resource_mgr.GetTexture(ssao_tex_handle);
             if (ao_tex) dc->PSSetShaderResources(2, 1, ao_tex->srv.GetAddressOf());
         }
         if (has_ae) {
-            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
+            const auto* ae_tex = resource_mgr.GetTexture(ae_tex_handle);
             if (ae_tex) dc->PSSetShaderResources(3, 1, ae_tex->srv.GetAddressOf());
         }
         if (has_lut) {
-            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[6]));
+            const auto* lut_tex = resource_mgr.GetTexture(lut_tex_handle);
             if (lut_tex) {
                 dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
             }
         }
         if (has_cs) {
-            const auto* cs_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[8]));
+            const auto* cs_tex = resource_mgr.GetTexture(cs_tex_handle);
             if (cs_tex) dc->PSSetShaderResources(5, 1, cs_tex->srv.GetAddressOf());
         }
 
-        // 懒惰创建 bloom composite 参数 CB（32B: exposure, bloomIntensity, ssaoEnabled, aeEnabled, lutEnabled, lutIntensity, csEnabled, csStrength）
+        // 懒惰创建 bloom composite 参数 CB。
+        // 对齐 [`kBloomCompositeSsaoAePS`](engine/render/rhi/dx11/dx11_shader_sources.h:1329)
+        // 与 CPU 侧 composite params 顺序：bloom/ssao/ae/lut/contact shadow/vignette/grain。
         if (!bloom_composite_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage          = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth      = 48;
+            bd.ByteWidth      = 96;
             bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             context_->device()->CreateBuffer(&bd, nullptr, bloom_composite_params_cb_.GetAddressOf());
         }
         if (bloom_composite_params_cb_) {
-            struct BloomCompositeParams { float exposure; float bloomIntensity; int bloomEnabled; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; int csEnabled; float csStrength; float _pad[1]; } cp{};
-            cp.exposure       = (params.size() >= 2) ? params[1] : 1.0f;
-            cp.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
-            cp.bloomEnabled   = bloom_enabled ? 1 : 0;
-            cp.ssaoEnabled    = has_ssao ? 1 : 0;
-            cp.aeEnabled      = has_ae ? 1 : 0;
-            cp.lutEnabled     = has_lut ? 1 : 0;
-            cp.lutIntensity   = has_lut ? params[7] : 0.0f;
-            cp.csEnabled      = has_cs ? 1 : 0;
-            cp.csStrength     = has_cs ? params[9] : 0.0f;
+            struct BloomCompositeParams {
+                float exposure;
+                float bloomIntensity;
+                int bloomEnabled;
+                int ssaoEnabled;
+                int aeEnabled;
+                int lutEnabled;
+                float lutIntensity;
+                int csEnabled;
+                float csStrength;
+                int vignetteEnabled;
+                float vignetteIntensity;
+                float vignetteRadius;
+                float vignetteSoftness;
+                int filmGrainEnabled;
+                float filmGrainIntensity;
+                float filmGrainTime;
+            } cp{};
+            cp.exposure           = composite.Float(CompositeParamsView::kExposure, 1.0f);
+            cp.bloomIntensity     = composite.Float(CompositeParamsView::kBloomIntensity, 0.5f);
+            cp.bloomEnabled       = bloom_enabled ? 1 : 0;
+            cp.ssaoEnabled        = has_ssao ? 1 : 0;
+            cp.aeEnabled          = has_ae ? 1 : 0;
+            cp.lutEnabled         = has_lut ? 1 : 0;
+            cp.lutIntensity       = composite.Float(CompositeParamsView::kLutIntensity, 0.0f);
+            cp.csEnabled          = has_cs ? 1 : 0;
+            cp.csStrength         = composite.Float(CompositeParamsView::kContactShadowStrength, 0.0f);
+            cp.vignetteEnabled    = composite.Flag(CompositeParamsView::kVignetteEnabled) ? 1 : 0;
+            cp.vignetteIntensity  = composite.Float(CompositeParamsView::kVignetteIntensity, 0.0f);
+            cp.vignetteRadius     = composite.Float(CompositeParamsView::kVignetteRadius, 0.75f);
+            cp.vignetteSoftness   = composite.Float(CompositeParamsView::kVignetteSoftness, 0.35f);
+            cp.filmGrainEnabled   = composite.Flag(CompositeParamsView::kFilmGrainEnabled) ? 1 : 0;
+            cp.filmGrainIntensity = composite.Float(CompositeParamsView::kFilmGrainIntensity, 0.0f);
+            cp.filmGrainTime      = composite.Float(CompositeParamsView::kFilmGrainTime, 0.0f);
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(bloom_composite_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &cp, sizeof(cp));

@@ -1346,7 +1346,13 @@ cbuffer BloomCompositeAeParams : register(b0) {
     float lutIntensity;
     int csEnabled;
     float csStrength;
-    float _pad2;
+    int vignetteEnabled;
+    float vignetteIntensity;
+    float vignetteRadius;
+    float vignetteSoftness;
+    int filmGrainEnabled;
+    float filmGrainIntensity;
+    float filmGrainTime;
 };
 
 struct PSInput {
@@ -1357,6 +1363,10 @@ struct PSInput {
 float3 AcesFilmic(float3 x) {
     float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
     return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float GrainNoise(float2 uv, float time_seed) {
+    return frac(sin(dot(uv + float2(time_seed, time_seed * 0.37f), float2(12.9898f, 78.233f))) * 43758.5453f);
 }
 
 float4 PSMain(PSInput input) : SV_TARGET {
@@ -1382,6 +1392,17 @@ float4 PSMain(PSInput input) : SV_TARGET {
     if (lutEnabled) {
         float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(color)).rgb;
         color = lerp(color, lutColor, lutIntensity);
+    }
+    if (vignetteEnabled) {
+        float dist = length(input.uv - float2(0.5f, 0.5f));
+        float radius = clamp(vignetteRadius, 0.001f, 1.5f);
+        float softness = max(vignetteSoftness, 0.0001f);
+        float vignette = 1.0f - smoothstep(radius, radius + softness, dist);
+        color *= lerp(1.0f, vignette, clamp(vignetteIntensity, 0.0f, 1.0f));
+    }
+    if (filmGrainEnabled) {
+        float grain = GrainNoise(input.uv * float2(1280.0f, 720.0f), filmGrainTime) - 0.5f;
+        color = saturate(color + grain * filmGrainIntensity);
     }
     return float4(color, 1.0f);
 }

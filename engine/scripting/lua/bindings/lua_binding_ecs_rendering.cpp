@@ -947,6 +947,45 @@ int L_EcsSetPostProcessAutoExposure(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessVignette(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->vignette_enabled = lua_isnoneornil(L, 2) ? pp->vignette_enabled : helper::CheckBool(L, 2);
+    pp->vignette_intensity = helper::OptFloat(L, 3, pp->vignette_intensity);
+    pp->vignette_radius = helper::OptFloat(L, 4, pp->vignette_radius);
+    pp->vignette_softness = helper::OptFloat(L, 5, pp->vignette_softness);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_EcsSetPostProcessFilmGrain(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->film_grain_enabled = lua_isnoneornil(L, 2) ? pp->film_grain_enabled : helper::CheckBool(L, 2);
+    pp->film_grain_intensity = helper::OptFloat(L, 3, pp->film_grain_intensity);
+    pp->film_grain_time_scale = helper::OptFloat(L, 4, pp->film_grain_time_scale);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsSetPostProcessColorLut(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1014,7 +1053,14 @@ int L_EcsGetPostProcessState(lua_State* L) {
     helper::PushFloat(L, pp->ssao_radius);
     helper::PushFloat(L, pp->ssao_bias);
     helper::PushBool(L, pp->fxaa_enabled);
-    return 12;
+    helper::PushBool(L, pp->vignette_enabled);
+    helper::PushFloat(L, pp->vignette_intensity);
+    helper::PushFloat(L, pp->vignette_radius);
+    helper::PushFloat(L, pp->vignette_softness);
+    helper::PushBool(L, pp->film_grain_enabled);
+    helper::PushFloat(L, pp->film_grain_intensity);
+    helper::PushFloat(L, pp->film_grain_time_scale);
+    return 18;
 }
 
 // ============================================================
@@ -1219,6 +1265,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_ssao",     L_EcsSetPostProcessSSAO},
         {"set_post_process_fxaa",     L_EcsSetPostProcessFXAA},
         {"set_post_process_auto_exposure", L_EcsSetPostProcessAutoExposure},
+        {"set_post_process_vignette", L_EcsSetPostProcessVignette},
+        {"set_post_process_film_grain", L_EcsSetPostProcessFilmGrain},
         {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering

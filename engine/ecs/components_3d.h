@@ -103,6 +103,17 @@ struct PostProcessComponent {
     unsigned int color_lut_handle = 0;   // 3D LUT texture handle (0 = disabled)
     float color_lut_intensity = 1.0f;    // blend factor (0 = no LUT, 1 = full LUT)
 
+    // Vignette
+    bool vignette_enabled = false;
+    float vignette_intensity = 0.35f;
+    float vignette_radius = 0.75f;
+    float vignette_softness = 0.35f;
+
+    // Film Grain
+    bool film_grain_enabled = false;
+    float film_grain_intensity = 0.08f;
+    float film_grain_time_scale = 1.0f;
+
     // FXAA
     bool fxaa_enabled = true;
 

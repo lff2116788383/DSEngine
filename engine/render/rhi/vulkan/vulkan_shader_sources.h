@@ -1083,7 +1083,7 @@ void main() {
 }
 )";
 
-/// Bloom Composite + SSAO + Auto Exposure + LUT + Contact Shadow
+/// Bloom Composite + SSAO + Auto Exposure + LUT + Contact Shadow + Vignette + Film Grain
 constexpr const char* kBloomCompositeSsaoAeFS = R"(
 layout(set = 2, binding = 2) uniform sampler2D bloomBlur;
 layout(set = 2, binding = 3) uniform sampler2D ssaoTexture;
@@ -1100,10 +1100,20 @@ layout(push_constant) uniform BloomCompositeAeParams {
     float lutIntensity;
     int csEnabled;
     float csStrength;
+    int vignetteEnabled;
+    float vignetteIntensity;
+    float vignetteRadius;
+    float vignetteSoftness;
+    int filmGrainEnabled;
+    float filmGrainIntensity;
+    float filmGrainTime;
 };
 vec3 AcesFilmic(vec3 x) {
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+float GrainNoise(vec2 uv, float time_seed) {
+    return fract(sin(dot(uv + vec2(time_seed, time_seed * 0.37), vec2(12.9898, 78.233))) * 43758.5453);
 }
 void main() {
     vec3 color = texture(screenTexture, vTexCoords).rgb;
@@ -1128,6 +1138,17 @@ void main() {
     if (lutEnabled != 0) {
         vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
         color = mix(color, lutColor, lutIntensity);
+    }
+    if (vignetteEnabled != 0) {
+        float dist = length(vTexCoords - vec2(0.5));
+        float radius = clamp(vignetteRadius, 0.001, 1.5);
+        float softness = max(vignetteSoftness, 0.0001);
+        float vignette = 1.0 - smoothstep(radius, radius + softness, dist);
+        color *= mix(1.0, vignette, clamp(vignetteIntensity, 0.0, 1.0));
+    }
+    if (filmGrainEnabled != 0) {
+        float grain = GrainNoise(vTexCoords * vec2(1280.0, 720.0), filmGrainTime) - 0.5;
+        color = clamp(color + grain * filmGrainIntensity, 0.0, 1.0);
     }
     FragColor = vec4(color, 1.0);
 }

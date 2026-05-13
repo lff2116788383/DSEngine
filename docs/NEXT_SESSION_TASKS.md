@@ -1,6 +1,6 @@
 # DSEngine 后续会话任务指令
 
-> 更新日期: 2026-05-12
+> 更新日期: 2026-05-13
 > 基于 `docs/RENDER_PIPELINE_OPTIMIZATION.md` 路线图，编辑器相关任务暂缓。
 
 ---
@@ -17,61 +17,17 @@
 | KF 标题画面 3D 穿透修复 | 2026-05-12 |
 | 三端视觉一致性验证 (RMSE ~22) | 2026-05-12 |
 | Phase 2.4a: Auto Exposure 三后端 | 2026-05-12 |
+| Phase 2.4b: Color Grading LUT 三后端 | 2026-05-13 |
+| Phase 2.4c: Vignette / Film Grain 三后端 | 2026-05-13 |
+| Phase 4.3: Contact Shadow 三后端 | 2026-05-13 |
+
+> 注：以上条目标记为“代码与编译接入完成”；`bloom off / vignette on`、`bloom on / grain on`、`LUT + contact shadow + vignette` 三组运行时组合验证待补。
 
 ---
 
 ## 下一步任务（按优先级排序）
 
-### 任务 1: Color Grading LUT (Phase 2.4b) — 预估 1 天
-
-**目标**: 支持 3D LUT 纹理做色彩分级。
-
-**实现方案**:
-1. 新增 `u_color_lut` 3D 纹理采样（16³ 或 32³ LUT）
-2. 在 tonemapping 之后、FXAA 之前应用 LUT
-3. 支持从 .cube / .png 加载 LUT
-
-**涉及文件**:
-- `engine/render/shaders/src/` — tonemapping 或 composite shader 追加 LUT 采样
-- `engine/assets/` — LUT 加载器
-- `engine/ecs/components_3d.h` — PostProcessComponent 新增 `color_lut_handle`
-
-**验证**: 加载不同 LUT 纹理，画面色调明显变化。
-
----
-
-### 任务 2: Vignette / Film Grain (Phase 2.4c) — 预估 0.5 天
-
-**目标**: 简单的全屏后处理效果。
-
-**实现方案**:
-- Vignette: `float vignette = smoothstep(outer, inner, length(uv - 0.5));`
-- Film Grain: 噪声纹理 + 时间偏移
-
-在 FXAA 之前的 composite pass 中追加即可，~10 行 shader。
-
----
-
-### 任务 3: Contact Shadow (Phase 4.3) — 预估 3 天
-
-**目标**: 补充 CSM 分辨率不足区域的近距离微小遮挡细节。
-
-**实现方案**:
-1. 在 Forward Scene 之后新增一个 screen-space ray march pass
-2. 从每个像素沿主光源方向步进深度缓冲（16-32 步）
-3. 输出 contact shadow mask，与 CSM 阴影相乘
-4. 接入 `PostProcessComponent::contact_shadow_enabled`
-
-**涉及文件**:
-- `engine/render/passes/builtin_passes.h/cpp` — 新增 ContactShadowPass
-- `engine/render/shaders/src/` — contact_shadow.frag
-- 三后端 shader 编译
-
-**验证**: 角色脚底、物体接触面出现精细阴影细节。
-
----
-
-### 任务 4: Light Probe SH Bake (Phase 3.1) — 预估 1-2 周
+### 任务 1: Light Probe SH Bake (Phase 3.1) — 预估 1-2 周
 
 **目标**: 实现运行时 Light Probe SH 数据生成和查询（不含编辑器 UI）。
 
@@ -91,7 +47,7 @@
 
 ---
 
-### 任务 5: Reflection Probe + IBL (Phase 3.2) — 预估 1-2 周
+### 任务 2: Reflection Probe + IBL (Phase 3.2) — 预估 1-2 周
 
 **目标**: 利用 `ReflectionProbeComponent` 实现间接高光。
 
@@ -105,7 +61,7 @@
 
 ---
 
-### 任务 6: TAA (Phase 2.3) — 预估 2 周
+### 任务 3: TAA (Phase 2.3) — 预估 2 周
 
 **前置**: 需 Motion Vector RT（Forward Pass 额外输出）+ Jitter（逐帧抖动投影矩阵）+ 历史帧缓冲。
 

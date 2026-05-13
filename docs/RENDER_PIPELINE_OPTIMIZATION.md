@@ -116,8 +116,8 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 1. ~~**光源扩展性**~~：✅ 已解决 — Clustered Forward+ 支持 256+256 光源
 2. **屏幕空间效果部分缺失**：✅ SSAO 已实现；❌ SSR/SSGI 未实现
-3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA + Auto Exposure；❌ TAA/DOF/Motion Blur
-4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡；❌ Contact Shadow 未实现
+3. **后处理栈部分补齐**：✅ Bloom + SSAO + FXAA + Auto Exposure + Color Grading LUT + Vignette + Film Grain；❌ TAA/DOF/Motion Blur
+4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡 + Contact Shadow；后续可继续补更高阶阴影细节
 5. **无间接光照**：Light Probe / Reflection Probe 组件已定义但未接入管线（⚠️ SH 管线已通，Bake 未实现）
 
 ---
@@ -284,6 +284,23 @@ for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
 
 #### 2.4 其他后处理（按优先级递减）
 
+##### 2.4a Auto Exposure — ✅ 已完成
+
+> **实现日期**: 2026-05-12
+
+##### 2.4b Color Grading LUT — ✅ 已完成
+
+> **实现日期**: 2026-05-13
+
+##### 2.4c Vignette / Film Grain — ✅ 已完成
+
+> **实现日期**: 2026-05-13
+>
+> 已复用现有 [`bloom_composite`](engine/render/passes/builtin_passes.cpp:615) / final composite 路径，
+> 在 [`PostProcessComponent`](engine/ecs/components_3d.h:76) 中补充最小运行时参数，
+> 并同步更新 OpenGL / Vulkan / D3D11 三后端 composite shader 与执行器参数绑定。
+
+
 | 效果 | 复杂度 | 前置依赖 |
 |------|--------|----------|
 | Auto Exposure | 低 | Compute average luminance |
@@ -383,7 +400,12 @@ shadow = mix(shadow_cascade[i], shadow_cascade[i+1], blend);
 - Blocker search (二分法近似) → 估算半影宽度 → 可变核 Poisson PCF
 - 阴影远处柔和、近处锐利，更真实
 
-#### 4.3 Contact Shadow
+#### 4.3 Contact Shadow — ✅ 已完成
+
+> **实现日期**: 2026-05-13
+>
+> 已在 [`ContactShadowPass::Execute()`](engine/render/passes/builtin_passes.cpp:790) 中完成 screen-space ray march 接入，
+> 并在 [`CompositePass::Execute()`](engine/render/passes/builtin_passes.cpp:542) 中与 final composite 合流。
 
 在 Forward Scene 之后做一次 Screen-Space Ray March：
 - 从像素沿光源方向步进深度缓冲

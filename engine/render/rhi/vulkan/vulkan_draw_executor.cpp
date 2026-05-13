@@ -41,6 +41,54 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 
 namespace {
 
+struct CompositeParamsView {
+    enum Index : std::size_t {
+        kBloomTex = 0,
+        kExposure,
+        kBloomIntensity,
+        kBloomEnabled,
+        kSsaoTex,
+        kAutoExposureTex,
+        kLutTex,
+        kLutIntensity,
+        kContactShadowTex,
+        kContactShadowStrength,
+        kVignetteEnabled,
+        kVignetteIntensity,
+        kVignetteRadius,
+        kVignetteSoftness,
+        kFilmGrainEnabled,
+        kFilmGrainIntensity,
+        kFilmGrainTime,
+        kCount
+    };
+
+    explicit CompositeParamsView(const std::vector<float>& in_params)
+        : params(in_params) {}
+
+    bool Has(Index index) const {
+        return params.size() > static_cast<std::size_t>(index);
+    }
+
+    float Float(Index index, float fallback = 0.0f) const {
+        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
+    }
+
+    unsigned int Texture(Index index) const {
+        return static_cast<unsigned int>(Float(index, 0.0f));
+    }
+
+    bool Flag(Index index) const {
+        return Float(index, 0.0f) != 0.0f;
+    }
+
+    bool HasRange(Index last_index) const {
+        return params.size() >= static_cast<std::size_t>(last_index) + 1;
+    }
+
+    const std::vector<float>& params;
+};
+
 /// 创建 Vulkan 缓冲区（host-visible，用于动态更新）
 bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
                         VkDeviceSize size, VkBufferUsageFlags usage,
@@ -1850,13 +1898,14 @@ void VulkanDrawExecutor::DrawPostProcess(
     // 构建额外纹理绑定列表 {set2_binding, texture_handle}
     std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
     if (effect_name == "bloom_composite") {
-        // binding 2: bloom, binding 3: ssao, binding 4: ae, binding 5: lut, binding 6: contact_shadow
-        unsigned int bloom_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        unsigned int ssao_h  = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
-        unsigned int ae_h    = (params.size() >= 6) ? static_cast<unsigned int>(params[5]) : 0;
-        unsigned int lut_h   = (params.size() >= 8) ? static_cast<unsigned int>(params[6]) : 0;
-        unsigned int cs_h    = (params.size() >= 10) ? static_cast<unsigned int>(params[8]) : 0;
-        extra_bindings = {{2, bloom_h}, {3, ssao_h}, {4, ae_h}, {5, lut_h}, {6, cs_h}};
+        const CompositeParamsView composite(params);
+        extra_bindings = {
+            {2, composite.Texture(CompositeParamsView::kBloomTex)},
+            {3, composite.Texture(CompositeParamsView::kSsaoTex)},
+            {4, composite.Texture(CompositeParamsView::kAutoExposureTex)},
+            {5, composite.Texture(CompositeParamsView::kLutTex)},
+            {6, composite.Texture(CompositeParamsView::kContactShadowTex)}
+        };
     } else if (effect_name == "tonemapping") {
         unsigned int ae_h  = (params.size() >= 2) ? static_cast<unsigned int>(params[1]) : 0;
         unsigned int lut_h = (params.size() >= 4) ? static_cast<unsigned int>(params[2]) : 0;
@@ -1905,16 +1954,42 @@ void VulkanDrawExecutor::DrawPostProcess(
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "bloom_composite" && params.size() >= 2) {
-            struct { float exposure; float bloomIntensity; int bloomEnabled; int ssaoEnabled; int aeEnabled; int lutEnabled; float lutIntensity; int csEnabled; float csStrength; } pc{};
-            pc.exposure       = params[1];
-            pc.bloomIntensity = (params.size() >= 3) ? params[2] : 0.5f;
-            pc.bloomEnabled   = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0) ? 1 : 0;
-            pc.ssaoEnabled    = (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) ? 1 : 0;
-            pc.aeEnabled      = (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0) ? 1 : 0;
-            pc.lutEnabled     = (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0) ? 1 : 0;
-            pc.lutIntensity   = (params.size() >= 8) ? params[7] : 0.0f;
-            pc.csEnabled      = (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0) ? 1 : 0;
-            pc.csStrength     = (params.size() >= 10) ? params[9] : 0.0f;
+            const CompositeParamsView composite(params);
+            struct {
+                float exposure;
+                float bloomIntensity;
+                int bloomEnabled;
+                int ssaoEnabled;
+                int aeEnabled;
+                int lutEnabled;
+                float lutIntensity;
+                int csEnabled;
+                float csStrength;
+                int vignetteEnabled;
+                float vignetteIntensity;
+                float vignetteRadius;
+                float vignetteSoftness;
+                int filmGrainEnabled;
+                float filmGrainIntensity;
+                float filmGrainTime;
+            } pc{};
+            pc.exposure           = composite.Float(CompositeParamsView::kExposure, 1.0f);
+            pc.bloomIntensity     = composite.Float(CompositeParamsView::kBloomIntensity, 0.5f);
+            pc.bloomEnabled       = (composite.Flag(CompositeParamsView::kBloomEnabled) &&
+                                     composite.Texture(CompositeParamsView::kBloomTex) != 0) ? 1 : 0;
+            pc.ssaoEnabled        = composite.Texture(CompositeParamsView::kSsaoTex) != 0 ? 1 : 0;
+            pc.aeEnabled          = composite.Texture(CompositeParamsView::kAutoExposureTex) != 0 ? 1 : 0;
+            pc.lutEnabled         = composite.Texture(CompositeParamsView::kLutTex) != 0 ? 1 : 0;
+            pc.lutIntensity       = composite.Float(CompositeParamsView::kLutIntensity, 0.0f);
+            pc.csEnabled          = composite.Texture(CompositeParamsView::kContactShadowTex) != 0 ? 1 : 0;
+            pc.csStrength         = composite.Float(CompositeParamsView::kContactShadowStrength, 0.0f);
+            pc.vignetteEnabled    = composite.Flag(CompositeParamsView::kVignetteEnabled) ? 1 : 0;
+            pc.vignetteIntensity  = composite.Float(CompositeParamsView::kVignetteIntensity, 0.0f);
+            pc.vignetteRadius     = composite.Float(CompositeParamsView::kVignetteRadius, 0.75f);
+            pc.vignetteSoftness   = composite.Float(CompositeParamsView::kVignetteSoftness, 0.35f);
+            pc.filmGrainEnabled   = composite.Flag(CompositeParamsView::kFilmGrainEnabled) ? 1 : 0;
+            pc.filmGrainIntensity = composite.Float(CompositeParamsView::kFilmGrainIntensity, 0.0f);
+            pc.filmGrainTime      = composite.Float(CompositeParamsView::kFilmGrainTime, 0.0f);
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "contact_shadow" && params.size() >= 10) {

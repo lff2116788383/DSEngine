@@ -32,6 +32,54 @@ namespace dse {
 namespace render {
 namespace {
 
+struct CompositeParamsView {
+    enum Index : std::size_t {
+        kBloomTex = 0,
+        kExposure,
+        kBloomIntensity,
+        kBloomEnabled,
+        kSsaoTex,
+        kAutoExposureTex,
+        kLutTex,
+        kLutIntensity,
+        kContactShadowTex,
+        kContactShadowStrength,
+        kVignetteEnabled,
+        kVignetteIntensity,
+        kVignetteRadius,
+        kVignetteSoftness,
+        kFilmGrainEnabled,
+        kFilmGrainIntensity,
+        kFilmGrainTime,
+        kCount
+    };
+
+    explicit CompositeParamsView(const std::vector<float>& in_params)
+        : params(in_params) {}
+
+    bool Has(Index index) const {
+        return params.size() > static_cast<std::size_t>(index);
+    }
+
+    float Float(Index index, float fallback = 0.0f) const {
+        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
+    }
+
+    unsigned int Texture(Index index) const {
+        return static_cast<unsigned int>(Float(index, 0.0f));
+    }
+
+    bool Flag(Index index) const {
+        return Float(index, 0.0f) != 0.0f;
+    }
+
+    bool HasRange(Index last_index) const {
+        return params.size() >= static_cast<std::size_t>(last_index) + 1;
+    }
+
+    const std::vector<float>& params;
+};
+
 #ifdef DSE_VSE_1522_DIAG
 
 float SignedArea2D(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c) {
@@ -1115,15 +1163,25 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
             uniform float exposure;
             uniform float bloomIntensity;
             uniform float u_lut_intensity;
+            uniform float u_vignette_intensity;
+            uniform float u_vignette_radius;
+            uniform float u_vignette_softness;
+            uniform float u_film_grain_intensity;
+            uniform float u_film_grain_time;
             uniform int u_bloom_enabled;
             uniform int u_ssao_enabled;
             uniform int u_contact_shadow_enabled;
             uniform float u_contact_shadow_strength;
             uniform int u_auto_exposure_enabled;
             uniform int u_lut_enabled;
+            uniform int u_vignette_enabled;
+            uniform int u_film_grain_enabled;
             vec3 AcesFilmic(vec3 x) {
                 float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
                 return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+            }
+            float GrainNoise(vec2 uv, float time_seed) {
+                return fract(sin(dot(uv + vec2(time_seed, time_seed * 0.37), vec2(12.9898, 78.233))) * 43758.5453);
             }
             void main() {
                 vec3 hdrColor = texture(screenTexture, TexCoords).rgb;
@@ -1148,6 +1206,17 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 if (u_lut_enabled != 0) {
                     vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
                     result = mix(result, lutColor, u_lut_intensity);
+                }
+                if (u_vignette_enabled != 0) {
+                    float dist = length(TexCoords - vec2(0.5));
+                    float radius = clamp(u_vignette_radius, 0.001, 1.5);
+                    float softness = max(u_vignette_softness, 0.0001);
+                    float vignette = 1.0 - smoothstep(radius, radius + softness, dist);
+                    result *= mix(1.0, vignette, clamp(u_vignette_intensity, 0.0, 1.0));
+                }
+                if (u_film_grain_enabled != 0) {
+                    float grain = GrainNoise(TexCoords * vec2(1280.0, 720.0), u_film_grain_time) - 0.5;
+                    result = clamp(result + grain * u_film_grain_intensity, 0.0, 1.0);
                 }
                 FragColor = vec4(result, 1.0);
             }
@@ -1396,54 +1465,78 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
         glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[1]);
     } else if (effect_name == "bloom_composite") {
-        const bool bloom_enabled = (params.size() >= 4 && params[3] != 0.0f && static_cast<unsigned int>(params[0]) != 0);
+        const CompositeParamsView composite(params);
+        const bool bloom_enabled = composite.Flag(CompositeParamsView::kBloomEnabled) &&
+                                   composite.Texture(CompositeParamsView::kBloomTex) != 0;
         if (bloom_enabled) {
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+            glBindTexture(GL_TEXTURE_2D, composite.Texture(CompositeParamsView::kBloomTex));
             glUniform1i(glGetUniformLocation(shader, "bloomBlur"), 1);
             glUniform1i(glGetUniformLocation(shader, "u_bloom_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_bloom_enabled"), 0);
         }
-        if (params.size() >= 2) {
-            glUniform1f(glGetUniformLocation(shader, "exposure"), params[1]);
-        }
-        if (params.size() >= 3) {
-            glUniform1f(glGetUniformLocation(shader, "bloomIntensity"), params[2]);
-        }
-        if (params.size() >= 5 && static_cast<unsigned int>(params[4]) != 0) {
+        glUniform1f(glGetUniformLocation(shader, "exposure"),
+                    composite.Float(CompositeParamsView::kExposure, 1.0f));
+        glUniform1f(glGetUniformLocation(shader, "bloomIntensity"),
+                    composite.Float(CompositeParamsView::kBloomIntensity, 0.5f));
+        const unsigned int ssao_tex = composite.Texture(CompositeParamsView::kSsaoTex);
+        if (ssao_tex != 0) {
             glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[4]));
+            glBindTexture(GL_TEXTURE_2D, ssao_tex);
             glUniform1i(glGetUniformLocation(shader, "ssaoTexture"), 2);
             glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_ssao_enabled"), 0);
         }
-        if (params.size() >= 6 && static_cast<unsigned int>(params[5]) != 0) {
+        const unsigned int auto_exposure_tex = composite.Texture(CompositeParamsView::kAutoExposureTex);
+        if (auto_exposure_tex != 0) {
             glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[5]));
+            glBindTexture(GL_TEXTURE_2D, auto_exposure_tex);
             glUniform1i(glGetUniformLocation(shader, "autoExposureTex"), 3);
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_auto_exposure_enabled"), 0);
         }
-        if (params.size() >= 8 && static_cast<unsigned int>(params[6]) != 0) {
+        const unsigned int lut_tex = composite.Texture(CompositeParamsView::kLutTex);
+        if (lut_tex != 0) {
             glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[6]));
+            glBindTexture(GL_TEXTURE_3D, lut_tex);
             glUniform1i(glGetUniformLocation(shader, "u_lut"), 4);
-            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"), params[7]);
+            glUniform1f(glGetUniformLocation(shader, "u_lut_intensity"),
+                        composite.Float(CompositeParamsView::kLutIntensity, 0.0f));
             glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 1);
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_lut_enabled"), 0);
         }
-        if (params.size() >= 10 && static_cast<unsigned int>(params[8]) != 0) {
+        const unsigned int contact_shadow_tex = composite.Texture(CompositeParamsView::kContactShadowTex);
+        if (contact_shadow_tex != 0) {
             glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[8]));
+            glBindTexture(GL_TEXTURE_2D, contact_shadow_tex);
             glUniform1i(glGetUniformLocation(shader, "contactShadowTex"), 5);
             glUniform1i(glGetUniformLocation(shader, "u_contact_shadow_enabled"), 1);
-            glUniform1f(glGetUniformLocation(shader, "u_contact_shadow_strength"), params[9]);
+            glUniform1f(glGetUniformLocation(shader, "u_contact_shadow_strength"),
+                        composite.Float(CompositeParamsView::kContactShadowStrength, 0.0f));
         } else {
             glUniform1i(glGetUniformLocation(shader, "u_contact_shadow_enabled"), 0);
+        }
+        const bool vignette_enabled = composite.Flag(CompositeParamsView::kVignetteEnabled);
+        glUniform1i(glGetUniformLocation(shader, "u_vignette_enabled"), vignette_enabled ? 1 : 0);
+        if (vignette_enabled) {
+            glUniform1f(glGetUniformLocation(shader, "u_vignette_intensity"),
+                        composite.Float(CompositeParamsView::kVignetteIntensity, 0.0f));
+            glUniform1f(glGetUniformLocation(shader, "u_vignette_radius"),
+                        composite.Float(CompositeParamsView::kVignetteRadius, 0.75f));
+            glUniform1f(glGetUniformLocation(shader, "u_vignette_softness"),
+                        composite.Float(CompositeParamsView::kVignetteSoftness, 0.35f));
+        }
+        const bool film_grain_enabled = composite.Flag(CompositeParamsView::kFilmGrainEnabled);
+        glUniform1i(glGetUniformLocation(shader, "u_film_grain_enabled"), film_grain_enabled ? 1 : 0);
+        if (film_grain_enabled) {
+            glUniform1f(glGetUniformLocation(shader, "u_film_grain_intensity"),
+                        composite.Float(CompositeParamsView::kFilmGrainIntensity, 0.0f));
+            glUniform1f(glGetUniformLocation(shader, "u_film_grain_time"),
+                        composite.Float(CompositeParamsView::kFilmGrainTime, 0.0f));
         }
     } else if (effect_name == "ssao" && params.size() >= 6) {
         glUniform1f(glGetUniformLocation(shader, "u_radius"), params[0]);

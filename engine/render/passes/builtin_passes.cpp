@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include "engine/base/time.h"
 
 namespace dse {
 namespace render {
@@ -582,10 +583,34 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         lut_intensity = pp_config.color_lut_intensity;
     }
 
+    // bloom_composite 是历史 effect name，当前实际承担 final composite 职责。
+    // 以下为 final composite 参数布局（按固定顺序传递到三后端）:
+    // [0] bloom_tex_handle
+    // [1] manual_exposure
+    // [2] bloom_intensity
+    // [3] bloom_enabled
+    // [4] ssao_tex_handle
+    // [5] auto_exposure_tex_handle
+    // [6] lut_tex_handle
+    // [7] lut_intensity
+    // [8] contact_shadow_tex_handle
+    // [9] contact_shadow_strength
+    // [10] vignette_enabled
+    // [11] vignette_intensity
+    // [12] vignette_radius
+    // [13] vignette_softness
+    // [14] film_grain_enabled
+    // [15] film_grain_intensity
+    // [16] film_grain_time
+    float film_grain_time = 0.0f;
+    if (pp_enabled && pp_config.film_grain_enabled && pp_config.film_grain_intensity > 0.0f) {
+        film_grain_time = static_cast<float>(std::fmod(Time::TimeSinceStartup() * pp_config.film_grain_time_scale, 4096.0f));
+    }
+
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
-    if (pp_enabled && (pp_config.bloom_enabled || contact_shadow_tex != 0)) {
+    if (pp_enabled && (pp_config.bloom_enabled || contact_shadow_tex != 0 || pp_config.vignette_enabled || pp_config.film_grain_enabled)) {
         const unsigned int bloom_tex = (pp_config.bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
             ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
             : 0;
@@ -599,7 +624,14 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             lut_tex,
             lut_intensity,
             static_cast<float>(contact_shadow_tex),
-            pp_config.contact_shadow_strength
+            pp_config.contact_shadow_strength,
+            pp_config.vignette_enabled ? 1.0f : 0.0f,
+            pp_config.vignette_intensity,
+            pp_config.vignette_radius,
+            pp_config.vignette_softness,
+            pp_config.film_grain_enabled ? 1.0f : 0.0f,
+            pp_config.film_grain_intensity,
+            film_grain_time
         });
     } else {
         if (ssao_tex != 0) {
