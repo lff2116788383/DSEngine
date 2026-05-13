@@ -16,6 +16,7 @@
 #define DSE_RENDER_GL_DRAW_EXECUTOR_H
 
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/rhi/draw_executor_common.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <functional>
@@ -96,35 +97,20 @@ public:
                            const glm::mat4& projection,
                            GLShaderManager& shader_mgr);
 
-    // --- 全局阴影/光源矩阵 ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) {
-        if (index < 3) global_shadow_map_[index] = handle;
-    }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
-        if (index < 4) global_spot_shadow_map_[index] = handle;
-    }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) {
-        if (index < 4) global_point_shadow_map_[index] = handle;
-    }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-        if (index < 3) global_light_space_matrix_[index] = mat;
-    }
-    void SetGlobalCascadeSplit(unsigned int index, float split) {
-        if (index < 3) global_cascade_splits_[index] = split;
-    }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-        if (index < 4) global_spot_light_space_matrix_[index] = mat;
-    }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
-        for (int i = 0; i < 9; ++i) global_light_probe_sh_[i] = sh[i];
-        global_light_probe_enabled_ = enabled;
-    }
+    // --- 全局阴影/光源矩阵（委托给共享状态） ---
+    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
+    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
+    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_state_.SetPointShadowMap(index, handle); }
+    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetLightSpaceMatrix(index, mat); }
+    void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
+    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
 
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
-    const RenderStats& last_frame_stats() const { return last_frame_stats_; }
-    const RenderStats& current_frame_stats() const { return current_frame_stats_; }
+    const RenderStats& last_frame_stats() const { return global_state_.last_frame_stats; }
+    const RenderStats& current_frame_stats() const { return global_state_.current_frame_stats; }
 
     // --- 访问器（供 OpenGLRhiDevice 委托使用） ---
     unsigned int white_texture_handle() const { return white_texture_handle_; }
@@ -186,21 +172,8 @@ private:
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;
 
-    // 全局阴影/光源状态
-    glm::mat4 global_light_space_matrix_[3];
-    glm::mat4 global_spot_light_space_matrix_[4] = {
-        glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)
-    };
-    float global_cascade_splits_[3];
-    unsigned int global_shadow_map_[3];
-    unsigned int global_spot_shadow_map_[4] = {0, 0, 0, 0};
-    unsigned int global_point_shadow_map_[4] = {0, 0, 0, 0};
-    glm::vec4 global_light_probe_sh_[9] = {};
-    bool global_light_probe_enabled_ = false;
-
-    // 渲染统计
-    RenderStats current_frame_stats_;
-    RenderStats last_frame_stats_;
+    // 全局渲染状态（共享结构体，消除三端重复）
+    DrawExecutorGlobalState global_state_;
 
     // 外部函数指针（由 OpenGLRhiDevice 注入）
     UpdateBufferFn update_buffer_fn_ = nullptr;

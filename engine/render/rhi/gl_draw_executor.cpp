@@ -9,6 +9,7 @@
 #include "engine/render/rhi/gl_resource_manager.h"
 #include "engine/render/rhi/ubo_manager.h"
 #include "engine/render/rhi/gl_enum_convert.h"
+#include "engine/render/rhi/postprocess_common.h"
 #include "engine/platform/screen.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>
@@ -31,54 +32,6 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 namespace dse {
 namespace render {
 namespace {
-
-struct CompositeParamsView {
-    enum Index : std::size_t {
-        kBloomTex = 0,
-        kExposure,
-        kBloomIntensity,
-        kBloomEnabled,
-        kSsaoTex,
-        kAutoExposureTex,
-        kLutTex,
-        kLutIntensity,
-        kContactShadowTex,
-        kContactShadowStrength,
-        kVignetteEnabled,
-        kVignetteIntensity,
-        kVignetteRadius,
-        kVignetteSoftness,
-        kFilmGrainEnabled,
-        kFilmGrainIntensity,
-        kFilmGrainTime,
-        kCount
-    };
-
-    explicit CompositeParamsView(const std::vector<float>& in_params)
-        : params(in_params) {}
-
-    bool Has(Index index) const {
-        return params.size() > static_cast<std::size_t>(index);
-    }
-
-    float Float(Index index, float fallback = 0.0f) const {
-        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
-    }
-
-    unsigned int Texture(Index index) const {
-        return static_cast<unsigned int>(Float(index, 0.0f));
-    }
-
-    bool Flag(Index index) const {
-        return Float(index, 0.0f) != 0.0f;
-    }
-
-    bool HasRange(Index last_index) const {
-        return params.size() >= static_cast<std::size_t>(last_index) + 1;
-    }
-
-    const std::vector<float>& params;
-};
 
 #ifdef DSE_VSE_1522_DIAG
 
@@ -335,11 +288,11 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             has_depth = rt->desc.has_depth;
         }
     }
-    current_frame_stats_.render_passes += 1;
+    global_state_.current_frame_stats.render_passes += 1;
     if (render_pass.render_target != 0) {
         auto stat_rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (stat_rt && !stat_rt->desc.has_color && stat_rt->desc.has_depth) {
-            current_frame_stats_.shadow_passes += 1;
+            global_state_.current_frame_stats.shadow_passes += 1;
         }
     }
     if (render_pass.clear_color_enabled) {
@@ -418,7 +371,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                                      GLResourceManager& resource_mgr,
                                      UBOManager& ubo_mgr) {
     if (items.empty()) return;
-    current_frame_stats_.mesh_count += static_cast<int>(items.size());
+    global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
 
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);
@@ -495,16 +448,16 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
     per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
-    per_scene.cascade_splits = glm::vec4(global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
+    per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], 0.0f);
     for (int i = 0; i < 3; ++i) {
-        per_scene.light_space_matrices[i] = global_light_space_matrix_[i];
+        per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
     ubo_mgr.UploadPerScene(per_scene);
 
     // === LightProbeData UBO: SH 球谐系数 ===
     LightProbeDataUBO lp_data{};
-    for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_light_probe_sh_[i];
-    lp_data.probe_params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_state_.light_probe_sh[i];
+    lp_data.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     ubo_mgr.UploadLightProbeData(lp_data);
 
     // 绑定所有 UBO
@@ -598,7 +551,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
         if (last_texture_handle != tex) {
             if (last_texture_handle != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_texture_handle = tex;
         }
@@ -607,7 +560,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         if (last_normal_map_handle != item.normal_map_handle) {
             if (last_normal_map_handle != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_normal_map_handle = item.normal_map_handle;
         }
@@ -619,7 +572,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         if (last_metallic_roughness_map_handle != item.metallic_roughness_map_handle) {
             if (last_metallic_roughness_map_handle != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_metallic_roughness_map_handle = item.metallic_roughness_map_handle;
         }
@@ -631,7 +584,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         if (last_emissive_map_handle != item.emissive_map_handle) {
             if (last_emissive_map_handle != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_emissive_map_handle = item.emissive_map_handle;
         }
@@ -643,7 +596,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         if (last_occlusion_map_handle != item.occlusion_map_handle) {
             if (last_occlusion_map_handle != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_occlusion_map_handle = item.occlusion_map_handle;
         }
@@ -671,7 +624,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         for (int i = 0; i < 4; ++i) {
             if (loc.point_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE9 + i);
-                glBindTexture(GL_TEXTURE_CUBE_MAP, global_point_shadow_map_[i]);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, global_state_.point_shadow_map[i]);
                 glUniform1i(loc.point_shadow_map[i], 9 + i);
             }
         }
@@ -680,7 +633,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         {
             SpotLightDataUBO sld_ubo{};
             for (int i = 0; i < 4; ++i)
-                sld_ubo.u_spot_light_space_matrices[i] = global_spot_light_space_matrix_[i];
+                sld_ubo.u_spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
             ubo_mgr.UploadSpotLightData(sld_ubo);
         }
 
@@ -688,7 +641,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         for (int i = 0; i < 3; ++i) {
             if (loc.shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE2 + i);
-                glBindTexture(GL_TEXTURE_2D, global_shadow_map_[i]);
+                glBindTexture(GL_TEXTURE_2D, global_state_.shadow_map[i]);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
                 glUniform1i(loc.shadow_map[i], 2 + i);
@@ -697,14 +650,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         for (int i = 0; i < 4; ++i) {
             if (loc.spot_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE5 + i);
-                glBindTexture(GL_TEXTURE_2D, global_spot_shadow_map_[i]);
+                glBindTexture(GL_TEXTURE_2D, global_state_.spot_shadow_map[i]);
                 glUniform1i(loc.spot_shadow_map[i], 5 + i);
             }
         }
 
         if (last_blend_mode != item.blend_mode) {
             if (last_blend_mode != std::numeric_limits<unsigned int>::max()) {
-                current_frame_stats_.material_switches += 1;
+                global_state_.current_frame_stats.material_switches += 1;
             }
             last_blend_mode = item.blend_mode;
         }
@@ -835,7 +788,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 #endif // DSE_VSE_1522_DIAG
         }
 
-        current_frame_stats_.draw_calls += 1;
+        global_state_.current_frame_stats.draw_calls += 1;
     }
     if (emit_vse1522_depth_diag) {
 #ifdef DSE_VSE_1522_DIAG
@@ -947,7 +900,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     glBindVertexArray(0);
     glDepthFunc(GL_LESS);
 
-    current_frame_stats_.draw_calls += 1;
+    global_state_.current_frame_stats.draw_calls += 1;
 }
 
 // ============================================================
@@ -1601,7 +1554,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
                                  GLShaderManager& shader_mgr,
                                  UBOManager& ubo_mgr) {
     if (items.empty()) return;
-    current_frame_stats_.sprite_count += static_cast<int>(items.size());
+    global_state_.current_frame_stats.sprite_count += static_cast<int>(items.size());
 
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);
@@ -1672,8 +1625,8 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     auto flush_batch = [&]() {
         if (batch_vertices.empty()) return;
         int batch_sprites = static_cast<int>(batch_vertices.size() / 4);
-        current_frame_stats_.draw_calls += 1;
-        current_frame_stats_.max_batch_sprites = std::max(current_frame_stats_.max_batch_sprites, batch_sprites);
+        global_state_.current_frame_stats.draw_calls += 1;
+        global_state_.current_frame_stats.max_batch_sprites = std::max(global_state_.current_frame_stats.max_batch_sprites, batch_sprites);
 
         if (update_buffer_fn_) {
             update_buffer_fn_(vbo_handle_, 0, batch_vertices.size() * sizeof(BatchVertex), batch_vertices.data(), false);
@@ -1818,7 +1771,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
         glVertexAttribDivisor(4, 1);
 
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, item.particle_count);
-        current_frame_stats_.draw_calls += 1;
+        global_state_.current_frame_stats.draw_calls += 1;
 
         glVertexAttribDivisor(2, 0);
         glVertexAttribDivisor(3, 0);
@@ -1835,11 +1788,11 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
 // ============================================================
 
 void GLDrawExecutor::BeginFrame() {
-    current_frame_stats_ = {};
+    global_state_.current_frame_stats = {};
 }
 
 void GLDrawExecutor::EndFrame() {
-    last_frame_stats_ = current_frame_stats_;
+    global_state_.last_frame_stats = global_state_.current_frame_stats;
     glFlush();
 }
 

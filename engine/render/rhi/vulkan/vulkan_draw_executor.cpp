@@ -19,6 +19,7 @@
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
+#include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -40,54 +41,6 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 // ============================================================================
 
 namespace {
-
-struct CompositeParamsView {
-    enum Index : std::size_t {
-        kBloomTex = 0,
-        kExposure,
-        kBloomIntensity,
-        kBloomEnabled,
-        kSsaoTex,
-        kAutoExposureTex,
-        kLutTex,
-        kLutIntensity,
-        kContactShadowTex,
-        kContactShadowStrength,
-        kVignetteEnabled,
-        kVignetteIntensity,
-        kVignetteRadius,
-        kVignetteSoftness,
-        kFilmGrainEnabled,
-        kFilmGrainIntensity,
-        kFilmGrainTime,
-        kCount
-    };
-
-    explicit CompositeParamsView(const std::vector<float>& in_params)
-        : params(in_params) {}
-
-    bool Has(Index index) const {
-        return params.size() > static_cast<std::size_t>(index);
-    }
-
-    float Float(Index index, float fallback = 0.0f) const {
-        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
-    }
-
-    unsigned int Texture(Index index) const {
-        return static_cast<unsigned int>(Float(index, 0.0f));
-    }
-
-    bool Flag(Index index) const {
-        return Float(index, 0.0f) != 0.0f;
-    }
-
-    bool HasRange(Index last_index) const {
-        return params.size() >= static_cast<std::size_t>(last_index) + 1;
-    }
-
-    const std::vector<float>& params;
-};
 
 /// 创建 Vulkan 缓冲区（host-visible，用于动态更新）
 bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
@@ -373,10 +326,10 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
     ubo.light_color_and_ambient = glm::vec4(item.light_color, item.ambient_intensity);
     ubo.light_params = glm::vec4(item.light_intensity, item.shadow_strength,
                                   item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(item.shading_mode));
-    ubo.cascade_splits = glm::vec4(global_cascade_splits_[0], global_cascade_splits_[1],
-                                    global_cascade_splits_[2], 0.0f);
+    ubo.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1],
+                                    global_state_.cascade_splits[2], 0.0f);
     for (int i = 0; i < 3; ++i) {
-        ubo.light_space_matrices[i] = global_light_space_matrix_[i];
+        ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
 
     WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
@@ -623,8 +576,8 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             glm::vec4 sh[9];
             glm::vec4 params;
         } lp_data{};
-        for (int i = 0; i < 9; ++i) lp_data.sh[i] = global_light_probe_sh_[i];
-        lp_data.params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+        for (int i = 0; i < 9; ++i) lp_data.sh[i] = global_state_.light_probe_sh[i];
+        lp_data.params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
         WriteToBuffer(device, light_probe_ubo_mem_[fi], 0, sizeof(lp_data), &lp_data);
 
         VkDescriptorBufferInfo lp_buf{};
@@ -705,7 +658,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             VkSampler cmp_sampler = resource_mgr.shadow_comparison_sampler();
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 3; ++i) {
-                unsigned int sm_handle = global_shadow_map_[i];
+                unsigned int sm_handle = global_state_.shadow_map[i];
                 // shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (sm_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(sm_handle) : VK_NULL_HANDLE;
@@ -734,7 +687,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         {
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 4; ++i) {
-                unsigned int ss_handle = global_spot_shadow_map_[i];
+                unsigned int ss_handle = global_state_.spot_shadow_map[i];
                 // spot shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (ss_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(ss_handle) : VK_NULL_HANDLE;
@@ -808,7 +761,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             VkSampler lin_sampler = resource_mgr.default_sampler();
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 4; ++i) {
-                unsigned int ps_handle = global_point_shadow_map_[i];
+                unsigned int ps_handle = global_state_.point_shadow_map[i];
                 const VulkanTexture* ps_tex = (ps_handle != 0)
                     ? resource_mgr.GetTexture(ps_handle) : nullptr;
                 if (ps_tex) {
@@ -1449,8 +1402,8 @@ void VulkanDrawExecutor::DrawSpriteBatch(
     const VulkanShaderProgram* sprite_program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
     if (!sprite_program) {
         // Fallback：无 sprite shader 时仅统计
-        current_frame_stats_.draw_calls++;
-        current_frame_stats_.sprite_count += static_cast<int>(items.size());
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.sprite_count += static_cast<int>(items.size());
         return;
     }
 
@@ -1558,10 +1511,10 @@ void VulkanDrawExecutor::DrawSpriteBatch(
 
         vkCmdDrawIndexed(cmd_buf, 6, 1, 0, 0, 0);
 
-        current_frame_stats_.draw_calls++;
+        global_state_.current_frame_stats.draw_calls++;
     }
 
-    current_frame_stats_.sprite_count += static_cast<int>(items.size());
+    global_state_.current_frame_stats.sprite_count += static_cast<int>(items.size());
 }
 
 // ============================================================================
@@ -1717,10 +1670,10 @@ void VulkanDrawExecutor::DrawMeshBatch(
                          static_cast<uint32_t>(item.indices.size()),
                          1, 0, 0, 0);
 
-        current_frame_stats_.draw_calls++;
+        global_state_.current_frame_stats.draw_calls++;
     }
 
-    current_frame_stats_.mesh_count += static_cast<int>(items.size());
+    global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
 }
 
 // ============================================================================
@@ -1792,7 +1745,7 @@ void VulkanDrawExecutor::DrawSkybox(
     // 36 个顶点（6 面 * 2 三角形 * 3 顶点）
     vkCmdDraw(cmd_buf, 36, 1, 0, 0);
 
-    current_frame_stats_.draw_calls++;
+    global_state_.current_frame_stats.draw_calls++;
 }
 
 // ============================================================================
@@ -2013,7 +1966,7 @@ void VulkanDrawExecutor::DrawPostProcess(
 
     vkCmdDraw(cmd_buf, 6, 1, 0, 0);
 
-    current_frame_stats_.draw_calls++;
+    global_state_.current_frame_stats.draw_calls++;
 }
 
 // ============================================================================
@@ -2077,10 +2030,10 @@ void VulkanDrawExecutor::DrawParticles3D(
                                                  item.texture_handle, *resource_mgr_);
 
         vkCmdDraw(cmd_buf, 4, 1, 0, 0);
-        current_frame_stats_.draw_calls++;
+        global_state_.current_frame_stats.draw_calls++;
     }
 
-    current_frame_stats_.particle_count += static_cast<int>(items.size());
+    global_state_.current_frame_stats.particle_count += static_cast<int>(items.size());
 }
 
 // ============================================================================
@@ -2088,7 +2041,7 @@ void VulkanDrawExecutor::DrawParticles3D(
 // ============================================================================
 
 void VulkanDrawExecutor::BeginFrame() {
-    current_frame_stats_ = {};
+    global_state_.current_frame_stats = {};
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
     render_pass_counter_ = 0;
     skip_current_pass_ = false;
@@ -2105,7 +2058,7 @@ void VulkanDrawExecutor::BeginFrame() {
 }
 
 void VulkanDrawExecutor::EndFrame() {
-    last_frame_stats_ = current_frame_stats_;
+    global_state_.last_frame_stats = global_state_.current_frame_stats;
 }
 
 // ============================================================================
@@ -2204,7 +2157,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &to_readonly);
 
-    current_frame_stats_.draw_calls++;
+    global_state_.current_frame_stats.draw_calls++;
 }
 
 } // namespace render

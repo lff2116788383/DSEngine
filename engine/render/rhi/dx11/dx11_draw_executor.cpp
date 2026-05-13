@@ -8,6 +8,7 @@
 #include "engine/render/rhi/dx11/dx11_resource_manager.h"
 #include "engine/render/rhi/dx11/dx11_pipeline_state_manager.h"
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
+#include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
 
 #include <cstring>
@@ -16,54 +17,6 @@
 namespace dse {
 namespace render {
 namespace {
-
-struct CompositeParamsView {
-    enum Index : std::size_t {
-        kBloomTex = 0,
-        kExposure,
-        kBloomIntensity,
-        kBloomEnabled,
-        kSsaoTex,
-        kAutoExposureTex,
-        kLutTex,
-        kLutIntensity,
-        kContactShadowTex,
-        kContactShadowStrength,
-        kVignetteEnabled,
-        kVignetteIntensity,
-        kVignetteRadius,
-        kVignetteSoftness,
-        kFilmGrainEnabled,
-        kFilmGrainIntensity,
-        kFilmGrainTime,
-        kCount
-    };
-
-    explicit CompositeParamsView(const std::vector<float>& in_params)
-        : params(in_params) {}
-
-    bool Has(Index index) const {
-        return params.size() > static_cast<std::size_t>(index);
-    }
-
-    float Float(Index index, float fallback = 0.0f) const {
-        return Has(index) ? params[static_cast<std::size_t>(index)] : fallback;
-    }
-
-    unsigned int Texture(Index index) const {
-        return static_cast<unsigned int>(Float(index, 0.0f));
-    }
-
-    bool Flag(Index index) const {
-        return Float(index, 0.0f) != 0.0f;
-    }
-
-    bool HasRange(Index last_index) const {
-        return params.size() >= static_cast<std::size_t>(last_index) + 1;
-    }
-
-    const std::vector<float>& params;
-};
 
 } // namespace
 
@@ -83,7 +36,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
 
     // 初始化全局光源矩阵
     for (int i = 0; i < 3; ++i)
-        global_light_space_matrix_[i] = glm::mat4(1.0f);
+        global_state_.light_space_matrix[i] = glm::mat4(1.0f);
 
     InitGeometryBuffers();
 
@@ -351,7 +304,7 @@ void DX11DrawExecutor::UpdateConstantBuffer(ID3D11Buffer* buffer, const void* da
 }
 
 void DX11DrawExecutor::BeginFrame() {
-    current_frame_stats_ = RenderStats{};
+    global_state_.current_frame_stats = RenderStats{};
 }
 
 void DX11DrawExecutor::EndFrame() {
@@ -519,8 +472,8 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         }
 
         dc->DrawIndexed(6, 0, 0);
-        current_frame_stats_.draw_calls++;
-        current_frame_stats_.sprite_count++;
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.sprite_count++;
     }
 }
 
@@ -553,9 +506,9 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         first.light_intensity, first.shadow_strength,
         first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
     scene_data.cascade_splits = glm::vec4(
-        global_cascade_splits_[0], global_cascade_splits_[1], global_cascade_splits_[2], 0.0f);
+        global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], 0.0f);
     for (int i = 0; i < 3; ++i)
-        scene_data.light_space_matrices[i] = global_light_space_matrix_[i];
+        scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
     // 选择着色器：深度 only pass 使用 shadow shader，否则使用 PBR
@@ -581,8 +534,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 绑定 CSM 阴影贴图到 t5/t6/t7
         for (int i = 0; i < 3; ++i) {
-            if (global_shadow_map_[i] != 0) {
-                const auto* sm = resource_mgr.GetTexture(global_shadow_map_[i]);
+            if (global_state_.shadow_map[i] != 0) {
+                const auto* sm = resource_mgr.GetTexture(global_state_.shadow_map[i]);
                 if (sm) dc->PSSetShaderResources(5 + i, 1, sm->srv.GetAddressOf());
             }
         }
@@ -595,8 +548,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 绑定点光源立方体阴影贴图到 t8~t11
         for (int i = 0; i < 4; ++i) {
-            if (global_point_shadow_map_[i] != 0) {
-                const auto* sm = resource_mgr.GetTexture(global_point_shadow_map_[i]);
+            if (global_state_.point_shadow_map[i] != 0) {
+                const auto* sm = resource_mgr.GetTexture(global_state_.point_shadow_map[i]);
                 if (sm) dc->PSSetShaderResources(8 + i, 1, sm->srv.GetAddressOf());
             }
         }
@@ -605,7 +558,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         {
             DX11SpotMatricesCB sm_cb{};
             for (int i = 0; i < 4; ++i)
-                sm_cb.spot_light_space_matrices[i] = global_spot_light_space_matrix_[i];
+                sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
             UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
             dc->PSSetConstantBuffers(6, 1, per_spot_matrices_cb_.GetAddressOf());
         }
@@ -613,16 +566,16 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // 填充 LightProbeData CB（b9）并绑定
         if (light_probe_data_cb_) {
             DX11LightProbeDataCB lp_cb{};
-            for (int i = 0; i < 9; ++i) lp_cb.sh_coefficients[i] = global_light_probe_sh_[i];
-            lp_cb.probe_params = glm::vec4(global_light_probe_enabled_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+            for (int i = 0; i < 9; ++i) lp_cb.sh_coefficients[i] = global_state_.light_probe_sh[i];
+            lp_cb.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
             UpdateConstantBuffer(light_probe_data_cb_.Get(), &lp_cb, sizeof(lp_cb));
             dc->PSSetConstantBuffers(9, 1, light_probe_data_cb_.GetAddressOf());
         }
 
         // 绑定聚光灯阴影贴图到 t12~t15
         for (int i = 0; i < 4; ++i) {
-            if (global_spot_shadow_map_[i] != 0) {
-                const auto* sm = resource_mgr.GetTexture(global_spot_shadow_map_[i]);
+            if (global_state_.spot_shadow_map[i] != 0) {
+                const auto* sm = resource_mgr.GetTexture(global_state_.spot_shadow_map[i]);
                 if (sm) dc->PSSetShaderResources(12 + i, 1, sm->srv.GetAddressOf());
             }
         }
@@ -726,8 +679,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         dc->DrawIndexed(static_cast<UINT>(item.indices.size()), 0, 0);
-        current_frame_stats_.draw_calls++;
-        current_frame_stats_.mesh_count++;
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.mesh_count++;
     }
 }
 
@@ -790,7 +743,7 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     dc->IASetVertexBuffers(0, 1, skybox_vbo_.GetAddressOf(), &stride, &offset);
 
     dc->Draw(36, 0);
-    current_frame_stats_.draw_calls++;
+    global_state_.current_frame_stats.draw_calls++;
 
     // 恢复之前的深度和光栅化状态
     dc->RSSetState(prev_rs.Get());
@@ -952,7 +905,7 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         dc->IASetVertexBuffers(0, 1, postprocess_vbo_.GetAddressOf(), &stride, &offset);
         dc->IASetIndexBuffer(postprocess_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
         dc->DrawIndexed(6, 0, 0);
-        current_frame_stats_.draw_calls++;
+        global_state_.current_frame_stats.draw_calls++;
 
         ID3D11ShaderResourceView* null_srvs[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
         dc->PSSetShaderResources(1, has_cs ? 5 : (has_lut ? 4 : (has_ae ? 3 : 2)), null_srvs);
@@ -989,7 +942,7 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         dc->IASetVertexBuffers(0, 1, postprocess_vbo_.GetAddressOf(), &s, &o);
         dc->IASetIndexBuffer(postprocess_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
         dc->DrawIndexed(6, 0, 0);
-        current_frame_stats_.draw_calls++;
+        global_state_.current_frame_stats.draw_calls++;
     };
 
     // FXAA 专用路径
@@ -1217,7 +1170,7 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
     dc->IASetIndexBuffer(postprocess_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
 
     dc->DrawIndexed(6, 0, 0);
-    current_frame_stats_.draw_calls++;
+    global_state_.current_frame_stats.draw_calls++;
 }
 
 void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
@@ -1315,8 +1268,8 @@ void DX11DrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& it
         }
 
         dc->DrawIndexedInstanced(6, item.particle_count, 0, 0, 0);
-        current_frame_stats_.draw_calls++;
-        current_frame_stats_.particle_count += item.particle_count;
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.particle_count += item.particle_count;
     }
 }
 
