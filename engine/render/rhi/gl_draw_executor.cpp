@@ -1394,11 +1394,8 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(color, 1.0);
             }
         )";
-    } else if (effect_name == "motion_blur") {
+    } else if (effect_name == "motion_vector") {
         fs_src += R"(
-            uniform sampler2D u_color_texture;
-            uniform float u_intensity;
-            uniform int u_samples;
             uniform float u_screen_w;
             uniform float u_screen_h;
             uniform mat4 u_reproj;
@@ -1409,7 +1406,21 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
                 vec4 prev_clip = u_reproj * clip_pos;
                 prev_clip.xy /= prev_clip.w;
-                vec2 velocity = (ndc - prev_clip.xy) * 0.5 * u_intensity;
+                vec2 prev_uv = prev_clip.xy * 0.5 + 0.5;
+                vec2 velocity = TexCoords - prev_uv;
+                FragColor = vec4(velocity, 0.0, 1.0);
+            }
+        )";
+    } else if (effect_name == "motion_blur") {
+        fs_src += R"(
+            uniform sampler2D u_color_texture;
+            uniform float u_intensity;
+            uniform int u_samples;
+            uniform float u_screen_w;
+            uniform float u_screen_h;
+            void main() {
+                // screenTexture = motion_vector RT (rg = velocity)
+                vec2 velocity = texture(screenTexture, TexCoords).rg * u_intensity;
                 vec3 color = texture(u_color_texture, TexCoords).rgb;
                 float total = 1.0;
                 for (int i = 1; i < u_samples; ++i) {
@@ -1476,14 +1487,19 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     } else if (effect_name == "taa_resolve") {
         fs_src += R"(
             uniform sampler2D u_history;
+            uniform sampler2D u_motion_vector;
             uniform float u_blend_factor;
             uniform float u_jitter_x;
             uniform float u_jitter_y;
             uniform int u_frame_index;
+            uniform float u_screen_w;
+            uniform float u_screen_h;
             void main() {
-                vec2 uv = TexCoords - vec2(u_jitter_x, u_jitter_y);
                 vec3 current = texture(screenTexture, TexCoords).rgb;
-                vec2 texel = 1.0 / vec2(textureSize(screenTexture, 0));
+                vec2 mv = texture(u_motion_vector, TexCoords).rg;
+                vec2 history_uv = TexCoords - mv - vec2(u_jitter_x, u_jitter_y);
+                history_uv = clamp(history_uv, vec2(0.0), vec2(1.0));
+                vec2 texel = 1.0 / vec2(u_screen_w, u_screen_h);
                 vec3 m1 = vec3(0.0), m2 = vec3(0.0);
                 for (int dx = -1; dx <= 1; ++dx) {
                     for (int dy = -1; dy <= 1; ++dy) {
@@ -1493,9 +1509,11 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 }
                 m1 /= 9.0;
                 vec3 sigma = sqrt(max(m2 / 9.0 - m1 * m1, vec3(0.0)));
-                vec3 history = texture(u_history, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
+                vec3 history = texture(u_history, history_uv).rgb;
                 history = clamp(history, m1 - 1.25 * sigma, m1 + 1.25 * sigma);
-                float alpha = (u_frame_index < 2) ? 1.0 : u_blend_factor;
+                float velocity_len = length(mv * vec2(u_screen_w, u_screen_h));
+                float vel_weight = clamp(velocity_len * 0.5, 0.0, 0.5);
+                float alpha = (u_frame_index < 2) ? 1.0 : clamp(u_blend_factor + vel_weight, u_blend_factor, 1.0);
                 FragColor = vec4(mix(history, current, alpha), 1.0);
             }
         )";
@@ -1682,14 +1700,17 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[7]));
         glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
-    } else if (effect_name == "motion_blur" && params.size() >= 21) {
+    } else if (effect_name == "motion_vector" && params.size() >= 18) {
+        glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[0]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[1]);
+        glUniformMatrix4fv(glGetUniformLocation(shader, "u_reproj"), 1, GL_FALSE, &params[2]);
+    } else if (effect_name == "motion_blur" && params.size() >= 5) {
         glUniform1f(glGetUniformLocation(shader, "u_intensity"), params[0]);
         glUniform1i(glGetUniformLocation(shader, "u_samples"), static_cast<int>(params[1]));
         glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[2]);
         glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[3]);
-        glUniformMatrix4fv(glGetUniformLocation(shader, "u_reproj"), 1, GL_FALSE, &params[4]);
         glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[20]));
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[4]));
         glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
     } else if (effect_name == "ssr" && params.size() >= 9) {
         glUniform1f(glGetUniformLocation(shader, "u_max_distance"), params[0]);
@@ -1705,16 +1726,20 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1i(glGetUniformLocation(shader, "u_color_texture"), 1);
     } else if (effect_name == "fxaa" && params.size() >= 2) {
         glUniform2f(glGetUniformLocation(shader, "u_resolution"), params[0], params[1]);
-    } else if (effect_name == "taa_resolve" && params.size() >= 4) {
-        // params: [history_tex, blend_factor, jitter_x, jitter_y, frame_index]
+    } else if (effect_name == "taa_resolve" && params.size() >= 8) {
+        // params: [history_tex, blend_factor, jitter_x, jitter_y, frame_index, mv_tex, screen_w, screen_h]
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
         glUniform1i(glGetUniformLocation(shader, "u_history"), 1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[5]));
+        glUniform1i(glGetUniformLocation(shader, "u_motion_vector"), 2);
         glUniform1f(glGetUniformLocation(shader, "u_blend_factor"), params[1]);
         glUniform1f(glGetUniformLocation(shader, "u_jitter_x"), params[2]);
         glUniform1f(glGetUniformLocation(shader, "u_jitter_y"), params[3]);
-        glUniform1i(glGetUniformLocation(shader, "u_frame_index"),
-                    params.size() >= 5 ? static_cast<int>(params[4]) : 0);
+        glUniform1i(glGetUniformLocation(shader, "u_frame_index"), static_cast<int>(params[4]));
+        glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[6]);
+        glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[7]);
     }
 
     glDisable(GL_DEPTH_TEST);

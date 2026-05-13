@@ -992,40 +992,69 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
         return;
     }
 
-    // 懒初始化历史 RT
-    if (history_rt_ == 0) {
-        RenderTargetDesc desc;
-        desc.width = Screen::width();
-        desc.height = Screen::height();
-        desc.has_color = true;
-        desc.has_depth = false;
-        history_rt_ = ctx_.rhi_device->CreateRenderTarget(desc);
-    }
+    const int sw = Screen::width();
+    const int sh = Screen::height();
+    EnsureHistoryRT(sw, sh);
 
     const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
     if (main_color_tex == 0) return;
 
-    const unsigned int history_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_);
+    // 读取 motion vector 纹理（如果可用）
+    const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
 
+    // 历史帧读取来自上一帧写入的 RT
+    const int read_idx = 1 - history_index_;
+    const unsigned int history_tex = has_valid_history_
+        ? ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[read_idx])
+        : 0;
+
+    // TAA resolve：写入当前帧的 history RT（直接做输出，省掉 copy）
+    const int write_idx = history_index_;
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
-    cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
+    cmd_buffer.BeginRenderPass({history_rt_[write_idx], glm::vec4(0.0f), true});
     cmd_buffer.DrawPostProcess(main_color_tex, "taa_resolve", {
         static_cast<float>(history_tex),
         blend_factor,
         current_jitter_.x,
         current_jitter_.y,
-        static_cast<float>(frame_index_)
+        static_cast<float>(frame_index_),
+        static_cast<float>(mv_tex),
+        static_cast<float>(sw),
+        static_cast<float>(sh)
     });
     cmd_buffer.EndRenderPass();
 
-    // 将当前 TAA 输出 blit 到历史 RT（供下一帧使用）
-    const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.taa);
-    if (taa_out_tex != 0 && history_rt_ != 0) {
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
-        cmd_buffer.BeginRenderPass({history_rt_, glm::vec4(0.0f), true});
+    // 将 TAA 结果 copy 到 taa RT（供 Present/FXAA 读取）
+    const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
+    if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
         cmd_buffer.DrawPostProcess(taa_out_tex, "copy", {});
         cmd_buffer.EndRenderPass();
     }
+
+    // 翻转 ping-pong 索引
+    history_index_ = 1 - history_index_;
+    has_valid_history_ = true;
+}
+
+void TAAPass::EnsureHistoryRT(int width, int height) {
+    if (width == history_width_ && height == history_height_
+        && history_rt_[0] != 0 && history_rt_[1] != 0) {
+        return;
+    }
+    // 分辨率变化或首次创建（旧 RT 由 RhiDevice 资源管理器统一回收）
+    for (int i = 0; i < 2; ++i) {
+        RenderTargetDesc desc;
+        desc.width = width;
+        desc.height = height;
+        desc.has_color = true;
+        desc.has_depth = false;
+        history_rt_[i] = ctx_.rhi_device->CreateRenderTarget(desc);
+    }
+    history_width_ = width;
+    history_height_ = height;
+    has_valid_history_ = false;
+    history_index_ = 0;
 }
 
 // ============================================================
@@ -1100,17 +1129,86 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// MotionVectorPass
+// ============================================================
+
+void MotionVectorPass::Setup(RenderGraph& graph) {
+    auto prez_depth    = graph.DeclareResource("prez_depth");
+    auto mv_color      = graph.DeclareResource("motion_vector_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, mv_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
+    if (ctx_.render_targets.motion_vector == 0) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    glm::mat4 current_vp = glm::mat4(1.0f);
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(cam.fov),
+                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                cam.near_clip, cam.far_clip);
+            glm::mat4 view = glm::mat4(1.0f);
+            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+                auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                view = glm::lookAt(transform.position, transform.position + front, up);
+            }
+            current_vp = projection * view;
+            break;
+        }
+    }
+
+    if (!has_prev_vp_) {
+        prev_vp_ = current_vp;
+        has_prev_vp_ = true;
+        // 首帧输出零速度
+        cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
+        cmd_buffer.EndRenderPass();
+        return;
+    }
+
+    glm::mat4 reproj = prev_vp_ * glm::inverse(current_vp);
+    const float* reproj_ptr = &reproj[0][0];
+
+    std::vector<float> params;
+    params.reserve(20);
+    params.push_back(static_cast<float>(Screen::width()));
+    params.push_back(static_cast<float>(Screen::height()));
+    // [2..17]: reproj matrix
+    for (int i = 0; i < 16; ++i) params.push_back(reproj_ptr[i]);
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "motion_vector", params);
+    cmd_buffer.EndRenderPass();
+
+    prev_vp_ = current_vp;
+}
+
+// ============================================================
 // MotionBlurPass
 // ============================================================
 
 void MotionBlurPass::Setup(RenderGraph& graph) {
     auto main_color  = graph.DeclareResource("main_color");
-    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto mv_color    = graph.DeclareResource("motion_vector_color");
     auto mb_color    = graph.DeclareResource("motion_blur_color");
 
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, main_color);
-    graph.PassRead(pass, prez_depth);
+    graph.PassRead(pass, mv_color);
     graph.PassWrite(pass, mb_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
@@ -1130,73 +1228,30 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
 
     if (!mb_enabled || ctx_.render_targets.dof == 0) return;
 
-    // Motion blur 运行于 DOF 之后，读 main RT（已完成 composite + DOF）
     const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (main_color_tex == 0 || depth_tex == 0) return;
+    const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
+    if (main_color_tex == 0 || mv_tex == 0) return;
 
-    float near_plane = 0.1f, far_plane = 10000.0f;
-    glm::mat4 current_vp = glm::mat4(1.0f);
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(cam.fov),
-                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                near_plane, far_plane);
-            glm::mat4 view = glm::mat4(1.0f);
-            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-                auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view = glm::lookAt(transform.position, transform.position + front, up);
-            }
-            current_vp = projection * view;
-            break;
-        }
-    }
-
-    if (!has_prev_vp_) {
-        prev_vp_ = current_vp;
-        has_prev_vp_ = true;
-        return;
-    }
-
-    // CPU 预计算重投影矩阵 = prev_vp * inverse(current_vp)
-    // 避免 HLSL 无 inverse() + Vulkan push constant 128B 限制
-    glm::mat4 reproj = prev_vp_ * glm::inverse(current_vp);
-    const float* reproj_ptr = &reproj[0][0];
-
-    std::vector<float> params;
-    params.reserve(24);
-    // [0]: intensity, [1]: samples, [2]: screen_w, [3]: screen_h
-    params.push_back(pp_config.motion_blur_intensity);
-    params.push_back(static_cast<float>(pp_config.motion_blur_samples));
-    params.push_back(static_cast<float>(Screen::width()));
-    params.push_back(static_cast<float>(Screen::height()));
-    // [4..19]: reproj matrix (col-major)
-    for (int i = 0; i < 16; ++i) params.push_back(reproj_ptr[i]);
-    // [20]: color texture handle (main RT, post-composite)
-    params.push_back(static_cast<float>(main_color_tex));
-
-    // Pass 1: motion blur → dof RT（复用为 scratch）
+    // motion_blur 现在读 motion_vector RT 而非深度 + reproj
+    // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "motion_blur", params);
+    cmd_buffer.DrawPostProcess(mv_tex, "motion_blur", {
+        pp_config.motion_blur_intensity,
+        static_cast<float>(pp_config.motion_blur_samples),
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height()),
+        static_cast<float>(main_color_tex)
+    });
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: dof RT → main RT（回写）
+    // dof RT → main RT
     const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (mb_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
         cmd_buffer.DrawPostProcess(mb_tex, "copy", {});
         cmd_buffer.EndRenderPass();
     }
-
-    prev_vp_ = current_vp;
 }
 
 // ============================================================

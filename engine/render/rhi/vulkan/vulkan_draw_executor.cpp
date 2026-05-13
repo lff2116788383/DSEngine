@@ -1884,12 +1884,13 @@ void VulkanDrawExecutor::DrawPostProcess(
         extra_bindings = {{5, lut_h}};
     } else if (effect_name == "taa_resolve") {
         unsigned int hist_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        extra_bindings = {{5, hist_h}};
+        unsigned int mv_h = (params.size() >= 6) ? static_cast<unsigned int>(params[5]) : 0;
+        extra_bindings = {{5, hist_h}, {2, mv_h}};
     } else if (effect_name == "dof") {
         unsigned int color_h = (params.size() >= 8) ? static_cast<unsigned int>(params[7]) : 0;
         extra_bindings = {{2, color_h}};
     } else if (effect_name == "motion_blur") {
-        unsigned int color_h = (params.size() >= 21) ? static_cast<unsigned int>(params[20]) : 0;
+        unsigned int color_h = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
         extra_bindings = {{2, color_h}};
     } else if (effect_name == "ssr") {
         unsigned int color_h = (params.size() >= 9) ? static_cast<unsigned int>(params[8]) : 0;
@@ -1977,10 +1978,17 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc = params[1];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "taa_resolve" && params.size() >= 4) {
-            struct { float blend_factor, jitter_x, jitter_y; int frame_index; } pc{
-                params[1], params[2], params[3],
-                params.size() >= 5 ? static_cast<int>(params[4]) : 0};
+        } else if (effect_name == "taa_resolve" && params.size() >= 8) {
+            struct { float blend_factor, jitter_x, jitter_y; int frame_index; float screen_w, screen_h; } pc{};
+            pc.blend_factor = params[1]; pc.jitter_x = params[2]; pc.jitter_y = params[3];
+            pc.frame_index = static_cast<int>(params[4]);
+            pc.screen_w = params[6]; pc.screen_h = params[7];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "motion_vector" && params.size() >= 18) {
+            struct { float screen_w, screen_h; float _pad[2]; float reproj[16]; } pc{};
+            pc.screen_w = params[0]; pc.screen_h = params[1];
+            for (int i = 0; i < 16; ++i) pc.reproj[i] = params[2 + i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "dof" && params.size() >= 7) {
@@ -1988,11 +1996,9 @@ void VulkanDrawExecutor::DrawPostProcess(
                 params[0], params[1], params[2], params[3], params[4], params[5], params[6]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "motion_blur" && params.size() >= 20) {
-            struct { float intensity, num_samples, screen_w, screen_h; float reproj[16]; } pc{};
-            pc.intensity = params[0]; pc.num_samples = params[1];
-            pc.screen_w = params[2]; pc.screen_h = params[3];
-            for (int i = 0; i < 16; ++i) pc.reproj[i] = params[4 + i];
+        } else if (effect_name == "motion_blur" && params.size() >= 4) {
+            struct { float intensity, num_samples, screen_w, screen_h; } pc{
+                params[0], params[1], params[2], params[3]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "ssr" && params.size() >= 8) {

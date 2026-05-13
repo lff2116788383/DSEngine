@@ -162,11 +162,15 @@ public:
 
 private:
     RenderPassContext& ctx_;
-    unsigned int history_rt_ = 0;      ///< 历史帧 RT
+    unsigned int history_rt_[2] = {0, 0}; ///< 双缓冲历史 RT (ping-pong)
+    int history_index_ = 0;              ///< 当前写入索引
+    int history_width_ = 0;              ///< 历史 RT 宽度
+    int history_height_ = 0;             ///< 历史 RT 高度
+    bool has_valid_history_ = false;     ///< 历史帧是否可用
     glm::vec2 current_jitter_ = {};
     int frame_index_ = 0;
 
-    /// Halton 序列 jitter
+    void EnsureHistoryRT(int width, int height);
     static float Halton(int index, int base);
 };
 
@@ -181,6 +185,19 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Motion Vector Pass ----
+class MotionVectorPass : public IRenderPass {
+public:
+    explicit MotionVectorPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "motion_vector_pass"; }
+private:
+    RenderPassContext& ctx_;
+    glm::mat4 prev_vp_ = glm::mat4(1.0f);
+    bool has_prev_vp_ = false;
+};
+
 // ---- Motion Blur Pass ----
 class MotionBlurPass : public IRenderPass {
 public:
@@ -190,8 +207,6 @@ public:
     const char* GetName() const override { return "motion_blur_pass"; }
 private:
     RenderPassContext& ctx_;
-    glm::mat4 prev_vp_ = glm::mat4(1.0f);
-    bool has_prev_vp_ = false;
 };
 
 // ---- SSR Pass ----

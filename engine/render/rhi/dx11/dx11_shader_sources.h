@@ -1441,15 +1441,20 @@ float4 PSMain(PSInput input) : SV_TARGET {
 // ============================================================
 
 constexpr const char* kTaaResolvePS = R"(
-Texture2D screenTexture : register(t0);
-Texture2D u_history     : register(t1);
-SamplerState u_sampler  : register(s0);
+Texture2D screenTexture  : register(t0);
+Texture2D u_history      : register(t1);
+Texture2D u_motion_vector: register(t2);
+SamplerState u_sampler   : register(s0);
 
 cbuffer TaaParams : register(b0) {
     float u_blend_factor;
     float u_jitter_x;
     float u_jitter_y;
     int   u_frame_index;
+    float u_screen_w;
+    float u_screen_h;
+    float _pad0;
+    float _pad1;
 };
 
 struct PSInput {
@@ -1458,13 +1463,13 @@ struct PSInput {
 };
 
 float4 PSMain(PSInput input) : SV_TARGET {
-    float2 uv = input.uv - float2(u_jitter_x, u_jitter_y);
     float3 current = screenTexture.Sample(u_sampler, input.uv).rgb;
 
-    uint tw, th;
-    screenTexture.GetDimensions(tw, th);
-    float2 texel = float2(1.0f / tw, 1.0f / th);
+    float2 mv = u_motion_vector.Sample(u_sampler, input.uv).rg;
+    float2 history_uv = input.uv - mv - float2(u_jitter_x, u_jitter_y);
+    history_uv = clamp(history_uv, 0.0f, 1.0f);
 
+    float2 texel = float2(1.0f / u_screen_w, 1.0f / u_screen_h);
     float3 m1 = 0.0f, m2 = 0.0f;
     for (int dx = -1; dx <= 1; ++dx) {
         for (int dy = -1; dy <= 1; ++dy) {
@@ -1476,12 +1481,46 @@ float4 PSMain(PSInput input) : SV_TARGET {
     m1 /= 9.0f;
     float3 sigma = sqrt(max(m2 / 9.0f - m1 * m1, 0.0f));
 
-    float2 hist_uv = clamp(uv, 0.0f, 1.0f);
-    float3 history = u_history.Sample(u_sampler, hist_uv).rgb;
+    float3 history = u_history.Sample(u_sampler, history_uv).rgb;
     history = clamp(history, m1 - 1.25f * sigma, m1 + 1.25f * sigma);
 
-    float alpha = (u_frame_index < 2) ? 1.0f : u_blend_factor;
+    float velocity_len = length(mv * float2(u_screen_w, u_screen_h));
+    float vel_weight = clamp(velocity_len * 0.5f, 0.0f, 0.5f);
+    float alpha = (u_frame_index < 2) ? 1.0f : clamp(u_blend_factor + vel_weight, u_blend_factor, 1.0f);
     return float4(lerp(history, current, alpha), 1.0f);
+}
+)";
+
+// ============================================================
+// Motion Vector Pixel Shader
+// ============================================================
+constexpr const char* kMotionVectorPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+cbuffer MvParams : register(b0) {
+    float screen_w;
+    float screen_h;
+    float _pad0;
+    float _pad1;
+    float4x4 reproj;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float depth = screenTexture.Sample(u_sampler, input.uv).r;
+    float2 ndc = input.uv * 2.0f - 1.0f;
+    float z_ndc = depth * 2.0f - 1.0f;
+    float4 clip_pos = float4(ndc, z_ndc, 1.0f);
+    float4 prev_clip = mul(clip_pos, reproj);
+    prev_clip.xy /= prev_clip.w;
+    float2 prev_uv = prev_clip.xy * 0.5f + 0.5f;
+    float2 velocity = input.uv - prev_uv;
+    return float4(velocity, 0.0f, 1.0f);
 }
 )";
 
@@ -1553,7 +1592,6 @@ cbuffer MotionBlurParams : register(b0) {
     float num_samples;
     float screen_w;
     float screen_h;
-    float4x4 reproj;  // prev_vp * inverse(current_vp), CPU 预计算
 };
 
 struct PSInput {
@@ -1562,13 +1600,7 @@ struct PSInput {
 };
 
 float4 PSMain(PSInput input) : SV_TARGET {
-    float depth = screenTexture.Sample(u_sampler, input.uv).r;
-    float2 ndc = input.uv * 2.0f - 1.0f;
-    float z_ndc = depth * 2.0f - 1.0f;
-    float4 clip_pos = float4(ndc, z_ndc, 1.0f);
-    float4 prev_clip = mul(clip_pos, reproj);
-    prev_clip.xy /= prev_clip.w;
-    float2 velocity = (ndc - prev_clip.xy) * 0.5f * intensity;
+    float2 velocity = screenTexture.Sample(u_sampler, input.uv).rg * intensity;
     int samples = max(int(num_samples), 1);
     float3 color = colorTexture.Sample(u_sampler, input.uv).rgb;
     float total = 1.0f;

@@ -22,6 +22,7 @@ struct RenderPipelineResources {
     unsigned int pp_taa_rt = 0;        // TAA resolve 输出
     unsigned int pp_dof_rt = 0;        // DOF 输出
     unsigned int pp_ssr_rt = 0;        // SSR 输出
+    unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
 
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
@@ -56,6 +57,7 @@ struct RenderPipelineResources {
         pp_taa_rt = 0;
         pp_dof_rt = 0;
         pp_ssr_rt = 0;
+        pp_motion_vector_rt = 0;
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;
         pp_lum_adapted_rt[1] = 0;

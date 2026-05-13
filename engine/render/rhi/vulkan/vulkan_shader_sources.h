@@ -1168,21 +1168,28 @@ void main() {
 }
 )";
 
-/// TAA Resolve — 将当前帧与历史帧混合（Variance Clipping 邻域约束）
+/// TAA Resolve — motion vector reprojection + variance clipping
 constexpr const char* kTaaResolveFS = R"(
 layout(set = 2, binding = 5) uniform sampler2D u_history;
+layout(set = 2, binding = 2) uniform sampler2D u_motion_vector;
 layout(push_constant) uniform TaaParams {
-    float u_blend_factor;    // 典型值 0.1（90% 历史）
+    float u_blend_factor;
     float u_jitter_x;
     float u_jitter_y;
     int   u_frame_index;
+    float u_screen_w;
+    float u_screen_h;
 };
 void main() {
-    vec2 uv = vTexCoords - vec2(u_jitter_x, u_jitter_y);
     vec3 current = texture(screenTexture, vTexCoords).rgb;
 
-    // 邻域 3×3 方差裁剪（防止 ghosting）
-    vec2 texel = 1.0 / vec2(textureSize(screenTexture, 0));
+    // 使用 motion vector 做重投影（比纯 jitter 更精确）
+    vec2 mv = texture(u_motion_vector, vTexCoords).rg;
+    vec2 history_uv = vTexCoords - mv - vec2(u_jitter_x, u_jitter_y);
+    history_uv = clamp(history_uv, vec2(0.0), vec2(1.0));
+
+    // 邻域 3×3 variance clipping
+    vec2 texel = 1.0 / vec2(u_screen_w, u_screen_h);
     vec3 m1 = vec3(0.0), m2 = vec3(0.0);
     for (int dx = -1; dx <= 1; ++dx) {
         for (int dy = -1; dy <= 1; ++dy) {
@@ -1196,12 +1203,37 @@ void main() {
     vec3 aabb_min = m1 - 1.25 * sigma;
     vec3 aabb_max = m1 + 1.25 * sigma;
 
-    // 采样历史帧（双线性，使用去抖动后 uv）
-    vec3 history = texture(u_history, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
+    vec3 history = texture(u_history, history_uv).rgb;
     history = clamp(history, aabb_min, aabb_max);
 
-    float alpha = u_frame_index < 2 ? 1.0 : u_blend_factor;
+    // velocity rejection：运动越快，越偏向当前帧
+    float velocity_len = length(mv * vec2(u_screen_w, u_screen_h));
+    float vel_weight = clamp(velocity_len * 0.5, 0.0, 0.5);
+    float alpha = u_frame_index < 2 ? 1.0 : clamp(u_blend_factor + vel_weight, u_blend_factor, 1.0);
+
     FragColor = vec4(mix(history, current, alpha), 1.0);
+}
+)";
+
+// ============================================================
+// Motion Vector Fragment Shader (深度重投影 → 速度场)
+// ============================================================
+constexpr const char* kMotionVectorFS = R"(
+layout(push_constant) uniform MvParams {
+    float screen_w;
+    float screen_h;
+    mat4 reproj;
+};
+void main() {
+    float depth = texture(screenTexture, vTexCoords).r;
+    vec2 ndc = vTexCoords * 2.0 - 1.0;
+    float z_ndc = depth * 2.0 - 1.0;
+    vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
+    vec4 prev_clip = reproj * clip_pos;
+    prev_clip.xy /= prev_clip.w;
+    vec2 prev_uv = prev_clip.xy * 0.5 + 0.5;
+    vec2 velocity = vTexCoords - prev_uv;
+    FragColor = vec4(velocity, 0.0, 1.0);
 }
 )";
 
@@ -1259,16 +1291,10 @@ layout(push_constant) uniform MotionBlurParams {
     float num_samples;
     float screen_w;
     float screen_h;
-    mat4 reproj;  // prev_vp * inverse(current_vp), CPU 预计算
 };
 void main() {
-    float depth = texture(screenTexture, vTexCoords).r;
-    vec2 ndc = vTexCoords * 2.0 - 1.0;
-    float z_ndc = depth * 2.0 - 1.0;
-    vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
-    vec4 prev_clip = reproj * clip_pos;
-    prev_clip.xy /= prev_clip.w;
-    vec2 velocity = (ndc - prev_clip.xy) * 0.5 * intensity;
+    // screenTexture = motion_vector RT (rg = velocity)
+    vec2 velocity = texture(screenTexture, vTexCoords).rg * intensity;
     int samples = max(int(num_samples), 1);
     vec3 color = texture(u_color_texture, vTexCoords).rgb;
     float total = 1.0;

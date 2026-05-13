@@ -1136,10 +1136,11 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
     // TAA Resolve 专用路径
     if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 4) {
-            struct { float blend_factor, jitter_x, jitter_y; int frame_index; } tp{
-                params[1], params[2], params[3],
-                params.size() >= 5 ? static_cast<int>(params[4]) : 0};
+        if (pp_params_cb_ && params.size() >= 8) {
+            struct { float blend_factor, jitter_x, jitter_y; int frame_index; float screen_w, screen_h; float _p0, _p1; } tp{};
+            tp.blend_factor = params[1]; tp.jitter_x = params[2]; tp.jitter_y = params[3];
+            tp.frame_index = static_cast<int>(params[4]);
+            tp.screen_w = params[6]; tp.screen_h = params[7];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &tp, sizeof(tp));
@@ -1151,9 +1152,38 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* hist_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
             if (hist_tex) dc->PSSetShaderResources(1, 1, hist_tex->srv.GetAddressOf());
         }
+        if (params.size() >= 6) {
+            const auto* mv_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
+            if (mv_tex) dc->PSSetShaderResources(2, 1, mv_tex->srv.GetAddressOf());
+        }
         draw_dedicated_pp(shader_mgr.taa_resolve_shader_handle());
-        ID3D11ShaderResourceView* null_srv = nullptr;
-        dc->PSSetShaderResources(1, 1, &null_srv);
+        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+        dc->PSSetShaderResources(1, 2, null_srvs);
+        return;
+    }
+
+    // Motion Vector 专用路径
+    if (effect_name == "motion_vector" && shader_mgr.motion_vector_shader_handle()) {
+        if (!mb_params_cb_ && context_->device()) {
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage = D3D11_USAGE_DYNAMIC;
+            bd.ByteWidth = 80;  // 4 floats (2 + 2 pad) + mat4 = 80 bytes
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            context_->device()->CreateBuffer(&bd, nullptr, mb_params_cb_.GetAddressOf());
+        }
+        if (mb_params_cb_ && params.size() >= 18) {
+            struct { float screen_w, screen_h, _p0, _p1; float reproj[16]; } mp{};
+            mp.screen_w = params[0]; mp.screen_h = params[1];
+            for (int i = 0; i < 16; ++i) mp.reproj[i] = params[2 + i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(mb_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &mp, sizeof(mp));
+                dc->Unmap(mb_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, mb_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.motion_vector_shader_handle());
         return;
     }
 
@@ -1180,30 +1210,21 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
-    // Motion Blur 专用路径
+    // Motion Blur 专用路径（读 motion_vector RT）
     if (effect_name == "motion_blur" && shader_mgr.motion_blur_shader_handle()) {
-        if (!mb_params_cb_ && context_->device()) {
-            D3D11_BUFFER_DESC bd{};
-            bd.Usage = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth = 80;  // 4 floats + mat4 = 80 bytes
-            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-            context_->device()->CreateBuffer(&bd, nullptr, mb_params_cb_.GetAddressOf());
-        }
-        if (mb_params_cb_ && params.size() >= 20) {
-            struct MBParams { float intensity, num_samples, screen_w, screen_h; float reproj[16]; } mp{};
-            mp.intensity = params[0]; mp.num_samples = params[1];
-            mp.screen_w = params[2]; mp.screen_h = params[3];
-            for (int i = 0; i < 16; ++i) mp.reproj[i] = params[4 + i];
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 4) {
+            struct { float intensity, num_samples, screen_w, screen_h; } mp{
+                params[0], params[1], params[2], params[3]};
             D3D11_MAPPED_SUBRESOURCE mapped{};
-            if (SUCCEEDED(dc->Map(mb_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &mp, sizeof(mp));
-                dc->Unmap(mb_params_cb_.Get(), 0);
+                dc->Unmap(pp_params_cb_.Get(), 0);
             }
-            dc->PSSetConstantBuffers(0, 1, mb_params_cb_.GetAddressOf());
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 21) {
-            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[20]));
+        if (params.size() >= 5) {
+            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
             if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.motion_blur_shader_handle());

@@ -65,6 +65,7 @@ struct RenderPassContext {
         unsigned int taa = 0;               // TAA resolve 输出 RT
         unsigned int dof = 0;               // DOF 输出 RT
         unsigned int ssr = 0;               // SSR 输出 RT
+        unsigned int motion_vector = 0;     // Motion Vector RT (RG16F)
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
     } render_targets;

@@ -305,6 +305,11 @@ bool FramePipeline::Init() {
         render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width / 2, render_height / 2, true, false, false});
     }
+    // Motion Vector: 全分辨率 RT (RG16F 速度场)
+    if (render_resources_.pp_motion_vector_rt == 0) {
+        render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
 
     // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
     if (render_resources_.pp_lum_temp_rt == 0) {
@@ -800,6 +805,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.taa       = render_resources_.pp_taa_rt;
     render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
     render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
+    render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
     render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
     render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
@@ -850,6 +856,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ContactShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::AutoExposurePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::MotionVectorPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
