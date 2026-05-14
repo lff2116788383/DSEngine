@@ -157,6 +157,8 @@ private:
     unsigned int mesh_vao_handle_ = 0;
     unsigned int mesh_vbo_handle_ = 0;
     unsigned int mesh_ibo_handle_ = 0;
+    unsigned int instance_vbo_handle_ = 0;
+    size_t instance_vbo_capacity_ = 0;  ///< 当前 instance VBO 容量（字节）
     unsigned int white_texture_handle_ = 0;
 
     // 天空盒几何

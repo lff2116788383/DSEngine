@@ -136,6 +136,7 @@ void GLShaderManager::CachePBRLocations() {
     loc.model = glGetUniformLocation(h, "u_model");
     loc.skinned = glGetUniformLocation(h, "u_skinned");
     loc.morph_enabled = glGetUniformLocation(h, "u_morph_enabled");
+    loc.use_instancing = glGetUniformLocation(h, "u_use_instancing");
 }
 
 // NOTE: Old hand-written PBR shader (~500 lines) removed.

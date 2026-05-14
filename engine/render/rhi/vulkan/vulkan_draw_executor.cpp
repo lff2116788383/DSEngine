@@ -251,6 +251,16 @@ void VulkanDrawExecutor::InitGeometryBuffers(
         WriteToBuffer(device, light_probe_ubo_mem_[i], 0, kLightProbeSize, zero_lp);
     }
 
+    // --- GPU Instancing VBO（初始 256 实例 = 16KB）---
+    {
+        constexpr size_t kInitialInstanceCapacity = 256;
+        instance_vbo_capacity_ = kInitialInstanceCapacity * sizeof(glm::mat4);
+        CreateVulkanBuffer(device, physical_device, instance_vbo_capacity_,
+                           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           instance_vbo_, instance_vbo_mem_);
+    }
+
     // --- 白色纹理 ---
     unsigned char white_pixel[4] = {255, 255, 255, 255};
     white_texture_handle_ = resource_mgr->CreateTexture2D(1, 1, white_pixel, true);
@@ -276,6 +286,8 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     destroy_buffer(sprite_ibo_, sprite_ibo_mem_);
     destroy_buffer(mesh_vbo_, mesh_vbo_mem_);
     destroy_buffer(mesh_ibo_, mesh_ibo_mem_);
+    destroy_buffer(instance_vbo_, instance_vbo_mem_);
+    instance_vbo_capacity_ = 0;
     destroy_buffer(skybox_vbo_, skybox_vbo_mem_);
     destroy_buffer(pp_vbo_, pp_vbo_mem_);
     destroy_buffer(particle_vbo_, particle_vbo_mem_);
@@ -1587,7 +1599,8 @@ void VulkanDrawExecutor::DrawMeshBatch(
 
     // 3D Mesh 顶点格式定义（两种管线共用）
     std::vector<VkVertexInputBindingDescription> mesh_bindings = {
-        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX}
+        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+        {1, sizeof(glm::mat4), VK_VERTEX_INPUT_RATE_INSTANCE},  // GPU Instancing: model matrix per instance
     };
     std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
         {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
@@ -1597,6 +1610,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
         {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
         {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
         {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
+        // GPU Instancing: instance model matrix (4 columns, binding 1)
+        {7,  1, VK_FORMAT_R32G32B32A32_SFLOAT, 0},                       // aInstModelCol0
+        {8,  1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4)},       // aInstModelCol1
+        {9,  1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4) * 2},   // aInstModelCol2
+        {10, 1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4) * 3},   // aInstModelCol3
     };
 
     // 延迟创建 VkPipeline（按需，首次 Draw 时创建）— 有剔除版本
@@ -1687,22 +1705,54 @@ void VulkanDrawExecutor::DrawMeshBatch(
             mesh_ibo_offset_ += idata_size;
         }
 
-        // Push constant: model + skinned + morph_enabled
+        // Push constant: model + skinned + morph_enabled + use_instancing
+        const bool is_instanced = item.instance_transforms.size() > 1;
         struct {
             glm::mat4 model;
             int skinned;
             int morph_enabled;
+            int use_instancing;
         } pc_data;
         pc_data.model = item.model;
         pc_data.skinned = item.skinned ? 1 : 0;
         pc_data.morph_enabled = item.morph_enabled ? 1 : 0;
+        pc_data.use_instancing = is_instanced ? 1 : 0;
         vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
                            VK_SHADER_STAGE_VERTEX_BIT,
                            0, sizeof(pc_data), &pc_data);
 
-        // 绑定 VBO（使用该 mesh 的偏移）
-        VkDeviceSize vbo_offsets[] = {cur_vbo_offset};
-        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &mesh_vbo_, vbo_offsets);
+        // GPU Instancing: 上传 instance 数据（在绑定之前处理可能的扩容）
+        uint32_t instance_count = 1;
+        if (is_instanced) {
+            const VkDeviceSize inst_data_size = item.instance_transforms.size() * sizeof(glm::mat4);
+
+            // 动态扩容 instance VBO
+            if (inst_data_size > instance_vbo_capacity_) {
+                auto device = context_->device();
+                if (instance_vbo_ != VK_NULL_HANDLE) {
+                    vkDestroyBuffer(device, instance_vbo_, nullptr);
+                    instance_vbo_ = VK_NULL_HANDLE;
+                }
+                if (instance_vbo_mem_ != VK_NULL_HANDLE) {
+                    vkFreeMemory(device, instance_vbo_mem_, nullptr);
+                    instance_vbo_mem_ = VK_NULL_HANDLE;
+                }
+                instance_vbo_capacity_ = inst_data_size * 2;
+                CreateVulkanBuffer(context_->device(), context_->physical_device(),
+                                   instance_vbo_capacity_,
+                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                   instance_vbo_, instance_vbo_mem_);
+            }
+
+            WriteToBuffer(context_->device(), instance_vbo_mem_, 0, inst_data_size, item.instance_transforms.data());
+            instance_count = static_cast<uint32_t>(item.instance_transforms.size());
+        }
+
+        // 绑定 VBO binding 0 (mesh) + binding 1 (instance)
+        VkBuffer vbo_buffers[] = {mesh_vbo_, instance_vbo_};
+        VkDeviceSize vbo_offsets[] = {cur_vbo_offset, 0};
+        vkCmdBindVertexBuffers(cmd_buf, 0, 2, vbo_buffers, vbo_offsets);
 
         // 绑定 IBO（使用该 mesh 的偏移）
         vkCmdBindIndexBuffer(cmd_buf, mesh_ibo_, cur_ibo_offset, VK_INDEX_TYPE_UINT16);
@@ -1710,8 +1760,12 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 绘制
         vkCmdDrawIndexed(cmd_buf,
                          static_cast<uint32_t>(item.indices.size()),
-                         1, 0, 0, 0);
+                         instance_count, 0, 0, 0);
 
+        if (is_instanced) {
+            global_state_.current_frame_stats.instanced_draw_calls++;
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
+        }
         global_state_.current_frame_stats.draw_calls++;
     }
 

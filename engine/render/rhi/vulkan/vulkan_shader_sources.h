@@ -42,6 +42,10 @@ layout(location = 3) in vec3 aNormal;
 layout(location = 4) in vec3 aTangent;
 layout(location = 5) in vec4 aBoneWeights;
 layout(location = 6) in vec4 aBoneIndices;
+layout(location = 7) in vec4 aInstModelCol0;
+layout(location = 8) in vec4 aInstModelCol1;
+layout(location = 9) in vec4 aInstModelCol2;
+layout(location = 10) in vec4 aInstModelCol3;
 
 layout(location = 0) out vec4 vColor;
 layout(location = 1) out vec2 vTexCoord;
@@ -62,6 +66,7 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     int skinned;
     int morph_enabled;
+    int use_instancing;
 } pc;
 
 const int MAX_BONES = 100;
@@ -75,6 +80,12 @@ layout(std140, set = 2, binding = 9) uniform MorphWeights {
 };
 
 void main() {
+    mat4 modelMatrix;
+    if (pc.use_instancing != 0) {
+        modelMatrix = mat4(aInstModelCol0, aInstModelCol1, aInstModelCol2, aInstModelCol3);
+    } else {
+        modelMatrix = pc.model;
+    }
     mat4 boneTransform = mat4(1.0);
     if (pc.skinned != 0) {
         boneTransform = bone_matrices[int(aBoneIndices[0])] * aBoneWeights[0] +
@@ -90,7 +101,7 @@ void main() {
     }
 
     vec4 localPos = boneTransform * vec4(morphedPos, 1.0);
-    vec4 worldPos = pc.model * localPos;
+    vec4 worldPos = modelMatrix * localPos;
     gl_Position = vp * worldPos;
 
     vFragPos = worldPos.xyz;
@@ -98,7 +109,7 @@ void main() {
     vColor = aColor;
     vTexCoord = aTexCoord;
 
-    mat3 normalMatrix = transpose(inverse(mat3(pc.model * boneTransform)));
+    mat3 normalMatrix = transpose(inverse(mat3(modelMatrix * boneTransform)));
     vec3 T = normalize(normalMatrix * aTangent);
     vec3 N = normalize(normalMatrix * morphedNormal);
     T = normalize(T - dot(T, N) * N);

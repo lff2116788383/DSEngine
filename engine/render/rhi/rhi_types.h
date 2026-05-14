@@ -225,6 +225,9 @@ struct MeshDrawItem {
 
     bool morph_enabled = false;
     std::vector<float> morph_weights;
+
+    /// GPU Instancing: 逐实例模型矩阵（非空时触发 instanced draw）
+    std::vector<glm::mat4> instance_transforms;
 };
 
 /// 3D 粒子绘制项
@@ -255,4 +258,6 @@ struct RenderStats {
     int render_passes = 0;
     int shadow_passes = 0;
     int particle_count = 0;  ///< 3D 粒子数量
+    int instanced_draw_calls = 0;  ///< GPU Instancing draw call 数
+    int instanced_mesh_count = 0;  ///< GPU Instancing 合批的实体总数
 };

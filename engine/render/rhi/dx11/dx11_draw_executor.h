@@ -46,7 +46,7 @@ struct DX11PerObjectCB {
     glm::mat4 model;
     int skinned;
     int morph_enabled;
-    int _pad0;
+    int use_instancing;
     int _pad1;
 };
 
@@ -235,6 +235,10 @@ private:
     ComPtr<ID3D11Buffer> mesh_dynamic_ibo_;
     size_t mesh_vbo_capacity_ = 0;
     size_t mesh_ibo_capacity_ = 0;
+
+    // GPU Instancing: instance model matrix VBO
+    ComPtr<ID3D11Buffer> instance_vbo_;
+    size_t instance_vbo_capacity_ = 0;
 
     // 天空盒立方体（静态）
     ComPtr<ID3D11Buffer> skybox_vbo_;

@@ -47,6 +47,7 @@ struct PBRShaderLocations {
     int model = -1;
     int skinned = -1;
     int morph_enabled = -1;
+    int use_instancing = -1;
 };
 
 /// 天空盒着色器 uniform location 缓存

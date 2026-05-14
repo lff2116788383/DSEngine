@@ -270,6 +270,10 @@ private:
     VkDeviceMemory mesh_vbo_mem_ = VK_NULL_HANDLE;
     VkDeviceMemory mesh_ibo_mem_ = VK_NULL_HANDLE;
 
+    VkBuffer instance_vbo_ = VK_NULL_HANDLE;
+    VkDeviceMemory instance_vbo_mem_ = VK_NULL_HANDLE;
+    VkDeviceSize instance_vbo_capacity_ = 0;  ///< GPU Instancing VBO 容量（字节）
+
     VkBuffer skybox_vbo_ = VK_NULL_HANDLE;
     VkDeviceMemory skybox_vbo_mem_ = VK_NULL_HANDLE;
 

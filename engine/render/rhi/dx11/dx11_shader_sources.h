@@ -100,7 +100,7 @@ cbuffer PerObject : register(b1) {
     float4x4 model;
     int skinned;
     int morph_enabled;
-    int _pad0;
+    int use_instancing;
     int _pad1;
 };
 
@@ -116,6 +116,10 @@ struct VSInput {
     float3 tangent   : TANGENT;
     float4 boneWts   : BLENDWEIGHT;
     float4 boneIdx   : BLENDINDICES;
+    float4 instModel0 : INST_MODEL0;
+    float4 instModel1 : INST_MODEL1;
+    float4 instModel2 : INST_MODEL2;
+    float4 instModel3 : INST_MODEL3;
 };
 
 struct VSOutput {
@@ -132,7 +136,14 @@ struct VSOutput {
 VSOutput VSMain(VSInput input) {
     VSOutput output;
 
-    float4x4 skinMatrix = model;
+    float4x4 modelMatrix;
+    if (use_instancing) {
+        modelMatrix = transpose(float4x4(input.instModel0, input.instModel1, input.instModel2, input.instModel3));
+    } else {
+        modelMatrix = model;
+    }
+
+    float4x4 skinMatrix = modelMatrix;
     if (skinned) {
         skinMatrix = u_bone_matrices[int(input.boneIdx[0])] * input.boneWts[0] +
                      u_bone_matrices[int(input.boneIdx[1])] * input.boneWts[1] +
@@ -813,7 +824,7 @@ cbuffer PerObject : register(b1) {
     float4x4 model;
     int skinned;
     int morph_enabled;
-    int _pad0;
+    int use_instancing;
     int _pad1;
 };
 
@@ -829,6 +840,10 @@ struct VSInput {
     float3 tangent   : TANGENT;
     float4 boneWts   : BLENDWEIGHT;
     float4 boneIdx   : BLENDINDICES;
+    float4 instModel0 : INST_MODEL0;
+    float4 instModel1 : INST_MODEL1;
+    float4 instModel2 : INST_MODEL2;
+    float4 instModel3 : INST_MODEL3;
 };
 
 struct VSOutput {
@@ -837,7 +852,13 @@ struct VSOutput {
 
 VSOutput VSMain(VSInput input) {
     VSOutput output;
-    float4x4 skinMatrix = model;
+    float4x4 modelMatrix;
+    if (use_instancing) {
+        modelMatrix = transpose(float4x4(input.instModel0, input.instModel1, input.instModel2, input.instModel3));
+    } else {
+        modelMatrix = model;
+    }
+    float4x4 skinMatrix = modelMatrix;
     if (skinned) {
         skinMatrix = u_bone_matrices[int(input.boneIdx[0])] * input.boneWts[0] +
                      u_bone_matrices[int(input.boneIdx[1])] * input.boneWts[1] +

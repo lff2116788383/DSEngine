@@ -547,6 +547,36 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
     }
 }
 
+// GPU Instancing: 零分配合批 key
+struct InstancingKeyData {
+    unsigned int tex[5];
+    float color[4];
+    float scalars[5];
+    float emissive[3];
+    unsigned int blend_mode;
+    int shading_mode, sorting_layer, order_in_layer, flags;
+};
+
+struct InstancingKey {
+    const std::string* mesh_path;
+    InstancingKeyData data;
+
+    bool operator==(const InstancingKey& o) const {
+        return *mesh_path == *o.mesh_path
+            && std::memcmp(&data, &o.data, sizeof(InstancingKeyData)) == 0;
+    }
+};
+
+struct InstancingKeyHash {
+    size_t operator()(const InstancingKey& k) const {
+        size_t h = std::hash<std::string>{}(*k.mesh_path);
+        const auto* p = reinterpret_cast<const unsigned char*>(&k.data);
+        for (size_t i = 0; i < sizeof(InstancingKeyData); ++i)
+            h ^= static_cast<size_t>(p[i]) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
 }
 
 void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
@@ -621,6 +651,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     
     std::vector<MeshDrawItem> batch_items;
     batch_items.reserve(view.size_hint());
+
+    // GPU Instancing: 相同 mesh_path + 材质的非蛮皮实体合批（零堆分配 key）
+    std::unordered_map<InstancingKey, size_t, InstancingKeyHash> instancing_map;
 
     for (auto entity : view) {
         auto& transform = view.get<TransformComponent>(entity);
@@ -773,6 +806,53 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.material_emissive += skylight_ambient * 0.05f;
         }
 
+        // GPU Instancing: 非蛮皮非变形 + 有 mesh_path → 检查合批
+        const bool can_instance = !item.skinned && !item.morph_enabled
+            && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
+            && !mesh_renderer.mesh_path.empty()
+            && !mesh_renderer.temp_vertices.empty()
+            && !mesh_renderer.temp_indices.empty();
+
+        InstancingKey inst_key{};
+        if (can_instance) {
+            inst_key.mesh_path = &mesh_renderer.mesh_path;
+            auto& kd = inst_key.data;
+            kd.tex[0] = item.texture_handle;
+            kd.tex[1] = item.normal_map_handle;
+            kd.tex[2] = item.metallic_roughness_map_handle;
+            kd.tex[3] = item.emissive_map_handle;
+            kd.tex[4] = item.occlusion_map_handle;
+            kd.color[0] = item.color.r; kd.color[1] = item.color.g;
+            kd.color[2] = item.color.b; kd.color[3] = item.color.a;
+            kd.scalars[0] = item.material_metallic;
+            kd.scalars[1] = item.material_roughness;
+            kd.scalars[2] = item.material_ao;
+            kd.scalars[3] = item.material_normal_strength;
+            kd.scalars[4] = item.material_alpha_cutoff;
+            kd.emissive[0] = item.material_emissive.r;
+            kd.emissive[1] = item.material_emissive.g;
+            kd.emissive[2] = item.material_emissive.b;
+            kd.blend_mode = item.blend_mode;
+            kd.shading_mode = item.shading_mode;
+            kd.sorting_layer = item.sorting_layer;
+            kd.order_in_layer = item.order_in_layer;
+            kd.flags = (item.material_alpha_test ? 1 : 0)
+                     | (item.material_double_sided ? 2 : 0)
+                     | (item.receive_shadow ? 4 : 0)
+                     | (item.depth_test_enabled ? 8 : 0)
+                     | (item.depth_write_enabled ? 16 : 0)
+                     | (item.lighting_enabled ? 32 : 0);
+
+            auto map_it = instancing_map.find(inst_key);
+            if (map_it != instancing_map.end()) {
+                batch_items[map_it->second].instance_transforms.push_back(mesh_model);
+                continue;
+            }
+
+            item.model = mesh_model;
+            item.instance_transforms.push_back(mesh_model);
+        }
+
         if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
 #ifdef DSE_VSE_1522_DIAG
             const bool emit_vse1522_depth_diag = ShouldLogVse1522MeshDiagnostics(mesh_renderer);
@@ -908,7 +988,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 const glm::vec3 world_pos3(world_pos);
                 world_min = glm::min(world_min, world_pos3);
                 world_max = glm::max(world_max, world_pos3);
-                bv.pos = item.skinned ? local_positions[i] : world_pos3;
+                bv.pos = (item.skinned || can_instance) ? local_positions[i] : world_pos3;
                 bv.color = item.color;
                 
                 glm::vec3 normal;
@@ -968,7 +1048,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     normal = glm::normalize(normal);
                 }
                 const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(mesh_model));
-                bv.normal = item.skinned ? normal : glm::normalize(normal_matrix * normal);
+                bv.normal = (item.skinned || can_instance) ? normal : glm::normalize(normal_matrix * normal);
                 item.vertices.push_back(bv);
             }
             item.indices = mesh_renderer.temp_indices;
@@ -1011,6 +1091,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
         if (!item.vertices.empty() && !item.indices.empty()) {
             batch_items.push_back(item);
+            if (can_instance) {
+                instancing_map[inst_key] = batch_items.size() - 1;
+            }
         }
     }
 

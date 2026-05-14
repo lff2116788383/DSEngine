@@ -110,6 +110,8 @@ void DX11DrawExecutor::Shutdown() {
     mesh_dynamic_ibo_.Reset();
     mesh_vbo_capacity_ = 0;
     mesh_ibo_capacity_ = 0;
+    instance_vbo_.Reset();
+    instance_vbo_capacity_ = 0;
     skybox_vbo_.Reset();
     postprocess_vbo_.Reset();
     postprocess_ibo_.Reset();
@@ -612,10 +614,48 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 绑定 VBO/IBO
-        UINT stride = sizeof(BatchVertex);
-        UINT vb_offset = 0;
-        dc->IASetVertexBuffers(0, 1, mesh_dynamic_vbo_.GetAddressOf(), &stride, &vb_offset);
+        // GPU Instancing 判定
+        const bool is_instanced = item.instance_transforms.size() > 1;
+        UINT instance_count = 1;
+
+        if (is_instanced) {
+            instance_count = static_cast<UINT>(item.instance_transforms.size());
+            size_t inst_bytes = instance_count * sizeof(glm::mat4);
+
+            // 动态扩容 instance VBO
+            if (inst_bytes > instance_vbo_capacity_) {
+                instance_vbo_.Reset();
+                size_t new_cap = inst_bytes * 2;
+                D3D11_BUFFER_DESC ibd{};
+                ibd.ByteWidth = static_cast<UINT>(new_cap);
+                ibd.Usage = D3D11_USAGE_DYNAMIC;
+                ibd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+                ibd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                if (SUCCEEDED(context_->device()->CreateBuffer(&ibd, nullptr, instance_vbo_.GetAddressOf())))
+                    instance_vbo_capacity_ = new_cap;
+            }
+
+            // 上传 instance 数据
+            if (instance_vbo_) {
+                D3D11_MAPPED_SUBRESOURCE mapped{};
+                if (SUCCEEDED(dc->Map(instance_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                    memcpy(mapped.pData, item.instance_transforms.data(), inst_bytes);
+                    dc->Unmap(instance_vbo_.Get(), 0);
+                }
+            }
+        }
+
+        // 绑定 VBO: instanced 时 slot 0 (mesh) + slot 1 (instance)；否则仅 slot 0
+        if (is_instanced) {
+            ID3D11Buffer* vbs[2] = {mesh_dynamic_vbo_.Get(), instance_vbo_.Get()};
+            UINT strides[2] = {sizeof(BatchVertex), sizeof(glm::mat4)};
+            UINT offsets[2] = {0, 0};
+            dc->IASetVertexBuffers(0, 2, vbs, strides, offsets);
+        } else {
+            UINT stride = sizeof(BatchVertex);
+            UINT vb_offset = 0;
+            dc->IASetVertexBuffers(0, 1, mesh_dynamic_vbo_.GetAddressOf(), &stride, &vb_offset);
+        }
         dc->IASetIndexBuffer(mesh_dynamic_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
 
         // PerObject
@@ -623,6 +663,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         obj_data.model = item.model;
         obj_data.skinned = item.skinned ? 1 : 0;
         obj_data.morph_enabled = item.morph_enabled ? 1 : 0;
+        obj_data.use_instancing = is_instanced ? 1 : 0;
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
         // 骨骼矩阵（b7）— 蒙皮网格需要
@@ -688,9 +729,13 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             if (oc) dc->PSSetShaderResources(4, 1, oc->srv.GetAddressOf());
         }
 
-        dc->DrawIndexed(static_cast<UINT>(item.indices.size()), 0, 0);
+        dc->DrawIndexedInstanced(static_cast<UINT>(item.indices.size()), instance_count, 0, 0, 0);
         global_state_.current_frame_stats.draw_calls++;
         global_state_.current_frame_stats.mesh_count++;
+        if (is_instanced) {
+            global_state_.current_frame_stats.instanced_draw_calls++;
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
+        }
     }
 }
 
