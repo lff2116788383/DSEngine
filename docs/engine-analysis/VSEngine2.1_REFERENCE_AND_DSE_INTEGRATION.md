@@ -112,9 +112,11 @@ LODSystem::Update()
   3. 遍历 LOD levels[]，选择第一个 screen_size > levels[i].screen_size_threshold 的级别
   4. 如果 current_lod != 新级别:
      - 更新 current_lod 为新级别
-     - 如果 levels[new_lod].loaded == false:
-       - 异步加载对应 Mesh
-     - 将 MeshRendererComponent.mesh_handle 更新为新级别的 mesh
+     - 如果 levels[new_lod].mesh_handle == 0（未加载）:
+       - 同步或异步加载 Mesh，获取 mesh handle
+       - 写入 levels[new_lod].mesh_handle
+     - 将 MeshRendererComponent.mesh_handle_override 更新为新级别的 handle
+       （注：MeshRendererComponent 需新增此字段，非零时渲染系统跳过 mesh_path 加载）
   5. 如果没有 LODGroupComponent，跳过（零开销）
 ```
 
@@ -136,15 +138,16 @@ OnUpdate() 时序:
 | 维度 | VSEngine2.1 | DSE 方案 | 理由 |
 |:-----|:-----------|:---------|:-----|
 | 架构模式 | OOP 节点树（VSModelSwitchNode 子节点切换） | ECS 组件（LODGroupComponent + LODSystem） | 符合 DSE 的 ECS 范式 |
-| Mesh 切换 | 节点指针切换，运行时即时生效 | 更新 MeshRendererComponent 的 mesh_handle | 渲染管线只消费组件数据，不感知 LOD |
+| Mesh 切换 | 节点指针切换，运行时即时生效 | 新增 `MeshRendererComponent.mesh_handle_override`（uint，非零时跳过 path 加载直接使用），LODSystem 预加载各级别并写入 | 渲染管线只消费组件数据，不感知 LOD |
 | 阈值存储 | VSGeometryNode.m_fLODScreenSize（序列化属性） | LODLevelConfig.screen_size_threshold | 同等的可配置能力 |
 | 全局缩放 | VSConfig::ms_LODScreenScale（Config.txt） | LODGroupComponent.global_scale | 实体级独立控制，更灵活 |
 | 约束 | SubMesh 数一致要求 | 无硬约束（dmesh 格式独立加载） | 离线 LOD 生成工具保证一致性 |
 
 **解耦要点：**
 - LODSystem 不依赖任何渲染后端，只修改 ECS 组件数据
-- MeshRendererComponent 不感知 LOD，只消费 mesh_handle
-- 与 RenderGraph Pass 完全解耦——Pass 只看到最终的 final_bone_matrices 和 mesh_handle
+- MeshRendererComponent 不感知 LOD，渲染系统检查 `mesh_handle_override`（非零优先，零则走 `mesh_path`）
+- 与 RenderGraph Pass 完全解耦——Pass 只看到最终的 final_bone_matrices 和 mesh handle
+- 注意：`MeshRendererComponent` 当前使用 `mesh_path`（字符串）加载，实现时需新增 `unsigned int mesh_handle_override = 0` 字段
 
 #### Mesh LOD 自动生成工具
 
