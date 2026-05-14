@@ -723,3 +723,126 @@ entity:set_ik_target("head_look", enemy_position)
 > 5. **root motion 边界清晰**：仅 base 动画贡献，层混合不干扰
 > 
 > 约 23 天的总工期换来 DSEngine 动画系统从"基础可用"升级到"达到主流引擎水准"——含 2D Blend Tree、分层混合（override/additive）、bone mask、FABRIK IK、LookAt IK。
+
+---
+
+## 十二、第三轮审查改进（实施前最终修订）
+
+> 经过与主流引擎（Unity/Unreal/Godot）全面对比后发现的补充改进。
+
+### 12.1 改进 A：动画事件回调（AnimEvent）— P0 新增
+
+**问题**：缺少动画事件系统。攻击判定帧、脚步音效、特效触发等都需要在动画特定时间点回调。当前 KF Demo 通过 Lua 硬算时间触发伤害，是 workaround。
+
+**方案**：在 `Animator3DComponent` 中增加轻量事件配置，采样时检查并通过回调通知。
+
+```cpp
+struct AnimEventConfig {
+    std::string name;           ///< 事件名称（如 "attack_hit", "footstep"）
+    float trigger_time = 0.0f;  ///< 触发时间（秒）
+    bool fired = false;         ///< 本轮播放是否已触发（loop 重置时清除）
+};
+```
+
+在 `EvaluateBaseAnim` 采样后检查事件时间，触发时写入一个 per-frame 事件队列，供 Lua/C++ 消费。**估算 +100 行，不影响其他 Phase。**
+
+### 12.2 改进 B：Root Motion 提取 — P1 增强
+
+**问题**：当前 `lock_root_motion` 只能锁定 Hips 位置，不能提取 root motion delta 驱动角色移动。Unity 的 `OnAnimatorMove` 和 Unreal 的 Root Motion Montage 都支持提取。
+
+**方案**：在 `Animator3DComponent` 中增加：
+
+```cpp
+glm::vec3 root_motion_delta = glm::vec3(0.0f);  ///< 本帧 root bone 位移增量（世界空间）
+glm::quat root_motion_rotation_delta = glm::quat(1,0,0,0); ///< 本帧 root bone 旋转增量
+```
+
+`EvaluateBaseAnim` 计算当前帧与上一帧 Hips 的 SRT 差异，写入 delta，逻辑层可选择消费它来驱动 CharacterController。**估算 +50 行。**
+
+### 12.3 改进 C：骨骼静态数据缓存（SkeletalCache）
+
+**问题**：当前 `AnimatorSystem::Update()` 每帧每实体重新解析 dskel、构建 `bind_globals[]`、`bone_name_to_index` 映射。增加 Layer/IK 后开销放大。
+
+**方案**：将静态骨骼数据缓存到 `Animator3DComponent` 运行时字段：
+
+```cpp
+struct SkeletalCache {
+    std::string cached_dskel_path;       ///< 用于检测 dskel 变更
+    uint32_t bone_count = 0;
+    std::vector<glm::mat4> bind_globals; ///< bind pose 全局矩阵
+    std::vector<int> parent_indices;     ///< 骨骼层级
+    std::unordered_map<std::string, int> bone_name_to_index;
+    bool valid = false;
+};
+```
+
+dskel_path 变更时重建缓存，否则每帧直接复用。**估算 +40 行重构，CPU 节省显著。**
+
+### 12.4 改进 D：AnimSourceType 枚举替代双 bool
+
+**问题**：`AnimLayerConfig` 中 `use_blend_tree` + `use_2d_blend` 双 bool 选择动画源，存在非法状态（两者同时为 true）。
+
+**修改**：
+
+```cpp
+enum class AnimSourceType : uint8_t {
+    SingleClip = 0,     ///< 单剪辑播放
+    BlendTree1D = 1,    ///< 1D 阈值混合
+    BlendTree2D = 2,    ///< 2D 双线性/Delaunay 混合
+};
+```
+
+`AnimLayerConfig` 中改为 `AnimSourceType source_type = AnimSourceType::SingleClip;`。
+
+### 12.5 改进 E：2D Blend Tree 网格限制标注
+
+当前双线性插值要求节点在规则网格上。文档标注此为"Grid Mode"，预留未来扩展为 Delaunay 三角化 + 重心坐标插值（Freeform Mode）的接口。
+
+### 12.6 修订后的工期
+
+| Phase | 原估算 | 修订估算 | 变化 |
+|:-----:|:------:|:-------:|:----:|
+| 1 (层系统 + AnimEvent + 骨骼缓存) | 7 天 | **6 天** | 含改进 A/C/D，骨骼缓存节省后续调试时间 |
+| 2 (2D Blend) | 3 天 | **2 天** | 80 行核心逻辑 |
+| 3 (IK + Root Motion 提取) | 10 天 | **9 天** | 含改进 B |
+| 4 (收尾) | 3 天 | **2 天** | 三端验证流程已成熟 |
+| **总计** | **23 天** | **19 天** | 减少 4 天 |
+
+---
+
+## 十三、实施进度
+
+### 2026-05-14 — IK 系统集成 + 动画管线修复
+
+**已完成 (全部通过编译验证，零错误)**
+
+#### 核心修复 (R1-R6)
+
+| # | 类型 | 修复内容 | 文件 |
+|:-:|:----:|---------|------|
+| R1 | 性能 | 去掉冗余 PoseBuffer::Reset 双重写入 | `animator_system.cpp` |
+| R2 | 正确性 | Additive blend 去 scale 再提取旋转 | `anim_layer_blend_system.cpp` |
+| R3 | 正确性 | 状态机路径事件用 state_time | `animator_system.cpp` |
+| R4 | 性能 | bone mask sorted+binary_search+子骨骼传播 | `anim_layer_blend_system.cpp` |
+| R5 | 正确性 | IK FABRIK/LookAt 旋转公式修正 | `ik_solver_system.cpp` |
+| R6 | 性能 | inv_bind_globals 预计算（避免每帧求逆） | `components_3d.h` + `animator_system.cpp` |
+
+#### 技术债清理 (D1-D4)
+
+| # | 修复内容 | 文件 |
+|:-:|---------|------|
+| D1 | 循环动画回绕时重置事件 fired 标记 | `components_3d.h` + `animator_system.cpp` |
+| D2 | 移除未实现的 enable_joint_limits 字段 | `components_3d.h` |
+| D3 | 去掉 entt/entt.hpp 重头文件依赖，改用 uint32_t sentinel | `components_3d.h` + `ik_solver_system.cpp` |
+| D4 | 提取共享 anim_clip_eval.h，消除 ~150 行重复代码 | 新建 `anim_clip_eval.h`，重构两个 system cpp |
+
+#### 新增文件
+
+- `modules/gameplay_3d/animation/anim_clip_eval.h` — 共享动画剪辑评估工具（Interpolate、AdvanceClipTime、EvaluateClip、AnimSampleBuffer）
+
+#### Phase 状态
+
+- Phase 1 (层系统 + AnimEvent + 骨骼缓存): ✅ 完成
+- Phase 2 (2D Blend Tree): ✅ 完成
+- Phase 3 (IK + Root Motion): ✅ 完成
+- Phase 4 (收尾/质量): ✅ 完成

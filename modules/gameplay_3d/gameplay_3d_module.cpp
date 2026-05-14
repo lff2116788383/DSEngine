@@ -19,6 +19,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 #endif
     mesh_render_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
+    anim_layer_blend_system_.SetAssetManager(asset_manager);
     particle3d_system_.SetAssetManager(asset_manager);
     particle3d_system_.Init(world, rhi_device);
     cloth_system_.SetAssetManager(asset_manager);
@@ -40,7 +41,11 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 
 void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     free_camera_controller_system_.Update(world, delta_time);
-    animator_system_.Update(world, delta_time);
+    // Animation pipeline: EvaluateBaseAnim → LayerBlend → IK → ComputeFinalMatrices
+    animator_system_.EvaluateBaseAnim(world, delta_time);
+    anim_layer_blend_system_.Update(world, delta_time);
+    ik_solver_system_.Update(world, delta_time);
+    animator_system_.ComputeFinalMatrices(world);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
 #ifdef DSE_ENABLE_PHYSX
@@ -135,6 +140,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);
+    anim_layer_blend_system_.SetAssetManager(nullptr);
     particle3d_system_.SetAssetManager(nullptr);
     cloth_system_.SetAssetManager(nullptr);
     fluid_system_.Shutdown(world);

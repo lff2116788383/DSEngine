@@ -7,6 +7,8 @@
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
+#include "modules/gameplay_3d/animation/anim_layer_blend_system.h"
+#include "modules/gameplay_3d/animation/ik_solver_system.h"
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"
@@ -45,6 +47,8 @@ private:
     TerrainSystem terrain_system_;
     FrustumCullingSystem frustum_culling_system_;
     AnimatorSystem animator_system_;
+    AnimLayerBlendSystem anim_layer_blend_system_;
+    IKSolverSystem ik_solver_system_;
     Particle3DSystem particle3d_system_;
     FreeCameraControllerSystem free_camera_controller_system_;
     SteeringSystem steering_system_;

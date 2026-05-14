@@ -1,126 +1,18 @@
 #include "modules/gameplay_3d/animation/animator_system.h"
+#include "modules/gameplay_3d/animation/anim_clip_eval.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
-#include <glm/gtx/quaternion.hpp>
 #include <algorithm>
 #include <cstring>
-#include <stdexcept>
-#include <unordered_map>
 
 namespace dse {
 namespace gameplay3d {
 
-namespace {
-
-AssetManager& RequireAssetManager(AssetManager* asset_manager) {
-    if (asset_manager != nullptr) {
-        return *asset_manager;
-    }
-    throw std::runtime_error("AnimatorSystem requires an injected AssetManager");
-}
-
-bool IsValidAnimHeader(const asset::compiler::AnimHeader* header) {
-    return header != nullptr &&
-        header->magic[0] == 'D' &&
-        header->magic[1] == 'S' &&
-        header->magic[2] == 'E' &&
-        header->magic[3] == 'A' &&
-        header->duration >= 0.0f;
-}
-
-template<typename T>
-T Interpolate(const std::vector<float>& times, const std::vector<T>& values, float current_time) {
-    if (times.empty() || values.empty()) return T();
-
-    const size_t key_count = std::min(times.size(), values.size());
-    if (key_count == 0) return T();
-    if (key_count == 1) return values[0];
-
-    if (current_time <= times[0]) {
-        return values[0];
-    }
-    if (current_time >= times[key_count - 1]) {
-        return values[key_count - 1];
-    }
-
-    size_t p0 = key_count - 2;
-    for (size_t i = 0; i + 1 < key_count; ++i) {
-        if (current_time < times[i + 1]) {
-            p0 = i;
-            break;
-        }
-    }
-    const size_t p1 = p0 + 1;
-
-    const float t0 = times[p0];
-    const float t1 = times[p1];
-    if (std::abs(t1 - t0) <= 1e-6f) {
-        return values[p0];
-    }
-
-    float factor = (current_time - t0) / (t1 - t0);
-    factor = std::clamp(factor, 0.0f, 1.0f);
-
-    if constexpr (std::is_same_v<T, glm::quat>) {
-        return glm::slerp(values[p0], values[p1], factor);
-    } else {
-        return glm::mix(values[p0], values[p1], factor);
-    }
-}
-
-std::vector<float> BuildKeyTimes(const uint8_t* data, const asset::compiler::AnimChannelDesc& ch, uint32_t key_count) {
-    if (key_count == 0) {
-        return {};
-    }
-
-    std::vector<float> result(key_count);
-    std::memcpy(result.data(), data + ch.time_offset, key_count * sizeof(float));
-    return result;
-}
-
-float AdvanceClipTime(float current_time, float delta_time, float speed, float duration, bool loop) {
-    current_time += delta_time * speed;
-    if (duration <= 0.0f) {
-        return 0.0f;
-    }
-    if (current_time > duration) {
-        if (loop) {
-            current_time = std::fmod(current_time, duration);
-        } else {
-            current_time = duration;
-        }
-    } else if (current_time < 0.0f) {
-        current_time = loop ? duration + std::fmod(current_time, duration) : 0.0f;
-        if (current_time >= duration) {
-            current_time = 0.0f;
-        }
-    }
-    return current_time;
-}
-
-struct SampleBuffer {
-    std::vector<glm::vec3> positions;
-    std::vector<glm::quat> rotations;
-    std::vector<glm::vec3> scales;
-    std::vector<bool> touched;
-
-    explicit SampleBuffer(uint32_t bone_count)
-        : positions(bone_count, glm::vec3(0.0f))
-        , rotations(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
-        , scales(bone_count, glm::vec3(1.0f))
-        , touched(bone_count, false) {}
-};
-
-void ApplySamplesToLocalTransforms(const SampleBuffer& sample, std::vector<glm::mat4>& local_transforms, uint32_t bone_count) {
-    for (uint32_t i = 0; i < bone_count; ++i) {
-        if (!sample.touched[i]) continue;  // keep bind pose for bones without animation data
-        local_transforms[i] = glm::translate(glm::mat4(1.0f), sample.positions[i]) * glm::mat4_cast(sample.rotations[i]) * glm::scale(glm::mat4(1.0f), sample.scales[i]);
-    }
-}
-
-}
+using anim_util::AdvanceClipTime;
+using anim_util::AnimSampleBuffer;
+using SampleBuffer = AnimSampleBuffer;
 
 AssetManager* AnimatorSystem::asset_manager_ = nullptr;
 
@@ -128,184 +20,119 @@ void AnimatorSystem::SetAssetManager(AssetManager* asset_manager) {
     asset_manager_ = asset_manager;
 }
 
-void AnimatorSystem::Update(World& world, float delta_time) {
+// Build or refresh SkeletalCache for an entity. Returns false if dskel invalid.
+bool BuildSkeletalCache(Animator3DComponent& animator, AssetManager& asset_manager, [[maybe_unused]] unsigned int entity_id) {
+    auto& cache = animator.skel_cache;
+    if (cache.valid && cache.cached_dskel_path == animator.dskel_path) {
+        return true;
+    }
+    cache.valid = false;
+    auto dskel = asset_manager.LoadDskel(animator.dskel_path);
+    if (!dskel || dskel->GetData().empty()) return false;
+
+    const uint8_t* skel_data = dskel->GetData().data();
+    const auto* skel_header = reinterpret_cast<const asset::compiler::SkelHeader*>(skel_data);
+    if (skel_header->magic[0] != 'D' || skel_header->magic[1] != 'S' ||
+        skel_header->magic[2] != 'E' || skel_header->magic[3] != 'S') return false;
+
+    const auto* bones = reinterpret_cast<const asset::compiler::BoneDesc*>(
+        skel_data + sizeof(asset::compiler::SkelHeader));
+    uint32_t bone_count = std::min(skel_header->bone_count, static_cast<uint32_t>(MAX_BONES));
+
+    cache.bone_count = bone_count;
+    cache.parent_indices.resize(bone_count);
+    cache.local_bind_poses.resize(bone_count);
+    cache.bind_globals.resize(bone_count);
+    cache.bone_name_to_index.clear();
+
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        cache.parent_indices[i] = bones[i].parent_index;
+        cache.local_bind_poses[i] = bones[i].local_transform;
+    }
+
+    // Parse v2 bone name table
+    if (skel_header->version >= 2) {
+        const uint8_t* name_ptr = skel_data + sizeof(asset::compiler::SkelHeader) + bone_count * sizeof(asset::compiler::BoneDesc);
+        const uint8_t* skel_end = skel_data + dskel->GetData().size();
+        for (uint32_t bi = 0; bi < bone_count && name_ptr + 2 <= skel_end; ++bi) {
+            uint16_t name_len = static_cast<uint16_t>(name_ptr[0] | (name_ptr[1] << 8));
+            name_ptr += 2;
+            if (name_ptr + name_len > skel_end) break;
+            std::string bname(reinterpret_cast<const char*>(name_ptr), name_len);
+            name_ptr += name_len;
+            cache.bone_name_to_index[bname] = static_cast<int>(bi);
+        }
+    }
+
+    // Compute bind_globals (iterative, handles arbitrary ordering)
+    std::vector<bool> computed(bone_count, false);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        int pi = cache.parent_indices[i];
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            cache.bind_globals[i] = cache.local_bind_poses[i];
+            computed[i] = true;
+        }
+    }
+    for (uint32_t pass = 0; pass < bone_count; ++pass) {
+        bool all_done = true;
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            if (computed[i]) continue;
+            int pi = cache.parent_indices[i];
+            if (computed[pi]) {
+                cache.bind_globals[i] = cache.bind_globals[pi] * cache.local_bind_poses[i];
+                computed[i] = true;
+            } else {
+                all_done = false;
+            }
+        }
+        if (all_done) break;
+    }
+
+    // Precompute inv_bind_globals (static, avoids per-frame glm::inverse)
+    cache.inv_bind_globals.resize(bone_count);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        cache.inv_bind_globals[i] = glm::inverse(cache.bind_globals[i]);
+    }
+
+    // Ensure buffers sized
+    if (animator.final_bone_matrices.size() < bone_count) {
+        animator.final_bone_matrices.resize(bone_count, glm::mat4(1.0f));
+        static int log_count = 0;
+        if (log_count < 2) {
+            DEBUG_LOG_INFO("[3D][VSE15.22] animator_system_first_update entity={} dskel_path={} bone_count={} final_bones={} note=animator_system_confirms_bone_count",
+                entity_id, animator.dskel_path, bone_count, animator.final_bone_matrices.size());
+            ++log_count;
+        }
+    }
+    animator.pose_buffer.Resize(bone_count);
+
+    cache.cached_dskel_path = animator.dskel_path;
+    cache.valid = true;
+    return true;
+}
+
+void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
     auto view = world.registry().view<Animator3DComponent>();
     if (view.empty()) return;
-    
+
     AssetManager* asset_manager_ptr = nullptr;
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
-        if (!animator.enabled) {
-            continue;
-        }
-        
-        if (animator.dskel_path.empty()) {
-            continue;
-        }
+        if (!animator.enabled || animator.dskel_path.empty()) continue;
 
-        // 延迟获取 AssetManager：仅在首次遇到真正需要加载资源的实体时校验
         if (!asset_manager_ptr) {
-            asset_manager_ptr = &RequireAssetManager(asset_manager_);
+            asset_manager_ptr = &anim_util::RequireAssetManager(asset_manager_);
         }
         auto& asset_manager = *asset_manager_ptr;
 
-        auto dskel = asset_manager.LoadDskel(animator.dskel_path);
-        if (!dskel || dskel->GetData().empty()) {
-            continue;
-        }
+        if (!BuildSkeletalCache(animator, asset_manager, static_cast<unsigned int>(entity))) continue;
 
-        const uint8_t* skel_data = dskel->GetData().data();
-        const asset::compiler::SkelHeader* skel_header = reinterpret_cast<const asset::compiler::SkelHeader*>(skel_data);
-        if (skel_header->magic[0] != 'D' || skel_header->magic[1] != 'S' || skel_header->magic[2] != 'E' || skel_header->magic[3] != 'S') {
-            continue;
-        }
-
-        const asset::compiler::BoneDesc* bones = reinterpret_cast<const asset::compiler::BoneDesc*>(skel_data + sizeof(asset::compiler::SkelHeader));
-        uint32_t bone_count = std::min(skel_header->bone_count, static_cast<uint32_t>(MAX_BONES));
-
-        // Parse dskel v2 bone name table for cross-skeleton remapping
-        std::unordered_map<std::string, int> bone_name_to_index;
-        if (skel_header->version >= 2) {
-            const uint8_t* name_ptr = skel_data + sizeof(asset::compiler::SkelHeader) + bone_count * sizeof(asset::compiler::BoneDesc);
-            const uint8_t* skel_end = skel_data + dskel->GetData().size();
-            for (uint32_t bi = 0; bi < bone_count && name_ptr + 2 <= skel_end; ++bi) {
-                uint16_t name_len = static_cast<uint16_t>(name_ptr[0] | (name_ptr[1] << 8));
-                name_ptr += 2;
-                if (name_ptr + name_len > skel_end) break;
-                std::string bname(reinterpret_cast<const char*>(name_ptr), name_len);
-                name_ptr += name_len;
-                bone_name_to_index[bname] = static_cast<int>(bi);
-            }
-        }
-
-        if (animator.final_bone_matrices.size() < bone_count) {
-            animator.final_bone_matrices.resize(bone_count, glm::mat4(1.0f));
-            // 首次 resize 时输出诊断：确认骨骼数，供 verify_lua_3d_demos.py 检测 final_bones=48
-            static int vse1522_animator_first_log_count = 0;
-            if (vse1522_animator_first_log_count < 2) {
-                DEBUG_LOG_INFO("[3D][VSE15.22] animator_system_first_update entity={} dskel_path={} bone_count={} final_bones={} note=animator_system_confirms_bone_count",
-                    static_cast<unsigned int>(entity), animator.dskel_path, bone_count, animator.final_bone_matrices.size());
-                ++vse1522_animator_first_log_count;
-            }
-        }
-
-        // 1. Compute bind-pose global transforms from local_transforms (node tree basis).
-        //    These serve as the reference for the "relative deformation" approach:
-        //    final_bone_matrix = anim_global * inv(bind_global)
-        //    This avoids using inverse_bind_matrix which may be inconsistent with
-        //    local_transform when the FBX has an Armature node transform.
-        //    NOTE: Bones may NOT be in topological order (e.g., Mixamo has children before
-        //    parents). We use iterative propagation to handle arbitrary ordering.
-        std::vector<glm::mat4> bind_globals(bone_count);
-        std::vector<bool> computed(bone_count, false);
-        // First pass: identify roots
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            int parent_index = bones[i].parent_index;
-            if (parent_index < 0 || parent_index >= static_cast<int>(bone_count)) {
-                bind_globals[i] = bones[i].local_transform;
-                computed[i] = true;
-            }
-        }
-        // Iterative passes until all computed
-        for (uint32_t pass = 0; pass < bone_count; ++pass) {
-            bool all_done = true;
-            for (uint32_t i = 0; i < bone_count; ++i) {
-                if (computed[i]) continue;
-                int parent_index = bones[i].parent_index;
-                if (computed[parent_index]) {
-                    bind_globals[i] = bind_globals[parent_index] * bones[i].local_transform;
-                    computed[i] = true;
-                } else {
-                    all_done = false;
-                }
-            }
-            if (all_done) break;
-        }
-
-        // Initialize animated local transforms with bind pose
-        std::vector<glm::mat4> local_transforms(bone_count);
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            local_transforms[i] = bones[i].local_transform;
-        }
+        auto& cache = animator.skel_cache;
+        const uint32_t bone_count = cache.bone_count;
+        const auto& bone_name_to_index = cache.bone_name_to_index;
         
         auto EvaluateClip = [&](const std::string& anim_path, float current_time, SampleBuffer& sample, float& out_duration) -> bool {
-            if (anim_path.empty()) return false;
-
-            auto danim = asset_manager.LoadDanim(anim_path);
-            if (!danim || danim->GetData().empty()) return false;
-            
-            const uint8_t* data = danim->GetData().data();
-            const size_t data_size = danim->GetData().size();
-            const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
-            if (!IsValidAnimHeader(header)) return false;
-            out_duration = header->duration;
-            const asset::compiler::AnimChannelDesc* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(data + sizeof(asset::compiler::AnimHeader));
-
-            // Parse danim v2 channel name table for cross-skeleton remapping
-            std::vector<std::string> channel_names;
-            if (header->version >= 2 && !bone_name_to_index.empty()) {
-                const uint8_t* nt_ptr = data + sizeof(asset::compiler::AnimHeader) + header->channel_count * sizeof(asset::compiler::AnimChannelDesc);
-                if (nt_ptr + sizeof(uint32_t) <= data + data_size) {
-                    uint32_t nt_total = 0;
-                    std::memcpy(&nt_total, nt_ptr, sizeof(uint32_t));
-                    const uint8_t* np = nt_ptr + sizeof(uint32_t);
-                    const uint8_t* ne = nt_ptr + nt_total;
-                    if (ne > data + data_size) ne = data + data_size;
-                    channel_names.reserve(header->channel_count);
-                    for (uint32_t ci = 0; ci < header->channel_count && np + 2 <= ne; ++ci) {
-                        uint16_t nl = static_cast<uint16_t>(np[0] | (np[1] << 8));
-                        np += 2;
-                        if (np + nl > ne) break;
-                        channel_names.emplace_back(reinterpret_cast<const char*>(np), nl);
-                        np += nl;
-                    }
-                }
-            }
-            for (uint32_t i = 0; i < header->channel_count; ++i) {
-                const auto& ch = channels[i];
-
-                // Resolve target bone index: prefer name-based remap, fall back to index
-                int target_bone = ch.target_node_index;
-                if (i < static_cast<uint32_t>(channel_names.size()) && !channel_names[i].empty()) {
-                    auto name_it = bone_name_to_index.find(channel_names[i]);
-                    if (name_it != bone_name_to_index.end()) {
-                        target_bone = name_it->second;
-                    } else {
-                        continue;  // bone not found in target skeleton, skip
-                    }
-                }
-                if (target_bone < 0 || target_bone >= static_cast<int>(bone_count)) continue;
-                
-                // Bounds check all offsets before reading
-                if (ch.time_offset + ch.position_key_count * sizeof(float) > data_size) continue;
-                if (ch.position_offset + ch.position_key_count * sizeof(glm::vec3) > data_size) continue;
-                if (ch.rotation_offset + ch.rotation_key_count * sizeof(glm::quat) > data_size) continue;
-                if (ch.scale_offset + ch.scale_key_count * sizeof(glm::vec3) > data_size) continue;
-
-                std::vector<float> position_times = BuildKeyTimes(data, ch, ch.position_key_count);
-                std::vector<float> rotation_times = BuildKeyTimes(data, ch, ch.rotation_key_count);
-                std::vector<float> scale_times = BuildKeyTimes(data, ch, ch.scale_key_count);
-                std::vector<glm::vec3> positions(ch.position_key_count);
-                std::memcpy(positions.data(), data + ch.position_offset, ch.position_key_count * sizeof(glm::vec3));
-                std::vector<glm::quat> rotations(ch.rotation_key_count);
-                std::memcpy(rotations.data(), data + ch.rotation_offset, ch.rotation_key_count * sizeof(glm::quat));
-                std::vector<glm::vec3> scales(ch.scale_key_count);
-                std::memcpy(scales.data(), data + ch.scale_offset, ch.scale_key_count * sizeof(glm::vec3));
-                
-                if (!position_times.empty() && !positions.empty()) {
-                    sample.positions[target_bone] = Interpolate<glm::vec3>(position_times, positions, current_time);
-                    sample.touched[target_bone] = true;
-                }
-                if (!rotation_times.empty() && !rotations.empty()) {
-                    sample.rotations[target_bone] = Interpolate<glm::quat>(rotation_times, rotations, current_time);
-                    sample.touched[target_bone] = true;
-                }
-                if (!scale_times.empty() && !scales.empty()) {
-                    sample.scales[target_bone] = Interpolate<glm::vec3>(scale_times, scales, current_time);
-                    sample.touched[target_bone] = true;
-                }
-            }
-            return true;
+            return anim_util::EvaluateClip(asset_manager, anim_path, current_time, bone_name_to_index, bone_count, sample, out_duration);
         };
 
         auto EvaluateLegacyBlendTree = [&](std::vector<AnimBlendNode>& blend_nodes, float blend_parameter_value, SampleBuffer& out_sample) -> bool {
@@ -377,7 +204,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
 
                 const uint8_t* data = danim->GetData().data();
                 const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
-                if (!IsValidAnimHeader(header)) {
+                if (!anim_util::IsValidAnimHeader(header)) {
                     continue;
                 }
 
@@ -420,6 +247,39 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             return true;
         };
 
+        // Helper: copy SampleBuffer into pose_buffer
+        auto WriteSampleToPoseBuffer = [&](const SampleBuffer& sample) {
+            auto& pb = animator.pose_buffer;
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (!sample.touched[i]) continue;
+                pb.positions[i] = sample.positions[i];
+                pb.rotations[i] = sample.rotations[i];
+                pb.scales[i] = sample.scales[i];
+                pb.touched[i] = true;
+            }
+        };
+
+        // Initialize pose_buffer from bind pose decomposition
+        animator.pose_buffer.Resize(bone_count);
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            const auto& bp = cache.local_bind_poses[i];
+            glm::vec3 scl(
+                glm::length(glm::vec3(bp[0])),
+                glm::length(glm::vec3(bp[1])),
+                glm::length(glm::vec3(bp[2])));
+            animator.pose_buffer.positions[i] = glm::vec3(bp[3]);
+            animator.pose_buffer.scales[i] = scl;
+            glm::mat3 rot_mat(
+                glm::vec3(bp[0]) / std::max(scl.x, 1e-6f),
+                glm::vec3(bp[1]) / std::max(scl.y, 1e-6f),
+                glm::vec3(bp[2]) / std::max(scl.z, 1e-6f));
+            animator.pose_buffer.rotations[i] = glm::quat_cast(rot_mat);
+            animator.pose_buffer.touched[i] = false;
+        }
+
+        // Clear per-frame event queue
+        animator.fired_events.clear();
+
         if (animator.state_machine) {
             // --- STATE MACHINE PATH ---
             auto& fsm = *animator.state_machine;
@@ -427,24 +287,22 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                 animator.current_state_name = fsm.GetDefaultState();
                 animator.state_time = 0.0f;
             }
-            
+
             const auto& states = fsm.GetStates();
             auto it = states.find(animator.current_state_name);
             if (it != states.end()) {
                 const AnimState& current_state = it->second;
-                
+
                 // 1. Evaluate transitions
                 if (!animator.is_transitioning) {
                     for (const auto& trans : current_state.transitions) {
                         if (fsm.EvaluateTransition(trans, animator.normalized_time)) {
-                            // Start transition
                             animator.is_transitioning = true;
                             animator.next_state_name = trans.target_state;
                             animator.transition_duration = trans.transition_duration;
                             animator.transition_progress = 0.0f;
                             animator.next_state_time = 0.0f;
-                            
-                            // Reset triggers that fired this transition
+
                             for (const auto& cond : trans.conditions) {
                                 auto param_it = fsm.GetParameters().find(cond.parameter_name);
                                 if (param_it != fsm.GetParameters().end() && param_it->second.type == AnimParamType::Trigger) {
@@ -455,7 +313,7 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                         }
                     }
                 }
-                
+
                 // 2. Advance time
                 animator.state_time += delta_time * current_state.speed;
                 if (animator.is_transitioning) {
@@ -464,27 +322,26 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                     } else {
                         animator.transition_progress += delta_time / animator.transition_duration;
                     }
-                    
+
                     auto next_it = states.find(animator.next_state_name);
                     if (next_it != states.end()) {
                         animator.next_state_time += delta_time * next_it->second.speed;
                     }
-                    
+
                     if (animator.transition_progress >= 1.0f) {
-                        // Finish transition
                         animator.current_state_name = animator.next_state_name;
                         animator.state_time = animator.next_state_time;
                         animator.is_transitioning = false;
-                        
+
                         it = states.find(animator.current_state_name);
-                        if (it == states.end()) continue; // Safety check
+                        if (it == states.end()) continue;
                     }
                 }
-                
-                // 3. Evaluate animation logic (current state)
+
+                // 3. Evaluate animation (current state)
                 float current_duration = 1.0f;
                 SampleBuffer current_sample(bone_count);
-                
+
                 if (!current_state.is_blend_tree) {
                     if (EvaluateClip(current_state.danim_path, animator.state_time, current_sample, current_duration)) {
                         animator.state_time = AdvanceClipTime(animator.state_time, 0.0f, current_state.speed, current_duration, current_state.loop);
@@ -495,16 +352,16 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                         animator.normalized_time = 0.0f;
                     }
                 }
-                
-                // 4. Evaluate and Blend Next State (Crossfade)
+
+                // 4. Crossfade blend
                 if (animator.is_transitioning) {
                     auto next_it = states.find(animator.next_state_name);
                     if (next_it != states.end()) {
                         const AnimState& next_state = next_it->second;
-                        
+
                         float next_duration = 1.0f;
                         SampleBuffer next_sample(bone_count);
-                        
+
                         if (!next_state.is_blend_tree) {
                             if (EvaluateClip(next_state.danim_path, animator.next_state_time, next_sample, next_duration)) {
                                 animator.next_state_time = AdvanceClipTime(animator.next_state_time, 0.0f, next_state.speed, next_duration, next_state.loop);
@@ -512,20 +369,19 @@ void AnimatorSystem::Update(World& world, float delta_time) {
                         } else {
                             EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, next_sample);
                         }
-                        
-                        // Crossfade blend
+
                         float t = std::clamp(animator.transition_progress, 0.0f, 1.0f);
+                        auto& pb = animator.pose_buffer;
                         for (uint32_t i = 0; i < bone_count; ++i) {
-                            if (!current_sample.touched[i] && !next_sample.touched[i]) continue;  // keep bind pose
-                            glm::vec3 final_p = glm::mix(current_sample.positions[i], next_sample.positions[i], t);
-                            glm::quat final_r = glm::slerp(current_sample.rotations[i], next_sample.rotations[i], t);
-                            glm::vec3 final_s = glm::mix(current_sample.scales[i], next_sample.scales[i], t);
-                            local_transforms[i] = glm::translate(glm::mat4(1.0f), final_p) * glm::mat4_cast(final_r) * glm::scale(glm::mat4(1.0f), final_s);
+                            if (!current_sample.touched[i] && !next_sample.touched[i]) continue;
+                            pb.positions[i] = glm::mix(current_sample.positions[i], next_sample.positions[i], t);
+                            pb.rotations[i] = glm::slerp(current_sample.rotations[i], next_sample.rotations[i], t);
+                            pb.scales[i] = glm::mix(current_sample.scales[i], next_sample.scales[i], t);
+                            pb.touched[i] = true;
                         }
                     }
                 } else {
-                    // Apply single state
-                    ApplySamplesToLocalTransforms(current_sample, local_transforms, bone_count);
+                    WriteSampleToPoseBuffer(current_sample);
                 }
             }
         } else if (!animator.use_anim_tree) {
@@ -539,49 +395,95 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             }
 
             animator.current_time = AdvanceClipTime(animator.current_time, delta_time, animator.speed, duration, animator.loop);
-            ApplySamplesToLocalTransforms(sample, local_transforms, bone_count);
+            WriteSampleToPoseBuffer(sample);
         } else {
             // --- LEGACY ANIM TREE (1D Blend) PATH ---
             SampleBuffer sample(bone_count);
             if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, sample)) {
-                ApplySamplesToLocalTransforms(sample, local_transforms, bone_count);
+                WriteSampleToPoseBuffer(sample);
             }
         }
 
-        // Root motion lock: prevent animation-driven hip translation from
-        // shifting the mesh.  Lock ONLY the "Hips" bone (the motion root)
-        // position to bind pose.  Other bones keep full animation.
-        if (animator.lock_root_motion) {
-            bool locked = false;
-            // Primary: find bone named "Hips" via dskel v2 name table
+        // Animation event checking (use state_time for FSM path, current_time for legacy)
+        float event_time = animator.state_machine ? animator.state_time : animator.current_time;
+        // Detect loop wrap-around: if time went backwards, reset all fired flags
+        if (event_time < animator.prev_event_time_) {
+            for (auto& evt : animator.events) evt.fired = false;
+        }
+        animator.prev_event_time_ = event_time;
+        for (auto& evt : animator.events) {
+            if (!evt.fired && event_time >= evt.trigger_time) {
+                evt.fired = true;
+                animator.fired_events.push_back(evt.name);
+            }
+        }
+
+        // Root motion lock / extraction
+        if (animator.lock_root_motion || animator.extract_root_motion) {
+            int hips_idx = -1;
             if (!bone_name_to_index.empty()) {
                 for (const auto& [name, idx] : bone_name_to_index) {
                     if (name.find("Hips") != std::string::npos && idx >= 0 && idx < static_cast<int>(bone_count)) {
-                        glm::vec3 bind_pos(bones[idx].local_transform[3]);
-                        local_transforms[idx][3] = glm::vec4(bind_pos, 1.0f);
-                        locked = true;
+                        hips_idx = idx;
                         break;
                     }
                 }
             }
-            // Fallback: lock root bones (depth 0) only
-            if (!locked) {
+
+            if (hips_idx >= 0) {
+                auto& pb = animator.pose_buffer;
+                if (animator.extract_root_motion) {
+                    animator.root_motion_delta = pb.positions[hips_idx] - animator.prev_root_position_;
+                    animator.root_motion_rotation_delta = glm::inverse(animator.prev_root_rotation_) * pb.rotations[hips_idx];
+                    animator.prev_root_position_ = pb.positions[hips_idx];
+                    animator.prev_root_rotation_ = pb.rotations[hips_idx];
+                }
+                if (animator.lock_root_motion) {
+                    pb.positions[hips_idx] = glm::vec3(cache.local_bind_poses[hips_idx][3]);
+                }
+            } else if (animator.lock_root_motion) {
+                // Fallback: lock root bones (depth 0)
                 for (uint32_t i = 0; i < bone_count; ++i) {
-                    int pi = bones[i].parent_index;
+                    int pi = cache.parent_indices[i];
                     if (pi < 0 || pi >= static_cast<int>(bone_count)) {
-                        glm::vec3 bind_pos(bones[i].local_transform[3]);
-                        local_transforms[i][3] = glm::vec4(bind_pos, 1.0f);
+                        animator.pose_buffer.positions[i] = glm::vec3(cache.local_bind_poses[i][3]);
                     }
                 }
             }
         }
+    }
+}
 
-        // 3. Calculate global transforms (handles arbitrary bone ordering)
-        std::vector<glm::mat4> global_transforms(bone_count);
-        std::fill(computed.begin(), computed.end(), false);
+void AnimatorSystem::ComputeFinalMatrices(World& world) {
+    auto view = world.registry().view<Animator3DComponent>();
+    if (view.empty()) return;
+
+    for (auto entity : view) {
+        auto& animator = view.get<Animator3DComponent>(entity);
+        if (!animator.enabled || !animator.skel_cache.valid) continue;
+
+        const auto& cache = animator.skel_cache;
+        const uint32_t bone_count = cache.bone_count;
+        const auto& pb = animator.pose_buffer;
+
+        // Build local transforms from pose_buffer SRT
+        std::vector<glm::mat4> local_transforms(bone_count);
         for (uint32_t i = 0; i < bone_count; ++i) {
-            int parent_index = bones[i].parent_index;
-            if (parent_index < 0 || parent_index >= static_cast<int>(bone_count)) {
+            if (pb.touched[i]) {
+                local_transforms[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
+                    * glm::mat4_cast(pb.rotations[i])
+                    * glm::scale(glm::mat4(1.0f), pb.scales[i]);
+            } else {
+                local_transforms[i] = cache.local_bind_poses[i];
+            }
+        }
+
+        // Calculate global transforms (handles arbitrary bone ordering)
+        std::vector<glm::mat4> global_transforms(bone_count);
+        std::vector<bool> computed(bone_count, false);
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            int pi = cache.parent_indices[i];
+            if (pi < 0 || pi >= static_cast<int>(bone_count)) {
                 global_transforms[i] = local_transforms[i];
                 computed[i] = true;
             }
@@ -590,9 +492,9 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             bool all_done = true;
             for (uint32_t i = 0; i < bone_count; ++i) {
                 if (computed[i]) continue;
-                int parent_index = bones[i].parent_index;
-                if (computed[parent_index]) {
-                    global_transforms[i] = global_transforms[parent_index] * local_transforms[i];
+                int pi = cache.parent_indices[i];
+                if (computed[pi]) {
+                    global_transforms[i] = global_transforms[pi] * local_transforms[i];
                     computed[i] = true;
                 } else {
                     all_done = false;
@@ -601,13 +503,16 @@ void AnimatorSystem::Update(World& world, float delta_time) {
             if (all_done) break;
         }
 
-        // 4. Calculate final bone matrices using relative deformation:
-        //    final = anim_global * inv(bind_global)
-        //    At bind pose this produces identity (no deformation).
+        // final = anim_global * inv(bind_global) [precomputed]
         for (uint32_t i = 0; i < bone_count; ++i) {
-            animator.final_bone_matrices[i] = global_transforms[i] * glm::inverse(bind_globals[i]);
+            animator.final_bone_matrices[i] = global_transforms[i] * cache.inv_bind_globals[i];
         }
     }
+}
+
+void AnimatorSystem::Update(World& world, float delta_time) {
+    EvaluateBaseAnim(world, delta_time);
+    ComputeFinalMatrices(world);
 }
 
 } // namespace gameplay3d
