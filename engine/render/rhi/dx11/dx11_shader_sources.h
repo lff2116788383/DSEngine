@@ -1681,6 +1681,78 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// GBuffer 几何通道 Pixel Shader（MRT 输出 albedo/normal/position）
+// ============================================================
+
+constexpr const char* kGBufferPS = R"(
+Texture2D u_texture : register(t0);
+SamplerState u_sampler : register(s0);
+
+struct PSInput {
+    float4 pos            : SV_POSITION;
+    float4 color          : COLOR0;
+    float2 uv             : TEXCOORD0;
+    float3 fragPos        : TEXCOORD1;
+    float3 normal         : TEXCOORD2;
+    float3 tangent        : TEXCOORD3;
+    float3 bitangent      : TEXCOORD4;
+    float3 fragPosView    : TEXCOORD5;
+};
+
+struct GBufferOutput {
+    float4 albedo   : SV_TARGET0;
+    float4 normal   : SV_TARGET1;
+    float4 position : SV_TARGET2;
+};
+
+GBufferOutput PSMain(PSInput input) {
+    GBufferOutput output;
+    float4 texColor = u_texture.Sample(u_sampler, input.uv);
+    float4 albedo = texColor * input.color;
+    clip(albedo.a - 0.01);
+    output.albedo   = albedo;
+    output.normal   = float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
+    output.position = float4(input.fragPos, 1.0);
+    return output;
+}
+)";
+
+// ============================================================
+// Deferred Lighting Pixel Shader（全屏后处理光照合成）
+// ============================================================
+
+constexpr const char* kDeferredLightingPS = R"(
+Texture2D screenTexture  : register(t0);
+Texture2D u_gbuf_normal  : register(t1);
+Texture2D u_gbuf_position: register(t2);
+SamplerState u_sampler   : register(s0);
+
+cbuffer DeferredLightParams : register(b0) {
+    float3 u_light_dir;
+    float  u_light_intensity;
+    float3 u_light_color;
+    float  u_ambient;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 albedo = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float3 normal = u_gbuf_normal.Sample(u_sampler, input.uv).rgb * 2.0 - 1.0;
+    float3 position = u_gbuf_position.Sample(u_sampler, input.uv).rgb;
+    if (length(normal) < 0.01) return float4(0.0, 0.0, 0.0, 1.0);
+    normal = normalize(normal);
+    float NdotL = max(dot(normal, -normalize(u_light_dir)), 0.0);
+    float3 diffuse = albedo * u_light_color * u_light_intensity * NdotL;
+    float3 ambient = albedo * u_ambient;
+    return float4(diffuse + ambient, 1.0);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

@@ -44,6 +44,8 @@ void DX11ShaderManager::Shutdown() {
     motion_blur_shader_handle_ = 0;
     ssr_shader_handle_ = 0;
     motion_vector_shader_handle_ = 0;
+    gbuffer_shader_handle_ = 0;
+    deferred_lighting_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -273,6 +275,23 @@ void DX11ShaderManager::InitBuiltinShaders() {
     motion_blur_shader_handle_ = create_pp_shader(dx11_shaders::kMotionBlurPS, "motion_blur");
     ssr_shader_handle_ = create_pp_shader(dx11_shaders::kSsrPS, "ssr");
     motion_vector_shader_handle_ = create_pp_shader(dx11_shaders::kMotionVectorPS, "motion_vector");
+    deferred_lighting_shader_handle_ = create_pp_shader(dx11_shaders::kDeferredLightingPS, "deferred_lighting");
+
+    // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
+    gbuffer_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kGBufferPS);
+    if (gbuffer_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin GBuffer shader created: {}", gbuffer_shader_handle_);
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION",     0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR",        0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD",     0, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL",       0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TANGENT",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        CreateInputLayoutForShader(gbuffer_shader_handle_, layout, 7);
+    }
 }
 
 // ============================================================

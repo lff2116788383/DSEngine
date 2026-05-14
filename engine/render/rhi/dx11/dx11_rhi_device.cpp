@@ -220,11 +220,23 @@ void DX11RhiDevice::BeginFrame() {
 unsigned int DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return resource_mgr_.CreateRenderTarget(
         desc.width, desc.height, desc.has_color, desc.has_depth,
-        desc.generate_mipmaps, desc.cube_map, desc.msaa_samples, desc.allow_uav);
+        desc.generate_mipmaps, desc.cube_map, desc.msaa_samples, desc.allow_uav,
+        desc.color_attachment_count);
 }
 
 unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     return resource_mgr_.GetRenderTargetColorTextureHandle(render_target_handle);
+}
+
+unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+    if (!rt) return 0;
+    if (!rt->color_texture_handles_mrt.empty()) {
+        if (index >= 0 && index < static_cast<int>(rt->color_texture_handles_mrt.size()))
+            return rt->color_texture_handles_mrt[index];
+        return 0;
+    }
+    return (index == 0) ? rt->color_texture_handle : 0;
 }
 
 unsigned int DX11RhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {
@@ -356,6 +368,14 @@ void DX11RhiDevice::SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm:
 
 void DX11RhiDevice::SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
     draw_executor_.SetGlobalLightProbeSH(sh, enabled);
+}
+
+void DX11RhiDevice::SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
+    draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
+}
+
+void DX11RhiDevice::SetGBufferRenderingMode(bool enabled) {
+    draw_executor_.SetGBufferRenderingMode(enabled);
 }
 
 // --- SSBO ---

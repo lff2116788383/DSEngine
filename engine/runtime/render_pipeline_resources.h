@@ -24,6 +24,9 @@ struct RenderPipelineResources {
     unsigned int pp_ssr_rt = 0;        // SSR 输出
     unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
 
+    unsigned int gbuffer_rt = 0;            // GBuffer MRT (3 color + depth)
+    unsigned int deferred_lighting_rt = 0;   // Deferred lighting output
+
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
 
@@ -58,6 +61,8 @@ struct RenderPipelineResources {
         pp_dof_rt = 0;
         pp_ssr_rt = 0;
         pp_motion_vector_rt = 0;
+        gbuffer_rt = 0;
+        deferred_lighting_rt = 0;
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;
         pp_lum_adapted_rt[1] = 0;

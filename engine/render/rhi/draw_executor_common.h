@@ -44,6 +44,11 @@ struct DrawExecutorGlobalState {
     glm::vec4 light_probe_sh[9] = {};
     bool light_probe_enabled = false;
 
+    // --- GBuffer (Deferred) ---
+    static constexpr int kMaxGBufferTextures = 4;
+    unsigned int gbuffer_texture[kMaxGBufferTextures] = {};
+    bool gbuffer_rendering_mode = false;  ///< true: DrawMeshBatch 使用 GBuffer shader
+
     // --- 渲染统计 ---
     RenderStats current_frame_stats;
     RenderStats last_frame_stats;
@@ -71,6 +76,9 @@ struct DrawExecutorGlobalState {
     void SetLightProbeSH(const glm::vec4 sh_in[9], bool enabled) {
         for (int i = 0; i < 9; ++i) light_probe_sh[i] = sh_in[i];
         light_probe_enabled = enabled;
+    }
+    void SetGBufferTexture(unsigned int index, unsigned int handle) {
+        if (index < kMaxGBufferTextures) gbuffer_texture[index] = handle;
     }
 
     void BeginFrame() {

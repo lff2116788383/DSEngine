@@ -311,6 +311,23 @@ bool FramePipeline::Init() {
             {render_width, render_height, true, false, false});
     }
 
+    // GBuffer MRT: 3 颜色附件 (albedo, normal, position) + 深度
+    if (render_resources_.gbuffer_rt == 0) {
+        RenderTargetDesc gbuf_desc;
+        gbuf_desc.width = render_width;
+        gbuf_desc.height = render_height;
+        gbuf_desc.has_color = true;
+        gbuf_desc.has_depth = true;
+        gbuf_desc.generate_mipmaps = false;
+        gbuf_desc.color_attachment_count = 3;
+        render_resources_.gbuffer_rt = runtime_context_.rhi_device->CreateRenderTarget(gbuf_desc);
+    }
+    // Deferred Lighting output: 全分辨率单颜色附件
+    if (render_resources_.deferred_lighting_rt == 0) {
+        render_resources_.deferred_lighting_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
+
     // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
     if (render_resources_.pp_lum_temp_rt == 0) {
         render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget(
@@ -806,6 +823,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
     render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
     render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
+    render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
+    render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
     render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
     render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
@@ -839,18 +858,25 @@ void FramePipeline::BuildRenderGraphInternal() {
     auto dof_color   = render_graph_dag_.DeclareResource("dof_color");
     auto ssr_color   = render_graph_dag_.DeclareResource("ssr_color");
     auto mb_color    = render_graph_dag_.DeclareResource("motion_blur_color");
+    auto gbuffer_color = render_graph_dag_.DeclareResource("gbuffer_color");
+    auto gbuffer_depth = render_graph_dag_.DeclareResource("gbuffer_depth");
+    auto deferred_lit  = render_graph_dag_.DeclareResource("deferred_lit_color");
     render_graph_dag_.MarkOutput(main_color);
     render_graph_dag_.MarkOutput(scene_color);
     render_graph_dag_.MarkOutput(taa_color);
     render_graph_dag_.MarkOutput(dof_color);
     render_graph_dag_.MarkOutput(ssr_color);
     render_graph_dag_.MarkOutput(mb_color);
+    render_graph_dag_.MarkOutput(gbuffer_color);
+    render_graph_dag_.MarkOutput(deferred_lit);
 
     // ---- 注册内置 Pass ----
     registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));

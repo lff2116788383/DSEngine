@@ -98,6 +98,7 @@ public:
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
+    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
@@ -126,6 +127,8 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) override;
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override;
+    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override;
+    void SetGBufferRenderingMode(bool enabled) override;
 
     // --- SSBO（Clustered Forward+ 所需） ---
     unsigned int CreateSSBO(size_t size, const void* data) override;

@@ -80,12 +80,14 @@ struct RenderTargetDesc {
     bool cube_map = false;
     int msaa_samples = 1;           ///< MSAA 采样数（1 = 禁用，4 = 4x MSAA）
     bool allow_uav = false;         ///< 颜色附件是否支持 UAV（Compute Shader 写入）
+    int color_attachment_count = 1; ///< MRT 颜色附件数量 (1~8)，has_color=true 时生效
 
     bool operator==(const RenderTargetDesc& o) const {
         return width == o.width && height == o.height &&
                has_color == o.has_color && has_depth == o.has_depth &&
                generate_mipmaps == o.generate_mipmaps && cube_map == o.cube_map &&
-               msaa_samples == o.msaa_samples && allow_uav == o.allow_uav;
+               msaa_samples == o.msaa_samples && allow_uav == o.allow_uav &&
+               color_attachment_count == o.color_attachment_count;
     }
 };
 

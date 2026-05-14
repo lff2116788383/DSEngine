@@ -463,9 +463,11 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
-    unsigned int color_texture_handle = 0;
     unsigned int depth_texture_handle = 0;
     unsigned int fbo_handle = 0;
+
+    const int num_color = desc.has_color ? (std::max)(1, desc.color_attachment_count) : 0;
+    std::vector<unsigned int> color_handles(static_cast<size_t>(num_color), 0);
 
     auto cleanup_failed_rt = [&]() {
         if (fbo_handle != 0) {
@@ -478,19 +480,22 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
             resource_mgr_.ledger().textures_destroyed += 1;
             depth_texture_handle = 0;
         }
-        if (color_texture_handle != 0) {
-            glDeleteTextures(1, &color_texture_handle);
-            resource_mgr_.ledger().textures_destroyed += 1;
-            color_texture_handle = 0;
+        for (auto& ch : color_handles) {
+            if (ch != 0) {
+                glDeleteTextures(1, &ch);
+                resource_mgr_.ledger().textures_destroyed += 1;
+                ch = 0;
+            }
         }
     };
 
-    if (desc.has_color) {
-        glGenTextures(1, &color_texture_handle);
+    for (int ci = 0; ci < num_color; ++ci) {
+        glGenTextures(1, &color_handles[ci]);
         resource_mgr_.ledger().textures_created += 1;
-        if (color_texture_handle == 0) {
-            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
-                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
+        if (color_handles[ci] == 0) {
+            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment {} ({}x{})",
+                ci, desc.width, desc.height);
+            cleanup_failed_rt();
             return 0;
         }
     }
@@ -499,8 +504,8 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         glGenTextures(1, &depth_texture_handle);
         resource_mgr_.ledger().textures_created += 1;
         if (depth_texture_handle == 0) {
-            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
-                desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
+            DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{})",
+                desc.width, desc.height);
             cleanup_failed_rt();
             return 0;
         }
@@ -509,14 +514,14 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glGenFramebuffers(1, &fbo_handle);
     resource_mgr_.ledger().framebuffers_created += 1;
     if (fbo_handle == 0) {
-        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenFramebuffers returned 0 ({}x{}, color={}, depth={}, mipmaps={})",
-            desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps);
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenFramebuffers returned 0 ({}x{})",
+            desc.width, desc.height);
         cleanup_failed_rt();
         return 0;
     }
 
-    if (desc.has_color) {
-        glBindTexture(GL_TEXTURE_2D, color_texture_handle);
+    for (int ci = 0; ci < num_color; ++ci) {
+        glBindTexture(GL_TEXTURE_2D, color_handles[ci]);
         GLint internal_format = GL_RGBA16F;
         GLenum type = GL_FLOAT;
         if (desc.generate_mipmaps) {
@@ -556,14 +561,22 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_handle);
-    if (desc.has_color) {
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texture_handle, 0);
+    for (int ci = 0; ci < num_color; ++ci) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + ci, GL_TEXTURE_2D, color_handles[ci], 0);
+    }
+    if (num_color > 1) {
+        std::vector<GLenum> draw_bufs(static_cast<size_t>(num_color));
+        for (int ci = 0; ci < num_color; ++ci)
+            draw_bufs[ci] = GL_COLOR_ATTACHMENT0 + ci;
+        glDrawBuffers(num_color, draw_bufs.data());
     }
     if (desc.has_depth) {
         if (desc.cube_map) {
             glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture_handle, 0);
-            glDrawBuffer(GL_NONE);
-            glReadBuffer(GL_NONE);
+            if (num_color == 0) {
+                glDrawBuffer(GL_NONE);
+                glReadBuffer(GL_NONE);
+            }
         } else {
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture_handle, 0);
         }
@@ -571,8 +584,8 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
 
     const GLenum framebuffer_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (framebuffer_status != GL_FRAMEBUFFER_COMPLETE) {
-        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{} ({}x{}, color={}, depth={}, mipmaps={}, cube={})",
-            static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, desc.has_color, desc.has_depth, desc.generate_mipmaps, desc.cube_map);
+        DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: framebuffer incomplete, status=0x{:x} ({}x{}, color_count={}, depth={}, cube={})",
+            static_cast<unsigned int>(framebuffer_status), desc.width, desc.height, num_color, desc.has_depth, desc.cube_map);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
@@ -584,7 +597,12 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
-    dse::render::RenderTargetResource rt{desc, fbo_handle, color_texture_handle, depth_texture_handle};
+    dse::render::RenderTargetResource rt{};
+    rt.desc = desc;
+    rt.fbo_handle = fbo_handle;
+    rt.color_texture_handle = num_color > 0 ? color_handles[0] : 0;
+    rt.depth_texture_handle = depth_texture_handle;
+    rt.color_texture_handles = std::move(color_handles);
     resource_mgr_.StoreRenderTarget(handle, rt);
     return handle;
 }
@@ -592,6 +610,13 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
 unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
     return rt ? rt->color_texture_handle : 0;
+}
+
+unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+    if (!rt) return 0;
+    if (index < 0 || index >= static_cast<int>(rt->color_texture_handles.size())) return 0;
+    return rt->color_texture_handles[index];
 }
 
 unsigned int OpenGLRhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {

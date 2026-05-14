@@ -53,14 +53,20 @@ struct DX11RenderTarget {
     bool generate_mipmaps = false;
     bool is_msaa = false;                          ///< 是否为 MSAA 渲染目标
     int msaa_samples = 1;                          ///< MSAA 采样数
+    int color_attachment_count = 1;                ///< MRT 颜色附件数量
 
-    ComPtr<ID3D11Texture2D> color_texture;         ///< 颜色纹理（MSAA 时为 MSAA 纹理）
+    ComPtr<ID3D11Texture2D> color_texture;         ///< 颜色纹理（MSAA 时为 MSAA 纹理），兼容 = color_textures[0]
     ComPtr<ID3D11RenderTargetView> color_rtv;
     ComPtr<ID3D11ShaderResourceView> color_srv;    ///< MSAA 时指向 resolve 纹理
     ComPtr<ID3D11UnorderedAccessView> color_uav;   ///< UAV（allow_uav=true 时有效）
     unsigned int color_texture_handle = 0;         ///< MSAA 时指向 resolve 纹理句柄
 
     ComPtr<ID3D11Texture2D> color_resolve_texture; ///< MSAA resolve 目标（1x）
+
+    std::vector<ComPtr<ID3D11Texture2D>> color_textures_mrt;       ///< MRT: 所有颜色纹理
+    std::vector<ComPtr<ID3D11RenderTargetView>> color_rtvs_mrt;    ///< MRT: 所有 RTV
+    std::vector<ComPtr<ID3D11ShaderResourceView>> color_srvs_mrt;  ///< MRT: 所有 SRV
+    std::vector<unsigned int> color_texture_handles_mrt;           ///< MRT: 所有纹理句柄
 
     ComPtr<ID3D11Texture2D> depth_texture;
     ComPtr<ID3D11DepthStencilView> depth_dsv;
@@ -117,7 +123,8 @@ public:
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
                                      bool generate_mipmaps, bool cube_map,
-                                     int msaa_samples = 1, bool allow_uav = false);
+                                     int msaa_samples = 1, bool allow_uav = false,
+                                     int color_attachment_count = 1);
     void DeleteRenderTarget(unsigned int handle);
     const DX11RenderTarget* GetRenderTarget(unsigned int handle) const;
     unsigned int GetRenderTargetColorTextureHandle(unsigned int handle) const;

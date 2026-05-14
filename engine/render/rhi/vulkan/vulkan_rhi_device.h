@@ -105,6 +105,7 @@ public:
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
+    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
@@ -152,6 +153,12 @@ public:
     }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
         draw_executor_.SetGlobalLightProbeSH(sh, enabled);
+    }
+    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
+        draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
+    }
+    void SetGBufferRenderingMode(bool enabled) override {
+        draw_executor_.SetGBufferRenderingMode(enabled);
     }
 
     // --- SSBO（Clustered Forward+ 所需） ---

@@ -104,6 +104,10 @@ public:
     void InitParticleShader();
     void set_particle_shader_handle(unsigned int h) { particle_shader_handle_ = h; }
 
+    // --- GBuffer 着色器（延迟渲染几何通道） ---
+    unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
+    void InitGBufferShader();
+
     // --- 后处理着色器缓存 ---
     unsigned int GetOrCreatePostProcessShader(const std::string& effect_name,
                                                const char* vs_src,
@@ -126,6 +130,8 @@ private:
 
     unsigned int particle_shader_handle_ = 0;
     ParticleShaderLocations particle_locations_;
+
+    unsigned int gbuffer_shader_handle_ = 0;
 
     /// 后处理着色器缓存：effect_name → shader_program_handle
     std::unordered_map<std::string, unsigned int> pp_shaders_;

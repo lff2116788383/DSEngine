@@ -511,10 +511,12 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
-    // 选择着色器：深度 only pass 使用 shadow shader，否则使用 PBR
+    const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
+
+    // 选择着色器：深度 only → shadow, GBuffer → gbuffer, 否则 PBR
     unsigned int shader_handle = is_depth_only_pass_
         ? shader_mgr.shadow_shader_handle()
-        : shader_mgr.pbr_shader_handle();
+        : (gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle());
     const auto* program = shader_mgr.GetProgram(shader_handle);
     if (!program) return;
     dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
@@ -528,7 +530,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 绑定常量缓冲
     ID3D11Buffer* vs_cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get()};
     dc->VSSetConstantBuffers(0, 2, vs_cbs);
-    if (!is_depth_only_pass_) {
+    if (!is_depth_only_pass_ && !gbuffer_mode) {
         ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), nullptr, per_scene_cb_.Get(), per_material_cb_.Get()};
         dc->PSSetConstantBuffers(0, 4, ps_cbs);
 
@@ -1256,6 +1258,36 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         draw_dedicated_pp(shader_mgr.ssr_shader_handle());
         ID3D11ShaderResourceView* null_srv = nullptr;
         dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
+    // Deferred Lighting 专用路径（GBuffer → 光照合成）
+    if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 10) {
+            // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+            struct { float lx, ly, lz; float intensity; float cx, cy, cz; float ambient; } dp{};
+            dp.lx = params[2]; dp.ly = params[3]; dp.lz = params[4];
+            dp.intensity = params[8];
+            dp.cx = params[5]; dp.cy = params[6]; dp.cz = params[7];
+            dp.ambient = params[9];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &dp, sizeof(dp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        // 绑定 GBuffer normal 到 t1, position 到 t2
+        if (params.size() >= 2) {
+            const auto* normal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (normal_tex) dc->PSSetShaderResources(1, 1, normal_tex->srv.GetAddressOf());
+            const auto* pos_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
+            if (pos_tex) dc->PSSetShaderResources(2, 1, pos_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.deferred_lighting_shader_handle());
+        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+        dc->PSSetShaderResources(1, 2, null_srvs);
         return;
     }
 

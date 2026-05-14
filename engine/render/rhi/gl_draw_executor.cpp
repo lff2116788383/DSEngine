@@ -426,8 +426,16 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     const bool emit_vse1522_depth_diag = false;
 #endif // DSE_VSE_1522_DIAG
 
+    const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
+
+    if (gbuffer_mode) {
+        shader_mgr.InitGBufferShader();
+        glUseProgram(shader_mgr.gbuffer_shader_handle());
+    } else {
+        glUseProgram(shader_mgr.pbr_shader_handle());
+    }
     const auto& loc = shader_mgr.pbr_locations();
-    glUseProgram(shader_mgr.pbr_shader_handle());
+
     if (state_mgr.active_pipeline_state() != 0) {
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
     } else {
@@ -442,9 +450,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
     ubo_mgr.UploadPerFrame(per_frame);
 
+    // PerScene UBO 需要在 for 循环中被 shading_mode 变更引用，声明在此处
+    PerSceneUBO per_scene{};
+    if (!gbuffer_mode) {
     // === PerScene UBO：使用第一个 item 的光照数据（同一批次光照通常一致） ===
     const auto& first_item = items[0];
-    PerSceneUBO per_scene;
     per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
     per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
@@ -459,12 +469,15 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_state_.light_probe_sh[i];
     lp_data.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     ubo_mgr.UploadLightProbeData(lp_data);
+    } // !gbuffer_mode
 
     // 绑定所有 UBO
     ubo_mgr.BindAll();
 
     // 纹理采样器（全局设置，非逐对象变化）
-    glUniform1i(loc.texture, 0);
+    unsigned int active_shader = gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle();
+    glUniform1i(glGetUniformLocation(active_shader, "u_texture"), 0);
+    const int gbuffer_model_loc = gbuffer_mode ? glGetUniformLocation(active_shader, "u_model") : -1;
 
     unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_normal_map_handle = std::numeric_limits<unsigned int>::max();
@@ -472,7 +485,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     unsigned int last_emissive_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_occlusion_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_blend_mode = std::numeric_limits<unsigned int>::max();
-    int last_shading_mode = first_item.shading_mode;
+    int last_shading_mode = items[0].shading_mode;
 
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
@@ -606,6 +619,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glUniform1i(loc.occlusion_map, 15);
         }
 
+        if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
         PerMaterialUBO per_mat;
         per_mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
@@ -668,6 +682,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadPerScene(per_scene);
             last_shading_mode = item.shading_mode;
         }
+        } // !gbuffer_mode
 
         // 双面材质
         if (item.material_double_sided) {
@@ -709,8 +724,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         // 模型矩阵（逐对象 uniform）
-        if (loc.model != -1) {
-            glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(item.model));
+        {
+            int model_loc = gbuffer_mode ? gbuffer_model_loc : loc.model;
+            if (model_loc != -1) {
+                glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.model));
+            }
         }
 
         if (item.vertices.size() > MAX_MESH_VERTICES || item.indices.size() > MAX_MESH_INDICES) {
@@ -1517,6 +1535,26 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(mix(history, current, alpha), 1.0);
             }
         )";
+    } else if (effect_name == "deferred_lighting") {
+        fs_src += R"(
+            uniform sampler2D u_gbuf_normal;
+            uniform sampler2D u_gbuf_position;
+            uniform vec3 u_light_dir;
+            uniform vec3 u_light_color;
+            uniform float u_light_intensity;
+            uniform float u_ambient;
+            void main() {
+                vec3 albedo   = texture(screenTexture, TexCoords).rgb;
+                vec3 normal   = texture(u_gbuf_normal, TexCoords).rgb * 2.0 - 1.0;
+                vec3 position = texture(u_gbuf_position, TexCoords).rgb;
+                if (length(normal) < 0.01) { FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+                normal = normalize(normal);
+                float NdotL = max(dot(normal, -normalize(u_light_dir)), 0.0);
+                vec3 diffuse = albedo * u_light_color * u_light_intensity * NdotL;
+                vec3 ambient = albedo * u_ambient;
+                FragColor = vec4(diffuse + ambient, 1.0);
+            }
+        )";
     } else if (effect_name == "ui_overlay") {
         fs_src += R"(
             void main() {
@@ -1740,6 +1778,18 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1i(glGetUniformLocation(shader, "u_frame_index"), static_cast<int>(params[4]));
         glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[6]);
         glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[7]);
+    } else if (effect_name == "deferred_lighting" && params.size() >= 10) {
+        // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_gbuf_normal"), 1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[1]));
+        glUniform1i(glGetUniformLocation(shader, "u_gbuf_position"), 2);
+        glUniform3f(glGetUniformLocation(shader, "u_light_dir"), params[2], params[3], params[4]);
+        glUniform3f(glGetUniformLocation(shader, "u_light_color"), params[5], params[6], params[7]);
+        glUniform1f(glGetUniformLocation(shader, "u_light_intensity"), params[8]);
+        glUniform1f(glGetUniformLocation(shader, "u_ambient"), params[9]);
     }
 
     glDisable(GL_DEPTH_TEST);

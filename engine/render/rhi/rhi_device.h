@@ -186,6 +186,9 @@ public:
     virtual void BeginFrame() = 0;
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
+    virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
+        (void)index; return GetRenderTargetColorTexture(render_target_handle);
+    }
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
     virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
@@ -216,6 +219,12 @@ public:
     void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { SetGlobalSpotLightSpaceMatrix(0, mat); }
     virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
     virtual void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) = 0;
+
+    // --- GBuffer / Deferred 管线状态 ---
+    virtual void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
+        (void)index; (void)texture_handle;
+    }
+    virtual void SetGBufferRenderingMode(bool enabled) { (void)enabled; }
 
     /// OpenGL textures need Y-flip on load (bottom-left origin); D3D11/Vulkan don't
     virtual bool NeedsTextureYFlip() const { return true; }
@@ -278,6 +287,7 @@ public:
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
+    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
@@ -319,6 +329,12 @@ public:
     }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
         draw_executor_.SetGlobalLightProbeSH(sh, enabled);
+    }
+    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
+        draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
+    }
+    void SetGBufferRenderingMode(bool enabled) override {
+        draw_executor_.SetGBufferRenderingMode(enabled);
     }
 
     // --- SSBO（Clustered Forward+ 所需） ---

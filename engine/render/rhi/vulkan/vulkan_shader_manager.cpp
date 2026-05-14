@@ -764,6 +764,25 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] Motion Vector shader creation failed");
     }
+
+    // GBuffer shader（复用 PBR 顶点着色器 + GBuffer 片段着色器）
+    {
+        gbuffer_shader_handle_ = CreateProgram(vulkan_shaders::kPbrVertex, vulkan_shaders::kGBufferFragment);
+        if (gbuffer_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] GBuffer shader created: handle={}", gbuffer_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] GBuffer shader creation failed");
+    }
+
+    // Deferred Lighting shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDeferredLightingFS;
+        deferred_lighting_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (deferred_lighting_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Deferred Lighting shader created: handle={}", deferred_lighting_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Deferred Lighting shader creation failed");
+    }
 }
 
 // ============================================================================

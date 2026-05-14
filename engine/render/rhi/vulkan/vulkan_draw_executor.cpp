@@ -406,7 +406,8 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     VkDeviceSize per_scene_offset,
     VkDeviceSize per_material_offset,
     VkDeviceSize per_pl_offset,
-    VkDeviceSize per_sl_offset) {
+    VkDeviceSize per_sl_offset,
+    bool gbuffer_mode) {
 
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
@@ -463,6 +464,9 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         write.pBufferInfo = &buf_info;
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
+
+    // --- Set 1 binding 1+: PBR 专用 SSBO/UBO（GBuffer 模式跳过）---
+    if (!gbuffer_mode) {
 
     // --- Set 1 binding 1: PointLights SSBO ---
     {
@@ -595,8 +599,32 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &lp_write, 0, nullptr);
     }
 
+    } // !gbuffer_mode — Set 1 PBR 专用绑定结束
+
     // --- Set 2: PerMaterial UBO + 采样器 ---
-    {
+    if (gbuffer_mode) {
+        // GBuffer 模式只绑定 albedo 纹理到 binding 1
+        unsigned int tex_handle = item.texture_handle;
+        if (tex_handle == 0) tex_handle = white_texture_handle_;
+        const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
+        if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
+        if (tex) {
+            VkDescriptorImageInfo img_info{};
+            img_info.sampler = resource_mgr.default_sampler();
+            img_info.imageView = tex->image_view;
+            img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            VkWriteDescriptorSet tex_write{};
+            tex_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            tex_write.dstSet = sets[2];
+            tex_write.dstBinding = 1;
+            tex_write.dstArrayElement = 0;
+            tex_write.descriptorCount = 1;
+            tex_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            tex_write.pImageInfo = &img_info;
+            vkUpdateDescriptorSets(device, 1, &tex_write, 0, nullptr);
+        }
+    } else {
         // PerMaterial UBO (binding 0)
         VkDescriptorBufferInfo mat_buf_info{};
         mat_buf_info.buffer = per_material_ubo_[fi];
@@ -751,10 +779,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         all_writes.push_back(bone_write);
         all_writes.push_back(morph_write);
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
-    }
+    } // else (PBR mode Set 2)
 
     // --- Set 3 binding 0: 点光源立方体阴影贴图 (u_point_shadow_maps[4]) ---
-    if (set_count >= 4 && sets[3] != VK_NULL_HANDLE) {
+    if (!gbuffer_mode && set_count >= 4 && sets[3] != VK_NULL_HANDLE) {
         VkDescriptorImageInfo point_shadow_infos[4] = {};
         VkWriteDescriptorSet  point_shadow_write{};
         {
@@ -1533,9 +1561,13 @@ void VulkanDrawExecutor::DrawMeshBatch(
     if (items.empty()) return;
     if (skip_current_pass_) return;
 
-    const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_mgr.pbr_shader_handle());
+    const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
+    unsigned int active_shader_handle = gbuffer_mode
+        ? shader_mgr.gbuffer_shader_handle()
+        : shader_mgr.pbr_shader_handle();
+    const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(active_shader_handle);
     if (!pbr_program) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor: PBR shader not available");
+        DEBUG_LOG_WARN("VulkanDrawExecutor: {} shader not available", gbuffer_mode ? "GBuffer" : "PBR");
         return;
     }
 
@@ -1627,7 +1659,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 分配并绑定 DescriptorSet（传入各 UBO 的当前偏移）
         AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
             cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
-            cur_material_offset, cur_pl_offset, cur_sl_offset);
+            cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
 
         // 上传顶点数据到 mesh VBO（累积偏移，避免后续 mesh 覆盖前面的数据）
         VkDeviceSize cur_vbo_offset = mesh_vbo_offset_;
@@ -1827,6 +1859,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.motion_blur_shader_handle();
     else if (effect_name == "ssr" && shader_mgr.ssr_shader_handle())
         selected_shader_handle = shader_mgr.ssr_shader_handle();
+    else if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle())
+        selected_shader_handle = shader_mgr.deferred_lighting_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1895,6 +1929,10 @@ void VulkanDrawExecutor::DrawPostProcess(
     } else if (effect_name == "ssr") {
         unsigned int color_h = (params.size() >= 9) ? static_cast<unsigned int>(params[8]) : 0;
         extra_bindings = {{2, color_h}};
+    } else if (effect_name == "deferred_lighting" && params.size() >= 2) {
+        unsigned int normal_h = static_cast<unsigned int>(params[0]);
+        unsigned int pos_h = static_cast<unsigned int>(params[1]);
+        extra_bindings = {{2, normal_h}, {3, pos_h}};
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -2007,6 +2045,15 @@ void VulkanDrawExecutor::DrawPostProcess(
             pc.max_steps = static_cast<int>(params[3]);
             pc.near_p = params[4]; pc.far_p = params[5];
             pc.screen_w = params[6]; pc.screen_h = params[7];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "deferred_lighting" && params.size() >= 10) {
+            // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+            struct { float lx, ly, lz; float intensity; float cx, cy, cz; float ambient; } pc{};
+            pc.lx = params[2]; pc.ly = params[3]; pc.lz = params[4];
+            pc.intensity = params[8];
+            pc.cx = params[5]; pc.cy = params[6]; pc.cz = params[7];
+            pc.ambient = params[9];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         }

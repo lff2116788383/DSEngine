@@ -722,7 +722,8 @@ const VulkanBuffer* VulkanResourceManager::GetSSBO(unsigned int handle) const {
 
 unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
                                                         bool generate_mipmaps, bool cube_map,
-                                                        int msaa_samples, bool allow_uav) {
+                                                        int msaa_samples, bool allow_uav,
+                                                        int color_attachment_count) {
     unsigned int handle = AllocateRenderTargetHandle();
     VulkanRenderTarget rt;
     rt.width = width;
@@ -731,6 +732,9 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     rt.has_depth = has_depth;
     rt.generate_mipmaps = generate_mipmaps;
     rt.allow_uav = allow_uav;
+
+    const int num_color = has_color ? (std::max)(1, color_attachment_count) : 0;
+    rt.color_attachment_count = num_color;
 
     // 查询设备支持的 MSAA 采样数
     VkSampleCountFlagBits actual_samples = VK_SAMPLE_COUNT_1_BIT;
@@ -741,6 +745,8 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
                                      & phys_props.limits.framebufferDepthSampleCounts;
         if (supported & VK_SAMPLE_COUNT_4_BIT) actual_samples = VK_SAMPLE_COUNT_4_BIT;
     }
+    // MRT (>1 attachment) 禁用 MSAA（deferred GBuffer 不用 MSAA）
+    if (num_color > 1) actual_samples = VK_SAMPLE_COUNT_1_BIT;
     const bool use_msaa = (actual_samples != VK_SAMPLE_COUNT_1_BIT);
     rt.is_msaa = use_msaa;
     rt.msaa_samples = use_msaa ? 4 : 1;
@@ -771,13 +777,27 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
             if (!CreateVulkanImage(width, height, color_format, VK_IMAGE_TILING_OPTIMAL,
                                    color_usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                    VK_IMAGE_ASPECT_COLOR_BIT, rt.color_texture)) return 0;
+            rt.color_textures.push_back(rt.color_texture);
         } else {
-            rt.color_texture.format = color_format;
-            rt.color_texture.width  = width;
-            rt.color_texture.height = height;
-            if (!CreateVulkanImage(width, height, color_format, VK_IMAGE_TILING_OPTIMAL,
-                                   color_usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                   VK_IMAGE_ASPECT_COLOR_BIT, rt.color_texture)) return 0;
+            rt.color_textures.resize(static_cast<size_t>(num_color));
+            for (int ci = 0; ci < num_color; ++ci) {
+                rt.color_textures[ci].format = color_format;
+                rt.color_textures[ci].width  = width;
+                rt.color_textures[ci].height = height;
+                if (!CreateVulkanImage(width, height, color_format, VK_IMAGE_TILING_OPTIMAL,
+                                       color_usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                       VK_IMAGE_ASPECT_COLOR_BIT, rt.color_textures[ci])) return 0;
+            }
+            rt.color_texture = rt.color_textures[0];
+            // MRT: 为每个颜色附件注册独立纹理 handle，供 GetRenderTargetColorTexture(handle, index) 查询
+            if (num_color > 1) {
+                rt.mrt_texture_handles.resize(static_cast<size_t>(num_color));
+                for (int ci = 0; ci < num_color; ++ci) {
+                    unsigned int tex_h = next_texture_handle_++;
+                    textures_[tex_h] = rt.color_textures[ci];
+                    rt.mrt_texture_handles[ci] = tex_h;
+                }
+            }
         }
     }
 
@@ -798,7 +818,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     std::vector<VkAttachmentDescription> attachments;
     std::vector<VkAttachmentReference> color_refs;
     VkAttachmentReference depth_ref{};
-    VkAttachmentReference resolve_ref{};
+    std::vector<VkAttachmentReference> resolve_refs;
 
     if (has_color) {
         if (use_msaa) {
@@ -815,18 +835,20 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
             color_refs.push_back({static_cast<uint32_t>(attachments.size() - 1),
                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         } else {
-            VkAttachmentDescription color_att{};
-            color_att.format         = color_format;
-            color_att.samples        = VK_SAMPLE_COUNT_1_BIT;
-            color_att.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            color_att.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
-            color_att.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            color_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            color_att.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-            color_att.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            attachments.push_back(color_att);
-            color_refs.push_back({static_cast<uint32_t>(attachments.size() - 1),
-                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+            for (int ci = 0; ci < num_color; ++ci) {
+                VkAttachmentDescription color_att{};
+                color_att.format         = color_format;
+                color_att.samples        = VK_SAMPLE_COUNT_1_BIT;
+                color_att.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                color_att.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+                color_att.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                color_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                color_att.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+                color_att.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                attachments.push_back(color_att);
+                color_refs.push_back({static_cast<uint32_t>(attachments.size() - 1),
+                                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+            }
         }
     }
 
@@ -855,8 +877,8 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
         resolve_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         resolve_att.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
         resolve_att.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        resolve_ref = {static_cast<uint32_t>(attachments.size()),
-                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+        resolve_refs.push_back({static_cast<uint32_t>(attachments.size()),
+                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         attachments.push_back(resolve_att);
     }
 
@@ -865,7 +887,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     subpass.colorAttachmentCount    = static_cast<uint32_t>(color_refs.size());
     subpass.pColorAttachments       = color_refs.empty() ? nullptr : color_refs.data();
     subpass.pDepthStencilAttachment = has_depth ? &depth_ref : nullptr;
-    subpass.pResolveAttachments     = (has_color && use_msaa) ? &resolve_ref : nullptr;
+    subpass.pResolveAttachments     = resolve_refs.empty() ? nullptr : resolve_refs.data();
 
     VkSubpassDependency dep{};
     dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
@@ -898,8 +920,12 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     // ---- Framebuffer ----
     std::vector<VkImageView> fb_attachments;
     if (has_color) {
-        fb_attachments.push_back(use_msaa ? rt.msaa_color_texture.image_view
-                                          : rt.color_texture.image_view);
+        if (use_msaa) {
+            fb_attachments.push_back(rt.msaa_color_texture.image_view);
+        } else {
+            for (int ci = 0; ci < num_color; ++ci)
+                fb_attachments.push_back(rt.color_textures[ci].image_view);
+        }
     }
     if (has_depth) fb_attachments.push_back(rt.depth_texture.image_view);
     if (has_color && use_msaa) fb_attachments.push_back(rt.color_texture.image_view);
@@ -919,8 +945,8 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     }
 
     render_targets_[handle] = rt;
-    DEBUG_LOG_INFO("[Vulkan] RenderTarget created: {}x{} msaa={} uav={} handle={}",
-                   width, height, rt.msaa_samples, allow_uav ? 1 : 0, handle);
+    DEBUG_LOG_INFO("[Vulkan] RenderTarget created: {}x{} color_count={} msaa={} uav={} handle={}",
+                   width, height, num_color, rt.msaa_samples, allow_uav ? 1 : 0, handle);
     return handle;
 }
 
@@ -936,9 +962,11 @@ void VulkanResourceManager::DeleteRenderTarget(unsigned int handle) {
         if (rt.msaa_color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.msaa_color_texture.image, nullptr);
         if (rt.msaa_color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.msaa_color_texture.memory, nullptr);
     }
-    if (rt.color_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.color_texture.image_view, nullptr);
-    if (rt.color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.color_texture.image, nullptr);
-    if (rt.color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.color_texture.memory, nullptr);
+    for (auto& ct : rt.color_textures) {
+        if (ct.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, ct.image_view, nullptr);
+        if (ct.image != VK_NULL_HANDLE) vkDestroyImage(device_, ct.image, nullptr);
+        if (ct.memory != VK_NULL_HANDLE) vkFreeMemory(device_, ct.memory, nullptr);
+    }
     if (rt.depth_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.depth_texture.image_view, nullptr);
     if (rt.depth_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.depth_texture.image, nullptr);
     if (rt.depth_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.depth_texture.memory, nullptr);

@@ -162,6 +162,8 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
+    void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
+    void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -213,7 +215,8 @@ private:
         VkDeviceSize per_scene_offset = 0,
         VkDeviceSize per_material_offset = 0,
         VkDeviceSize per_pl_offset = 0,
-        VkDeviceSize per_sl_offset = 0);
+        VkDeviceSize per_sl_offset = 0,
+        bool gbuffer_mode = false);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(

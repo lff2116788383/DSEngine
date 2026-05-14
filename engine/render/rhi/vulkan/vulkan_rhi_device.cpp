@@ -241,12 +241,23 @@ void VulkanRhiDevice::BeginFrame() {
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return resource_mgr_.CreateRenderTarget(desc.width, desc.height, desc.has_color, desc.has_depth,
                                              desc.generate_mipmaps, desc.cube_map,
-                                             desc.msaa_samples, desc.allow_uav);
+                                             desc.msaa_samples, desc.allow_uav,
+                                             desc.color_attachment_count);
 }
 
 unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     // Vulkan 中纹理句柄概念不同，返回 RenderTarget handle 作为代理
     return render_target_handle;
+}
+
+unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+    if (rt && !rt->mrt_texture_handles.empty()) {
+        if (index >= 0 && index < static_cast<int>(rt->mrt_texture_handles.size()))
+            return rt->mrt_texture_handles[index];
+        return 0;
+    }
+    return (index == 0) ? render_target_handle : 0;
 }
 
 unsigned int VulkanRhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {

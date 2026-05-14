@@ -54,11 +54,15 @@ struct VulkanRenderTarget {
     int msaa_samples = 1;            ///< MSAA 采样数（1 或 4）
     bool allow_uav = false;          ///< 是否支持 Compute Storage 写入
 
+    int color_attachment_count = 1;  ///< MRT 颜色附件数量
+
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass render_pass = VK_NULL_HANDLE;       ///< RenderTarget 关联的 RenderPass
-    VulkanTexture color_texture;       ///< 1x SRV（MSAA 时为 resolve 目标）
+    VulkanTexture color_texture;       ///< 1x SRV（MSAA 时为 resolve 目标），兼容 = color_textures[0]
     VulkanTexture msaa_color_texture;  ///< MSAA 颜色附件（仅 is_msaa=true 时有效）
     VulkanTexture depth_texture;
+    std::vector<VulkanTexture> color_textures; ///< MRT: 所有颜色附件
+    std::vector<unsigned int> mrt_texture_handles; ///< MRT: 每个颜色附件对应的独立纹理 handle
 };
 
 /**
@@ -111,7 +115,8 @@ public:
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
                                      bool generate_mipmaps, bool cube_map,
-                                     int msaa_samples = 1, bool allow_uav = false);
+                                     int msaa_samples = 1, bool allow_uav = false,
+                                     int color_attachment_count = 1);
     void DeleteRenderTarget(unsigned int handle);
     const VulkanRenderTarget* GetRenderTarget(unsigned int handle) const;
 

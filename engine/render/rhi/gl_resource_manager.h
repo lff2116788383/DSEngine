@@ -53,8 +53,9 @@ struct ResourceLedger {
 struct RenderTargetResource {
     RenderTargetDesc desc;
     unsigned int fbo_handle = 0;
-    unsigned int color_texture_handle = 0;
+    unsigned int color_texture_handle = 0;      ///< 兼容：等于 color_texture_handles[0]
     unsigned int depth_texture_handle = 0;
+    std::vector<unsigned int> color_texture_handles; ///< MRT: 所有颜色附件纹理句柄
 };
 
 /**

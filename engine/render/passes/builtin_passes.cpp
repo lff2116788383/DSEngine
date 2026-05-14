@@ -268,6 +268,148 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// GBufferPass (deferred geometry)
+// ============================================================
+
+void GBufferPass::Setup(RenderGraph& graph) {
+    auto prez_depth    = graph.DeclareResource("prez_depth");
+    auto gbuffer_color = graph.DeclareResource("gbuffer_color");
+    auto gbuffer_depth = graph.DeclareResource("gbuffer_depth");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, gbuffer_color);
+    graph.PassWrite(pass, gbuffer_depth);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
+    if (ctx_.render_targets.gbuffer == 0) return;
+
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.gbuffer, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
+
+    ctx_.rhi_device->SetGBufferRenderingMode(true);
+
+    // 选择相机（与 ForwardScenePass 相同逻辑）
+    bool render_3d = false;
+    if (ctx_.editor_mode && ctx_.use_editor_camera) {
+        render_3d = true;
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
+    } else {
+        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+        entt::entity selected_camera3d = entt::null;
+        int selected_priority3d = std::numeric_limits<int>::min();
+        std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
+        for (auto entity : camera3d_view) {
+            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+            if (!camera.enabled) continue;
+            const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
+            if (selected_camera3d == entt::null ||
+                camera.priority > selected_priority3d ||
+                (camera.priority == selected_priority3d && entity_id < selected_id3d)) {
+                selected_camera3d = entity;
+                selected_priority3d = camera.priority;
+                selected_id3d = entity_id;
+            }
+        }
+        if (selected_camera3d != entt::null) {
+            render_3d = true;
+            auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
+            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
+                                                    static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                                                    camera.near_clip, camera.far_clip);
+            glm::mat4 view = glm::mat4(1.0f);
+            if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
+                auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
+                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                view = glm::lookAt(transform.position, transform.position + front, up);
+            }
+            cmd_buffer.SetCamera(view, projection);
+        }
+    }
+
+    if (render_3d) {
+        cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+        if (ctx_.modules.empty() && ctx_.render_meshes) {
+            ctx_.render_meshes(*ctx_.world, cmd_buffer);
+        }
+        const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        for (auto& mod : ctx_.modules) {
+            if (mod.instance) {
+                mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
+            }
+        }
+    }
+
+    ctx_.rhi_device->SetGBufferRenderingMode(false);
+    cmd_buffer.EndRenderPass();
+
+    // 将 GBuffer MRT 纹理注册为全局 GBuffer 纹理
+    for (int i = 0; i < 3; ++i) {
+        unsigned int tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, i);
+        ctx_.rhi_device->SetGlobalGBufferTexture(static_cast<unsigned int>(i), tex);
+    }
+}
+
+// ============================================================
+// DeferredLightingPass
+// ============================================================
+
+void DeferredLightingPass::Setup(RenderGraph& graph) {
+    auto gbuffer_color      = graph.DeclareResource("gbuffer_color");
+    auto shadow_depth       = graph.DeclareResource("shadow_depth");
+    auto deferred_lit_color = graph.DeclareResource("deferred_lit_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, gbuffer_color);
+    graph.PassRead(pass, shadow_depth);
+    graph.PassWrite(pass, deferred_lit_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
+    if (ctx_.render_targets.deferred_lighting == 0 || ctx_.render_targets.gbuffer == 0) return;
+
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.deferred_lighting, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), true});
+
+    unsigned int gbuf_albedo   = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 0);
+    unsigned int gbuf_normal   = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 1);
+    unsigned int gbuf_position = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 2);
+
+    // 查找主方向光参数
+    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.1f;
+
+    auto dl_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    for (auto entity : dl_view) {
+        auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(entity);
+        if (!dl.enabled) continue;
+        light_dir = glm::normalize(dl.direction);
+        light_color = dl.color;
+        light_intensity = dl.intensity;
+        ambient_intensity = dl.ambient_intensity;
+        break;
+    }
+
+    // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+    std::vector<float> params;
+    params.push_back(static_cast<float>(gbuf_normal));
+    params.push_back(static_cast<float>(gbuf_position));
+    params.push_back(light_dir.x); params.push_back(light_dir.y); params.push_back(light_dir.z);
+    params.push_back(light_color.x); params.push_back(light_color.y); params.push_back(light_color.z);
+    params.push_back(light_intensity);
+    params.push_back(ambient_intensity);
+
+    cmd_buffer.DrawPostProcess(gbuf_albedo, "deferred_lighting", params);
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
 // ForwardScenePass
 // ============================================================
 
