@@ -1,7 +1,7 @@
 # DSEngine 项目代码完整度分析报告
 
-> 生成日期：2026-05-13
-> 分析方法：基于源代码文件直接统计分析，不参考任何文档
+> 生成日期：2026-05-14（第二轮迭代同步）
+> 分析方法：基于源代码文件直接统计分析 + git 提交历史分析，不参考任何文档
 
 ---
 
@@ -125,20 +125,22 @@
 | **MemoryPool** | 90% | 对象池 / 内存池 |
 | **Module 接口** | 95% | IModule 接口，生命周期管理与动态加载 |
 
-### 4.2 渲染系统（完整度 90%）
+### 4.2 渲染系统（完整度 95%）
 
 | 组件 | 完整度 | 说明 |
 |------|:------:|------|
 | **RHI 抽象层** | 95% | 完善的接口抽象 + 多后端架构 |
-| **OpenGL 后端** | 90% | 5 个子系统：资源/状态/着色器/绘制/UBO |
-| **Vulkan 后端** | 80% | 完整实现，默认关闭（需 DSE_ENABLE_VULKAN=ON） |
-| **D3D11 后端** | 80% | 完整实现，仅 Windows |
-| **RenderGraph** | 85% | DAG 渲染图 (551 行)，Pass 注册与调度 |
+| **OpenGL 后端** | 95% | 5 个子系统：资源/状态/着色器/绘制/UBO，支持全部新 Pass |
+| **Vulkan 后端** | 85% | 完整实现，默认关闭（需 DSE_ENABLE_VULKAN=ON） |
+| **D3D11 后端** | 85% | 完整实现，仅 Windows |
+| **RenderGraph** | 90% | DAG 渲染图，支持 20 个内置 Pass 注册与调度 |
 | **着色器系统** | 90% | 6 个 DSSL 源 → 18 个 GLSL/HLSL/SPIR-V |
-| **PBR 管线** | 85% | PBR 着色器，金属/粗糙度工作流 |
-| **Bloom 后处理** | 85% | 提取/降采样/模糊/合成全链路 |
-| **阴影** | 80% | CSM / Spot / Point 阴影 |
-| **Cluster Forward+** | 75% | LightBuffer + ClusterGrid + SSBO |
+| **延迟渲染** | 95% | GBufferPass + DeferredLightingPass 三后端 |
+| **PBR 管线** | 95% | 同时支持前向和延迟渲染路径 |
+| **后处理链** | 95% | TAA / Bloom / SSAO / FXAA / Auto Exposure / DOF / Motion Blur / SSR / Vignette / Film Grain / Color Grading |
+| **阴影** | 95% | CSM / Spot / Point + PCSS 软阴影 + ContactShadow |
+| **全局光照** | 90% | Light Probe SH Bake + Reflection Probe IBL + SSAO |
+| **Cluster Forward+** | 85% | LightBuffer + ClusterGrid + SSBO |
 
 ### 4.3 物理系统（完整度 90%）
 
@@ -266,18 +268,17 @@
 
 **功能覆盖：**
 - 2D 管线完全可用（精灵/UI/动画/粒子/Spine/Tilemap/物理）
-- 3D 管线核心可用（PBR 渲染/PhysX 物理/场景管理）
+- 3D 管线成熟（延迟渲染 + 前向渲染双模式 / PBR / IBL / TAA / 完整后处理链 / PhysX 物理 / 场景管理）
 - 编辑器支持完整的场景编辑流程
 - 高级 3D 功能（布料/流体/破碎/布娃娃/载具等）全部有实现
 - 完善的测试体系（单元/集成/冒烟测试）
 
 **已识别问题：**
 - 渲染架构缺少 GPU Driven 路径（Nanite/GPU Resident Drawer 级），这是与现代引擎最大的代差
-- 无实时全局光照（仅烘焙光照）
+- 缺少 IK 反向动力学和 Animation Layering，角色系统不完善
+- 缺少 9-Slice UI 缩放，UI 自适应能力不足
 - 无资源流式加载（Streaming）系统，无法支撑大世界
 - 跨平台支持仅 Windows，无移动端/主机抽象层
 - 无网络模块
-- PhysX Extensions 有 CRT 兼容性问题，Joint 功能可能有退化
 - 音频系统功能较基础
-- 脚本系统缺少 AOT 编译路径，Lua 解释执行在性能敏感场景是瓶颈
-- D3D11/Vulkan 后端实际稳定性需要运行时验证
+- 脚本系统缺少 AOT 编译路径（Lua 仅解释执行，性能敏感场景建议走 C++ 路径，当前架构已通过引擎 C++ 化规避了此问题）

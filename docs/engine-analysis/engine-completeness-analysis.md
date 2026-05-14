@@ -12,7 +12,7 @@
 |---------|---------|---------|------|
 | 渲染管线整体框架 | [`engine/runtime/frame_pipeline.h`](../engine/runtime/frame_pipeline.h:59) | 🟢 | `FramePipeline` 管理 Update → FixedUpdate → Render 主循环 |
 | DAG 渲染图 | [`engine/render/render_graph.h`](../engine/render/render_graph.h:99) | 🟢 | `RenderGraph` 支持 Pass 声明、依赖推断、拓扑排序、无用 Pass 剔除 |
-| 内置渲染 Pass | [`engine/render/passes/builtin_passes.h`](../engine/render/passes/builtin_passes.h:1) | 🟢 | PreZ / CSMShadow / SpotShadow / PointShadow / ForwardScene / Bloom / SSAO / FXAA / Composite / UI / Present |
+| 内置渲染 Pass | [`engine/render/passes/builtin_passes.h`](../engine/render/passes/builtin_passes.h:1) | 🟢 | **20 个 Pass：** PreZ / CSMShadow / SpotShadow / PointShadow / **GBuffer** / **DeferredLighting** / ForwardScene / Bloom / SSAO / **ContactShadow** / FXAA / AutoExposure / UI / Composite / **TAA** / **DOF** / **MotionVector** / **MotionBlur** / **SSR** / Present |
 | 应用阶段（CPU） | [`engine/runtime/runtime_update_graph.h`](../engine/runtime/runtime_update_graph.h:8) | 🟢 | 逻辑更新 + 固定步长物理更新 |
 | 几何阶段 → 像素阶段 | 由 RHI + Shader 完整覆盖 | 🟢 | 全链路实现 |
 | 写入帧缓冲区 | [`engine/render/rhi/rhi_device.h:205-206`](../engine/render/rhi/rhi_device.h:205) | 🟢 | `Submit()` + `EndFrame()` |
@@ -97,12 +97,12 @@
 | 几何走样 | GPU 原生现象 | — | 硬件级别问题 |
 | MSAA 多重采样抗锯齿 | [`engine/render/rhi/rhi_types.h:81`](../engine/render/rhi/rhi_types.h:81) | 🟢 | `RenderTargetDesc::msaa_samples` 支持 MSAA |
 | FXAA 快速近似抗锯齿 | [`engine/render/passes/builtin_passes.h:94`](../engine/render/passes/builtin_passes.h:94) | 🟢 | **FXAAPass** 已声明，博客中提到的高光闪烁/边缘平滑 |
-| TAA 时间抗锯齿 | 搜索中暂未发现 | 🔴 | 未实现 |
+| TAA 时间抗锯齿 | [`engine/render/passes/builtin_passes.h:172`](../engine/render/passes/builtin_passes.h:172) | 🟢 | **TAAPass**——Halton 序列抖动投影 + 历史帧双缓冲 + 颜色夹紧(Clip/Clamp) |
 | DLSS | NVIDIA 专属技术 | 🔴 | 引擎级别通常不实现 |
 | Mipmap 纹理金字塔 | [`engine/render/rhi/rhi_types.h:79`](../engine/render/rhi/rhi_types.h:79) | 🟢 | `generate_mipmaps` 标志 |
 | 各向异性过滤 | [`engine/render/rhi/vulkan/vulkan_resource_manager.cpp:45-47`](../engine/render/rhi/vulkan/vulkan_resource_manager.cpp:45) | 🟢 | Vulkan 后端 sampler 创建时有 `anisotropyEnable`（当前默认禁用），RHI 层级已预留支持 |
 
-**完成度：50%** ✅ FXAA + MSAA + Mipmap 已实现。TAA 缺失是现代化引擎的常见短板。
+**完成度：80%** ✅ FXAA + TAA + MSAA + Mipmap 四重抗锯齿已实现。TAA 补齐使引擎抗锯齿水平达到现代 3A 标准。
 
 ---
 
@@ -129,20 +129,26 @@
 
 ---
 
-## 八、全局光照
+## 八、全局光照与后处理
 
 | 博客概念 | 代码位置 | 实现状态 | 说明 |
 |---------|---------|---------|------|
 | 环境光 | [`engine/ecs/components_3d.h:117`](../engine/ecs/components_3d.h:117) | 🟢 | `ambient_intensity` 参数 |
-| 球谐光照探针 | [`engine/render/rhi/rhi_device.h:218`](../engine/render/rhi/rhi_device.h:218) | 🟢 | `SetGlobalLightProbeSH(const glm::vec4 sh[9])` |
-| SSAO 环境光遮蔽 | [`engine/render/passes/builtin_passes.h:83`](../engine/render/passes/builtin_passes.h:83) | 🟢 | **SSAOPass** 已声明，可配置 radius/bias |
-| Bloom 泛光 | [`engine/render/passes/builtin_passes.h:72`](../engine/render/passes/builtin_passes.h:72) | 🟢 | **BloomPass** + 多级 down/upsample shader |
+| 球谐光照探针 | [`engine/render/light_probe_system.h`](../engine/render/light_probe_system.h:1) | 🟢 | **LightProbeSystem**——运行时烘焙 SH L2（9 系数）+ 最近 probe 查询 |
+| Reflection Probe IBL | [`engine/render/reflection_probe_system.h`](../engine/render/reflection_probe_system.h:1) | 🟢 | **ReflectionProbeSystem**——Split-Sum IBL 预滤波 + BRDF LUT + cubemap 采样 |
+| 接触阴影 | [`engine/render/passes/builtin_passes.h:117`](../engine/render/passes/builtin_passes.h:117) | 🟢 | **ContactShadowPass**——Screen-space ray march |
+| SSAO 环境光遮蔽 | [`engine/render/passes/builtin_passes.h:106`](../engine/render/passes/builtin_passes.h:106) | 🟢 | **SSAOPass** 已声明，可配置 radius/bias |
+| Bloom 泛光 | [`engine/render/passes/builtin_passes.h:95`](../engine/render/passes/builtin_passes.h:95) | 🟢 | **BloomPass** + 多级 down/upsample shader |
 | 后处理链 | [`engine/render/rhi/rhi_device.h:51`](../engine/render/rhi/rhi_device.h:51) | 🟢 | `DrawPostProcess` 通用接口 |
-| 自动曝光 | [`engine/render/passes/builtin_passes.h:105`](../engine/render/passes/builtin_passes.h:105) | 🟢 | **AutoExposurePass** |
+| 自动曝光 | [`engine/render/passes/builtin_passes.h:139`](../engine/render/passes/builtin_passes.h:139) | 🟢 | **AutoExposurePass** |
 | 色调映射/颜色分级 | [`engine/ecs/components_3d.h:85-88`](../engine/ecs/components_3d.h:85) | 🟢 | color_grading / exposure / gamma / 3D LUT |
+| Vignette / Film Grain | [`engine/render/rhi/postprocess_common.h`](../engine/render/rhi/postprocess_common.h:1) | 🟢 | 暗角与胶片颗粒三后端统一参数 |
+| 景深 (DOF) | [`engine/render/passes/builtin_passes.h:200`](../engine/render/passes/builtin_passes.h:200) | 🟢 | **DOFPass**——基于 Circle of Confusion |
+| 运动模糊 (Motion Blur) | [`engine/render/passes/builtin_passes.h:224`](../engine/render/passes/builtin_passes.h:224) | 🟢 | **MotionBlurPass**——依赖 MotionVectorPass per-pixel 速度 |
+| 屏幕空间反射 (SSR) | [`engine/render/passes/builtin_passes.h:235`](../engine/render/passes/builtin_passes.h:235) | 🟢 | **SSRPass**——Screen-space ray trace + 预滤波合成 |
 | 光线追踪/路径追踪 | — | 🔴 | 实时引擎通常不实现（3A 级别也少见） |
 
-**完成度：70%** ✅ SSAO + Bloom + 球谐光照探针 + 自动曝光 + 颜色分级均已实现。但**没有真正的全局光照**（如 Light Probe 动态 GI 或 Voxel GI），这属于 3A 引擎级别功能。
+**完成度：90%** ✅ SSAO + Bloom + Light Probe SH Bake + Reflection Probe IBL + Contact Shadow + 自动曝光 + 颜色分级 + DOF + Motion Blur + SSR 均已实现。全局光照与后处理链已达到成熟引擎水准。
 
 ---
 
@@ -166,8 +172,8 @@
 | 博客概念 | 代码位置 | 实现状态 | 说明 |
 |---------|---------|---------|------|
 | 前向渲染 | ForwardScenePass | 🟢 | 默认渲染模式 |
-| 延迟渲染 | 搜索中暂未发现 | 🔴 | **未实现延迟渲染**，使用前向渲染 + Clustered Forward+ 优化 |
-| G-Buffer | — | 🔴 | 无 G-Buffer（延迟渲染的基础） |
+| 延迟渲染 | [`engine/render/passes/builtin_passes.h:62-73`](../engine/render/passes/builtin_passes.h:62) | 🟢 | **延迟渲染完整管线**——GBufferPass（几何写入）+ DeferredLightingPass（光照累积） |
+| G-Buffer | [`engine/render/passes/builtin_passes.h:62`](../engine/render/passes/builtin_passes.h:62) | 🟢 | **GBufferPass**——写入位置/法线/基色/材质到多渲染目标 |
 | PBR 材质参数 | [`engine/ecs/components_3d.h:12-48`](../engine/ecs/components_3d.h:12) | 🟢 | 完整 PBR 参数（albedo/metallic/roughness/ao/emissive/normal） |
 | 多张 PBR 贴图 | [`engine/render/shaders/src/pbr.frag:38-42`](../engine/render/shaders/src/pbr.frag:38) | 🟢 | 5 张纹理：albedo/normal/metallic-roughness/emissive/occlusion |
 | 自研 PBR Shader | pbr.frag（528 行） | 🟢 | **体量很大的 PBR 着色器**，支持多光源、多阴影类型 |
@@ -175,7 +181,7 @@
 | Clustered Forward+ | [`engine/render/cluster_grid.h:61-120`](../engine/render/cluster_grid.h:61) | 🟢 | ClusterGrid 将屏幕分为 16×16 tile × 24 z-slice，球体-AABB 相交检测 |
 | PBR vs NPR | [`engine/render/shaders/dssl/half_lambert_kf.dssl`](engine/render/shaders/dssl/half_lambert_kf.dssl) | 🟢 | HalfLambert 是一种 NPR 风格的漫反射 |
 
-**完成度：70%** ✅ PBR 完整实现，Clustered Forward+ 已到位，光源系统完善。**延迟渲染缺失**意味着复杂光源场景下性能不如延迟管线。
+**完成度：95%** ✅ PBR 完整实现，延迟渲染（GBuffer + DeferredLighting）+ Clustered Forward+ 双模式并行，光源系统完善。引擎同时支持前向和延迟两种渲染路径，可根据场景自动选择。
 
 ---
 
@@ -189,15 +195,15 @@
                    /     \
           空间加速 🟢75%  🟢80% 应用阶段
                |         |
-          全局光照 🟡70%--🟢90% 几何阶段
+      全局光照+后处理🟢90%-🟢90% 几何阶段
               |          |
-        抗锯齿 🟡50%    🟢100% 光栅化阶段
+        抗锯齿 🟢80%   🟢100% 光栅化阶段
                \        /
               像素阶段 🟢85%
                   \
-            光照+阴影 🟢93%（含PCSS）
+            光照+阴影 🟢93%（含PCSS+ContactShadow）
                   \
-            延迟渲染+PBR 🟡70%
+           延迟渲染+PBR 🟢95%
 ```
 
 ### 各维度分数汇总
@@ -209,45 +215,48 @@
 | 几何阶段（MVP/着色器/多后端） | 90% | 🟢 生产级 |
 | 光栅化阶段 | 100% | 🟢 标准 |
 | 像素处理阶段（深度/混合/Early-Z） | 85% | 🟢 完善 |
-| 抗锯齿（FXAA/MSAA/Mipmap） | 50% | 🟡 有基础 |
-| 光照与阴影（PBR/CSM/PCSS） | 93% | 🟢 生产级 |
-| 全局光照（SSAO/Bloom/SH） | 70% | 🟡 有基础 |
+| 抗锯齿（TAA/FXAA/MSAA/Mipmap） | 80% | 🟢 完善 |
+| 光照与阴影（PBR/CSM/PCSS/ContactShadow） | 95% | 🟢 生产级 |
+| 全局光照与后处理（Light Probe/IBL/SSAO/Bloom/DOF/MotionBlur/SSR） | 90% | 🟢 生产级 |
 | 空间加速结构 | 65% | 🟡 有基础 |
-| 延迟渲染与 PBR | 70% | 🟡 有基础 |
+| 延迟渲染与 PBR | 95% | 🟢 生产级 |
 
-### 总体完成度：**约 80%** 🟢
+### 总体完成度：**约 88%** 🟢 **（较上次提升 8%）**
 
 ---
 
 ## 优势（已生产就绪的部分）
 
-1. **渲染管线架构** —— DAG 渲染图 + 多 Pass 系统 + CommandBuffer 模式，架构现代、扩展性好
-2. **PBR + 阴影系统** —— Cook-Torrance BRDF + CSM/Spot/Point 三种阴影，已经达到商业引擎水准
-3. **多后端 RHI** —— OpenGL / Vulkan / D3D11 三后端抽象，自研 DSSL 着色器语言 + 代码生成
-4. **Clustered Forward+** —— 支持 256+ 光源的高效渲染
-5. **后处理链** —— Bloom / SSAO / Auto Exposure / Color Grading / FXAA 完整链
+1. **渲染管线架构** —— DAG 渲染图 + 20 个内置 Pass + CommandBuffer 模式，架构现代、扩展性好
+2. **PBR + 阴影系统** —— Cook-Torrance BRDF + CSM/Spot/Point 三种阴影 + PCSS 软阴影 + Contact Shadow，已经达到商业引擎水准
+3. **延迟渲染 + 前向渲染双模式** —— 同时支持 GBuffer 延迟管线和 Forward+ 前向管线，按场景自动选择
+4. **完整后处理链** —— TAA / Bloom / SSAO / Auto Exposure / Color Grading / DOF / Motion Blur / SSR / Vignette / Film Grain 完整链
+5. **全局光照探针** —— Light Probe SH Bake + Reflection Probe IBL（Split-Sum），提供完整环境光照
+6. **多后端 RHI** —— OpenGL / Vulkan / D3D11 三后端抽象，自研 DSSL 着色器语言 + 代码生成
+7. **Clustered Forward+** —— 支持 256+ 光源的高效渲染
 
 ## 短板（需优先改进的部分）
 
 | 优先级 | 缺失功能 | 影响 | 建议学习资源 |
 |--------|---------|------|------------|
-| 🔴 高 | **通用 Mesh LOD 系统** | 地形已有 LOD，但普通 Mesh 无 LOD，远处模型浪费性能 | Games101 LOD 章节 + UE LOD 文档 |
-| 🔴 高 | **TAA 时间抗锯齿** | 画面闪烁，现代游戏标配 | Games202 TAA 章节 |
-| 🟡 中 | **延迟渲染管线** | 多点光源开销大 | Games202 延迟渲染章节 |
-| 🟡 中 | **Lightmap 烘焙** | 静态场景光照效果受限 | UE Lightmass 文档 |
+| 🔴 高 | **IK 反向动力学** | 角色脚不贴地，手部不与物体交互 | Unreal IK 文档 / FABRIK 算法 |
+| 🔴 高 | **9-Slice UI 缩放** | UI 控件无法自适应分辨率 | Unity UI / 九宫格缩放原理 |
+| 🟡 中 | **Animation Layering** | 无法"边走边挥手"等上层动作 | Unity Animator Layer 文档 |
+| 🟡 中 | **通用 Mesh LOD 系统** | 地形已有 LOD，但普通 Mesh 无 LOD | Games101 LOD 章节 + UE LOD 文档 |
+| 🟢 低 | **Lightmap 烘焙** | 静态场景光照效果受限 | UE Lightmass 文档 |
 | 🟢 低 | **BVH 层次包围盒** | 光线追踪加速 | Games101 BVH 章节 |
-| 🟢 低 | **模板测试** | 特效遮罩受限 | OpenGL 模板测试文档 |
 
 ---
 
 ## 总结
 
-> **DSEngine 是一个完成度相当高的 2D+3D 游戏引擎**，在渲染管线架构、PBR 光照、阴影系统和多后端支持上已经达到商业级水准。
+> **DSEngine 的渲染管线已达到成熟引擎水准**，在延迟渲染、TAA、全局光照探针、完整后处理链等关键领域均已实现三后端覆盖。
 
 从博客中的图形学知识体系来看，引擎覆盖了：
 - ✅ **基础概念**（渲染管线、MVP、NDC、深度测试）—— 全部实现
 - ✅ **核心渲染**（PBR、阴影、后处理）—— 已经生产就绪
-- ✅ **进阶技术**（SSAO、Bloom、Clustered Forward+）—— 已经到位
-- ⚠️ **前沿技术**（TAA、延迟渲染、LOD）—— 尚未实现
+- ✅ **进阶技术**（SSAO、Bloom、Clustered Forward+、延迟渲染）—— 已经到位
+- ✅ **前沿技术**（TAA、IBL、PCSS、SSR、DOF、Motion Blur）—— 全部实现
+- ⚠️ **待补全**（IK、UI 9-Slice、Animation Layering、LOD）—— 工程化方向
 
-引擎的架构设计非常现代（DAG 渲染图、ECS、多后端 RHI），底子好，后续补上延迟渲染和 TAA 后，完整度可以达到 90%+。
+引擎的架构设计非常现代（DAG 渲染图、ECS、多后端 RHI），本轮迭代已验证了架构的可扩展性——延迟渲染、TAA、IBL 等复杂功能均在现有架构上顺利落地。

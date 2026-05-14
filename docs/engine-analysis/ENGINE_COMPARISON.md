@@ -1,7 +1,7 @@
 # DSEngine 对比分析：与主流引擎及自研引擎的横向比较
 
-> 生成日期：2026-05-13
-> 分析方法：基于 DSEngine 代码库实际分析 + 行业公开信息
+> 生成日期：2026-05-14（迭代同步更新）
+> 分析方法：基于 DSEngine 代码库实际分析 + git 提交历史分析 + 行业公开信息
 
 ---
 
@@ -11,7 +11,7 @@
 |------|----------|---------|-----------------|
 | **代码量** | ~9.6 万行 | ~数千万行 | ~数千万行 |
 | **研发投入** | 个人/小团队 | 数千人 · 数十年 | 数千人 · 数十年 |
-| **渲染能力** | PBR + Bloom + Shadow Map + Cluster Forward | SRP 可定制管线 + DOTS + GPU Driven | Nanite + Lumen + 完整电影级渲染 |
+| **渲染能力** | PBR + 延迟渲染/前向双模式 + Bloom + SSAO + TAA + IBL + SSR + DOF + MotionBlur + ContactShadow + Cluster Forward | SRP 可定制管线 + DOTS + GPU Driven | Nanite + Lumen + 完整电影级渲染 |
 | **核心架构** | **EnTT ECS（纯正数据驱动）** + JobSystem + RenderGraph | OOP + DOTS ECS（双轨） | **Actor/Component OOP（无 ECS）** |
 | **编辑器** | ImGui 实现，28 个功能面板 | 完整可视化编辑器 | 完整可视化编辑器 + Blueprint |
 | **脚本系统** | Lua (sol2 绑定) | C# + Visual Scripting | C++ + Blueprint |
@@ -19,7 +19,7 @@
 | **2D 管线** | 完整（Sprite/UI/Spine/Tilemap/粒子/动画） | 成熟 | 较弱 |
 | **3D 管线** | 可用，功能较全 | 成熟 | 行业最强 |
 | **物理引擎** | Box2D + PhysX | PhysX（自研中） | Chaos Physics |
-| **实时全局光照** | 无 | 可配置（HDRP） | Lumen（行业标杆） |
+| **实时全局光照** | Light Probe SH Bake + Reflection Probe IBL + SSAO | 可配置（HDRP） | Lumen（行业标杆） |
 | **GPU Driven 渲染** | 无 | ✅ GPU Resident Drawer | ✅ Nanite |
 | **网络** | 无 | 完整 | 完整 |
 | **资源流式加载** | 无 | ✅ Addressables | ✅ World Partition |
@@ -91,7 +91,7 @@
 | **代码量** | ~9.6 万行 | ~150 万行 |
 | **编程语言** | C++20 + Lua | C++ + GDScript / C# |
 | **核心架构** | EnTT ECS（纯正实体组件系统） | Node / Scene 树（非 ECS） |
-| **渲染后端** | 自研 RHI（OpenGL / Vulkan / D3D11） | RenderingDevil（Vulkan / OpenGL / D3D12） |
+| **渲染后端** | 自研 RHI（OpenGL / Vulkan / D3D11） | RenderingDevice（Vulkan / OpenGL 3 / OpenGL 2） |
 | **编辑器** | ImGui 实现（功能完整，28 面板） | 原生 GUI 框架（极其成熟，可视化编辑） |
 | **2D 能力** | 完整（精灵 / UI / Spine / Tilemap / 粒子） | 行业最佳之一，节点式 2D 工作流 |
 | **3D 能力** | 完整（含布料 / 流体 / 破碎 / 布娃娃 / 载具等） | 持续改进中，略弱于 Unity |
