@@ -42,12 +42,29 @@ struct MeshRendererComponent {
     int sorting_layer = 0;
     int order_in_layer = 0;
     MaterialDataSource material_data_source = MaterialDataSource::ComponentFallback;
+    unsigned int mesh_handle_override = 0;  ///< 非零时表示 LODSystem 正在管理此实体的 mesh_path
     std::vector<float> temp_vertices;
     std::vector<unsigned short> temp_indices;
     std::vector<float> temp_uvs;
     std::vector<float> temp_normals;
     std::vector<float> temp_tangents;
     int dmesh_vertex_stride = 20;  ///< v1=20 (no color), v2=24 (with RGBA color at [20-23])
+};
+
+struct LODLevelConfig {
+    std::string mesh_path;
+    float screen_size_threshold = 0.0f;  ///< 当 screen_size > threshold 时选此级别
+    unsigned int mesh_handle = 0;        ///< LODSystem 赋值的已加载 mesh 句柄
+    bool loaded = false;
+};
+
+struct LODGroupComponent {
+    bool enabled = true;
+    std::vector<LODLevelConfig> levels;  ///< 按 threshold 降序排列（最高精度在前）
+    int current_lod = -1;
+    float global_scale = 1.0f;
+    float hysteresis = 0.05f;            ///< 切换死区：升级需超 threshold*(1+h)，降级需低于 threshold*(1-h)
+    std::string original_mesh_path;      ///< 首次 LOD 切换前的原始 mesh_path，disable 时用于恢复
 };
 
 struct BoundingBoxComponent {

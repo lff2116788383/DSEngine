@@ -1212,6 +1212,52 @@ int L_EcsWorldToScreen(lua_State* L) {
     return 3;
 }
 
+// ============================================================
+// LOD
+// ============================================================
+
+/// lod.add_level(entity, mesh_path, threshold)
+int L_EcsLodAddLevel(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const char* mesh_path = luaL_checkstring(L, 2);
+    float threshold = static_cast<float>(luaL_checknumber(L, 3));
+    if (!world->registry().all_of<LODGroupComponent>(e)) {
+        world->registry().emplace<LODGroupComponent>(e);
+    }
+    auto& lod = world->registry().get<LODGroupComponent>(e);
+    LODLevelConfig level;
+    level.mesh_path = mesh_path;
+    level.screen_size_threshold = threshold;
+    lod.levels.push_back(std::move(level));
+    return 0;
+}
+
+/// lod.set_scale(entity, scale)
+int L_EcsLodSetScale(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float scale = static_cast<float>(luaL_checknumber(L, 2));
+    auto* lod = helper::TryGetComponent<LODGroupComponent>(*world, e);
+    if (!lod) return 0;
+    lod->global_scale = scale;
+    return 0;
+}
+
+/// lod.set_enabled(entity, enabled)
+int L_EcsLodSetEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool enabled = lua_toboolean(L, 2) != 0;
+    auto* lod = helper::TryGetComponent<LODGroupComponent>(*world, e);
+    if (!lod) return 0;
+    lod->enabled = enabled;
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsRenderingBindings(lua_State* L) {
@@ -1273,6 +1319,10 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"add_steering",              L_EcsAddSteering},
         {"set_steering_target",       L_EcsSetSteeringTarget},
         {"get_steering_state",        L_EcsGetSteeringState},
+        // LOD
+        {"lod_add_level",             L_EcsLodAddLevel},
+        {"lod_set_scale",             L_EcsLodSetScale},
+        {"lod_set_enabled",           L_EcsLodSetEnabled},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

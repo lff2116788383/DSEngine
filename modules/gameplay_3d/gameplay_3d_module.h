@@ -6,6 +6,7 @@
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
+#include "modules/gameplay_3d/rendering/lod_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
 #include "modules/gameplay_3d/animation/anim_layer_blend_system.h"
 #include "modules/gameplay_3d/animation/ik_solver_system.h"
@@ -46,6 +47,7 @@ private:
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     FrustumCullingSystem frustum_culling_system_;
+    LODSystem lod_system_;
     AnimatorSystem animator_system_;
     AnimLayerBlendSystem anim_layer_blend_system_;
     IKSolverSystem ik_solver_system_;

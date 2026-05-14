@@ -180,7 +180,7 @@ bool TryBootstrapFromStartupScene(World& world, AssetManager& asset_manager) {
         return false;
     }
 
-    scene::Scene startup("cpp-startup-scene");
+    ::scene::Scene startup("cpp-startup-scene");
     if (!startup.Deserialize(startup_scene)) {
         std::cout << "[3D-Smoke][CPP] startup_scene_failed path=" << startup_scene << std::endl;
         return false;

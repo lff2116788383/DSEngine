@@ -18,6 +18,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     (void)world;
 #endif
     mesh_render_system_.SetAssetManager(asset_manager);
+    lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
     anim_layer_blend_system_.SetAssetManager(asset_manager);
     particle3d_system_.SetAssetManager(asset_manager);
@@ -53,6 +54,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 #endif
     fluid_system_.Update(world, delta_time);
     frustum_culling_system_.Update(world);
+    lod_system_.Update(world);
 }
 
 void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
@@ -139,6 +141,7 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
 void Gameplay3DModule::OnShutdown(World& world) {
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
+    lod_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);
     anim_layer_blend_system_.SetAssetManager(nullptr);
     particle3d_system_.SetAssetManager(nullptr);

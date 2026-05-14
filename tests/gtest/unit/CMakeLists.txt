@@ -85,6 +85,7 @@ if(DSE_ENABLE_3D)
         modules/gameplay_3d/rope_vehicle_system_test.cpp
         modules/gameplay_3d/anim_layer_ik_test.cpp
         modules/gameplay_3d/anim_perf_benchmark_test.cpp
+        modules/gameplay_3d/lod_system_test.cpp
     )
 endif()
 
