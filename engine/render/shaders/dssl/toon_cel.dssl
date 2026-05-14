@@ -1,0 +1,27 @@
+shader_type surface;
+render_mode diffuse_lambert, specular_disabled, blend_disabled, cull_back;
+
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform vec3 shadow_color : color = vec3(0.15, 0.1, 0.18);
+uniform float shadow_threshold : range(0.0, 1.0) = 0.35;
+uniform float shadow_softness : range(0.01, 0.3) = 0.05;
+
+void surface() {
+    ALBEDO = sample(albedo_tex, UV).rgb * COLOR.rgb;
+    ROUGHNESS = 1.0;
+}
+
+void light() {
+    float NdotL = dot(WORLD_NORMAL, LIGHT_DIR) * 0.5 + 0.5;
+
+    float band1 = smoothstep(shadow_threshold - shadow_softness, shadow_threshold + shadow_softness, NdotL);
+    float band2 = smoothstep(0.7 - shadow_softness, 0.7 + shadow_softness, NdotL);
+    float cel = band1 * 0.7 + band2 * 0.3;
+
+    vec3 lit_color = ALBEDO * LIGHT_COLOR;
+    vec3 dark_color = ALBEDO * shadow_color;
+    DIFFUSE_LIGHT += mix(dark_color, lit_color, cel) * SHADOW;
+
+    float rim = 1.0 - max(dot(WORLD_NORMAL, VIEW_DIR), 0.0);
+    SPECULAR_LIGHT += vec3(pow(rim, 4.0) * 0.25);
+}

@@ -263,15 +263,9 @@ add_library(dse_engine SHARED
     ${luasocket_c}
     ${spine_cpp}
     ${tiny_aes_c}
-    ${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c
     ${bundle_cpp}
     ${imgui_src}
     ${engine_cpp}
-    modules/gameplay_2d/gameplay_2d_module.cpp
-    engine/runtime/runtime_frame_ops.cpp
-    engine/runtime/runtime_update_graph.cpp
-    engine/runtime/runtime_render_shell.cpp
-    engine/runtime/business_runtime_bridge.cpp
 )
 target_link_libraries(dse_engine PRIVATE box2d)
 if(DSE_HAS_ASSIMP)
@@ -387,7 +381,6 @@ function(dse_copy_runtime_assets target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:${target_name}>
-        $<$<TARGET_EXISTS:DSE_Gameplay3D>:$<TARGET_FILE:DSE_Gameplay3D>>
         $<TARGET_FILE_DIR:${target_name}>
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
@@ -406,7 +399,6 @@ function(dse_copy_runtime_dlls target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:${target_name}>
-        $<$<TARGET_EXISTS:DSE_Gameplay3D>:$<TARGET_FILE:DSE_Gameplay3D>>
         $<TARGET_FILE_DIR:${target_name}>
         COMMAND_EXPAND_LISTS
     )
