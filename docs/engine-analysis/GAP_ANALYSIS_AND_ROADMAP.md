@@ -1,52 +1,58 @@
 # DSEngine 短板补全计划
 
-> 生成日期：2026-05-14（第三次迭代更新）
+> 生成日期：2026-05-14（第四次迭代更新）
 > 方法：基于代码实际审查 + 文档交叉验证 + git 提交历史分析
 >
-> ⚠️ **本轮重大更新说明：** 自 2026-05-13 首次文档生成以来，引擎经历了**重大功能迭代**，完成了延迟渲染管线、TAA、Contact Shadow、Light Probe SH Bake、Reflection Probe IBL、DOF、Motion Blur、SSR 等关键渲染功能的三后端实现。本文档已针对最新代码状态全面更新。
+> ⚠️ **本轮重大更新说明：** 自 2026-05-13 首次文档生成以来，引擎经历了**重大功能迭代**。前三次迭代完成了渲染管线全功能补齐（延迟渲染、TAA、Contact Shadow、Light Probe SH Bake、Reflection Probe IBL、DOF、Motion Blur、SSR），**第四次迭代完成了动画系统 Phase 1 的完整实现**（FABRIK IK、LookAt IK、Animation Layering、2D Blend Tree、Bone Mask），补齐了最后一个 P0 功能。当前引擎短板重心已从「缺什么」转向「怎么更好」，参考 docs/GAP_ANALYSIS_MINIMALIST.md 的「轻量级高性能3D极客引擎」方向。
 
 ---
 
 ## 一、审查结论：文档与源码一致性
 
-### 本轮迭代已完成的功能（自 2026-05-13 起新增）
+### 本轮迭代已完成的功能（自 2026-05-14 第三次更新起新增）
 
 | 功能 | 提交 | 状态 | 说明 |
 |------|------|------|------|
-| **Contact Shadow（接触阴影）** | `65a420e` | ✅ 三后端完整实现 | 原 P0 短板，Screen-space ray march，现已集成到渲染管线 |
-| **Vignette / Film Grain** | `f7bf59a` | ✅ 三后端统一接入 | 原 GL 路径扩展为三后端完整实现，合成参数统一 |
-| **Light Probe SH Bake** | `52f9005` | ✅ 三后端完整实现 | 运行时 cubemap 渲染→CPU 回读→SH L2 积分→最近 probe 查询 |
-| **Reflection Probe + IBL** | `52f9005` | ✅ 三后端完整实现 | Split-Sum IBL 预滤波 + BRDF LUT + 最近 probe cubemap 采样 |
-| **TAA 时间抗锯齿** | `52f9005` + `a3d3e92` | ✅ 三后端完整实现 | Halton 序列抖动 + 历史帧双缓冲 + resize + motion vector RT |
-| **DOF 景深** | `e9372eb` | ✅ 三后端完整实现 | 基于 Circle of Confusion 的景深效果 |
-| **Motion Blur 运动模糊** | `e9372eb` | ✅ 三后端完整实现 | 依赖 MotionVectorPass 的 per-pixel 运动矢量 |
-| **SSR 屏幕空间反射** | `e9372eb` | ✅ 三后端完整实现 | Screen-space ray tracing + 预滤波结果合成 |
-| **延迟渲染管线** | `88535cf` | ✅ 三后端完整实现 | GBuffer（位置/法线/基色/材质）+ DeferredLightingPass |
-| **DrawExecutor 共享状态提取** | `147fefd` | ✅ | 三后端后处理参数统一到公共头文件 |
+| **AnimatorSystem 重构** | `169c51f` | ✅ 已实现 | `Update()` 拆分为 `EvaluateBaseAnim()` + `ComputeFinalMatrices()`，中间姿势通过 pose_buffer 传递 |
+| **FABRIK IK 求解器** | `169c51f` | ✅ 已实现 | 多迭代 FABRIK + 极向量约束 + 不可达伸展，支持脚/手臂/任意链 |
+| **LookAt IK** | `169c51f` | ✅ 已实现 | 头部/眼球朝向目标，局部空间旋转混合 |
+| **Animation Layering** | `169c51f` | ✅ 已实现 | Override + Additive 双模式，支持每层骨骼遮罩（bone mask） |
+| **Bone Mask** | `169c51f` | ✅ 已实现 | 名称→索引缓存 + O(log n) 二分查找 + 子骨骼传播 |
+| **2D Blend Tree** | `169c51f` | ✅ 已实现 | Shepard 逆距离加权法（非网格模式），支持任意点布局 |
+| **Anim Clip Eval 模块** | `169c51f` | ✅ 已实现 | `anim_clip_eval.h` 独立内联模板，跨骨架骨骼重映射 |
+| **动画 Lua API 绑定** | `8fa07ff` | ✅ 已实现 | 35+ 个 Lua 函数，覆盖层/IK/事件/FSM/root motion |
+| **Lua Demo + 测试** | `8fa07ff` | ✅ 已实现 | 3d_animation_ik_layers.lua Demo + 单元测试 + 性能基准测试 |
 
-**结论：** 上一版文档中列出的渲染管线关键短板（Contact Shadow、Light Probe SH Bake、Reflection Probe IBL、TAA、Deferred Rendering）已**全部完成**。文档更新速度跟上了开发节奏。
+**结论：** 上一版文档中列出的动画系统全部 P0/P1 短板（IK、Animation Layering、2D Blend Tree）已**全部完成**。
 
 ### 已完成的全部里程碑
 
 - ✅ 🖼️ **延迟渲染管线** — GBuffer + DeferredLightingPass 三后端
 - ✅ 🌓 **Contact Shadow** — Screen-space 接触阴影
-- ✅ � **TAA 时间抗锯齿** — Halton 抖动 + 历史帧双缓冲
+- ✅ 🎨 **TAA 时间抗锯齿** — Halton 抖动 + 历史帧双缓冲
 - ✅ 💡 **Light Probe SH Bake** — 运行时 SH L2 烘焙
 - ✅ 🔍 **Reflection Probe + IBL** — Split-Sum IBL + BRDF LUT
 - ✅ 🌸 **DOF 景深** — Circle of Confusion
 - ✅ 💨 **Motion Blur** — Per-pixel motion vector
 - ✅ 🪞 **SSR 屏幕空间反射** — Screen-space ray trace
-- ✅ 🌸 **Vignette / Film Grain** — 三后端统一
-- ✅ �📦 游戏打包管线 — standalone exe + .dpak 资产打包
-- ✅ 🎮 Lua Console REPL 面板
-- ✅ 🔄 Lua 热重载
-- ✅ 🧪 编辑器自动化测试（12 无头测试）
-- ✅ 🎨 Color Grading LUT（三后端 3D LUT）
-- ✅ 📐 SSAO / FXAA / Auto Exposure 三后端
-- ✅ 🎛️ ACES Filmic Tonemapping（取代 Reinhard）
-- ✅ 🔦 Clustered Forward+（256+ 光源）
-- ✅ 📊 PCSS 软阴影 + CSM 级联 smoothstep
-- ✅ 🔧 全部架构重构项（单例治理/RHI 拆分/2D 模块化/跨 DLL/UBO/JobSystem/RenderGraph）
+- ✅ 🎬 **Vignette / Film Grain** — 三后端统一
+- ✅ 🎛️ **ACES Filmic Tonemapping**（取代 Reinhard）
+- ✅ 🔦 **Clustered Forward+**（256+ 光源）
+- ✅ 📊 **PCSS 软阴影 + CSM 级联 smoothstep**
+- ✅ 📦 **游戏打包管线** — standalone exe + .dpak 资产打包
+- ✅ 🎮 **Lua Console REPL 面板**
+- ✅ 🔄 **Lua 热重载**
+- ✅ 🧪 **编辑器自动化测试**（12 无头测试）
+- ✅ 🎨 **Color Grading LUT**（三后端 3D LUT）
+- ✅ 📐 **SSAO / FXAA / Auto Exposure** 三后端
+- ✅ 🔧 **全部架构重构项**（单例治理/RHI 拆分/2D 模块化/跨 DLL/UBO/JobSystem/RenderGraph）
+- ✅ 🦴 **AnimatorSystem 重构** — `EvaluateBaseAnim` + `ComputeFinalMatrices` 两阶段流水线
+- ✅ 🦵 **FABRIK IK 求解器** — 多迭代 + 极向量 + 不可达伸展
+- ✅ 👀 **LookAt IK** — 头部朝向目标
+- ✅ 🧩 **Animation Layering** — Override / Additive 双模式 + Bone Mask
+- ✅ 🌿 **2D Blend Tree** — Shepard 逆距离加权
+- ✅ 📜 **动画 Lua API 绑定** — 35+ 函数，覆盖全部功能
+- ✅ 🧪 **动画单元测试 / 性能基准测试** — anim_layer_ik_test + anim_perf_benchmark_test
 
 ---
 
@@ -60,31 +66,34 @@
 
 | 优先级 | 短板 | 范围 | 影响 | 估算工期 |
 |--------|------|------|------|---------|
-| 🔴 P0 | **IK 反向动力学** | Gameplay3D | 角色脚不贴地，手部不与物体交互 | **2 周** |
-| 🔴 P0 | **9-Slice UI 缩放** | 2D/UI | UI 控件无法自适应分辨率 | **3 天** |
-| 🟡 P1 | **Animation Layering** | Gameplay3D | 无法"边走边挥手"等上层动作 | **1 周** |
-| 🟡 P1 | **Mesh LOD 系统** | Render | 无自动 LOD，远处性能浪费 | **1-2 周** |
+| 🔴 P0 | **Subsurface Scattering** | Render | 皮肤/树叶半透光感缺失，3A 标配 | **1 天** |
+| 🔴 P0 | **通用 Mesh LOD 系统** | Render | 无自动 LOD，远处性能浪费 | **1-2 周** |
+| 🔴 P0 | **GPU Instancing** | Render | 大量同模（草地/树木）Draw Call 爆炸 | **1 周** |
+| 🟡 P1 | **9-Slice UI 缩放** | 2D/UI | UI 控件无法自适应分辨率 | **3 天** |
+| 🟡 P1 | **Volumetric Fog / Light Shaft** | Render | 场景氛围最关键因素缺失 | **1-2 周** |
+| 🟡 P1 | **Toon / Cel Shading** | Render | 风格化渲染完全空白，DSSL ~20 行可达 | **0.5 天** |
+| 🟡 P1 | **Decal System** | Render | 弹孔/路面标记缺失 | **1 周** |
+| 🟡 P1 | **Outline / Edge Detection** | Render | 风格化描边缺失，需双 Pass 渲染 | **1 周** |
+| 🟡 P1 | **材质系统增强（Clear Coat / Anisotropy / POM）** | Render | Shader 级改进 | **2 天** |
 | 🟡 P1 | **2D 多边形碰撞体** | Physics2D | 碰撞精度低，圆形/胶囊外不准 | **2 天** |
-| 🟡 P1 | **2D 碰撞体编辑** | Editor | 无法编辑碰撞体形状 | **3 天** |
-| 🟡 P1 | **2D Blend Tree / Motion Matching** | Animation | 动画融合不够丰富 | **2-4 周** |
 | 🟢 P2 | **Linux/macOS 跨平台** | Platform | 仅 Windows | **4-8 周** |
 | 🟢 P2 | **网络/多人同步** | Network | 无法联机 | **4-8 周** |
 | 🟢 P2 | **Mesh Shader / GPU Driven** | Render | 大规模场景 CPU 瓶颈 | **4-8 周** |
-| 🟢 P2 | **物理资源流式加载** | Assets | 大世界内存不足 | **2-4 周** |
-| 🟢 P2 | **D3D12 后端** | Render | 缺 D3D12（有 D3D11） | **2-3 月** |
+| 🟢 P2 | **D3D12 后端** | Render | 缺 D3D12（有 Vulkan） | **2-3 月** |
 
-### 2.2 各领域的完整度（2026-05-14 更新）
+### 2.2 各领域的完整度（2026-05-14 第四次更新）
 
 ```
-渲染品质        ██████████████░░  88%  ✅ 重大提升！延迟渲染/IBL/TAA/SSR/DOF/MotionBlur 都已实现
-动画系统        ████████░░░░░░░  55%  缺 IK/AnimationLayering/MotionMatching
-2D/UI           ██████████░░░░░  70%  缺 9Slice/多边形碰撞体/碰撞体编辑
+渲染品质        ██████████████░░  88%  ✅ 延迟/IBL/TAA/SSR/DOF/MotionBlur 都已实现
+动画系统        █████████████░░░  82%  ✅ IK/Layering/2DBlend 已实现，大跨步提升！
+2D/UI           ██████████░░░░░  70%  缺 9Slice/多边形碰撞体
 物理系统        ████████████░░░  85%  可用的完整度很高
-音频系统        ████████░░░░░░░  55%  基础播放已有，缺 FMOD/Wwise/混音总线
+音频系统        ████████░░░░░░░  55%  基础播放已有，缺混音总线/DSP
+风格化渲染      ░░░░░░░░░░░░░░░   0%  ❌ 完全缺失，待启动
 跨平台          ██░░░░░░░░░░░░░  15%  仅 Windows
 网络            ░░░░░░░░░░░░░░░   0%  完全缺失
 
-总体           ████████████░░░░  72%  ⬆️ 从 60% 提升至 72%，渲染品质接近成熟
+总体           ██████████████░░  80%  ⬆️ 从 72% 提升至 80%，动画系统补齐后整体成熟度显著提升
 ```
 
 ---
@@ -93,63 +102,71 @@
 
 ### 当前状态概览
 
-> **渲染管线已基本成熟。** 上一轮迭代完成了渲染关键短板的补齐：
-> - 延迟渲染（GBuffer + DeferredLighting）解决多光源性能问题
-> - TAA 解决了画面闪烁
-> - IBL + Light Probe 提供了环境光照
-> - SSR/DOF/MotionBlur 提供了高级后处理
-> - Contact Shadow 填补了阴影最后空白
+> **动画系统已基本补齐。** 第四次迭代完成了动画 Phase 1 的全部目标：
+> - FABRIK IK + LookAt IK 解决了角色交互基础问题
+> - Animation Layering（Override + Additive）实现了多路动画叠加
+> - 2D Blend Tree 丰富了动画融合维度
+> - Bone Mask 支持了局部身体动画控制
+> - AnimatorSystem 重构为两阶段流水线，为后续扩展奠定了基础
 >
-> **当前重点应转向角色动画系统补全和 2D/UI 完善。**
+> **当前重点应转向渲染品质细腻度优化（SSS / Volumetric Fog / 风格化渲染）和性能优化（Mesh LOD / GPU Instancing）。**
 
-### Phase 1: 角色动画系统补全（3-5 周）← 当前最高优先级
-
-| 顺序 | 任务 | 工期 | 说明 |
-|:----:|------|:----:|------|
-| **1** | **FABRIK IK Solver** | **1 周** | 优先实现 FABRIK（Forward And Backward Reaching IK），比 CCD 更稳定、迭代少。先做脚部 IK，让角色脚贴在起伏地形上 |
-| **2** | **IK 骨骼链配置** | **3 天** | 在 `Animator3DComponent` 中添加 IK target 骨骼链配置（脚踝/膝盖/髋，手/肘/肩），Lua API 暴露 IK target 位置 |
-| **3** | **Animation Layering** | **1 周** | 在 `Animator3DComponent` 中添加 layer mask（bone mask），支持上层动作叠加。实现"走路同时挥手" |
-| **4** | **Look-At IK** | **2 天** | 角色头部/眼球跟踪目标（比 FABRIK 简单得多，单独实现） |
-
-**Phase 1 总工期：3-5 周**。完成后角色动画质量从"基础播放"提升到"可以用于第三人称游戏"。
-
-### Phase 2: UI 与 2D 完善（1-2 周）
+### Phase 1: 画质细腻度 + 风格化启动（1-2 周）← 当前最高优先级
 
 | 顺序 | 任务 | 工期 | 说明 |
 |:----:|------|:----:|------|
-| **5** | **9-Slice UI 缩放** | **2-3 天** | 在 `UISpriteComponent` 或 `UIImageComponent` 新增 `slice_left/right/top/bottom` 四边距，sprite render system 中根据九宫格拆分为 9 个 quad 绘制 |
-| **6** | **多边形碰撞体编辑器** | **2-3 天** | 在 `BoxCollider2DComponent` 旁新增 `PolygonCollider2DComponent`（顶点数组），Inspector 增加顶点编辑功能 |
+| **1** | **SSS（次表面散射）** | **1 天** | Pre-integrated Skin 纯 shader 方案，在 PBR BRDF 后叠加半透散射。三端同步 |
+| **2** | **Toon / Cel Shading DSSL 材质** | **0.5 天** | 阶梯漫反射 + 纯色高光，~20 行 DSSL，不需改引擎（利用 DSSL 自定义 light() 回调） |
+| **3** | **Clear Coat + Anisotropy BRDF** | **1 天** | 扩展 PBR BRDF 公式，车漆/头发效果 |
+| **4** | **POM（Parallax Occlusion Mapping）** | **1 天** | 砖墙/地面深度感增强 |
+| **5** | **Color Banding 后处理** | **0.2 天** | 低成本的风格化加量 |
 
-### Phase 3: 性能优化（3-4 周）
+**Phase 1 总工期：1-2 周**。完成后写实渲染从 ~88% 提升至 ~92%，风格化渲染从 0% 启动到 ~20%。
+
+### Phase 2: 性能优化 + 兼容（2-3 周）
 
 | 顺序 | 任务 | 工期 | 说明 |
 |:----:|------|:----:|------|
-| **7** | **Mesh LOD 自动生成** | **1-2 周** | 基于 `MeshRendererComponent.mesh_path` 在构建时生成 LOD 级别，`BoundingBoxComponent` 距离判据切换。先做简单距离切换，不做渐隐过渡 |
-| **8** | **2D Blend Tree** | **1-2 周** | 实现 2D 混合树（Cartesian/Directional），支持前后左右方向融合 |
+| **6** | **通用 Mesh LOD 系统** | **1-2 周** | 基于距离判据的 LOD 切换，LODGroupComponent + LODSystem。先做简单切换，不做渐隐过渡 |
+| **7** | **GPU Instancing** | **1 周** | 统一化 glDrawElementsInstanced，覆盖草地/树木/石头等大量同模场景 |
+| **8** | **9-Slice UI 缩放** | **3 天** | UISpriteComponent 新增四边距，拆分为 9 个 quad 绘制 |
+| **9** | **SSBO → UBO fallback** | **0.5 天** | 降 GPU 要求至 GL 3.3，兼容旧显卡 |
+| **10** | **.dds / BCn 纹理直接上传** | **1 天** | 降 VRAM 30-40% + 加载速度提升 |
+
+### Phase 3: 氛围增强 + 风格化深化（3-5 周）
+
+| 顺序 | 任务 | 工期 | 说明 |
+|:----:|------|:----:|------|
+| **11** | **Volumetric Fog / Light Shaft** | **1-2 周** | 3D 纹理 raymarching，场景氛围最关键因素 |
+| **12** | **Decal System** | **1 周** | Screen-space decal，弹孔/路面标记/血迹 |
+| **13** | **Outline / Edge Detection** | **1 周** | 双 Pass 渲染（Backface fatten）+ 后处理 Sobel Edge Detection |
+| **14** | **DSSL 风格化材质库** | **3 天** | 多个风格化材质（toon、outline、watercolor_hint），封装为可复用的 DSSL 集合 |
+| **15** | **D3D11 后端补齐** | **2-3 周** | Win7+ 全平台覆盖，前向渲染管线 |
 
 ---
 
 ## 四、当前最推荐优先做的具体任务
 
-### 第 1 优先：FABRIK IK（1 周）
+### 第 1 优先：SSS（次表面散射，1 天）
 
 **原因：**
-- IK 是目前唯一的 P0 级未完成功能（其余 P0 渲染短板已全部补齐）
-- 角色脚不贴地直接影响 3D 游戏的基础体验
-- 其他引擎都是直接提供 2-Bone IK，DSE 目前完全缺失
+- SSS 是当前写实渲染管线最明显的视觉缺口（皮肤质感）
+- Pre-integrated Skin 纯 shader 方案，不需要新 Pass，不做资产依赖
+- 三端同步改动极小（~30 行 GLSL/HLSL/SPIR-V）
 
-### 第 2 优先：9-Slice UI 缩放（3 天）
-
-**原因：**
-- UI 自适应是 2D 游戏的基本需求
-- 实现简单，收益明显
-- 2D 引擎分析文档明确将其列为"严重缺失"
-
-### 第 3 优先：Animation Layering（1 周）
+### 第 2 优先：通用 Mesh LOD 系统（1-2 周）
 
 **原因：**
-- 没有分层就无法实现"一边走路一边挥手"，表现为严重受限
-- 动画系统完整度将从 55% 提升至 70%
+- 当前仅有地形 LOD，通用网格远距离无降级，VRAM 和 Fillrate 浪费严重
+- 实现后大规模场景性能可提升 2-3 倍
+- 是「低硬件门槛」目标的基础设施前置条件
+
+### 第 3 优先：Toon Shading DSSL 材质（0.5 天）
+
+**原因：**
+- 风格化渲染当前完全空白
+- DSSL 材质系统已支持自定义 light() 回调，Toon Shading 不需改引擎核心
+- ~20 行 DSSL 即可实现基础的 3-step 阶梯漫反射 + 纯色高光
 
 ---
 
@@ -169,31 +186,44 @@
 
 | 任务 | 关键代码文件 | 预计新增代码 |
 |------|-------------|:----------:|
-| IK (FABRIK) | `modules/gameplay_3d/animation/` 新增 `ik_solver.*` | ~400 行 |
-| Animation Layering | `modules/gameplay_3d/animation/animator_system.*` | ~300 行 |
-| 9-Slice UI | `modules/gameplay_2d/rendering/sprite_render_system.*`, `modules/gameplay_2d/ui/ui_system.*` | ~300 行 |
-| Mesh LOD | `engine/assets/asset_manager.*`, `modules/gameplay_3d/rendering/mesh_render_system.*` | ~500 行 |
-| 2D Blend Tree | `modules/gameplay_3d/animation/` | ~400 行 |
+| SSS | `engine/render/shaders/src/pbr.frag` + 三端 shader 源 | ~30 行 |
+| Toon Shading | `engine/render/shaders/dssl/toon_default.dssl`（新建） | ~20 行 |
+| Clear Coat / Anisotropy | `engine/render/shaders/src/pbr.frag` + 三端 shader | ~30 行 |
+| POM | `engine/render/shaders/src/pbr.frag` + 三端 shader | ~40 行 |
+| Mesh LOD | `engine/ecs/components_3d.h`, `modules/gameplay_3d/rendering/` | ~500 行 |
+| GPU Instancing | `engine/render/rhi/gl_draw_executor.cpp` + 各后端 | ~200 行 |
+| 9-Slice UI | `modules/gameplay_2d/rendering/sprite_render_system.*` | ~300 行 |
+| SSBO → UBO fallback | `engine/render/light_buffer.h` + `cluster_grid.cpp` | ~100 行 |
+| Volumetric Fog | `engine/render/passes/` 新建 Pass + shader | ~600 行 |
+| Decal System | `engine/render/passes/` 新建 Pass + shader | ~400 行 |
+| Outline / Edge Detection | `engine/render/passes/` 修改 + shader | ~300 行 |
+| D3D11 后端补齐 | `engine/render/rhi/dx11/*` | ~2000 行 |
 
 ---
 
 ## 七、执行顺序建议
 
 ```
-Session 1 (1周): FABRIK IK + 骨骼链配置               ← 角色，当前最高优先级
-Session 2 (1周): Animation Layering                    ← 角色
-Session 3 (2天): Look-At IK                            ← 角色
-──────────────────────────────────────────────── 至此角色系统完善
-Session 4 (3天): 9-Slice UI 缩放                        ← UI
-Session 5 (3天): 多边形碰撞体 + 编辑器                   ← 2D 物理
-──────────────────────────────────────────────── 至此达到"可发布"水准
-Session 6 (1-2周): Mesh LOD                            ← 性能
-Session 7 (1-2周): 2D Blend Tree                       ← 动画增强
+Session 1 (1天): SSS + Toon Shading DSSL 材质            ← 画质，最高 ROI
+Session 2 (1天): Clear Coat + Anisotropy + POM           ← Shader 级增强
+Session 3 (0.5天): Color Banding + SSBO→UBO fallback     ← 风格化 + 兼容
+──────────────────────────────────────────────── 至此画质细腻度 + 风格化启动
+Session 4 (1-2周): Mesh LOD 系统                          ← 性能
+Session 5 (1周): GPU Instancing                           ← 性能
+Session 6 (3天): 9-Slice UI 缩放                         ← UI
+──────────────────────────────────────────────── 至此达到性能基线
+Session 7 (1-2周): Volumetric Fog                         ← 氛围
+Session 8 (1周): Decal System                             ← 场景细节
+Session 9 (1周): Outline / Edge Detection                 ← 风格化深化
+Session 10 (3天): DSSL 风格化材质库                        ← 风格化深化
 ──────────────────────────────────────────────── 至此引擎进入成熟期
+Session 11 (2-3周): D3D11 后端补齐                        ← 兼容拓展
 ```
 
 ---
 
 ## 八、一句话总结
 
-> **经过本轮迭代，DSEngine 的渲染管线已从"基础 PBR"升级为"完整 PBR + 延迟渲染 + 全局光照探针 + IBL + TAA + 全后处理链"——渲染品质达到成熟引擎水准。当前最缺的不再是渲染功能，而是角色动画（IK + Layering）和 UI 完善（9-Slice）。接下来的开发重心应从渲染转向角色系统。**
+> **经过四次迭代，DSEngine 的渲染管线已从"基础 PBR"升级为"完整 PBR + 延迟渲染 + 全局光照探针 + IBL + TAA + 全后处理链 + 动画层/IK/2DBlend"。渲染品质达到成熟引擎水准，动画系统从"基础播放"升级为"可用于第三人称游戏"。**
+>
+> **当前最缺的不再是渲染功能和角色动画，而是：渲染细腻度（SSS/Volumetric Fog/风格化）、性能优化（Mesh LOD/GPU Instancing）、UI 完善（9-Slice）。引擎战略方向参考 docs/GAP_ANALYSIS_MINIMALIST.md 的「轻量级高性能3D极客引擎」定位。**

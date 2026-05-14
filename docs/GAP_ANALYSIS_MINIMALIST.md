@@ -133,12 +133,18 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 ### 2.1 GPU 要求降级路径
 
 ```
-[当前] GL 4.3+（SSBO 必需） / ~2GB VRAM / 仅 D3D11 Stub
-       ↓
-[目标] GL 3.3+（SSBO→UBO fallback） / ~1GB VRAM / D3D11 可用
-       ↓
-[理想] Intel UHD 620 核显 / 512MB VRAM / 三后端全可用
+[当前] GL 4.3+（SSBO 必需） / ~2GB VRAM / PBR 写实向策略
+       ↓ SSBO→UBO fallback + 前向渲染 + 精简后处理 + Toon Shading 降级
+[目标] GL 3.3+ / ~1GB VRAM / D3D11 可用
+       ↓ 纹理流送 + Mesh LOD + 风格化渲染优化
+[降级] Intel UHD 620 核显 / 512MB VRAM / 三后端全可用（风格化中端画质，参考原神）
 ```
+
+**说明**：
+- DSE 当前 PBR 写实管线（延迟+全后处理）需要中高端显卡，这本身不是问题
+- 但 DSE 架构天然支持**降级策略**：前向模式 + 可关闭的 Pass + DSSL 换 Toon Shading
+- 原神在 UHD 620 上能跑中端画质（720p~30FPS），证明"核显 + 风格化渲染"方案可行
+- DSE 同一个引擎，高端卡跑 PBR 写实，UHD 620 跑 Toon 简化版——这是架构优势
 
 ### 2.2 性能优化措施
 
