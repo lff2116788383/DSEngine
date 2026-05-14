@@ -192,6 +192,8 @@ cbuffer PerMaterial : register(b3) {
     float4 mat_flags;
     float4 mat_extra_params;
     float4 mat_extra_params2;
+    float4 mat_toon_shadow_color;
+    float4 mat_toon_params;
 };
 
 struct PointLightEntry {
@@ -516,6 +518,30 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float shadow_multiplier = 1.0 - shadow * 0.5;
         float3 color = (diffuse_color + specular_color) * shadow_multiplier;
         return float4(color, 1.0);
+    }
+
+    // Toon / Cel shading mode (light_params.w == 4.0)
+    if (light_params.w == 4.0) {
+        float3 L = normalize(-light_dir_and_enabled.xyz);
+        float3 V_tn = normalize(camera_pos.xyz - input.fragPos);
+        float3 H = normalize(L + V_tn);
+        float NdotL = dot(N, L) * 0.5 + 0.5;
+        float band1 = smoothstep(mat_toon_shadow_color.w - mat_toon_params.x,
+                                 mat_toon_shadow_color.w + mat_toon_params.x, NdotL);
+        float band2 = smoothstep(0.7 - mat_toon_params.x, 0.7 + mat_toon_params.x, NdotL);
+        float cel = band1 * 0.7 + band2 * 0.3;
+        float3 baseColor = albedo_color;
+        float3 shadowColor = baseColor * mat_toon_shadow_color.xyz;
+        float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
+        float3 diffuse = lerp(shadowColor, baseColor * light_color_and_ambient.rgb, cel) * (1.0 - shadow);
+        float NdotH = max(dot(N, H), 0.0);
+        float spec = step(mat_toon_params.y, NdotH) * mat_toon_params.z;
+        float3 specular = light_color_and_ambient.rgb * spec * (1.0 - shadow);
+        float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * mat_toon_params.w;
+        float3 color = diffuse + specular + float3(rim, rim, rim);
+        color = color / (color + float3(1.0, 1.0, 1.0));
+        color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+        return float4(color, texColor.a * input.color.a);
     }
 
     // Half-Lambert STATIC shading mode (KF default_pixel_shader, light_params.w == 3.0)
@@ -1004,6 +1030,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
     color += bloom * bloomIntensity;
     color = AcesFilmic(color * exposure);
     color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    color += (ign - 0.5f) / 255.0f;
     return float4(color, 1.0f);
 }
 )";
@@ -1256,6 +1284,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(result)).rgb;
         result = lerp(result, lutColor, lutIntensity);
     }
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    result += (ign - 0.5f) / 255.0f;
     return float4(result, 1.0);
 }
 )";
@@ -1297,6 +1327,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
     color += bloom * bloomIntensity;
     color = AcesFilmic(color * exposure);
     color = pow(max(color, 0.0f), 1.0f / 2.2f);
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    color += (ign - 0.5f) / 255.0f;
     return float4(color, 1.0f);
 }
 )";

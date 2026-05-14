@@ -164,7 +164,7 @@ struct MeshDrawItem {
     int order_in_layer = 0;
 
     bool lighting_enabled = false;
-    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin (KF knight/zombie), 3=HalfLambert-Static (KF default)
+    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon/Cel
     glm::vec3 material_albedo = glm::vec3(1.0f);
     float material_metallic = 0.0f;
     float material_roughness = 1.0f;
@@ -180,6 +180,12 @@ struct MeshDrawItem {
     float material_clear_coat_roughness = 0.1f;
     float material_anisotropy = 0.0f;
     float material_pom_height_scale = 0.0f;
+    glm::vec3 toon_shadow_color = glm::vec3(0.15f, 0.1f, 0.18f);
+    float toon_shadow_threshold = 0.35f;
+    float toon_shadow_softness = 0.05f;
+    float toon_specular_size = 0.6f;
+    float toon_specular_strength = 0.8f;
+    float toon_rim_strength = 0.3f;
     bool material_uses_instance_data = false;
     bool receive_shadow = true;
     bool depth_test_enabled = true;

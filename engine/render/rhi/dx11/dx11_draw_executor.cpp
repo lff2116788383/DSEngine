@@ -695,6 +695,10 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         mat_data.extra_params2 = glm::vec4(
             item.material_pom_height_scale,
             item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
+        mat_data.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
+        mat_data.toon_params = glm::vec4(
+            item.toon_shadow_softness, item.toon_specular_size,
+            item.toon_specular_strength, item.toon_rim_strength);
         UpdateConstantBuffer(per_material_cb_.Get(), &mat_data, sizeof(mat_data));
 
         // Re-upload PerScene CB when shading mode changes per item

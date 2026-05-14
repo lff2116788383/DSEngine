@@ -156,6 +156,8 @@ layout(std140, set = 2, binding = 0) uniform PerMaterial {
     vec4 flags;
     vec4 extra_params;
     vec4 extra_params2;
+    vec4 toon_shadow_color;
+    vec4 toon_params;
 };
 
 // 采样器 (Set 2)
@@ -245,6 +247,12 @@ const float PI = 3.14159265359;
 #define u_anisotropy                extra_params.w
 #define u_pom_height_scale          extra_params2.x
 #define u_sss_tint                  extra_params2.yzw
+#define u_toon_shadow_color         toon_shadow_color.xyz
+#define u_toon_shadow_threshold     toon_shadow_color.w
+#define u_toon_shadow_softness      toon_params.x
+#define u_toon_specular_size        toon_params.y
+#define u_toon_specular_strength    toon_params.z
+#define u_toon_rim_strength         toon_params.w
 
 #define POM_NUM_LAYERS 16
 vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirTS, float height_scale) {
@@ -422,6 +430,31 @@ void main() {
         float shadow_multiplier = 1.0 - shadow * 0.5;
         vec3 color = (diffuse_color + specular_color) * shadow_multiplier;
         FragColor = vec4(color, 1.0);
+        return;
+    }
+
+    // Toon / Cel shading mode (light_params.w == 4.0)
+    if (light_params.w == 4.0) {
+        vec3 L = normalize(-u_light_direction);
+        vec3 V_tn = normalize(u_camera_pos - vFragPos);
+        vec3 H = normalize(L + V_tn);
+        float NdotL = dot(N, L) * 0.5 + 0.5;
+        float band1 = smoothstep(u_toon_shadow_threshold - u_toon_shadow_softness,
+                                 u_toon_shadow_threshold + u_toon_shadow_softness, NdotL);
+        float band2 = smoothstep(0.7 - u_toon_shadow_softness, 0.7 + u_toon_shadow_softness, NdotL);
+        float cel = band1 * 0.7 + band2 * 0.3;
+        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 shadowColor = baseColor * u_toon_shadow_color;
+        float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
+        vec3 diffuse = mix(shadowColor, baseColor * u_light_color, cel) * (1.0 - shadow);
+        float NdotH = max(dot(N, H), 0.0);
+        float spec = step(u_toon_specular_size, NdotH) * u_toon_specular_strength;
+        vec3 specular = u_light_color * spec * (1.0 - shadow);
+        float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * u_toon_rim_strength;
+        vec3 color = diffuse + specular + vec3(rim);
+        color = color / (color + vec3(1.0));
+        color = pow(color, vec3(1.0 / 2.2));
+        FragColor = vec4(color, texColor.a * vColor.a);
         return;
     }
 
@@ -837,6 +870,8 @@ void main() {
     color += bloomColor * bloomIntensity;
     color = AcesFilmic(color * exposure);
     color = pow(color, vec3(1.0 / 2.2));
+    float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+    color += (ign - 0.5) / 255.0;
     FragColor = vec4(color, 1.0);
 }
 )";

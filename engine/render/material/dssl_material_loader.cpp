@@ -85,6 +85,7 @@ bool DSSLMaterialLoader::ParseDSSLForTemplate(const std::string& source,
             else if (trimmed.find("cull_front") != std::string::npos) out.render_modes.cull = "front";
             if (trimmed.find("alpha_test") != std::string::npos) out.render_modes.alpha_test = true;
             if (trimmed.find("shadows_disabled") != std::string::npos) out.render_modes.shadows_enabled = false;
+            if (trimmed.find("diffuse_lambert") != std::string::npos) out.render_modes.lighting_model = "toon";
             continue;
         }
 

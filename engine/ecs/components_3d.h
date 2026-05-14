@@ -41,6 +41,12 @@ struct MeshRendererComponent {
     float clear_coat_roughness = 0.1f;
     float anisotropy = 0.0f;
     float pom_height_scale = 0.0f;
+    glm::vec3 toon_shadow_color = glm::vec3(0.15f, 0.1f, 0.18f);
+    float toon_shadow_threshold = 0.35f;
+    float toon_shadow_softness = 0.05f;
+    float toon_specular_size = 0.6f;
+    float toon_specular_strength = 0.8f;
+    float toon_rim_strength = 0.3f;
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;

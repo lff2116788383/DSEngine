@@ -660,6 +660,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         per_mat.extra_params2 = glm::vec4(
             item.material_pom_height_scale,
             item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
+        per_mat.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
+        per_mat.toon_params = glm::vec4(
+            item.toon_shadow_softness, item.toon_specular_size,
+            item.toon_specular_strength, item.toon_rim_strength);
         ubo_mgr.UploadPerMaterial(per_mat);
 
         // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 绑定）

@@ -67,6 +67,8 @@ struct DX11PerMaterialCB {
     glm::vec4 flags;
     glm::vec4 extra_params;  ///< x=sss_strength, y=clear_coat, z=clear_coat_roughness, w=anisotropy
     glm::vec4 extra_params2; ///< x=pom_height_scale, y/z/w=sss_tint RGB
+    glm::vec4 toon_shadow_color; ///< xyz=shadow tint, w=shadow_threshold
+    glm::vec4 toon_params;       ///< x=shadow_softness, y=specular_size, z=specular_strength, w=rim_strength
 };
 
 /// PointLight 单条目（每条 48B，3 × 16B，与 kPbrPS b4 对齐）

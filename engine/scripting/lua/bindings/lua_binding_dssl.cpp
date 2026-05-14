@@ -150,7 +150,12 @@ static int L_DsslApplyMaterial(lua_State* L) {
 
     // 设置 shader variant
     switch (inst->GetShaderType()) {
-        case DSSLShaderType::Surface: mesh->shader_variant = "MESH_PBR"; break;
+        case DSSLShaderType::Surface:
+            if (inst->GetRenderModes().lighting_model == "toon")
+                mesh->shader_variant = "MESH_TOON";
+            else
+                mesh->shader_variant = "MESH_PBR";
+            break;
         case DSSLShaderType::Unlit:   mesh->shader_variant = "MESH_UNLIT"; break;
         default:                      mesh->shader_variant = "MESH_PBR"; break;
     }
@@ -182,6 +187,17 @@ static int L_DsslApplyMaterial(lua_State* L) {
 
     // 阴影
     mesh->receive_shadow = inst->GetRenderModes().shadows_enabled;
+
+    // Toon 参数
+    if (inst->GetRenderModes().lighting_model == "toon") {
+        glm::vec4 sc = inst->GetVec4("shadow_color", glm::vec4(0.15f, 0.1f, 0.18f, 1.0f));
+        mesh->toon_shadow_color = glm::vec3(sc);
+        mesh->toon_shadow_threshold = inst->GetFloat("shadow_threshold", 0.35f);
+        mesh->toon_shadow_softness = inst->GetFloat("shadow_softness", 0.05f);
+        mesh->toon_specular_size = inst->GetFloat("specular_size", 0.6f);
+        mesh->toon_specular_strength = inst->GetFloat("specular_strength", 0.8f);
+        mesh->toon_rim_strength = inst->GetFloat("rim_strength", 0.3f);
+    }
 
     return 0;
 }

@@ -729,6 +729,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.shading_mode = 2;  // Half-Lambert skin (KF knight/zombie)
         } else if (resolved_shader_variant == "MESH_HALFLAMBERT_STATIC") {
             item.shading_mode = 3;  // Half-Lambert static (KF default shader)
+        } else if (resolved_shader_variant == "MESH_TOON") {
+            item.shading_mode = 4;  // Toon / Cel shading
         }
         
         if (world.registry().all_of<Animator3DComponent>(entity)) {
@@ -774,6 +776,12 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.material_clear_coat_roughness = resolved_scalars.clear_coat_roughness;
         item.material_anisotropy = resolved_scalars.anisotropy;
         item.material_pom_height_scale = resolved_scalars.pom_height_scale;
+        item.toon_shadow_color = mesh_renderer.toon_shadow_color;
+        item.toon_shadow_threshold = mesh_renderer.toon_shadow_threshold;
+        item.toon_shadow_softness = mesh_renderer.toon_shadow_softness;
+        item.toon_specular_size = mesh_renderer.toon_specular_size;
+        item.toon_specular_strength = mesh_renderer.toon_specular_strength;
+        item.toon_rim_strength = mesh_renderer.toon_rim_strength;
         item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;

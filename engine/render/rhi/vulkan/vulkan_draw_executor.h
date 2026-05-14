@@ -58,6 +58,8 @@ struct VulkanPerMaterialUBO {
     glm::vec4 flags;            ///< x=has_normal_map, y=has_metallic_roughness_map, z=has_emissive_map, w=has_occlusion_map
     glm::vec4 extra_params;     ///< x=sss_strength, y=clear_coat, z=clear_coat_roughness, w=anisotropy
     glm::vec4 extra_params2;    ///< x=pom_height_scale, y/z/w=sss_tint RGB
+    glm::vec4 toon_shadow_color; ///< xyz=shadow tint, w=shadow_threshold
+    glm::vec4 toon_params;       ///< x=shadow_softness, y=specular_size, z=specular_strength, w=rim_strength
 };
 
 /// PointLights UBO（set=1, binding=1，与 GLSL std140 PointLights block 对齐）

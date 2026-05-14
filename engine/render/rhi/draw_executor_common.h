@@ -143,6 +143,10 @@ inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item) {
     mat.extra_params2 = glm::vec4(
         item.material_pom_height_scale,
         item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
+    mat.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
+    mat.toon_params = glm::vec4(
+        item.toon_shadow_softness, item.toon_specular_size,
+        item.toon_specular_strength, item.toon_rim_strength);
     return mat;
 }
 

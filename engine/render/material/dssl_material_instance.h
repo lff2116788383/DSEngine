@@ -79,6 +79,7 @@ public:
     struct RenderModes {
         std::string blend = "disabled";
         std::string cull = "back";
+        std::string lighting_model = "pbr";
         bool shadows_enabled = true;
         bool alpha_test = false;
     };

@@ -23,7 +23,6 @@
 #include "embed/bloom_upsample_frag.gen.h"
 #include "embed/bloom_blur_h_frag.gen.h"
 #include "embed/bloom_blur_v_frag.gen.h"
-#include "embed/bloom_composite_frag.gen.h"
 
 namespace dse {
 namespace render {
