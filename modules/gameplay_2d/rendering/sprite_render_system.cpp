@@ -10,6 +10,70 @@
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 
+void Expand9SliceItems(const SpriteDrawItem& base_item,
+                       const glm::vec2& final_pos,
+                       const glm::vec2& size,
+                       const glm::vec4& uv,
+                       const glm::vec4& border,
+                       const glm::vec2& src_size,
+                       std::vector<SpriteDrawItem>& out_items) {
+    // 边框 UV 分量 → 屏幕像素尺寸
+    // src_size > 0：固定角块模式（弹性面板）；= 0：等比缩放模式。
+    const bool fixed_corner = src_size.x > 0.0f && src_size.y > 0.0f;
+    float bl = border.x * (fixed_corner ? src_size.x : size.x);   // left
+    float bb = border.y * (fixed_corner ? src_size.y : size.y);   // bottom
+    float br = border.z * (fixed_corner ? src_size.x : size.x);   // right
+    float bt = border.w * (fixed_corner ? src_size.y : size.y);   // top
+
+    float x0 = final_pos.x - size.x * 0.5f;
+    float y0 = final_pos.y - size.y * 0.5f;
+
+    // 屏幕列分割点 (x) 和行分割点 (y, y 轴朝上)
+    float xcols[4] = { x0, x0 + bl, x0 + size.x - br, x0 + size.x };
+    float yrows[4] = { y0, y0 + bb, y0 + size.y - bt, y0 + size.y };
+
+    // UV 列分割点
+    float ucols[4] = {
+        uv.x,
+        uv.x + border.x * uv.z,
+        uv.x + (1.0f - border.z) * uv.z,
+        uv.x + uv.z
+    };
+    // UV 行分割点
+    float vrows[4] = {
+        uv.y,
+        uv.y + border.y * uv.w,
+        uv.y + (1.0f - border.w) * uv.w,
+        uv.y + uv.w
+    };
+
+    out_items.reserve(out_items.size() + 9);
+    for (int col = 0; col < 3; ++col) {
+        float cw = xcols[col + 1] - xcols[col];
+        if (cw <= 0.0f) continue;
+        for (int row = 0; row < 3; ++row) {
+            float ch = yrows[row + 1] - yrows[row];
+            if (ch <= 0.0f) continue;
+
+            float cx = (xcols[col] + xcols[col + 1]) * 0.5f;
+            float cy = (yrows[row] + yrows[row + 1]) * 0.5f;
+
+            SpriteDrawItem item = base_item;
+            glm::mat4 m = glm::mat4(1.0f);
+            m = glm::translate(m, glm::vec3(cx, cy, 0.0f));
+            m = glm::scale(m, glm::vec3(cw, ch, 1.0f));
+            item.model = m;
+            item.uv = glm::vec4(
+                ucols[col],
+                vrows[row],
+                ucols[col + 1] - ucols[col],
+                vrows[row + 1] - vrows[row]
+            );
+            out_items.push_back(item);
+        }
+    }
+}
+
 void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     std::vector<SpriteDrawItem> items;
     auto view = world.registry().view<SpriteRendererComponent, TransformComponent>();
@@ -68,10 +132,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             continue;
         }
         
-        SpriteDrawItem item;
-        item.texture_handle = ui.texture_handle;
-        
-        // 1. Calculate Anchor Position (assuming parent is screen for now, in a real system we'd traverse a hierarchy)
+        // 1. Calculate Anchor Position
         float parent_w = static_cast<float>(screen_width);
         float parent_h = static_cast<float>(screen_height);
         
@@ -89,13 +150,12 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
         // 3. Final center position
         glm::vec2 final_pos = anchor_pos + ui.position + pivot_to_center;
 
-        // Build model matrix for UI
+        // Build model matrix for UI (used for raycasting and normal draw)
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(final_pos.x, final_pos.y, 0.0f));
         model = glm::scale(model, glm::vec3(ui.size.x, ui.size.y, 1.0f));
         
         ui.runtime_model = model; // Cache for raycasting/event bubbling
-        item.model = model;
         
         // Apply tint based on event state
         glm::vec4 final_color = ui.color;
@@ -104,11 +164,23 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             else if (ui.is_hovered) final_color *= 1.2f;
         }
 
-        item.color = final_color;
-        item.uv = ui.uv;
-        item.sorting_layer = 1000; // UI is usually on top
-        item.order_in_layer = ui.order;
-        items.push_back(item);
+        if (ui.nine_slice_enabled) {
+            SpriteDrawItem base_item;
+            base_item.texture_handle = ui.texture_handle;
+            base_item.color = final_color;
+            base_item.sorting_layer = 1000;
+            base_item.order_in_layer = ui.order;
+            Expand9SliceItems(base_item, final_pos, ui.size, ui.uv, ui.nine_slice_border, ui.nine_slice_src_size, items);
+        } else {
+            SpriteDrawItem item;
+            item.texture_handle = ui.texture_handle;
+            item.model = model;
+            item.color = final_color;
+            item.uv = ui.uv;
+            item.sorting_layer = 1000;
+            item.order_in_layer = ui.order;
+            items.push_back(item);
+        }
     }
     
     if (items.empty()) {

@@ -71,6 +71,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     modules/gameplay_2d/particle_system_2d_test.cpp
     modules/gameplay_2d/tilemap_system_test.cpp
     modules/gameplay_2d/localization_system_test.cpp
+    modules/gameplay_2d/nine_slice_render_test.cpp
     # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine）
     modules/gameplay_3d/animation_state_machine_test.cpp
 )

@@ -392,6 +392,26 @@ int L_UiSetVisible(lua_State* L) {
     return 0;
 }
 
+int L_UiSetNineSlice(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    bool enabled = lua_toboolean(L, 2) != 0;
+    float left   = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    float bottom = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    float right  = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    float top    = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    float src_w  = static_cast<float>(luaL_optnumber(L, 7, 0.0));
+    float src_h  = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    if (world->registry().valid(e) && world->registry().all_of<UIRendererComponent>(e)) {
+        auto& ui = world->registry().get<UIRendererComponent>(e);
+        ui.nine_slice_enabled  = enabled;
+        ui.nine_slice_border   = glm::vec4(left, bottom, right, top);
+        ui.nine_slice_src_size = glm::vec2(src_w, src_h);
+    }
+    return 0;
+}
+
 int L_UiSetUv(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -433,6 +453,7 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("set_color", L_UiSetColor);
     set_fn("set_visible", L_UiSetVisible);
     set_fn("set_uv", L_UiSetUv);
+    set_fn("set_nine_slice", L_UiSetNineSlice);
 }
 
 }

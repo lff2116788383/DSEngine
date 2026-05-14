@@ -39,6 +39,28 @@ TEST(UIRendererComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(ui.pressed_scale, 0.94f);
 }
 
+TEST(UIRendererComponentTest, 九宫格默认禁用) {
+    UIRendererComponent ui;
+    EXPECT_FALSE(ui.nine_slice_enabled);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.x, 0.0f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.y, 0.0f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.z, 0.0f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.w, 0.0f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_src_size.x, 0.0f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_src_size.y, 0.0f);
+}
+
+TEST(UIRendererComponentTest, 九宫格边框赋值) {
+    UIRendererComponent ui;
+    ui.nine_slice_enabled = true;
+    ui.nine_slice_border = glm::vec4(0.1f, 0.2f, 0.1f, 0.2f);
+    EXPECT_TRUE(ui.nine_slice_enabled);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.x, 0.1f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.y, 0.2f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.z, 0.1f);
+    EXPECT_FLOAT_EQ(ui.nine_slice_border.w, 0.2f);
+}
+
 // ============================================================
 // UIPanelComponent
 // ============================================================

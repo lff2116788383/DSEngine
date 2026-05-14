@@ -50,6 +50,12 @@ struct UIRendererComponent {
     std::function<void(Entity)> on_pointer_enter;        ///< C++ 层的指针移入回调
     std::function<void(Entity)> on_pointer_exit;         ///< C++ 层的指针移出回调
     
+    // Nine-slice / 9 宫格
+    bool nine_slice_enabled = false;                     ///< 启用 9 宫格拉伸模式
+    glm::vec4 nine_slice_border = glm::vec4(0.0f);       ///< 9 宫格边框 UV 分量 (left, bottom, right, top)，[0, 0.5]
+    glm::vec2 nine_slice_src_size = glm::vec2(0.0f);     ///< 源精灵像素尺寸 (src_w, src_h)；> 0 时角块屏幕尺寸固定为 border × src_size
+                                                         ///< = (0,0) 时退为等比模式：角块随 widget 缩放（适用于均匀缩放的按钮/图标）
+
     // Runtime computed layout
     glm::mat4 runtime_model = glm::mat4(1.0f);           ///< 运行时计算出的绝对变换矩阵
 };
