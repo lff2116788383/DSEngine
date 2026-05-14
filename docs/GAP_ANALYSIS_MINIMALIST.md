@@ -1,8 +1,10 @@
 # DSEngine 「轻量级高性能3D极客引擎」差距分析
 
-> 分析日期：2026-05-14
+> 分析日期：2026-05-14（第二次更新）
 > 目标：最少代码、最低硬件、最少资源、极致画质
 > 深耕：风格化渲染 + 写实渲染
+>
+> ⚠️ **本轮更新说明：** 自首次文档生成以来，引擎经历了重大功能迭代——D3D11 后端已从 Stub 升级为完整实现（PBR/阴影/后处理/SSBO 三后端对等），动画系统 Phase 1 全部完成（IK/Layering/2DBlend/BoneMask），物理 Overlap API 已实现。
 
 ---
 
@@ -12,21 +14,20 @@
 
 | 模块                                                     |     行数     | 说明                                    |
 | ------------------------------------------------------ | :--------: | ------------------------------------- |
-| engine/render/                                         |   29,564   | 核心竞争力，渲染管线核心                          |
-| engine/scripting/                                      |    7,033   | Lua 绑定 + sol2                         |
-| engine/assets/                                         |    4,386   | 资源管理                                  |
-| engine/scene/                                          |    2,841   | SubScene + Octree                     |
-| engine/runtime/                                        |    2,538   | FramePipeline + 调度                    |
-| engine/ecs/                                            |    2,238   | 组件定义                                  |
-| engine/physics/                                        |    2,025   | PhysX 封装                              |
-| engine/core/                                           |    1,636   | ServiceLocator / EventBus / JobSystem |
-| engine/base/ + audio/ + input/ + platform/ + profiler/ |    1,967   | 基础设施                                  |
-| **engine/ 合计**                                         | **56,272** | **核心 204 文件**                         |
-| modules/gameplay\_3d/                                  |    5,867   | 3D 玩法模块                               |
-| modules/gameplay\_2d/                                  |    3,557   | 2D 玩法模块（保留以支持 2D-3D 混合场景）             |
-| apps/editor\_cpp/                                      |   11,229   | 编辑器（不删除，暂不扩展）                         |
-| apps/runtime/ + standalone/ + tools/                   |     325    | 宿主程序                                  |
-| **自有代码合计**                                             | **77,250** | **324 文件**                            |
+| engine/render/（含 shaders/generated）                    |  ~35,000   | 核心竞争力，渲染管线核心 + 三后端 shader              |
+| engine/scripting/                                      |   ~7,500   | Lua 绑定 + sol2                         |
+| engine/assets/                                         |   ~4,400   | 资源管理                                  |
+| engine/scene/                                          |   ~2,900   | SubScene + Octree                     |
+| engine/runtime/                                        |   ~2,600   | FramePipeline + 调度                    |
+| engine/ecs/                                            |   ~2,500   | 组件定义（含动画 IK/Layer 组件）                 |
+| engine/physics/                                        |   ~2,100   | PhysX 封装                              |
+| engine/core/                                           |   ~1,700   | ServiceLocator / EventBus / JobSystem |
+| engine/base/ + audio/ + input/ + platform/ + profiler/ |   ~2,000   | 基础设施                                  |
+| **engine/ 合计**                                         | **~63,000** | **核心 215 文件**                        |
+| modules/gameplay\_3d/ + gameplay\_2d/                  |   ~8,980   | 3D/2D 玩法模块                            |
+| apps/editor\_cpp/                                      |   ~9,700   | 编辑器（不删除，暂不扩展）                         |
+| apps/runtime/ + standalone/ + tools/                   |   ~1,950   | 宿主程序 + DSSL/Shader 编译器               |
+| **自有代码合计**                                             | **~83,600** | **340+ 文件**                           |
 
 ### 第三方依赖
 
@@ -47,16 +48,16 @@
 
 | 维度   | 要求                                  |
 | ---- | ----------------------------------- |
-| GPU  | OpenGL 4.3+（SSBO）或 Vulkan 1.0+      |
-| VRAM | \~2GB（延迟管线 GBuffer 3 RT）            |
-| RAM  | \~4GB                               |
-| API  | OpenGL ✅ / Vulkan ✅ / D3D11 ❌（Stub） |
+| GPU  | OpenGL 4.3+（SSBO）或 Vulkan 1.0+ 或 D3D11 |
+| VRAM | \~2GB（延迟管线 GBuffer 3 RT）                 |
+| RAM  | \~4GB                                    |
+| API  | OpenGL ✅ / Vulkan ✅ / D3D11 ✅             |
 
 ---
 
 ## 一、当前代码功能差距
 
-### 写实渲染：已有 \~70%，缺 \~25%
+### 写实渲染：已有 \~88%，缺 \~10%
 
 #### 已有能力
 
@@ -91,7 +92,7 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 | **Anisotropy（各向异性 BRDF）**           | 🟢 低 | 🟢 低 |        金属拉丝/头发效果       |
 | **HDR10/BT.2020 Output**            | 🟢 低 | 🟡 中 | 真实 HDR 显示，当前仅 ACES→SDR |
 
-### 风格化渲染：当前 0%
+### 风格化渲染：当前 ~5%（仅 DSSL 基础设施 + half_lambert_kf 模板）
 
 #### 缺失项
 
@@ -102,25 +103,27 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 | **Color Banding / 颜色量化**   | 🟡 中 | 🟢 低 | 后处理颜色阶跃                              |
 | **Custom NPR Light Model** | 🟡 中 | 🟢 低 | DSSL 的 light() 回调已支持                 |
 
-### 动画系统：基础可用，待增强
+### 动画系统：Phase 1 全部完成
 
-参考 [animation-enhancement-plan.md](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/docs/animation-enhancement-plan.md)：
+参考 [animation-enhancement-plan.md](docs/animation-enhancement-plan.md)：
 
 | 能力                                      |     状态    |
 | --------------------------------------- | :-------: |
 | 1D Blend Tree + 状态机 + Crossfade         |    ✅ 已有   |
-| Root Motion 锁定                          |    ✅ 已有   |
-| Animation Layering（Override / Additive） | ❌ Phase 1 |
-| 2D Blend Tree                           | ❌ Phase 2 |
-| FABRIK IK / LookAt IK                   | ❌ Phase 3 |
-| Bone Mask / Partial Blending            | ❌ Phase 1 |
+| Root Motion 锁定 + 提取                     |    ✅ 已有   |
+| Animation Layering（Override / Additive） |   ✅ 已实现  |
+| 2D Blend Tree（Shepard 逆距离加权）           |   ✅ 已实现  |
+| FABRIK IK / LookAt IK                   |   ✅ 已实现  |
+| Bone Mask / Partial Blending            |   ✅ 已实现  |
+| AnimatorSystem 两阶段流水线                  |   ✅ 已实现  |
+| 动画 Lua API 绑定（35+ 函数）                  |   ✅ 已实现  |
 
 ### 其他模块
 
 | 模块            |                状态               | 差距                    |
 | ------------- | :-----------------------------: | --------------------- |
 | ECS（EnTT）     |               ✅ 成熟              | 无                     |
-| 3D 物理（PhysX）  | ✅ 完整（刚体/碰撞体/关节/角色/布娃娃/车辆/软体/浮力） | 缺公开 Overlap/Sweep API |
+| 3D 物理（PhysX）  | ✅ 完整（刚体/碰撞体/关节/角色/布娃娃/车辆/软体/浮力） | Overlap API ✅ 已实现 |
 | 2D 物理（Box2D）  |             ✅ 基础功能完备            | 无需增强                  |
 | 音频（miniaudio） |     ✅ 完善（3D 空间化/遮挡/VFS/并发控制）    | 缺 DSP 效果链             |
 | 场景管理          |    ✅ SubScene + 异步加载 + Prefab   | 缺通用 LOD               |
@@ -162,7 +165,7 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 
 | 措施                      |  投入  |       兼容收益       |   做  |
 | :---------------------- | :--: | :--------------: | :--: |
-| **补齐 D3D11 后端**         | 🔴 高 |    Win7+ 全平台覆盖   |   ✅  |
+| **D3D11 后端**             | ✅ 已完成 |    Win7+ 全平台覆盖   | ✅ 已完成 |
 | **SSBO → UBO fallback** | 🟢 低 | 降 GPU 要求至 GL 3.3 |   ✅  |
 | **GLES 3.1 兼容封装**       | 🔴 高 |       移动端支持      | ❌ 暂不 |
 | **Vulkan 最低版本保持 1.0**   | 🟢 低 |   最广 Vulkan 覆盖   |   ✅  |
@@ -328,15 +331,16 @@ light() {
           └─────────────────┘  └─────────────────┘  └─────────────────┘
 性能       │ 通用 Mesh LOD   │  │ GPU Instancing   │  │ 纹理流送评估   │
 +          │ .dds 直接上传   │  │ LTCG 编译        │  │                │
-兼容       │ SSBO→UBO fallb.│  │ D3D11 后端补齐   │  │                │
+兼容       │ SSBO→UBO fallb.│  │                  │  │                │
           │ Release 构建    │  │                  │  │                │
           └─────────────────┘  └─────────────────┘  └─────────────────┘
 代码       │ 默认关闭非必需   │  │（自有代码不删）   │  │（自有代码不删）│
 瘦身       │ 第三方 CMake    │  │                  │  │                │
           │ 残留清理         │  │                  │  │                │
           └─────────────────┘  └─────────────────┘  └─────────────────┘
-动画       │（按动画增强方案   │  │ 按 Phase 2 推进   │  │ 按 Phase 3     │
-(并行)     │  Phase 1 推进）  │  │                  │  │ 推进          │
+✅ 已完成   │ D3D11 三后端    │  │                  │  │                │
+          │ 动画 Phase 1   │  │                  │  │                │
+          │ Overlap API    │  │                  │  │                │
 ```
 
 ### Phase 1 细化（1 周）
@@ -352,7 +356,7 @@ light() {
 | SSBO → UBO fallback 路径             |  兼容  | 0.5 天 |
 | Release 构建脚本                       |  构建  | 0.3 天 |
 | 默认关闭非必需第三方 + CMake 清理              |  瘦身  | 0.5 天 |
-| 动画增强 Phase 1 并行                    |  动画  |  独立并行 |
+| ~~动画增强 Phase 1~~ ✅ 已完成            |  动画  | ✅ 完成  |
 
 ### Phase 2 细化（2 周）
 
@@ -363,7 +367,7 @@ light() {
 | POM shader                           |  写实 |  1 天  |
 | Outline 双 Pass + Edge Detection Pass | 风格化 |  2 天  |
 | GPU Instancing 统一化                   |  性能 |  2 天  |
-| D3D11 后端补齐                           |  兼容 |  3 天  |
+| ~~D3D11 后端补齐~~ ✅ 已完成               |  兼容 | ✅ 完成 |
 | LTCG 编译 + 测试                         |  构建 | 0.5 天 |
 
 ### Phase 3 细化（3 周）
@@ -387,12 +391,12 @@ light() {
 UE5         数百万    DX11+     ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐⭐  极大         内置
 Unity6      数百万    GLES3+    ⭐⭐⭐⭐  ⭐⭐⭐⭐   极大         内置
 Godot4      ~100万   GLES3+    ⭐⭐⭐   ⭐⭐⭐    大           内置
-DSE 当前    ~7.7万   GL 4.3+   ⭐⭐⭐⭐  ❌        中           有（暂不扩展）
-DSE 目标    ~7.7万   GL 3.3+   ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐   小           有（后续扩展）
+DSE 当前    ~8.4万   GL 4.3+   ⭐⭐⭐⭐  ❌        中           有（暂不扩展）
+DSE 目标    ~8.4万   GL 3.3+   ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐   小           有（后续扩展）
 
 「极简代码 + 极致画质」是独特生态位 —— 没有主流引擎能做到。
-DSE 自有代码保持 77K 行不变，第三方从 ~200K 降至 ~120K，
-硬件兼容扩展至 GL 3.3+ + D3D11，画质补完 SSS / Volumetric / Toon / Outline。
+DSE 自有代码从 77K 增长至 ~84K（新增动画 IK/Layer + DX11 完善），第三方从 ~200K 可降至 ~120K，
+D3D11 已完成！硬件兼容扩展至 GL 3.3+（需 SSBO→UBO fallback），画质补完 SSS / Volumetric / Toon / Outline。
 ```
 
 ---
@@ -401,13 +405,13 @@ DSE 自有代码保持 77K 行不变，第三方从 ~200K 降至 ~120K，
 
 | 维度        |     当前    |       Phase 1 后       |    Phase 2 后   | Phase 3 后 |
 | :-------- | :-------: | :-------------------: | :------------: | :-------: |
-| 写实渲染完整度   |   \~70%   |         \~80%         |      \~90%     |   \~95%   |
-| 风格化渲染     |     0%    |  20%（Toon + Banding）  | 60%（+ Outline） | 100%（材质库） |
+| 写实渲染完整度   |   \~88%   |         \~92%         |      \~95%     |   \~98%   |
+| 风格化渲染     |    ~5%    |  25%（Toon + Banding）  | 65%（+ Outline） | 100%（材质库） |
 | 最低 GPU    |  GL 4.3+  | GL 3.3+（UBO fallback） |     GL 3.3+    |  GL 3.3+  |
-| D3D11 后端  |    Stub   |          Stub         |      ✅ 可用      |    ✅ 可用   |
+| D3D11 后端  |   ✅ 可用   |          ✅ 可用         |      ✅ 可用      |    ✅ 可用   |
 | 第三方依赖     |   \~200K  |         \~120K        |     \~120K     |   \~120K  |
-| 自有代码      |    77K    |       77K（只增不减）       |      77K+      |    77K+   |
-| **总体成熟度** | **\~65%** |       **\~78%**       |    **\~88%**   | **\~95%** |
+| 自有代码      |   ~84K    |       84K（只增不减）       |      84K+      |    84K+   |
+| **总体成熟度** | **\~80%** |       **\~85%**       |    **\~92%**   | **\~97%** |
 
-> 核心思路：**自有代码全部保留**（编辑器留着后续扩展），瘦身针对第三方依赖的条件编译和 CMake 残留；画质跃升分写实和风格化两条线并行推进；性能兼容走 LOD + Instancing + D3D11 补齐 + SSBO fallback 四管齐下。
+> 核心思路：**自有代码全部保留**（编辑器留着后续扩展），瘦身针对第三方依赖的条件编译和 CMake 残留；画质跃升分写实和风格化两条线并行推进；性能兼容走 LOD + Instancing + SSBO fallback 三管齐下（D3D11 已完成）。
 

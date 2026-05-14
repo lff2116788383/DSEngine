@@ -53,6 +53,8 @@
 - ✅ 🌿 **2D Blend Tree** — Shepard 逆距离加权
 - ✅ 📜 **动画 Lua API 绑定** — 35+ 函数，覆盖全部功能
 - ✅ 🧪 **动画单元测试 / 性能基准测试** — anim_layer_ik_test + anim_perf_benchmark_test
+- ✅ 🖥️ **D3D11 后端完整实现** — PBR/阴影/后处理/SSBO 三后端对等
+- ✅ 🔍 **物理 Overlap API** — physics_3d_overlap_sphere / physics_3d_overlap_box
 
 ---
 
@@ -79,21 +81,22 @@
 | 🟢 P2 | **Linux/macOS 跨平台** | Platform | 仅 Windows | **4-8 周** |
 | 🟢 P2 | **网络/多人同步** | Network | 无法联机 | **4-8 周** |
 | 🟢 P2 | **Mesh Shader / GPU Driven** | Render | 大规模场景 CPU 瓶颈 | **4-8 周** |
-| 🟢 P2 | **D3D12 后端** | Render | 缺 D3D12（有 Vulkan） | **2-3 月** |
+| 🟢 P2 | **D3D12 后端** | Render | 缺 D3D12（有 Vulkan + D3D11） | **2-3 月** |
 
 ### 2.2 各领域的完整度（2026-05-14 第四次更新）
 
 ```
 渲染品质        ██████████████░░  88%  ✅ 延迟/IBL/TAA/SSR/DOF/MotionBlur 都已实现
-动画系统        █████████████░░░  82%  ✅ IK/Layering/2DBlend 已实现，大跨步提升！
+动画系统        █████████████░░░  82%  ✅ IK/Layering/2DBlend 已实现
 2D/UI           ██████████░░░░░  70%  缺 9Slice/多边形碰撞体
-物理系统        ████████████░░░  85%  可用的完整度很高
+物理系统        █████████████░░  88%  ✅ Overlap API 已实现
 音频系统        ████████░░░░░░░  55%  基础播放已有，缺混音总线/DSP
-风格化渲染      ░░░░░░░░░░░░░░░   0%  ❌ 完全缺失，待启动
+风格化渲染      █░░░░░░░░░░░░░░  ~5%  DSSL 基础设施已有，待 Toon/Outline
 跨平台          ██░░░░░░░░░░░░░  15%  仅 Windows
+D3D11 后端      ███████████████ 100%  ✅ PBR/阴影/后处理/SSBO 完整实现
 网络            ░░░░░░░░░░░░░░░   0%  完全缺失
 
-总体           ██████████████░░  80%  ⬆️ 从 72% 提升至 80%，动画系统补齐后整体成熟度显著提升
+总体           ██████████████░░  82%  ⬆️ D3D11+Overlap 补齐后进一步提升
 ```
 
 ---
@@ -141,7 +144,7 @@
 | **12** | **Decal System** | **1 周** | Screen-space decal，弹孔/路面标记/血迹 |
 | **13** | **Outline / Edge Detection** | **1 周** | 双 Pass 渲染（Backface fatten）+ 后处理 Sobel Edge Detection |
 | **14** | **DSSL 风格化材质库** | **3 天** | 多个风格化材质（toon、outline、watercolor_hint），封装为可复用的 DSSL 集合 |
-| **15** | **D3D11 后端补齐** | **2-3 周** | Win7+ 全平台覆盖，前向渲染管线 |
+| ~~15~~ | ~~D3D11 后端补齐~~ | ✅ 已完成 | PBR/阴影/后处理/SSBO 三后端对等，无需额外工作 |
 
 ---
 
@@ -197,7 +200,7 @@
 | Volumetric Fog | `engine/render/passes/` 新建 Pass + shader | ~600 行 |
 | Decal System | `engine/render/passes/` 新建 Pass + shader | ~400 行 |
 | Outline / Edge Detection | `engine/render/passes/` 修改 + shader | ~300 行 |
-| D3D11 后端补齐 | `engine/render/rhi/dx11/*` | ~2000 行 |
+| ~~D3D11 后端补齐~~ | `engine/render/rhi/dx11/*` | ✅ 已完成 |
 
 ---
 
@@ -217,7 +220,6 @@ Session 8 (1周): Decal System                             ← 场景细节
 Session 9 (1周): Outline / Edge Detection                 ← 风格化深化
 Session 10 (3天): DSSL 风格化材质库                        ← 风格化深化
 ──────────────────────────────────────────────── 至此引擎进入成熟期
-Session 11 (2-3周): D3D11 后端补齐                        ← 兼容拓展
 ```
 
 ---
@@ -226,4 +228,4 @@ Session 11 (2-3周): D3D11 后端补齐                        ← 兼容拓展
 
 > **经过四次迭代，DSEngine 的渲染管线已从"基础 PBR"升级为"完整 PBR + 延迟渲染 + 全局光照探针 + IBL + TAA + 全后处理链 + 动画层/IK/2DBlend"。渲染品质达到成熟引擎水准，动画系统从"基础播放"升级为"可用于第三人称游戏"。**
 >
-> **当前最缺的不再是渲染功能和角色动画，而是：渲染细腻度（SSS/Volumetric Fog/风格化）、性能优化（Mesh LOD/GPU Instancing）、UI 完善（9-Slice）。引擎战略方向参考 docs/GAP_ANALYSIS_MINIMALIST.md 的「轻量级高性能3D极客引擎」定位。**
+> **当前最缺的不再是渲染功能、角色动画或后端覆盖，而是：渲染细腻度（SSS/Volumetric Fog/风格化）、性能优化（Mesh LOD/GPU Instancing）、UI 完善（9-Slice）。D3D11 后端已完整实现，三后端对等。引擎战略方向参考 docs/GAP_ANALYSIS_MINIMALIST.md 的「轻量级高性能3D极客引擎」定位。**
