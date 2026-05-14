@@ -35,6 +35,12 @@ struct MeshRendererComponent {
     unsigned int metallic_roughness_texture_handle = 0;
     unsigned int emissive_texture_handle = 0;
     unsigned int occlusion_texture_handle = 0;
+    float sss_strength = 0.0f;
+    glm::vec3 sss_tint = glm::vec3(0.0f);
+    float clear_coat = 0.0f;
+    float clear_coat_roughness = 0.1f;
+    float anisotropy = 0.0f;
+    float pom_height_scale = 0.0f;
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;

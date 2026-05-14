@@ -302,8 +302,32 @@ int L_EcsSetMeshMaterialScalar(lua_State* L) {
     else if (name == "ao") mesh->ao = value;
     else if (name == "normal_strength") mesh->normal_strength = value;
     else if (name == "material_alpha_cutoff") mesh->material_alpha_cutoff = value;
+    else if (name == "sss_strength") mesh->sss_strength = value;
+    else if (name == "clear_coat") mesh->clear_coat = value;
+    else if (name == "clear_coat_roughness") mesh->clear_coat_roughness = value;
+    else if (name == "anisotropy") mesh->anisotropy = value;
+    else if (name == "pom_height_scale") mesh->pom_height_scale = value;
 
     // 直接 Lua 材质创作应覆盖复制的 .dmat/MaterialInstance 值
+    mesh->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
+    return 0;
+}
+
+int L_EcsSetMeshAdvancedMaterial(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
+    if (!mesh) return 0;
+    mesh->clear_coat             = helper::OptFloat(L, 2, 0.0f);
+    mesh->clear_coat_roughness   = helper::OptFloat(L, 3, 0.1f);
+    mesh->anisotropy             = helper::OptFloat(L, 4, 0.0f);
+    mesh->pom_height_scale       = helper::OptFloat(L, 5, 0.0f);
+    mesh->sss_strength           = helper::OptFloat(L, 6, 0.0f);
+    mesh->sss_tint               = glm::vec3(
+        helper::OptFloat(L, 7, 0.0f),
+        helper::OptFloat(L, 8, 0.0f),
+        helper::OptFloat(L, 9, 0.0f));
     mesh->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
     return 0;
 }
@@ -1286,6 +1310,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_mesh_normals",          L_EcsSetMeshNormals},
         {"set_mesh_tangents",         L_EcsSetMeshTangents},
         {"set_mesh_emissive",         L_EcsSetMeshEmissive},
+        {"set_mesh_advanced_material", L_EcsSetMeshAdvancedMaterial},
         // Lights
         {"add_directional_light_3d",  L_EcsAddDirectionalLight3D},
         {"set_directional_light_3d",  L_EcsSetDirectionalLight3D},

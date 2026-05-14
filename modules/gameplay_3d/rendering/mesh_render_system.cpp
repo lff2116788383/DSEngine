@@ -683,20 +683,27 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         const MaterialAsset::TextureSlots resolved_texture_slots = prefer_material_instance
             ? material_instance->GetTextureSlots()
             : MaterialAsset::TextureSlots{
-                mesh_renderer.albedo_texture_handle,
-                mesh_renderer.normal_texture_handle,
-                mesh_renderer.metallic_roughness_texture_handle,
-                mesh_renderer.emissive_texture_handle,
-                mesh_renderer.occlusion_texture_handle
+                .albedo              = mesh_renderer.albedo_texture_handle,
+                .normal              = mesh_renderer.normal_texture_handle,
+                .metallic_roughness  = mesh_renderer.metallic_roughness_texture_handle,
+                .emissive            = mesh_renderer.emissive_texture_handle,
+                .occlusion           = mesh_renderer.occlusion_texture_handle
             };
         const MaterialAsset::ScalarOverrides resolved_scalars = prefer_material_instance
             ? material_instance->GetScalarOverrides()
             : MaterialAsset::ScalarOverrides{
-                mesh_renderer.metallic,
-                mesh_renderer.roughness,
-                mesh_renderer.ao,
-                mesh_renderer.normal_strength,
-                mesh_renderer.material_alpha_cutoff
+                .metallic             = mesh_renderer.metallic,
+                .roughness            = mesh_renderer.roughness,
+                .ao                   = mesh_renderer.ao,
+                .normal_strength      = mesh_renderer.normal_strength,
+                .alpha_cutoff         = mesh_renderer.material_alpha_cutoff,
+                .alpha_test           = mesh_renderer.material_alpha_test,
+                .sss_strength         = mesh_renderer.sss_strength,
+                .sss_tint             = mesh_renderer.sss_tint,
+                .clear_coat           = mesh_renderer.clear_coat,
+                .clear_coat_roughness = mesh_renderer.clear_coat_roughness,
+                .anisotropy           = mesh_renderer.anisotropy,
+                .pom_height_scale     = mesh_renderer.pom_height_scale
             };
         const MaterialBlendMode resolved_blend_mode = prefer_material_instance
             ? material_instance->GetBlendMode()
@@ -761,6 +768,12 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.material_alpha_cutoff = resolved_scalars.alpha_cutoff;
         item.material_alpha_test = resolved_alpha_test;
         item.material_double_sided = resolved_double_sided;
+        item.material_sss_strength = resolved_scalars.sss_strength;
+        item.material_sss_tint = resolved_scalars.sss_tint;
+        item.material_clear_coat = resolved_scalars.clear_coat;
+        item.material_clear_coat_roughness = resolved_scalars.clear_coat_roughness;
+        item.material_anisotropy = resolved_scalars.anisotropy;
+        item.material_pom_height_scale = resolved_scalars.pom_height_scale;
         item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;

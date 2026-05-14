@@ -186,6 +186,12 @@ public:
         float normal_strength = 1.0f;
         float alpha_cutoff = 0.5f;
         bool alpha_test = false;
+        float sss_strength = 0.0f;
+        glm::vec3 sss_tint = glm::vec3(0.0f);
+        float clear_coat = 0.0f;
+        float clear_coat_roughness = 0.1f;
+        float anisotropy = 0.0f;
+        float pom_height_scale = 0.0f;
     };
 
     struct RasterOverrides {
