@@ -120,8 +120,10 @@ struct PerMaterialUBO {
     glm::vec4 roughness_ao;     ///< x = 粗糙度, y = AO, z = 法线强度, w = Alpha 裁剪阈值
     glm::vec4 emissive;         ///< xyz = 自发光颜色, w = alpha_test (0.0/1.0)
     glm::vec4 flags;            ///< x = has_normal_map, y = has_metallic_roughness_map, z = has_emissive_map, w = has_occlusion_map (均为 0.0/1.0)
+    glm::vec4 extra_params;     ///< x = sss_strength, y = clear_coat, z = clear_coat_roughness, w = anisotropy
+    glm::vec4 extra_params2;    ///< x = pom_height_scale (0=off), y/z/w = sss_tint RGB (0,0,0=default skin)
 };
-static_assert(sizeof(PerMaterialUBO) == 64, "PerMaterialUBO must be 64 bytes for std140 layout");
+static_assert(sizeof(PerMaterialUBO) == 96, "PerMaterialUBO must be 96 bytes for std140 layout");
 
 // ============================================================
 // PointLights UBO (binding = 3)

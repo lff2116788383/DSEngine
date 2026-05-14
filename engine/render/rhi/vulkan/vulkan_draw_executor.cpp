@@ -348,6 +348,16 @@ void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
         item.emissive_map_handle != 0 ? 1.0f : 0.0f,
         item.occlusion_map_handle != 0 ? 1.0f : 0.0f
     );
+    ubo.extra_params = glm::vec4(
+        item.material_sss_strength,
+        item.material_clear_coat,
+        item.material_clear_coat_roughness,
+        item.material_anisotropy
+    );
+    ubo.extra_params2 = glm::vec4(
+        item.material_pom_height_scale,
+        item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z
+    );
 
     WriteToBuffer(context_->device(), per_material_ubo_mem_[current_frame_index_],
                   per_material_ubo_offset_, sizeof(VulkanPerMaterialUBO), &ubo);

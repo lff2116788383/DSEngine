@@ -179,6 +179,8 @@ cbuffer PerMaterial : register(b3) {
     float4 mat_roughness_ao;
     float4 mat_emissive;
     float4 mat_flags;
+    float4 mat_extra_params;
+    float4 mat_extra_params2;
 };
 
 struct PointLightEntry {
@@ -236,6 +238,46 @@ SamplerState u_sampler : register(s0);
 SamplerComparisonState u_cmp_sampler : register(s1);
 
 static const float PI = 3.14159265359;
+
+float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS, float height_scale) {
+    const int numLayers = 16;
+    float layerDepth = 1.0 / (float)numLayers;
+    float currentLayerDepth = 0.0;
+    float2 P = viewDirTS.xy / max(viewDirTS.z, 0.001) * height_scale;
+    float2 deltaUV = P / (float)numLayers;
+    float2 curUV = uv;
+    float curDepth = 1.0 - u_normal_map.Sample(u_sampler, curUV).a;
+    [loop] for (int i = 0; i < numLayers; ++i) {
+        if (currentLayerDepth >= curDepth) break;
+        curUV -= deltaUV;
+        curDepth = 1.0 - u_normal_map.Sample(u_sampler, curUV).a;
+        currentLayerDepth += layerDepth;
+    }
+    float2 prevUV = curUV + deltaUV;
+    float afterDepth = curDepth - currentLayerDepth;
+    float beforeDepth = (1.0 - u_normal_map.Sample(u_sampler, prevUV).a) - currentLayerDepth + layerDepth;
+    float w = afterDepth / (afterDepth - beforeDepth + 0.0001);
+    return lerp(curUV, prevUV, w);
+}
+
+float DistributionGGXAniso(float3 N, float3 H, float3 T, float3 B, float roughness, float aniso) {
+    float at = max(roughness * (1.0 + aniso), 0.001);
+    float ab = max(roughness * (1.0 - aniso), 0.001);
+    float TdotH = dot(T, H);
+    float BdotH = dot(B, H);
+    float NdotH = dot(N, H);
+    float d = TdotH*TdotH/(at*at) + BdotH*BdotH/(ab*ab) + NdotH*NdotH;
+    return 1.0 / (PI * at * ab * d * d + 0.0001);
+}
+
+float3 SubsurfaceScattering(float3 N, float3 L, float3 alb, float sss, float3 lc, float li, float3 tint) {
+    float wrap = 0.5 * sss;
+    float NdotL_wrap = max(0.0, (dot(N, L) + wrap) / (1.0 + wrap));
+    float NdotL_std  = max(dot(N, L), 0.0);
+    float diff = NdotL_wrap - NdotL_std;
+    float3 sss_tint = (dot(tint, tint) > 0.0) ? tint : float3(1.0, 0.35, 0.2);
+    return alb * sss_tint * diff * lc * li;
+}
 
 struct PSInput {
     float4 pos            : SV_POSITION;
@@ -413,13 +455,19 @@ float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, 
 
 constexpr const char* kPbrPS_Part2 = R"(
 float4 PSMain(PSInput input) : SV_TARGET {
-    float4 texColor = u_texture.Sample(u_sampler, input.uv);
+    float2 finalUV = input.uv;
+    bool has_normal_map = (mat_flags.x != 0.0);
+    if (mat_extra_params2.x > 0.0 && has_normal_map) {
+        float3x3 TBN_t = float3x3(input.tangent, input.bitangent, input.normal);
+        float3 viewDirTS = mul(TBN_t, normalize(camera_pos.xyz - input.fragPos));
+        finalUV = ParallaxOcclusionMapping(input.uv, viewDirTS, mat_extra_params2.x);
+    }
+    float4 texColor = u_texture.Sample(u_sampler, finalUV);
     float3 albedo_color = texColor.rgb * input.color.rgb * mat_albedo.rgb;
 
     float3 N = normalize(input.normal);
-    bool has_normal_map = (mat_flags.x != 0.0);
     if (has_normal_map) {
-        float3 normalMap = u_normal_map.Sample(u_sampler, input.uv).rgb;
+        float3 normalMap = u_normal_map.Sample(u_sampler, finalUV).rgb;
         normalMap = normalMap * 2.0 - 1.0;
         normalMap.xy *= mat_roughness_ao.z;
         float3x3 TBN = float3x3(input.tangent, input.bitangent, input.normal);
@@ -431,7 +479,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 result = albedo_color;
         bool has_emissive_map = (mat_flags.z != 0.0);
         if (has_emissive_map) {
-            result += u_emissive_map.Sample(u_sampler, input.uv).rgb * mat_emissive.rgb;
+            result += u_emissive_map.Sample(u_sampler, finalUV).rgb * mat_emissive.rgb;
         }
         if (light_params.w == 0.0) {
             result = result / (result + float3(1.0, 1.0, 1.0));
@@ -484,21 +532,23 @@ float4 PSMain(PSInput input) : SV_TARGET {
 
     bool has_mr_map = (mat_flags.y != 0.0);
     if (has_mr_map) {
-        float4 mrSample = u_metallic_roughness_map.Sample(u_sampler, input.uv);
+        float4 mrSample = u_metallic_roughness_map.Sample(u_sampler, finalUV);
         roughness = clamp(mrSample.g * mat_roughness_ao.x, 0.04, 1.0);
         metallic = saturate(mrSample.b * mat_albedo.w);
     }
     bool has_occlusion_map = (mat_flags.w != 0.0);
     if (has_occlusion_map) {
-        ao *= u_occlusion_map.Sample(u_sampler, input.uv).r;
+        ao *= u_occlusion_map.Sample(u_sampler, finalUV).r;
     }
 
     float3 V = normalize(camera_pos.xyz - input.fragPos);
     float3 F0 = lerp(float3(0.04, 0.04, 0.04), surface_albedo, metallic);
+    float3 T_dir = normalize(input.tangent);
+    float3 B_dir = normalize(input.bitangent);
 
     float3 L = normalize(-light_dir_and_enabled.xyz);
     float3 H = normalize(V + L);
-    float NDF = DistributionGGX(N, H, roughness);
+    float NDF = (mat_extra_params.w != 0.0) ? DistributionGGXAniso(N, H, T_dir, B_dir, roughness, mat_extra_params.w) : DistributionGGX(N, H, roughness);
     float G   = GeometrySmith(N, V, L, roughness);
     float3 F  = fresnelSchlick(max(dot(H, V), 0.0), F0);
     float3 specular = (NDF * G * F) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001, 0.0001);
@@ -506,6 +556,16 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float NdotL = max(dot(N, L), 0.0);
     float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
     float3 Lo = (kD * surface_albedo / PI + specular) * light_color_and_ambient.rgb * light_params.x * NdotL * (1.0 - shadow);
+    if (mat_extra_params.x > 0.0)
+        Lo += SubsurfaceScattering(N, L, surface_albedo, mat_extra_params.x, light_color_and_ambient.rgb, light_params.x, mat_extra_params2.yzw) * (1.0 - shadow);
+    if (mat_extra_params.y > 0.0) {
+        float cc_r = max(mat_extra_params.z, 0.04);
+        float NDF_cc = DistributionGGX(N, H, cc_r);
+        float G_cc = GeometrySmith(N, V, L, cc_r);
+        float3 F_cc = fresnelSchlick(max(dot(H, V), 0.0), float3(0.04, 0.04, 0.04));
+        float3 spec_cc = (NDF_cc * G_cc * F_cc) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001, 0.0001);
+        Lo += spec_cc * mat_extra_params.y * NdotL * light_color_and_ambient.rgb * light_params.x * (1.0 - shadow);
+    }
 
 )" R"(
     // 聚光灯 PBR 循环
@@ -586,7 +646,16 @@ float4 PSMain(PSInput input) : SV_TARGET {
 
     float3 sh_irradiance = (probe_params.x > 0.5) ? EvaluateSH(N) : float3(light_color_and_ambient.w, light_color_and_ambient.w, light_color_and_ambient.w);
     float3 ambient = sh_irradiance * surface_albedo * ao;
-    float3 color = ambient + Lo + mat_emissive.rgb;
+    if (mat_extra_params.y > 0.0) {
+        float3 F_cc_amb = fresnelSchlick(max(dot(N, V), 0.0), float3(0.04, 0.04, 0.04));
+        ambient += F_cc_amb * mat_extra_params.y * sh_irradiance * (1.0 - mat_extra_params.z) * 0.25;
+    }
+    float3 surface_emissive = mat_emissive.rgb;
+    bool has_emissive_map = (mat_flags.z != 0.0);
+    if (has_emissive_map) {
+        surface_emissive *= u_emissive_map.Sample(u_sampler, finalUV).rgb;
+    }
+    float3 color = ambient + Lo + surface_emissive;
     color = color / (color + float3(1.0, 1.0, 1.0));
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
     return float4(color, texColor.a * input.color.a);
@@ -1318,6 +1387,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(result)).rgb;
         result = lerp(result, lutColor, u_lut_intensity);
     }
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    result += (ign - 0.5f) / 255.0f;
     return float4(result, 1.0);
 }
 )";
@@ -1404,6 +1475,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float grain = GrainNoise(input.uv * float2(1280.0f, 720.0f), filmGrainTime) - 0.5f;
         color = saturate(color + grain * filmGrainIntensity);
     }
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    color += (ign - 0.5f) / 255.0f;
     return float4(color, 1.0f);
 }
 )";
@@ -1432,6 +1505,8 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
     float3 lutColor = lutTexture.Sample(u_lut_sampler, saturate(color)).rgb;
     color = lerp(color, lutColor, u_lut_intensity);
+    float ign = frac(52.9829189f * frac(0.06711056f * input.pos.x + 0.00583715f * input.pos.y));
+    color += (ign - 0.5f) / 255.0f;
     return float4(color, 1.0f);
 }
 )";

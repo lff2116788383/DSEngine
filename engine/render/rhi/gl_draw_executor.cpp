@@ -631,6 +631,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             item.emissive_map_handle != 0 ? 1.0f : 0.0f,
             item.occlusion_map_handle != 0 ? 1.0f : 0.0f
         );
+        per_mat.extra_params = glm::vec4(
+            item.material_sss_strength,
+            item.material_clear_coat,
+            item.material_clear_coat_roughness,
+            item.material_anisotropy);
+        per_mat.extra_params2 = glm::vec4(
+            item.material_pom_height_scale,
+            item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
         ubo_mgr.UploadPerMaterial(per_mat);
 
         // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 绑定）
@@ -1121,6 +1129,8 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
                     result = mix(result, lutColor, u_lut_intensity);
                 }
+                float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+                result += (ign - 0.5) / 255.0;
                 FragColor = vec4(result, 1.0);
             }
         )";
@@ -1189,6 +1199,9 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     float grain = GrainNoise(TexCoords * vec2(1280.0, 720.0), u_film_grain_time) - 0.5;
                     result = clamp(result + grain * u_film_grain_intensity, 0.0, 1.0);
                 }
+                // Anti color-banding dithering (IGN, +-0.5/255)
+                float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+                result += (ign - 0.5) / 255.0;
                 FragColor = vec4(result, 1.0);
             }
         )";
@@ -1283,6 +1296,8 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                     vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
                     result = mix(result, lutColor, u_lut_intensity);
                 }
+                float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+                result += (ign - 0.5) / 255.0;
                 FragColor = vec4(result, 1.0);
             }
         )";
@@ -1333,6 +1348,8 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 vec3 color = texture(screenTexture, TexCoords).rgb;
                 vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
                 color = mix(color, lutColor, u_lut_intensity);
+                float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+                color += (ign - 0.5) / 255.0;
                 FragColor = vec4(color, 1.0);
             }
         )";

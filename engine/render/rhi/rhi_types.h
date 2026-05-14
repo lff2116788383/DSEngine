@@ -174,6 +174,12 @@ struct MeshDrawItem {
     float material_alpha_cutoff = 0.5f;
     bool material_alpha_test = false;
     bool material_double_sided = false;
+    float material_sss_strength = 0.0f;
+    glm::vec3 material_sss_tint = glm::vec3(0.0f);  ///< SSS 散射色调，(0,0,0) 使用默认皮肤色
+    float material_clear_coat = 0.0f;
+    float material_clear_coat_roughness = 0.1f;
+    float material_anisotropy = 0.0f;
+    float material_pom_height_scale = 0.0f;
     bool material_uses_instance_data = false;
     bool receive_shadow = true;
     bool depth_test_enabled = true;

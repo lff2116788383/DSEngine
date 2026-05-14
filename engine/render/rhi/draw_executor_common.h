@@ -135,6 +135,14 @@ inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item) {
         item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
         item.emissive_map_handle != 0 ? 1.0f : 0.0f,
         item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
+    mat.extra_params = glm::vec4(
+        item.material_sss_strength,
+        item.material_clear_coat,
+        item.material_clear_coat_roughness,
+        item.material_anisotropy);
+    mat.extra_params2 = glm::vec4(
+        item.material_pom_height_scale,
+        item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
     return mat;
 }
 

@@ -143,6 +143,8 @@ layout(std140, set = 2, binding = 0) uniform PerMaterial {
     vec4 roughness_ao;
     vec4 emissive;
     vec4 flags;
+    vec4 extra_params;
+    vec4 extra_params2;
 };
 
 // 采样器 (Set 2)
@@ -226,6 +228,52 @@ const float PI = 3.14159265359;
 #define u_has_emissive_map          (flags.z != 0.0)
 #define u_has_occlusion_map         (flags.w != 0.0)
 #define u_camera_pos                camera_pos.xyz
+#define u_sss_strength              extra_params.x
+#define u_clear_coat                extra_params.y
+#define u_clear_coat_roughness      extra_params.z
+#define u_anisotropy                extra_params.w
+#define u_pom_height_scale          extra_params2.x
+#define u_sss_tint                  extra_params2.yzw
+
+#define POM_NUM_LAYERS 16
+vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirTS, float height_scale) {
+    const float layerDepth = 1.0 / float(POM_NUM_LAYERS);
+    float currentLayerDepth = 0.0;
+    vec2 P = viewDirTS.xy / max(viewDirTS.z, 0.001) * height_scale;
+    vec2 deltaUV = P / float(POM_NUM_LAYERS);
+    vec2 curUV = uv;
+    float curDepth = 1.0 - texture(u_normal_map, curUV).a;
+    for (int i = 0; i < POM_NUM_LAYERS; ++i) {
+        if (currentLayerDepth >= curDepth) break;
+        curUV -= deltaUV;
+        curDepth = 1.0 - texture(u_normal_map, curUV).a;
+        currentLayerDepth += layerDepth;
+    }
+    vec2 prevUV = curUV + deltaUV;
+    float afterDepth = curDepth - currentLayerDepth;
+    float beforeDepth = (1.0 - texture(u_normal_map, prevUV).a) - currentLayerDepth + layerDepth;
+    float w = afterDepth / (afterDepth - beforeDepth + 0.0001);
+    return mix(curUV, prevUV, w);
+}
+
+float DistributionGGXAniso(vec3 N, vec3 H, vec3 T, vec3 B, float roughness, float aniso) {
+    float at = max(roughness * (1.0 + aniso), 0.001);
+    float ab = max(roughness * (1.0 - aniso), 0.001);
+    float TdotH = dot(T, H);
+    float BdotH = dot(B, H);
+    float NdotH = dot(N, H);
+    float d = TdotH*TdotH/(at*at) + BdotH*BdotH/(ab*ab) + NdotH*NdotH;
+    return 1.0 / (PI * at * ab * d * d + 0.0001);
+}
+
+vec3 SubsurfaceScattering(vec3 N, vec3 L, vec3 alb, float sss, vec3 lc, float li, vec3 tint) {
+    float wrap = 0.5 * sss;
+    float NdotL_wrap = max(0.0, (dot(N, L) + wrap) / (1.0 + wrap));
+    float NdotL_std  = max(dot(N, L), 0.0);
+    float diff = NdotL_wrap - NdotL_std;
+    vec3 sss_tint = (dot(tint, tint) > 0.0) ? tint : vec3(1.0, 0.35, 0.2);
+    return alb * sss_tint * diff * lc * li;
+}
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness*roughness;
@@ -317,15 +365,19 @@ float PointShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 light
     float bias = 0.05;
     return (currentDepth - bias) > closestDepth ? u_shadow_strength : 0.0;
 }
-
+)" R"(
 void main() {
-    vec4 texColor = texture(u_texture, vTexCoord);
+    vec2 finalUV = vTexCoord;
+    if (u_pom_height_scale > 0.0 && u_has_normal_map) {
+        vec3 viewDirTS = transpose(vTBN) * normalize(u_camera_pos - vFragPos);
+        finalUV = ParallaxOcclusionMapping(vTexCoord, viewDirTS, u_pom_height_scale);
+    }
+    vec4 texColor = texture(u_texture, finalUV) * vColor;
     if (u_material_alpha_test && texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
 
     vec3 N = vNormal;
     if (u_has_normal_map) {
-        vec3 normalMap = texture(u_normal_map, vTexCoord).rgb;
-        normalMap = normalMap * 2.0 - 1.0;
+        vec3 normalMap = texture(u_normal_map, finalUV).rgb * 2.0 - 1.0;
         normalMap.xy *= u_material_normal_strength;
         N = normalize(vTBN * normalMap);
     }
@@ -333,7 +385,7 @@ void main() {
     if (!u_lighting_enabled) {
         vec3 result = texColor.rgb * vColor.rgb * u_material_albedo;
         if (u_has_emissive_map) {
-            result += texture(u_emissive_map, vTexCoord).rgb * u_material_emissive;
+            result += texture(u_emissive_map, finalUV).rgb * u_material_emissive;
         }
         if (light_params.w == 0.0) {
             result = result / (result + vec3(1.0));
@@ -352,7 +404,7 @@ void main() {
         vec3 diffuse_color = texColor.rgb * vColor.rgb * u_material_albedo * half_lambert;
         float spec_brightness = pow(max(dot(R, V_hl), 0.0), 100.0);
         vec3 spec_tex = u_has_metallic_roughness_map
-            ? texture(u_metallic_roughness_map, vTexCoord).rgb
+            ? texture(u_metallic_roughness_map, finalUV).rgb
             : vec3(0.0);
         vec3 specular_color = spec_tex * spec_brightness;
         float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
@@ -387,19 +439,21 @@ void main() {
     float ao = max(u_material_ao, 0.0);
     vec3 surface_emissive = u_material_emissive;
     if (u_has_metallic_roughness_map) {
-        vec4 mrSample = texture(u_metallic_roughness_map, vTexCoord);
+        vec4 mrSample = texture(u_metallic_roughness_map, finalUV);
         roughness = clamp(mrSample.g * u_material_roughness, 0.04, 1.0);
         metallic = clamp(mrSample.b * u_material_metallic, 0.0, 1.0);
     }
     if (u_has_occlusion_map) {
-        ao *= texture(u_occlusion_map, vTexCoord).r;
+        ao *= texture(u_occlusion_map, finalUV).r;
     }
     if (u_has_emissive_map) {
-        surface_emissive *= texture(u_emissive_map, vTexCoord).rgb;
+        surface_emissive *= texture(u_emissive_map, finalUV).rgb;
     }
     vec3 V = normalize(u_camera_pos - vFragPos);
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, surface_albedo, metallic);
+    vec3 T = normalize(vTBN[0]);
+    vec3 B = normalize(vTBN[1]);
 
     vec3 Lo = vec3(0.0);
 
@@ -407,7 +461,7 @@ void main() {
     {
         vec3 L = normalize(-u_light_direction);
         vec3 H = normalize(V + L);
-        float NDF = DistributionGGX(N, H, roughness);
+        float NDF = (u_anisotropy != 0.0) ? DistributionGGXAniso(N, H, T, B, roughness, u_anisotropy) : DistributionGGX(N, H, roughness);
         float G   = GeometrySmith(N, V, L, roughness);
         vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
         vec3 numerator    = NDF * G * F;
@@ -419,6 +473,16 @@ void main() {
         float NdotL = max(dot(N, L), 0.0);
         float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
         Lo += (kD * surface_albedo / PI + specular) * u_light_color * u_light_intensity * NdotL * (1.0 - shadow);
+        if (u_sss_strength > 0.0)
+            Lo += SubsurfaceScattering(N, L, surface_albedo, u_sss_strength, u_light_color, u_light_intensity, u_sss_tint) * (1.0 - shadow);
+        if (u_clear_coat > 0.0) {
+            float cc_r = max(u_clear_coat_roughness, 0.04);
+            float NDF_cc = DistributionGGX(N, H, cc_r);
+            float G_cc = GeometrySmith(N, V, L, cc_r);
+            vec3 F_cc = fresnelSchlick(max(dot(H, V), 0.0), vec3(0.04));
+            vec3 spec_cc = (NDF_cc * G_cc * F_cc) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+            Lo += spec_cc * u_clear_coat * NdotL * u_light_color * u_light_intensity * (1.0 - shadow);
+        }
     }
 
     // 点光源
@@ -487,6 +551,10 @@ void main() {
     vec3 diffuse_ambient = irradiance * surface_albedo;
     vec3 specular_ambient = irradiance * F0 * (1.0 - roughness);
     vec3 ambient = (kD_ambient * diffuse_ambient + specular_ambient) * ao;
+    if (u_clear_coat > 0.0) {
+        vec3 F_cc_amb = fresnelSchlick(max(dot(N, V), 0.0), vec3(0.04));
+        ambient += F_cc_amb * u_clear_coat * irradiance * (1.0 - u_clear_coat_roughness) * 0.25;
+    }
     vec3 color = ambient + Lo + surface_emissive;
 
     color = color / (color + vec3(1.0));
@@ -1079,6 +1147,8 @@ void main() {
         vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
         result = mix(result, lutColor, u_lut_intensity);
     }
+    float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+    result += (ign - 0.5) / 255.0;
     FragColor = vec4(result, 1.0);
 }
 )";
@@ -1150,6 +1220,8 @@ void main() {
         float grain = GrainNoise(vTexCoords * vec2(1280.0, 720.0), filmGrainTime) - 0.5;
         color = clamp(color + grain * filmGrainIntensity, 0.0, 1.0);
     }
+    float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+    color += (ign - 0.5) / 255.0;
     FragColor = vec4(color, 1.0);
 }
 )";
@@ -1164,6 +1236,8 @@ void main() {
     vec3 color = texture(screenTexture, vTexCoords).rgb;
     vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
     color = mix(color, lutColor, u_lut_intensity);
+    float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+    color += (ign - 0.5) / 255.0;
     FragColor = vec4(color, 1.0);
 }
 )";
