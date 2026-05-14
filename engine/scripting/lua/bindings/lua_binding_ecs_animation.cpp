@@ -309,6 +309,293 @@ int L_EcsSetAnimator3DLockRootMotion(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// 动画层系统 (AnimLayerComponent)
+// ============================================================
+
+int L_EcsAddAnimLayerComponent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<AnimLayerComponent>(e);
+    return 0;
+}
+
+int L_EcsAddAnimLayer(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp) { helper::PushInt(L, -1); return 1; }
+
+    AnimLayerConfig layer;
+    layer.name = luaL_optstring(L, 2, "");
+    layer.weight = helper::OptFloat(L, 3, 1.0f);
+    int mode = helper::OptInt(L, 4, 0);
+    layer.blend_mode = static_cast<AnimLayerBlendMode>(mode);
+    comp->layers.push_back(std::move(layer));
+    helper::PushInt(L, static_cast<int>(comp->layers.size()) - 1);
+    return 1;
+}
+
+int L_EcsSetAnimLayerClip(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    const char* danim_path = luaL_checkstring(L, 3);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
+    auto& layer = comp->layers[idx];
+    layer.source_type = AnimSourceType::SingleClip;
+    layer.danim_path = danim_path;
+    layer.speed = helper::OptFloat(L, 4, 1.0f);
+    layer.loop = helper::OptBool(L, 5, true);
+    return 0;
+}
+
+int L_EcsSetAnimLayerWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    float w = helper::CheckFloat(L, 3);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
+    comp->layers[idx].weight = w;
+    return 0;
+}
+
+int L_EcsSetAnimLayerBoneMask(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
+    auto& layer = comp->layers[idx];
+    layer.bone_mask_include.clear();
+    if (lua_istable(L, 3)) {
+        int len = static_cast<int>(lua_rawlen(L, 3));
+        for (int i = 1; i <= len; ++i) {
+            lua_rawgeti(L, 3, i);
+            if (lua_isstring(L, -1)) {
+                layer.bone_mask_include.emplace_back(lua_tostring(L, -1));
+            }
+            lua_pop(L, 1);
+        }
+    }
+    layer.bone_mask_dirty = true;
+    return 0;
+}
+
+int L_EcsSetAnimLayerBlendTree1D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
+    auto& layer = comp->layers[idx];
+    layer.source_type = AnimSourceType::BlendTree1D;
+    layer.blend_nodes.clear();
+    if (lua_istable(L, 3)) {
+        lua_pushnil(L);
+        while (lua_next(L, 3) != 0) {
+            if (lua_istable(L, -1)) {
+                AnimBlendNode node;
+                lua_rawgeti(L, -1, 1); node.danim_path = luaL_optstring(L, -1, ""); lua_pop(L, 1);
+                lua_rawgeti(L, -1, 2); node.threshold = static_cast<float>(luaL_optnumber(L, -1, 0.0)); lua_pop(L, 1);
+                lua_rawgeti(L, -1, 3); node.speed = static_cast<float>(luaL_optnumber(L, -1, 1.0)); lua_pop(L, 1);
+                node.loop = true;
+                layer.blend_nodes.push_back(std::move(node));
+            }
+            lua_pop(L, 1);
+        }
+    }
+    return 0;
+}
+
+int L_EcsSetAnimLayerBlendParam(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    float val = helper::CheckFloat(L, 3);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
+    comp->layers[idx].blend_parameter_value = val;
+    return 0;
+}
+
+int L_EcsSetAnimLayerEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
+    if (!comp) return 0;
+    comp->enabled = helper::CheckBool(L, 2);
+    return 0;
+}
+
+// ============================================================
+// IK 系统 (IKChain3DComponent)
+// ============================================================
+
+int L_EcsAddIKComponent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<IKChain3DComponent>(e);
+    return 0;
+}
+
+int L_EcsAddIKChain(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp) { helper::PushInt(L, -1); return 1; }
+
+    IKChainConfig chain;
+    chain.name = luaL_optstring(L, 2, "");
+    int type = helper::OptInt(L, 3, 0);
+    chain.type = static_cast<IKChainType>(type);
+    chain.root_bone = luaL_optstring(L, 4, "");
+    chain.tip_bone = luaL_optstring(L, 5, "");
+    chain.weight = helper::OptFloat(L, 6, 1.0f);
+    comp->chains.push_back(std::move(chain));
+    helper::PushInt(L, static_cast<int>(comp->chains.size()) - 1);
+    return 1;
+}
+
+int L_EcsSetIKTarget(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
+    comp->chains[idx].target_position = helper::CheckVec3(L, 3);
+    return 0;
+}
+
+int L_EcsSetIKTargetEntity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
+    if (lua_isnil(L, 3)) {
+        comp->chains[idx].target_entity = UINT32_MAX;
+    } else {
+        Entity target = helper::CheckEntity(L, 3);
+        comp->chains[idx].target_entity = static_cast<uint32_t>(target);
+    }
+    return 0;
+}
+
+int L_EcsSetIKWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    float w = helper::CheckFloat(L, 3);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
+    comp->chains[idx].weight = w;
+    return 0;
+}
+
+int L_EcsSetIKPoleVector(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
+    comp->chains[idx].pole_vector = helper::CheckVec3(L, 3);
+    return 0;
+}
+
+int L_EcsSetIKIterations(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    int iters = helper::CheckInt(L, 3);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
+    comp->chains[idx].iterations = iters;
+    return 0;
+}
+
+int L_EcsSetIKEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
+    if (!comp) return 0;
+    comp->enabled = helper::CheckBool(L, 2);
+    return 0;
+}
+
+// ============================================================
+// 3D 动画事件 (Animator3DComponent)
+// ============================================================
+
+int L_EcsAddAnimator3DEvent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const char* event_name = luaL_checkstring(L, 2);
+    float trigger_time = helper::CheckFloat(L, 3);
+    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
+    if (!animator) return 0;
+    AnimEventConfig evt;
+    evt.name = event_name;
+    evt.trigger_time = trigger_time;
+    evt.fired = false;
+    animator->events.push_back(std::move(evt));
+    return 0;
+}
+
+int L_EcsPopAnimator3DEvent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushstring(L, ""); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
+    if (animator && !animator->fired_events.empty()) {
+        std::string name = animator->fired_events.front();
+        animator->fired_events.erase(animator->fired_events.begin());
+        lua_pushstring(L, name.c_str());
+        return 1;
+    }
+    lua_pushstring(L, "");
+    return 1;
+}
+
+int L_EcsSetAnimator3DExtractRootMotion(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
+    if (!animator) return 0;
+    animator->extract_root_motion = helper::CheckBool(L, 2);
+    return 0;
+}
+
+int L_EcsGetAnimator3DRootMotionDelta(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* animator = helper::TryGetComponentConst<Animator3DComponent>(*world, e);
+    if (!animator) return 0;
+    helper::PushVec3(L, animator->root_motion_delta);
+    return 3;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -331,6 +618,29 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"set_animator_3d_param_float",  L_EcsSetAnimator3DParamFloat},
         {"set_animator_3d_param_trigger", L_EcsSetAnimator3DParamTrigger},
         {"set_animator_3d_lock_root_motion", L_EcsSetAnimator3DLockRootMotion},
+        // 3D 动画事件 + Root Motion
+        {"add_animator_3d_event",            L_EcsAddAnimator3DEvent},
+        {"pop_animator_3d_event",            L_EcsPopAnimator3DEvent},
+        {"set_animator_3d_extract_root_motion", L_EcsSetAnimator3DExtractRootMotion},
+        {"get_animator_3d_root_motion_delta", L_EcsGetAnimator3DRootMotionDelta},
+        // 动画层系统
+        {"add_anim_layer_component",         L_EcsAddAnimLayerComponent},
+        {"add_anim_layer",                   L_EcsAddAnimLayer},
+        {"set_anim_layer_clip",              L_EcsSetAnimLayerClip},
+        {"set_anim_layer_weight",            L_EcsSetAnimLayerWeight},
+        {"set_anim_layer_bone_mask",         L_EcsSetAnimLayerBoneMask},
+        {"set_anim_layer_blend_tree_1d",     L_EcsSetAnimLayerBlendTree1D},
+        {"set_anim_layer_blend_param",       L_EcsSetAnimLayerBlendParam},
+        {"set_anim_layer_enabled",           L_EcsSetAnimLayerEnabled},
+        // IK 系统
+        {"add_ik_component",                 L_EcsAddIKComponent},
+        {"add_ik_chain",                     L_EcsAddIKChain},
+        {"set_ik_target",                    L_EcsSetIKTarget},
+        {"set_ik_target_entity",             L_EcsSetIKTargetEntity},
+        {"set_ik_weight",                    L_EcsSetIKWeight},
+        {"set_ik_pole_vector",               L_EcsSetIKPoleVector},
+        {"set_ik_iterations",                L_EcsSetIKIterations},
+        {"set_ik_enabled",                   L_EcsSetIKEnabled},
     });
 }
 

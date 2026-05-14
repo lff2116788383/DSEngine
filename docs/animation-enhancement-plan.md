@@ -846,3 +846,36 @@ enum class AnimSourceType : uint8_t {
 - Phase 2 (2D Blend Tree): ✅ 完成
 - Phase 3 (IK + Root Motion): ✅ 完成
 - Phase 4 (收尾/质量): ✅ 完成
+
+### 2026-05-14 — Lua 绑定 + 单元测试补全
+
+**已完成 (dse_engine 编译零错误)**
+
+#### Lua 绑定 (20 个新 API)
+
+| 分类 | API | 参数 |
+|------|-----|------|
+| 动画层 | `add_anim_layer_component(e)` | 添加组件 |
+| | `add_anim_layer(e, name, weight, mode)` → idx | 添加层，返回索引 |
+| | `set_anim_layer_clip(e, idx, path, speed, loop)` | 设置单剪辑源 |
+| | `set_anim_layer_weight(e, idx, w)` | 设置层权重 |
+| | `set_anim_layer_bone_mask(e, idx, {bones})` | 设置骨骼遮罩 |
+| | `set_anim_layer_blend_tree_1d(e, idx, nodes)` | 设置 1D 混合树 |
+| | `set_anim_layer_blend_param(e, idx, val)` | 设置混合参数 |
+| | `set_anim_layer_enabled(e, bool)` | 启用/禁用 |
+| IK | `add_ik_component(e)` | 添加组件 |
+| | `add_ik_chain(e, name, type, root, tip, w)` → idx | 添加链 |
+| | `set_ik_target(e, idx, x, y, z)` | 设置目标位置 |
+| | `set_ik_target_entity(e, idx, target_e)` | 设置目标实体 |
+| | `set_ik_weight(e, idx, w)` | 设置权重 |
+| | `set_ik_pole_vector(e, idx, x, y, z)` | 设置极向量 |
+| | `set_ik_iterations(e, idx, n)` | 设置迭代次数 |
+| | `set_ik_enabled(e, bool)` | 启用/禁用 |
+| 3D 事件 | `add_animator_3d_event(e, name, time)` | 添加事件 |
+| | `pop_animator_3d_event(e)` → name | 弹出已触发事件 |
+| Root Motion | `set_animator_3d_extract_root_motion(e, bool)` | 启用提取 |
+| | `get_animator_3d_root_motion_delta(e)` → x,y,z | 获取增量 |
+
+#### 单元测试 (17 个新测试用例)
+
+- `anim_layer_ik_test.cpp`: AnimLayer 组件默认值、空 World 安全、IK 链默认值、anim_clip_eval 工具函数验证（AdvanceClipTime 循环/非循环/零时长、Interpolate vec3/quat、AnimSampleBuffer 初始化）
