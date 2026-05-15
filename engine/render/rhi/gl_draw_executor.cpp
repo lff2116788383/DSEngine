@@ -1717,6 +1717,72 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = texture(screenTexture, TexCoords);
             }
         )";
+    } else if (effect_name == "volumetric_fog") {
+        fs_src += R"(
+            uniform sampler2D u_depth_tex;
+            uniform vec3 u_fog_color;
+            uniform float u_fog_density;
+            uniform float u_height_falloff;
+            uniform float u_height_offset;
+            uniform float u_fog_start;
+            uniform float u_fog_end;
+            uniform float u_fog_steps;
+            uniform float u_sun_scatter;
+            uniform vec3 u_sun_dir;
+            uniform vec3 u_camera_pos;
+            uniform float u_near;
+            uniform float u_far;
+            uniform vec3 u_cam_right;
+            uniform vec3 u_cam_up;
+            uniform vec3 u_cam_fwd;
+            uniform float u_tan_fov_y;
+            uniform float u_aspect;
+
+            float VFogLinearDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+
+            void main() {
+                vec4 scene = texture(screenTexture, TexCoords);
+                float depth = texture(u_depth_tex, TexCoords).r;
+                if (depth >= 0.9999) { FragColor = scene; return; }
+
+                float viewZ = VFogLinearDepth(depth);
+                vec2 ndc = TexCoords * 2.0 - 1.0;
+                vec3 viewDir = normalize(u_cam_fwd
+                    + ndc.x * u_cam_right * u_tan_fov_y * u_aspect
+                    + ndc.y * u_cam_up    * u_tan_fov_y);
+                float cosAngle = max(dot(viewDir, u_cam_fwd), 0.0001);
+                float rayLen   = viewZ / cosAngle;
+
+                float marchStart = u_fog_start;
+                float marchEnd   = min(rayLen, u_fog_end);
+                float steps = max(u_fog_steps, 1.0);
+                if (marchEnd <= marchStart) { FragColor = scene; return; }
+
+                float stepLen  = (marchEnd - marchStart) / steps;
+                float cosTheta = dot(viewDir, -u_sun_dir);
+                float g = 0.76; float g2 = g * g;
+                float mie = (1.0 - g2) / (4.0 * 3.14159265 *
+                    pow(max(1.0 + g2 - 2.0 * g * cosTheta, 0.001), 1.5));
+
+                float transmittance = 1.0;
+                vec3 inscatter = vec3(0.0);
+                for (float i = 0.0; i < steps; i += 1.0) {
+                    float t   = marchStart + (i + 0.5) * stepLen;
+                    vec3 pos  = u_camera_pos + viewDir * t;
+                    float h   = max(pos.y - u_height_offset, 0.0);
+                    float den = u_fog_density * exp(-u_height_falloff * h);
+                    float sT  = exp(-den * stepLen);
+                    inscatter += transmittance * (1.0 - sT) *
+                        (u_fog_color + mie * u_sun_scatter * vec3(1.0));
+                    transmittance *= sT;
+                    if (transmittance < 0.001) break;
+                }
+                FragColor = vec4(scene.rgb * transmittance + inscatter, scene.a);
+            }
+        )";
     } else {
         fs_src += R"(
             void main() {
@@ -1955,6 +2021,27 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform1f(glGetUniformLocation(shader, "u_far"), params[7]);
         glUniform1f(glGetUniformLocation(shader, "u_screen_w"), params[8]);
         glUniform1f(glGetUniformLocation(shader, "u_screen_h"), params[9]);
+    } else if (effect_name == "volumetric_fog" && params.size() >= 30) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_depth_tex"), 1);
+        glUniform3f(glGetUniformLocation(shader, "u_fog_color"),   params[1], params[2], params[3]);
+        glUniform1f(glGetUniformLocation(shader, "u_fog_density"),   params[4]);
+        glUniform1f(glGetUniformLocation(shader, "u_height_falloff"),params[5]);
+        glUniform1f(glGetUniformLocation(shader, "u_height_offset"), params[6]);
+        glUniform1f(glGetUniformLocation(shader, "u_fog_start"),     params[7]);
+        glUniform1f(glGetUniformLocation(shader, "u_fog_end"),       params[8]);
+        glUniform1f(glGetUniformLocation(shader, "u_fog_steps"),     params[9]);
+        glUniform1f(glGetUniformLocation(shader, "u_sun_scatter"),   params[10]);
+        glUniform3f(glGetUniformLocation(shader, "u_sun_dir"),    params[11], params[12], params[13]);
+        glUniform3f(glGetUniformLocation(shader, "u_camera_pos"), params[14], params[15], params[16]);
+        glUniform1f(glGetUniformLocation(shader, "u_near"),  params[17]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"),   params[18]);
+        glUniform3f(glGetUniformLocation(shader, "u_cam_right"), params[19], params[20], params[21]);
+        glUniform3f(glGetUniformLocation(shader, "u_cam_up"),    params[22], params[23], params[24]);
+        glUniform3f(glGetUniformLocation(shader, "u_cam_fwd"),   params[25], params[26], params[27]);
+        glUniform1f(glGetUniformLocation(shader, "u_tan_fov_y"), params[28]);
+        glUniform1f(glGetUniformLocation(shader, "u_aspect"),    params[29]);
     }
 
     glDisable(GL_DEPTH_TEST);

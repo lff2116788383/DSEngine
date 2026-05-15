@@ -1945,6 +1945,88 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Volumetric Fog Pixel Shader
+// ============================================================
+constexpr const char* kVolumetricFogPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D u_depth_tex   : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer VolumetricFogParams : register(b0) {
+    float  u_depth_handle;
+    float  u_fog_r;    float u_fog_g;    float u_fog_b;
+    float  u_fog_density;
+    float  u_height_falloff;
+    float  u_height_offset;
+    float  u_fog_start;
+    float  u_fog_end;
+    float  u_fog_steps;
+    float  u_sun_scatter;
+    float  u_sun_dir_x; float u_sun_dir_y; float u_sun_dir_z;
+    float  u_cam_pos_x; float u_cam_pos_y; float u_cam_pos_z;
+    float  u_near;      float u_far;
+    float  u_right_x;   float u_right_y;  float u_right_z;
+    float  u_up_x;      float u_up_y;     float u_up_z;
+    float  u_fwd_x;     float u_fwd_y;    float u_fwd_z;
+    float  u_tan_fov_y;
+    float  u_aspect;
+    float2 _pad;
+};
+
+struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+
+float VFogLinZ(float d) {
+    float z = d * 2.0f - 1.0f;
+    return (2.0f * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+float4 main(VS_OUTPUT input) : SV_TARGET {
+    float4 scene = screenTexture.Sample(u_sampler, input.uv);
+    float  depth = u_depth_tex.Sample(u_sampler, input.uv).r;
+    if (depth >= 0.9999f) return scene;
+
+    float viewZ = VFogLinZ(depth);
+    float2 ndc   = input.uv * 2.0f - 1.0f;
+    float3 camFwd   = float3(u_fwd_x,   u_fwd_y,   u_fwd_z);
+    float3 camRight = float3(u_right_x, u_right_y, u_right_z);
+    float3 camUp    = float3(u_up_x,    u_up_y,    u_up_z);
+    float3 viewDir  = normalize(camFwd
+        + ndc.x * camRight * u_tan_fov_y * u_aspect
+        + ndc.y * camUp    * u_tan_fov_y);
+    float cosAngle = max(dot(viewDir, camFwd), 0.0001f);
+    float rayLen   = viewZ / cosAngle;
+
+    float marchStart = u_fog_start;
+    float marchEnd   = min(rayLen, u_fog_end);
+    float steps = max(u_fog_steps, 1.0f);
+    if (marchEnd <= marchStart) return scene;
+
+    float stepLen  = (marchEnd - marchStart) / steps;
+    float3 sunDir  = float3(u_sun_dir_x, u_sun_dir_y, u_sun_dir_z);
+    float cosTheta = dot(viewDir, -sunDir);
+    float g = 0.76f; float g2 = g * g;
+    float mie = (1.0f - g2) / (4.0f * 3.14159265f *
+        pow(max(1.0f + g2 - 2.0f * g * cosTheta, 0.001f), 1.5f));
+
+    float3 fogColor  = float3(u_fog_r, u_fog_g, u_fog_b);
+    float3 camPos    = float3(u_cam_pos_x, u_cam_pos_y, u_cam_pos_z);
+    float  transmit  = 1.0f;
+    float3 inscatter = float3(0.0f, 0.0f, 0.0f);
+    for (float i = 0.0f; i < steps; i += 1.0f) {
+        float  t   = marchStart + (i + 0.5f) * stepLen;
+        float3 pos = camPos + viewDir * t;
+        float  h   = max(pos.y - u_height_offset, 0.0f);
+        float  den = u_fog_density * exp(-u_height_falloff * h);
+        float  sT  = exp(-den * stepLen);
+        inscatter += transmit * (1.0f - sT) * (fogColor + mie * u_sun_scatter * float3(1,1,1));
+        transmit  *= sT;
+        if (transmit < 0.001f) break;
+    }
+    return float4(scene.rgb * transmit + inscatter, scene.a);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

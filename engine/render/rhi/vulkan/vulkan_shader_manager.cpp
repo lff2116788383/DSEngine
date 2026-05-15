@@ -793,6 +793,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] Edge Detect shader creation failed");
     }
+
+    // Volumetric Fog shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kVolumetricFogFS;
+        volumetric_fog_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (volumetric_fog_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Volumetric Fog shader created: handle={}", volumetric_fog_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Volumetric Fog shader creation failed");
+    }
 }
 
 // ============================================================================

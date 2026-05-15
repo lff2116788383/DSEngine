@@ -315,6 +315,11 @@ bool FramePipeline::Init() {
         render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
+    // Volumetric Fog: 全分辨率 RT（存储 scene+fog 合成结果）
+    if (render_resources_.pp_fog_rt == 0) {
+        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
 
     // GBuffer MRT: 3 颜色附件 (albedo, normal, position) + 深度
     if (render_resources_.gbuffer_rt == 0) {
@@ -829,6 +834,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
     render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
     render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
+    render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
     render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
@@ -893,6 +899,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::MotionVectorPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::OutlinePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::VolumetricFogPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DOFPass>(render_pass_context_));

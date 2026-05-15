@@ -1536,5 +1536,113 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     }
 }
 
+// ============================================================
+// VolumetricFogPass — 高度指数雾 + Mie 散射近似 raymarching
+// ============================================================
+
+void VolumetricFogPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto fog_color   = graph.DeclareResource("fog_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, fog_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    const dse::PostProcessComponent* pp = nullptr;
+    for (auto entity : pp_view) {
+        auto& p = pp_view.get<dse::PostProcessComponent>(entity);
+        if (p.enabled && p.fog_enabled) { pp = &p; break; }
+    }
+    if (!pp || ctx_.render_targets.fog == 0) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    // 获取相机参数
+    float near_p = 0.1f, far_p = 1000.0f, fov_y = 60.0f;
+    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+    glm::vec3 cam_pos{0.0f}, cam_right{1,0,0}, cam_up{0,1,0}, cam_fwd{0,0,-1};
+
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (!cam.enabled) continue;
+        near_p = cam.near_clip;
+        far_p  = cam.far_clip;
+        fov_y  = cam.fov;
+        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
+            cam_pos   = t.position;
+            cam_fwd   = glm::normalize(t.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+            cam_right = glm::normalize(t.rotation * glm::vec3(1.0f, 0.0f,  0.0f));
+            cam_up    = glm::normalize(t.rotation * glm::vec3(0.0f, 1.0f,  0.0f));
+        }
+        break;
+    }
+    const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
+
+    // 获取主平行光方向（用于 Mie 散射）
+    glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    for (auto entity : light_view) {
+        auto& l = light_view.get<dse::DirectionalLight3DComponent>(entity);
+        if (l.enabled) { sun_dir = glm::normalize(l.direction); break; }
+    }
+
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    // params 布局（30 个 float，三后端通用）：
+    // [0]      depth_tex handle
+    // [1-3]    fog_color.rgb
+    // [4]      fog_density
+    // [5]      height_falloff
+    // [6]      height_offset
+    // [7]      fog_start
+    // [8]      fog_end
+    // [9]      fog_steps
+    // [10]     sun_scatter
+    // [11-13]  sun_dir.xyz
+    // [14-16]  camera_pos.xyz
+    // [17]     near
+    // [18]     far
+    // [19-21]  cam_right.xyz
+    // [22-24]  cam_up.xyz
+    // [25-27]  cam_fwd.xyz
+    // [28]     tan_fov_y
+    // [29]     aspect
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
+    cmd_buffer.DrawPostProcess(scene_tex, "volumetric_fog", {
+        static_cast<float>(depth_tex),
+        pp->fog_color.r, pp->fog_color.g, pp->fog_color.b,
+        pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset,
+        pp->fog_start, pp->fog_end,
+        static_cast<float>(pp->fog_steps),
+        pp->fog_sun_scatter,
+        sun_dir.x, sun_dir.y, sun_dir.z,
+        cam_pos.x, cam_pos.y, cam_pos.z,
+        near_p, far_p,
+        cam_right.x, cam_right.y, cam_right.z,
+        cam_up.x, cam_up.y, cam_up.z,
+        cam_fwd.x, cam_fwd.y, cam_fwd.z,
+        tan_fov_y, aspect
+    });
+    cmd_buffer.EndRenderPass();
+
+    // 将雾效结果（已包含 scene 颜色）覆写回 scene RT
+    const unsigned int fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
+    if (fog_tex != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+        cmd_buffer.DrawPostProcess(fog_tex, "copy", {});
+        cmd_buffer.EndRenderPass();
+    }
+}
+
 } // namespace render
 } // namespace dse

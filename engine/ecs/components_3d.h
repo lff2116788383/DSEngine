@@ -183,6 +183,17 @@ struct PostProcessComponent {
     float outline_thickness = 1.0f;       // 描边粗细（像素）
     float outline_depth_threshold = 0.1f; // 深度边缘阈值
     float outline_normal_threshold = 0.4f;// 法线边缘阈值
+
+    // Volumetric Fog（高度指数雾 + Mie 散射近似 raymarching）
+    bool fog_enabled = false;
+    glm::vec3 fog_color = glm::vec3(0.70f, 0.75f, 0.85f); // 雾颜色（默认天空蓝灰）
+    float fog_density = 0.02f;        // 基础散射密度
+    float fog_height_falloff = 0.3f;  // 高度衰减系数（越大雾层越薄）
+    float fog_height_offset = 0.0f;   // 雾基线高度（世界坐标 Y）
+    float fog_start = 0.0f;           // 开始积累雾的最小距离
+    float fog_end = 1000.0f;          // 雾效最大步进距离
+    int fog_steps = 16;               // Raymarching 步数（8~32 可用）
+    float fog_sun_scatter = 0.6f;     // 日光 Mie 散射强度
 };
 
 #define CSM_CASCADES 3

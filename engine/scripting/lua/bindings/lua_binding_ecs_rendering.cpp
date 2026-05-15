@@ -1076,6 +1076,27 @@ int L_EcsSetPostProcessOutline(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessFog(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) { lua_pushboolean(L, 0); return 1; }
+    pp->fog_enabled        = lua_isnoneornil(L, 2)  ? pp->fog_enabled        : helper::CheckBool(L, 2);
+    pp->fog_density        = helper::OptFloat(L,  3, pp->fog_density);
+    pp->fog_height_falloff = helper::OptFloat(L,  4, pp->fog_height_falloff);
+    pp->fog_height_offset  = helper::OptFloat(L,  5, pp->fog_height_offset);
+    pp->fog_start          = helper::OptFloat(L,  6, pp->fog_start);
+    pp->fog_end            = helper::OptFloat(L,  7, pp->fog_end);
+    if (!lua_isnoneornil(L, 8)) pp->fog_steps = static_cast<int>(luaL_checknumber(L, 8));
+    pp->fog_sun_scatter    = helper::OptFloat(L,  9, pp->fog_sun_scatter);
+    pp->fog_color.r        = helper::OptFloat(L, 10, pp->fog_color.r);
+    pp->fog_color.g        = helper::OptFloat(L, 11, pp->fog_color.g);
+    pp->fog_color.b        = helper::OptFloat(L, 12, pp->fog_color.b);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1363,6 +1384,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_film_grain", L_EcsSetPostProcessFilmGrain},
         {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
         {"set_post_process_outline",  L_EcsSetPostProcessOutline},
+        {"set_post_process_fog",      L_EcsSetPostProcessFog},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},
