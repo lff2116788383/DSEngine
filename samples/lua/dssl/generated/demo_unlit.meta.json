@@ -1,0 +1,15 @@
+{
+  "shader_type": "unlit",
+  "has_light": false,
+  "render_modes": {
+    "blend": "blend_mix",
+    "cull": "cull_back",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "albedo_color", "type": "vec4", "default": "vec4(0.0, 0.8, 1.0, 0.8)", "hints": ["color"]},
+    {"name": "albedo_tex", "type": "sampler2D", "is_sampler": true, "hints": ["filter_linear_mipmap", "white_default"]}
+  ]
+}

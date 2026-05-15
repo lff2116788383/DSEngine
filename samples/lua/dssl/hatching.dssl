@@ -1,0 +1,41 @@
+// DSSL — 交叉线影光照 (素描/版画风)
+// 根据光照强度在屏幕空间叠加多层线影图案
+// 暗区 = 密集交叉线 (墨色)，亮区 = 干净纸色
+shader_type surface;
+render_mode cull_back;
+
+uniform vec4 ink_color : color = vec4(0.1, 0.08, 0.05, 1.0);
+uniform vec4 paper_color : color = vec4(0.95, 0.92, 0.85, 1.0);
+uniform float hatch_density : range(5.0, 80.0) = 30.0;
+uniform float hatch_thickness : range(0.1, 0.9) = 0.4;
+
+void surface() {
+    ALBEDO = paper_color.rgb;
+    ALPHA = 1.0;
+    METALLIC = 0.0;
+    ROUGHNESS = 1.0;
+    AO = 0.0;
+}
+
+void light() {
+    float intensity = NdotL * ATTENUATION * SHADOW;
+
+    // 屏幕空间线影坐标
+    vec2 hatch_uv = gl_FragCoord.xy / hatch_density;
+
+    // 3 层方向不同的线影
+    float line1 = abs(fract(hatch_uv.x + hatch_uv.y) - 0.5) * 2.0;
+    float line2 = abs(fract(hatch_uv.x - hatch_uv.y) - 0.5) * 2.0;
+    float line3 = abs(fract(hatch_uv.x * 0.7 + hatch_uv.y * 1.3) - 0.5) * 2.0;
+
+    // 亮度越低，叠加越多层线影
+    float t = hatch_thickness;
+    float hatch = 1.0;
+    if (intensity < 0.75) hatch = min(hatch, smoothstep(t - 0.1, t, line1));
+    if (intensity < 0.50) hatch = min(hatch, smoothstep(t - 0.1, t, line2));
+    if (intensity < 0.25) hatch = min(hatch, smoothstep(t - 0.1, t, line3));
+
+    vec3 ink_linear = pow(ink_color.rgb, vec3(2.2));
+    vec3 hatched = mix(ink_linear, surface_albedo, hatch);
+    DIFFUSE_LIGHT = hatched * LIGHT_COLOR * LIGHT_INTENSITY * ATTENUATION;
+}

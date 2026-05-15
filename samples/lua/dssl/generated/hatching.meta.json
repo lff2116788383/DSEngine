@@ -1,0 +1,17 @@
+{
+  "shader_type": "surface",
+  "has_light": true,
+  "render_modes": {
+    "blend": "blend_mix",
+    "cull": "cull_back",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "ink_color", "type": "vec4", "default": "vec4(0.1, 0.08, 0.05, 1.0)", "hints": ["color"]},
+    {"name": "paper_color", "type": "vec4", "default": "vec4(0.95, 0.92, 0.85, 1.0)", "hints": ["color"]},
+    {"name": "hatch_density", "type": "float", "default": "30.0", "hints": ["range(5.0", "80.0)"]},
+    {"name": "hatch_thickness", "type": "float", "default": "0.4", "hints": ["range(0.1", "0.9)"]}
+  ]
+}

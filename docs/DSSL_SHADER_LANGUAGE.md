@@ -202,9 +202,10 @@ void surface() {
 void light() {
     // 引擎为每个光源调用一次
     // 输入: LIGHT_DIR, LIGHT_COLOR, LIGHT_INTENSITY, ATTENUATION, SHADOW
+    //       NdotL, NdotV, H (半角向量), NdotH — 预计算便捷变量
+    //       N (法线), V (视线方向), surface_albedo (线性空间)
     // 输出: DIFFUSE_LIGHT, SPECULAR_LIGHT
-    float NdotL = max(dot(NORMAL, LIGHT_DIR), 0.0);
-    DIFFUSE_LIGHT += LIGHT_COLOR * LIGHT_INTENSITY * NdotL * ATTENUATION * SHADOW;
+    DIFFUSE_LIGHT = surface_albedo * NdotL * LIGHT_COLOR * LIGHT_INTENSITY * ATTENUATION * SHADOW;
 }
 ```
 
@@ -638,8 +639,19 @@ bin/dse_shader_compiler --input-dir engine/render/shaders/dssl/generated --outpu
 | `flag_wave.dssl` | surface | vert + frag | 顶点动画 (vertex() + TIME) |
 | `unlit_default.dssl` | unlit | vert + frag | 无光照 |
 | `grayscale_post.dssl` | postprocess | frag | 全屏灰度后处理 |
+| `hatching.dssl` | surface (light) | vert + frag | 交叉线影光照（素描风） |
+| `gradient_ramp.dssl` | surface (light) | vert + frag | 渐变 ramp 映射光照 |
+| `minnaert.dssl` | surface (light) | vert + frag | Minnaert 月球散射模型 |
 
-**全部 6 DSSL → 11 GLSL 450 → SPIR-V + GLSL 330 + HLSL 零错误通过。**
+**全部 DSSL → GLSL 450 零错误通过。**
+
+#### NPR 自定义光照预设说明
+
+| 预设 | 光照模型 | 可调参数 |
+|------|---------|----------|
+| `hatching.dssl` | 屏幕空间 3 层交叉线影 | `ink_color`, `paper_color`, `hatch_density`, `hatch_thickness` |
+| `gradient_ramp.dssl` | NdotL 量化为离散色带 + 冷暖插值 | `warm_color`, `cool_color`, `ramp_bands`, `ramp_smoothness` |
+| `minnaert.dssl` | Minnaert limb darkening/brightening | `darkness` (k<1 边缘增亮, k=1 Lambert, k>1 边缘变暗) |
 
 ### ✅ Phase 3 — 运行时 MaterialInstance + Lua 绑定
 

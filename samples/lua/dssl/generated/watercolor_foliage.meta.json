@@ -1,0 +1,19 @@
+{
+  "shader_type": "surface",
+  "has_light": false,
+  "render_modes": {
+    "blend": "blend_mix",
+    "cull": "cull_disabled",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "albedo_color", "type": "vec4", "default": "vec4(0.35, 0.7, 0.3, 0.9)", "hints": ["color"]},
+    {"name": "albedo_tex", "type": "sampler2D", "is_sampler": true, "hints": ["filter_linear_mipmap", "white_default"]},
+    {"name": "paper_strength", "type": "float", "default": "0.2", "hints": ["range(0.0", "1.0)"]},
+    {"name": "edge_darkening", "type": "float", "default": "0.6", "hints": ["range(0.0", "1.0)"]},
+    {"name": "color_bleed", "type": "float", "default": "0.5", "hints": ["range(0.0", "1.0)"]},
+    {"name": "pigment_density", "type": "float", "default": "0.8", "hints": ["range(0.1", "2.0)"]}
+  ]
+}

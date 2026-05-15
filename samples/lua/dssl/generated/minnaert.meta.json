@@ -1,0 +1,16 @@
+{
+  "shader_type": "surface",
+  "has_light": true,
+  "render_modes": {
+    "blend": "blend_mix",
+    "cull": "cull_back",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "albedo_color", "type": "vec4", "default": "vec4(0.75, 0.73, 0.7, 1.0)", "hints": ["color"]},
+    {"name": "albedo_tex", "type": "sampler2D", "is_sampler": true, "hints": ["filter_linear_mipmap", "white_default"]},
+    {"name": "darkness", "type": "float", "default": "1.5", "hints": ["range(0.0", "3.0)"]}
+  ]
+}

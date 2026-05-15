@@ -1,0 +1,26 @@
+// DSSL — Minnaert 月球表面散射模型
+// 基于 Minnaert 法则: I = NdotL^k * NdotV^(k-1)
+// k<1 = 边缘增亮 (limb brightening)
+// k=1 = 标准 Lambert
+// k>1 = 边缘变暗 (limb darkening, 月球/丝绒效果)
+shader_type surface;
+render_mode cull_back;
+
+uniform vec4 albedo_color : color = vec4(0.75, 0.73, 0.7, 1.0);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform float darkness : range(0.0, 3.0) = 1.5;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb;
+    ALPHA = tex.a * albedo_color.a;
+    METALLIC = 0.0;
+    ROUGHNESS = 0.8;
+}
+
+void light() {
+    float k = darkness;
+    float minnaert = pow(max(NdotL, 0.001), k) * pow(max(NdotV, 0.001), k - 1.0);
+    vec3 diffuse = surface_albedo * minnaert / PI;
+    DIFFUSE_LIGHT = diffuse * LIGHT_COLOR * LIGHT_INTENSITY * ATTENUATION * SHADOW;
+}

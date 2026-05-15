@@ -1,0 +1,18 @@
+{
+  "shader_type": "surface",
+  "has_light": false,
+  "render_modes": {
+    "blend": "blend_disabled",
+    "cull": "cull_back",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "albedo_color", "type": "vec4", "default": "vec4(0.1, 0.1, 0.1, 1.0)", "hints": ["color"]},
+    {"name": "emission_color", "type": "vec3", "default": "vec3(1.0, 0.3, 0.0)", "hints": ["color"]},
+    {"name": "emission_strength", "type": "float", "default": "3.0", "hints": ["range(0.0", "10.0)"]},
+    {"name": "metallic", "type": "float", "default": "0.8", "hints": ["range(0.0", "1.0)"]},
+    {"name": "roughness", "type": "float", "default": "0.2", "hints": ["range(0.04", "1.0)"]}
+  ]
+}

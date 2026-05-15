@@ -1,0 +1,39 @@
+// DSSL — 渐变 Ramp 映射光照
+// 将 NdotL 量化为离散色带，支持冷暖色调插值
+// 效果类似手绘动画的分层着色
+shader_type surface;
+render_mode cull_back;
+
+uniform vec4 albedo_color : color = vec4(1.0, 0.85, 0.7, 1.0);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform vec4 warm_color : color = vec4(1.0, 0.9, 0.7, 1.0);
+uniform vec4 cool_color : color = vec4(0.3, 0.4, 0.6, 1.0);
+uniform float ramp_smoothness : range(0.0, 1.0) = 0.1;
+uniform float ramp_bands : range(2.0, 8.0) = 4.0;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb;
+    ALPHA = tex.a * albedo_color.a;
+    METALLIC = 0.0;
+    ROUGHNESS = 1.0;
+}
+
+void light() {
+    float ramp = NdotL;
+
+    // 量化为离散色带
+    float bands = ramp_bands;
+    float stepped = floor(ramp * bands) / bands;
+    float frac_part = fract(ramp * bands);
+    float s = ramp_smoothness;
+    ramp = mix(stepped, stepped + 1.0 / bands,
+               smoothstep(0.5 - s * 0.5, 0.5 + s * 0.5, frac_part));
+
+    // 冷暖色调插值
+    vec3 warm_linear = pow(warm_color.rgb, vec3(2.2));
+    vec3 cool_linear = pow(cool_color.rgb, vec3(2.2));
+    vec3 ramp_color = mix(cool_linear, warm_linear, ramp);
+
+    DIFFUSE_LIGHT = surface_albedo * ramp_color * LIGHT_COLOR * LIGHT_INTENSITY * ATTENUATION * SHADOW;
+}

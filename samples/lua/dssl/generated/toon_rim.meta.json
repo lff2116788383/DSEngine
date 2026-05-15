@@ -1,0 +1,21 @@
+{
+  "shader_type": "surface",
+  "has_light": false,
+  "render_modes": {
+    "blend": "blend_mix",
+    "cull": "cull_back",
+    "depth_draw": "depth_draw_opaque",
+    "shadows_enabled": true,
+    "alpha_test": false
+  },
+  "uniforms": [
+    {"name": "albedo_color", "type": "vec4", "default": "vec4(1.0, 0.9, 0.82, 1.0)", "hints": ["color"]},
+    {"name": "albedo_tex", "type": "sampler2D", "is_sampler": true, "hints": ["filter_linear_mipmap", "white_default"]},
+    {"name": "shadow_color", "type": "vec4", "default": "vec4(0.2, 0.12, 0.22, 1.0)", "hints": ["color"]},
+    {"name": "shadow_threshold", "type": "float", "default": "0.4", "hints": ["range(0.0", "1.0)"]},
+    {"name": "shadow_softness", "type": "float", "default": "0.15", "hints": ["range(0.0", "0.5)"]},
+    {"name": "specular_size", "type": "float", "default": "0.4", "hints": ["range(0.0", "1.0)"]},
+    {"name": "specular_strength", "type": "float", "default": "0.5", "hints": ["range(0.0", "2.0)"]},
+    {"name": "rim_strength", "type": "float", "default": "0.7", "hints": ["range(0.0", "2.0)"]}
+  ]
+}

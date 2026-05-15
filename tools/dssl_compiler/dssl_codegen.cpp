@@ -531,6 +531,10 @@ void main() {
         float LIGHT_INTENSITY = u_light_intensity;
         float ATTENUATION = 1.0;
         float SHADOW = 1.0 - ShadowCalculation(vFragPos, vFragPosViewSpace, N, LIGHT_DIR);
+        float NdotL = max(dot(N, LIGHT_DIR), 0.0);
+        float NdotV = max(dot(N, V), 0.0);
+        vec3 H = normalize(V + LIGHT_DIR);
+        float NdotH = max(dot(N, H), 0.0);
         vec3 DIFFUSE_LIGHT = vec3(0.0);
         vec3 SPECULAR_LIGHT = vec3(0.0);
         {
@@ -601,6 +605,10 @@ void main() {
         float SHADOW = 1.0;
         if (u_point_lights[i].cast_shadow != 0)
             SHADOW = 1.0 - PointShadowCalculation(u_point_lights[i].shadow_index, vFragPos, u_point_lights[i].position, u_point_lights[i].radius);
+        float NdotL = max(dot(N, LIGHT_DIR), 0.0);
+        float NdotV = max(dot(N, V), 0.0);
+        vec3 H = normalize(V + LIGHT_DIR);
+        float NdotH = max(dot(N, H), 0.0);
         vec3 DIFFUSE_LIGHT = vec3(0.0);
         vec3 SPECULAR_LIGHT = vec3(0.0);
         {
@@ -670,6 +678,10 @@ void main() {
         float SHADOW = 1.0;
         if (u_spot_lights[i].cast_shadow != 0)
             SHADOW = 1.0 - SpotShadowCalculation(u_spot_lights[i].shadow_index, vFragPos, N, LIGHT_DIR);
+        float NdotL = max(dot(N, LIGHT_DIR), 0.0);
+        float NdotV = max(dot(N, V), 0.0);
+        vec3 H = normalize(V + LIGHT_DIR);
+        float NdotH = max(dot(N, H), 0.0);
         vec3 DIFFUSE_LIGHT = vec3(0.0);
         vec3 SPECULAR_LIGHT = vec3(0.0);
         {
@@ -951,6 +963,7 @@ static std::string GenerateMetaJSON(const DSSLModule& mod) {
         case ShaderType::Canvas:      type_name = "canvas"; break;
     }
     out << "  \"shader_type\": \"" << type_name << "\",\n";
+    out << "  \"has_light\": " << (!mod.light_body.empty() ? "true" : "false") << ",\n";
 
     // render_modes
     out << "  \"render_modes\": {\n";
