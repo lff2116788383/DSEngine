@@ -28,9 +28,17 @@ public:
      * @param cmd_buffer 渲染命令缓冲
      */
     void Render(World& world, CommandBuffer& cmd_buffer);
+
+    /**
+     * @brief 渲染透明物体 (WBOIT)
+     * @param wboit_mode 1=accumulation, 2=revealage
+     */
+    void RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode);
+
     void SetAssetManager(AssetManager* asset_manager);
 private:
     AssetManager* asset_manager_ = nullptr;
+    std::vector<MeshDrawItem> transparent_items_;  ///< 每帧缓存的透明绘制项
 };
 
 } // namespace gameplay3d

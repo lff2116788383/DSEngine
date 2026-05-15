@@ -70,8 +70,8 @@ unsigned int DX11PipelineStateManager::CreatePipelineState(const PipelineStateDe
     blend_desc.RenderTarget[0].SrcBlend = ToD3D11Blend(desc.blend_src);
     blend_desc.RenderTarget[0].DestBlend = ToD3D11Blend(desc.blend_dst);
     blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-    blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-    blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    blend_desc.RenderTarget[0].SrcBlendAlpha = ToD3D11Blend(desc.alpha_blend_src);
+    blend_desc.RenderTarget[0].DestBlendAlpha = ToD3D11Blend(desc.alpha_blend_dst);
     blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 

@@ -138,6 +138,7 @@ const float PI = 3.14159265359;
 #define u_shadow_strength     light_params.y
 #define u_receive_shadow      (light_params.z != 0.0)
 #define u_cascade_splits      cascade_splits.xyz
+#define u_wboit_mode          cascade_splits.w
 
 #define u_material_albedo           albedo.xyz
 #define u_material_metallic         albedo.w
@@ -408,6 +409,20 @@ float PointShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 light
     return (currentDepth - bias) > closestDepth ? u_shadow_strength : 0.0;
 }
 
+void OutputFragment(vec3 color, float alpha) {
+    if (u_wboit_mode > 0.5) {
+        float z = gl_FragCoord.z;
+        float w = alpha * max(1e-2, 3e3 * pow(1.0 - z, 3.0));
+        if (u_wboit_mode < 1.5) {
+            FragColor = vec4(color * alpha * w, alpha * w);
+        } else {
+            FragColor = vec4(0.0, 0.0, 0.0, alpha);
+        }
+        return;
+    }
+    FragColor = vec4(color, alpha);
+}
+
 void main() {
     vec2 finalUV = vTexCoord;
     if (u_pom_height_scale > 0.0 && u_has_normal_map) {
@@ -433,7 +448,7 @@ void main() {
             result = result / (result + vec3(1.0));
             result = pow(result, vec3(1.0/2.2));
         }
-        FragColor = vec4(result, texColor.a * vColor.a);
+        OutputFragment(result, texColor.a * vColor.a);
         return;
     }
 
@@ -452,7 +467,7 @@ void main() {
         float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
         float shadow_multiplier = 1.0 - shadow * 0.5;
         vec3 color = (diffuse_color + specular_color) * shadow_multiplier;
-        FragColor = vec4(color, 1.0);
+        OutputFragment(color, 1.0);
         return;
     }
 
@@ -477,7 +492,7 @@ void main() {
         vec3 color = diffuse + specular + vec3(rim);
         color = color / (color + vec3(1.0));
         color = pow(color, vec3(1.0 / 2.2));
-        FragColor = vec4(color, texColor.a * vColor.a);
+        OutputFragment(color, texColor.a * vColor.a);
         return;
     }
 
@@ -522,7 +537,7 @@ void main() {
         // 色调映射 + gamma
         diffuse = diffuse / (diffuse + vec3(1.0));
         diffuse = pow(diffuse, vec3(1.0 / 2.2));
-        FragColor = vec4(diffuse, texColor.a * vColor.a);
+        OutputFragment(diffuse, texColor.a * vColor.a);
         return;
     }
 
@@ -541,7 +556,7 @@ void main() {
         vec3 color_st = material_color * texColor.rgb * vColor.rgb;
         float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
         float shadow_multiplier = 1.0 - shadow * 0.5;
-        FragColor = vec4(color_st * shadow_multiplier, texColor.a * vColor.a);
+        OutputFragment(color_st * shadow_multiplier, texColor.a * vColor.a);
         return;
     }
 
@@ -691,5 +706,5 @@ void main() {
 
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
-    FragColor = vec4(color, texColor.a * vColor.a);
+    OutputFragment(color, texColor.a * vColor.a);
 }

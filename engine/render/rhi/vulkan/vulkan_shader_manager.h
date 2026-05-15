@@ -153,6 +153,7 @@ public:
     unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
     unsigned int volumetric_fog_shader_handle() const { return volumetric_fog_shader_handle_; }
     unsigned int decal_shader_handle() const { return decal_shader_handle_; }
+    unsigned int wboit_composite_shader_handle() const { return wboit_composite_shader_handle_; }
 
     /// 着色器程序计数
     std::size_t programs_created() const { return programs_created_; }
@@ -224,6 +225,7 @@ private:
     unsigned int edge_detect_shader_handle_ = 0;
     unsigned int volumetric_fog_shader_handle_ = 0;
     unsigned int decal_shader_handle_ = 0;
+    unsigned int wboit_composite_shader_handle_ = 0;
 
     /// Compute 着色器程序
     std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;

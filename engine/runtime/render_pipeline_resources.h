@@ -25,6 +25,8 @@ struct RenderPipelineResources {
     unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
     unsigned int pp_outline_rt = 0;       // Outline / Edge Detection
     unsigned int pp_fog_rt = 0;           // Volumetric Fog
+    unsigned int wboit_accum_rt = 0;      // WBOIT accumulation (RGBA16F)
+    unsigned int wboit_reveal_rt = 0;     // WBOIT revealage (RGBA16F)
 
     unsigned int gbuffer_rt = 0;            // GBuffer MRT (3 color + depth)
     unsigned int deferred_lighting_rt = 0;   // Deferred lighting output
@@ -41,6 +43,8 @@ struct RenderPipelineResources {
     unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int shadow_pipeline_state = 0;
     unsigned int decal_blend_pipeline_state = 0;
+    unsigned int wboit_accum_pipeline_state = 0;
+    unsigned int wboit_reveal_pipeline_state = 0;
 
     void Reset() {
         main_render_target = 0;
@@ -66,6 +70,8 @@ struct RenderPipelineResources {
         pp_motion_vector_rt = 0;
         pp_outline_rt = 0;
         pp_fog_rt = 0;
+        wboit_accum_rt = 0;
+        wboit_reveal_rt = 0;
         gbuffer_rt = 0;
         deferred_lighting_rt = 0;
         pp_lum_temp_rt = 0;
@@ -77,6 +83,8 @@ struct RenderPipelineResources {
         composite_pipeline_state = 0;
         shadow_pipeline_state = 0;
         decal_blend_pipeline_state = 0;
+        wboit_accum_pipeline_state = 0;
+        wboit_reveal_pipeline_state = 0;
     }
 };
 

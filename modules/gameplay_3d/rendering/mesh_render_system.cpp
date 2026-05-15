@@ -1124,8 +1124,23 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
     }
 
-    if (!batch_items.empty()) {
-        std::sort(batch_items.begin(), batch_items.end(), [](const MeshDrawItem& a, const MeshDrawItem& b) {
+    // 分离不透明与透明绘制项
+    transparent_items_.clear();
+    std::vector<MeshDrawItem> opaque_items;
+    opaque_items.reserve(batch_items.size());
+    for (auto& item : batch_items) {
+        const bool is_transparent =
+            item.blend_mode != static_cast<unsigned int>(MaterialBlendMode::Opaque)
+            || item.color.a < 0.999f;
+        if (is_transparent) {
+            transparent_items_.push_back(std::move(item));
+        } else {
+            opaque_items.push_back(std::move(item));
+        }
+    }
+
+    if (!opaque_items.empty()) {
+        std::sort(opaque_items.begin(), opaque_items.end(), [](const MeshDrawItem& a, const MeshDrawItem& b) {
             if (a.sorting_layer != b.sorting_layer) {
                 return a.sorting_layer < b.sorting_layer;
             }
@@ -1134,8 +1149,17 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             }
             return a.model[3].z < b.model[3].z;
         });
-        cmd_buffer.DrawMeshBatch(batch_items);
+        cmd_buffer.DrawMeshBatch(opaque_items);
     }
+}
+
+void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode) {
+    if (transparent_items_.empty()) return;
+
+    for (auto& item : transparent_items_) {
+        item.wboit_mode = wboit_mode;
+    }
+    cmd_buffer.DrawMeshBatch(transparent_items_);
 }
 
 } // namespace gameplay3d

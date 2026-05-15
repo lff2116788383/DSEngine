@@ -1645,6 +1645,71 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// WBOITPass — Weighted Blended Order-Independent Transparency
+// ============================================================
+
+void WBOITPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto wboit_accum = graph.DeclareResource("wboit_accum");
+    auto wboit_reveal = graph.DeclareResource("wboit_reveal");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, wboit_accum);
+    graph.PassWrite(pass, wboit_reveal);
+    graph.PassWrite(pass, scene_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
+    if (ctx_.render_targets.wboit_accum == 0 || ctx_.render_targets.wboit_reveal == 0) return;
+
+    const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+
+    // --- Pass 1: Accumulation (blend ONE, ONE) ---
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_accum);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_accum, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
+
+    if (ctx_.render_transparent_meshes) {
+        ctx_.render_transparent_meshes(*ctx_.world, cmd_buffer, 1);
+    }
+    for (auto& mod : ctx_.modules) {
+        if (mod.instance) {
+            mod.instance->OnRenderTransparent(*ctx_.world, cmd_buffer, scene_clip_correction, 1);
+        }
+    }
+    cmd_buffer.EndRenderPass();
+
+    // --- Pass 2: Revealage (blend ZERO, ONE_MINUS_SRC_ALPHA) ---
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_reveal);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_reveal, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true});
+
+    if (ctx_.render_transparent_meshes) {
+        ctx_.render_transparent_meshes(*ctx_.world, cmd_buffer, 2);
+    }
+    for (auto& mod : ctx_.modules) {
+        if (mod.instance) {
+            mod.instance->OnRenderTransparent(*ctx_.world, cmd_buffer, scene_clip_correction, 2);
+        }
+    }
+    cmd_buffer.EndRenderPass();
+
+    // --- Pass 3: Composite WBOIT onto scene RT ---
+    const unsigned int accum_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_accum);
+    const unsigned int reveal_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_reveal);
+    if (accum_tex == 0 || reveal_tex == 0) return;
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+    cmd_buffer.DrawPostProcess(accum_tex, "wboit_composite", {
+        static_cast<float>(reveal_tex)
+    });
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
 // DecalPass — Screen-Space Decal (深度重建 + 盒体投影)
 // ============================================================
 

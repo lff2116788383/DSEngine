@@ -339,7 +339,7 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
     ubo.light_params = glm::vec4(item.light_intensity, item.shadow_strength,
                                   item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(item.shading_mode));
     ubo.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1],
-                                    global_state_.cascade_splits[2], 0.0f);
+                                    global_state_.cascade_splits[2], static_cast<float>(item.wboit_mode));
     for (int i = 0; i < 3; ++i) {
         ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
@@ -1942,6 +1942,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.volumetric_fog_shader_handle();
     else if (effect_name == "decal" && shader_mgr.decal_shader_handle())
         selected_shader_handle = shader_mgr.decal_shader_handle();
+    else if (effect_name == "wboit_composite" && shader_mgr.wboit_composite_shader_handle())
+        selected_shader_handle = shader_mgr.wboit_composite_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -2021,6 +2023,9 @@ void VulkanDrawExecutor::DrawPostProcess(
         unsigned int depth_h = static_cast<unsigned int>(params[0]);
         unsigned int decal_h = static_cast<unsigned int>(params[1]);
         extra_bindings = {{2, depth_h}, {3, decal_h}};
+    } else if (effect_name == "wboit_composite" && params.size() >= 1) {
+        unsigned int reveal_h = static_cast<unsigned int>(params[0]);
+        extra_bindings = {{2, reveal_h}};
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -2160,6 +2165,10 @@ void VulkanDrawExecutor::DrawPostProcess(
         } else if (effect_name == "decal" && params.size() >= 26) {
             float pc[26];
             for (int i = 0; i < 26; ++i) pc[i] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "wboit_composite" && params.size() >= 1) {
+            float pc[1] = { params[0] };
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         }

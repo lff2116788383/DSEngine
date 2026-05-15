@@ -264,6 +264,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- WBOIT (Weighted Blended OIT) Pass ----
+class WBOITPass : public IRenderPass {
+public:
+    explicit WBOITPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "wboit_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Screen-Space Decal Pass ----
 class DecalPass : public IRenderPass {
 public:

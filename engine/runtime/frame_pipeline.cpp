@@ -321,6 +321,17 @@ bool FramePipeline::Init() {
             {render_width, render_height, true, false, false});
     }
 
+    // WBOIT accumulation: 全分辨率 RGBA16F（需要 HDR 精度累积加权颜色）
+    if (render_resources_.wboit_accum_rt == 0) {
+        render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
+    // WBOIT revealage: 全分辨率（R 通道存储 prod(1-alpha_i)）
+    if (render_resources_.wboit_reveal_rt == 0) {
+        render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
+
     // GBuffer MRT: 3 颜色附件 (albedo, normal, position) + 深度
     if (render_resources_.gbuffer_rt == 0) {
         RenderTargetDesc gbuf_desc;
@@ -430,6 +441,30 @@ bool FramePipeline::Init() {
         Shutdown();
         return false;
     }
+
+    // WBOIT accumulation: additive blend (ONE, ONE), depth test OFF, depth write OFF
+    PipelineStateDesc wboit_accum_desc;
+    wboit_accum_desc.blend_enabled = true;
+    wboit_accum_desc.blend_src = BlendFactor::One;
+    wboit_accum_desc.blend_dst = BlendFactor::One;
+    wboit_accum_desc.alpha_blend_src = BlendFactor::One;
+    wboit_accum_desc.alpha_blend_dst = BlendFactor::One;
+    wboit_accum_desc.depth_test_enabled = false;
+    wboit_accum_desc.depth_write_enabled = false;
+    wboit_accum_desc.culling_enabled = false;
+    render_resources_.wboit_accum_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(wboit_accum_desc);
+
+    // WBOIT revealage: blend (ZERO, ONE_MINUS_SRC_ALPHA), depth test OFF, depth write OFF
+    PipelineStateDesc wboit_reveal_desc;
+    wboit_reveal_desc.blend_enabled = true;
+    wboit_reveal_desc.blend_src = BlendFactor::Zero;
+    wboit_reveal_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+    wboit_reveal_desc.alpha_blend_src = BlendFactor::Zero;
+    wboit_reveal_desc.alpha_blend_dst = BlendFactor::OneMinusSrcAlpha;
+    wboit_reveal_desc.depth_test_enabled = false;
+    wboit_reveal_desc.depth_write_enabled = false;
+    wboit_reveal_desc.culling_enabled = false;
+    render_resources_.wboit_reveal_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(wboit_reveal_desc);
 
     DEBUG_LOG_INFO("FramePipeline init: systems init begin");
     gameplay2d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
@@ -826,6 +861,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.pipeline_states.shadow    = render_resources_.shadow_pipeline_state;
     render_pass_context_.pipeline_states.composite = render_resources_.composite_pipeline_state;
     render_pass_context_.pipeline_states.decal_blend = render_resources_.decal_blend_pipeline_state;
+    render_pass_context_.pipeline_states.wboit_accum = render_resources_.wboit_accum_pipeline_state;
+    render_pass_context_.pipeline_states.wboit_reveal = render_resources_.wboit_reveal_pipeline_state;
 
     render_pass_context_.render_targets.main     = render_resources_.main_render_target;
     render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
@@ -850,6 +887,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
     render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
     render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
+    render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
+    render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
     render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
@@ -876,6 +915,9 @@ void FramePipeline::BuildRenderGraphInternal() {
     };
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
         mesh_render_system_.Render(world, cmd);
+    };
+    render_pass_context_.render_transparent_meshes = [this](World& world, CommandBuffer& cmd, int wboit_mode) {
+        mesh_render_system_.RenderTransparent(world, cmd, wboit_mode);
     };
 
     // ---- 声明外部输出 ----
@@ -907,6 +949,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::WBOITPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ContactShadowPass>(render_pass_context_));

@@ -63,9 +63,17 @@ public:
     virtual void OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) {}
 
     /**
-     * @brief 模块渲染：Scene (主场景渲染阶段)
+     * @brief 模块渲染：Scene (主场景渲染阶段，仅不透明物体)
      */
     virtual void OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f)) {}
+
+    /**
+     * @brief 模块渲染：Transparent (WBOIT 透明物体渲染阶段)
+     *
+     * ForwardScenePass 结束后由 WBOITPass 调用，仅渲染 blend_mode != Opaque 的半透明物体。
+     * @param wboit_mode 1=accumulation, 2=revealage
+     */
+    virtual void OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) {}
 
     /**
      * @brief 模块渲染：UI (独立于场景的 UI 渲染阶段)

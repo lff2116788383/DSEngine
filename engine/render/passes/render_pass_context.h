@@ -47,6 +47,8 @@ struct RenderPassContext {
         unsigned int shadow = 0;
         unsigned int composite = 0;
         unsigned int decal_blend = 0;
+        unsigned int wboit_accum = 0;
+        unsigned int wboit_reveal = 0;
     } pipeline_states;
 
     struct RenderTargets {
@@ -69,6 +71,8 @@ struct RenderPassContext {
         unsigned int motion_vector = 0;     // Motion Vector RT (RG16F)
         unsigned int outline = 0;            // Outline / Edge Detection RT
         unsigned int fog = 0;               // Volumetric Fog RT
+        unsigned int wboit_accum = 0;        // WBOIT accumulation RT (RGBA16F)
+        unsigned int wboit_reveal = 0;       // WBOIT revealage RT (RGBA16F)
         unsigned int gbuffer = 0;           // GBuffer MRT (3 color + depth)
         unsigned int deferred_lighting = 0; // Deferred lighting output RT
         unsigned int lum_temp = 0;          // 64x64 log luminance
@@ -102,6 +106,7 @@ struct RenderPassContext {
     std::function<void(World&, CommandBuffer&)> render_2d_scene;
     std::function<void(World&, CommandBuffer&, int, int, const glm::mat4&)> render_2d_ui;
     std::function<void(World&, CommandBuffer&)> render_meshes;
+    std::function<void(World&, CommandBuffer&, int wboit_mode)> render_transparent_meshes;
 };
 
 } // namespace render

@@ -292,6 +292,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
     edge_detect_shader_handle_ = create_pp_shader(dx11_shaders::kEdgeDetectPS, "edge_detect");
     volumetric_fog_shader_handle_ = create_pp_shader(dx11_shaders::kVolumetricFogPS, "volumetric_fog");
     decal_shader_handle_ = create_pp_shader(dx11_shaders::kDecalPS, "decal");
+    wboit_composite_shader_handle_ = create_pp_shader(dx11_shaders::kWboitCompositePS, "wboit_composite");
 
     // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
     gbuffer_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kGBufferPS);

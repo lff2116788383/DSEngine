@@ -50,9 +50,10 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
             glDisable(GL_BLEND);
         }
     }
-    if (state.blend_enabled && (state.blend_src != cached.blend_src || state.blend_dst != cached.blend_dst)) {
+    if (state.blend_enabled && (state.blend_src != cached.blend_src || state.blend_dst != cached.blend_dst
+        || state.alpha_blend_src != cached.alpha_blend_src || state.alpha_blend_dst != cached.alpha_blend_dst)) {
         glBlendFuncSeparate(ToGLBlendFactor(state.blend_src), ToGLBlendFactor(state.blend_dst),
-                            GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+                            ToGLBlendFactor(state.alpha_blend_src), ToGLBlendFactor(state.alpha_blend_dst));
     }
 
     // --- 深度测试 Diff ---

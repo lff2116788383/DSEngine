@@ -508,7 +508,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         first.light_intensity, first.shadow_strength,
         first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
     scene_data.cascade_splits = glm::vec4(
-        global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], 0.0f);
+        global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first.wboit_mode));
     for (int i = 0; i < 3; ++i)
         scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
@@ -1423,6 +1423,21 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         draw_dedicated_pp(shader_mgr.decal_shader_handle());
         ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
         dc->PSSetShaderResources(1, 2, null_srvs);
+        return;
+    }
+
+    // WBOIT Composite 专用路径
+    if (effect_name == "wboit_composite" && shader_mgr.wboit_composite_shader_handle()) {
+        if (params.size() >= 1) {
+            const auto* reveal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (reveal_tex) dc->PSSetShaderResources(1, 1, reveal_tex->srv.GetAddressOf());
+        }
+        // Alpha blending for composite onto scene
+        float blend_factor[4] = {0, 0, 0, 0};
+        dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF);
+        draw_dedicated_pp(shader_mgr.wboit_composite_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
         return;
     }
 

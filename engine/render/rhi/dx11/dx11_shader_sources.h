@@ -467,6 +467,19 @@ float ShadowCalculation(float3 fragPosWorld, float3 fragPosView, float3 normal, 
 )";
 
 constexpr const char* kPbrPS_Part2 = R"(
+float4 OutputFragment(float3 color, float alpha, float z_depth) {
+    float wboit_mode = cascade_splits.w;
+    if (wboit_mode > 0.5) {
+        float w = alpha * max(1e-2, 3e3 * pow(1.0 - z_depth, 3.0));
+        if (wboit_mode < 1.5) {
+            return float4(color * alpha * w, alpha * w);
+        } else {
+            return float4(0.0, 0.0, 0.0, alpha);
+        }
+    }
+    return float4(color, alpha);
+}
+
 float4 PSMain(PSInput input) : SV_TARGET {
     float2 finalUV = input.uv;
     bool has_normal_map = (mat_flags.x != 0.0);
@@ -498,7 +511,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
             result = result / (result + float3(1.0, 1.0, 1.0));
             result = pow(result, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
         }
-        return float4(result, texColor.a * input.color.a);
+        return OutputFragment(result, texColor.a * input.color.a, input.pos.z);
     }
 
     // Half-Lambert shading mode (KF-style, light_params.w == 2.0)
@@ -517,7 +530,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
         float shadow_multiplier = 1.0 - shadow * 0.5;
         float3 color = (diffuse_color + specular_color) * shadow_multiplier;
-        return float4(color, 1.0);
+        return OutputFragment(color, 1.0, input.pos.z);
     }
 
     // Toon / Cel shading mode (light_params.w == 4.0)
@@ -541,7 +554,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 color = diffuse + specular + float3(rim, rim, rim);
         color = color / (color + float3(1.0, 1.0, 1.0));
         color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
-        return float4(color, texColor.a * input.color.a);
+        return OutputFragment(color, texColor.a * input.color.a, input.pos.z);
     }
 
     // Watercolor shading mode (light_params.w == 5.0)
@@ -570,7 +583,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         wc_diffuse = pow(wc_diffuse, float3(1.0 / wc_pigment, 1.0 / wc_pigment, 1.0 / wc_pigment));
         wc_diffuse = wc_diffuse / (wc_diffuse + float3(1.0, 1.0, 1.0));
         wc_diffuse = pow(wc_diffuse, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
-        return float4(wc_diffuse, texColor.a * input.color.a);
+        return OutputFragment(wc_diffuse, texColor.a * input.color.a, input.pos.z);
     }
 
     // Half-Lambert STATIC shading mode (KF default_pixel_shader, light_params.w == 3.0)
@@ -588,7 +601,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 color_st = material_color * texColor.rgb * input.color.rgb;
         float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
         float shadow_multiplier = 1.0 - shadow * 0.5;
-        return float4(color_st * shadow_multiplier, texColor.a * input.color.a);
+        return OutputFragment(color_st * shadow_multiplier, texColor.a * input.color.a, input.pos.z);
     }
 
     float3 surface_albedo = pow(albedo_color, float3(2.2, 2.2, 2.2));
@@ -724,7 +737,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
     float3 color = ambient + Lo + surface_emissive;
     color = color / (color + float3(1.0, 1.0, 1.0));
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
-    return float4(color, texColor.a * input.color.a);
+    return OutputFragment(color, texColor.a * input.color.a, input.pos.z);
 }
 )";
 
@@ -2110,6 +2123,27 @@ float4 main(VS_OUTPUT input) : SV_TARGET {
         angle_factor = smoothstep(0.0f, 1.0f - u_angle_fade, facing);
     }
     return float4(decal.rgb, decal.a * angle_factor);
+}
+)";
+
+// ============================================================
+// WBOIT Composite Pixel Shader
+// ============================================================
+constexpr const char* kWboitCompositePS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D u_reveal_tex  : register(t1);
+SamplerState u_sampler  : register(s0);
+
+struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+
+float4 main(VS_OUTPUT input) : SV_TARGET {
+    float4 accum = screenTexture.Sample(u_sampler, input.uv);
+    float revealage = u_reveal_tex.Sample(u_sampler, input.uv).r;
+
+    if (accum.a < 1e-4f) discard;
+
+    float3 avg_color = accum.rgb / max(accum.a, 1e-5f);
+    return float4(avg_color, 1.0f - revealage);
 }
 )";
 

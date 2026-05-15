@@ -1,18 +1,19 @@
 # DSEngine 短板补全计划
 
-> 生成日期：2026-05-15（第八次迭代更新）
+> 生成日期：2026-05-15（第九次迭代更新）
 > 方法：基于代码实际审查 + 文档交叉验证 + git 提交历史分析
 >
-> ⚠️ **本轮重大更新说明：** 自 2026-05-13 首次文档生成以来，引擎经历了**重大功能迭代**。前七次迭代分别完成了延迟渲染/TAA/全局光照/后处理链、动画系统完善、SSS tint 参数化、GPU Instancing 三后端、9-Slice UI 缩放。**第八次迭代完成了风格化渲染 Phase 1 全部收官**：Toon/Cel Shading DSSL 材质 + Clear Coat/Anisotropy/POM 三后端参数管线 + Color Banding IGN 抖动三后端集成，至此 Phase 1「画质细腻度 + 风格化启动」五项任务全部完成。引擎短板重心已从 Phase 1 转移到 Phase 2「性能优化 + 兼容性」与 Phase 3「氛围增强 + 风格化深化」。
+> ⚠️ **本轮重大更新说明：** 自 2026-05-13 首次文档生成以来，引擎经历了**重大功能迭代**。前八次迭代分别完成了延迟渲染/TAA/全局光照/后处理链、动画系统完善、SSS tint 参数化、GPU Instancing 三后端、9-Slice UI 缩放、风格化渲染 Phase 1 全部收官。**第九次迭代完成了 WBOIT（Weighted Blended OIT）透明渲染**：三后端（GL/Vulkan/DX11）透明物体 OIT 全流程实现，含 accumulation/revealage 双 pass + composite 合成，所有 shading 模式（PBR / Toon / Watercolor / Half-Lambert / Unlit）均正确输出 WBOIT 数据，`PipelineStateDesc` 新增独立 alpha 通道混合因子支持。
 
 ---
 
 ## 一、审查结论：文档与源码一致性
 
-### 本轮迭代已完成的功能（自 2026-05-15 第八次更新起新增）
+### 本轮迭代已完成的功能（自 2026-05-15 第九次更新起新增）
 
 | 功能 | 提交 | 状态 | 说明 |
 |------|------|------|------|
+| **WBOIT 透明渲染（Order Independent Transparency）** | `pending` | ✅ 已实现 | Weighted Blended OIT 三后端全流程：`WBOITPass`（accumulation + revealage + composite 三阶段）、`MeshRenderSystem` 透明/不透明分离、`IModule::OnRenderTransparent` 接口、`PipelineStateDesc` 独立 alpha 通道混合因子（`alpha_blend_src/dst`）、三后端 shader（所有 shading 模式含 `OutputFragment` 统一出口）、`wboit_composite` 合成 shader |
 | **Color Banding + Toon/Cel Shading 三后端集成** | `284f46e` | ✅ 已实现 | IGN 抖动抗色带三后端同步；Toon `shading_mode=4` 三后端完整集成（shadow_color/shadow_threshold/softness/specular/rim 7 参数通过 PerMaterial UBO 传入） |
 | **Clear Coat + Anisotropy + POM 参数管线** | `1c2bb0a` | ✅ 已实现 | Clear Coat 强度+粗糙度、各向异性 GGX、16 层 POM 视差遮挡，`extra_params.yzw` + `extra_params2.x` 三端同步；`3d_advanced_pbr_showcase.lua` 演示 |
 | **Toon/Cel Shading DSSL 材质** | `e187980` | ✅ 已实现 | `toon_cel.dssl` 表面材质，7 个可配参数，`demo_toon.lua` 演示；生成 `toon_cel.frag/.vert/.meta.json` |
@@ -70,6 +71,7 @@
 - ✅ 🔧 **Clear Coat + Anisotropy BRDF** — `extra_params.yz` 清漆强度/粗糙度 + `extra_params.w` 各向异性 GGX
 - ✅ 🏔️ **POM（Parallax Occlusion Mapping）** — `extra_params2.x` height_scale，16 层视差遮挡采样
 - ✅ 🖌️ **Phase 1 全部完成** — 画质细腻度 + 风格化启动五项任务全部落地
+- ✅ 🫧 **WBOIT 透明渲染** — Weighted Blended OIT 三后端，`WBOITPass` accumulation/revealage/composite，`OutputFragment` 统一 shader 出口，`PipelineStateDesc` 独立 alpha 混合因子
 
 ---
 

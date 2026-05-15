@@ -117,6 +117,8 @@ struct PipelineStateDesc {
     bool blend_enabled = true;
     BlendFactor blend_src = BlendFactor::SrcAlpha;
     BlendFactor blend_dst = BlendFactor::OneMinusSrcAlpha;
+    BlendFactor alpha_blend_src = BlendFactor::One;               ///< Alpha 通道源因子
+    BlendFactor alpha_blend_dst = BlendFactor::OneMinusSrcAlpha;  ///< Alpha 通道目标因子
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
     CompareFunc depth_func = CompareFunc::Less;
@@ -215,6 +217,8 @@ struct MeshDrawItem {
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
+
+    int wboit_mode = 0;  ///< 0=normal, 1=WBOIT accumulation, 2=WBOIT revealage
 
     std::string debug_label;
     glm::vec3 debug_world_bounds_min = glm::vec3(0.0f);

@@ -479,7 +479,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
     per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
-    per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], 0.0f);
+    per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first_item.wboit_mode));
     for (int i = 0; i < 3; ++i) {
         per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
@@ -1790,6 +1790,21 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(scene.rgb * transmittance + inscatter, scene.a);
             }
         )";
+    } else if (effect_name == "wboit_composite") {
+        fs_src += R"(
+            uniform sampler2D u_reveal_tex;
+
+            void main() {
+                vec4 accum = texture(screenTexture, TexCoords);
+                float revealage = texture(u_reveal_tex, TexCoords).r;
+
+                // No transparent fragments: early out
+                if (accum.a < 1e-4) discard;
+
+                vec3 avg_color = accum.rgb / max(accum.a, 1e-5);
+                FragColor = vec4(avg_color, 1.0 - revealage);
+            }
+        )";
     } else if (effect_name == "decal") {
         fs_src += R"(
             uniform sampler2D u_depth_tex;
@@ -2085,6 +2100,10 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform3f(glGetUniformLocation(shader, "u_cam_fwd"),   params[25], params[26], params[27]);
         glUniform1f(glGetUniformLocation(shader, "u_tan_fov_y"), params[28]);
         glUniform1f(glGetUniformLocation(shader, "u_aspect"),    params[29]);
+    } else if (effect_name == "wboit_composite" && params.size() >= 1) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_reveal_tex"), 1);
     } else if (effect_name == "decal" && params.size() >= 26) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
@@ -2099,7 +2118,7 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     }
 
     glDisable(GL_DEPTH_TEST);
-    if (effect_name == "ui_overlay" || effect_name == "decal") {
+    if (effect_name == "ui_overlay" || effect_name == "decal" || effect_name == "wboit_composite") {
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     } else {
