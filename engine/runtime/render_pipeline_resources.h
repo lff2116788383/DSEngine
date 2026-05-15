@@ -40,6 +40,7 @@ struct RenderPipelineResources {
     unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int shadow_pipeline_state = 0;
+    unsigned int decal_blend_pipeline_state = 0;
 
     void Reset() {
         main_render_target = 0;
@@ -75,6 +76,7 @@ struct RenderPipelineResources {
         prez_pipeline_state = 0;
         composite_pipeline_state = 0;
         shadow_pipeline_state = 0;
+        decal_blend_pipeline_state = 0;
     }
 };
 

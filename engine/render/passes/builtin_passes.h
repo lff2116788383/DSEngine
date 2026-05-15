@@ -264,6 +264,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Screen-Space Decal Pass ----
+class DecalPass : public IRenderPass {
+public:
+    explicit DecalPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "decal_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Present Pass (runtime only) ----
 class PresentPass : public IRenderPass {
 public:

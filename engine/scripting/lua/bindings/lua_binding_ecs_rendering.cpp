@@ -1097,6 +1097,33 @@ int L_EcsSetPostProcessFog(lua_State* L) {
     return 1;
 }
 
+int L_EcsAddDecal(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    if (!world->registry().all_of<dse::DecalComponent>(e))
+        world->registry().emplace<dse::DecalComponent>(e);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_EcsSetDecal(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* dc = helper::TryGetComponent<dse::DecalComponent>(*world, e);
+    if (!dc) { lua_pushboolean(L, 0); return 1; }
+    dc->enabled        = lua_isnoneornil(L, 2) ? dc->enabled : helper::CheckBool(L, 2);
+    if (!lua_isnoneornil(L, 3)) dc->albedo_texture = static_cast<unsigned int>(luaL_checknumber(L, 3));
+    dc->color.r        = helper::OptFloat(L, 4, dc->color.r);
+    dc->color.g        = helper::OptFloat(L, 5, dc->color.g);
+    dc->color.b        = helper::OptFloat(L, 6, dc->color.b);
+    dc->color.a        = helper::OptFloat(L, 7, dc->color.a);
+    dc->angle_fade     = helper::OptFloat(L, 8, dc->angle_fade);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1385,6 +1412,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
         {"set_post_process_outline",  L_EcsSetPostProcessOutline},
         {"set_post_process_fog",      L_EcsSetPostProcessFog},
+        {"add_decal",                 L_EcsAddDecal},
+        {"set_decal",                 L_EcsSetDecal},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},

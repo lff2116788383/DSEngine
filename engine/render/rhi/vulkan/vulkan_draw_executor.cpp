@@ -1933,6 +1933,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.edge_detect_shader_handle();
     else if (effect_name == "volumetric_fog" && shader_mgr.volumetric_fog_shader_handle())
         selected_shader_handle = shader_mgr.volumetric_fog_shader_handle();
+    else if (effect_name == "decal" && shader_mgr.decal_shader_handle())
+        selected_shader_handle = shader_mgr.decal_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -2008,6 +2010,10 @@ void VulkanDrawExecutor::DrawPostProcess(
     } else if (effect_name == "volumetric_fog" && params.size() >= 1) {
         unsigned int depth_h = static_cast<unsigned int>(params[0]);
         extra_bindings = {{2, depth_h}};
+    } else if (effect_name == "decal" && params.size() >= 2) {
+        unsigned int depth_h = static_cast<unsigned int>(params[0]);
+        unsigned int decal_h = static_cast<unsigned int>(params[1]);
+        extra_bindings = {{2, depth_h}, {3, decal_h}};
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -2142,6 +2148,11 @@ void VulkanDrawExecutor::DrawPostProcess(
         } else if (effect_name == "volumetric_fog" && params.size() >= 30) {
             float pc[30];
             for (int i = 0; i < 30; ++i) pc[i] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "decal" && params.size() >= 26) {
+            float pc[26];
+            for (int i = 0; i < 26; ++i) pc[i] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         }

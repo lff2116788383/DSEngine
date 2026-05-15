@@ -1783,6 +1783,42 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(scene.rgb * transmittance + inscatter, scene.a);
             }
         )";
+    } else if (effect_name == "decal") {
+        fs_src += R"(
+            uniform sampler2D u_depth_tex;
+            uniform sampler2D u_decal_tex;
+            uniform mat4 u_inv_model_vp;
+            uniform vec4 u_color;
+            uniform float u_angle_fade;
+            uniform vec3 u_decal_up;
+
+            void main() {
+                float depth = texture(u_depth_tex, TexCoords).r;
+                if (depth >= 0.9999) discard;
+
+                vec4 clip = vec4(TexCoords * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+                vec4 local4 = u_inv_model_vp * clip;
+                vec3 local = local4.xyz / local4.w;
+
+                if (abs(local.x) > 0.5 || abs(local.y) > 0.5 || abs(local.z) > 0.5) discard;
+
+                vec2 decal_uv = local.xz + 0.5;
+                vec4 decal = texture(u_decal_tex, decal_uv) * u_color;
+
+                float angle_factor = 1.0;
+                if (u_angle_fade > 0.0) {
+                    vec2 texel = 1.0 / textureSize(u_depth_tex, 0);
+                    float dl = texture(u_depth_tex, TexCoords + vec2(-texel.x, 0.0)).r;
+                    float dr = texture(u_depth_tex, TexCoords + vec2( texel.x, 0.0)).r;
+                    float dt = texture(u_depth_tex, TexCoords + vec2(0.0,  texel.y)).r;
+                    float db = texture(u_depth_tex, TexCoords + vec2(0.0, -texel.y)).r;
+                    vec3 normal = normalize(vec3(dl - dr, dt - db, 2.0 * texel.x));
+                    float facing = abs(dot(normal, u_decal_up));
+                    angle_factor = smoothstep(0.0, 1.0 - u_angle_fade, facing);
+                }
+                FragColor = vec4(decal.rgb, decal.a * angle_factor);
+            }
+        )";
     } else {
         fs_src += R"(
             void main() {
@@ -2042,10 +2078,21 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform3f(glGetUniformLocation(shader, "u_cam_fwd"),   params[25], params[26], params[27]);
         glUniform1f(glGetUniformLocation(shader, "u_tan_fov_y"), params[28]);
         glUniform1f(glGetUniformLocation(shader, "u_aspect"),    params[29]);
+    } else if (effect_name == "decal" && params.size() >= 26) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_depth_tex"), 1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[1]));
+        glUniform1i(glGetUniformLocation(shader, "u_decal_tex"), 2);
+        glUniformMatrix4fv(glGetUniformLocation(shader, "u_inv_model_vp"), 1, GL_FALSE, &params[2]);
+        glUniform4f(glGetUniformLocation(shader, "u_color"), params[18], params[19], params[20], params[21]);
+        glUniform1f(glGetUniformLocation(shader, "u_angle_fade"), params[22]);
+        glUniform3f(glGetUniformLocation(shader, "u_decal_up"), params[23], params[24], params[25]);
     }
 
     glDisable(GL_DEPTH_TEST);
-    if (effect_name == "ui_overlay") {
+    if (effect_name == "ui_overlay" || effect_name == "decal") {
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     } else {

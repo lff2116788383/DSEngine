@@ -803,6 +803,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] Volumetric Fog shader creation failed");
     }
+
+    // Decal shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDecalFS;
+        decal_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (decal_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Decal shader created: handle={}", decal_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Decal shader creation failed");
+    }
 }
 
 // ============================================================================

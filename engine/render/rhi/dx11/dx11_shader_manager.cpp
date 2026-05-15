@@ -48,6 +48,7 @@ void DX11ShaderManager::Shutdown() {
     deferred_lighting_shader_handle_ = 0;
     edge_detect_shader_handle_ = 0;
     volumetric_fog_shader_handle_ = 0;
+    decal_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
 
@@ -290,6 +291,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
     deferred_lighting_shader_handle_ = create_pp_shader(dx11_shaders::kDeferredLightingPS, "deferred_lighting");
     edge_detect_shader_handle_ = create_pp_shader(dx11_shaders::kEdgeDetectPS, "edge_detect");
     volumetric_fog_shader_handle_ = create_pp_shader(dx11_shaders::kVolumetricFogPS, "volumetric_fog");
+    decal_shader_handle_ = create_pp_shader(dx11_shaders::kDecalPS, "decal");
 
     // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
     gbuffer_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kGBufferPS);

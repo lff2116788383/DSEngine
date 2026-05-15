@@ -46,6 +46,7 @@ struct RenderPassContext {
         unsigned int prez = 0;
         unsigned int shadow = 0;
         unsigned int composite = 0;
+        unsigned int decal_blend = 0;
     } pipeline_states;
 
     struct RenderTargets {

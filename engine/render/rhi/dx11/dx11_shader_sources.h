@@ -2027,6 +2027,63 @@ float4 main(VS_OUTPUT input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Screen-Space Decal Pixel Shader
+// ============================================================
+constexpr const char* kDecalPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D u_depth_tex   : register(t1);
+Texture2D u_decal_tex   : register(t2);
+SamplerState u_sampler  : register(s0);
+
+cbuffer DecalParams : register(b0) {
+    float  u_depth_handle;
+    float  u_decal_handle;
+    float4 u_inv_mvp_c0;
+    float4 u_inv_mvp_c1;
+    float4 u_inv_mvp_c2;
+    float4 u_inv_mvp_c3;
+    float4 u_color;
+    float  u_angle_fade;
+    float  u_decal_up_x;
+    float  u_decal_up_y;
+    float  u_decal_up_z;
+};
+
+struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+
+float4 main(VS_OUTPUT input) : SV_TARGET {
+    float depth = u_depth_tex.Sample(u_sampler, input.uv).r;
+    if (depth >= 0.9999f) discard;
+
+    float4x4 inv_mvp = float4x4(u_inv_mvp_c0, u_inv_mvp_c1, u_inv_mvp_c2, u_inv_mvp_c3);
+    float4 clip = float4(input.uv * 2.0f - 1.0f, depth * 2.0f - 1.0f, 1.0f);
+    float4 local4 = mul(clip, inv_mvp);
+    float3 local = local4.xyz / local4.w;
+
+    if (abs(local.x) > 0.5f || abs(local.y) > 0.5f || abs(local.z) > 0.5f) discard;
+
+    float2 decal_uv = local.xz + 0.5f;
+    float4 decal = u_decal_tex.Sample(u_sampler, decal_uv) * u_color;
+
+    float angle_factor = 1.0f;
+    if (u_angle_fade > 0.0f) {
+        float2 dim;
+        u_depth_tex.GetDimensions(dim.x, dim.y);
+        float2 texel = 1.0f / dim;
+        float dl = u_depth_tex.Sample(u_sampler, input.uv + float2(-texel.x, 0.0f)).r;
+        float dr = u_depth_tex.Sample(u_sampler, input.uv + float2( texel.x, 0.0f)).r;
+        float dt = u_depth_tex.Sample(u_sampler, input.uv + float2(0.0f,  texel.y)).r;
+        float db = u_depth_tex.Sample(u_sampler, input.uv + float2(0.0f, -texel.y)).r;
+        float3 normal = normalize(float3(dl - dr, dt - db, 2.0f * texel.x));
+        float3 decal_up = float3(u_decal_up_x, u_decal_up_y, u_decal_up_z);
+        float facing = abs(dot(normal, decal_up));
+        angle_factor = smoothstep(0.0f, 1.0f - u_angle_fade, facing);
+    }
+    return float4(decal.rgb, decal.a * angle_factor);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

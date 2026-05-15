@@ -417,6 +417,20 @@ bool FramePipeline::Init() {
         return false;
     }
 
+    PipelineStateDesc decal_blend_desc;
+    decal_blend_desc.blend_enabled = true;
+    decal_blend_desc.blend_src = BlendFactor::SrcAlpha;
+    decal_blend_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+    decal_blend_desc.depth_test_enabled = false;
+    decal_blend_desc.depth_write_enabled = false;
+    decal_blend_desc.culling_enabled = false;
+    render_resources_.decal_blend_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(decal_blend_desc);
+    if (render_resources_.decal_blend_pipeline_state == 0) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: decal_blend pipeline state creation returned 0");
+        Shutdown();
+        return false;
+    }
+
     DEBUG_LOG_INFO("FramePipeline init: systems init begin");
     gameplay2d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
     mesh_render_system_.SetAssetManager(&asset_manager);
@@ -811,6 +825,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.pipeline_states.prez      = render_resources_.prez_pipeline_state;
     render_pass_context_.pipeline_states.shadow    = render_resources_.shadow_pipeline_state;
     render_pass_context_.pipeline_states.composite = render_resources_.composite_pipeline_state;
+    render_pass_context_.pipeline_states.decal_blend = render_resources_.decal_blend_pipeline_state;
 
     render_pass_context_.render_targets.main     = render_resources_.main_render_target;
     render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
@@ -900,6 +915,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::OutlinePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::VolumetricFogPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::DecalPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DOFPass>(render_pass_context_));

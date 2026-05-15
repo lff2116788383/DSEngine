@@ -1391,6 +1391,34 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // Decal 专用路径
+    if (effect_name == "decal" && shader_mgr.decal_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 26) {
+            float raw[28] = {};
+            for (int i = 0; i < 26; ++i) raw[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, raw, sizeof(raw));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 2) {
+            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+            const auto* decal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
+            if (decal_tex) dc->PSSetShaderResources(2, 1, decal_tex->srv.GetAddressOf());
+        }
+        // Alpha blending
+        float blend_factor[4] = {0, 0, 0, 0};
+        dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF); // Let pipeline state handle
+        draw_dedicated_pp(shader_mgr.decal_shader_handle());
+        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+        dc->PSSetShaderResources(1, 2, null_srvs);
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

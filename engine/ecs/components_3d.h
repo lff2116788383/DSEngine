@@ -196,6 +196,14 @@ struct PostProcessComponent {
     float fog_sun_scatter = 0.6f;     // 日光 Mie 散射强度
 };
 
+// Screen-Space Decal（基于深度重建投影贴花）
+struct DecalComponent {
+    bool enabled = true;
+    unsigned int albedo_texture = 0;     // 贴花颜色纹理
+    glm::vec4 color = glm::vec4(1.0f);  // 颜色乘算 + alpha 不透明度
+    float angle_fade = 0.5f;             // 法线角度衰减阈值（0=无衰减,1=严格正面）
+};
+
 #define CSM_CASCADES 3
 
 struct DirectionalLight3DComponent {

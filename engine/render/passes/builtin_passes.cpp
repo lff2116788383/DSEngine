@@ -1644,5 +1644,94 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     }
 }
 
+// ============================================================
+// DecalPass — Screen-Space Decal (深度重建 + 盒体投影)
+// ============================================================
+
+void DecalPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, scene_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void DecalPass::Execute(CommandBuffer& cmd_buffer) {
+    auto decal_view = ctx_.world->registry().view<dse::DecalComponent, TransformComponent>();
+    bool has_any = false;
+    for (auto entity : decal_view) {
+        auto& dc = decal_view.get<dse::DecalComponent>(entity);
+        if (dc.enabled && dc.albedo_texture != 0) { has_any = true; break; }
+    }
+    if (!has_any) return;
+
+    // 获取相机 view/projection 构建 inv_vp
+    glm::mat4 view_mat(1.0f), proj_mat(1.0f);
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (!cam.enabled) continue;
+        float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+        proj_mat = clip_correction * glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
+        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
+            glm::vec3 front = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            glm::vec3 up    = t.rotation * glm::vec3(0.0f, 1.0f,  0.0f);
+            view_mat = glm::lookAt(t.position, t.position + front, up);
+        }
+        break;
+    }
+    const glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+
+    // params 布局（26 float）：
+    // [0]      depth_tex handle
+    // [1]      decal_tex handle
+    // [2-17]   inv_model_vp (column-major, 16 floats)
+    // [18-21]  color.rgba
+    // [22]     angle_fade
+    // [23-25]  decal Y-axis in world (用于角度衰减)
+    std::vector<float> params(26);
+    params[0] = static_cast<float>(depth_tex);
+
+    for (auto entity : decal_view) {
+        auto& dc = decal_view.get<dse::DecalComponent>(entity);
+        if (!dc.enabled || dc.albedo_texture == 0) continue;
+        auto& transform = decal_view.get<TransformComponent>(entity);
+
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), transform.position)
+                        * glm::mat4_cast(transform.rotation)
+                        * glm::scale(glm::mat4(1.0f), transform.scale);
+        glm::mat4 inv_model_vp = glm::inverse(model) * inv_vp;
+        glm::vec3 decal_up = glm::normalize(glm::vec3(model[1]));
+
+        params[1] = static_cast<float>(dc.albedo_texture);
+        const float* m = &inv_model_vp[0][0];
+        for (int i = 0; i < 16; ++i) params[2 + i] = m[i];
+        params[18] = dc.color.r;
+        params[19] = dc.color.g;
+        params[20] = dc.color.b;
+        params[21] = dc.color.a;
+        params[22] = dc.angle_fade;
+        params[23] = decal_up.x;
+        params[24] = decal_up.y;
+        params[25] = decal_up.z;
+
+        cmd_buffer.DrawPostProcess(scene_tex, "decal", params);
+    }
+    cmd_buffer.EndRenderPass();
+}
+
 } // namespace render
 } // namespace dse

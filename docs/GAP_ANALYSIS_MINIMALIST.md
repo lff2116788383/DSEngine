@@ -322,7 +322,7 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 | ✅ ~~Release 构建脚本 + LTCG~~                 |  构建  | ✅ 完成 |
 | ✅ ~~默认关闭非必需第三方 + CMake 清理~~              |  瘦身  | ✅ 完成 |
 | ✅ ~~Volumetric Fog raymarching~~          |  写实 |  ✅ 完成  |
-| Decal System（screen-space）           |  写实 |  2 天  |
+| ✅ ~~Decal System（screen-space）~~         |  写实 |  ✅ 完成  |
 | ✅ ~~Outline 双 Pass + Edge Detection Pass~~ | 风格化 |  ✅ 完成  |
 
 ### Phase 3 细化（3-5 周）
