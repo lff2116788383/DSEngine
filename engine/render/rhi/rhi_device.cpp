@@ -19,6 +19,35 @@
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
 #endif
 
+// BCn / S3TC / BPTC 压缩纹理格式常量
+#ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT            0x83F0
+#endif
+#ifndef GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT           0x8C4C
+#endif
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT           0x83F2
+#endif
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT           0x83F3
+#endif
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT     0x8C4F
+#endif
+#ifndef GL_COMPRESSED_RED_RGTC1
+#define GL_COMPRESSED_RED_RGTC1                    0x8DBB
+#endif
+#ifndef GL_COMPRESSED_RG_RGTC2
+#define GL_COMPRESSED_RG_RGTC2                     0x8DBD
+#endif
+#ifndef GL_COMPRESSED_RGBA_BPTC_UNORM_ARB
+#define GL_COMPRESSED_RGBA_BPTC_UNORM_ARB          0x8E8C
+#endif
+#ifndef GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB
+#define GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB    0x8E8D
+#endif
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cstddef>
@@ -414,6 +443,47 @@ unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsig
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texture_handle;
+}
+
+unsigned int OpenGLRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                         const std::vector<CompressedMipLevel>& mips,
+                                                         bool linear_filter) {
+    if (mips.empty()) return 0;
+
+    GLenum gl_format = 0;
+    switch (format) {
+        case CompressedTextureFormat::BC1_UNORM: gl_format = GL_COMPRESSED_RGB_S3TC_DXT1_EXT; break;
+        case CompressedTextureFormat::BC1_SRGB:  gl_format = GL_COMPRESSED_SRGB_S3TC_DXT1_EXT; break;
+        case CompressedTextureFormat::BC2_UNORM: gl_format = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT; break;
+        case CompressedTextureFormat::BC3_UNORM: gl_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; break;
+        case CompressedTextureFormat::BC3_SRGB:  gl_format = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; break;
+        case CompressedTextureFormat::BC4_UNORM: gl_format = GL_COMPRESSED_RED_RGTC1; break;
+        case CompressedTextureFormat::BC5_UNORM: gl_format = GL_COMPRESSED_RG_RGTC2; break;
+        case CompressedTextureFormat::BC7_UNORM: gl_format = GL_COMPRESSED_RGBA_BPTC_UNORM_ARB; break;
+        case CompressedTextureFormat::BC7_SRGB:  gl_format = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB; break;
+        default: return 0;
+    }
+
+    unsigned int texture_handle = 0;
+    glGenTextures(1, &texture_handle);
+    resource_mgr_.ledger().textures_created += 1;
+    glBindTexture(GL_TEXTURE_2D, texture_handle);
+
+    bool has_mips = mips.size() > 1;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, has_mips ? (linear_filter ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST) : (linear_filter ? GL_LINEAR : GL_NEAREST));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(mips.size() - 1));
+
+    for (size_t i = 0; i < mips.size(); ++i) {
+        glCompressedTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(i), gl_format,
+                               mips[i].width, mips[i].height, 0,
+                               static_cast<GLsizei>(mips[i].size), mips[i].data);
+    }
+
     glBindTexture(GL_TEXTURE_2D, 0);
     return texture_handle;
 }

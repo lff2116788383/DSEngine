@@ -317,10 +317,10 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 
 | 任务                                   |  类型 |  工作量  |
 | :----------------------------------- | :-: | :---: |
-| SSBO → UBO fallback 路径             |  兼容  | 0.5 天 |
-| .dds / BCn 纹理直接上传支持                |  性能  |  1 天  |
-| Release 构建脚本 + LTCG                 |  构建  | 0.5 天 |
-| 默认关闭非必需第三方 + CMake 清理              |  瘦身  | 0.5 天 |
+| ✅ ~~SSBO → UBO fallback 路径~~             |  兼容  | ✅ 完成 |
+| ✅ ~~.dds / BCn 纹理直接上传支持~~                |  性能  |  ✅ 完成  |
+| ✅ ~~Release 构建脚本 + LTCG~~                 |  构建  | ✅ 完成 |
+| ✅ ~~默认关闭非必需第三方 + CMake 清理~~              |  瘦身  | ✅ 完成 |
 | Volumetric Fog raymarching           |  写实 |  3 天  |
 | Decal System（screen-space）           |  写实 |  2 天  |
 | ✅ ~~Outline 双 Pass + Edge Detection Pass~~ | 风格化 |  ✅ 完成  |

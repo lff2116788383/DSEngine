@@ -13,6 +13,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstdint>
+#include "engine/render/rhi/rhi_types.h"
 
 namespace dse {
 namespace render {
@@ -96,6 +97,9 @@ public:
 
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);
+    unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+                                           const std::vector<CompressedMipLevel>& mips,
+                                           bool linear_filter);
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter);
     unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter);
     void DeleteTexture(unsigned int handle);

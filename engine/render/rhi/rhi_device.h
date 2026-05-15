@@ -193,6 +193,9 @@ public:
     virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
     virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    virtual unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                   const std::vector<CompressedMipLevel>& mips,
+                                                   bool linear_filter) { (void)format; (void)mips; (void)linear_filter; return 0; }
     virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
     virtual unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
@@ -300,6 +303,9 @@ public:
     unsigned int CreateVertexArray() override;
     void DeleteVertexArray(unsigned int handle) override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+                                           const std::vector<CompressedMipLevel>& mips,
+                                           bool linear_filter) override;
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
     unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
     void DeleteTexture(unsigned int texture_handle) override;

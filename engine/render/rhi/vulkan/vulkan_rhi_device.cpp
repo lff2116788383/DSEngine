@@ -397,6 +397,12 @@ unsigned int VulkanRhiDevice::CreateTexture2D(int width, int height, const unsig
     return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
 }
 
+unsigned int VulkanRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                         const std::vector<CompressedMipLevel>& mips,
+                                                         bool linear_filter) {
+    return resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter);
+}
+
 unsigned int VulkanRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
     return resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter);
 }

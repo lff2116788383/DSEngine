@@ -214,6 +214,149 @@ unsigned int VulkanResourceManager::CreateTexture2D(int width, int height, const
     return handle;
 }
 
+unsigned int VulkanResourceManager::CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                                const std::vector<CompressedMipLevel>& mips,
+                                                                bool linear_filter) {
+    if (mips.empty()) return 0;
+
+    VkFormat vk_fmt = VK_FORMAT_UNDEFINED;
+    switch (format) {
+        case CompressedTextureFormat::BC1_UNORM: vk_fmt = VK_FORMAT_BC1_RGBA_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC1_SRGB:  vk_fmt = VK_FORMAT_BC1_RGBA_SRGB_BLOCK; break;
+        case CompressedTextureFormat::BC2_UNORM: vk_fmt = VK_FORMAT_BC2_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC3_UNORM: vk_fmt = VK_FORMAT_BC3_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC3_SRGB:  vk_fmt = VK_FORMAT_BC3_SRGB_BLOCK; break;
+        case CompressedTextureFormat::BC4_UNORM: vk_fmt = VK_FORMAT_BC4_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC5_UNORM: vk_fmt = VK_FORMAT_BC5_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC7_UNORM: vk_fmt = VK_FORMAT_BC7_UNORM_BLOCK; break;
+        case CompressedTextureFormat::BC7_SRGB:  vk_fmt = VK_FORMAT_BC7_SRGB_BLOCK; break;
+        default: return 0;
+    }
+
+    unsigned int handle = AllocateTextureHandle();
+    VulkanTexture tex;
+    tex.width = mips[0].width;
+    tex.height = mips[0].height;
+    tex.channels = 4;
+    tex.format = vk_fmt;
+
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = vk_fmt;
+    image_info.extent.width = static_cast<uint32_t>(mips[0].width);
+    image_info.extent.height = static_cast<uint32_t>(mips[0].height);
+    image_info.extent.depth = 1;
+    image_info.mipLevels = static_cast<uint32_t>(mips.size());
+    image_info.arrayLayers = 1;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    if (vkCreateImage(device_, &image_info, nullptr, &tex.image) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mem_reqs;
+    vkGetImageMemoryRequirements(device_, tex.image, &mem_reqs);
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = FindMemoryType(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(device_, &alloc_info, nullptr, &tex.memory) != VK_SUCCESS) return 0;
+    vkBindImageMemory(device_, tex.image, tex.memory, 0);
+
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = tex.image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = vk_fmt;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.levelCount = static_cast<uint32_t>(mips.size());
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount = 1;
+    if (vkCreateImageView(device_, &view_info, nullptr, &tex.image_view) != VK_SUCCESS) return 0;
+
+    size_t total_size = 0;
+    for (auto& m : mips) total_size += m.size;
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_memory;
+    VkBufferCreateInfo buf_info{};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = total_size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    vkCreateBuffer(device_, &buf_info, nullptr, &staging_buffer);
+    VkMemoryRequirements staging_reqs;
+    vkGetBufferMemoryRequirements(device_, staging_buffer, &staging_reqs);
+    VkMemoryAllocateInfo staging_alloc{};
+    staging_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    staging_alloc.allocationSize = staging_reqs.size;
+    staging_alloc.memoryTypeIndex = FindMemoryType(staging_reqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vkAllocateMemory(device_, &staging_alloc, nullptr, &staging_memory);
+    vkBindBufferMemory(device_, staging_buffer, staging_memory, 0);
+
+    void* mapped;
+    vkMapMemory(device_, staging_memory, 0, total_size, 0, &mapped);
+    size_t offset = 0;
+    for (auto& m : mips) {
+        memcpy(static_cast<uint8_t*>(mapped) + offset, m.data, m.size);
+        offset += m.size;
+    }
+    vkUnmapMemory(device_, staging_memory);
+
+    VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = tex.image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = static_cast<uint32_t>(mips.size());
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    std::vector<VkBufferImageCopy> regions(mips.size());
+    offset = 0;
+    for (size_t i = 0; i < mips.size(); ++i) {
+        regions[i] = {};
+        regions[i].bufferOffset = offset;
+        regions[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        regions[i].imageSubresource.mipLevel = static_cast<uint32_t>(i);
+        regions[i].imageSubresource.baseArrayLayer = 0;
+        regions[i].imageSubresource.layerCount = 1;
+        regions[i].imageExtent = {static_cast<uint32_t>(mips[i].width), static_cast<uint32_t>(mips[i].height), 1};
+        offset += mips[i].size;
+    }
+    vkCmdCopyBufferToImage(cmd, staging_buffer, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           static_cast<uint32_t>(regions.size()), regions.data());
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    EndSingleTimeCommands(cmd);
+    vkDestroyBuffer(device_, staging_buffer, nullptr);
+    vkFreeMemory(device_, staging_memory, nullptr);
+
+    textures_[handle] = tex;
+    return handle;
+}
+
 unsigned int VulkanResourceManager::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
     unsigned int handle = AllocateTextureHandle();
     VulkanTexture tex;

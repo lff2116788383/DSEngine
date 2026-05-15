@@ -110,6 +110,9 @@ public:
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+                                           const std::vector<CompressedMipLevel>& mips,
+                                           bool linear_filter) override;
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
     unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
     void DeleteTexture(unsigned int texture_handle) override;

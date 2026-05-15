@@ -261,6 +261,12 @@ unsigned int DX11RhiDevice::CreateTexture2D(int width, int height, const unsigne
     return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
 }
 
+unsigned int DX11RhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                       const std::vector<CompressedMipLevel>& mips,
+                                                       bool linear_filter) {
+    return resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter);
+}
+
 unsigned int DX11RhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
     return resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter);
 }

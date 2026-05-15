@@ -118,6 +118,85 @@ unsigned int DX11ResourceManager::CreateTexture2D(int width, int height,
     return handle;
 }
 
+unsigned int DX11ResourceManager::CreateCompressedTexture2D(CompressedTextureFormat format,
+                                                              const std::vector<CompressedMipLevel>& mips,
+                                                              bool linear_filter) {
+    if (!device_ || mips.empty()) return 0;
+
+    DXGI_FORMAT dxgi_fmt = DXGI_FORMAT_UNKNOWN;
+    switch (format) {
+        case CompressedTextureFormat::BC1_UNORM: dxgi_fmt = DXGI_FORMAT_BC1_UNORM; break;
+        case CompressedTextureFormat::BC1_SRGB:  dxgi_fmt = DXGI_FORMAT_BC1_UNORM_SRGB; break;
+        case CompressedTextureFormat::BC2_UNORM: dxgi_fmt = DXGI_FORMAT_BC2_UNORM; break;
+        case CompressedTextureFormat::BC3_UNORM: dxgi_fmt = DXGI_FORMAT_BC3_UNORM; break;
+        case CompressedTextureFormat::BC3_SRGB:  dxgi_fmt = DXGI_FORMAT_BC3_UNORM_SRGB; break;
+        case CompressedTextureFormat::BC4_UNORM: dxgi_fmt = DXGI_FORMAT_BC4_UNORM; break;
+        case CompressedTextureFormat::BC5_UNORM: dxgi_fmt = DXGI_FORMAT_BC5_UNORM; break;
+        case CompressedTextureFormat::BC7_UNORM: dxgi_fmt = DXGI_FORMAT_BC7_UNORM; break;
+        case CompressedTextureFormat::BC7_SRGB:  dxgi_fmt = DXGI_FORMAT_BC7_UNORM_SRGB; break;
+        default: return 0;
+    }
+
+    UINT block_size = 4;
+    auto row_pitch = [&](int w) -> UINT {
+        UINT blocks_wide = std::max<UINT>(1u, (static_cast<UINT>(w) + block_size - 1) / block_size);
+        UINT bytes_per_block = (format == CompressedTextureFormat::BC1_UNORM ||
+                                format == CompressedTextureFormat::BC1_SRGB ||
+                                format == CompressedTextureFormat::BC4_UNORM) ? 8u : 16u;
+        return blocks_wide * bytes_per_block;
+    };
+
+    DX11Texture tex;
+    tex.width = mips[0].width;
+    tex.height = mips[0].height;
+    tex.is_cube = false;
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = static_cast<UINT>(mips[0].width);
+    td.Height = static_cast<UINT>(mips[0].height);
+    td.MipLevels = static_cast<UINT>(mips.size());
+    td.ArraySize = 1;
+    td.Format = dxgi_fmt;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    std::vector<D3D11_SUBRESOURCE_DATA> init_data(mips.size());
+    for (size_t i = 0; i < mips.size(); ++i) {
+        init_data[i].pSysMem = mips[i].data;
+        init_data[i].SysMemPitch = row_pitch(mips[i].width);
+        init_data[i].SysMemSlicePitch = 0;
+    }
+
+    HRESULT hr = device_->CreateTexture2D(&td, init_data.data(), tex.texture.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateCompressedTexture2D failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = dxgi_fmt;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = td.MipLevels;
+    hr = device_->CreateShaderResourceView(tex.texture.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter = linear_filter ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_MIP_POINT;
+    sd.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    sd.MaxAnisotropy = 1;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    return handle;
+}
+
 unsigned int DX11ResourceManager::CreateTextureCube(int width, int height,
                                                       const unsigned char* const rgba8_faces[6],
                                                       bool linear_filter) {

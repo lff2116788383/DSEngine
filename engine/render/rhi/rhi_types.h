@@ -66,6 +66,27 @@ enum class CullFace : unsigned int {
     FrontAndBack = 3,
 };
 
+/// 压缩纹理格式（BCn / DXT 系列）
+enum class CompressedTextureFormat : unsigned int {
+    BC1_UNORM = 0,   ///< DXT1 (RGB, 4bpp)
+    BC1_SRGB  = 1,   ///< DXT1 sRGB
+    BC2_UNORM = 2,   ///< DXT3 (RGBA, 8bpp)
+    BC3_UNORM = 3,   ///< DXT5 (RGBA, 8bpp)
+    BC3_SRGB  = 4,   ///< DXT5 sRGB
+    BC4_UNORM = 5,   ///< 单通道 (4bpp)
+    BC5_UNORM = 6,   ///< 双通道 (8bpp, 法线贴图)
+    BC7_UNORM = 7,   ///< 高质量 RGBA (8bpp)
+    BC7_SRGB  = 8,   ///< 高质量 RGBA sRGB
+};
+
+/// 压缩纹理 Mip 级别数据
+struct CompressedMipLevel {
+    const unsigned char* data = nullptr;
+    size_t size = 0;
+    int width = 0;
+    int height = 0;
+};
+
 // ============================================================
 // 渲染目标与管线状态描述
 // ============================================================
