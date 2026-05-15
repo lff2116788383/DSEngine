@@ -1881,6 +1881,70 @@ float4 PSMain(PSInput input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Edge Detection (Outline) Pixel Shader
+// ============================================================
+constexpr const char* kEdgeDetectPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler  : register(s0);
+
+cbuffer EdgeDetectParams : register(b0) {
+    float u_thickness;
+    float u_depth_threshold;
+    float u_normal_threshold;
+    float u_outline_r;
+    float u_outline_g;
+    float u_outline_b;
+    float u_near;
+    float u_far;
+    float u_screen_w;
+    float u_screen_h;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float linearize_depth(float d) {
+    float ndc = d * 2.0f - 1.0f;
+    return (2.0f * u_near * u_far) / (u_far + u_near - ndc * (u_far - u_near));
+}
+
+float3 reconstruct_normal(float2 uv, float2 texel_size) {
+    float dc = linearize_depth(screenTexture.Sample(u_sampler, uv).r);
+    float dl = linearize_depth(screenTexture.Sample(u_sampler, uv - float2(texel_size.x, 0.0f)).r);
+    float dr = linearize_depth(screenTexture.Sample(u_sampler, uv + float2(texel_size.x, 0.0f)).r);
+    float db = linearize_depth(screenTexture.Sample(u_sampler, uv - float2(0.0f, texel_size.y)).r);
+    float dt = linearize_depth(screenTexture.Sample(u_sampler, uv + float2(0.0f, texel_size.y)).r);
+    return normalize(float3(dl - dr, db - dt, 2.0f * texel_size.x * dc));
+}
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float2 base_texel = float2(1.0f / u_screen_w, 1.0f / u_screen_h);
+    float2 texel = base_texel * u_thickness;
+
+    float d_c = linearize_depth(screenTexture.Sample(u_sampler, input.uv).r);
+    float d_l = linearize_depth(screenTexture.Sample(u_sampler, input.uv + float2(-texel.x, 0.0f)).r);
+    float d_r = linearize_depth(screenTexture.Sample(u_sampler, input.uv + float2( texel.x, 0.0f)).r);
+    float d_t = linearize_depth(screenTexture.Sample(u_sampler, input.uv + float2(0.0f,  texel.y)).r);
+    float d_b = linearize_depth(screenTexture.Sample(u_sampler, input.uv + float2(0.0f, -texel.y)).r);
+
+    float depth_diff = abs(d_l - d_r) + abs(d_t - d_b);
+    float depth_edge = smoothstep(0.0f, u_depth_threshold * d_c, depth_diff);
+
+    float3 n_l = reconstruct_normal(input.uv + float2(-texel.x, 0.0f), base_texel);
+    float3 n_r = reconstruct_normal(input.uv + float2( texel.x, 0.0f), base_texel);
+    float3 n_t = reconstruct_normal(input.uv + float2(0.0f,  texel.y), base_texel);
+    float3 n_b = reconstruct_normal(input.uv + float2(0.0f, -texel.y), base_texel);
+    float normal_diff = length(n_l - n_r) + length(n_t - n_b);
+    float normal_edge = smoothstep(0.0f, u_normal_threshold, normal_diff);
+
+    float edge = saturate(max(depth_edge, normal_edge));
+    return float4(u_outline_r, u_outline_g, u_outline_b, edge);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

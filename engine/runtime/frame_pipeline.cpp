@@ -310,6 +310,11 @@ bool FramePipeline::Init() {
         render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
+    // Outline / Edge Detection: 全分辨率 RT
+    if (render_resources_.pp_outline_rt == 0) {
+        render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget(
+            {render_width, render_height, true, false, false});
+    }
 
     // GBuffer MRT: 3 颜色附件 (albedo, normal, position) + 深度
     if (render_resources_.gbuffer_rt == 0) {
@@ -823,6 +828,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
     render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
     render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
+    render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
     render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
@@ -861,6 +867,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     auto gbuffer_color = render_graph_dag_.DeclareResource("gbuffer_color");
     auto gbuffer_depth = render_graph_dag_.DeclareResource("gbuffer_depth");
     auto deferred_lit  = render_graph_dag_.DeclareResource("deferred_lit_color");
+    auto outline_color = render_graph_dag_.DeclareResource("outline_color");
     render_graph_dag_.MarkOutput(main_color);
     render_graph_dag_.MarkOutput(scene_color);
     render_graph_dag_.MarkOutput(taa_color);
@@ -869,6 +876,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.MarkOutput(mb_color);
     render_graph_dag_.MarkOutput(gbuffer_color);
     render_graph_dag_.MarkOutput(deferred_lit);
+    render_graph_dag_.MarkOutput(outline_color);
 
     // ---- 注册内置 Pass ----
     registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
@@ -884,6 +892,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::AutoExposurePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::MotionVectorPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::OutlinePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DOFPass>(render_pass_context_));

@@ -783,6 +783,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] Deferred Lighting shader creation failed");
     }
+
+    // Edge Detection (Outline) shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kEdgeDetectFS;
+        edge_detect_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (edge_detect_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Edge Detect shader created: handle={}", edge_detect_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Edge Detect shader creation failed");
+    }
 }
 
 // ============================================================================

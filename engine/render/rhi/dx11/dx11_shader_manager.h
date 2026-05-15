@@ -104,6 +104,7 @@ public:
     unsigned int motion_vector_shader_handle() const { return motion_vector_shader_handle_; }
     unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
     unsigned int deferred_lighting_shader_handle() const { return deferred_lighting_shader_handle_; }
+    unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -148,6 +149,7 @@ private:
     unsigned int motion_vector_shader_handle_ = 0;
     unsigned int gbuffer_shader_handle_ = 0;
     unsigned int deferred_lighting_shader_handle_ = 0;
+    unsigned int edge_detect_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

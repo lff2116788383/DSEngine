@@ -1467,5 +1467,74 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     }
 }
 
+// ============================================================
+// OutlinePass — 屏幕空间边缘检测描边
+// ============================================================
+
+void OutlinePass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto outline_color = graph.DeclareResource("outline_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, outline_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    const dse::PostProcessComponent* pp_ptr = nullptr;
+    for (auto entity : pp_view) {
+        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+        if (pp.enabled && pp.outline_enabled) {
+            pp_ptr = &pp;
+            break;
+        }
+    }
+
+    if (!pp_ptr || ctx_.render_targets.outline == 0) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    float near_plane = 0.1f, far_plane = 1000.0f;
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled) {
+            near_plane = cam.near_clip;
+            far_plane = cam.far_clip;
+            break;
+        }
+    }
+
+    // Pass 1: 边缘检测 → outline RT
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
+    cmd_buffer.DrawPostProcess(depth_tex, "edge_detect", {
+        pp_ptr->outline_thickness,
+        pp_ptr->outline_depth_threshold,
+        pp_ptr->outline_normal_threshold,
+        pp_ptr->outline_color.r,
+        pp_ptr->outline_color.g,
+        pp_ptr->outline_color.b,
+        near_plane,
+        far_plane,
+        static_cast<float>(Screen::width()),
+        static_cast<float>(Screen::height())
+    });
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: 将边缘结果叠加到 scene RT
+    const unsigned int outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
+    if (outline_tex != 0) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+        cmd_buffer.DrawPostProcess(outline_tex, "ui_overlay", {});
+        cmd_buffer.EndRenderPass();
+    }
+}
+
 } // namespace render
 } // namespace dse

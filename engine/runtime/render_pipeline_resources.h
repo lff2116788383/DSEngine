@@ -23,6 +23,7 @@ struct RenderPipelineResources {
     unsigned int pp_dof_rt = 0;        // DOF 输出
     unsigned int pp_ssr_rt = 0;        // SSR 输出
     unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
+    unsigned int pp_outline_rt = 0;       // Outline / Edge Detection
 
     unsigned int gbuffer_rt = 0;            // GBuffer MRT (3 color + depth)
     unsigned int deferred_lighting_rt = 0;   // Deferred lighting output
@@ -61,6 +62,7 @@ struct RenderPipelineResources {
         pp_dof_rt = 0;
         pp_ssr_rt = 0;
         pp_motion_vector_rt = 0;
+        pp_outline_rt = 0;
         gbuffer_rt = 0;
         deferred_lighting_rt = 0;
         pp_lum_temp_rt = 0;

@@ -1929,6 +1929,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.ssr_shader_handle();
     else if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle())
         selected_shader_handle = shader_mgr.deferred_lighting_shader_handle();
+    else if (effect_name == "edge_detect" && shader_mgr.edge_detect_shader_handle())
+        selected_shader_handle = shader_mgr.edge_detect_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -2122,6 +2124,14 @@ void VulkanDrawExecutor::DrawPostProcess(
             pc.intensity = params[8];
             pc.cx = params[5]; pc.cy = params[6]; pc.cz = params[7];
             pc.ambient = params[9];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "edge_detect" && params.size() >= 10) {
+            struct { float thickness, depth_threshold, normal_threshold, outline_r, outline_g, outline_b, near_p, far_p, screen_w, screen_h; } pc{};
+            pc.thickness = params[0]; pc.depth_threshold = params[1]; pc.normal_threshold = params[2];
+            pc.outline_r = params[3]; pc.outline_g = params[4]; pc.outline_b = params[5];
+            pc.near_p = params[6]; pc.far_p = params[7];
+            pc.screen_w = params[8]; pc.screen_h = params[9];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         }

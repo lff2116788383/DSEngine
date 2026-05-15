@@ -1318,6 +1318,26 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // Edge Detection (Outline) 专用路径
+    if (effect_name == "edge_detect" && shader_mgr.edge_detect_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 10) {
+            struct { float thickness, depth_threshold, normal_threshold, outline_r, outline_g, outline_b, near_p, far_p, screen_w, screen_h; } ep{};
+            ep.thickness = params[0]; ep.depth_threshold = params[1]; ep.normal_threshold = params[2];
+            ep.outline_r = params[3]; ep.outline_g = params[4]; ep.outline_b = params[5];
+            ep.near_p = params[6]; ep.far_p = params[7];
+            ep.screen_w = params[8]; ep.screen_h = params[9];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &ep, sizeof(ep));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.edge_detect_shader_handle());
+        return;
+    }
+
     // Deferred Lighting 专用路径（GBuffer → 光照合成）
     if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle()) {
         ensure_pp_params_cb();

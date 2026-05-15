@@ -242,6 +242,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Outline / Edge Detection Pass ----
+class OutlinePass : public IRenderPass {
+public:
+    explicit OutlinePass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "outline_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Present Pass (runtime only) ----
 class PresentPass : public IRenderPass {
 public:

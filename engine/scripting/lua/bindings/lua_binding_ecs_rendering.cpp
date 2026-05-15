@@ -1053,6 +1053,29 @@ int L_EcsSetPostProcessColorLut(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessOutline(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    pp->outline_enabled = lua_isnoneornil(L, 2) ? pp->outline_enabled : helper::CheckBool(L, 2);
+    pp->outline_color.r = helper::OptFloat(L, 3, pp->outline_color.r);
+    pp->outline_color.g = helper::OptFloat(L, 4, pp->outline_color.g);
+    pp->outline_color.b = helper::OptFloat(L, 5, pp->outline_color.b);
+    pp->outline_thickness = helper::OptFloat(L, 6, pp->outline_thickness);
+    pp->outline_depth_threshold = helper::OptFloat(L, 7, pp->outline_depth_threshold);
+    pp->outline_normal_threshold = helper::OptFloat(L, 8, pp->outline_normal_threshold);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsGetPostProcessState(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -1339,6 +1362,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_vignette", L_EcsSetPostProcessVignette},
         {"set_post_process_film_grain", L_EcsSetPostProcessFilmGrain},
         {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
+        {"set_post_process_outline",  L_EcsSetPostProcessOutline},
         {"get_post_process_state",    L_EcsGetPostProcessState},
         // Steering
         {"add_steering",              L_EcsAddSteering},

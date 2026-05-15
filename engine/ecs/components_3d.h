@@ -176,6 +176,13 @@ struct PostProcessComponent {
     float ssr_thickness = 0.5f;          // 表面厚度阈值
     float ssr_step_size = 1.0f;          // 步进大小
     int ssr_max_steps = 64;              // 最大步数
+
+    // Outline / Edge Detection
+    bool outline_enabled = false;
+    glm::vec3 outline_color = glm::vec3(0.0f, 0.0f, 0.0f);  // 描边颜色
+    float outline_thickness = 1.0f;       // 描边粗细（像素）
+    float outline_depth_threshold = 0.1f; // 深度边缘阈值
+    float outline_normal_threshold = 0.4f;// 法线边缘阈值
 };
 
 #define CSM_CASCADES 3
