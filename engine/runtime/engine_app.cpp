@@ -8,6 +8,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scene/scene.h"
 #include "engine/render/rhi/rhi_factory.h"
+#include "engine/render/rhi/ubo_types.h"
 #include <GLFW/glfw3.h>
 #include <glad/gl.h>
 #ifdef _WIN32
@@ -250,6 +251,14 @@ bool EngineInstance::Init() {
         }
 
         GLFWwindow* window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
+        if (!window && needs_gl_context) {
+            // GL 4.3 不可用，降级到 GL 3.3（UBO fallback 模式，无 SSBO）
+            fprintf(stderr, "[DSEngine] GL 4.3 unavailable, falling back to GL 3.3 (UBO light mode, max %d lights)\n",
+                    dse::render::kMaxUBOLights);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
+        }
         if (!window) {
             std::cerr << "Failed to create GLFW window\n";
             glfwTerminate();

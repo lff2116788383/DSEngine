@@ -5,6 +5,7 @@
 
 #include "engine/render/light_buffer.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/ubo_types.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/base/debug.h"
@@ -38,11 +39,16 @@ void LightBuffer::CollectLights(World& world) {
     point_lights_.clear();
     spot_lights_.clear();
 
+    // UBO fallback 模式（GL 3.3）最多 64 个光源（固定大小 UBO 限制）
+    const bool ubo_mode = device_ && !device_->SupportsSSBO();
+    const int max_point = ubo_mode ? kMaxUBOLights : kMaxClusteredPointLights;
+    const int max_spot  = ubo_mode ? kMaxUBOLights : kMaxClusteredSpotLights;
+
     // 收集点光源
     int next_point_shadow = 0;
     auto point_view = world.registry().view<TransformComponent, PointLightComponent>();
     for (auto entity : point_view) {
-        if (static_cast<int>(point_lights_.size()) >= kMaxClusteredPointLights) break;
+        if (static_cast<int>(point_lights_.size()) >= max_point) break;
         auto& transform = point_view.get<TransformComponent>(entity);
         auto& light     = point_view.get<PointLightComponent>(entity);
         if (!light.enabled) continue;
@@ -68,7 +74,7 @@ void LightBuffer::CollectLights(World& world) {
     int next_spot_shadow = 0;
     auto spot_view = world.registry().view<TransformComponent, SpotLightComponent>();
     for (auto entity : spot_view) {
-        if (static_cast<int>(spot_lights_.size()) >= kMaxClusteredSpotLights) break;
+        if (static_cast<int>(spot_lights_.size()) >= max_spot) break;
         auto& transform = spot_view.get<TransformComponent>(entity);
         auto& light     = spot_view.get<SpotLightComponent>(entity);
         if (!light.enabled) continue;

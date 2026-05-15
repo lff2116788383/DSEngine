@@ -353,7 +353,7 @@ light() {
 | Color Banding 后处理参数                |  风格化 | 0.2 天 |
 | 通用 Mesh LOD 接口定义 + 系统              |  性能  |  2 天  |
 | .dds / BCn 纹理直接上传支持                |  性能  |  1 天  |
-| SSBO → UBO fallback 路径             |  兼容  | 0.5 天 |
+| ~~SSBO → UBO fallback 路径~~ ✅ 已完成 |  兼容  | ✅ 完成 |
 | Release 构建脚本                       |  构建  | 0.3 天 |
 | 默认关闭非必需第三方 + CMake 清理              |  瘦身  | 0.5 天 |
 | ~~动画增强 Phase 1~~ ✅ 已完成            |  动画  | ✅ 完成  |

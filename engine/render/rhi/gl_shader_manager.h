@@ -83,6 +83,10 @@ public:
     /// 销毁着色器程序
     void DeleteProgram(unsigned int handle);
 
+    /// 设置 SSBO 支持标志（必须在 InitBuiltinPBRShader 前调用）
+    void set_supports_ssbo(bool v) { supports_ssbo_ = v; }
+    bool supports_ssbo() const { return supports_ssbo_; }
+
     /// 初始化内置 PBR 着色器，编译并缓存所有 uniform location
     void InitBuiltinPBRShader();
 
@@ -140,6 +144,11 @@ private:
     /// 着色器程序创建/销毁计数
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;
+
+    /// GL 3.3 UBO fallback 模式：从 SSBO GLSL 430 运行时高效生成 GLSL 330 UBO 变体
+    static std::string GenerateUBOGLSL();
+
+    bool supports_ssbo_ = true;
 };
 
 } // namespace render

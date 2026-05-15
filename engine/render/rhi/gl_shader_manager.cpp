@@ -8,6 +8,7 @@
 #include "engine/base/debug.h"
 #include <glad/gl.h>
 #include <cstdio>
+#include <cstring>
 
 // 内嵌的 GLSL 330 着色器源码
 #include "embed/pbr_vert.gen.h"
@@ -77,12 +78,195 @@ void GLShaderManager::DeleteProgram(unsigned int handle) {
 }
 
 // ============================================================
+// GL 3.3 UBO Fallback：从 SSBO GLSL 430 生成 GLSL 330 UBO 变体
+//
+// 所有操作均按 block/struct 名称定位，不依赖 spirv-cross 自动分配的
+// OpVariable ID（如 _1904、_1996），因此 shader 改动后 ID 漂移时仍稳定。
+// ============================================================
+
+// 按名称移除一个 SSBO block 声明（ID 无关）
+static bool RemoveSSBOBlock(std::string& src, const char* block_name) {
+    const std::string marker = std::string("buffer ") + block_name + "\n";
+    const auto blk = src.find(marker);
+    if (blk == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] block not found: %s\n", block_name);
+        return false;
+    }
+    const auto layout_start = src.rfind("layout(", blk);
+    if (layout_start == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] layout( before block not found: %s\n", block_name);
+        return false;
+    }
+    const auto close = src.find("\n}", blk);
+    if (close == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] closing } not found: %s\n", block_name);
+        return false;
+    }
+    auto end = src.find('\n', close + 2); // 跳过 "} _NNN;"
+    if (end == std::string::npos) end = src.size();
+    else end++;                            // 包含换行
+    while (end < src.size() && src[end] == '\n') end++; // 消耗尾部空行
+    src.erase(layout_start, end - layout_start);
+    return true;
+}
+
+// 将 SSBO 块声明原地转换为固定大小 UBO 块（ID 无关）
+static bool TransformSSBOToUBO(std::string& src, const char* ssbo_name, const char* ubo_name,
+                                const char* array_field, int max_count) {
+    const std::string old_decl = std::string("std430) readonly buffer ") + ssbo_name;
+    const std::string new_decl = std::string("std140) uniform ") + ubo_name;
+    auto pos = src.find(old_decl);
+    if (pos == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] SSBO decl not found: %s\n", ssbo_name);
+        return false;
+    }
+    src.replace(pos, old_decl.size(), new_decl);
+
+    const std::string old_arr = std::string(array_field) + "[];";
+    const std::string new_arr = std::string(array_field) + "[" + std::to_string(max_count) + "];";
+    pos = src.find(old_arr);
+    if (pos == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] array field not found: %s\n", array_field);
+        return false;
+    }
+    src.replace(pos, old_arr.size(), new_arr);
+    return true;
+}
+
+// 动态提取 UBO 块的 spirv-cross 实例名（如 "_2008"），随 shader 变动而变动
+static std::string ExtractInstanceName(const std::string& src, const char* ubo_name) {
+    const std::string marker = std::string("uniform ") + ubo_name + "\n";
+    const auto blk = src.find(marker);
+    if (blk == std::string::npos) return {};
+    const auto close = src.find("\n} ", blk); // "\n} _NNN;"
+    if (close == std::string::npos) return {};
+    const auto name_start = close + 3;        // 跳过 "\n} "
+    const auto semi = src.find(';', name_start);
+    if (semi == std::string::npos) return {};
+    return src.substr(name_start, semi - name_start);
+}
+
+// 将 Clustered Forward+ 点光源循环替换为暴力遍历（ID 无关）
+// 定位依据：结构标记 "int cl_tx" 和 "for (uint ci = 0u;"，不依赖任何 _NNN ID
+static bool ReplacePointLoopCluster(std::string& src, const std::string& point_inst) {
+    const auto preamble = src.find("    int cl_tx = int(gl_FragCoord.x)");
+    if (preamble == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] cl_tx preamble not found\n");
+        return false;
+    }
+    const auto for_kw = src.find("    for (uint ci = 0u;", preamble);
+    if (for_kw == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] point cluster for-loop not found\n");
+        return false;
+    }
+    const auto body = src.find("    {\n", for_kw); // for 循环体开始 "    {\n"
+    if (body == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] point loop body { not found\n");
+        return false;
+    }
+    // 循环体内第一个 "        }\n" 是 if-guard 的闭合括号
+    const auto guard_end = src.find("        }\n", body + 5);
+    if (guard_end == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] point loop guard } not found\n");
+        return false;
+    }
+    const auto remove_end = guard_end + 10; // "        }\n" = 10 chars
+    const std::string new_loop =
+        "    for (int i = 0; i < " + point_inst + ".u_point_light_count; i++)\n    {\n";
+    src.replace(preamble, remove_end - preamble, new_loop);
+    return true;
+}
+
+// 将聚光灯循环头替换为暴力遍历（ID 无关）
+// 定位依据：结构标记 "for (uint si = 0u;"，不依赖任何 _NNN ID
+static bool ReplaceSpotLoopHeader(std::string& src, const std::string& spot_inst) {
+    const auto for_kw = src.find("    for (uint si = 0u;");
+    if (for_kw == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] spot cluster for-loop not found\n");
+        return false;
+    }
+    const auto body = src.find("    {\n", for_kw);
+    if (body == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] spot loop body { not found\n");
+        return false;
+    }
+    const auto guard_end = src.find("        }\n", body + 5);
+    if (guard_end == std::string::npos) {
+        fprintf(stderr, "[GenerateUBOGLSL] spot loop guard } not found\n");
+        return false;
+    }
+    const auto remove_end = guard_end + 10;
+    const std::string new_loop =
+        "    for (int i_1 = 0; i_1 < " + spot_inst + ".u_spot_light_count; i_1++)\n    {\n";
+    src.replace(for_kw, remove_end - for_kw, new_loop);
+    return true;
+}
+
+std::string GLShaderManager::GenerateUBOGLSL() {
+    using namespace dse::render::generated_shaders;
+    std::string src = kpbr_frag_glsl330;
+
+    // 1. 版本降级（#version 430 → #version 330）
+    {
+        const auto pos = src.find("#version 430");
+        if (pos == std::string::npos)
+            fprintf(stderr, "[GenerateUBOGLSL] #version 430 not found\n");
+        else
+            src.replace(pos, 12, "#version 330");
+    }
+
+    // 2. 移除 ClusterInfoEntry 结构体（按名称定位，ID 无关）
+    {
+        const auto s = src.find("struct ClusterInfoEntry\n");
+        if (s == std::string::npos) {
+            fprintf(stderr, "[GenerateUBOGLSL] struct ClusterInfoEntry not found\n");
+        } else {
+            auto e = src.find("};\n", s);
+            if (e == std::string::npos) {
+                fprintf(stderr, "[GenerateUBOGLSL] ClusterInfoEntry end not found\n");
+            } else {
+                e += 3;
+                if (e < src.size() && src[e] == '\n') e++;
+                src.erase(s, e - s);
+            }
+        }
+    }
+
+    // 3 & 4. 移除 ClusterInfoSSBO + LightIndexSSBO（按名称定位，ID 无关）
+    RemoveSSBOBlock(src, "ClusterInfoSSBO");
+    RemoveSSBOBlock(src, "LightIndexSSBO");
+
+    // 5 & 6. PointLightSSBO + SpotLightSSBO → 固定大小 UBO（按名称定位，ID 无关）
+    TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights[]", kMaxUBOLights);
+    TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights[]",  kMaxUBOLights);
+
+    // 7. 动态提取实例名（随 shader 变动自动适应，不再硬编码 _2008/_2190）
+    const std::string point_inst = ExtractInstanceName(src, "PointLightUBO");
+    const std::string spot_inst  = ExtractInstanceName(src, "SpotLightUBO");
+    if (point_inst.empty())
+        fprintf(stderr, "[GenerateUBOGLSL] PointLightUBO instance name not found\n");
+    if (spot_inst.empty())
+        fprintf(stderr, "[GenerateUBOGLSL] SpotLightUBO instance name not found\n");
+
+    // 8 & 9. 替换 Clustered Forward+ 循环为暴力遍历（按结构标记定位，ID 无关）
+    ReplacePointLoopCluster(src, point_inst);
+    ReplaceSpotLoopHeader(src, spot_inst);
+
+    return src;
+}
+
+// ============================================================
 // 内置 PBR 着色器
 // ============================================================
 
 void GLShaderManager::InitBuiltinPBRShader() {
     using namespace dse::render::generated_shaders;
-    pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kpbr_frag_glsl330);
+    if (!supports_ssbo_) {
+        static std::string ubo_frag_src = GenerateUBOGLSL();
+        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl330, ubo_frag_src.c_str());
+    } else {
+        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kpbr_frag_glsl330);
+    }
     programs_created_ += 1;
     CachePBRLocations();
 }
@@ -104,9 +288,13 @@ void GLShaderManager::CachePBRLocations() {
     BindUBOBlock(h, "PerFrame",       UBOBindingPoint::PerFrame,      loc.per_frame_block_index);
     BindUBOBlock(h, "PerScene",       UBOBindingPoint::PerScene,      loc.per_scene_block_index);
     BindUBOBlock(h, "PerMaterial",    UBOBindingPoint::PerMaterial,   loc.per_material_block_index);
-    // PointLights/SpotLights 已改为 SSBO，通过 layout(binding=N) 自动绑定
-    loc.point_lights_block_index = GL_INVALID_INDEX;
-    loc.spot_lights_block_index  = GL_INVALID_INDEX;
+    if (!supports_ssbo_) {
+        BindUBOBlock(h, "PointLightUBO", UBOBindingPoint::PointLights, loc.point_lights_block_index);
+        BindUBOBlock(h, "SpotLightUBO",  UBOBindingPoint::SpotLights,  loc.spot_lights_block_index);
+    } else {
+        loc.point_lights_block_index = GL_INVALID_INDEX;
+        loc.spot_lights_block_index  = GL_INVALID_INDEX;
+    }
     BindUBOBlock(h, "SpotLightData",  UBOBindingPoint::SpotLightData, loc.spot_light_data_block_index);
     BindUBOBlock(h, "BoneMatrices",   UBOBindingPoint::BoneMatrices,  loc.bone_matrices_block_index);
     BindUBOBlock(h, "MorphWeights",   UBOBindingPoint::MorphWeights,  loc.morph_weights_block_index);

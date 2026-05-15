@@ -39,6 +39,9 @@ enum class UBOBindingPoint : unsigned int {
     Count           = 9,  ///< 绑定点总数
 };
 
+/// GL 3.3 UBO fallback 模式下每类光源的最大数量（固定大小 UBO 数组上限）
+static constexpr int kMaxUBOLights = 64;
+
 // ============================================================
 // PerFrame UBO (binding = 0)
 // ============================================================

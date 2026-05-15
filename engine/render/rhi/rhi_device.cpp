@@ -287,6 +287,13 @@ void OpenGLRhiDevice::EnsureInitialized() {
         return CreateTexture2D(w, h, data, linear);
     });
 
+    // 检测 SSBO 支持（需要 GL 4.3+）
+    GLint gl_major = 0, gl_minor = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &gl_major);
+    glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
+    supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
+    shader_mgr_.set_supports_ssbo(supports_ssbo_);
+
     // 初始化内置 PBR 着色器
     shader_mgr_.InitBuiltinPBRShader();
     resource_mgr_.ledger().shader_programs_created += 1;
@@ -732,20 +739,41 @@ unsigned int OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {
     glGenBuffers(1, &handle);
     if (handle == 0) return 0;
     resource_mgr_.ledger().buffers_created += 1;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    if (!supports_ssbo_) {
+        glBindBuffer(GL_UNIFORM_BUFFER, handle);
+        glBufferData(GL_UNIFORM_BUFFER, size, data, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    } else {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
     return handle;
 }
 
 void OpenGLRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
     if (handle == 0) return;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    if (!supports_ssbo_) {
+        glBindBuffer(GL_UNIFORM_BUFFER, handle);
+        glBufferSubData(GL_UNIFORM_BUFFER, offset, size, data);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    } else {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
 }
 
 void OpenGLRhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
+    if (!supports_ssbo_) {
+        // UBO fallback 映射：SSBO 绑定点 1→3（PointLights），2→4（SpotLights），3/4（cluster grid）no-op
+        if (binding_point == 1u) {
+            glBindBufferBase(GL_UNIFORM_BUFFER, 3u, handle);
+        } else if (binding_point == 2u) {
+            glBindBufferBase(GL_UNIFORM_BUFFER, 4u, handle);
+        }
+        return;
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding_point, handle);
 }
 

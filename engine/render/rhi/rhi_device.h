@@ -265,6 +265,9 @@ public:
 
     /// 删除 SSBO 缓冲区
     virtual void DeleteSSBO(unsigned int handle) { (void)handle; }
+
+    /// 是否支持 SSBO（OpenGL 4.3+ 支持；GL 3.3 使用 UBO fallback）
+    virtual bool SupportsSSBO() const { return true; }
 };
 
 /**
@@ -342,6 +345,7 @@ public:
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
     void DeleteSSBO(unsigned int handle) override;
+    bool SupportsSSBO() const override { return supports_ssbo_; }
 
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
@@ -376,6 +380,7 @@ private:
     std::unordered_set<unsigned int> external_shader_programs_;
 
     bool initialized_ = false;
+    bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
 };
 
 
