@@ -1,10 +1,10 @@
 # DSEngine 「轻量级高性能3D极客引擎」差距分析
 
-> 分析日期：2026-05-14（第二次更新）
+> 分析日期：2026-05-15（第三次更新）
 > 目标：最少代码、最低硬件、最少资源、极致画质
 > 深耕：风格化渲染 + 写实渲染
 >
-> ⚠️ **本轮更新说明：** 自首次文档生成以来，引擎经历了重大功能迭代——D3D11 后端已从 Stub 升级为完整实现（PBR/阴影/后处理/SSBO 三后端对等），动画系统 Phase 1 全部完成（IK/Layering/2DBlend/BoneMask），物理 Overlap API 已实现。
+> ⚠️ **本轮重大更新说明：** 自上次文档生成以来，引擎经历了**关键 Phase 1 收官**。完整实现了 Toon/Cel Shading DSSL 材质 + 三后端集成、Clear Coat/Anisotropy/POM 三后端参数管线、Color Banding IGN 抖动三后端同步。至此「画质细腻度 + 风格化启动」全部完成。当前引擎短板重心已从 Phase 1 转移到 Phase 2（SSBO→UBO fallback、.dds 纹理、LTCG 编译）和 Phase 3（Volumetric Fog、Decal、Outline）。
 
 ---
 
@@ -82,26 +82,23 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 
 | 缺失技术                                |  重要性 |  难度  |          画面影响          |
 | ----------------------------------- | :--: | :--: | :--------------------: |
-| **Subsurface Scattering**           | 🔴 高 | 🟡 中 |     皮肤/树叶透光感，3A 标配     |
 | **Volumetric Fog / Light Shaft**    | 🔴 高 | 🔴 高 |      光柱/雾效/氛围最关键因素     |
-| **通用 Mesh LOD**                     | 🔴 高 | 🟡 中 |    远距离降面数，当前仅地形有 LOD   |
-| **GPU Instancing**                  | 🔴 高 | 🟡 中 |    大量同模（草地/石头/树木）性能    |
 | **Decal System**                    | 🟡 中 | 🟡 中 |       弹孔/路面标记/血迹       |
-| **POM（Parallax Occlusion Mapping）** | 🟡 中 | 🟡 中 |       砖墙/地面的微深度细节      |
-| **Clear Coat（清漆层）**                 | 🟢 低 | 🟢 低 |        车漆/木材表面光泽       |
-| **Anisotropy（各向异性 BRDF）**           | 🟢 低 | 🟢 低 |        金属拉丝/头发效果       |
+| **OIT（Order Independent Transparency）** | 🟢 低 | 🔴 高 | 半透明物体正确排序，进阶需求 |
 | **HDR10/BT.2020 Output**            | 🟢 低 | 🟡 中 | 真实 HDR 显示，当前仅 ACES→SDR |
 
-### 风格化渲染：当前 ~5%（仅 DSSL 基础设施 + half_lambert_kf 模板）
+✅ 已补齐：SSS、GPU Instancing、通用 Mesh LOD、Clear Coat、Anisotropy、POM、D3D11 后端
+
+### 风格化渲染：当前 ~35%（已实现 Toon/Cel Shading + Color Banding）
 
 #### 缺失项
 
 | 缺失技术                       |  重要性 |  难度  | 说明                                   |
 | -------------------------- | :--: | :--: | ------------------------------------ |
-| **Toon/Cel Shading**       | 🔴 高 | 🟢 低 | 阶梯漫反射 + 纯色高光，DSSL \~20 行可完成          |
 | **Outline/Edge Detection** | 🔴 高 | 🟡 中 | Backface fatten + 后处理 edge detection |
-| **Color Banding / 颜色量化**   | 🟡 中 | 🟢 低 | 后处理颜色阶跃                              |
-| **Custom NPR Light Model** | 🟡 中 | 🟢 低 | DSSL 的 light() 回调已支持                 |
+| **Custom NPR Light Model** | 🟡 中 | 🟢 低 | DSSL 的 light() 回调已支持 |
+
+✅ 已补齐：Toon/Cel Shading（`shading_mode=4`，三后端 7 参数 PerMaterial UBO）、Color Banding（IGN 抖动三后端同步）
 
 ### 动画系统：Phase 1 全部完成
 
@@ -124,9 +121,9 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 | ------------- | :-----------------------------: | --------------------- |
 | ECS（EnTT）     |               ✅ 成熟              | 无                     |
 | 3D 物理（PhysX）  | ✅ 完整（刚体/碰撞体/关节/角色/布娃娃/车辆/软体/浮力） | Overlap API ✅ 已实现 |
-| 2D 物理（Box2D）  |             ✅ 基础功能完备            | 无需增强                  |
+| 2D 物理（Box2D）  |             ✅ 基础功能完备            | 缺多边形碰撞体              |
 | 音频（miniaudio） |     ✅ 完善（3D 空间化/遮挡/VFS/并发控制）    | 缺 DSP 效果链             |
-| 场景管理          |    ✅ SubScene + 异步加载 + Prefab   | 缺通用 LOD               |
+| 场景管理          |    ✅ SubScene + 异步加载 + Prefab   | 缺通用 LOD ✅ 已实现        |
 | 资源管理          | ✅ 同步/异步双管道 + Bundle + 热重载 + LRU | 缺 Skinned Mesh 专属类型   |
 
 ---
@@ -153,12 +150,13 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 
 | 措施                              |  投入  |          性能收益         |       做      |
 | :------------------------------ | :--: | :-------------------: | :----------: |
-| **通用 Mesh LOD 系统**              | 🟡 中 |    降顶点数 50-80%（远距离）   |       ✅      |
-| **GPU Instancing**              | 🟡 中 | 降 Draw Call 90%（大量同模） |       ✅      |
-| **纹理 .dds / BCn 直接上传**          | 🟢 低 |  降 VRAM 30-40% + 加载速度 |       ✅      |
+| **通用 Mesh LOD 系统**              | 🟡 中 |    降顶点数 50-80%（远距离）   |       ✅ 已完成      |
+| **GPU Instancing**              | 🟡 中 | 降 Draw Call 90%（大量同模） |       ✅ 已完成      |
+| **纹理 .dds / BCn 直接上传**          | 🟢 低 |  降 VRAM 30-40% + 加载速度 |       🟡 待办    |
 | **纹理流送（Texture Streaming）**     | 🔴 高 |     降 VRAM 峰值 50%+    |     🟡 评估    |
 | **Compute Shader 扩展**           | 🟡 中 |     Bloom 等后处理性能提升    | 🟡 优先 Vulkan |
-| **LTCG 编译**                     | 🟢 低 |      二进制降 10-20%      |       ✅      |
+| **SSBO → UBO fallback**         | 🟢 低 | 降 GPU 要求至 GL 3.3    |   🟡 待办    |
+| **LTCG 编译**                     | 🟢 低 |      二进制降 10-20%      |       🟡 待办      |
 | **Profile-guided Optimization** | 🟡 中 |      运行时性能 5-15%      |      🟡      |
 
 ### 2.3 兼容性措施
@@ -166,7 +164,7 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 | 措施                      |  投入  |       兼容收益       |   做  |
 | :---------------------- | :--: | :--------------: | :--: |
 | **D3D11 后端**             | ✅ 已完成 |    Win7+ 全平台覆盖   | ✅ 已完成 |
-| **SSBO → UBO fallback** | 🟢 低 | 降 GPU 要求至 GL 3.3 |   ✅  |
+| **SSBO → UBO fallback** | 🟢 低 | 降 GPU 要求至 GL 3.3 |   🟡 待办  |
 | **GLES 3.1 兼容封装**       | 🔴 高 |       移动端支持      | ❌ 暂不 |
 | **Vulkan 最低版本保持 1.0**   | 🟢 低 |   最广 Vulkan 覆盖   |   ✅  |
 
@@ -185,83 +183,58 @@ DSSL 材质系统（surface / light / vertex 三阶段）
 ### 3.1 写实渲染跃升路径
 
 ```
-[当前] PBR + CSM + PCSS + IBL + 全后处理链
-       ↓ Phase 1「Shader 补完」(1-2天)
-[阶段1] + SSS + Clear Coat + Anisotropy
+[当前] PBR + CSM + PCSS + IBL + 全后处理链 + SSS + Clear Coat + Anisotropy + POM + GPU Instancing + Mesh LOD
        ↓ Phase 2「氛围增强」(1-2周)
-[阶段2] + Volumetric Fog + Decal + POM
+[阶段1] + Volumetric Fog + Decal
        ↓ Phase 3「极致细节」(2-4周)
-[阶段3] + 半透物体(OIT) + 高质量水/海洋 + HDR10
+[阶段2] + 半透物体(OIT) + 高质量水/海洋 + HDR10
 ```
 
-**Phase 1 核心：**
-
-```
-SSS（Pre-integrated Skin）:
-  纯 shader 方案，不需要新 Pass。
-  在 PBR BRDF 之后叠加 Pre-integrated SSS 纹理采样，
-  根据 N·L 和曲率做半透散射叠加。
-  行数: ~30 行 GLSL / HLSL / SPIR-V
-
-Clear Coat + Anisotropy:
-  扩展 PBR BRDF 公式，增加 clear coat 层和
-  各向异性法线分布函数。
-  行数: ~20 行 GLSL / HLSL / SPIR-V
-```
+**Phase 1 已完成（画质细腻度）：**
+- SSS（Pre-integrated Skin）— ~30 行 GLSL/HLSL/SPIR-V，纯 shader 方案
+- Clear Coat + Anisotropy — 扩展 PBR BRDF 公式，~20 行
+- POM（Parallax Occlusion Mapping）— 16 层视差遮挡，~40 行
+- GPU Instancing — 三后端合批，降 Draw Call 90%
+- 通用 Mesh LOD — 屏幕空间投影 + hysteresis 死区
 
 ### 3.2 风格化渲染跃升路径
 
 ```
-[当前] 完全无 NPR 能力
-       ↓ Phase 1「DSSL 材质级」(不必改引擎)
-[阶段1] + Toon Shading（~20 行 DSSL）
-       + Color Banding（后处理参数级）
-       + Half-Lambert（已有 half_lambert_kf.dssl）
+[当前] Toon/Cel Shading + Color Banding ✅
        ↓ Phase 2「引擎级支持」(1-2周)
-[阶段2] + Outline（ForwardScenePass 双 Pass 变体）
+[阶段1] + Outline（ForwardScenePass 双 Pass 变体）
        + Edge Detection（新增后处理 Pass）
        ↓ Phase 3「风格化材质库」(3-5天)
-[阶段3] + 水彩/素描/动漫风的 DSSL 材质集合
+[阶段2] + 水彩/素描/动漫风的 DSSL 材质集合
        + NPR 光照模型库
 ```
 
-**关键优势：DSSL 材质系统** — 自定义 `light()` 回调让 Toon Shading 不需要改引擎核心：
+**DSSL 材质系统已就绪** — `toon_cel.dssl` 提供 7 参数可配置 Toon Shading：
 
-```
-// toon_default.dssl (表面材质)
-surface() {
-    ALBEDO = texture(u_albedo_tex, UV);
-}
-light() {
-    float NdotL = dot(N, L);
-    // 3-step 阶梯式漫反射
-    float shade = 0.3;
-    if (NdotL > 0.3) shade = 0.6;
-    if (NdotL > 0.6) shade = 0.8;
-    if (NdotL > 0.8) shade = 1.0;
-    DIFFUSE = shade * LIGHT_COLOR * ALBEDO;
-    // 纯色高光
-    float spec = step(0.95, dot(H, N));
-    SPECULAR = spec * LIGHT_COLOR * 0.5;
-}
-```
-
-**真正需要引擎级支持的：**
-
-1. **双 Pass 渲染** — ForwardScenePass 中增加 Outline Backface 变体，法线方向膨胀顶点 + 纯色输出
-2. **后处理 Edge Detection** — 新增独立 Pass 或集成到 CompositePass（Sobel / Laplacian 算子）
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `shadow_color` | vec4(rgb+threshold) | 阴影颜色 + 阈值 |
+| `rim_color` | vec3 | 边缘光颜色 |
+| `shadow_softness` | float | 阴影过渡软度 |
+| `specular_size` | float | 高光大小 |
+| `specular_strength` | float | 高光强度 |
+| `rim_strength` | float | 边缘光强度 |
+| `shadow_threshold` | float | 阴影阈值（DSSL 定义） |
 
 ### 3.3 画质提升效果预估
 
 | 技术             |   画面感知提升   |       性能成本       |
 | -------------- | :--------: | :--------------: |
-| SSS            | 中高（角色皮肤质感） |    低（1 次纹理采样）    |
+| ✅ SSS         | 中高（角色皮肤质感） |    低（1 次纹理采样）    |
+| ✅ Toon Shading |  高（风格化基底）  |        无额外       |
+| ✅ Clear Coat   |  中（表面光泽）   |    低（BRDF 扩展）    |
+| ✅ Anisotropy   |  中（金属发丝）   |    低（BRDF 扩展）    |
+| ✅ POM          |  中（微深度）    |     中（16 层采样）    |
+| ✅ Mesh LOD     |   低感知但高帧率  |     负成本（降负载）     |
+| ✅ GPU Instancing | 低感知但高帧率 | 负成本（降 Draw Call） |
 | Volumetric Fog |   高（场景氛围）  |  中（raymarching）  |
 | Decal          |   中（场景细节）  |   低（1 次全屏 Pass）  |
-| Toon Shading   |  高（风格化基底）  |        无额外       |
 | Outline        |  高（风格化轮廓）  |   低（1 次额外 Pass）  |
-| Mesh LOD       |   低感知但高帧率  |     负成本（降负载）     |
-| GPU Instancing |   低感知但高帧率  | 负成本（降 Draw Call） |
 
 ---
 
@@ -321,56 +294,40 @@ light() {
 ### 整体路线图
 
 ```
-时间线        Phase 1 (1周)          Phase 2 (2周)          Phase 3 (3周)
-          ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-画质       │ SSS Shader      │  │ Volumetric Fog   │  │ DSSL 风格化库   │
-跃升       │ Clear Coat      │  │ Decal System     │  │ NPR 光照模型    │
-          │ Anisotropy      │  │ POM              │  │ OIT 透明排序    │
-          │ Toon DSSL 材质  │  │ Outline 渲染     │  │ 水/海洋系统     │
-          │ Color Banding   │  │ Edge Detection   │  │                │
-          └─────────────────┘  └─────────────────┘  └─────────────────┘
-性能       │ 通用 Mesh LOD   │  │ GPU Instancing   │  │ 纹理流送评估   │
-+          │ .dds 直接上传   │  │ LTCG 编译        │  │                │
-兼容       │ SSBO→UBO fallb.│  │                  │  │                │
-          │ Release 构建    │  │                  │  │                │
-          └─────────────────┘  └─────────────────┘  └─────────────────┘
-代码       │ 默认关闭非必需   │  │（自有代码不删）   │  │（自有代码不删）│
-瘦身       │ 第三方 CMake    │  │                  │  │                │
-          │ 残留清理         │  │                  │  │                │
-          └─────────────────┘  └─────────────────┘  └─────────────────┘
-✅ 已完成   │ D3D11 三后端    │  │                  │  │                │
-          │ 动画 Phase 1   │  │                  │  │                │
-          │ Overlap API    │  │                  │  │                │
+时间线        Phase 2 (1-2周)          Phase 3 (3-5周)
+          ┌─────────────────┐  ┌─────────────────┐
+画质       │ Volumetric Fog  │  │ DSSL 风格化库   │
+跃升       │ Decal System    │  │ NPR 光照模型    │
+          │ Outline 渲染    │  │ OIT 透明排序    │
+          │ Edge Detection  │  │ 水/海洋系统     │
+          └─────────────────┘  └─────────────────┘
+性能       │ SSBO→UBO fallb. │  │                │
++          │ .dds 直接上传   │  │                │
+兼容       │ Release 构建    │  │                │
+          │ CMake 残留清理   │  │                │
+          │ LTCG 编译       │  │                │
+          └─────────────────┘  └─────────────────┘
+✅ 已完成   │ Phase 1 全部    │  │                │
+          │ Mesh LOD        │  │                │
+          │ GPU Instancing  │  │                │
+          │ 9-Slice UI      │  │                │
+          │ D3D11 后端      │  │                │
+          │ 动画系统 Phase1 │  │                │
 ```
 
-### Phase 1 细化（1 周）
-
-| 任务                                 |  类型  |  工作量  |
-| :--------------------------------- | :--: | :---: |
-| SSS Pre-integrated Skin shader（三端） | 写实渲染 |  1 天  |
-| Clear Coat + Anisotropy BRDF 扩展    | 写实渲染 | 0.5 天 |
-| Toon Shading DSSL 材质               |  风格化 | 0.5 天 |
-| Color Banding 后处理参数                |  风格化 | 0.2 天 |
-| 通用 Mesh LOD 接口定义 + 系统              |  性能  |  2 天  |
-| .dds / BCn 纹理直接上传支持                |  性能  |  1 天  |
-| ~~SSBO → UBO fallback 路径~~ ✅ 已完成 |  兼容  | ✅ 完成 |
-| Release 构建脚本                       |  构建  | 0.3 天 |
-| 默认关闭非必需第三方 + CMake 清理              |  瘦身  | 0.5 天 |
-| ~~动画增强 Phase 1~~ ✅ 已完成            |  动画  | ✅ 完成  |
-
-### Phase 2 细化（2 周）
+### Phase 2 细化（1-2 周）← 当前最高优先级
 
 | 任务                                   |  类型 |  工作量  |
 | :----------------------------------- | :-: | :---: |
+| SSBO → UBO fallback 路径             |  兼容  | 0.5 天 |
+| .dds / BCn 纹理直接上传支持                |  性能  |  1 天  |
+| Release 构建脚本 + LTCG                 |  构建  | 0.5 天 |
+| 默认关闭非必需第三方 + CMake 清理              |  瘦身  | 0.5 天 |
 | Volumetric Fog raymarching           |  写实 |  3 天  |
 | Decal System（screen-space）           |  写实 |  2 天  |
-| POM shader                           |  写实 |  1 天  |
 | Outline 双 Pass + Edge Detection Pass | 风格化 |  2 天  |
-| GPU Instancing 统一化                   |  性能 |  2 天  |
-| ~~D3D11 后端补齐~~ ✅ 已完成               |  兼容 | ✅ 完成 |
-| LTCG 编译 + 测试                         |  构建 | 0.5 天 |
 
-### Phase 3 细化（3 周）
+### Phase 3 细化（3-5 周）
 
 | 任务                                         |  类型 | 工作量 |
 | :----------------------------------------- | :-: | :-: |
@@ -391,27 +348,27 @@ light() {
 UE5         数百万    DX11+     ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐⭐  极大         内置
 Unity6      数百万    GLES3+    ⭐⭐⭐⭐  ⭐⭐⭐⭐   极大         内置
 Godot4      ~100万   GLES3+    ⭐⭐⭐   ⭐⭐⭐    大           内置
-DSE 当前    ~8.4万   GL 4.3+   ⭐⭐⭐⭐  ❌        中           有（暂不扩展）
+DSE 当前    ~8.4万   GL 4.3+   ⭐⭐⭐⭐⭐ ⭐⭐⭐   中           有（暂不扩展）
 DSE 目标    ~8.4万   GL 3.3+   ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐   小           有（后续扩展）
 
 「极简代码 + 极致画质」是独特生态位 —— 没有主流引擎能做到。
-DSE 自有代码从 77K 增长至 ~84K（新增动画 IK/Layer + DX11 完善），第三方从 ~200K 可降至 ~120K，
-D3D11 已完成！硬件兼容扩展至 GL 3.3+（需 SSBO→UBO fallback），画质补完 SSS / Volumetric / Toon / Outline。
+DSE 自有代码从 77K 增长至 ~84K（新增动画 IK/Layer + DX11 + Toon/Cel + ClearCoat + POM + Instancing），第三方从 ~200K 可降至 ~120K，
+D3D11 已完成！硬件兼容扩展至 GL 3.3+（需 SSBO→UBO fallback），画质补完 Volumetric Fog / Decal / Outline。
 ```
 
 ---
 
 ## 总结
 
-| 维度        |     当前    |       Phase 1 后       |    Phase 2 后   | Phase 3 后 |
-| :-------- | :-------: | :-------------------: | :------------: | :-------: |
-| 写实渲染完整度   |   \~88%   |         \~92%         |      \~95%     |   \~98%   |
-| 风格化渲染     |    ~5%    |  25%（Toon + Banding）  | 65%（+ Outline） | 100%（材质库） |
-| 最低 GPU    |  GL 4.3+  | GL 3.3+（UBO fallback） |     GL 3.3+    |  GL 3.3+  |
-| D3D11 后端  |   ✅ 可用   |          ✅ 可用         |      ✅ 可用      |    ✅ 可用   |
-| 第三方依赖     |   \~200K  |         \~120K        |     \~120K     |   \~120K  |
-| 自有代码      |   ~84K    |       84K（只增不减）       |      84K+      |    84K+   |
-| **总体成熟度** | **\~80%** |       **\~85%**       |    **\~92%**   | **\~97%** |
+| 维度        |     当前    |       Phase 2 后       |    Phase 3 后   |
+| :-------- | :-------: | :-------------------: | :------------: |
+| 写实渲染完整度   |   ~94%    |         ~96%          |      ~99%      |
+| 风格化渲染     |    ~35%   | 65%（+ Outline/Edge Detection） | 100%（材质库） |
+| 最低 GPU    |  GL 4.3+  | GL 3.3+（UBO fallback） |     GL 3.3+    |
+| D3D11 后端  |   ✅ 可用   |          ✅ 可用         |      ✅ 可用      |
+| 第三方依赖     |   ~200K   |         ~120K         |     ~120K      |
+| 自有代码      |   ~84K    |       84K（只增不减）       |      84K+      |
+| **总体成熟度** | **~85%**  |       **~92%**        |    **~97%**    |
 
-> 核心思路：**自有代码全部保留**（编辑器留着后续扩展），瘦身针对第三方依赖的条件编译和 CMake 残留；画质跃升分写实和风格化两条线并行推进；性能兼容走 LOD + Instancing + SSBO fallback 三管齐下（D3D11 已完成）。
+> 核心思路：**自有代码全部保留**（编辑器留着后续扩展），瘦身针对第三方依赖的条件编译和 CMake 残留；画质跃升分写实和风格化两条线并行推进；性能兼容走 UBO fallback + .dds 纹理 + LTCG 三管齐下（Mesh LOD / GPU Instancing / D3D11 已完成）。
 
