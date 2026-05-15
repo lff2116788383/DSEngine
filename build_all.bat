@@ -23,6 +23,7 @@ set /a START_TOTAL_CS=1%START_H%*360000 + 1%START_M%*6000 + 1%START_S%*100 + 1%S
 set BUILD_DIR=build_vs2022
 set GENERATOR="Visual Studio 17 2022"
 set ARCH=x64
+set BUILD_CONFIG=Debug
 set BUILD_EDITOR=0
 set BUILD_LAUNCHER=0
 set BUILD_ENGINE_TESTS=1
@@ -107,6 +108,16 @@ if /I "%~1"=="--no-verify-exe" (
 if /I "%~1"=="--all" (
     set BUILD_EDITOR=1
     set BUILD_LAUNCHER=1
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--release" (
+    set BUILD_CONFIG=Release
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--relwithdebinfo" (
+    set BUILD_CONFIG=RelWithDebInfo
     shift
     goto parse_args
 )
@@ -271,8 +282,8 @@ if %ERRORLEVEL% neq 0 (
 
 :: 3. Build all targets
 echo.
-echo [3/4] Building all targets (Debug)...
-cmake --build %BUILD_DIR% --config Debug
+echo [3/4] Building all targets (%BUILD_CONFIG%)...
+cmake --build %BUILD_DIR% --config %BUILD_CONFIG%
 if %ERRORLEVEL% neq 0 (
     echo.
     echo ========================================================
@@ -341,7 +352,7 @@ if "%PACKAGE_LAUNCHER_EXE%"=="1" (
 echo.
 echo [*] Installing C++ SDK...
 if "%PACKAGE_SDK%"=="1" (
-    cmake --install %BUILD_DIR% --config Debug --prefix ".\bin\sdk"
+    cmake --install %BUILD_DIR% --config %BUILD_CONFIG% --prefix ".\bin\sdk"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] SDK Installation failed!
         popd
@@ -426,7 +437,7 @@ if "%BUILD_ENGINE_TESTS%"=="1" (
     echo [*] Running CTest ^(-L engine; full engine-labeled suite^) ...
     if not exist "%BUILD_DIR%\Testing\Temporary" mkdir "%BUILD_DIR%\Testing\Temporary"
     set "ENGINE_TEST_LOG=%BUILD_DIR%\Testing\Temporary\engine_ctest_output.log"
-    ctest --test-dir %BUILD_DIR% -C Debug --output-on-failure --verbose -L engine -E "^engine\.lua_runtime$|^engine\.lua_runtime\.smoke$|^engine\.resource_injection$" > "!ENGINE_TEST_LOG!" 2>&1
+    ctest --test-dir %BUILD_DIR% -C %BUILD_CONFIG% --output-on-failure --verbose -L engine -E "^engine\.lua_runtime$|^engine\.lua_runtime\.smoke$|^engine\.resource_injection$" > "!ENGINE_TEST_LOG!" 2>&1
     set "ENGINE_TEST_RC=!ERRORLEVEL!"
     type "!ENGINE_TEST_LOG!"
     powershell -NoProfile -Command "$logPath = '!ENGINE_TEST_LOG!'; $rc = [int]'!ENGINE_TEST_RC!'; $total = 0; $passed = 0; $failed = 0; $found = $false; if (Test-Path $logPath) { $raw = Get-Content -Raw -Encoding UTF8 $logPath; $summaryMatches = [regex]::Matches($raw, '(?im)^\s*test cases:\s*(\d+)\s*\|\s*(\d+)\s*passed\s*\|\s*(\d+)\s*failed\s*$'); if ($summaryMatches.Count -gt 0) { $last = $summaryMatches[$summaryMatches.Count - 1]; $total = [int]$last.Groups[1].Value; $passed = [int]$last.Groups[2].Value; $failed = [int]$last.Groups[3].Value; $found = $true } else { $allPassedMatches = [regex]::Matches($raw, '(?im)^\s*All tests passed\s*\(\d+ assertions in (\d+) test cases\)\s*$'); if ($allPassedMatches.Count -gt 0) { $last = $allPassedMatches[$allPassedMatches.Count - 1]; $total = [int]$last.Groups[1].Value; $passed = $total; $failed = 0; $found = $true } } }; $color = if ($rc -eq 0) { 'Green' } else { 'Red' }; Write-Host ('[TEST_CASE] Total: ' + $total + ', Passed: ' + $passed + ', Failed: ' + $failed) -ForegroundColor $color; if (-not $found) { Write-Host '[WARN] Catch2 summary not found in log. TEST_CASE stats may be incomplete.' -ForegroundColor Yellow }"
@@ -513,6 +524,8 @@ echo   --no-sdk               Disable SDK packaging
 echo   --with-verify-exe      Enable executable verification (default: ON)
 echo   --no-verify-exe        Disable executable verification
 echo   --all                  Enable editor and launcher build together
+echo   --release              Build Release config (with LTCG, no debug info)
+echo   --relwithdebinfo       Build RelWithDebInfo config (with LTCG + debug info)
 echo   --electron-mirror URL  Electron download mirror URL for electron-builder
 echo   --electron-custom-dir NAME  Optional custom dir name under mirror for Electron zip
 echo   --electron-cache-dir PATH  Electron zip cache directory

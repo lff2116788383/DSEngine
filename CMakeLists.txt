@@ -127,13 +127,10 @@ include_directories("modules")
 include_directories("samples")
 include_directories("depends/spdlog/include")
 
-include_directories("depends/spscqueue/include")
-include_directories("depends/rttr-0.9.6/src")
 include_directories("depends/glm")
 include_directories("depends/glm_ext")
 include_directories("depends/rapidjson/include")
 include_directories("depends/eventpp/include")
-include_directories("depends/timetool")
 include_directories("depends/tinygltf")
 set(DSE_HAS_ASSIMP OFF)
 if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt")
@@ -288,19 +285,11 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         $<$<CONFIG:Debug>:${PHYSX_DLL_DIR_DEBUG}>
         $<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLL_DIR_RELEASE}>
     )
+    # PHYSX_LIBS 由 cmake/CMakeLists.txt.Physx 计算，已包含 release→debug import lib 回退
     target_link_libraries(dse_engine PRIVATE
-        $<$<CONFIG:Debug>:
-            ${PHYSX_LIB_DIR_DEBUG}/PhysX_64.lib
-            ${PHYSX_LIB_DIR_DEBUG}/PhysXCommon_64.lib
-            ${PHYSX_LIB_DIR_DEBUG}/PhysXCooking_64.lib
-            ${PHYSX_LIB_DIR_DEBUG}/PhysXFoundation_64.lib
-            ${PHYSX_LIB_DIR_DEBUG}/PhysXExtensions_static_64.lib>
-        $<$<NOT:$<CONFIG:Debug>>:
-            ${PHYSX_LIB_DIR_RELEASE}/PhysX_64.lib
-            ${PHYSX_LIB_DIR_RELEASE}/PhysXCommon_64.lib
-            ${PHYSX_LIB_DIR_RELEASE}/PhysXCooking_64.lib
-            ${PHYSX_LIB_DIR_RELEASE}/PhysXFoundation_64.lib
-            ${PHYSX_LIB_DIR_RELEASE}/PhysXExtensions_static_64.lib>
+        ${PHYSX_LIBS}
+        $<$<CONFIG:Debug>:${PHYSX_LIB_DIR_DEBUG}/PhysXExtensions_static_64.lib>
+        $<$<NOT:$<CONFIG:Debug>>:${PHYSX_LIB_DIR_RELEASE}/PhysXExtensions_static_64.lib>
     )
 endif()
 # --- D3D11 RHI 后端 ---

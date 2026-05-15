@@ -495,6 +495,41 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 绑定所有 UBO
     ubo_mgr.BindAll();
 
+    // GL 3.3 UBO fallback: BindAll() 会将 UBOManager 的空 PointLights/SpotLights UBO
+    // 绑定到 binding 3/4，覆盖 LightBuffer::Bind() 的透明映射。
+    // 此处从 MeshDrawItem 的光源列表填充并上传，与 Vulkan 后端 UpdatePointSpotLightUBOs 对齐。
+    if (!shader_mgr.supports_ssbo() && !items.empty()) {
+        const auto& ref = items[0];
+
+        PointLightsUBO pl_ubo{};
+        pl_ubo.u_point_light_count = static_cast<int>(
+            (std::min)(ref.point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
+        for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
+            const auto& s = ref.point_lights[i];
+            auto& d = pl_ubo.u_point_lights[i];
+            d.color = s.color;   d.intensity = s.intensity;
+            d.position = s.position; d.radius = s.radius;
+            d.cast_shadow = s.cast_shadow ? 1 : 0;
+            d.shadow_index = s.shadow_index;
+        }
+        ubo_mgr.UploadPointLights(pl_ubo);
+
+        SpotLightsUBO sl_ubo{};
+        sl_ubo.u_spot_light_count = static_cast<int>(
+            (std::min)(ref.spot_lights.size(), static_cast<size_t>(kMaxSpotLightsUBO)));
+        for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
+            const auto& s = ref.spot_lights[i];
+            auto& d = sl_ubo.u_spot_lights[i];
+            d.color = s.color;   d.intensity = s.intensity;
+            d.position = s.position; d.radius = s.radius;
+            d.direction = s.direction; d.inner_cone = s.inner_cone;
+            d.outer_cone = s.outer_cone;
+            d.cast_shadow = s.cast_shadow ? 1 : 0;
+            d.shadow_index = s.shadow_index;
+        }
+        ubo_mgr.UploadSpotLights(sl_ubo);
+    }
+
     // 纹理采样器（全局设置，非逐对象变化）
     unsigned int active_shader = gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle();
     glUniform1i(glGetUniformLocation(active_shader, "u_texture"), 0);
@@ -673,7 +708,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
         ubo_mgr.UploadPerMaterial(per_mat);
 
-        // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 绑定）
+        // 点光源/聚光灯数据：GL 4.3+ 由 LightBuffer SSBO 提供；GL 3.3 已由上方 UBO fallback 上传
         // 仅绑定点光源阴影贴图
         for (int i = 0; i < 4; ++i) {
             if (loc.point_shadow_map[i] != -1) {
