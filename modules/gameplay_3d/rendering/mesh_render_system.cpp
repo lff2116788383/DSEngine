@@ -731,6 +731,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.shading_mode = 3;  // Half-Lambert static (KF default shader)
         } else if (resolved_shader_variant == "MESH_TOON") {
             item.shading_mode = 4;  // Toon / Cel shading
+        } else if (resolved_shader_variant == "MESH_WATERCOLOR") {
+            item.shading_mode = 5;  // Watercolor stylization
         }
         
         if (world.registry().all_of<Animator3DComponent>(entity)) {
@@ -782,6 +784,10 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         item.toon_specular_size = mesh_renderer.toon_specular_size;
         item.toon_specular_strength = mesh_renderer.toon_specular_strength;
         item.toon_rim_strength = mesh_renderer.toon_rim_strength;
+        item.watercolor_paper_strength = mesh_renderer.watercolor_paper_strength;
+        item.watercolor_edge_darkening = mesh_renderer.watercolor_edge_darkening;
+        item.watercolor_color_bleed = mesh_renderer.watercolor_color_bleed;
+        item.watercolor_pigment_density = mesh_renderer.watercolor_pigment_density;
         item.material_uses_instance_data = prefer_material_instance;
         item.material_emissive = resolved_emissive;
         item.receive_shadow = mesh_renderer.receive_shadow;

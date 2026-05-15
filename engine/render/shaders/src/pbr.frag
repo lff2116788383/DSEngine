@@ -481,6 +481,51 @@ void main() {
         return;
     }
 
+    // Watercolor shading mode (light_params.w == 5.0)
+    // UBO packing: toon_shadow_color.x=paper_strength, .y=edge_darkening, .z=color_bleed, .w=pigment_density
+    if (light_params.w == 5.0) {
+        float wc_paper    = toon_shadow_color.x;
+        float wc_edge     = toon_shadow_color.y;
+        float wc_bleed    = toon_shadow_color.z;
+        float wc_pigment  = max(toon_shadow_color.w, 0.1);
+
+        vec3 L = normalize(-u_light_direction);
+        vec3 V_wc = normalize(u_camera_pos - vFragPos);
+        float NdotL = dot(N, L) * 0.5 + 0.5;
+
+        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+
+        // 1) 分段漫反射 + 柔和阴影过渡
+        float soft_band = smoothstep(0.25, 0.55, NdotL);
+        float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
+        vec3 lit = baseColor * u_light_color * u_light_intensity;
+        vec3 shade = baseColor * vec3(0.45, 0.4, 0.5) * u_ambient_intensity;
+        vec3 diffuse = mix(shade, lit, soft_band) * (1.0 - shadow * 0.6);
+
+        // 2) 边缘加深（模拟颜料在笔触边缘的沉积）
+        float fresnel = 1.0 - max(dot(N, V_wc), 0.0);
+        float edge_factor = pow(fresnel, 3.0) * wc_edge;
+        diffuse *= (1.0 - edge_factor * 0.5);
+
+        // 3) 纸张颗粒纹理（程序化噪声近似）
+        float paper_noise = fract(sin(dot(gl_FragCoord.xy * 0.01, vec2(12.9898, 78.233))) * 43758.5453);
+        paper_noise = paper_noise * 0.5 + 0.5;
+        diffuse = mix(diffuse, diffuse * paper_noise, wc_paper * 0.3);
+
+        // 4) 色彩渗透（邻域色相偏移近似）
+        vec3 warm_shift = vec3(0.03, -0.01, -0.03) * wc_bleed;
+        diffuse += warm_shift * (1.0 - soft_band);
+
+        // 5) 颜料浓度调整
+        diffuse = pow(diffuse, vec3(1.0 / wc_pigment));
+
+        // 色调映射 + gamma
+        diffuse = diffuse / (diffuse + vec3(1.0));
+        diffuse = pow(diffuse, vec3(1.0 / 2.2));
+        FragColor = vec4(diffuse, texColor.a * vColor.a);
+        return;
+    }
+
     // Half-Lambert STATIC shading mode (KF default_pixel_shader, light_params.w == 3.0)
     if (light_params.w == 3.0) {
         vec3 L = normalize(-u_light_direction);

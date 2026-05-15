@@ -47,6 +47,11 @@ struct MeshRendererComponent {
     float toon_specular_size = 0.6f;
     float toon_specular_strength = 0.8f;
     float toon_rim_strength = 0.3f;
+    // Watercolor 参数（shading_mode=5, 与 toon 互斥，复用同一 UBO slot）
+    float watercolor_paper_strength = 0.3f;
+    float watercolor_edge_darkening = 0.4f;
+    float watercolor_color_bleed = 0.2f;
+    float watercolor_pigment_density = 1.0f;
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;

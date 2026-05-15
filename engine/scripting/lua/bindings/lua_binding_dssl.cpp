@@ -153,6 +153,8 @@ static int L_DsslApplyMaterial(lua_State* L) {
         case DSSLShaderType::Surface:
             if (inst->GetRenderModes().lighting_model == "toon")
                 mesh->shader_variant = "MESH_TOON";
+            else if (inst->GetRenderModes().lighting_model == "watercolor")
+                mesh->shader_variant = "MESH_WATERCOLOR";
             else
                 mesh->shader_variant = "MESH_PBR";
             break;
@@ -197,6 +199,14 @@ static int L_DsslApplyMaterial(lua_State* L) {
         mesh->toon_specular_size = inst->GetFloat("specular_size", 0.6f);
         mesh->toon_specular_strength = inst->GetFloat("specular_strength", 0.8f);
         mesh->toon_rim_strength = inst->GetFloat("rim_strength", 0.3f);
+    }
+
+    // Watercolor 参数
+    if (inst->GetRenderModes().lighting_model == "watercolor") {
+        mesh->watercolor_paper_strength = inst->GetFloat("paper_strength", 0.3f);
+        mesh->watercolor_edge_darkening = inst->GetFloat("edge_darkening", 0.4f);
+        mesh->watercolor_color_bleed = inst->GetFloat("color_bleed", 0.2f);
+        mesh->watercolor_pigment_density = inst->GetFloat("pigment_density", 1.0f);
     }
 
     return 0;

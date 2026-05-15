@@ -86,6 +86,7 @@ bool DSSLMaterialLoader::ParseDSSLForTemplate(const std::string& source,
             if (trimmed.find("alpha_test") != std::string::npos) out.render_modes.alpha_test = true;
             if (trimmed.find("shadows_disabled") != std::string::npos) out.render_modes.shadows_enabled = false;
             if (trimmed.find("diffuse_lambert") != std::string::npos) out.render_modes.lighting_model = "toon";
+            if (trimmed.find("lighting_model_watercolor") != std::string::npos) out.render_modes.lighting_model = "watercolor";
             continue;
         }
 

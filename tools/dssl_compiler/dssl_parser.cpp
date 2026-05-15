@@ -188,6 +188,8 @@ DSSLModule Parse(const std::string& source, const std::string& filepath) {
                     mod.render_modes.alpha_test = true;
                 else if (m == "wireframe")
                     mod.render_modes.wireframe = true;
+                else if (m == "lighting_model_watercolor")
+                    mod.render_modes.diffuse = m;
             }
             pos = line_end + 1;
             continue;

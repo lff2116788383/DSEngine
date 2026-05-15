@@ -370,10 +370,17 @@ void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
         item.material_pom_height_scale,
         item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z
     );
-    ubo.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
-    ubo.toon_params = glm::vec4(
-        item.toon_shadow_softness, item.toon_specular_size,
-        item.toon_specular_strength, item.toon_rim_strength);
+    if (item.shading_mode == 5) {
+        ubo.toon_shadow_color = glm::vec4(
+            item.watercolor_paper_strength, item.watercolor_edge_darkening,
+            item.watercolor_color_bleed, item.watercolor_pigment_density);
+        ubo.toon_params = glm::vec4(0.0f);
+    } else {
+        ubo.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
+        ubo.toon_params = glm::vec4(
+            item.toon_shadow_softness, item.toon_specular_size,
+            item.toon_specular_strength, item.toon_rim_strength);
+    }
 
     WriteToBuffer(context_->device(), per_material_ubo_mem_[current_frame_index_],
                   per_material_ubo_offset_, sizeof(VulkanPerMaterialUBO), &ubo);

@@ -1,0 +1,20 @@
+// DSSL — 水彩风格材质
+// 基于 shading_mode=5 的水彩着色模型
+// 特征：纸张颗粒纹理、边缘扩散加深、低饱和阴影
+shader_type surface;
+render_mode lighting_model_watercolor, cull_back;
+
+uniform vec4 albedo_color : color = vec4(0.85, 0.65, 0.45, 1.0);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform float paper_strength : range(0.0, 1.0) = 0.3;
+uniform float edge_darkening : range(0.0, 1.0) = 0.4;
+uniform float color_bleed : range(0.0, 1.0) = 0.2;
+uniform float pigment_density : range(0.1, 2.0) = 1.0;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb;
+    ALPHA = tex.a * albedo_color.a;
+    METALLIC = 0.0;
+    ROUGHNESS = 1.0;
+}

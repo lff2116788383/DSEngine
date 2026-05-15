@@ -185,7 +185,7 @@ struct MeshDrawItem {
     int order_in_layer = 0;
 
     bool lighting_enabled = false;
-    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon/Cel
+    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon/Cel, 5=Watercolor
     glm::vec3 material_albedo = glm::vec3(1.0f);
     float material_metallic = 0.0f;
     float material_roughness = 1.0f;
@@ -207,6 +207,10 @@ struct MeshDrawItem {
     float toon_specular_size = 0.6f;
     float toon_specular_strength = 0.8f;
     float toon_rim_strength = 0.3f;
+    float watercolor_paper_strength = 0.3f;
+    float watercolor_edge_darkening = 0.4f;
+    float watercolor_color_bleed = 0.2f;
+    float watercolor_pigment_density = 1.0f;
     bool material_uses_instance_data = false;
     bool receive_shadow = true;
     bool depth_test_enabled = true;

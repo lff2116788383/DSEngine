@@ -544,6 +544,35 @@ float4 PSMain(PSInput input) : SV_TARGET {
         return float4(color, texColor.a * input.color.a);
     }
 
+    // Watercolor shading mode (light_params.w == 5.0)
+    if (light_params.w == 5.0) {
+        float wc_paper    = mat_toon_shadow_color.x;
+        float wc_edge     = mat_toon_shadow_color.y;
+        float wc_bleed    = mat_toon_shadow_color.z;
+        float wc_pigment  = max(mat_toon_shadow_color.w, 0.1);
+        float3 L = normalize(-light_dir_and_enabled.xyz);
+        float3 V_wc = normalize(camera_pos.xyz - input.fragPos);
+        float NdotL = dot(N, L) * 0.5 + 0.5;
+        float3 baseColor = texColor.rgb * input.color.rgb * mat_albedo.rgb;
+        float soft_band = smoothstep(0.25, 0.55, NdotL);
+        float shadow = ShadowCalculation(input.fragPos, input.fragPosView, N, L);
+        float3 lit = baseColor * light_color_and_ambient.rgb * light_params.x;
+        float3 shade = baseColor * float3(0.45, 0.4, 0.5) * light_color_and_ambient.w;
+        float3 wc_diffuse = lerp(shade, lit, soft_band) * (1.0 - shadow * 0.6);
+        float fresnel = 1.0 - max(dot(N, V_wc), 0.0);
+        float edge_factor = pow(fresnel, 3.0) * wc_edge;
+        wc_diffuse *= (1.0 - edge_factor * 0.5);
+        float paper_noise = frac(sin(dot(input.pos.xy * 0.01, float2(12.9898, 78.233))) * 43758.5453);
+        paper_noise = paper_noise * 0.5 + 0.5;
+        wc_diffuse = lerp(wc_diffuse, wc_diffuse * paper_noise, wc_paper * 0.3);
+        float3 warm_shift = float3(0.03, -0.01, -0.03) * wc_bleed;
+        wc_diffuse += warm_shift * (1.0 - soft_band);
+        wc_diffuse = pow(wc_diffuse, float3(1.0 / wc_pigment, 1.0 / wc_pigment, 1.0 / wc_pigment));
+        wc_diffuse = wc_diffuse / (wc_diffuse + float3(1.0, 1.0, 1.0));
+        wc_diffuse = pow(wc_diffuse, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+        return float4(wc_diffuse, texColor.a * input.color.a);
+    }
+
     // Half-Lambert STATIC shading mode (KF default_pixel_shader, light_params.w == 3.0)
     if (light_params.w == 3.0) {
         float3 L = normalize(-light_dir_and_enabled.xyz);

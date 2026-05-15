@@ -1,0 +1,19 @@
+// DSSL — 水彩植物材质
+// 较强色彩渗透 + 半透明效果
+shader_type surface;
+render_mode lighting_model_watercolor, cull_disabled;
+
+uniform vec4 albedo_color : color = vec4(0.35, 0.7, 0.3, 0.9);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform float paper_strength : range(0.0, 1.0) = 0.2;
+uniform float edge_darkening : range(0.0, 1.0) = 0.6;
+uniform float color_bleed : range(0.0, 1.0) = 0.5;
+uniform float pigment_density : range(0.1, 2.0) = 0.8;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb;
+    ALPHA = tex.a * albedo_color.a;
+    METALLIC = 0.0;
+    ROUGHNESS = 1.0;
+}
