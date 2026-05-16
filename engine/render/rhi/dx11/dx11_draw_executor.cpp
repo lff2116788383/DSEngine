@@ -1441,6 +1441,31 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // Water 专用路径
+    if (effect_name == "water" && shader_mgr.water_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 32) {
+            float raw[32] = {};
+            for (int i = 0; i < 32; ++i) raw[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, raw, sizeof(raw));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+        }
+        float blend_factor[4] = {0, 0, 0, 0};
+        dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF);
+        draw_dedicated_pp(shader_mgr.water_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

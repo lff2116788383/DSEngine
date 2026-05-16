@@ -2147,6 +2147,114 @@ float4 main(VS_OUTPUT input) : SV_TARGET {
 }
 )";
 
+// ============================================================
+// Water / Ocean Pixel Shader (screen-space Gerstner)
+// ============================================================
+constexpr const char* kWaterPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D u_depth_tex   : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer WaterParams : register(b0) {
+    float u_depth_handle;
+    float u_water_level;
+    float u_deep_r;    float u_deep_g;    float u_deep_b;
+    float u_shallow_r; float u_shallow_g; float u_shallow_b;
+    float u_max_depth;
+    float u_transparency;
+    float u_wave_amplitude; float u_wave_frequency; float u_wave_speed;
+    float u_wave_dir_x; float u_wave_dir_y;
+    float u_refraction_strength;
+    float u_specular_power;
+    float u_reflection_strength;
+    float u_time;
+    float u_sun_dir_x; float u_sun_dir_y; float u_sun_dir_z;
+    float u_cam_pos_x; float u_cam_pos_y; float u_cam_pos_z;
+    float u_near; float u_far;
+    float u_fwd_x; float u_fwd_y; float u_fwd_z;
+    float u_tan_fov_y;
+    float u_aspect;
+};
+
+struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+
+float WaterLinZ(float d) {
+    float z = d * 2.0f - 1.0f;
+    return (2.0f * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
+
+float3 GerstnerNormal(float2 xz, float t, float2 d1) {
+    float k = u_wave_frequency;
+    float a = u_wave_amplitude;
+    float sp = u_wave_speed;
+    float2 d2 = float2(-d1.y, d1.x);
+    float p1 = dot(d1, xz) * k - t * sp;
+    float p2 = dot(d2, xz) * k * 1.3f - t * sp * 0.7f;
+    float ddx = -k * a * (d1.x * cos(p1) + d2.x * 0.5f * cos(p2));
+    float ddz = -k * a * (d1.y * cos(p1) + d2.y * 0.5f * cos(p2));
+    return normalize(float3(-ddx, 1.0f, -ddz));
+}
+
+float4 main(VS_OUTPUT input) : SV_TARGET {
+    float4 scene = screenTexture.Sample(u_sampler, input.uv);
+    float depth_raw = u_depth_tex.Sample(u_sampler, input.uv).r;
+
+    float3 camFwd = float3(u_fwd_x, u_fwd_y, u_fwd_z);
+    float3 camPos = float3(u_cam_pos_x, u_cam_pos_y, u_cam_pos_z);
+    float3 worldUp = float3(0.0f, 1.0f, 0.0f);
+    float3 camRight = normalize(cross(worldUp, camFwd));
+    float3 camUp = cross(camFwd, camRight);
+
+    // DX11 UV: y 需要翻转到 NDC
+    float2 ndc = float2(input.uv.x * 2.0f - 1.0f, -(input.uv.y * 2.0f - 1.0f));
+    float3 rayDir = normalize(camFwd
+        + ndc.x * camRight * u_tan_fov_y * u_aspect
+        + ndc.y * camUp    * u_tan_fov_y);
+
+    float denom = rayDir.y;
+    if (abs(denom) < 1e-6f) return scene;
+    float t_hit = (u_water_level - camPos.y) / denom;
+    if (t_hit < 0.0f) return scene;
+
+    float scene_linear = (depth_raw < 0.9999f)
+        ? WaterLinZ(depth_raw) / max(dot(rayDir, camFwd), 0.0001f)
+        : 1e6f;
+    if (t_hit > scene_linear) return scene;
+
+    float3 water_world = camPos + rayDir * t_hit;
+    float2 waveDir = float2(u_wave_dir_x, u_wave_dir_y);
+
+    float underwater_depth = max(scene_linear - t_hit, 0.0f);
+    float depth_factor = saturate(underwater_depth / max(u_max_depth, 0.01f));
+    float3 deepC = float3(u_deep_r, u_deep_g, u_deep_b);
+    float3 shallowC = float3(u_shallow_r, u_shallow_g, u_shallow_b);
+    float3 water_color = lerp(shallowC, deepC, depth_factor);
+
+    float3 wave_normal = GerstnerNormal(water_world.xz, u_time, waveDir);
+    float2 refract_offset = wave_normal.xz * u_refraction_strength;
+    float2 refract_uv = saturate(input.uv + refract_offset);
+    float3 refracted = screenTexture.Sample(u_sampler, refract_uv).rgb;
+
+    float cos_theta = max(dot(-rayDir, wave_normal), 0.0f);
+    float fresnel = u_reflection_strength + (1.0f - u_reflection_strength) * pow(1.0f - cos_theta, 5.0f);
+
+    float3 reflected_dir = reflect(rayDir, wave_normal);
+    float sky_grad = saturate(reflected_dir.y * 0.5f + 0.5f);
+    float3 sky_color = lerp(float3(0.3f, 0.4f, 0.5f), float3(0.6f, 0.75f, 1.0f), sky_grad);
+
+    float3 sunDir = float3(u_sun_dir_x, u_sun_dir_y, u_sun_dir_z);
+    float3 half_vec = normalize(-rayDir + (-sunDir));
+    float spec = pow(max(dot(wave_normal, half_vec), 0.0f), u_specular_power);
+
+    float3 underwater = lerp(refracted, water_color, depth_factor * u_transparency);
+    float3 surface = lerp(underwater, sky_color, fresnel) + float3(spec, spec, spec);
+
+    float edge_fade = smoothstep(0.0f, 0.5f, underwater_depth);
+    float alpha = u_transparency * edge_fade;
+    return float4(lerp(scene.rgb, surface, alpha), scene.a);
+}
+)";
+
 } // namespace dx11_shaders
 } // namespace render
 } // namespace dse

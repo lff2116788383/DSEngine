@@ -531,6 +531,23 @@ struct SteeringComponent {
     glm::vec3 velocity = glm::vec3(0.0f);
 };
 
+/// Water / Ocean surface (screen-space Gerstner wave + refraction/reflection)
+struct WaterComponent {
+    bool enabled = true;
+    float water_level = 0.0f;                  ///< Y 高度 (世界坐标)
+    glm::vec3 deep_color = glm::vec3(0.0f, 0.05f, 0.15f);   ///< 深水颜色
+    glm::vec3 shallow_color = glm::vec3(0.0f, 0.4f, 0.55f);  ///< 浅水颜色
+    float max_depth = 30.0f;                   ///< 深浅过渡的最大深度
+    float transparency = 0.6f;                 ///< 水面整体透明度 (0=全透, 1=全不透)
+    float wave_amplitude = 0.15f;              ///< Gerstner 波幅
+    float wave_frequency = 1.5f;               ///< Gerstner 频率
+    float wave_speed = 1.0f;                   ///< 波浪速度
+    glm::vec2 wave_direction = glm::vec2(1.0f, 0.3f); ///< 主波浪方向 (自动归一化)
+    float refraction_strength = 0.03f;         ///< 折射偏移强度
+    float reflection_strength = 0.5f;          ///< 菲涅尔反射强度
+    float specular_power = 128.0f;             ///< 高光指数
+};
+
 /// Light Probe: captures indirect diffuse lighting at a point for GI approximation
 struct LightProbeComponent {
     bool enabled = true;

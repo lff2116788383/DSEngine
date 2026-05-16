@@ -823,6 +823,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         else
             DEBUG_LOG_WARN("[Vulkan] WBOIT Composite shader creation failed");
     }
+
+    // Water shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kWaterFS;
+        water_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (water_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Water shader created: handle={}", water_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Water shader creation failed");
+    }
 }
 
 // ============================================================================

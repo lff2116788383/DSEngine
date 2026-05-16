@@ -275,6 +275,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Water / Ocean Pass ----
+class WaterPass : public IRenderPass {
+public:
+    explicit WaterPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "water_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Screen-Space Decal Pass ----
 class DecalPass : public IRenderPass {
 public:

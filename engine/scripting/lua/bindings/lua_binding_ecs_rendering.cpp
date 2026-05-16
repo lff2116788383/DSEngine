@@ -1159,6 +1159,76 @@ int L_EcsGetPostProcessState(lua_State* L) {
 }
 
 // ============================================================
+// Water
+// ============================================================
+
+int L_EcsAddWater(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    if (!world->registry().all_of<dse::WaterComponent>(e))
+        world->registry().emplace<dse::WaterComponent>(e);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_EcsSetWater(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* wc = helper::TryGetComponent<dse::WaterComponent>(*world, e);
+    if (!wc) { lua_pushboolean(L, 0); return 1; }
+    wc->enabled             = lua_isnoneornil(L, 2) ? wc->enabled : helper::CheckBool(L, 2);
+    wc->water_level         = helper::OptFloat(L, 3, wc->water_level);
+    wc->deep_color.r        = helper::OptFloat(L, 4, wc->deep_color.r);
+    wc->deep_color.g        = helper::OptFloat(L, 5, wc->deep_color.g);
+    wc->deep_color.b        = helper::OptFloat(L, 6, wc->deep_color.b);
+    wc->shallow_color.r     = helper::OptFloat(L, 7, wc->shallow_color.r);
+    wc->shallow_color.g     = helper::OptFloat(L, 8, wc->shallow_color.g);
+    wc->shallow_color.b     = helper::OptFloat(L, 9, wc->shallow_color.b);
+    wc->max_depth           = helper::OptFloat(L, 10, wc->max_depth);
+    wc->transparency        = helper::OptFloat(L, 11, wc->transparency);
+    wc->wave_amplitude      = helper::OptFloat(L, 12, wc->wave_amplitude);
+    wc->wave_frequency      = helper::OptFloat(L, 13, wc->wave_frequency);
+    wc->wave_speed          = helper::OptFloat(L, 14, wc->wave_speed);
+    wc->wave_direction.x    = helper::OptFloat(L, 15, wc->wave_direction.x);
+    wc->wave_direction.y    = helper::OptFloat(L, 16, wc->wave_direction.y);
+    wc->refraction_strength = helper::OptFloat(L, 17, wc->refraction_strength);
+    wc->reflection_strength = helper::OptFloat(L, 18, wc->reflection_strength);
+    wc->specular_power      = helper::OptFloat(L, 19, wc->specular_power);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_EcsGetWater(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* wc = helper::TryGetComponentConst<dse::WaterComponent>(*world, e);
+    if (!wc) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, 1);
+    helper::PushBool(L, wc->enabled);
+    helper::PushFloat(L, wc->water_level);
+    helper::PushFloat(L, wc->deep_color.r);
+    helper::PushFloat(L, wc->deep_color.g);
+    helper::PushFloat(L, wc->deep_color.b);
+    helper::PushFloat(L, wc->shallow_color.r);
+    helper::PushFloat(L, wc->shallow_color.g);
+    helper::PushFloat(L, wc->shallow_color.b);
+    helper::PushFloat(L, wc->max_depth);
+    helper::PushFloat(L, wc->transparency);
+    helper::PushFloat(L, wc->wave_amplitude);
+    helper::PushFloat(L, wc->wave_frequency);
+    helper::PushFloat(L, wc->wave_speed);
+    helper::PushFloat(L, wc->wave_direction.x);
+    helper::PushFloat(L, wc->wave_direction.y);
+    helper::PushFloat(L, wc->refraction_strength);
+    helper::PushFloat(L, wc->reflection_strength);
+    helper::PushFloat(L, wc->specular_power);
+    return 19;
+}
+
+// ============================================================
 // Steering
 // ============================================================
 
@@ -1415,6 +1485,10 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"add_decal",                 L_EcsAddDecal},
         {"set_decal",                 L_EcsSetDecal},
         {"get_post_process_state",    L_EcsGetPostProcessState},
+        // Water
+        {"add_water",                 L_EcsAddWater},
+        {"set_water",                 L_EcsSetWater},
+        {"get_water",                 L_EcsGetWater},
         // Steering
         {"add_steering",              L_EcsAddSteering},
         {"set_steering_target",       L_EcsSetSteeringTarget},

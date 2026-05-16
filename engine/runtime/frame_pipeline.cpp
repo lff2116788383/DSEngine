@@ -950,6 +950,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::WBOITPass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::WaterPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ContactShadowPass>(render_pass_context_));

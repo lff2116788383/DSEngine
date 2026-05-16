@@ -1840,6 +1840,109 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(avg_color, 1.0 - revealage);
             }
         )";
+    } else if (effect_name == "water") {
+        fs_src += R"(
+            uniform sampler2D u_depth_tex;
+            uniform float u_water_level;
+            uniform vec3  u_deep_color;
+            uniform vec3  u_shallow_color;
+            uniform float u_max_depth;
+            uniform float u_transparency;
+            uniform float u_wave_amplitude;
+            uniform float u_wave_frequency;
+            uniform float u_wave_speed;
+            uniform vec2  u_wave_dir;
+            uniform float u_refraction_strength;
+            uniform float u_specular_power;
+            uniform float u_reflection_strength;
+            uniform float u_time;
+            uniform vec3  u_sun_dir;
+            uniform vec3  u_camera_pos;
+            uniform float u_near;
+            uniform float u_far;
+            uniform vec3  u_cam_fwd;
+            uniform float u_tan_fov_y;
+            uniform float u_aspect;
+
+            float WaterLinearDepth(float d) {
+                float z = d * 2.0 - 1.0;
+                return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+            }
+
+            vec3 GerstnerNormal(vec2 xz, float t) {
+                float k = u_wave_frequency;
+                float a = u_wave_amplitude;
+                float sp = u_wave_speed;
+                vec2 d1 = u_wave_dir;
+                vec2 d2 = vec2(-d1.y, d1.x);
+                float p1 = dot(d1, xz) * k - t * sp;
+                float p2 = dot(d2, xz) * k * 1.3 - t * sp * 0.7;
+                float dx = -k * a * (d1.x * cos(p1) + d2.x * 0.5 * cos(p2));
+                float dz = -k * a * (d1.y * cos(p1) + d2.y * 0.5 * cos(p2));
+                return normalize(vec3(-dx, 1.0, -dz));
+            }
+
+            void main() {
+                vec4 scene = texture(screenTexture, TexCoords);
+                float depth_raw = texture(u_depth_tex, TexCoords).r;
+
+                vec3 worldUp = vec3(0.0, 1.0, 0.0);
+                vec3 camRight = normalize(cross(worldUp, u_cam_fwd));
+                vec3 camUp = cross(u_cam_fwd, camRight);
+                vec2 ndc = TexCoords * 2.0 - 1.0;
+                vec3 rayDir = normalize(u_cam_fwd
+                    + ndc.x * camRight * u_tan_fov_y * u_aspect
+                    + ndc.y * camUp    * u_tan_fov_y);
+
+                // ray-plane intersection: y = water_level
+                float denom = rayDir.y;
+                if (abs(denom) < 1e-6) { FragColor = scene; return; }
+                float t_hit = (u_water_level - u_camera_pos.y) / denom;
+                if (t_hit < 0.0) { FragColor = scene; return; }
+
+                // scene depth in world units
+                float scene_linear = (depth_raw < 0.9999)
+                    ? WaterLinearDepth(depth_raw) / max(dot(rayDir, u_cam_fwd), 0.0001)
+                    : 1e6;
+
+                if (t_hit > scene_linear) { FragColor = scene; return; }
+
+                vec3 water_world = u_camera_pos + rayDir * t_hit;
+
+                // underwater depth for coloring
+                float underwater_depth = max(scene_linear - t_hit, 0.0);
+                float depth_factor = clamp(underwater_depth / max(u_max_depth, 0.01), 0.0, 1.0);
+                vec3 water_color = mix(u_shallow_color, u_deep_color, depth_factor);
+
+                // refraction: offset UV by wave normal
+                vec3 wave_normal = GerstnerNormal(water_world.xz, u_time);
+                vec2 refract_offset = wave_normal.xz * u_refraction_strength;
+                vec2 refract_uv = clamp(TexCoords + refract_offset, 0.0, 1.0);
+                vec3 refracted = texture(screenTexture, refract_uv).rgb;
+
+                // Fresnel (Schlick approximation)
+                float cos_theta = max(dot(-rayDir, wave_normal), 0.0);
+                float fresnel = u_reflection_strength + (1.0 - u_reflection_strength) * pow(1.0 - cos_theta, 5.0);
+
+                // simple sky reflection
+                vec3 reflected_dir = reflect(rayDir, wave_normal);
+                float sky_grad = clamp(reflected_dir.y * 0.5 + 0.5, 0.0, 1.0);
+                vec3 sky_color = mix(vec3(0.3, 0.4, 0.5), vec3(0.6, 0.75, 1.0), sky_grad);
+
+                // specular highlight
+                vec3 half_vec = normalize(-rayDir + (-u_sun_dir));
+                float spec = pow(max(dot(wave_normal, half_vec), 0.0), u_specular_power);
+                vec3 specular = vec3(1.0) * spec;
+
+                // combine
+                vec3 underwater = mix(refracted, water_color, depth_factor * u_transparency);
+                vec3 surface = mix(underwater, sky_color, fresnel) + specular;
+
+                float edge_fade = smoothstep(0.0, 0.5, underwater_depth);
+                float alpha = u_transparency * edge_fade;
+                FragColor = vec4(mix(scene.rgb, surface, alpha), scene.a);
+            }
+        )";
     } else if (effect_name == "decal") {
         fs_src += R"(
             uniform sampler2D u_depth_tex;
@@ -2139,6 +2242,30 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
         glUniform1i(glGetUniformLocation(shader, "u_reveal_tex"), 1);
+    } else if (effect_name == "water" && params.size() >= 32) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_depth_tex"), 1);
+        glUniform1f(glGetUniformLocation(shader, "u_water_level"), params[1]);
+        glUniform3f(glGetUniformLocation(shader, "u_deep_color"), params[2], params[3], params[4]);
+        glUniform3f(glGetUniformLocation(shader, "u_shallow_color"), params[5], params[6], params[7]);
+        glUniform1f(glGetUniformLocation(shader, "u_max_depth"), params[8]);
+        glUniform1f(glGetUniformLocation(shader, "u_transparency"), params[9]);
+        glUniform1f(glGetUniformLocation(shader, "u_wave_amplitude"), params[10]);
+        glUniform1f(glGetUniformLocation(shader, "u_wave_frequency"), params[11]);
+        glUniform1f(glGetUniformLocation(shader, "u_wave_speed"), params[12]);
+        glUniform2f(glGetUniformLocation(shader, "u_wave_dir"), params[13], params[14]);
+        glUniform1f(glGetUniformLocation(shader, "u_refraction_strength"), params[15]);
+        glUniform1f(glGetUniformLocation(shader, "u_specular_power"), params[16]);
+        glUniform1f(glGetUniformLocation(shader, "u_reflection_strength"), params[17]);
+        glUniform1f(glGetUniformLocation(shader, "u_time"), params[18]);
+        glUniform3f(glGetUniformLocation(shader, "u_sun_dir"), params[19], params[20], params[21]);
+        glUniform3f(glGetUniformLocation(shader, "u_camera_pos"), params[22], params[23], params[24]);
+        glUniform1f(glGetUniformLocation(shader, "u_near"), params[25]);
+        glUniform1f(glGetUniformLocation(shader, "u_far"), params[26]);
+        glUniform3f(glGetUniformLocation(shader, "u_cam_fwd"), params[27], params[28], params[29]);
+        glUniform1f(glGetUniformLocation(shader, "u_tan_fov_y"), params[30]);
+        glUniform1f(glGetUniformLocation(shader, "u_aspect"), params[31]);
     } else if (effect_name == "decal" && params.size() >= 26) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
@@ -2153,7 +2280,7 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
     }
 
     glDisable(GL_DEPTH_TEST);
-    if (effect_name == "ui_overlay" || effect_name == "decal" || effect_name == "wboit_composite") {
+    if (effect_name == "ui_overlay" || effect_name == "decal" || effect_name == "wboit_composite" || effect_name == "water") {
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     } else {

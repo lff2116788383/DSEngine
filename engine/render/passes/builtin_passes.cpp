@@ -1710,6 +1710,119 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// WaterPass — Screen-Space Water / Ocean (Gerstner wave + refraction)
+// ============================================================
+
+void WaterPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, scene_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void WaterPass::Execute(CommandBuffer& cmd_buffer) {
+    auto water_view = ctx_.world->registry().view<dse::WaterComponent>();
+    bool has_water = false;
+    for (auto entity : water_view) {
+        if (water_view.get<dse::WaterComponent>(entity).enabled) { has_water = true; break; }
+    }
+    if (!has_water) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    // 获取相机信息
+    glm::mat4 view_mat(1.0f);
+    float cam_fov = 60.0f, cam_near = 0.1f, cam_far = 1000.0f;
+    glm::vec3 cam_pos(0.0f);
+    bool found_camera = false;
+
+    if (ctx_.editor_mode && ctx_.use_editor_camera) {
+        found_camera = true;
+        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
+        view_mat = ctx_.editor_view;
+        // 从 projection 中估算 fov 不太精确，使用默认值
+    } else {
+        auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+        for (auto entity : camera_view) {
+            auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+            if (!cam.enabled) continue;
+            cam_fov = cam.fov;
+            cam_near = cam.near_clip;
+            cam_far = cam.far_clip;
+            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+                auto& t = ctx_.world->registry().get<TransformComponent>(entity);
+                glm::vec3 front = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up    = t.rotation * glm::vec3(0.0f, 1.0f,  0.0f);
+                view_mat = glm::lookAt(t.position, t.position + front, up);
+                cam_pos = t.position;
+            }
+            found_camera = true;
+            break;
+        }
+    }
+    if (!found_camera) return;
+
+    glm::mat4 inv_view = glm::inverse(view_mat);
+    glm::vec3 cam_fwd   = -glm::normalize(glm::vec3(inv_view[2]));
+    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+    float tan_fov_y = std::tan(glm::radians(cam_fov) * 0.5f);
+
+    // 获取太阳光方向
+    glm::vec3 sun_dir(0.0f, -1.0f, 0.0f);
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    for (auto entity : light_view) {
+        auto& light = light_view.get<dse::DirectionalLight3DComponent>(entity);
+        if (light.enabled) {
+            sun_dir = glm::normalize(light.direction);
+            break;
+        }
+    }
+
+    const float current_time = Time::TimeSinceStartup();
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+
+    // params 布局（32 float = 128 bytes）
+    std::vector<float> params(32);
+
+    for (auto entity : water_view) {
+        auto& wc = water_view.get<dse::WaterComponent>(entity);
+        if (!wc.enabled) continue;
+
+        glm::vec2 wave_dir = glm::length(wc.wave_direction) > 0.001f
+            ? glm::normalize(wc.wave_direction) : glm::vec2(1.0f, 0.0f);
+
+        params[0]  = static_cast<float>(depth_tex);
+        params[1]  = wc.water_level;
+        params[2]  = wc.deep_color.r;    params[3]  = wc.deep_color.g;    params[4]  = wc.deep_color.b;
+        params[5]  = wc.shallow_color.r;  params[6]  = wc.shallow_color.g;  params[7]  = wc.shallow_color.b;
+        params[8]  = wc.max_depth;
+        params[9]  = wc.transparency;
+        params[10] = wc.wave_amplitude;   params[11] = wc.wave_frequency;   params[12] = wc.wave_speed;
+        params[13] = wave_dir.x;          params[14] = wave_dir.y;
+        params[15] = wc.refraction_strength;
+        params[16] = wc.specular_power;
+        params[17] = wc.reflection_strength;
+        params[18] = current_time;
+        params[19] = sun_dir.x;           params[20] = sun_dir.y;           params[21] = sun_dir.z;
+        params[22] = cam_pos.x;           params[23] = cam_pos.y;           params[24] = cam_pos.z;
+        params[25] = cam_near;            params[26] = cam_far;
+        params[27] = cam_fwd.x;           params[28] = cam_fwd.y;           params[29] = cam_fwd.z;
+        params[30] = tan_fov_y;           params[31] = aspect;
+
+        cmd_buffer.DrawPostProcess(scene_tex, "water", params);
+    }
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
 // DecalPass — Screen-Space Decal (深度重建 + 盒体投影)
 // ============================================================
 
