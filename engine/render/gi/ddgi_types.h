@@ -161,9 +161,6 @@ struct DDGIResources {
     unsigned int irradiance_atlas = 0;       ///< RGBA16F 纹理（辐照度 octahedral atlas）
     unsigned int visibility_atlas = 0;       ///< RG16F 纹理（深度 + 深度² atlas）
     unsigned int probe_state_ssbo = 0;       ///< ProbeState[] SSBO
-    unsigned int rsm_position_rt = 0;        ///< RSM 世界坐标 RT (RGBA32F)
-    unsigned int rsm_normal_rt = 0;          ///< RSM 法线 RT (RGBA16F)
-    unsigned int rsm_flux_rt = 0;            ///< RSM 辐射通量 RT (RGBA16F)
     unsigned int update_compute_shader = 0;  ///< 探针更新 compute shader
     bool initialized = false;
 };

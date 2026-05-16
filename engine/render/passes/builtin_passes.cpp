@@ -2595,11 +2595,6 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
 
-    // 查找 rsm_render_target handle（通过反推：RSM MRT 是 rsm_targets 所在的 FBO）
-    // 这里直接用 render_pass_context 中存储的 rsm_render_target
-    // RSM 渲染使用 GBuffer 模式（MRT 输出 position/normal/albedo）
-    // 找到 rsm RT handle — 需要从 render_targets 获取
-    // 注: RSM MRT 的 FBO handle 通过 render_pass_context 传入
     if (ctx_.rsm_render_target == 0) return;
 
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
@@ -2650,8 +2645,11 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
         break;
     }
 
-    // 驱动 DDGI 系统更新探针
+    // 驱动 DDGI 系统更新探针（传入外部管理的 RSM 纹理句柄）
     ctx_.ddgi_system->UpdateProbes(rhi,
+                                    ctx_.rsm_targets.position,
+                                    ctx_.rsm_targets.normal,
+                                    ctx_.rsm_targets.flux,
                                     ctx_.rsm_targets.width,
                                     ctx_.rsm_targets.height,
                                     light_dir, light_color);

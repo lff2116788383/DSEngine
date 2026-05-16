@@ -40,11 +40,13 @@ public:
     void EnsureRSMResources(RhiDevice* rhi);
 
     /// Compute Shader 探针更新（在 shadow pass 之后、forward pass 之前调用）
-    /// @param rsm_width  RSM 纹理宽度
-    /// @param rsm_height RSM 纹理高度
+    /// @param rsm_position/rsm_normal/rsm_flux RSM MRT 纹理句柄
+    /// @param rsm_width/rsm_height  RSM 纹理尺寸
     /// @param light_dir  主方向光方向（归一化）
     /// @param light_color 主方向光颜色 * 强度
-    void UpdateProbes(RhiDevice* rhi, int rsm_width, int rsm_height,
+    void UpdateProbes(RhiDevice* rhi,
+                      unsigned int rsm_position, unsigned int rsm_normal, unsigned int rsm_flux,
+                      int rsm_width, int rsm_height,
                       const glm::vec3& light_dir, const glm::vec3& light_color);
 
     /// 将 irradiance/visibility atlas 绑定到指定纹理单元供 PBR shader 采样

@@ -247,12 +247,6 @@ void DDGISystem::Shutdown(RhiDevice* rhi) {
         rhi->DeleteSSBO(resources_.probe_state_ssbo);
         resources_.probe_state_ssbo = 0;
     }
-    if (resources_.rsm_position_rt != 0) {
-        // RSM RTs are managed externally (by FramePipeline)
-        resources_.rsm_position_rt = 0;
-        resources_.rsm_normal_rt = 0;
-        resources_.rsm_flux_rt = 0;
-    }
     if (resources_.update_compute_shader != 0) {
         rhi->DeleteComputeShader(resources_.update_compute_shader);
         resources_.update_compute_shader = 0;
@@ -275,12 +269,15 @@ void DDGISystem::EnsureRSMResources(RhiDevice* rhi) {
     // 这里只做存在性检查
 }
 
-void DDGISystem::UpdateProbes(RhiDevice* rhi, int rsm_width, int rsm_height,
+void DDGISystem::UpdateProbes(RhiDevice* rhi,
+                               unsigned int rsm_position, unsigned int rsm_normal, unsigned int rsm_flux,
+                               int rsm_width, int rsm_height,
                                const glm::vec3& light_dir, const glm::vec3& light_color) {
     if (!rhi || !resources_.initialized) return;
     if (resources_.update_compute_shader == 0) return;
     if (resources_.irradiance_atlas == 0 || resources_.visibility_atlas == 0) return;
     if (rsm_width <= 0 || rsm_height <= 0) return;
+    if (rsm_position == 0 || rsm_normal == 0 || rsm_flux == 0) return;
 
     int total_probes = config_.TotalProbeCount();
     int probes_this_frame = std::min(probes_per_frame_, total_probes);
@@ -289,10 +286,10 @@ void DDGISystem::UpdateProbes(RhiDevice* rhi, int rsm_width, int rsm_height,
     rhi->SetComputeTextureImage(0, resources_.irradiance_atlas, false);
     rhi->SetComputeTextureImage(1, resources_.visibility_atlas, false);
 
-    // RSM textures as samplers
-    rhi->SetComputeTextureSampler(0, resources_.rsm_position_rt);
-    rhi->SetComputeTextureSampler(1, resources_.rsm_normal_rt);
-    rhi->SetComputeTextureSampler(2, resources_.rsm_flux_rt);
+    // RSM textures as samplers (externally managed by FramePipeline)
+    rhi->SetComputeTextureSampler(0, rsm_position);
+    rhi->SetComputeTextureSampler(1, rsm_normal);
+    rhi->SetComputeTextureSampler(2, rsm_flux);
 
     // Probe state SSBO
     rhi->BindSSBO(resources_.probe_state_ssbo, 0);
