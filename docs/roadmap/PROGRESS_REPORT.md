@@ -230,7 +230,7 @@ Phase 2 — 渲染性能突破 (~2周)
 Phase 3 — 视觉特性 (~3周)
   ├── ✅ Terrain 系统（GPU VBO/EBO + Per-Patch LOD + Skirt 裙边 + Splatmap 4层混合 + CPU 高度查询 + Lua API）
   ├── ✅ 大型植被系统 Step 1（草地 GPU Instancing + CPU 风场动画 + LOD 2级 + Billboard + Chunk 缓存 + 视锥剪裁 + Lua API）
-  ├── 大型植被系统 Step 2（GPU 风场 Compute + 顶点色渐变 + 平滑 LOD 过渡）  [2-3天]
+  ├── ✅ 大型植被系统 Step 2（GPU 风场 Compute + 顶点色渐变 + 平滑 LOD 过渡）
   └── 毛发模拟（TressFX 风格 Strand 物理 + Compute 模拟 + OIT 渲染）    [10-14天]
 
 Phase 4 — 光照升级

@@ -21,6 +21,12 @@ struct GrassInstanceLayout {
     float     wind_phase;  ///< 风相位种子（基于位置 hash）
 };
 
+/// GPU-friendly packed instance layout (32 bytes, std430 aligned)
+struct GrassGPUInstance {
+    glm::vec4 pos_yaw;        ///< xyz = world position, w = yaw (radians)
+    glm::vec4 wh_phase_fade;  ///< x = width, y = height, z = wind_phase, w = fade_factor
+};
+
 /// 草地 chunk 缓存数据
 struct GrassChunkData {
     std::vector<GrassInstanceLayout> layouts;  ///< 静态布局（缓存不变）
@@ -101,6 +107,17 @@ private:
     std::unordered_map<uint32_t, EntityCache> entity_caches_;
 
     double accumulated_time_ = 0.0;  ///< 风场动画累积时间（double 避免长时间精度丢失）
+
+    // GPU Compute 风场（仅 OpenGL 4.3+ 启用，VK/DX11 走 CPU fallback）
+    void InitComputeShader();
+    void ShutdownComputeResources();
+    void EnsureSSBOCapacity(size_t required_count);
+
+    unsigned int wind_compute_shader_ = 0;
+    unsigned int input_ssbo_ = 0;
+    unsigned int output_ssbo_ = 0;
+    size_t ssbo_capacity_ = 0;
+    bool gpu_compute_enabled_ = false;
 };
 
 } // namespace gameplay3d

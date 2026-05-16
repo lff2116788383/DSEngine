@@ -9,6 +9,77 @@ namespace dse {
 namespace gameplay3d {
 
 // ============================================================
+// GPU Wind Compute Shader (GLSL 430, OpenGL 4.3+)
+// ============================================================
+
+static const char* kGrassWindComputeSource = R"(
+#version 430 core
+layout(local_size_x = 64) in;
+
+struct GrassInstance {
+    vec4 pos_yaw;
+    vec4 wh_phase_fade;
+};
+
+layout(std430, binding = 11) readonly buffer InputBuffer {
+    GrassInstance instances[];
+};
+
+layout(std430, binding = 12) buffer OutputBuffer {
+    mat4 matrices[];
+};
+
+uniform vec2 u_wind_dir;
+uniform float u_wind_speed;
+uniform float u_wind_strength;
+uniform float u_wind_turbulence;
+uniform float u_time;
+uniform int u_instance_count;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= u_instance_count) return;
+
+    GrassInstance inst = instances[idx];
+    vec3 pos = inst.pos_yaw.xyz;
+    float yaw = inst.pos_yaw.w;
+    float w = inst.wh_phase_fade.x;
+    float h = inst.wh_phase_fade.y;
+    float wind_phase = inst.wh_phase_fade.z;
+    float fade = inst.wh_phase_fade.w;
+
+    float phase = wind_phase + u_time * u_wind_speed;
+    float bend = sin(phase) * u_wind_strength;
+    float turb = sin(phase * 3.7 + wind_phase * 2.3) * u_wind_turbulence;
+    float total_bend = clamp(bend + turb, -0.436, 0.436);
+
+    float rx = -total_bend * u_wind_dir.y;
+    float rz =  total_bend * u_wind_dir.x;
+
+    float cx = cos(rx), sx = sin(rx);
+    float cz = cos(rz), sz = sin(rz);
+    float cy = cos(yaw), sy = sin(yaw);
+
+    float a00 = cz * cy;   float a01 = -sz;  float a02 = cz * sy;
+    float a10 = sz * cy;   float a11 = cz;   float a12 = sz * sy;
+    float a20 = -sy;       float a21 = 0.0;  float a22 = cy;
+
+    float r00 = a00;                     float r01 = a01;                    float r02 = a02;
+    float r10 = cx * a10 - sx * a20;     float r11 = cx * a11 - sx * a21;   float r12 = cx * a12 - sx * a22;
+    float r20 = sx * a10 + cx * a20;     float r21 = sx * a11 + cx * a21;   float r22 = sx * a12 + cx * a22;
+
+    float hf = h * fade;
+    mat4 m;
+    m[0] = vec4(r00 * w, r10 * w, r20 * w, 0.0);
+    m[1] = vec4(r01 * hf, r11 * hf, r21 * hf, 0.0);
+    m[2] = vec4(r02 * w, r12 * w, r22 * w, 0.0);
+    m[3] = vec4(pos, 1.0);
+
+    matrices[idx] = m;
+}
+)";
+
+// ============================================================
 // Halton 低差异序列 + hash
 // ============================================================
 
@@ -99,18 +170,81 @@ void GrassSystem::Init(RhiDevice* rhi_device) {
     rhi_ = rhi_device;
     BuildBladeMesh();
     BuildBillboardMesh();
-    DEBUG_LOG_INFO("[GrassSystem] Initialized. blade_verts={}, billboard_verts={}",
-                   blade_vertices_.size(), billboard_vertices_.size());
+    InitComputeShader();
+    DEBUG_LOG_INFO("[GrassSystem] Initialized. blade_verts={}, billboard_verts={}, gpu_compute={}",
+                   blade_vertices_.size(), billboard_vertices_.size(), gpu_compute_enabled_);
 }
 
 void GrassSystem::Shutdown(World& world) {
     (void)world;
+    ShutdownComputeResources();
     blade_vertices_.clear();
     blade_indices_.clear();
     billboard_vertices_.clear();
     billboard_indices_.clear();
     entity_caches_.clear();
     rhi_ = nullptr;
+}
+
+// ============================================================
+// GPU Compute 风场 — 初始化 / 清理 / 容量管理
+// ============================================================
+
+void GrassSystem::InitComputeShader() {
+    if (!rhi_ || !rhi_->SupportsSSBOCompute()) {
+        gpu_compute_enabled_ = false;
+        return;
+    }
+    wind_compute_shader_ = rhi_->CreateComputeShader(kGrassWindComputeSource);
+    gpu_compute_enabled_ = (wind_compute_shader_ != 0);
+    if (gpu_compute_enabled_) {
+        DEBUG_LOG_INFO("[GrassSystem] GPU wind compute shader created: {}", wind_compute_shader_);
+    } else {
+        DEBUG_LOG_INFO("[GrassSystem] GPU compute not available, using CPU fallback");
+    }
+}
+
+void GrassSystem::ShutdownComputeResources() {
+    if (!rhi_) return;
+    if (wind_compute_shader_ != 0) {
+        rhi_->DeleteComputeShader(wind_compute_shader_);
+        wind_compute_shader_ = 0;
+    }
+    if (input_ssbo_ != 0) {
+        rhi_->DeleteSSBO(input_ssbo_);
+        input_ssbo_ = 0;
+    }
+    if (output_ssbo_ != 0) {
+        rhi_->DeleteSSBO(output_ssbo_);
+        output_ssbo_ = 0;
+    }
+    ssbo_capacity_ = 0;
+    gpu_compute_enabled_ = false;
+}
+
+void GrassSystem::EnsureSSBOCapacity(size_t required_count) {
+    if (required_count <= ssbo_capacity_) return;
+
+    size_t new_cap = std::max(required_count, ssbo_capacity_ * 2);
+    new_cap = std::max(new_cap, size_t(1024));
+
+    if (input_ssbo_ != 0) rhi_->DeleteSSBO(input_ssbo_);
+    if (output_ssbo_ != 0) rhi_->DeleteSSBO(output_ssbo_);
+
+    input_ssbo_ = rhi_->CreateSSBO(new_cap * sizeof(GrassGPUInstance), nullptr);
+    output_ssbo_ = rhi_->CreateSSBO(new_cap * sizeof(glm::mat4), nullptr);
+
+    if (input_ssbo_ == 0 || output_ssbo_ == 0) {
+        DEBUG_LOG_ERROR("[GrassSystem] SSBO allocation failed, disabling GPU compute");
+        if (input_ssbo_ != 0) { rhi_->DeleteSSBO(input_ssbo_); input_ssbo_ = 0; }
+        if (output_ssbo_ != 0) { rhi_->DeleteSSBO(output_ssbo_); output_ssbo_ = 0; }
+        ssbo_capacity_ = 0;
+        gpu_compute_enabled_ = false;
+        return;
+    }
+    ssbo_capacity_ = new_cap;
+
+    DEBUG_LOG_INFO("[GrassSystem] SSBO capacity grown to {} instances", new_cap);
 }
 
 // ============================================================
@@ -435,7 +569,6 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
     glm::vec4 frustum_planes[6];
     ExtractFrustumPlanes(vp, frustum_planes);
 
-    // 方向光
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color(1.0f);
     float light_intensity = 1.0f;
@@ -472,13 +605,24 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
                               ? glm::normalize(grass.wind_direction)
                               : glm::vec2(1.0f, 0.0f);
 
-        std::vector<glm::mat4> lod0_instances;
-        std::vector<glm::mat4> lod1_instances;
-        lod0_instances.reserve(static_cast<size_t>(grass.cached_instance_count_));
+        // === Phase 1: 收集 GPU 实例 + LOD 分类 + fade ===
+        std::vector<GrassGPUInstance> lod0_gpu, lod1_gpu;
+        lod0_gpu.reserve(static_cast<size_t>(grass.cached_instance_count_));
+        lod1_gpu.reserve(static_cast<size_t>(grass.cached_instance_count_) / 4);
+
+        auto pack_instance = [](const GrassInstanceLayout& layout, float fade) -> GrassGPUInstance {
+            return GrassGPUInstance{
+                glm::vec4(layout.position, layout.yaw),
+                glm::vec4(layout.width, layout.height, layout.wind_phase, fade)
+            };
+        };
+
+        const float fade_range = std::max(grass.fade_range, 0.01f);
+        const float near_fade_start = std::max(0.0f, grass.lod_near - fade_range);
+        const float far_fade_start  = std::max(grass.lod_near, grass.lod_far - fade_range);
 
         for (const auto& [key, cd] : cache.chunks) {
             if (!cd.valid || cd.layouts.empty()) continue;
-
             if (!IsAABBInFrustum(frustum_planes, cd.aabb_min, cd.aabb_max))
                 continue;
 
@@ -491,31 +635,111 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             if (shadow_pass) {
                 if (!grass.cast_shadow || dist > grass.shadow_distance) continue;
                 for (const auto& layout : cd.layouts) {
-                    lod0_instances.push_back(BuildWindMatrix(
-                        layout, wind_norm, grass.wind_speed,
-                        grass.wind_strength, grass.wind_turbulence, current_time));
+                    lod0_gpu.push_back(pack_instance(layout, 1.0f));
                 }
             } else {
-                if (dist < grass.lod_near) {
+                if (dist < near_fade_start) {
                     for (const auto& layout : cd.layouts) {
-                        lod0_instances.push_back(BuildWindMatrix(
-                            layout, wind_norm, grass.wind_speed,
-                            grass.wind_strength, grass.wind_turbulence, current_time));
+                        lod0_gpu.push_back(pack_instance(layout, 1.0f));
+                    }
+                } else if (dist < grass.lod_near) {
+                    float t = (dist - near_fade_start) / fade_range;
+                    for (const auto& layout : cd.layouts) {
+                        lod0_gpu.push_back(pack_instance(layout, 1.0f - t));
+                        lod1_gpu.push_back(pack_instance(layout, t));
+                    }
+                } else if (dist < far_fade_start) {
+                    for (const auto& layout : cd.layouts) {
+                        lod1_gpu.push_back(pack_instance(layout, 1.0f));
                     }
                 } else if (dist < grass.lod_far) {
+                    float t = (dist - far_fade_start) / fade_range;
                     for (const auto& layout : cd.layouts) {
-                        lod1_instances.push_back(BuildWindMatrix(
-                            layout, wind_norm, grass.wind_speed,
-                            grass.wind_strength, grass.wind_turbulence, current_time));
+                        lod1_gpu.push_back(pack_instance(layout, 1.0f - t));
                     }
                 }
             }
         }
 
+        // === Phase 2: 计算 model matrix（GPU compute 或 CPU fallback）===
+        const size_t lod0_count = lod0_gpu.size();
+        const size_t total_count = lod0_count + lod1_gpu.size();
+        if (total_count == 0) continue;
+
+        std::vector<glm::mat4> all_matrices(total_count);
+
+        bool use_gpu = gpu_compute_enabled_ && total_count >= 64;
+        if (use_gpu) {
+            EnsureSSBOCapacity(total_count);
+            use_gpu = gpu_compute_enabled_;
+        }
+
+        if (use_gpu) {
+            rhi_->UpdateSSBO(input_ssbo_, 0,
+                lod0_count * sizeof(GrassGPUInstance), lod0_gpu.data());
+            if (!lod1_gpu.empty()) {
+                rhi_->UpdateSSBO(input_ssbo_,
+                    lod0_count * sizeof(GrassGPUInstance),
+                    lod1_gpu.size() * sizeof(GrassGPUInstance), lod1_gpu.data());
+            }
+            rhi_->BindSSBO(input_ssbo_, 11);
+            rhi_->BindSSBO(output_ssbo_, 12);
+
+            rhi_->SetComputeUniformVec2f(wind_compute_shader_, "u_wind_dir", wind_norm.x, wind_norm.y);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_speed", grass.wind_speed);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_strength", grass.wind_strength);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_turbulence", grass.wind_turbulence);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_time", current_time);
+            rhi_->SetComputeUniformInt(wind_compute_shader_, "u_instance_count", static_cast<int>(total_count));
+
+            unsigned int groups = (static_cast<unsigned int>(total_count) + 63) / 64;
+            rhi_->DispatchCompute(wind_compute_shader_, groups, 1, 1);
+            rhi_->ComputeMemoryBarrier();
+
+            rhi_->ReadSSBO(output_ssbo_, 0, total_count * sizeof(glm::mat4), all_matrices.data());
+        } else {
+            auto compute_cpu = [&](const std::vector<GrassGPUInstance>& gpu_vec, size_t out_offset) {
+                for (size_t i = 0; i < gpu_vec.size(); ++i) {
+                    const auto& inst = gpu_vec[i];
+                    GrassInstanceLayout layout;
+                    layout.position = glm::vec3(inst.pos_yaw);
+                    layout.yaw = inst.pos_yaw.w;
+                    layout.width = inst.wh_phase_fade.x;
+                    layout.height = inst.wh_phase_fade.y * inst.wh_phase_fade.w;
+                    layout.wind_phase = inst.wh_phase_fade.z;
+                    all_matrices[out_offset + i] = BuildWindMatrix(
+                        layout, wind_norm, grass.wind_speed,
+                        grass.wind_strength, grass.wind_turbulence, current_time);
+                }
+            };
+            compute_cpu(lod0_gpu, 0);
+            compute_cpu(lod1_gpu, lod0_count);
+        }
+
+        std::vector<glm::mat4> lod0_matrices(
+            all_matrices.begin(),
+            all_matrices.begin() + static_cast<ptrdiff_t>(lod0_count));
+        std::vector<glm::mat4> lod1_matrices(
+            all_matrices.begin() + static_cast<ptrdiff_t>(lod0_count),
+            all_matrices.end());
+
+        // === Phase 3: 顶点色渐变 — base_color → tip_color 按模型空间 Y 插值 ===
+        auto make_gradient_verts = [&](const std::vector<BatchVertex>& src) {
+            auto verts = src;
+            for (auto& v : verts) {
+                float t = v.pos.y;
+                v.color = glm::vec4(glm::mix(grass.base_color, grass.tip_color, t), 1.0f);
+            }
+            return verts;
+        };
+        auto blade_colored = make_gradient_verts(blade_vertices_);
+        auto billboard_colored = make_gradient_verts(billboard_vertices_);
+
+        // === Phase 4: 提交 instanced draw ===
         auto fill_item = [&](MeshDrawItem& item) {
             item.lighting_enabled = true;
             item.shading_mode = 0;
-            item.material_albedo = grass.base_color;
+            item.material_albedo = glm::vec3(1.0f);
             item.material_metallic = 0.0f;
             item.material_roughness = 0.85f;
             item.material_ao = 1.0f;
@@ -531,8 +755,6 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             item.shadow_strength = shadow_strength_val;
         };
 
-        // 提交 instanced draw —— 注意 executor 阈值是 size()>1，
-        // 单实例时退化为 item.model 走非 instanced 路径
         auto submit_batch = [&](std::vector<glm::mat4>& instances,
                                const std::vector<BatchVertex>& verts,
                                const std::vector<unsigned short>& idxs) {
@@ -551,9 +773,9 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             cmd_buffer.DrawMeshBatch(items);
         };
 
-        submit_batch(lod0_instances, blade_vertices_, blade_indices_);
+        submit_batch(lod0_matrices, blade_colored, blade_indices_);
         if (!shadow_pass) {
-            submit_batch(lod1_instances, billboard_vertices_, billboard_indices_);
+            submit_batch(lod1_matrices, billboard_colored, billboard_indices_);
         }
     }
 }

@@ -408,6 +408,9 @@ public:
     /// 是否支持 compute shader
     virtual bool SupportsCompute() const { return false; }
 
+    /// 是否支持 SSBO compute + 同步读回（GPU 草地风场使用）
+    virtual bool SupportsSSBOCompute() const { return false; }
+
     // --- Mega Buffer (GPU Driven) ---
 
     /// 创建 Mega VAO（BatchVertex 布局），同时创建 VBO 和 IBO
@@ -569,6 +572,7 @@ public:
                                    int mip_level, bool read_only, bool r32f = false) override;
     void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
     bool SupportsCompute() const override { return supports_ssbo_; }
+    bool SupportsSSBOCompute() const override { return supports_ssbo_; }
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;
