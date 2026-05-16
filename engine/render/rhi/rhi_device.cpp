@@ -42,6 +42,12 @@
 #ifndef GL_RGBA32F
 #define GL_RGBA32F 0x8814
 #endif
+#ifndef GL_DRAW_INDIRECT_BUFFER
+#define GL_DRAW_INDIRECT_BUFFER 0x8F3F
+#endif
+#ifndef GL_COMMAND_BARRIER_BIT
+#define GL_COMMAND_BARRIER_BIT 0x00000040
+#endif
 
 // GL 4.2+/4.3 函数指针（glad 仅加载 GL 3.3 core，需手动解析）
 #ifdef _WIN32
@@ -51,6 +57,7 @@ extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
 static void(GLAD_API_PTR* pfn_glDispatchCompute)(GLuint, GLuint, GLuint) = nullptr;
 static void(GLAD_API_PTR* pfn_glMemoryBarrier)(GLbitfield) = nullptr;
 static void(GLAD_API_PTR* pfn_glBindImageTexture)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum) = nullptr;
+static void(GLAD_API_PTR* pfn_glMultiDrawElementsIndirect)(GLenum, GLenum, const void*, GLsizei, GLsizei) = nullptr;
 
 static void InitComputeProcAddresses() {
     static bool done = false;
@@ -60,6 +67,7 @@ static void InitComputeProcAddresses() {
     pfn_glDispatchCompute = reinterpret_cast<decltype(pfn_glDispatchCompute)>(wglGetProcAddress("glDispatchCompute"));
     pfn_glMemoryBarrier = reinterpret_cast<decltype(pfn_glMemoryBarrier)>(wglGetProcAddress("glMemoryBarrier"));
     pfn_glBindImageTexture = reinterpret_cast<decltype(pfn_glBindImageTexture)>(wglGetProcAddress("glBindImageTexture"));
+    pfn_glMultiDrawElementsIndirect = reinterpret_cast<decltype(pfn_glMultiDrawElementsIndirect)>(wglGetProcAddress("glMultiDrawElementsIndirect"));
 #endif
 }
 
@@ -416,6 +424,12 @@ void OpenGLRhiDevice::Shutdown() {
         glDeleteProgram(handle);
     }
     compute_programs_.clear();
+
+    // 清理 indirect draw buffers
+    for (auto& [rhi_handle, gl_buf] : indirect_buffers_) {
+        glDeleteBuffers(1, &gl_buf);
+    }
+    indirect_buffers_.clear();
 
     // 清理子系统（逆序）
     draw_executor_.ShutdownGeometryBuffers();
@@ -969,7 +983,9 @@ void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
 void OpenGLRhiDevice::ComputeMemoryBarrier() {
     if (!supports_ssbo_) return;
     InitComputeProcAddresses();
-    if (pfn_glMemoryBarrier) pfn_glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+    if (pfn_glMemoryBarrier) pfn_glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+        GL_TEXTURE_FETCH_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 }
 
 void OpenGLRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
@@ -1088,6 +1104,13 @@ void OpenGLRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* na
     if (loc >= 0) glUniform2f(loc, x, y);
 }
 
+void OpenGLRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform4f(loc, x, y, z, w);
+}
+
 void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
     if (!supports_ssbo_ || shader == 0 || !name || !data) return;
     glUseProgram(shader);
@@ -1103,6 +1126,149 @@ void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(offset),
                        static_cast<GLsizeiptr>(size), dst);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+// --- Indirect Draw Buffer ---
+
+unsigned int OpenGLRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    if (!supports_ssbo_) return 0;  // GL 4.3+ 同时支持 indirect draw
+    InitComputeProcAddresses();
+    unsigned int gl_buf = 0;
+    glGenBuffers(1, &gl_buf);
+    if (gl_buf == 0) return 0;
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, gl_buf);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER, static_cast<GLsizeiptr>(size), data, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    unsigned int handle = next_indirect_handle_++;
+    indirect_buffers_[handle] = gl_buf;
+    return handle;
+}
+
+void OpenGLRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    auto it = indirect_buffers_.find(handle);
+    if (it == indirect_buffers_.end()) return;
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, it->second);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, static_cast<GLintptr>(offset),
+                    static_cast<GLsizeiptr>(size), data);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+}
+
+void OpenGLRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
+    auto it = indirect_buffers_.find(handle);
+    if (it == indirect_buffers_.end()) return;
+    glDeleteBuffers(1, &it->second);
+    indirect_buffers_.erase(it);
+}
+
+void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
+    if (draw_count <= 0 || indirect_buffer == 0) return;
+    InitComputeProcAddresses();
+    if (!pfn_glMultiDrawElementsIndirect) {
+        DEBUG_LOG_WARN("glMultiDrawElementsIndirect not available");
+        return;
+    }
+
+    // 优先查找 indirect buffer map；找不到则当作 raw GL buffer handle（如 SSBO）
+    unsigned int gl_buf = indirect_buffer;
+    auto it = indirect_buffers_.find(indirect_buffer);
+    if (it != indirect_buffers_.end()) {
+        gl_buf = it->second;
+    }
+
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, gl_buf);
+
+    pfn_glMultiDrawElementsIndirect(
+        GL_TRIANGLES,
+        GL_UNSIGNED_INT,
+        nullptr,
+        static_cast<GLsizei>(draw_count),
+        static_cast<GLsizei>(stride)
+    );
+
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+
+    draw_executor_.MutableCurrentStats().indirect_draw_calls += 1;
+}
+
+// --- Mega Buffer (GPU Driven) ---
+
+unsigned int OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                             unsigned int& out_vbo, unsigned int& out_ibo) {
+    unsigned int vao = 0, vbo = 0, ibo = 0;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glGenBuffers(1, &ibo);
+    if (vao == 0 || vbo == 0 || ibo == 0) {
+        if (vao) glDeleteVertexArrays(1, &vao);
+        if (vbo) glDeleteBuffers(1, &vbo);
+        if (ibo) glDeleteBuffers(1, &ibo);
+        out_vbo = 0; out_ibo = 0;
+        return 0;
+    }
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vbo_size_bytes), nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(ibo_size_bytes), nullptr, GL_DYNAMIC_DRAW);
+
+    // BatchVertex 布局: stride = 92 bytes (23 floats)
+    const GLsizei stride = 92;
+    // pos: location 0, vec3, offset 0
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(0));
+    // color: location 1, vec4, offset 12
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(12));
+    // uv: location 2, vec2, offset 28
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(28));
+    // normal: location 3, vec3, offset 36
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(36));
+    // tangent: location 4, vec3, offset 48
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(48));
+    // weights: location 5, vec4, offset 60
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(60));
+    // joints: location 6, vec4, offset 76
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(76));
+
+    glBindVertexArray(0);
+    out_vbo = vbo;
+    out_ibo = ibo;
+    resource_mgr_.ledger().buffers_created += 2;
+    return vao;
+}
+
+void OpenGLRhiDevice::UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) {
+    if (vbo == 0 || size == 0 || !data) return;
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size), data);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void OpenGLRhiDevice::UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) {
+    if (ibo == 0 || size == 0 || !data) return;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size), data);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void OpenGLRhiDevice::DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) {
+    if (vao) glDeleteVertexArrays(1, &vao);
+    if (vbo) glDeleteBuffers(1, &vbo);
+    if (ibo) glDeleteBuffers(1, &ibo);
+}
+
+void OpenGLRhiDevice::BindMegaVAO(unsigned int vao) {
+    if (vao) glBindVertexArray(vao);
+}
+
+void OpenGLRhiDevice::UnbindVAO() {
+    glBindVertexArray(0);
 }
 
 // --- 资源账本 ---

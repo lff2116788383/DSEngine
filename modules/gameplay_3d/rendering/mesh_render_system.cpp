@@ -2,6 +2,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/render/passes/render_pass_context.h"
 #include "engine/base/debug.h"
 #include <stdexcept>
 #include <algorithm>
@@ -1213,6 +1214,238 @@ void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer
         item.wboit_mode = wboit_mode;
     }
     cmd_buffer.DrawMeshBatch(transparent_items_);
+}
+
+int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {
+    if (!ctx.gpu_driven_enabled) return 0;
+
+    auto* rhi = ctx.rhi_device;
+    if (!rhi) return 0;
+
+    auto view = world.registry().view<TransformComponent, MeshRendererComponent>();
+
+    gpu_draw_cmds_.clear();
+    gpu_instances_.clear();
+    gpu_aabbs_.clear();
+
+    int cmd_index = 0;
+    bool new_mesh_added = false;
+
+    for (auto entity : view) {
+        auto& transform = view.get<TransformComponent>(entity);
+        auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
+
+        if (!mesh_renderer.visible) continue;
+        if (mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty()) continue;
+        if (!mesh_renderer.local_bounds_valid) continue;
+
+        // 排除蒙皮和透明
+        if (world.registry().all_of<Animator3DComponent>(entity)) {
+            const auto& animator = world.registry().get<Animator3DComponent>(entity);
+            if (animator.enabled && !animator.final_bone_matrices.empty()) continue;
+        }
+        if (mesh_renderer.color.a < 0.999f) continue;
+
+        const glm::mat4 model = transform.local_to_world;
+
+        // 计算世界 AABB
+        const glm::vec3& bmin = mesh_renderer.local_bounds_min;
+        const glm::vec3& bmax = mesh_renderer.local_bounds_max;
+        glm::vec3 w_min(std::numeric_limits<float>::max());
+        glm::vec3 w_max(std::numeric_limits<float>::lowest());
+        for (int ci = 0; ci < 8; ++ci) {
+            glm::vec3 corner = glm::vec3(model * glm::vec4(
+                (ci & 1) ? bmax.x : bmin.x,
+                (ci & 2) ? bmax.y : bmin.y,
+                (ci & 4) ? bmax.z : bmin.z, 1.0f));
+            w_min = glm::min(w_min, corner);
+            w_max = glm::max(w_max, corner);
+        }
+        gpu_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
+
+        // 注册 mesh 到 mega buffer（去重：相同 mesh_path 只注册一次）
+        const std::string& mesh_key = mesh_renderer.mesh_path;
+        auto reg_it = mesh_registry_.find(mesh_key);
+        if (reg_it == mesh_registry_.end()) {
+            // 新 mesh：转换为 BatchVertex 格式追加到 mega buffer
+            const int stride = mesh_renderer.dmesh_vertex_stride;
+            if (stride <= 0) continue;
+            const size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
+            const bool is_dmesh = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
+
+            dse::render::MeshBatchEntry entry{};
+            entry.base_vertex = static_cast<int32_t>(mega_vbo_vertex_count_);
+            entry.first_index = mega_ibo_index_count_;
+            entry.index_count = static_cast<uint32_t>(mesh_renderer.temp_indices.size());
+            entry.vertex_count = static_cast<uint32_t>(vertex_count);
+
+            // 追加顶点数据（BatchVertex 格式：23 floats per vertex）
+            for (size_t i = 0; i < vertex_count; ++i) {
+                glm::vec3 pos(mesh_renderer.temp_vertices[i * stride],
+                              mesh_renderer.temp_vertices[i * stride + 1],
+                              mesh_renderer.temp_vertices[i * stride + 2]);
+                glm::vec3 normal(0.0f, 0.0f, 1.0f);
+                glm::vec2 uv(0.0f);
+                glm::vec3 tangent(1.0f, 0.0f, 0.0f);
+                glm::vec4 weights(0.0f);
+                glm::vec4 joints(0.0f);
+
+                if (is_dmesh && stride >= 8) {
+                    normal = glm::vec3(mesh_renderer.temp_vertices[i * stride + 3],
+                                       mesh_renderer.temp_vertices[i * stride + 4],
+                                       mesh_renderer.temp_vertices[i * stride + 5]);
+                    uv = glm::vec2(mesh_renderer.temp_vertices[i * stride + 6],
+                                   mesh_renderer.temp_vertices[i * stride + 7]);
+                }
+                if (is_dmesh && stride >= 16) {
+                    weights = glm::vec4(mesh_renderer.temp_vertices[i * stride + 8],
+                                        mesh_renderer.temp_vertices[i * stride + 9],
+                                        mesh_renderer.temp_vertices[i * stride + 10],
+                                        mesh_renderer.temp_vertices[i * stride + 11]);
+                }
+                if (is_dmesh && stride >= 20) {
+                    tangent = glm::vec3(mesh_renderer.temp_vertices[i * stride + 16],
+                                        mesh_renderer.temp_vertices[i * stride + 17],
+                                        mesh_renderer.temp_vertices[i * stride + 18]);
+                }
+
+                // pos(3) + color(4) + uv(2) + normal(3) + tangent(3) + weights(4) + joints(4)
+                glm::vec4 color = mesh_renderer.color;
+                mega_vbo_data_.push_back(pos.x); mega_vbo_data_.push_back(pos.y); mega_vbo_data_.push_back(pos.z);
+                mega_vbo_data_.push_back(color.r); mega_vbo_data_.push_back(color.g);
+                mega_vbo_data_.push_back(color.b); mega_vbo_data_.push_back(color.a);
+                mega_vbo_data_.push_back(uv.x); mega_vbo_data_.push_back(uv.y);
+                mega_vbo_data_.push_back(normal.x); mega_vbo_data_.push_back(normal.y); mega_vbo_data_.push_back(normal.z);
+                mega_vbo_data_.push_back(tangent.x); mega_vbo_data_.push_back(tangent.y); mega_vbo_data_.push_back(tangent.z);
+                mega_vbo_data_.push_back(weights.x); mega_vbo_data_.push_back(weights.y);
+                mega_vbo_data_.push_back(weights.z); mega_vbo_data_.push_back(weights.w);
+                mega_vbo_data_.push_back(joints.x); mega_vbo_data_.push_back(joints.y);
+                mega_vbo_data_.push_back(joints.z); mega_vbo_data_.push_back(joints.w);
+            }
+
+            // 追加索引数据（转换为 uint32_t）
+            for (unsigned short idx : mesh_renderer.temp_indices) {
+                mega_ibo_data_.push_back(static_cast<uint32_t>(idx));
+            }
+
+            mega_vbo_vertex_count_ += entry.vertex_count;
+            mega_ibo_index_count_ += entry.index_count;
+            mesh_registry_[mesh_key] = entry;
+            reg_it = mesh_registry_.find(mesh_key);
+            new_mesh_added = true;
+        }
+
+        const auto& entry = reg_it->second;
+
+        // DrawElementsIndirectCommand — instance_count=1 初始（GPU cull 会写 0 表示剔除）
+        DrawElementsIndirectCommand cmd{};
+        cmd.count = entry.index_count;
+        cmd.instance_count = 1;
+        cmd.first_index = entry.first_index;
+        cmd.base_vertex = entry.base_vertex;
+        cmd.base_instance = static_cast<uint32_t>(cmd_index);
+        gpu_draw_cmds_.push_back(cmd);
+
+        // GPUInstanceData
+        dse::render::GPUInstanceData inst{};
+        inst.model = model;
+        inst.material_id = 0;
+        inst.draw_cmd_id = static_cast<uint32_t>(cmd_index);
+        inst.pad[0] = 0;
+        inst.pad[1] = 0;
+        gpu_instances_.push_back(inst);
+
+        ++cmd_index;
+    }
+
+    // 上传/更新 Mega VBO/IBO
+    if (new_mesh_added && mega_vbo_vertex_count_ > 0) {
+        mega_buffer_dirty_ = true;
+    }
+    if (mega_buffer_dirty_ && mega_vbo_vertex_count_ > 0) {
+        const size_t vbo_bytes = mega_vbo_data_.size() * sizeof(float);
+        const size_t ibo_bytes = mega_ibo_data_.size() * sizeof(uint32_t);
+        if (mega_vao_ == 0) {
+            mega_vao_ = rhi->CreateMegaVAO(vbo_bytes, ibo_bytes, mega_vbo_, mega_ibo_);
+        } else {
+            // 需要扩容时重建
+            rhi->DeleteMegaVAO(mega_vao_, mega_vbo_, mega_ibo_);
+            mega_vao_ = rhi->CreateMegaVAO(vbo_bytes, ibo_bytes, mega_vbo_, mega_ibo_);
+        }
+        if (mega_vao_ != 0) {
+            rhi->UpdateMegaVBO(mega_vbo_, 0, vbo_bytes, mega_vbo_data_.data());
+            rhi->UpdateMegaIBO(mega_ibo_, 0, ibo_bytes, mega_ibo_data_.data());
+        }
+        mega_buffer_dirty_ = false;
+    }
+    ctx.gpu_mega_vao = mega_vao_;
+
+    if (cmd_index == 0) {
+        ctx.gpu_indirect_draw_count = 0;
+        ctx.gpu_total_instances = 0;
+        return 0;
+    }
+
+    // 上传 AABB SSBO（复用 Hi-Z AABB binding point 0）
+    if (ctx.hiz_aabb_ssbo != 0) {
+        const size_t aabb_size = gpu_aabbs_.size() * sizeof(HiZAABB);
+        rhi->UpdateSSBO(ctx.hiz_aabb_ssbo, 0, aabb_size, gpu_aabbs_.data());
+    }
+
+    const size_t required_count = static_cast<size_t>(cmd_index);
+
+    // 上传 DrawCommands 到 SSBO（binding 6，供 compute shader 读写）
+    {
+        const size_t cmd_size = required_count * sizeof(DrawElementsIndirectCommand);
+        if (ctx.gpu_draw_cmd_ssbo != 0 && required_count > gpu_draw_cmd_capacity_) {
+            rhi->DeleteSSBO(ctx.gpu_draw_cmd_ssbo);
+            ctx.gpu_draw_cmd_ssbo = 0;
+        }
+        if (ctx.gpu_draw_cmd_ssbo == 0) {
+            const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
+            ctx.gpu_draw_cmd_ssbo = rhi->CreateSSBO(alloc_count * sizeof(DrawElementsIndirectCommand), nullptr);
+            gpu_draw_cmd_capacity_ = alloc_count;
+        }
+        rhi->UpdateSSBO(ctx.gpu_draw_cmd_ssbo, 0, cmd_size, gpu_draw_cmds_.data());
+    }
+
+    // 上传 GPUInstanceData SSBO（binding 5）
+    {
+        const size_t inst_size = required_count * sizeof(dse::render::GPUInstanceData);
+        if (ctx.gpu_instance_ssbo != 0 && required_count > gpu_instance_capacity_) {
+            rhi->DeleteSSBO(ctx.gpu_instance_ssbo);
+            ctx.gpu_instance_ssbo = 0;
+        }
+        if (ctx.gpu_instance_ssbo == 0) {
+            const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
+            ctx.gpu_instance_ssbo = rhi->CreateSSBO(alloc_count * sizeof(dse::render::GPUInstanceData), nullptr);
+            gpu_instance_capacity_ = alloc_count;
+        }
+        rhi->UpdateSSBO(ctx.gpu_instance_ssbo, 0, inst_size, gpu_instances_.data());
+    }
+
+    ctx.gpu_indirect_draw_count = cmd_index;
+    ctx.gpu_total_instances = cmd_index;
+    ctx.hiz_object_count = cmd_index;
+
+    return cmd_index;
+}
+
+void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {
+    if (!rhi) return;
+    if (mega_vao_ != 0) {
+        rhi->DeleteMegaVAO(mega_vao_, mega_vbo_, mega_ibo_);
+        mega_vao_ = 0;
+        mega_vbo_ = 0;
+        mega_ibo_ = 0;
+    }
+    mega_vbo_data_.clear();
+    mega_ibo_data_.clear();
+    mega_vbo_vertex_count_ = 0;
+    mega_ibo_index_count_ = 0;
+    mesh_registry_.clear();
+    gpu_draw_cmd_capacity_ = 0;
+    gpu_instance_capacity_ = 0;
 }
 
 } // namespace gameplay3d

@@ -348,6 +348,17 @@ private:
     void EnsureShader();
 };
 
+// ---- GPU Driven Cull Pass (Compute) ----
+class GPUCullPass : public IRenderPass {
+public:
+    explicit GPUCullPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "gpu_cull_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 } // namespace render
 } // namespace dse
 

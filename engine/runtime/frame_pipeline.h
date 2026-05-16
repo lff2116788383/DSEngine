@@ -250,6 +250,7 @@ private:
     
     dse::gameplay2d::Gameplay2DModule gameplay2d_module_;
     dse::gameplay3d::MeshRenderSystem mesh_render_system_;
+    int gpu_culled_last_frame_ = 0;  ///< GPU Driven: 上一帧被剔除的 draw command 数
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     dse::physics3d::Physics3DSystem physics3d_system_;
     bool physics3d_system_initialized_ = false;

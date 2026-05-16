@@ -517,6 +517,9 @@ void DX11RhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name
 void DX11RhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
     (void)shader; (void)name; (void)x; (void)y;
 }
+void DX11RhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+    (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
+}
 void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
     (void)shader; (void)name; (void)data;
 }

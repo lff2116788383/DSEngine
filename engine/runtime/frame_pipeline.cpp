@@ -41,6 +41,7 @@ namespace dse::render {
     extern const char* kHiZCopyShaderSource;
     extern const char* kHiZDownsampleShaderSource;
     extern const char* kHiZCullShaderSource;
+    extern const char* kGPUCullShaderSource;
 }
 
 namespace {
@@ -394,6 +395,18 @@ bool FramePipeline::Init() {
         }
     }
 
+    // GPU Driven Rendering 能力检测
+    if (runtime_context_.rhi_device->SupportsCompute() &&
+        runtime_context_.rhi_device->SupportsIndirectDraw() &&
+        runtime_context_.rhi_device->SupportsSSBO()) {
+        render_resources_.gpu_driven_supported = true;
+        render_resources_.gpu_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kGPUCullShaderSource);
+        DEBUG_LOG_INFO("GPU Driven Rendering: supported, cull_shader={}", render_resources_.gpu_cull_shader);
+    } else {
+        render_resources_.gpu_driven_supported = false;
+        DEBUG_LOG_INFO("GPU Driven Rendering: not supported, using CPU path");
+    }
+
     PipelineStateDesc sprite_desc;
     sprite_desc.blend_enabled = true;
     sprite_desc.blend_src = BlendFactor::SrcAlpha;
@@ -683,6 +696,23 @@ void FramePipeline::Shutdown() {
         }
     }
 
+    // GPU Driven 资源清理
+    if (runtime_context_.rhi_device) {
+        mesh_render_system_.CleanupGPUResources(runtime_context_.rhi_device.get());
+        if (render_resources_.gpu_draw_cmd_ssbo != 0) {
+            runtime_context_.rhi_device->DeleteSSBO(render_resources_.gpu_draw_cmd_ssbo);
+            render_resources_.gpu_draw_cmd_ssbo = 0;
+        }
+        if (render_resources_.gpu_instance_ssbo != 0) {
+            runtime_context_.rhi_device->DeleteSSBO(render_resources_.gpu_instance_ssbo);
+            render_resources_.gpu_instance_ssbo = 0;
+        }
+        if (render_resources_.gpu_indirect_buffer != 0) {
+            runtime_context_.rhi_device->DeleteIndirectBuffer(render_resources_.gpu_indirect_buffer);
+            render_resources_.gpu_indirect_buffer = 0;
+        }
+    }
+
     if (runtime_context_.rhi_device) {
         runtime_context_.rhi_device->Shutdown();
         runtime_context_.rhi_device.reset();
@@ -844,13 +874,39 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
+    // GPU Driven: 准备 GPU 场景数据（AABB + DrawCommands + Instance 数据）
+    if (render_resources_.gpu_driven_supported) {
+        mesh_render_system_.PrepareGPUScene(*runtime_context_.world, render_pass_context_);
+        // 同步动态创建的句柄回 render_resources_，确保下帧不被覆盖
+        render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
+        render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
+    }
+
     ExecuteRenderGraph(*cmd_buffer);
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
-    // Hi-Z: GPU 执行完毕后，读回可见性 SSBO 供下一帧 MeshRenderSystem 使用
-    if (render_resources_.hiz_visibility_ssbo != 0 && render_pass_context_.hiz_object_count > 0
+    // Hi-Z / GPU Driven: GPU 执行完毕后，读回可见性供下一帧 MeshRenderSystem 使用
+    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+        && render_pass_context_.gpu_draw_cmd_ssbo != 0) {
+        // GPU Driven 路径：从 draw commands SSBO 读回 instance_count 作为可见性
+        const int count = render_pass_context_.gpu_indirect_draw_count;
+        std::vector<DrawElementsIndirectCommand> cmds(count);
+        runtime_context_.rhi_device->ReadSSBO(
+            render_pass_context_.gpu_draw_cmd_ssbo, 0,
+            count * sizeof(DrawElementsIndirectCommand), cmds.data());
+        std::vector<uint32_t> visibility(count);
+        int culled = 0;
+        for (int i = 0; i < count; ++i) {
+            visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
+            if (visibility[i] == 0) ++culled;
+        }
+        mesh_render_system_.SetHiZVisibility(visibility);
+        gpu_culled_last_frame_ = culled;
+        runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
+    } else if (render_resources_.hiz_visibility_ssbo != 0 && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
+        // 传统 Hi-Z 路径：从 visibility SSBO 读回
         const int count = render_pass_context_.hiz_object_count;
         std::vector<uint32_t> visibility(count, 1);
         runtime_context_.rhi_device->ReadSSBO(
@@ -1008,6 +1064,19 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
     render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
 
+    // GPU Driven 状态
+    render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
+    render_pass_context_.gpu_indirect_buffer = render_resources_.gpu_indirect_buffer;
+    render_pass_context_.gpu_instance_ssbo = render_resources_.gpu_instance_ssbo;
+    render_pass_context_.gpu_material_ssbo = render_resources_.gpu_material_ssbo;
+    render_pass_context_.gpu_draw_cmd_ssbo = render_resources_.gpu_draw_cmd_ssbo;
+    render_pass_context_.gpu_visible_indices_ssbo = render_resources_.gpu_visible_indices_ssbo;
+    render_pass_context_.gpu_atomic_counter_ssbo = render_resources_.gpu_atomic_counter_ssbo;
+    render_pass_context_.gpu_mega_vao = render_resources_.gpu_mega_vao;
+    render_pass_context_.gpu_cull_shader = render_resources_.gpu_cull_shader;
+    render_pass_context_.gpu_indirect_draw_count = 0;
+    render_pass_context_.gpu_total_instances = 0;
+
     render_pass_context_.modules.clear();
     for (auto& mod : modules_) {
         if (mod.instance) {
@@ -1060,6 +1129,10 @@ void FramePipeline::BuildRenderGraphInternal() {
     if (render_resources_.hiz_texture != 0) {
         registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
         registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
+    }
+    // GPU Driven Cull Pass — 视锥 + Hi-Z 剔除，直接写 indirect draw commands
+    if (render_resources_.gpu_driven_supported) {
+        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
     }
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));

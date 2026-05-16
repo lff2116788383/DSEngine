@@ -5,6 +5,7 @@
 
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
@@ -558,8 +559,29 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.light_buffer) ctx_.light_buffer->Bind();
         if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
-        if (ctx_.modules.empty() && ctx_.render_meshes) {
-            ctx_.render_meshes(*ctx_.world, cmd_buffer);
+        // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
+        const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+            && ctx_.gpu_mega_vao != 0
+            && ctx_.gpu_draw_cmd_ssbo != 0
+            && ctx_.gpu_indirect_draw_count > 0;
+
+        if (use_gpu_indirect) {
+            // 绑定 instance SSBO 供 vertex shader 读取 model matrix
+            auto* rhi = ctx_.rhi_device;
+            rhi->BindSSBO(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
+
+        // CPU 路径：仅在 GPU indirect 未激活时走完整 render_meshes；
+        // GPU indirect 激活时仅走 modules（处理蒙皮等 GPU Driven 不覆盖的内容）
+        if (!use_gpu_indirect) {
+            if (ctx_.modules.empty() && ctx_.render_meshes) {
+                ctx_.render_meshes(*ctx_.world, cmd_buffer);
+            }
         }
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         for (auto& mod : ctx_.modules) {
@@ -2308,6 +2330,225 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     unsigned int groups_x = (static_cast<unsigned int>(ctx_.hiz_object_count) + 63) / 64;
     rhi->DispatchCompute(hiz_cull_shader_, groups_x, 1, 1);
+    rhi->ComputeMemoryBarrier();
+}
+
+// ============================================================
+// GPUCullPass — GPU Driven 视锥 + Hi-Z 剔除，直接写 indirect args
+// ============================================================
+
+const char* kGPUCullShaderSource = R"(
+#version 430 core
+layout(local_size_x = 64) in;
+
+struct AABB {
+    vec4 min_point; // xyz = world min, w = padding
+    vec4 max_point; // xyz = world max, w = padding
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+layout(std430, binding = 0) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(std430, binding = 6) buffer DrawCommandBuffer {
+    DrawCommand draw_cmds[];
+};
+
+uniform sampler2D u_hiz_texture;
+uniform mat4 u_view_projection;
+uniform vec4 u_frustum_planes[6];
+uniform vec2 u_screen_size;
+uniform int u_mip_count;
+uniform int u_object_count;
+
+bool FrustumTestAABB(vec3 aabb_min, vec3 aabb_max) {
+    for (int i = 0; i < 6; ++i) {
+        vec3 positive_vertex = vec3(
+            (u_frustum_planes[i].x >= 0.0) ? aabb_max.x : aabb_min.x,
+            (u_frustum_planes[i].y >= 0.0) ? aabb_max.y : aabb_min.y,
+            (u_frustum_planes[i].z >= 0.0) ? aabb_max.z : aabb_min.z
+        );
+        float d = dot(u_frustum_planes[i].xyz, positive_vertex) + u_frustum_planes[i].w;
+        if (d < 0.0) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    // 1. Frustum culling
+    if (!FrustumTestAABB(aabb_min, aabb_max)) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    // 2. Hi-Z occlusion culling
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            // Behind camera — conservatively mark visible
+            draw_cmds[idx].instance_count = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    vec2 uv_min = clamp(ndc_min * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+    vec2 uv_max = clamp(ndc_max * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+
+    // Fully outside screen
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    // Determine mip level
+    vec2 size_pixels = (uv_max - uv_min) * u_screen_size;
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+
+    // Sample Hi-Z (5-tap conservative)
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_c  = textureLod(u_hiz_texture, uv_center, mip_level).r;
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_c, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    if (test_depth > max_hiz) {
+        draw_cmds[idx].instance_count = 0u;
+    } else {
+        draw_cmds[idx].instance_count = 1u;
+    }
+}
+)";
+
+void GPUCullPass::Setup(RenderGraph& graph) {
+    auto hiz_mips = graph.DeclareResource("hiz_mips");
+    auto gpu_draw_cmds = graph.DeclareResource("gpu_draw_commands");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, hiz_mips);
+    graph.PassWrite(pass, gpu_draw_cmds);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
+    if (!ctx_.gpu_driven_enabled) return;
+    if (ctx_.gpu_cull_shader == 0) return;
+    if (ctx_.render_targets.hiz_texture == 0) return;
+    if (ctx_.gpu_draw_cmd_ssbo == 0) return;
+    if (ctx_.gpu_indirect_draw_count <= 0) return;
+
+    auto* rhi = ctx_.rhi_device;
+    if (!rhi) return;
+
+    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (hiz_gpu_tex == 0) return;
+
+    const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
+
+    // Bind SSBOs
+    rhi->BindSSBO(ctx_.hiz_aabb_ssbo, 0);           // AABB input
+    rhi->BindSSBO(ctx_.gpu_draw_cmd_ssbo, 6);        // DrawCommands (read/write)
+
+    // Bind Hi-Z texture
+    rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
+
+    // Get VP matrix
+    glm::mat4 view_projection(1.0f);
+    glm::vec4 frustum_planes[6] = {};
+    {
+        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+        for (auto entity : camera3d_view) {
+            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+            if (!camera.enabled) continue;
+            if (!ctx_.world->registry().all_of<TransformComponent>(entity)) continue;
+            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::mat4 view = glm::lookAt(transform.position, transform.position + front, up);
+            const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
+            glm::mat4 projection = clip_correction * glm::perspective(
+                glm::radians(camera.fov),
+                static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
+                camera.near_clip, camera.far_clip);
+            view_projection = projection * view;
+
+            // Extract frustum planes from VP matrix (Gribb/Hartmann method)
+            const glm::mat4& m = view_projection;
+            // Left
+            frustum_planes[0] = glm::vec4(m[0][3]+m[0][0], m[1][3]+m[1][0], m[2][3]+m[2][0], m[3][3]+m[3][0]);
+            // Right
+            frustum_planes[1] = glm::vec4(m[0][3]-m[0][0], m[1][3]-m[1][0], m[2][3]-m[2][0], m[3][3]-m[3][0]);
+            // Bottom
+            frustum_planes[2] = glm::vec4(m[0][3]+m[0][1], m[1][3]+m[1][1], m[2][3]+m[2][1], m[3][3]+m[3][1]);
+            // Top
+            frustum_planes[3] = glm::vec4(m[0][3]-m[0][1], m[1][3]-m[1][1], m[2][3]-m[2][1], m[3][3]-m[3][1]);
+            // Near
+            frustum_planes[4] = glm::vec4(m[0][3]+m[0][2], m[1][3]+m[1][2], m[2][3]+m[2][2], m[3][3]+m[3][2]);
+            // Far
+            frustum_planes[5] = glm::vec4(m[0][3]-m[0][2], m[1][3]-m[1][2], m[2][3]-m[2][2], m[3][3]-m[3][2]);
+
+            // Normalize planes
+            for (int i = 0; i < 6; ++i) {
+                float len = glm::length(glm::vec3(frustum_planes[i]));
+                if (len > 0.0f) frustum_planes[i] /= len;
+            }
+            break;
+        }
+    }
+
+    // Set uniforms
+    unsigned int shader = ctx_.gpu_cull_shader;
+    rhi->SetComputeUniformInt(shader, "u_hiz_texture", 0);
+    rhi->SetComputeUniformMat4(shader, "u_view_projection", &view_projection[0][0]);
+    rhi->SetComputeUniformVec2f(shader, "u_screen_size",
+                                static_cast<float>(Screen::width()),
+                                static_cast<float>(Screen::height()));
+    rhi->SetComputeUniformInt(shader, "u_mip_count", mip_count);
+    rhi->SetComputeUniformInt(shader, "u_object_count", ctx_.gpu_indirect_draw_count);
+
+    // Upload frustum planes as 6 vec4 uniforms
+    for (int i = 0; i < 6; ++i) {
+        char name[32];
+        snprintf(name, sizeof(name), "u_frustum_planes[%d]", i);
+        rhi->SetComputeUniformVec4(shader, name,
+            frustum_planes[i].x, frustum_planes[i].y,
+            frustum_planes[i].z, frustum_planes[i].w);
+    }
+
+    unsigned int groups_x = (static_cast<unsigned int>(ctx_.gpu_indirect_draw_count) + 63) / 64;
+    rhi->DispatchCompute(shader, groups_x, 1, 1);
     rhi->ComputeMemoryBarrier();
 }
 

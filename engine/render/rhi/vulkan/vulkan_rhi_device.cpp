@@ -585,6 +585,9 @@ void VulkanRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* na
 void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
     (void)shader; (void)name; (void)x; (void)y;
 }
+void VulkanRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+    (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
+}
 void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
     (void)shader; (void)name; (void)data;
 }

@@ -212,6 +212,9 @@ public:
     virtual void EndFrame() = 0;
     virtual const RenderStats& LastFrameStats() const = 0;
 
+    /// 在 EndFrame 之后补写 GPU Driven 剔除统计（因 readback 在 EndFrame 后发生）
+    virtual void PatchLastFrameGPUCulledCount(int culled) { (void)culled; }
+
     // --- 阴影/光源全局状态接口（所有后端统一） ---
     virtual void SetGlobalShadowMap(unsigned int index, unsigned int handle) = 0;
     void SetGlobalSpotShadowMap(unsigned int handle) { SetGlobalSpotShadowMap(0, handle); }
@@ -351,6 +354,10 @@ public:
     virtual void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
         (void)shader; (void)name; (void)x; (void)y;
     }
+    /// 设置 compute shader 的 vec4 uniform
+    virtual void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+        (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
+    }
     /// 设置 compute shader 的 mat4 uniform
     virtual void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
         (void)shader; (void)name; (void)data;
@@ -367,8 +374,73 @@ public:
         (void)handle; (void)offset; (void)size; (void)dst;
     }
 
+    // --- Indirect Draw Buffer (GL_DRAW_INDIRECT_BUFFER) ---
+
+    /// 创建 Indirect Draw Buffer
+    /// @param size  缓冲区大小（字节）
+    /// @param data  初始数据（可为 nullptr）
+    /// @return 句柄，0 表示失败
+    virtual unsigned int CreateIndirectBuffer(size_t size, const void* data) {
+        (void)size; (void)data; return 0;
+    }
+
+    /// 更新 Indirect Draw Buffer 子区域
+    virtual void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+        (void)handle; (void)offset; (void)size; (void)data;
+    }
+
+    /// 删除 Indirect Draw Buffer
+    virtual void DeleteIndirectBuffer(unsigned int handle) {
+        (void)handle;
+    }
+
+    /// 绑定 indirect buffer 并发起 Multi-Draw Indexed Indirect
+    /// @param indirect_buffer  indirect buffer 句柄
+    /// @param draw_count       draw command 条数
+    /// @param stride           每条 command 的字节步长
+    virtual void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
+        (void)indirect_buffer; (void)draw_count; (void)stride;
+    }
+
+    /// 是否支持 indirect draw (需要 GL 4.3+ / VK / DX11.1)
+    virtual bool SupportsIndirectDraw() const { return false; }
+
     /// 是否支持 compute shader
     virtual bool SupportsCompute() const { return false; }
+
+    // --- Mega Buffer (GPU Driven) ---
+
+    /// 创建 Mega VAO（BatchVertex 布局），同时创建 VBO 和 IBO
+    /// @param vbo_size_bytes  VBO 初始大小
+    /// @param ibo_size_bytes  IBO 初始大小
+    /// @param out_vbo  输出 VBO GL handle
+    /// @param out_ibo  输出 IBO GL handle
+    /// @return VAO handle，0 表示失败
+    virtual unsigned int CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                       unsigned int& out_vbo, unsigned int& out_ibo) {
+        (void)vbo_size_bytes; (void)ibo_size_bytes; out_vbo = 0; out_ibo = 0; return 0;
+    }
+
+    /// 更新 Mega VBO 子区域数据
+    virtual void UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) {
+        (void)vbo; (void)offset; (void)size; (void)data;
+    }
+
+    /// 更新 Mega IBO 子区域数据
+    virtual void UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) {
+        (void)ibo; (void)offset; (void)size; (void)data;
+    }
+
+    /// 删除 Mega VAO + VBO + IBO
+    virtual void DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) {
+        (void)vao; (void)vbo; (void)ibo;
+    }
+
+    /// 绑定 Mega VAO 供 indirect draw 使用
+    virtual void BindMegaVAO(unsigned int vao) { (void)vao; }
+
+    /// 解绑 VAO
+    virtual void UnbindVAO() {}
 };
 
 /**
@@ -414,6 +486,9 @@ public:
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
+    void PatchLastFrameGPUCulledCount(int culled) override {
+        draw_executor_.MutableLastFrameStats().gpu_culled_count = culled;
+    }
 
     // --- 全局阴影/光源矩阵（委托到 draw_executor_） ---
     void SetGlobalShadowMap(unsigned int index, unsigned int handle) override {
@@ -473,10 +548,27 @@ public:
     void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
     void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
     void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
     void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
 
     // --- SSBO 读回 ---
     void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
+
+    // --- Indirect Draw Buffer ---
+    unsigned int CreateIndirectBuffer(size_t size, const void* data) override;
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void DeleteIndirectBuffer(unsigned int handle) override;
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
+    bool SupportsIndirectDraw() const override { return supports_ssbo_; }
+
+    // --- Mega Buffer (GPU Driven) ---
+    unsigned int CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                               unsigned int& out_vbo, unsigned int& out_ibo) override;
+    void UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) override;
+    void BindMegaVAO(unsigned int vao) override;
+    void UnbindVAO() override;
 
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
@@ -522,6 +614,10 @@ private:
     };
     std::unordered_map<unsigned int, HiZTextureInfo> hiz_textures_;
     unsigned int next_hiz_handle_ = 500000;
+
+    /// Indirect draw buffer 管理
+    std::unordered_map<unsigned int, unsigned int> indirect_buffers_; ///< handle → GL buffer ID
+    unsigned int next_indirect_handle_ = 600000;
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false

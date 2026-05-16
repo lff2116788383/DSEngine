@@ -195,8 +195,16 @@ public:
     void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
     void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
     void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
     void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
     void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
+
+    // --- Indirect Draw Buffer (桩) ---
+    unsigned int CreateIndirectBuffer(size_t size, const void* data) override { (void)size; (void)data; return 0; }
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override { (void)handle; (void)offset; (void)size; (void)data; }
+    void DeleteIndirectBuffer(unsigned int handle) override { (void)handle; }
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override { (void)indirect_buffer; (void)draw_count; (void)stride; }
+    bool SupportsIndirectDraw() const override { return false; }
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }

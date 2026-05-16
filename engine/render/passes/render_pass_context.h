@@ -89,6 +89,19 @@ struct RenderPassContext {
     unsigned int hiz_downsample_shader = 0; ///< Compute: mip N-1 → mip N
     unsigned int hiz_cull_shader = 0;       ///< Compute: AABB 遮挡剔除
 
+    /// GPU Driven 渲染状态
+    bool gpu_driven_enabled = false;              ///< 本帧是否激活 GPU Driven 路径
+    unsigned int gpu_indirect_buffer = 0;         ///< indirect draw argument buffer
+    unsigned int gpu_instance_ssbo = 0;           ///< GPUInstanceData[] SSBO
+    unsigned int gpu_material_ssbo = 0;           ///< GPUMaterialData[] SSBO
+    unsigned int gpu_draw_cmd_ssbo = 0;           ///< DrawCommands as SSBO (compute write)
+    unsigned int gpu_visible_indices_ssbo = 0;    ///< visible instance index buffer SSBO
+    unsigned int gpu_atomic_counter_ssbo = 0;     ///< atomic draw count SSBO
+    unsigned int gpu_mega_vao = 0;                ///< mega buffer VAO
+    unsigned int gpu_cull_shader = 0;             ///< GPU Driven culling compute shader
+    int gpu_indirect_draw_count = 0;              ///< indirect draw command 条数
+    int gpu_total_instances = 0;                  ///< 本帧总 instance 数
+
     /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
     bool fxaa_active = false;
     bool taa_active = false;

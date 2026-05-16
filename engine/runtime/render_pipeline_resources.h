@@ -41,7 +41,24 @@ struct RenderPipelineResources {
     size_t hiz_ssbo_capacity = 0;        // SSBO 当前容量（对象数）
     unsigned int hiz_copy_shader = 0;    // Compute: depth → Hi-Z mip 0
     unsigned int hiz_downsample_shader = 0; // Compute: mip N-1 → mip N
-    unsigned int hiz_cull_shader = 0;    // Compute: AABB 過滤
+    unsigned int hiz_cull_shader = 0;    // Compute: AABB 過濾
+
+    // --- GPU Driven Rendering ---
+    unsigned int gpu_indirect_buffer = 0;       // Indirect draw argument buffer
+    unsigned int gpu_instance_ssbo = 0;         // GPUInstanceData[] SSBO
+    unsigned int gpu_material_ssbo = 0;         // GPUMaterialData[] SSBO
+    unsigned int gpu_visible_indices_ssbo = 0;  // visible instance indices SSBO
+    unsigned int gpu_atomic_counter_ssbo = 0;   // atomic draw count SSBO
+    unsigned int gpu_draw_cmd_ssbo = 0;         // DrawElementsIndirectCommand[] as SSBO (for compute write)
+    unsigned int gpu_mega_vbo = 0;              // 统一顶点缓冲区
+    unsigned int gpu_mega_ibo = 0;              // 统一索引缓冲区
+    unsigned int gpu_mega_vao = 0;              // Mega buffer VAO
+    unsigned int gpu_cull_shader = 0;           // GPU Driven culling compute shader
+    size_t gpu_instance_capacity = 0;           // instance SSBO 当前容量
+    size_t gpu_material_capacity = 0;           // material SSBO 当前容量
+    size_t gpu_mega_vbo_capacity = 0;           // mega VBO 当前容量（字节）
+    size_t gpu_mega_ibo_capacity = 0;           // mega IBO 当前容量（字节）
+    bool gpu_driven_supported = false;          // 运行时检测结果
 
     unsigned int sprite_pipeline_state = 0;
     unsigned int mesh_pipeline_state = 0;
@@ -101,6 +118,21 @@ struct RenderPipelineResources {
         hiz_copy_shader = 0;
         hiz_downsample_shader = 0;
         hiz_cull_shader = 0;
+        gpu_indirect_buffer = 0;
+        gpu_instance_ssbo = 0;
+        gpu_material_ssbo = 0;
+        gpu_visible_indices_ssbo = 0;
+        gpu_atomic_counter_ssbo = 0;
+        gpu_draw_cmd_ssbo = 0;
+        gpu_mega_vbo = 0;
+        gpu_mega_ibo = 0;
+        gpu_mega_vao = 0;
+        gpu_cull_shader = 0;
+        gpu_instance_capacity = 0;
+        gpu_material_capacity = 0;
+        gpu_mega_vbo_capacity = 0;
+        gpu_mega_ibo_capacity = 0;
+        gpu_driven_supported = false;
     }
 };
 

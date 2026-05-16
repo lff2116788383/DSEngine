@@ -239,6 +239,15 @@ void DrawProfilerPanel(EditorProfilerContext& context) {
         ImGui::Text("Texture Binds: %d", render_frame.texture_binds);
         ImGui::Text("Shader Switches: %d", render_frame.shader_switches);
         ImGui::Text("Texture Memory: %.2f KB", render_frame.texture_memory / 1024.0f);
+        if (render_frame.instanced_draw_calls > 0) {
+            ImGui::Text("Instanced Draws: %d (%d meshes)", render_frame.instanced_draw_calls, render_frame.instanced_mesh_count);
+        }
+        if (render_frame.indirect_draw_calls > 0) {
+            ImGui::Text("Indirect Draws: %d", render_frame.indirect_draw_calls);
+        }
+        if (render_frame.gpu_culled_count > 0) {
+            ImGui::Text("GPU Culled: %d", render_frame.gpu_culled_count);
+        }
         ImGui::Separator();
         ImGui::Text("Avg Draw Calls: %.2f", render_acc.avg_draw_calls);
         ImGui::Text("Avg Triangles: %.2f", render_acc.avg_triangles);

@@ -276,6 +276,19 @@ struct Particle3DDrawItem {
 };
 
 // ============================================================
+// GPU Driven Indirect Draw
+// ============================================================
+
+/// 对应 GL DrawElementsIndirectCommand / VkDrawIndexedIndirectCommand
+struct DrawElementsIndirectCommand {
+    uint32_t count;          ///< index count
+    uint32_t instance_count; ///< GPU cull 写 0 表示 culled
+    uint32_t first_index;    ///< mega IBO 中的起始 index 偏移
+    int32_t  base_vertex;    ///< mega VBO 中的基础顶点偏移
+    uint32_t base_instance;  ///< 用于索引 instance data
+};
+
+// ============================================================
 // 渲染统计与常量
 // ============================================================
 
@@ -295,4 +308,6 @@ struct RenderStats {
     int particle_count = 0;  ///< 3D 粒子数量
     int instanced_draw_calls = 0;  ///< GPU Instancing draw call 数
     int instanced_mesh_count = 0;  ///< GPU Instancing 合批的实体总数
+    int indirect_draw_calls = 0;   ///< GPU Driven indirect draw call 数
+    int gpu_culled_count = 0;      ///< GPU 剔除的对象数
 };

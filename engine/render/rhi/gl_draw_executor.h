@@ -113,6 +113,8 @@ public:
     void EndFrame();
     const RenderStats& last_frame_stats() const { return global_state_.last_frame_stats; }
     const RenderStats& current_frame_stats() const { return global_state_.current_frame_stats; }
+    RenderStats& MutableCurrentStats() { return global_state_.current_frame_stats; }
+    RenderStats& MutableLastFrameStats() { return global_state_.last_frame_stats; }
 
     // --- 访问器（供 OpenGLRhiDevice 委托使用） ---
     unsigned int white_texture_handle() const { return white_texture_handle_; }
