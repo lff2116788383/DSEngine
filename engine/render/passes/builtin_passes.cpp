@@ -30,6 +30,61 @@ namespace dse {
 namespace render {
 
 // ============================================================
+// 公共工具：方向光阴影相机计算（CSMShadowPass / RSMRenderPass 共用）
+// ============================================================
+namespace {
+
+glm::vec3 FindShadowCenter(World& world) {
+    glm::vec3 shadow_center(0.0f);
+    auto camera3d_view = world.registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera3d_view) {
+        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+        if (camera.enabled && world.registry().all_of<TransformComponent>(entity)) {
+            auto& transform = world.registry().get<TransformComponent>(entity);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            shadow_center = transform.position + front * 50.0f;
+            break;
+        }
+    }
+    return shadow_center;
+}
+
+struct DirectionalLightCamera {
+    glm::mat4 view;
+    glm::mat4 projection;
+};
+
+DirectionalLightCamera ComputeDirectionalLightCamera(
+        const glm::vec3& shadow_center,
+        const glm::vec3& light_direction,
+        float ortho_size,
+        const glm::mat4& clip_correction,
+        float shadow_map_res = 0.0f) {
+    float far_dist = ortho_size * 4.0f;
+    glm::vec3 light_dir_n = glm::normalize(light_direction);
+
+    glm::vec3 center = shadow_center;
+    if (shadow_map_res > 0.0f) {
+        float texel_world_size = (2.0f * ortho_size) / shadow_map_res;
+        glm::mat4 lv = glm::lookAt(
+            shadow_center - light_dir_n * (far_dist * 0.5f),
+            shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec4 sc_ls = lv * glm::vec4(shadow_center, 1.0f);
+        sc_ls.x = std::floor(sc_ls.x / texel_world_size) * texel_world_size;
+        sc_ls.y = std::floor(sc_ls.y / texel_world_size) * texel_world_size;
+        center = glm::vec3(glm::inverse(lv) * sc_ls);
+    }
+
+    glm::vec3 light_pos = center - light_dir_n * (far_dist * 0.5f);
+    return {
+        glm::lookAt(light_pos, center, glm::vec3(0.0f, 1.0f, 0.0f)),
+        clip_correction * glm::ortho(-ortho_size, ortho_size, -ortho_size, ortho_size, 1.0f, far_dist)
+    };
+}
+
+} // anonymous namespace
+
+// ============================================================
 // PreZPass
 // ============================================================
 
@@ -96,18 +151,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
     if (!light.enabled || !light.cast_shadow) return;
 
-    // Find main camera position to center shadow maps on the scene
-    glm::vec3 shadow_center(0.0f);
-    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera3d_view) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-        if (camera.enabled && ctx_.world->registry().all_of<TransformComponent>(entity)) {
-            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            shadow_center = transform.position + front * 50.0f;
-            break;
-        }
-    }
+    glm::vec3 shadow_center = FindShadowCenter(*ctx_.world);
 
     std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
     std::vector<float> cascade_splits(CSM_CASCADES);
@@ -115,39 +159,24 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
 
-        // Use cascade_splits to scale ortho projection size
         float size = light.cascade_splits[i];
-        float far_dist = size * 4.0f;
-        glm::vec3 light_dir_n = glm::normalize(light.direction);
-
-        // Texel snapping: 将 shadow_center 在光空间中对齐到阴影贴图纹素边界，
-        // 避免相机移动时阴影边缘子像素抖动（shadow swimming）
         constexpr float shadow_map_res = 2048.0f;
-        float texel_world_size = (2.0f * size) / shadow_map_res;
-        glm::mat4 light_view_unsnapped = glm::lookAt(
-            shadow_center - light_dir_n * (far_dist * 0.5f),
-            shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::vec4 sc_ls = light_view_unsnapped * glm::vec4(shadow_center, 1.0f);
-        sc_ls.x = std::floor(sc_ls.x / texel_world_size) * texel_world_size;
-        sc_ls.y = std::floor(sc_ls.y / texel_world_size) * texel_world_size;
-        glm::vec3 snapped_center = glm::vec3(glm::inverse(light_view_unsnapped) * sc_ls);
-
-        glm::vec3 light_pos = snapped_center - light_dir_n * (far_dist * 0.5f);
-        glm::mat4 light_view_mat = glm::lookAt(light_pos, snapped_center, glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+        auto cam = ComputeDirectionalLightCamera(
+            shadow_center, light.direction, size, clip_correction, shadow_map_res);
 
         // Sampling matrix uses shadow_sample_correction (no Z remap)
-        // so shader can uniformly remap Z from [-1,1] to [0,1]
-        glm::mat4 sample_proj = shadow_sample_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
-        light_space_matrices[i] = sample_proj * light_view_mat;
+        float far_dist = size * 4.0f;
+        glm::mat4 sample_proj = shadow_sample_correction *
+            glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+        light_space_matrices[i] = sample_proj * cam.view;
         cascade_splits[i] = light.cascade_splits[i];
 
-        cmd_buffer.SetCamera(light_view_mat, light_proj);
+        cmd_buffer.SetCamera(cam.view, cam.projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
 
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
-                mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, i, light_view_mat, light_proj);
+                mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, i, cam.view, cam.projection);
             }
         }
 
@@ -2568,38 +2597,21 @@ void RSMRenderPass::Setup(RenderGraph& graph) {
 
 void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     if (!ctx_.ddgi_active || ctx_.rsm_targets.position == 0) return;
+    if (ctx_.rsm_render_target == 0) return;
 
     auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
     if (light_view.begin() == light_view.end()) return;
     auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
     if (!light.enabled) return;
 
-    // 复用 CSM cascade 0 的光源相机（覆盖最近的场景区域）
-    glm::vec3 shadow_center(0.0f);
-    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera3d_view) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-        if (camera.enabled && ctx_.world->registry().all_of<TransformComponent>(entity)) {
-            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            shadow_center = transform.position + front * 50.0f;
-            break;
-        }
-    }
-
+    glm::vec3 shadow_center = FindShadowCenter(*ctx_.world);
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    float size = light.cascade_splits[0];
-    float far_dist = size * 4.0f;
-    glm::vec3 light_dir_n = glm::normalize(light.direction);
-    glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
-    glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
-
-    if (ctx_.rsm_render_target == 0) return;
+    auto cam = ComputeDirectionalLightCamera(
+        shadow_center, light.direction, light.cascade_splits[0], clip_correction);
 
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
     ctx_.rhi_device->SetGBufferRenderingMode(true);
-    cmd_buffer.SetCamera(light_view_mat, light_proj);
+    cmd_buffer.SetCamera(cam.view, cam.projection);
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
 
     for (auto& mod : ctx_.modules) {
