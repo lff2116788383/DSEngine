@@ -189,7 +189,8 @@ void main() {
         vec3 blended_irr = mix(irradiance, prev_irr.rgb, u_hysteresis);
         imageStore(u_irradiance_atlas, atlas_texel, vec4(blended_irr, 1.0));
 
-        // Visibility atlas
+        // Visibility atlas (skip if texel exceeds visibility resolution)
+        if (texel_x >= u_visibility_texels || texel_y >= u_visibility_texels) continue;
         ivec2 vis_texel = ivec2(
             atlas_col * u_visibility_texels + texel_x,
             atlas_row * u_visibility_texels + texel_y
