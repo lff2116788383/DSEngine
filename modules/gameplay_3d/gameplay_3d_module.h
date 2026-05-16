@@ -6,6 +6,7 @@
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "modules/gameplay_3d/rendering/grass_system.h"
+#include "modules/gameplay_3d/rendering/hair_system.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
 #include "modules/gameplay_3d/rendering/lod_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -51,6 +52,7 @@ private:
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     GrassSystem grass_system_;
+    HairSystem hair_system_;
     FrustumCullingSystem frustum_culling_system_;
     LODSystem lod_system_;
     AnimatorSystem animator_system_;

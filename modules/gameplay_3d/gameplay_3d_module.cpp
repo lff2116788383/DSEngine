@@ -1,5 +1,6 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/core/service_locator.h"
+#include <limits>
 #ifdef DSE_ENABLE_PHYSX
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
@@ -19,6 +20,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 #endif
     terrain_system_.Init(rhi_device);
     grass_system_.Init(rhi_device);
+    hair_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
     lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
@@ -59,6 +61,21 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 #endif
     fluid_system_.Update(world, delta_time);
     grass_system_.Update(world, delta_time);
+
+    // Hair: extract camera pos for LOD
+    {
+        glm::vec3 cam_pos(0.0f);
+        auto cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : cam_v) {
+            auto& cam = cam_v.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            auto& ct = cam_v.get<TransformComponent>(e);
+            cam_pos = glm::vec3(ct.local_to_world * glm::vec4(0, 0, 0, 1));
+            break;
+        }
+        hair_system_.Update(world, cam_pos, delta_time);
+    }
+
     frustum_culling_system_.Update(world);
     lod_system_.Update(world);
 }
@@ -131,7 +148,7 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
         }
     }
 
-    if (!p_items.empty() && selected_camera3d != entt::null) {
+    if (selected_camera3d != entt::null) {
         auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
         glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
                                                 16.0f / 9.0f,
@@ -143,13 +160,20 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
             glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
             view = glm::lookAt(transform.position, transform.position + front, up);
         }
-        cmd_buffer.DrawParticles3D(p_items, view, projection);
+
+        if (!p_items.empty()) {
+            cmd_buffer.DrawParticles3D(p_items, view, projection);
+        }
+
+        // Hair rendering
+        hair_system_.Render(world, cmd_buffer, view, projection);
     }
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
+    hair_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);

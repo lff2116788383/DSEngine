@@ -175,6 +175,11 @@ void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>&
     draw_particles3d_cmds_.push_back({next_cmd_order_++, items, view, projection});
 }
 
+void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (items.empty()) return;
+    draw_hair_strands_cmds_.push_back({next_cmd_order_++, items, view, projection});
+}
+
 void OpenGLCommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
     defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 0});
 }
@@ -203,6 +208,7 @@ void OpenGLCommandBuffer::AppendFrom(OpenGLCommandBuffer& other) {
     for (auto& c : other.draw_skybox_cmds_)          { c.order = rebase(c.order); draw_skybox_cmds_.push_back(std::move(c)); }
     for (auto& c : other.draw_post_process_cmds_)    { c.order = rebase(c.order); draw_post_process_cmds_.push_back(std::move(c)); }
     for (auto& c : other.draw_particles3d_cmds_)     { c.order = rebase(c.order); draw_particles3d_cmds_.push_back(std::move(c)); }
+    for (auto& c : other.draw_hair_strands_cmds_)    { c.order = rebase(c.order); draw_hair_strands_cmds_.push_back(std::move(c)); }
     for (auto& c : other.defer_shadow_map_cmds_)     { c.order = rebase(c.order); defer_shadow_map_cmds_.push_back(std::move(c)); }
 
     next_cmd_order_ = offset + other.next_cmd_order_;
@@ -222,6 +228,7 @@ void OpenGLCommandBuffer::Reset() {
     draw_skybox_cmds_.clear();
     draw_post_process_cmds_.clear();
     draw_particles3d_cmds_.clear();
+    draw_hair_strands_cmds_.clear();
     defer_shadow_map_cmds_.clear();
     next_cmd_order_ = 0;
 }
@@ -269,6 +276,9 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
     }
     for (size_t i = 0; i < draw_particles3d_cmds_.size(); ++i) {
         commands.push_back({draw_particles3d_cmds_[i].order, 12, i});
+    }
+    for (size_t i = 0; i < draw_hair_strands_cmds_.size(); ++i) {
+        commands.push_back({draw_hair_strands_cmds_[i].order, 14, i});
     }
     for (size_t i = 0; i < defer_shadow_map_cmds_.size(); ++i) {
         commands.push_back({defer_shadow_map_cmds_[i].order, 13, i});
@@ -322,6 +332,8 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
             device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].source_texture, draw_post_process_cmds_[cmd.index].effect_name, draw_post_process_cmds_[cmd.index].params);
         } else if (cmd.type == 12) {
             device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
+        } else if (cmd.type == 14) {
+            device->RealSubmitDrawHairStrands(draw_hair_strands_cmds_[cmd.index].items, draw_hair_strands_cmds_[cmd.index].view, draw_hair_strands_cmds_[cmd.index].projection);
         } else if (cmd.type == 13) {
             const auto& sc = defer_shadow_map_cmds_[cmd.index];
             if (sc.shadow_type == 0) {
@@ -864,6 +876,10 @@ void OpenGLRhiDevice::RealSubmitDrawPostProcess(unsigned int source_texture, con
 
 void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawParticles3D(items, view, projection, shader_mgr_);
+}
+
+void OpenGLRhiDevice::RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    draw_executor_.DrawHairStrands(items, view, projection, shader_mgr_);
 }
 
 // --- SSBO (Shader Storage Buffer Object) ---

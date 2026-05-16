@@ -681,6 +681,49 @@ struct GrassComponent {
     int cached_instance_count_ = 0;
 };
 
+/// TressFX 风格毛发组件
+struct HairComponent {
+    bool enabled = true;
+
+    /// 毛发资产路径（.dhair 或程序化生成标记 "procedural:N:V:L:R"）
+    std::string hair_asset_path;
+
+    // 物理参数
+    float damping          = 0.04f;
+    float stiffness_local  = 0.8f;
+    float stiffness_global = 0.4f;
+    float gravity          = 9.81f;
+    glm::vec3 wind         = glm::vec3(0.0f);
+    float wind_turbulence  = 0.2f;
+
+    // 渲染参数
+    glm::vec4 root_color = glm::vec4(0.1f, 0.05f, 0.02f, 1.0f);
+    glm::vec4 tip_color  = glm::vec4(0.4f, 0.25f, 0.15f, 1.0f);
+    float fiber_radius   = 0.04f;
+    float opacity        = 0.9f;
+    float specular_power_primary   = 80.0f;
+    float specular_power_secondary = 20.0f;
+    float specular_strength_primary   = 0.6f;
+    float specular_strength_secondary = 0.3f;
+    glm::vec3 specular_color = glm::vec3(1.0f, 0.9f, 0.8f);
+
+    // LOD
+    float lod0_distance = 20.0f;
+    float lod1_distance = 40.0f;
+    float lod2_distance = 80.0f;
+    float cull_distance = 120.0f;
+
+    // follower strands
+    int   num_follow_per_guide = 4;
+    float follow_root_offset   = 1.5f;
+
+    bool  cast_shadow   = true;
+    bool  receive_shadow = true;
+
+    // 运行时（HairSystem 管理，用户不应手动写入）
+    int hair_instance_index_ = -1;
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_H

@@ -154,6 +154,9 @@ public:
     unsigned int AllocateTextureHandle();
     unsigned int AllocateRenderTargetHandle();
 
+    /// 查找合适的内存类型
+    uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties);
+
 private:
     /// 创建 VkImage + VkDeviceMemory + VkImageView
     bool CreateVulkanImage(int width, int height, VkFormat format, VkImageTiling tiling,
@@ -167,9 +170,6 @@ private:
     /// 过渡 Image Layout
     void TransitionImageLayout(VkImage image, VkFormat format,
                                 VkImageLayout old_layout, VkImageLayout new_layout);
-
-    /// 查找合适的内存类型
-    uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
     VulkanContext* context_ = nullptr;
     VkDevice device_ = VK_NULL_HANDLE;

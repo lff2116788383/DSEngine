@@ -282,6 +282,32 @@ struct Particle3DDrawItem {
     unsigned int instance_vbo = 0;       ///< 实例变换/颜色 VBO
 };
 
+/// 毛发绘制项 (per-instance)
+struct HairDrawItem {
+    unsigned int position_ssbo = 0;     ///< 当前帧位置 SSBO (vec4[N])
+    unsigned int tangent_ssbo = 0;      ///< 切线 SSBO (vec4[N])
+    uint32_t total_vertex_count = 0;
+    uint32_t strand_count = 0;
+    const int* strand_firsts = nullptr; ///< per-strand 起始索引 (CPU array)
+    const int* strand_counts = nullptr; ///< per-strand 顶点数 (CPU array)
+    glm::mat4 world_transform = glm::mat4(1.0f);
+
+    glm::vec4 root_color = glm::vec4(0.1f, 0.05f, 0.02f, 1.0f);
+    glm::vec4 tip_color  = glm::vec4(0.4f, 0.25f, 0.15f, 1.0f);
+    float fiber_radius = 0.04f;
+    float opacity = 0.9f;
+    float specular_primary = 80.0f;
+    float specular_secondary = 20.0f;
+    float specular_strength_primary = 0.6f;
+    float specular_strength_secondary = 0.3f;
+    glm::vec3 specular_color = glm::vec3(1.0f, 0.9f, 0.8f);
+
+    glm::vec3 light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color = glm::vec3(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.2f;
+};
+
 // ============================================================
 // GPU Driven Indirect Draw
 // ============================================================

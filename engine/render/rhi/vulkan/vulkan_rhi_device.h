@@ -51,6 +51,7 @@ public:
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
     void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
+    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
     void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override;
     void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override;
@@ -178,11 +179,14 @@ public:
     void DeleteComputeShader(unsigned int handle) override;
     void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
     void ComputeMemoryBarrier() override;
+    void BeginComputePass() override;
+    void EndComputePass() override;
     void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
     void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                    int mip_level, bool read_only, bool r32f = false) override;
     void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
     bool SupportsCompute() const override { return true; }
+    bool SupportsSSBOCompute() const override { return true; }
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;
@@ -262,6 +266,23 @@ private:
 
     /// 当前帧绑定的 SSBO 状态 (binding_point → handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
+
+    /// Compute pass 批量录制状态
+    VkCommandBuffer compute_cmd_buffer_ = VK_NULL_HANDLE;
+    bool in_compute_pass_ = false;
+
+    /// Compute push constant 缓冲（用于 SetComputeUniform* 系列）
+    std::vector<uint8_t> compute_push_constants_;
+
+    /// Pending compute image 绑定 (binding → texture_handle)
+    struct ComputeImageBinding {
+        unsigned int texture_handle = 0;
+        bool read_only = true;
+        int mip_level = -1;  ///< -1 表示全 mip
+        bool r32f = false;
+    };
+    std::unordered_map<unsigned int, ComputeImageBinding> pending_compute_images_;
+    std::unordered_map<unsigned int, unsigned int> pending_compute_samplers_; ///< unit → tex handle
 
     bool initialized_ = false;
 };

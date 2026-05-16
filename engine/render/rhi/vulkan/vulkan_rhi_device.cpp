@@ -13,6 +13,7 @@
 #include "engine/render/rhi/vulkan/vulkan_rhi_device.h"
 #include "engine/base/debug.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace dse {
@@ -125,6 +126,13 @@ void VulkanCommandBuffer::DrawPostProcess(unsigned int source_texture, const std
 void VulkanCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DrawParticles3D(
+        vk_command_buffer_, items, view, projection,
+        device_->state_mgr(), device_->shader_mgr());
+}
+
+void VulkanCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->draw_executor().DrawHairStrands(
         vk_command_buffer_, items, view, projection,
         device_->state_mgr(), device_->shader_mgr());
 }
@@ -466,8 +474,26 @@ unsigned int VulkanRhiDevice::CreateComputeShader(const std::string& source) {
 }
 
 void VulkanRhiDevice::DeleteComputeShader(unsigned int handle) {
-    // shader_mgr_ 的 Shutdown 会清理所有，这里仅标记
     (void)handle;
+}
+
+void VulkanRhiDevice::BeginComputePass() {
+    if (!initialized_ || in_compute_pass_) return;
+
+    compute_cmd_buffer_ = resource_mgr_.BeginSingleTimeCommands();
+    in_compute_pass_ = true;
+    pending_compute_images_.clear();
+    pending_compute_samplers_.clear();
+}
+
+void VulkanRhiDevice::EndComputePass() {
+    if (!in_compute_pass_ || compute_cmd_buffer_ == VK_NULL_HANDLE) return;
+
+    resource_mgr_.EndSingleTimeCommands(compute_cmd_buffer_);
+    compute_cmd_buffer_ = VK_NULL_HANDLE;
+    in_compute_pass_ = false;
+    pending_compute_images_.clear();
+    pending_compute_samplers_.clear();
 }
 
 void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
@@ -477,11 +503,13 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
     const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
     if (!prog || prog->pipeline == VK_NULL_HANDLE) return;
 
-    // 使用单次命令缓冲提交 compute dispatch
-    VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+    // 确定录制目标 cmd buffer
+    const bool batched = in_compute_pass_ && compute_cmd_buffer_ != VK_NULL_HANDLE;
+    VkCommandBuffer cmd = batched ? compute_cmd_buffer_ : resource_mgr_.BeginSingleTimeCommands();
+
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prog->pipeline);
 
-    // 绑定当前帧绑定的 SSBO 到 descriptor set
+    // 绑定 SSBO descriptor set
     if (prog->descriptor_set_layout != VK_NULL_HANDLE && !bound_ssbos_.empty()) {
         VkDescriptorSet ds = resource_mgr_.AllocateDescriptorSet(prog->descriptor_set_layout);
         if (ds != VK_NULL_HANDLE) {
@@ -518,39 +546,54 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
         }
     }
 
+    // Push constants
+    if (prog->push_constant_size > 0 && !compute_push_constants_.empty()) {
+        uint32_t size = std::min(prog->push_constant_size,
+                                 static_cast<uint32_t>(compute_push_constants_.size()));
+        vkCmdPushConstants(cmd, prog->pipeline_layout,
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, size,
+                           compute_push_constants_.data());
+    }
+
     vkCmdDispatch(cmd, groups_x, groups_y, groups_z);
 
-    // 插入内存屏障
-    VkMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         0, 1, &barrier, 0, nullptr, 0, nullptr);
-
-    resource_mgr_.EndSingleTimeCommands(cmd);
+    if (!batched) {
+        // 单次模式：插入 barrier + 提交
+        VkMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0, 1, &barrier, 0, nullptr, 0, nullptr);
+        resource_mgr_.EndSingleTimeCommands(cmd);
+    }
 }
 
 void VulkanRhiDevice::ComputeMemoryBarrier() {
-    // Vulkan barrier 已在 DispatchCompute 中注入，此处为 no-op
+    if (!in_compute_pass_ || compute_cmd_buffer_ == VK_NULL_HANDLE) return;
+
+    VkMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    vkCmdPipelineBarrier(compute_cmd_buffer_,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0, 1, &barrier, 0, nullptr, 0, nullptr);
 }
 
 void VulkanRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
-    // Vulkan image binding 需要通过 descriptor set 进行，
-    // 当前预留接口，后续可扩展为 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-    (void)binding; (void)texture_handle; (void)read_only;
+    pending_compute_images_[binding] = { texture_handle, read_only, -1, false };
 }
 
 void VulkanRhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                                  int mip_level, bool read_only, bool r32f) {
-    // TODO: Vulkan Hi-Z — 通过 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE 绑定指定 mip level
-    (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
+    pending_compute_images_[binding] = { texture_handle, read_only, mip_level, r32f };
 }
 
 void VulkanRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
-    // TODO: Vulkan Hi-Z — 通过 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 绑定
-    (void)unit; (void)texture_handle;
+    pending_compute_samplers_[unit] = texture_handle;
 }
 
 unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
@@ -573,26 +616,101 @@ unsigned int VulkanRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
     return 0;
 }
 
+// Push constant 辅助：确保缓冲区足够大，写入数据到指定偏移
+static void EnsurePushConstantCapacity(std::vector<uint8_t>& buf, size_t offset, size_t write_size) {
+    size_t needed = offset + write_size;
+    if (buf.size() < needed) buf.resize(needed, 0);
+}
+
 void VulkanRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
-    (void)shader; (void)name; (void)value;
+    (void)shader; (void)name;
+    // Vulkan compute uniform 通过 push constant 传递，后续可扩展为 name→offset 映射
+    // 当前简化：顺序追加到 push constant buffer
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(int));
+    memcpy(compute_push_constants_.data() + offset, &value, sizeof(int));
 }
 void VulkanRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
-    (void)shader; (void)name; (void)value;
+    (void)shader; (void)name;
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(float));
+    memcpy(compute_push_constants_.data() + offset, &value, sizeof(float));
 }
 void VulkanRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
-    (void)shader; (void)name; (void)x; (void)y;
+    (void)shader; (void)name;
+    int data[2] = { x, y };
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
+    memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
-    (void)shader; (void)name; (void)x; (void)y;
+    (void)shader; (void)name;
+    float data[2] = { x, y };
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
+    memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
-    (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
+    (void)shader; (void)name;
+    float data[4] = { x, y, z, w };
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
+    memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    (void)shader; (void)name; (void)data;
+    (void)shader; (void)name;
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, 64);
+    memcpy(compute_push_constants_.data() + offset, data, 64);
 }
 void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
-    (void)handle; (void)offset; (void)size; (void)dst;
+    if (!initialized_) return;
+    const auto* ssbo = resource_mgr_.GetSSBO(handle);
+    if (!ssbo || !ssbo->buffer) return;
+
+    // Staging buffer 读回
+    VkDevice device = context_.device();
+    VkBuffer staging;
+    VkDeviceMemory staging_mem;
+
+    VkBufferCreateInfo buf_ci{};
+    buf_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_ci.size = size;
+    buf_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buf_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(device, &buf_ci, nullptr, &staging) != VK_SUCCESS) return;
+
+    VkMemoryRequirements mem_req;
+    vkGetBufferMemoryRequirements(device, staging, &mem_req);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_req.size;
+    alloc_info.memoryTypeIndex = resource_mgr_.FindMemoryType(
+        mem_req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(device, &alloc_info, nullptr, &staging_mem) != VK_SUCCESS) {
+        vkDestroyBuffer(device, staging, nullptr);
+        return;
+    }
+    vkBindBufferMemory(device, staging, staging_mem, 0);
+
+    VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+    VkBufferCopy copy_region{};
+    copy_region.srcOffset = offset;
+    copy_region.dstOffset = 0;
+    copy_region.size = size;
+    vkCmdCopyBuffer(cmd, ssbo->buffer, staging, 1, &copy_region);
+    resource_mgr_.EndSingleTimeCommands(cmd);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(device, staging_mem, 0, size, 0, &mapped) == VK_SUCCESS) {
+        memcpy(dst, mapped, size);
+        vkUnmapMemory(device, staging_mem);
+    }
+
+    vkDestroyBuffer(device, staging, nullptr);
+    vkFreeMemory(device, staging_mem, nullptr);
 }
 
 unsigned int VulkanRhiDevice::CreateVertexArray() {

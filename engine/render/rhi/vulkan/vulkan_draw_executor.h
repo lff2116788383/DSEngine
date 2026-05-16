@@ -158,6 +158,13 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 
+    void DrawHairStrands(VkCommandBuffer cmd_buf,
+                          const std::vector<HairDrawItem>& items,
+                          const glm::mat4& view,
+                          const glm::mat4& projection,
+                          VulkanPipelineStateManager& pipeline_mgr,
+                          VulkanShaderManager& shader_mgr);
+
     // --- 全局阴影/光源矩阵（委托给共享状态） ---
     void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
     void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }

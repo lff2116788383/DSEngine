@@ -97,6 +97,11 @@ public:
                            const glm::mat4& projection,
                            GLShaderManager& shader_mgr);
 
+    void DrawHairStrands(const std::vector<HairDrawItem>& items,
+                          const glm::mat4& view,
+                          const glm::mat4& projection,
+                          GLShaderManager& shader_mgr);
+
     // --- 全局阴影/光源矩阵（委托给共享状态） ---
     void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
     void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
@@ -174,6 +179,17 @@ private:
     // 3D 粒子四边形
     unsigned int particle_quad_vao_handle_ = 0;
     unsigned int particle_quad_vbo_handle_ = 0;
+
+    // 毛发 (Hair strands)
+    unsigned int hair_vao_handle_ = 0;
+    unsigned int hair_shader_handle_ = 0;
+    // 缓存 uniform locations (在 shader 编译后填充)
+    int hair_loc_model_ = -1, hair_loc_view_ = -1, hair_loc_proj_ = -1;
+    int hair_loc_cam_ = -1, hair_loc_ldir_ = -1, hair_loc_lcol_ = -1;
+    int hair_loc_lint_ = -1, hair_loc_ambient_ = -1;
+    int hair_loc_root_ = -1, hair_loc_tip_ = -1, hair_loc_opacity_ = -1;
+    int hair_loc_spec1_ = -1, hair_loc_spec2_ = -1;
+    int hair_loc_sstr1_ = -1, hair_loc_sstr2_ = -1, hair_loc_scol_ = -1;
 
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;

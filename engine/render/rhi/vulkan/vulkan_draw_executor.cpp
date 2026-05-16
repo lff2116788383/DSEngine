@@ -2271,6 +2271,30 @@ void VulkanDrawExecutor::DrawParticles3D(
 }
 
 // ============================================================================
+// Hair Strand 渲染 (Vulkan)
+// ============================================================================
+
+void VulkanDrawExecutor::DrawHairStrands(
+    VkCommandBuffer cmd_buf,
+    const std::vector<HairDrawItem>& items,
+    const glm::mat4& view,
+    const glm::mat4& projection,
+    VulkanPipelineStateManager& pipeline_mgr,
+    VulkanShaderManager& shader_mgr) {
+
+    if (items.empty()) return;
+    (void)cmd_buf; (void)view; (void)projection;
+    (void)pipeline_mgr; (void)shader_mgr;
+
+    static bool warned = false;
+    if (!warned) {
+        DEBUG_LOG_WARN("[VulkanDrawExecutor] DrawHairStrands not yet implemented for Vulkan backend. "
+                       "Hair will not render when using Vulkan.");
+        warned = true;
+    }
+}
+
+// ============================================================================
 // 渲染统计
 // ============================================================================
 

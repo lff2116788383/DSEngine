@@ -920,6 +920,83 @@ unsigned int VulkanShaderManager::CreateComputeProgram(const std::string& comp_s
     return handle;
 }
 
+unsigned int VulkanShaderManager::CreateComputeProgramSSBO(
+    const std::string& comp_src,
+    uint32_t ssbo_binding_count,
+    uint32_t push_constant_bytes) {
+
+    std::vector<uint32_t> comp_spirv;
+    if (!CompileGlslToSpirv(comp_src, VK_SHADER_STAGE_COMPUTE_BIT, comp_spirv)) {
+        DEBUG_LOG_ERROR("[Vulkan] SSBO compute shader compilation failed");
+        return 0;
+    }
+
+    auto device = context_->device();
+    VulkanComputeProgram prog;
+    prog.comp_module = CreateShaderModule(comp_spirv);
+    if (prog.comp_module == VK_NULL_HANDLE) return 0;
+    prog.uses_ssbo_bindings = true;
+    prog.push_constant_size = push_constant_bytes;
+
+    // Descriptor set layout: N SSBO bindings (binding 0..N-1)
+    std::vector<VkDescriptorSetLayoutBinding> bindings(ssbo_binding_count);
+    for (uint32_t i = 0; i < ssbo_binding_count; ++i) {
+        bindings[i] = {};
+        bindings[i].binding         = i;
+        bindings[i].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo dsl_ci{};
+    dsl_ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dsl_ci.bindingCount = ssbo_binding_count;
+    dsl_ci.pBindings    = bindings.data();
+    if (vkCreateDescriptorSetLayout(device, &dsl_ci, nullptr, &prog.descriptor_set_layout) != VK_SUCCESS) {
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Pipeline layout
+    VkPushConstantRange pc_range{};
+    pc_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pc_range.offset     = 0;
+    pc_range.size       = push_constant_bytes > 0 ? push_constant_bytes : 4;
+
+    VkPipelineLayoutCreateInfo pl_ci{};
+    pl_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pl_ci.setLayoutCount         = 1;
+    pl_ci.pSetLayouts            = &prog.descriptor_set_layout;
+    pl_ci.pushConstantRangeCount = push_constant_bytes > 0 ? 1u : 0u;
+    pl_ci.pPushConstantRanges    = push_constant_bytes > 0 ? &pc_range : nullptr;
+    if (vkCreatePipelineLayout(device, &pl_ci, nullptr, &prog.pipeline_layout) != VK_SUCCESS) {
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    // Compute pipeline
+    VkComputePipelineCreateInfo cp_ci{};
+    cp_ci.sType        = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cp_ci.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    cp_ci.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    cp_ci.stage.module = prog.comp_module;
+    cp_ci.stage.pName  = "main";
+    cp_ci.layout       = prog.pipeline_layout;
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+        vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+        return 0;
+    }
+
+    unsigned int handle = next_handle_++;
+    compute_programs_[handle] = prog;
+    DEBUG_LOG_INFO("[Vulkan] SSBO compute program created: handle={}, ssbo_bindings={}, pc_bytes={}",
+                   handle, ssbo_binding_count, push_constant_bytes);
+    return handle;
+}
+
 unsigned int VulkanShaderManager::CreateComputeProgramFromSpirv(
     const uint32_t* comp_spv, size_t comp_word_count) {
 

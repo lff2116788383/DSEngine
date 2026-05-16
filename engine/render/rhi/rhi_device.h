@@ -50,6 +50,7 @@ public:
     virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
     virtual void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) = 0;
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
+    virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
     /// 延迟阴影贴图绑定命令（Pass 中调用，Submit 时回放到 Device）
     virtual void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
@@ -77,6 +78,7 @@ public:
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
     void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
+    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
     void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override;
     void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override;
@@ -164,7 +166,15 @@ private:
         int shadow_type; // 0=CSM, 1=Spot, 2=Point
     };
 
+    struct DrawHairStrandsCmd {
+        uint64_t order;
+        std::vector<HairDrawItem> items;
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 projection = glm::mat4(1.0f);
+    };
+
     std::vector<DrawParticles3DCmd> draw_particles3d_cmds_;
+    std::vector<DrawHairStrandsCmd> draw_hair_strands_cmds_;
     std::vector<DeferShadowMapCmd> defer_shadow_map_cmds_;
 };
 
@@ -295,6 +305,15 @@ public:
 
     /// 插入内存屏障（保证 compute 写入对后续图形管线可见）
     virtual void ComputeMemoryBarrier() {}
+
+    /// 开始 compute pass（批量录制多个 dispatch，一次提交）
+    /// 在 BeginComputePass/EndComputePass 之间的 DispatchCompute 调用会被
+    /// 录制到同一 command buffer 中，ComputeMemoryBarrier 插入 pipeline barrier。
+    /// 若后端不支持或未调用 BeginComputePass，DispatchCompute 退化为单次提交。
+    virtual void BeginComputePass() {}
+
+    /// 结束 compute pass 并提交所有录制的 dispatch
+    virtual void EndComputePass() {}
 
     /// 将纹理绑定到 compute shader 的 image 单元（image load/store）
     virtual void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
@@ -628,6 +647,7 @@ public:
     void RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params);
     void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
 
     // --- 子系统访问器 ---
     dse::render::GLResourceManager& resource_mgr() { return resource_mgr_; }

@@ -178,6 +178,12 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
+    void DrawHairStrands(const std::vector<HairDrawItem>& items,
+                          const glm::mat4& view, const glm::mat4& projection,
+                          DX11PipelineStateManager& pipeline_mgr,
+                          DX11ShaderManager& shader_mgr,
+                          DX11ResourceManager& resource_mgr);
+
     void DispatchCompute(unsigned int cs_handle,
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,

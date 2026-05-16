@@ -46,12 +46,14 @@ struct ShaderReflection {
     bool has_push_constant = false;
 };
 
-/// Compute 着色器程序（Bloom CS）
+/// Compute 着色器程序
 struct VulkanComputeProgram {
     VkShaderModule comp_module = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+    uint32_t push_constant_size = 0;  ///< push constant 大小（字节）
+    bool uses_ssbo_bindings = false;  ///< 是否使用 SSBO 绑定（运行时从 bound_ssbos_ 解析）
 };
 
 /// 着色器程序句柄对应的 Vulkan 对象集合
@@ -118,7 +120,17 @@ public:
     void InitBloomComputeShaders();
 
     /// 从 GLSL 源码创建 Compute 程序，返回句柄（0 = 失败）
+    /// 默认使用 Bloom 风格 layout: binding0=sampler, binding1=storage_image, 4-float push constant
     unsigned int CreateComputeProgram(const std::string& comp_src);
+
+    /// 从 GLSL 源码创建 SSBO 驱动的 Compute 程序
+    /// @param comp_src  GLSL 源码
+    /// @param ssbo_binding_count  SSBO 绑定数量（binding 0..N-1，类型 STORAGE_BUFFER）
+    /// @param push_constant_bytes push constant 大小（字节），0 表示无 push constant
+    /// @return 句柄，0 = 失败
+    unsigned int CreateComputeProgramSSBO(const std::string& comp_src,
+                                          uint32_t ssbo_binding_count,
+                                          uint32_t push_constant_bytes);
 
     /// 从预编译 SPIR-V 创建 Compute 程序
     unsigned int CreateComputeProgramFromSpirv(const uint32_t* comp_spv, size_t comp_word_count);

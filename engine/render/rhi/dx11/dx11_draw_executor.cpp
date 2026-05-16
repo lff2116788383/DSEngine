@@ -1629,5 +1629,26 @@ void DX11DrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& it
     }
 }
 
+// ============================================================================
+// Hair Strand 渲染 (DX11)
+// ============================================================================
+
+void DX11DrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
+                                         const glm::mat4& view, const glm::mat4& projection,
+                                         DX11PipelineStateManager& pipeline_mgr,
+                                         DX11ShaderManager& shader_mgr,
+                                         DX11ResourceManager& resource_mgr) {
+    if (items.empty()) return;
+    (void)view; (void)projection;
+    (void)pipeline_mgr; (void)shader_mgr; (void)resource_mgr;
+
+    static bool warned = false;
+    if (!warned) {
+        DEBUG_LOG_WARN("[DX11DrawExecutor] DrawHairStrands not yet implemented for D3D11 backend. "
+                       "Hair will not render when using D3D11.");
+        warned = true;
+    }
+}
+
 } // namespace render
 } // namespace dse

@@ -1580,6 +1580,91 @@ int L_EcsGetGrassStats(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// Hair
+// ============================================================
+
+// add_hair(entity, asset_path [, num_follow_per_guide])
+int L_EcsAddHair(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& h = world->registry().emplace_or_replace<HairComponent>(e);
+    h.enabled = true;
+    h.hair_asset_path = helper::CheckString(L, 2);
+    if (lua_gettop(L) >= 3) h.num_follow_per_guide = helper::CheckInt(L, 3);
+    return 0;
+}
+
+// set_hair_physics(entity, damping, stiffness_local, stiffness_global, gravity)
+int L_EcsSetHairPhysics(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
+    if (!h) return 0;
+    if (lua_gettop(L) >= 2) h->damping          = helper::CheckFloat(L, 2);
+    if (lua_gettop(L) >= 3) h->stiffness_local  = helper::CheckFloat(L, 3);
+    if (lua_gettop(L) >= 4) h->stiffness_global = helper::CheckFloat(L, 4);
+    if (lua_gettop(L) >= 5) h->gravity          = helper::CheckFloat(L, 5);
+    return 0;
+}
+
+// set_hair_render(entity, root_r,g,b,a, tip_r,g,b,a, fiber_radius, opacity)
+int L_EcsSetHairRender(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
+    if (!h) return 0;
+    if (lua_gettop(L) >= 5)
+        h->root_color = glm::vec4(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3),
+                                   helper::CheckFloat(L, 4), helper::CheckFloat(L, 5));
+    if (lua_gettop(L) >= 9)
+        h->tip_color = glm::vec4(helper::CheckFloat(L, 6), helper::CheckFloat(L, 7),
+                                  helper::CheckFloat(L, 8), helper::CheckFloat(L, 9));
+    if (lua_gettop(L) >= 10) h->fiber_radius = helper::CheckFloat(L, 10);
+    if (lua_gettop(L) >= 11) h->opacity      = helper::CheckFloat(L, 11);
+    return 0;
+}
+
+// set_hair_wind(entity, wx, wy, wz [, turbulence])
+int L_EcsSetHairWind(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
+    if (!h) return 0;
+    h->wind = glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
+    if (lua_gettop(L) >= 5) h->wind_turbulence = helper::CheckFloat(L, 5);
+    return 0;
+}
+
+// set_hair_enabled(entity, bool)
+int L_EcsSetHairEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
+    if (!h) return 0;
+    h->enabled = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// set_hair_lod(entity, lod0, lod1, lod2, cull)
+int L_EcsSetHairLod(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
+    if (!h) return 0;
+    if (lua_gettop(L) >= 2) h->lod0_distance = helper::CheckFloat(L, 2);
+    if (lua_gettop(L) >= 3) h->lod1_distance = helper::CheckFloat(L, 3);
+    if (lua_gettop(L) >= 4) h->lod2_distance = helper::CheckFloat(L, 4);
+    if (lua_gettop(L) >= 5) h->cull_distance = helper::CheckFloat(L, 5);
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsRenderingBindings(lua_State* L) {
@@ -1665,6 +1750,13 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_grass_lod",             L_EcsSetGrassLod},
         {"set_grass_enabled",         L_EcsSetGrassEnabled},
         {"get_grass_stats",           L_EcsGetGrassStats},
+        // Hair
+        {"add_hair",                  L_EcsAddHair},
+        {"set_hair_physics",          L_EcsSetHairPhysics},
+        {"set_hair_render",           L_EcsSetHairRender},
+        {"set_hair_wind",             L_EcsSetHairWind},
+        {"set_hair_enabled",          L_EcsSetHairEnabled},
+        {"set_hair_lod",              L_EcsSetHairLod},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

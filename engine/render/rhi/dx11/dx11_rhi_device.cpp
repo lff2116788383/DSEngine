@@ -115,6 +115,12 @@ void DX11CommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& i
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
+void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
+    if (!device_ || items.empty()) return;
+    device_->draw_executor().DrawHairStrands(items, view, projection,
+        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
+}
+
 void DX11CommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
     if (device_) device_->SetGlobalShadowMap(index, texture_handle);
 }
