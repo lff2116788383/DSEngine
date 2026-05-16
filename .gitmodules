@@ -66,3 +66,6 @@
 [submodule "depends/spirv-cross"]
 	path = depends/spirv-cross
 	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "depends/recastnavigation"]
+	path = depends/recastnavigation
+	url = https://github.com/recastnavigation/recastnavigation.git

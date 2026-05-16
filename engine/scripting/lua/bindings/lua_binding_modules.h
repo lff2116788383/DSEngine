@@ -21,6 +21,9 @@ void RegisterAssetsBindings(lua_State* L);
 void RegisterAppBindings(lua_State* L);
 void RegisterMetricsBindings(lua_State* L);
 void RegisterDSSLBindings(lua_State* L);
+#ifdef DSE_ENABLE_NAVMESH
+void RegisterNavigationBindings(lua_State* L);
+#endif
 
 // ECS 子域注册（由 RegisterEcsBindings 内部调用，栈顶需为 ecs 表）
 void RegisterEcsCoreBindings(lua_State* L);

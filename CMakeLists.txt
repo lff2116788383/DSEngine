@@ -48,8 +48,12 @@ option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
+option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
 
 
+if(DSE_ENABLE_NAVMESH)
+    add_definitions(-D DSE_ENABLE_NAVMESH)
+endif()
 if(DSE_ENABLE_2D)
     add_definitions(-D DSE_ENABLE_2D)
 endif()
@@ -155,6 +159,11 @@ add_subdirectory(depends/box2d-2.4.1)
 if(MSVC)
     set_property(TARGET box2d PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
+
+# Recast & Detour 静态库（仅在 NavMesh 启用时编译）
+if(DSE_ENABLE_NAVMESH)
+    include(cmake/CMakeLists.txt.recastnavigation)
+endif()
 if(DSE_HAS_ASSIMP)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
@@ -247,6 +256,12 @@ if(NOT DSE_ENABLE_PHYSX OR (MSVC AND NOT DSE_HAS_PHYSX_LIBS))
     list(FILTER engine_cpp EXCLUDE REGEX ".*/fracture/.*\\.cpp$")
 endif()
 
+# NavMesh 禁用时排除 navigation 源文件
+if(NOT DSE_ENABLE_NAVMESH)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/navigation/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_3d/ai/nav_.*\\.cpp$")
+endif()
+
 file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
 set(tiny_aes_c
     "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c"
@@ -278,6 +293,9 @@ add_library(dse_engine SHARED
 target_link_libraries(dse_engine PRIVATE box2d)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
+endif()
+if(DSE_ENABLE_NAVMESH)
+    target_link_libraries(dse_engine PRIVATE recast detour)
 endif()
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     target_include_directories(dse_engine PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})

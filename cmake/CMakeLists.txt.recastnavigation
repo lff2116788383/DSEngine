@@ -1,0 +1,31 @@
+# Recast & Detour 静态库 — DSEngine 自定义集成
+# 仅编译 Recast (navmesh 生成) + Detour (路径查询)，不包含 DetourCrowd / DetourTileCache / DebugUtils
+#
+# 三个目标：
+#   - recast       静态库 (navmesh 生成)
+#   - detour       静态库 (navmesh 路径查询)
+#   - 头文件目录暴露给 dse_engine 使用
+
+set(RECASTNAV_ROOT "${CMAKE_SOURCE_DIR}/depends/recastnavigation")
+
+# ---- Recast ----
+file(GLOB RECAST_SOURCES "${RECASTNAV_ROOT}/Recast/Source/*.cpp")
+add_library(recast STATIC ${RECAST_SOURCES})
+target_include_directories(recast PUBLIC "${RECASTNAV_ROOT}/Recast/Include")
+if(MSVC)
+    set_property(TARGET recast PROPERTY MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(recast PRIVATE /wd4267 /wd4244 /wd4996)
+endif()
+set_target_properties(recast PROPERTIES FOLDER "depends")
+
+# ---- Detour ----
+file(GLOB DETOUR_SOURCES "${RECASTNAV_ROOT}/Detour/Source/*.cpp")
+add_library(detour STATIC ${DETOUR_SOURCES})
+target_include_directories(detour PUBLIC "${RECASTNAV_ROOT}/Detour/Include")
+if(MSVC)
+    set_property(TARGET detour PROPERTY MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(detour PRIVATE /wd4267 /wd4244 /wd4996)
+endif()
+set_target_properties(detour PROPERTIES FOLDER "depends")

@@ -49,6 +49,9 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     animator_system_.ComputeFinalMatrices(world);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
+#ifdef DSE_ENABLE_NAVMESH
+    nav_agent_system_.Update(world, delta_time);
+#endif
 #ifdef DSE_ENABLE_PHYSX
     fracture_system_.Update(world, delta_time);
 #endif

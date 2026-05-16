@@ -18,6 +18,9 @@
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
+#ifdef DSE_ENABLE_NAVMESH
+#include "engine/navigation/nav_mesh_system.h"
+#endif
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
 #include "modules/gameplay_2d/camera/camera_system.h"
 #include "modules/gameplay_2d/ui/ui_system.h"
@@ -250,6 +253,10 @@ private:
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     dse::physics3d::Physics3DSystem physics3d_system_;
     bool physics3d_system_initialized_ = false;
+#endif
+#ifdef DSE_ENABLE_NAVMESH
+    dse::navigation::NavMeshSystem nav_mesh_system_;
+    bool nav_mesh_system_initialized_ = false;
 #endif
 #ifdef DSE_ENABLE_3D
     dse::gameplay3d::Gameplay3DModule gameplay3d_module_;

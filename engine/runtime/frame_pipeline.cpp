@@ -489,6 +489,15 @@ bool FramePipeline::Init() {
     }
 #endif
 
+#ifdef DSE_ENABLE_NAVMESH
+    if (nav_mesh_system_.Init()) {
+        dse::core::ServiceLocator::Instance().Register<dse::navigation::NavMeshSystem, dse::navigation::NavMeshSystem>(
+            std::shared_ptr<dse::navigation::NavMeshSystem>(&nav_mesh_system_, [](auto*) {}));
+        nav_mesh_system_initialized_ = true;
+        DEBUG_LOG_INFO("FramePipeline init: NavMeshSystem initialized and registered");
+    }
+#endif
+
 #ifdef DSE_ENABLE_3D
     if (enable_gameplay3d) {
         if (!gameplay3d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
@@ -596,6 +605,13 @@ void FramePipeline::Shutdown() {
         dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
         physics3d_system_.Shutdown();
         physics3d_system_initialized_ = false;
+    }
+#endif
+#ifdef DSE_ENABLE_NAVMESH
+    if (nav_mesh_system_initialized_) {
+        dse::core::ServiceLocator::Instance().Reset<dse::navigation::NavMeshSystem>();
+        nav_mesh_system_.Shutdown();
+        nav_mesh_system_initialized_ = false;
     }
 #endif
     cluster_grid_.Shutdown();

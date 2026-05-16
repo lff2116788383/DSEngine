@@ -13,6 +13,9 @@
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"
+#ifdef DSE_ENABLE_NAVMESH
+#include "modules/gameplay_3d/ai/nav_agent_system.h"
+#endif
 #ifdef DSE_ENABLE_PHYSX
 #include "modules/gameplay_3d/destruction/fracture_system.h"
 #include "modules/gameplay_3d/ragdoll/ragdoll_system.h"
@@ -54,6 +57,9 @@ private:
     Particle3DSystem particle3d_system_;
     FreeCameraControllerSystem free_camera_controller_system_;
     SteeringSystem steering_system_;
+#ifdef DSE_ENABLE_NAVMESH
+    NavAgentSystem nav_agent_system_;
+#endif
 #ifdef DSE_ENABLE_PHYSX
     FractureSystem fracture_system_;
     RagdollSystem ragdoll_system_;

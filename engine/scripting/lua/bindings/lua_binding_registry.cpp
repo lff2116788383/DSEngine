@@ -42,6 +42,11 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // DSSL 材质系统 — 独立全局表 "dssl"
     RegisterDSSLBindings(L);
+
+#ifdef DSE_ENABLE_NAVMESH
+    // NavMesh 寻路系统 — 独立全局表 "nav" + ecs 扩展
+    RegisterNavigationBindings(L);
+#endif
 }
 
 }
