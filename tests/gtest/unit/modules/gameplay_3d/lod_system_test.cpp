@@ -15,6 +15,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/assets/asset_manager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -106,7 +107,12 @@ TEST(LODScreenSizeFormulaTest, 距离为零时不除零) {
 class LODSystemTest : public ::testing::Test {
 protected:
     World world;
+    AssetManager asset_mgr;
     LODSystem sys;
+
+    void SetUp() override {
+        sys.SetAssetManager(&asset_mgr);
+    }
 };
 
 TEST_F(LODSystemTest, 空World不崩溃) {

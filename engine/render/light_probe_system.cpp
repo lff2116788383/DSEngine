@@ -88,7 +88,7 @@ void LightProbeSystem::IntegrateFaceSH(const unsigned char* rgba8, int width, in
 
             // 立体角权重（cubemap texel 对应的立体角近似）
             float tmp = 1.0f + u * u + v * v;
-            float d_omega = 4.0f / (std::sqrt(tmp) * tmp);
+            float d_omega = 4.0f * inv_w * inv_h / (std::sqrt(tmp) * tmp);
 
             // 线性颜色（从 sRGB 近似解码 gamma 2.2）
             int idx = (y * width + x) * 4;

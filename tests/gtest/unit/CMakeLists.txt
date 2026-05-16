@@ -12,6 +12,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/core/event_id_cross_dll_test.cpp
     engine/core/service_locator_test.cpp
     engine/core/job_system_test.cpp
+    engine/core/job_system_stress_test.cpp
     engine/core/math_pool_test.cpp
     engine/core/dynamic_library_test.cpp
     engine/core/module_test.cpp
@@ -47,6 +48,14 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/render/rhi_types_test.cpp
     engine/render/vulkan_rhi_test.cpp
     engine/render/dx11_rhi_test.cpp
+    engine/render/gl_rhi_test.cpp
+    engine/render/builtin_passes_test.cpp
+    engine/render/light_probe_system_test.cpp
+    engine/render/reflection_probe_system_test.cpp
+    engine/render/ubo_draw_executor_common_test.cpp
+    engine/render/gl_shader_ubo_manager_test.cpp
+    engine/render/rendergraph_parallel_test.cpp
+    engine/render/postprocess_common_test.cpp
     # engine/scene
     engine/scene/octree_test.cpp
     engine/scene/quad_tree_test.cpp
@@ -72,8 +81,11 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     modules/gameplay_2d/tilemap_system_test.cpp
     modules/gameplay_2d/localization_system_test.cpp
     modules/gameplay_2d/nine_slice_render_test.cpp
+    modules/gameplay_2d/sprite_ui_render_system_test.cpp
+    modules/gameplay_2d/ui_system_test.cpp
     # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine）
     modules/gameplay_3d/animation_state_machine_test.cpp
+    modules/gameplay_3d/blend_tree_crossfade_test.cpp
 )
 
 # 3D 模块测试需要DSE_Gameplay3D 库（条件编译）
@@ -87,6 +99,13 @@ if(DSE_ENABLE_3D)
         modules/gameplay_3d/anim_layer_ik_test.cpp
         modules/gameplay_3d/anim_perf_benchmark_test.cpp
         modules/gameplay_3d/lod_system_test.cpp
+        modules/gameplay_3d/mesh_render_system_test.cpp
+        modules/gameplay_3d/softbody_system_test.cpp
+        modules/gameplay_3d/particle3d_system_test.cpp
+        modules/gameplay_3d/terrain_system_test.cpp
+        modules/gameplay_3d/anim_layer_blend_system_test.cpp
+        modules/gameplay_3d/ragdoll_system_test.cpp
+        modules/gameplay_3d/buoyancy_system_test.cpp
     )
 endif()
 

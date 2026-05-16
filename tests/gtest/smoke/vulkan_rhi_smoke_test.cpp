@@ -153,4 +153,43 @@ TEST_F(VulkanRhiSmokeTest, 纹理创建销毁不崩溃) {
     SUCCEED();
 }
 
+TEST_F(VulkanRhiSmokeTest, 10帧连续提交稳定) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    for (int i = 0; i < 10; ++i) {
+        device_.BeginFrame();
+        auto cmd = device_.CreateCommandBuffer();
+        cmd->ClearColor(glm::vec4(0.1f * i, 0.0f, 0.0f, 1.0f));
+        device_.Submit(cmd);
+        device_.EndFrame();
+    }
+    SUCCEED();
+}
+
+TEST_F(VulkanRhiSmokeTest, RenderTarget创建销毁不崩溃) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    RenderTargetDesc desc;
+    desc.width = 64;
+    desc.height = 64;
+    desc.has_depth = true;
+    unsigned int rt = device_.CreateRenderTarget(desc);
+    EXPECT_NE(rt, 0u);
+    device_.DeleteRenderTarget(rt);
+    SUCCEED();
+}
+
+TEST_F(VulkanRhiSmokeTest, Buffer创建销毁不崩溃) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    unsigned int buf = device_.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_NE(buf, 0u);
+    device_.DeleteBuffer(buf);
+    SUCCEED();
+}
+
 #endif // DSE_ENABLE_VULKAN

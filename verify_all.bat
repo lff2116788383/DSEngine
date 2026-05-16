@@ -92,21 +92,21 @@ if "%SKIP_GTEST%"=="1" (
 set /a TOTAL_STEPS+=1
 echo [2] 构建 GTest targets (Debug)...
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests --parallel -- /p:CL_MPCount=12
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_unit_tests 构建失败!
     set /a FAIL_COUNT+=1
     goto :gtest_run
 )
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests --parallel -- /p:CL_MPCount=12
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_integration_tests 构建失败!
     set /a FAIL_COUNT+=1
     goto :gtest_run
 )
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests --parallel -- /p:CL_MPCount=12
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_smoke_tests 构建失败!
     set /a FAIL_COUNT+=1
@@ -166,7 +166,7 @@ if "%SKIP_LUA%"=="1" (
 set /a TOTAL_STEPS+=1
 echo [4] 构建 Lua 运行时 (dse_example_lua, Debug)...
 
-cmake --build %BUILD_DIR% --config Debug --target dse_example_lua
+cmake --build %BUILD_DIR% --config Debug --target dse_example_lua --parallel -- /p:CL_MPCount=12
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_example_lua 构建失败!
     set /a FAIL_COUNT+=1

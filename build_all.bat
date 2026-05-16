@@ -283,7 +283,7 @@ if %ERRORLEVEL% neq 0 (
 :: 3. Build all targets
 echo.
 echo [3/4] Building all targets (%BUILD_CONFIG%)...
-cmake --build %BUILD_DIR% --config %BUILD_CONFIG%
+cmake --build %BUILD_DIR% --config %BUILD_CONFIG% --parallel -- /p:CL_MPCount=12
 if %ERRORLEVEL% neq 0 (
     echo.
     echo ========================================================
