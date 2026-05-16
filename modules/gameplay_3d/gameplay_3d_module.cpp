@@ -18,6 +18,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     (void)world;
 #endif
     terrain_system_.Init(rhi_device);
+    grass_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
     lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
@@ -57,6 +58,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     fracture_system_.Update(world, delta_time);
 #endif
     fluid_system_.Update(world, delta_time);
+    grass_system_.Update(world, delta_time);
     frustum_culling_system_.Update(world);
     lod_system_.Update(world);
 }
@@ -75,6 +77,7 @@ void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
 void Gameplay3DModule::OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
+    grass_system_.Render(world, cmd_buffer);
 }
 
 void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) {
@@ -83,11 +86,13 @@ void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
     (void)light_proj;
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
+    grass_system_.RenderShadow(world, cmd_buffer);
 }
 
 void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
+    grass_system_.Render(world, cmd_buffer);
 
     auto p_view = world.registry().view<dse::ParticleSystem3DComponent>();
     std::vector<Particle3DDrawItem> p_items;
@@ -144,6 +149,7 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
 
 void Gameplay3DModule::OnShutdown(World& world) {
     terrain_system_.Shutdown(world);
+    grass_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);

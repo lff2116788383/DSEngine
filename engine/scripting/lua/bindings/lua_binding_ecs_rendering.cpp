@@ -1488,6 +1488,98 @@ int L_EcsLodSetEnabled(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// Grass
+// ============================================================
+
+int L_EcsAddGrass(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& g = world->registry().emplace_or_replace<GrassComponent>(e);
+    g.enabled = true;
+    g.density       = helper::OptFloat(L, 2, 1.0f);
+    g.spawn_radius  = helper::OptFloat(L, 3, 50.0f);
+    g.blade_height  = helper::OptFloat(L, 4, 1.0f);
+    g.blade_width   = helper::OptFloat(L, 5, 0.1f);
+    return 0;
+}
+
+int L_EcsSetGrassParams(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* g = helper::TryGetComponent<GrassComponent>(*world, e);
+    if (!g) return 0;
+    if (lua_gettop(L) >= 2) g->density       = helper::CheckFloat(L, 2);
+    if (lua_gettop(L) >= 3) g->spawn_radius  = helper::CheckFloat(L, 3);
+    if (lua_gettop(L) >= 4) g->blade_height  = helper::CheckFloat(L, 4);
+    if (lua_gettop(L) >= 5) g->blade_width   = helper::CheckFloat(L, 5);
+    if (lua_gettop(L) >= 6) g->blade_height_variation = helper::CheckFloat(L, 6);
+    if (lua_gettop(L) >= 7) g->chunk_size    = helper::CheckFloat(L, 7);
+    if (lua_gettop(L) >= 8) g->seed          = static_cast<unsigned int>(helper::CheckInt(L, 8));
+    return 0;
+}
+
+int L_EcsSetGrassColor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* g = helper::TryGetComponent<GrassComponent>(*world, e);
+    if (!g) return 0;
+    g->base_color = glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
+    if (lua_gettop(L) >= 7) {
+        g->tip_color = glm::vec3(helper::CheckFloat(L, 5), helper::CheckFloat(L, 6), helper::CheckFloat(L, 7));
+    }
+    return 0;
+}
+
+int L_EcsSetGrassWind(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* g = helper::TryGetComponent<GrassComponent>(*world, e);
+    if (!g) return 0;
+    g->wind_direction = glm::vec2(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3));
+    if (lua_gettop(L) >= 4) g->wind_speed      = helper::CheckFloat(L, 4);
+    if (lua_gettop(L) >= 5) g->wind_strength    = helper::CheckFloat(L, 5);
+    if (lua_gettop(L) >= 6) g->wind_turbulence  = helper::CheckFloat(L, 6);
+    return 0;
+}
+
+int L_EcsSetGrassLod(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* g = helper::TryGetComponent<GrassComponent>(*world, e);
+    if (!g) return 0;
+    g->lod_near = helper::CheckFloat(L, 2);
+    g->lod_far  = helper::CheckFloat(L, 3);
+    if (lua_gettop(L) >= 4) g->cast_shadow      = lua_toboolean(L, 4) != 0;
+    if (lua_gettop(L) >= 5) g->shadow_distance   = helper::CheckFloat(L, 5);
+    return 0;
+}
+
+int L_EcsSetGrassEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* g = helper::TryGetComponent<GrassComponent>(*world, e);
+    if (!g) return 0;
+    g->enabled = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+int L_EcsGetGrassStats(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* g = helper::TryGetComponentConst<GrassComponent>(*world, e);
+    if (!g) return 0;
+    helper::PushInt(L, g->cached_instance_count_);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsRenderingBindings(lua_State* L) {
@@ -1565,6 +1657,14 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"lod_add_level",             L_EcsLodAddLevel},
         {"lod_set_scale",             L_EcsLodSetScale},
         {"lod_set_enabled",           L_EcsLodSetEnabled},
+        // Grass
+        {"add_grass",                 L_EcsAddGrass},
+        {"set_grass_params",          L_EcsSetGrassParams},
+        {"set_grass_color",           L_EcsSetGrassColor},
+        {"set_grass_wind",            L_EcsSetGrassWind},
+        {"set_grass_lod",             L_EcsSetGrassLod},
+        {"set_grass_enabled",         L_EcsSetGrassEnabled},
+        {"get_grass_stats",           L_EcsGetGrassStats},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

@@ -644,6 +644,43 @@ struct NavMeshAgentComponent {
 };
 #endif
 
+/// 大型植被系统：草地实例化渲染组件
+struct GrassComponent {
+    bool enabled = true;
+
+    // 分布参数
+    float density = 1.0f;              ///< 每平方单位草叶数
+    float spawn_radius = 50.0f;        ///< 围绕摄像机的生成半径
+    unsigned int seed = 42;            ///< 随机种子
+    float chunk_size = 8.0f;           ///< 空间 chunk 边长（米）
+
+    // 草叶外观
+    float blade_width = 0.1f;
+    float blade_height = 1.0f;
+    float blade_height_variation = 0.3f;  ///< ±高度随机比例
+    glm::vec3 base_color = glm::vec3(0.15f, 0.45f, 0.1f);
+    glm::vec3 tip_color  = glm::vec3(0.3f, 0.65f, 0.15f);  ///< TODO: shader 顶点色渐变（尚未使用）
+    unsigned int albedo_texture = 0;
+
+    // 风场
+    glm::vec2 wind_direction = glm::vec2(1.0f, 0.0f);
+    float wind_speed = 1.0f;
+    float wind_strength = 0.3f;
+    float wind_turbulence = 0.2f;
+
+    // LOD
+    float lod_near = 30.0f;           ///< < near: 全精度草叶
+    float lod_far  = 80.0f;           ///< > far: 完全剔除
+    float fade_range = 5.0f;          ///< LOD 过渡距离 TODO: 实现平滑 LOD 过渡
+
+    // 阴影
+    bool  cast_shadow = false;
+    float shadow_distance = 20.0f;    ///< 仅近距离投射阴影
+
+    // 运行时（GrassSystem 管理，用户不应手动写入）
+    int cached_instance_count_ = 0;
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_H
