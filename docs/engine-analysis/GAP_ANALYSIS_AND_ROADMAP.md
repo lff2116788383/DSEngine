@@ -72,6 +72,7 @@
 - ✅ 🏔️ **POM（Parallax Occlusion Mapping）** — `extra_params2.x` height_scale，16 层视差遮挡采样
 - ✅ 🖌️ **Phase 1 全部完成** — 画质细腻度 + 风格化启动五项任务全部落地
 - ✅ 🫧 **WBOIT 透明渲染** — Weighted Blended OIT 三后端，`WBOITPass` accumulation/revealage/composite，`OutputFragment` 统一 shader 出口，`PipelineStateDesc` 独立 alpha 混合因子
+- ✅ 🔷 **2D 多边形碰撞体** — `PolygonCollider2DComponent` + Box2D `b2PolygonShape`（最多 8 凸顶点），Lua `add_polygon_collider` / `set_polygon_collider_trigger`
 
 ---
 
@@ -85,7 +86,7 @@
 
 | 优先级 | 短板 | 范围 | 影响 | 估算工期 |
 |--------|------|------|------|---------|
-|  P1 | **2D 多边形碰撞体** | Physics2D | 碰撞精度低，圆形/胶囊外不准 | **2 天** |
+| ~~🟡 P1~~ | ~~**2D 多边形碰撞体**~~ | ✅ 已完成 | `PolygonCollider2DComponent` + Box2D `b2PolygonShape` + Lua API | — |
 | 🟢 P2 | **Linux/macOS 跨平台** | Platform | 仅 Windows | **4-8 周** |
 | 🟢 P2 | **网络/多人同步** | Network | 无法联机 | **4-8 周** |
 | 🟢 P2 | **Mesh Shader / GPU Driven** | Render | 大规模场景 CPU 瓶颈 | **4-8 周** |
@@ -96,7 +97,7 @@
 ```
 渲染品质        █████████████████  100%  ✅ PBR/延迟/IBL/TAA/SSR/DOF/MotionBlur/SSS/VolumetricFog/Decal/Outline/WBOIT/Toon/ClearCoat/Anisotropy/POM
 动画系统        █████████████████  100%  ✅ IK/Layering/2DBlend/AnimatorSystem 重构
-2D/UI           ████████████████  90%  ✅ 9-Slice/多边形碰撞体
+2D/UI           █████████████████  95%  ✅ 9-Slice + 多边形碰撞体已完成
 物理系统        █████████████████  100%  ✅ Overlap API
 音频系统        ████████░░░░░░░░  55%  基础播放已有，缺混音总线/DSP
 风格化渲染      █████████████████  100%  ✅ Toon/Cel + Outline + Watercolor + Hatching + 8种 DSSL 材质

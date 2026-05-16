@@ -134,6 +134,10 @@ void Physics2DSystem::Init(World& world) {
     for (auto entity : circle_collider_view) {
         circle_collider_view.get<CircleCollider2DComponent>(entity).runtime_fixture = nullptr;
     }
+    auto poly_collider_view = world.registry().view<PolygonCollider2DComponent>();
+    for (auto entity : poly_collider_view) {
+        poly_collider_view.get<PolygonCollider2DComponent>(entity).runtime_fixture = nullptr;
+    }
     auto joint_view_init = world.registry().view<Joint2DComponent>();
     for (auto entity : joint_view_init) {
         joint_view_init.get<Joint2DComponent>(entity).runtime_joint = nullptr;
@@ -185,6 +189,19 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         }
     }
 
+    auto poly_col_view = world.registry().view<PolygonCollider2DComponent>();
+    for (auto entity : poly_col_view) {
+        auto& collider = poly_col_view.get<PolygonCollider2DComponent>(entity);
+        if (!world.registry().all_of<RigidBody2DComponent>(entity)) {
+            collider.runtime_fixture = nullptr;
+            continue;
+        }
+        auto& rb = world.registry().get<RigidBody2DComponent>(entity);
+        if (!IsValidBody(rb.runtime_body)) {
+            collider.runtime_fixture = nullptr;
+        }
+    }
+
     auto rb_view = world.registry().view<RigidBody2DComponent>();
     for (auto entity : rb_view) {
         auto& rb = rb_view.get<RigidBody2DComponent>(entity);
@@ -195,6 +212,9 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
             }
             if (world.registry().all_of<CircleCollider2DComponent>(entity)) {
                 world.registry().get<CircleCollider2DComponent>(entity).runtime_fixture = nullptr;
+            }
+            if (world.registry().all_of<PolygonCollider2DComponent>(entity)) {
+                world.registry().get<PolygonCollider2DComponent>(entity).runtime_fixture = nullptr;
             }
         }
     }
@@ -248,6 +268,29 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                 fixture_def.restitution = cc.restitution;
                 fixture_def.isSensor = cc.is_trigger;
                 cc.runtime_fixture = rb.runtime_body->CreateFixture(&fixture_def);
+            }
+
+            if (world.registry().all_of<PolygonCollider2DComponent>(entity)) {
+                auto& pc = world.registry().get<PolygonCollider2DComponent>(entity);
+                int count = static_cast<int>((std::min)(pc.vertices.size(), static_cast<size_t>(b2_maxPolygonVertices)));
+                if (count >= 3) {
+                    b2Vec2 b2verts[b2_maxPolygonVertices];
+                    for (int i = 0; i < count; ++i) {
+                        b2verts[i].Set(
+                            pc.vertices[i].x * transform.scale.x + pc.offset.x,
+                            pc.vertices[i].y * transform.scale.y + pc.offset.y);
+                    }
+                    b2PolygonShape poly_shape;
+                    poly_shape.Set(b2verts, count);
+
+                    b2FixtureDef fixture_def;
+                    fixture_def.shape = &poly_shape;
+                    fixture_def.density = pc.density;
+                    fixture_def.friction = pc.friction;
+                    fixture_def.restitution = pc.restitution;
+                    fixture_def.isSensor = pc.is_trigger;
+                    pc.runtime_fixture = rb.runtime_body->CreateFixture(&fixture_def);
+                }
             }
 
             rb.runtime_body->SetLinearVelocity(b2Vec2{rb.velocity.x, rb.velocity.y});

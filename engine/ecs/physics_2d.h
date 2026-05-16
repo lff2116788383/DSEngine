@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <deque>
 #include <functional>
+#include <vector>
 #include <entt/entt.hpp>
 
 using Entity = entt::entity;
@@ -84,6 +85,21 @@ struct CircleCollider2DComponent {
     bool is_trigger = false;                             ///< 是否为触发器 (仅检测不产生物理力)
 
     // Internal Box2D runtime fixture pointer
+    b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
+};
+
+/**
+ * @struct PolygonCollider2DComponent
+ * @brief 2D 凸多边形碰撞体组件（最多 8 顶点，Box2D 限制）
+ */
+struct PolygonCollider2DComponent {
+    std::vector<glm::vec2> vertices;                     ///< 凸多边形顶点（局部坐标，逆时针）
+    glm::vec2 offset = glm::vec2(0.0f, 0.0f);            ///< 相对实体的偏移
+    float density = 1.0f;                                ///< 密度
+    float friction = 0.3f;                               ///< 摩擦系数
+    float restitution = 0.0f;                            ///< 恢复系数
+    bool is_trigger = false;                             ///< 是否为触发器
+
     b2Fixture* runtime_fixture = nullptr;                ///< 运行时绑定的 Box2D 夹具实例
 };
 

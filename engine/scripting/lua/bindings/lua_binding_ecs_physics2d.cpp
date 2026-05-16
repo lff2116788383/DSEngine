@@ -170,6 +170,55 @@ int L_EcsSetCircleColliderTrigger(lua_State* L) {
 }
 
 // ============================================================
+// PolygonCollider2DComponent 绑定
+// ============================================================
+
+int L_EcsAddPolygonCollider(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    // arg2: Lua table of vertices {{x1,y1},{x2,y2},...}
+    luaL_checktype(L, 2, LUA_TTABLE);
+    int n = static_cast<int>(lua_rawlen(L, 2));
+    float density = helper::OptFloat(L, 3, 1.0f);
+    float friction = helper::OptFloat(L, 4, 0.3f);
+    float restitution = helper::OptFloat(L, 5, 0.0f);
+
+    auto& pc = world->registry().emplace_or_replace<PolygonCollider2DComponent>(e);
+    pc.vertices.clear();
+    pc.vertices.reserve(n);
+    for (int i = 1; i <= n; ++i) {
+        lua_rawgeti(L, 2, i);
+        lua_rawgeti(L, -1, 1);
+        float vx = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+        lua_rawgeti(L, -1, 2);
+        float vy = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+        lua_pop(L, 1); // pop sub-table
+        pc.vertices.push_back(glm::vec2(vx, vy));
+    }
+    pc.density = density;
+    pc.friction = friction;
+    pc.restitution = restitution;
+    return 0;
+}
+
+int L_EcsSetPolygonColliderTrigger(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool is_trigger = helper::CheckBool(L, 2);
+    auto* collider = helper::TryGetComponent<PolygonCollider2DComponent>(*world, e);
+    if (!collider) return 0;
+    collider->is_trigger = is_trigger;
+    if (collider->runtime_fixture != nullptr) {
+        collider->runtime_fixture->SetSensor(is_trigger);
+    }
+    return 0;
+}
+
+// ============================================================
 // Joint2DComponent 绑定
 // ============================================================
 
@@ -312,6 +361,8 @@ void RegisterEcsPhysics2DBindings(lua_State* L) {
         {"set_box_collider_trigger", L_EcsSetBoxColliderTrigger},
         {"add_circle_collider",     L_EcsAddCircleCollider},
         {"set_circle_collider_trigger", L_EcsSetCircleColliderTrigger},
+        {"add_polygon_collider",    L_EcsAddPolygonCollider},
+        {"set_polygon_collider_trigger", L_EcsSetPolygonColliderTrigger},
         {"add_joint_2d",            L_EcsAddJoint2D},
         {"set_joint_2d_revolute",   L_EcsSetJoint2DRevolute},
         {"set_joint_2d_distance",   L_EcsSetJoint2DDistance},

@@ -17,6 +17,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/physics/physics2d_collision_event_integration_test.cpp
     engine/physics/physics2d_joint_integration_test.cpp
     engine/physics/physics2d_circle_collider_integration_test.cpp
+    engine/physics/physics2d_polygon_collider_integration_test.cpp
     engine/physics/physics3d_ecs_integration_test.cpp
     # engine/profiler
     engine/profiler/profiler_jobsystem_integration_test.cpp
