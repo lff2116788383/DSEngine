@@ -1665,6 +1665,80 @@ int L_EcsSetHairLod(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// GI Probe Volume (DDGI)
+// ============================================================
+
+// add_gi_probe(entity [, ox,oy,oz, ex,ey,ez, rx,ry,rz])
+int L_EcsAddGIProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& gi = world->registry().emplace_or_replace<GIProbeVolumeComponent>(e);
+    gi.enabled = true;
+    if (lua_gettop(L) >= 4)
+        gi.origin = glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
+    if (lua_gettop(L) >= 7)
+        gi.extent = glm::vec3(helper::CheckFloat(L, 5), helper::CheckFloat(L, 6), helper::CheckFloat(L, 7));
+    if (lua_gettop(L) >= 10) {
+        gi.resolution_x = helper::CheckInt(L, 8);
+        gi.resolution_y = helper::CheckInt(L, 9);
+        gi.resolution_z = helper::CheckInt(L, 10);
+    }
+    gi.needs_reinit_ = true;
+    return 0;
+}
+
+// set_gi_probe(entity, origin_x,y,z, extent_x,y,z, res_x,y,z [, gi_intensity, normal_bias, hysteresis])
+int L_EcsSetGIProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* gi = helper::TryGetComponent<GIProbeVolumeComponent>(*world, e);
+    if (!gi) return 0;
+    if (lua_gettop(L) >= 4)
+        gi->origin = glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
+    if (lua_gettop(L) >= 7)
+        gi->extent = glm::vec3(helper::CheckFloat(L, 5), helper::CheckFloat(L, 6), helper::CheckFloat(L, 7));
+    if (lua_gettop(L) >= 10) {
+        gi->resolution_x = helper::CheckInt(L, 8);
+        gi->resolution_y = helper::CheckInt(L, 9);
+        gi->resolution_z = helper::CheckInt(L, 10);
+        gi->needs_reinit_ = true;
+    }
+    if (lua_gettop(L) >= 11) gi->gi_intensity = helper::CheckFloat(L, 11);
+    if (lua_gettop(L) >= 12) gi->normal_bias = helper::CheckFloat(L, 12);
+    if (lua_gettop(L) >= 13) gi->hysteresis = helper::CheckFloat(L, 13);
+    return 0;
+}
+
+// set_gi_probe_enabled(entity, bool)
+int L_EcsSetGIProbeEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* gi = helper::TryGetComponent<GIProbeVolumeComponent>(*world, e);
+    if (!gi) return 0;
+    gi->enabled = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// get_gi_probe(entity) -> enabled, ox,oy,oz, ex,ey,ez, rx,ry,rz, gi_intensity, normal_bias
+int L_EcsGetGIProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* gi = helper::TryGetComponentConst<GIProbeVolumeComponent>(*world, e);
+    if (!gi) return 0;
+    helper::PushBool(L, gi->enabled);
+    helper::PushFloat(L, gi->origin.x); helper::PushFloat(L, gi->origin.y); helper::PushFloat(L, gi->origin.z);
+    helper::PushFloat(L, gi->extent.x); helper::PushFloat(L, gi->extent.y); helper::PushFloat(L, gi->extent.z);
+    lua_pushinteger(L, gi->resolution_x); lua_pushinteger(L, gi->resolution_y); lua_pushinteger(L, gi->resolution_z);
+    helper::PushFloat(L, gi->gi_intensity);
+    helper::PushFloat(L, gi->normal_bias);
+    return 12;
+}
+
 } // namespace
 
 void RegisterEcsRenderingBindings(lua_State* L) {
@@ -1757,6 +1831,11 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_hair_wind",             L_EcsSetHairWind},
         {"set_hair_enabled",          L_EcsSetHairEnabled},
         {"set_hair_lod",              L_EcsSetHairLod},
+        // GI Probe (DDGI)
+        {"add_gi_probe",              L_EcsAddGIProbe},
+        {"set_gi_probe",              L_EcsSetGIProbe},
+        {"set_gi_probe_enabled",      L_EcsSetGIProbeEnabled},
+        {"get_gi_probe",              L_EcsGetGIProbe},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

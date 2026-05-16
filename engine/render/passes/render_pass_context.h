@@ -147,6 +147,8 @@ struct RenderPassContext {
         int height = 0;
     } rsm_targets;
 
+    unsigned int rsm_render_target = 0;  ///< RSM MRT FBO handle（供 RSMRenderPass 使用）
+
     /// DDGI 探针 atlas 纹理（供 PBR shader 采样）
     unsigned int ddgi_irradiance_atlas = 0;
     unsigned int ddgi_visibility_atlas = 0;

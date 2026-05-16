@@ -67,6 +67,7 @@ struct RenderPipelineResources {
     unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
     unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
+    unsigned int rsm_render_target = 0;    // RSM MRT (position+normal+flux, 3 color + depth)
     unsigned int shadow_pipeline_state = 0;
     unsigned int decal_blend_pipeline_state = 0;
     unsigned int wboit_accum_pipeline_state = 0;
@@ -107,6 +108,7 @@ struct RenderPipelineResources {
         mesh_pipeline_state = 0;
         prez_pipeline_state = 0;
         composite_pipeline_state = 0;
+        rsm_render_target = 0;
         shadow_pipeline_state = 0;
         decal_blend_pipeline_state = 0;
         wboit_accum_pipeline_state = 0;

@@ -253,6 +253,17 @@ bool FramePipeline::Init() {
         render_resources_.point_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true, false, true});
     }
 
+    // RSM MRT: 3 color (position + normal + flux) + depth, 512x512
+    if (render_resources_.rsm_render_target == 0) {
+        RenderTargetDesc rsm_desc;
+        rsm_desc.width = 512;
+        rsm_desc.height = 512;
+        rsm_desc.has_color = true;
+        rsm_desc.has_depth = true;
+        rsm_desc.color_attachment_count = 3;
+        render_resources_.rsm_render_target = runtime_context_.rhi_device->CreateRenderTarget(rsm_desc);
+    }
+
     if (render_resources_.pp_bloom_extract_rt == 0) {
         render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     }
@@ -1134,6 +1145,14 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
     render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
+    if (render_resources_.rsm_render_target != 0) {
+        render_pass_context_.rsm_render_target = render_resources_.rsm_render_target;
+        render_pass_context_.rsm_targets.position = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 0);
+        render_pass_context_.rsm_targets.normal   = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 1);
+        render_pass_context_.rsm_targets.flux     = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 2);
+        render_pass_context_.rsm_targets.width = 512;
+        render_pass_context_.rsm_targets.height = 512;
+    }
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
     render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
     render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
@@ -1219,7 +1238,9 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
-    // DDGI Probe Update — shadow pass 之后、光照/Forward pass 之前
+    // RSM — 从方向光视角渲染 GBuffer 到 RSM MRT（DDGI 的 VPL 数据源）
+    registered_passes_.push_back(std::make_unique<dse::render::RSMRenderPass>(render_pass_context_));
+    // DDGI Probe Update — RSM 之后、光照/Forward pass 之前
     registered_passes_.push_back(std::make_unique<dse::render::DDGIUpdatePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));

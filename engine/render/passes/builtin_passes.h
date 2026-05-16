@@ -359,6 +359,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- RSM Render Pass (Reflective Shadow Map) ----
+class RSMRenderPass : public IRenderPass {
+public:
+    explicit RSMRenderPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "rsm_render_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- DDGI Update Pass (Compute) ----
 class DDGIUpdatePass : public IRenderPass {
 public:

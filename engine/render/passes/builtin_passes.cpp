@@ -2554,6 +2554,70 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 }
 
 // ============================================================
+// RSMRenderPass — 从方向光视角渲染场景到 RSM MRT (position/normal/flux)
+// ============================================================
+
+void RSMRenderPass::Setup(RenderGraph& graph) {
+    auto shadow_depth = graph.DeclareResource("shadow_depth_rsm_dep");
+    auto rsm_data = graph.DeclareResource("rsm_data");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, shadow_depth);
+    graph.PassWrite(pass, rsm_data);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
+    if (!ctx_.ddgi_active || ctx_.rsm_targets.position == 0) return;
+
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    if (light_view.begin() == light_view.end()) return;
+    auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
+    if (!light.enabled) return;
+
+    // 复用 CSM cascade 0 的光源相机（覆盖最近的场景区域）
+    glm::vec3 shadow_center(0.0f);
+    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera3d_view) {
+        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+        if (camera.enabled && ctx_.world->registry().all_of<TransformComponent>(entity)) {
+            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            shadow_center = transform.position + front * 50.0f;
+            break;
+        }
+    }
+
+    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+    float size = light.cascade_splits[0];
+    float far_dist = size * 4.0f;
+    glm::vec3 light_dir_n = glm::normalize(light.direction);
+    glm::vec3 light_pos = shadow_center - light_dir_n * (far_dist * 0.5f);
+    glm::mat4 light_view_mat = glm::lookAt(light_pos, shadow_center, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 light_proj = clip_correction * glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+
+    // 查找 rsm_render_target handle（通过反推：RSM MRT 是 rsm_targets 所在的 FBO）
+    // 这里直接用 render_pass_context 中存储的 rsm_render_target
+    // RSM 渲染使用 GBuffer 模式（MRT 输出 position/normal/albedo）
+    // 找到 rsm RT handle — 需要从 render_targets 获取
+    // 注: RSM MRT 的 FBO handle 通过 render_pass_context 传入
+    if (ctx_.rsm_render_target == 0) return;
+
+    cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
+    ctx_.rhi_device->SetGBufferRenderingMode(true);
+    cmd_buffer.SetCamera(light_view_mat, light_proj);
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+
+    for (auto& mod : ctx_.modules) {
+        if (mod.instance) {
+            mod.instance->OnRenderScene(*ctx_.world, cmd_buffer);
+        }
+    }
+
+    ctx_.rhi_device->SetGBufferRenderingMode(false);
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
 // DDGIUpdatePass — 从 RSM VPL 更新 Irradiance Probe Atlas (Compute Shader)
 // ============================================================
 
