@@ -236,11 +236,11 @@ Phase 3 — 视觉特性 (~3周)
   └── ✅ 毛发系统（TressFX Strand 物理 Compute 模拟 + Kajiya-Kay 渲染 + LOD + GL 完整实现 + VK/DX11 管线接入）
 
 Phase 4 — 光照升级
-  ├── 🔧 实时 GI Step A — DDGI 数据结构 + ECS 组件 + OctahedralMap 编解码    [✅ 已完成]
-  ├── 🔧 实时 GI Step B — FramePipeline 集成 + DDGIUpdatePass 注册 + Compute Shader    [✅ 已完成]
-  ├── 🔧 实时 GI Step C — GL PBR shader 间接漫反射采样注入 + RHI uniform 管线    [✅ 已完成]
-  ├── ⬜ 实时 GI Step D — ECS + Lua API + RSM RT 创建
-  └── ⬜ 实时 GI Step E — VK/DX11 stub + temporal blending 调优 + 编译验证
+  ├── ✅ 实时 GI Step A — DDGI 数据结构 + ECS 组件 + OctahedralMap 编解码
+  ├── ✅ 实时 GI Step B — FramePipeline 集成 + DDGIUpdatePass 注册 + Compute Shader
+  ├── ✅ 实时 GI Step C — GL PBR shader 间接漫反射采样注入 + RHI uniform 管线
+  ├── ✅ 实时 GI Step D — Lua API + RSM MRT RenderTarget + RSMRenderPass + DDGIUpdatePass 集成
+  └── ✅ 实时 GI Step E — VK/DX11 stub 就绪 + visibility 越界守卫 + 公共光源相机提取 + 全量审查修复
 
 总计预估：6-8 周全力开发
 ```
@@ -249,9 +249,9 @@ Phase 4 — 光照升级
 
 ```
 Compute Shader 管线 ──┬── ✅ GPU Driven 渲染（已完成）
-                      ├── 大型植被系统（风场 Compute）
-                      ├── 毛发模拟（物理 Compute）
-                      └── 实时全局光照（DDGI Probe）
+                      ├── ✅ 大型植被系统（风场 Compute）
+                      ├── ✅ 毛发模拟（物理 Compute）
+                      └── ✅ 实时全局光照（DDGI Probe）
 ✅ Terrain 系统 ─────── ✅ 大型植被系统 Step 1
 
 ✅ Hi-Z Culling ──────── ✅ GPU Driven 渲染
