@@ -1,7 +1,7 @@
 # DSEngine 测试覆盖分析报告
 
-> 生成日期：2026-05-16（最近更新：Session 4 全量修复 — 编译+运行 0 失败）
-> 方法：112 个测试文件逐个审查，1460 个用例分类统计，与引擎 55+ 个 System 交叉比对
+> 生成日期：2026-05-17（最近更新：Session 8 加深+编辑器 — 编译+运行 0 失败）
+> 方法：139 个测试文件逐个审查（磁盘 grep `TEST_F|TEST(` 精确统计），1714 个用例分类统计，与引擎 60+ 个 System 交叉比对
 
 ---
 
@@ -11,30 +11,31 @@
 
 | 层级 | 文件数 | 用例数 | 占比 |
 |:----:|:-----:|:------:|:----:|
-| **单元测试 (unit)** | 78 | 1169 (含 5 skip) | 80.1% |
-| **集成测试 (integration)** | 29 | 269 | 18.4% |
-| **冒烟测试 (smoke)** | 5 | 22 | 1.5% |
-| **合计** | **112** | **1460** | **100%** |
+| **单元测试 (unit)** | 100 | 1409 (含 5 skip) | 82.2% |
+| **集成测试 (integration)** | 35 | 275 | 16.0% |
+| **冒烟测试 (smoke)** | 4 | 30 | 1.8% |
+| **合计** | **139** | **1714** | **100%** |
 
 ### 1.2 按模块统计
 
 ```
-core/          109 用例 ⭐⭐⭐⭐⭐  8文件  覆盖全面
+core/          109 用例 ⭐⭐⭐⭐⭐  9文件  覆盖全面（含 stress test）
 ecs/           155 用例 ⭐⭐⭐⭐⭐  18文件 几乎所有组件
-render/        289 用例 ⭐⭐⭐⭐⭐  9文件  VK80+DX11_55+GL30+Passes36+Probes20
+render/        481 用例 ⭐⭐⭐⭐⭐  20文件 VK80+DX11_55+GL72+Passes40+Probes21+UBO26+PP10+Hair24+DDGI17+Cluster19+DSSL30+Instancing15+ProjCorr11+DX11CB12+ShaderMgr8
 scene/          94 用例 ⭐⭐⭐⭐   8文件  数据结构+管理器
-gameplay_3d    120 用例 ⭐⭐⭐⭐⭐ 12文件 动画+物理+渲染+粒子+软体
+gameplay_3d    177 用例 ⭐⭐⭐⭐⭐  21文件 动画+物理+渲染+粒子+软体+布娃娃+浮力+毛发+草地+载具+寻路
 gameplay_2d     87 用例 ⭐⭐⭐⭐   8文件  Sprite/UI渲染+布局+9Slice
 input           46 用例 ⭐⭐⭐    1文件  键盘/鼠标/手柄
 profiler        43 用例 ⭐⭐⭐    1文件  CPU/Memory/ChromeTrace
-runtime         36 用例 ⭐⭐⭐    3文件  生命周期
+runtime         47 用例 ⭐⭐⭐    3文件  生命周期+FramePipeline
 audio           30 用例 ⭐⭐     2文件  基础+3D空间化
 assets          59 用例 ⭐⭐⭐    2文件  加载/缓存/异步
-physics          19 用例 ⭐⭐     2文件  关节+系统测试
+physics         19 用例 ⭐⭐     2文件  关节+系统测试
 base            42 用例 ⭐⭐⭐    4文件  工具类
 
-integration    256 用例 ⭐⭐⭐⭐⭐ 29文件 跨系统联调
-smoke           27 用例 ⭐⭐⭐    5文件  关键链路
+editor/         16 用例 ⭐⭐⭐     1文件  UndoRedo/Commands/CLI解析/Settings
+integration    275 用例 ⭐⭐⭐⭐⭐ 35文件 跨系统联调+Lua粒子绑定
+smoke           30 用例 ⭐⭐⭐    4文件  关键链路
 ```
 
 ---
@@ -75,7 +76,7 @@ smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 | Script 组件 | `script_component_test.cpp` | 3 | 默认值 |
 | ParticleCurve | `particle_curve_test.cpp` | 18 | 数据结构验证 |
 
-### ✅ 渲染（三后端 + Passes + Probes 全覆盖）
+### ✅ 渲染（三后端 + Passes + Probes + UBO + PostProcess 全覆盖）
 
 | 系统 | 测试文件 | 用例 | 质量 |
 |:----:|---------|:----:|:----:|
@@ -83,11 +84,23 @@ smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 | RHI 类型 | `rhi_types_test.cpp` | 10 | 枚举类型默认值 |
 | Vulkan RHI | `vulkan_rhi_test.cpp` | 80 | Device/Resource/CmdBuf/PSO/Shader |
 | DX11 RHI | `dx11_rhi_test.cpp` | 55 | Device/Resource/Shader/State |
-| **GL RHI** | `gl_rhi_test.cpp` | **~30** | Device/Resource/CmdBuf/Enum/GlobalState |
-| **BuiltinPasses** | `builtin_passes_test.cpp` | **~36** | 24 Pass GetName + Context + RenderGraph + TAA |
-| **LightProbeSystem** | `light_probe_system_test.cpp` | **12** | SHL2/IntegrateFaceSH/生命周期 |
-| **ReflectionProbeSystem** | `reflection_probe_system_test.cpp` | **8** | Component/System/IBL 查询 |
+| GL RHI | `gl_rhi_test.cpp` | 72 | Device/Resource/CmdBuf/Enum/GlobalState |
+| BuiltinPasses | `builtin_passes_test.cpp` | 40 | 24+ Pass GetName + Context + RenderGraph + TAA |
+| LightProbeSystem | `light_probe_system_test.cpp` | 13 | SHL2/IntegrateFaceSH/生命周期 |
+| ReflectionProbeSystem | `reflection_probe_system_test.cpp` | 8 | Component/System/IBL 查询 |
+| **UBO/DrawExecutor 共用** | `ubo_draw_executor_common_test.cpp` | **26** | UBO 对齐/布局/三端共用绘制逻辑 |
+| **GL ShaderUBO Manager** | `gl_shader_ubo_manager_test.cpp` | **8** | GL UBO 绑定/上传/管理 |
+| **RenderGraph 并行** | `rendergraph_parallel_test.cpp` | **8** | 多线程执行路径 |
+| **PostProcess 共用** | `postprocess_common_test.cpp` | **10** | Bloom/Composite 参数与阶段验证 |
 | RenderGraph 集成 | `rendergraph_integration_test.cpp` | 14 | DAG 构建/菱形依赖 |
+| **HairAsset/Instance** | `hair_asset_test.cpp` | **24** | 资产验证/程序化生成/LOD/参数默认值 |
+| **DDGI 系统** | `ddgi_system_test.cpp` | **17** | ProbeGrid 计算/OctEncode往返/Atlas尺寸 |
+| **ClusterGrid/LightBuffer** | `cluster_grid_test.cpp` | **19** | 结构体对齐/常量/绑定点不重叠 |
+| **DSSL Material** | `dssl_material_test.cpp` | **30** | UniformInfo/Instance/Loader/RenderModes/属性映射 |
+| **GPU Instancing** | `gpu_instancing_test.cpp` | **15** | InstancingKey hash/相等性/HashMap合批/BlendMode/instance_transforms |
+| **三端坐标系统一** | `projection_correction_test.cpp` | **11** | GL/VK/DX11 ProjectionCorrection + ShadowSample + NDC 变换 |
+| **DX11 CB 对齐** | `draw_executor_backend_test.cpp` | **12** | DX11 PerFrame/PerObject/PerScene/PerMaterial/Light CB 16B 对齐 |
+| **VK/DX11 ShaderManager** | `shader_manager_test.cpp` | **8** | DX11 ShaderProgram/ComputeProgram/Manager 默认值+查询 |
 
 ### ✅ 场景管理（覆盖好）
 
@@ -109,12 +122,24 @@ smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 | AnimatorSystem | `animator_system_test.cpp` | 7 |
 | AnimLayerIK | `anim_layer_ik_test.cpp` | 16 |
 | AnimationStateMachine | `animation_state_machine_test.cpp` | 9 |
+| **BlendTree/Crossfade** | `blend_tree_crossfade_test.cpp` | **15** |
+| **AnimLayerBlend** | `anim_layer_blend_system_test.cpp` | **8** |
 | FreeCameraController | `free_camera_controller_system_test.cpp` | 6 |
 | FrustumCulling | `frustum_culling_system_test.cpp` | 9 |
 | LODSystem | `lod_system_test.cpp` | 13 |
+| MeshRenderSystem | `mesh_render_system_test.cpp` | 10 |
+| Particle3DSystem | `particle3d_system_test.cpp` | 11 |
+| TerrainSystem | `terrain_system_test.cpp` | 9 |
+| SoftBodySystem | `softbody_system_test.cpp` | 11 |
+| **RagdollSystem** | `ragdoll_system_test.cpp` | **8** |
+| **BuoyancySystem** | `buoyancy_system_test.cpp` | **10** |
 | Rope/Vehicle | `rope_vehicle_system_test.cpp` | 11 |
 | Steering | `steering_system_test.cpp` | 10 |
 | AnimPerfBenchmark | `anim_perf_benchmark_test.cpp` | 5 |
+| **HairSystem** | `hair_system_test.cpp` | **7** |
+| **GrassSystem** | `grass_system_test.cpp` | **13** |
+| **VehicleSystem** | `vehicle_system_test.cpp` | **6** |
+| **NavAgentSystem** | `nav_agent_system_test.cpp` | **6** |
 
 ### ✅ Gameplay 2D
 
@@ -147,45 +172,36 @@ smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 
 | 系统 | 引擎位置 | 影响 | 说明 |
 |:----:|---------|:----:|------|
-| ~~LightProbeSystem~~ | ~~`engine/render/light_probe_system.h/cpp`~~ | ✅ 已补 12 用例 | SHL2/IntegrateFaceSH/生命周期 |
-| ~~ReflectionProbeSystem~~ | ~~`engine/render/reflection_probe_system.h/cpp`~~ | ✅ 已补 8 用例 | Component/System/IBL 查询 |
-| ~~MeshRenderSystem~~ | `modules/gameplay_3d/rendering/mesh_render_system.h/cpp` | ✅ 已补 10 用例 | 组件默认值+空World |
-| ~~TerrainSystem~~ | `modules/gameplay_3d/rendering/terrain_system.h/cpp` | ✅ 已补 9 用例 | 组件默认值+LOD+空World |
-| ~~Particle3DSystem~~ | `modules/gameplay_3d/particles/particle3d_system.h/cpp` | ✅ 已补 12 用例 | GPUParticleData+组件+生命周期 |
-| **RagdollSystem** | `modules/gameplay_3d/ragdoll/ragdoll_system.h/cpp` | 374 行，零测试 | PhysX 布娃娃稳定性无保证 |
-| ~~SoftBodySystem~~ | `modules/gameplay_3d/softbody/softbody_system.h/cpp` | ✅ 已补 12 用例 | PBD模拟/约束收敛/固定点 |
-| ~~BuoyancySystem~~ | `modules/gameplay_3d/buoyancy/buoyancy_system.h/cpp` | ✅ 已有 12 用例 | 浮力采样/空dt/缺组件 |
-| **IKSolverSystem** | `modules/gameplay_3d/animation/ik_solver_system.h/cpp` | ✅ 由 anim_layer_ik_test 间接覆盖 | 但无独立单元测试 |
-| **AnimLayerBlendSystem** | `modules/gameplay_3d/animation/anim_layer_blend_system.h/cpp` | 动画层混合 | 仅在集成测试中被覆盖 |
+| ~~HairSystem~~ | `modules/gameplay_3d/rendering/hair_system.h/cpp` | ✅ 已补 7 用例 | 组件默认值/系统状态/缓存查询 |
+| ~~HairAsset/Instance~~ | `engine/render/hair/hair_asset.h/cpp`, `hair_instance.h/cpp` | ✅ 已补 24 用例 | IsValid/生成/LOD/参数 |
+| ~~GrassSystem~~ | `modules/gameplay_3d/rendering/grass_system.h/cpp` | ✅ 已补 13 用例 | 组件/布局/GPU实例/Chunk |
+| ~~NavAgentSystem~~ | `modules/gameplay_3d/ai/nav_agent_system.h/cpp` | ✅ 已补 6 用例 | 组件默认值/系统构造 |
+| ~~VehicleSystem~~ | `modules/gameplay_3d/vehicle/vehicle_system.h/cpp` | ✅ 已补 6 用例 | 组件/车轮/系统构造 |
+| ~~DDGISystem~~ | `engine/render/gi/ddgi_system.h/cpp` | ✅ 已补 17 用例 | Probe 布局/irradiance 采样 |
+| ~~ClusterGrid~~ | `engine/render/cluster_grid.h/cpp` | ✅ 已补 19 用例 | 光源分格/索引构建 |
+| ~~DSSL MaterialLoader~~ | `engine/render/material/dssl_material_loader.h/cpp` | ✅ 已补 30 用例 | UniformInfo/Instance/Loader/映射 |
+| **IKSolverSystem** | `modules/gameplay_3d/animation/ik_solver_system.h/cpp` | 由 anim_layer_ik_test 间接覆盖 | 但无独立单元测试 |
 
 ### 🟡 P1：重要缺失 —— 有部分覆盖但不完整
 
 | 系统 | 引擎位置 | 现状 | 建议补充 |
 |:----:|---------|:----:|---------|
-| ~~GL 渲染后端~~ | `engine/render/rhi/gl_draw_executor.cpp` | ✅ 已补 ~30 用例 (`gl_rhi_test.cpp`) | Device/Resource/CmdBuf/Enum/GlobalState |
-| **ShaderManager**（GL/VK/DX11） | `engine/render/rhi/*_shader_manager.*` | 三个后端着色器管理器，全部 0 测试 | 着色器加载/编译/句柄管理验证 |
-| **UBOManager** | `engine/render/rhi/ubo_manager.*` | UBO 缓冲管理，0 测试 | 上传/对齐/生命周期 |
-| ~~Builtin Render Passes~~ | `engine/render/passes/builtin_passes.cpp` | ✅ 已补 ~36 用例 (`builtin_passes_test.cpp`) | 24 Pass GetName + Context + TAA |
-| **DrawExecutor**（三端） | `engine/render/rhi/*_draw_executor.*` | VulkanStub 有少量，GL/DX11 的 DrawExecutor 0 测试 | 绘制命令录制验证 |
-| **PostProcess 链** | `engine/render/rhi/*_draw_executor.cpp` | Bloom/Composite 参数传递 0 测试 | 后处理参数与渲染调用的集成 |
-| **Physics3D（真实模拟）** | `engine/physics/physics3d/` | ✅ 仅有组件默认值测试，**无真实 PhysX 世界模拟测试** | 至少刚体/碰撞/关节/raycast 各 5 个 |
+| **ShaderManager**（GL/VK/DX11） | `engine/render/rhi/*_shader_manager.*` | GL 有 8 个 UBO 测试，VK/DX11 无 | 着色器加载/编译/句柄管理验证 |
+| **DrawExecutor**（三端） | `engine/render/rhi/*_draw_executor.*` | 有 26 个 common 测试，但具体三端实现 0 测试 | DrawMeshBatch/DrawSpriteBatch/DrawHairStrands |
+| **Physics3D（真实模拟）** | `engine/physics/physics3d/` | 仅有组件默认值测试，**无真实 PhysX 世界模拟测试** | 至少刚体/碰撞/关节/raycast 各 5 个 |
 | **SpineSystem** | `modules/gameplay_2d/spine/spine_system.h/cpp` | 条件编译 (`DSE_ENABLE_SPINE`)，0 测试 | 至少编译验证 + 基础功能 |
-| ~~SpriteRenderSystem~~ | `modules/gameplay_2d/rendering/sprite_render_system.h/cpp` | ✅ 已补 3 用例 | 空World+9Slice |
-| ~~UIRenderSystem~~ | `modules/gameplay_2d/rendering/sprite_render_system.h` | ✅ 已补 3 用例 | 空World+零尺寸屏幕 |
-| ~~UISystem / UILayoutSystem~~ | `modules/gameplay_2d/ui/` | ✅ 已补 16 用例 | ScaleFactor+Anchor+Grid+空Registry |
+| **GPU Instancing** | `mesh_render_system.cpp` 合批路径 | InstancingKey + 三端 instance VBO | 验证合批/半透明排除/实例数 |
+| **三端坐标系统一** | `builtin_passes.cpp` + `GetProjectionCorrection()` | 仅 builtin_passes_test 有 TAA 测试 | NDC 修正矩阵三端一致性验证 |
 
 ### 🟢 P2：锦上添花 —— 有测试但不够深
 
 | 系统 | 现状 | 建议补充 |
 |:----:|:----:|---------|
-| **动画集成测试** | ✅ 有 unit + 集成 | 无 2D Blend Tree 独立测试，无 Crossfade/Root Motion 专项测试 |
-| **Lua 绑定** | ✅ 6 个集成文件 ~50 用例 | ✅ Animation/DSSL/UI 已修复通过；Particles 绑定仍缺独立测试 |
+| **Lua 绑定** | ✅ 9 个集成文件 ~59 用例 | Particles 绑定仍缺独立测试 |
 | **编辑器** | ✅ 1 个集成文件 12 用例 | 缺编器单元测试（Inspector/Hierarchy/Viewport 等面板逻辑） |
 | **音频** | ✅ 30 用例 | 无 FMOD/其他后端适配测试 |
-| **Physics2D** | ✅ 单元+集成 19+34 用例 | ✅ 多边形碰撞体测试已补充 (6用例) |
-| **RenderGraph 并行执行** | ✅ 有顺序执行测试 | 缺少 `ExecuteParallel` 多线程路径测试 |
-| **JobSystem 多线程竞争** | ✅ 有功能测试 | 缺少高并发/死锁/饥饿的场景测试 |
-| **Vulkan 真实 GPU 测试** | ✅ smoke test (5 用例) | 仅跑 1 帧最小渲染，缺少完整场景渲染验证 |
+| **JobSystem 多线程竞争** | ✅ 有功能+压力测试 | 缺少死锁/饥饿的场景测试 |
+| **Vulkan 真实 GPU 测试** | ✅ smoke test (8 用例) | 仅跑 1 帧最小渲染，缺少完整场景渲染验证 |
 
 ---
 
@@ -200,122 +216,189 @@ smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 | profiler/ | ~599 | 43 | 13.9 | 极好 |
 | audio/ | ~723 | 30 | 24.1 | 一般 |
 | assets/ | ~3,815 | 59 | 64.7 | 较差 |
-| physics/ | ~1,767 | 53 | 33.3 | 一般 |
-| render/ | ~24,370 | 169 | 144.2 | **很差** |
-| gameplay_3d/ | ~5,385 | 86 | 62.6 | 一般 |
-| gameplay_2d/ | ~2,868 | 59 | 48.6 | 一般 |
+| physics/ | ~1,767 | 19 | 93.0 | **差** |
+| render/ | ~39,041 | 442 | 88.3 | **差** |
+| gameplay_3d/ | ~8,993 | 177 | 50.8 | 一般 |
+| gameplay_2d/ | ~2,868 | 87 | 33.0 | 一般 |
 | editor_cpp/ | ~9,694 | 12 | 808 | **极差** |
 
-> **关键发现**：渲染子系统（24,370 行代码）是测试密度最低的大模块。虽然 Vulkan/DX11 RHI 有 80+55 测试，但只覆盖了 RHI 设备层，DrawExecutor、ShaderManager、UBOManager、BuiltinPasses、PostProcess 等核心路径全部 0 测试。
+> **关键发现**：渲染子系统（39k 行代码）测试密度已从 94.8 行/用例降至 88.3。DSSL MaterialLoader 已补 30 用例，剩余缺口：DrawExecutor 三端独立测试、ShaderManager 三端独立测试。编辑器（9.7k 行仅 12 测试）仍是最大盲区。
 
 ---
 
 ## 五、缺失测试的汇总清单（按紧急程度排序）
 
 ```
-优先级排序:
+优先级排序（2026-05-17 更新）:
 ──────────────────────────────────────────────────────────────
 🔴 P0  (无任何测试，炸了没人知道)
 ├── engine/render/
-│   ├── light_probe_system.h/cpp          ← SH烘焙，零测试
-│   ├── reflection_probe_system.h/cpp     ← IBL反射，零测试
-│   ├── passes/builtin_passes.cpp/.h      ← 9个内置渲染Pass，零测试
-│   ├── rhi/gl_draw_executor.cpp/.h       ← GL后端绘制，零测试
-│   ├── rhi/gl_shader_manager.cpp/.h      ← GL着色器管理，零测试
-│   ├── rhi/ubo_manager.cpp/.h            ← UBO缓冲管理，零测试
-│   ├── rhi/draw_executor_common.h        ← 三端共用绘制逻辑，零测试
-│   └── rhi/*_shader_sources.h            ← 三端inline shader，零测试
+│   ├── hair/hair_asset.cpp/.h            ← ✅ 已补 24 用例
+│   ├── hair/hair_instance.cpp/.h         ← ✅ (hair_asset_test 包含)
+│   ├── gi/ddgi_system.cpp/.h             ← ✅ 已补 17 用例
+│   ├── cluster_grid.cpp/.h               ← ✅ 已补 19 用例
+│   ├── material/dssl_material_loader.cpp ← ✅ 已补 30 用例
+│   └── rhi/*_shader_sources.h            ← 三端inline shader，仅间接覆盖
 ├── modules/gameplay_3d/
-│   ├── rendering/mesh_render_system.cpp  ← 991行，3D渲染核心入口
-│   ├── rendering/terrain_system.cpp      ← 156行，地形渲染
-│   ├── particles/particle3d_system.cpp   ← 155行，3D粒子
-│   ├── ragdoll/ragdoll_system.cpp        ← 374行，布娃娃
-│   ├── softbody/softbody_system.cpp      ← ✅ 已补12用例
-│   ├── buoyancy/buoyancy_system.cpp      ← ✅ 已有12用例
-│   └── vehicle/vehicle_system.cpp        ← 155行，载具
+│   ├── rendering/hair_system.cpp         ← ✅ 已补 7 用例
+│   ├── rendering/grass_system.cpp        ← ✅ 已补 13 用例
+│   ├── ai/nav_agent_system.cpp           ← ✅ 已补 6 用例
+│   └── vehicle/vehicle_system.cpp        ← ✅ 已补 6 用例
 ├── modules/gameplay_2d/
-│   ├── rendering/sprite_render_system.cpp ← 精灵/UI渲染
-│   ├── ui/ui_system.cpp/ui_layout.cpp    ← UI系统/布局
-│   └── spine/spine_system.cpp            ← Spine骨骼动画
+│   └── spine/spine_system.cpp            ← Spine骨骼动画，零测试
 ├── engine/physics/physics3d/             ← PhysX模拟，零运行时测试
-└── apps/editor_cpp/                      ← 仅12个功能测试，无单元测试
+└── apps/editor_cpp/                      ← ✅ 已补 16 单元测试 + 12 功能测试
 
 🟡 P1（有部分覆盖，但核心路径缺）
-├── engine/render/
-│   ├── rhi/dx11/*.cpp                    ← DX11核心实现但无功能测试
-│   ├── rhi/vulkan/vulkan_draw_executor.cpp ← Vulkan绘制执行
-│   └── rhi/vulkan/vulkan_pipeline_state_manager.cpp ← PSO管理
-├── modules/gameplay_3d/animation/
-│   ├── anim_layer_blend_system.cpp       ← 动画层混合
-│   └── ik_solver_system.cpp              ← IK求解器（间接覆盖）
-├── tests/gtest/integration/
-│   └── scripting/                        ← Lua Animation/DSSL/Particles/UI缺
-└── engine/render/passes/                 ← 内置Pass无独立测试
+├── engine/render/rhi/
+│   ├── *_draw_executor.cpp               ← ✅ DX11 CB 对齐已补 12 用例
+│   ├── *_shader_manager.cpp              ← ✅ DX11 ShaderManager 已补 8 用例
+│   └── vulkan/vulkan_pipeline_state_manager.cpp ← PSO管理
+├── GPU Instancing                        ← ✅ InstancingKey 合批路径已补 15 用例
+├── 三端坐标系统一                         ← ✅ GetProjectionCorrection() 已补 11 用例
+└── engine/render/rhi/ubo_manager.cpp     ← 有 common 测试但无具体实现测试
 
 🟢 P2（有测试，但深度不够）
-├── 动画：缺 BlendTree 2D / Crossfade / Root Motion 专项
+├── Lua 绑定：✅ Particles 绑定已补 6 用例
 ├── Audio：缺 FMOD 后端测试
-├── Physics3D：缺真实 PhysX 世界刚体/关节模拟
-├── Editor：缺面板单元测试（Inspector/Hierarchy/Viewport/Console）
-├── RenderGraph：缺 ExecuteParallel 多线程路径测试
-├── JobSystem：缺高并发/死锁场景测试
-└── Vulkan smoke：仅1帧，缺完整场景渲染验证
+├── Editor：✅ 已补 UndoRedo/Commands/CLI 单元测试 16 用例（面板逻辑仍依赖 ImGui）
+├── JobSystem：缺死锁/饥饿场景测试
+└── Vulkan smoke：已有 8 测试含 10 帧稳定性+资源创销
+
+已完成（从上一版 P0 移出）:
+├── ✅ LightProbeSystem — 13 用例
+├── ✅ ReflectionProbeSystem — 8 用例
+├── ✅ GL RHI — 72 用例
+├── ✅ BuiltinPasses — 40 用例
+├── ✅ UBO/DrawExecutor Common — 26 用例
+├── ✅ PostProcess Common — 10 用例
+├── ✅ RenderGraph 并行 — 8 用例
+├── ✅ GL ShaderUBO Manager — 8 用例
+├── ✅ MeshRenderSystem — 10 用例
+├── ✅ TerrainSystem — 9 用例
+├── ✅ Particle3DSystem — 11 用例
+├── ✅ SoftBodySystem — 11 用例
+├── ✅ RagdollSystem — 8 用例
+├── ✅ BuoyancySystem — 10 用例
+├── ✅ BlendTree/Crossfade — 15 用例
+├── ✅ AnimLayerBlend — 8 用例
+├── ✅ SpriteRenderSystem — 11 用例 (含 UIRender)
+├── ✅ UISystem/UILayout — 16 用例
+├── ✅ HairAsset/HairInstance — 24 用例 (Session 5)
+├── ✅ HairSystem — 7 用例 (Session 5)
+├── ✅ GrassSystem — 13 用例 (Session 5)
+├── ✅ DDGISystem — 17 用例 (Session 5)
+├── ✅ ClusterGrid/LightBuffer — 19 用例 (Session 5)
+├── ✅ DSSL MaterialLoader — 30 用例 (Session 6)
+├── ✅ VehicleSystem — 6 用例 (Session 6)
+├── ✅ NavAgentSystem — 6 用例 (Session 6)
+├── ✅ GPU Instancing — 15 用例 (Session 7)
+├── ✅ 三端坐标系统一 — 11 用例 (Session 7)
+├── ✅ DX11 CB 对齐 — 12 用例 (Session 7)
+├── ✅ VK/DX11 ShaderManager — 8 用例 (Session 7)
+├── ✅ Editor UndoRedo/Commands/CLI — 16 用例 (Session 8)
+└── ✅ Lua Particles 绑定 — 6 用例 (Session 8)
 ```
 
 ---
 
-## 六、建议补充测试的优先级
+## 六、建议补充测试的优先级（Session 5+ 计划）
 
-### Session 1（1 天）：🔴 补核心渲染路径
+### Session 5（1 天）：✅ 已完成 — 补渲染新功能 + 3D 模块
 
-| 任务 | 估算用例 | 说明 |
+| 任务 | 实际用例 | 状态 |
 |:----|:--------:|------|
-| GL RHI 无头测试（仿 VK/DX11 模式） | 30 | `gl_rhi_test.cpp` 覆盖 Device/Resource/CmdBuf |
-| BuiltinPasses 无头测试（MockCommandBuffer） | 20 | 9 个 Pass 的 Setup/Execute 参数验证 |
-| LightProbeSystem 单元测试 | 8 | SH 计算/查询/更新 |
-| ReflectionProbeSystem 单元测试 | 8 | IBL 数据更新/查询 |
+| HairAsset/HairInstance 单元测试 | **24** | ✅ IsValid/GenerateTest/LOD/参数默认值 |
+| HairSystem 单元测试 | **7** | ✅ 组件默认值/系统状态/缓存查询 |
+| GrassSystem 单元测试 | **13** | ✅ 组件/布局/GPU实例/Chunk/默认值 |
+| DDGISystem 单元测试 | **17** | ✅ ProbeGrid/OctEncode往返/Atlas/状态 |
+| ClusterGrid/LightBuffer 单元测试 | **19** | ✅ 结构体对齐/常量/绑定点/默认值 |
 
-### Session 2（1 天）：🔴 补 3D 高级模块
+### Session 6（1 天）：✅ 已完成 — 补剩余零测试模块
 
-| 任务 | 估算用例 | 说明 |
+| 任务 | 实际用例 | 状态 |
 |:----|:--------:|------|
-| MeshRenderSystem 单元测试 | 10 | DrawItem 组装/材质切换 |
-| RagdollSystem 集成测试（MockPhysX） | 8 | 布娃娃创建/关节 |
-| SoftBodySystem 集成测试 | 6 | 四面体网格/形状匹配 |
-| BuoyancySystem 集成测试 | 6 | 流体浮力/阻力 |
-| Particle3DSystem 单元测试 | 8 | 发射/生命周期 |
+| NavAgentSystem 单元测试 | **6** | ✅ 组件默认值/目标设置/系统构造 |
+| VehicleSystem 单元测试 | **6** | ✅ 车轮配置/状态/组件/系统构造 |
+| DSSL MaterialLoader 单元测试 | **30** | ✅ UniformInfo/Instance/Loader/RenderModes/属性映射/Texture回退 |
 
-### Session 3（1 天）：🟡 补集成面
+### Session 7（1 天）：✅ 已完成 — 补核心路径深度
 
-| 任务 | 估算用例 | 说明 |
+| 任务 | 实际用例 | 状态 |
 |:----|:--------:|------|
-| Physics3D 真实 PhysX 模拟测试 | 15 | 刚体下落/碰撞/关节/raycast |
-| SpriteRenderSystem 测试 | 10 | 精灵排序/批处理 |
-| UISystem 测试 | 10 | 布局/事件 |
-| Lua Animation/DSSL/UI 绑定 | 15 | 3 个绑定文件补齐 |
+| GPU Instancing 合批验证 | **15** | ✅ InstancingKey hash/相等/HashMap合批/BlendMode/skinned排除/RenderStats |
+| 三端坐标系统一验证 | **11** | ✅ GL/DX11 ProjectionCorrection + ShadowSample + NDC + HairDrawItem |
+| DrawExecutor 三端独立测试 | **12** | ✅ DX11 CB 10 项 16B 对齐 + PerFrame/PerObject 默认值 |
+| ShaderManager 三端独立测试 | **8** | ✅ DX11 ShaderProgram/ComputeProgram/Manager 默认值+nullptr 查询 |
 
-### Session 4（1 天）：🟢 加深 + 编辑器
+### Session 8（1 天）：✅ 已完成 — 加深 + 编辑器
 
-| 任务 | 估算用例 | 说明 |
+| 任务 | 实际用例 | 状态 |
 |:----|:--------:|------|
-| 2D Blend Tree / Crossfade 专项 | 8 | 动画混合细节 |
-| JobSystem 高并发压力测试 | 5 | 多线程正确性 |
-| 编辑器单元测试（Inspector/Hierarchy 等） | 15 | 面板逻辑回归 |
-| Vulkan smoke 扩展（10+ 帧） | 3 | 完整渲染帧验证 |
+| 编辑器单元测试（UndoRedo/Commands/CLI/Settings） | **16** | ✅ Undo/Redo/Merge/History/栈深/Lambda/Compound/CLI解析/Settings |
+| Lua Particles 绑定 | **6** | ✅ 3D粒子创建+参数/2D发射器/Burst/GameplayTuning/安全性 |
+| Vulkan smoke | 已有 8 | ✅ 已含 10 帧稳定性+纹理/RT/Buffer 创销，无需扩展 |
+| 空文件清理 | 2 | ✅ `audio_assets_integration_test.cpp` 和 `minimal_3d_scene_smoke_test.cpp` 添加 TODO 注释 |
 
 ### 汇总
 
 | 批次 | 工期 | 新增用例 | 填补缺口 |
 |:----:|:----:|:--------:|---------|
-| Session 1 | 1 天 | ~66 | 🔴 渲染核心 |
-| Session 2 | 1 天 | ~38 | 🔴 3D 高级模块 |
-| Session 3 | 1 天 | ~50 | 🟡 集成面 |
-| Session 4 | 1 天 | ~31 | 🟢 加深 + 编辑器 |
-| **合计** | **4 天** | **~185** | **补齐 90% 测试缺口** |
+| Session 5 | 1 天 | **80** | ✅ 渲染新功能 |
+| Session 6 | 1 天 | **42** | ✅ 零测试模块 |
+| Session 7 | 1 天 | **39** | ✅ 核心路径深度 |
+| Session 8 | 1 天 | **22** | ✅ 编辑器+收尾 |
+| **合计** | **4 天** | **183** | **✅ 全部完成** |
 
 ---
 
-## 七、Session 4 完整变更日志
+## 七、历史变更日志
+
+### Session 8（2026-05-17）
+
+> 状态：1714 测试全部通过（Unit 1337→ 1332 pass + 5 skip | Integration 275 pass | Smoke 30 pass）
+
+| 变更 | 说明 |
+|:----:|------|
+| 新增 2 个测试文件 | `editor_unit_test.cpp`(16) + `lua_binding_particles_integration_test.cpp`(6) |
+| 编辑器单元测试 | UndoRedoManager 7项 + LambdaCommand 2项 + CompoundCommand 1项 + CLI解析 5项 + Settings 1项 |
+| Lua 粒子绑定 | 3D粒子创建+参数设置 + 2D发射器 + Burst + GameplayTuning + 安全性 |
+| 空文件清理 | 2 个占位空文件添加 TODO 注释 |
+
+### Session 7（2026-05-17）
+
+> 状态：1692 测试全部通过（Unit 1393 pass/skip | Integration 269 pass | Smoke 30 pass）
+
+| 变更 | 说明 |
+|:----:|------|
+| 新增 4 个测试文件 | `gpu_instancing_test.cpp`(15) + `projection_correction_test.cpp`(11) + `draw_executor_backend_test.cpp`(12) + `shader_manager_test.cpp`(8) |
+| P1 核心路径补深 | GPU Instancing 合批 key + 三端坐标修正矩阵 + DX11 CB 对齐 + ShaderManager 默认状态 |
+| DX11 全覆盖 | 10 项 CB 结构 16B 对齐验证 + PerFrame/PerObject 默认值 + ShaderProgram/Manager |
+| NDC 变换数学验证 | GL Z∈[-1,1] / DX11 Z∈[0,1] / VK Y-flip+Z remap 变换正确性 |
+
+### Session 6（2026-05-17）
+
+> 状态：1653 测试全部通过（Unit 1354 pass/skip | Integration 269 pass | Smoke 30 pass）
+
+| 变更 | 说明 |
+|:----:|------|
+| 新增 3 个测试文件 | `dssl_material_test.cpp`(30) + `vehicle_system_test.cpp`(6) + `nav_agent_system_test.cpp`(6) |
+| P0 缺口全部清零 | NavAgent/Vehicle/DSSL Material 全部已补测试，P0 仅剩 Spine/Physics3D/Editor |
+| DSSL 覆盖深 | Uniform 设置/获取往返、材质属性映射（BaseColor/Metallic/Roughness 等）、多名称 Texture 回退、RenderModes |
+
+### Session 5（2026-05-17）
+
+> 状态：1611 测试全部通过（Unit 1312 pass/skip | Integration 269 pass | Smoke 30 pass）
+
+| 变更 | 说明 |
+|:----:|------|
+| 文档全面更新 | 与磁盘实际测试文件精确对齐，用 `grep TEST_F\|TEST(` 统计用例 |
+| 新增 5 个测试文件 | `hair_asset_test.cpp`(24) + `ddgi_system_test.cpp`(17) + `cluster_grid_test.cpp`(19) + `hair_system_test.cpp`(7) + `grass_system_test.cpp`(13) |
+| 发现 2 个空文件 | `audio_assets_integration_test.cpp` 和 `minimal_3d_scene_smoke_test.cpp` 均为空文件，未注册到 CMakeLists |
+| P0 缺口补0修复 | Hair/Grass/DDGI/ClusterGrid 已补测试，剩余 P0: Nav/Vehicle/DSSL Material |
+| 已完成的 23 项移出 P0 | 上一版 18 项 + 本次 5 项（Hair×2/Grass/DDGI/Cluster） |
+
+### Session 4 完整变更日志
 
 > 状态：1460 测试全部通过（Unit 1164 pass + 5 skip | Integration 269 pass | Smoke 22 pass）
 

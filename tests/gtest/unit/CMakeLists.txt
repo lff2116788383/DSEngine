@@ -56,6 +56,14 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/render/gl_shader_ubo_manager_test.cpp
     engine/render/rendergraph_parallel_test.cpp
     engine/render/postprocess_common_test.cpp
+    engine/render/hair_asset_test.cpp
+    engine/render/ddgi_system_test.cpp
+    engine/render/cluster_grid_test.cpp
+    engine/render/dssl_material_test.cpp
+    engine/render/gpu_instancing_test.cpp
+    engine/render/projection_correction_test.cpp
+    engine/render/draw_executor_backend_test.cpp
+    engine/render/shader_manager_test.cpp
     # engine/scene
     engine/scene/octree_test.cpp
     engine/scene/quad_tree_test.cpp
@@ -86,6 +94,9 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine）
     modules/gameplay_3d/animation_state_machine_test.cpp
     modules/gameplay_3d/blend_tree_crossfade_test.cpp
+    # apps/editor (header-only classes + test harness)
+    apps/editor/editor_unit_test.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
 )
 
 # 3D 模块测试需要DSE_Gameplay3D 库（条件编译）
@@ -106,6 +117,10 @@ if(DSE_ENABLE_3D)
         modules/gameplay_3d/anim_layer_blend_system_test.cpp
         modules/gameplay_3d/ragdoll_system_test.cpp
         modules/gameplay_3d/buoyancy_system_test.cpp
+        modules/gameplay_3d/hair_system_test.cpp
+        modules/gameplay_3d/grass_system_test.cpp
+        modules/gameplay_3d/vehicle_system_test.cpp
+        modules/gameplay_3d/nav_agent_system_test.cpp
     )
 endif()
 

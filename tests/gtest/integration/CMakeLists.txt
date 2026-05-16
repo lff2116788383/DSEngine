@@ -36,6 +36,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/scripting/lua_binding_animation_integration_test.cpp
     engine/scripting/lua_binding_dssl_integration_test.cpp
     engine/scripting/lua_binding_ui_integration_test.cpp
+    engine/scripting/lua_binding_particles_integration_test.cpp
     # engine/runtime
     engine/runtime/runtime_subsystem_integration_test.cpp
     # engine/audio
