@@ -459,6 +459,89 @@ void VulkanRhiDevice::DeleteSSBO(unsigned int handle) {
     resource_mgr_.DeleteSSBO(handle);
 }
 
+// --- Compute Shader ---
+
+unsigned int VulkanRhiDevice::CreateComputeShader(const std::string& source) {
+    return shader_mgr_.CreateComputeProgram(source);
+}
+
+void VulkanRhiDevice::DeleteComputeShader(unsigned int handle) {
+    // shader_mgr_ 的 Shutdown 会清理所有，这里仅标记
+    (void)handle;
+}
+
+void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
+                                       unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
+    if (!initialized_ || shader_handle == 0) return;
+
+    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
+    if (!prog || prog->pipeline == VK_NULL_HANDLE) return;
+
+    // 使用单次命令缓冲提交 compute dispatch
+    VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prog->pipeline);
+
+    // 绑定当前帧绑定的 SSBO 到 descriptor set
+    if (prog->descriptor_set_layout != VK_NULL_HANDLE && !bound_ssbos_.empty()) {
+        VkDescriptorSet ds = resource_mgr_.AllocateDescriptorSet(prog->descriptor_set_layout);
+        if (ds != VK_NULL_HANDLE) {
+            std::vector<VkWriteDescriptorSet> writes;
+            std::vector<VkDescriptorBufferInfo> buffer_infos;
+            buffer_infos.reserve(bound_ssbos_.size());
+
+            for (auto& [binding, ssbo_handle] : bound_ssbos_) {
+                const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
+                if (!ssbo) continue;
+
+                VkDescriptorBufferInfo buf_info{};
+                buf_info.buffer = ssbo->buffer;
+                buf_info.offset = 0;
+                buf_info.range = ssbo->size;
+                buffer_infos.push_back(buf_info);
+
+                VkWriteDescriptorSet w{};
+                w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                w.dstSet = ds;
+                w.dstBinding = binding;
+                w.descriptorCount = 1;
+                w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                w.pBufferInfo = &buffer_infos.back();
+                writes.push_back(w);
+            }
+
+            if (!writes.empty()) {
+                vkUpdateDescriptorSets(context_.device(),
+                    static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    prog->pipeline_layout, 0, 1, &ds, 0, nullptr);
+            }
+        }
+    }
+
+    vkCmdDispatch(cmd, groups_x, groups_y, groups_z);
+
+    // 插入内存屏障
+    VkMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+    resource_mgr_.EndSingleTimeCommands(cmd);
+}
+
+void VulkanRhiDevice::ComputeMemoryBarrier() {
+    // Vulkan barrier 已在 DispatchCompute 中注入，此处为 no-op
+}
+
+void VulkanRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+    // Vulkan image binding 需要通过 descriptor set 进行，
+    // 当前预留接口，后续可扩展为 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+    (void)binding; (void)texture_handle; (void)read_only;
+}
+
 unsigned int VulkanRhiDevice::CreateVertexArray() {
     // Vulkan 不需要 VAO 概念，顶点格式在 VkPipeline 创建时指定
     // 返回占位句柄以兼容 RhiDevice 接口

@@ -123,6 +123,7 @@ public:
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data);
     void BindSSBO(unsigned int handle, unsigned int binding_point);
     void DeleteSSBO(unsigned int handle);
+    const DX11SSBO* GetSSBO(unsigned int handle) const;
 
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,

@@ -14,9 +14,38 @@
 #include "engine/platform/screen.h"
 #include <glad/gl.h>
 
-// GL 4.3 SSBO 常量 — glad/gl.h 仅包含 GL 3.3 定义
+// GL 4.3 SSBO / Compute 常量 — glad/gl.h 仅包含 GL 3.3 定义
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
+#endif
+#ifndef GL_COMPUTE_SHADER
+#define GL_COMPUTE_SHADER 0x91B9
+#endif
+#ifndef GL_SHADER_STORAGE_BARRIER_BIT
+#define GL_SHADER_STORAGE_BARRIER_BIT 0x00002000
+#endif
+#ifndef GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
+#endif
+#ifndef GL_TEXTURE_FETCH_BARRIER_BIT
+#define GL_TEXTURE_FETCH_BARRIER_BIT 0x00000008
+#endif
+#ifndef GL_READ_ONLY
+#define GL_READ_ONLY 0x88B8
+#endif
+#ifndef GL_WRITE_ONLY
+#define GL_WRITE_ONLY 0x88B9
+#endif
+#ifndef GL_READ_WRITE
+#define GL_READ_WRITE 0x88BA
+#endif
+#ifndef GL_RGBA32F
+#define GL_RGBA32F 0x8814
+#endif
+
+// wglGetProcAddress 前置声明（避免引入 Windows.h）
+#ifdef _WIN32
+extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
 #endif
 
 // BCn / S3TC / BPTC 压缩纹理格式常量
@@ -366,6 +395,12 @@ void OpenGLRhiDevice::Shutdown() {
             resource_mgr_.ledger().shader_programs_destroyed += live_external;
         }
     }
+
+    // 清理 compute shader programs
+    for (auto handle : compute_programs_) {
+        glDeleteProgram(handle);
+    }
+    compute_programs_.clear();
 
     // 清理子系统（逆序）
     draw_executor_.ShutdownGeometryBuffers();
@@ -851,6 +886,100 @@ void OpenGLRhiDevice::DeleteSSBO(unsigned int handle) {
     if (handle == 0) return;
     glDeleteBuffers(1, &handle);
     resource_mgr_.ledger().buffers_destroyed += 1;
+}
+
+// --- Compute Shader (GL 4.3+) ---
+
+unsigned int OpenGLRhiDevice::CreateComputeShader(const std::string& source) {
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("CreateComputeShader: GL 4.3+ required for compute shaders");
+        return 0;
+    }
+    if (source.empty()) return 0;
+
+    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+    if (shader == 0) return 0;
+
+    const char* src = source.c_str();
+    glShaderSource(shader, 1, &src, nullptr);
+    glCompileShader(shader);
+
+    GLint success = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char info_log[1024];
+        glGetShaderInfoLog(shader, sizeof(info_log), nullptr, info_log);
+        DEBUG_LOG_ERROR("Compute shader compile error: {}", info_log);
+        glDeleteShader(shader);
+        return 0;
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, shader);
+    glLinkProgram(program);
+    glDeleteShader(shader);
+
+    GLint link_ok = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
+    if (!link_ok) {
+        char info_log[1024];
+        glGetProgramInfoLog(program, sizeof(info_log), nullptr, info_log);
+        DEBUG_LOG_ERROR("Compute shader link error: {}", info_log);
+        glDeleteProgram(program);
+        return 0;
+    }
+
+    compute_programs_.insert(program);
+    return program;
+}
+
+void OpenGLRhiDevice::DeleteComputeShader(unsigned int handle) {
+    if (handle == 0) return;
+    auto it = compute_programs_.find(handle);
+    if (it != compute_programs_.end()) {
+        glDeleteProgram(handle);
+        compute_programs_.erase(it);
+    }
+}
+
+void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
+                                       unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
+    if (!supports_ssbo_ || shader_handle == 0) return;
+    glUseProgram(shader_handle);
+
+    // glDispatchCompute 是 GL 4.3 函数
+    using PFN_glDispatchCompute = void(GLAD_API_PTR*)(GLuint, GLuint, GLuint);
+    static PFN_glDispatchCompute pfn = reinterpret_cast<PFN_glDispatchCompute>(
+        wglGetProcAddress("glDispatchCompute"));
+    if (pfn) {
+        pfn(groups_x, groups_y, groups_z);
+    }
+    glUseProgram(0);
+}
+
+void OpenGLRhiDevice::ComputeMemoryBarrier() {
+    if (!supports_ssbo_) return;
+
+    // glMemoryBarrier 是 GL 4.2+ 函数
+    using PFN_glMemoryBarrier = void(GLAD_API_PTR*)(GLbitfield);
+    static PFN_glMemoryBarrier pfn = reinterpret_cast<PFN_glMemoryBarrier>(
+        wglGetProcAddress("glMemoryBarrier"));
+    if (pfn) {
+        pfn(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+    }
+}
+
+void OpenGLRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+    if (!supports_ssbo_ || texture_handle == 0) return;
+
+    // glBindImageTexture 是 GL 4.2+ 函数
+    using PFN_glBindImageTexture = void(GLAD_API_PTR*)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum);
+    static PFN_glBindImageTexture pfn = reinterpret_cast<PFN_glBindImageTexture>(
+        wglGetProcAddress("glBindImageTexture"));
+    if (pfn) {
+        GLenum access = read_only ? GL_READ_ONLY : GL_READ_WRITE;
+        pfn(binding, texture_handle, 0, GL_FALSE, 0, access, GL_RGBA32F);
+    }
 }
 
 // --- 资源账本 ---

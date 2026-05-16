@@ -446,6 +446,11 @@ void DX11ResourceManager::DeleteSSBO(unsigned int handle) {
     ssbos_.erase(handle);
 }
 
+const DX11SSBO* DX11ResourceManager::GetSSBO(unsigned int handle) const {
+    auto it = ssbos_.find(handle);
+    return it != ssbos_.end() ? &it->second : nullptr;
+}
+
 // ============================================================
 // 渲染目标
 // ============================================================

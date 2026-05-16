@@ -40,6 +40,12 @@ struct DspEffectParams {
     bool enabled = true;
 };
 
+/// 运行时 DSP 节点句柄（内部使用，持有 heap-allocated miniaudio 节点）
+struct DspNodeHandle {
+    DspEffectType type = DspEffectType::LowPass;
+    void* node_ptr = nullptr;
+};
+
 /// 单条混音总线
 struct AudioBus {
     std::string name;                 ///< 总线名称（如 "master", "music", "sfx", "voice"）
@@ -50,6 +56,7 @@ struct AudioBus {
 
     // 运行时句柄（内部使用，实际为 ma_sound*）
     void* group_handle = nullptr;
+    std::vector<DspNodeHandle> active_nodes; ///< 运行时 DSP 节点实例
 };
 
 /**

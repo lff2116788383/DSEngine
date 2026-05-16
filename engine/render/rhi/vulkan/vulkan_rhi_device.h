@@ -173,6 +173,14 @@ public:
     }
     void DeleteSSBO(unsigned int handle) override;
 
+    // --- Compute Shader ---
+    unsigned int CreateComputeShader(const std::string& source) override;
+    void DeleteComputeShader(unsigned int handle) override;
+    void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
+    void ComputeMemoryBarrier() override;
+    void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    bool SupportsCompute() const override { return true; }
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 

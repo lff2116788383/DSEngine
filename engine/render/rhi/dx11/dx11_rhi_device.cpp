@@ -396,10 +396,82 @@ void DX11RhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, 
 
 void DX11RhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
     resource_mgr_.BindSSBO(handle, binding_point);
+    bound_ssbos_[binding_point] = handle;
 }
 
 void DX11RhiDevice::DeleteSSBO(unsigned int handle) {
     resource_mgr_.DeleteSSBO(handle);
+}
+
+// --- Compute Shader ---
+
+unsigned int DX11RhiDevice::CreateComputeShader(const std::string& source) {
+    return shader_mgr_.CreateComputeProgram(source);
+}
+
+void DX11RhiDevice::DeleteComputeShader(unsigned int handle) {
+    // shader_mgr_ 的 Shutdown 会清理，此处仅占位
+    (void)handle;
+}
+
+void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
+                                     unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
+    if (!initialized_ || shader_handle == 0) return;
+
+    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
+    if (!prog || !prog->cs) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    dc->CSSetShader(prog->cs.Get(), nullptr, 0);
+
+    // 将追踪的 SSBO 绑定到 CS 阶段（SRV slot 16+ 与 PS 保持一致）
+    for (auto& [binding_point, ssbo_handle] : bound_ssbos_) {
+        const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
+        if (!ssbo) continue;
+        ID3D11ShaderResourceView* srv = ssbo->srv.Get();
+        if (srv) {
+            dc->CSSetShaderResources(16 + binding_point, 1, &srv);
+        }
+    }
+
+    dc->Dispatch(groups_x, groups_y, groups_z);
+
+    // 解绑 CS 资源
+    for (auto& [binding_point, _] : bound_ssbos_) {
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
+    }
+    dc->CSSetShader(nullptr, nullptr, 0);
+}
+
+void DX11RhiDevice::ComputeMemoryBarrier() {
+    // D3D11 不需要显式 memory barrier — resource hazard tracking 由运行时自动处理
+}
+
+void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+    if (!initialized_) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    if (read_only) {
+        // 绑定为 SRV 到 CS
+        const auto* tex = resource_mgr_.GetTexture(texture_handle);
+        if (tex && tex->srv) {
+            ID3D11ShaderResourceView* srv = tex->srv.Get();
+            dc->CSSetShaderResources(binding, 1, &srv);
+        }
+    } else {
+        // 绑定为 UAV（需要从 render target 获取，或创建专用 UAV）
+        // 当前仅支持 render target 的 UAV
+        const auto* rt = resource_mgr_.GetRenderTarget(texture_handle);
+        if (rt && rt->color_uav) {
+            ID3D11UnorderedAccessView* uav = rt->color_uav.Get();
+            dc->CSSetUnorderedAccessViews(binding, 1, &uav, nullptr);
+        }
+    }
 }
 
 } // namespace render

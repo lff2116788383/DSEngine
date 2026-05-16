@@ -139,6 +139,14 @@ public:
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
     void DeleteSSBO(unsigned int handle) override;
 
+    // --- Compute Shader ---
+    unsigned int CreateComputeShader(const std::string& source) override;
+    void DeleteComputeShader(unsigned int handle) override;
+    void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
+    void ComputeMemoryBarrier() override;
+    void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    bool SupportsCompute() const override { return true; }
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
@@ -178,6 +186,9 @@ private:
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;
+
+    /// Compute Shader 绑定的 SSBO 追踪（binding_point → handle）
+    std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
 
     RenderStats last_frame_stats_;
     RenderStats current_frame_stats_;

@@ -271,6 +271,35 @@ public:
 
     /// 是否支持 SSBO（OpenGL 4.3+ 支持；GL 3.3 使用 UBO fallback）
     virtual bool SupportsSSBO() const { return true; }
+
+    // --- Compute Shader 管线 ---
+    // OpenGL: GL_COMPUTE_SHADER (GL 4.3+)
+    // Vulkan: VkPipeline (compute)
+    // DX11:   ID3D11ComputeShader
+
+    /// 创建 compute shader（source 为后端原生语言：GLSL/SPIR-V binary/HLSL）
+    /// @return shader 句柄，0 表示失败
+    virtual unsigned int CreateComputeShader(const std::string& source) { (void)source; return 0; }
+
+    /// 删除 compute shader
+    virtual void DeleteComputeShader(unsigned int handle) { (void)handle; }
+
+    /// 调度 compute shader 执行
+    virtual void DispatchCompute(unsigned int shader_handle,
+                                 unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
+        (void)shader_handle; (void)groups_x; (void)groups_y; (void)groups_z;
+    }
+
+    /// 插入内存屏障（保证 compute 写入对后续图形管线可见）
+    virtual void ComputeMemoryBarrier() {}
+
+    /// 将纹理绑定到 compute shader 的 image 单元（image load/store）
+    virtual void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+        (void)binding; (void)texture_handle; (void)read_only;
+    }
+
+    /// 是否支持 compute shader
+    virtual bool SupportsCompute() const { return false; }
 };
 
 /**
@@ -353,6 +382,14 @@ public:
     void DeleteSSBO(unsigned int handle) override;
     bool SupportsSSBO() const override { return supports_ssbo_; }
 
+    // --- Compute Shader（GL 4.3+）---
+    unsigned int CreateComputeShader(const std::string& source) override;
+    void DeleteComputeShader(unsigned int handle) override;
+    void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
+    void ComputeMemoryBarrier() override;
+    void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    bool SupportsCompute() const override { return supports_ssbo_; }
+
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
     void RealEndRenderPass();
@@ -384,6 +421,9 @@ private:
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理
     std::unordered_set<unsigned int> external_shader_programs_;
+
+    /// 通过 CreateComputeShader 创建的 compute 程序句柄
+    std::unordered_set<unsigned int> compute_programs_;
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
