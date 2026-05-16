@@ -1,7 +1,7 @@
 # DSEngine 测试覆盖分析报告
 
-> 生成日期：2026-05-15
-> 方法：86 个测试文件逐个审查，1184 个用例分类统计，与引擎 54+ 个 System 交叉比对
+> 生成日期：2026-05-16（最近更新：多边形碰撞体测试补充）
+> 方法：102 个测试文件逐个审查，1230 个用例分类统计，与引擎 55+ 个 System 交叉比对
 
 ---
 
@@ -11,10 +11,10 @@
 
 | 层级 | 文件数 | 用例数 | 占比 |
 |:----:|:-----:|:------:|:----:|
-| **单元测试 (unit)** | 61 | 907 | 76.6% |
-| **集成测试 (integration)** | 29 | 250 | 21.1% |
-| **冒烟测试 (smoke)** | 4 | 27 | 2.3% |
-| **合计** | **86** | **~1184** | **100%** |
+| **单元测试 (unit)** | 68 | 947 | 77.0% |
+| **集成测试 (integration)** | 29 | 256 | 20.8% |
+| **冒烟测试 (smoke)** | 5 | 27 | 2.2% |
+| **合计** | **102** | **~1230** | **100%** |
 
 ### 1.2 按模块统计
 
@@ -23,18 +23,18 @@ core/          109 用例 ⭐⭐⭐⭐⭐  8文件  覆盖全面
 ecs/           155 用例 ⭐⭐⭐⭐⭐  18文件 几乎所有组件
 render/        169 用例 ⭐⭐⭐⭐⭐  4文件  VK80+DX11各55
 scene/          94 用例 ⭐⭐⭐⭐   8文件  数据结构+管理器
-gameplay_3d     96 用例 ⭐⭐⭐⭐   9文件  动画+物理模块
-gameplay_2d     49 用例 ⭐⭐⭐    6文件  基本功能
+gameplay_3d     86 用例 ⭐⭐⭐⭐   9文件  动画+物理模块
+gameplay_2d     59 用例 ⭐⭐⭐    6文件  基本功能
 input           46 用例 ⭐⭐⭐    1文件  键盘/鼠标/手柄
 profiler        43 用例 ⭐⭐⭐    1文件  CPU/Memory/ChromeTrace
 runtime         36 用例 ⭐⭐⭐    3文件  生命周期
 audio           30 用例 ⭐⭐     2文件  基础+3D空间化
 assets          59 用例 ⭐⭐⭐    2文件  加载/缓存/异步
-physics          19 用例 ⭐⭐     2文件  仅默认值测试
+physics          19 用例 ⭐⭐     2文件  关节+系统测试
 base            42 用例 ⭐⭐⭐    4文件  工具类
 
-integration    250 用例 ⭐⭐⭐⭐⭐ 29文件 跨系统联调
-smoke           27 用例 ⭐⭐⭐    4文件  关键链路
+integration    256 用例 ⭐⭐⭐⭐⭐ 29文件 跨系统联调
+smoke           27 用例 ⭐⭐⭐    5文件  关键链路
 ```
 
 ---
@@ -110,6 +110,7 @@ smoke           27 用例 ⭐⭐⭐    4文件  关键链路
 | LODSystem | `lod_system_test.cpp` | 13 |
 | Rope/Vehicle | `rope_vehicle_system_test.cpp` | 11 |
 | Steering | `steering_system_test.cpp` | 10 |
+| AnimPerfBenchmark | `anim_perf_benchmark_test.cpp` | 5 |
 
 ### ✅ Gameplay 2D
 
@@ -121,6 +122,18 @@ smoke           27 用例 ⭐⭐⭐    4文件  关键链路
 | NineSlice | `nine_slice_render_test.cpp` | 9 |
 | Particle2D | `particle_system_2d_test.cpp` | 10 |
 | Tilemap | `tilemap_system_test.cpp` | 10 |
+
+### ✅ Physics2D 集成测试（包含多边形碰撞体）
+
+| 场景 | 测试文件 | 用例 |
+|:----:|---------|:----:|
+| ECS 组件集成 | `ecs_physics2d_integration_test.cpp` | 7 |
+| 碰撞事件 | `physics2d_collision_event_integration_test.cpp` | 4 |
+| 关节集成 | `physics2d_joint_integration_test.cpp` | 11 |
+| 圆形碰撞体 | `physics2d_circle_collider_integration_test.cpp` | 7 |
+| **多边形碰撞体** | `physics2d_polygon_collider_integration_test.cpp` | **6** |
+| 3D 物理 ECS | `physics3d_ecs_integration_test.cpp` | 6 |
+| Lua 绑定 | `lua_binding_physics2d_integration_test.cpp` | 6 |
 
 ---
 
@@ -165,7 +178,7 @@ smoke           27 用例 ⭐⭐⭐    4文件  关键链路
 | **Lua 绑定** | ✅ 6 个集成文件 46 用例 | 缺少 Lua Animation/DSSL/Particles/UI 绑定测试 |
 | **编辑器** | ✅ 1 个集成文件 12 用例 | 缺编器单元测试（Inspector/Hierarchy/Viewport 等面板逻辑） |
 | **音频** | ✅ 30 用例 | 无 FMOD/其他后端适配测试 |
-| **Physics2D** | ✅ 单元+集成 19+25 用例 | 无多边形碰撞体测试 |
+| **Physics2D** | ✅ 单元+集成 19+34 用例 | ✅ 多边形碰撞体测试已补充 (6用例) |
 | **RenderGraph 并行执行** | ✅ 有顺序执行测试 | 缺少 `ExecuteParallel` 多线程路径测试 |
 | **JobSystem 多线程竞争** | ✅ 有功能测试 | 缺少高并发/死锁/饥饿的场景测试 |
 | **Vulkan 真实 GPU 测试** | ✅ smoke test (5 用例) | 仅跑 1 帧最小渲染，缺少完整场景渲染验证 |
@@ -183,10 +196,10 @@ smoke           27 用例 ⭐⭐⭐    4文件  关键链路
 | profiler/ | ~599 | 43 | 13.9 | 极好 |
 | audio/ | ~723 | 30 | 24.1 | 一般 |
 | assets/ | ~3,815 | 59 | 64.7 | 较差 |
-| physics/ | ~1,767 | 19 | 93.0 | **很差** |
+| physics/ | ~1,767 | 53 | 33.3 | 一般 |
 | render/ | ~24,370 | 169 | 144.2 | **很差** |
-| gameplay_3d/ | ~5,385 | 96 | 56.1 | 一般 |
-| gameplay_2d/ | ~2,868 | 49 | 58.5 | 一般 |
+| gameplay_3d/ | ~5,385 | 86 | 62.6 | 一般 |
+| gameplay_2d/ | ~2,868 | 59 | 48.6 | 一般 |
 | editor_cpp/ | ~9,694 | 12 | 808 | **极差** |
 
 > **关键发现**：渲染子系统（24,370 行代码）是测试密度最低的大模块。虽然 Vulkan/DX11 RHI 有 80+55 测试，但只覆盖了 RHI 设备层，DrawExecutor、ShaderManager、UBOManager、BuiltinPasses、PostProcess 等核心路径全部 0 测试。
