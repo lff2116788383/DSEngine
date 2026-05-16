@@ -15,6 +15,7 @@
 #include <memory>
 #include <functional>
 #include <glm/glm.hpp>
+#include "audio_bus.h"
 
 class AssetManager;
 
@@ -156,6 +157,10 @@ public:
      */
     void SetRaycastFunction(AudioRaycastFunc func);
 
+    /// 获取混音总线管理器（DSP 效果链 + 总线路由）
+    AudioBusManager& GetBusManager() { return bus_manager_; }
+    const AudioBusManager& GetBusManager() const { return bus_manager_; }
+
 private:
     struct EngineHandle;
     struct ResourceManagerHandle;
@@ -188,6 +193,7 @@ private:
     bool is_initialized = false;
     AssetManager* asset_manager_ = nullptr;
     AudioRaycastFunc raycast_func_;
+    AudioBusManager bus_manager_;
 };
 
 } // namespace gameplay2d

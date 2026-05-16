@@ -510,6 +510,7 @@ bool FramePipeline::Init() {
 
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
 
+    runtime_context_.audio_system = &gameplay2d_module_.audio_system();
 
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },

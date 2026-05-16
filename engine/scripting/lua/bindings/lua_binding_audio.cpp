@@ -7,6 +7,7 @@
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/audio/audio_system.h"
 #include "engine/ecs/audio.h"
 #include <algorithm>
 extern "C" {
@@ -141,6 +142,96 @@ int L_AudioGetSourceState(lua_State* L) {
     lua_pushstring(L, audio.clip ? audio.clip->GetPath().c_str() : "");
     return 12;
 }
+
+// ============================================================
+// 混音总线 + DSP 效果链 Lua API
+// ============================================================
+
+static dse::gameplay2d::AudioSystem* GetAudioSys() {
+    const auto& ctx = GetBindingContext();
+    return static_cast<dse::gameplay2d::AudioSystem*>(ctx.audio_system);
+}
+
+int L_BusSetVolume(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    float vol = static_cast<float>(luaL_checknumber(L, 2));
+    sys->GetBusManager().SetBusVolume(name, vol);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_BusSetMuted(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    bool muted = lua_toboolean(L, 2) != 0;
+    sys->GetBusManager().SetBusMuted(name, muted);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int L_BusCreate(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    const char* parent = luaL_optstring(L, 2, "master");
+    float vol = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    bool ok = sys->GetBusManager().CreateBus(name, parent, vol);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+int L_BusRemove(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    bool ok = sys->GetBusManager().RemoveBus(name);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+int L_BusAddEffect(lua_State* L) {
+    using dse::gameplay2d::DspEffectType;
+    using dse::gameplay2d::DspEffectParams;
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* bus_name = luaL_checkstring(L, 1);
+    int type_int = static_cast<int>(luaL_checkinteger(L, 2));
+    DspEffectParams p;
+    p.type = static_cast<DspEffectType>(std::clamp(type_int, 0, (int)DspEffectType::Count - 1));
+    p.cutoff_hz = static_cast<float>(luaL_optnumber(L, 3, 1000.0));
+    p.q = static_cast<float>(luaL_optnumber(L, 4, 0.707));
+    p.delay_time_ms = static_cast<float>(luaL_optnumber(L, 5, 250.0));
+    p.feedback = static_cast<float>(luaL_optnumber(L, 6, 0.3));
+    p.wet_mix = static_cast<float>(luaL_optnumber(L, 7, 0.5));
+    bool ok = sys->GetBusManager().AddEffect(bus_name, p);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+int L_BusRemoveEffect(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* bus_name = luaL_checkstring(L, 1);
+    size_t index = static_cast<size_t>(luaL_checkinteger(L, 2));
+    bool ok = sys->GetBusManager().RemoveEffect(bus_name, index);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+int L_BusGetNames(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_newtable(L); return 1; }
+    auto names = sys->GetBusManager().GetBusNames();
+    lua_createtable(L, static_cast<int>(names.size()), 0);
+    for (size_t i = 0; i < names.size(); ++i) {
+        lua_pushstring(L, names[i].c_str());
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
 }
 
 void RegisterAudioBindings(lua_State* L) {
@@ -160,6 +251,15 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("add_listener", L_AudioAddListener);
     set_fn("set_3d_distance", L_AudioSet3DDistance);
     set_fn("get_source_state", L_AudioGetSourceState);
+
+    // 混音总线 + DSP 效果链
+    set_fn("bus_set_volume", L_BusSetVolume);
+    set_fn("bus_set_muted", L_BusSetMuted);
+    set_fn("bus_create", L_BusCreate);
+    set_fn("bus_remove", L_BusRemove);
+    set_fn("bus_add_effect", L_BusAddEffect);
+    set_fn("bus_remove_effect", L_BusRemoveEffect);
+    set_fn("bus_get_names", L_BusGetNames);
 }
 
 }

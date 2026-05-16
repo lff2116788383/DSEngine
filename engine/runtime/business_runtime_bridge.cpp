@@ -13,7 +13,8 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
             stats_bindings.get_draw_calls,
             stats_bindings.get_max_batch_sprites,
             stats_bindings.get_sprite_count,
-            context.asset_manager
+            context.asset_manager,
+            context.audio_system
         });
         return BootstrapLuaRuntime();
     }

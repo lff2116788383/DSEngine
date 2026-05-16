@@ -24,6 +24,7 @@ struct LuaApiContext {
     std::function<int()> get_max_batch_sprites;
     std::function<int()> get_sprite_count;
     AssetManager* asset_manager = nullptr;
+    void* audio_system = nullptr;  ///< dse::gameplay2d::AudioSystem* (避免头文件依赖)
 };
 
 /**

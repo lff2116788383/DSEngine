@@ -230,6 +230,10 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
     resource_manager_handle_ = std::move(resource_manager);
     engine_handle_ = std::move(engine);
     SetMasterVolume(master_volume_);
+
+    // 初始化混音总线系统
+    bus_manager_.Initialize(engine_handle_->get());
+
     is_initialized = true;
     return true;
 }
@@ -440,6 +444,7 @@ void AudioSystem::Shutdown() {
     active_sfx_per_clip_.clear();
     sfx_clip_lookup_.clear();
     sfx_last_trigger_ms_.clear();
+    bus_manager_.Shutdown();
     resource_manager_handle_.reset();
     engine_handle_.reset();
     g_audio_asset_manager = nullptr;
@@ -470,11 +475,12 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
     }
 
     auto new_sound = std::make_unique<SoundHandle>();
+    ma_sound* sfx_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle("sfx"));
     const ma_result result = ma_sound_init_from_file(
         engine_handle_->get(),
         filepath.c_str(),
         0,
-        nullptr,
+        sfx_group,
         nullptr,
         &new_sound->value);
     if (result != MA_SUCCESS) {
@@ -500,11 +506,12 @@ bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) 
 
     StopBgm();
     auto new_sound = std::make_unique<SoundHandle>();
+    ma_sound* music_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle("music"));
     const ma_result result = ma_sound_init_from_file(
         engine_handle_->get(),
         filepath.c_str(),
         MA_SOUND_FLAG_STREAM,
-        nullptr,
+        music_group,
         nullptr,
         &new_sound->value);
     if (result != MA_SUCCESS) {

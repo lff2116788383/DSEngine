@@ -26,6 +26,8 @@ struct RuntimeContext {
     bool editor_mode = false;
     /// 平台原生窗口句柄（Win32 HWND），D3D11/Vulkan 后端初始化时需要
     void* native_window_handle = nullptr;
+    /// 音频系统指针（避免头文件依赖，实际为 dse::gameplay2d::AudioSystem*）
+    void* audio_system = nullptr;
 };
 
 } // namespace dse::runtime
