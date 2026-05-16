@@ -49,6 +49,8 @@ option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
+option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
+option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
 
 if(DSE_ENABLE_NAVMESH)
@@ -90,6 +92,7 @@ if (MSVC)
         "VcpkgAutoLink=false"
     )
     add_compile_options(/bigobj)
+    add_compile_options(/MP)   # 多线程编译：始终启用，不依赖构建脚本传参
     add_compile_options(/wd4819)#忽略保存为unicode警告
     add_compile_options(/FS) # 修复多线程编译 PDB 写入冲突 C1041
     add_compile_options("$<$<CONFIG:Debug>:/Z7>")
@@ -123,19 +126,20 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     add_definitions(-D DSE_ENABLE_PHYSX)
 endif()
 
-#头文件目录
-include_directories("depends")
-include_directories("${CMAKE_SOURCE_DIR}")
-include_directories("engine")
-include_directories("modules")
-include_directories("samples")
-include_directories("depends/spdlog/include")
-
-include_directories("depends/glm")
-include_directories("depends/glm_ext")
-include_directories("depends/rapidjson/include")
-include_directories("depends/eventpp/include")
-include_directories("depends/tinygltf")
+#头文件目录（全局，合并为一处避免重复）
+include_directories(
+    "${CMAKE_SOURCE_DIR}"
+    "engine"
+    "modules"
+    "samples"
+    "depends"
+    "depends/spdlog/include"
+    "depends/glm"
+    "depends/glm_ext"
+    "depends/rapidjson/include"
+    "depends/eventpp/include"
+    "depends/tinygltf"
+)
 set(DSE_HAS_ASSIMP OFF)
 if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt")
     include_directories("depends/assimp/include")
@@ -188,12 +192,8 @@ endif()
 set(CMAKE_WARN_DEPRECATED ${DSE_PREV_CMAKE_WARN_DEPRECATED})
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DSE_PREV_CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
 
-# Include directories
+# 仅追加上方未覆盖的第三方库路径
 include_directories(
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/engine
-    ${CMAKE_SOURCE_DIR}/modules
-    ${CMAKE_SOURCE_DIR}/samples
     ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
     ${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1/include
     ${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/include
@@ -386,6 +386,21 @@ endfunction()
 dse_apply_config_postfix(dse_engine)
 # IMPORT_SUFFIX / PREFIX 由 dse_apply_config_postfix 的 DEBUG_POSTFIX 等属性自动处理，
 # 不再硬编码为 _debug.lib，否则 Release 配置也会链接到 _debug.lib。
+
+# --- 预编译头（PCH）：加速常用 STL / GLM / EnTT 头文件解析 ---
+if(DSE_ENABLE_PCH)
+    target_precompile_headers(dse_engine PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/engine/dse_pch.h>"
+    )
+endif()
+
+# --- Unity Build（可选）：合并翻译单元减少编译器启动 / 头文件重复解析开销 ---
+if(DSE_ENABLE_UNITY_BUILD)
+    set_target_properties(dse_engine PROPERTIES
+        UNITY_BUILD ON
+        UNITY_BUILD_BATCH_SIZE 16
+    )
+endif()
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")

@@ -32,6 +32,7 @@ set PACKAGE_LAUNCHER_EXE=0
 set PACKAGE_SDK=1
 set VERIFY_EXECUTABLES=0
 set VERIFY_EXE_TIMEOUT_SECONDS=3
+set CLEAN_BUILD=0
 
 :parse_args
 if "%~1"=="" goto parse_done
@@ -108,6 +109,11 @@ if /I "%~1"=="--no-verify-exe" (
 if /I "%~1"=="--all" (
     set BUILD_EDITOR=1
     set BUILD_LAUNCHER=1
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--clean" (
+    set CLEAN_BUILD=1
     shift
     goto parse_args
 )
@@ -261,11 +267,17 @@ if !ERRORLEVEL! neq 0 (
 del "!NPM_CACHE!\_dse_write_test.tmp" >nul 2>&1
 set NPM_CONFIG_CACHE=!NPM_CACHE!
 
-:: 1. Checking and cleaning old build cache
-echo [1/4] Checking and cleaning old build cache...
-if exist %BUILD_DIR%\CMakeCache.txt (
-    echo Found existing CMakeCache.txt, removing it...
-    del /f /q %BUILD_DIR%\CMakeCache.txt
+:: 1. Checking build cache
+echo [1/4] Checking build cache...
+if "%CLEAN_BUILD%"=="1" (
+    if exist %BUILD_DIR%\CMakeCache.txt (
+        echo [INFO] --clean: removing CMakeCache.txt for fresh configure...
+        del /f /q %BUILD_DIR%\CMakeCache.txt
+    )
+) else (
+    if exist %BUILD_DIR%\CMakeCache.txt (
+        echo [INFO] Reusing existing CMakeCache.txt (use --clean to force reconfigure).
+    )
 )
 
 :: 2. Configure CMake project
@@ -283,7 +295,7 @@ if %ERRORLEVEL% neq 0 (
 :: 3. Build all targets
 echo.
 echo [3/4] Building all targets (%BUILD_CONFIG%)...
-cmake --build %BUILD_DIR% --config %BUILD_CONFIG% --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config %BUILD_CONFIG% --parallel
 if %ERRORLEVEL% neq 0 (
     echo.
     echo ========================================================
@@ -524,6 +536,7 @@ echo   --no-sdk               Disable SDK packaging
 echo   --with-verify-exe      Enable executable verification (default: ON)
 echo   --no-verify-exe        Disable executable verification
 echo   --all                  Enable editor and launcher build together
+echo   --clean                Force clean reconfigure (remove CMakeCache.txt)
 echo   --release              Build Release config (with LTCG, no debug info)
 echo   --relwithdebinfo       Build RelWithDebInfo config (with LTCG + debug info)
 echo   --electron-mirror URL  Electron download mirror URL for electron-builder

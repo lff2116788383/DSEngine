@@ -64,6 +64,11 @@ echo [1] CMake Configure (GTest=ON, 3D=ON, PhysX=ON)...
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
+if exist "%BUILD_DIR%\CMakeCache.txt" (
+    echo [INFO] 复用已有 CMakeCache.txt（增量构建）。
+) else (
+    echo [INFO] 首次配置...
+)
 cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 ^
     -DDSE_BUILD_EDITOR=OFF ^
     -DDSE_BUILD_LAUNCHER=OFF ^
@@ -92,21 +97,21 @@ if "%SKIP_GTEST%"=="1" (
 set /a TOTAL_STEPS+=1
 echo [2] 构建 GTest targets (Debug)...
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_unit_tests 构建失败!
     set /a FAIL_COUNT+=1
     goto :gtest_run
 )
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_integration_tests 构建失败!
     set /a FAIL_COUNT+=1
     goto :gtest_run
 )
 
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_gtest_smoke_tests 构建失败!
     set /a FAIL_COUNT+=1
@@ -166,7 +171,7 @@ if "%SKIP_LUA%"=="1" (
 set /a TOTAL_STEPS+=1
 echo [4] 构建 Lua 运行时 (dse_example_lua, Debug)...
 
-cmake --build %BUILD_DIR% --config Debug --target dse_example_lua --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_example_lua --parallel
 if !ERRORLEVEL! neq 0 (
     echo [FAIL] dse_example_lua 构建失败!
     set /a FAIL_COUNT+=1

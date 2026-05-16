@@ -23,7 +23,7 @@ if not exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 
 echo [INFO] Building gtest targets (Debug)...
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_unit_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo.
     echo [ERROR] Unit test build failed! Check the output above.
@@ -33,7 +33,7 @@ if !ERRORLEVEL! neq 0 (
 )
 
 echo [INFO] Building integration test target (Debug)...
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_integration_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo.
     echo [ERROR] Integration test build failed! Check the output above.
@@ -43,7 +43,7 @@ if !ERRORLEVEL! neq 0 (
 )
 
 echo [INFO] Building smoke test target (Debug)...
-cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests --parallel -- /p:CL_MPCount=12
+cmake --build %BUILD_DIR% --config Debug --target dse_gtest_smoke_tests --parallel
 if !ERRORLEVEL! neq 0 (
     echo.
     echo [ERROR] Smoke test build failed! Check the output above.

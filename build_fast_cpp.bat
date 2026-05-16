@@ -24,7 +24,7 @@ if not exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 
 echo [INFO] Building %TARGET_NAME% (Debug)...
-cmake --build %BUILD_DIR% --config Debug --target %TARGET_NAME%
+cmake --build %BUILD_DIR% --config Debug --target %TARGET_NAME% --parallel
 
 if %ERRORLEVEL% equ 0 (
     echo.
