@@ -298,6 +298,75 @@ public:
         (void)binding; (void)texture_handle; (void)read_only;
     }
 
+    /// 将纹理的指定 mip level 绑定到 compute shader 的 image 单元
+    /// @param binding  image unit 绑定点
+    /// @param texture_handle 纹理句柄（Hi-Z 纹理或其他 R32F 纹理）
+    /// @param mip_level 要绑定的 mip level
+    /// @param read_only true=GL_READ_ONLY, false=GL_WRITE_ONLY/GL_READ_WRITE
+    /// @param r32f      true 使用 R32F 格式，false 使用 RGBA32F
+    virtual void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                           int mip_level, bool read_only, bool r32f = false) {
+        (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
+    }
+
+    /// 将纹理绑定到 compute shader 的采样器单元（用于 textureLod 采样）
+    /// @param unit    纹理单元编号
+    /// @param texture_handle 纹理句柄
+    virtual void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+        (void)unit; (void)texture_handle;
+    }
+
+    // --- Hi-Z Occlusion Culling 纹理 ---
+
+    /// 创建 Hi-Z 纹理（R32F 格式，完整 mip chain，nearest 过滤）
+    /// @param width  基础 mip 宽度（通常等于屏幕宽度）
+    /// @param height 基础 mip 高度（通常等于屏幕高度）
+    /// @return 纹理句柄，0 表示失败
+    virtual unsigned int CreateHiZTexture(int width, int height) { (void)width; (void)height; return 0; }
+
+    /// 删除 Hi-Z 纹理
+    virtual void DeleteHiZTexture(unsigned int handle) { (void)handle; }
+
+    /// 获取 Hi-Z 纹理的 mip 级数
+    virtual int GetHiZMipCount(unsigned int handle) const { (void)handle; return 0; }
+
+    /// 获取 Hi-Z 纹理的 GPU 原生句柄（OpenGL 为 GLuint texture，其他后端为内部 ID）
+    virtual unsigned int GetHiZGpuTexture(unsigned int handle) const { (void)handle; return 0; }
+
+    // --- Compute Uniform 设置（在 DispatchCompute 之前调用）---
+
+    /// 设置 compute shader 的 int uniform
+    virtual void SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+        (void)shader; (void)name; (void)value;
+    }
+    /// 设置 compute shader 的 float uniform
+    virtual void SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+        (void)shader; (void)name; (void)value;
+    }
+    /// 设置 compute shader 的 ivec2 uniform
+    virtual void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+        (void)shader; (void)name; (void)x; (void)y;
+    }
+    /// 设置 compute shader 的 vec2 uniform
+    virtual void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+        (void)shader; (void)name; (void)x; (void)y;
+    }
+    /// 设置 compute shader 的 mat4 uniform
+    virtual void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+        (void)shader; (void)name; (void)data;
+    }
+
+    // --- SSBO 读回 ---
+
+    /// 同步读回 SSBO 内容到 CPU
+    /// @param handle SSBO 句柄
+    /// @param offset 读取起始偏移（字节）
+    /// @param size   读取大小（字节）
+    /// @param dst    目标缓冲区
+    virtual void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+        (void)handle; (void)offset; (void)size; (void)dst;
+    }
+
     /// 是否支持 compute shader
     virtual bool SupportsCompute() const { return false; }
 };
@@ -388,7 +457,26 @@ public:
     void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
     void ComputeMemoryBarrier() override;
     void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                   int mip_level, bool read_only, bool r32f = false) override;
+    void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
     bool SupportsCompute() const override { return supports_ssbo_; }
+
+    // --- Hi-Z Occlusion Culling ---
+    unsigned int CreateHiZTexture(int width, int height) override;
+    void DeleteHiZTexture(unsigned int handle) override;
+    int GetHiZMipCount(unsigned int handle) const override;
+    unsigned int GetHiZGpuTexture(unsigned int handle) const override;
+
+    // --- Compute Uniform ---
+    void SetComputeUniformInt(unsigned int shader, const char* name, int value) override;
+    void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
+    void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
+    void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
+
+    // --- SSBO 读回 ---
+    void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
 
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
@@ -424,6 +512,16 @@ private:
 
     /// 通过 CreateComputeShader 创建的 compute 程序句柄
     std::unordered_set<unsigned int> compute_programs_;
+
+    /// Hi-Z 纹理信息
+    struct HiZTextureInfo {
+        unsigned int gl_texture = 0;
+        int width = 0;
+        int height = 0;
+        int mip_count = 0;
+    };
+    std::unordered_map<unsigned int, HiZTextureInfo> hiz_textures_;
+    unsigned int next_hiz_handle_ = 500000;
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false

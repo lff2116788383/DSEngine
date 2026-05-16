@@ -319,6 +319,35 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Hi-Z Build Pass (Compute) ----
+class HiZBuildPass : public IRenderPass {
+public:
+    explicit HiZBuildPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "hiz_build_pass"; }
+private:
+    RenderPassContext& ctx_;
+    unsigned int hiz_copy_shader_ = 0;
+    unsigned int hiz_downsample_shader_ = 0;
+    bool shaders_compiled_ = false;
+    void EnsureShaders();
+};
+
+// ---- Hi-Z Occlusion Cull Pass (Compute) ----
+class HiZCullPass : public IRenderPass {
+public:
+    explicit HiZCullPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "hiz_cull_pass"; }
+private:
+    RenderPassContext& ctx_;
+    unsigned int hiz_cull_shader_ = 0;
+    bool shader_compiled_ = false;
+    void EnsureShader();
+};
+
 } // namespace render
 } // namespace dse
 

@@ -34,6 +34,15 @@ struct RenderPipelineResources {
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
 
+    static constexpr size_t kHiZMaxObjects = 8192;
+    unsigned int hiz_texture = 0;        // Hi-Z depth mipmap (R32F, RHI handle)
+    unsigned int hiz_visibility_ssbo = 0; // Visibility SSBO for Hi-Z culling
+    unsigned int hiz_aabb_ssbo = 0;       // AABB SSBO for Hi-Z culling
+    size_t hiz_ssbo_capacity = 0;        // SSBO 当前容量（对象数）
+    unsigned int hiz_copy_shader = 0;    // Compute: depth → Hi-Z mip 0
+    unsigned int hiz_downsample_shader = 0; // Compute: mip N-1 → mip N
+    unsigned int hiz_cull_shader = 0;    // Compute: AABB 過滤
+
     unsigned int sprite_pipeline_state = 0;
     unsigned int mesh_pipeline_state = 0;
     unsigned int prez_pipeline_state = 0;
@@ -85,6 +94,13 @@ struct RenderPipelineResources {
         decal_blend_pipeline_state = 0;
         wboit_accum_pipeline_state = 0;
         wboit_reveal_pipeline_state = 0;
+        hiz_texture = 0;
+        hiz_visibility_ssbo = 0;
+        hiz_aabb_ssbo = 0;
+        hiz_ssbo_capacity = 0;
+        hiz_copy_shader = 0;
+        hiz_downsample_shader = 0;
+        hiz_cull_shader = 0;
     }
 };
 

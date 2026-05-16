@@ -474,5 +474,55 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
     }
 }
 
+void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                               int mip_level, bool read_only, bool r32f) {
+    // TODO: DX11 Hi-Z — 创建 per-mip UAV/SRV 并绑定到 CS
+    (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
+}
+
+void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+    // TODO: DX11 Hi-Z — 绑定纹理 SRV + sampler 到 CS
+    (void)unit; (void)texture_handle;
+}
+
+unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
+    // TODO: DX11 Hi-Z — 创建 DXGI_FORMAT_R32_FLOAT 纹理，完整 mip chain + UAV per mip
+    (void)width; (void)height;
+    return 0;
+}
+
+void DX11RhiDevice::DeleteHiZTexture(unsigned int handle) {
+    (void)handle;
+}
+
+int DX11RhiDevice::GetHiZMipCount(unsigned int handle) const {
+    (void)handle;
+    return 0;
+}
+
+unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
+    (void)handle;
+    return 0;
+}
+
+void DX11RhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+    (void)shader; (void)name; (void)value;
+}
+void DX11RhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+    (void)shader; (void)name; (void)value;
+}
+void DX11RhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+    (void)shader; (void)name; (void)x; (void)y;
+}
+void DX11RhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+    (void)shader; (void)name; (void)x; (void)y;
+}
+void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+    (void)shader; (void)name; (void)data;
+}
+void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+    (void)handle; (void)offset; (void)size; (void)dst;
+}
+
 } // namespace render
 } // namespace dse

@@ -219,7 +219,7 @@ Phase 1 — 基础能力补全 (~1周)
   └── ✅ NavMesh / 寻路（Recast/Detour submodule v1.6.0 + NavMeshSystem + NavAgentSystem + Lua API + 二进制序列化）
 
 Phase 2 — 渲染性能突破 (~2周)
-  ├── Hi-Z Occlusion Culling                                            [2-3天]
+  ├── ✅ Hi-Z Occlusion Culling（RHI 抽象 + Compute Mip Chain + GPU Cull + 早期剔除）
   ├── GPU Driven 渲染（Indirect Draw + Compute 视锥/遮挡剔除）          [5-7天]
   └── 资源流式加载（分块加载/卸载 + 距离触发 + 异步 IO 优先级队列）     [4-5天]
 

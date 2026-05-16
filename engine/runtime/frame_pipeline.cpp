@@ -37,6 +37,12 @@
 #include <cstdint>
 #include <sstream>
 
+namespace dse::render {
+    extern const char* kHiZCopyShaderSource;
+    extern const char* kHiZDownsampleShaderSource;
+    extern const char* kHiZCullShaderSource;
+}
+
 namespace {
 struct ReadbackStats {
     int width = 0;
@@ -361,6 +367,33 @@ bool FramePipeline::Init() {
         }
     }
 
+    // Hi-Z Occlusion Culling: R32F 纹理 + 完整 mip chain
+    if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
+        render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
+        if (render_resources_.hiz_texture != 0) {
+            const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
+            render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateSSBO(
+                cap * sizeof(uint32_t), nullptr);
+            render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateSSBO(
+                cap * 8 * sizeof(float), nullptr);
+            render_resources_.hiz_ssbo_capacity = cap;
+
+            // 创建 compute shader（仅一次，缓存句柄）— 源码定义在 builtin_passes.cpp
+            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCopyShaderSource);
+            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZDownsampleShaderSource);
+            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCullShaderSource);
+
+            DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
+                           render_resources_.hiz_texture,
+                           render_resources_.hiz_visibility_ssbo,
+                           render_resources_.hiz_aabb_ssbo,
+                           cap,
+                           render_resources_.hiz_copy_shader,
+                           render_resources_.hiz_downsample_shader,
+                           render_resources_.hiz_cull_shader);
+        }
+    }
+
     PipelineStateDesc sprite_desc;
     sprite_desc.blend_enabled = true;
     sprite_desc.blend_src = BlendFactor::SrcAlpha;
@@ -622,6 +655,34 @@ void FramePipeline::Shutdown() {
 
     asset_manager.ReleaseGpuResources();
 
+    // Hi-Z: 释放 GPU 资源
+    if (runtime_context_.rhi_device) {
+        if (render_resources_.hiz_copy_shader != 0) {
+            runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_copy_shader);
+            render_resources_.hiz_copy_shader = 0;
+        }
+        if (render_resources_.hiz_downsample_shader != 0) {
+            runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_downsample_shader);
+            render_resources_.hiz_downsample_shader = 0;
+        }
+        if (render_resources_.hiz_cull_shader != 0) {
+            runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_cull_shader);
+            render_resources_.hiz_cull_shader = 0;
+        }
+        if (render_resources_.hiz_texture != 0) {
+            runtime_context_.rhi_device->DeleteHiZTexture(render_resources_.hiz_texture);
+            render_resources_.hiz_texture = 0;
+        }
+        if (render_resources_.hiz_visibility_ssbo != 0) {
+            runtime_context_.rhi_device->DeleteSSBO(render_resources_.hiz_visibility_ssbo);
+            render_resources_.hiz_visibility_ssbo = 0;
+        }
+        if (render_resources_.hiz_aabb_ssbo != 0) {
+            runtime_context_.rhi_device->DeleteSSBO(render_resources_.hiz_aabb_ssbo);
+            render_resources_.hiz_aabb_ssbo = 0;
+        }
+    }
+
     if (runtime_context_.rhi_device) {
         runtime_context_.rhi_device->Shutdown();
         runtime_context_.rhi_device.reset();
@@ -768,9 +829,36 @@ void FramePipeline::RunRenderInternal() {
     // 每帧更新 Auto Exposure 所需的 delta_time
     render_pass_context_.delta_time = Time::delta_time();
 
+    // Hi-Z: 上传上一帧收集的 AABB 到 GPU SSBO（供 HiZCullPass 使用）
+    if (render_resources_.hiz_aabb_ssbo != 0 && render_resources_.hiz_visibility_ssbo != 0) {
+        const auto& aabbs = mesh_render_system_.cached_aabbs();
+        const int count = mesh_render_system_.cached_aabb_count();
+        if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
+            runtime_context_.rhi_device->UpdateSSBO(
+                render_resources_.hiz_aabb_ssbo, 0,
+                count * sizeof(dse::gameplay3d::HiZAABB),
+                aabbs.data());
+            render_pass_context_.hiz_object_count = count;
+        } else {
+            render_pass_context_.hiz_object_count = 0;
+        }
+    }
+
     ExecuteRenderGraph(*cmd_buffer);
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
+
+    // Hi-Z: GPU 执行完毕后，读回可见性 SSBO 供下一帧 MeshRenderSystem 使用
+    if (render_resources_.hiz_visibility_ssbo != 0 && render_pass_context_.hiz_object_count > 0
+        && render_pass_context_.hiz_culling_enabled) {
+        const int count = render_pass_context_.hiz_object_count;
+        std::vector<uint32_t> visibility(count, 1);
+        runtime_context_.rhi_device->ReadSSBO(
+            render_resources_.hiz_visibility_ssbo, 0,
+            count * sizeof(uint32_t), visibility.data());
+        mesh_render_system_.SetHiZVisibility(visibility);
+    }
+
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
         if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
@@ -911,6 +999,14 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
     render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
     render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
+    render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
+    render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
+    render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+    render_pass_context_.hiz_culling_enabled = false;
+    render_pass_context_.hiz_object_count = 0;
+    render_pass_context_.hiz_copy_shader = render_resources_.hiz_copy_shader;
+    render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
+    render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
 
     render_pass_context_.modules.clear();
     for (auto& mod : modules_) {
@@ -960,6 +1056,11 @@ void FramePipeline::BuildRenderGraphInternal() {
 
     // ---- 注册内置 Pass ----
     registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
+    // Hi-Z passes — 紧跟 PreZ 之后，在 Forward 之前
+    if (render_resources_.hiz_texture != 0) {
+        registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
+        registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
+    }
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));

@@ -43,10 +43,25 @@
 #define GL_RGBA32F 0x8814
 #endif
 
-// wglGetProcAddress 前置声明（避免引入 Windows.h）
+// GL 4.2+/4.3 函数指针（glad 仅加载 GL 3.3 core，需手动解析）
 #ifdef _WIN32
 extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
 #endif
+
+static void(GLAD_API_PTR* pfn_glDispatchCompute)(GLuint, GLuint, GLuint) = nullptr;
+static void(GLAD_API_PTR* pfn_glMemoryBarrier)(GLbitfield) = nullptr;
+static void(GLAD_API_PTR* pfn_glBindImageTexture)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum) = nullptr;
+
+static void InitComputeProcAddresses() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+#ifdef _WIN32
+    pfn_glDispatchCompute = reinterpret_cast<decltype(pfn_glDispatchCompute)>(wglGetProcAddress("glDispatchCompute"));
+    pfn_glMemoryBarrier = reinterpret_cast<decltype(pfn_glMemoryBarrier)>(wglGetProcAddress("glMemoryBarrier"));
+    pfn_glBindImageTexture = reinterpret_cast<decltype(pfn_glBindImageTexture)>(wglGetProcAddress("glBindImageTexture"));
+#endif
+}
 
 // BCn / S3TC / BPTC 压缩纹理格式常量
 #ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
@@ -945,41 +960,149 @@ void OpenGLRhiDevice::DeleteComputeShader(unsigned int handle) {
 void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
                                        unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
     if (!supports_ssbo_ || shader_handle == 0) return;
+    InitComputeProcAddresses();
     glUseProgram(shader_handle);
-
-    // glDispatchCompute 是 GL 4.3 函数
-    using PFN_glDispatchCompute = void(GLAD_API_PTR*)(GLuint, GLuint, GLuint);
-    static PFN_glDispatchCompute pfn = reinterpret_cast<PFN_glDispatchCompute>(
-        wglGetProcAddress("glDispatchCompute"));
-    if (pfn) {
-        pfn(groups_x, groups_y, groups_z);
-    }
+    if (pfn_glDispatchCompute) pfn_glDispatchCompute(groups_x, groups_y, groups_z);
     glUseProgram(0);
 }
 
 void OpenGLRhiDevice::ComputeMemoryBarrier() {
     if (!supports_ssbo_) return;
-
-    // glMemoryBarrier 是 GL 4.2+ 函数
-    using PFN_glMemoryBarrier = void(GLAD_API_PTR*)(GLbitfield);
-    static PFN_glMemoryBarrier pfn = reinterpret_cast<PFN_glMemoryBarrier>(
-        wglGetProcAddress("glMemoryBarrier"));
-    if (pfn) {
-        pfn(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-    }
+    InitComputeProcAddresses();
+    if (pfn_glMemoryBarrier) pfn_glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 }
 
 void OpenGLRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
     if (!supports_ssbo_ || texture_handle == 0) return;
-
-    // glBindImageTexture 是 GL 4.2+ 函数
-    using PFN_glBindImageTexture = void(GLAD_API_PTR*)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum);
-    static PFN_glBindImageTexture pfn = reinterpret_cast<PFN_glBindImageTexture>(
-        wglGetProcAddress("glBindImageTexture"));
-    if (pfn) {
+    InitComputeProcAddresses();
+    if (pfn_glBindImageTexture) {
         GLenum access = read_only ? GL_READ_ONLY : GL_READ_WRITE;
-        pfn(binding, texture_handle, 0, GL_FALSE, 0, access, GL_RGBA32F);
+        pfn_glBindImageTexture(binding, texture_handle, 0, GL_FALSE, 0, access, GL_RGBA32F);
     }
+}
+
+void OpenGLRhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                                  int mip_level, bool read_only, bool r32f) {
+    if (!supports_ssbo_ || texture_handle == 0) return;
+    InitComputeProcAddresses();
+    if (pfn_glBindImageTexture) {
+        GLenum access = read_only ? GL_READ_ONLY : GL_READ_WRITE;
+        GLenum format = r32f ? GL_R32F : GL_RGBA32F;
+        pfn_glBindImageTexture(binding, texture_handle, mip_level, GL_FALSE, 0, access, format);
+    }
+}
+
+void OpenGLRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+    if (!supports_ssbo_) return;
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(GL_TEXTURE_2D, texture_handle);
+}
+
+// --- Hi-Z Occlusion Culling ---
+
+unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
+    if (!supports_ssbo_ || width <= 0 || height <= 0) return 0;
+
+    int mip_count = 1;
+    {
+        int w = width, h = height;
+        while (w > 1 || h > 1) {
+            w = std::max(1, w / 2);
+            h = std::max(1, h / 2);
+            ++mip_count;
+        }
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    if (tex == 0) return 0;
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    // 分配所有 mip level 的存储
+    for (int i = 0; i < mip_count; ++i) {
+        int mip_w = std::max(1, width >> i);
+        int mip_h = std::max(1, height >> i);
+        glTexImage2D(GL_TEXTURE_2D, i, GL_R32F, mip_w, mip_h, 0, GL_RED, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mip_count - 1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    unsigned int handle = next_hiz_handle_++;
+    hiz_textures_[handle] = {tex, width, height, mip_count};
+    DEBUG_LOG_INFO("Hi-Z texture created: handle={} gl_tex={} {}x{} mips={}",
+                   handle, tex, width, height, mip_count);
+    return handle;
+}
+
+void OpenGLRhiDevice::DeleteHiZTexture(unsigned int handle) {
+    auto it = hiz_textures_.find(handle);
+    if (it == hiz_textures_.end()) return;
+    if (it->second.gl_texture) {
+        glDeleteTextures(1, &it->second.gl_texture);
+    }
+    hiz_textures_.erase(it);
+}
+
+int OpenGLRhiDevice::GetHiZMipCount(unsigned int handle) const {
+    auto it = hiz_textures_.find(handle);
+    return it != hiz_textures_.end() ? it->second.mip_count : 0;
+}
+
+unsigned int OpenGLRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
+    auto it = hiz_textures_.find(handle);
+    return it != hiz_textures_.end() ? it->second.gl_texture : 0;
+}
+
+// --- Compute Uniform ---
+
+void OpenGLRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform1i(loc, value);
+}
+
+void OpenGLRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform1f(loc, value);
+}
+
+void OpenGLRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform2i(loc, x, y);
+}
+
+void OpenGLRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform2f(loc, x, y);
+}
+
+void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+    if (!supports_ssbo_ || shader == 0 || !name || !data) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, data);
+}
+
+// --- SSBO 读回 ---
+
+void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+    if (!supports_ssbo_ || handle == 0 || !dst || size == 0) return;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(offset),
+                       static_cast<GLsizeiptr>(size), dst);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 // --- 资源账本 ---

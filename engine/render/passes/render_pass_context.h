@@ -77,7 +77,17 @@ struct RenderPassContext {
         unsigned int deferred_lighting = 0; // Deferred lighting output RT
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
+        unsigned int hiz_texture = 0;       // Hi-Z depth mipmap (R32F, RHI handle)
     } render_targets;
+
+    /// Hi-Z Occlusion Culling 状态
+    unsigned int hiz_visibility_ssbo = 0;   ///< 可见性 SSBO（每个 mesh 1 uint: 1=visible, 0=occluded）
+    unsigned int hiz_aabb_ssbo = 0;         ///< AABB SSBO（每个 mesh 6 floats: min_xyz, max_xyz）
+    int hiz_object_count = 0;               ///< 当前帧 mesh 数量
+    bool hiz_culling_enabled = false;       ///< Hi-Z 剔除是否激活
+    unsigned int hiz_copy_shader = 0;       ///< Compute: depth → Hi-Z mip 0（由 FramePipeline 管理生命周期）
+    unsigned int hiz_downsample_shader = 0; ///< Compute: mip N-1 → mip N
+    unsigned int hiz_cull_shader = 0;       ///< Compute: AABB 遮挡剔除
 
     /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
     bool fxaa_active = false;

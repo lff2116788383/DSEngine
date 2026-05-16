@@ -542,6 +542,56 @@ void VulkanRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int 
     (void)binding; (void)texture_handle; (void)read_only;
 }
 
+void VulkanRhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                                 int mip_level, bool read_only, bool r32f) {
+    // TODO: Vulkan Hi-Z — 通过 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE 绑定指定 mip level
+    (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
+}
+
+void VulkanRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+    // TODO: Vulkan Hi-Z — 通过 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 绑定
+    (void)unit; (void)texture_handle;
+}
+
+unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
+    // TODO: Vulkan Hi-Z — 创建 VK_FORMAT_R32_SFLOAT 纹理，完整 mip chain
+    (void)width; (void)height;
+    return 0;
+}
+
+void VulkanRhiDevice::DeleteHiZTexture(unsigned int handle) {
+    (void)handle;
+}
+
+int VulkanRhiDevice::GetHiZMipCount(unsigned int handle) const {
+    (void)handle;
+    return 0;
+}
+
+unsigned int VulkanRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
+    (void)handle;
+    return 0;
+}
+
+void VulkanRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+    (void)shader; (void)name; (void)value;
+}
+void VulkanRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+    (void)shader; (void)name; (void)value;
+}
+void VulkanRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+    (void)shader; (void)name; (void)x; (void)y;
+}
+void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+    (void)shader; (void)name; (void)x; (void)y;
+}
+void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+    (void)shader; (void)name; (void)data;
+}
+void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+    (void)handle; (void)offset; (void)size; (void)dst;
+}
+
 unsigned int VulkanRhiDevice::CreateVertexArray() {
     // Vulkan 不需要 VAO 概念，顶点格式在 VkPipeline 创建时指定
     // 返回占位句柄以兼容 RhiDevice 接口

@@ -652,6 +652,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     std::vector<MeshDrawItem> batch_items;
     batch_items.reserve(view.size_hint());
 
+    // Hi-Z: 准备收集本帧 AABB
+    cached_aabbs_.clear();
+    cached_aabbs_.reserve(view.size_hint());
+    int hiz_mesh_index = 0;
+
     // GPU Instancing: 相同 mesh_path + 材质的非蛮皮实体合批（零堆分配 key）
     std::unordered_map<InstancingKey, size_t, InstancingKeyHash> instancing_map;
 
@@ -661,6 +666,53 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         
         EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
         if (!mesh_renderer.visible) continue;
+
+        // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
+        if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
+            const int stride = mesh_renderer.dmesh_vertex_stride;
+            const size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
+            glm::vec3 lb_min(std::numeric_limits<float>::max());
+            glm::vec3 lb_max(std::numeric_limits<float>::lowest());
+            for (size_t i = 0; i < vertex_count; ++i) {
+                glm::vec3 p(mesh_renderer.temp_vertices[i * stride],
+                            mesh_renderer.temp_vertices[i * stride + 1],
+                            mesh_renderer.temp_vertices[i * stride + 2]);
+                lb_min = glm::min(lb_min, p);
+                lb_max = glm::max(lb_max, p);
+            }
+            mesh_renderer.local_bounds_min = lb_min;
+            mesh_renderer.local_bounds_max = lb_max;
+            mesh_renderer.local_bounds_valid = true;
+        }
+
+        // Hi-Z: 早期遮挡剔除 — 用 local bounds + transform 快速计算保守世界 AABB
+        if (mesh_renderer.local_bounds_valid) {
+            const glm::mat4 model = glm::translate(glm::mat4(1.0f), transform.position)
+                                  * glm::mat4_cast(transform.rotation)
+                                  * glm::scale(glm::mat4(1.0f), transform.scale);
+            const glm::vec3& bmin = mesh_renderer.local_bounds_min;
+            const glm::vec3& bmax = mesh_renderer.local_bounds_max;
+            glm::vec3 w_min(std::numeric_limits<float>::max());
+            glm::vec3 w_max(std::numeric_limits<float>::lowest());
+            for (int ci = 0; ci < 8; ++ci) {
+                glm::vec3 corner = glm::vec3(model * glm::vec4(
+                    (ci & 1) ? bmax.x : bmin.x,
+                    (ci & 2) ? bmax.y : bmin.y,
+                    (ci & 4) ? bmax.z : bmin.z, 1.0f));
+                w_min = glm::min(w_min, corner);
+                w_max = glm::max(w_max, corner);
+            }
+            cached_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
+
+            // 检查上一帧的可见性
+            if (hiz_mesh_index < static_cast<int>(hiz_visibility_.size())) {
+                if (hiz_visibility_[hiz_mesh_index] == 0) {
+                    ++hiz_mesh_index;
+                    continue;  // 被遮挡，跳过后续全部顶点处理
+                }
+            }
+            ++hiz_mesh_index;
+        }
         
         std::shared_ptr<MaterialAsset> material_instance;
         if (mesh_renderer.material_instance_id != 0) {
@@ -1081,6 +1133,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.indices = mesh_renderer.temp_indices;
             item.debug_world_bounds_min = world_min;
             item.debug_world_bounds_max = world_max;
+
             if (emit_vse1522_depth_diag) {
 #ifdef DSE_VSE_1522_DIAG
                 static int vse1522_diag_frame = 0;

@@ -5,6 +5,7 @@
 
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/base/debug.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
@@ -2006,6 +2007,308 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.DrawPostProcess(scene_tex, "decal", params);
     }
     cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// HiZBuildPass — 从 PreZ 深度构建 Hi-Z Mip Chain (Compute Shader)
+// ============================================================
+
+const char* kHiZCopyShaderSource = R"(
+#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+
+uniform sampler2D u_depth_texture;
+layout(r32f, binding = 0) writeonly uniform image2D u_hiz_mip0;
+
+uniform ivec2 u_dst_size;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= u_dst_size.x || coord.y >= u_dst_size.y) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(u_dst_size);
+    float depth = texture(u_depth_texture, uv).r;
+    imageStore(u_hiz_mip0, coord, vec4(depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZDownsampleShaderSource = R"(
+#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(r32f, binding = 0) readonly uniform image2D u_src_mip;
+layout(r32f, binding = 1) writeonly uniform image2D u_dst_mip;
+
+uniform ivec2 u_src_size;
+uniform ivec2 u_dst_size;
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (dst_coord.x >= u_dst_size.x || dst_coord.y >= u_dst_size.y) return;
+
+    ivec2 src_coord = dst_coord * 2;
+
+    float d00 = imageLoad(u_src_mip, src_coord).r;
+    float d10 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 0), u_src_size - 1)).r;
+    float d01 = imageLoad(u_src_mip, min(src_coord + ivec2(0, 1), u_src_size - 1)).r;
+    float d11 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 1), u_src_size - 1)).r;
+
+    // Conservative: take MAX depth (farthest), so occluder test is pessimistic
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    imageStore(u_dst_mip, dst_coord, vec4(max_depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZCullShaderSource = R"(
+#version 430 core
+layout(local_size_x = 64) in;
+
+struct AABB {
+    vec4 min_point; // xyz = world min, w = padding
+    vec4 max_point; // xyz = world max, w = padding
+};
+
+layout(std430, binding = 0) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(std430, binding = 1) writeonly buffer VisibilityBuffer {
+    uint visibility[];
+};
+
+uniform sampler2D u_hiz_texture;
+uniform mat4 u_view_projection;
+uniform vec2 u_screen_size;
+uniform int u_mip_count;
+uniform int u_object_count;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    // Project all 8 corners to NDC
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            // Behind camera — conservatively mark as visible
+            visibility[idx] = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    // Convert NDC [-1,1] to UV [0,1]
+    vec2 uv_min = ndc_min * 0.5 + 0.5;
+    vec2 uv_max = ndc_max * 0.5 + 0.5;
+
+    // Clamp to screen
+    uv_min = clamp(uv_min, vec2(0.0), vec2(1.0));
+    uv_max = clamp(uv_max, vec2(0.0), vec2(1.0));
+
+    // If fully outside frustum, mark occluded
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        visibility[idx] = 0u;
+        return;
+    }
+
+    // Determine appropriate mip level based on screen-space size
+    vec2 size_pixels = (uv_max - uv_min) * u_screen_size;
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
+
+    // Convert depth from NDC [-1,1] to [0,1] for comparison
+    float test_depth = nearest_z * 0.5 + 0.5;
+
+    // Sample Hi-Z at the center of the projected AABB
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_depth = textureLod(u_hiz_texture, uv_center, mip_level).r;
+
+    // Also sample at corners for conservative test
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_depth, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    // Object is occluded if its nearest depth is farther than Hi-Z (reversed for max buffer)
+    // For standard depth buffer (0=near, 1=far): occluded if test_depth > max_hiz
+    if (test_depth > max_hiz) {
+        visibility[idx] = 0u;
+    } else {
+        visibility[idx] = 1u;
+    }
+}
+)";
+
+void HiZBuildPass::EnsureShaders() {
+    if (shaders_compiled_) return;
+    shaders_compiled_ = true;
+
+    // 使用 FramePipeline 缓存的 shader 句柄，避免每帧重建泄漏
+    hiz_copy_shader_ = ctx_.hiz_copy_shader;
+    hiz_downsample_shader_ = ctx_.hiz_downsample_shader;
+}
+
+void HiZBuildPass::Setup(RenderGraph& graph) {
+    auto prez_depth = graph.DeclareResource("prez_depth");
+    auto hiz_mip = graph.DeclareResource("hiz_mip_chain");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, hiz_mip);
+    graph.MarkOutput(hiz_mip);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
+    EnsureShaders();
+    if (hiz_copy_shader_ == 0 || hiz_downsample_shader_ == 0) return;
+    if (ctx_.render_targets.hiz_texture == 0 || ctx_.render_targets.prez == 0) return;
+
+    auto* rhi = ctx_.rhi_device;
+    if (!rhi) return;
+
+    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (hiz_gpu_tex == 0) return;
+
+    const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
+    if (mip_count <= 0) return;
+
+    const int base_w = Screen::width();
+    const int base_h = Screen::height();
+
+    // Step 1: Copy PreZ depth → Hi-Z mip 0
+    {
+        unsigned int depth_tex = rhi->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+        if (depth_tex == 0) return;
+
+        rhi->SetComputeTextureSampler(0, depth_tex);
+        rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
+
+        rhi->SetComputeUniformInt(hiz_copy_shader_, "u_depth_texture", 0);
+        rhi->SetComputeUniformVec2i(hiz_copy_shader_, "u_dst_size", base_w, base_h);
+
+        unsigned int groups_x = (base_w + 15) / 16;
+        unsigned int groups_y = (base_h + 15) / 16;
+        rhi->DispatchCompute(hiz_copy_shader_, groups_x, groups_y, 1);
+        rhi->ComputeMemoryBarrier();
+    }
+
+    // Step 2: Iterative downsample mip N-1 → mip N
+    for (int mip = 1; mip < mip_count; ++mip) {
+        int src_w = std::max(1, base_w >> (mip - 1));
+        int src_h = std::max(1, base_h >> (mip - 1));
+        int dst_w = std::max(1, base_w >> mip);
+        int dst_h = std::max(1, base_h >> mip);
+
+        rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, mip - 1, true, true);
+        rhi->SetComputeTextureImageMip(1, hiz_gpu_tex, mip, false, true);
+
+        rhi->SetComputeUniformVec2i(hiz_downsample_shader_, "u_src_size", src_w, src_h);
+        rhi->SetComputeUniformVec2i(hiz_downsample_shader_, "u_dst_size", dst_w, dst_h);
+
+        unsigned int groups_x = (dst_w + 15) / 16;
+        unsigned int groups_y = (dst_h + 15) / 16;
+        rhi->DispatchCompute(hiz_downsample_shader_, groups_x, groups_y, 1);
+        rhi->ComputeMemoryBarrier();
+    }
+
+    ctx_.hiz_culling_enabled = true;
+}
+
+// ============================================================
+// HiZCullPass — GPU-driven 遮挡剔除 (Compute Shader)
+// ============================================================
+
+void HiZCullPass::EnsureShader() {
+    if (shader_compiled_) return;
+    shader_compiled_ = true;
+
+    // 使用 FramePipeline 缓存的 shader 句柄
+    hiz_cull_shader_ = ctx_.hiz_cull_shader;
+}
+
+void HiZCullPass::Setup(RenderGraph& graph) {
+    auto hiz_mip = graph.DeclareResource("hiz_mip_chain");
+    auto hiz_visibility = graph.DeclareResource("hiz_visibility");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, hiz_mip);
+    graph.PassWrite(pass, hiz_visibility);
+    graph.MarkOutput(hiz_visibility);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
+    EnsureShader();
+    if (hiz_cull_shader_ == 0) return;
+    if (ctx_.render_targets.hiz_texture == 0) return;
+    if (ctx_.hiz_aabb_ssbo == 0 || ctx_.hiz_visibility_ssbo == 0) return;
+    if (ctx_.hiz_object_count <= 0) return;
+
+    auto* rhi = ctx_.rhi_device;
+    if (!rhi) return;
+
+    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (hiz_gpu_tex == 0) return;
+
+    const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
+
+    // Bind SSBOs
+    rhi->BindSSBO(ctx_.hiz_aabb_ssbo, 0);
+    rhi->BindSSBO(ctx_.hiz_visibility_ssbo, 1);
+
+    // Bind Hi-Z texture as sampler
+    rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
+
+    // Get current camera VP matrix for AABB projection
+    glm::mat4 view_projection(1.0f);
+    {
+        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+        for (auto entity : camera3d_view) {
+            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
+            if (!camera.enabled) continue;
+            if (!ctx_.world->registry().all_of<TransformComponent>(entity)) continue;
+            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
+            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::mat4 view = glm::lookAt(transform.position, transform.position + front, up);
+            const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
+            glm::mat4 projection = clip_correction * glm::perspective(
+                glm::radians(camera.fov),
+                static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
+                camera.near_clip, camera.far_clip);
+            view_projection = projection * view;
+            break;
+        }
+    }
+
+    // Set uniforms through RHI
+    rhi->SetComputeUniformInt(hiz_cull_shader_, "u_hiz_texture", 0);
+    rhi->SetComputeUniformMat4(hiz_cull_shader_, "u_view_projection", &view_projection[0][0]);
+    rhi->SetComputeUniformVec2f(hiz_cull_shader_, "u_screen_size",
+                                static_cast<float>(Screen::width()),
+                                static_cast<float>(Screen::height()));
+    rhi->SetComputeUniformInt(hiz_cull_shader_, "u_mip_count", mip_count);
+    rhi->SetComputeUniformInt(hiz_cull_shader_, "u_object_count", ctx_.hiz_object_count);
+
+    unsigned int groups_x = (static_cast<unsigned int>(ctx_.hiz_object_count) + 63) / 64;
+    rhi->DispatchCompute(hiz_cull_shader_, groups_x, 1, 1);
+    rhi->ComputeMemoryBarrier();
 }
 
 } // namespace render

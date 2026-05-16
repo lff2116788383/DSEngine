@@ -145,7 +145,24 @@ public:
     void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
     void ComputeMemoryBarrier() override;
     void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                   int mip_level, bool read_only, bool r32f = false) override;
+    void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
     bool SupportsCompute() const override { return true; }
+
+    // --- Hi-Z Occlusion Culling ---
+    unsigned int CreateHiZTexture(int width, int height) override;
+    void DeleteHiZTexture(unsigned int handle) override;
+    int GetHiZMipCount(unsigned int handle) const override;
+    unsigned int GetHiZGpuTexture(unsigned int handle) const override;
+
+    // --- Compute Uniform ---
+    void SetComputeUniformInt(unsigned int shader, const char* name, int value) override;
+    void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
+    void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
+    void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
+    void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }

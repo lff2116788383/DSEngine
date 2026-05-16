@@ -66,6 +66,11 @@ struct MeshRendererComponent {
     std::vector<float> temp_normals;
     std::vector<float> temp_tangents;
     int dmesh_vertex_stride = 20;  ///< v1=20 (no color), v2=24 (with RGBA color at [20-23])
+
+    /// Hi-Z: 本地空间 AABB（mesh 加载后一次性计算）
+    glm::vec3 local_bounds_min = glm::vec3(0.0f);
+    glm::vec3 local_bounds_max = glm::vec3(0.0f);
+    bool local_bounds_valid = false;
 };
 
 struct LODLevelConfig {
