@@ -44,6 +44,16 @@ struct DrawExecutorGlobalState {
     glm::vec4 light_probe_sh[9] = {};
     bool light_probe_enabled = false;
 
+    // --- DDGI ---
+    bool ddgi_enabled = false;
+    unsigned int ddgi_irradiance_atlas = 0;
+    glm::vec3 ddgi_grid_origin = glm::vec3(0.0f);
+    glm::vec3 ddgi_grid_spacing = glm::vec3(1.0f);
+    glm::ivec3 ddgi_grid_resolution = glm::ivec3(0);
+    int ddgi_irradiance_texels = 8;
+    float ddgi_gi_intensity = 1.0f;
+    float ddgi_normal_bias = 0.2f;
+
     // --- GBuffer (Deferred) ---
     static constexpr int kMaxGBufferTextures = 4;
     unsigned int gbuffer_texture[kMaxGBufferTextures] = {};

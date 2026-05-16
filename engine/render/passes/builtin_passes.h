@@ -359,6 +359,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- DDGI Update Pass (Compute) ----
+class DDGIUpdatePass : public IRenderPass {
+public:
+    explicit DDGIUpdatePass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "ddgi_update_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 } // namespace render
 } // namespace dse
 

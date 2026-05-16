@@ -27,6 +27,10 @@ namespace render {
 class LightBuffer;
 class ClusterGrid;
 
+namespace gi {
+class DDGISystem;
+} // namespace gi
+
 /**
  * @struct RenderPassContext
  * @brief 所有 Pass 共享的运行时上下文（非拥有型指针）
@@ -130,6 +134,25 @@ struct RenderPassContext {
     std::function<void(World&, CommandBuffer&, int, int, const glm::mat4&)> render_2d_ui;
     std::function<void(World&, CommandBuffer&)> render_meshes;
     std::function<void(World&, CommandBuffer&, int wboit_mode)> render_transparent_meshes;
+
+    /// DDGI 系统（FramePipeline 持有生命周期，Pass 通过指针访问）
+    gi::DDGISystem* ddgi_system = nullptr;
+
+    /// RSM (Reflective Shadow Map) 渲染目标
+    struct RSMRenderTargets {
+        unsigned int position = 0;    ///< 世界坐标 RT (RGBA32F)
+        unsigned int normal = 0;      ///< 法线 RT (RGBA16F)
+        unsigned int flux = 0;        ///< 辐射通量 RT (RGBA16F)
+        int width = 0;
+        int height = 0;
+    } rsm_targets;
+
+    /// DDGI 探针 atlas 纹理（供 PBR shader 采样）
+    unsigned int ddgi_irradiance_atlas = 0;
+    unsigned int ddgi_visibility_atlas = 0;
+    bool ddgi_active = false;
+    float ddgi_gi_intensity = 1.0f;
+    float ddgi_normal_bias = 0.2f;
 };
 
 } // namespace render

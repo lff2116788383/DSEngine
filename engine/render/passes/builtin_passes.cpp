@@ -6,6 +6,7 @@
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
+#include "engine/render/gi/ddgi_system.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
@@ -2550,6 +2551,51 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     unsigned int groups_x = (static_cast<unsigned int>(ctx_.gpu_indirect_draw_count) + 63) / 64;
     rhi->DispatchCompute(shader, groups_x, 1, 1);
     rhi->ComputeMemoryBarrier();
+}
+
+// ============================================================
+// DDGIUpdatePass — 从 RSM VPL 更新 Irradiance Probe Atlas (Compute Shader)
+// ============================================================
+
+void DDGIUpdatePass::Setup(RenderGraph& graph) {
+    auto rsm_data = graph.DeclareResource("rsm_data");
+    auto ddgi_atlas = graph.DeclareResource("ddgi_irradiance_atlas");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, rsm_data);
+    graph.PassWrite(pass, ddgi_atlas);
+    graph.MarkOutput(ddgi_atlas);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
+    if (!ctx_.ddgi_active || !ctx_.ddgi_system) return;
+
+    auto* rhi = ctx_.rhi_device;
+    if (!rhi || !rhi->SupportsCompute()) return;
+
+    // 获取主方向光参数
+    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color(1.0f);
+
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    for (auto entity : light_view) {
+        auto& light = light_view.get<dse::DirectionalLight3DComponent>(entity);
+        if (!light.enabled) continue;
+        light_dir = glm::normalize(-light.direction);  // toward light
+        light_color = glm::vec3(light.color) * light.intensity;
+        break;
+    }
+
+    // 驱动 DDGI 系统更新探针
+    ctx_.ddgi_system->UpdateProbes(rhi,
+                                    ctx_.rsm_targets.width,
+                                    ctx_.rsm_targets.height,
+                                    light_dir, light_color);
+
+    // 更新 context 中的 atlas 句柄供后续 Pass 采样
+    const auto& res = ctx_.ddgi_system->GetResources();
+    ctx_.ddgi_irradiance_atlas = res.irradiance_atlas;
+    ctx_.ddgi_visibility_atlas = res.visibility_atlas;
 }
 
 } // namespace render

@@ -1120,6 +1120,20 @@ void OpenGLRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* na
     if (loc >= 0) glUniform2f(loc, x, y);
 }
 
+void OpenGLRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform3f(loc, x, y, z);
+}
+
+void OpenGLRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+    if (!supports_ssbo_ || shader == 0 || !name) return;
+    glUseProgram(shader);
+    GLint loc = glGetUniformLocation(shader, name);
+    if (loc >= 0) glUniform3i(loc, x, y, z);
+}
+
 void OpenGLRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
     glUseProgram(shader);

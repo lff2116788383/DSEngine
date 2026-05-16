@@ -236,6 +236,17 @@ public:
     virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
     virtual void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) = 0;
 
+    // --- DDGI 全局状态 ---
+    virtual void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
+                                const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
+                                const glm::ivec3& grid_resolution, int irradiance_texels,
+                                float gi_intensity, float normal_bias) {
+        (void)enabled; (void)irradiance_atlas;
+        (void)grid_origin; (void)grid_spacing;
+        (void)grid_resolution; (void)irradiance_texels;
+        (void)gi_intensity; (void)normal_bias;
+    }
+
     // --- GBuffer / Deferred 管线状态 ---
     virtual void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
         (void)index; (void)texture_handle;
@@ -372,6 +383,14 @@ public:
     /// 设置 compute shader 的 vec2 uniform
     virtual void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
         (void)shader; (void)name; (void)x; (void)y;
+    }
+    /// 设置 compute shader 的 vec3 uniform
+    virtual void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+        (void)shader; (void)name; (void)x; (void)y; (void)z;
+    }
+    /// 设置 compute shader 的 ivec3 uniform
+    virtual void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+        (void)shader; (void)name; (void)x; (void)y; (void)z;
     }
     /// 设置 compute shader 的 vec4 uniform
     virtual void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
@@ -567,6 +586,15 @@ public:
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
         draw_executor_.SetGlobalLightProbeSH(sh, enabled);
     }
+    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
+                        const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
+                        const glm::ivec3& grid_resolution, int irradiance_texels,
+                        float gi_intensity, float normal_bias) override {
+        draw_executor_.SetGlobalDDGI(enabled, irradiance_atlas,
+                                      grid_origin, grid_spacing,
+                                      grid_resolution, irradiance_texels,
+                                      gi_intensity, normal_bias);
+    }
     void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
         draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
     }
@@ -604,6 +632,8 @@ public:
     void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
     void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
     void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) override;
+    void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) override;
     void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
     void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
 

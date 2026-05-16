@@ -2230,6 +2230,16 @@ layout(binding = 15) uniform sampler2D u_splat_layer3;
 uniform float u_splat_enabled;
 uniform vec4 u_splat_tiling;
 
+// DDGI Irradiance Probe uniforms
+layout(binding = 21) uniform sampler2D u_ddgi_irradiance_atlas;
+uniform float u_ddgi_enabled;
+uniform vec3 u_ddgi_grid_origin;
+uniform vec3 u_ddgi_grid_spacing;
+uniform ivec3 u_ddgi_grid_resolution;
+uniform int u_ddgi_irradiance_texels;
+uniform float u_ddgi_gi_intensity;
+uniform float u_ddgi_normal_bias;
+
 layout(location = 1) in vec2 vTexCoord;
 layout(location = 4) in mat3 vTBN;
 layout(location = 2) in vec3 vFragPos;
@@ -2564,6 +2574,51 @@ vec3 EvaluateSH(vec3 N)
     vec3 _341 = ((((((((_231.sh_coefficients[0].xyz * 0.2820949852466583251953125) + ((_231.sh_coefficients[1].xyz * 0.48860299587249755859375) * N.y)) + ((_231.sh_coefficients[2].xyz * 0.48860299587249755859375) * N.z)) + ((_231.sh_coefficients[3].xyz * 0.48860299587249755859375) * N.x)) + (((_231.sh_coefficients[4].xyz * 1.09254801273345947265625) * N.x) * N.y)) + (((_231.sh_coefficients[5].xyz * 1.09254801273345947265625) * N.y) * N.z)) + ((_231.sh_coefficients[6].xyz * 0.3153919875621795654296875) * (((3.0 * N.z) * N.z) - 1.0))) + (((_231.sh_coefficients[7].xyz * 1.09254801273345947265625) * N.x) * N.z)) + ((_231.sh_coefficients[8].xyz * 0.546274006366729736328125) * ((N.x * N.x) - (N.y * N.y)));
     vec3 result = _341;
     return max(result, vec3(0.0));
+}
+)"
+R"(
+vec2 ddgi_oct_encode(vec3 n) {
+    float s = abs(n.x) + abs(n.y) + abs(n.z);
+    vec2 oct = n.xy / s;
+    if (n.z < 0.0) {
+        oct = (1.0 - abs(oct.yx)) * sign(oct.xy);
+    }
+    return oct * 0.5 + 0.5;
+}
+
+vec3 SampleDDGIIrradiance(vec3 worldPos, vec3 normal) {
+    vec3 biased_pos = worldPos + normal * u_ddgi_normal_bias;
+    vec3 grid_coord = (biased_pos - u_ddgi_grid_origin) / u_ddgi_grid_spacing;
+    ivec3 base = ivec3(floor(grid_coord));
+    vec3 frac_coord = grid_coord - vec3(base);
+    base = clamp(base, ivec3(0), u_ddgi_grid_resolution - ivec3(2));
+    vec2 oct_uv = ddgi_oct_encode(normal);
+    vec3 total_irradiance = vec3(0.0);
+    float total_weight = 0.0;
+    int atlas_probes_per_row = u_ddgi_grid_resolution.x * u_ddgi_grid_resolution.z;
+    vec2 atlas_size = vec2(atlas_probes_per_row * u_ddgi_irradiance_texels,
+                           u_ddgi_grid_resolution.y * u_ddgi_irradiance_texels);
+    for (int i = 0; i < 8; ++i) {
+        ivec3 offset = ivec3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+        ivec3 probe_coord = base + offset;
+        if (any(greaterThanEqual(probe_coord, u_ddgi_grid_resolution))) continue;
+        vec3 probe_pos = u_ddgi_grid_origin + vec3(probe_coord) * u_ddgi_grid_spacing;
+        vec3 to_probe = normalize(probe_pos - worldPos);
+        float dir_weight = max(0.0001, (dot(to_probe, normal) + 1.0) * 0.5);
+        vec3 trilinear = mix(vec3(1.0) - frac_coord, frac_coord, vec3(offset));
+        float w = trilinear.x * trilinear.y * trilinear.z * dir_weight;
+        int col = probe_coord.x + probe_coord.z * u_ddgi_grid_resolution.x;
+        int row = probe_coord.y;
+        vec2 texel = (vec2(col, row) * float(u_ddgi_irradiance_texels) +
+                      oct_uv * float(u_ddgi_irradiance_texels - 1) + 0.5) / atlas_size;
+        vec3 probe_irr = texture(u_ddgi_irradiance_atlas, texel).rgb;
+        total_irradiance += probe_irr * w;
+        total_weight += w;
+    }
+    if (total_weight > 0.0001) {
+        total_irradiance /= total_weight;
+    }
+    return max(total_irradiance, vec3(0.0));
 }
 
 vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
@@ -2966,6 +3021,10 @@ R"(        float denominator_2 = ((4.0 * max(dot(N, V), 0.0)) * max(dot(N, L_5),
         _2561 = vec3(_829.light_color_and_ambient.w);
     }
     vec3 irradiance = _2561;
+    if (u_ddgi_enabled > 0.5) {
+        vec3 ddgi_irr = SampleDDGIIrradiance(vFragPos, N);
+        irradiance += ddgi_irr * u_ddgi_gi_intensity;
+    }
     vec3 diffuse_ambient = (kD_ambient * irradiance) * surface_albedo;
     vec3 _2582;
     if (_231.probe_params.y > 0.5)

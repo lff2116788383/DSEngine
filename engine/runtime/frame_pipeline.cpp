@@ -591,6 +591,8 @@ bool FramePipeline::Init() {
     // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
     reflection_probe_system_.Init(runtime_context_.rhi_device.get());
 
+    // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
+
     // 资源流式加载管理器初始化
     streaming_manager_.Init(&asset_manager);
     {
@@ -675,6 +677,7 @@ void FramePipeline::Shutdown() {
     light_buffer_.Shutdown();
     light_probe_system_.Shutdown();
     reflection_probe_system_.Shutdown(runtime_context_.rhi_device.get());
+    ddgi_system_.Shutdown(runtime_context_.rhi_device.get());
     taa_pass_ = nullptr;
 
     asset_manager.ReleaseGpuResources();
@@ -884,6 +887,59 @@ void FramePipeline::RunRenderInternal() {
 
     // 每帧更新 Auto Exposure 所需的 delta_time
     render_pass_context_.delta_time = Time::delta_time();
+
+    // DDGI: 检测 GIProbeVolumeComponent，按需初始化/更新系统
+    render_pass_context_.ddgi_active = false;
+    render_pass_context_.ddgi_system = nullptr;
+    if (runtime_context_.world && runtime_context_.rhi_device->SupportsCompute()) {
+        auto gi_view = runtime_context_.world->registry().view<dse::GIProbeVolumeComponent>();
+        for (auto entity : gi_view) {
+            auto& gi = gi_view.get<dse::GIProbeVolumeComponent>(entity);
+            if (!gi.enabled) continue;
+
+            // 按需初始化或重配置
+            if (gi.needs_reinit_ || !ddgi_system_.IsInitialized()) {
+                dse::render::gi::DDGIVolumeConfig cfg;
+                cfg.origin = gi.origin;
+                cfg.extent = gi.extent;
+                cfg.resolution = glm::ivec3(gi.resolution_x, gi.resolution_y, gi.resolution_z);
+                cfg.irradiance_texels = gi.irradiance_texels;
+                cfg.visibility_texels = gi.visibility_texels;
+                cfg.rays_per_probe = gi.rays_per_probe;
+                cfg.hysteresis = gi.hysteresis;
+                if (ddgi_system_.IsInitialized()) {
+                    ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
+                } else {
+                    ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
+                }
+                gi.needs_reinit_ = false;
+            }
+
+            if (ddgi_system_.IsInitialized()) {
+                render_pass_context_.ddgi_system = &ddgi_system_;
+                render_pass_context_.ddgi_active = true;
+                render_pass_context_.ddgi_gi_intensity = gi.gi_intensity;
+                render_pass_context_.ddgi_normal_bias = gi.normal_bias;
+                const auto& res = ddgi_system_.GetResources();
+                render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
+                render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
+            }
+            break;  // 仅支持单个 GI Volume
+        }
+    }
+    // 同步 DDGI 状态到 RHI 全局渲染状态
+    if (render_pass_context_.ddgi_active) {
+        const auto& cfg = ddgi_system_.GetConfig();
+        runtime_context_.rhi_device->SetGlobalDDGI(
+            true, render_pass_context_.ddgi_irradiance_atlas,
+            cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
+            cfg.irradiance_texels,
+            render_pass_context_.ddgi_gi_intensity,
+            render_pass_context_.ddgi_normal_bias);
+    } else {
+        runtime_context_.rhi_device->SetGlobalDDGI(
+            false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
+    }
 
     // Hi-Z: 上传上一帧收集的 AABB 到 GPU SSBO（供 HiZCullPass 使用）
     if (render_resources_.hiz_aabb_ssbo != 0 && render_resources_.hiz_visibility_ssbo != 0) {
@@ -1163,6 +1219,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
+    // DDGI Probe Update — shadow pass 之后、光照/Forward pass 之前
+    registered_passes_.push_back(std::make_unique<dse::render::DDGIUpdatePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));

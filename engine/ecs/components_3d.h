@@ -724,6 +724,38 @@ struct HairComponent {
     int hair_instance_index_ = -1;
 };
 
+/// DDGI GI Probe Volume 组件
+/// 定义一个 3D 探针网格，用于实时间接漫反射光照
+struct GIProbeVolumeComponent {
+    bool enabled = true;
+
+    // 网格范围（世界坐标）
+    glm::vec3 origin = glm::vec3(-50.0f);     ///< 网格最小角
+    glm::vec3 extent = glm::vec3(100.0f);     ///< 网格范围
+
+    // 探针分辨率（各轴数量）
+    int resolution_x = 8;
+    int resolution_y = 4;
+    int resolution_z = 8;
+
+    // 质量参数
+    int irradiance_texels = 8;        ///< 每探针辐照度 octahedral 分辨率
+    int visibility_texels = 8;        ///< 每探针可见性 octahedral 分辨率
+    int rays_per_probe = 256;         ///< 每次更新采样 VPL 数量
+    float hysteresis = 0.97f;         ///< Temporal 混合因子 (0=全新, 1=全旧)
+
+    // 间接光强度
+    float gi_intensity = 1.0f;        ///< 全局 GI 强度乘数
+    float normal_bias = 0.2f;         ///< 法线方向偏移（减少自遮挡泄漏）
+    float view_bias = 0.1f;           ///< 视线方向偏移
+
+    // 调试
+    bool show_debug_probes = false;   ///< 编辑器中显示探针球体
+
+    // 运行时（DDGISystem 管理，用户不应手动写入）
+    bool needs_reinit_ = true;
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_H

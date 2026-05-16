@@ -54,6 +54,7 @@
 #include "engine/render/cluster_grid.h"
 #include "engine/render/light_probe_system.h"
 #include "engine/render/reflection_probe_system.h"
+#include "engine/render/gi/ddgi_system.h"
 #include "engine/assets/streaming_manager.h"
 
 class AssetManager;
@@ -303,6 +304,9 @@ private:
 
     /// Reflection Probe + IBL 系统
     dse::render::ReflectionProbeSystem reflection_probe_system_;
+
+    /// DDGI Irradiance Probe 系统
+    dse::render::gi::DDGISystem ddgi_system_;
 
     /// TAA 帧计数器（跨帧 jitter 序列）
     int taa_frame_index_ = 0;

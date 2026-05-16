@@ -110,6 +110,19 @@ public:
     void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
+    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
+                        const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
+                        const glm::ivec3& grid_resolution, int irradiance_texels,
+                        float gi_intensity, float normal_bias) {
+        global_state_.ddgi_enabled = enabled;
+        global_state_.ddgi_irradiance_atlas = irradiance_atlas;
+        global_state_.ddgi_grid_origin = grid_origin;
+        global_state_.ddgi_grid_spacing = grid_spacing;
+        global_state_.ddgi_grid_resolution = grid_resolution;
+        global_state_.ddgi_irradiance_texels = irradiance_texels;
+        global_state_.ddgi_gi_intensity = gi_intensity;
+        global_state_.ddgi_normal_bias = normal_bias;
+    }
     void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
     void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
 
