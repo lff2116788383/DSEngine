@@ -958,6 +958,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.push_back(std::make_unique<dse::render::MotionVectorPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::OutlinePass>(render_pass_context_));
+    registered_passes_.push_back(std::make_unique<dse::render::LightShaftPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::VolumetricFogPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DecalPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));

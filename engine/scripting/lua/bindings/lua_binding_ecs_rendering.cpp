@@ -1097,6 +1097,26 @@ int L_EcsSetPostProcessFog(lua_State* L) {
     return 1;
 }
 
+int L_EcsSetPostProcessLightShaft(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pp = helper::TryGetComponent<PostProcessComponent>(*world, e);
+    if (!pp) { lua_pushboolean(L, 0); return 1; }
+    pp->light_shaft_enabled   = lua_isnoneornil(L, 2) ? pp->light_shaft_enabled : helper::CheckBool(L, 2);
+    pp->light_shaft_density   = helper::OptFloat(L, 3, pp->light_shaft_density);
+    pp->light_shaft_weight    = helper::OptFloat(L, 4, pp->light_shaft_weight);
+    pp->light_shaft_decay     = helper::OptFloat(L, 5, pp->light_shaft_decay);
+    pp->light_shaft_exposure  = helper::OptFloat(L, 6, pp->light_shaft_exposure);
+    pp->light_shaft_intensity = helper::OptFloat(L, 7, pp->light_shaft_intensity);
+    if (!lua_isnoneornil(L, 8)) pp->light_shaft_samples = static_cast<int>(luaL_checknumber(L, 8));
+    pp->light_shaft_color.r   = helper::OptFloat(L, 9,  pp->light_shaft_color.r);
+    pp->light_shaft_color.g   = helper::OptFloat(L, 10, pp->light_shaft_color.g);
+    pp->light_shaft_color.b   = helper::OptFloat(L, 11, pp->light_shaft_color.b);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsAddDecal(lua_State* L) {
     World* world = GetWorld();
     if (!world) { lua_pushboolean(L, 0); return 1; }
@@ -1196,6 +1216,14 @@ int L_EcsSetWater(lua_State* L) {
     wc->refraction_strength = helper::OptFloat(L, 17, wc->refraction_strength);
     wc->reflection_strength = helper::OptFloat(L, 18, wc->reflection_strength);
     wc->specular_power      = helper::OptFloat(L, 19, wc->specular_power);
+    wc->caustic_intensity   = helper::OptFloat(L, 20, wc->caustic_intensity);
+    wc->caustic_scale       = helper::OptFloat(L, 21, wc->caustic_scale);
+    wc->foam_intensity      = helper::OptFloat(L, 22, wc->foam_intensity);
+    wc->foam_depth_threshold = helper::OptFloat(L, 23, wc->foam_depth_threshold);
+    wc->underwater_fog_density = helper::OptFloat(L, 24, wc->underwater_fog_density);
+    wc->underwater_fog_color.r = helper::OptFloat(L, 25, wc->underwater_fog_color.r);
+    wc->underwater_fog_color.g = helper::OptFloat(L, 26, wc->underwater_fog_color.g);
+    wc->underwater_fog_color.b = helper::OptFloat(L, 27, wc->underwater_fog_color.b);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -1482,6 +1510,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_post_process_color_lut", L_EcsSetPostProcessColorLut},
         {"set_post_process_outline",  L_EcsSetPostProcessOutline},
         {"set_post_process_fog",      L_EcsSetPostProcessFog},
+        {"set_post_process_light_shaft", L_EcsSetPostProcessLightShaft},
         {"add_decal",                 L_EcsAddDecal},
         {"set_decal",                 L_EcsSetDecal},
         {"get_post_process_state",    L_EcsGetPostProcessState},

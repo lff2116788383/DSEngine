@@ -109,6 +109,7 @@ public:
     unsigned int decal_shader_handle() const { return decal_shader_handle_; }
     unsigned int wboit_composite_shader_handle() const { return wboit_composite_shader_handle_; }
     unsigned int water_shader_handle() const { return water_shader_handle_; }
+    unsigned int light_shaft_shader_handle() const { return light_shaft_shader_handle_; }
 
     std::size_t programs_created() const { return programs_created_; }
     std::size_t programs_destroyed() const { return programs_destroyed_; }
@@ -158,6 +159,7 @@ private:
     unsigned int decal_shader_handle_ = 0;
     unsigned int wboit_composite_shader_handle_ = 0;
     unsigned int water_shader_handle_ = 0;
+    unsigned int light_shaft_shader_handle_ = 0;
 
     std::size_t programs_created_ = 0;
     std::size_t programs_destroyed_ = 0;

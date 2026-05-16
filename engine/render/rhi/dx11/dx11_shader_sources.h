@@ -1924,6 +1924,66 @@ float4 PSMain(PSInput input) : SV_TARGET {
 )";
 
 // ============================================================
+// Light Shaft / God Ray Pixel Shader
+// ============================================================
+constexpr const char* kLightShaftPS = R"(
+Texture2D screenTexture : register(t0);
+Texture2D depthTexture  : register(t1);
+SamplerState u_sampler  : register(s0);
+
+cbuffer LightShaftParams : register(b0) {
+    float u_depth_handle;
+    float u_sun_x;
+    float u_sun_y;
+    float u_light_r;
+    float u_light_g;
+    float u_light_b;
+    float u_density;
+    float u_weight;
+    float u_decay;
+    float u_exposure;
+    float u_num_samples;
+    float u_intensity;
+    float pad0; float pad1; float pad2; float pad3;
+};
+
+struct VS_OUTPUT {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 main(VS_OUTPUT input) : SV_TARGET {
+    float2 uv = input.uv;
+    uv.y = 1.0f - uv.y;
+
+    float4 scene = screenTexture.Sample(u_sampler, uv);
+    int samples = (int)u_num_samples;
+    float2 delta_uv = (float2(u_sun_x, u_sun_y) - uv) * u_density / (float)samples;
+
+    float2 suv = uv;
+    float illum_decay = 1.0f;
+    float3 accumulated = float3(0.0f, 0.0f, 0.0f);
+
+    [loop] for (int i = 0; i < samples; i++) {
+        suv += delta_uv;
+        float2 cuv = clamp(suv, 0.001f, 0.999f);
+        float d = depthTexture.Sample(u_sampler, cuv).r;
+        float3 s = screenTexture.Sample(u_sampler, cuv).rgb;
+        float sky = step(0.9999f, d);
+        float lum = dot(s, float3(0.2126f, 0.7152f, 0.0722f));
+        float bright = smoothstep(0.8f, 1.2f, lum);
+        float mask = max(sky, bright);
+        accumulated += s * mask * illum_decay * u_weight;
+        illum_decay *= u_decay;
+        if (illum_decay < 0.003f) break;
+    }
+
+    float3 result = scene.rgb + accumulated * u_exposure * float3(u_light_r, u_light_g, u_light_b) * u_intensity;
+    return float4(result, 1.0f);
+}
+)";
+
+// ============================================================
 // Edge Detection (Outline) Pixel Shader
 // ============================================================
 constexpr const char* kEdgeDetectPS = R"(
@@ -2174,6 +2234,10 @@ cbuffer WaterParams : register(b0) {
     float u_fwd_x; float u_fwd_y; float u_fwd_z;
     float u_tan_fov_y;
     float u_aspect;
+    float u_caustic_intensity; float u_caustic_scale;
+    float u_foam_intensity; float u_foam_depth_threshold;
+    float u_uw_fog_density;
+    float u_uw_fog_r; float u_uw_fog_g; float u_uw_fog_b;
 };
 
 struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -2246,8 +2310,53 @@ float4 main(VS_OUTPUT input) : SV_TARGET {
     float3 half_vec = normalize(-rayDir + (-sunDir));
     float spec = pow(max(dot(wave_normal, half_vec), 0.0f), u_specular_power);
 
-    float3 underwater = lerp(refracted, water_color, depth_factor * u_transparency);
-    float3 surface = lerp(underwater, sky_color, fresnel) + float3(spec, spec, spec);
+    // caustics: dual-layer Voronoi
+    float3 caustic = float3(0.0f, 0.0f, 0.0f);
+    if (u_caustic_intensity > 0.001f) {
+        float2 cUV = water_world.xz / u_caustic_scale;
+        float v1 = 1.0f, v2 = 1.0f;
+        [unroll] for (int ci = 0; ci < 2; ci++) {
+            float speed = (ci == 0) ? 0.4f : -0.3f;
+            float2 uvc = cUV + float2(u_time * speed, u_time * speed * 0.7f);
+            float2 cell = floor(uvc);
+            float2 frac_uv = frac(uvc);
+            float minD = 1.0f;
+            [unroll] for (int y = -1; y <= 1; y++) {
+                [unroll] for (int x = -1; x <= 1; x++) {
+                    float2 nb = float2((float)x, (float)y);
+                    float2 h = frac(sin(float2(
+                        dot(cell + nb, float2(127.1f, 311.7f)),
+                        dot(cell + nb, float2(269.5f, 183.3f))
+                    )) * 43758.5453f);
+                    float2 diff = nb + h - frac_uv;
+                    minD = min(minD, dot(diff, diff));
+                }
+            }
+            if (ci == 0) v1 = minD; else v2 = minD;
+        }
+        float pattern = saturate(pow(min(v1, v2), 0.5f) * 2.0f);
+        pattern = 1.0f - pattern;
+        pattern = pow(pattern, 2.5f);
+        caustic = float3(pattern, pattern, pattern) * u_caustic_intensity * (1.0f - depth_factor);
+    }
+
+    // foam
+    float foam = 0.0f;
+    if (u_foam_intensity > 0.001f) {
+        foam = (1.0f - smoothstep(0.0f, u_foam_depth_threshold, underwater_depth)) * u_foam_intensity;
+        float foam_noise = frac(sin(dot(water_world.xz * 5.0f + u_time * 0.3f, float2(12.9898f, 78.233f))) * 43758.5453f);
+        foam *= (0.6f + 0.4f * foam_noise);
+    }
+
+    float3 underwater = lerp(refracted, water_color, depth_factor * u_transparency) + caustic;
+    float3 surface = lerp(underwater, sky_color, fresnel) + float3(spec, spec, spec) + float3(foam, foam, foam);
+
+    // underwater fog
+    if (camPos.y < u_water_level && u_uw_fog_density > 0.001f) {
+        float fog_dist = length(water_world - camPos);
+        float fog_factor = 1.0f - exp(-u_uw_fog_density * fog_dist);
+        surface = lerp(surface, float3(u_uw_fog_r, u_uw_fog_g, u_uw_fog_b), saturate(fog_factor));
+    }
 
     float edge_fade = smoothstep(0.0f, 0.5f, underwater_depth);
     float alpha = u_transparency * edge_fade;

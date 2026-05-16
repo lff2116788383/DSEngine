@@ -1753,6 +1753,45 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 FragColor = vec4(u_outline_color, edge);
             }
         )";
+    } else if (effect_name == "light_shaft") {
+        fs_src += R"(
+            uniform sampler2D u_depth_tex;
+            uniform vec2 u_sun_screen;
+            uniform vec3 u_light_color;
+            uniform float u_density;
+            uniform float u_weight;
+            uniform float u_decay;
+            uniform float u_exposure;
+            uniform float u_num_samples;
+            uniform float u_intensity;
+
+            void main() {
+                vec4 scene = texture(screenTexture, TexCoords);
+                int samples = int(u_num_samples);
+                vec2 delta_uv = (u_sun_screen - TexCoords) * u_density / float(samples);
+
+                vec2 uv = TexCoords;
+                float illum_decay = 1.0;
+                vec3 accumulated = vec3(0.0);
+
+                for (int i = 0; i < samples; i++) {
+                    uv += delta_uv;
+                    vec2 suv = clamp(uv, 0.001, 0.999);
+                    float d = texture(u_depth_tex, suv).r;
+                    vec3 s = texture(screenTexture, suv).rgb;
+                    float sky = step(0.9999, d);
+                    float lum = dot(s, vec3(0.2126, 0.7152, 0.0722));
+                    float bright = smoothstep(0.8, 1.2, lum);
+                    float mask = max(sky, bright);
+                    accumulated += s * mask * illum_decay * u_weight;
+                    illum_decay *= u_decay;
+                    if (illum_decay < 0.003) break;
+                }
+
+                vec3 result = scene.rgb + accumulated * u_exposure * u_light_color * u_intensity;
+                FragColor = vec4(result, 1.0);
+            }
+        )";
     } else if (effect_name == "ui_overlay") {
         fs_src += R"(
             void main() {
@@ -1863,6 +1902,12 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
             uniform vec3  u_cam_fwd;
             uniform float u_tan_fov_y;
             uniform float u_aspect;
+            uniform float u_caustic_intensity;
+            uniform float u_caustic_scale;
+            uniform float u_foam_intensity;
+            uniform float u_foam_depth_threshold;
+            uniform float u_uw_fog_density;
+            uniform vec3  u_uw_fog_color;
 
             float WaterLinearDepth(float d) {
                 float z = d * 2.0 - 1.0;
@@ -1934,9 +1979,54 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
                 float spec = pow(max(dot(wave_normal, half_vec), 0.0), u_specular_power);
                 vec3 specular = vec3(1.0) * spec;
 
+                // caustics: dual-layer Voronoi noise projected on underwater surfaces
+                vec3 caustic = vec3(0.0);
+                if (u_caustic_intensity > 0.001) {
+                    vec2 cUV = water_world.xz / u_caustic_scale;
+                    float v1 = 1.0, v2 = 1.0;
+                    for (int ci = 0; ci < 2; ci++) {
+                        float speed = (ci == 0) ? 0.4 : -0.3;
+                        vec2 uvc = cUV + vec2(u_time * speed, u_time * speed * 0.7);
+                        vec2 cell = floor(uvc);
+                        vec2 frac_uv = fract(uvc);
+                        float minD = 1.0;
+                        for (int y = -1; y <= 1; y++) {
+                            for (int x = -1; x <= 1; x++) {
+                                vec2 nb = vec2(float(x), float(y));
+                                vec2 h = fract(sin(vec2(
+                                    dot(cell + nb, vec2(127.1, 311.7)),
+                                    dot(cell + nb, vec2(269.5, 183.3))
+                                )) * 43758.5453);
+                                vec2 diff = nb + h - frac_uv;
+                                minD = min(minD, dot(diff, diff));
+                            }
+                        }
+                        if (ci == 0) v1 = minD; else v2 = minD;
+                    }
+                    float pattern = clamp(pow(min(v1, v2), 0.5) * 2.0, 0.0, 1.0);
+                    pattern = 1.0 - pattern;
+                    pattern = pow(pattern, 2.5);
+                    caustic = vec3(pattern) * u_caustic_intensity * (1.0 - depth_factor);
+                }
+
+                // foam: white fringe at shallow depths
+                float foam = 0.0;
+                if (u_foam_intensity > 0.001) {
+                    foam = (1.0 - smoothstep(0.0, u_foam_depth_threshold, underwater_depth)) * u_foam_intensity;
+                    float foam_noise = fract(sin(dot(water_world.xz * 5.0 + u_time * 0.3, vec2(12.9898, 78.233))) * 43758.5453);
+                    foam *= (0.6 + 0.4 * foam_noise);
+                }
+
                 // combine
-                vec3 underwater = mix(refracted, water_color, depth_factor * u_transparency);
-                vec3 surface = mix(underwater, sky_color, fresnel) + specular;
+                vec3 underwater = mix(refracted, water_color, depth_factor * u_transparency) + caustic;
+                vec3 surface = mix(underwater, sky_color, fresnel) + specular + vec3(foam);
+
+                // underwater fog: when camera is below water level
+                if (u_camera_pos.y < u_water_level && u_uw_fog_density > 0.001) {
+                    float fog_dist = length(water_world - u_camera_pos);
+                    float fog_factor = 1.0 - exp(-u_uw_fog_density * fog_dist);
+                    surface = mix(surface, u_uw_fog_color, clamp(fog_factor, 0.0, 1.0));
+                }
 
                 float edge_fade = smoothstep(0.0, 0.5, underwater_depth);
                 float alpha = u_transparency * edge_fade;
@@ -2208,6 +2298,18 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform3f(glGetUniformLocation(shader, "u_light_color"), params[5], params[6], params[7]);
         glUniform1f(glGetUniformLocation(shader, "u_light_intensity"), params[8]);
         glUniform1f(glGetUniformLocation(shader, "u_ambient"), params[9]);
+    } else if (effect_name == "light_shaft" && params.size() >= 12) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
+        glUniform1i(glGetUniformLocation(shader, "u_depth_tex"), 1);
+        glUniform2f(glGetUniformLocation(shader, "u_sun_screen"), params[1], params[2]);
+        glUniform3f(glGetUniformLocation(shader, "u_light_color"), params[3], params[4], params[5]);
+        glUniform1f(glGetUniformLocation(shader, "u_density"), params[6]);
+        glUniform1f(glGetUniformLocation(shader, "u_weight"), params[7]);
+        glUniform1f(glGetUniformLocation(shader, "u_decay"), params[8]);
+        glUniform1f(glGetUniformLocation(shader, "u_exposure"), params[9]);
+        glUniform1f(glGetUniformLocation(shader, "u_num_samples"), params[10]);
+        glUniform1f(glGetUniformLocation(shader, "u_intensity"), params[11]);
     } else if (effect_name == "edge_detect" && params.size() >= 10) {
         glUniform1f(glGetUniformLocation(shader, "u_thickness"), params[0]);
         glUniform1f(glGetUniformLocation(shader, "u_depth_threshold"), params[1]);
@@ -2242,7 +2344,7 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
         glUniform1i(glGetUniformLocation(shader, "u_reveal_tex"), 1);
-    } else if (effect_name == "water" && params.size() >= 32) {
+    } else if (effect_name == "water" && params.size() >= 40) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));
         glUniform1i(glGetUniformLocation(shader, "u_depth_tex"), 1);
@@ -2266,6 +2368,12 @@ void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
         glUniform3f(glGetUniformLocation(shader, "u_cam_fwd"), params[27], params[28], params[29]);
         glUniform1f(glGetUniformLocation(shader, "u_tan_fov_y"), params[30]);
         glUniform1f(glGetUniformLocation(shader, "u_aspect"), params[31]);
+        glUniform1f(glGetUniformLocation(shader, "u_caustic_intensity"), params[32]);
+        glUniform1f(glGetUniformLocation(shader, "u_caustic_scale"), params[33]);
+        glUniform1f(glGetUniformLocation(shader, "u_foam_intensity"), params[34]);
+        glUniform1f(glGetUniformLocation(shader, "u_foam_depth_threshold"), params[35]);
+        glUniform1f(glGetUniformLocation(shader, "u_uw_fog_density"), params[36]);
+        glUniform3f(glGetUniformLocation(shader, "u_uw_fog_color"), params[37], params[38], params[39]);
     } else if (effect_name == "decal" && params.size() >= 26) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, static_cast<unsigned int>(params[0]));

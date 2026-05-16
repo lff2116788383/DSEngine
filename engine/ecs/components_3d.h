@@ -189,6 +189,16 @@ struct PostProcessComponent {
     float outline_depth_threshold = 0.1f; // 深度边缘阈值
     float outline_normal_threshold = 0.4f;// 法线边缘阈值
 
+    // Light Shaft / God Ray（screen-space radial blur）
+    bool light_shaft_enabled = false;
+    glm::vec3 light_shaft_color = glm::vec3(1.0f, 0.95f, 0.8f); // 暖阳色
+    float light_shaft_density = 0.84f;     // 步进密度
+    float light_shaft_weight = 0.04f;      // 每步权重
+    float light_shaft_decay = 0.97f;       // 逐步衰减
+    float light_shaft_exposure = 0.4f;     // 最终曝光乘数
+    float light_shaft_intensity = 1.0f;    // 整体混合强度
+    int light_shaft_samples = 64;          // 采样数
+
     // Volumetric Fog（高度指数雾 + Mie 散射近似 raymarching）
     bool fog_enabled = false;
     glm::vec3 fog_color = glm::vec3(0.70f, 0.75f, 0.85f); // 雾颜色（默认天空蓝灰）
@@ -546,6 +556,13 @@ struct WaterComponent {
     float refraction_strength = 0.03f;         ///< 折射偏移强度
     float reflection_strength = 0.5f;          ///< 菲涅尔反射强度
     float specular_power = 128.0f;             ///< 高光指数
+    // 视觉增强
+    float caustic_intensity = 0.3f;            ///< 焦散光纹强度
+    float caustic_scale = 8.0f;                ///< 焦散纹理缩放
+    float foam_intensity = 0.5f;               ///< 岸边泡沫强度
+    float foam_depth_threshold = 2.0f;         ///< 泡沫出现的深度阈值
+    float underwater_fog_density = 0.15f;      ///< 水下雾密度
+    glm::vec3 underwater_fog_color = glm::vec3(0.0f, 0.1f, 0.2f); ///< 水下雾颜色
 };
 
 /// Light Probe: captures indirect diffuse lighting at a point for GI approximation

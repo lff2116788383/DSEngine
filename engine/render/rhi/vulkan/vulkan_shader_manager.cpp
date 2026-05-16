@@ -286,9 +286,9 @@ bool VulkanShaderManager::ReflectSpirv(
 
     out_reflection.has_push_constant = true;
     out_reflection.push_constant_range = {
-        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0,
-        128  // model matrix (64) + 额外数据空间
+        160  // model matrix (64) + 额外数据 / 后处理最大 water 40 float
     };
 
     return true;
@@ -832,6 +832,16 @@ void VulkanShaderManager::InitPostProcessShader() {
             DEBUG_LOG_INFO("[Vulkan] Water shader created: handle={}", water_shader_handle_);
         else
             DEBUG_LOG_WARN("[Vulkan] Water shader creation failed");
+    }
+
+    // Light Shaft shader
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLightShaftFS;
+        light_shaft_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (light_shaft_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] Light Shaft shader created: handle={}", light_shaft_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] Light Shaft shader creation failed");
     }
 }
 

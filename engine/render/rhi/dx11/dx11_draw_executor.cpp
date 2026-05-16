@@ -978,12 +978,12 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
-    // 辅助：懒惰创建通用 PP 参数 CB（按最大 contact_shadow struct 需求 48B，向上取整到 64B）
+    // 辅助：懒惰创建通用 PP 参数 CB（按最大 water 40 float = 160B，16 字节对齐 → 160B）
     auto ensure_pp_params_cb = [&]() {
         if (!pp_params_cb_ && context_->device()) {
             D3D11_BUFFER_DESC bd{};
             bd.Usage = D3D11_USAGE_DYNAMIC;
-            bd.ByteWidth = 64;
+            bd.ByteWidth = 160;
             bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             context_->device()->CreateBuffer(&bd, nullptr, pp_params_cb_.GetAddressOf());
@@ -1444,9 +1444,9 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
     // Water 专用路径
     if (effect_name == "water" && shader_mgr.water_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 32) {
-            float raw[32] = {};
-            for (int i = 0; i < 32; ++i) raw[i] = params[i];
+        if (pp_params_cb_ && params.size() >= 40) {
+            float raw[40] = {};
+            for (int i = 0; i < 40; ++i) raw[i] = params[i];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, raw, sizeof(raw));
@@ -1461,6 +1461,29 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         float blend_factor[4] = {0, 0, 0, 0};
         dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF);
         draw_dedicated_pp(shader_mgr.water_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
+    // Light Shaft 专用路径
+    if (effect_name == "light_shaft" && shader_mgr.light_shaft_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 16) {
+            float raw[16] = {};
+            for (int i = 0; i < 16; ++i) raw[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, raw, sizeof(raw));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.light_shaft_shader_handle());
         ID3D11ShaderResourceView* null_srv = nullptr;
         dc->PSSetShaderResources(1, 1, &null_srv);
         return;

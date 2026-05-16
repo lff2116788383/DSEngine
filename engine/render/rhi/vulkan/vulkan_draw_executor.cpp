@@ -1946,6 +1946,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         selected_shader_handle = shader_mgr.wboit_composite_shader_handle();
     else if (effect_name == "water" && shader_mgr.water_shader_handle())
         selected_shader_handle = shader_mgr.water_shader_handle();
+    else if (effect_name == "light_shaft" && shader_mgr.light_shaft_shader_handle())
+        selected_shader_handle = shader_mgr.light_shaft_shader_handle();
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -2029,6 +2031,9 @@ void VulkanDrawExecutor::DrawPostProcess(
         unsigned int reveal_h = static_cast<unsigned int>(params[0]);
         extra_bindings = {{2, reveal_h}};
     } else if (effect_name == "water" && params.size() >= 1) {
+        unsigned int depth_h = static_cast<unsigned int>(params[0]);
+        extra_bindings = {{2, depth_h}};
+    } else if (effect_name == "light_shaft" && params.size() >= 1) {
         unsigned int depth_h = static_cast<unsigned int>(params[0]);
         extra_bindings = {{2, depth_h}};
     }
@@ -2176,9 +2181,14 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc[1] = { params[0] };
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "water" && params.size() >= 32) {
-            float pc[32];
-            for (int i = 0; i < 32; ++i) pc[i] = params[i];
+        } else if (effect_name == "water" && params.size() >= 40) {
+            float pc[40];
+            for (int i = 0; i < 40; ++i) pc[i] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "light_shaft" && params.size() >= 16) {
+            float pc[16];
+            for (int i = 0; i < 16; ++i) pc[i] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         }

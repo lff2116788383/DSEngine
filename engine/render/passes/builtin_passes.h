@@ -253,6 +253,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Light Shaft / God Ray Pass ----
+class LightShaftPass : public IRenderPass {
+public:
+    explicit LightShaftPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "light_shaft_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- Volumetric Fog Pass ----
 class VolumetricFogPass : public IRenderPass {
 public:

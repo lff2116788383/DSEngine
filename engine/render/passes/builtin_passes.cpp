@@ -1537,6 +1537,98 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// LightShaftPass — screen-space radial blur (God Ray)
+// ============================================================
+
+void LightShaftPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, scene_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
+    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
+    const dse::PostProcessComponent* pp = nullptr;
+    for (auto entity : pp_view) {
+        auto& p = pp_view.get<dse::PostProcessComponent>(entity);
+        if (p.enabled && p.light_shaft_enabled) { pp = &p; break; }
+    }
+    if (!pp) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    glm::vec3 cam_fwd{0,0,-1}, cam_right{1,0,0}, cam_up{0,1,0};
+    float fov_y = 60.0f;
+    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+
+    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
+    for (auto entity : camera_view) {
+        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
+        if (!cam.enabled) continue;
+        fov_y = cam.fov;
+        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
+            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
+            cam_fwd   = glm::normalize(t.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+            cam_right = glm::normalize(t.rotation * glm::vec3(1.0f, 0.0f,  0.0f));
+            cam_up    = glm::normalize(t.rotation * glm::vec3(0.0f, 1.0f,  0.0f));
+        }
+        break;
+    }
+    const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
+
+    glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
+    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+    for (auto entity : light_view) {
+        auto& l = light_view.get<dse::DirectionalLight3DComponent>(entity);
+        if (l.enabled) { sun_dir = glm::normalize(l.direction); break; }
+    }
+
+    glm::vec3 to_sun = -sun_dir;
+    float d_fwd = glm::dot(to_sun, cam_fwd);
+    if (d_fwd <= 0.01f) return;
+
+    float d_right = glm::dot(to_sun, cam_right);
+    float d_up    = glm::dot(to_sun, cam_up);
+    float sun_uv_x = (d_right / (d_fwd * tan_fov_y * aspect)) * 0.5f + 0.5f;
+    float sun_uv_y = (d_up / (d_fwd * tan_fov_y)) * 0.5f + 0.5f;
+
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    // params 布局（16 float）:
+    // [0]    depth_tex handle
+    // [1-2]  sun_screen_pos.xy (UV space)
+    // [3-5]  light_color.rgb
+    // [6]    density
+    // [7]    weight
+    // [8]    decay
+    // [9]    exposure
+    // [10]   num_samples
+    // [11]   intensity
+    // [12-15] reserved (pad to 16)
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+    cmd_buffer.DrawPostProcess(scene_tex, "light_shaft", {
+        static_cast<float>(depth_tex),
+        sun_uv_x, sun_uv_y,
+        pp->light_shaft_color.r, pp->light_shaft_color.g, pp->light_shaft_color.b,
+        pp->light_shaft_density,
+        pp->light_shaft_weight,
+        pp->light_shaft_decay,
+        pp->light_shaft_exposure,
+        static_cast<float>(pp->light_shaft_samples),
+        pp->light_shaft_intensity,
+        0.0f, 0.0f, 0.0f, 0.0f
+    });
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
 // VolumetricFogPass — 高度指数雾 + Mie 散射近似 raymarching
 // ============================================================
 
@@ -1789,8 +1881,8 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
-    // params 布局（32 float = 128 bytes）
-    std::vector<float> params(32);
+    // params 布局（40 float = 160 bytes）
+    std::vector<float> params(40);
 
     for (auto entity : water_view) {
         auto& wc = water_view.get<dse::WaterComponent>(entity);
@@ -1816,6 +1908,11 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         params[25] = cam_near;            params[26] = cam_far;
         params[27] = cam_fwd.x;           params[28] = cam_fwd.y;           params[29] = cam_fwd.z;
         params[30] = tan_fov_y;           params[31] = aspect;
+        // 视觉增强参数
+        params[32] = wc.caustic_intensity;    params[33] = wc.caustic_scale;
+        params[34] = wc.foam_intensity;       params[35] = wc.foam_depth_threshold;
+        params[36] = wc.underwater_fog_density;
+        params[37] = wc.underwater_fog_color.r; params[38] = wc.underwater_fog_color.g; params[39] = wc.underwater_fog_color.b;
 
         cmd_buffer.DrawPostProcess(scene_tex, "water", params);
     }
