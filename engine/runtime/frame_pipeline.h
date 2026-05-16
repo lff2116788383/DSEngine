@@ -54,6 +54,7 @@
 #include "engine/render/cluster_grid.h"
 #include "engine/render/light_probe_system.h"
 #include "engine/render/reflection_probe_system.h"
+#include "engine/assets/streaming_manager.h"
 
 class AssetManager;
 
@@ -308,6 +309,9 @@ private:
 
     /// TAA Pass 弱引用（注册后从 registered_passes_ 中查找）
     dse::render::TAAPass* taa_pass_ = nullptr;
+
+    /// 资源流式加载管理器
+    dse::streaming::StreamingManager streaming_manager_;
 
     /// 渲染 Pass 共享上下文
     dse::render::RenderPassContext render_pass_context_;

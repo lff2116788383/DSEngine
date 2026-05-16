@@ -47,6 +47,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     // NavMesh 寻路系统 — 独立全局表 "nav" + ecs 扩展
     RegisterNavigationBindings(L);
 #endif
+
+    // 资源流式加载 — 独立全局表 "streaming"
+    RegisterStreamingBindings(L);
 }
 
 }

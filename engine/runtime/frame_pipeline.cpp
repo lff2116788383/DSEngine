@@ -591,6 +591,13 @@ bool FramePipeline::Init() {
     // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
     reflection_probe_system_.Init(runtime_context_.rhi_device.get());
 
+    // 资源流式加载管理器初始化
+    streaming_manager_.Init(&asset_manager);
+    {
+        auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&streaming_manager_, [](auto*) {});
+        dse::core::ServiceLocator::Instance().Register<dse::streaming::StreamingManager, dse::streaming::StreamingManager>(streaming_shared);
+    }
+
     initialized_ = true;
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
@@ -605,6 +612,10 @@ void FramePipeline::Shutdown() {
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
+    // 资源流式加载管理器关闭
+    streaming_manager_.Shutdown();
+    dse::core::ServiceLocator::Instance().Reset<dse::streaming::StreamingManager>();
+
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
@@ -754,6 +765,21 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
     asset_manager.PumpHotReloads();
+
+    // 资源流式加载：获取摄像机位置并 tick
+    if (runtime_context_.world) {
+        glm::vec3 streaming_cam_pos(0.0f);
+        auto streaming_cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
+        for (auto e : streaming_cam_view) {
+            auto& cam = streaming_cam_view.get<dse::Camera3DComponent>(e);
+            if (cam.enabled) {
+                streaming_cam_pos = streaming_cam_view.get<TransformComponent>(e).position;
+                break;
+            }
+        }
+        streaming_manager_.Tick(streaming_cam_pos);
+    }
+
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
 
     dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);

@@ -224,7 +224,7 @@ Phase 2 — 渲染性能突破 (~2周)
   ├── ✅ Hi-Z Occlusion Culling（RHI 抽象 + Compute Mip Chain + GPU Cull + 早期剔除）
   ├── ✅ GPU Driven 渲染 Phase 1（Compute 视锥/Hi-Z 剔除 + SSBO DrawCommands + CPU readback 反馈）
   ├── ✅ GPU Driven 渲染 Phase 2（Mega VBO/IBO + SSBO=IndirectBuffer 零拷贝 + MultiDrawIndexedIndirect + RenderStats 集成）
-  └── 资源流式加载（分块加载/卸载 + 距离触发 + 异步 IO 优先级队列）     [4-5天]
+  └── ✅ 资源流式加载（StreamingManager + 距离触发分块加载/卸载 + 异步 IO + Lua API）
 
 Phase 3 — 视觉特性 (~3周)
   ├── Terrain 系统（Heightmap + Clipmap LOD + Splatmap 多纹理混合）      [4-5天]
