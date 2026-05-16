@@ -441,6 +441,39 @@ public:
 
     /// 解绑 VAO
     virtual void UnbindVAO() {}
+
+    // --- Static Mesh VAO (BatchVertex 布局, GL_STATIC_DRAW, GL_UNSIGNED_INT 索引) ---
+
+    /// 创建静态网格 VAO（含 VBO + 多个 EBO），使用 BatchVertex 属性布局
+    /// @param vertex_data   顶点数据 (BatchVertex[])
+    /// @param vertex_bytes  顶点数据字节数
+    /// @param ebo_datas     各 LOD 级别索引数据 (uint32_t[])
+    /// @param ebo_sizes     各 LOD 级别索引字节数
+    /// @param out_vbo       输出 VBO handle
+    /// @param out_ebos      输出各 LOD EBO handle
+    /// @return VAO handle，0 表示失败
+    virtual unsigned int CreateStaticMeshVAO(
+        const void* vertex_data, size_t vertex_bytes,
+        const std::vector<const void*>& ebo_datas,
+        const std::vector<size_t>& ebo_sizes,
+        unsigned int& out_vbo,
+        std::vector<unsigned int>& out_ebos) {
+        (void)vertex_data; (void)vertex_bytes;
+        (void)ebo_datas; (void)ebo_sizes;
+        out_vbo = 0; out_ebos.clear();
+        return 0;
+    }
+
+    /// 删除静态网格 VAO + VBO + 所有 EBO
+    virtual void DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
+                                      const std::vector<unsigned int>& ebos) {
+        (void)vao; (void)vbo; (void)ebos;
+    }
+
+    /// 绑定 VAO 并切换到指定 EBO 进行绘制
+    virtual void BindVAOWithEBO(unsigned int vao, unsigned int ebo) {
+        (void)vao; (void)ebo;
+    }
 };
 
 /**
@@ -569,6 +602,17 @@ public:
     void DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) override;
     void BindMegaVAO(unsigned int vao) override;
     void UnbindVAO() override;
+
+    // --- Static Mesh VAO ---
+    unsigned int CreateStaticMeshVAO(
+        const void* vertex_data, size_t vertex_bytes,
+        const std::vector<const void*>& ebo_datas,
+        const std::vector<size_t>& ebo_sizes,
+        unsigned int& out_vbo,
+        std::vector<unsigned int>& out_ebos) override;
+    void DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
+                              const std::vector<unsigned int>& ebos) override;
+    void BindVAOWithEBO(unsigned int vao, unsigned int ebo) override;
 
     // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);

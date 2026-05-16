@@ -171,6 +171,7 @@ struct BatchVertex {
 /// 3D 网格绘制项
 struct MeshDrawItem {
     unsigned int vao_override = 0;       ///< 非零时直接使用此 VAO（仅 GL 后端有效）
+    unsigned int ebo_override = 0;       ///< 非零时绑定此 EBO 覆盖 VAO 默认的 element buffer
     unsigned int index_count_override = 0;
 
     unsigned int texture_handle = 0;
@@ -217,6 +218,12 @@ struct MeshDrawItem {
     bool receive_shadow = true;
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
+
+    // Terrain splatmap
+    bool splat_enabled = false;
+    unsigned int splat_weight_map_handle = 0;
+    unsigned int splat_layer_handles[4] = {0, 0, 0, 0};
+    glm::vec4 splat_tiling = glm::vec4(10.0f); ///< per-layer UV tiling
 
     int wboit_mode = 0;  ///< 0=normal, 1=WBOIT accumulation, 2=WBOIT revealage
 

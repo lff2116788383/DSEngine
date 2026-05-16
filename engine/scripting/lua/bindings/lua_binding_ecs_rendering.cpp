@@ -856,6 +856,43 @@ int L_EcsGetTerrainLod(lua_State* L) {
     return 5;
 }
 
+int L_EcsSampleTerrainHeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float wx = helper::CheckFloat(L, 2);
+    float wz = helper::CheckFloat(L, 3);
+    const auto* terrain = helper::TryGetComponentConst<TerrainComponent>(*world, e);
+    const auto* transform = helper::TryGetComponentConst<TransformComponent>(*world, e);
+    if (!terrain || !transform) {
+        helper::PushFloat(L, 0.0f);
+        return 1;
+    }
+    float h = dse::SampleTerrainHeight(*terrain, *transform, wx, wz);
+    helper::PushFloat(L, h);
+    return 1;
+}
+
+int L_EcsSetTerrainSplatTexture(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    int layer = helper::CheckInt(L, 2);
+    const char* path = luaL_checkstring(L, 3);
+    auto* terrain = helper::TryGetComponent<TerrainComponent>(*world, e);
+    if (!terrain || layer < 0 || layer > 3) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    auto tex = GetAssetManager().LoadTexture(path);
+    if (!tex) { lua_pushboolean(L, 0); return 1; }
+    terrain->splat_texture_paths[layer] = path;
+    terrain->splat_texture_handles[layer] = tex->GetHandle();
+    terrain->splat_dirty = true;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // ============================================================
 // PostProcess
 // ============================================================
@@ -1498,6 +1535,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"load_terrain_heightmap",    L_EcsLoadTerrainHeightmap},
         {"set_terrain_texture",       L_EcsSetTerrainTexture},
         {"get_terrain_lod",           L_EcsGetTerrainLod},
+        {"sample_terrain_height",     L_EcsSampleTerrainHeight},
+        {"set_terrain_splat_texture", L_EcsSetTerrainSplatTexture},
         // PostProcess
         {"add_post_process",          L_EcsAddPostProcess},
         {"set_post_process_bloom",    L_EcsSetPostProcessBloom},

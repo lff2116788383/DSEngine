@@ -17,6 +17,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     // a second PxFoundation in its own module-local locator.
     (void)world;
 #endif
+    terrain_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
     lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
@@ -142,6 +143,7 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {
+    terrain_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);

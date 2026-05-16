@@ -675,6 +675,28 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glUniform1i(loc.occlusion_map, 15);
         }
 
+        // Terrain splatmap
+        if (loc.splat_enabled != -1) {
+            glUniform1f(loc.splat_enabled, item.splat_enabled ? 1.0f : 0.0f);
+        }
+        if (item.splat_enabled) {
+            if (loc.splat_tiling != -1) {
+                glUniform4fv(loc.splat_tiling, 1, &item.splat_tiling.x);
+            }
+            if (item.splat_weight_map_handle != 0 && loc.splat_weight_map != -1) {
+                glActiveTexture(GL_TEXTURE16);
+                glBindTexture(GL_TEXTURE_2D, item.splat_weight_map_handle);
+                glUniform1i(loc.splat_weight_map, 16);
+            }
+            for (int si = 0; si < 4; ++si) {
+                if (item.splat_layer_handles[si] != 0 && loc.splat_layer[si] != -1) {
+                    glActiveTexture(GL_TEXTURE17 + si);
+                    glBindTexture(GL_TEXTURE_2D, item.splat_layer_handles[si]);
+                    glUniform1i(loc.splat_layer[si], 17 + si);
+                }
+            }
+        }
+
         if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
         PerMaterialUBO per_mat;
@@ -834,6 +856,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // 实际绘制
         if (item.vao_override > 0) {
             glBindVertexArray(item.vao_override);
+            if (item.ebo_override > 0) {
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, item.ebo_override);
+            }
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.index_count_override), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
         } else if (is_instanced) {

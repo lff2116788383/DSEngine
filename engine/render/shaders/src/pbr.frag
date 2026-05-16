@@ -127,6 +127,15 @@ layout(std140, set = 1, binding = 5) uniform LightProbeData {
 layout(set = 2, binding = 8) uniform samplerCube u_reflection_cubemap;
 layout(set = 2, binding = 9) uniform sampler2D   u_brdf_lut;
 
+// Terrain Splatmap (standalone uniforms, binding 11-15)
+layout(set = 2, binding = 11) uniform sampler2D u_splat_weight_map;
+layout(set = 2, binding = 12) uniform sampler2D u_splat_layer0;
+layout(set = 2, binding = 13) uniform sampler2D u_splat_layer1;
+layout(set = 2, binding = 14) uniform sampler2D u_splat_layer2;
+layout(set = 2, binding = 15) uniform sampler2D u_splat_layer3;
+uniform float u_splat_enabled;  // >0.5 = splatmap mode
+uniform vec4  u_splat_tiling;   // per-layer UV tiling factor
+
 const float PI = 3.14159265359;
 
 // UBO 字段便捷访问别名
@@ -429,7 +438,19 @@ void main() {
         vec3 viewDirTS = transpose(vTBN) * normalize(u_camera_pos - vFragPos);
         finalUV = ParallaxOcclusionMapping(vTexCoord, viewDirTS, u_pom_height_scale);
     }
-    vec4 texColor = texture(u_texture, finalUV) * vColor;
+    vec4 texColor;
+    if (u_splat_enabled > 0.5) {
+        vec4 w = texture(u_splat_weight_map, finalUV);
+        float w_sum = w.r + w.g + w.b + w.a;
+        if (w_sum > 0.001) w /= w_sum;
+        vec3 c0 = texture(u_splat_layer0, finalUV * u_splat_tiling.x).rgb;
+        vec3 c1 = texture(u_splat_layer1, finalUV * u_splat_tiling.y).rgb;
+        vec3 c2 = texture(u_splat_layer2, finalUV * u_splat_tiling.z).rgb;
+        vec3 c3 = texture(u_splat_layer3, finalUV * u_splat_tiling.w).rgb;
+        texColor = vec4(c0 * w.r + c1 * w.g + c2 * w.b + c3 * w.a, 1.0) * vColor;
+    } else {
+        texColor = texture(u_texture, finalUV) * vColor;
+    }
     if (u_material_alpha_test && texColor.a < clamp(u_material_alpha_cutoff, 0.0, 1.0)) discard;
 
     vec3 N = vNormal;

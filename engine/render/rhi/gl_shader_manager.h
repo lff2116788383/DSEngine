@@ -43,6 +43,12 @@ struct PBRShaderLocations {
     int spot_shadow_map[4] = {-1, -1, -1, -1};
     int point_shadow_map[4] = {-1, -1, -1, -1};
 
+    // --- Terrain splatmap ---
+    int splat_weight_map = -1;
+    int splat_layer[4] = {-1, -1, -1, -1};
+    int splat_enabled = -1;
+    int splat_tiling = -1;
+
     // --- 逐对象 uniform（从 push constants 展平） ---
     int model = -1;
     int skinned = -1;

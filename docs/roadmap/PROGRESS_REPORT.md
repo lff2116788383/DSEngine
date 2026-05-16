@@ -227,7 +227,7 @@ Phase 2 — 渲染性能突破 (~2周)
   └── ✅ 资源流式加载（StreamingManager + 距离触发分块加载/卸载 + 异步 IO + Lua API）
 
 Phase 3 — 视觉特性 (~3周)
-  ├── Terrain 系统（Heightmap + Clipmap LOD + Splatmap 多纹理混合）      [4-5天]
+  ├── ✅ Terrain 系统（GPU VBO/EBO + Per-Patch LOD + Skirt 裙边 + Splatmap 4层混合 + CPU 高度查询 + Lua API）
   ├── 大型植被系统（草地 GPU Instancing + 风场 + LOD + Billboard）       [6-8天]
   └── 毛发模拟（TressFX 风格 Strand 物理 + Compute 模拟 + OIT 渲染）    [10-14天]
 
@@ -245,7 +245,7 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染（已完成）
                       ├── 毛发模拟（物理 Compute）
                       └── GPU 粒子（可选升级）
 
-Terrain 系统 ────────── 大型植被系统
+✅ Terrain 系统 ─────── 大型植被系统
 
 ✅ Hi-Z Culling ──────── ✅ GPU Driven 渲染
 

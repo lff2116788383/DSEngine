@@ -1273,6 +1273,86 @@ void OpenGLRhiDevice::UnbindVAO() {
 
 // --- 资源账本 ---
 
+// --- Static Mesh VAO ---
+
+unsigned int OpenGLRhiDevice::CreateStaticMeshVAO(
+    const void* vertex_data, size_t vertex_bytes,
+    const std::vector<const void*>& ebo_datas,
+    const std::vector<size_t>& ebo_sizes,
+    unsigned int& out_vbo,
+    std::vector<unsigned int>& out_ebos)
+{
+    if (!vertex_data || vertex_bytes == 0) { out_vbo = 0; out_ebos.clear(); return 0; }
+    if (ebo_datas.size() != ebo_sizes.size()) { out_vbo = 0; out_ebos.clear(); return 0; }
+
+    unsigned int vao = 0, vbo = 0;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    if (vao == 0 || vbo == 0) {
+        if (vao) glDeleteVertexArrays(1, &vao);
+        if (vbo) glDeleteBuffers(1, &vbo);
+        out_vbo = 0; out_ebos.clear(); return 0;
+    }
+
+    glBindVertexArray(vao);
+
+    // VBO: static vertex data
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertex_bytes), vertex_data, GL_STATIC_DRAW);
+
+    // BatchVertex 属性布局 (stride = 92)
+    const GLsizei stride = static_cast<GLsizei>(sizeof(BatchVertex));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, pos)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, color)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, uv)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, normal)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, tangent)));
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, weights)));
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, joints)));
+
+    // 创建多个 EBO（一个 per LOD level）
+    out_ebos.resize(ebo_datas.size(), 0);
+    if (!ebo_datas.empty()) {
+        glGenBuffers(static_cast<GLsizei>(ebo_datas.size()), out_ebos.data());
+        // 绑定第一个 EBO 到 VAO 的 element buffer
+        for (size_t i = 0; i < ebo_datas.size(); ++i) {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, out_ebos[i]);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                         static_cast<GLsizeiptr>(ebo_sizes[i]),
+                         ebo_datas[i], GL_STATIC_DRAW);
+        }
+        // VAO 记住最后绑定的 EBO；运行时通过 BindVAOWithEBO 切换
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, out_ebos[0]);
+    }
+
+    glBindVertexArray(0);
+    out_vbo = vbo;
+    resource_mgr_.ledger().buffers_created += 1 + static_cast<int>(ebo_datas.size());
+    return vao;
+}
+
+void OpenGLRhiDevice::DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
+                                           const std::vector<unsigned int>& ebos) {
+    if (!ebos.empty()) {
+        glDeleteBuffers(static_cast<GLsizei>(ebos.size()), ebos.data());
+        resource_mgr_.ledger().buffers_destroyed += static_cast<int>(ebos.size());
+    }
+    if (vbo) { glDeleteBuffers(1, &vbo); resource_mgr_.ledger().buffers_destroyed += 1; }
+    if (vao) { glDeleteVertexArrays(1, &vao); }
+}
+
+void OpenGLRhiDevice::BindVAOWithEBO(unsigned int vao, unsigned int ebo) {
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+}
+
 void OpenGLRhiDevice::LogResourceLedger() const {
     resource_mgr_.LogResourceLedger();
     // 合并着色器管理器的计数

@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>
+#include "engine/ecs/transform.h"
 #include "modules/gameplay_3d/animation/animation_state_machine.h"
 
 namespace dse {
@@ -510,7 +512,8 @@ struct TerrainComponent {
     std::vector<float> splat_data;           // size = resolution_x * resolution_z * 4
     std::string splat_texture_paths[4];      // texture path per layer
     unsigned int splat_texture_handles[4] = {0, 0, 0, 0};
-    bool splat_dirty = true;
+    glm::vec4 splat_tiling = glm::vec4(10.0f); // per-layer UV tiling factor
+    bool splat_dirty = true; // TODO: consumed when splat weight map GPU upload is implemented
 
     // Internal state
     bool is_dirty = true;
@@ -522,6 +525,36 @@ struct TerrainComponent {
     std::vector<unsigned int> lod_index_counts;
     unsigned int index_count = 0;
 };
+
+inline float SampleTerrainHeight(const TerrainComponent& terrain,
+                                  const TransformComponent& transform,
+                                  float world_x, float world_z) {
+    if (terrain.height_data.empty() || terrain.resolution_x < 2 || terrain.resolution_z < 2)
+        return 0.0f;
+    glm::mat4 inv_model = glm::inverse(transform.local_to_world);
+    glm::vec4 local = inv_model * glm::vec4(world_x, 0.0f, world_z, 1.0f);
+    const int rx = terrain.resolution_x;
+    const int rz = terrain.resolution_z;
+    const float half_w = terrain.width * 0.5f;
+    const float half_d = terrain.depth * 0.5f;
+    float gx = (local.x + half_w) / terrain.width * static_cast<float>(rx - 1);
+    float gz = (local.z + half_d) / terrain.depth * static_cast<float>(rz - 1);
+    if (gx < 0.0f || gz < 0.0f || gx >= static_cast<float>(rx - 1) || gz >= static_cast<float>(rz - 1))
+        return 0.0f;
+    int ix = static_cast<int>(gx);
+    int iz = static_cast<int>(gz);
+    float fx = gx - static_cast<float>(ix);
+    float fz = gz - static_cast<float>(iz);
+    int ix1 = std::min(ix + 1, rx - 1);
+    int iz1 = std::min(iz + 1, rz - 1);
+    float h00 = terrain.height_data[static_cast<size_t>(iz * rx + ix)];
+    float h10 = terrain.height_data[static_cast<size_t>(iz * rx + ix1)];
+    float h01 = terrain.height_data[static_cast<size_t>(iz1 * rx + ix)];
+    float h11 = terrain.height_data[static_cast<size_t>(iz1 * rx + ix1)];
+    float h0 = h00 + fx * (h10 - h00);
+    float h1 = h01 + fx * (h11 - h01);
+    return h0 + fz * (h1 - h0);
+}
 
 struct SteeringComponent {
     bool enabled = true;

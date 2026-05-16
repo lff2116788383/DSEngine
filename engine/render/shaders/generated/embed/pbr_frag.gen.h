@@ -2222,6 +2222,13 @@ layout(binding = 1) uniform sampler2D u_texture;
 layout(binding = 4) uniform sampler2D u_emissive_map;
 layout(binding = 3) uniform sampler2D u_metallic_roughness_map;
 layout(binding = 5) uniform sampler2D u_occlusion_map;
+layout(binding = 11) uniform sampler2D u_splat_weight_map;
+layout(binding = 12) uniform sampler2D u_splat_layer0;
+layout(binding = 13) uniform sampler2D u_splat_layer1;
+layout(binding = 14) uniform sampler2D u_splat_layer2;
+layout(binding = 15) uniform sampler2D u_splat_layer3;
+uniform float u_splat_enabled;
+uniform vec4 u_splat_tiling;
 
 layout(location = 1) in vec2 vTexCoord;
 layout(location = 4) in mat3 vTBN;
@@ -2599,7 +2606,19 @@ void main()
         float param_2 = _1204.extra_params2.x;
         finalUV = ParallaxOcclusionMapping(param, param_1, param_2);
     }
-    vec4 texColor = texture(u_texture, finalUV) * vColor;
+    vec4 texColor;
+    if (u_splat_enabled > 0.5) {
+        vec4 sw = texture(u_splat_weight_map, finalUV);
+        float sw_sum = sw.r + sw.g + sw.b + sw.a;
+        if (sw_sum > 0.001) sw /= sw_sum;
+        vec3 sc0 = texture(u_splat_layer0, finalUV * u_splat_tiling.x).rgb;
+        vec3 sc1 = texture(u_splat_layer1, finalUV * u_splat_tiling.y).rgb;
+        vec3 sc2 = texture(u_splat_layer2, finalUV * u_splat_tiling.z).rgb;
+        vec3 sc3 = texture(u_splat_layer3, finalUV * u_splat_tiling.w).rgb;
+        texColor = vec4(sc0 * sw.r + sc1 * sw.g + sc2 * sw.b + sc3 * sw.a, 1.0) * vColor;
+    } else {
+        texColor = texture(u_texture, finalUV) * vColor;
+    }
     bool _1253 = _1204.emissive.w != 0.0;
     bool _1262;
     if (_1253)
@@ -3079,6 +3098,17 @@ Texture2D<float4> u_metallic_roughness_map : register(t3);
 SamplerState _u_metallic_roughness_map_sampler : register(s3);
 Texture2D<float4> u_occlusion_map : register(t5);
 SamplerState _u_occlusion_map_sampler : register(s5);
+Texture2D<float4> u_splat_weight_map : register(t11);
+SamplerState _u_splat_weight_map_sampler : register(s11);
+Texture2D<float4> u_splat_layer0 : register(t12);
+SamplerState _u_splat_layer0_sampler : register(s12);
+Texture2D<float4> u_splat_layer1 : register(t13);
+SamplerState _u_splat_layer1_sampler : register(s13);
+Texture2D<float4> u_splat_layer2 : register(t14);
+SamplerState _u_splat_layer2_sampler : register(s14);
+Texture2D<float4> u_splat_layer3 : register(t15);
+SamplerState _u_splat_layer3_sampler : register(s15);
+cbuffer SplatParams : register(b12) { float u_splat_enabled; float3 _splat_pad; float4 u_splat_tiling; };
 
 static float4 gl_FragCoord;
 static float2 vTexCoord;
@@ -3482,7 +3512,19 @@ void frag_main()
         float param_2 = _1204_extra_params2.x;
         finalUV = ParallaxOcclusionMapping(param, param_1, param_2);
     }
-    float4 texColor = u_texture.Sample(_u_texture_sampler, finalUV) * vColor;
+    float4 texColor;
+    if (u_splat_enabled > 0.5f) {
+        float4 sw = u_splat_weight_map.Sample(_u_splat_weight_map_sampler, finalUV);
+        float sw_sum = sw.r + sw.g + sw.b + sw.a;
+        if (sw_sum > 0.001f) sw /= sw_sum;
+        float3 sc0 = u_splat_layer0.Sample(_u_splat_layer0_sampler, finalUV * u_splat_tiling.x).rgb;
+        float3 sc1 = u_splat_layer1.Sample(_u_splat_layer1_sampler, finalUV * u_splat_tiling.y).rgb;
+        float3 sc2 = u_splat_layer2.Sample(_u_splat_layer2_sampler, finalUV * u_splat_tiling.z).rgb;
+        float3 sc3 = u_splat_layer3.Sample(_u_splat_layer3_sampler, finalUV * u_splat_tiling.w).rgb;
+        texColor = float4(sc0 * sw.r + sc1 * sw.g + sc2 * sw.b + sc3 * sw.a, 1.0f) * vColor;
+    } else {
+        texColor = u_texture.Sample(_u_texture_sampler, finalUV) * vColor;
+    }
     bool _1253 = _1204_emissive.w != 0.0f;
     bool _1262;
     if (_1253)

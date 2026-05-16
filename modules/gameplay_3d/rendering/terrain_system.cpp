@@ -1,140 +1,293 @@
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_2d.h"
-#include "engine/assets/asset_manager.h"
-#include <iostream>
+#include "engine/base/debug.h"
+#include <algorithm>
+#include <cmath>
 
 namespace dse {
 namespace gameplay3d {
 
+// ============================================================
+// 生命周期
+// ============================================================
+
+void TerrainSystem::Init(RhiDevice* rhi_device) {
+    rhi_ = rhi_device;
+}
+
+void TerrainSystem::Shutdown(World& world) {
+    if (!rhi_) return;
+    auto view = world.registry().view<TerrainComponent>();
+    for (auto entity : view) {
+        auto& terrain = view.get<TerrainComponent>(entity);
+        DestroyTerrainGPU(terrain);
+    }
+    rhi_ = nullptr;
+}
+
+// ============================================================
+// GPU 资源管理
+// ============================================================
+
+void TerrainSystem::DestroyTerrainGPU(TerrainComponent& terrain) {
+    if (terrain.vao != 0 && rhi_) {
+        rhi_->DeleteStaticMeshVAO(terrain.vao, terrain.vbo, terrain.lod_ebos);
+        terrain.vao = 0;
+        terrain.vbo = 0;
+        terrain.lod_ebos.clear();
+        terrain.lod_index_counts.clear();
+        terrain.ebo = 0;
+        terrain.index_count = 0;
+    }
+}
+
+// ============================================================
+// 网格重建（含中心差分法线 + skirt 裙边 + 多级 LOD EBO）
+// ============================================================
+
 void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
     if (terrain.resolution_x < 2 || terrain.resolution_z < 2) return;
-    
-    std::vector<float> vertices;
-    std::vector<unsigned int> indices;
-    
-    // Create base vertices
-    float dx = terrain.width / (terrain.resolution_x - 1);
-    float dz = terrain.depth / (terrain.resolution_z - 1);
-    float start_x = -terrain.width / 2.0f;
-    float start_z = -terrain.depth / 2.0f;
-    
-    // We assume resolution_x == resolution_z and it's a power of 2 plus 1 (e.g., 65x65) for perfect LOD,
-    // but for simplicity we will handle general cases by adjusting step size.
-    
+    if (!rhi_) return;
+
+    DestroyTerrainGPU(terrain);
+
+    const int rx = terrain.resolution_x;
+    const int rz = terrain.resolution_z;
+    const float dx = terrain.width / static_cast<float>(rx - 1);
+    const float dz = terrain.depth / static_cast<float>(rz - 1);
+    const float start_x = -terrain.width * 0.5f;
+    const float start_z = -terrain.depth * 0.5f;
+
     if (terrain.height_data.empty()) {
-        terrain.height_data.resize(terrain.resolution_x * terrain.resolution_z, 0.0f);
+        terrain.height_data.assign(static_cast<size_t>(rx * rz), 0.0f);
     }
-    
-    // Build LOD indices
-    terrain.lod_index_counts.clear();
-    terrain.lod_index_counts.resize(terrain.max_lod_levels, 0);
-    // In a real RHI we would create multiple EBOs, but here we just store the CPU side index buffers
-    // Actually, since we are doing client memory drawing right now, we will just compute the indices on the fly per frame based on current_lod!
-    
+
+    const auto h = [&](int x, int z) -> float {
+        x = std::clamp(x, 0, rx - 1);
+        z = std::clamp(z, 0, rz - 1);
+        return terrain.height_data[static_cast<size_t>(z * rx + x)];
+    };
+
+    // --- 1) 生成顶点（主网格 + skirt） ---
+    const int main_vert_count = rx * rz;
+    const int skirt_vert_count = 2 * (rx + rz);
+    const int total_vert_count = main_vert_count + skirt_vert_count;
+    std::vector<BatchVertex> vertices(static_cast<size_t>(total_vert_count));
+
+    const float skirt_drop = terrain.max_height * 0.5f + 10.0f;
+
+    for (int z = 0; z < rz; ++z) {
+        for (int x = 0; x < rx; ++x) {
+            BatchVertex& v = vertices[static_cast<size_t>(z * rx + x)];
+            v.pos = glm::vec3(start_x + x * dx, h(x, z), start_z + z * dz);
+            v.color = glm::vec4(1.0f);
+            v.uv = glm::vec2(
+                static_cast<float>(x) / static_cast<float>(rx - 1),
+                static_cast<float>(z) / static_cast<float>(rz - 1));
+
+            // 中心差分法线
+            float hL = h(x - 1, z), hR = h(x + 1, z);
+            float hD = h(x, z - 1), hU = h(x, z + 1);
+            glm::vec3 n(-((hR - hL) / (2.0f * dx)), 1.0f, -((hU - hD) / (2.0f * dz)));
+            v.normal = glm::normalize(n);
+
+            // 切线（沿 X 方向的 height gradient）
+            glm::vec3 t(1.0f, (hR - hL) / (2.0f * dx), 0.0f);
+            v.tangent = glm::normalize(t);
+
+            v.weights = glm::vec4(0.0f);
+            v.joints = glm::vec4(0.0f);
+        }
+    }
+
+    // Skirt 裙边顶点：bottom edge, top edge, left edge, right edge
+    int skirt_idx = main_vert_count;
+    auto add_skirt_vert = [&](int gx, int gz) {
+        BatchVertex& sv = vertices[static_cast<size_t>(skirt_idx++)];
+        const BatchVertex& src = vertices[static_cast<size_t>(gz * rx + gx)];
+        sv = src;
+        sv.pos.y -= skirt_drop;
+    };
+    // bottom edge (z=0)
+    for (int x = 0; x < rx; ++x) add_skirt_vert(x, 0);
+    // top edge (z=rz-1)
+    for (int x = 0; x < rx; ++x) add_skirt_vert(x, rz - 1);
+    // left edge (x=0)
+    for (int z = 0; z < rz; ++z) add_skirt_vert(0, z);
+    // right edge (x=rx-1)
+    for (int z = 0; z < rz; ++z) add_skirt_vert(rx - 1, z);
+
+    // --- 2) 生成多级 LOD 索引 ---
+    terrain.max_lod_levels = std::max(1, terrain.max_lod_levels);
+
+    std::vector<std::vector<unsigned int>> lod_indices(static_cast<size_t>(terrain.max_lod_levels));
+
+    for (int lod = 0; lod < terrain.max_lod_levels; ++lod) {
+        const int step = 1 << lod;
+        auto& idx = lod_indices[static_cast<size_t>(lod)];
+        idx.reserve(static_cast<size_t>((rx / step) * (rz / step) * 6));
+
+        // 主网格三角形
+        for (int z = 0; z + step < rz; z += step) {
+            for (int x = 0; x + step < rx; x += step) {
+                unsigned int tl = static_cast<unsigned int>(z * rx + x);
+                unsigned int tr = static_cast<unsigned int>(z * rx + (x + step));
+                unsigned int bl = static_cast<unsigned int>((z + step) * rx + x);
+                unsigned int br = static_cast<unsigned int>((z + step) * rx + (x + step));
+                idx.push_back(tl); idx.push_back(bl); idx.push_back(tr);
+                idx.push_back(tr); idx.push_back(bl); idx.push_back(br);
+            }
+        }
+
+        // Skirt 三角形（只在 LOD 0 添加，高 LOD 裙边不太可见）
+        if (lod == 0) {
+            const unsigned int sb = static_cast<unsigned int>(main_vert_count);          // bottom edge skirt start
+            const unsigned int st = static_cast<unsigned int>(main_vert_count + rx);     // top edge skirt start
+            const unsigned int sl = static_cast<unsigned int>(main_vert_count + 2 * rx); // left edge skirt start
+            const unsigned int sr = static_cast<unsigned int>(main_vert_count + 2 * rx + rz); // right edge skirt start
+
+            // bottom edge
+            for (int x = 0; x + 1 < rx; ++x) {
+                unsigned int a = static_cast<unsigned int>(x);
+                unsigned int b = static_cast<unsigned int>(x + 1);
+                idx.push_back(a); idx.push_back(sb + static_cast<unsigned int>(x)); idx.push_back(b);
+                idx.push_back(b); idx.push_back(sb + static_cast<unsigned int>(x)); idx.push_back(sb + static_cast<unsigned int>(x + 1));
+            }
+            // top edge
+            for (int x = 0; x + 1 < rx; ++x) {
+                unsigned int a = static_cast<unsigned int>((rz - 1) * rx + x);
+                unsigned int b = static_cast<unsigned int>((rz - 1) * rx + x + 1);
+                idx.push_back(a); idx.push_back(b); idx.push_back(st + static_cast<unsigned int>(x));
+                idx.push_back(b); idx.push_back(st + static_cast<unsigned int>(x + 1)); idx.push_back(st + static_cast<unsigned int>(x));
+            }
+            // left edge
+            for (int z = 0; z + 1 < rz; ++z) {
+                unsigned int a = static_cast<unsigned int>(z * rx);
+                unsigned int b = static_cast<unsigned int>((z + 1) * rx);
+                idx.push_back(a); idx.push_back(sl + static_cast<unsigned int>(z)); idx.push_back(b);
+                idx.push_back(b); idx.push_back(sl + static_cast<unsigned int>(z)); idx.push_back(sl + static_cast<unsigned int>(z + 1));
+            }
+            // right edge
+            for (int z = 0; z + 1 < rz; ++z) {
+                unsigned int a = static_cast<unsigned int>(z * rx + rx - 1);
+                unsigned int b = static_cast<unsigned int>((z + 1) * rx + rx - 1);
+                idx.push_back(a); idx.push_back(b); idx.push_back(sr + static_cast<unsigned int>(z));
+                idx.push_back(b); idx.push_back(sr + static_cast<unsigned int>(z + 1)); idx.push_back(sr + static_cast<unsigned int>(z));
+            }
+        }
+    }
+
+    // --- 3) 上传 GPU ---
+    std::vector<const void*> ebo_datas;
+    std::vector<size_t> ebo_sizes;
+    terrain.lod_index_counts.resize(static_cast<size_t>(terrain.max_lod_levels));
+
+    for (int lod = 0; lod < terrain.max_lod_levels; ++lod) {
+        const auto& idx = lod_indices[static_cast<size_t>(lod)];
+        ebo_datas.push_back(idx.data());
+        ebo_sizes.push_back(idx.size() * sizeof(unsigned int));
+        terrain.lod_index_counts[static_cast<size_t>(lod)] = static_cast<unsigned int>(idx.size());
+    }
+
+    terrain.vao = rhi_->CreateStaticMeshVAO(
+        vertices.data(), vertices.size() * sizeof(BatchVertex),
+        ebo_datas, ebo_sizes,
+        terrain.vbo, terrain.lod_ebos);
+
+    if (terrain.vao != 0) {
+        terrain.ebo = terrain.lod_ebos.empty() ? 0 : terrain.lod_ebos[0];
+        terrain.index_count = terrain.lod_index_counts.empty() ? 0 : terrain.lod_index_counts[0];
+    }
+
     terrain.is_dirty = false;
+    DEBUG_LOG_INFO("[TerrainSystem] Rebuilt terrain '{}x{}' → {} verts, {} LODs, vao={}",
+                  rx, rz, total_vert_count, terrain.max_lod_levels, terrain.vao);
 }
+
+// ============================================================
+// 渲染
+// ============================================================
 
 void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     auto view = world.registry().view<TerrainComponent, TransformComponent>();
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
-    
+
     glm::vec3 camera_pos(0.0f);
     if (camera_view.begin() != camera_view.end()) {
-        auto& cam_transform = camera_view.get<TransformComponent>((entt::entity)*camera_view.begin());
-        camera_pos = glm::vec3(cam_transform.local_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+        auto cam_entity = *camera_view.begin();
+        camera_pos = glm::vec3(camera_view.get<TransformComponent>(cam_entity).local_to_world
+                               * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
     }
-    
+
     std::vector<MeshDrawItem> items;
     items.reserve(view.size_hint());
-    
+
     for (auto entity : view) {
-        auto& terrain = view.get<TerrainComponent>((entt::entity)entity);
-        auto& transform = view.get<TransformComponent>((entt::entity)entity);
-        
+        auto& terrain = view.get<TerrainComponent>(entity);
+        auto& transform = view.get<TransformComponent>(entity);
+
         if (!terrain.enabled) continue;
-        
+
         if (terrain.is_dirty) {
             RebuildTerrain(terrain);
-            if (!world.registry().all_of<BoundingBoxComponent>((entt::entity)entity)) {
-                world.registry().emplace<BoundingBoxComponent>((entt::entity)entity);
+            if (!world.registry().all_of<BoundingBoxComponent>(entity)) {
+                world.registry().emplace<BoundingBoxComponent>(entity);
             }
-            auto& bbox = world.registry().get<BoundingBoxComponent>((entt::entity)entity);
-            bbox.min_extents = glm::vec3(-terrain.width / 2.0f, 0.0f, -terrain.depth / 2.0f);
-            bbox.max_extents = glm::vec3(terrain.width / 2.0f, terrain.max_height, terrain.depth / 2.0f);
+            auto& bbox = world.registry().get<BoundingBoxComponent>(entity);
+            bbox.min_extents = glm::vec3(-terrain.width * 0.5f, 0.0f, -terrain.depth * 0.5f);
+            bbox.max_extents = glm::vec3(terrain.width * 0.5f, terrain.max_height, terrain.depth * 0.5f);
         }
-        
-        // Frustum Culling Support for Terrain
+
         if (!terrain.visible) continue;
-        
-        // --- Dynamic LOD Calculation (inspired by VSLodTerrainGeometry) ---
+        if (terrain.vao == 0) continue;
+
+        // LOD 选择
         if (terrain.use_dynamic_lod) {
             glm::vec3 terrain_center = glm::vec3(transform.local_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
             float dist = glm::length(camera_pos - terrain_center);
-            
-            // Distance-based LOD selection
             int desired_lod = static_cast<int>(dist / terrain.lod_distance_factor);
             terrain.current_lod = std::clamp(desired_lod, 0, terrain.max_lod_levels - 1);
         } else {
             terrain.current_lod = 0;
         }
-        
-        int step = 1 << terrain.current_lod; // step = 2^lod (1, 2, 4, 8...)
-        
+
+        int lod = terrain.current_lod;
+        if (lod < 0 || static_cast<size_t>(lod) >= terrain.lod_ebos.size()) lod = 0;
+
         MeshDrawItem item;
         item.model = transform.local_to_world;
-        item.texture_handle = terrain.texture_handle;
-        
-        float dx = terrain.width / (terrain.resolution_x - 1);
-        float dz = terrain.depth / (terrain.resolution_z - 1);
-        float start_x = -terrain.width / 2.0f;
-        float start_z = -terrain.depth / 2.0f;
-        
-        // Client side array filling (with LOD step)
-        item.vertices.reserve(terrain.resolution_x * terrain.resolution_z);
-        for (int z = 0; z < terrain.resolution_z; ++z) {
-            for (int x = 0; x < terrain.resolution_x; ++x) {
-                BatchVertex v;
-                v.pos = glm::vec3(start_x + x * dx, terrain.height_data[z * terrain.resolution_x + x], start_z + z * dz);
-                v.color = glm::vec4(1.0f);
-                v.uv = glm::vec2(static_cast<float>(x) / (terrain.resolution_x - 1) * 10.0f, static_cast<float>(z) / (terrain.resolution_z - 1) * 10.0f);
-                v.normal = glm::vec3(0.0f, 1.0f, 0.0f);
-                v.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
-                item.vertices.push_back(v);
-            }
-        }
-        
-        // Generate indices with LOD step
-        item.indices.reserve((terrain.resolution_x - 1) * (terrain.resolution_z - 1) * 6 / (step * step));
-        for (int z = 0; z < terrain.resolution_z - 1 - step; z += step) {
-            for (int x = 0; x < terrain.resolution_x - 1 - step; x += step) {
-                int top_left = z * terrain.resolution_x + x;
-                int top_right = z * terrain.resolution_x + (x + step);
-                int bottom_left = (z + step) * terrain.resolution_x + x;
-                int bottom_right = (z + step) * terrain.resolution_x + (x + step);
-                
-                // Add two triangles for this quad patch
-                item.indices.push_back(top_left);
-                item.indices.push_back(bottom_left);
-                item.indices.push_back(top_right);
-                
-                item.indices.push_back(top_right);
-                item.indices.push_back(bottom_left);
-                item.indices.push_back(bottom_right);
-            }
-        }
-        
-        // Setup PBR materials for terrain
+        item.vao_override = terrain.vao;
+        item.ebo_override = terrain.lod_ebos[static_cast<size_t>(lod)];
+        item.index_count_override = terrain.lod_index_counts[static_cast<size_t>(lod)];
+
+        // PBR 材质
         item.lighting_enabled = true;
-        item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f); // Greenish
+        item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f);
         item.material_metallic = 0.0f;
         item.material_roughness = 0.9f;
         item.receive_shadow = true;
-        
-        // Find lights
+
+        // Splatmap
+        bool has_any_splat = false;
+        for (int si = 0; si < 4; ++si) {
+            if (terrain.splat_texture_handles[si] != 0) { has_any_splat = true; break; }
+        }
+        if (has_any_splat) {
+            item.splat_enabled = true;
+            item.splat_weight_map_handle = terrain.texture_handle;
+            for (int si = 0; si < 4; ++si) {
+                item.splat_layer_handles[si] = terrain.splat_texture_handles[si];
+            }
+            item.splat_tiling = terrain.splat_tiling;
+        } else {
+            item.texture_handle = terrain.texture_handle;
+        }
+
+        // 方向光
         auto light_view = world.registry().view<DirectionalLight3DComponent>();
         if (light_view.begin() != light_view.end()) {
-            auto& light = light_view.get<DirectionalLight3DComponent>((entt::entity)*light_view.begin());
+            auto& light = light_view.get<DirectionalLight3DComponent>(*light_view.begin());
             if (light.enabled) {
                 item.light_direction = light.direction;
                 item.light_color = light.color;
@@ -143,17 +296,23 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 item.shadow_strength = light.shadow_strength;
             }
         }
-        
-        // We don't override VAO since we populate client memory
-        // item.vao_override = terrain.vao;
-        // item.index_count_override = terrain.index_count;
-        
+
         items.push_back(item);
     }
-    
+
     if (!items.empty()) {
         cmd_buffer.DrawMeshBatch(items);
     }
+}
+
+// ============================================================
+// CPU 高度查询（双线性插值）
+// ============================================================
+
+float TerrainSystem::SampleHeight(const TerrainComponent& terrain,
+                                   const TransformComponent& transform,
+                                   float world_x, float world_z) {
+    return dse::SampleTerrainHeight(terrain, transform, world_x, world_z);
 }
 
 } // namespace gameplay3d

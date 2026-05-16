@@ -319,6 +319,15 @@ void GLShaderManager::CachePBRLocations() {
         loc.spot_shadow_map[i] = glGetUniformLocation(h, name.c_str());
     }
 
+    // --- Terrain splatmap ---
+    loc.splat_weight_map = glGetUniformLocation(h, "u_splat_weight_map");
+    loc.splat_layer[0] = glGetUniformLocation(h, "u_splat_layer0");
+    loc.splat_layer[1] = glGetUniformLocation(h, "u_splat_layer1");
+    loc.splat_layer[2] = glGetUniformLocation(h, "u_splat_layer2");
+    loc.splat_layer[3] = glGetUniformLocation(h, "u_splat_layer3");
+    loc.splat_enabled = glGetUniformLocation(h, "u_splat_enabled");
+    loc.splat_tiling = glGetUniformLocation(h, "u_splat_tiling");
+
     // --- 逐对象 uniform（从 push constants 展平）-----
     loc.model = glGetUniformLocation(h, "u_model");
     loc.skinned = glGetUniformLocation(h, "u_skinned");
