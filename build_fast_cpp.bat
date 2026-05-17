@@ -12,8 +12,12 @@ echo.
 set BUILD_DIR=build_vs2022
 set TARGET_NAME=DSEngine_example_cpp
 
-if not exist "%BUILD_DIR%\CMakeCache.txt" (
-    echo [INFO] CMakeCache.txt not found. Running initial configure...
+set NEED_CONFIGURE=0
+if not exist "%BUILD_DIR%\CMakeCache.txt" set NEED_CONFIGURE=1
+if not exist "%BUILD_DIR%\apps\runtime\cpp_host\%TARGET_NAME%.vcxproj" set NEED_CONFIGURE=1
+
+if "!NEED_CONFIGURE!"=="1" (
+    echo [INFO] Target not found or CMakeCache.txt missing. Running configure...
     cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_SPINE=ON -DDSE_ENABLE_3D=OFF
 
     if !ERRORLEVEL! neq 0 (

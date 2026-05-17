@@ -84,6 +84,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/runtime/frame_pipeline_test.cpp
     engine/runtime/runtime_context_test.cpp
     engine/runtime/engine_app_test.cpp
+    engine/runtime/game_application_test.cpp
     # modules/gameplay_2d
     modules/gameplay_2d/animation_system_2d_test.cpp
     modules/gameplay_2d/camera_system_2d_test.cpp

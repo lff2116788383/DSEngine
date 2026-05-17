@@ -429,31 +429,26 @@ endif ()
 
 # DSE_Gameplay3D 已静态编入 dse_engine，无需独立 install 规则。
 
-function(dse_copy_runtime_assets target_name)
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_RUNTIME_DLLS:${target_name}>
-        $<TARGET_FILE_DIR:${target_name}>
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+add_custom_target(dse_copy_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/samples
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/samples
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/script
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/script
-        COMMAND_EXPAND_LISTS
-    )
+    COMMENT "Copying runtime assets to bin/"
+)
+add_dependencies(dse_copy_assets dse_engine)
+
+function(dse_copy_runtime_assets target_name)
+    add_dependencies(${target_name} dse_copy_assets)
 endfunction()
 
 function(dse_copy_runtime_dlls target_name)
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_RUNTIME_DLLS:${target_name}>
-        $<TARGET_FILE_DIR:${target_name}>
-        COMMAND_EXPAND_LISTS
-    )
+    add_dependencies(${target_name} dse_copy_assets)
 endfunction()
 
 # 包含运行时宿主入口

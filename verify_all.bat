@@ -248,16 +248,16 @@ for %%D in (%DEMOS%) do (
     )
 
     if "!DEMO_RC!"=="0" (
-        echo [OK] 正常退出 (exit=0)
+        echo [OK] 正常退出 ^(exit=0^)
         set /a PASS_COUNT+=1
     ) else if "!DEMO_RC!"=="124" (
-        echo [OK] 超时退出 (运行中无崩溃)
+        echo [OK] 超时退出 ^(运行中无崩溃^)
         set /a PASS_COUNT+=1
     ) else if "!DEMO_RC!"=="-1073741515" (
-        echo [SKIP] DLL 缺失 (0xC0000135)
+        echo [SKIP] DLL 缺失 ^(0xC0000135^)
         set /a SKIP_COUNT+=1
     ) else (
-        echo [FAIL] 异常退出 (exit=!DEMO_RC!)
+        echo [FAIL] 异常退出 ^(exit=!DEMO_RC!^)
         set /a FAIL_COUNT+=1
     )
 )

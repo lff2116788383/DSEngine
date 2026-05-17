@@ -148,7 +148,6 @@ set CMAKE_BOX2D_LINKAGE_OPTION=-DBUILD_SHARED_LIBS=OFF
 set CMAKE_MSVC_RUNTIME_OPTION="-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>"
 
 
-
 :: Check Administrator Privileges if we need to package EXE
 if "%PACKAGE_EDITOR_EXE%"=="1" set NEED_ADMIN=1
 if "%PACKAGE_LAUNCHER_EXE%"=="1" set NEED_ADMIN=1
@@ -190,7 +189,6 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 echo [OK] CMake found.
-
 if "%BUILD_EDITOR%"=="1" (
 
 
@@ -234,7 +232,7 @@ if "%BUILD_LAUNCHER%"=="1" (
     where cargo >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         if exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
-            set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+            set "PATH=!USERPROFILE!\.cargo\bin;!USERPROFILE!\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;!PATH!"
             echo [OK] Found Cargo in USERPROFILE, added to PATH temporarily.
         ) else (
             echo [WARN] Rust / Cargo is not installed or not in PATH!
@@ -243,7 +241,7 @@ if "%BUILD_LAUNCHER%"=="1" (
             if exist "rustup-init.exe" (
                 .\rustup-init.exe -y --default-toolchain stable --profile minimal
                 del /f /q "rustup-init.exe"
-                set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+                set "PATH=!USERPROFILE!\.cargo\bin;!USERPROFILE!\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;!PATH!"
                 echo [OK] Rust toolchain installed successfully.
             ) else (
                 echo [ERROR] Failed to download rustup-init.exe. Please install Rust manually from https://rustup.rs/
@@ -276,7 +274,7 @@ if "%CLEAN_BUILD%"=="1" (
     )
 ) else (
     if exist %BUILD_DIR%\CMakeCache.txt (
-        echo [INFO] Reusing existing CMakeCache.txt (use --clean to force reconfigure).
+        echo [INFO] Reusing existing CMakeCache.txt, use --clean to force reconfigure.
     )
 )
 
@@ -335,7 +333,7 @@ if "%PACKAGE_LAUNCHER_EXE%"=="1" (
         )
 
         :: 确保 Rust / Cargo 在 PATH 中（兼容刚才修复的本地环境）
-        set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+        set "PATH=!USERPROFILE!\.cargo\bin;!USERPROFILE!\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;!PATH!"
         
         call npm run tauri build
         set "PACK_LAUNCHER_RC=!ERRORLEVEL!"

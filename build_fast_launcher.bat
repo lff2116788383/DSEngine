@@ -29,7 +29,7 @@ if !ERRORLEVEL! neq 0 (
 where cargo >nul 2>&1
 if !ERRORLEVEL! neq 0 (
     if exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
-        set "PATH=%USERPROFILE%\.cargo\bin;%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;%PATH%"
+        set "PATH=!USERPROFILE!\.cargo\bin;!USERPROFILE!\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;!PATH!"
         echo [OK] Found Cargo in USERPROFILE, added to PATH temporarily.
     ) else (
         echo [ERROR] Rust / Cargo is not installed or not in PATH!

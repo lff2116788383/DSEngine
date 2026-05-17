@@ -124,11 +124,13 @@ protected:
 
     unsigned int LoadTexture(const std::string& path);
 
-private:
+    // ─── 内部生命周期（protected 以支持测试注入） ───
+
     void Bootstrap(World& world, AssetManager& asset_manager);
     void Tick(World& world, float delta_time);
     void ShutdownInternal();
 
+private:
     World* world_ = nullptr;
     AssetManager* asset_manager_ = nullptr;
 };

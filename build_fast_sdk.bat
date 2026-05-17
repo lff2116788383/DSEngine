@@ -12,8 +12,12 @@ echo.
 set BUILD_DIR=build_vs2022
 set INSTALL_DIR=.\bin\sdk
 
-if not exist "%BUILD_DIR%\CMakeCache.txt" (
-    echo [INFO] CMakeCache.txt not found. Running initial configure...
+set NEED_CONFIGURE=0
+if not exist "%BUILD_DIR%\CMakeCache.txt" set NEED_CONFIGURE=1
+if not exist "%BUILD_DIR%\dse_engine.vcxproj" set NEED_CONFIGURE=1
+
+if "!NEED_CONFIGURE!"=="1" (
+    echo [INFO] Target not found or CMakeCache.txt missing. Running configure...
     cmake -S . -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF -DDSE_BUILD_GTESTS=OFF
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Initial CMake configure failed!

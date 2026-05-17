@@ -135,7 +135,7 @@ if exist ".git\modules\!TARGET!" (
 
 REM Add the submodule
 if /I "!REF!"=="master" (
-    echo [INFO] Adding submodule (track default branch and record the current commit later): !TARGET!
+    echo [INFO] Adding submodule ^(track default branch and record the current commit later^): !TARGET!
     git submodule add "!URL!" "!TARGET!"
 ) else (
     echo [INFO] Adding submodule: !TARGET!
