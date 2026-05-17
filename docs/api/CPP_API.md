@@ -72,6 +72,80 @@ int exit_code = engine.Run();  // 完整生命周期
 int dse::runtime::RunEngine(const EngineRunConfig& config);
 ```
 
+### GameApplication（C++ 宿主便捷基类）
+
+**头文件：** `engine/scripting/cpp/game_application.h`  
+**命名空间：** `dse::runtime`
+
+继承此类可快速搭建 C++ 游戏，无需手动注册 `CppBusinessHooks`。
+
+```cpp
+class MyGame : public dse::runtime::GameApplication {
+protected:
+    void OnInit() override {
+        auto cam = CreateCamera3D({0, 5, 15});
+        auto sun = CreateDirectionalLight({-0.5f, -1.0f, -0.3f});
+        auto box = CreateMesh({0, 0, 0}, "models/cube.dmesh");
+    }
+    void OnUpdate(float dt) override { }
+    void OnShutdown() override { }
+};
+int main() { return MyGame().Run({.window_width=1280, .window_height=720}); }
+```
+
+**生命周期钩子：**
+
+| 虚方法 | 说明 |
+|--------|------|
+| `OnInit()` | 引擎初始化完毕后调用 |
+| `OnUpdate(float dt)` | 每帧调用 |
+| `OnShutdown()` | 引擎关停前调用 |
+
+**服务访问：**
+
+| 方法 | 返回类型 | 说明 |
+|------|----------|------|
+| `GetWorld()` | `World&` | 获取 ECS 世界 |
+| `GetAssetManager()` | `AssetManager&` | 获取资产管理器 |
+
+**ECS 操作：**
+
+| 方法 | 说明 |
+|------|------|
+| `CreateEntity()` | 创建空实体 |
+| `DestroyEntity(e)` | 销毁实体 |
+| `Emplace<T>(e, args...)` | 添加/替换组件 |
+| `Get<T>(e)` | 获取组件指针（无则返回 nullptr） |
+| `Has<T>(e)` | 是否拥有组件 |
+| `Remove<T>(e)` | 移除组件 |
+
+**实体工厂：**
+
+| 方法 | 说明 |
+|------|------|
+| `CreateEntityAt(pos, scale)` | 创建带 Transform 的实体 |
+| `CreateCamera3D(pos, fov, near, far)` | 创建 3D 相机（含 FreeCameraController） |
+| `CreateDirectionalLight(dir, color, intensity, shadow)` | 创建平行光 |
+| `CreatePointLight(pos, color, intensity, radius)` | 创建点光源 |
+| `CreateMesh(pos, path, scale)` | 创建网格实体（PBR 默认材质） |
+| `LoadTexture(path)` | 加载纹理，返回 handle |
+
+### DSE_ENABLE_LUA 条件编译
+
+CMake 选项 `DSE_ENABLE_LUA`（默认 `ON`）控制 Lua 运行时是否编入引擎：
+
+```bash
+# 纯 C++ 构建，裁剪 Lua 解释器 + 全部绑定代码
+cmake -S . -B build -DDSE_ENABLE_LUA=OFF
+```
+
+| 开关状态 | 效果 |
+|----------|------|
+| `ON`（默认） | Lua 解释器 + 340+ 绑定函数编入 `DSEngine.dll` |
+| `OFF` | 排除 `depends/lua/*` + `engine/scripting/lua/*.cpp`，二进制更小 |
+
+> 注意：`DSE_ENABLE_LUA=OFF` 时若 `BusinessMode` 设为 `Lua`，引擎将输出错误日志并启动失败。
+
 ---
 
 ## 2. 核心服务
