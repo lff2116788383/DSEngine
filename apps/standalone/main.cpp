@@ -14,6 +14,7 @@ struct StandaloneConfig {
     std::string pak_path;
     std::string lua_script  = "main.lua";
     std::string rhi_backend;   // --rhi=opengl|d3d11|vulkan
+    std::string demo;          // --demo=3d_fracture
     int width  = 1280;
     int height = 720;
     std::string title = "DSEngine Game";
@@ -37,6 +38,8 @@ StandaloneConfig ParseArgs(int argc, char** argv) {
             cfg.height = std::atoi(arg.substr(9).c_str());
         } else if (arg.rfind("--title=", 0) == 0) {
             cfg.title = arg.substr(8);
+        } else if (arg.rfind("--demo=", 0) == 0) {
+            cfg.demo = arg.substr(7);
         }
     }
     return cfg;
@@ -58,6 +61,15 @@ std::string FindPakNextToExe(const char* argv0) {
 
 int main(int argc, char** argv) {
     auto cfg = ParseArgs(argc, argv);
+
+    // --demo= 设置环境变量 DSE_DEMO，供 Lua main.lua 读取
+    if (!cfg.demo.empty()) {
+#ifdef _WIN32
+        _putenv_s("DSE_DEMO", cfg.demo.c_str());
+#else
+        setenv("DSE_DEMO", cfg.demo.c_str(), 1);
+#endif
+    }
 
     // --rhi= 命令行参数覆盖环境变量 DSE_RHI_BACKEND
     if (!cfg.rhi_backend.empty()) {

@@ -4,157 +4,58 @@ if type(Config) ~= "table" then
     Config = _G.Config or {}
 end
 
+-- ============================================================
+-- Demo 解析：优先级 DSE_DEMO 环境变量 > config.game_entry > 默认
+-- 用法: DSEngine_Game_release.exe --demo=3d_fracture
+--       或 set DSE_DEMO=3d_fracture
+--       或修改 config.lua 的 Config.game_entry
+-- ============================================================
+
+local env_demo = os.getenv("DSE_DEMO")
+local game_entry = (env_demo and env_demo ~= "") and env_demo
+    or (type(Config.game_entry) == "string" and Config.game_entry)
+    or "phase1_2d_physics_showcase"
+
+-- 3D 基础图元：module 名不带 "3d_" 前缀
+local primitives_3d = {triangle = true, square = true, cube = true}
+
+-- 顶层 demo（非 3d/ 子目录，module path 和 config key 不规则）
+local toplevel_demos = {
+    phase1_2d_mvp              = {module = "phase1_2d_mvp",             cfg = "phase1_2d"},
+    phase1_2d_showcase         = {module = "phase1_2d_showcase",        cfg = "phase1_2d_showcase"},
+    phase1_2d_physics_showcase = {module = "phase1_2d_physics_showcase", cfg = "phase1_2d_physics_showcase"},
+    phase1_2d_stress           = {module = "phase1_2d_stress",          cfg = "phase1_2d"},
+    phase2_3d_mvp              = {module = "phase2_3d_mvp",             cfg = "phase2_3d"},
+    frog_jump                  = {module = "frog_jump",                 cfg = "frog_jump"},
+    vse_demo_15_7              = {module = "vse_demo.demo15_7",         cfg = "vse_demo_15_7"},
+    vse_demo_15_8              = {module = "vse_demo.demo15_8",         cfg = "vse_demo_15_8"},
+    vse_demo_15_9              = {module = "vse_demo.demo15_9",         cfg = "vse_demo_15_9"},
+}
+
+-- 约定式解析
 local RuntimeEntry = nil
 local runtime_config = nil
-local game_entry = type(Config.game_entry) == "string" and Config.game_entry or "phase1_2d_physics_showcase"
-if game_entry == "3d_triangle" then
-    RuntimeEntry = require("3d.triangle")
-    runtime_config = Config.basic_3d or {}
-elseif game_entry == "3d_square" then
-    RuntimeEntry = require("3d.square")
-    runtime_config = Config.basic_3d or {}
-elseif game_entry == "3d_cube" then
-    RuntimeEntry = require("3d.cube")
-    runtime_config = Config.basic_3d or {}
-elseif game_entry == "3d_static_model" then
-    RuntimeEntry = require("3d.3d_static_model")
-    runtime_config = Config.demo_3d_static_model or Config.basic_3d or {}
-elseif game_entry == "3d_material_showcase" then
-    RuntimeEntry = require("3d.3d_material_showcase")
-    runtime_config = Config.demo_3d_material_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_lighting_showcase" then
-    RuntimeEntry = require("3d.3d_lighting_showcase")
-    runtime_config = Config.demo_3d_lighting_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_camera_showcase" then
-    RuntimeEntry = require("3d.3d_camera_showcase")
-    runtime_config = Config.demo_3d_camera_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_textured_cube" then
-    RuntimeEntry = require("3d.3d_textured_cube")
-    runtime_config = Config.demo_3d_textured_cube or Config.basic_3d or {}
-elseif game_entry == "3d_scene_showcase" then
-    RuntimeEntry = require("3d.3d_scene_showcase")
-    runtime_config = Config.demo_3d_scene_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_skybox_environment" then
-    RuntimeEntry = require("3d.3d_skybox_environment")
-    runtime_config = Config.demo_3d_skybox_environment or Config.basic_3d or {}
-elseif game_entry == "3d_postprocess_showcase" then
-    RuntimeEntry = require("3d.3d_postprocess_showcase")
-    runtime_config = Config.demo_3d_postprocess_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_particles_showcase" then
-    RuntimeEntry = require("3d.3d_particles_showcase")
-    runtime_config = Config.demo_3d_particles_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_physics_stack" then
-    RuntimeEntry = require("3d.3d_physics_stack")
-    runtime_config = Config.demo_3d_physics_stack or Config.basic_3d or {}
-elseif game_entry == "3d_terrain_heightmap" then
-    RuntimeEntry = require("3d.3d_terrain_heightmap")
-    runtime_config = Config.demo_3d_terrain_heightmap or Config.basic_3d or {}
-elseif game_entry == "3d_shadow_showcase" then
-    RuntimeEntry = require("3d.3d_shadow_showcase")
-    runtime_config = Config.demo_3d_shadow_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_animation_basic" then
-    RuntimeEntry = require("3d.3d_animation_basic")
-    runtime_config = Config.demo_3d_animation_basic or Config.basic_3d or {}
-elseif game_entry == "3d_character_third_person" then
-    RuntimeEntry = require("3d.3d_character_third_person")
-    runtime_config = Config.demo_3d_character_third_person or Config.basic_3d or {}
-elseif game_entry == "3d_audio_spatial" then
-    RuntimeEntry = require("3d.3d_audio_spatial")
-    runtime_config = Config.demo_3d_audio_spatial or Config.basic_3d or {}
-elseif game_entry == "3d_physics_raycast_pick" then
-    RuntimeEntry = require("3d.3d_physics_raycast_pick")
-    runtime_config = Config.demo_3d_physics_raycast_pick or Config.basic_3d or {}
-elseif game_entry == "3d_texture_material_slots" then
-    RuntimeEntry = require("3d.3d_texture_material_slots")
-    runtime_config = Config.demo_3d_texture_material_slots or Config.basic_3d or {}
-elseif game_entry == "3d_terrain_lod_zones" then
-    RuntimeEntry = require("3d.3d_terrain_lod_zones")
-    runtime_config = Config.demo_3d_terrain_lod_zones or Config.basic_3d or {}
-elseif game_entry == "3d_vse15_22_scene" then
-    RuntimeEntry = require("3d.3d_vse15_22_scene")
-    runtime_config = Config.demo_3d_vse15_22_scene or Config.basic_3d or {}
-elseif game_entry == "3d_character_controller" then
-    RuntimeEntry = require("3d.3d_character_controller")
-    runtime_config = Config.demo_3d_character_controller or Config.basic_3d or {}
-elseif game_entry == "3d_physics_interaction" then
-    RuntimeEntry = require("3d.3d_physics_interaction")
-    runtime_config = Config.demo_3d_physics_interaction or Config.basic_3d or {}
-elseif game_entry == "3d_input_showcase" then
-    RuntimeEntry = require("3d.3d_input_showcase")
-    runtime_config = Config.demo_3d_input_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_hud_overlay" then
-    RuntimeEntry = require("3d.3d_hud_overlay")
-    runtime_config = Config.demo_3d_hud_overlay or Config.basic_3d or {}
-elseif game_entry == "3d_procedural_mesh" then
-    RuntimeEntry = require("3d.3d_procedural_mesh")
-    runtime_config = Config.demo_3d_procedural_mesh or Config.basic_3d or {}
-elseif game_entry == "3d_scene_load" then
-    RuntimeEntry = require("3d.3d_scene_load")
-    runtime_config = Config.demo_3d_scene_load or Config.basic_3d or {}
-elseif game_entry == "3d_metrics_debug" then
-    RuntimeEntry = require("3d.3d_metrics_debug")
-    runtime_config = Config.demo_3d_metrics_debug or Config.basic_3d or {}
-elseif game_entry == "3d_physics_triggers" then
-    RuntimeEntry = require("3d.3d_physics_triggers")
-    runtime_config = Config.demo_3d_physics_triggers or Config.basic_3d or {}
-elseif game_entry == "3d_audio_complete" then
-    RuntimeEntry = require("3d.3d_audio_complete")
-    runtime_config = Config.demo_3d_audio_complete or Config.basic_3d or {}
-elseif game_entry == "3d_asset_pack_showcase" then
-    RuntimeEntry = require("3d.3d_asset_pack_showcase")
-    runtime_config = Config.demo_3d_asset_pack_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_render_quality_showcase" then
-    RuntimeEntry = require("3d.3d_render_quality_showcase")
-    runtime_config = Config.demo_3d_render_quality_showcase or Config.basic_3d or {}
-elseif game_entry == "3d_fracture" then
-    RuntimeEntry = require("3d.3d_fracture")
-    runtime_config = Config.demo_3d_fracture or Config.basic_3d or {}
-elseif game_entry == "3d_cloth" then
-    RuntimeEntry = require("3d.3d_cloth")
-    runtime_config = Config.demo_3d_cloth or Config.basic_3d or {}
-elseif game_entry == "3d_fluid" then
-    RuntimeEntry = require("3d.3d_fluid")
-    runtime_config = Config.demo_3d_fluid or Config.basic_3d or {}
-elseif game_entry == "3d_ragdoll" then
-    RuntimeEntry = require("3d.3d_ragdoll")
-    runtime_config = Config.demo_3d_ragdoll or Config.basic_3d or {}
-elseif game_entry == "3d_softbody" then
-    RuntimeEntry = require("3d.3d_softbody")
-    runtime_config = Config.demo_3d_softbody or Config.basic_3d or {}
-elseif game_entry == "3d_vehicle" then
-    RuntimeEntry = require("3d.3d_vehicle")
-    runtime_config = Config.demo_3d_vehicle or Config.basic_3d or {}
-elseif game_entry == "3d_rope" then
-    RuntimeEntry = require("3d.3d_rope")
-    runtime_config = Config.demo_3d_rope or Config.basic_3d or {}
-elseif game_entry == "3d_buoyancy" then
-    RuntimeEntry = require("3d.3d_buoyancy")
-    runtime_config = Config.demo_3d_buoyancy or Config.basic_3d or {}
-elseif game_entry == "phase1_2d_physics_showcase" then
-    RuntimeEntry = require("phase1_2d_physics_showcase")
-    runtime_config = Config.phase1_2d_physics_showcase or {}
-elseif game_entry == "frog_jump" then
-    RuntimeEntry = require("frog_jump")
-    runtime_config = Config.frog_jump or {}
-elseif game_entry == "phase1_2d_mvp" then
-    RuntimeEntry = require("phase1_2d_mvp")
-    runtime_config = Config.phase1_2d or {}
-elseif game_entry == "phase1_2d_showcase" then
-    RuntimeEntry = require("phase1_2d_showcase")
-    runtime_config = Config.phase1_2d_showcase or {}
-elseif game_entry == "vse_demo_15_7" then
-    RuntimeEntry = require("vse_demo.demo15_7")
-    runtime_config = Config.vse_demo_15_7 or {}
-elseif game_entry == "vse_demo_15_8" then
-    RuntimeEntry = require("vse_demo.demo15_8")
-    runtime_config = Config.vse_demo_15_8 or {}
-elseif game_entry == "vse_demo_15_9" then
-    RuntimeEntry = require("vse_demo.demo15_9")
-    runtime_config = Config.vse_demo_15_9 or {}
+
+local top = toplevel_demos[game_entry]
+if top then
+    RuntimeEntry = require(top.module)
+    runtime_config = Config[top.cfg] or {}
+elseif game_entry:sub(1, 3) == "3d_" then
+    local suffix = game_entry:sub(4) -- "fracture", "triangle", etc.
+    if primitives_3d[suffix] then
+        RuntimeEntry = require("3d." .. suffix)
+        runtime_config = Config.basic_3d or {}
+    else
+        RuntimeEntry = require("3d." .. game_entry)
+        runtime_config = Config["demo_" .. game_entry] or Config.basic_3d or {}
+    end
 else
+    print("[main] 未知 demo: " .. game_entry .. ", fallback to phase2_3d_mvp")
     RuntimeEntry = require("phase2_3d_mvp")
     runtime_config = Config.phase2_3d or {}
 end
+
+print("[main] 加载 demo: " .. game_entry)
 
 function Awake()
     if type(Config.title) == "string" and Config.title ~= "" then
