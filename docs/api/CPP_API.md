@@ -420,9 +420,12 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 
 ### 5.1 RhiDevice（渲染硬件接口）
 
-**头文件：** `engine/render/rhi/rhi_device.h`
+**头文件：** `engine/render/rhi/rhi_device.h`（纯虚基类 + `CommandBuffer` + `OpenGLCommandBuffer`）
 
-抽象基类，三个后端实现：`OpenGLRhiDevice`、`VulkanRhiDevice`（条件编译 `DSE_ENABLE_VULKAN`）、`DX11RhiDevice`（条件编译 `DSE_ENABLE_D3D11`）。
+抽象基类，三个后端实现位于各自头文件：
+- `OpenGLRhiDevice` → `engine/render/rhi/gl_rhi_device.h`
+- `VulkanRhiDevice` → `engine/render/rhi/vulkan/vulkan_rhi_device.h`（条件编译 `DSE_ENABLE_VULKAN`）
+- `DX11RhiDevice` → `engine/render/rhi/dx11/dx11_rhi_device.h`（条件编译 `DSE_ENABLE_D3D11`）
 
 #### GPU 资源创建
 

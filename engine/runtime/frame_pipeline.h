@@ -21,23 +21,7 @@
 #ifdef DSE_ENABLE_NAVMESH
 #include "engine/navigation/nav_mesh_system.h"
 #endif
-#include "modules/gameplay_2d/rendering/sprite_render_system.h"
-#include "modules/gameplay_2d/camera/camera_system.h"
-#include "modules/gameplay_2d/ui/ui_system.h"
 #include "engine/audio/audio_system.h"
-#include "modules/gameplay_2d/tilemap/tilemap_system.h"
-#include "modules/gameplay_2d/animation/animation_system.h"
-#include "modules/gameplay_2d/particle/particle_system.h"
-#include "modules/gameplay_2d/spine/spine_system.h"
-#include "modules/gameplay_2d/gameplay_2d_module.h"
-#include "modules/gameplay_3d/rendering/mesh_render_system.h"
-#ifdef DSE_ENABLE_3D
-#include "modules/gameplay_3d/gameplay_3d_module.h"
-#else
-#include "modules/gameplay_3d/particles/particle3d_system.h"
-#include "modules/gameplay_3d/ai/steering_system.h"
-#include "modules/gameplay_3d/animation/animator_system.h"
-#endif
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
 #include "engine/runtime/runtime_frame_ops.h"
@@ -58,6 +42,7 @@
 #include "engine/assets/streaming_manager.h"
 
 class AssetManager;
+struct FramePipelineModules;
 
 /**
  * @class FramePipeline
@@ -68,8 +53,8 @@ public:
     [[deprecated("Use EngineInstance::pipeline() or injected FramePipeline instance")]]
     static FramePipeline& Instance();
 
-    FramePipeline() = default;
-    ~FramePipeline() = default;
+    FramePipeline();
+    ~FramePipeline();
 
     /**
      * @brief 初始化流水线及内部子系统
@@ -250,8 +235,7 @@ private:
 
     dse::runtime::RuntimeContext runtime_context_{};
     
-    dse::gameplay2d::Gameplay2DModule gameplay2d_module_;
-    dse::gameplay3d::MeshRenderSystem mesh_render_system_;
+    std::unique_ptr<FramePipelineModules> modules_impl_;
     int gpu_culled_last_frame_ = 0;  ///< GPU Driven: 上一帧被剔除的 draw command 数
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     dse::physics3d::Physics3DSystem physics3d_system_;
@@ -261,15 +245,7 @@ private:
     dse::navigation::NavMeshSystem nav_mesh_system_;
     bool nav_mesh_system_initialized_ = false;
 #endif
-#ifdef DSE_ENABLE_3D
-    dse::gameplay3d::Gameplay3DModule gameplay3d_module_;
     bool builtin_gameplay3d_enabled_ = false;
-#else
-    dse::gameplay3d::Particle3DSystem particle3d_system_;
-    dse::gameplay3d::SteeringSystem steering_system_;
-    dse::gameplay3d::AnimatorSystem animator3d_system_;
-    bool builtin_gameplay3d_enabled_ = false;
-#endif
     
     // 动态模块优先；未启用完整 3D 构建时保留 Particle3D/Steering/Animator3D 最小内置更新链路。
     struct LoadedModule {

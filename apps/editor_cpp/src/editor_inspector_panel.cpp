@@ -6,6 +6,7 @@
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/ecs/audio.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
+#include "modules/gameplay_3d/animation/animation_state_machine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"

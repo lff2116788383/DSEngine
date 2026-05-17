@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include "engine/ecs/transform.h"
-#include "modules/gameplay_3d/animation/animation_state_machine.h"
+namespace dse { namespace gameplay3d { class AnimationStateMachine; } }
 
 namespace dse {
 

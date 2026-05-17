@@ -18,6 +18,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/animation.h"
 #include "engine/ecs/components_3d.h"
+#include "modules/gameplay_3d/animation/animation_state_machine.h"
 #include "engine/core/service_locator.h"
 #include "engine/base/debug.h"
 #include <cmath>

@@ -1,6 +1,7 @@
 #include "engine/runtime/runtime_update_graph.h"
 
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/frame_pipeline_modules.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 
@@ -18,7 +19,7 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, float delta_time) {
     auto& world = pipeline.world();
 
     // 2D 模块统一通过 IModule 接口调度
-    pipeline.gameplay2d_module_.OnUpdate(world, delta_time);
+    pipeline.modules_impl_->gameplay2d_module.OnUpdate(world, delta_time);
 
     for (auto& mod : pipeline.modules_) {
         if (mod.instance) {
@@ -27,7 +28,7 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, float delta_time) {
     }
 #ifdef DSE_ENABLE_3D
     if (pipeline.builtin_gameplay3d_enabled_) {
-        pipeline.gameplay3d_module_.OnUpdate(world, delta_time);
+        pipeline.modules_impl_->gameplay3d_module.OnUpdate(world, delta_time);
     }
 #endif
 }
@@ -36,7 +37,7 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
     auto& world = pipeline.world();
 
     // 2D 模块统一通过 IModule 接口调度
-    pipeline.gameplay2d_module_.OnFixedUpdate(world, fixed_delta_time);
+    pipeline.modules_impl_->gameplay2d_module.OnFixedUpdate(world, fixed_delta_time);
 
     for (auto& mod : pipeline.modules_) {
         if (mod.instance) {
@@ -45,7 +46,7 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
     }
 #ifdef DSE_ENABLE_3D
     if (pipeline.builtin_gameplay3d_enabled_) {
-        pipeline.gameplay3d_module_.OnFixedUpdate(world, fixed_delta_time);
+        pipeline.modules_impl_->gameplay3d_module.OnFixedUpdate(world, fixed_delta_time);
     }
 #endif
 

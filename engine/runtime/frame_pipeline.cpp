@@ -4,6 +4,11 @@
  */
 
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/frame_pipeline_modules.h"
+
+FramePipeline::FramePipeline() : modules_impl_(std::make_unique<FramePipelineModules>()) {}
+FramePipeline::~FramePipeline() = default;
+
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/base/debug.h"
 #include "engine/base/time.h"
@@ -524,8 +529,8 @@ bool FramePipeline::Init() {
     render_resources_.wboit_reveal_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(wboit_reveal_desc);
 
     DEBUG_LOG_INFO("FramePipeline init: systems init begin");
-    gameplay2d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
-    mesh_render_system_.SetAssetManager(&asset_manager);
+    modules_impl_->gameplay2d_module.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
+    modules_impl_->mesh_render_system.SetAssetManager(&asset_manager);
     DEBUG_LOG_INFO("FramePipeline init: systems init complete");
 
     const auto runtime_modules = ResolveRuntimeModules();
@@ -557,7 +562,7 @@ bool FramePipeline::Init() {
 
 #ifdef DSE_ENABLE_3D
     if (enable_gameplay3d) {
-        if (!gameplay3d_module_.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
+        if (!modules_impl_->gameplay3d_module.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
             DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D module OnInit returned false");
         } else {
             DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module OnInit OK (static)");
@@ -567,8 +572,8 @@ bool FramePipeline::Init() {
 #else
     if (enable_gameplay3d) {
         DEBUG_LOG_INFO("FramePipeline init: Gameplay3D built-in fallback enabled (particle/steering/animator)");
-        particle3d_system_.SetAssetManager(&asset_manager);
-        particle3d_system_.Init(*runtime_context_.world, runtime_context_.rhi_device.get());
+        modules_impl_->particle3d_system.SetAssetManager(&asset_manager);
+        modules_impl_->particle3d_system.Init(*runtime_context_.world, runtime_context_.rhi_device.get());
         dse::gameplay3d::AnimatorSystem::SetAssetManager(&asset_manager);
         builtin_gameplay3d_enabled_ = true;
     }
@@ -576,7 +581,7 @@ bool FramePipeline::Init() {
 
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
 
-    runtime_context_.audio_system = &gameplay2d_module_.audio_system();
+    runtime_context_.audio_system = &modules_impl_->gameplay2d_module.audio_system();
 
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },
@@ -632,16 +637,16 @@ void FramePipeline::Shutdown() {
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
-    gameplay2d_module_.OnShutdown(*runtime_context_.world);
+    modules_impl_->gameplay2d_module.OnShutdown(*runtime_context_.world);
 #ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        gameplay3d_module_.OnShutdown(*runtime_context_.world);
+        modules_impl_->gameplay3d_module.OnShutdown(*runtime_context_.world);
         builtin_gameplay3d_enabled_ = false;
     }
 #else
     if (builtin_gameplay3d_enabled_) {
-        particle3d_system_.Shutdown(*runtime_context_.world);
-        particle3d_system_.SetAssetManager(nullptr);
+        modules_impl_->particle3d_system.Shutdown(*runtime_context_.world);
+        modules_impl_->particle3d_system.SetAssetManager(nullptr);
         dse::gameplay3d::AnimatorSystem::SetAssetManager(nullptr);
         builtin_gameplay3d_enabled_ = false;
     }
@@ -669,7 +674,7 @@ void FramePipeline::Shutdown() {
 
     modules_.clear();
 
-    mesh_render_system_.SetAssetManager(nullptr);
+    modules_impl_->mesh_render_system.SetAssetManager(nullptr);
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     if (physics3d_system_initialized_) {
         dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
@@ -723,7 +728,7 @@ void FramePipeline::Shutdown() {
 
     // GPU Driven 资源清理
     if (runtime_context_.rhi_device) {
-        mesh_render_system_.CleanupGPUResources(runtime_context_.rhi_device.get());
+        modules_impl_->mesh_render_system.CleanupGPUResources(runtime_context_.rhi_device.get());
         if (render_resources_.gpu_draw_cmd_ssbo != 0) {
             runtime_context_.rhi_device->DeleteSSBO(render_resources_.gpu_draw_cmd_ssbo);
             render_resources_.gpu_draw_cmd_ssbo = 0;
@@ -799,8 +804,8 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);
 #ifndef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        particle3d_system_.Update(*runtime_context_.world, delta_time);
-        steering_system_.Update(*runtime_context_.world, delta_time);
+        modules_impl_->particle3d_system.Update(*runtime_context_.world, delta_time);
+        modules_impl_->steering_system.Update(*runtime_context_.world, delta_time);
         dse::gameplay3d::AnimatorSystem::Update(*runtime_context_.world, delta_time);
     }
 #endif
@@ -954,8 +959,8 @@ void FramePipeline::RunRenderInternal() {
 
     // Hi-Z: 上传上一帧收集的 AABB 到 GPU SSBO（供 HiZCullPass 使用）
     if (render_resources_.hiz_aabb_ssbo != 0 && render_resources_.hiz_visibility_ssbo != 0) {
-        const auto& aabbs = mesh_render_system_.cached_aabbs();
-        const int count = mesh_render_system_.cached_aabb_count();
+        const auto& aabbs = modules_impl_->mesh_render_system.cached_aabbs();
+        const int count = modules_impl_->mesh_render_system.cached_aabb_count();
         if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
             runtime_context_.rhi_device->UpdateSSBO(
                 render_resources_.hiz_aabb_ssbo, 0,
@@ -969,7 +974,7 @@ void FramePipeline::RunRenderInternal() {
 
     // GPU Driven: 准备 GPU 场景数据（AABB + DrawCommands + Instance 数据）
     if (render_resources_.gpu_driven_supported) {
-        mesh_render_system_.PrepareGPUScene(*runtime_context_.world, render_pass_context_);
+        modules_impl_->mesh_render_system.PrepareGPUScene(*runtime_context_.world, render_pass_context_);
         // 同步动态创建的句柄回 render_resources_，确保下帧不被覆盖
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
@@ -994,7 +999,7 @@ void FramePipeline::RunRenderInternal() {
             visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
             if (visibility[i] == 0) ++culled;
         }
-        mesh_render_system_.SetHiZVisibility(visibility);
+        modules_impl_->mesh_render_system.SetHiZVisibility(visibility);
         gpu_culled_last_frame_ = culled;
         runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
     } else if (render_resources_.hiz_visibility_ssbo != 0 && render_pass_context_.hiz_object_count > 0
@@ -1005,7 +1010,7 @@ void FramePipeline::RunRenderInternal() {
         runtime_context_.rhi_device->ReadSSBO(
             render_resources_.hiz_visibility_ssbo, 0,
             count * sizeof(uint32_t), visibility.data());
-        mesh_render_system_.SetHiZVisibility(visibility);
+        modules_impl_->mesh_render_system.SetHiZVisibility(visibility);
     }
 
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
@@ -1186,21 +1191,21 @@ void FramePipeline::BuildRenderGraphInternal() {
     }
 #ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        render_pass_context_.modules.push_back({&gameplay3d_module_});
+        render_pass_context_.modules.push_back({&modules_impl_->gameplay3d_module});
     }
 #endif
 
     render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
-        gameplay2d_module_.OnRenderScene(world, cmd);
+        modules_impl_->gameplay2d_module.OnRenderScene(world, cmd);
     };
     render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
-        gameplay2d_module_.OnRenderUI(world, cmd, w, h, clip);
+        modules_impl_->gameplay2d_module.OnRenderUI(world, cmd, w, h, clip);
     };
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
-        mesh_render_system_.Render(world, cmd);
+        modules_impl_->mesh_render_system.Render(world, cmd);
     };
     render_pass_context_.render_transparent_meshes = [this](World& world, CommandBuffer& cmd, int wboit_mode) {
-        mesh_render_system_.RenderTransparent(world, cmd, wboit_mode);
+        modules_impl_->mesh_render_system.RenderTransparent(world, cmd, wboit_mode);
     };
 
     // ---- 声明外部输出 ----
@@ -1279,7 +1284,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     }
 #ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        gameplay3d_module_.RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
+        modules_impl_->gameplay3d_module.RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
     }
 #endif
 

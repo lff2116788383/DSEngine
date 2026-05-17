@@ -19,7 +19,7 @@
 #include <gtest/gtest.h>
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/rhi_factory.h"
-#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/gl_rhi_device.h"
 #include "engine/render/rhi/gl_draw_executor.h"
 #include "engine/render/rhi/gl_shader_manager.h"
 #include "engine/render/rhi/gl_resource_manager.h"

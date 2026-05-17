@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "engine/render/rhi/rhi_types.h"
-#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/gl_rhi_device.h"
 #include <glm/glm.hpp>
 
 // ============================================================

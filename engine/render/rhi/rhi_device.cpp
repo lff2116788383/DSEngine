@@ -9,7 +9,7 @@
  * - GLDrawExecutor：绘制命令执行
  */
 
-#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/gl_rhi_device.h"
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"
 #include <glad/gl.h>

@@ -202,7 +202,9 @@ EngineInstance (生命周期管理)
 | [`engine/render/render_graph.h`](engine/render/render_graph.h) | DAG 渲染图 |
 | [`engine/render/passes/render_pass_interface.h`](engine/render/passes/render_pass_interface.h) | `IRenderPass` 接口 |
 | [`engine/render/passes/builtin_passes.h`](engine/render/passes/builtin_passes.h) / [`engine/render/passes/builtin_passes.cpp`](engine/render/passes/builtin_passes.cpp) | 内置渲染 Pass |
-| [`engine/render/rhi/rhi_device.h`](engine/render/rhi/rhi_device.h) | RHI 抽象基类 + `CommandBuffer` |
+| [`engine/render/rhi/rhi_device.h`](engine/render/rhi/rhi_device.h) | RHI 抽象基类 + `CommandBuffer` + `OpenGLCommandBuffer` |
+| [`engine/render/rhi/gl_rhi_device.h`](engine/render/rhi/gl_rhi_device.h) | `OpenGLRhiDevice` 实现（从 rhi_device.h 拆出） |
+| [`engine/runtime/frame_pipeline_modules.h`](engine/runtime/frame_pipeline_modules.h) | FramePipeline Pimpl 内部头（隔离 modules/ 依赖） |
 | [`engine/render/rhi/gl_draw_executor.cpp`](engine/render/rhi/gl_draw_executor.cpp) | OpenGL 绘制执行（含 inline shader） |
 | [`engine/render/rhi/vulkan/vulkan_shader_sources.h`](engine/render/rhi/vulkan/vulkan_shader_sources.h) | Vulkan shader 源 |
 | [`engine/render/rhi/dx11/dx11_shader_sources.h`](engine/render/rhi/dx11/dx11_shader_sources.h) | D3D11 shader 源 |
