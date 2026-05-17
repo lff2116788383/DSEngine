@@ -1440,6 +1440,16 @@ RenderTargetReadback FramePipeline::ReadMainColorRgba8WithSize() const {
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.main_render_target);
 }
 
+RenderTargetReadback FramePipeline::ReadBloomMip0Rgba8WithSize() const {
+    if (!runtime_context_.rhi_device || render_resources_.pp_bloom_mip_rts.empty()) return {};
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.pp_bloom_mip_rts[0]);
+}
+
+RenderTargetReadback FramePipeline::ReadBloomExtractRgba8WithSize() const {
+    if (!runtime_context_.rhi_device || render_resources_.pp_bloom_extract_rt == 0) return {};
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.pp_bloom_extract_rt);
+}
+
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {
     runtime_context_.window_title_setter = std::move(setter);
 }

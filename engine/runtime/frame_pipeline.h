@@ -205,6 +205,9 @@ public:
      */
     RenderTargetReadback ReadMainColorRgba8WithSize() const;
 
+    RenderTargetReadback ReadBloomMip0Rgba8WithSize() const;
+    RenderTargetReadback ReadBloomExtractRgba8WithSize() const;
+
     /// RHI 后端是否需要回读时 Y 翻转（OpenGL 需要，D3D11/Vulkan 不需要）
     bool NeedsReadbackYFlip() const {
         return runtime_context_.rhi_device ? runtime_context_.rhi_device->NeedsReadbackYFlip() : true;

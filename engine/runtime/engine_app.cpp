@@ -106,9 +106,15 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
     }
 
     const std::string target = ReadNonEmptyEnv("DSE_SCREENSHOT_TARGET");
-    RenderTargetReadback readback = (target == "main")
-        ? pipeline.ReadMainColorRgba8WithSize()
-        : pipeline.ReadSceneColorRgba8WithSize();
+    RenderTargetReadback readback{};
+    if (target == "main")
+        readback = pipeline.ReadMainColorRgba8WithSize();
+    else if (target == "bloom")
+        readback = pipeline.ReadBloomMip0Rgba8WithSize();
+    else if (target == "bloom_extract")
+        readback = pipeline.ReadBloomExtractRgba8WithSize();
+    else
+        readback = pipeline.ReadSceneColorRgba8WithSize();
     if (readback.pixels.empty() || readback.width <= 0 || readback.height <= 0) {
         std::cerr << "Failed to capture screenshot pixels\n";
         return false;
@@ -129,7 +135,7 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
         return false;
     }
 
-    std::cout << "DSE_SCREENSHOT_WRITTEN path=" << screenshot_path << " target=" << (target == "main" ? "main" : "scene")
+    std::cout << "DSE_SCREENSHOT_WRITTEN path=" << screenshot_path << " target=" << (target.empty() ? "scene" : target)
               << " size=" << readback.width << "x" << readback.height << std::endl;
     return true;
 }

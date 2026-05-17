@@ -522,3 +522,39 @@ Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
 | IBL 方案 | **Split-Sum + BRDF LUT** | 工业标准（Epic Games 论文），与 Cook-Torrance BRDF 完美匹配 |
 | Cluster 划分 | **16×16 tile × 24 Z-slice (指数)** | 与 Doom 2016 / id Tech 方案对齐，Z 用指数划分匹配透视投影 |
 | 软阴影 | **PCSS** | 比 VSM 更直观、无 light bleeding 问题 |
+
+---
+
+## 附录：已知跨后端差异
+
+> 更新日期: 2026-05-17
+
+### A.1 PBR 前向着色器输出差异（OpenGL vs DX11/Vulkan）
+
+**现象**：`3d_postprocess_showcase` 跨后端回归测试中 OpenGL 与 DX11/Vulkan 的 RMSE 约 112-114，远高于 DX11 vs Vulkan 的 1.77。
+
+**视觉表现**：
+- OpenGL：地面较亮（中灰）、立方体颜色偏淡/粉彩
+- DX11/Vulkan：地面很暗、立方体颜色饱和度更高
+
+**原因分析**：三端 PBR 前向着色器（`pbr.frag` / `dx11_shader_sources.h` / `vulkan_shader_sources.h`）的光照计算路径产生不同的 HDR 输出。差异来自基础 ambient / diffuse / specular 计算，**不是** bloom 或后处理问题。
+
+**已排除**：
+- Bloom extract/composite（三端已统一阈值过滤逻辑）
+- Tone mapping 双重应用（已从 PBR shader 移除内联 TM+gamma，统一由 CompositePass 处理）
+
+**待排查方向**：
+- 三端 PBR shader 中 ambient 项的计算差异
+- IBL / 环境光 fallback 路径差异
+- 法线/切线空间变换精度差异
+
+### A.2 Bloom 修复记录（2026-05-17）
+
+**问题**：DX11/Vulkan 的 `bloom_extract` 后处理缺少专用着色器，回退到 passthrough（`copy`），导致全场景像素进入 bloom 流水线，画面严重过曝。
+
+**修复**：
+- 三端 PBR shader 移除内联 Reinhard tone mapping + gamma（由 CompositePass 统一处理 ACES Filmic TM + gamma）
+- DX11/Vulkan 新增 `bloom_extract` 专用 pixel shader，实现与 OpenGL 一致的亮度阈值过滤
+- CompositePass 非 bloom 路径统一走 `tonemapping` 效果（不再回退到 `copy`）
+
+**验证**：DX11 vs Vulkan postprocess_showcase RMSE=1.77（修复前为 passthrough 导致的全场景 bloom）

@@ -84,6 +84,7 @@ public:
     unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
     unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
     unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
+    unsigned int bloom_extract_shader_handle() const { return bloom_extract_shader_handle_; }
     unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
     unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
     unsigned int bloom_composite_shader_handle() const { return bloom_composite_shader_handle_; }
@@ -134,6 +135,7 @@ private:
     unsigned int sprite_shader_handle_ = 0;
     unsigned int postprocess_shader_handle_ = 0;
     unsigned int shadow_shader_handle_ = 0;
+    unsigned int bloom_extract_shader_handle_ = 0;
     unsigned int bloom_downsample_cs_handle_ = 0;
     unsigned int bloom_upsample_cs_handle_ = 0;
     unsigned int bloom_composite_shader_handle_ = 0;

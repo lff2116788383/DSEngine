@@ -421,10 +421,6 @@ void main() {
         if (u_has_emissive_map) {
             result += texture(u_emissive_map, finalUV).rgb * u_material_emissive;
         }
-        if (light_params.w == 0.0) {
-            result = result / (result + vec3(1.0));
-            result = pow(result, vec3(1.0/2.2));
-        }
         OutputFragment(result, texColor.a * vColor.a);
         return;
     }
@@ -467,8 +463,6 @@ void main() {
         vec3 specular = u_light_color * spec * (1.0 - shadow);
         float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * u_toon_rim_strength;
         vec3 color = diffuse + specular + vec3(rim);
-        color = color / (color + vec3(1.0));
-        color = pow(color, vec3(1.0 / 2.2));
         OutputFragment(color, texColor.a * vColor.a);
         return;
     }
@@ -497,8 +491,6 @@ void main() {
         vec3 warm_shift = vec3(0.03, -0.01, -0.03) * wc_bleed;
         diffuse += warm_shift * (1.0 - soft_band);
         diffuse = pow(diffuse, vec3(1.0 / wc_pigment));
-        diffuse = diffuse / (diffuse + vec3(1.0));
-        diffuse = pow(diffuse, vec3(1.0 / 2.2));
         OutputFragment(diffuse, texColor.a * vColor.a);
         return;
     }
@@ -646,8 +638,6 @@ void main() {
     }
     vec3 color = ambient + Lo + surface_emissive;
 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));
     OutputFragment(color, texColor.a * vColor.a);
 }
 )";
@@ -895,6 +885,22 @@ void main() {
         result += texture(screenTexture, vTexCoords - vec2(0.0, tex_offset.y * i)).rgb * weight[i];
     }
     FragColor = vec4(result, 1.0);
+}
+)";
+
+/// Bloom Extract: 亮度阈值过滤（与 OpenGL bloom_extract 对齐）
+/// 需与 kPostProcessHeader 拼接使用
+constexpr const char* kBloomExtractFS = R"(
+layout(push_constant) uniform PushConstants {
+    float threshold;
+};
+void main() {
+    vec3 color = texture(screenTexture, vTexCoords).rgb;
+    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    if (brightness > threshold)
+        FragColor = vec4(color, 1.0);
+    else
+        FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 )";
 

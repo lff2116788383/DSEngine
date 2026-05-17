@@ -507,10 +507,6 @@ float4 PSMain(PSInput input) : SV_TARGET {
         if (has_emissive_map) {
             result += u_emissive_map.Sample(u_sampler, finalUV).rgb * mat_emissive.rgb;
         }
-        if (light_params.w == 0.0) {
-            result = result / (result + float3(1.0, 1.0, 1.0));
-            result = pow(result, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
-        }
         return OutputFragment(result, texColor.a * input.color.a, input.pos.z);
     }
 
@@ -552,8 +548,6 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 specular = light_color_and_ambient.rgb * spec * (1.0 - shadow);
         float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * mat_toon_params.w;
         float3 color = diffuse + specular + float3(rim, rim, rim);
-        color = color / (color + float3(1.0, 1.0, 1.0));
-        color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
         return OutputFragment(color, texColor.a * input.color.a, input.pos.z);
     }
 
@@ -581,8 +575,6 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 warm_shift = float3(0.03, -0.01, -0.03) * wc_bleed;
         wc_diffuse += warm_shift * (1.0 - soft_band);
         wc_diffuse = pow(wc_diffuse, float3(1.0 / wc_pigment, 1.0 / wc_pigment, 1.0 / wc_pigment));
-        wc_diffuse = wc_diffuse / (wc_diffuse + float3(1.0, 1.0, 1.0));
-        wc_diffuse = pow(wc_diffuse, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
         return OutputFragment(wc_diffuse, texColor.a * input.color.a, input.pos.z);
     }
 
@@ -735,8 +727,6 @@ float4 PSMain(PSInput input) : SV_TARGET {
         surface_emissive *= u_emissive_map.Sample(u_sampler, finalUV).rgb;
     }
     float3 color = ambient + Lo + surface_emissive;
-    color = color / (color + float3(1.0, 1.0, 1.0));
-    color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
     return OutputFragment(color, texColor.a * input.color.a, input.pos.z);
 }
 )";
@@ -945,6 +935,34 @@ struct PSInput {
 
 float4 PSMain(PSInput input) : SV_TARGET {
     return float4(0, 0, 0, 1);
+}
+)";
+
+// ============================================================
+// Bloom Extract: 亮度阈值过滤（与 OpenGL bloom_extract 对齐）
+// ============================================================
+
+constexpr const char* kBloomExtractPS = R"(
+Texture2D screenTexture : register(t0);
+SamplerState u_sampler : register(s0);
+
+cbuffer BloomExtractParams : register(b0) {
+    float threshold;
+    float3 _pad;
+};
+
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 PSMain(PSInput input) : SV_TARGET {
+    float3 color = screenTexture.Sample(u_sampler, input.uv).rgb;
+    float brightness = dot(color, float3(0.2126, 0.7152, 0.0722));
+    if (brightness > threshold)
+        return float4(color, 1.0);
+    else
+        return float4(0.0, 0.0, 0.0, 1.0);
 }
 )";
 

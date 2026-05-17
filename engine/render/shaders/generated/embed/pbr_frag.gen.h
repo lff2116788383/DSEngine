@@ -2705,11 +2705,6 @@ void main()
         {
             result += (texture(u_emissive_map, finalUV).xyz * _1204.emissive.xyz);
         }
-        if (_829.light_params.w == 0.0)
-        {
-            result /= (result + vec3(1.0));
-            result = pow(result, vec3(0.4545454680919647216796875));
-        }
         FragColor = vec4(result, texColor.w * vColor.w);
         return;
     }
@@ -2764,8 +2759,6 @@ void main()
         vec3 specular = (_829.light_color_and_ambient.xyz * spec) * (1.0 - shadow_1);
         float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * _1204.toon_params.w;
         vec3 color_1 = (diffuse + specular) + vec3(rim);
-        color_1 /= (color_1 + vec3(1.0));
-        color_1 = pow(color_1, vec3(0.4545454680919647216796875));
         FragColor = vec4(color_1, texColor.w * vColor.w);
         return;
     }
@@ -3049,8 +3042,6 @@ R"(        float denominator_2 = ((4.0 * max(dot(N, V), 0.0)) * max(dot(N, L_5),
         ambient += ((((F_cc_amb * _1204.extra_params.y) * irradiance) * (1.0 - _1204.extra_params.z)) * 0.25);
     }
     vec3 color_2 = (ambient + Lo) + surface_emissive;
-    color_2 /= (color_2 + vec3(1.0));
-    color_2 = pow(color_2, vec3(0.4545454680919647216796875));
     FragColor = vec4(color_2, texColor.w * vColor.w);
 }
 
@@ -3615,11 +3606,6 @@ void frag_main()
         {
             result += (u_emissive_map.Sample(_u_emissive_map_sampler, finalUV).xyz * _1204_emissive.xyz);
         }
-        if (_829_light_params.w == 0.0f)
-        {
-            result /= (result + 1.0f.xxx);
-            result = pow(result, 0.4545454680919647216796875f.xxx);
-        }
         FragColor = float4(result, texColor.w * vColor.w);
         return;
     }
@@ -3674,8 +3660,6 @@ void frag_main()
         float3 specular = (_829_light_color_and_ambient.xyz * spec) * (1.0f - shadow_1);
         float rim = pow(1.0f - max(dot(N, V_tn), 0.0f), 4.0f) * _1204_toon_params.w;
         float3 color_1 = (diffuse + specular) + rim.xxx;
-        color_1 /= (color_1 + 1.0f.xxx);
-        color_1 = pow(color_1, 0.4545454680919647216796875f.xxx);
         FragColor = float4(color_1, texColor.w * vColor.w);
         return;
     }
@@ -3955,8 +3939,6 @@ R"(            point_shadow = PointShadowCalculation(param_59, param_60, param_6
         ambient += ((((F_cc_amb * _1204_extra_params.y) * irradiance) * (1.0f - _1204_extra_params.z)) * 0.25f);
     }
     float3 color_2 = (ambient + Lo) + surface_emissive;
-    color_2 /= (color_2 + 1.0f.xxx);
-    color_2 = pow(color_2, 0.4545454680919647216796875f.xxx);
     FragColor = float4(color_2, texColor.w * vColor.w);
 }
 

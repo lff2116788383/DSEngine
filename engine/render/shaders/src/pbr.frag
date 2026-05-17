@@ -465,10 +465,6 @@ void main() {
         if (u_has_emissive_map) {
             result += texture(u_emissive_map, finalUV).rgb * u_material_emissive;
         }
-        if (light_params.w == 0.0) {
-            result = result / (result + vec3(1.0));
-            result = pow(result, vec3(1.0/2.2));
-        }
         OutputFragment(result, texColor.a * vColor.a);
         return;
     }
@@ -511,8 +507,6 @@ void main() {
         vec3 specular = u_light_color * spec * (1.0 - shadow);
         float rim = pow(1.0 - max(dot(N, V_tn), 0.0), 4.0) * u_toon_rim_strength;
         vec3 color = diffuse + specular + vec3(rim);
-        color = color / (color + vec3(1.0));
-        color = pow(color, vec3(1.0 / 2.2));
         OutputFragment(color, texColor.a * vColor.a);
         return;
     }
@@ -555,9 +549,6 @@ void main() {
         // 5) 颜料浓度调整
         diffuse = pow(diffuse, vec3(1.0 / wc_pigment));
 
-        // 色调映射 + gamma
-        diffuse = diffuse / (diffuse + vec3(1.0));
-        diffuse = pow(diffuse, vec3(1.0 / 2.2));
         OutputFragment(diffuse, texColor.a * vColor.a);
         return;
     }
@@ -725,7 +716,5 @@ void main() {
     }
     vec3 color = ambient + Lo + surface_emissive;
 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));
     OutputFragment(color, texColor.a * vColor.a);
 }

@@ -625,6 +625,16 @@ void VulkanShaderManager::InitPostProcessShader() {
         DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
     }
 
+    // Bloom Extract shader（运行时 GLSL → SPIR-V）
+    {
+        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kBloomExtractFS;
+        bloom_extract_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        if (bloom_extract_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] BloomExtract shader created: handle={}", bloom_extract_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] BloomExtract shader creation failed");
+    }
+
     // FXAA shader（运行时 GLSL → SPIR-V）
     {
         std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kFxaaFS;

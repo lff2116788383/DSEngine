@@ -322,6 +322,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         return h;
     };
     pulse();
+    bloom_extract_shader_handle_ = create_pp_shader(dx11_shaders::kBloomExtractPS, "bloom_extract");
     fxaa_shader_handle_ = create_pp_shader(dx11_shaders::kFxaaPS, "fxaa");
     ssao_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoPS, "ssao");
     ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");

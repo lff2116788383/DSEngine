@@ -839,15 +839,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         if (ssao_tex != 0) {
             cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
         } else {
-            if (ae_tex != 0) {
-                cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
-            } else {
-                if (lut_tex != 0.0f) {
-                    cmd_buffer.DrawPostProcess(scene_color_tex, "color_grading", {lut_tex, lut_intensity});
-                } else {
-                    cmd_buffer.DrawPostProcess(scene_color_tex, "copy", {});
-                }
-            }
+            cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
         }
     }
 

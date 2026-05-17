@@ -1919,7 +1919,9 @@ void VulkanDrawExecutor::DrawPostProcess(
 
     // 根据 effect 名称选择专用着色器
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
-    if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle())
+    if (effect_name == "bloom_extract" && shader_mgr.bloom_extract_shader_handle())
+        selected_shader_handle = shader_mgr.bloom_extract_shader_handle();
+    else if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle())
         selected_shader_handle = shader_mgr.fxaa_shader_handle();
     else if (effect_name == "ssao" && shader_mgr.ssao_shader_handle())
         selected_shader_handle = shader_mgr.ssao_shader_handle();
@@ -2058,7 +2060,11 @@ void VulkanDrawExecutor::DrawPostProcess(
 
     // 传递 push constants
     if (pp_program && pp_program->pipeline_layout != VK_NULL_HANDLE) {
-        if (effect_name == "fxaa" && params.size() >= 2) {
+        if (effect_name == "bloom_extract" && params.size() >= 1) {
+            float pc = params[0];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "fxaa" && params.size() >= 2) {
             float pc[2] = {params[0], params[1]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);

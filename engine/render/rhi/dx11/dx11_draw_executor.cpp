@@ -1099,6 +1099,22 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         return;
     }
 
+    // Bloom Extract 专用路径（亮度阈值过滤）
+    if (effect_name == "bloom_extract" && shader_mgr.bloom_extract_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 1) {
+            struct { float threshold; float _p0, _p1, _p2; } ep{params[0], 0, 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &ep, sizeof(ep));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.bloom_extract_shader_handle());
+        return;
+    }
+
     // Contact Shadow 专用路径
     if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle()) {
         ensure_pp_params_cb();
