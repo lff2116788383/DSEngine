@@ -5,7 +5,9 @@
 
 #define GLFW_INCLUDE_NONE
 #include "engine/runtime/engine_app.h"
+#ifdef DSE_ENABLE_LUA
 #include "engine/scripting/lua/lua_runtime.h"
+#endif
 #include "engine/scene/scene.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include "engine/render/rhi/ubo_types.h"
@@ -355,9 +357,11 @@ bool EngineInstance::Init() {
     }
     pipeline_->SetBusinessMode(config_.business_mode);
     
+#ifdef DSE_ENABLE_LUA
     if (config_.business_mode == BusinessMode::Lua && !config_.startup_lua_script_path.empty()) {
         SetStartupLuaScriptPath(config_.startup_lua_script_path);
     }
+#endif
     
     std::cout << "Business mode: " << (config_.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
     

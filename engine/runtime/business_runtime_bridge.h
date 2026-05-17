@@ -2,7 +2,9 @@
 #define DSE_BUSINESS_RUNTIME_BRIDGE_H
 
 #include "engine/runtime/runtime_context.h"
+#ifdef DSE_ENABLE_LUA
 #include "engine/scripting/lua/lua_runtime.h"
+#endif
 
 namespace dse::runtime {
 

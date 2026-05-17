@@ -47,6 +47,7 @@ option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
+option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
 option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
@@ -110,10 +111,16 @@ else()
     set(easy_profiler_core_source "")
     add_definitions(-D EASY_PROFILER_DISABLE)
 endif()
-include(cmake/CMakeLists.txt.lua_script)
-if(DSE_ENABLE_LUASOCKET)
-    include(cmake/CMakeLists.txt.luasocket)
+if(DSE_ENABLE_LUA)
+    include(cmake/CMakeLists.txt.lua_script)
+    add_definitions(-D DSE_ENABLE_LUA)
+    if(DSE_ENABLE_LUASOCKET)
+        include(cmake/CMakeLists.txt.luasocket)
+    else()
+        set(luasocket_c "")
+    endif()
 else()
+    set(lua_src "")
     set(luasocket_c "")
 endif()
 if(DSE_ENABLE_PHYSX)
@@ -218,6 +225,11 @@ endif()
 # D3D11 RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_D3D11)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/dx11/.*\\.cpp$")
+endif()
+
+# Lua 脚本运行时仅在启用时编译
+if(NOT DSE_ENABLE_LUA)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/scripting/lua/.*\\.cpp$")
 endif()
 
 
@@ -361,11 +373,15 @@ if(MSVC)
 endif()
 
 target_include_directories(dse_engine PRIVATE
-    ${CMAKE_SOURCE_DIR}/depends/lua
-    ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
     ${CMAKE_SOURCE_DIR}/depends/glad/include
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
+if(DSE_ENABLE_LUA)
+    target_include_directories(dse_engine PRIVATE
+        ${CMAKE_SOURCE_DIR}/depends/lua
+        ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
+    )
+endif()
 
 if(EXISTS "${BOX2D_ROOT}/include")
     target_include_directories(dse_engine PRIVATE "${BOX2D_ROOT}/include")

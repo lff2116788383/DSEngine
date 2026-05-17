@@ -1,12 +1,14 @@
 #include "engine/runtime/business_runtime_bridge.h"
 
 #include "engine/assets/asset_manager.h"
+#include "engine/base/debug.h"
 #include "engine/scripting/cpp/cpp_business_runtime.h"
 
 namespace dse::runtime {
 
 bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBindings& stats_bindings) {
     if (context.business_mode == BusinessMode::Lua) {
+#ifdef DSE_ENABLE_LUA
         ConfigureLuaApiContext({
             context.world,
             context.window_title_setter,
@@ -17,6 +19,10 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
             context.audio_system
         });
         return BootstrapLuaRuntime();
+#else
+        DEBUG_LOG_ERROR("BusinessMode::Lua requested but DSE_ENABLE_LUA is OFF");
+        return false;
+#endif
     }
 
     if (context.world == nullptr || context.asset_manager == nullptr) {
@@ -27,7 +33,9 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
 
 void TickBusinessRuntime(RuntimeContext& context, float delta_time) {
     if (context.business_mode == BusinessMode::Lua) {
+#ifdef DSE_ENABLE_LUA
         TickLuaRuntime(delta_time);
+#endif
         return;
     }
 
@@ -39,7 +47,9 @@ void TickBusinessRuntime(RuntimeContext& context, float delta_time) {
 
 void ShutdownBusinessRuntime(const RuntimeContext& context) {
     if (context.business_mode == BusinessMode::Lua) {
+#ifdef DSE_ENABLE_LUA
         ShutdownLuaRuntime();
+#endif
         return;
     }
     ShutdownCppBusiness();
