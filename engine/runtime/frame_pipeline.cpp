@@ -19,6 +19,7 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/ecs/physics_2d.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/ui.h"
+#include "engine/ecs/camera.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
@@ -1305,10 +1306,32 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    // 渲染 Pass 的 Execute() 内部通过 registry.view<>() 访问 ECS，
-    // 而 EnTT registry 非线程安全（assure() 可能触发 pools_ 重新分配）。
-    // 在实现 Pass 数据隔离（预缓存 view 结果）之前，使用串行执行保证正确性。
-    render_graph_dag_.Execute(cmd_buffer);
+    // 主线程预热所有 builtin Pass 中用到的 ECS 组件池。
+    // EnTT registry.view<T>() 内部调用 assure<T>()，首次访问某类型时会
+    // 触发 pools_ vector 重新分配。预热确保所有池已分配，后续 view 调用
+    // 变为纯只读，可安全在工作线程并行执行。
+    if (runtime_context_.world) {
+        auto& reg = runtime_context_.world->registry();
+        (void)reg.view<TransformComponent>();
+        (void)reg.view<CameraComponent>();
+        (void)reg.view<dse::Camera3DComponent>();
+        (void)reg.view<dse::DirectionalLight3DComponent>();
+        (void)reg.view<TransformComponent, dse::SpotLightComponent>();
+        (void)reg.view<TransformComponent, dse::PointLightComponent>();
+        (void)reg.view<dse::PostProcessComponent>();
+        (void)reg.view<dse::SkyboxComponent>();
+        (void)reg.view<dse::DecalComponent, TransformComponent>();
+        (void)reg.view<dse::WaterComponent>();
+    }
+
+    // OpenGL 后端：使用波次并行执行（同一波次内无依赖的 Pass 并行录制）
+    auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
+    auto* js = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
+    if (gl_cmd && js) {
+        render_graph_dag_.ExecuteParallel(*gl_cmd, *js);
+    } else {
+        render_graph_dag_.Execute(cmd_buffer);
+    }
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {
