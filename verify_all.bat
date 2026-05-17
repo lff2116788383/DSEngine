@@ -22,6 +22,7 @@ set BUILD_DIR=build_vs2022
 set SKIP_GTEST=0
 set SKIP_LUA=0
 set SKIP_DEMOS=0
+set SKIP_REGRESSION=0
 set DEMO_TIMEOUT_SECONDS=5
 set PASS_COUNT=0
 set FAIL_COUNT=0
@@ -34,6 +35,7 @@ if "%~1"=="" goto parse_done
 if /I "%~1"=="--skip-gtest"   set SKIP_GTEST=1
 if /I "%~1"=="--skip-lua"     set SKIP_LUA=1
 if /I "%~1"=="--skip-demos"   set SKIP_DEMOS=1
+if /I "%~1"=="--skip-regression" set SKIP_REGRESSION=1
 if /I "%~1"=="--demo-timeout" (
     set "DEMO_TIMEOUT_SECONDS=%~2"
     shift
@@ -52,6 +54,7 @@ echo  配置:
 echo    GTest:       %SKIP_GTEST%  (0=执行 1=跳过)
 echo    Lua 构建:    %SKIP_LUA%    (0=执行 1=跳过)
 echo    Demo 验证:   %SKIP_DEMOS%  (0=执行 1=跳过)
+echo    Regression:  %SKIP_REGRESSION%  (0=执行 1=跳过)
 echo    Demo 超时:   %DEMO_TIMEOUT_SECONDS% 秒
 echo ========================================================
 echo.
@@ -265,6 +268,50 @@ for %%D in (%DEMOS%) do (
 echo.
 
 :: ============================================================
+:: 步骤 6: 截图回归对比 (demo_regression.py --compare)
+:: ============================================================
+if "%SKIP_REGRESSION%"=="1" (
+    echo [SKIP] 截图回归对比（--skip-regression）
+    echo.
+    goto :summary
+)
+if "%SKIP_DEMOS%"=="1" (
+    echo [SKIP] 截图回归对比（--skip-demos 已跳过 demo 验证）
+    echo.
+    goto :summary
+)
+
+set /a TOTAL_STEPS+=1
+echo [6] 截图回归对比 (59 个 3D demo RMSE 阈值=5.0)...
+echo.
+
+:: 检查 baseline 目录
+if not exist "tests\regression\screenshots\opengl" (
+    echo [SKIP] 基线目录不存在，跳过截图回归。
+    echo        请先运行: python tools/demo_regression.py --baseline
+    set /a SKIP_COUNT+=1
+    goto :summary
+)
+
+:: 检查 Python
+where python >nul 2>&1
+if !ERRORLEVEL! neq 0 (
+    echo [SKIP] 未找到 Python，跳过截图回归。
+    set /a SKIP_COUNT+=1
+    goto :summary
+)
+
+python tools/demo_regression.py --compare --no-sync
+if !ERRORLEVEL! neq 0 (
+    echo [FAIL] 截图回归对比有失败项!
+    set /a FAIL_COUNT+=1
+) else (
+    echo [OK] 截图回归对比全部通过。
+    set /a PASS_COUNT+=1
+)
+echo.
+
+:: ============================================================
 :: 汇总
 :: ============================================================
 :summary
@@ -313,10 +360,11 @@ echo 选项:
 echo   --skip-gtest         跳过 GTest 构建与运行
 echo   --skip-lua           跳过 Lua 运行时构建
 echo   --skip-demos         跳过 Lua 3D Demo 验证
+echo   --skip-regression    跳过截图回归对比
 echo   --demo-timeout SEC   设置每个 Demo 的超时秒数 (默认: 5)
 echo   -h, --help           显示帮助
 echo.
-echo 默认: 执行全部验证 (GTest + Lua 构建 + Demo 验证)
+echo 默认: 执行全部验证 (GTest + Lua 构建 + Demo 验证 + 截图回归)
 echo.
 echo 说明:
 echo   - GTest: 构建 unit/integration/smoke 三级 targets，通过 CTest 聚合运行

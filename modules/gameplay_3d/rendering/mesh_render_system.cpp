@@ -670,7 +670,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
         // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
         if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
-            const int stride = mesh_renderer.dmesh_vertex_stride;
+            const bool is_dmesh_lb = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
+            const int stride = is_dmesh_lb ? mesh_renderer.dmesh_vertex_stride : 3;
             const size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
             glm::vec3 lb_min(std::numeric_limits<float>::max());
             glm::vec3 lb_max(std::numeric_limits<float>::lowest());
@@ -1268,10 +1269,10 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         auto reg_it = mesh_registry_.find(mesh_key);
         if (reg_it == mesh_registry_.end()) {
             // 新 mesh：转换为 BatchVertex 格式追加到 mega buffer
-            const int stride = mesh_renderer.dmesh_vertex_stride;
+            const bool is_dmesh = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
+            const int stride = is_dmesh ? mesh_renderer.dmesh_vertex_stride : 3;
             if (stride <= 0) continue;
             const size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
-            const bool is_dmesh = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
 
             dse::render::MeshBatchEntry entry{};
             entry.base_vertex = static_cast<int32_t>(mega_vbo_vertex_count_);
