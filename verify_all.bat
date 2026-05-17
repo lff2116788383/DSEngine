@@ -281,18 +281,6 @@ if "%SKIP_DEMOS%"=="1" (
     goto :summary
 )
 
-set /a TOTAL_STEPS+=1
-echo [6] 截图回归对比 (59 个 3D demo RMSE 阈值=5.0)...
-echo.
-
-:: 检查 baseline 目录
-if not exist "tests\regression\screenshots\opengl" (
-    echo [SKIP] 基线目录不存在，跳过截图回归。
-    echo        请先运行: python tools/demo_regression.py --baseline
-    set /a SKIP_COUNT+=1
-    goto :summary
-)
-
 :: 检查 Python
 where python >nul 2>&1
 if !ERRORLEVEL! neq 0 (
@@ -301,15 +289,42 @@ if !ERRORLEVEL! neq 0 (
     goto :summary
 )
 
-python tools/demo_regression.py --compare --no-sync
-if !ERRORLEVEL! neq 0 (
-    echo [FAIL] 截图回归对比有失败项!
-    set /a FAIL_COUNT+=1
-) else (
-    echo [OK] 截图回归对比全部通过。
-    set /a PASS_COUNT+=1
+:: 6a: 逐后端回归
+for %%B in (opengl dx11 vulkan) do (
+    if exist "tests\regression\screenshots\%%B" (
+        set /a TOTAL_STEPS+=1
+        echo [6-%%B] 截图回归对比 ^(59 demo, %%B, RMSE阈值=5.0^)...
+        python tools/demo_regression.py --compare --backend=%%B --no-sync
+        if !ERRORLEVEL! neq 0 (
+            echo [FAIL] %%B 截图回归有失败项!
+            set /a FAIL_COUNT+=1
+        ) else (
+            echo [OK] %%B 截图回归全部通过。
+            set /a PASS_COUNT+=1
+        )
+        echo.
+    ) else (
+        echo [SKIP] %%B 基线不存在，跳过。
+    )
 )
-echo.
+
+:: 6b: 跨后端对比（至少 2 个后端基线存在时执行）
+set /a BACKEND_COUNT=0
+if exist "tests\regression\screenshots\opengl" set /a BACKEND_COUNT+=1
+if exist "tests\regression\screenshots\dx11"   set /a BACKEND_COUNT+=1
+if exist "tests\regression\screenshots\vulkan" set /a BACKEND_COUNT+=1
+if !BACKEND_COUNT! geq 2 (
+    set /a TOTAL_STEPS+=1
+    echo [6-cross] 跨后端 RMSE 对比 ^(threshold=20^)...
+    python tools/demo_regression.py --cross-compare --threshold=20
+    if !ERRORLEVEL! neq 0 (
+        echo [WARN] 跨后端对比有超阈值项（仅警告，不计为失败）。
+    ) else (
+        echo [OK] 跨后端对比全部在阈值内。
+        set /a PASS_COUNT+=1
+    )
+    echo.
+)
 
 :: ============================================================
 :: 汇总
