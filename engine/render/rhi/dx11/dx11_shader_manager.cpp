@@ -8,8 +8,25 @@
 #include "engine/render/rhi/dx11/dx11_shader_sources.h"
 #include "engine/base/debug.h"
 
+#include <fstream>
+#include <filesystem>
+#include <functional>
+
 namespace dse {
 namespace render {
+
+static constexpr const char* kShaderCacheDir = "data/shader_cache";
+
+static std::string ShaderCacheKey(const std::string& source,
+                                   const std::string& entry_point,
+                                   const std::string& target) {
+    std::size_t h = std::hash<std::string>{}(source);
+    h ^= std::hash<std::string>{}(entry_point) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<std::string>{}(target) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%016zx", h);
+    return std::string(kShaderCacheDir) + "/" + buf + ".cso";
+}
 
 void DX11ShaderManager::Init(DX11Context* context) {
     context_ = context;
@@ -55,6 +72,24 @@ void DX11ShaderManager::Shutdown() {
 ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
                                                      const std::string& entry_point,
                                                      const std::string& target) {
+    // 尝试从磁盘缓存加载已编译的 blob
+    std::string cache_path = ShaderCacheKey(source, entry_point, target);
+    {
+        std::ifstream fin(cache_path, std::ios::binary | std::ios::ate);
+        if (fin.is_open()) {
+            auto size = fin.tellg();
+            if (size > 0) {
+                fin.seekg(0);
+                ComPtr<ID3DBlob> blob;
+                D3DCreateBlob(static_cast<SIZE_T>(size), blob.GetAddressOf());
+                fin.read(static_cast<char*>(blob->GetBufferPointer()), size);
+                if (fin.good()) {
+                    return blob;
+                }
+            }
+        }
+    }
+
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error_blob;
 
@@ -76,6 +111,17 @@ ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
         }
         return nullptr;
     }
+
+    // 写入磁盘缓存
+    try {
+        std::filesystem::create_directories(kShaderCacheDir);
+        std::ofstream fout(cache_path, std::ios::binary);
+        if (fout.is_open()) {
+            fout.write(static_cast<const char*>(blob->GetBufferPointer()),
+                       static_cast<std::streamsize>(blob->GetBufferSize()));
+        }
+    } catch (...) {}
+
     return blob;
 }
 
@@ -145,7 +191,8 @@ ID3D11InputLayout* DX11ShaderManager::GetInputLayout(unsigned int shader_handle)
     return it != input_layouts_.end() ? it->second.Get() : nullptr;
 }
 
-void DX11ShaderManager::InitBuiltinShaders() {
+void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
+    auto pulse = [&]() { if (keep_alive) keep_alive(); };
     // ---- 精灵着色器 ----
     sprite_shader_handle_ = CreateProgram(dx11_shaders::kSpriteVS, dx11_shaders::kSpritePS);
     if (sprite_shader_handle_) {
@@ -158,6 +205,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
         CreateInputLayoutForShader(sprite_shader_handle_, layout, 3);
     }
 
+    pulse();
     // ---- PBR 着色器 ----
     pbr_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS,
         std::string(dx11_shaders::kPbrPS_Part1) + dx11_shaders::kPbrPS_Part2);
@@ -217,6 +265,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
         CreateInputLayoutForShader(postprocess_shader_handle_, layout, 2);
     }
 
+    pulse();
     // ---- 阴影着色器 ----
     shadow_shader_handle_ = CreateProgram(dx11_shaders::kShadowVS, dx11_shaders::kShadowPS);
     if (shadow_shader_handle_) {
@@ -272,6 +321,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
         }
         return h;
     };
+    pulse();
     fxaa_shader_handle_ = create_pp_shader(dx11_shaders::kFxaaPS, "fxaa");
     ssao_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoPS, "ssao");
     ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");
@@ -280,11 +330,13 @@ void DX11ShaderManager::InitBuiltinShaders() {
     bloom_composite_ssao_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoPS, "bloom_composite_ssao");
     lum_compute_shader_handle_ = create_pp_shader(dx11_shaders::kLumComputePS, "lum_compute");
     lum_adapt_shader_handle_ = create_pp_shader(dx11_shaders::kLumAdaptPS, "lum_adapt");
+    pulse();
     tonemapping_shader_handle_ = create_pp_shader(dx11_shaders::kTonemappingPS, "tonemapping");
     bloom_composite_ssao_ae_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoAePS, "bloom_composite_ssao_ae");
     color_grading_shader_handle_ = create_pp_shader(dx11_shaders::kColorGradingPS, "color_grading");
     taa_resolve_shader_handle_ = create_pp_shader(dx11_shaders::kTaaResolvePS, "taa_resolve");
     dof_shader_handle_ = create_pp_shader(dx11_shaders::kDofPS, "dof");
+    pulse();
     motion_blur_shader_handle_ = create_pp_shader(dx11_shaders::kMotionBlurPS, "motion_blur");
     ssr_shader_handle_ = create_pp_shader(dx11_shaders::kSsrPS, "ssr");
     motion_vector_shader_handle_ = create_pp_shader(dx11_shaders::kMotionVectorPS, "motion_vector");
@@ -296,6 +348,7 @@ void DX11ShaderManager::InitBuiltinShaders() {
     water_shader_handle_ = create_pp_shader(dx11_shaders::kWaterPS, "water");
     light_shaft_shader_handle_ = create_pp_shader(dx11_shaders::kLightShaftPS, "light_shaft");
 
+    pulse();
     // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
     gbuffer_shader_handle_ = CreateProgram(dx11_shaders::kPbrVS, dx11_shaders::kGBufferPS);
     if (gbuffer_shader_handle_) {

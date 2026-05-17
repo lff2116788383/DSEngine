@@ -192,6 +192,7 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
         DEBUG_LOG_ERROR("[Vulkan] Context init failed");
         return false;
     }
+    KeepAlive();
 
     // 2. 初始化资源管理器
     if (!resource_mgr_.Init(&context_)) {
@@ -202,14 +203,18 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     // 3. 初始化其余子系统
     state_mgr_.Init(&context_, &shader_mgr_);
     shader_mgr_.Init(&context_);
+    KeepAlive();
 
     // 4. 编译内置着色器（PBR/天空盒/粒子/精灵/后处理）
     shader_mgr_.InitBuiltinPBRShader();
+    KeepAlive();
     shader_mgr_.InitSkyboxShader();
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
+    KeepAlive();
     shader_mgr_.InitPostProcessShader();
     shader_mgr_.InitBloomComputeShaders();
+    KeepAlive();
 
     // 5. 初始化几何缓冲区和 UBO
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);

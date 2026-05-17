@@ -14,6 +14,8 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <fstream>
+#include <filesystem>
 
 namespace dse {
 namespace render {
@@ -79,7 +81,7 @@ static glm::vec2 IntegrateBRDF(float NdotV, float roughness) {
     glm::vec3 N(0, 0, 1);
 
     float A = 0.0f, B = 0.0f;
-    const unsigned int SAMPLE_COUNT = 1024u;
+    const unsigned int SAMPLE_COUNT = 256u;
 
     for (unsigned int i = 0u; i < SAMPLE_COUNT; ++i) {
         glm::vec2 Xi = Hammersley(i, SAMPLE_COUNT);
@@ -101,29 +103,64 @@ static glm::vec2 IntegrateBRDF(float NdotV, float roughness) {
     return glm::vec2(A, B) / static_cast<float>(SAMPLE_COUNT);
 }
 
+static constexpr int kBrdfLutSize = 128;
+static constexpr const char* kBrdfLutCachePath = "data/brdf_lut.cache";
+
 void ReflectionProbeSystem::GenerateBRDFLUT(RhiDevice* rhi_device) {
-    const int lut_size = 256;
-    std::vector<unsigned char> pixels(lut_size * lut_size * 4);
+    const int lut_size = kBrdfLutSize;
+    const size_t data_bytes = lut_size * lut_size * 4;
+    std::vector<unsigned char> pixels(data_bytes);
 
-    for (int y = 0; y < lut_size; ++y) {
-        for (int x = 0; x < lut_size; ++x) {
-            float NdotV = (static_cast<float>(x) + 0.5f) / static_cast<float>(lut_size);
-            float roughness = (static_cast<float>(y) + 0.5f) / static_cast<float>(lut_size);
-            NdotV = std::max(NdotV, 0.001f);
-
-            glm::vec2 brdf = IntegrateBRDF(NdotV, roughness);
-
-            int idx = (y * lut_size + x) * 4;
-            pixels[idx + 0] = static_cast<unsigned char>(std::min(brdf.x * 255.0f, 255.0f));
-            pixels[idx + 1] = static_cast<unsigned char>(std::min(brdf.y * 255.0f, 255.0f));
-            pixels[idx + 2] = 0;
-            pixels[idx + 3] = 255;
+    // 尝试从磁盘缓存加载
+    bool loaded_from_cache = false;
+    {
+        std::ifstream fin(kBrdfLutCachePath, std::ios::binary);
+        if (fin.is_open()) {
+            int cached_size = 0;
+            fin.read(reinterpret_cast<char*>(&cached_size), sizeof(cached_size));
+            if (cached_size == lut_size) {
+                fin.read(reinterpret_cast<char*>(pixels.data()), static_cast<std::streamsize>(data_bytes));
+                if (fin.good()) {
+                    loaded_from_cache = true;
+                    DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT loaded from cache");
+                }
+            }
         }
     }
 
+    if (!loaded_from_cache) {
+        for (int y = 0; y < lut_size; ++y) {
+            for (int x = 0; x < lut_size; ++x) {
+                float NdotV = (static_cast<float>(x) + 0.5f) / static_cast<float>(lut_size);
+                float roughness = (static_cast<float>(y) + 0.5f) / static_cast<float>(lut_size);
+                NdotV = std::max(NdotV, 0.001f);
+
+                glm::vec2 brdf = IntegrateBRDF(NdotV, roughness);
+
+                int idx = (y * lut_size + x) * 4;
+                pixels[idx + 0] = static_cast<unsigned char>(std::min(brdf.x * 255.0f, 255.0f));
+                pixels[idx + 1] = static_cast<unsigned char>(std::min(brdf.y * 255.0f, 255.0f));
+                pixels[idx + 2] = 0;
+                pixels[idx + 3] = 255;
+            }
+        }
+
+        // 写入磁盘缓存
+        try {
+            std::filesystem::create_directories(std::filesystem::path(kBrdfLutCachePath).parent_path());
+            std::ofstream fout(kBrdfLutCachePath, std::ios::binary);
+            if (fout.is_open()) {
+                fout.write(reinterpret_cast<const char*>(&lut_size), sizeof(lut_size));
+                fout.write(reinterpret_cast<const char*>(pixels.data()), static_cast<std::streamsize>(data_bytes));
+                DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT cached to disk");
+            }
+        } catch (...) {}
+    }
+
     brdf_lut_handle_ = rhi_device->CreateTexture2D(lut_size, lut_size, pixels.data(), true);
-    DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT generated: {}x{}, handle={}",
-                   lut_size, lut_size, brdf_lut_handle_);
+    DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT generated: {}x{}, handle={}{}",
+                   lut_size, lut_size, brdf_lut_handle_,
+                   loaded_from_cache ? " (cached)" : " (computed)");
 }
 
 // ============================================================================

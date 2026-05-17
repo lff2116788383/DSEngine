@@ -41,6 +41,13 @@ RhiBackend ResolveRhiBackendFromEnv();
  */
 std::string RhiBackendToString(RhiBackend backend);
 
+/**
+ * @brief 根据编译时后端可用性验证请求的后端，必要时回退
+ * @param requested 请求的后端类型
+ * @return 实际可用的后端类型
+ */
+RhiBackend ValidateRhiBackend(RhiBackend requested);
+
 } // namespace render
 } // namespace dse
 

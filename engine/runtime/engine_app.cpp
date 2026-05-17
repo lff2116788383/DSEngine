@@ -68,8 +68,11 @@ std::string ReadNonEmptyEnv(const char* name) {
 }
 
 bool IsStartupSceneRegressionDisabled() {
-    const char* env = std::getenv("DSE_DISABLE_STARTUP_SCENE_REGRESSION");
-    return env && env[0] != '\0' && std::string(env) != "0";
+    // 默认跳过场景回归测试（生产/demo 场景不需要）。
+    // 设置 DSE_ENABLE_STARTUP_SCENE_REGRESSION=1 显式启用。
+    const char* env = std::getenv("DSE_ENABLE_STARTUP_SCENE_REGRESSION");
+    bool enabled = env && env[0] != '\0' && std::string(env) != "0";
+    return !enabled;
 }
 
 std::string RuntimeOutputPathInBin(const char* filename) {
@@ -243,8 +246,8 @@ bool EngineInstance::Init() {
             return false;
         }
 
-        // 根据 RHI 后端选择 GLFW 窗口 client API
-        const auto rhi_backend = dse::render::ResolveRhiBackendFromEnv();
+        // 根据 RHI 后端选择 GLFW 窗口 client API（验证编译时可用性）
+        const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
         const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
                                        rhi_backend != RhiBackend::Vulkan);
         if (needs_gl_context) {
@@ -279,6 +282,11 @@ bool EngineInstance::Init() {
                 glfwTerminate();
                 return false;
             }
+            // 立即清黑屏并 swap，消除初始化期间的白屏
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glfwSwapBuffers(window);
+
             // 打印当前使用的 GPU 信息
             const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
             const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
@@ -351,6 +359,14 @@ bool EngineInstance::Init() {
     // 先登记 EngineInstance 级服务容器，再桥接到兼容全局入口。
     RegisterRuntimeServices();
 
+    // 初始化期间保持窗口消息泵送，防止 Windows 标记"未响应"
+    if (glfw_window_) glfwPollEvents();
+
+    if (glfw_window_) {
+        pipeline_->SetInitKeepAlive([w = static_cast<GLFWwindow*>(glfw_window_)]() {
+            glfwPollEvents();
+        });
+    }
     pipeline_->EnableEditorMode(config_.enable_editor);
     pipeline_->SetWorld(services_.world);
     pipeline_->SetAssetManager(services_.asset_manager);
@@ -376,12 +392,15 @@ bool EngineInstance::Init() {
 #endif
     
     std::cout << "Business mode: " << (config_.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
+
+    if (glfw_window_) glfwPollEvents();
     
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
         CleanupOnInitFailure();
         return false;
     }
+    pipeline_->SetInitKeepAlive(nullptr);
 
     if (!RunStartupSceneRegressionChecks()) {
         std::cerr << "Startup scene regression checks failed\n";
@@ -494,6 +513,11 @@ int EngineInstance::Run() {
     if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
         max_frames = (std::max)(0, std::atoi(env_max_frames));
     }
+    int screenshot_frame = 0;
+    if (const char* env_ss_frame = std::getenv("DSE_SCREENSHOT_FRAME")) {
+        screenshot_frame = (std::max)(0, std::atoi(env_ss_frame));
+    }
+    bool screenshot_taken = false;
     int frame_counter = 0;
     while (!glfwWindowShouldClose(window)) {
         const double frame_start = glfwGetTime();
@@ -524,6 +548,9 @@ int EngineInstance::Run() {
             }
         }
         frame_counter += 1;
+        if (screenshot_frame > 0 && frame_counter == screenshot_frame && !screenshot_taken) {
+            screenshot_taken = CaptureRuntimeScreenshot(*pipeline_);
+        }
         if (max_frames > 0 && frame_counter >= max_frames) {
             std::cout << "DSE_MAX_FRAMES reached: " << frame_counter << std::endl;
             break;
@@ -534,7 +561,7 @@ int EngineInstance::Run() {
     timeEndPeriod(1);
 #endif
 
-    const bool screenshot_ok = CaptureRuntimeScreenshot(*pipeline_);
+    const bool screenshot_ok = screenshot_taken || CaptureRuntimeScreenshot(*pipeline_);
 
     Shutdown();
     return screenshot_ok ? 0 : -2;

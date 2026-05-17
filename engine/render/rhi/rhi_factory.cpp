@@ -82,5 +82,32 @@ std::unique_ptr<RhiDevice> CreateRhiDevice(RhiBackend backend) {
     }
 }
 
+RhiBackend ValidateRhiBackend(RhiBackend requested) {
+    switch (requested) {
+        case RhiBackend::Vulkan:
+#ifdef DSE_ENABLE_VULKAN
+            return RhiBackend::Vulkan;
+#else
+            DEBUG_LOG_WARN("Vulkan 后端未编译 (DSE_ENABLE_VULKAN=OFF)，回退到 D3D11/OpenGL");
+#ifdef DSE_ENABLE_D3D11
+            return RhiBackend::D3D11;
+#else
+            return RhiBackend::OpenGL;
+#endif
+#endif
+
+        case RhiBackend::D3D11:
+#ifdef DSE_ENABLE_D3D11
+            return RhiBackend::D3D11;
+#else
+            DEBUG_LOG_WARN("D3D11 后端未编译 (DSE_ENABLE_D3D11=OFF)，回退到 OpenGL");
+            return RhiBackend::OpenGL;
+#endif
+
+        default:
+            return requested;
+    }
+}
+
 } // namespace render
 } // namespace dse

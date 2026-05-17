@@ -157,6 +157,18 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
         return false;
     }
 
+    // swap chain 就绪后立即 present 黑屏，消除白屏
+    {
+        ID3D11DeviceContext* dc = context_.device_context();
+        ID3D11RenderTargetView* rtv = context_.backbuffer_rtv();
+        if (dc && rtv) {
+            float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            dc->ClearRenderTargetView(rtv, black);
+            context_.Present(false);
+        }
+    }
+    KeepAlive();
+
     if (!resource_mgr_.Init(&context_)) {
         DEBUG_LOG_ERROR("[D3D11] ResourceManager init failed");
         return false;
@@ -166,8 +178,9 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
     state_mgr_.Init(&context_);
     draw_executor_.Init(&context_, &resource_mgr_);
 
-    // 初始化内置着色器
-    shader_mgr_.InitBuiltinShaders();
+    KeepAlive();
+    // 初始化内置着色器（传入 keep-alive 回调防止编译期间窗口"未响应"）
+    shader_mgr_.InitBuiltinShaders(init_keep_alive_);
 
     initialized_ = true;
     DEBUG_LOG_INFO("[D3D11] RhiDevice initialized (all subsystems ready)");

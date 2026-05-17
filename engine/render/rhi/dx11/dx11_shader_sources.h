@@ -259,16 +259,16 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS, float height_scale)
     float2 P = viewDirTS.xy / max(viewDirTS.z, 0.001) * height_scale;
     float2 deltaUV = P / (float)numLayers;
     float2 curUV = uv;
-    float curDepth = 1.0 - u_normal_map.Sample(u_sampler, curUV).a;
+    float curDepth = 1.0 - u_normal_map.SampleLevel(u_sampler, curUV, 0).a;
     [loop] for (int i = 0; i < numLayers; ++i) {
         if (currentLayerDepth >= curDepth) break;
         curUV -= deltaUV;
-        curDepth = 1.0 - u_normal_map.Sample(u_sampler, curUV).a;
+        curDepth = 1.0 - u_normal_map.SampleLevel(u_sampler, curUV, 0).a;
         currentLayerDepth += layerDepth;
     }
     float2 prevUV = curUV + deltaUV;
     float afterDepth = curDepth - currentLayerDepth;
-    float beforeDepth = (1.0 - u_normal_map.Sample(u_sampler, prevUV).a) - currentLayerDepth + layerDepth;
+    float beforeDepth = (1.0 - u_normal_map.SampleLevel(u_sampler, prevUV, 0).a) - currentLayerDepth + layerDepth;
     float w = afterDepth / (afterDepth - beforeDepth + 0.0001);
     return lerp(curUV, prevUV, w);
 }
@@ -713,10 +713,10 @@ float4 PSMain(PSInput input) : SV_TARGET {
         if (pl.cast_shadow != 0) {
             float3 sampleDir = input.fragPos - pl.position;
             float closestDepth = 0.0;
-            if      (pl.shadow_index == 0) closestDepth = u_point_shadow_map0.Sample(u_sampler, sampleDir).r;
-            else if (pl.shadow_index == 1) closestDepth = u_point_shadow_map1.Sample(u_sampler, sampleDir).r;
-            else if (pl.shadow_index == 2) closestDepth = u_point_shadow_map2.Sample(u_sampler, sampleDir).r;
-            else                           closestDepth = u_point_shadow_map3.Sample(u_sampler, sampleDir).r;
+            if      (pl.shadow_index == 0) closestDepth = u_point_shadow_map0.SampleLevel(u_sampler, sampleDir, 0).r;
+            else if (pl.shadow_index == 1) closestDepth = u_point_shadow_map1.SampleLevel(u_sampler, sampleDir, 0).r;
+            else if (pl.shadow_index == 2) closestDepth = u_point_shadow_map2.SampleLevel(u_sampler, sampleDir, 0).r;
+            else                           closestDepth = u_point_shadow_map3.SampleLevel(u_sampler, sampleDir, 0).r;
             float currentDepth = dist / pl.radius;
             pl_shadow = (currentDepth - 0.005 > closestDepth) ? 1.0 : 0.0;
         }
@@ -1190,7 +1190,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float3 sampleDir = kernel[i];
         if (dot(sampleDir, normal) < 0.0) sampleDir = -sampleDir;
         float2 sampleUV = input.uv + sampleDir.xy * rScale * (1.0 / u_screen_size);
-        float sampleDepth = linearizeDepth(screenTexture.Sample(u_sampler, sampleUV).r);
+        float sampleDepth = linearizeDepth(screenTexture.SampleLevel(u_sampler, sampleUV, 0).r);
         float rangeCheck = smoothstep(0.0, 1.0, u_radius / abs(linDepth - sampleDepth));
         if (sampleDepth < linDepth - u_bias) occlusion += rangeCheck;
     }
@@ -1268,7 +1268,7 @@ float4 PSMain(PSInput input) : SV_TARGET {
         float dist = u_step_size * float(i);
         float2 sampleUV = input.uv + lightDir.xy * texelSize * dist * 50.0;
         if (sampleUV.x < 0.0 || sampleUV.y < 0.0 || sampleUV.x > 1.0 || sampleUV.y > 1.0) break;
-        float sampleDepth = screenTexture.Sample(u_sampler, sampleUV).r;
+        float sampleDepth = screenTexture.SampleLevel(u_sampler, sampleUV, 0).r;
         if (sampleDepth >= 1.0) continue;
         float sampleLin = linearizeDepth(sampleDepth);
         float diff = sampleLin - linDepth;
@@ -1774,11 +1774,11 @@ float4 PSMain(PSInput input) : SV_TARGET {
     int samples = max(int(num_samples), 1);
     float3 color = colorTexture.Sample(u_sampler, input.uv).rgb;
     float total = 1.0f;
-    for (int i = 1; i < samples; ++i) {
+    [loop] for (int i = 1; i < samples; ++i) {
         float t = float(i) / float(samples);
         float2 sample_uv = input.uv + velocity * t;
         if (sample_uv.x >= 0.0f && sample_uv.x <= 1.0f && sample_uv.y >= 0.0f && sample_uv.y <= 1.0f) {
-            color += colorTexture.Sample(u_sampler, sample_uv).rgb;
+            color += colorTexture.SampleLevel(u_sampler, sample_uv, 0).rgb;
             total += 1.0f;
         }
     }
@@ -1838,12 +1838,12 @@ float4 PSMain(PSInput input) : SV_TARGET {
     for (int i = 0; i < max_steps; ++i) {
         ray_uv += reflect_dir.xy * texel * step_size;
         if (ray_uv.x < 0.0f || ray_uv.x > 1.0f || ray_uv.y < 0.0f || ray_uv.y > 1.0f) break;
-        float sample_depth = linearizeDepth(screenTexture.Sample(u_sampler, ray_uv).r);
+        float sample_depth = linearizeDepth(screenTexture.SampleLevel(u_sampler, ray_uv, 0).r);
         ray_depth += reflect_dir.z * step_size;
         float depth_diff = ray_depth - sample_depth;
         if (depth_diff > 0.0f && depth_diff < thickness) {
             float fade = 1.0f - float(i) / float(max_steps);
-            float3 hit_color = colorTexture.Sample(u_sampler, ray_uv).rgb;
+            float3 hit_color = colorTexture.SampleLevel(u_sampler, ray_uv, 0).rgb;
             return float4(hit_color * fade, fade);
         }
     }
@@ -1952,7 +1952,7 @@ struct VS_OUTPUT {
     float2 uv  : TEXCOORD0;
 };
 
-float4 main(VS_OUTPUT input) : SV_TARGET {
+float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float2 uv = input.uv;
     uv.y = 1.0f - uv.y;
 
@@ -1967,8 +1967,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET {
     [loop] for (int i = 0; i < samples; i++) {
         suv += delta_uv;
         float2 cuv = clamp(suv, 0.001f, 0.999f);
-        float d = depthTexture.Sample(u_sampler, cuv).r;
-        float3 s = screenTexture.Sample(u_sampler, cuv).rgb;
+        float d = depthTexture.SampleLevel(u_sampler, cuv, 0).r;
+        float3 s = screenTexture.SampleLevel(u_sampler, cuv, 0).rgb;
         float sky = step(0.9999f, d);
         float lum = dot(s, float3(0.2126f, 0.7152f, 0.0722f));
         float bright = smoothstep(0.8f, 1.2f, lum);
@@ -2083,7 +2083,7 @@ float VFogLinZ(float d) {
     return (2.0f * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
 }
 
-float4 main(VS_OUTPUT input) : SV_TARGET {
+float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float4 scene = screenTexture.Sample(u_sampler, input.uv);
     float  depth = u_depth_tex.Sample(u_sampler, input.uv).r;
     if (depth >= 0.9999f) return scene;
@@ -2154,7 +2154,7 @@ cbuffer DecalParams : register(b0) {
 
 struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
 
-float4 main(VS_OUTPUT input) : SV_TARGET {
+float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float depth = u_depth_tex.Sample(u_sampler, input.uv).r;
     if (depth >= 0.9999f) discard;
 
@@ -2196,7 +2196,7 @@ SamplerState u_sampler  : register(s0);
 
 struct VS_OUTPUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
 
-float4 main(VS_OUTPUT input) : SV_TARGET {
+float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float4 accum = screenTexture.Sample(u_sampler, input.uv);
     float revealage = u_reveal_tex.Sample(u_sampler, input.uv).r;
 
@@ -2259,7 +2259,7 @@ float3 GerstnerNormal(float2 xz, float t, float2 d1) {
     return normalize(float3(-ddx, 1.0f, -ddz));
 }
 
-float4 main(VS_OUTPUT input) : SV_TARGET {
+float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float4 scene = screenTexture.Sample(u_sampler, input.uv);
     float depth_raw = u_depth_tex.Sample(u_sampler, input.uv).r;
 

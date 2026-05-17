@@ -89,18 +89,19 @@ def capture_backend(backend_name, out_path, frames=300, timeout=120):
 
     env = os.environ.copy()
     env["DSE_RHI_BACKEND"] = rhi
-    env["DSE_MAX_FRAMES"] = str(frames)
+    env["DSE_MAX_FRAMES"] = str(frames + 50)
+    env["DSE_SCREENSHOT_FRAME"] = str(frames)
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
-    env["DSE_DATA_ROOT"] = str(KF_DIR)
     env["DSE_AUTO_BATTLE"] = "1"
-    env["DSE_STARTUP_LUA"] = str(lua)
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
+    env.pop("DSE_DATA_ROOT", None)  # 让 Lua set_data_root 生效
 
     print(f"  Capturing {backend_name} ({rhi})... ", end="", flush=True)
     try:
         proc = subprocess.run(
-            [str(exe)], cwd=str(ENGINE_ROOT), env=env,
+            [str(exe), f"--script={lua}", f"--rhi={rhi}"],
+            cwd=str(ENGINE_ROOT), env=env,
             capture_output=True, text=True, errors="replace", timeout=timeout
         )
         if out_path.exists():

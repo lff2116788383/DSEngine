@@ -302,8 +302,8 @@ dse.ecs.add_camera_3d(cam, 60, 0, 0.1, 500)
 ```
 
 **验收标准：**
-- [ ] 地面 + 天空盒 + 阴影可见
-- [ ] 自由摄像机可浏览场景
+- [x] 地面 + 天空盒 + 阴影可见 ✅
+- [x] 自由摄像机可浏览场景 ✅
 
 ---
 
@@ -474,7 +474,7 @@ zombie_params = {
 - [x] 玩家攻击可命中敌人并扣血 (前方120°扇形 + 距离检测)
 - [x] 敌人攻击可命中玩家并扣血 (距离 + 攻击帧窗口)
 - [x] 敌人 HP 归零后死亡动画
-- [ ] 所有敌人死亡或玩家死亡 → 触发结局 (Phase 6)
+- [x] 所有敌人死亡或玩家死亡 → 触发结局 ✅
 
 ---
 
@@ -514,9 +514,9 @@ end
 **验收标准：**
 - [x] Battle → Result 流程（玩家死亡→DEFEAT / 全敌消灭→VICTORY）
 - [x] 每个画面有对应 BGM（game.wav / result.wav）
-- [ ] 战斗中显示 HP 条（待实现）
-- [ ] Fade 过渡自然（待实现）
-- [ ] Title 画面（待实现，需要 title 纹理）
+- [x] 战斗中显示 HP 条 ✅
+- [x] Fade 过渡自然 ✅
+- [x] Title 画面 ✅
 
 ---
 
@@ -541,7 +541,7 @@ end
 - [x] 玩家受伤/死亡音效（damage_voice 1-2随机 / death_voice）
 - [x] 敌人命中/死亡/警告音效（zombie_beat / zombie_death / zombie_warning）
 - [x] BGM 切换（game → result）
-- [ ] 3D 音源距离衰减（待实现）
+- [x] 3D 音源距离衰减 ✅
 - [x] 场景视觉丰富度达标（18种装饰物 + 天空盒 + 后处理）
 
 ---
@@ -798,7 +798,50 @@ examples/KF_Framework/
 ## 8. 首要行动
 
 1. ~~**复制纹理/音频**~~ ✅ `setup_assets.py` 已完成
-2. **用 AssetBuilder 转换 knight FBX** — 基础模型 + 动画
-3. **用 AssetBuilder 转换 zombie / 场景 FBX**
-4. **验证加载** — 在 DSEngine standalone 中加载 Knight .dmesh 验证渲染
-5. **Phase 1 实施** — 搭建最小场景
+2. ~~**用 AssetBuilder 转换 knight FBX**~~ ✅
+3. ~~**用 AssetBuilder 转换 zombie / 场景 FBX**~~ ✅
+4. ~~**验证加载**~~ ✅
+5. ~~**Phase 1 实施**~~ ✅
+
+---
+
+## 9. 截图对比工具与引擎修复
+
+### 9.1 跨后端自动截图对比
+
+**工具**:
+- `tools/compare_all.py` — 三后端(Vulkan/OpenGL/DX11)全量截图 + KF 原版对比
+- `tools/visual_compare.py` — DSE vs KF 单后端截图对比
+
+**用法**:
+```bash
+python tools/compare_all.py --force-capture --frames 300  # 强制重截 + 对比
+python tools/compare_all.py --capture-only                 # 仅截取
+python tools/visual_compare.py --dse-only --dse-frames 300 # DSE 单独截图
+```
+
+**环境变量**:
+- `DSE_AUTO_BATTLE=1` — 跳过 Title/Fade，直接进入战斗
+- `DSE_SCREENSHOT_FRAME=N` — 第 N 帧截图
+- `DSE_MAX_FRAMES=N` — 最大运行帧数
+- `DSE_SCREENSHOT_PATH` / `DSE_SCREENSHOT_TARGET` — 截图输出路径/目标
+
+**最新对比结果** (2025-05):
+| 对比 | RMSE | 状态 |
+|------|------|------|
+| DX11 vs Vulkan | 0.0 | ✅ 完全一致 |
+| OpenGL vs Vulkan | 3.0 | ✅ 极小差异 |
+| Vulkan vs KF | 9.7 | ✅ 合理（动画帧差异 + tonemapping）|
+
+### 9.2 引擎修复: Octree 延迟构建
+
+**问题**: `DSE_AUTO_BATTLE` 模式下截图只有天空盒，`meshes=0`。
+
+**根因**: `SpatialScene::BuildStatic()` 在首帧被调用时 `BoundingBoxComponent` 尚未就绪
+（它在 Render 阶段的 `EnsureMeshPathDataLoaded` 中懒加载添加）。空 Octree 被标记
+`built_=true` 后永不重建，`CullFrustum` 将所有 mesh 标为不可见。
+
+**修复** (`engine/scene/spatial_scene.cpp`): 空树不标记 built，下一帧自动重建。
+```cpp
+built_ = !static_entities_.empty() || !dynamic_entities_.empty();
+```

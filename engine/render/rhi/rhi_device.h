@@ -13,6 +13,7 @@
 #define DSE_RHI_DEVICE_H
 
 #include <vector>
+#include <functional>
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
@@ -182,6 +183,8 @@ private:
 class RhiDevice {
 public:
     virtual ~RhiDevice() = default;
+
+    void SetInitKeepAlive(std::function<void()> cb) { init_keep_alive_ = std::move(cb); }
 
     /// 在窗口创建后初始化设备（D3D11/Vulkan 需要 HWND；OpenGL 默认已就绪）
     virtual bool InitDevice(void* window_handle, int width, int height) { (void)window_handle; (void)width; (void)height; return true; }
@@ -509,6 +512,10 @@ public:
     virtual void BindVAOWithEBO(unsigned int vao, unsigned int ebo) {
         (void)vao; (void)ebo;
     }
+
+protected:
+    std::function<void()> init_keep_alive_;
+    void KeepAlive() { if (init_keep_alive_) init_keep_alive_(); }
 };
 
 #endif

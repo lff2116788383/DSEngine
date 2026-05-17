@@ -1600,7 +1600,6 @@ void LightShaftPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
-    graph.PassWrite(pass, scene_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -1804,7 +1803,6 @@ void WBOITPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, wboit_accum);
     graph.PassWrite(pass, wboit_reveal);
-    graph.PassWrite(pass, scene_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -1865,7 +1863,6 @@ void WaterPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
-    graph.PassWrite(pass, scene_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -1983,7 +1980,6 @@ void DecalPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
-    graph.PassWrite(pass, scene_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 

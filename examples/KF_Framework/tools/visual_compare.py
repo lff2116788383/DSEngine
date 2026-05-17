@@ -458,13 +458,13 @@ def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60, demo_play
 
     lua_script = kf_dir / "script" / "main.lua"
     env = os.environ.copy()
-    env["DSE_MAX_FRAMES"] = str(frames)
+    env["DSE_MAX_FRAMES"] = str(frames + 50)
+    env["DSE_SCREENSHOT_FRAME"] = str(frames)
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
-    env["DSE_DATA_ROOT"] = str(kf_dir)
     env["DSE_AUTO_BATTLE"] = "2" if demo_play else "1"  # 1=PlayGame(no AI), 2=DemoPlay(AI)
-    env["DSE_STARTUP_LUA"] = str(lua_script)
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
+    env.pop("DSE_DATA_ROOT", None)  # 让 Lua set_data_root 生效
 
     cmd = [str(exe), f"--script={lua_script}"]
     print(f"  Engine: {exe}")

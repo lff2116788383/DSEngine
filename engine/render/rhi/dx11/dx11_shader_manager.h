@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace dse {
 namespace render {
@@ -71,7 +72,7 @@ public:
     const DX11ComputeProgram* GetComputeProgram(unsigned int handle) const;
 
     /// 初始化内置着色器
-    void InitBuiltinShaders();
+    void InitBuiltinShaders(std::function<void()> keep_alive = nullptr);
 
     /// 获取着色器对应的 InputLayout（由 InitBuiltinShaders 创建）
     ID3D11InputLayout* GetInputLayout(unsigned int shader_handle) const;

@@ -149,6 +149,7 @@ public:
 
     void SetQuitCallback(std::function<void()> cb);
     void SetTargetFpsCallbacks(std::function<void(float)> setter, std::function<float()> getter);
+    void SetInitKeepAlive(std::function<void()> cb);
 
     /**
      * @brief 注入全局资产管理器实例
@@ -235,6 +236,9 @@ private:
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
+
+    std::function<void()> init_keep_alive_;
+    void KeepAlive() { if (init_keep_alive_) init_keep_alive_(); }
 
     dse::runtime::RuntimeContext runtime_context_{};
     

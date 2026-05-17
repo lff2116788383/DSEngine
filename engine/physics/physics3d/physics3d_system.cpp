@@ -878,6 +878,21 @@ void Physics3DSystem::RemoveActor(entt::entity entity) {
 // 不依赖 PxControllerManager/PxCapsuleController（预编译 static lib 与 /MD CRT 不兼容）
 // ---------------------------------------------------------------------------
 
+// sweep 时排除角色自身 actor，避免自碰撞导致位移归零
+class SelfExcludeQueryFilter : public PxQueryFilterCallback {
+public:
+    const PxRigidActor* self_actor;
+    explicit SelfExcludeQueryFilter(const PxRigidActor* self) : self_actor(self) {}
+
+    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape*,
+        const PxRigidActor* actor, PxHitFlags&) override {
+        return (actor == self_actor) ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
+    }
+    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&) override {
+        return PxQueryHitType::eBLOCK;
+    }
+};
+
 void Physics3DSystem::CreateCharacterActor(World& world, entt::entity entity,
     CharacterController3DComponent& cc, const TransformComponent& transform)
 {
@@ -933,6 +948,11 @@ void Physics3DSystem::SyncCharacterControllers(World& world, float fixed_delta_t
         // 应用速度：使用 sweep 检测碰撞后移动
         glm::vec3 displacement = cc.velocity * fixed_delta_time;
 
+        // sweep 过滤：排除自身 actor
+        SelfExcludeQueryFilter self_filter(actor);
+        PxQueryFilterData filter_data;
+        filter_data.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
+
         // ---- 水平 sweep ----
         glm::vec3 horizontal_disp(displacement.x, 0.0f, displacement.z);
         float h_len = glm::length(horizontal_disp);
@@ -942,7 +962,8 @@ void Physics3DSystem::SyncCharacterControllers(World& world, float fixed_delta_t
             PxTransform pose = actor->getGlobalPose();
             PxCapsuleGeometry capsule_geo(cc.radius, cc.height * 0.5f);
 
-            if (scene_->sweep(capsule_geo, pose, px_dir, h_len, sweep_hit)) {
+            if (scene_->sweep(capsule_geo, pose, px_dir, h_len, sweep_hit,
+                              PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
                 // 碰撞：只移动到碰撞点（留一点皮肤间隙）
                 float safe_dist = glm::max(0.0f, sweep_hit.block.distance - cc.skin_width);
                 displacement.x = px_dir.x * safe_dist;
@@ -965,7 +986,8 @@ void Physics3DSystem::SyncCharacterControllers(World& world, float fixed_delta_t
             pose.p.z += displacement.z;
             PxCapsuleGeometry capsule_geo(cc.radius, cc.height * 0.5f);
 
-            if (scene_->sweep(capsule_geo, pose, px_dir, abs_v, sweep_hit)) {
+            if (scene_->sweep(capsule_geo, pose, px_dir, abs_v, sweep_hit,
+                              PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
                 float safe_dist = glm::max(0.0f, sweep_hit.block.distance - cc.skin_width);
                 displacement.y = px_dir.y * safe_dist;
 
@@ -993,7 +1015,8 @@ void Physics3DSystem::SyncCharacterControllers(World& world, float fixed_delta_t
             PxSweepBuffer sweep_hit;
             float ground_check_dist = cc.step_offset + 0.05f;
 
-            if (scene_->sweep(capsule_geo, pose, PxVec3(0.0f, -1.0f, 0.0f), ground_check_dist, sweep_hit)) {
+            if (scene_->sweep(capsule_geo, pose, PxVec3(0.0f, -1.0f, 0.0f), ground_check_dist, sweep_hit,
+                              PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
                 cc.is_grounded = true;
                 // 贴地：snap 到地面
                 float snap_dist = sweep_hit.block.distance - cc.skin_width;
@@ -1011,6 +1034,22 @@ void Physics3DSystem::SyncCharacterControllers(World& world, float fixed_delta_t
         new_pose.p.x += displacement.x;
         new_pose.p.y += displacement.y;
         new_pose.p.z += displacement.z;
+
+        // 地形高度图贴地（PhysX 场景可能没有地形碰撞体）
+        float foot_y = new_pose.p.y - cc.radius - cc.height * 0.5f;
+        float terrain_y = -1e10f;
+        auto hm_view = world.registry().view<TerrainHeightmapComponent>();
+        for (auto te : hm_view) {
+            float h = hm_view.get<TerrainHeightmapComponent>(te).GetHeight(new_pose.p.x, new_pose.p.z);
+            if (h > terrain_y) terrain_y = h;
+        }
+        if (terrain_y > -1e9f && foot_y <= terrain_y) {
+            new_pose.p.y = terrain_y + cc.radius + cc.height * 0.5f;
+            cc.is_grounded = true;
+            cc.velocity.y = 0.0f;
+            cc.collision_flags = cc.collision_flags | CharacterCollisionFlag::Down;
+        }
+
         actor->setKinematicTarget(new_pose);
 
         // 同步到 ECS Transform（position 代表脚底位置）
@@ -1046,6 +1085,11 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
     PxRigidDynamic* actor = static_cast<PxRigidDynamic*>(cc.runtime_controller);
     cc.collision_flags = CharacterCollisionFlag::None;
 
+    // sweep 过滤：排除自身 actor
+    SelfExcludeQueryFilter self_filter(actor);
+    PxQueryFilterData filter_data;
+    filter_data.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
+
     if (!cc.is_grounded) {
         cc.velocity.y -= 9.81f * delta_time;
     }
@@ -1059,7 +1103,8 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
         PxTransform pose = actor->getGlobalPose();
         PxCapsuleGeometry capsule_geo(cc.radius, cc.height * 0.5f);
 
-        if (scene_->sweep(capsule_geo, pose, px_dir, h_len, sweep_hit)) {
+        if (scene_->sweep(capsule_geo, pose, px_dir, h_len, sweep_hit,
+                          PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
             float safe_dist = glm::max(0.0f, sweep_hit.block.distance - cc.skin_width);
             resolved_displacement.x = px_dir.x * safe_dist;
             resolved_displacement.z = px_dir.z * safe_dist;
@@ -1079,7 +1124,8 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
         pose.p.z += resolved_displacement.z;
         PxCapsuleGeometry capsule_geo(cc.radius, cc.height * 0.5f);
 
-        if (scene_->sweep(capsule_geo, pose, px_dir, abs_v, sweep_hit)) {
+        if (scene_->sweep(capsule_geo, pose, px_dir, abs_v, sweep_hit,
+                          PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
             float safe_dist = glm::max(0.0f, sweep_hit.block.distance - cc.skin_width);
             resolved_displacement.y = px_dir.y * safe_dist;
 
@@ -1102,7 +1148,8 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
         PxSweepBuffer sweep_hit;
         float ground_check_dist = cc.step_offset + 0.05f;
 
-        if (scene_->sweep(capsule_geo, pose, PxVec3(0.0f, -1.0f, 0.0f), ground_check_dist, sweep_hit)) {
+        if (scene_->sweep(capsule_geo, pose, PxVec3(0.0f, -1.0f, 0.0f), ground_check_dist, sweep_hit,
+                          PxHitFlags(PxHitFlag::eDEFAULT), filter_data, &self_filter)) {
             cc.is_grounded = true;
             float snap_dist = sweep_hit.block.distance - cc.skin_width;
             if (snap_dist > 0.0f && snap_dist < cc.step_offset) {
@@ -1118,6 +1165,24 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
     new_pose.p.x += resolved_displacement.x;
     new_pose.p.y += resolved_displacement.y;
     new_pose.p.z += resolved_displacement.z;
+
+    // 地形高度图贴地（PhysX 场景可能没有地形碰撞体）
+    {
+        float foot_y = new_pose.p.y - cc.radius - cc.height * 0.5f;
+        float terrain_y = -1e10f;
+        auto hm_view = world_cache_->registry().view<TerrainHeightmapComponent>();
+        for (auto te : hm_view) {
+            float h = hm_view.get<TerrainHeightmapComponent>(te).GetHeight(new_pose.p.x, new_pose.p.z);
+            if (h > terrain_y) terrain_y = h;
+        }
+        if (terrain_y > -1e9f && foot_y <= terrain_y) {
+            new_pose.p.y = terrain_y + cc.radius + cc.height * 0.5f;
+            cc.is_grounded = true;
+            cc.velocity.y = 0.0f;
+            cc.collision_flags = cc.collision_flags | CharacterCollisionFlag::Down;
+        }
+    }
+
     actor->setGlobalPose(new_pose);
 
     transform.position = glm::vec3(

@@ -127,7 +127,7 @@ void SpatialScene::BuildStatic(World& world) {
     // 所有有 BoundingBox + Transform 的实体
     auto view = world.registry().view<TransformComponent, BoundingBoxComponent>();
 
-    // 判定是否静态：有 RigidBody3D 且为 Dynamic/Kinematic → dynamic，否则 → static
+    // 判定是否静态：运动学/动画/角色控制器实体视为 dynamic，其余 static
     for (auto entity : view) {
         bool is_dynamic = false;
         if (world.registry().all_of<dse::RigidBody3DComponent>(entity)) {
@@ -136,8 +136,13 @@ void SpatialScene::BuildStatic(World& world) {
                 is_dynamic = true;
             }
         }
-        // 布料等也视为动态
         if (world.registry().all_of<dse::ClothComponent>(entity)) {
+            is_dynamic = true;
+        }
+        if (world.registry().all_of<dse::CharacterController3DComponent>(entity)) {
+            is_dynamic = true;
+        }
+        if (world.registry().all_of<dse::Animator3DComponent>(entity)) {
             is_dynamic = true;
         }
 
@@ -173,7 +178,9 @@ void SpatialScene::BuildStatic(World& world) {
         static_tree_->Insert({e, aabb});
     }
 
-    built_ = true;
+    // 如果没有找到任何实体（BoundingBoxComponent 可能尚未就绪），
+    // 不标记为已构建，允许下一帧重建
+    built_ = !static_entities_.empty() || !dynamic_entities_.empty();
 }
 
 void SpatialScene::MarkStatic(entt::entity e) {

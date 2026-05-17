@@ -166,11 +166,19 @@ bool FramePipeline::Init() {
         return false;
     }
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    const auto rhi_backend = dse::render::ResolveRhiBackendFromEnv();
+    auto t0 = std::chrono::steady_clock::now();
+    auto lap = [&t0](const char* label) {
+        auto now = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count();
+        DEBUG_LOG_INFO("[InitTiming] {}: {}ms", label, ms);
+        t0 = now;
+    };
+    const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
     DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
 
     // D3D11 / Vulkan 后端需要用平台窗口句柄完成设备初始化
+    runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
     if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
         const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
         const int init_h = Screen::height() > 0 ? Screen::height() : 720;
@@ -190,8 +198,13 @@ bool FramePipeline::Init() {
                 dse::render::RhiBackendToString(rhi_backend));
             return false;
         }
+        // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
+        runtime_context_.rhi_device->BeginFrame();
+        runtime_context_.rhi_device->EndFrame();
     }
 
+    lap("RHI device init");
+    KeepAlive();
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
@@ -530,6 +543,8 @@ bool FramePipeline::Init() {
     wboit_reveal_desc.culling_enabled = false;
     render_resources_.wboit_reveal_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(wboit_reveal_desc);
 
+    lap("render resources");
+    KeepAlive();
     DEBUG_LOG_INFO("FramePipeline init: systems init begin");
     modules_impl_->gameplay2d_module.OnInit(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
     modules_impl_->mesh_render_system.SetAssetManager(&asset_manager);
@@ -581,6 +596,8 @@ bool FramePipeline::Init() {
     }
 #endif
 
+    lap("systems init");
+    KeepAlive();
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
 
     runtime_context_.audio_system = &modules_impl_->gameplay2d_module.audio_system();
@@ -597,17 +614,23 @@ bool FramePipeline::Init() {
         Shutdown();
         return false;
     }
+    lap("business bootstrap");
+    KeepAlive();
     BuildRenderGraph();
+    lap("BuildRenderGraph");
 
     // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
     light_buffer_.Init(runtime_context_.rhi_device.get());
     cluster_grid_.Init(runtime_context_.rhi_device.get());
+    lap("light buffer + cluster grid");
 
     // Light Probe SH Bake 系统初始化
     light_probe_system_.Init(runtime_context_.rhi_device.get());
+    lap("LightProbeSystem");
 
     // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
     reflection_probe_system_.Init(runtime_context_.rhi_device.get());
+    lap("ReflectionProbeSystem");
 
     // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
 
@@ -617,7 +640,7 @@ bool FramePipeline::Init() {
         auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&streaming_manager_, [](auto*) {});
         dse::core::ServiceLocator::Instance().Register<dse::streaming::StreamingManager, dse::streaming::StreamingManager>(streaming_shared);
     }
-
+    lap("StreamingManager");
     initialized_ = true;
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
@@ -1334,41 +1357,11 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    // 主线程预热所有 builtin Pass 中用到的 ECS 组件池。
-    // EnTT registry.view<T>() 首次调用 assure<T>() 会触发 pools_ 重新分配，
-    // 预热确保后续 view 调用为纯只读，可安全并行执行。
-    if (runtime_context_.world) {
-        auto& reg = runtime_context_.world->registry();
-        WarmUpRenderECSPools(reg);
-
-#ifndef NDEBUG
-        // Debug 守卫：记录预热后的池数量
-        size_t pool_count_before = 0;
-        for (auto&& [id, pool] : reg.storage()) { (void)pool; ++pool_count_before; }
-#endif
-
-        // OpenGL 后端：使用波次并行执行（同一波次内无依赖的 Pass 并行录制）
-        auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
-        auto* js = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
-        if (gl_cmd && js) {
-            render_graph_dag_.ExecuteParallel(*gl_cmd, *js);
-        } else {
-            render_graph_dag_.Execute(cmd_buffer);
-        }
-
-#ifndef NDEBUG
-        // 断言：并行执行期间不应有新组件池被 assure() 创建
-        size_t pool_count_after = 0;
-        for (auto&& [id, pool] : reg.storage()) { (void)pool; ++pool_count_after; }
-        if (pool_count_after != pool_count_before) {
-            DEBUG_LOG_ERROR("RenderGraph 并行执行期间新增了 {} 个 ECS 组件池！"
-                           "请在 WarmUpRenderECSPools() 中补充对应 view 调用。",
-                           pool_count_after - pool_count_before);
-        }
-#endif
-    } else {
-        render_graph_dag_.Execute(cmd_buffer);
-    }
+    // 串行执行 RenderGraph。
+    // 并行路径 (ExecuteParallel) 已禁用：仅做 ECS 池预热不足以消除
+    // EnTT registry 的多线程竞争（view 迭代 + Lua Update 同帧修改实体）。
+    // 恢复并行需完整的主线程 view 缓存方案，暂不实施。
+    render_graph_dag_.Execute(cmd_buffer);
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {
@@ -1472,6 +1465,10 @@ void FramePipeline::SetQuitCallback(std::function<void()> cb) {
 void FramePipeline::SetTargetFpsCallbacks(std::function<void(float)> setter, std::function<float()> getter) {
     runtime_context_.set_target_fps = std::move(setter);
     runtime_context_.get_target_fps = std::move(getter);
+}
+
+void FramePipeline::SetInitKeepAlive(std::function<void()> cb) {
+    init_keep_alive_ = std::move(cb);
 }
 
 void FramePipeline::SetEditorCamera(const glm::mat4& view, const glm::mat4& projection) {
