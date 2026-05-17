@@ -365,7 +365,7 @@ void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
 
     if (render_3d) {
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
-        if (ctx_.modules.empty() && ctx_.render_meshes) {
+        if (ctx_.render_meshes) {
             ctx_.render_meshes(*ctx_.world, cmd_buffer);
         }
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
@@ -606,12 +606,9 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             rhi->UnbindVAO();
         }
 
-        // CPU 路径：仅在 GPU indirect 未激活时走完整 render_meshes；
-        // GPU indirect 激活时仅走 modules（处理蒙皮等 GPU Driven 不覆盖的内容）
-        if (!use_gpu_indirect) {
-            if (ctx_.modules.empty() && ctx_.render_meshes) {
-                ctx_.render_meshes(*ctx_.world, cmd_buffer);
-            }
+        // CPU 路径：GPU indirect 未激活时走完整 render_meshes
+        if (!use_gpu_indirect && ctx_.render_meshes) {
+            ctx_.render_meshes(*ctx_.world, cmd_buffer);
         }
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         for (auto& mod : ctx_.modules) {

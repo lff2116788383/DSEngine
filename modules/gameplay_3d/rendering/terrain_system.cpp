@@ -123,7 +123,14 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
 
     std::vector<std::vector<unsigned int>> lod_indices(static_cast<size_t>(terrain.max_lod_levels));
 
-    for (int lod = 0; lod < terrain.max_lod_levels; ++lod) {
+    // 安全上限：step = 2^lod 超出网格分辨率后无意义，且 lod>=31 会触发 int 溢出
+    const int max_useful_lod = std::min(terrain.max_lod_levels,
+                                         static_cast<int>(std::ceil(std::log2(static_cast<double>(std::max(rx, rz))))));
+    const int actual_lod_count = std::max(1, max_useful_lod);
+    lod_indices.resize(static_cast<size_t>(actual_lod_count));
+    terrain.max_lod_levels = actual_lod_count;
+
+    for (int lod = 0; lod < actual_lod_count; ++lod) {
         const int step = 1 << lod;
         auto& idx = lod_indices[static_cast<size_t>(lod)];
         idx.reserve(static_cast<size_t>((rx / step) * (rz / step) * 6));

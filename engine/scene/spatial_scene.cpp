@@ -210,14 +210,15 @@ void SpatialScene::CullFrustum(const glm::mat4& view_proj, World& world, Visible
 
     auto planes = ExtractPlanes(view_proj);
 
-    // 先将所有可渲染实体设为不可见
-    auto mr_view = world.registry().view<MeshRendererComponent>();
-    for (auto e : mr_view) {
-        mr_view.get<MeshRendererComponent>(e).visible = false;
+    // 只对参与空间剔除（有 BoundingBoxComponent）的实体重置可见性；
+    // 没有 BoundingBoxComponent 的实体不在空间索引中，保持其 visible 不变
+    auto mr_bb_view = world.registry().view<MeshRendererComponent, BoundingBoxComponent>();
+    for (auto e : mr_bb_view) {
+        mr_bb_view.get<MeshRendererComponent>(e).visible = false;
     }
-    auto terrain_view = world.registry().view<TerrainComponent>();
-    for (auto e : terrain_view) {
-        terrain_view.get<TerrainComponent>(e).visible = false;
+    auto terrain_bb_view = world.registry().view<TerrainComponent, BoundingBoxComponent>();
+    for (auto e : terrain_bb_view) {
+        terrain_bb_view.get<TerrainComponent>(e).visible = false;
     }
 
     // 1. 查询静态 Octree

@@ -43,7 +43,7 @@ local function setup_scene()
     local terrain = dse.ecs.create_entity()
     dse.ecs.add_transform(terrain, 0, 0, 0, 1, 1, 1)
     dse.ecs.add_terrain(terrain)
-    dse.ecs.set_terrain_params(terrain, 30, 30, 128, 128, 0.8)
+    dse.ecs.set_terrain_params(terrain, 30, 30, 4, 128, 0.8)
     state.terrain_entity = terrain
 
     -- Grass system（内部走 compute shader）
