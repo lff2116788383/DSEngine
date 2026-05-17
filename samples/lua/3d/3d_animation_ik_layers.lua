@@ -45,7 +45,7 @@ end
 --------------------------------------------------------------------------------
 -- setup
 --------------------------------------------------------------------------------
-function AnimIKLayers3D.setup(config)
+function AnimIKLayers3D.Setup(config)
     -- 灯光
     local light = ecs.create_entity()
     ecs.add_directional_light_3d(light, -0.35, -1.0, -0.32, 1.0, 0.94, 0.86, 1.2, 0.18, 0.35)
@@ -131,7 +131,7 @@ end
 --------------------------------------------------------------------------------
 -- update
 --------------------------------------------------------------------------------
-function AnimIKLayers3D.update(dt)
+function AnimIKLayers3D.Update(dt)
     local ch = state.character
     if not ch then return end
     state.time = state.time + dt
@@ -185,9 +185,5 @@ function AnimIKLayers3D.update(dt)
         -- 可选: 应用 root motion
     end
 end
-
--- 模块入口 (与其他 3d sample 一致)
-function setup(config) AnimIKLayers3D.setup(config) end
-function update(dt) AnimIKLayers3D.update(dt) end
 
 return AnimIKLayers3D

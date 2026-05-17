@@ -190,4 +190,55 @@ Config.demo_3d_rope={
 Config.demo_3d_buoyancy={
     camera_distance=16.0
 }
+Config.demo_3d_instancing={
+    camera_distance=28.0
+}
+Config.demo_3d_gpu_culling={
+    camera_distance=20.0
+}
+Config.demo_3d_streaming_load={
+    camera_distance=8.0
+}
+Config.demo_3d_compute_basic={
+    camera_distance=18.0
+}
+Config.demo_3d_transparency={
+    camera_distance=16.0
+}
+Config.demo_3d_navmesh={
+    camera_distance=22.0
+}
+Config.demo_3d_water={
+    camera_distance=22.0
+}
+Config.demo_3d_decal={
+    camera_distance=14.0
+}
+Config.demo_3d_lod={
+    camera_distance=10.0
+}
+Config.demo_3d_morph_target={
+    camera_distance=12.0
+}
+Config.demo_3d_reflection_probe={
+    camera_distance=16.0
+}
+Config.demo_3d_fog_atmosphere={
+    camera_distance=25.0
+}
+Config.demo_3d_gi_probe={
+    camera_distance=8.0
+}
+Config.demo_3d_hair={
+    camera_distance=10.0
+}
+Config.demo_3d_postprocess_effects={
+    camera_distance=14.0
+}
+Config.demo_3d_light_probe={
+    camera_distance=10.0
+}
+Config.demo_3d_steering_behavior={
+    camera_distance=20.0
+}
 return Config

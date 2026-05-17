@@ -88,6 +88,43 @@
 | `3d_procedural_mesh` | 3d_procedural_mesh.lua | 程序化网格生成 |
 | `3d_particles_showcase` | 3d_particles_showcase.lua | 粒子系统 |
 
+## GPU / 管线验证
+
+| demo 名 | 文件 | 说明 |
+|----------|------|------|
+| `3d_instancing` | 3d_instancing.lua | GPU Instancing 自动合批 |
+| `3d_gpu_culling` | 3d_gpu_culling.lua | Hi-Z 遮挡剔除 + Frustum Culling |
+| `3d_streaming_load` | 3d_streaming_load.lua | 异步加载 + 流式区域 |
+| `3d_compute_basic` | 3d_compute_basic.lua | Compute Shader (Grass System) |
+| `3d_transparency` | 3d_transparency.lua | Alpha 排序 + 半透明深度 |
+| `3d_navmesh` | 3d_navmesh.lua | Recast 导航网格寻路 |
+
+## 环境 / 特效
+
+| demo 名 | 文件 | 说明 |
+|----------|------|------|
+| `3d_water` | 3d_water.lua | 水面波浪 + 折射/反射/焦散/泡沫 |
+| `3d_decal` | 3d_decal.lua | 贴花投影到多种几何表面 |
+| `3d_fog_atmosphere` | 3d_fog_atmosphere.lua | 高度雾 + 体积光轴 (Light Shaft) |
+
+## 高级渲染
+
+| demo 名 | 文件 | 说明 |
+|----------|------|------|
+| `3d_lod` | 3d_lod.lua | LOD 自动切换 |
+| `3d_morph_target` | 3d_morph_target.lua | Morph Target / Blend Shape |
+| `3d_reflection_probe` | 3d_reflection_probe.lua | 反射探针环境 cubemap |
+| `3d_gi_probe` | 3d_gi_probe.lua | GI Probe (DDGI) 间接光照 |
+| `3d_hair` | 3d_hair.lua | 毛发物理 + 风力 + LOD |
+| `3d_light_probe` | 3d_light_probe.lua | SH 光照探针间接漫反射 |
+| `3d_postprocess_effects` | 3d_postprocess_effects.lua | Vignette / Film Grain / Auto Exposure / Outline / Color LUT |
+
+## AI / 行为
+
+| demo 名 | 文件 | 说明 |
+|----------|------|------|
+| `3d_steering_behavior` | 3d_steering_behavior.lua | Seek / Flee / Arrive 转向行为 |
+
 ---
 
 ## 新增 demo 步骤
