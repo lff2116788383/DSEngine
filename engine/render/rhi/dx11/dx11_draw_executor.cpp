@@ -13,6 +13,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <limits>
 
 namespace dse {
 namespace render {
@@ -370,6 +371,11 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     if (dsv) {
         dc->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     }
+
+    global_state_.current_frame_stats.render_passes += 1;
+    if (is_depth_only_pass_) {
+        global_state_.current_frame_stats.shadow_passes += 1;
+    }
 }
 
 void DX11DrawExecutor::EndRenderPass() {
@@ -585,8 +591,15 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
     }
 
+    unsigned int last_material_tex = (std::numeric_limits<unsigned int>::max)();
     for (const auto& item : items) {
         if (item.vertices.empty() || item.indices.empty()) continue;
+
+        if (item.texture_handle != last_material_tex) {
+            if (last_material_tex != (std::numeric_limits<unsigned int>::max)())
+                global_state_.current_frame_stats.material_switches++;
+            last_material_tex = item.texture_handle;
+        }
 
         // 动态 VBO/IBO 容量保证
         size_t vbo_bytes = item.vertices.size() * sizeof(BatchVertex);

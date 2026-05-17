@@ -346,9 +346,16 @@ void DX11RhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
     if (!dx_cmd) return;
 
     // 累加 DrawExecutor 统计
-    current_frame_stats_.draw_calls += draw_executor_.current_frame_stats().draw_calls;
-    current_frame_stats_.sprite_count += draw_executor_.current_frame_stats().sprite_count;
-    current_frame_stats_.mesh_count += draw_executor_.current_frame_stats().mesh_count;
+    const auto& ex_stats = draw_executor_.current_frame_stats();
+    current_frame_stats_.draw_calls += ex_stats.draw_calls;
+    current_frame_stats_.sprite_count += ex_stats.sprite_count;
+    current_frame_stats_.mesh_count += ex_stats.mesh_count;
+    current_frame_stats_.render_passes += ex_stats.render_passes;
+    current_frame_stats_.shadow_passes += ex_stats.shadow_passes;
+    current_frame_stats_.material_switches += ex_stats.material_switches;
+    current_frame_stats_.instanced_draw_calls += ex_stats.instanced_draw_calls;
+    current_frame_stats_.instanced_mesh_count += ex_stats.instanced_mesh_count;
+    current_frame_stats_.particle_count += ex_stats.particle_count;
 }
 
 void DX11RhiDevice::EndFrame() {

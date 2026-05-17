@@ -25,6 +25,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 
 namespace dse {
 namespace render {
@@ -1395,6 +1396,10 @@ void VulkanDrawExecutor::BeginRenderPass(
             if (rt_info) { rt_has_color = rt_info->has_color; rt_has_depth = rt_info->has_depth; }
         }
         current_color_attachment_count_ = rt_has_color ? 1 : 0;
+        global_state_.current_frame_stats.render_passes += 1;
+        if (!rt_has_color && rt_has_depth) {
+            global_state_.current_frame_stats.shadow_passes += 1;
+        }
         DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color={} depth={} pass#={}",
                        render_pass.render_target,
                        render_extent.width, render_extent.height,
@@ -1665,7 +1670,13 @@ void VulkanDrawExecutor::DrawMeshBatch(
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
     // 逐 mesh 绘制
+    unsigned int last_material_tex = (std::numeric_limits<unsigned int>::max)();
     for (const auto& item : items) {
+        if (item.texture_handle != last_material_tex) {
+            if (last_material_tex != (std::numeric_limits<unsigned int>::max)())
+                global_state_.current_frame_stats.material_switches++;
+            last_material_tex = item.texture_handle;
+        }
         // 双面材质切换管线（与 OpenGL 的 material_double_sided 行为对齐）
         VkPipeline desired_pipeline = item.material_double_sided
             ? vk_pipeline_nocull : vk_pipeline_cull;

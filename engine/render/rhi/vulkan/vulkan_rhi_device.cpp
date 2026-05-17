@@ -822,7 +822,19 @@ void VulkanRhiDevice::EndFrame() {
     }
 
     context_.AdvanceFrame();
-    last_frame_stats_ = current_frame_stats_;
+    // 合并 DrawExecutor 统计到 device 层
+    const auto& ex_stats = draw_executor_.last_frame_stats();
+    last_frame_stats_ = {};
+    last_frame_stats_.draw_calls = ex_stats.draw_calls;
+    last_frame_stats_.sprite_count = ex_stats.sprite_count;
+    last_frame_stats_.mesh_count = ex_stats.mesh_count;
+    last_frame_stats_.render_passes = ex_stats.render_passes;
+    last_frame_stats_.shadow_passes = ex_stats.shadow_passes;
+    last_frame_stats_.material_switches = ex_stats.material_switches;
+    last_frame_stats_.instanced_draw_calls = ex_stats.instanced_draw_calls;
+    last_frame_stats_.instanced_mesh_count = ex_stats.instanced_mesh_count;
+    last_frame_stats_.particle_count = ex_stats.particle_count;
+    last_frame_stats_.max_batch_sprites = ex_stats.max_batch_sprites;
 }
 
 const RenderStats& VulkanRhiDevice::LastFrameStats() const {
