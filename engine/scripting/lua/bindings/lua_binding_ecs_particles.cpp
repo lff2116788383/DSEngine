@@ -148,6 +148,123 @@ int L_EcsSetGameplayTuning(lua_State* L) {
     return 0;
 }
 
+// set_particle_random(entity, velocity_min_xyz, velocity_max_xyz, life_min, life_max, size_min, size_max)
+int L_EcsSetParticleRandom(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->use_random_params = true;
+    pe->velocity_min = glm::vec3(helper::CheckFloat(L,2), helper::CheckFloat(L,3), helper::CheckFloat(L,4));
+    pe->velocity_max = glm::vec3(helper::CheckFloat(L,5), helper::CheckFloat(L,6), helper::CheckFloat(L,7));
+    pe->life_time_min = helper::OptFloat(L, 8, pe->life_time_min);
+    pe->life_time_max = helper::OptFloat(L, 9, pe->life_time_max);
+    pe->size_min = helper::OptFloat(L, 10, pe->size_min);
+    pe->size_max = helper::OptFloat(L, 11, pe->size_max);
+    return 0;
+}
+
+// set_particle_size_curve(entity, enabled, start_value, end_value)
+int L_EcsSetParticleSizeCurve(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->size_curve.enabled = helper::CheckBool(L, 2);
+    pe->size_curve.start_value = helper::OptFloat(L, 3, pe->size_curve.start_value);
+    pe->size_curve.end_value = helper::OptFloat(L, 4, pe->size_curve.end_value);
+    return 0;
+}
+
+// set_particle_alpha_curve(entity, enabled, start_value, end_value)
+int L_EcsSetParticleAlphaCurve(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->alpha_curve.enabled = helper::CheckBool(L, 2);
+    pe->alpha_curve.start_value = helper::OptFloat(L, 3, pe->alpha_curve.start_value);
+    pe->alpha_curve.end_value = helper::OptFloat(L, 4, pe->alpha_curve.end_value);
+    return 0;
+}
+
+// set_particle_speed_curve(entity, enabled, start_value, end_value)
+int L_EcsSetParticleSpeedCurve(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->speed_curve.enabled = helper::CheckBool(L, 2);
+    pe->speed_curve.start_value = helper::OptFloat(L, 3, pe->speed_curve.start_value);
+    pe->speed_curve.end_value = helper::OptFloat(L, 4, pe->speed_curve.end_value);
+    return 0;
+}
+
+// set_particle_gravity(entity, gx, gy, gz)
+int L_EcsSetParticleGravity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->gravity = glm::vec3(
+        helper::CheckFloat(L, 2),
+        helper::CheckFloat(L, 3),
+        helper::CheckFloat(L, 4));
+    return 0;
+}
+
+// set_particle_collision(entity, enabled, [mode, bounce, friction, life_loss, ground_y])
+// mode: 0=None, 1=GroundPlane, 2=Box2D
+int L_EcsSetParticleCollision(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->enable_collision = helper::CheckBool(L, 2);
+    pe->collision_mode = static_cast<ParticleCollisionMode>(helper::OptInt(L, 3, static_cast<int>(pe->collision_mode)));
+    pe->collision_bounce = helper::OptFloat(L, 4, pe->collision_bounce);
+    pe->collision_friction = helper::OptFloat(L, 5, pe->collision_friction);
+    pe->collision_life_loss = helper::OptFloat(L, 6, pe->collision_life_loss);
+    pe->ground_y = helper::OptFloat(L, 7, pe->ground_y);
+    return 0;
+}
+
+// set_particle_color_curve(entity, enabled, end_r, end_g, end_b, end_a)
+int L_EcsSetParticleColorCurve(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->use_color_curve = helper::CheckBool(L, 2);
+    pe->color_curve_end = glm::vec4(
+        helper::OptFloat(L, 3, pe->color_curve_end.r),
+        helper::OptFloat(L, 4, pe->color_curve_end.g),
+        helper::OptFloat(L, 5, pe->color_curve_end.b),
+        helper::OptFloat(L, 6, pe->color_curve_end.a));
+    return 0;
+}
+
+// set_particle_rotation(entity, rotation_min, rotation_max, angular_velocity_min, angular_velocity_max)
+int L_EcsSetParticleRotation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
+    if (!pe) return 0;
+    pe->rotation_min = helper::OptFloat(L, 2, pe->rotation_min);
+    pe->rotation_max = helper::OptFloat(L, 3, pe->rotation_max);
+    pe->angular_velocity_min = helper::OptFloat(L, 4, pe->angular_velocity_min);
+    pe->angular_velocity_max = helper::OptFloat(L, 5, pe->angular_velocity_max);
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsParticlesBindings(lua_State* L) {
@@ -161,6 +278,14 @@ void RegisterEcsParticlesBindings(lua_State* L) {
         {"add_particle_emitter",         L_EcsAddParticleEmitter},
         {"set_particle_density",         L_EcsSetParticleDensity},
         {"particle_burst",               L_EcsParticleBurst},
+        {"set_particle_random",           L_EcsSetParticleRandom},
+        {"set_particle_size_curve",       L_EcsSetParticleSizeCurve},
+        {"set_particle_alpha_curve",      L_EcsSetParticleAlphaCurve},
+        {"set_particle_speed_curve",      L_EcsSetParticleSpeedCurve},
+        {"set_particle_gravity",          L_EcsSetParticleGravity},
+        {"set_particle_collision",        L_EcsSetParticleCollision},
+        {"set_particle_color_curve",      L_EcsSetParticleColorCurve},
+        {"set_particle_rotation",         L_EcsSetParticleRotation},
         // GameplayTuning
         {"add_gameplay_tuning",          L_EcsAddGameplayTuning},
         {"set_gameplay_tuning",          L_EcsSetGameplayTuning},

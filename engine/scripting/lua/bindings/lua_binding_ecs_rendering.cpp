@@ -619,6 +619,58 @@ int L_EcsAddSpotLight3D(lua_State* L) {
     return 0;
 }
 
+// set_point_light_3d(entity, r, g, b, intensity, radius)
+int L_EcsSetPointLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* light = helper::TryGetComponent<PointLightComponent>(*world, e);
+    if (!light) return 0;
+    if (!lua_isnoneornil(L, 2)) light->color.r = helper::CheckFloat(L, 2);
+    if (!lua_isnoneornil(L, 3)) light->color.g = helper::CheckFloat(L, 3);
+    if (!lua_isnoneornil(L, 4)) light->color.b = helper::CheckFloat(L, 4);
+    if (!lua_isnoneornil(L, 5)) light->intensity = helper::CheckFloat(L, 5);
+    if (!lua_isnoneornil(L, 6)) light->radius = helper::CheckFloat(L, 6);
+    return 0;
+}
+
+// set_spot_light_3d(entity, dir_x, dir_y, dir_z, r, g, b, intensity, radius, inner_angle, outer_angle)
+int L_EcsSetSpotLight3D(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* light = helper::TryGetComponent<SpotLightComponent>(*world, e);
+    if (!light) return 0;
+    if (!lua_isnoneornil(L, 2) && !lua_isnoneornil(L, 3) && !lua_isnoneornil(L, 4)) {
+        light->direction = glm::normalize(glm::vec3(
+            helper::CheckFloat(L, 2),
+            helper::CheckFloat(L, 3),
+            helper::CheckFloat(L, 4)));
+    }
+    if (!lua_isnoneornil(L, 5)) light->color.r = helper::CheckFloat(L, 5);
+    if (!lua_isnoneornil(L, 6)) light->color.g = helper::CheckFloat(L, 6);
+    if (!lua_isnoneornil(L, 7)) light->color.b = helper::CheckFloat(L, 7);
+    if (!lua_isnoneornil(L, 8)) light->intensity = helper::CheckFloat(L, 8);
+    if (!lua_isnoneornil(L, 9)) light->radius = helper::CheckFloat(L, 9);
+    if (!lua_isnoneornil(L, 10)) light->inner_cone_angle = helper::CheckFloat(L, 10);
+    if (!lua_isnoneornil(L, 11)) light->outer_cone_angle = helper::CheckFloat(L, 11);
+    return 0;
+}
+
+// set_spot_light_shadow(entity, cast_shadow)
+int L_EcsSetSpotLightShadow(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* light = helper::TryGetComponent<SpotLightComponent>(*world, e);
+    if (!light) { lua_pushboolean(L, 0); return 1; }
+    if (!lua_isnoneornil(L, 2)) {
+        light->cast_shadow = helper::CheckBool(L, 2);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int L_EcsAddSkyLight(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -1212,7 +1264,7 @@ int L_EcsGetPostProcessState(lua_State* L) {
     helper::PushBool(L, pp->film_grain_enabled);
     helper::PushFloat(L, pp->film_grain_intensity);
     helper::PushFloat(L, pp->film_grain_time_scale);
-    return 18;
+    return 19;
 }
 
 // ============================================================
@@ -1739,6 +1791,142 @@ int L_EcsGetGIProbe(lua_State* L) {
     return 12;
 }
 
+// ============================================================
+// MorphComponent 绑定
+// ============================================================
+
+// add_morph(entity)
+int L_EcsAddMorph(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& morph = world->registry().emplace_or_replace<MorphComponent>(e);
+    morph.enabled = true;
+    return 0;
+}
+
+// morph_add_target(entity, name, weight)
+int L_EcsMorphAddTarget(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* morph = helper::TryGetComponent<MorphComponent>(*world, e);
+    if (!morph) return 0;
+    MorphTarget target;
+    target.name = helper::CheckString(L, 2);
+    target.weight = helper::OptFloat(L, 3, 0.0f);
+    morph->targets.push_back(target);
+    return 0;
+}
+
+// morph_set_weight(entity, name_or_index, weight)
+int L_EcsMorphSetWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* morph = helper::TryGetComponent<MorphComponent>(*world, e);
+    if (!morph) return 0;
+    float weight = helper::CheckFloat(L, 3);
+    if (lua_isinteger(L, 2)) {
+        int idx = static_cast<int>(lua_tointeger(L, 2));
+        if (idx >= 0 && idx < static_cast<int>(morph->targets.size())) {
+            morph->targets[idx].weight = weight;
+        }
+    } else {
+        const char* name = helper::CheckString(L, 2);
+        for (auto& t : morph->targets) {
+            if (t.name == name) { t.weight = weight; break; }
+        }
+    }
+    return 0;
+}
+
+// morph_get_weight(entity, name_or_index) → weight
+int L_EcsMorphGetWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0.0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* morph = helper::TryGetComponentConst<MorphComponent>(*world, e);
+    if (!morph) { lua_pushnumber(L, 0.0); return 1; }
+    if (lua_isinteger(L, 2)) {
+        int idx = static_cast<int>(lua_tointeger(L, 2));
+        if (idx >= 0 && idx < static_cast<int>(morph->targets.size())) {
+            lua_pushnumber(L, morph->targets[idx].weight);
+            return 1;
+        }
+    } else {
+        const char* name = helper::CheckString(L, 2);
+        for (const auto& t : morph->targets) {
+            if (t.name == name) { lua_pushnumber(L, t.weight); return 1; }
+        }
+    }
+    lua_pushnumber(L, 0.0);
+    return 1;
+}
+
+DSE_LUA_COMPONENT_SETTER(MorphEnabled, MorphComponent, enabled, bool, helper::CheckBool(L, 2))
+
+// ============================================================
+// LightProbeComponent 绑定
+// ============================================================
+
+// add_light_probe(entity, [influence_radius])
+int L_EcsAddLightProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& probe = world->registry().emplace_or_replace<LightProbeComponent>(e);
+    probe.enabled = true;
+    probe.influence_radius = helper::OptFloat(L, 2, 10.0f);
+    return 0;
+}
+
+// set_light_probe(entity, influence_radius, [capture_resolution])
+int L_EcsSetLightProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* probe = helper::TryGetComponent<LightProbeComponent>(*world, e);
+    if (!probe) return 0;
+    if (!lua_isnoneornil(L, 2)) probe->influence_radius = helper::CheckFloat(L, 2);
+    if (!lua_isnoneornil(L, 3)) probe->needs_rebake = helper::CheckBool(L, 3);
+    return 0;
+}
+
+DSE_LUA_COMPONENT_SETTER(LightProbeEnabled, LightProbeComponent, enabled, bool, helper::CheckBool(L, 2))
+
+// ============================================================
+// ReflectionProbeComponent 绑定
+// ============================================================
+
+// add_reflection_probe(entity, [influence_radius])
+int L_EcsAddReflectionProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& probe = world->registry().emplace_or_replace<ReflectionProbeComponent>(e);
+    probe.enabled = true;
+    probe.influence_radius = helper::OptFloat(L, 2, 15.0f);
+    return 0;
+}
+
+// set_reflection_probe(entity, influence_radius, box_size_x, box_size_y, box_size_z, [capture_resolution])
+int L_EcsSetReflectionProbe(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* probe = helper::TryGetComponent<ReflectionProbeComponent>(*world, e);
+    if (!probe) return 0;
+    if (!lua_isnoneornil(L, 2)) probe->influence_radius = helper::CheckFloat(L, 2);
+    if (!lua_isnoneornil(L, 3)) probe->box_size_x = helper::CheckFloat(L, 3);
+    if (!lua_isnoneornil(L, 4)) probe->box_size_y = helper::CheckFloat(L, 4);
+    if (!lua_isnoneornil(L, 5)) probe->box_size_z = helper::CheckFloat(L, 5);
+    if (!lua_isnoneornil(L, 6)) probe->resolution = helper::CheckInt(L, 6);
+    return 0;
+}
+
+DSE_LUA_COMPONENT_SETTER(ReflectionProbeEnabled, ReflectionProbeComponent, enabled, bool, helper::CheckBool(L, 2))
+
 } // namespace
 
 void RegisterEcsRenderingBindings(lua_State* L) {
@@ -1773,8 +1961,11 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_directional_light_3d",  L_EcsSetDirectionalLight3D},
         {"set_directional_light_shadow", L_EcsSetDirectionalLightShadow},
         {"add_point_light_3d",        L_EcsAddPointLight3D},
+        {"set_point_light_3d",        L_EcsSetPointLight3D},
         {"set_point_light_shadow",    L_EcsSetPointLightShadow},
         {"add_spot_light_3d",         L_EcsAddSpotLight3D},
+        {"set_spot_light_3d",         L_EcsSetSpotLight3D},
+        {"set_spot_light_shadow",     L_EcsSetSpotLightShadow},
         {"add_sky_light",             L_EcsAddSkyLight},
         {"set_sky_light",             L_EcsSetSkyLight},
         // Skybox
@@ -1836,6 +2027,20 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_gi_probe",              L_EcsSetGIProbe},
         {"set_gi_probe_enabled",      L_EcsSetGIProbeEnabled},
         {"get_gi_probe",              L_EcsGetGIProbe},
+        // Morph Target
+        {"add_morph",                 L_EcsAddMorph},
+        {"morph_add_target",          L_EcsMorphAddTarget},
+        {"morph_set_weight",          L_EcsMorphSetWeight},
+        {"morph_get_weight",          L_EcsMorphGetWeight},
+        {"set_morph_enabled",         L_EcsSetMorphEnabled},
+        // Light Probe
+        {"add_light_probe",           L_EcsAddLightProbe},
+        {"set_light_probe",           L_EcsSetLightProbe},
+        {"set_light_probe_enabled",   L_EcsSetLightProbeEnabled},
+        // Reflection Probe
+        {"add_reflection_probe",      L_EcsAddReflectionProbe},
+        {"set_reflection_probe",      L_EcsSetReflectionProbe},
+        {"set_reflection_probe_enabled", L_EcsSetReflectionProbeEnabled},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

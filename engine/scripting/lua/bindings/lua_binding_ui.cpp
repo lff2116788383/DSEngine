@@ -427,6 +427,209 @@ int L_UiSetUv(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// UIAnchorComponent 绑定
+// ============================================================
+
+// ui.add_anchor(entity, anchor_type, offset_x, offset_y)
+int L_UiAddAnchor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& anchor = world->registry().emplace_or_replace<UIAnchorComponent>(e);
+    anchor.anchor = static_cast<int>(luaL_optinteger(L, 2, 5));
+    anchor.offset.x = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    anchor.offset.y = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    return 0;
+}
+
+// ui.set_anchor_type(entity, anchor_type)
+int L_UiSetAnchorType(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnchorComponent>(e)) return 0;
+    auto& anchor = world->registry().get<UIAnchorComponent>(e);
+    anchor.anchor = static_cast<int>(luaL_checkinteger(L, 2));
+    return 0;
+}
+
+// ui.set_anchor_offset(entity, offset_x, offset_y)
+int L_UiSetAnchorOffset(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnchorComponent>(e)) return 0;
+    auto& anchor = world->registry().get<UIAnchorComponent>(e);
+    anchor.offset.x = static_cast<float>(luaL_checknumber(L, 2));
+    anchor.offset.y = static_cast<float>(luaL_checknumber(L, 3));
+    return 0;
+}
+
+// ============================================================
+// UIGridLayoutComponent 绑定
+// ============================================================
+
+// ui.add_grid_layout(entity, columns, cell_w, cell_h, spacing_x, spacing_y)
+int L_UiAddGridLayout(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& grid = world->registry().emplace_or_replace<UIGridLayoutComponent>(e);
+    grid.columns = static_cast<int>(luaL_optinteger(L, 2, 1));
+    grid.cell_size.x = static_cast<float>(luaL_optnumber(L, 3, 100.0));
+    grid.cell_size.y = static_cast<float>(luaL_optnumber(L, 4, 100.0));
+    grid.spacing.x = static_cast<float>(luaL_optnumber(L, 5, 10.0));
+    grid.spacing.y = static_cast<float>(luaL_optnumber(L, 6, 10.0));
+    return 0;
+}
+
+// ui.set_grid_layout(entity, columns, rows, cell_w, cell_h, spacing_x, spacing_y, alignment)
+int L_UiSetGridLayout(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIGridLayoutComponent>(e)) return 0;
+    auto& grid = world->registry().get<UIGridLayoutComponent>(e);
+    if (!lua_isnoneornil(L, 2)) grid.columns = static_cast<int>(luaL_checkinteger(L, 2));
+    if (!lua_isnoneornil(L, 3)) grid.rows = static_cast<int>(luaL_checkinteger(L, 3));
+    if (!lua_isnoneornil(L, 4)) grid.cell_size.x = static_cast<float>(luaL_checknumber(L, 4));
+    if (!lua_isnoneornil(L, 5)) grid.cell_size.y = static_cast<float>(luaL_checknumber(L, 5));
+    if (!lua_isnoneornil(L, 6)) grid.spacing.x = static_cast<float>(luaL_checknumber(L, 6));
+    if (!lua_isnoneornil(L, 7)) grid.spacing.y = static_cast<float>(luaL_checknumber(L, 7));
+    if (!lua_isnoneornil(L, 8)) grid.alignment = static_cast<int>(luaL_checkinteger(L, 8));
+    return 0;
+}
+
+// ============================================================
+// UICanvasScalerComponent 绑定
+// ============================================================
+
+// ui.add_canvas_scaler(entity, ref_w, ref_h, [match_width_or_height])
+int L_UiAddCanvasScaler(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& scaler = world->registry().emplace_or_replace<UICanvasScalerComponent>(e);
+    scaler.reference_resolution.x = static_cast<float>(luaL_optnumber(L, 2, 1920.0));
+    scaler.reference_resolution.y = static_cast<float>(luaL_optnumber(L, 3, 1080.0));
+    scaler.match_width_or_height = lua_isnoneornil(L, 4) ? true : (lua_toboolean(L, 4) != 0);
+    return 0;
+}
+
+// ui.set_canvas_scaler(entity, ref_w, ref_h, scale_factor, match_width_or_height)
+int L_UiSetCanvasScaler(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UICanvasScalerComponent>(e)) return 0;
+    auto& scaler = world->registry().get<UICanvasScalerComponent>(e);
+    if (!lua_isnoneornil(L, 2)) scaler.reference_resolution.x = static_cast<float>(luaL_checknumber(L, 2));
+    if (!lua_isnoneornil(L, 3)) scaler.reference_resolution.y = static_cast<float>(luaL_checknumber(L, 3));
+    if (!lua_isnoneornil(L, 4)) scaler.scale_factor = static_cast<float>(luaL_checknumber(L, 4));
+    if (!lua_isnoneornil(L, 5)) scaler.match_width_or_height = (lua_toboolean(L, 5) != 0);
+    return 0;
+}
+
+// ============================================================
+// UIAnimationComponent 绑定
+// ============================================================
+
+// ui.add_ui_animation(entity, duration, easing, [loop, ping_pong, delay])
+int L_UiAddAnimation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& anim = world->registry().emplace_or_replace<UIAnimationComponent>(e);
+    anim.duration = static_cast<float>(luaL_optnumber(L, 2, 0.3));
+    anim.easing = static_cast<int>(luaL_optinteger(L, 3, 0));
+    anim.loop = lua_isnoneornil(L, 4) ? false : (lua_toboolean(L, 4) != 0);
+    anim.ping_pong = lua_isnoneornil(L, 5) ? false : (lua_toboolean(L, 5) != 0);
+    anim.delay = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    return 0;
+}
+
+// ui.animate_position(entity, target_x, target_y)
+int L_UiAnimatePosition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnimationComponent>(e)) return 0;
+    auto& anim = world->registry().get<UIAnimationComponent>(e);
+    anim.target_position.x = static_cast<float>(luaL_checknumber(L, 2));
+    anim.target_position.y = static_cast<float>(luaL_checknumber(L, 3));
+    anim.animate_position = true;
+    anim.playing = true;
+    anim.elapsed = 0.0f;
+    anim.delay_remaining = anim.delay;
+    return 0;
+}
+
+// ui.animate_scale(entity, target_sx, target_sy)
+int L_UiAnimateScale(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnimationComponent>(e)) return 0;
+    auto& anim = world->registry().get<UIAnimationComponent>(e);
+    anim.target_scale.x = static_cast<float>(luaL_checknumber(L, 2));
+    anim.target_scale.y = static_cast<float>(luaL_checknumber(L, 3));
+    anim.animate_scale = true;
+    anim.playing = true;
+    anim.elapsed = 0.0f;
+    anim.delay_remaining = anim.delay;
+    return 0;
+}
+
+// ui.animate_alpha(entity, target_alpha)
+int L_UiAnimateAlpha(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnimationComponent>(e)) return 0;
+    auto& anim = world->registry().get<UIAnimationComponent>(e);
+    anim.target_alpha = static_cast<float>(luaL_checknumber(L, 2));
+    anim.animate_alpha = true;
+    anim.playing = true;
+    anim.elapsed = 0.0f;
+    anim.delay_remaining = anim.delay;
+    return 0;
+}
+
+// ui.animate_color(entity, r, g, b, a)
+int L_UiAnimateColor(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnimationComponent>(e)) return 0;
+    auto& anim = world->registry().get<UIAnimationComponent>(e);
+    anim.target_color = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+    anim.animate_color = true;
+    anim.playing = true;
+    anim.elapsed = 0.0f;
+    anim.delay_remaining = anim.delay;
+    return 0;
+}
+
+// ui.stop_ui_animation(entity)
+int L_UiStopAnimation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIAnimationComponent>(e)) return 0;
+    auto& anim = world->registry().get<UIAnimationComponent>(e);
+    anim.playing = false;
+    return 0;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -454,6 +657,23 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("set_visible", L_UiSetVisible);
     set_fn("set_uv", L_UiSetUv);
     set_fn("set_nine_slice", L_UiSetNineSlice);
+    // UIAnchorComponent
+    set_fn("add_anchor", L_UiAddAnchor);
+    set_fn("set_anchor_type", L_UiSetAnchorType);
+    set_fn("set_anchor_offset", L_UiSetAnchorOffset);
+    // UIGridLayoutComponent
+    set_fn("add_grid_layout", L_UiAddGridLayout);
+    set_fn("set_grid_layout", L_UiSetGridLayout);
+    // UICanvasScalerComponent
+    set_fn("add_canvas_scaler", L_UiAddCanvasScaler);
+    set_fn("set_canvas_scaler", L_UiSetCanvasScaler);
+    // UIAnimationComponent
+    set_fn("add_ui_animation", L_UiAddAnimation);
+    set_fn("animate_position", L_UiAnimatePosition);
+    set_fn("animate_scale", L_UiAnimateScale);
+    set_fn("animate_alpha", L_UiAnimateAlpha);
+    set_fn("animate_color", L_UiAnimateColor);
+    set_fn("stop_ui_animation", L_UiStopAnimation);
 }
 
 }
