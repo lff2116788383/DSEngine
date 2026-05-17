@@ -13,6 +13,7 @@ class RenderGraph;
 } // namespace dse
 
 class CommandBuffer;
+class World;
 
 namespace dse {
 namespace render {
@@ -24,6 +25,8 @@ namespace render {
  * 每个实现类负责：
  * 1. Setup() — 在 RenderGraph 上声明资源依赖
  * 2. Execute() — 录制渲染命令到 CommandBuffer
+ * 3. WarmUpECS() — (可选) 声明 Execute 中访问的 ECS 组件类型，
+ *    由主线程在并行执行前调用，确保 EnTT 组件池已分配。
  */
 class IRenderPass {
 public:
@@ -37,6 +40,11 @@ public:
 
     /// Pass 名称（用于调试和日志）
     virtual const char* GetName() const = 0;
+
+    /// 预热 ECS 组件池（主线程调用，并行执行前）。
+    /// 实现中应对所有 Execute() 内 registry.view<T>() 用到的 T 调用一次 view。
+    /// 默认空实现 — 不访问 ECS 的 Pass 无需重写。
+    virtual void WarmUpECS(World& /*world*/) {}
 };
 
 } // namespace render

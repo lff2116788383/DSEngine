@@ -23,6 +23,7 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/components_3d_fluid.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
@@ -1305,30 +1306,66 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
 }
 
+/// 预热 builtin Pass 在 Execute() 中用到的所有 ECS 组件池。
+/// 新增 Pass 若使用新组件类型，必须在此处补充对应 view 调用。
+/// Debug 模式下 ExecuteRenderGraphInternal 会在并行执行后断言池数量未增长，
+/// 以检测遗漏的组件类型。
+static void WarmUpRenderECSPools(entt::registry& reg) {
+    // --- builtin Pass 直接使用 ---
+    (void)reg.view<TransformComponent>();
+    (void)reg.view<CameraComponent>();
+    (void)reg.view<dse::Camera3DComponent>();
+    (void)reg.view<dse::DirectionalLight3DComponent>();
+    (void)reg.view<TransformComponent, dse::SpotLightComponent>();
+    (void)reg.view<TransformComponent, dse::PointLightComponent>();
+    (void)reg.view<dse::PostProcessComponent>();
+    (void)reg.view<dse::SkyboxComponent>();
+    (void)reg.view<dse::DecalComponent, TransformComponent>();
+    (void)reg.view<dse::WaterComponent>();
+    // --- 模块渲染回调 (OnRenderScene / OnRenderTransparent) 间接使用 ---
+    (void)reg.view<TransformComponent, dse::MeshRendererComponent>();
+    (void)reg.view<dse::SkyLightComponent>();
+    (void)reg.view<dse::TerrainComponent, TransformComponent>();
+    (void)reg.view<dse::GrassComponent, TransformComponent>();
+    (void)reg.view<dse::HairComponent, TransformComponent>();
+    (void)reg.view<dse::ParticleSystem3DComponent>();
+    (void)reg.view<dse::FluidEmitterComponent>();
+    (void)reg.view<dse::GIProbeVolumeComponent>();
+}
+
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
     // 主线程预热所有 builtin Pass 中用到的 ECS 组件池。
-    // EnTT registry.view<T>() 内部调用 assure<T>()，首次访问某类型时会
-    // 触发 pools_ vector 重新分配。预热确保所有池已分配，后续 view 调用
-    // 变为纯只读，可安全在工作线程并行执行。
+    // EnTT registry.view<T>() 首次调用 assure<T>() 会触发 pools_ 重新分配，
+    // 预热确保后续 view 调用为纯只读，可安全并行执行。
     if (runtime_context_.world) {
         auto& reg = runtime_context_.world->registry();
-        (void)reg.view<TransformComponent>();
-        (void)reg.view<CameraComponent>();
-        (void)reg.view<dse::Camera3DComponent>();
-        (void)reg.view<dse::DirectionalLight3DComponent>();
-        (void)reg.view<TransformComponent, dse::SpotLightComponent>();
-        (void)reg.view<TransformComponent, dse::PointLightComponent>();
-        (void)reg.view<dse::PostProcessComponent>();
-        (void)reg.view<dse::SkyboxComponent>();
-        (void)reg.view<dse::DecalComponent, TransformComponent>();
-        (void)reg.view<dse::WaterComponent>();
-    }
+        WarmUpRenderECSPools(reg);
 
-    // OpenGL 后端：使用波次并行执行（同一波次内无依赖的 Pass 并行录制）
-    auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
-    auto* js = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
-    if (gl_cmd && js) {
-        render_graph_dag_.ExecuteParallel(*gl_cmd, *js);
+#ifndef NDEBUG
+        // Debug 守卫：记录预热后的池数量
+        size_t pool_count_before = 0;
+        for (auto&& [id, pool] : reg.storage()) { (void)pool; ++pool_count_before; }
+#endif
+
+        // OpenGL 后端：使用波次并行执行（同一波次内无依赖的 Pass 并行录制）
+        auto* gl_cmd = dynamic_cast<OpenGLCommandBuffer*>(&cmd_buffer);
+        auto* js = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
+        if (gl_cmd && js) {
+            render_graph_dag_.ExecuteParallel(*gl_cmd, *js);
+        } else {
+            render_graph_dag_.Execute(cmd_buffer);
+        }
+
+#ifndef NDEBUG
+        // 断言：并行执行期间不应有新组件池被 assure() 创建
+        size_t pool_count_after = 0;
+        for (auto&& [id, pool] : reg.storage()) { (void)pool; ++pool_count_after; }
+        if (pool_count_after != pool_count_before) {
+            DEBUG_LOG_ERROR("RenderGraph 并行执行期间新增了 {} 个 ECS 组件池！"
+                           "请在 WarmUpRenderECSPools() 中补充对应 view 调用。",
+                           pool_count_after - pool_count_before);
+        }
+#endif
     } else {
         render_graph_dag_.Execute(cmd_buffer);
     }

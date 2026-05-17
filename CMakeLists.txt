@@ -420,9 +420,20 @@ endif()
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # Release 构建启用 LTCG（Link-Time Code Generation）以优化跨 TU 内联
-    set_property(TARGET dse_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-    set_property(TARGET dse_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
+    # 注意：LTCG (/GL) 与 WINDOWS_EXPORT_ALL_SYMBOLS 不兼容。
+    # cmake -E __create_def 无法读取 /GL 产出的 .obj 文件（无标准 COFF 符号表）。
+    # 因此不启用 INTERPROCEDURAL_OPTIMIZATION，Release 依赖 /O2 + Unity Build 即可。
+
+    # Workaround: CMake 4.3 VS generator 在非 Debug 配置下可能不生成 objects.txt，
+    # 导致 WINDOWS_EXPORT_ALL_SYMBOLS 的 __create_def PreLinkEvent 失败。
+    # 此自定义 PRE_LINK 命令在 __create_def 之前运行，确保 objects.txt 存在。
+    add_custom_command(TARGET dse_engine PRE_LINK
+        COMMAND ${CMAKE_COMMAND}
+            -DOBJ_DIR=${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>
+            -P ${CMAKE_SOURCE_DIR}/cmake/write_objects_txt.cmake
+        COMMENT "Generating objects.txt for WINDOWS_EXPORT_ALL_SYMBOLS"
+        VERBATIM
+    )
 else()
     add_definitions(-D _DEBUG)
 endif ()

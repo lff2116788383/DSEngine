@@ -16,6 +16,8 @@
 #ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
 #endif
 #include <iostream>
 #include <thread>
@@ -483,6 +485,11 @@ int EngineInstance::Run() {
         return -1;
     }
 
+#ifdef _WIN32
+    // 提升 Windows 定时器分辨率至 1ms（默认 ~15ms），改善 sleep 精度
+    timeBeginPeriod(1);
+#endif
+
     int max_frames = 0;
     if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
         max_frames = (std::max)(0, std::atoi(env_max_frames));
@@ -505,10 +512,15 @@ int EngineInstance::Run() {
         }
         if (target_fps_ > 0.0f) {
             const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
-            const double elapsed = glfwGetTime() - frame_start;
-            if (elapsed < target_frame_time) {
-                const auto sleep_us = static_cast<int>((target_frame_time - elapsed) * 1e6);
-                std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
+            double remaining = target_frame_time - (glfwGetTime() - frame_start);
+            // sleep 大部分等待时间（保留 1.5ms 给 spin-wait 以补偿 OS 调度抖动）
+            if (remaining > 0.0015) {
+                std::this_thread::sleep_for(
+                    std::chrono::microseconds(static_cast<int>((remaining - 0.0015) * 1e6)));
+            }
+            // spin-wait 精确到目标时刻
+            while ((glfwGetTime() - frame_start) < target_frame_time) {
+                // busy wait
             }
         }
         frame_counter += 1;
@@ -518,8 +530,11 @@ int EngineInstance::Run() {
         }
     }
 
-    const bool screenshot_ok = CaptureRuntimeScreenshot(*pipeline_);
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
 
+    const bool screenshot_ok = CaptureRuntimeScreenshot(*pipeline_);
 
     Shutdown();
     return screenshot_ok ? 0 : -2;
