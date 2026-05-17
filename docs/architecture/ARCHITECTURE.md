@@ -389,3 +389,147 @@
 
 **DSEngine 的核心竞争力不在功能多少，而在于"底子好"。** 
 架构现代化意味着**后续补功能不会遇到架构瓶颈**——事实证明，延迟渲染、TAA、Contact Shadow 等关键功能都能顺利地在现有 DAG RenderGraph + 三后端 RHI 架构上实现。这一点上，DSEngine 已经比很多 indie 引擎走得远得多了。
+
+---
+
+## 九、跨平台与 RHI 深度评估
+
+> 更新日期: 2026-05-18
+
+### 9.1 RHI 抽象层详细分析
+
+**核心接口**：纯虚基类 `RhiDevice`（`engine/render/rhi/rhi_device.h`，~522 行）
+
+| 能力域 | 接口覆盖 | 说明 |
+|--------|---------|------|
+| 资源管理 | RenderTarget / Texture2D/3D/Cube / Buffer / VAO / PipelineState / SSBO | ✅ 完备 |
+| 命令录制 | `CommandBuffer` 抽象基类 → 三端各自实现 | ✅ |
+| Compute | CreateComputeShader / DispatchCompute / BeginComputePass / EndComputePass / MemoryBarrier | ✅ |
+| 后处理 | 统一 `DrawPostProcess(source, effect_name, params)` | ✅ 效果名驱动 |
+| 后端差异抹平 | `NeedsTextureYFlip()` / `NeedsReadbackYFlip()` / `GetProjectionCorrection()` / `GetShadowSampleCorrection()` | ✅ 细节到位 |
+| Hi-Z 遮挡剔除 | CreateHiZTexture / SetComputeTextureImageMip | ✅ |
+
+**三后端架构一致性**：每个后端（OpenGL / DX11 / Vulkan）拆分为 5 个子系统：
+- **ResourceManager** — GPU 资源生命周期
+- **PipelineStateManager** — 渲染状态缓存与应用
+- **ShaderManager** — 着色器编译/链接/反射
+- **DrawExecutor** — 绘制命令执行
+- **UBOManager** — Uniform/Constant Buffer 管理
+
+**工厂模式切换**：`rhi_factory.cpp` 通过 `RhiBackend` 枚举 + 条件编译 + 环境变量 `DSE_RHI_BACKEND` 选择后端，支持运行时指定。
+
+**已知不足**：
+- **Shader 三端手工维护**：OpenGL shader 内嵌在 `gl_draw_executor.cpp`（148KB），DX11 在 `dx11_shader_sources.h`，Vulkan 在 `vulkan_shader_sources.h`。三端着色器逻辑需人工保持同步，是目前最大的维护负担（bloom_extract 修复就是此问题的典型案例）
+- **CommandBuffer 语义差异**：OpenGL 端是完全录制+排序回放，DX11/Vulkan 端是即时执行，导致部分时序假设不通用
+- **GPU Driven / Indirect Draw**：在 DX11/Vulkan 后端覆盖不完整
+
+### 9.2 跨平台现状
+
+| 维度 | 现状 | 评估 |
+|------|------|------|
+| 窗口系统 | GLFW（跨平台） | ✅ Linux/macOS/Windows |
+| OpenGL 后端 | OpenGL 4.3（GLFW + GLAD） | ✅ 全平台可用 |
+| Vulkan 后端 | 可选，`DSE_ENABLE_VULKAN` | ✅ Windows/Linux |
+| D3D11 后端 | Windows 自动启用，`DSE_ENABLE_D3D11` | ⚠️ 仅 Windows |
+| 构建系统 | CMake + VS2022 | ✅ CMake 本身跨平台 |
+| 构建脚本 | 全部 `.bat`（`build_all.bat` / `verify_all.bat`） | ❌ 仅 Windows |
+| CI/CD | 无 | ❌ |
+| 文件系统 | `std::filesystem`，未做平台抽象 | 🟡 基本可跨平台 |
+| Metal 后端 | 无 | ❌ macOS/iOS 需要 |
+| 移动端 | 无 Android/iOS 支持 | ❌ |
+
+**移植到 Linux 的成本**（预估 1-2 周）：
+1. 补 shell 构建脚本（替代 `.bat`）
+2. 处理 `__declspec(dllexport)` → `__attribute__((visibility("default")))` 等平台宏
+3. 验证 OpenGL/Vulkan 后端在 Linux 的正确性
+4. 路径分隔符和文件权限适配
+
+**移植到 macOS 的成本**（预估 1-2 月）：
+- 需新增 Metal 后端（`RhiDevice` 子类 + 5 个子系统 + 着色器翻译）
+
+---
+
+## 十、脚本语言扩展性评估
+
+### 10.1 当前架构
+
+**双宿主设计**：
+
+| 宿主 | 入口 | BusinessMode |
+|------|------|-------------|
+| Lua 宿主 | `apps/runtime/lua_host/main.cpp` | `BusinessMode::Lua` |
+| C++ 宿主 | `apps/runtime/cpp_host/main.cpp` | `BusinessMode::Cpp` |
+
+引擎通过 `EngineRunConfig.business_mode` 分发，`EngineInstance` 内部按模式初始化不同脚本运行时。脚本层与引擎核心完全解耦。
+
+### 10.2 Lua 绑定模块一览
+
+注册入口：`lua_binding_registry.cpp` → `RegisterPhase1LuaApi()`
+
+| 全局表 | 子域 | 绑定文件 |
+|--------|------|---------|
+| `dse.ecs` | Core / Transform / Rendering / Physics2D / Physics3D / Animation / Particles / Gameplay3D | 8 个 `lua_binding_ecs_*.cpp` |
+| `dse.audio` | 音频系统 | `lua_binding_audio.cpp` |
+| `dse.spine` | Spine 动画 | `lua_binding_spine.cpp` |
+| `dse.ui` | UI 系统 | `lua_binding_ui.cpp` |
+| `dse.assets` | 资产管理 | `lua_binding_context.cpp` |
+| `dse.app` | 应用控制 | `lua_binding_context.cpp` |
+| `dse.metrics` | 性能指标 | `lua_binding_context.cpp` |
+| `dssl.*` | DSSL 材质系统 | `lua_binding_dssl.cpp` |
+| `nav.*` | 导航网格（条件编译） | `lua_binding_navigation.cpp` |
+| `streaming.*` | 资源流式加载 | `lua_binding_streaming.cpp` |
+
+共 **16 个绑定模块**，全部手写 C API，无自动生成。
+
+### 10.3 C++ 宿主
+
+`GameApplication` 基类（`engine/scripting/cpp/game_application.h`）：
+- 虚方法 `OnInit()` / `OnUpdate(dt)` / `OnShutdown()`
+- 便捷工厂：`CreateCamera3D()` / `CreateDirectionalLight()` / `CreateMesh()` 等
+- 直接访问 ECS `World` + `AssetManager`
+
+### 10.4 新增脚本语言的成本分析
+
+| 语言 | 嵌入运行时 | 绑定层 | 总成本 | 备注 |
+|------|-----------|--------|--------|------|
+| **C#** | CoreCLR/hostfxr (~1周) | C API 导出 + P/Invoke/自动生成 (~2-3周) | **3-6 周** | GC 暂停需调优；runtime 体积 +30-50MB |
+| **Python** | CPython 嵌入 (~0.5周) | pybind11 自动绑定 (~1-2周) | **2-3 周** | 性能较差，适合工具链/编辑器脚本 |
+| **JavaScript** | V8/QuickJS (~1周) | C API 桥接 (~2周) | **3-4 周** | V8 重但性能好；QuickJS 轻但慢 |
+| **Wren/Squirrel** | 轻量嵌入 (~0.5周) | 手写绑定 (~1-2周) | **1-2 周** | 生态小，学习曲线高 |
+
+**C# 详细方案**：
+
+```
+新增 BusinessMode::CSharp
+    ↓
+engine_app.cpp 添加分支：
+    case BusinessMode::CSharp → BootstrapCSharpRuntime()
+    ↓
+嵌入 .NET 8+ CoreCLR (hostfxr API)：
+    hostfxr_initialize → load_assembly → 调用 C# 入口
+    ↓
+绑定层（最大工作量，占 60%）：
+    方案 A: 手写 extern "C" 导出 + C# P/Invoke     → 高工作量，高维护
+    方案 B: libclang 解析头文件 → 自动生成 C API    → 中等前期，低维护（推荐）
+    方案 C: NativeAOT + UnmanagedCallersOnly        → .NET 8 原生方案
+    ↓
+C# 类库：
+    engine/scripting/csharp/
+    ├── DSEngine.Runtime.csproj
+    ├── NativeBindings.cs    // 自动生成
+    ├── Entity.cs / World.cs
+    └── GameApplication.cs   // 对标 C++ 基类
+```
+
+**架构上的有利因素**：
+- ✅ `EngineInstance` 通过 `BusinessMode` 分发，不与 Lua 硬耦合
+- ✅ 服务通过 `ServiceLocator` 获取，C# 侧拿同一套服务指针即可
+- ✅ ECS 基于 entt，可通过 entity ID 跨语言传递
+- ✅ 已有 C++ 宿主先例，C# 本质是同一模式
+
+**主要风险**：
+- GC 与引擎帧同步（CoreCLR GC 暂停可能导致帧率抖动）
+- 分发包体积增加 30-50MB（.NET runtime）
+- 调试体验需额外工具链
+
+**最小可用 demo**（仅 ECS + Transform + Rendering 子集绑定）约 **2 周**可跑通。
