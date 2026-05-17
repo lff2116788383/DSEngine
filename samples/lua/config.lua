@@ -2,15 +2,6 @@ Config={}
 Config.title="DSEngine"
 Config.data_path="data/"
 Config.game_entry="3d_fracture"
-Config.phase1_2d={
-    total_boxes=1024,
-    spawn_per_frame=64,
-    columns=64,
-    spacing=0.55,
-    start_y=2.0,
-    box_scale=0.45,
-    camera_ortho_size=12.0
-}
 Config.phase1_2d_showcase={
     camera_ortho_size=7.5
 }
@@ -120,33 +111,6 @@ Config.demo_3d_terrain_lod_zones={
     depth=10.0,
     max_height=3.0
 }
-Config.demo_3d_vse15_22_scene={
-    camera_distance=7.0,
-    camera_height=4.2,
-    camera_pitch=-33.0,
-    camera_speed=6.2,
-    monster_scale=0.180,
-    mesh_path="vse_demo/15_22/cooked/OceanPlane.dmesh",
-    material_path="vse_demo/15_22/cooked/OceanPlane.dmat",
-    character_mesh_path="vse_demo/15_22/cooked/Monster.dmesh",
-    character_material_path="vse_demo/15_22/cooked/Monster.dmat",
-    danim_path="vse_demo/15_22/cooked/Monster.danim",
-    dskel_path="vse_demo/15_22/cooked/Monster.dskel",
-    idle_danim_path="vse_demo/15_22/cooked/Monster.danim",
-    walk_danim_path="vse_demo/15_22/cooked/Walk.danim",
-    attack_danim_path="vse_demo/15_22/cooked/Attack.danim",
-    attack2_danim_path="vse_demo/15_22/cooked/Attack2.danim",
-    pos_danim_path="vse_demo/15_22/cooked/Monster.danim",
-    additive_danim_path="vse_demo/15_22/cooked/Monster.danim",
-    move_speed=2.7,
-    steering_force=10.0,
-    sky_intensity=1.05,
-    shadow_strength=0.36,
-    ocean_clip_safe=false,
-    ocean_clip_safe_z_min=-17.5,
-    ocean_clip_safe_z_max=12.0
-}
-
 Config.demo_3d_character_controller={
     camera_distance=8.0,
     camera_speed=4.0,
@@ -225,20 +189,5 @@ Config.demo_3d_rope={
 }
 Config.demo_3d_buoyancy={
     camera_distance=16.0
-}
-Config.phase2_3d={
-    note="legacy_phase2_3d_mvp"
-}
-Config.frog_jump={
-    camera_ortho_size=7.0
-}
-Config.vse_demo_15_7={
-    title="DSEngine Lua Demo 15.7"
-}
-Config.vse_demo_15_8={
-    title="DSEngine Lua Demo 15.8"
-}
-Config.vse_demo_15_9={
-    title="DSEngine Lua Demo 15.9"
 }
 return Config

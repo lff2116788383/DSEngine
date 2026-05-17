@@ -21,15 +21,8 @@ local primitives_3d = {triangle = true, square = true, cube = true}
 
 -- 顶层 demo（非 3d/ 子目录，module path 和 config key 不规则）
 local toplevel_demos = {
-    phase1_2d_mvp              = {module = "phase1_2d_mvp",             cfg = "phase1_2d"},
     phase1_2d_showcase         = {module = "phase1_2d_showcase",        cfg = "phase1_2d_showcase"},
     phase1_2d_physics_showcase = {module = "phase1_2d_physics_showcase", cfg = "phase1_2d_physics_showcase"},
-    phase1_2d_stress           = {module = "phase1_2d_stress",          cfg = "phase1_2d"},
-    phase2_3d_mvp              = {module = "phase2_3d_mvp",             cfg = "phase2_3d"},
-    frog_jump                  = {module = "frog_jump",                 cfg = "frog_jump"},
-    vse_demo_15_7              = {module = "vse_demo.demo15_7",         cfg = "vse_demo_15_7"},
-    vse_demo_15_8              = {module = "vse_demo.demo15_8",         cfg = "vse_demo_15_8"},
-    vse_demo_15_9              = {module = "vse_demo.demo15_9",         cfg = "vse_demo_15_9"},
 }
 
 -- 约定式解析
@@ -50,9 +43,9 @@ elseif game_entry:sub(1, 3) == "3d_" then
         runtime_config = Config["demo_" .. game_entry] or Config.basic_3d or {}
     end
 else
-    print("[main] 未知 demo: " .. game_entry .. ", fallback to phase2_3d_mvp")
-    RuntimeEntry = require("phase2_3d_mvp")
-    runtime_config = Config.phase2_3d or {}
+    print("[main] 未知 demo: " .. game_entry .. ", fallback to phase1_2d_physics_showcase")
+    RuntimeEntry = require("phase1_2d_physics_showcase")
+    runtime_config = Config.phase1_2d_physics_showcase or {}
 end
 
 print("[main] 加载 demo: " .. game_entry)
