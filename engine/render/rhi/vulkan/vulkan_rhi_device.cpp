@@ -295,7 +295,9 @@ RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
 
     int width = rt->width;
     int height = rt->height;
-    size_t data_size = width * height * 4;
+    const bool is_hdr = (rt->color_texture.format == VK_FORMAT_R16G16B16A16_SFLOAT);
+    const size_t bytes_per_pixel = is_hdr ? 8 : 4;
+    size_t data_size = width * height * bytes_per_pixel;
 
     // 创建回读缓冲区
     VkBuffer readback_buffer = VK_NULL_HANDLE;
@@ -391,11 +393,42 @@ RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     RenderTargetReadback result;
     result.width = width;
     result.height = height;
-    result.pixels.resize(data_size);
+    result.pixels.resize(width * height * 4);
 
     void* mapped = nullptr;
     if (vkMapMemory(device, readback_memory, 0, data_size, 0, &mapped) == VK_SUCCESS) {
-        memcpy(result.pixels.data(), mapped, data_size);
+        if (is_hdr) {
+            // R16G16B16A16_SFLOAT → RGBA8: half-float → clamp [0,1] → uint8
+            const auto half_to_float = [](uint16_t h) -> float {
+                uint32_t sign = static_cast<uint32_t>(h >> 15) << 31;
+                uint32_t exponent = (h >> 10) & 0x1Fu;
+                uint32_t mantissa = h & 0x3FFu;
+                uint32_t f;
+                if (exponent == 0) {
+                    if (mantissa == 0) { f = sign; }
+                    else {
+                        exponent = 1;
+                        while (!(mantissa & 0x400u)) { mantissa <<= 1; exponent--; }
+                        mantissa &= 0x3FFu;
+                        f = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+                    }
+                } else if (exponent == 31) {
+                    f = sign | 0x7F800000u | (mantissa << 13);
+                } else {
+                    f = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+                }
+                float r; memcpy(&r, &f, 4); return r;
+            };
+            const uint16_t* src = static_cast<const uint16_t*>(mapped);
+            unsigned char* dst = result.pixels.data();
+            for (int i = 0; i < width * height * 4; ++i) {
+                float v = half_to_float(src[i]);
+                v = (std::max)(0.0f, (std::min)(1.0f, v));
+                dst[i] = static_cast<unsigned char>(v * 255.0f + 0.5f);
+            }
+        } else {
+            memcpy(result.pixels.data(), mapped, data_size);
+        }
         vkUnmapMemory(device, readback_memory);
     }
 

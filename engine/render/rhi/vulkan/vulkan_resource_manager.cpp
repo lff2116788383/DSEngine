@@ -894,7 +894,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     rt.is_msaa = use_msaa;
     rt.msaa_samples = use_msaa ? 4 : 1;
 
-    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+    const VkFormat color_format = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     // ---- 颜色附件 ----
     if (has_color) {
