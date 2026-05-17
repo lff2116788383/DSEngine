@@ -28,6 +28,11 @@ struct RuntimeContext {
     void* native_window_handle = nullptr;
     /// 音频系统指针（避免头文件依赖，实际为 dse::gameplay2d::AudioSystem*）
     void* audio_system = nullptr;
+    /// 退出应用回调（由 EngineInstance 注入）
+    std::function<void()> quit_app;
+    /// 设置/获取目标帧率回调
+    std::function<void(float)> set_target_fps;
+    std::function<float()> get_target_fps;
 };
 
 } // namespace dse::runtime

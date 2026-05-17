@@ -147,6 +147,9 @@ public:
      */
     void SetBusinessMode(BusinessMode mode);
 
+    void SetQuitCallback(std::function<void()> cb);
+    void SetTargetFpsCallbacks(std::function<void(float)> setter, std::function<float()> getter);
+
     /**
      * @brief 注入全局资产管理器实例
      * @param asset_manager 资产管理器指针

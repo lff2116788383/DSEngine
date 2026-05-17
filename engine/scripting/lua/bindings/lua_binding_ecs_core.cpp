@@ -76,6 +76,16 @@ int L_EcsLoadSubScene(lua_State* L) {
     return 2;
 }
 
+int L_EcsDestroyEntity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    if (world->registry().valid(e)) {
+        world->DestroyEntity(e);
+    }
+    return 0;
+}
+
 int L_EcsFindEntitiesByMeshPath(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -103,6 +113,7 @@ void RegisterEcsCoreBindings(lua_State* L) {
     using namespace helper;
     RegisterBindings(L, {
         {"create_entity",              L_EcsCreateEntity},
+        {"destroy_entity",             L_EcsDestroyEntity},
         {"load_scene",                 L_EcsLoadScene},
         {"load_sub_scene",             L_EcsLoadSubScene},
         {"find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath},

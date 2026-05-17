@@ -16,7 +16,10 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
             stats_bindings.get_max_batch_sprites,
             stats_bindings.get_sprite_count,
             context.asset_manager,
-            context.audio_system
+            context.audio_system,
+            context.quit_app,
+            context.set_target_fps,
+            context.get_target_fps
         });
         return BootstrapLuaRuntime();
 #else

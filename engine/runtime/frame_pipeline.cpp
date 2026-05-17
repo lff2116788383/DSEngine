@@ -1405,6 +1405,15 @@ void FramePipeline::SetBusinessMode(BusinessMode mode) {
     runtime_context_.business_mode = mode;
 }
 
+void FramePipeline::SetQuitCallback(std::function<void()> cb) {
+    runtime_context_.quit_app = std::move(cb);
+}
+
+void FramePipeline::SetTargetFpsCallbacks(std::function<void(float)> setter, std::function<float()> getter) {
+    runtime_context_.set_target_fps = std::move(setter);
+    runtime_context_.get_target_fps = std::move(getter);
+}
+
 void FramePipeline::SetEditorCamera(const glm::mat4& view, const glm::mat4& projection) {
     render_pass_context_.use_editor_camera = true;
     render_pass_context_.editor_view = view;

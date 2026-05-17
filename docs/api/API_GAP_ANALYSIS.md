@@ -35,12 +35,12 @@
 | 幻影函数 | 备注 |
 |----------|------|
 | `app.set_window_icon(tex_handle)` | |
-| `app.set_target_fps(fps)` | |
-| `app.quit()` | |
-| `app.get_mouse_middle()` | |
-| `app.get_mouse_middle_down()` | |
-| `app.get_mouse_scroll_dx()` | |
-| `app.get_mouse_scroll_dy()` | |
+| ~~`app.set_target_fps(fps)`~~ | ✅ 已实现 |
+| ~~`app.quit()`~~ | ✅ 已实现 |
+| ~~`app.get_mouse_middle()`~~ | ✅ 已实现 |
+| ~~`app.get_mouse_middle_down()`~~ | ✅ 已实现 |
+| ~~`app.get_mouse_scroll_dx()`~~ | ✅ 已实现 |
+| ~~`app.get_mouse_scroll_dy()`~~ | ✅ 已实现 |
 
 ### 1.3 dse.assets
 
@@ -57,14 +57,14 @@
 
 | 幻影函数 |
 |----------|
-| `metrics.get_fps()` |
-| `metrics.get_frame_time_ms()` |
+| ~~`metrics.get_fps()`~~ | ✅ 已实现 |
+| ~~`metrics.get_frame_time_ms()`~~ | ✅ 已实现 |
 
 ### 1.5 dse.ecs
 
 | 幻影函数 | 所属域 |
 |----------|--------|
-| `ecs.destroy_entity(e)` | Core |
+| ~~`ecs.destroy_entity(e)`~~ | Core ✅ 已实现 |
 | `ecs.find_entities_by_name(name)` | Core |
 | `ecs.set_sprite_size(e, w, h)` | Sprite |
 | `ecs.set_sprite_color(e, r, g, b, a)` | Sprite |

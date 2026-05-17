@@ -99,6 +99,7 @@ private:
     std::unique_ptr<FramePipeline> pipeline_;
     float accumulator_ = 0.0f;
     float fixed_time_step_ = 0.02f;
+    float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
     bool is_initialized_ = false;
     /// 保存 GLFW 窗口指针（D3D11 后端无 GL 上下文，不能用 glfwGetCurrentContext 获取）
     void* glfw_window_ = nullptr;

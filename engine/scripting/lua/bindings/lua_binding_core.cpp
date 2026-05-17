@@ -176,6 +176,51 @@ int L_AppGetScreenHeight(lua_State* L) {
     return 1;
 }
 
+int L_AppQuit(lua_State* L) {
+    const auto& fn = GetBindingContext().quit_app;
+    if (fn) fn();
+    return 0;
+}
+
+int L_AppSetTargetFps(lua_State* L) {
+    float fps = static_cast<float>(luaL_checknumber(L, 1));
+    const auto& fn = GetBindingContext().set_target_fps;
+    if (fn) fn(fps);
+    return 0;
+}
+
+int L_AppGetMouseMiddle(lua_State* L) {
+    lua_pushboolean(L, Input::GetMouseButton(MOUSE_BUTTON_MIDDLE));
+    return 1;
+}
+
+int L_AppGetMouseMiddleDown(lua_State* L) {
+    lua_pushboolean(L, Input::GetMouseButtonDown(MOUSE_BUTTON_MIDDLE));
+    return 1;
+}
+
+int L_AppGetMouseScrollDx(lua_State* L) {
+    lua_pushnumber(L, 0.0);  // GLFW only reports vertical scroll
+    return 1;
+}
+
+int L_AppGetMouseScrollDy(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Input::mouseScroll()));
+    return 1;
+}
+
+int L_MetricsGetFps(lua_State* L) {
+    float dt = Time::delta_time();
+    float fps = (dt > 0.0f) ? (1.0f / dt) : 0.0f;
+    lua_pushnumber(L, static_cast<lua_Number>(fps));
+    return 1;
+}
+
+int L_MetricsGetFrameTimeMs(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Time::delta_time() * 1000.0f));
+    return 1;
+}
+
 int L_MetricsGetDrawCalls(lua_State* L) {
     const auto& fn = GetBindingContext().get_draw_calls;
     lua_pushinteger(L, fn ? fn() : 0);
@@ -232,6 +277,12 @@ void RegisterAppBindings(lua_State* L) {
     set_fn("time_since_startup", L_AppGetTimeSinceStartup);
     set_fn("get_screen_width", L_AppGetScreenWidth);
     set_fn("get_screen_height", L_AppGetScreenHeight);
+    set_fn("quit", L_AppQuit);
+    set_fn("set_target_fps", L_AppSetTargetFps);
+    set_fn("get_mouse_middle", L_AppGetMouseMiddle);
+    set_fn("get_mouse_middle_down", L_AppGetMouseMiddleDown);
+    set_fn("get_mouse_scroll_dx", L_AppGetMouseScrollDx);
+    set_fn("get_mouse_scroll_dy", L_AppGetMouseScrollDy);
 }
 
 void RegisterMetricsBindings(lua_State* L) {
@@ -243,6 +294,8 @@ void RegisterMetricsBindings(lua_State* L) {
     set_fn("get_draw_calls", L_MetricsGetDrawCalls);
     set_fn("get_max_batch_sprites", L_MetricsGetMaxBatchSprites);
     set_fn("get_sprite_count", L_MetricsGetSpriteCount);
+    set_fn("get_fps", L_MetricsGetFps);
+    set_fn("get_frame_time_ms", L_MetricsGetFrameTimeMs);
 }
 
 }

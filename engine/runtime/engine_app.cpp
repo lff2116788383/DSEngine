@@ -18,6 +18,7 @@
 #include <GLFW/glfw3native.h>
 #endif
 #include <iostream>
+#include <thread>
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/core/service_locator.h"
@@ -356,6 +357,15 @@ bool EngineInstance::Init() {
         services_.asset_manager->SetJobSystem(services_.job_system);
     }
     pipeline_->SetBusinessMode(config_.business_mode);
+    if (current_window) {
+        pipeline_->SetQuitCallback([current_window]() {
+            glfwSetWindowShouldClose(current_window, GLFW_TRUE);
+        });
+    }
+    pipeline_->SetTargetFpsCallbacks(
+        [this](float fps) { target_fps_ = fps; },
+        [this]() { return target_fps_; }
+    );
     
 #ifdef DSE_ENABLE_LUA
     if (config_.business_mode == BusinessMode::Lua && !config_.startup_lua_script_path.empty()) {
@@ -479,6 +489,7 @@ int EngineInstance::Run() {
     }
     int frame_counter = 0;
     while (!glfwWindowShouldClose(window)) {
+        const double frame_start = glfwGetTime();
         glfwPollEvents();
 
         int width = 0;
@@ -491,6 +502,14 @@ int EngineInstance::Run() {
         // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 glfwSwapBuffers
         if (glfwGetCurrentContext() != nullptr) {
             glfwSwapBuffers(window);
+        }
+        if (target_fps_ > 0.0f) {
+            const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
+            const double elapsed = glfwGetTime() - frame_start;
+            if (elapsed < target_frame_time) {
+                const auto sleep_us = static_cast<int>((target_frame_time - elapsed) * 1e6);
+                std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
+            }
         }
         frame_counter += 1;
         if (max_frames > 0 && frame_counter >= max_frames) {
