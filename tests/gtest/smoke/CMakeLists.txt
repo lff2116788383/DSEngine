@@ -3,8 +3,11 @@ set(DSE_GTEST_SMOKE_TARGET dse_gtest_smoke_tests)
 add_executable(${DSE_GTEST_SMOKE_TARGET}
     engine_core_services_smoke_test.cpp
     lua_host_smoke_test.cpp
+    lua_lifecycle_smoke_test.cpp
     runtime_lifecycle_smoke_test.cpp
     vulkan_rhi_smoke_test.cpp
+    dx11_rhi_smoke_test.cpp
+    physics3d_smoke_test.cpp
 )
 
 target_include_directories(${DSE_GTEST_SMOKE_TARGET}
@@ -50,8 +53,9 @@ if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)
     endif()
 endif()
 
-# PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
+# PhysX smoke 测试依赖（include + DLL 复制）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    target_include_directories(${DSE_GTEST_SMOKE_TARGET} PRIVATE ${PHYSX_INCLUDE_DIR} ${PXSHARED_INCLUDE_DIR})
     add_custom_command(TARGET ${DSE_GTEST_SMOKE_TARGET} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<$<CONFIG:Debug>:${PHYSX_DLLS_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${PHYSX_DLLS_RELEASE}>"

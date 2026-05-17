@@ -48,6 +48,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     modules/fluid_system_integration_test.cpp
     # editor (headless functional tests)
     editor/editor_functional_test.cpp
+    editor/editor_selection_integration_test.cpp
     editor/editor_test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_snapshot.cpp

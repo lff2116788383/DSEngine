@@ -13,6 +13,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/core/service_locator_test.cpp
     engine/core/job_system_test.cpp
     engine/core/job_system_stress_test.cpp
+    engine/core/performance_baseline_test.cpp
     engine/core/math_pool_test.cpp
     engine/core/dynamic_library_test.cpp
     engine/core/module_test.cpp

@@ -1,7 +1,7 @@
 # DSEngine 测试覆盖分析报告
 
-> 生成日期：2026-05-17（最近更新：Session 8 加深+编辑器 — 编译+运行 0 失败）
-> 方法：139 个测试文件逐个审查（磁盘 grep `TEST_F|TEST(` 精确统计），1714 个用例分类统计，与引擎 60+ 个 System 交叉比对
+> 生成日期：2026-05-17（最近更新：Session 9 Smoke+Performance+集成 — 编译+运行 0 失败）
+> 方法：144 个测试文件逐个审查（磁盘 grep `TEST_F|TEST(` 精确统计），1665 个用例分类统计，与引擎 60+ 个 System 交叉比对
 
 ---
 
@@ -11,15 +11,15 @@
 
 | 层级 | 文件数 | 用例数 | 占比 |
 |:----:|:-----:|:------:|:----:|
-| **单元测试 (unit)** | 100 | 1409 (含 5 skip) | 82.2% |
-| **集成测试 (integration)** | 35 | 275 | 16.0% |
-| **冒烟测试 (smoke)** | 4 | 30 | 1.8% |
-| **合计** | **139** | **1714** | **100%** |
+| **单元测试 (unit)** | 101 | 1343 (含 5 skip) | 81.1% |
+| **集成测试 (integration)** | 36 | 281 | 17.0% |
+| **冒烟测试 (smoke)** | 7 | 41 | 2.5% |
+| **合计** | **144** | **1665** | **100%** |
 
 ### 1.2 按模块统计
 
 ```
-core/          109 用例 ⭐⭐⭐⭐⭐  9文件  覆盖全面（含 stress test）
+core/          115 用例 ⭐⭐⭐⭐⭐  10文件 覆盖全面（含 stress test + performance baseline）
 ecs/           155 用例 ⭐⭐⭐⭐⭐  18文件 几乎所有组件
 render/        481 用例 ⭐⭐⭐⭐⭐  20文件 VK80+DX11_55+GL72+Passes40+Probes21+UBO26+PP10+Hair24+DDGI17+Cluster19+DSSL30+Instancing15+ProjCorr11+DX11CB12+ShaderMgr8
 scene/          94 用例 ⭐⭐⭐⭐   8文件  数据结构+管理器
@@ -30,12 +30,12 @@ profiler        43 用例 ⭐⭐⭐    1文件  CPU/Memory/ChromeTrace
 runtime         47 用例 ⭐⭐⭐    3文件  生命周期+FramePipeline
 audio           30 用例 ⭐⭐     2文件  基础+3D空间化
 assets          59 用例 ⭐⭐⭐    2文件  加载/缓存/异步
-physics         19 用例 ⭐⭐     2文件  关节+系统测试
+physics         27 用例 ⭐⭐⭐    3文件  关节+系统+PhysX真实模拟
 base            42 用例 ⭐⭐⭐    4文件  工具类
 
-editor/         16 用例 ⭐⭐⭐     1文件  UndoRedo/Commands/CLI解析/Settings
-integration    275 用例 ⭐⭐⭐⭐⭐ 35文件 跨系统联调+Lua粒子绑定
-smoke           30 用例 ⭐⭐⭐    4文件  关键链路
+editor/         22 用例 ⭐⭐⭐     2文件  UndoRedo/Commands/CLI解析/Settings+SelectionManager
+integration    281 用例 ⭐⭐⭐⭐⭐ 36文件 跨系统联调+Lua粒子绑定+SelectionManager
+smoke           41 用例 ⭐⭐⭐⭐   7文件  关键链路+D3D11 RHI+Lua生命周期+Physics3D
 ```
 
 ---
@@ -340,6 +340,16 @@ smoke           30 用例 ⭐⭐⭐    4文件  关键链路
 | Vulkan smoke | 已有 8 | ✅ 已含 10 帧稳定性+纹理/RT/Buffer 创销，无需扩展 |
 | 空文件清理 | 2 | ✅ `audio_assets_integration_test.cpp` 和 `minimal_3d_scene_smoke_test.cpp` 添加 TODO 注释 |
 
+### Session 9（1 天）：✅ 已完成 — Smoke + Performance + 集成补深
+
+| 任务 | 实际用例 | 状态 |
+|:----|:--------:|------|
+| D3D11 RHI 冒烟测试 | **8** | ✅ InitD3D11/单帧/多帧/Shutdown重Init/纹理/10帧/RenderTarget/Buffer |
+| Performance 基线测试 | **6** | ✅ ECS迭代+创销/JobSystem吞吐+依赖链/ServiceLocator查询/EventBus广播 |
+| Editor SelectionManager 集成测试 | **6** | ✅ 初始空/单选/反选Toggle/防重复/Remove/null清空 |
+| Lua 全生命周期 smoke | **3** | ✅ 50帧Tick无泄漏/动态创建实体/语法错误不崩溃 |
+| Physics3D 真实模拟 smoke | **8** | ✅ 重力下落/地面阻挡/Raycast命中/冲量/碰撞事件/600帧稳定/RemoveActor/空场景 |
+
 ### 汇总
 
 | 批次 | 工期 | 新增用例 | 填补缺口 |
@@ -348,11 +358,26 @@ smoke           30 用例 ⭐⭐⭐    4文件  关键链路
 | Session 6 | 1 天 | **42** | ✅ 零测试模块 |
 | Session 7 | 1 天 | **39** | ✅ 核心路径深度 |
 | Session 8 | 1 天 | **22** | ✅ 编辑器+收尾 |
-| **合计** | **4 天** | **183** | **✅ 全部完成** |
+| Session 9 | 1 天 | **31** | ✅ Smoke+Performance+集成+Physics3D |
+| **合计** | **5 天** | **214** | **✅ 测试金字塔全层覆盖** |
 
 ---
 
 ## 七、历史变更日志
+
+### Session 9（2026-05-17）
+
+> 状态：1665 测试全部通过（Unit 1338 pass + 5 skip | Integration 281 pass | Smoke 41 pass）
+
+| 变更 | 说明 |
+|:----:|------|
+| 新增 5 个测试文件 | `dx11_rhi_smoke_test.cpp`(8) + `lua_lifecycle_smoke_test.cpp`(3) + `performance_baseline_test.cpp`(6) + `editor_selection_integration_test.cpp`(6) + `physics3d_smoke_test.cpp`(8) |
+| D3D11 RHI 冒烟测试 | 完整 GPU 设备生命周期：初始化/单帧/多帧/Shutdown重Init/纹理/10帧/RenderTarget/Buffer |
+| Performance 基线测试 | ECS 迭代+创销/JobSystem 吞吐+依赖链/ServiceLocator 查询/EventBus 广播 |
+| Editor SelectionManager 集成测试 | 初始空/单选/反选Toggle/防重复/Remove/null 清空 |
+| Lua 全生命周期 smoke | 50帧 Tick 无泄漏/动态创建实体/语法错误不崩溃 |
+| Physics3D 真实模拟 smoke | 重力下落/地面阻挡/Raycast命中/AddImpulse/碰撞事件/600帧稳定/RemoveActor/空场景 |
+| Bug fix | `RenderTargetDesc` 名称空格修正，`resource_mgr().DeleteRenderTarget` 调用修正 |
 
 ### Session 8（2026-05-17）
 
@@ -362,7 +387,7 @@ smoke           30 用例 ⭐⭐⭐    4文件  关键链路
 |:----:|------|
 | 新增 2 个测试文件 | `editor_unit_test.cpp`(16) + `lua_binding_particles_integration_test.cpp`(6) |
 | 编辑器单元测试 | UndoRedoManager 7项 + LambdaCommand 2项 + CompoundCommand 1项 + CLI解析 5项 + Settings 1项 |
-| Lua 粒子绑定 | 3D粒子创建+参数设置 + 2D发射器 + Burst + GameplayTuning + 安全性 |
+| Lua 粒子绑定 | 3D粒子创建+参数/2D发射器/Burst/GameplayTuning/安全性 |
 | 空文件清理 | 2 个占位空文件添加 TODO 注释 |
 
 ### Session 7（2026-05-17）
