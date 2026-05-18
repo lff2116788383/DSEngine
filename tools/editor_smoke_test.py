@@ -36,12 +36,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 BIN_DIR = ROOT / "bin"
 BASELINE_DIR = ROOT / "tests" / "editor_smoke_baselines"
 SCREENSHOT_DIR = ROOT / "tests" / "editor_smoke_current"
+FIXTURES_DIR = ROOT / "tests" / "editor_smoke_fixtures"
 
 # 测试场景列表：(名称, 额外参数)
 SMOKE_CASES = [
     ("empty_scene", []),
-    # 如有需要，后续可追加:
-    # ("with_cube", ["--scene=examples/test_scenes/cube.dscene"]),
+    ("with_entity", [f"--scene={FIXTURES_DIR / 'with_entity.dscene'}"]),
+    ("with_directional_light", [f"--scene={FIXTURES_DIR / 'with_directional_light.dscene'}"]),
 ]
 
 

@@ -1,0 +1,35 @@
+[
+    {
+        "id": 1,
+        "name": "Sun",
+        "transform": {
+            "position": [0.0, 10.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+            "dirty": false
+        },
+        "directional_light3d": {
+            "enabled": true,
+            "color": [1.0, 0.95, 0.85],
+            "intensity": 1.5,
+            "cast_shadow": false,
+            "shadow_strength": 1.0
+        }
+    },
+    {
+        "id": 2,
+        "name": "AmbientLight",
+        "transform": {
+            "position": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+            "dirty": false
+        },
+        "sky_light": {
+            "enabled": true,
+            "up_color": [0.4, 0.6, 1.0],
+            "down_color": [0.2, 0.2, 0.2],
+            "intensity": 0.4
+        }
+    }
+]
