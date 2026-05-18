@@ -22,6 +22,7 @@
 #include "editor_shell.h"
 #include "editor_scene_tabs.h"
 #include "editor_prefab.h"
+#include "editor_selection.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -1699,6 +1700,82 @@ static JsonRpcResponse HandleEntityReparent(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_selection_get ───────────────────────────────────────────
+
+static JsonRpcResponse HandleSelectionGet(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& /*engine*/) {
+
+    auto& sel = SelectionManager::Get();
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+
+    rapidjson::Value ids(rapidjson::kArrayType);
+    for (auto ent : sel.GetAll()) {
+        ids.PushBack(static_cast<uint32_t>(ent), alloc);
+    }
+    result.AddMember("entity_ids", ids, alloc);
+    result.AddMember("count", rapidjson::Value(sel.Count()), alloc);
+    if (sel.GetPrimary() == entt::null) {
+        result.AddMember("primary_id", rapidjson::Value(rapidjson::kNullType), alloc);
+    } else {
+        result.AddMember("primary_id",
+            rapidjson::Value(static_cast<uint32_t>(sel.GetPrimary())), alloc);
+    }
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_selection_set ───────────────────────────────────────────
+
+static JsonRpcResponse HandleSelectionSet(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_ids") || !params["entity_ids"].IsArray()) {
+        return MakeToolError(-32602, "Missing required param: entity_ids (array of uint)");
+    }
+
+    auto& registry = engine.pipeline()->world().registry();
+    auto& sel = SelectionManager::Get();
+    sel.Clear();
+
+    int added = 0;
+    for (const auto& v : params["entity_ids"].GetArray()) {
+        if (!v.IsUint()) continue;
+        auto ent = static_cast<entt::entity>(v.GetUint());
+        if (!registry.valid(ent)) continue;
+        sel.Add(ent);
+        ++added;
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("count", rapidjson::Value(added), alloc);
+    if (sel.GetPrimary() == entt::null) {
+        result.AddMember("primary_id", rapidjson::Value(rapidjson::kNullType), alloc);
+    } else {
+        result.AddMember("primary_id",
+            rapidjson::Value(static_cast<uint32_t>(sel.GetPrimary())), alloc);
+    }
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_selection_clear ─────────────────────────────────────────
+
+static JsonRpcResponse HandleSelectionClear(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& /*engine*/) {
+
+    SelectionManager::Get().Clear();
+
+    rapidjson::Document result;
+    result.SetObject();
+    result.AddMember("cleared", rapidjson::Value(true), result.GetAllocator());
+    return MakeOk(std::move(result));
+}
+
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
 struct ToolEntry {
@@ -1733,6 +1810,9 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_prefab_instantiate",        HandlePrefabInstantiate },
     { "dsengine_scene_new",                 HandleSceneNew },
     { "dsengine_entity_reparent",           HandleEntityReparent },
+    { "dsengine_selection_get",             HandleSelectionGet },
+    { "dsengine_selection_set",             HandleSelectionSet },
+    { "dsengine_selection_clear",           HandleSelectionClear },
 };
 
 void RegisterBuiltinTools(ControlServer& server) {

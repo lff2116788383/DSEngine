@@ -1364,3 +1364,66 @@ TEST_F(ControlServerTest, EntityReparent_CircularParent_ReturnsError) {
     auto resp = Dispatch("dsengine_entity_reparent", p2.c_str());
     EXPECT_TRUE(resp.is_error);
 }
+
+// ─── Test 88: selection_get 空选择返回 count=0 ───────────────────────────────
+
+TEST_F(ControlServerTest, SelectionGet_EmptyReturnsZero) {
+    Dispatch("dsengine_selection_clear", "{}");
+    auto resp = Dispatch("dsengine_selection_get", "{}");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 0);
+    EXPECT_TRUE(resp.result["entity_ids"].IsArray());
+    EXPECT_EQ(resp.result["entity_ids"].Size(), 0u);
+    EXPECT_TRUE(resp.result["primary_id"].IsNull());
+}
+
+// ─── Test 89: selection_set 批量设置选择 ─────────────────────────────────────
+
+TEST_F(ControlServerTest, SelectionSet_SetsMultipleEntities) {
+    auto r1 = Dispatch("dsengine_entity_create", R"({"name":"Sel1"})");
+    auto r2 = Dispatch("dsengine_entity_create", R"({"name":"Sel2"})");
+    uint32_t id1 = r1.result["entity_id"].GetUint();
+    uint32_t id2 = r2.result["entity_id"].GetUint();
+
+    std::string p = R"({"entity_ids":[)" + std::to_string(id1) +
+        "," + std::to_string(id2) + "]}";
+    auto resp = Dispatch("dsengine_selection_set", p.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 2);
+    EXPECT_EQ(resp.result["primary_id"].GetUint(), id2);
+
+    // Verify via selection_get
+    auto gr = Dispatch("dsengine_selection_get", "{}");
+    ASSERT_FALSE(gr.is_error);
+    EXPECT_EQ(gr.result["count"].GetInt(), 2);
+    EXPECT_EQ(gr.result["entity_ids"].Size(), 2u);
+}
+
+// ─── Test 90: selection_set 过滤无效 entity_id ───────────────────────────────
+
+TEST_F(ControlServerTest, SelectionSet_FiltersInvalidIds) {
+    auto r = Dispatch("dsengine_entity_create", R"({"name":"Valid"})");
+    uint32_t valid_id = r.result["entity_id"].GetUint();
+
+    std::string p = R"({"entity_ids":[)" + std::to_string(valid_id) +
+        R"(,9999999]})";
+    auto resp = Dispatch("dsengine_selection_set", p.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 1);
+}
+
+// ─── Test 91: selection_clear 清空选择 ───────────────────────────────────────
+
+TEST_F(ControlServerTest, SelectionClear_ClearsSelection) {
+    auto r = Dispatch("dsengine_entity_create", R"({"name":"ToDeselect"})");
+    uint32_t id = r.result["entity_id"].GetUint();
+    Dispatch("dsengine_selection_set",
+        (R"({"entity_ids":[)" + std::to_string(id) + "]}").c_str());
+
+    auto cr = Dispatch("dsengine_selection_clear", "{}");
+    ASSERT_FALSE(cr.is_error) << cr.error_message;
+    EXPECT_TRUE(cr.result["cleared"].GetBool());
+
+    auto gr = Dispatch("dsengine_selection_get", "{}");
+    EXPECT_EQ(gr.result["count"].GetInt(), 0);
+}
