@@ -13,8 +13,15 @@
 #include "editor_scene_tabs.h"
 #include "editor_build_game.h"
 #include "editor_icons.h"
+#include "editor_selection.h"
+#include "engine/dse_version.h"
 
 #include <filesystem>
+
+#if defined(_WIN32)
+#include <Windows.h>
+#include <shellapi.h>
+#endif
 
 namespace dse::editor {
 
@@ -106,13 +113,14 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         return;
     }
 
+    // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("File")) {
         auto& tab_mgr = SceneTabManager::Get();
-        if (ImGui::MenuItem("New Scene", "Ctrl+N", false, !ctx.read_only)) {
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Scene", "Ctrl+N", false, !ctx.read_only)) {
             tab_mgr.NewScene(ctx.registry);
             ctx.selected_entity = entt::null;
         }
-        if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !ctx.read_only)) {
+        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Scene...", "Ctrl+O", false, !ctx.read_only)) {
             std::string path = dse::editor::OpenSceneFileDialog();
             if (!path.empty()) {
                 tab_mgr.OpenScene(ctx.registry, path);
@@ -137,7 +145,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Save", "Ctrl+S", false, !ctx.read_only)) {
+        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save", "Ctrl+S", false, !ctx.read_only)) {
             const std::string& current_path = tab_mgr.GetActiveFilePath();
             if (current_path.empty()) {
                 std::string path = dse::editor::SaveSceneFileDialog();
@@ -163,11 +171,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             }
         }
         if (ctx.read_only) {
-            ImGui::TextDisabled("Play 模式下已禁用场景文件读写。");
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Build Game...", nullptr, false, !ctx.read_only)) {
-            OpenBuildGameDialog();
+            ImGui::TextDisabled("Play mode: file operations disabled.");
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {
@@ -175,36 +179,76 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::EndMenu();
     }
+
+    // ─── Edit ───────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Edit")) {
         auto& undo_mgr = dse::editor::GetUndoRedoManager();
         std::string undo_label = "Undo";
-        if (undo_mgr.CanUndo()) {
-            undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
-        }
+        if (undo_mgr.CanUndo()) undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
         if (ImGui::MenuItem(undo_label.c_str(), "Ctrl+Z", false, undo_mgr.CanUndo())) {
             undo_mgr.Undo();
         }
         std::string redo_label = "Redo";
-        if (undo_mgr.CanRedo()) {
-            redo_label += " (" + undo_mgr.GetRedoDescription() + ")";
-        }
+        if (undo_mgr.CanRedo()) redo_label += " (" + undo_mgr.GetRedoDescription() + ")";
         if (ImGui::MenuItem(redo_label.c_str(), "Ctrl+Y", false, undo_mgr.CanRedo())) {
             undo_mgr.Redo();
         }
-        ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Window")) {
-        if (show_preferences && ImGui::MenuItem("Preferences")) {
+        ImGui::Separator();
+        if (ImGui::MenuItem("Select All", "Ctrl+A", false, !ctx.read_only)) {
+            auto& sel = SelectionManager::Get();
+            sel.Clear();
+            auto view = ctx.registry.view<EditorNameComponent>();
+            for (auto e : view) sel.Add(e);
+            if (!sel.IsEmpty()) ctx.selected_entity = sel.GetPrimary();
+        }
+        if (ImGui::MenuItem("Deselect All", nullptr, false, !ctx.read_only)) {
+            SelectionManager::Get().Clear();
+            ctx.selected_entity = entt::null;
+        }
+        ImGui::Separator();
+        if (show_preferences && ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
             *show_preferences = true;
         }
-        if (show_plugins && ImGui::MenuItem("Plugins")) {
+        ImGui::EndMenu();
+    }
+
+    // ─── Entity ─────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Entity")) {
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  Create Empty", nullptr, false, !ctx.read_only)) {
+            CreateEmptyEntity(ctx);
+        }
+        ImGui::Separator();
+        bool has_sel = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
+        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && !ctx.read_only)) {
+            DuplicateSelectedEntity(ctx);
+            EditorLog(LogLevel::Info, "Entity duplicated");
+        }
+        if (ImGui::MenuItem("Delete", "Del", false, has_sel && !ctx.read_only)) {
+            DeleteSelectedEntity(ctx);
+            SelectionManager::Get().Clear();
+            EditorLog(LogLevel::Info, "Entity deleted");
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Focus Selected", "F", false, has_sel)) {
+            // Handled by ProcessShortcuts — this is a visual reminder
+        }
+        ImGui::EndMenu();
+    }
+
+    // ─── Project ────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Project")) {
+        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, !ctx.read_only)) {
+            OpenBuildGameDialog();
+        }
+        ImGui::Separator();
+        if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
             *show_plugins = true;
         }
-        ImGui::Separator();
-        if (show_chat && ImGui::MenuItem("AI Chat")) {
-            *show_chat = true;
-        }
-        ImGui::Separator();
+        ImGui::EndMenu();
+    }
+
+    // ─── Window ─────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Window")) {
         if (ImGui::BeginMenu("Panels")) {
             if (panels) {
                 if (panels->profiler)
@@ -223,11 +267,43 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             ImGui::EndMenu();
         }
         ImGui::Separator();
+        if (show_chat && ImGui::MenuItem("AI Chat")) {
+            *show_chat = true;
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout")) {
             ResetEditorLayout();
         }
         ImGui::EndMenu();
     }
+
+    // ─── Help ───────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Help")) {
+        if (ImGui::MenuItem("About DSEngine")) {
+            ImGui::OpenPopup("AboutDSEngine");
+        }
+#if defined(_WIN32)
+        if (ImGui::MenuItem("Documentation (GitHub)")) {
+            ShellExecuteA(nullptr, "open", "https://github.com/lff2116788383/DSEngine", nullptr, nullptr, SW_SHOWNORMAL);
+        }
+#endif
+        ImGui::EndMenu();
+    }
+
+    // About popup (must be at menu bar scope to avoid clipping)
+    if (ImGui::BeginPopupModal("AboutDSEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("DSEngine Editor");
+        ImGui::Separator();
+        ImGui::Text("Version: %d.%d.%d", DSE_VERSION_MAJOR, DSE_VERSION_MINOR, DSE_VERSION_PATCH);
+        ImGui::Text("C++ Editor with ImGui, entt ECS, OpenGL/Vulkan/DX11");
+        ImGui::Text("(c) 2024-2026 DSEngine Contributors");
+        ImGui::Separator();
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     ImGui::EndMenuBar();
 }
 

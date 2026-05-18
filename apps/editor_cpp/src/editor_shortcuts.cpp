@@ -21,9 +21,14 @@
 
 namespace dse::editor {
 
-namespace {
+void CreateEmptyEntity(EditorContext& context) {
+    auto new_ent = context.world.CreateEntity();
+    context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
+    context.registry.emplace<TransformComponent>(new_ent);
+    context.selected_entity = new_ent;
+    EditorLog(LogLevel::Info, "Created empty entity");
+}
 
-/// Duplicate the currently selected entity (mirrors Hierarchy panel logic)
 void DuplicateSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
@@ -110,7 +115,6 @@ void DuplicateSelectedEntity(EditorContext& context) {
     context.selected_entity = new_ent;
 }
 
-/// Delete the currently selected entity
 void DeleteSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
@@ -118,8 +122,6 @@ void DeleteSelectedEntity(EditorContext& context) {
     context.world.DestroyEntity(context.selected_entity);
     context.selected_entity = entt::null;
 }
-
-} // namespace
 
 UndoRedoManager& GetUndoRedoManager() {
     static UndoRedoManager instance(200);

@@ -55,3 +55,10 @@
 
 // Lua Console
 #define MDI_ICON_CODE                   "\xef\x84\xa1" // U+F121 fa-code
+
+// Menu bar icons
+#define MDI_ICON_PLUS                   "\xef\x81\xa7" // U+F067 fa-plus
+#define MDI_ICON_FOLDER_OPEN            "\xef\x81\xbc" // U+F07C fa-folder-open
+#define MDI_ICON_CONTENT_SAVE           "\xef\x83\x87" // U+F0C7 fa-floppy-disk
+#define MDI_ICON_EXPORT                 "\xef\x95\x6e" // U+F56E fa-file-export
+#define MDI_ICON_PUZZLE                 "\xef\x84\xae" // U+F12E fa-puzzle-piece
