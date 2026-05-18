@@ -255,19 +255,89 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
         glsl_options.vulkan_semantics = false;
         compiler.set_common_options(glsl_options);
 
-        // SSBO (storage buffers) → SRV t16+ 避免与纹理 t-register 冲突
         auto resources = compiler.get_shader_resources();
+        auto exec_model = compiler.get_execution_model();
+
+        // Helper: get (set, binding) for sorting
+        auto get_set_binding = [&](spirv_cross::ID id) -> std::pair<uint32_t, uint32_t> {
+            uint32_t s = compiler.get_decoration(id, spv::DecorationDescriptorSet);
+            uint32_t b = compiler.get_decoration(id, spv::DecorationBinding);
+            return {s, b};
+        };
+
+        // ---- Combined image samplers → sequential t0/s0, t1/s1, ... ----
+        {
+            std::vector<std::pair<std::pair<uint32_t,uint32_t>, spirv_cross::Resource*>> sorted;
+            for (auto& r : resources.sampled_images) sorted.push_back({get_set_binding(r.id), &r});
+            for (auto& r : resources.separate_images) sorted.push_back({get_set_binding(r.id), &r});
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.first < b.first; });
+            uint32_t tex_slot = 0;
+            for (auto& [sb, res] : sorted) {
+                spirv_cross::HLSLResourceBinding hlsl_binding{};
+                hlsl_binding.stage = exec_model;
+                hlsl_binding.desc_set = sb.first;
+                hlsl_binding.binding = sb.second;
+                hlsl_binding.srv.register_space = 0;
+                hlsl_binding.srv.register_binding = tex_slot;
+                hlsl_binding.sampler.register_space = 0;
+                hlsl_binding.sampler.register_binding = tex_slot;
+                hlsl_binding.cbv = {};
+                hlsl_binding.uav = {};
+                compiler.add_hlsl_resource_binding(hlsl_binding);
+                tex_slot++;
+            }
+            // Separate samplers (if any)
+            uint32_t samp_slot = 0;
+            for (auto& r : resources.separate_samplers) {
+                auto [s, b] = get_set_binding(r.id);
+                spirv_cross::HLSLResourceBinding hlsl_binding{};
+                hlsl_binding.stage = exec_model;
+                hlsl_binding.desc_set = s;
+                hlsl_binding.binding = b;
+                hlsl_binding.sampler.register_space = 0;
+                hlsl_binding.sampler.register_binding = samp_slot++;
+                hlsl_binding.srv = {};
+                hlsl_binding.cbv = {};
+                hlsl_binding.uav = {};
+                compiler.add_hlsl_resource_binding(hlsl_binding);
+            }
+        }
+
+        // ---- Uniform buffers → sequential b0, b1, ... ----
+        // push_constant occupies b0 if present; UBOs start after
+        {
+            uint32_t cb_slot = resources.push_constant_buffers.empty() ? 0 : 1;
+            std::vector<std::pair<std::pair<uint32_t,uint32_t>, spirv_cross::Resource*>> sorted;
+            for (auto& r : resources.uniform_buffers) sorted.push_back({get_set_binding(r.id), &r});
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.first < b.first; });
+            for (auto& [sb, res] : sorted) {
+                spirv_cross::HLSLResourceBinding hlsl_binding{};
+                hlsl_binding.stage = exec_model;
+                hlsl_binding.desc_set = sb.first;
+                hlsl_binding.binding = sb.second;
+                hlsl_binding.cbv.register_space = 0;
+                hlsl_binding.cbv.register_binding = cb_slot;
+                hlsl_binding.srv = {};
+                hlsl_binding.uav = {};
+                hlsl_binding.sampler = {};
+                compiler.add_hlsl_resource_binding(hlsl_binding);
+                cb_slot++;
+            }
+        }
+
+        // ---- SSBO (storage buffers) → SRV t16+ 避免与纹理 t-register 冲突 ----
         for (auto& ssbo : resources.storage_buffers) {
-            uint32_t set = compiler.get_decoration(ssbo.id, spv::DecorationDescriptorSet);
-            uint32_t binding = compiler.get_decoration(ssbo.id, spv::DecorationBinding);
-            spirv_cross::HLSLResourceBinding hlsl_binding;
-            hlsl_binding.stage = compiler.get_execution_model();
-            hlsl_binding.desc_set = set;
-            hlsl_binding.binding = binding;
+            auto [s, b] = get_set_binding(ssbo.id);
+            spirv_cross::HLSLResourceBinding hlsl_binding{};
+            hlsl_binding.stage = exec_model;
+            hlsl_binding.desc_set = s;
+            hlsl_binding.binding = b;
             hlsl_binding.srv.register_space = 0;
-            hlsl_binding.srv.register_binding = 16 + binding; // t16+
+            hlsl_binding.srv.register_binding = 16 + b;
             hlsl_binding.uav.register_space = 0;
-            hlsl_binding.uav.register_binding = 16 + binding;
+            hlsl_binding.uav.register_binding = 16 + b;
             hlsl_binding.cbv = {};
             hlsl_binding.sampler = {};
             compiler.add_hlsl_resource_binding(hlsl_binding);

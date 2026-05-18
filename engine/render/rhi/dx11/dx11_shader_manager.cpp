@@ -6,6 +6,34 @@
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 #include "engine/render/rhi/dx11/dx11_context.h"
 #include "engine/render/rhi/dx11/dx11_shader_sources.h"
+#include "engine/render/shaders/generated/embed/fxaa_frag.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_extract_frag.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_composite_frag.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_downsample_comp.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_upsample_comp.gen.h"
+#include "engine/render/shaders/generated/embed/postprocess_passthrough_frag.gen.h"
+#include "engine/render/shaders/generated/embed/ssao_frag.gen.h"
+#include "engine/render/shaders/generated/embed/ssao_blur_frag.gen.h"
+#include "engine/render/shaders/generated/embed/ssao_apply_frag.gen.h"
+#include "engine/render/shaders/generated/embed/contact_shadow_frag.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_composite_ssao_frag.gen.h"
+#include "engine/render/shaders/generated/embed/bloom_composite_ssao_ae_frag.gen.h"
+#include "engine/render/shaders/generated/embed/lum_compute_frag.gen.h"
+#include "engine/render/shaders/generated/embed/lum_adapt_frag.gen.h"
+#include "engine/render/shaders/generated/embed/tonemapping_frag.gen.h"
+#include "engine/render/shaders/generated/embed/color_grading_frag.gen.h"
+#include "engine/render/shaders/generated/embed/taa_resolve_frag.gen.h"
+#include "engine/render/shaders/generated/embed/dof_frag.gen.h"
+#include "engine/render/shaders/generated/embed/motion_blur_frag.gen.h"
+#include "engine/render/shaders/generated/embed/ssr_frag.gen.h"
+#include "engine/render/shaders/generated/embed/motion_vector_frag.gen.h"
+#include "engine/render/shaders/generated/embed/deferred_lighting_frag.gen.h"
+#include "engine/render/shaders/generated/embed/edge_detect_frag.gen.h"
+#include "engine/render/shaders/generated/embed/volumetric_fog_frag.gen.h"
+#include "engine/render/shaders/generated/embed/decal_frag.gen.h"
+#include "engine/render/shaders/generated/embed/wboit_composite_frag.gen.h"
+#include "engine/render/shaders/generated/embed/water_frag.gen.h"
+#include "engine/render/shaders/generated/embed/light_shaft_frag.gen.h"
 #include "engine/base/debug.h"
 
 #include <fstream>
@@ -126,12 +154,17 @@ ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
 }
 
 unsigned int DX11ShaderManager::CreateProgram(const std::string& vert_src, const std::string& frag_src) {
+    return CreateProgram(vert_src, frag_src, "VSMain", "PSMain");
+}
+
+unsigned int DX11ShaderManager::CreateProgram(const std::string& vert_src, const std::string& frag_src,
+                                               const std::string& vs_entry, const std::string& ps_entry) {
     if (!context_) return 0;
 
-    auto vs_blob = CompileShader(vert_src, "VSMain", "vs_5_0");
+    auto vs_blob = CompileShader(vert_src, vs_entry, "vs_5_0");
     if (!vs_blob) return 0;
 
-    auto ps_blob = CompileShader(frag_src, "PSMain", "ps_5_0");
+    auto ps_blob = CompileShader(frag_src, ps_entry, "ps_5_0");
     if (!ps_blob) return 0;
 
     DX11ShaderProgram program;
@@ -289,18 +322,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     }
 
     // ---- Bloom Compute Shaders ----
-    bloom_downsample_cs_handle_ = CreateComputeProgram(dx11_shaders::kBloomDownsampleCS);
+    bloom_downsample_cs_handle_ = CreateComputeProgram(generated_shaders::kbloom_downsample_comp_hlsl, "main");
     if (bloom_downsample_cs_handle_)
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom downsample CS created: {}", bloom_downsample_cs_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom downsample CS created (gen.h): {}", bloom_downsample_cs_handle_);
 
-    bloom_upsample_cs_handle_ = CreateComputeProgram(dx11_shaders::kBloomUpsampleCS);
+    bloom_upsample_cs_handle_ = CreateComputeProgram(generated_shaders::kbloom_upsample_comp_hlsl, "main");
     if (bloom_upsample_cs_handle_)
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created: {}", bloom_upsample_cs_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created (gen.h): {}", bloom_upsample_cs_handle_);
 
     // ---- Bloom Composite 着色器（ACES Filmic Tone Mapping）----
-    bloom_composite_shader_handle_ = CreateProgram(dx11_shaders::kPostProcessVS, dx11_shaders::kBloomCompositePS);
+    bloom_composite_shader_handle_ = CreateProgram(dx11_shaders::kPostProcessVS,
+                                                     generated_shaders::kbloom_composite_frag_hlsl,
+                                                     "VSMain", "main");
     if (bloom_composite_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom composite shader created: {}", bloom_composite_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom composite shader created (gen.h): {}", bloom_composite_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -308,11 +343,11 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(bloom_composite_shader_handle_, layout, 2);
     }
 
-    // ---- FXAA shader ----
-    auto create_pp_shader = [&](const char* ps_src, const char* name) -> unsigned int {
-        unsigned int h = CreateProgram(dx11_shaders::kPostProcessVS, ps_src);
+    // ---- gen.h shader 创建 lambda（VS 保留手写版，PS 入口点为 "main"）----
+    auto create_pp_gen = [&](const char* ps_src, const char* name) -> unsigned int {
+        unsigned int h = CreateProgram(dx11_shaders::kPostProcessVS, ps_src, "VSMain", "main");
         if (h) {
-            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created: {}", name, h);
+            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created (gen.h): {}", name, h);
             D3D11_INPUT_ELEMENT_DESC layout[] = {
                 {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
                 {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -322,32 +357,32 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         return h;
     };
     pulse();
-    bloom_extract_shader_handle_ = create_pp_shader(dx11_shaders::kBloomExtractPS, "bloom_extract");
-    fxaa_shader_handle_ = create_pp_shader(dx11_shaders::kFxaaPS, "fxaa");
-    ssao_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoPS, "ssao");
-    ssao_blur_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoBlurPS, "ssao_blur");
-    ssao_apply_shader_handle_ = create_pp_shader(dx11_shaders::kSsaoApplyPS, "ssao_apply");
-    contact_shadow_shader_handle_ = create_pp_shader(dx11_shaders::kContactShadowPS, "contact_shadow");
-    bloom_composite_ssao_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoPS, "bloom_composite_ssao");
-    lum_compute_shader_handle_ = create_pp_shader(dx11_shaders::kLumComputePS, "lum_compute");
-    lum_adapt_shader_handle_ = create_pp_shader(dx11_shaders::kLumAdaptPS, "lum_adapt");
+    bloom_extract_shader_handle_ = create_pp_gen(generated_shaders::kbloom_extract_frag_hlsl, "bloom_extract");
+    fxaa_shader_handle_ = create_pp_gen(generated_shaders::kfxaa_frag_hlsl, "fxaa");
+    ssao_shader_handle_ = create_pp_gen(generated_shaders::kssao_frag_hlsl, "ssao");
+    ssao_blur_shader_handle_ = create_pp_gen(generated_shaders::kssao_blur_frag_hlsl, "ssao_blur");
+    ssao_apply_shader_handle_ = create_pp_gen(generated_shaders::kssao_apply_frag_hlsl, "ssao_apply");
+    contact_shadow_shader_handle_ = create_pp_gen(generated_shaders::kcontact_shadow_frag_hlsl, "contact_shadow");
+    bloom_composite_ssao_shader_handle_ = create_pp_gen(generated_shaders::kbloom_composite_ssao_frag_hlsl, "bloom_composite_ssao");
+    lum_compute_shader_handle_ = create_pp_gen(generated_shaders::klum_compute_frag_hlsl, "lum_compute");
+    lum_adapt_shader_handle_ = create_pp_gen(generated_shaders::klum_adapt_frag_hlsl, "lum_adapt");
     pulse();
-    tonemapping_shader_handle_ = create_pp_shader(dx11_shaders::kTonemappingPS, "tonemapping");
-    bloom_composite_ssao_ae_shader_handle_ = create_pp_shader(dx11_shaders::kBloomCompositeSsaoAePS, "bloom_composite_ssao_ae");
-    color_grading_shader_handle_ = create_pp_shader(dx11_shaders::kColorGradingPS, "color_grading");
-    taa_resolve_shader_handle_ = create_pp_shader(dx11_shaders::kTaaResolvePS, "taa_resolve");
-    dof_shader_handle_ = create_pp_shader(dx11_shaders::kDofPS, "dof");
+    tonemapping_shader_handle_ = create_pp_gen(generated_shaders::ktonemapping_frag_hlsl, "tonemapping");
+    bloom_composite_ssao_ae_shader_handle_ = create_pp_gen(generated_shaders::kbloom_composite_ssao_ae_frag_hlsl, "bloom_composite_ssao_ae");
+    color_grading_shader_handle_ = create_pp_gen(generated_shaders::kcolor_grading_frag_hlsl, "color_grading");
+    taa_resolve_shader_handle_ = create_pp_gen(generated_shaders::ktaa_resolve_frag_hlsl, "taa_resolve");
+    dof_shader_handle_ = create_pp_gen(generated_shaders::kdof_frag_hlsl, "dof");
     pulse();
-    motion_blur_shader_handle_ = create_pp_shader(dx11_shaders::kMotionBlurPS, "motion_blur");
-    ssr_shader_handle_ = create_pp_shader(dx11_shaders::kSsrPS, "ssr");
-    motion_vector_shader_handle_ = create_pp_shader(dx11_shaders::kMotionVectorPS, "motion_vector");
-    deferred_lighting_shader_handle_ = create_pp_shader(dx11_shaders::kDeferredLightingPS, "deferred_lighting");
-    edge_detect_shader_handle_ = create_pp_shader(dx11_shaders::kEdgeDetectPS, "edge_detect");
-    volumetric_fog_shader_handle_ = create_pp_shader(dx11_shaders::kVolumetricFogPS, "volumetric_fog");
-    decal_shader_handle_ = create_pp_shader(dx11_shaders::kDecalPS, "decal");
-    wboit_composite_shader_handle_ = create_pp_shader(dx11_shaders::kWboitCompositePS, "wboit_composite");
-    water_shader_handle_ = create_pp_shader(dx11_shaders::kWaterPS, "water");
-    light_shaft_shader_handle_ = create_pp_shader(dx11_shaders::kLightShaftPS, "light_shaft");
+    motion_blur_shader_handle_ = create_pp_gen(generated_shaders::kmotion_blur_frag_hlsl, "motion_blur");
+    ssr_shader_handle_ = create_pp_gen(generated_shaders::kssr_frag_hlsl, "ssr");
+    motion_vector_shader_handle_ = create_pp_gen(generated_shaders::kmotion_vector_frag_hlsl, "motion_vector");
+    deferred_lighting_shader_handle_ = create_pp_gen(generated_shaders::kdeferred_lighting_frag_hlsl, "deferred_lighting");
+    edge_detect_shader_handle_ = create_pp_gen(generated_shaders::kedge_detect_frag_hlsl, "edge_detect");
+    volumetric_fog_shader_handle_ = create_pp_gen(generated_shaders::kvolumetric_fog_frag_hlsl, "volumetric_fog");
+    decal_shader_handle_ = create_pp_gen(generated_shaders::kdecal_frag_hlsl, "decal");
+    wboit_composite_shader_handle_ = create_pp_gen(generated_shaders::kwboit_composite_frag_hlsl, "wboit_composite");
+    water_shader_handle_ = create_pp_gen(generated_shaders::kwater_frag_hlsl, "water");
+    light_shaft_shader_handle_ = create_pp_gen(generated_shaders::klight_shaft_frag_hlsl, "light_shaft");
 
     pulse();
     // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
@@ -376,11 +411,15 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
 // ============================================================
 
 unsigned int DX11ShaderManager::CreateComputeProgram(const std::string& cs_src) {
+    return CreateComputeProgram(cs_src, "CSMain");
+}
+
+unsigned int DX11ShaderManager::CreateComputeProgram(const std::string& cs_src, const std::string& cs_entry) {
     if (!context_) return 0;
     ID3D11Device* device = context_->device();
     if (!device) return 0;
 
-    auto cs_blob = CompileShader(cs_src, "CSMain", "cs_5_0");
+    auto cs_blob = CompileShader(cs_src, cs_entry, "cs_5_0");
     if (!cs_blob) return 0;
 
     DX11ComputeProgram prog;

@@ -47,8 +47,8 @@ void main()
 )";
 
 // DX11 HLSL SM5.0
-static const char* kpostprocess_passthrough_frag_hlsl = R"(Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
+static const char* kpostprocess_passthrough_frag_hlsl = R"(Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
 
 static float4 FragColor;
 static float2 vTexCoords;

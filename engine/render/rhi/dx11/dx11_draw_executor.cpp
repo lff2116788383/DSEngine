@@ -899,7 +899,10 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         const auto* src_tex = resource_mgr.GetTexture(source_texture);
         if (src_tex) {
             dc->PSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
-            dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
+            ID3D11SamplerState* samplers[6] = {
+                src_tex->sampler.Get(), src_tex->sampler.Get(), src_tex->sampler.Get(),
+                src_tex->sampler.Get(), src_tex->sampler.Get(), src_tex->sampler.Get()};
+            dc->PSSetSamplers(0, 6, samplers);
         }
         if (bloom_enabled) {
             const auto* bloom_tex = resource_mgr.GetTexture(composite.Texture(CompositeParamsView::kBloomTex));
@@ -917,7 +920,7 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             const auto* lut_tex = resource_mgr.GetTexture(lut_tex_handle);
             if (lut_tex) {
                 dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
-                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+                dc->PSSetSamplers(4, 1, lut_tex->sampler.GetAddressOf());
             }
         }
         if (has_cs) {
@@ -1015,7 +1018,10 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         const auto* src_tex = resource_mgr.GetTexture(source_texture);
         if (src_tex) {
             dc->PSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
-            dc->PSSetSamplers(0, 1, src_tex->sampler.GetAddressOf());
+            ID3D11SamplerState* samplers[6] = {
+                src_tex->sampler.Get(), src_tex->sampler.Get(), src_tex->sampler.Get(),
+                src_tex->sampler.Get(), src_tex->sampler.Get(), src_tex->sampler.Get()};
+            dc->PSSetSamplers(0, 6, samplers);
         }
         UINT s = sizeof(float) * 4, o = 0;
         dc->IASetVertexBuffers(0, 1, postprocess_vbo_.GetAddressOf(), &s, &o);
@@ -1089,13 +1095,13 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         if (has_lut) {
             const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[3]));
             if (lut_tex) {
-                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
-                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+                dc->PSSetShaderResources(3, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(3, 1, lut_tex->sampler.GetAddressOf());
             }
         }
         draw_dedicated_pp(shader_mgr.ssao_apply_shader_handle());
-        ID3D11ShaderResourceView* null_srvs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
-        dc->PSSetShaderResources(1, has_lut ? 4 : (has_ae ? 2 : 1), null_srvs);
+        ID3D11ShaderResourceView* null_srvs[3] = {nullptr, nullptr, nullptr};
+        dc->PSSetShaderResources(1, has_lut ? 3 : (has_ae ? 2 : 1), null_srvs);
         return;
     }
 
@@ -1187,8 +1193,8 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         if (has_lut) {
             const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[2]));
             if (lut_tex) {
-                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
-                dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
+                dc->PSSetShaderResources(2, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetSamplers(2, 1, lut_tex->sampler.GetAddressOf());
             }
         }
         draw_dedicated_pp(shader_mgr.tonemapping_shader_handle());
@@ -1198,7 +1204,7 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         }
         if (has_lut) {
             ID3D11ShaderResourceView* null_srv = nullptr;
-            dc->PSSetShaderResources(4, 1, &null_srv);
+            dc->PSSetShaderResources(2, 1, &null_srv);
         }
         return;
     }
@@ -1218,13 +1224,13 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
         if (params.size() >= 1) {
             const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
             if (lut_tex) {
-                dc->PSSetShaderResources(4, 1, lut_tex->srv.GetAddressOf());
+                dc->PSSetShaderResources(1, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
             }
         }
         draw_dedicated_pp(shader_mgr.color_grading_shader_handle());
         ID3D11ShaderResourceView* null_srv = nullptr;
-        dc->PSSetShaderResources(4, 1, &null_srv);
+        dc->PSSetShaderResources(1, 1, &null_srv);
         return;
     }
 
@@ -1243,13 +1249,13 @@ void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* hist_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
-            if (hist_tex) dc->PSSetShaderResources(1, 1, hist_tex->srv.GetAddressOf());
-        }
         if (params.size() >= 6) {
             const auto* mv_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
-            if (mv_tex) dc->PSSetShaderResources(2, 1, mv_tex->srv.GetAddressOf());
+            if (mv_tex) dc->PSSetShaderResources(1, 1, mv_tex->srv.GetAddressOf());
+        }
+        if (params.size() >= 1) {
+            const auto* hist_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+            if (hist_tex) dc->PSSetShaderResources(2, 1, hist_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.taa_resolve_shader_handle());
         ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};

@@ -847,19 +847,6 @@ void main() {
 }
 )";
 
-/// Bloom 亮度提取
-constexpr const char* kBloomExtractFS = R"(
-uniform float threshold;
-void main() {
-    vec3 color = texture(screenTexture, vTexCoords).rgb;
-    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    if(brightness > threshold)
-        FragColor = vec4(color, 1.0);
-    else
-        FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-}
-)";
-
 /// Bloom 水平模糊
 constexpr const char* kBloomBlurHFS = R"(
 uniform float weight[5] = float[] (0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);

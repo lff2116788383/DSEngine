@@ -152,16 +152,16 @@ void main()
 )";
 
 // DX11 HLSL SM5.0
-static const char* kbloom_composite_frag_hlsl = R"(cbuffer BloomParams : register(b3)
+static const char* kbloom_composite_frag_hlsl = R"(cbuffer BloomParams : register(b0)
 {
     float _73_exposure : packoffset(c0);
     float _73_bloomIntensity : packoffset(c0.y);
 };
 
-Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
-Texture2D<float4> bloomBlur : register(t2);
-SamplerState _bloomBlur_sampler : register(s2);
+Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
+Texture2D<float4> bloomBlur : register(t1);
+SamplerState _bloomBlur_sampler : register(s1);
 
 static float4 gl_FragCoord;
 static float2 vTexCoords;

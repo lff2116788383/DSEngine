@@ -228,13 +228,13 @@ void main()
 )";
 
 // DX11 HLSL SM5.0
-static const char* kbloom_downsample_frag_hlsl = R"(cbuffer BloomParams : register(b2)
+static const char* kbloom_downsample_frag_hlsl = R"(cbuffer BloomParams : register(b0)
 {
     float2 _13_srcResolution : packoffset(c0);
 };
 
-Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
+Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
 
 static float2 vTexCoords;
 static float4 FragColor;

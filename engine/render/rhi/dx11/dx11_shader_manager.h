@@ -59,6 +59,10 @@ public:
     /// 从 HLSL 源码创建着色器程序，返回句柄（0 = 失败）
     unsigned int CreateProgram(const std::string& vert_src, const std::string& frag_src);
 
+    /// 从 HLSL 源码创建着色器程序（自定义入口点），用于 spirv-cross 生成的 HLSL
+    unsigned int CreateProgram(const std::string& vert_src, const std::string& frag_src,
+                               const std::string& vs_entry, const std::string& ps_entry);
+
     /// 销毁着色器程序
     void DeleteProgram(unsigned int handle);
 
@@ -67,6 +71,9 @@ public:
 
     /// 从 HLSL 源码创建 Compute Shader，返回句柄（0 = 失败）
     unsigned int CreateComputeProgram(const std::string& cs_src);
+
+    /// 从 HLSL 源码创建 Compute Shader（自定义入口点），用于 spirv-cross 生成的 HLSL
+    unsigned int CreateComputeProgram(const std::string& cs_src, const std::string& cs_entry);
 
     /// 查询 Compute Shader 程序
     const DX11ComputeProgram* GetComputeProgram(unsigned int handle) const;

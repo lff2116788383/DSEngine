@@ -248,15 +248,10 @@ layout(binding = 0, std140) uniform PerFrame
 uniform mat4 u_model;
 uniform int u_skinned;
 uniform int u_morph_enabled;
-uniform int u_use_instancing;
 layout(location = 6) in vec4 aBoneIndices;
 layout(location = 5) in vec4 aBoneWeights;
 layout(location = 0) in vec3 aPos;
 layout(location = 3) in vec3 aNormal;
-layout(location = 7) in vec4 aInstModelCol0;
-layout(location = 8) in vec4 aInstModelCol1;
-layout(location = 9) in vec4 aInstModelCol2;
-layout(location = 10) in vec4 aInstModelCol3;
 layout(location = 2) out vec3 vFragPos;
 layout(location = 7) out vec3 vFragPosViewSpace;
 layout(location = 0) out vec4 vColor;
@@ -286,20 +281,14 @@ void main()
     {
         morphedPos += (vec3(0.00999999977648258209228515625) * _138.u_morph_weights[0]);
     }
-    mat4 modelMatrix;
-    if (u_use_instancing != 0) {
-        modelMatrix = mat4(aInstModelCol0, aInstModelCol1, aInstModelCol2, aInstModelCol3);
-    } else {
-        modelMatrix = u_model;
-    }
     vec4 localPos = boneTransform * vec4(morphedPos, 1.0);
-    vec4 worldPos = modelMatrix * localPos;
+    vec4 worldPos = u_model * localPos;
     gl_Position = _166.vp * worldPos;
     vFragPos = worldPos.xyz;
     vFragPosViewSpace = (_166.view * worldPos).xyz;
     vColor = aColor;
     vTexCoord = aTexCoord;
-    mat4 _198 = modelMatrix * boneTransform;
+    mat4 _198 = u_model * boneTransform;
     mat3 normalMatrix = transpose(inverse(mat3(_198[0].xyz, _198[1].xyz, _198[2].xyz)));
     vec3 T = normalize(normalMatrix * aTangent);
     vec3 N = normalize(normalMatrix * morphedNormal);
@@ -312,17 +301,17 @@ void main()
 )";
 
 // DX11 HLSL SM5.0
-static const char* kpbr_vert_hlsl = R"(cbuffer BoneMatrices : register(b8)
+static const char* kpbr_vert_hlsl = R"(cbuffer BoneMatrices : register(b2)
 {
     row_major float4x4 _36_u_bone_matrices[100] : packoffset(c0);
 };
 
-cbuffer MorphWeights : register(b9)
+cbuffer MorphWeights : register(b3)
 {
     float _138_u_morph_weights[4] : packoffset(c0);
 };
 
-cbuffer PerFrame : register(b0)
+cbuffer PerFrame : register(b1)
 {
     row_major float4x4 _166_vp : packoffset(c0);
     row_major float4x4 _166_view : packoffset(c4);

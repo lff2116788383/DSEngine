@@ -27,6 +27,31 @@
 #include "embed/postprocess_passthrough_frag.gen.h"
 #include "embed/bloom_downsample_comp.gen.h"
 #include "embed/bloom_upsample_comp.gen.h"
+#include "embed/fxaa_frag.gen.h"
+#include "embed/bloom_extract_frag.gen.h"
+#include "embed/bloom_composite_frag.gen.h"
+#include "embed/ssao_frag.gen.h"
+#include "embed/ssao_blur_frag.gen.h"
+#include "embed/ssao_apply_frag.gen.h"
+#include "embed/contact_shadow_frag.gen.h"
+#include "embed/bloom_composite_ssao_frag.gen.h"
+#include "embed/bloom_composite_ssao_ae_frag.gen.h"
+#include "embed/lum_compute_frag.gen.h"
+#include "embed/lum_adapt_frag.gen.h"
+#include "embed/tonemapping_frag.gen.h"
+#include "embed/color_grading_frag.gen.h"
+#include "embed/taa_resolve_frag.gen.h"
+#include "embed/dof_frag.gen.h"
+#include "embed/motion_blur_frag.gen.h"
+#include "embed/ssr_frag.gen.h"
+#include "embed/motion_vector_frag.gen.h"
+#include "embed/deferred_lighting_frag.gen.h"
+#include "embed/edge_detect_frag.gen.h"
+#include "embed/volumetric_fog_frag.gen.h"
+#include "embed/decal_frag.gen.h"
+#include "embed/wboit_composite_frag.gen.h"
+#include "embed/water_frag.gen.h"
+#include "embed/light_shaft_frag.gen.h"
 
 // glslang 运行时编译支持
 #ifdef DSE_HAS_GLSLANG
@@ -625,155 +650,53 @@ void VulkanShaderManager::InitPostProcessShader() {
         DEBUG_LOG_INFO("Vulkan post-process shader created: handle={}", postprocess_shader_handle_);
     }
 
-    // Bloom Extract shader（运行时 GLSL → SPIR-V）
+    // Bloom Extract shader（预编译 SPIR-V from gen.h）
     {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kBloomExtractFS;
-        bloom_extract_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        bloom_extract_shader_handle_ = CreateProgramFromSpirv(
+            generated_shaders::kpostprocess_vert_spv, generated_shaders::kpostprocess_vert_spv_size,
+            generated_shaders::kbloom_extract_frag_spv, generated_shaders::kbloom_extract_frag_spv_size);
         if (bloom_extract_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] BloomExtract shader created: handle={}", bloom_extract_shader_handle_);
+            DEBUG_LOG_INFO("[Vulkan] BloomExtract shader created (gen.h SPIR-V): handle={}", bloom_extract_shader_handle_);
         else
             DEBUG_LOG_WARN("[Vulkan] BloomExtract shader creation failed");
     }
 
-    // FXAA shader（运行时 GLSL → SPIR-V）
+    // FXAA shader（预编译 SPIR-V from gen.h）
     {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kFxaaFS;
-        fxaa_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
+        fxaa_shader_handle_ = CreateProgramFromSpirv(
+            generated_shaders::kpostprocess_vert_spv, generated_shaders::kpostprocess_vert_spv_size,
+            generated_shaders::kfxaa_frag_spv, generated_shaders::kfxaa_frag_spv_size);
         if (fxaa_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] FXAA shader created: handle={}", fxaa_shader_handle_);
+            DEBUG_LOG_INFO("[Vulkan] FXAA shader created (gen.h SPIR-V): handle={}", fxaa_shader_handle_);
         else
             DEBUG_LOG_WARN("[Vulkan] FXAA shader creation failed");
     }
 
-    // SSAO shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsaoFS;
-        ssao_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (ssao_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] SSAO shader created: handle={}", ssao_shader_handle_);
+    // ---- 以下全部使用预编译 SPIR-V (gen.h) ----
+    auto create_pp_spv = [&](const uint32_t* frag_spv, size_t frag_size, const char* name) -> unsigned int {
+        unsigned int h = CreateProgramFromSpirv(
+            generated_shaders::kpostprocess_vert_spv, generated_shaders::kpostprocess_vert_spv_size,
+            frag_spv, frag_size);
+        if (h)
+            DEBUG_LOG_INFO("[Vulkan] {} shader created (gen.h SPIR-V): handle={}", name, h);
         else
-            DEBUG_LOG_WARN("[Vulkan] SSAO shader creation failed");
-    }
+            DEBUG_LOG_WARN("[Vulkan] {} shader creation failed", name);
+        return h;
+    };
 
-    // SSAO Blur shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsaoBlurFS;
-        ssao_blur_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (ssao_blur_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] SSAO blur shader created: handle={}", ssao_blur_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] SSAO blur shader creation failed");
-    }
-
-    // Contact Shadow shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kContactShadowFS;
-        contact_shadow_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (contact_shadow_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] ContactShadow shader created: handle={}", contact_shadow_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] ContactShadow shader creation failed");
-    }
-
-    // Lum Compute shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLumComputeFS;
-        lum_compute_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (lum_compute_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] LumCompute shader created: handle={}", lum_compute_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] LumCompute shader creation failed");
-    }
-
-    // Lum Adapt shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLumAdaptFS;
-        lum_adapt_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (lum_adapt_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] LumAdapt shader created: handle={}", lum_adapt_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] LumAdapt shader creation failed");
-    }
-
-    // Tonemapping shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kTonemappingFS;
-        tonemapping_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (tonemapping_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Tonemapping shader created: handle={}", tonemapping_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Tonemapping shader creation failed");
-    }
-
-    // Bloom Composite + SSAO + AE shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kBloomCompositeSsaoAeFS;
-        bloom_composite_ssao_ae_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (bloom_composite_ssao_ae_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] BloomCompositeSsaoAe shader created: handle={}", bloom_composite_ssao_ae_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] BloomCompositeSsaoAe shader creation failed");
-    }
-
-    // Color Grading shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kColorGradingFS;
-        color_grading_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (color_grading_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] ColorGrading shader created: handle={}", color_grading_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] ColorGrading shader creation failed");
-    }
-
-    // TAA Resolve shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kTaaResolveFS;
-        taa_resolve_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (taa_resolve_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] TAA Resolve shader created: handle={}", taa_resolve_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] TAA Resolve shader creation failed");
-    }
-
-    // DOF shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDofFS;
-        dof_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (dof_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] DOF shader created: handle={}", dof_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] DOF shader creation failed");
-    }
-
-    // Motion Blur shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kMotionBlurFS;
-        motion_blur_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (motion_blur_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Motion Blur shader created: handle={}", motion_blur_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Motion Blur shader creation failed");
-    }
-
-    // SSR shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kSsrFS;
-        ssr_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (ssr_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] SSR shader created: handle={}", ssr_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] SSR shader creation failed");
-    }
-
-    // Motion Vector shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kMotionVectorFS;
-        motion_vector_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (motion_vector_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Motion Vector shader created: handle={}", motion_vector_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Motion Vector shader creation failed");
-    }
+    ssao_shader_handle_ = create_pp_spv(generated_shaders::kssao_frag_spv, generated_shaders::kssao_frag_spv_size, "SSAO");
+    ssao_blur_shader_handle_ = create_pp_spv(generated_shaders::kssao_blur_frag_spv, generated_shaders::kssao_blur_frag_spv_size, "SSAO Blur");
+    contact_shadow_shader_handle_ = create_pp_spv(generated_shaders::kcontact_shadow_frag_spv, generated_shaders::kcontact_shadow_frag_spv_size, "ContactShadow");
+    lum_compute_shader_handle_ = create_pp_spv(generated_shaders::klum_compute_frag_spv, generated_shaders::klum_compute_frag_spv_size, "LumCompute");
+    lum_adapt_shader_handle_ = create_pp_spv(generated_shaders::klum_adapt_frag_spv, generated_shaders::klum_adapt_frag_spv_size, "LumAdapt");
+    tonemapping_shader_handle_ = create_pp_spv(generated_shaders::ktonemapping_frag_spv, generated_shaders::ktonemapping_frag_spv_size, "Tonemapping");
+    bloom_composite_ssao_ae_shader_handle_ = create_pp_spv(generated_shaders::kbloom_composite_ssao_ae_frag_spv, generated_shaders::kbloom_composite_ssao_ae_frag_spv_size, "BloomCompositeSsaoAe");
+    color_grading_shader_handle_ = create_pp_spv(generated_shaders::kcolor_grading_frag_spv, generated_shaders::kcolor_grading_frag_spv_size, "ColorGrading");
+    taa_resolve_shader_handle_ = create_pp_spv(generated_shaders::ktaa_resolve_frag_spv, generated_shaders::ktaa_resolve_frag_spv_size, "TAA Resolve");
+    dof_shader_handle_ = create_pp_spv(generated_shaders::kdof_frag_spv, generated_shaders::kdof_frag_spv_size, "DOF");
+    motion_blur_shader_handle_ = create_pp_spv(generated_shaders::kmotion_blur_frag_spv, generated_shaders::kmotion_blur_frag_spv_size, "Motion Blur");
+    ssr_shader_handle_ = create_pp_spv(generated_shaders::kssr_frag_spv, generated_shaders::kssr_frag_spv_size, "SSR");
+    motion_vector_shader_handle_ = create_pp_spv(generated_shaders::kmotion_vector_frag_spv, generated_shaders::kmotion_vector_frag_spv_size, "Motion Vector");
 
     // GBuffer shader（复用 PBR 顶点着色器 + GBuffer 片段着色器）
     {
@@ -784,75 +707,13 @@ void VulkanShaderManager::InitPostProcessShader() {
             DEBUG_LOG_WARN("[Vulkan] GBuffer shader creation failed");
     }
 
-    // Deferred Lighting shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDeferredLightingFS;
-        deferred_lighting_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (deferred_lighting_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Deferred Lighting shader created: handle={}", deferred_lighting_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Deferred Lighting shader creation failed");
-    }
-
-    // Edge Detection (Outline) shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kEdgeDetectFS;
-        edge_detect_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (edge_detect_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Edge Detect shader created: handle={}", edge_detect_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Edge Detect shader creation failed");
-    }
-
-    // Volumetric Fog shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kVolumetricFogFS;
-        volumetric_fog_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (volumetric_fog_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Volumetric Fog shader created: handle={}", volumetric_fog_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Volumetric Fog shader creation failed");
-    }
-
-    // Decal shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kDecalFS;
-        decal_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (decal_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Decal shader created: handle={}", decal_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Decal shader creation failed");
-    }
-
-    // WBOIT Composite shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kWboitCompositeFS;
-        wboit_composite_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (wboit_composite_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] WBOIT Composite shader created: handle={}", wboit_composite_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] WBOIT Composite shader creation failed");
-    }
-
-    // Water shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kWaterFS;
-        water_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (water_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Water shader created: handle={}", water_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Water shader creation failed");
-    }
-
-    // Light Shaft shader
-    {
-        std::string fs = std::string(vulkan_shaders::kPostProcessHeader) + vulkan_shaders::kLightShaftFS;
-        light_shaft_shader_handle_ = CreateProgram(vulkan_shaders::kPostProcessVertex, fs);
-        if (light_shaft_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] Light Shaft shader created: handle={}", light_shaft_shader_handle_);
-        else
-            DEBUG_LOG_WARN("[Vulkan] Light Shaft shader creation failed");
-    }
+    deferred_lighting_shader_handle_ = create_pp_spv(generated_shaders::kdeferred_lighting_frag_spv, generated_shaders::kdeferred_lighting_frag_spv_size, "Deferred Lighting");
+    edge_detect_shader_handle_ = create_pp_spv(generated_shaders::kedge_detect_frag_spv, generated_shaders::kedge_detect_frag_spv_size, "Edge Detect");
+    volumetric_fog_shader_handle_ = create_pp_spv(generated_shaders::kvolumetric_fog_frag_spv, generated_shaders::kvolumetric_fog_frag_spv_size, "Volumetric Fog");
+    decal_shader_handle_ = create_pp_spv(generated_shaders::kdecal_frag_spv, generated_shaders::kdecal_frag_spv_size, "Decal");
+    wboit_composite_shader_handle_ = create_pp_spv(generated_shaders::kwboit_composite_frag_spv, generated_shaders::kwboit_composite_frag_spv_size, "WBOIT Composite");
+    water_shader_handle_ = create_pp_spv(generated_shaders::kwater_frag_spv, generated_shaders::kwater_frag_spv_size, "Water");
+    light_shaft_shader_handle_ = create_pp_spv(generated_shaders::klight_shaft_frag_spv, generated_shaders::klight_shaft_frag_spv_size, "Light Shaft");
 }
 
 // ============================================================================
