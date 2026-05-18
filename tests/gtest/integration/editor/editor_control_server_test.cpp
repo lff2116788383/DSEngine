@@ -1534,3 +1534,61 @@ TEST_F(ControlServerTest, UndoHistory_AfterUndo_CanRedo) {
     EXPECT_GE(resp.result["redo_count"].GetInt(), 1);
     EXPECT_FALSE(std::string(resp.result["redo_description"].GetString()).empty());
 }
+
+// ─── Test 98: entity_find_by_name 精确匹配 ────────────────────────────────────
+
+TEST_F(ControlServerTest, EntityFindByName_ExactMatch) {
+    Dispatch("dsengine_scene_new", "{}");
+    Dispatch("dsengine_entity_create", R"({"name":"UniqueAlpha"})");
+    Dispatch("dsengine_entity_create", R"({"name":"BetaEntity"})");
+
+    auto resp = Dispatch("dsengine_entity_find_by_name", R"({"name":"UniqueAlpha"})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 1);
+    EXPECT_FALSE(resp.result["entity_id"].IsNull());
+}
+
+// ─── Test 99: entity_find_by_name 部分匹配 ────────────────────────────────────
+
+TEST_F(ControlServerTest, EntityFindByName_PartialMatch) {
+    Dispatch("dsengine_scene_new", "{}");
+    Dispatch("dsengine_entity_create", R"({"name":"TreeA"})");
+    Dispatch("dsengine_entity_create", R"({"name":"TreeB"})");
+    Dispatch("dsengine_entity_create", R"({"name":"Rock"})");
+
+    auto resp = Dispatch("dsengine_entity_find_by_name",
+        R"({"name":"Tree","partial":true})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 2);
+    EXPECT_EQ(resp.result["matches"].Size(), 2u);
+}
+
+// ─── Test 100: entity_find_by_name 未找到时 count=0 entity_id=null ───────────
+
+TEST_F(ControlServerTest, EntityFindByName_NoMatch) {
+    auto resp = Dispatch("dsengine_entity_find_by_name",
+        R"({"name":"__nonexistent_xyz__"})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["count"].GetInt(), 0);
+    EXPECT_TRUE(resp.result["entity_id"].IsNull());
+}
+
+// ─── Test 101: entity_modify rename 支持 Undo ─────────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_RenameUndo) {
+    Dispatch("dsengine_scene_new", "{}");
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"OrigName"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string mp = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"name":"NewName"})";
+    Dispatch("dsengine_entity_modify", mp.c_str());
+
+    auto& registry = world_.registry();
+    auto ent = static_cast<entt::entity>(eid);
+    EXPECT_EQ(registry.get<dse::editor::EditorNameComponent>(ent).name, "NewName");
+
+    Dispatch("dsengine_editor_undo", "{}");
+    EXPECT_EQ(registry.get<dse::editor::EditorNameComponent>(ent).name, "OrigName");
+}

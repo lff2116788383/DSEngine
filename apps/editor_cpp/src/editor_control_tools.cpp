@@ -724,11 +724,25 @@ static JsonRpcResponse HandleEntityModify(
 
     // name
     if (params.HasMember("name") && params["name"].IsString()) {
+        std::string old_name;
+        if (registry.all_of<EditorNameComponent>(entity))
+            old_name = registry.get<EditorNameComponent>(entity).name;
+        std::string new_name = params["name"].GetString();
         if (registry.all_of<EditorNameComponent>(entity)) {
-            registry.get<EditorNameComponent>(entity).name = params["name"].GetString();
+            registry.get<EditorNameComponent>(entity).name = new_name;
         } else {
-            registry.emplace<EditorNameComponent>(entity).name = params["name"].GetString();
+            registry.emplace<EditorNameComponent>(entity).name = new_name;
         }
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(
+            std::make_unique<PropertyChangeCommand<std::string>>(
+                "Rename Entity",
+                old_name, new_name,
+                [&reg, entity](const std::string& v) {
+                    if (reg.valid(entity) && reg.all_of<EditorNameComponent>(entity))
+                        reg.get<EditorNameComponent>(entity).name = v;
+                }),
+            false);
     }
 
     // position / rotation / scale
@@ -1763,6 +1777,51 @@ static JsonRpcResponse HandleEntityReparent(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_entity_find_by_name ─────────────────────────────────────
+
+static JsonRpcResponse HandleEntityFindByName(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("name") || !params["name"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: name (string)");
+    }
+
+    std::string target = params["name"].GetString();
+    bool exact = !params.HasMember("partial") || !params["partial"].GetBool();
+
+    auto& registry = engine.pipeline()->world().registry();
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+
+    rapidjson::Value matches(rapidjson::kArrayType);
+    auto view = registry.view<EditorNameComponent>();
+    for (auto entity : view) {
+        const std::string& n = view.get<EditorNameComponent>(entity).name;
+        bool hit = exact ? (n == target) : (n.find(target) != std::string::npos);
+        if (!hit) continue;
+        rapidjson::Value obj(rapidjson::kObjectType);
+        obj.AddMember("entity_id", rapidjson::Value(static_cast<uint32_t>(entity)), alloc);
+        obj.AddMember("name", rapidjson::Value(n.c_str(), alloc), alloc);
+        matches.PushBack(obj, alloc);
+    }
+
+    int match_count = static_cast<int>(matches.Size());
+    uint32_t first_id = 0;
+    bool has_match = match_count > 0;
+    if (has_match) first_id = matches[0]["entity_id"].GetUint();
+
+    result.AddMember("matches", matches, alloc);
+    result.AddMember("count", rapidjson::Value(match_count), alloc);
+    if (has_match) {
+        result.AddMember("entity_id", rapidjson::Value(first_id), alloc);
+    } else {
+        result.AddMember("entity_id", rapidjson::Value(rapidjson::kNullType), alloc);
+    }
+    return MakeOk(std::move(result));
+}
+
 // ─── Tool: dsengine_undo_history ────────────────────────────────────────────
 
 static JsonRpcResponse HandleUndoHistory(
@@ -1907,6 +1966,7 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_prefab_instantiate",        HandlePrefabInstantiate },
     { "dsengine_scene_new",                 HandleSceneNew },
     { "dsengine_entity_reparent",           HandleEntityReparent },
+    { "dsengine_entity_find_by_name",       HandleEntityFindByName },
     { "dsengine_undo_history",              HandleUndoHistory },
     { "dsengine_selection_get",             HandleSelectionGet },
     { "dsengine_selection_set",             HandleSelectionSet },
