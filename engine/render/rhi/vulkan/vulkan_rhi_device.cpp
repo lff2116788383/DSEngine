@@ -23,6 +23,11 @@ namespace render {
 // VulkanCommandBuffer 实现
 // ============================================================
 
+void VulkanCommandBuffer::SetDevice(VulkanRhiDevice* device) {
+    device_ = device;
+    base_device_ = device;
+}
+
 void VulkanCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().BeginRenderPass(
@@ -40,44 +45,9 @@ void VulkanCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     device_->state_mgr().set_active_pipeline_state(pipeline_state_handle);
 }
 
-void VulkanCommandBuffer::SetCamera(const glm::mat4& view, const glm::mat4& projection) {
-    view_ = view;
-    projection_ = projection;
-}
-
-void VulkanCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
-    // DrawBatchItem 是 SpriteDrawItem 的别名，直接传递
-    if (!items.empty()) {
-        DrawSpriteBatch(items);
-    }
-}
-
 void VulkanCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-
-    // 将 pending 的阴影/光源全局数据派发到 draw executor
-    {
-        auto it = pending_mat4_array_.find("u_light_space_matrices");
-        if (it != pending_mat4_array_.end()) {
-            for (size_t i = 0; i < it->second.size() && i < 3; ++i)
-                device_->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
-        }
-    }
-    {
-        auto it = pending_float_array_.find("u_cascade_splits");
-        if (it != pending_float_array_.end()) {
-            for (size_t i = 0; i < it->second.size() && i < 3; ++i)
-                device_->SetGlobalCascadeSplit(static_cast<unsigned int>(i), it->second[i]);
-        }
-    }
-    {
-        auto it = pending_mat4_array_.find("u_spot_light_space_matrices");
-        if (it != pending_mat4_array_.end()) {
-            for (size_t i = 0; i < it->second.size() && i < 4; ++i)
-                device_->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
-        }
-    }
-
+    DispatchPendingLightArrays();
     device_->draw_executor().SetBoundSSBOs(device_->bound_ssbos());
     device_->draw_executor().DrawMeshBatch(
         vk_command_buffer_, items, view_, projection_,
@@ -95,18 +65,6 @@ void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
     // Vulkan 中清除在 BeginRenderPass 时通过 VkClearValue 处理
     // 此处为空操作，或在已开启 RenderPass 时用 vkCmdClearAttachments
     (void)color;
-}
-
-void VulkanCommandBuffer::SetGlobalMat4(const std::string& name, const glm::mat4& value) {
-    pending_mat4_[name] = value;
-}
-
-void VulkanCommandBuffer::SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) {
-    pending_mat4_array_[name] = values;
-}
-
-void VulkanCommandBuffer::SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) {
-    pending_float_array_[name] = values;
 }
 
 void VulkanCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
@@ -137,22 +95,9 @@ void VulkanCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items
         device_->state_mgr(), device_->shader_mgr());
 }
 
-void VulkanCommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalShadowMap(index, texture_handle);
-}
-
-void VulkanCommandBuffer::DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalSpotShadowMap(index, texture_handle);
-}
-
-void VulkanCommandBuffer::DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalPointShadowMap(index, texture_handle);
-}
-
 void VulkanCommandBuffer::Reset() {
     vk_command_buffer_ = VK_NULL_HANDLE;
-    view_ = glm::mat4(1.0f);
-    projection_ = glm::mat4(1.0f);
+    ResetBase();
 }
 
 // ============================================================

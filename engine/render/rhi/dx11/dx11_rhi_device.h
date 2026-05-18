@@ -13,7 +13,7 @@
 #ifndef DSE_RENDER_DX11_RHI_DEVICE_H
 #define DSE_RENDER_DX11_RHI_DEVICE_H
 
-#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/forwarding_command_buffer.h"
 #include "engine/render/rhi/dx11/dx11_context.h"
 #include "engine/render/rhi/dx11/dx11_resource_manager.h"
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
@@ -33,52 +33,27 @@ namespace render {
  *
  * Phase 1: stub 实现 — 所有方法为空操作
  */
-class DX11CommandBuffer final : public CommandBuffer {
+class DX11CommandBuffer final : public ForwardingCommandBuffer {
 public:
     void BeginRenderPass(const RenderPassDesc& render_pass) override;
     void EndRenderPass() override;
     void SetPipelineState(unsigned int pipeline_state_handle) override;
-    void SetCamera(const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawBatch(const std::vector<DrawBatchItem>& items) override;
     void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
     void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
-    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override;
-    void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override;
-    void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
     void DrawPostProcess(dse::render::PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-    void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
-    void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override;
-    void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override;
 
     /// 重置命令缓冲状态
     void Reset();
 
     /// 设置所属设备（由 DX11RhiDevice::CreateCommandBuffer 注入）
-    void SetDevice(class DX11RhiDevice* device) { device_ = device; }
-
-    // --- 全局 uniform 访问器（供后续 DrawExecutor 读取） ---
-    const std::unordered_map<std::string, glm::mat4>& pending_mat4() const { return pending_mat4_; }
-    const std::unordered_map<std::string, std::vector<glm::mat4>>& pending_mat4_array() const { return pending_mat4_array_; }
-    const std::unordered_map<std::string, std::vector<float>>& pending_float_array() const { return pending_float_array_; }
-    void ClearPendingUniforms() {
-        pending_mat4_.clear();
-        pending_mat4_array_.clear();
-        pending_float_array_.clear();
-    }
+    void SetDevice(class DX11RhiDevice* device);
 
 private:
     DX11RhiDevice* device_ = nullptr;
-    glm::mat4 view_ = glm::mat4(1.0f);
-    glm::mat4 projection_ = glm::mat4(1.0f);
-
-    /// 全局 uniform 暂存（SetGlobalMat4 等），绘制时由 DrawExecutor 消费
-    std::unordered_map<std::string, glm::mat4> pending_mat4_;
-    std::unordered_map<std::string, std::vector<glm::mat4>> pending_mat4_array_;
-    std::unordered_map<std::string, std::vector<float>> pending_float_array_;
 };
 
 /**

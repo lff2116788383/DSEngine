@@ -1,12 +1,12 @@
 /**
  * @file rhi_device.h
- * @brief 渲染硬件接口(RHI)抽象层 — 纯虚基类 RhiDevice + CommandBuffer + OpenGLCommandBuffer
+ * @brief 渲染硬件接口(RHI)抽象层 — 纯虚基类 RhiDevice + CommandBuffer
  *
- * 本文件仅包含后端无关的抽象接口和 OpenGL 命令缓冲。
+ * 本文件仅包含后端无关的抽象接口。
  * 具体后端实现位于各自头文件：
- * - gl_rhi_device.h    (OpenGLRhiDevice)
- * - vulkan/vulkan_rhi_device.h (VulkanRhiDevice)
- * - dx11/dx11_rhi_device.h     (DX11RhiDevice)
+ * - gl_command_buffer.h + gl_rhi_device.h    (OpenGL)
+ * - vulkan/vulkan_rhi_device.h (Vulkan)
+ * - dx11/dx11_rhi_device.h     (DX11)
  */
 
 #ifndef DSE_RHI_DEVICE_H
@@ -22,8 +22,6 @@
 #include <string>
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/postprocess_common.h"
-
-class OpenGLRhiDevice;
 
 /**
  * @class CommandBuffer
@@ -48,128 +46,10 @@ public:
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
-    /// 延迟阴影贴图绑定命令（Pass 中调用，Submit 时回放到 Device）
+    /// 阴影贴图绑定命令（Pass 中调用，直接委托到 RhiDevice）
     virtual void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
     virtual void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
     virtual void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
-};
-
-/**
- * @class OpenGLCommandBuffer
- * @brief OpenGL 命令缓冲实现，负责在前端收集命令，并在 Execute 阶段通过底层的 OpenGLRhiDevice 提交到 GPU
- */
-class OpenGLCommandBuffer final : public CommandBuffer {
-public:
-    void BeginRenderPass(const RenderPassDesc& render_pass) override;
-    void EndRenderPass() override;
-    void SetPipelineState(unsigned int pipeline_state_handle) override;
-    void SetCamera(const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawBatch(const std::vector<DrawBatchItem>& items) override;
-    void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
-    void ClearColor(const glm::vec4& color) override;
-    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override;
-    void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override;
-    void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
-    void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(dse::render::PostProcessRequest request) override;
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-    void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
-    void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override;
-    void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override;
-
-    void Execute(OpenGLRhiDevice* device);
-    void Reset();
-
-    /// 将 other 的所有录制命令追加到当前缓冲（用于合并 secondary buffers）
-    void AppendFrom(OpenGLCommandBuffer& other);
-
-private:
-    struct ClearCmd { uint64_t order; glm::vec4 color; };
-    struct BeginRenderPassCmd { uint64_t order; RenderPassDesc render_pass; };
-    struct EndRenderPassCmd { uint64_t order; };
-    struct SetPipelineStateCmd { uint64_t order; unsigned int pipeline_state_handle; };
-    struct DrawBatchCmd {
-        uint64_t order;
-        std::vector<SpriteDrawItem> items;
-        glm::mat4 view = glm::mat4(1.0f);
-        glm::mat4 projection = glm::mat4(1.0f);
-    };
-    struct DrawMeshBatchCmd {
-        uint64_t order;
-        std::vector<MeshDrawItem> items;
-        glm::mat4 view = glm::mat4(1.0f);
-        glm::mat4 projection = glm::mat4(1.0f);
-    };
-    struct SetGlobalMat4Cmd {
-        uint64_t order;
-        std::string name;
-        glm::mat4 value;
-    };
-    struct SetGlobalMat4ArrayCmd {
-        uint64_t order;
-        std::string name;
-        std::vector<glm::mat4> values;
-    };
-    struct SetGlobalFloatArrayCmd {
-        uint64_t order;
-        std::string name;
-        std::vector<float> values;
-    };
-    struct DrawSkyboxCmd {
-        uint64_t order;
-        unsigned int cubemap_texture_handle;
-        glm::mat4 view = glm::mat4(1.0f);
-        glm::mat4 projection = glm::mat4(1.0f);
-    };
-    struct DrawPostProcessCmd {
-        uint64_t order;
-        dse::render::PostProcessRequest request;
-    };
-    struct DrawParticles3DCmd {
-        uint64_t order;
-        std::vector<Particle3DDrawItem> items;
-        glm::mat4 view = glm::mat4(1.0f);
-        glm::mat4 projection = glm::mat4(1.0f);
-    };
-    struct CommandRef {
-        uint64_t order = 0;
-        int type = 0;
-        size_t index = 0;
-    };
-
-    glm::mat4 view_ = glm::mat4(1.0f);
-    glm::mat4 projection_ = glm::mat4(1.0f);
-    uint64_t next_cmd_order_ = 0;
-    std::vector<BeginRenderPassCmd> begin_render_pass_cmds_;
-    std::vector<EndRenderPassCmd> end_render_pass_cmds_;
-    std::vector<SetPipelineStateCmd> set_pipeline_state_cmds_;
-    std::vector<SetGlobalMat4Cmd> set_global_mat4_cmds_;
-    std::vector<SetGlobalMat4ArrayCmd> set_global_mat4_array_cmds_;
-    std::vector<SetGlobalFloatArrayCmd> set_global_float_array_cmds_;
-    std::vector<ClearCmd> clear_cmds_;
-    std::vector<DrawBatchCmd> draw_batch_cmds_;
-    std::vector<DrawMeshBatchCmd> draw_mesh_batch_cmds_;
-    std::vector<DrawSkyboxCmd> draw_skybox_cmds_;
-    std::vector<DrawPostProcessCmd> draw_post_process_cmds_;
-    struct DeferShadowMapCmd {
-        uint64_t order;
-        unsigned int index;
-        unsigned int texture_handle;
-        int shadow_type; // 0=CSM, 1=Spot, 2=Point
-    };
-
-    struct DrawHairStrandsCmd {
-        uint64_t order;
-        std::vector<HairDrawItem> items;
-        glm::mat4 view = glm::mat4(1.0f);
-        glm::mat4 projection = glm::mat4(1.0f);
-    };
-
-    std::vector<DrawParticles3DCmd> draw_particles3d_cmds_;
-    std::vector<DrawHairStrandsCmd> draw_hair_strands_cmds_;
-    std::vector<DeferShadowMapCmd> defer_shadow_map_cmds_;
 };
 
 /**

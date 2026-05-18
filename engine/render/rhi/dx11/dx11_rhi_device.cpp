@@ -21,6 +21,11 @@ namespace render {
 // DX11CommandBuffer 实现
 // ============================================================
 
+void DX11CommandBuffer::SetDevice(DX11RhiDevice* device) {
+    device_ = device;
+    base_device_ = device;
+}
+
 void DX11CommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     if (!device_) return;
     device_->draw_executor().BeginRenderPass(render_pass, device_->resource_mgr(), device_->state_mgr());
@@ -36,19 +41,9 @@ void DX11CommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     device_->state_mgr().ApplyPipelineState(pipeline_state_handle, device_->context().device_context());
 }
 
-void DX11CommandBuffer::SetCamera(const glm::mat4& view, const glm::mat4& projection) {
-    view_ = view;
-    projection_ = projection;
-}
-
-void DX11CommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
-    if (!items.empty()) {
-        DrawSpriteBatch(items);
-    }
-}
-
 void DX11CommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
     if (!device_ || items.empty()) return;
+    DispatchPendingLightArrays();
     device_->draw_executor().DrawMeshBatch(items, view_, projection_,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
@@ -66,34 +61,6 @@ void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     if (rtv) {
         float c[4] = {color.r, color.g, color.b, color.a};
         dc->ClearRenderTargetView(rtv, c);
-    }
-}
-
-void DX11CommandBuffer::SetGlobalMat4(const std::string& name, const glm::mat4& value) {
-    pending_mat4_[name] = value;
-}
-
-void DX11CommandBuffer::SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) {
-    pending_mat4_array_[name] = values;
-    if (!device_) return;
-    if (name == "u_light_space_matrices") {
-        for (size_t i = 0; i < values.size() && i < 3; ++i) {
-            device_->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), values[i]);
-        }
-    } else if (name == "u_spot_light_space_matrices") {
-        for (size_t i = 0; i < values.size() && i < 4; ++i) {
-            device_->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), values[i]);
-        }
-    }
-}
-
-void DX11CommandBuffer::SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) {
-    pending_float_array_[name] = values;
-    if (!device_) return;
-    if (name == "u_cascade_splits") {
-        for (size_t i = 0; i < values.size() && i < 3; ++i) {
-            device_->SetGlobalCascadeSplit(static_cast<unsigned int>(i), values[i]);
-        }
     }
 }
 
@@ -121,22 +88,8 @@ void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, 
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void DX11CommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalShadowMap(index, texture_handle);
-}
-
-void DX11CommandBuffer::DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalSpotShadowMap(index, texture_handle);
-}
-
-void DX11CommandBuffer::DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
-    if (device_) device_->SetGlobalPointShadowMap(index, texture_handle);
-}
-
 void DX11CommandBuffer::Reset() {
-    view_ = glm::mat4(1.0f);
-    projection_ = glm::mat4(1.0f);
-    ClearPendingUniforms();
+    ResetBase();
 }
 
 // ============================================================

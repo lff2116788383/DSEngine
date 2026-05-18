@@ -1,43 +1,32 @@
 /**
  * @file rendergraph_parallel_test.cpp
- * @brief RenderGraph ExecuteParallel 多线程测试
+ * @brief RenderGraph 执行测试
  *
  * 测试策略：
- * - 编译后波次划分正确性
- * - ExecuteParallel 配合 JobSystem 执行不崩溃
- * - 所有 Pass 均被执行
+ * - 编译后拓扑顺序正确性
+ * - Execute 串行执行所有 Pass
  * - 依赖链保证顺序正确
  */
 
 #include <gtest/gtest.h>
 #include "engine/render/render_graph.h"
-#include "engine/render/rhi/rhi_device.h"
-#include "engine/core/job_system.h"
+#include "engine/render/rhi/gl_command_buffer.h"
 #include <atomic>
 
 using namespace dse::render;
-using namespace dse::core;
 
-class RenderGraphParallelTest : public ::testing::Test {
+class RenderGraphExecuteTest : public ::testing::Test {
 protected:
     RenderGraph graph_;
-    JobSystem js_;
-
-    void SetUp() override {
-        js_.Init();
-    }
-    void TearDown() override {
-        js_.Shutdown();
-    }
 };
 
-TEST_F(RenderGraphParallelTest, 空图ExecuteParallel不崩溃) {
+TEST_F(RenderGraphExecuteTest, 空图Execute不崩溃) {
     graph_.Compile();
     OpenGLCommandBuffer cmd;
-    graph_.ExecuteParallel(cmd, js_);
+    graph_.Execute(cmd);
 }
 
-TEST_F(RenderGraphParallelTest, 单Pass并行执行) {
+TEST_F(RenderGraphExecuteTest, 单Pass执行) {
     auto color = graph_.DeclareResource("color");
     graph_.MarkOutput(color);
 
@@ -51,12 +40,12 @@ TEST_F(RenderGraphParallelTest, 单Pass并行执行) {
     EXPECT_EQ(graph_.compiled_pass_count(), 1u);
 
     OpenGLCommandBuffer cmd;
-    graph_.ExecuteParallel(cmd, js_);
+    graph_.Execute(cmd);
 
     EXPECT_EQ(counter.load(), 1);
 }
 
-TEST_F(RenderGraphParallelTest, 两独立Pass同波次) {
+TEST_F(RenderGraphExecuteTest, 两独立Pass均执行) {
     auto color_a = graph_.DeclareResource("color_a");
     auto color_b = graph_.DeclareResource("color_b");
     graph_.MarkOutput(color_a);
@@ -72,12 +61,12 @@ TEST_F(RenderGraphParallelTest, 两独立Pass同波次) {
     EXPECT_EQ(graph_.compiled_pass_count(), 2u);
 
     OpenGLCommandBuffer cmd;
-    graph_.ExecuteParallel(cmd, js_);
+    graph_.Execute(cmd);
 
     EXPECT_EQ(counter.load(), 2);
 }
 
-TEST_F(RenderGraphParallelTest, 依赖链顺序执行) {
+TEST_F(RenderGraphExecuteTest, 依赖链顺序执行) {
     auto depth = graph_.DeclareResource("depth");
     auto color = graph_.DeclareResource("color");
     graph_.MarkOutput(color);
@@ -101,12 +90,12 @@ TEST_F(RenderGraphParallelTest, 依赖链顺序执行) {
     ASSERT_TRUE(graph_.Compile());
 
     OpenGLCommandBuffer cmd;
-    graph_.ExecuteParallel(cmd, js_);
+    graph_.Execute(cmd);
 
     EXPECT_LT(shadow_order.load(), forward_order.load());
 }
 
-TEST_F(RenderGraphParallelTest, 菱形依赖全部执行) {
+TEST_F(RenderGraphExecuteTest, 菱形依赖全部执行) {
     auto depth = graph_.DeclareResource("depth");
     auto color_a = graph_.DeclareResource("color_a");
     auto color_b = graph_.DeclareResource("color_b");
@@ -135,7 +124,7 @@ TEST_F(RenderGraphParallelTest, 菱形依赖全部执行) {
     ASSERT_TRUE(graph_.Compile());
 
     OpenGLCommandBuffer cmd;
-    graph_.ExecuteParallel(cmd, js_);
+    graph_.Execute(cmd);
 
     EXPECT_EQ(counter.load(), 4);
 }

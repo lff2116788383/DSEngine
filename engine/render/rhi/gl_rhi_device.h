@@ -168,7 +168,7 @@ public:
                               const std::vector<unsigned int>& ebos) override;
     void BindVAOWithEBO(unsigned int vao, unsigned int ebo) override;
 
-    // --- 内部方法（供 OpenGLCommandBuffer::Execute 调用，委托到子系统） ---
+    // --- 内部方法（供 OpenGLCommandBuffer 直接调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
     void RealEndRenderPass();
     void RealSetPipelineState(unsigned int pipeline_state_handle);

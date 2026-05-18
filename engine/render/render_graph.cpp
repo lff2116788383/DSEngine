@@ -5,7 +5,6 @@
 
 #include "engine/render/render_graph.h"
 #include "engine/render/rhi/rhi_device.h"
-#include "engine/core/job_system.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -390,38 +389,6 @@ bool RenderGraph::Compile() {
         }
     }
 
-    // ---- 8. 计算波次：同一波次内的 Pass 无相互依赖 ----
-    compiled_waves_.clear();
-    {
-        // 为每个 pass 计算依赖深度（depth = max(all_dependency_depths) + 1）
-        std::unordered_map<uint32_t, int> pass_depth;
-        for (uint32_t pid : compiled_order_) {
-            auto pit = pass_id_to_idx_.find(pid);
-            if (pit == pass_id_to_idx_.end()) continue;
-            const auto& p = passes_[pit->second];
-            int max_dep_depth = -1;
-            // 检查此 pass 读取的资源，找到写入者的最大深度
-            for (const auto& rh : p.reads) {
-                for (const auto& res : resources_) {
-                    if (res.id == rh.id) {
-                        for (const auto& writer : res.writers) {
-                            auto dit = pass_depth.find(writer.id);
-                            if (dit != pass_depth.end()) {
-                                max_dep_depth = std::max(max_dep_depth, dit->second);
-                            }
-                        }
-                    }
-                }
-            }
-            int depth = max_dep_depth + 1;
-            pass_depth[pid] = depth;
-            if (depth >= static_cast<int>(compiled_waves_.size())) {
-                compiled_waves_.resize(static_cast<size_t>(depth) + 1);
-            }
-            compiled_waves_[static_cast<size_t>(depth)].push_back(pid);
-        }
-    }
-
     is_compiled_ = true;
     return true;
 }
@@ -472,53 +439,6 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
     }
 }
 
-void RenderGraph::ExecuteParallel(OpenGLCommandBuffer& primary, dse::core::JobSystem& job_system) {
-    if (!is_compiled_ || compiled_waves_.empty()) {
-        Execute(primary);
-        return;
-    }
-
-    for (const auto& wave : compiled_waves_) {
-        if (wave.size() <= 1) {
-            // 单 Pass 波次：直接在主线程录制，无开销
-            for (uint32_t pid : wave) {
-                auto it = pass_id_to_idx_.find(pid);
-                if (it != pass_id_to_idx_.end() && passes_[it->second].execute) {
-                    passes_[it->second].execute(primary);
-                }
-            }
-            continue;
-        }
-
-        // 多 Pass 波次：每个 Pass 录制到独立 secondary buffer，然后合并
-        std::vector<OpenGLCommandBuffer> secondaries(wave.size());
-        std::vector<dse::core::JobHandle> handles;
-        handles.reserve(wave.size());
-
-        for (size_t i = 0; i < wave.size(); ++i) {
-            uint32_t pid = wave[i];
-            auto it = pass_id_to_idx_.find(pid);
-            if (it == pass_id_to_idx_.end() || !passes_[it->second].execute) {
-                continue;
-            }
-            auto& exec_fn = passes_[it->second].execute;
-            auto* sec = &secondaries[i];
-            handles.push_back(job_system.Submit([&exec_fn, sec]() {
-                exec_fn(*sec);
-            }, dse::core::JobPriority::High));
-        }
-
-        // 等待所有录制完成
-        for (auto& h : handles) {
-            job_system.Wait(h);
-        }
-
-        // 按波次内顺序合并到主缓冲
-        for (auto& sec : secondaries) {
-            primary.AppendFrom(sec);
-        }
-    }
-}
 
 // ============================================================
 // 查询与重置
@@ -540,7 +460,6 @@ void RenderGraph::Reset() {
     resource_by_name_.clear();
     output_resources_.clear();
     compiled_order_.clear();
-    compiled_waves_.clear();
     pass_id_to_idx_.clear();
     next_resource_id_ = 1;
     next_pass_id_ = 1;

@@ -10,6 +10,7 @@
  */
 
 #include "engine/render/rhi/gl_rhi_device.h"
+#include "engine/render/rhi/gl_command_buffer.h"
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"
 #include <glad/gl.h>
@@ -108,244 +109,67 @@ static void InitComputeProcAddresses() {
 #include <string>
 
 // ============================================================
-// OpenGLCommandBuffer — 命令记录与回放（无状态，纯委托到 device）
+// OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice
 // ============================================================
 
-void OpenGLCommandBuffer::SetCamera(const glm::mat4& view, const glm::mat4& projection) {
-    view_ = view;
-    projection_ = projection;
+void OpenGLCommandBuffer::SetDevice(OpenGLRhiDevice* device) {
+    device_ = device;
+    base_device_ = device;
 }
 
 void OpenGLCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
-    begin_render_pass_cmds_.push_back({next_cmd_order_++, render_pass});
+    if (!device_) return;
+    device_->RealBeginRenderPass(render_pass);
 }
 
 void OpenGLCommandBuffer::EndRenderPass() {
-    end_render_pass_cmds_.push_back({next_cmd_order_++});
+    if (!device_) return;
+    device_->RealEndRenderPass();
 }
 
 void OpenGLCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
-    set_pipeline_state_cmds_.push_back({next_cmd_order_++, pipeline_state_handle});
-}
-
-void OpenGLCommandBuffer::SetGlobalMat4(const std::string& name, const glm::mat4& value) {
-    set_global_mat4_cmds_.push_back({next_cmd_order_++, name, value});
-}
-
-void OpenGLCommandBuffer::SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) {
-    set_global_mat4_array_cmds_.push_back({next_cmd_order_++, name, values});
-}
-
-void OpenGLCommandBuffer::SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) {
-    set_global_float_array_cmds_.push_back({next_cmd_order_++, name, values});
-}
-
-void OpenGLCommandBuffer::DrawBatch(const std::vector<DrawBatchItem>& items) {
-    DrawBatchCmd cmd;
-    cmd.order = next_cmd_order_++;
-    cmd.items = items;
-    cmd.view = view_;
-    cmd.projection = projection_;
-    draw_batch_cmds_.push_back(std::move(cmd));
+    if (!device_) return;
+    device_->RealSetPipelineState(pipeline_state_handle);
 }
 
 void OpenGLCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
-    if (items.empty()) return;
-    draw_mesh_batch_cmds_.push_back({next_cmd_order_++, items, view_, projection_});
+    if (!device_ || items.empty()) return;
+    DispatchPendingLightArrays();
+    device_->RealSubmitDrawMeshBatch(items, view_, projection_);
 }
 
 void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
-    DrawBatch(items);
-}
-
-void OpenGLCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
-    draw_skybox_cmds_.push_back({next_cmd_order_++, cubemap_texture_handle, view_, projection_});
+    if (!device_ || items.empty()) return;
+    device_->RealSubmitDrawBatch(items, view_, projection_);
 }
 
 void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
-    clear_cmds_.push_back({next_cmd_order_++, color});
+    if (!device_) return;
+    device_->RealClearColor(color);
+}
+
+void OpenGLCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
+    if (!device_) return;
+    device_->RealSubmitDrawSkybox(cubemap_texture_handle, view_, projection_);
 }
 
 void OpenGLCommandBuffer::DrawPostProcess(dse::render::PostProcessRequest request) {
-    draw_post_process_cmds_.push_back({next_cmd_order_++, std::move(request)});
+    if (!device_) return;
+    device_->RealSubmitDrawPostProcess(request);
 }
 
 void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (items.empty()) return;
-    draw_particles3d_cmds_.push_back({next_cmd_order_++, items, view, projection});
+    if (!device_ || items.empty()) return;
+    device_->RealSubmitDrawParticles3D(items, view, projection);
 }
 
 void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (items.empty()) return;
-    draw_hair_strands_cmds_.push_back({next_cmd_order_++, items, view, projection});
-}
-
-void OpenGLCommandBuffer::DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
-    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 0});
-}
-
-void OpenGLCommandBuffer::DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
-    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 1});
-}
-
-void OpenGLCommandBuffer::DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
-    defer_shadow_map_cmds_.push_back({next_cmd_order_++, index, texture_handle, 2});
-}
-
-void OpenGLCommandBuffer::AppendFrom(OpenGLCommandBuffer& other) {
-    const uint64_t offset = next_cmd_order_;
-    auto rebase = [offset](uint64_t order) { return order + offset; };
-
-    for (auto& c : other.begin_render_pass_cmds_)   { c.order = rebase(c.order); begin_render_pass_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.end_render_pass_cmds_)     { c.order = rebase(c.order); end_render_pass_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.set_pipeline_state_cmds_)   { c.order = rebase(c.order); set_pipeline_state_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.set_global_mat4_cmds_)      { c.order = rebase(c.order); set_global_mat4_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.set_global_mat4_array_cmds_){ c.order = rebase(c.order); set_global_mat4_array_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.set_global_float_array_cmds_){ c.order = rebase(c.order); set_global_float_array_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.clear_cmds_)               { c.order = rebase(c.order); clear_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_batch_cmds_)           { c.order = rebase(c.order); draw_batch_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_mesh_batch_cmds_)      { c.order = rebase(c.order); draw_mesh_batch_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_skybox_cmds_)          { c.order = rebase(c.order); draw_skybox_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_post_process_cmds_)    { c.order = rebase(c.order); draw_post_process_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_particles3d_cmds_)     { c.order = rebase(c.order); draw_particles3d_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.draw_hair_strands_cmds_)    { c.order = rebase(c.order); draw_hair_strands_cmds_.push_back(std::move(c)); }
-    for (auto& c : other.defer_shadow_map_cmds_)     { c.order = rebase(c.order); defer_shadow_map_cmds_.push_back(std::move(c)); }
-
-    next_cmd_order_ = offset + other.next_cmd_order_;
-    other.Reset();
+    if (!device_ || items.empty()) return;
+    device_->RealSubmitDrawHairStrands(items, view, projection);
 }
 
 void OpenGLCommandBuffer::Reset() {
-    begin_render_pass_cmds_.clear();
-    end_render_pass_cmds_.clear();
-    set_pipeline_state_cmds_.clear();
-    set_global_mat4_cmds_.clear();
-    set_global_mat4_array_cmds_.clear();
-    set_global_float_array_cmds_.clear();
-    clear_cmds_.clear();
-    draw_batch_cmds_.clear();
-    draw_mesh_batch_cmds_.clear();
-    draw_skybox_cmds_.clear();
-    draw_post_process_cmds_.clear();
-    draw_particles3d_cmds_.clear();
-    draw_hair_strands_cmds_.clear();
-    defer_shadow_map_cmds_.clear();
-    next_cmd_order_ = 0;
-}
-
-void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
-    if (!device) {
-        return;
-    }
-
-    // 收集所有命令并按提交顺序排序
-    std::vector<CommandRef> commands;
-    commands.reserve(begin_render_pass_cmds_.size() + set_pipeline_state_cmds_.size() + clear_cmds_.size() + draw_batch_cmds_.size() + draw_mesh_batch_cmds_.size() + end_render_pass_cmds_.size());
-    for (size_t i = 0; i < begin_render_pass_cmds_.size(); ++i) {
-        commands.push_back({begin_render_pass_cmds_[i].order, 0, i});
-    }
-    for (size_t i = 0; i < set_pipeline_state_cmds_.size(); ++i) {
-        commands.push_back({set_pipeline_state_cmds_[i].order, 1, i});
-    }
-    for (size_t i = 0; i < set_global_mat4_cmds_.size(); ++i) {
-        commands.push_back({set_global_mat4_cmds_[i].order, 8, i});
-    }
-    for (size_t i = 0; i < clear_cmds_.size(); ++i) {
-        commands.push_back({clear_cmds_[i].order, 2, i});
-    }
-    for (size_t i = 0; i < draw_batch_cmds_.size(); ++i) {
-        commands.push_back({draw_batch_cmds_[i].order, 3, i});
-    }
-    for (size_t i = 0; i < end_render_pass_cmds_.size(); ++i) {
-        commands.push_back({end_render_pass_cmds_[i].order, 4, i});
-    }
-    for (size_t i = 0; i < draw_mesh_batch_cmds_.size(); ++i) {
-        commands.push_back({draw_mesh_batch_cmds_[i].order, 5, i});
-    }
-    for (size_t i = 0; i < draw_skybox_cmds_.size(); ++i) {
-        commands.push_back({draw_skybox_cmds_[i].order, 7, i});
-    }
-    for (size_t i = 0; i < set_global_mat4_array_cmds_.size(); ++i) {
-        commands.push_back({set_global_mat4_array_cmds_[i].order, 9, i});
-    }
-    for (size_t i = 0; i < set_global_float_array_cmds_.size(); ++i) {
-        commands.push_back({set_global_float_array_cmds_[i].order, 10, i});
-    }
-    for (size_t i = 0; i < draw_post_process_cmds_.size(); ++i) {
-        commands.push_back({draw_post_process_cmds_[i].order, 11, i});
-    }
-    for (size_t i = 0; i < draw_particles3d_cmds_.size(); ++i) {
-        commands.push_back({draw_particles3d_cmds_[i].order, 12, i});
-    }
-    for (size_t i = 0; i < draw_hair_strands_cmds_.size(); ++i) {
-        commands.push_back({draw_hair_strands_cmds_[i].order, 14, i});
-    }
-    for (size_t i = 0; i < defer_shadow_map_cmds_.size(); ++i) {
-        commands.push_back({defer_shadow_map_cmds_[i].order, 13, i});
-    }
-    std::sort(commands.begin(), commands.end(), [](const CommandRef& a, const CommandRef& b) {
-        return a.order < b.order;
-    });
-
-    // 按顺序回放到 device
-    for (const auto& cmd : commands) {
-        if (cmd.type == 0) {
-            device->RealBeginRenderPass(begin_render_pass_cmds_[cmd.index].render_pass);
-        } else if (cmd.type == 1) {
-            device->RealSetPipelineState(set_pipeline_state_cmds_[cmd.index].pipeline_state_handle);
-        } else if (cmd.type == 8) {
-            const auto& mat_cmd = set_global_mat4_cmds_[cmd.index];
-            if (mat_cmd.name == "u_spot_light_space_matrix") {
-                device->SetGlobalSpotLightSpaceMatrix(mat_cmd.value);
-            } else if (mat_cmd.name == "u_light_space_matrix") {
-                device->SetGlobalLightSpaceMatrix(0, mat_cmd.value);
-            }
-        } else if (cmd.type == 9) {
-            const auto& mat_cmd = set_global_mat4_array_cmds_[cmd.index];
-            if (mat_cmd.name == "u_light_space_matrices") {
-                for(size_t j=0; j<3 && j<mat_cmd.values.size(); ++j) {
-                    device->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(j), mat_cmd.values[j]);
-                }
-            } else if (mat_cmd.name == "u_spot_light_space_matrices") {
-                for(size_t j=0; j<4 && j<mat_cmd.values.size(); ++j) {
-                    device->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(j), mat_cmd.values[j]);
-                }
-            }
-        } else if (cmd.type == 10) {
-            const auto& mat_cmd = set_global_float_array_cmds_[cmd.index];
-            if (mat_cmd.name == "u_cascade_splits") {
-                for(size_t j=0; j<3 && j<mat_cmd.values.size(); ++j) {
-                    device->SetGlobalCascadeSplit(static_cast<unsigned int>(j), mat_cmd.values[j]);
-                }
-            }
-        } else if (cmd.type == 2) {
-            device->RealClearColor(clear_cmds_[cmd.index].color);
-        } else if (cmd.type == 3) {
-            device->RealSubmitDrawBatch(draw_batch_cmds_[cmd.index].items, draw_batch_cmds_[cmd.index].view, draw_batch_cmds_[cmd.index].projection);
-        } else if (cmd.type == 4) {
-            device->RealEndRenderPass();
-        } else if (cmd.type == 5) {
-            device->RealSubmitDrawMeshBatch(draw_mesh_batch_cmds_[cmd.index].items, draw_mesh_batch_cmds_[cmd.index].view, draw_mesh_batch_cmds_[cmd.index].projection);
-        } else if (cmd.type == 7) {
-            device->RealSubmitDrawSkybox(draw_skybox_cmds_[cmd.index].cubemap_texture_handle, draw_skybox_cmds_[cmd.index].view, draw_skybox_cmds_[cmd.index].projection);
-        } else if (cmd.type == 11) {
-            device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].request);
-        } else if (cmd.type == 12) {
-            device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
-        } else if (cmd.type == 14) {
-            device->RealSubmitDrawHairStrands(draw_hair_strands_cmds_[cmd.index].items, draw_hair_strands_cmds_[cmd.index].view, draw_hair_strands_cmds_[cmd.index].projection);
-        } else if (cmd.type == 13) {
-            const auto& sc = defer_shadow_map_cmds_[cmd.index];
-            if (sc.shadow_type == 0) {
-                device->SetGlobalShadowMap(sc.index, sc.texture_handle);
-            } else if (sc.shadow_type == 1) {
-                device->SetGlobalSpotShadowMap(sc.index, sc.texture_handle);
-            } else if (sc.shadow_type == 2) {
-                device->SetGlobalPointShadowMap(sc.index, sc.texture_handle);
-            }
-        }
-    }
-    Reset();
+    ResetBase();
 }
 
 // ============================================================
@@ -829,17 +653,16 @@ unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc)
 // --- 命令缓冲 ---
 
 std::shared_ptr<CommandBuffer> OpenGLRhiDevice::CreateCommandBuffer() {
-    return std::make_shared<OpenGLCommandBuffer>();
+    auto cmd = std::make_shared<OpenGLCommandBuffer>();
+    cmd->SetDevice(this);
+    return cmd;
 }
 
-void OpenGLRhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
-    auto gl_cmd = std::dynamic_pointer_cast<OpenGLCommandBuffer>(cmd_buffer);
-    if (gl_cmd) {
-        gl_cmd->Execute(this);
-    }
+void OpenGLRhiDevice::Submit(std::shared_ptr<CommandBuffer> /*cmd_buffer*/) {
+    // 立即转发模式下，命令已在录制时执行，Submit 仅作为帧结束标记
 }
 
-// --- Real* 方法（由 OpenGLCommandBuffer::Execute 回调，委托到子系统） ---
+// --- Real* 方法（由 OpenGLCommandBuffer 直接调用，委托到子系统） ---
 
 void OpenGLRhiDevice::RealClearColor(const glm::vec4& color) {
     draw_executor_.ClearColor(color);

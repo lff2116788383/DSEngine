@@ -5,7 +5,7 @@
  * 覆盖场景（均不需要真实 GL 上下文）：
  *
  * 1. OpenGLRhiDevice 构造/析构/未初始化时接口安全
- * 2. OpenGLCommandBuffer 命令录制/Reset/AppendFrom
+ * 2. OpenGLCommandBuffer 立即转发/Reset
  * 3. GLDrawExecutor 全局状态边界检查
  * 4. GLShaderManager 未初始化默认值
  * 5. GLResourceManager 句柄分配递增 / 渲染目标存储查询
@@ -20,6 +20,7 @@
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include "engine/render/rhi/gl_rhi_device.h"
+#include "engine/render/rhi/gl_command_buffer.h"
 #include "engine/render/rhi/gl_draw_executor.h"
 #include "engine/render/rhi/gl_shader_manager.h"
 #include "engine/render/rhi/gl_resource_manager.h"
@@ -243,22 +244,8 @@ TEST(OpenGLCommandBufferTest, Reset重置状态) {
     cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
     cmd.DrawSkybox(100);
     cmd.Reset();
-    // Execute after Reset should not crash (no commands)
-    cmd.Execute(nullptr);
-}
-
-TEST(OpenGLCommandBufferTest, Execute_nullptr安全) {
-    OpenGLCommandBuffer cmd;
-    cmd.Execute(nullptr);
-}
-
-TEST(OpenGLCommandBufferTest, AppendFrom合并命令) {
-    OpenGLCommandBuffer cmd1;
-    OpenGLCommandBuffer cmd2;
-    cmd1.DrawSkybox(100);
-    cmd2.DrawSkybox(200);
-    cmd1.AppendFrom(cmd2);
-    // Should not crash
+    // After Reset, view/projection are identity, pending uniforms cleared
+    cmd.DrawSkybox(200);
 }
 
 // ============================================================
