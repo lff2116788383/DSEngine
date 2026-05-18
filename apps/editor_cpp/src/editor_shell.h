@@ -15,6 +15,7 @@ struct EditorShellContext {
     entt::entity& selected_entity;
     bool read_only = false;
     bool* show_preferences = nullptr;
+    bool* show_plugins = nullptr;
 };
 
 void BeginEditorShell();

@@ -1,0 +1,9 @@
+{
+    "name": "Hello World Plugin",
+    "version": "1.0.0",
+    "author": "DSEngine",
+    "description": "A minimal example plugin that connects to the Control Server and creates an entity.",
+    "runtime": "python",
+    "entry": "main.py",
+    "requires_ui": false
+}

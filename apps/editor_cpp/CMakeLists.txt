@@ -15,6 +15,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_app.cpp
     src/editor_control_server.cpp
     src/editor_control_tools.cpp
+    src/editor_plugin_manager.cpp
     src/editor_aux_panels.cpp
     src/editor_console_panel.cpp
     src/editor_file_dialog.cpp

@@ -478,6 +478,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
 
+    // 扫描插件目录
+    plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
+
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
     return true;
 }
@@ -499,6 +502,9 @@ void EditorApp::Run() {
         if (control_server_ && control_server_->IsRunning()) {
             control_server_->Poll(*engine_instance_);
         }
+
+        // Poll plugin process status
+        plugin_manager_.PollStatus();
 
         // Update editor camera (Edit mode only)
         if (GetEditorState() == EditorState::Edit) {
@@ -621,6 +627,9 @@ void EditorApp::Shutdown() {
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
 
+    // 停止所有插件
+    plugin_manager_.StopAll();
+
     // 停止 Control Server
     if (control_server_) {
         control_server_->Stop();
@@ -669,7 +678,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     last_editor_state_ = static_cast<int>(GetEditorState());
 
     dse::editor::BeginEditorShell();
-    dse::editor::EditorShellContext shell_context{*engine_instance_, registry, selected_entity_, GetEditorState() == EditorState::Play, &show_preferences_};
+    dse::editor::EditorShellContext shell_context{*engine_instance_, registry, selected_entity_, GetEditorState() == EditorState::Play, &show_preferences_, &show_plugins_panel_};
     dse::editor::DrawEditorMainMenu(shell_context);
 
     if (GetEditorState() == EditorState::Edit) {
@@ -719,6 +728,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::DrawBuildGameDialog();
 
     dse::editor::DrawPreferencesPanel(&show_preferences_);
+
+    // Plugin Manager 面板
+    if (show_plugins_panel_) {
+        ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Plugins", &show_plugins_panel_)) {
+            dse::editor::DrawPluginManagerPanel(plugin_manager_);
+        }
+        ImGui::End();
+    }
 
     dse::editor::EditorViewportPanelContext scene_viewport_context{registry, selected_entity_, scene_texture};
     dse::editor::DrawSceneViewportPanel(scene_viewport_context, g_current_gizmo_operation, g_current_gizmo_mode, BuildActiveCameraMatrices);

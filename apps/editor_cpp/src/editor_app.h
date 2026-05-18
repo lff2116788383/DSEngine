@@ -8,6 +8,7 @@
 #include <entt/entt.hpp>
 #include "editor_test_harness.h"
 #include "editor_control_server.h"
+#include "editor_plugin_manager.h"
 
 struct GLFWwindow;
 
@@ -56,6 +57,10 @@ private:
     // Control Server (WebSocket JSON-RPC)
     std::unique_ptr<ControlServer> control_server_;
 
+    // Plugin Manager
+    PluginManager plugin_manager_;
+    bool show_plugins_ = false;
+
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};
     int frames_remaining_ = -1;
@@ -71,6 +76,7 @@ private:
     bool collider_is_trigger_ = false;
     char localization_preview_key_[128] = "editor.preview.status";
     char localization_preview_fallback_[128] = "Language: {lang}";
+    bool show_plugins_panel_ = false;
     bool show_preferences_ = false;
 };
 

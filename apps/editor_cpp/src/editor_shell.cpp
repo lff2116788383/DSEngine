@@ -192,6 +192,9 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         if (context.show_preferences && ImGui::MenuItem("Preferences")) {
             *context.show_preferences = true;
         }
+        if (context.show_plugins && ImGui::MenuItem("Plugins")) {
+            *context.show_plugins = true;
+        }
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
