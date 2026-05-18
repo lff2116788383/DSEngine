@@ -404,7 +404,9 @@ void DrawLocalizationPreviewPanel(EditorContext& ctx,
     ImGui::End();
 }
 
-void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity) {
+void DrawAnimationPanel(EditorContext& ctx) {
+    auto& registry = ctx.registry;
+    auto selected_entity = ctx.selected_entity;
     ImGui::Begin("Animation");
 
     // Check if selected entity has Animator3DComponent

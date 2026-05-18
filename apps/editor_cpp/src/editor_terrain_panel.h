@@ -4,6 +4,8 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+namespace dse::editor { struct EditorContext; }
+
 namespace dse::editor {
 
 enum class TerrainBrushMode {
@@ -36,7 +38,7 @@ struct TerrainEditorState {
 TerrainEditorState& GetTerrainEditorState();
 
 /// Draw the Terrain Brush panel (brush tools + parameters)
-void DrawTerrainEditorPanel(entt::registry& registry, entt::entity selected_entity);
+void DrawTerrainEditorPanel(EditorContext& ctx);
 
 /// Draw the brush circle overlay on the Scene viewport.
 void DrawTerrainBrushOverlay(entt::registry& registry,

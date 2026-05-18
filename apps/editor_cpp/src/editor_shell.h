@@ -10,7 +10,7 @@ void EndEditorShell();
 void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr);
 
 /// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
-void DrawSceneTabBar(entt::registry& registry);
+void DrawSceneTabBar(EditorContext& ctx);
 
 /// Get/Set the current scene file path (for window title display)
 const std::string& GetCurrentScenePath();

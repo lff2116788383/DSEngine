@@ -200,8 +200,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     ImGui::EndMenuBar();
 }
 
-void DrawSceneTabBar(entt::registry& registry) {
-    SceneTabManager::Get().DrawTabBar(registry);
+void DrawSceneTabBar(EditorContext& ctx) {
+    SceneTabManager::Get().DrawTabBar(ctx.registry);
 }
 
 } // namespace dse::editor

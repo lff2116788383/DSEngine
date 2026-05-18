@@ -13,7 +13,7 @@ void DrawConsolePanel();
 void DrawLocalizationPreviewPanel(EditorContext& ctx,
                                   char* key_buf, std::size_t key_size,
                                   char* fallback_buf, std::size_t fallback_size);
-void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity);
+void DrawAnimationPanel(EditorContext& ctx);
 void DrawTilePalettePanel(EditorContext& ctx);
 
 } // namespace dse::editor

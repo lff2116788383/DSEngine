@@ -1,4 +1,5 @@
 #include "editor_toolbar.h"
+#include "editor_context.h"
 
 #include <memory>
 #include <vector>
@@ -72,10 +73,9 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
     g_editor_state = EditorState::Edit;
 }
 
-void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
-                       entt::registry& registry,
-                       entt::entity& selected_entity) {
-    (void)engine;
+void DrawEditorToolbar(dse::editor::EditorContext& ctx) {
+    auto& registry = ctx.registry;
+    auto& selected_entity = ctx.selected_entity;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 4));
     ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);

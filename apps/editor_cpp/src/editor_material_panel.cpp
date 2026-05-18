@@ -12,7 +12,9 @@
 
 namespace dse::editor {
 
-void DrawMaterialPanel(entt::registry& registry, entt::entity selected_entity) {
+void DrawMaterialPanel(EditorContext& ctx) {
+    auto& registry = ctx.registry;
+    auto selected_entity = ctx.selected_entity;
     ImGui::Begin("Material");
 
     bool has_mesh = (selected_entity != entt::null &&

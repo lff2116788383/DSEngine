@@ -692,12 +692,12 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_);
 
     if (!is_play) {
-        dse::editor::DrawSceneTabBar(ctx.registry);
+        dse::editor::DrawSceneTabBar(ctx);
     }
 
     dse::editor::ProcessShortcuts(ctx);
 
-    DrawEditorToolbar(ctx.engine, ctx.registry, ctx.selected_entity);
+    DrawEditorToolbar(ctx);
 
     dse::editor::DrawHierarchyPanel(ctx);
 
@@ -711,10 +711,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         localization_preview_fallback_, sizeof(localization_preview_fallback_));
 
     dse::editor::DrawProfilerPanel(ctx);
-    dse::editor::DrawAnimationPanel(ctx.registry, ctx.selected_entity);
-    dse::editor::DrawMaterialPanel(ctx.registry, ctx.selected_entity);
+    dse::editor::DrawAnimationPanel(ctx);
+    dse::editor::DrawMaterialPanel(ctx);
     dse::editor::DrawTilePalettePanel(ctx);
-    dse::editor::DrawTerrainEditorPanel(ctx.registry, ctx.selected_entity);
+    dse::editor::DrawTerrainEditorPanel(ctx);
     dse::editor::DrawLuaConsolePanel();
     dse::editor::DrawBuildGameDialog();
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <entt/entt.hpp>
+#include "editor_context.h"
 
 namespace dse::editor {
 
-void DrawMaterialPanel(entt::registry& registry, entt::entity selected_entity);
+void DrawMaterialPanel(EditorContext& ctx);
 
 } // namespace dse::editor

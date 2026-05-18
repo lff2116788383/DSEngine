@@ -1,4 +1,5 @@
 #include "editor_terrain_panel.h"
+#include "editor_context.h"
 
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
@@ -254,7 +255,9 @@ static void ApplySplatBrush(TerrainComponent& terrain,
 // Panel drawing
 // ---------------------------------------------------------------------------
 
-void DrawTerrainEditorPanel(entt::registry& registry, entt::entity selected_entity) {
+void DrawTerrainEditorPanel(EditorContext& ctx) {
+    auto& registry = ctx.registry;
+    auto selected_entity = ctx.selected_entity;
     ImGui::Begin("Terrain Brush");
 
     auto& state = GetTerrainEditorState();
