@@ -16,9 +16,6 @@
 #include <functional>
 #include <glm/glm.hpp>
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
-#include <cstdint>
 #include <string>
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/postprocess_common.h"

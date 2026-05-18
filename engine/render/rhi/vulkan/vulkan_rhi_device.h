@@ -13,7 +13,7 @@
 #ifndef DSE_RENDER_VULKAN_RHI_DEVICE_H
 #define DSE_RENDER_VULKAN_RHI_DEVICE_H
 
-#include "engine/render/rhi/forwarding_command_buffer.h"
+#include "engine/render/rhi/vulkan/vulkan_command_buffer.h"
 #include "engine/render/rhi/vulkan/vulkan_context.h"
 #include "engine/render/rhi/vulkan/vulkan_resource_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
@@ -26,41 +26,6 @@
 
 namespace dse {
 namespace render {
-
-/**
- * @class VulkanCommandBuffer
- * @brief Vulkan 命令缓冲实现，录制渲染命令并提交到 VulkanRhiDevice
- *
- * 继承 ForwardingCommandBuffer，使用 VkCommandBuffer 录制命令，
- * Submit 时通过 vkEndCommandBuffer + vkQueueSubmit 提交。
- */
-class VulkanCommandBuffer final : public ForwardingCommandBuffer {
-public:
-    void BeginRenderPass(const RenderPassDesc& render_pass) override;
-    void EndRenderPass() override;
-    void SetPipelineState(unsigned int pipeline_state_handle) override;
-    void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
-    void ClearColor(const glm::vec4& color) override;
-    void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(PostProcessRequest request) override;
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-
-    /// 获取底层 VkCommandBuffer
-    VkCommandBuffer GetVkCommandBuffer() const { return vk_command_buffer_; }
-    void SetVkCommandBuffer(VkCommandBuffer cmd) { vk_command_buffer_ = cmd; }
-
-    /// 重置命令缓冲状态
-    void Reset();
-
-    /// 设置所属设备（由 VulkanRhiDevice::CreateCommandBuffer 注入）
-    void SetDevice(class VulkanRhiDevice* device);
-
-private:
-    VkCommandBuffer vk_command_buffer_ = VK_NULL_HANDLE;
-    VulkanRhiDevice* device_ = nullptr;
-};
 
 /**
  * @class VulkanRhiDevice

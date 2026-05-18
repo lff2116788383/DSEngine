@@ -13,7 +13,7 @@
 #ifndef DSE_RENDER_DX11_RHI_DEVICE_H
 #define DSE_RENDER_DX11_RHI_DEVICE_H
 
-#include "engine/render/rhi/forwarding_command_buffer.h"
+#include "engine/render/rhi/dx11/dx11_command_buffer.h"
 #include "engine/render/rhi/dx11/dx11_context.h"
 #include "engine/render/rhi/dx11/dx11_resource_manager.h"
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
@@ -26,35 +26,6 @@
 
 namespace dse {
 namespace render {
-
-/**
- * @class DX11CommandBuffer
- * @brief D3D11 命令缓冲实现，录制渲染命令并提交到 DX11RhiDevice
- *
- * Phase 1: stub 实现 — 所有方法为空操作
- */
-class DX11CommandBuffer final : public ForwardingCommandBuffer {
-public:
-    void BeginRenderPass(const RenderPassDesc& render_pass) override;
-    void EndRenderPass() override;
-    void SetPipelineState(unsigned int pipeline_state_handle) override;
-    void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
-    void ClearColor(const glm::vec4& color) override;
-    void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(PostProcessRequest request) override;
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
-
-    /// 重置命令缓冲状态
-    void Reset();
-
-    /// 设置所属设备（由 DX11RhiDevice::CreateCommandBuffer 注入）
-    void SetDevice(class DX11RhiDevice* device);
-
-private:
-    DX11RhiDevice* device_ = nullptr;
-};
 
 /**
  * @class DX11RhiDevice
