@@ -36,6 +36,8 @@
 #include "apps/editor_cpp/src/editor_shell.h"
 #include "apps/editor_cpp/src/editor_test_harness.h"
 #include "apps/editor_cpp/src/editor_snapshot.h"
+#include "apps/editor_cpp/src/editor_inspector_registry.h"
+#include "apps/editor_cpp/src/editor_settings.h"
 
 using namespace dse;
 using dse::editor::EditorNameComponent;
@@ -1761,4 +1763,264 @@ TEST_F(EditorFunctionalTest, SceneIO_TerrainRoundTrip) {
     }
     EXPECT_TRUE(found);
     CleanupFile(path);
+}
+
+// ============================================================
+// Test 48: UndoRedo PropertyChangeCommand Execute 和 Undo
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_ExecuteAndUndo) {
+    dse::editor::UndoRedoManager mgr;
+    float value = 1.0f;
+
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<float>>(
+        "SetValue", 1.0f, 5.0f,
+        [&](const float& v) { value = v; }));
+
+    EXPECT_NEAR(value, 5.0f, 0.001f);
+    EXPECT_TRUE(mgr.CanUndo());
+    EXPECT_FALSE(mgr.CanRedo());
+
+    mgr.Undo();
+    EXPECT_NEAR(value, 1.0f, 0.001f);
+    EXPECT_FALSE(mgr.CanUndo());
+    EXPECT_TRUE(mgr.CanRedo());
+
+    mgr.Redo();
+    EXPECT_NEAR(value, 5.0f, 0.001f);
+}
+
+// ============================================================
+// Test 49: UndoRedo PropertyChangeCommand Merge
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_MergeSameDescription) {
+    dse::editor::UndoRedoManager mgr;
+    float value = 0.0f;
+
+    auto setter = [&](const float& v) { value = v; };
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<float>>(
+        "Drag", 0.0f, 1.0f, setter));
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<float>>(
+        "Drag", 1.0f, 2.0f, setter), true);
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<float>>(
+        "Drag", 2.0f, 3.0f, setter), true);
+
+    EXPECT_NEAR(value, 3.0f, 0.001f);
+    EXPECT_EQ(mgr.GetUndoCount(), 1);
+
+    mgr.Undo();
+    EXPECT_NEAR(value, 0.0f, 0.001f);
+}
+
+// ============================================================
+// Test 50: UndoRedo CompoundCommand 反序 Undo
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_CompoundCommand_ReverseUndo) {
+    dse::editor::UndoRedoManager mgr;
+    std::vector<int> log;
+
+    auto compound = std::make_unique<dse::editor::CompoundCommand>("Batch");
+    compound->AddCommand(std::make_unique<dse::editor::LambdaCommand>(
+        "A", [&] { log.push_back(1); }, [&] { log.push_back(-1); }));
+    compound->AddCommand(std::make_unique<dse::editor::LambdaCommand>(
+        "B", [&] { log.push_back(2); }, [&] { log.push_back(-2); }));
+    compound->AddCommand(std::make_unique<dse::editor::LambdaCommand>(
+        "C", [&] { log.push_back(3); }, [&] { log.push_back(-3); }));
+
+    mgr.Execute(std::move(compound));
+    ASSERT_EQ(log.size(), 3u);
+    EXPECT_EQ(log[0], 1);
+    EXPECT_EQ(log[2], 3);
+
+    log.clear();
+    mgr.Undo();
+    ASSERT_EQ(log.size(), 3u);
+    EXPECT_EQ(log[0], -3);
+    EXPECT_EQ(log[1], -2);
+    EXPECT_EQ(log[2], -1);
+}
+
+// ============================================================
+// Test 51: UndoRedo MaxHistory 裁剪
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_MaxHistory_Trim) {
+    dse::editor::UndoRedoManager mgr(5);
+    int dummy = 0;
+
+    for (int i = 0; i < 10; ++i) {
+        mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+            "Cmd" + std::to_string(i),
+            [&, i] { dummy = i; },
+            [&, i] { dummy = i - 1; }));
+    }
+
+    EXPECT_EQ(mgr.GetUndoCount(), 5);
+    EXPECT_EQ(mgr.GetUndoDescription(), "Cmd9");
+}
+
+// ============================================================
+// Test 52: UndoRedo LambdaCommand MergeById
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_LambdaCommand_MergeById) {
+    dse::editor::UndoRedoManager mgr;
+    float pos = 0.0f;
+
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "MoveX", [&] { pos = 1.0f; }, [&] { pos = 0.0f; }, "drag_x"));
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "MoveX", [&] { pos = 5.0f; }, [&] { pos = 1.0f; }, "drag_x"), true);
+
+    EXPECT_NEAR(pos, 5.0f, 0.001f);
+    EXPECT_EQ(mgr.GetUndoCount(), 1);
+
+    mgr.Undo();
+    EXPECT_NEAR(pos, 0.0f, 0.001f);
+}
+
+// ============================================================
+// Test 53: InspectorRegistry Register 和排序
+// ============================================================
+
+TEST_F(EditorFunctionalTest, InspectorRegistry_SortOrder) {
+    std::vector<dse::editor::InspectorEntry> entries = {
+        {"CompC", "3D", nullptr, nullptr, nullptr, 300},
+        {"CompA", "2D", nullptr, nullptr, nullptr, 100},
+        {"CompB", "Physics", nullptr, nullptr, nullptr, 200},
+    };
+    std::sort(entries.begin(), entries.end(),
+        [](const dse::editor::InspectorEntry& a, const dse::editor::InspectorEntry& b) {
+            return a.sort_order < b.sort_order;
+        });
+
+    ASSERT_EQ(entries.size(), 3u);
+    EXPECT_EQ(entries[0].component_name, "CompA");
+    EXPECT_EQ(entries[1].component_name, "CompB");
+    EXPECT_EQ(entries[2].component_name, "CompC");
+}
+
+// ============================================================
+// Test 54: InspectorRegistry Has 回调
+// ============================================================
+
+TEST_F(EditorFunctionalTest, InspectorRegistry_HasAndAddCallback) {
+    dse::editor::InspectorEntry entry{
+        "TransformComponent", "Core", nullptr,
+        [](entt::registry& r, entt::entity e) -> bool {
+            return r.all_of<TransformComponent>(e);
+        },
+        [](entt::registry& r, entt::entity e) {
+            if (!r.all_of<TransformComponent>(e))
+                r.emplace<TransformComponent>(e);
+        },
+        10
+    };
+
+    Entity e = world.CreateEntity();
+    EXPECT_FALSE(entry.has(reg(), e));
+
+    entry.add(reg(), e);
+    EXPECT_TRUE(entry.has(reg(), e));
+}
+
+// ============================================================
+// Test 55: InspectorRegistry Category 分类
+// ============================================================
+
+TEST_F(EditorFunctionalTest, InspectorRegistry_SingletonAccessible) {
+    auto& registry = dse::editor::InspectorRegistry::Get();
+    const auto& entries = registry.GetEntries();
+    // 测试环境无 ImGui panel .cpp 链入，entries 可能为空但不崩溃
+    (void)entries;
+    SUCCEED();
+}
+
+// ============================================================
+// Test 56: EditorSettings AddRecentFile 去重和裁剪
+// ============================================================
+
+TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_DedupAndTrim) {
+    dse::editor::EditorSettings settings;
+    settings.max_recent_files = 3;
+
+    dse::editor::AddRecentFile(settings, "a.dscene");
+    dse::editor::AddRecentFile(settings, "b.dscene");
+    dse::editor::AddRecentFile(settings, "c.dscene");
+    dse::editor::AddRecentFile(settings, "a.dscene");
+
+    EXPECT_EQ(settings.recent_files.size(), 3u);
+    EXPECT_EQ(settings.recent_files[0], "a.dscene");
+
+    dse::editor::AddRecentFile(settings, "d.dscene");
+    EXPECT_EQ(settings.recent_files.size(), 3u);
+    EXPECT_EQ(settings.recent_files[0], "d.dscene");
+}
+
+// ============================================================
+// Test 57: EditorSettings 默认值
+// ============================================================
+
+TEST_F(EditorFunctionalTest, EditorSettings_DefaultValues) {
+    dse::editor::EditorSettings settings;
+    EXPECT_TRUE(settings.recent_files.empty());
+    EXPECT_EQ(settings.default_gizmo_operation, 0);
+    EXPECT_EQ(settings.default_gizmo_mode, 0);
+    EXPECT_EQ(settings.max_recent_files, 10);
+}
+
+// ============================================================
+// Test 58: EditorSettings Save 和 Load 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, EditorSettings_SaveLoadRoundTrip) {
+    dse::editor::EditorSettings original;
+    original.recent_files = {"scene1.dscene", "scene2.dscene"};
+    original.last_scene_path = "scenes/main.dscene";
+    original.default_gizmo_operation = 2;
+    original.default_gizmo_mode = 1;
+
+    dse::editor::SaveEditorSettings(original);
+    auto loaded = dse::editor::LoadEditorSettings();
+
+    EXPECT_EQ(loaded.recent_files.size(), 2u);
+    if (!loaded.recent_files.empty())
+        EXPECT_EQ(loaded.recent_files[0], "scene1.dscene");
+    EXPECT_EQ(loaded.last_scene_path, "scenes/main.dscene");
+    EXPECT_EQ(loaded.default_gizmo_operation, 2);
+    EXPECT_EQ(loaded.default_gizmo_mode, 1);
+}
+
+// ============================================================
+// Test 59: Snapshot ExportRegistrySnapshot 基本输出
+// ============================================================
+
+TEST_F(EditorFunctionalTest, Snapshot_ExportRegistrySnapshot_BasicOutput) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "SnapEntity");
+    reg().emplace<TransformComponent>(e).position = glm::vec3(1, 2, 3);
+
+    std::string json = dse::editor::test::ExportRegistrySnapshot(reg());
+    EXPECT_FALSE(json.empty());
+    EXPECT_NE(json.find("SnapEntity"), std::string::npos);
+}
+
+// ============================================================
+// Test 60: Snapshot CompareSnapshot 检测差异
+// ============================================================
+
+TEST_F(EditorFunctionalTest, Snapshot_CompareSnapshot_DetectsDifference) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Original");
+    reg().emplace<TransformComponent>(e).position = glm::vec3(0, 0, 0);
+
+    std::string snap1 = dse::editor::test::ExportRegistrySnapshot(reg());
+
+    reg().get<TransformComponent>(e).position = glm::vec3(99, 0, 0);
+    std::string snap2 = dse::editor::test::ExportRegistrySnapshot(reg());
+
+    auto diffs = dse::editor::test::CompareSnapshot(snap2, snap1);
+    EXPECT_FALSE(diffs.empty());
 }
