@@ -152,6 +152,11 @@ void CopyRegistry(entt::registry& dst, entt::registry& src) {
             terrain.is_dirty = true;
             dst.emplace<dse::TerrainComponent>(new_ent, std::move(terrain));
         }
+        if (src.all_of<dse::RigidBody3DComponent>(entity)) {
+            auto rb = src.get<dse::RigidBody3DComponent>(entity);
+            rb.runtime_body = nullptr;
+            dst.emplace<dse::RigidBody3DComponent>(new_ent, std::move(rb));
+        }
     }
 }
 

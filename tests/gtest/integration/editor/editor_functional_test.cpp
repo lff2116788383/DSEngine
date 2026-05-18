@@ -25,6 +25,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_physics.h"
 
 // Editor modules (headless-safe, no ImGui/GLFW calls in these paths)
 #include "apps/editor_cpp/src/editor_shared_components.h"
@@ -1032,4 +1033,262 @@ TEST_F(EditorFunctionalTest, CopyRegistry_MultiComponent_Integrity) {
         EXPECT_NEAR(r.gravity_scale, 2.0f, 0.01f);
     }
     EXPECT_TRUE(found);
+}
+
+// ============================================================
+// Test 25: SceneIO PointLight 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_PointLightRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "PointLightEnt");
+    auto& pl = reg().emplace<dse::PointLightComponent>(e);
+    pl.intensity = 3.5f;
+    pl.radius = 20.0f;
+    pl.falloff = 1.5f;
+    pl.cast_shadow = true;
+    pl.color = glm::vec3(0.9f, 0.7f, 0.3f);
+
+    const auto path = TempPath("dse_test_pointlight.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::PointLightComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::PointLightComponent>(en);
+        EXPECT_NEAR(r.intensity, 3.5f, 0.01f);
+        EXPECT_NEAR(r.radius, 20.0f, 0.01f);
+        EXPECT_NEAR(r.falloff, 1.5f, 0.01f);
+        EXPECT_TRUE(r.cast_shadow);
+        EXPECT_NEAR(r.color.r, 0.9f, 0.01f);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 26: SceneIO SpotLight 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SpotLightRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "SpotLightEnt");
+    auto& sl = reg().emplace<dse::SpotLightComponent>(e);
+    sl.intensity = 2.0f;
+    sl.radius = 15.0f;
+    sl.inner_cone_angle = 15.0f;
+    sl.outer_cone_angle = 30.0f;
+    sl.cast_shadow = false;
+    sl.color = glm::vec3(0.5f, 0.5f, 1.0f);
+
+    const auto path = TempPath("dse_test_spotlight.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::SpotLightComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::SpotLightComponent>(en);
+        EXPECT_NEAR(r.intensity, 2.0f, 0.01f);
+        EXPECT_NEAR(r.inner_cone_angle, 15.0f, 0.01f);
+        EXPECT_NEAR(r.outer_cone_angle, 30.0f, 0.01f);
+        EXPECT_FALSE(r.cast_shadow);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 27: SceneIO SkyLight 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SkyLightRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "SkyLightEnt");
+    auto& sky = reg().emplace<dse::SkyLightComponent>(e);
+    sky.intensity = 0.8f;
+    sky.up_color = glm::vec3(0.4f, 0.6f, 1.0f);
+    sky.down_color = glm::vec3(0.2f, 0.15f, 0.1f);
+
+    const auto path = TempPath("dse_test_skylight.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::SkyLightComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::SkyLightComponent>(en);
+        EXPECT_NEAR(r.intensity, 0.8f, 0.01f);
+        EXPECT_NEAR(r.up_color.r, 0.4f, 0.01f);
+        EXPECT_NEAR(r.down_color.g, 0.15f, 0.01f);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 28: SceneTabManager dirty 状态追踪
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneTabManager_DirtyStateTracking) {
+    auto& tab_mgr = dse::editor::SceneTabManager::Get();
+    tab_mgr.Init("Untitled");
+
+    EXPECT_FALSE(tab_mgr.GetActiveTab().dirty);
+    EXPECT_FALSE(tab_mgr.IsAnyTabDirty());
+
+    tab_mgr.MarkDirty();
+    EXPECT_TRUE(tab_mgr.GetActiveTab().dirty);
+    EXPECT_TRUE(tab_mgr.IsAnyTabDirty());
+
+    tab_mgr.MarkClean();
+    EXPECT_FALSE(tab_mgr.GetActiveTab().dirty);
+    EXPECT_FALSE(tab_mgr.IsAnyTabDirty());
+
+    tab_mgr.NewScene(reg());
+    tab_mgr.MarkDirty();
+    EXPECT_TRUE(tab_mgr.IsAnyTabDirty());
+
+    tab_mgr.SwitchTo(0, reg());
+    EXPECT_FALSE(tab_mgr.GetActiveTab().dirty);
+    EXPECT_TRUE(tab_mgr.IsAnyTabDirty());
+
+    tab_mgr.Init("Untitled");
+}
+
+// ============================================================
+// Test 29: Prefab 多组件完整性
+// ============================================================
+
+TEST_F(EditorFunctionalTest, Prefab_MultiComponent_RoundTrip) {
+    Entity src = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(src, "MultiCompPrefab");
+    auto& t = reg().emplace<TransformComponent>(src);
+    t.position = glm::vec3(5.0f, 0.0f, 0.0f);
+    t.scale = glm::vec3(2.0f, 2.0f, 2.0f);
+    auto& mr = reg().emplace<dse::MeshRendererComponent>(src);
+    mr.mesh_path = "assets/sphere.dmesh";
+    mr.metallic = 0.8f;
+    auto& anim = reg().emplace<dse::Animator3DComponent>(src);
+    anim.dskel_path = "assets/hero.dskel";
+    anim.speed = 0.5f;
+
+    const auto prefab_path = TempPath("dse_test_multicomp.dprefab");
+    ASSERT_TRUE(dse::editor::SaveEntityAsPrefab(reg(), src, prefab_path.string()));
+
+    Entity inst = dse::editor::InstantiatePrefab(world, reg(), prefab_path.string());
+    ASSERT_TRUE(reg().valid(inst));
+
+    ASSERT_TRUE(reg().all_of<TransformComponent>(inst));
+    ASSERT_TRUE(reg().all_of<dse::MeshRendererComponent>(inst));
+    ASSERT_TRUE(reg().all_of<dse::Animator3DComponent>(inst));
+
+    EXPECT_NEAR(reg().get<TransformComponent>(inst).position.x, 5.0f, 0.01f);
+    EXPECT_EQ(reg().get<dse::MeshRendererComponent>(inst).mesh_path, "assets/sphere.dmesh");
+    EXPECT_NEAR(reg().get<dse::MeshRendererComponent>(inst).metallic, 0.8f, 0.01f);
+    EXPECT_EQ(reg().get<dse::Animator3DComponent>(inst).dskel_path, "assets/hero.dskel");
+    EXPECT_NEAR(reg().get<dse::Animator3DComponent>(inst).speed, 0.5f, 0.01f);
+
+    CleanupFile(prefab_path);
+}
+
+// ============================================================
+// Test 30: SceneIO Animator3D 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_Animator3DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "AnimatorEnt");
+    auto& anim = reg().emplace<dse::Animator3DComponent>(e);
+    anim.dskel_path = "assets/hero.dskel";
+    anim.danim_path = "assets/walk.danim";
+    anim.speed = 1.5f;
+    anim.loop = false;
+
+    const auto path = TempPath("dse_test_animator3d.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::Animator3DComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::Animator3DComponent>(en);
+        EXPECT_EQ(r.dskel_path, "assets/hero.dskel");
+        EXPECT_EQ(r.danim_path, "assets/walk.danim");
+        EXPECT_NEAR(r.speed, 1.5f, 0.01f);
+        EXPECT_FALSE(r.loop);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 31: SceneIO RigidBody3D 往返 + CopyRegistry bug 验证
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_RigidBody3DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "RB3DEnt");
+    auto& rb = reg().emplace<dse::RigidBody3DComponent>(e);
+    rb.type = dse::RigidBody3DType::Dynamic;
+    rb.mass = 5.0f;
+    rb.gravity_scale = 0.5f;
+    rb.use_gravity = true;
+
+    const auto path = TempPath("dse_test_rigidbody3d.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::RigidBody3DComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::RigidBody3DComponent>(en);
+        EXPECT_EQ(r.type, dse::RigidBody3DType::Dynamic);
+        EXPECT_NEAR(r.mass, 5.0f, 0.01f);
+        EXPECT_NEAR(r.gravity_scale, 0.5f, 0.01f);
+        EXPECT_TRUE(r.use_gravity);
+        EXPECT_EQ(r.runtime_body, static_cast<void*>(nullptr));
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+
+    // CopyRegistry 不再丢失 RigidBody3D（bug fix 验证）
+    entt::registry copy;
+    dse::editor::CopyRegistry(copy, reg());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(copy), 1u);
+    bool copy_found = false;
+    for (auto en : copy.storage<entt::entity>()) {
+        if (!copy.valid(en)) continue;
+        if (!copy.all_of<dse::RigidBody3DComponent>(en)) continue;
+        copy_found = true;
+        EXPECT_NEAR(copy.get<dse::RigidBody3DComponent>(en).mass, 5.0f, 0.01f);
+        EXPECT_EQ(copy.get<dse::RigidBody3DComponent>(en).runtime_body, static_cast<void*>(nullptr));
+    }
+    EXPECT_TRUE(copy_found);
 }
