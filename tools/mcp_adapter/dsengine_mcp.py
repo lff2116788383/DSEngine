@@ -169,6 +169,25 @@ MCP_TOOLS = [
                         },
                         "required": ["type", "properties"]
                     }
+                },
+                "add_components": {
+                    "type": "array",
+                    "description": "Add components to entity. Items: type string or {type, properties} object.",
+                    "items": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {
+                                "type": "object",
+                                "properties": {"type": {"type": "string"}, "properties": {"type": "object"}},
+                                "required": ["type"]
+                            }
+                        ]
+                    }
+                },
+                "remove_components": {
+                    "type": "array",
+                    "description": "Remove components by type name.",
+                    "items": {"type": "string"}
                 }
             },
             "required": ["entity_id"]

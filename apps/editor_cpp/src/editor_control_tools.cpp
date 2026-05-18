@@ -50,6 +50,8 @@ static JsonRpcResponse MakeToolError(int code, const std::string& msg) {
 static void CollectEntityComponents(entt::registry& registry, entt::entity entity,
                                      rapidjson::Value& arr, rapidjson::Document::AllocatorType& alloc,
                                      bool include_properties);
+static bool RemoveComponentByType(entt::registry& registry, entt::entity entity,
+                                   const std::string& type);
 
 // ─── Tool: dsengine_lua_execute ─────────────────────────────────────────────
 
@@ -688,6 +690,39 @@ static JsonRpcResponse HandleEntityModify(
         }
     }
 
+    // add_components: 批量添加组件（复用 AddComponentByType）
+    std::vector<std::string> added_list;
+    if (params.HasMember("add_components") && params["add_components"].IsArray()) {
+        for (auto& item : params["add_components"].GetArray()) {
+            std::string ctype;
+            const rapidjson::Value* props = nullptr;
+            if (item.IsString()) {
+                ctype = item.GetString();
+            } else if (item.IsObject() && item.HasMember("type") && item["type"].IsString()) {
+                ctype = item["type"].GetString();
+                if (item.HasMember("properties") && item["properties"].IsObject())
+                    props = &item["properties"];
+            }
+            if (!ctype.empty()) {
+                AddComponentByType(registry, entity, ctype, props);
+                added_list.push_back(ctype);
+            }
+        }
+    }
+
+    // remove_components: 批量移除组件（复用 RemoveComponentByType）
+    std::vector<std::string> removed_list;
+    if (params.HasMember("remove_components") && params["remove_components"].IsArray()) {
+        for (auto& item : params["remove_components"].GetArray()) {
+            if (item.IsString()) {
+                std::string ctype = item.GetString();
+                if (RemoveComponentByType(registry, entity, ctype)) {
+                    removed_list.push_back(ctype);
+                }
+            }
+        }
+    }
+
     rapidjson::Document result;
     result.SetObject();
     auto& alloc = result.GetAllocator();
@@ -699,6 +734,16 @@ static JsonRpcResponse HandleEntityModify(
             comps_copy.PushBack(rapidjson::Value(v.GetString(), alloc), alloc);
         }
         result.AddMember("modified_components", comps_copy, alloc);
+    }
+    if (!added_list.empty()) {
+        rapidjson::Value arr(rapidjson::kArrayType);
+        for (auto& s : added_list) arr.PushBack(rapidjson::Value(s.c_str(), alloc), alloc);
+        result.AddMember("added_components", arr, alloc);
+    }
+    if (!removed_list.empty()) {
+        rapidjson::Value arr(rapidjson::kArrayType);
+        for (auto& s : removed_list) arr.PushBack(rapidjson::Value(s.c_str(), alloc), alloc);
+        result.AddMember("removed_components", arr, alloc);
     }
     return MakeOk(std::move(result));
 }
