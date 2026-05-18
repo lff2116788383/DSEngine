@@ -388,6 +388,26 @@ bool EditorApp::Init(int argc, char* argv[]) {
         return false;
     }
 
+    // Layout version check: if the stored version doesn't match, delete the old ini
+    // so BuildDefaultDockLayout rebuilds from scratch on next launch.
+    {
+        static constexpr int kLayoutVersion = 2;
+        const auto ini_path = GetEditorBinPath() / "editor_layout.ini";
+        const auto ver_path = GetEditorBinPath() / "editor_layout.ver";
+        bool needs_reset = true;
+        if (std::filesystem::exists(ver_path)) {
+            std::ifstream vf(ver_path);
+            int stored_ver = 0;
+            vf >> stored_ver;
+            needs_reset = (stored_ver != kLayoutVersion);
+        }
+        if (needs_reset) {
+            std::filesystem::remove(ini_path);
+            std::ofstream vf(ver_path);
+            vf << kLayoutVersion;
+        }
+    }
+
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

@@ -16,4 +16,7 @@ void DrawSceneTabBar(EditorContext& ctx);
 const std::string& GetCurrentScenePath();
 void SetCurrentScenePath(const std::string& path);
 
+/// Force rebuild of dock layout on the next frame (clears first_time guard).
+void ResetEditorLayout();
+
 } // namespace dse::editor

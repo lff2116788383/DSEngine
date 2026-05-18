@@ -12,6 +12,9 @@
 #include "editor_settings.h"
 #include "editor_scene_tabs.h"
 #include "editor_build_game.h"
+#include "editor_icons.h"
+
+#include <filesystem>
 
 namespace dse::editor {
 
@@ -29,34 +32,37 @@ void SetCurrentScenePath(const std::string& path) {
 
 namespace {
 
+static bool s_layout_dirty = true;
+
 void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
-    static bool first_time = true;
-    if (!first_time) {
+    if (!s_layout_dirty) {
         return;
     }
-    first_time = false;
+    s_layout_dirty = false;
 
     ImGui::DockBuilderRemoveNode(dockspace_id);
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace_id, viewport_size);
 
     auto dock_id_main = dockspace_id;
-    auto dock_id_top = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up, 0.05f, nullptr, &dock_id_main);
-    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.30f, nullptr, &dock_id_main);
-    auto dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, nullptr, &dock_id_main);
-    auto dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, nullptr, &dock_id_main);
+    auto dock_id_top    = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up,    0.05f, nullptr, &dock_id_main);
+    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down,  0.24f, nullptr, &dock_id_main);
+    auto dock_id_left   = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left,  0.18f, nullptr, &dock_id_main);
+    auto dock_id_right  = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.24f, nullptr, &dock_id_main);
 
-    ImGui::DockBuilderDockWindow("Toolbar", dock_id_top);
-    ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
-    ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
-    ImGui::DockBuilderDockWindow("Material", dock_id_right);
-    ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Animation", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Profiler", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Tile Palette", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Scene", dock_id_main);
-    ImGui::DockBuilderDockWindow("Game", dock_id_main);
+    ImGui::DockBuilderDockWindow("Toolbar",              dock_id_top);
+    ImGui::DockBuilderDockWindow("Hierarchy",             dock_id_left);
+    ImGui::DockBuilderDockWindow("Inspector",             dock_id_right);
+    ImGui::DockBuilderDockWindow("Material",              dock_id_right);
+    ImGui::DockBuilderDockWindow("Project",               dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Console",               dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Animation",             dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Profiler",              dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Tile Palette",          dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Localization Preview",  dock_id_bottom);
+    ImGui::DockBuilderDockWindow(MDI_ICON_CODE "  Lua Console", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Scene",                 dock_id_main);
+    ImGui::DockBuilderDockWindow("Game",                  dock_id_main);
 
     ImGuiDockNode* node = ImGui::DockBuilderGetNode(dock_id_top);
     if (node) {
@@ -67,6 +73,10 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
 }
 
 } // namespace
+
+void ResetEditorLayout() {
+    s_layout_dirty = true;
+}
 
 void BeginEditorShell() {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
@@ -198,6 +208,10 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Separator();
         if (show_chat && ImGui::MenuItem("AI Chat")) {
             *show_chat = true;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Reset Layout")) {
+            ResetEditorLayout();
         }
         ImGui::EndMenu();
     }
