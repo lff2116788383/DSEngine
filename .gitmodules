@@ -69,3 +69,6 @@
 [submodule "depends/recastnavigation"]
 	path = depends/recastnavigation
 	url = https://github.com/recastnavigation/recastnavigation.git
+[submodule "depends/IXWebSocket"]
+	path = depends/IXWebSocket
+	url = https://github.com/machinezone/IXWebSocket.git

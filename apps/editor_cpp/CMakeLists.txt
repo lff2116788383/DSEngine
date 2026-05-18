@@ -1,3 +1,10 @@
+# ─── IXWebSocket (WebSocket server for Control Server / MCP) ────────────────
+set(USE_TLS OFF CACHE BOOL "" FORCE)
+set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+set(BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_SOURCE_DIR}/depends/IXWebSocket ${CMAKE_CURRENT_BINARY_DIR}/IXWebSocket)
+
 set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c)
 if(NOT EXISTS ${DSE_GLAD_SOURCE})
     set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glad/src/glad.c)
@@ -68,7 +75,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends
 )
 
-target_link_libraries(dse_editor_cpp PRIVATE dse_engine opengl32 comdlg32)
+target_link_libraries(dse_editor_cpp PRIVATE dse_engine ixwebsocket opengl32 comdlg32)
 
 # 将编译产物放到 bin 目录下
 set_target_properties(dse_editor_cpp PROPERTIES 
