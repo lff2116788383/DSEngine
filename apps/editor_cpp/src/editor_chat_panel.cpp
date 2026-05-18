@@ -1,4 +1,5 @@
 #include "editor_chat_panel.h"
+#include "editor_chat_protocol.h"
 #include "editor_control_server.h"
 #include "editor_console_panel.h"
 
@@ -307,54 +308,36 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
             std::string line = std::move(pending_output_.front());
             pending_output_.pop_front();
 
-            // Parse JSON line from bridge
-            rapidjson::Document doc;
-            doc.Parse(line.c_str());
-            if (doc.HasParseError() || !doc.IsObject()) {
+            auto bmsg = ParseBridgeMessage(line);
+
+            if (!bmsg.valid) {
                 messages_.push_back({ChatRole::System, "[bridge] " + line});
                 continue;
             }
 
-            std::string type;
-            if (doc.HasMember("type") && doc["type"].IsString())
-                type = doc["type"].GetString();
-
-            if (type == "assistant_message") {
-                std::string content;
-                if (doc.HasMember("content") && doc["content"].IsString())
-                    content = doc["content"].GetString();
-                messages_.push_back({ChatRole::Assistant, content});
+            switch (bmsg.type) {
+            case BridgeMessageType::AssistantMessage:
+                messages_.push_back({ChatRole::Assistant, bmsg.content});
                 waiting_for_response_ = false;
                 scroll_to_bottom_ = true;
-            }
-            else if (type == "tool_call") {
-                std::string name, args, call_id;
-                if (doc.HasMember("name") && doc["name"].IsString())
-                    name = doc["name"].GetString();
-                if (doc.HasMember("arguments") && doc["arguments"].IsString())
-                    args = doc["arguments"].GetString();
-                if (doc.HasMember("call_id") && doc["call_id"].IsString())
-                    call_id = doc["call_id"].GetString();
-
-                messages_.push_back({ChatRole::System, "Calling: " + name});
+                break;
+            case BridgeMessageType::ToolCall:
+                messages_.push_back({ChatRole::System, "Calling: " + bmsg.tool_name});
                 scroll_to_bottom_ = true;
-
-                ExecuteToolCall(name, args, call_id, server, engine);
-            }
-            else if (type == "error") {
-                std::string msg;
-                if (doc.HasMember("message") && doc["message"].IsString())
-                    msg = doc["message"].GetString();
-                messages_.push_back({ChatRole::System, "Error: " + msg});
+                ExecuteToolCall(bmsg.tool_name, bmsg.tool_args, bmsg.call_id, server, engine);
+                break;
+            case BridgeMessageType::Error:
+                messages_.push_back({ChatRole::System, "Error: " + bmsg.content});
                 waiting_for_response_ = false;
                 scroll_to_bottom_ = true;
-            }
-            else if (type == "status") {
-                std::string msg;
-                if (doc.HasMember("message") && doc["message"].IsString())
-                    msg = doc["message"].GetString();
-                messages_.push_back({ChatRole::System, msg});
+                break;
+            case BridgeMessageType::Status:
+                messages_.push_back({ChatRole::System, bmsg.content});
                 scroll_to_bottom_ = true;
+                break;
+            default:
+                messages_.push_back({ChatRole::System, "[bridge] " + line});
+                break;
             }
         }
     }

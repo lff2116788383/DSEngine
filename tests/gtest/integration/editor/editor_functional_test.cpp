@@ -38,6 +38,7 @@
 #include "apps/editor_cpp/src/editor_snapshot.h"
 #include "apps/editor_cpp/src/editor_inspector_registry.h"
 #include "apps/editor_cpp/src/editor_settings.h"
+#include "apps/editor_cpp/src/editor_chat_protocol.h"
 
 using namespace dse;
 using dse::editor::EditorNameComponent;
@@ -2146,4 +2147,119 @@ TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_IgnoresUntitledAndEmpt
 
     EXPECT_EQ(settings.recent_files.size(), 1u);
     EXPECT_EQ(settings.recent_files[0], "valid.dscene");
+}
+
+// ============================================================
+// Test 67: ChatProtocol ParseBridgeMessage - assistant_message
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_AssistantMessage) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"assistant_message","content":"Hello world"})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::AssistantMessage);
+    EXPECT_EQ(msg.content, "Hello world");
+}
+
+// ============================================================
+// Test 68: ChatProtocol ParseBridgeMessage - tool_call
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_ToolCall) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"tool_call","name":"dsengine_entity_create","arguments":"{\"name\":\"Box\"}","call_id":"abc123"})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::ToolCall);
+    EXPECT_EQ(msg.tool_name, "dsengine_entity_create");
+    EXPECT_EQ(msg.call_id, "abc123");
+    EXPECT_FALSE(msg.tool_args.empty());
+}
+
+// ============================================================
+// Test 69: ChatProtocol ParseBridgeMessage - error
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Error) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"error","message":"API key missing"})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::Error);
+    EXPECT_EQ(msg.content, "API key missing");
+}
+
+// ============================================================
+// Test 70: ChatProtocol ParseBridgeMessage - status
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Status) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"status","message":"Connected"})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::Status);
+    EXPECT_EQ(msg.content, "Connected");
+}
+
+// ============================================================
+// Test 71: ChatProtocol ParseBridgeMessage - invalid JSON
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_InvalidJSON) {
+    auto msg = dse::editor::ParseBridgeMessage("not json at all");
+    EXPECT_FALSE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::Unknown);
+    EXPECT_EQ(msg.content, "not json at all");
+}
+
+// ============================================================
+// Test 72: ChatProtocol ParseBridgeMessage - unknown type
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_UnknownType) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"custom_event","data":123})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::Unknown);
+}
+
+// ============================================================
+// Test 73: ChatProtocol BuildUserMessage 格式正确
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_BuildUserMessage) {
+    std::string line = dse::editor::BuildUserMessage("Create a cube");
+    EXPECT_TRUE(line.back() == '\n');
+
+    rapidjson::Document doc;
+    doc.Parse(line.c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_STREQ(doc["type"].GetString(), "user_message");
+    EXPECT_STREQ(doc["content"].GetString(), "Create a cube");
+}
+
+// ============================================================
+// Test 74: ChatProtocol BuildToolResult 格式正确
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_BuildToolResult) {
+    std::string line = dse::editor::BuildToolResult("call_42", R"({"ok":true})");
+    EXPECT_TRUE(line.back() == '\n');
+
+    rapidjson::Document doc;
+    doc.Parse(line.c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_STREQ(doc["type"].GetString(), "tool_result");
+    EXPECT_STREQ(doc["call_id"].GetString(), "call_42");
+    EXPECT_STREQ(doc["result"].GetString(), R"({"ok":true})");
+}
+
+// ============================================================
+// Test 75: ChatProtocol ParseBridgeMessage - 空 content 字段
+// ============================================================
+
+TEST_F(EditorFunctionalTest, ChatProtocol_Parse_EmptyContent) {
+    auto msg = dse::editor::ParseBridgeMessage(
+        R"({"type":"assistant_message","content":""})");
+    EXPECT_TRUE(msg.valid);
+    EXPECT_EQ(msg.type, dse::editor::BridgeMessageType::AssistantMessage);
+    EXPECT_TRUE(msg.content.empty());
 }
