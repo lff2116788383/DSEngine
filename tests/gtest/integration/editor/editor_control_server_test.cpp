@@ -829,3 +829,81 @@ TEST_F(ControlServerTest, EntityRemoveComponent_NonExistent_ReturnsFalse) {
     ASSERT_FALSE(resp.is_error) << resp.error_message;
     EXPECT_FALSE(resp.result["removed"].GetBool());
 }
+
+// ─── Test 60: modify_components 数组批量 patch ─────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponents_BatchArray) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"BatchEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    // 添加 Camera3D 和 DirectionalLight
+    auto addComp = [&](const char* type) {
+        std::string p = R"({"entity_id":)" + std::to_string(eid) +
+            R"(,"type":")" + type + R"(","properties":{}})";
+        ASSERT_FALSE(Dispatch("dsengine_entity_add_component", p.c_str()).is_error);
+    };
+    addComp("Camera3D");
+    addComp("DirectionalLight");
+
+    // 批量 patch
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_components":[)"
+        R"({"type":"Camera3D","properties":{"fov":75.0}},)"
+        R"({"type":"DirectionalLight","properties":{"intensity":4.2}})"
+        R"(]})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    auto& registry = world_.registry();
+    const auto entity = static_cast<entt::entity>(eid);
+    EXPECT_NEAR(registry.get<Camera3DComponent>(entity).fov, 75.0f, 0.01f);
+    EXPECT_NEAR(registry.get<dse::DirectionalLight3DComponent>(entity).intensity, 4.2f, 0.01f);
+}
+
+// ─── Test 61: modify_component 修改 AudioSource ──────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponent_AudioSource) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"AudioEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string add = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"AudioSource","properties":{}})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", add.c_str()).is_error);
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_component":{"type":"AudioSource","properties":{"volume":0.6,"pitch":1.25,"loop":true}}})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    const auto& as = world_.registry().get<AudioSourceComponent>(
+        static_cast<entt::entity>(eid));
+    EXPECT_NEAR(as.volume, 0.6f, 0.01f);
+    EXPECT_NEAR(as.pitch, 1.25f, 0.01f);
+    EXPECT_TRUE(as.loop);
+}
+
+// ─── Test 62: modify_component 修改 SpotLight ────────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponent_SpotLight) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"SpotEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string add = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"SpotLight","properties":{}})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", add.c_str()).is_error);
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_component":{"type":"SpotLight","properties":{"intensity":6.0,"range":18.0,"inner_cone":20.0,"outer_cone":40.0}}})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    const auto& sl = world_.registry().get<dse::SpotLightComponent>(
+        static_cast<entt::entity>(eid));
+    EXPECT_NEAR(sl.intensity, 6.0f, 0.01f);
+    EXPECT_NEAR(sl.radius, 18.0f, 0.01f);
+    EXPECT_NEAR(sl.inner_cone_angle, 20.0f, 0.01f);
+    EXPECT_NEAR(sl.outer_cone_angle, 40.0f, 0.01f);
+}

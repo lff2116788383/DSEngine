@@ -1642,3 +1642,123 @@ TEST_F(EditorFunctionalTest, SceneTabManager_SwitchTo_RestoresRegistry) {
     tab_mgr.Init("Untitled");
     dse::editor::SetCurrentScenePath("Untitled");
 }
+
+// ============================================================
+// Test 45: SceneIO UIRenderer 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UIRendererRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "UIRenEnt");
+    auto& ui = reg().emplace<UIRendererComponent>(e);
+    ui.texture_handle = 42;
+    ui.color = glm::vec4(0.8f, 0.6f, 0.4f, 0.9f);
+    ui.uv = glm::vec4(0.1f, 0.2f, 0.9f, 0.8f);
+    ui.visible = false;
+
+    const auto path = TempPath("dse_test_uirenderer.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UIRendererComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<UIRendererComponent>(en);
+        EXPECT_EQ(r.texture_handle, 42u);
+        EXPECT_NEAR(r.color.r, 0.8f, 0.01f);
+        EXPECT_NEAR(r.uv.x, 0.1f, 0.01f);
+        EXPECT_FALSE(r.visible);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 46: SceneIO 复合多组件实体往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_MultiComponentEntityRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "ComplexEnt");
+    reg().emplace<TransformComponent>(e).position = glm::vec3(5, 10, 15);
+    auto& cam = reg().emplace<dse::Camera3DComponent>(e);
+    cam.fov = 90.0f;
+    auto& pl = reg().emplace<dse::PointLightComponent>(e);
+    pl.intensity = 4.0f;
+    pl.radius = 15.0f;
+    auto& mr = reg().emplace<dse::MeshRendererComponent>(e);
+    mr.mesh_path = "assets/complex.dmesh";
+    mr.metallic = 0.7f;
+
+    const auto path = TempPath("dse_test_multicomp.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<EditorNameComponent>(en)) continue;
+        if (loaded.get<EditorNameComponent>(en).name != "ComplexEnt") continue;
+        found = true;
+        ASSERT_TRUE(loaded.all_of<TransformComponent>(en));
+        ASSERT_TRUE(loaded.all_of<dse::Camera3DComponent>(en));
+        ASSERT_TRUE(loaded.all_of<dse::PointLightComponent>(en));
+        ASSERT_TRUE(loaded.all_of<dse::MeshRendererComponent>(en));
+        EXPECT_NEAR(loaded.get<TransformComponent>(en).position.x, 5.0f, 0.01f);
+        EXPECT_NEAR(loaded.get<dse::Camera3DComponent>(en).fov, 90.0f, 0.01f);
+        EXPECT_NEAR(loaded.get<dse::PointLightComponent>(en).intensity, 4.0f, 0.01f);
+        EXPECT_EQ(loaded.get<dse::MeshRendererComponent>(en).mesh_path, "assets/complex.dmesh");
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 47: SceneIO Terrain 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_TerrainRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "TerrainEnt");
+    auto& t = reg().emplace<dse::TerrainComponent>(e);
+    t.heightmap_path = "data/terrain/height.png";
+    t.width = 256.0f;
+    t.depth = 256.0f;
+    t.max_height = 50.0f;
+    t.resolution_x = 128;
+    t.resolution_z = 128;
+    t.use_dynamic_lod = true;
+    t.enabled = true;
+
+    const auto path = TempPath("dse_test_terrain.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::TerrainComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::TerrainComponent>(en);
+        EXPECT_EQ(r.heightmap_path, "data/terrain/height.png");
+        EXPECT_NEAR(r.width, 256.0f, 0.01f);
+        EXPECT_NEAR(r.depth, 256.0f, 0.01f);
+        EXPECT_NEAR(r.max_height, 50.0f, 0.01f);
+        EXPECT_EQ(r.resolution_x, 128);
+        EXPECT_EQ(r.resolution_z, 128);
+        EXPECT_TRUE(r.use_dynamic_lod);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
