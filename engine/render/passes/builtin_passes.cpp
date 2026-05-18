@@ -428,16 +428,15 @@ void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
         break;
     }
 
-    // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+    // params: [light_dir.xyz, light_color.xyz, intensity, ambient]
     std::vector<float> params;
-    params.push_back(static_cast<float>(gbuf_normal));
-    params.push_back(static_cast<float>(gbuf_position));
     params.push_back(light_dir.x); params.push_back(light_dir.y); params.push_back(light_dir.z);
     params.push_back(light_color.x); params.push_back(light_color.y); params.push_back(light_color.z);
     params.push_back(light_intensity);
     params.push_back(ambient_intensity);
 
-    cmd_buffer.DrawPostProcess({"deferred_lighting", gbuf_albedo, params});
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"deferred_lighting", gbuf_albedo, std::move(params)}
+        .Tex(2, gbuf_normal).Tex(3, gbuf_position));
     cmd_buffer.EndRenderPass();
 }
 
@@ -837,9 +836,13 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         }});
     } else {
         if (ssao_tex != 0) {
-            cmd_buffer.DrawPostProcess({"ssao_apply", scene_color_tex, {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity}});
+            cmd_buffer.DrawPostProcess(PostProcessRequest{"ssao_apply", scene_color_tex,
+                {pp_config.exposure, lut_intensity}}
+                .Tex(2, ssao_tex).Tex(3, ae_tex).Tex3D(5, static_cast<unsigned int>(lut_tex)));
         } else {
-            cmd_buffer.DrawPostProcess({"tonemapping", scene_color_tex, {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity}});
+            cmd_buffer.DrawPostProcess(PostProcessRequest{"tonemapping", scene_color_tex,
+                {pp_config.exposure, lut_intensity}}
+                .Tex(2, ae_tex).Tex3D(5, static_cast<unsigned int>(lut_tex)));
         }
     }
 
@@ -897,15 +900,14 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
 
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_adapted[write_idx], glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess({"lum_adapt", lum_temp_tex, {
-        static_cast<float>(prev_adapted_tex),
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"lum_adapt", lum_temp_tex, {
         ctx_.delta_time,
         pp_config.adaptation_speed_up,
         pp_config.adaptation_speed_down,
         pp_config.exposure_min,
         pp_config.exposure_max,
         pp_config.exposure_compensation
-    }});
+    }}.Tex(2, prev_adapted_tex));
     cmd_buffer.EndRenderPass();
 
     // 翻转 ping-pong
@@ -1199,16 +1201,14 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const int write_idx = history_index_;
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({history_rt_[write_idx], glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"taa_resolve", main_color_tex, {
-        static_cast<float>(history_tex),
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"taa_resolve", main_color_tex, {
         blend_factor,
         current_jitter_.x,
         current_jitter_.y,
         static_cast<float>(frame_index_),
-        static_cast<float>(mv_tex),
         static_cast<float>(sw),
         static_cast<float>(sh)
-    }});
+    }}.Tex(2, mv_tex).Tex(5, history_tex));
     cmd_buffer.EndRenderPass();
 
     // 将 TAA 结果 copy 到 taa RT（供 Present/FXAA 读取）
@@ -1294,16 +1294,15 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: DOF → dof RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"dof", depth_tex, {
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"dof", depth_tex, {
         pp_config.dof_focus_distance,
         pp_config.dof_focus_range,
         pp_config.dof_bokeh_radius,
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height()),
-        static_cast<float>(main_color_tex)
-    }});
+        static_cast<float>(Screen::height())
+    }}.Tex(2, main_color_tex));
     cmd_buffer.EndRenderPass();
 
     // Pass 2: dof RT → main RT（回写）
@@ -1423,13 +1422,12 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"motion_blur", mv_tex, {
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"motion_blur", mv_tex, {
         pp_config.motion_blur_intensity,
         static_cast<float>(pp_config.motion_blur_samples),
         static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height()),
-        static_cast<float>(main_color_tex)
-    }});
+        static_cast<float>(Screen::height())
+    }}.Tex(2, main_color_tex));
     cmd_buffer.EndRenderPass();
 
     // dof RT → main RT
@@ -1490,7 +1488,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: 渲染 SSR 到半分辨率 ssr RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssr, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"ssr", depth_tex, {
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"ssr", depth_tex, {
         pp_config.ssr_max_distance,
         pp_config.ssr_thickness,
         pp_config.ssr_step_size,
@@ -1498,9 +1496,8 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height()),
-        static_cast<float>(scene_color_tex)
-    }});
+        static_cast<float>(Screen::height())
+    }}.Tex(2, scene_color_tex));
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 将 SSR 结果叠加到 scene RT（利用 SSR alpha 作为混合权重）
@@ -1644,21 +1641,19 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
 
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    // params 布局（16 float）:
-    // [0]    depth_tex handle
-    // [1-2]  sun_screen_pos.xy (UV space)
-    // [3-5]  light_color.rgb
-    // [6]    density
-    // [7]    weight
-    // [8]    decay
-    // [9]    exposure
-    // [10]   num_samples
-    // [11]   intensity
-    // [12-15] reserved (pad to 16)
+    // params 布局（15 float）:
+    // [0-1]  sun_screen_pos.xy (UV space)
+    // [2-4]  light_color.rgb
+    // [5]    density
+    // [6]    weight
+    // [7]    decay
+    // [8]    exposure
+    // [9]    num_samples
+    // [10]   intensity
+    // [11-14] reserved (pad)
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess({"light_shaft", scene_tex, {
-        static_cast<float>(depth_tex),
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"light_shaft", scene_tex, {
         sun_uv_x, sun_uv_y,
         pp->light_shaft_color.r, pp->light_shaft_color.g, pp->light_shaft_color.b,
         pp->light_shaft_density,
@@ -1668,7 +1663,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(pp->light_shaft_samples),
         pp->light_shaft_intensity,
         0.0f, 0.0f, 0.0f, 0.0f
-    }});
+    }, false, 0}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 }
 
@@ -1754,8 +1749,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     // [29]     aspect
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"volumetric_fog", scene_tex, {
-        static_cast<float>(depth_tex),
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"volumetric_fog", scene_tex, {
         pp->fog_color.r, pp->fog_color.g, pp->fog_color.b,
         pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset,
         pp->fog_start, pp->fog_end,
@@ -1768,7 +1762,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
         cam_up.x, cam_up.y, cam_up.z,
         cam_fwd.x, cam_fwd.y, cam_fwd.z,
         tan_fov_y, aspect
-    }});
+    }}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 
     // 将雾效结果（已包含 scene 颜色）覆写回 scene RT
@@ -1838,9 +1832,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess({"wboit_composite", accum_tex, {
-        static_cast<float>(reveal_tex)
-    }});
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"wboit_composite", accum_tex}.Tex(2, reveal_tex));
     cmd_buffer.EndRenderPass();
 }
 
@@ -1924,7 +1916,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
     // params 布局（40 float = 160 bytes）
-    std::vector<float> params(40);
+    std::vector<float> params(39);
 
     for (auto entity : water_view) {
         auto& wc = water_view.get<dse::WaterComponent>(entity);
@@ -1933,30 +1925,29 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         glm::vec2 wave_dir = glm::length(wc.wave_direction) > 0.001f
             ? glm::normalize(wc.wave_direction) : glm::vec2(1.0f, 0.0f);
 
-        params[0]  = static_cast<float>(depth_tex);
-        params[1]  = wc.water_level;
-        params[2]  = wc.deep_color.r;    params[3]  = wc.deep_color.g;    params[4]  = wc.deep_color.b;
-        params[5]  = wc.shallow_color.r;  params[6]  = wc.shallow_color.g;  params[7]  = wc.shallow_color.b;
-        params[8]  = wc.max_depth;
-        params[9]  = wc.transparency;
-        params[10] = wc.wave_amplitude;   params[11] = wc.wave_frequency;   params[12] = wc.wave_speed;
-        params[13] = wave_dir.x;          params[14] = wave_dir.y;
-        params[15] = wc.refraction_strength;
-        params[16] = wc.specular_power;
-        params[17] = wc.reflection_strength;
-        params[18] = current_time;
-        params[19] = sun_dir.x;           params[20] = sun_dir.y;           params[21] = sun_dir.z;
-        params[22] = cam_pos.x;           params[23] = cam_pos.y;           params[24] = cam_pos.z;
-        params[25] = cam_near;            params[26] = cam_far;
-        params[27] = cam_fwd.x;           params[28] = cam_fwd.y;           params[29] = cam_fwd.z;
-        params[30] = tan_fov_y;           params[31] = aspect;
+        params[0]  = wc.water_level;
+        params[1]  = wc.deep_color.r;    params[2]  = wc.deep_color.g;    params[3]  = wc.deep_color.b;
+        params[4]  = wc.shallow_color.r;  params[5]  = wc.shallow_color.g;  params[6]  = wc.shallow_color.b;
+        params[7]  = wc.max_depth;
+        params[8]  = wc.transparency;
+        params[9]  = wc.wave_amplitude;   params[10] = wc.wave_frequency;   params[11] = wc.wave_speed;
+        params[12] = wave_dir.x;          params[13] = wave_dir.y;
+        params[14] = wc.refraction_strength;
+        params[15] = wc.specular_power;
+        params[16] = wc.reflection_strength;
+        params[17] = current_time;
+        params[18] = sun_dir.x;           params[19] = sun_dir.y;           params[20] = sun_dir.z;
+        params[21] = cam_pos.x;           params[22] = cam_pos.y;           params[23] = cam_pos.z;
+        params[24] = cam_near;            params[25] = cam_far;
+        params[26] = cam_fwd.x;           params[27] = cam_fwd.y;           params[28] = cam_fwd.z;
+        params[29] = tan_fov_y;           params[30] = aspect;
         // 视觉增强参数
-        params[32] = wc.caustic_intensity;    params[33] = wc.caustic_scale;
-        params[34] = wc.foam_intensity;       params[35] = wc.foam_depth_threshold;
-        params[36] = wc.underwater_fog_density;
-        params[37] = wc.underwater_fog_color.r; params[38] = wc.underwater_fog_color.g; params[39] = wc.underwater_fog_color.b;
+        params[31] = wc.caustic_intensity;    params[32] = wc.caustic_scale;
+        params[33] = wc.foam_intensity;       params[34] = wc.foam_depth_threshold;
+        params[35] = wc.underwater_fog_density;
+        params[36] = wc.underwater_fog_color.r; params[37] = wc.underwater_fog_color.g; params[38] = wc.underwater_fog_color.b;
 
-        cmd_buffer.DrawPostProcess({"water", scene_tex, params});
+        cmd_buffer.DrawPostProcess(PostProcessRequest{"water", scene_tex, params}.Tex(2, depth_tex));
     }
     cmd_buffer.EndRenderPass();
 }
@@ -2018,8 +2009,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
     // [18-21]  color.rgba
     // [22]     angle_fade
     // [23-25]  decal Y-axis in world (用于角度衰减)
-    std::vector<float> params(26);
-    params[0] = static_cast<float>(depth_tex);
+    std::vector<float> params(24);
 
     for (auto entity : decal_view) {
         auto& dc = decal_view.get<dse::DecalComponent>(entity);
@@ -2032,19 +2022,19 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
         glm::mat4 inv_model_vp = glm::inverse(model) * inv_vp;
         glm::vec3 decal_up = glm::normalize(glm::vec3(model[1]));
 
-        params[1] = static_cast<float>(dc.albedo_texture);
         const float* m = &inv_model_vp[0][0];
-        for (int i = 0; i < 16; ++i) params[2 + i] = m[i];
-        params[18] = dc.color.r;
-        params[19] = dc.color.g;
-        params[20] = dc.color.b;
-        params[21] = dc.color.a;
-        params[22] = dc.angle_fade;
-        params[23] = decal_up.x;
-        params[24] = decal_up.y;
-        params[25] = decal_up.z;
+        for (int i = 0; i < 16; ++i) params[i] = m[i];
+        params[16] = dc.color.r;
+        params[17] = dc.color.g;
+        params[18] = dc.color.b;
+        params[19] = dc.color.a;
+        params[20] = dc.angle_fade;
+        params[21] = decal_up.x;
+        params[22] = decal_up.y;
+        params[23] = decal_up.z;
 
-        cmd_buffer.DrawPostProcess({"decal", scene_tex, params});
+        cmd_buffer.DrawPostProcess(PostProcessRequest{"decal", scene_tex, params}
+            .Tex(2, depth_tex).Tex(3, dc.albedo_texture));
     }
     cmd_buffer.EndRenderPass();
 }

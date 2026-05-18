@@ -1073,11 +1073,11 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // SSAO Apply 专用路径（带 SSAO + 可选 AE + LUT 纹理）
     if (effect_name == "ssao_apply" && shader_mgr.ssao_apply_shader_handle()) {
         ensure_pp_params_cb();
-        const bool has_ae  = (params.size() >= 3 && static_cast<unsigned int>(params[2]) != 0);
-        const bool has_lut = (params.size() >= 5 && static_cast<unsigned int>(params[3]) != 0);
+        const bool has_ae  = request.FindTex(3) != 0;
+        const bool has_lut = request.FindTex(5) != 0;
         if (pp_params_cb_ && params.size() >= 2) {
             struct { float exposure; int aeEnabled; int lutEnabled; float lutIntensity; } ap{
-                params[1], has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[4] : 0.0f};
+                params[0], has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[1] : 0.0f};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &ap, sizeof(ap));
@@ -1085,16 +1085,16 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* ao_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* ao_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (ao_tex) dc->PSSetShaderResources(1, 1, ao_tex->srv.GetAddressOf());
         }
         if (has_ae) {
-            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[2]));
+            const auto* ae_tex = resource_mgr.GetTexture(request.FindTex(3));
             if (ae_tex) dc->PSSetShaderResources(2, 1, ae_tex->srv.GetAddressOf());
         }
         if (has_lut) {
-            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[3]));
+            const auto* lut_tex = resource_mgr.GetTexture(request.FindTex(5));
             if (lut_tex) {
                 dc->PSSetShaderResources(3, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(3, 1, lut_tex->sampler.GetAddressOf());
@@ -1152,9 +1152,9 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Luminance Adapt 专用路径（EMA 自适应曝光）
     if (effect_name == "lum_adapt" && shader_mgr.lum_adapt_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 7) {
+        if (pp_params_cb_ && params.size() >= 6) {
             struct { float dt, speed_up, speed_down, min_exp, max_exp, compensation, _p0, _p1; } lp{
-                params[1], params[2], params[3], params[4], params[5], params[6], 0, 0};
+                params[0], params[1], params[2], params[3], params[4], params[5], 0, 0};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &lp, sizeof(lp));
@@ -1162,8 +1162,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* prev_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* prev_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (prev_tex) dc->PSSetShaderResources(1, 1, prev_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.lum_adapt_shader_handle());
@@ -1175,11 +1175,11 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Tonemapping 专用路径（带可选 Auto Exposure + LUT 纹理）
     if (effect_name == "tonemapping" && shader_mgr.tonemapping_shader_handle()) {
         ensure_pp_params_cb();
-        const bool has_ae  = (params.size() >= 2 && static_cast<unsigned int>(params[1]) != 0);
-        const bool has_lut = (params.size() >= 4 && static_cast<unsigned int>(params[2]) != 0);
+        const bool has_ae  = request.FindTex(2) != 0;
+        const bool has_lut = request.FindTex(5) != 0;
         if (pp_params_cb_) {
             struct { float manual_exposure; int ae_enabled; int lut_enabled; float lut_intensity; } tp{
-                (params.size() >= 1) ? params[0] : 1.0f, has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[3] : 0.0f};
+                (params.size() >= 1) ? params[0] : 1.0f, has_ae ? 1 : 0, has_lut ? 1 : 0, has_lut ? params[1] : 0.0f};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &tp, sizeof(tp));
@@ -1188,11 +1188,11 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
         if (has_ae) {
-            const auto* ae_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
+            const auto* ae_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (ae_tex) dc->PSSetShaderResources(1, 1, ae_tex->srv.GetAddressOf());
         }
         if (has_lut) {
-            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[2]));
+            const auto* lut_tex = resource_mgr.GetTexture(request.FindTex(5));
             if (lut_tex) {
                 dc->PSSetShaderResources(2, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(2, 1, lut_tex->sampler.GetAddressOf());
@@ -1213,8 +1213,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Color Grading (LUT only) 专用路径
     if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 2) {
-            struct { float lut_intensity; float _p0, _p1, _p2; } cgp{params[1], 0, 0, 0};
+        if (pp_params_cb_ && params.size() >= 1) {
+            struct { float lut_intensity; float _p0, _p1, _p2; } cgp{params[0], 0, 0, 0};
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &cgp, sizeof(cgp));
@@ -1222,8 +1222,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* lut_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* lut_tex = resource_mgr.GetTexture(request.FindTex(5));
             if (lut_tex) {
                 dc->PSSetShaderResources(1, 1, lut_tex->srv.GetAddressOf());
                 dc->PSSetSamplers(1, 1, lut_tex->sampler.GetAddressOf());
@@ -1238,11 +1238,11 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // TAA Resolve 专用路径
     if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 8) {
+        if (pp_params_cb_ && params.size() >= 6) {
             struct { float blend_factor, jitter_x, jitter_y; int frame_index; float screen_w, screen_h; float _p0, _p1; } tp{};
-            tp.blend_factor = params[1]; tp.jitter_x = params[2]; tp.jitter_y = params[3];
-            tp.frame_index = static_cast<int>(params[4]);
-            tp.screen_w = params[6]; tp.screen_h = params[7];
+            tp.blend_factor = params[0]; tp.jitter_x = params[1]; tp.jitter_y = params[2];
+            tp.frame_index = static_cast<int>(params[3]);
+            tp.screen_w = params[4]; tp.screen_h = params[5];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &tp, sizeof(tp));
@@ -1250,12 +1250,12 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 6) {
-            const auto* mv_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[5]));
+        {
+            const auto* mv_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (mv_tex) dc->PSSetShaderResources(1, 1, mv_tex->srv.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* hist_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* hist_tex = resource_mgr.GetTexture(request.FindTex(5));
             if (hist_tex) dc->PSSetShaderResources(2, 1, hist_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.taa_resolve_shader_handle());
@@ -1292,7 +1292,7 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // DOF 专用路径
     if (effect_name == "dof" && shader_mgr.dof_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 8) {
+        if (pp_params_cb_ && params.size() >= 7) {
             struct { float focus_distance, focus_range, bokeh_radius, near_p, far_p, screen_w, screen_h, _pad; } dp{
                 params[0], params[1], params[2], params[3], params[4], params[5], params[6], 0};
             D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -1302,8 +1302,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 8) {
-            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[7]));
+        {
+            const auto* color_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.dof_shader_handle());
@@ -1325,8 +1325,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 5) {
-            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[4]));
+        {
+            const auto* color_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.motion_blur_shader_handle());
@@ -1351,8 +1351,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 9) {
-            const auto* color_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[8]));
+        {
+            const auto* color_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (color_tex) dc->PSSetShaderResources(1, 1, color_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.ssr_shader_handle());
@@ -1384,13 +1384,13 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Deferred Lighting 专用路径（GBuffer → 光照合成）
     if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 10) {
-            // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+        if (pp_params_cb_ && params.size() >= 8) {
+            // params: [light_dir.xyz, light_color.xyz, intensity, ambient]
             struct { float lx, ly, lz; float intensity; float cx, cy, cz; float ambient; } dp{};
-            dp.lx = params[2]; dp.ly = params[3]; dp.lz = params[4];
-            dp.intensity = params[8];
-            dp.cx = params[5]; dp.cy = params[6]; dp.cz = params[7];
-            dp.ambient = params[9];
+            dp.lx = params[0]; dp.ly = params[1]; dp.lz = params[2];
+            dp.cx = params[3]; dp.cy = params[4]; dp.cz = params[5];
+            dp.intensity = params[6];
+            dp.ambient = params[7];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &dp, sizeof(dp));
@@ -1399,10 +1399,10 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
         // 绑定 GBuffer normal 到 t1, position 到 t2
-        if (params.size() >= 2) {
-            const auto* normal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* normal_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (normal_tex) dc->PSSetShaderResources(1, 1, normal_tex->srv.GetAddressOf());
-            const auto* pos_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
+            const auto* pos_tex = resource_mgr.GetTexture(request.FindTex(3));
             if (pos_tex) dc->PSSetShaderResources(2, 1, pos_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.deferred_lighting_shader_handle());
@@ -1414,9 +1414,10 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Volumetric Fog 专用路径
     if (effect_name == "volumetric_fog" && shader_mgr.volumetric_fog_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 30) {
+        if (pp_params_cb_ && params.size() >= 29) {
             float raw[32] = {};
-            for (int i = 0; i < 30; ++i) raw[i] = params[i];
+            raw[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 29; ++i) raw[i + 1] = params[i];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, raw, sizeof(raw));
@@ -1424,8 +1425,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.volumetric_fog_shader_handle());
@@ -1437,9 +1438,11 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Decal 专用路径
     if (effect_name == "decal" && shader_mgr.decal_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 26) {
+        if (pp_params_cb_ && params.size() >= 24) {
             float raw[28] = {};
-            for (int i = 0; i < 26; ++i) raw[i] = params[i];
+            raw[0] = static_cast<float>(request.FindTex(2));
+            raw[1] = static_cast<float>(request.FindTex(3));
+            for (int i = 0; i < 24; ++i) raw[i + 2] = params[i];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, raw, sizeof(raw));
@@ -1447,10 +1450,10 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 2) {
-            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
-            const auto* decal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[1]));
+            const auto* decal_tex = resource_mgr.GetTexture(request.FindTex(3));
             if (decal_tex) dc->PSSetShaderResources(2, 1, decal_tex->srv.GetAddressOf());
         }
         // Alpha blending
@@ -1464,8 +1467,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
 
     // WBOIT Composite 专用路径
     if (effect_name == "wboit_composite" && shader_mgr.wboit_composite_shader_handle()) {
-        if (params.size() >= 1) {
-            const auto* reveal_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* reveal_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (reveal_tex) dc->PSSetShaderResources(1, 1, reveal_tex->srv.GetAddressOf());
         }
         // Alpha blending for composite onto scene
@@ -1480,9 +1483,10 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Water 专用路径
     if (effect_name == "water" && shader_mgr.water_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 40) {
+        if (pp_params_cb_ && params.size() >= 39) {
             float raw[40] = {};
-            for (int i = 0; i < 40; ++i) raw[i] = params[i];
+            raw[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 39; ++i) raw[i + 1] = params[i];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, raw, sizeof(raw));
@@ -1490,8 +1494,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
         }
         float blend_factor[4] = {0, 0, 0, 0};
@@ -1505,9 +1509,10 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
     // Light Shaft 专用路径
     if (effect_name == "light_shaft" && shader_mgr.light_shaft_shader_handle()) {
         ensure_pp_params_cb();
-        if (pp_params_cb_ && params.size() >= 16) {
+        if (pp_params_cb_ && params.size() >= 15) {
             float raw[16] = {};
-            for (int i = 0; i < 16; ++i) raw[i] = params[i];
+            raw[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 15; ++i) raw[i + 1] = params[i];
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, raw, sizeof(raw));
@@ -1515,8 +1520,8 @@ void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& re
             }
             dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
         }
-        if (params.size() >= 1) {
-            const auto* depth_tex = resource_mgr.GetTexture(static_cast<unsigned int>(params[0]));
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
             if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.light_shaft_shader_handle());

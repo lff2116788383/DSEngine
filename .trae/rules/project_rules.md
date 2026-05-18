@@ -77,6 +77,10 @@ apps/  ->  modules/  ->  engine/  ->  depends/
   - [`vulkan_shader_sources.h`](engine/render/rhi/vulkan/vulkan_shader_sources.h)
   - [`dx11_shader_sources.h`](engine/render/rhi/dx11/dx11_shader_sources.h)
   - 三后端执行器中的纹理绑定与参数布局
+- 后处理效果通过 [`PostProcessRequest`](engine/render/rhi/postprocess_common.h) 传递参数：
+  - `params` **只放纯 uniform 数据**（float 数值），不得混入纹理句柄。
+  - 纹理句柄统一通过 `.Tex(slot, handle)` / `.Tex3D(slot, handle)` 写入 `textures[]` 数组，三端执行器用 `request.FindTex(slot)` 读取。
+  - slot 编号对应 GLSL `layout(binding = N)`（spirv-cross 映射为 DX11 `tN` / Vulkan `binding = N`）。
 - 新增 [`RhiDevice`](engine/render/rhi/rhi_device.h) 接口或行为时，所有后端与测试桩都要同步。
 
 ### 3.4 模块与运行时更新路径

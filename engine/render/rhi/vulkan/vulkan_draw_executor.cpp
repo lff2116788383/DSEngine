@@ -2004,53 +2004,33 @@ void VulkanDrawExecutor::DrawPostProcess(
             {6, composite.Texture(CompositeParamsView::kContactShadowTex)}
         };
     } else if (effect_name == "tonemapping") {
-        unsigned int ae_h  = (params.size() >= 2) ? static_cast<unsigned int>(params[1]) : 0;
-        unsigned int lut_h = (params.size() >= 4) ? static_cast<unsigned int>(params[2]) : 0;
-        extra_bindings = {{2, ae_h}, {5, lut_h}};
+        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
     } else if (effect_name == "ssao_apply") {
-        unsigned int ssao_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        unsigned int ae_h   = (params.size() >= 3) ? static_cast<unsigned int>(params[2]) : 0;
-        unsigned int lut_h  = (params.size() >= 5) ? static_cast<unsigned int>(params[3]) : 0;
-        extra_bindings = {{2, ssao_h}, {3, ae_h}, {5, lut_h}};
+        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}, {5, request.FindTex(5)}};
     } else if (effect_name == "lum_adapt") {
-        unsigned int prev_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        extra_bindings = {{2, prev_h}};
+        extra_bindings = {{2, request.FindTex(2)}};
     } else if (effect_name == "color_grading") {
-        unsigned int lut_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        extra_bindings = {{5, lut_h}};
+        extra_bindings = {{5, request.FindTex(5)}};
     } else if (effect_name == "taa_resolve") {
-        unsigned int hist_h = (params.size() >= 1) ? static_cast<unsigned int>(params[0]) : 0;
-        unsigned int mv_h = (params.size() >= 6) ? static_cast<unsigned int>(params[5]) : 0;
-        extra_bindings = {{5, hist_h}, {2, mv_h}};
+        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
     } else if (effect_name == "dof") {
-        unsigned int color_h = (params.size() >= 8) ? static_cast<unsigned int>(params[7]) : 0;
-        extra_bindings = {{2, color_h}};
+        extra_bindings = {{2, request.FindTex(2)}};
     } else if (effect_name == "motion_blur") {
-        unsigned int color_h = (params.size() >= 5) ? static_cast<unsigned int>(params[4]) : 0;
-        extra_bindings = {{2, color_h}};
+        extra_bindings = {{2, request.FindTex(2)}};
     } else if (effect_name == "ssr") {
-        unsigned int color_h = (params.size() >= 9) ? static_cast<unsigned int>(params[8]) : 0;
-        extra_bindings = {{2, color_h}};
-    } else if (effect_name == "deferred_lighting" && params.size() >= 2) {
-        unsigned int normal_h = static_cast<unsigned int>(params[0]);
-        unsigned int pos_h = static_cast<unsigned int>(params[1]);
-        extra_bindings = {{2, normal_h}, {3, pos_h}};
-    } else if (effect_name == "volumetric_fog" && params.size() >= 1) {
-        unsigned int depth_h = static_cast<unsigned int>(params[0]);
-        extra_bindings = {{2, depth_h}};
-    } else if (effect_name == "decal" && params.size() >= 2) {
-        unsigned int depth_h = static_cast<unsigned int>(params[0]);
-        unsigned int decal_h = static_cast<unsigned int>(params[1]);
-        extra_bindings = {{2, depth_h}, {3, decal_h}};
-    } else if (effect_name == "wboit_composite" && params.size() >= 1) {
-        unsigned int reveal_h = static_cast<unsigned int>(params[0]);
-        extra_bindings = {{2, reveal_h}};
-    } else if (effect_name == "water" && params.size() >= 1) {
-        unsigned int depth_h = static_cast<unsigned int>(params[0]);
-        extra_bindings = {{2, depth_h}};
-    } else if (effect_name == "light_shaft" && params.size() >= 1) {
-        unsigned int depth_h = static_cast<unsigned int>(params[0]);
-        extra_bindings = {{2, depth_h}};
+        extra_bindings = {{2, request.FindTex(2)}};
+    } else if (effect_name == "deferred_lighting") {
+        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
+    } else if (effect_name == "volumetric_fog") {
+        extra_bindings = {{2, request.FindTex(2)}};
+    } else if (effect_name == "decal") {
+        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
+    } else if (effect_name == "wboit_composite") {
+        extra_bindings = {{2, request.FindTex(2)}};
+    } else if (effect_name == "water") {
+        extra_bindings = {{2, request.FindTex(2)}};
+    } else if (effect_name == "light_shaft") {
+        extra_bindings = {{2, request.FindTex(2)}};
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -2074,17 +2054,25 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc[6] = {params[0], params[1], params[2], params[3], params[4], params[5]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "lum_adapt" && params.size() >= 7) {
-            // params: [prevAdaptedTex(ignored here), dt, speed_up, speed_down, min, max, compensation]
-            float pc[6] = {params[1], params[2], params[3], params[4], params[5], params[6]};
+        } else if (effect_name == "ssao_apply" && params.size() >= 2) {
+            struct { float exposure; int ae_enabled; int lut_enabled; float lut_intensity; } pc{};
+            pc.exposure    = params[0];
+            pc.ae_enabled  = request.FindTex(3) != 0 ? 1 : 0;
+            pc.lut_enabled = request.FindTex(5) != 0 ? 1 : 0;
+            pc.lut_intensity = params[1];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        } else if (effect_name == "lum_adapt" && params.size() >= 6) {
+            // params: [dt, speed_up, speed_down, min, max, compensation]
+            float pc[6] = {params[0], params[1], params[2], params[3], params[4], params[5]};
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "tonemapping" && params.size() >= 2) {
+        } else if (effect_name == "tonemapping") {
             struct { float manual_exposure; int ae_enabled; int lut_enabled; float lut_intensity; } pc{};
-            pc.manual_exposure = params[0];
-            pc.ae_enabled = static_cast<unsigned int>(params[1]) != 0 ? 1 : 0;
-            pc.lut_enabled = (params.size() >= 4 && static_cast<unsigned int>(params[2]) != 0) ? 1 : 0;
-            pc.lut_intensity = (params.size() >= 4) ? params[3] : 0.0f;
+            pc.manual_exposure = (params.size() >= 1) ? params[0] : 1.0f;
+            pc.ae_enabled = request.FindTex(2) != 0 ? 1 : 0;
+            pc.lut_enabled = request.FindTex(5) != 0 ? 1 : 0;
+            pc.lut_intensity = (params.size() >= 2) ? params[1] : 0.0f;
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "bloom_composite" && params.size() >= 2) {
@@ -2134,15 +2122,15 @@ void VulkanDrawExecutor::DrawPostProcess(
             pc.strength = params[7]; pc.num_steps = static_cast<int>(params[8]); pc.step_size = params[9];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "color_grading" && params.size() >= 2) {
-            float pc = params[1];
+        } else if (effect_name == "color_grading" && params.size() >= 1) {
+            float pc = params[0];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "taa_resolve" && params.size() >= 8) {
+        } else if (effect_name == "taa_resolve" && params.size() >= 6) {
             struct { float blend_factor, jitter_x, jitter_y; int frame_index; float screen_w, screen_h; } pc{};
-            pc.blend_factor = params[1]; pc.jitter_x = params[2]; pc.jitter_y = params[3];
-            pc.frame_index = static_cast<int>(params[4]);
-            pc.screen_w = params[6]; pc.screen_h = params[7];
+            pc.blend_factor = params[0]; pc.jitter_x = params[1]; pc.jitter_y = params[2];
+            pc.frame_index = static_cast<int>(params[3]);
+            pc.screen_w = params[4]; pc.screen_h = params[5];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "motion_vector" && params.size() >= 18) {
@@ -2169,13 +2157,13 @@ void VulkanDrawExecutor::DrawPostProcess(
             pc.screen_w = params[6]; pc.screen_h = params[7];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "deferred_lighting" && params.size() >= 10) {
-            // params: [normal_tex, position_tex, light_dir.xyz, light_color.xyz, intensity, ambient]
+        } else if (effect_name == "deferred_lighting" && params.size() >= 8) {
+            // params: [light_dir.xyz, light_color.xyz, intensity, ambient]
             struct { float lx, ly, lz; float intensity; float cx, cy, cz; float ambient; } pc{};
-            pc.lx = params[2]; pc.ly = params[3]; pc.lz = params[4];
-            pc.intensity = params[8];
-            pc.cx = params[5]; pc.cy = params[6]; pc.cz = params[7];
-            pc.ambient = params[9];
+            pc.lx = params[0]; pc.ly = params[1]; pc.lz = params[2];
+            pc.cx = params[3]; pc.cy = params[4]; pc.cz = params[5];
+            pc.intensity = params[6];
+            pc.ambient = params[7];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "edge_detect" && params.size() >= 10) {
@@ -2186,28 +2174,33 @@ void VulkanDrawExecutor::DrawPostProcess(
             pc.screen_w = params[8]; pc.screen_h = params[9];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-        } else if (effect_name == "volumetric_fog" && params.size() >= 30) {
+        } else if (effect_name == "volumetric_fog" && params.size() >= 29) {
             float pc[30];
-            for (int i = 0; i < 30; ++i) pc[i] = params[i];
+            pc[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 29; ++i) pc[i + 1] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "decal" && params.size() >= 26) {
+        } else if (effect_name == "decal" && params.size() >= 24) {
             float pc[26];
-            for (int i = 0; i < 26; ++i) pc[i] = params[i];
+            pc[0] = static_cast<float>(request.FindTex(2));
+            pc[1] = static_cast<float>(request.FindTex(3));
+            for (int i = 0; i < 24; ++i) pc[i + 2] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "wboit_composite" && params.size() >= 1) {
-            float pc[1] = { params[0] };
+        } else if (effect_name == "wboit_composite") {
+            float pc[1] = { static_cast<float>(request.FindTex(2)) };
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "water" && params.size() >= 40) {
+        } else if (effect_name == "water" && params.size() >= 39) {
             float pc[40];
-            for (int i = 0; i < 40; ++i) pc[i] = params[i];
+            pc[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 39; ++i) pc[i + 1] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        } else if (effect_name == "light_shaft" && params.size() >= 16) {
-            float pc[16];
-            for (int i = 0; i < 16; ++i) pc[i] = params[i];
+        } else if (effect_name == "light_shaft" && params.size() >= 11) {
+            float pc[16] = {};
+            pc[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 11; ++i) pc[i + 1] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         }

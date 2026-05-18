@@ -136,6 +136,7 @@ static constexpr int kMaxPPTextures = 8;
 struct PPTextureBinding {
     uint32_t slot    = 0;   ///< 绑定点（对应 GLSL layout(binding=N) / HLSL tN / VK set2 binding）
     unsigned int handle = 0; ///< 纹理句柄，0 表示空
+    bool is_3d = false;      ///< GL 专用：用 GL_TEXTURE_3D 绑定（如 LUT 3D 纹理）
 };
 
 struct PostProcessRequest {
@@ -160,9 +161,26 @@ struct PostProcessRequest {
     /// 便利方法：添加一个额外纹理绑定
     PostProcessRequest& Tex(uint32_t slot, unsigned int handle) {
         for (auto& t : textures) {
-            if (t.handle == 0) { t = {slot, handle}; return *this; }
+            if (t.handle == 0) { t = {slot, handle, false}; return *this; }
         }
         return *this;
+    }
+
+    /// 便利方法：添加一个 3D 纹理绑定（如 Color Grading LUT）
+    PostProcessRequest& Tex3D(uint32_t slot, unsigned int handle) {
+        for (auto& t : textures) {
+            if (t.handle == 0) { t = {slot, handle, true}; return *this; }
+        }
+        return *this;
+    }
+
+    /// 按 slot 查找纹理句柄（0 表示未设置）
+    unsigned int FindTex(uint32_t slot) const {
+        for (const auto& t : textures) {
+            if (t.handle == 0) break;
+            if (t.slot == slot) return t.handle;
+        }
+        return 0;
     }
 };
 
