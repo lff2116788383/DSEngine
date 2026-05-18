@@ -24,6 +24,28 @@
 #include "embed/bloom_upsample_frag.gen.h"
 #include "embed/bloom_blur_h_frag.gen.h"
 #include "embed/bloom_blur_v_frag.gen.h"
+#include "embed/fxaa_frag.gen.h"
+#include "embed/tonemapping_frag.gen.h"
+#include "embed/color_grading_frag.gen.h"
+#include "embed/edge_detect_frag.gen.h"
+#include "embed/bloom_composite_ssao_ae_frag.gen.h"
+#include "embed/ssao_apply_frag.gen.h"
+#include "embed/ssao_frag.gen.h"
+#include "embed/ssao_blur_frag.gen.h"
+#include "embed/contact_shadow_frag.gen.h"
+#include "embed/dof_frag.gen.h"
+#include "embed/motion_vector_frag.gen.h"
+#include "embed/motion_blur_frag.gen.h"
+#include "embed/ssr_frag.gen.h"
+#include "embed/taa_resolve_frag.gen.h"
+#include "embed/deferred_lighting_frag.gen.h"
+#include "embed/light_shaft_frag.gen.h"
+#include "embed/volumetric_fog_frag.gen.h"
+#include "embed/decal_frag.gen.h"
+#include "embed/water_frag.gen.h"
+#include "embed/wboit_composite_frag.gen.h"
+#include "embed/lum_compute_frag.gen.h"
+#include "embed/lum_adapt_frag.gen.h"
 
 namespace dse {
 namespace render {
@@ -435,6 +457,53 @@ unsigned int GLShaderManager::GetOrCreatePostProcessShader(const std::string& ef
 
 bool GLShaderManager::HasPostProcessShader(const std::string& effect_name) const {
     return pp_shaders_.find(effect_name) != pp_shaders_.end();
+}
+
+unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_name) {
+    std::string key = "gen_" + effect_name;
+    auto it = pp_shaders_.find(key);
+    if (it != pp_shaders_.end()) return it->second;
+
+    using namespace dse::render::generated_shaders;
+    const char* fs = nullptr;
+    if      (effect_name == "fxaa")             fs = kfxaa_frag_glsl330;
+    else if (effect_name == "bloom_extract")     fs = kbloom_extract_frag_glsl330;
+    else if (effect_name == "bloom_downsample")  fs = kbloom_downsample_frag_glsl330;
+    else if (effect_name == "bloom_upsample")    fs = kbloom_upsample_frag_glsl330;
+    else if (effect_name == "tonemapping")         fs = ktonemapping_frag_glsl330;
+    else if (effect_name == "color_grading")       fs = kcolor_grading_frag_glsl330;
+    else if (effect_name == "edge_detect")          fs = kedge_detect_frag_glsl330;
+    else if (effect_name == "postprocess_passthrough") fs = kpostprocess_passthrough_frag_glsl330;
+    else if (effect_name == "bloom_composite")     fs = kbloom_composite_ssao_ae_frag_glsl330;
+    else if (effect_name == "ssao_apply")           fs = kssao_apply_frag_glsl330;
+    else if (effect_name == "ssao")                 fs = kssao_frag_glsl330;
+    else if (effect_name == "ssao_blur")             fs = kssao_blur_frag_glsl330;
+    else if (effect_name == "contact_shadow")        fs = kcontact_shadow_frag_glsl330;
+    else if (effect_name == "dof")                   fs = kdof_frag_glsl330;
+    else if (effect_name == "motion_vector")         fs = kmotion_vector_frag_glsl330;
+    else if (effect_name == "motion_blur")           fs = kmotion_blur_frag_glsl330;
+    else if (effect_name == "ssr")                   fs = kssr_frag_glsl330;
+    else if (effect_name == "taa_resolve")           fs = ktaa_resolve_frag_glsl330;
+    else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl330;
+    else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl330;
+    else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl330;
+    else if (effect_name == "decal")                 fs = kdecal_frag_glsl330;
+    else if (effect_name == "water")                 fs = kwater_frag_glsl330;
+    else if (effect_name == "wboit_composite")       fs = kwboit_composite_frag_glsl330;
+    else if (effect_name == "lum_compute")           fs = klum_compute_frag_glsl330;
+    else if (effect_name == "lum_adapt")             fs = klum_adapt_frag_glsl330;
+    else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl330;
+    else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl330;
+    else return 0;
+
+    unsigned int shader = CompileProgram(kpostprocess_vert_glsl330, fs);
+    if (shader == 0) {
+        DEBUG_LOG_ERROR("Failed to compile gen.h PP shader: {}", effect_name);
+        return 0;
+    }
+    programs_created_ += 1;
+    pp_shaders_[key] = shader;
+    return shader;
 }
 
 // ============================================================

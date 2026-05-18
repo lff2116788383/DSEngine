@@ -188,6 +188,7 @@ private:
     // 后处理全屏四边形
     unsigned int pp_vao_handle_ = 0;
     unsigned int pp_vbo_handle_ = 0;
+    unsigned int pp_param_ubo_ = 0;  ///< gen.h PP shader 参数 UBO (binding=2)
 
     // 3D 粒子四边形
     unsigned int particle_quad_vao_handle_ = 0;

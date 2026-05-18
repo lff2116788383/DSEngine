@@ -251,12 +251,13 @@ Phase 1-4 GL 后端全部完成 ✅ — 实际用时约 5 周
 Phase 5 — Shader 统一化 + 已知技术债务
   ├── ✅ Shader Unification PoC Phase 1（dse_shader_compiler 工具链 + GLSL 450 → SPIR-V/GLSL 430/HLSL SM5.0 gen.h）
   ├── ✅ Shader Unification Phase 2（全部后处理 shader 迁移: 22 个 GLSL 450 源 → 40 gen.h）
+  │    GL: 28 效果 gen.h GLSL 430 统一路径（layout(binding=N) 自动绑定 + plain struct uniform）
   │    DX11: 全部 32 shader 创建成功 + executor register/sampler 修复
   │    Vulkan: 全部后处理 shader 替换为预编译 SPIR-V
   │    修复: contact_shadow/ssr textureLod; tonemapping/ssao_apply/color_grading/taa_resolve register 不匹配
   ├── ✅ engine/ → modules/ 架构依赖违规（已修复：IBuiltinModules 接口抽象 + AnimationStateMachine 搬迁 + HiZAABB 提取）
   │    hair_asset.h 经核实无违规
-  ├── ⬜ GL 后端适配 gen.h GLSL 430 输出（架构需从动态拼接改为 shader manager）
+  ├── ✅ GL 后端适配 gen.h GLSL 430 输出（28 效果: GetOrCreateGenPPShader + executor 参数/纹理/blend 全覆盖）
   ├── ⬜ DDGI Compute → VK SPIR-V + DX11 HLSL 移植
   ├── ⬜ TressFX Compute + 渲染 → VK + DX11 移植
   ├── ⬜ Grass Wind Compute → VK + DX11 移植
@@ -286,6 +287,6 @@ WBOIT（已有）────────── ✅ 毛发渲染半透明混合
 >
 > **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在于功能覆盖深度——缺少网络模块、跨平台——这些需要成千上万倍于当前的人年投入。GPU Driven 渲染、地形植被、资源流式加载等核心特性已全部实现。实时全局光照（DDGI）和毛发模拟（TressFX）在 GL 后端完整可用，但 VK/DX11 后端的 Compute Shader 尚未移植（shader 为 GLSL 430 硬编码）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台、编辑器体验和社区生态上全面落败。**
 >
-> **当前最大技术债务：① VK/DX11 Compute 移植（DDGI/TressFX/Grass 三组 shader）；~~② engine/ → modules/ 架构依赖违规（3 文件 17 处）~~ ✅ 已完成（IBuiltinModules 接口 + runtime_bridge 实现）；② 跨平台抽象层（engine/ 13 文件 25 处 Win32 硬编码）。Shader Unification Phase 2 已完成——全部后处理 shader 已统一为 GLSL 450 源码 → gen.h 跨后端输出，DX11/VK 均已验证通过。**
+> **当前最大技术债务：① VK/DX11 Compute 移植（DDGI/TressFX/Grass 三组 shader）；~~② engine/ → modules/ 架构依赖违规（3 文件 17 处）~~ ✅ 已完成（IBuiltinModules 接口 + runtime_bridge 实现）；② 跨平台抽象层（engine/ 13 文件 25 处 Win32 硬编码）。Shader Unification 全部完成——全部后处理 shader 已统一为 GLSL 450 源码 → gen.h 跨后端输出，GL/DX11/VK 三端均已验证通过。**
 >
 > **SDK 测试版已完成打包脚本和验证框架，仅覆盖 2D 最小配置。SSBO→UBO fallback 已实现。要发布第一个可用版本，还需约 2 天全力冲刺 P0 任务。完整的 v0.1.0-alpha 可在 1 周内就绪。**
