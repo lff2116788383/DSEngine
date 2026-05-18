@@ -47,6 +47,10 @@ static JsonRpcResponse MakeToolError(int code, const std::string& msg) {
     return resp;
 }
 
+static void CollectEntityComponents(entt::registry& registry, entt::entity entity,
+                                     rapidjson::Value& arr, rapidjson::Document::AllocatorType& alloc,
+                                     bool include_properties);
+
 // ─── Tool: dsengine_lua_execute ─────────────────────────────────────────────
 
 static JsonRpcResponse HandleLuaExecute(
@@ -113,54 +117,7 @@ static JsonRpcResponse HandleSceneGetState(
 
         if (include_components) {
             rapidjson::Value components(rapidjson::kArrayType);
-
-            if (registry.all_of<TransformComponent>(entity)) {
-                const auto& t = registry.get<TransformComponent>(entity);
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "Transform", alloc);
-                rapidjson::Value pos(rapidjson::kArrayType);
-                pos.PushBack(t.position.x, alloc).PushBack(t.position.y, alloc).PushBack(t.position.z, alloc);
-                comp.AddMember("position", pos, alloc);
-                rapidjson::Value scl(rapidjson::kArrayType);
-                scl.PushBack(t.scale.x, alloc).PushBack(t.scale.y, alloc).PushBack(t.scale.z, alloc);
-                comp.AddMember("scale", scl, alloc);
-                components.PushBack(comp, alloc);
-            }
-
-            if (registry.all_of<dse::Camera3DComponent>(entity)) {
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "Camera3D", alloc);
-                const auto& cam = registry.get<dse::Camera3DComponent>(entity);
-                comp.AddMember("fov", cam.fov, alloc);
-                comp.AddMember("near_clip", cam.near_clip, alloc);
-                comp.AddMember("far_clip", cam.far_clip, alloc);
-                components.PushBack(comp, alloc);
-            }
-
-            if (registry.all_of<dse::MeshRendererComponent>(entity)) {
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "MeshRenderer", alloc);
-                components.PushBack(comp, alloc);
-            }
-
-            if (registry.all_of<dse::DirectionalLight3DComponent>(entity)) {
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "DirectionalLight", alloc);
-                components.PushBack(comp, alloc);
-            }
-
-            if (registry.all_of<dse::PointLightComponent>(entity)) {
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "PointLight", alloc);
-                components.PushBack(comp, alloc);
-            }
-
-            if (registry.all_of<SpriteRendererComponent>(entity)) {
-                rapidjson::Value comp(rapidjson::kObjectType);
-                comp.AddMember("type", "SpriteRenderer", alloc);
-                components.PushBack(comp, alloc);
-            }
-
+            CollectEntityComponents(registry, entity, components, alloc, true);
             entity_obj.AddMember("components", components, alloc);
         }
 
@@ -293,6 +250,79 @@ static void AddComponentByType(entt::registry& registry, entt::entity entity,
             registry.emplace<PostProcessComponent>(entity);
     }
     // 其他未知类型静默忽略
+}
+
+static bool ModifyComponentProperties(entt::registry& registry, entt::entity entity,
+                                       const std::string& type, const rapidjson::Value& props) {
+    auto getF = [&](const char* key, float def) -> float {
+        if (props.HasMember(key) && props[key].IsNumber()) return props[key].GetFloat();
+        return def;
+    };
+
+    if (type == "MeshRenderer" || type == "MeshRendererComponent") {
+        if (!registry.all_of<MeshRendererComponent>(entity)) return false;
+        auto& mr = registry.get<MeshRendererComponent>(entity);
+        if (props.HasMember("mesh_path") && props["mesh_path"].IsString())
+            mr.mesh_path = props["mesh_path"].GetString();
+        if (props.HasMember("shader_variant") && props["shader_variant"].IsString())
+            mr.shader_variant = props["shader_variant"].GetString();
+        if (props.HasMember("color") && props["color"].IsArray())
+            mr.color = ParseVec4(props["color"]);
+        if (props.HasMember("metallic")) mr.metallic = getF("metallic", mr.metallic);
+        if (props.HasMember("roughness")) mr.roughness = getF("roughness", mr.roughness);
+        return true;
+    } else if (type == "Camera3D" || type == "Camera3DComponent") {
+        if (!registry.all_of<Camera3DComponent>(entity)) return false;
+        auto& c = registry.get<Camera3DComponent>(entity);
+        if (props.HasMember("fov")) c.fov = getF("fov", c.fov);
+        if (props.HasMember("near_clip")) c.near_clip = getF("near_clip", c.near_clip);
+        if (props.HasMember("far_clip")) c.far_clip = getF("far_clip", c.far_clip);
+        return true;
+    } else if (type == "DirectionalLight" || type == "DirectionalLight3DComponent") {
+        if (!registry.all_of<DirectionalLight3DComponent>(entity)) return false;
+        auto& dl = registry.get<DirectionalLight3DComponent>(entity);
+        if (props.HasMember("intensity")) dl.intensity = getF("intensity", dl.intensity);
+        if (props.HasMember("color") && props["color"].IsArray())
+            dl.color = ParseVec3(props["color"], dl.color);
+        if (props.HasMember("direction") && props["direction"].IsArray())
+            dl.direction = ParseVec3(props["direction"], dl.direction);
+        return true;
+    } else if (type == "PointLight" || type == "PointLightComponent") {
+        if (!registry.all_of<PointLightComponent>(entity)) return false;
+        auto& pl = registry.get<PointLightComponent>(entity);
+        if (props.HasMember("intensity")) pl.intensity = getF("intensity", pl.intensity);
+        if (props.HasMember("range")) pl.radius = getF("range", pl.radius);
+        if (props.HasMember("color") && props["color"].IsArray())
+            pl.color = ParseVec3(props["color"], pl.color);
+        return true;
+    } else if (type == "SpotLight" || type == "SpotLightComponent") {
+        if (!registry.all_of<SpotLightComponent>(entity)) return false;
+        auto& sl = registry.get<SpotLightComponent>(entity);
+        if (props.HasMember("intensity")) sl.intensity = getF("intensity", sl.intensity);
+        if (props.HasMember("range")) sl.radius = getF("range", sl.radius);
+        if (props.HasMember("inner_cone")) sl.inner_cone_angle = getF("inner_cone", sl.inner_cone_angle);
+        if (props.HasMember("outer_cone")) sl.outer_cone_angle = getF("outer_cone", sl.outer_cone_angle);
+        return true;
+    } else if (type == "RigidBody3D" || type == "RigidBody3DComponent") {
+        if (!registry.all_of<RigidBody3DComponent>(entity)) return false;
+        auto& rb = registry.get<RigidBody3DComponent>(entity);
+        if (props.HasMember("mass")) rb.mass = getF("mass", rb.mass);
+        if (props.HasMember("body_type") && props["body_type"].IsString()) {
+            std::string bt = props["body_type"].GetString();
+            if (bt == "static") rb.type = RigidBody3DType::Static;
+            else if (bt == "kinematic") rb.type = RigidBody3DType::Kinematic;
+            else rb.type = RigidBody3DType::Dynamic;
+        }
+        return true;
+    } else if (type == "AudioSource" || type == "AudioSourceComponent") {
+        if (!registry.all_of<AudioSourceComponent>(entity)) return false;
+        auto& as = registry.get<AudioSourceComponent>(entity);
+        if (props.HasMember("volume")) as.volume = getF("volume", as.volume);
+        if (props.HasMember("pitch")) as.pitch = getF("pitch", as.pitch);
+        if (props.HasMember("loop") && props["loop"].IsBool()) as.loop = props["loop"].GetBool();
+        return true;
+    }
+    return false;
 }
 
 // ─── Tool: dsengine_entity_create ───────────────────────────────────────────
@@ -632,11 +662,44 @@ static JsonRpcResponse HandleEntityModify(
         registry.emplace<TransformComponent>(entity, t);
     }
 
+    // modify_component: 修改已存在组件的属性
+    rapidjson::Value modified_comps(rapidjson::kArrayType);
+    rapidjson::Document::AllocatorType temp_alloc;  // 临时分配器
+
+    if (params.HasMember("modify_component") && params["modify_component"].IsObject()) {
+        const auto& mc = params["modify_component"];
+        if (mc.HasMember("type") && mc["type"].IsString() &&
+            mc.HasMember("properties") && mc["properties"].IsObject()) {
+            std::string ctype = mc["type"].GetString();
+            if (ModifyComponentProperties(registry, entity, ctype, mc["properties"])) {
+                modified_comps.PushBack(rapidjson::Value(ctype.c_str(), temp_alloc), temp_alloc);
+            }
+        }
+    }
+    if (params.HasMember("modify_components") && params["modify_components"].IsArray()) {
+        for (auto& item : params["modify_components"].GetArray()) {
+            if (item.IsObject() && item.HasMember("type") && item["type"].IsString() &&
+                item.HasMember("properties") && item["properties"].IsObject()) {
+                std::string ctype = item["type"].GetString();
+                if (ModifyComponentProperties(registry, entity, ctype, item["properties"])) {
+                    modified_comps.PushBack(rapidjson::Value(ctype.c_str(), temp_alloc), temp_alloc);
+                }
+            }
+        }
+    }
+
     rapidjson::Document result;
     result.SetObject();
     auto& alloc = result.GetAllocator();
     result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
     result.AddMember("modified", rapidjson::Value(true), alloc);
+    if (modified_comps.Size() > 0) {
+        rapidjson::Value comps_copy(rapidjson::kArrayType);
+        for (auto& v : modified_comps.GetArray()) {
+            comps_copy.PushBack(rapidjson::Value(v.GetString(), alloc), alloc);
+        }
+        result.AddMember("modified_components", comps_copy, alloc);
+    }
     return MakeOk(std::move(result));
 }
 

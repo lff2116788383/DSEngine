@@ -139,7 +139,8 @@ MCP_TOOLS = [
     },
     {
         "name": "dsengine_entity_modify",
-        "description": "Modify an existing entity's name, position, rotation, or scale",
+        "description": "Modify an existing entity's name, transform, and/or component properties. "
+                       "Use modify_component for a single component, modify_components for batch updates.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -147,7 +148,28 @@ MCP_TOOLS = [
                 "name": {"type": "string", "description": "New entity name"},
                 "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"},
                 "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[pitch,yaw,roll] degrees"},
-                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"}
+                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"},
+                "modify_component": {
+                    "type": "object",
+                    "description": "Modify a single component's properties: {type, properties}",
+                    "properties": {
+                        "type": {"type": "string"},
+                        "properties": {"type": "object"}
+                    },
+                    "required": ["type", "properties"]
+                },
+                "modify_components": {
+                    "type": "array",
+                    "description": "Batch modify multiple components: [{type, properties}, ...]",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "properties": {"type": "object"}
+                        },
+                        "required": ["type", "properties"]
+                    }
+                }
             },
             "required": ["entity_id"]
         }
