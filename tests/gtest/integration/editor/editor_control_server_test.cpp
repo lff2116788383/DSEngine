@@ -907,3 +907,105 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_SpotLight) {
     EXPECT_NEAR(sl.inner_cone_angle, 20.0f, 0.01f);
     EXPECT_NEAR(sl.outer_cone_angle, 40.0f, 0.01f);
 }
+
+// ─── Test 63: scene_get_state include_components=false ───────────────────────
+
+TEST_F(ControlServerTest, SceneGetState_WithoutComponents_NoComponentsField) {
+    Dispatch("dsengine_entity_create", R"({"name":"StateTestEnt"})");
+
+    auto resp = Dispatch("dsengine_scene_get_state",
+        R"({"include_components": false})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    ASSERT_TRUE(resp.result.HasMember("entities"));
+    ASSERT_TRUE(resp.result["entities"].IsArray());
+    ASSERT_GT(resp.result["entities"].Size(), 0u);
+
+    const auto& first = resp.result["entities"][0];
+    EXPECT_FALSE(first.HasMember("components"));
+}
+
+// ─── Test 64: entity_create 带 rotation + scale ──────────────────────────────
+
+TEST_F(ControlServerTest, EntityCreate_WithRotationAndScale) {
+    auto resp = Dispatch("dsengine_entity_create",
+        R"({"name":"FullTransform","position":[1,2,3],"rotation":[0,90,0],"scale":[2,2,2]})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    uint32_t eid = resp.result["entity_id"].GetUint();
+
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(world_.registry().all_of<TransformComponent>(entity));
+    const auto& t = world_.registry().get<TransformComponent>(entity);
+    EXPECT_NEAR(t.position.x, 1.0f, 0.01f);
+    EXPECT_NEAR(t.scale.x, 2.0f, 0.01f);
+    EXPECT_NEAR(t.scale.y, 2.0f, 0.01f);
+}
+
+// ─── Test 65: delete 后 get_components 返回 invalid entity ──────────────────
+
+TEST_F(ControlServerTest, EntityDelete_ThenGetComponents_ReturnsInvalid) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"WillDie"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    auto del = Dispatch("dsengine_entity_delete",
+        (R"({"entity_id":)" + std::to_string(eid) + "}").c_str());
+    ASSERT_FALSE(del.is_error);
+
+    auto gc = Dispatch("dsengine_entity_get_components",
+        (R"({"entity_id":)" + std::to_string(eid) + "}").c_str());
+    EXPECT_TRUE(gc.is_error);
+    EXPECT_EQ(gc.error_code, -32602);
+}
+
+// ─── Test 66: modify_component RigidBody3D mass + body_type ──────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponent_RigidBody3D) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"RBEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string add = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"RigidBody3D","properties":{}})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", add.c_str()).is_error);
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_component":{"type":"RigidBody3D","properties":{"mass":10.0,"body_type":"kinematic"}}})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    const auto& rb = world_.registry().get<dse::RigidBody3DComponent>(
+        static_cast<entt::entity>(eid));
+    EXPECT_NEAR(rb.mass, 10.0f, 0.01f);
+    EXPECT_EQ(rb.type, dse::RigidBody3DType::Kinematic);
+}
+
+// ─── Test 67: add_components 批量带 properties 对象 ──────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_AddComponents_WithProperties) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"AddBatchEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"add_components":[)"
+        R"({"type":"PointLight","properties":{"intensity":5.0,"range":20.0}},)"
+        R"("AudioListener")"
+        R"(]})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(world_.registry().all_of<dse::PointLightComponent>(entity));
+    ASSERT_TRUE(world_.registry().all_of<AudioListenerComponent>(entity));
+    EXPECT_NEAR(world_.registry().get<dse::PointLightComponent>(entity).intensity, 5.0f, 0.01f);
+    EXPECT_NEAR(world_.registry().get<dse::PointLightComponent>(entity).radius, 20.0f, 0.01f);
+}
+
+// ─── Test 68: asset_import 未知扩展名 auto-detect 失败 ───────────────────────
+
+TEST_F(ControlServerTest, AssetImport_UnknownExtension_ReturnsError) {
+    auto resp = Dispatch("dsengine_asset_import",
+        R"({"path":"test_file.xyz"})");
+    EXPECT_TRUE(resp.is_error);
+    EXPECT_EQ(resp.error_code, -32602);
+}
