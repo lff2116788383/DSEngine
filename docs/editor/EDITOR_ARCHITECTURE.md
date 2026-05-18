@@ -1,6 +1,6 @@
 # DSEngine 编辑器架构分析
 
-> 更新日期: 2026-05-18 (最近修订: Inspector 注册式重构 + AI Control Server 完成)
+> 更新日期: 2026-05-18 (最近修订: EditorContext 统一 + 全局变量消除 + 表驱动 Tool 注册)
 > 基于 `apps/editor_cpp/` 源码审查
 
 ---
@@ -180,7 +180,7 @@
 | 问题 | 严重性 | 说明 |
 |------|--------|------|
 | ~~main.cpp 过重~~ | ✅ 已修 | 拆分为 EditorApp 类，main.cpp 仅 10 行 |
-| ~~大量 static 全局状态~~ | ✅ 大部分已修 | static 变量已收拢到 EditorApp 成员 |
+| ~~大量 static 全局状态~~ | ✅ 已修 | 全局变量已消除：profiler/gizmo/language 收入 EditorApp 成员，editor_state/backup_registry 改为 namespace-static，EditorContext 统一传递 |
 | ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
 | **仅 OpenGL** | 🟡 中 | 编辑器直接 `#include <glad/gl.h>`，未走 RHI |
 | **Multi-viewport 禁用** | 🟡 中 | CRT heap 断言，注释标注了原因 |
@@ -191,7 +191,7 @@
 |--------|------|------|------|
 | ~~🔴 高~~ | ~~拆分 main.cpp → EditorApp 类~~ | ~~1-2 天~~ | ✅ 完成 |
 | ~~🔴 高~~ | ~~Inspector 注册式 (Component → DrawFunc)~~ | ~~1 周~~ | ✅ 完成 |
-| 🟡 中 | 统一 EditorContext 替代残余 static 变量 | 2-3 天 | 待开始 |
+| ~~🟡 中~~ | ~~统一 EditorContext 替代残余 static 变量~~ | ~~2-3 天~~ | ✅ 完成 |
 | 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 待开始 |
 | 🟢 低 | 修复 Multi-viewport CRT 问题 | 未知 | 待开始 |
 
@@ -210,4 +210,4 @@
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分和 Inspector 注册式已完成，AI Control Server (15 个 Tool) 已全部实现。下一步可聚焦 Phase 2 资产生成或 EditorContext 统一。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成，AI Control Server (18 个 Tool) 已全部实现。下一步可聚焦编辑器走 RHI、Phase 2 资产生成 Tool、或插件模板与文档。
