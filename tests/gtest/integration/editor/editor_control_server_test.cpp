@@ -33,6 +33,7 @@
 
 #include "apps/editor_cpp/src/editor_control_server.h"
 #include "apps/editor_cpp/src/editor_shared_components.h"
+#include "apps/editor_cpp/src/editor_prefab.h"
 #include "apps/editor_cpp/src/editor_shortcuts.h"
 #include "apps/editor_cpp/src/editor_toolbar.h"
 #include "apps/editor_cpp/src/editor_undo.h"
@@ -1182,4 +1183,94 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_WithTopLevelName) {
     EXPECT_EQ(registry.get<dse::editor::EditorNameComponent>(entity).name, "RenamedEnt");
     EXPECT_NEAR(registry.get<dse::PointLightComponent>(entity).intensity, 7.0f, 0.01f);
     EXPECT_NEAR(registry.get<dse::PointLightComponent>(entity).radius, 25.0f, 0.01f);
+}
+
+// ─── Test 79: entity_get_state 返回 transform + 组件详情 ─────────────────────
+
+TEST_F(ControlServerTest, EntityGetState_ReturnsTransformAndComponents) {
+    auto cr = Dispatch("dsengine_entity_create",
+        R"({"name":"StateEnt","position":[1.0,2.0,3.0],"components":["PointLight"]})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string q = R"({"entity_id":)" + std::to_string(eid) + R"(})";
+    auto resp = Dispatch("dsengine_entity_get_state", q.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    EXPECT_EQ(std::string(resp.result["name"].GetString()), "StateEnt");
+    ASSERT_TRUE(resp.result.HasMember("transform"));
+    const auto& tf = resp.result["transform"];
+    EXPECT_NEAR(tf["position"][0].GetFloat(), 1.0f, 0.01f);
+    EXPECT_NEAR(tf["position"][1].GetFloat(), 2.0f, 0.01f);
+    EXPECT_NEAR(tf["position"][2].GetFloat(), 3.0f, 0.01f);
+    ASSERT_TRUE(resp.result.HasMember("components"));
+    EXPECT_TRUE(resp.result["components"].IsArray());
+}
+
+// ─── Test 80: entity_get_state 对无效 entity_id 报错 ──────────────────────────
+
+TEST_F(ControlServerTest, EntityGetState_InvalidId_ReturnsError) {
+    auto resp = Dispatch("dsengine_entity_get_state", R"({"entity_id":99999})");
+    EXPECT_TRUE(resp.is_error);
+}
+
+// ─── Test 81: entity_duplicate 复制实体含组件 ────────────────────────────────
+
+TEST_F(ControlServerTest, EntityDuplicate_CopiesNameAndComponents) {
+    auto cr = Dispatch("dsengine_entity_create",
+        R"({"name":"Original","components":["PointLight"]})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t src_id = cr.result["entity_id"].GetUint();
+
+    std::string dup_p = R"({"entity_id":)" + std::to_string(src_id) + R"(})";
+    auto dr = Dispatch("dsengine_entity_duplicate", dup_p.c_str());
+    ASSERT_FALSE(dr.is_error) << dr.error_message;
+
+    uint32_t dst_id = dr.result["entity_id"].GetUint();
+    EXPECT_NE(dst_id, src_id);
+    EXPECT_EQ(std::string(dr.result["name"].GetString()), "Original (Copy)");
+    EXPECT_EQ(dr.result["source_entity_id"].GetUint(), src_id);
+
+    auto& registry = world_.registry();
+    auto dst = static_cast<entt::entity>(dst_id);
+    EXPECT_TRUE(registry.all_of<dse::PointLightComponent>(dst));
+}
+
+// ─── Test 82: entity_duplicate 对无效 id 报错 ────────────────────────────────
+
+TEST_F(ControlServerTest, EntityDuplicate_InvalidId_ReturnsError) {
+    auto resp = Dispatch("dsengine_entity_duplicate", R"({"entity_id":99999})");
+    EXPECT_TRUE(resp.is_error);
+}
+
+// ─── Test 83: prefab_save + prefab_instantiate 往返 ──────────────────────────
+
+TEST_F(ControlServerTest, PrefabSaveAndInstantiate_RoundTrip) {
+    auto cr = Dispatch("dsengine_entity_create",
+        R"({"name":"PrefabSrc","mesh":"cube.obj"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t src_id = cr.result["entity_id"].GetUint();
+
+    // 保存到临时路径（generic_string 用正斜杠，避免 Windows 反斜杠破坏 JSON 字符串）
+    std::string tmp = (std::filesystem::temp_directory_path() / "test_rpc.dprefab").generic_string();
+    std::string save_p = R"({"entity_id":)" + std::to_string(src_id) +
+        R"(,"path":")" + tmp + R"("})";
+    auto sr = Dispatch("dsengine_prefab_save", save_p.c_str());
+    ASSERT_FALSE(sr.is_error) << sr.error_message;
+    EXPECT_TRUE(sr.result["saved"].GetBool());
+
+    // 实例化
+    std::string inst_p = R"({"path":")" + tmp + R"("})";
+    auto ir = Dispatch("dsengine_prefab_instantiate", inst_p.c_str());
+    ASSERT_FALSE(ir.is_error) << ir.error_message;
+
+    uint32_t inst_id = ir.result["entity_id"].GetUint();
+    EXPECT_NE(inst_id, src_id);
+    EXPECT_EQ(std::string(ir.result["name"].GetString()), "PrefabSrc");
+
+    auto& registry = world_.registry();
+    auto inst = static_cast<entt::entity>(inst_id);
+    EXPECT_TRUE(registry.valid(inst));
+    EXPECT_TRUE(registry.all_of<dse::MeshRendererComponent>(inst));
+    EXPECT_TRUE(dse::editor::IsPrefabInstance(registry, inst));
 }

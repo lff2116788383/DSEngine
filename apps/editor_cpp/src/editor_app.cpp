@@ -67,6 +67,7 @@
 #include "editor_settings.h"
 #include "editor_material_panel.h"
 #include "editor_prefab.h"
+#include "editor_selection.h"
 #include "editor_preferences_panel.h"
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
@@ -703,6 +704,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     if (static_cast<int>(last_editor_state_) != static_cast<int>(dse::editor::GetEditorState()) && dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
         selected_entity_ = entt::null;
+        SelectionManager::Get().Clear();
         inspector_active_ = true;
         inspector_static_ = false;
         sprite_flip_x_ = false;

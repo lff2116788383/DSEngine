@@ -21,6 +21,7 @@
 #include "editor_undo.h"
 #include "editor_shell.h"
 #include "editor_scene_tabs.h"
+#include "editor_prefab.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -420,6 +421,17 @@ static JsonRpcResponse HandleEntityCreate(
     if (registry.all_of<PostProcessComponent>(entity))       added_comps.PushBack("PostProcess", alloc);
     result.AddMember("components", added_comps, alloc);
 
+    // Undo: destroy the created entity
+    {
+        entt::entity created = entity;
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+            "Create Entity (RPC)",
+            []() {},
+            [created, &reg]() { if (reg.valid(created)) reg.destroy(created); }
+        ));
+    }
+
     return MakeOk(std::move(result));
 }
 
@@ -440,7 +452,33 @@ static JsonRpcResponse HandleEntityDelete(
         return MakeToolError(-32602, "Invalid entity_id");
     }
 
+    // Snapshot name + transform for undo reconstruction
+    std::string saved_name;
+    TransformComponent saved_tf;
+    bool has_tf = false;
+    if (registry.all_of<EditorNameComponent>(entity))
+        saved_name = registry.get<EditorNameComponent>(entity).name;
+    if (registry.all_of<TransformComponent>(entity)) {
+        saved_tf = registry.get<TransformComponent>(entity);
+        has_tf = true;
+    }
+
     registry.destroy(entity);
+
+    // Undo: recreate entity with name + transform
+    {
+        auto& w = engine.pipeline()->world();
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+            "Delete Entity (RPC)",
+            []() {},
+            [saved_name, saved_tf, has_tf, &w, &reg]() {
+                auto e = w.CreateEntity();
+                if (!saved_name.empty()) reg.emplace<EditorNameComponent>(e, saved_name);
+                if (has_tf) reg.emplace<TransformComponent>(e, saved_tf);
+            }
+        ));
+    }
 
     rapidjson::Document result;
     result.SetObject();
@@ -1331,6 +1369,218 @@ static JsonRpcResponse HandleMaterialCreate(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_entity_get_state ────────────────────────────────────────
+
+static JsonRpcResponse HandleEntityGetState(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+
+    if (registry.all_of<EditorNameComponent>(entity)) {
+        result.AddMember("name",
+            rapidjson::Value(registry.get<EditorNameComponent>(entity).name.c_str(), alloc), alloc);
+    }
+
+    if (registry.all_of<TransformComponent>(entity)) {
+        const auto& t = registry.get<TransformComponent>(entity);
+        rapidjson::Value tf(rapidjson::kObjectType);
+        rapidjson::Value pos(rapidjson::kArrayType);
+        pos.PushBack(t.position.x, alloc); pos.PushBack(t.position.y, alloc); pos.PushBack(t.position.z, alloc);
+        tf.AddMember("position", pos, alloc);
+        rapidjson::Value rot(rapidjson::kArrayType);
+        rot.PushBack(t.rotation.x, alloc); rot.PushBack(t.rotation.y, alloc);
+        rot.PushBack(t.rotation.z, alloc); rot.PushBack(t.rotation.w, alloc);
+        tf.AddMember("rotation", rot, alloc);
+        rapidjson::Value scl(rapidjson::kArrayType);
+        scl.PushBack(t.scale.x, alloc); scl.PushBack(t.scale.y, alloc); scl.PushBack(t.scale.z, alloc);
+        tf.AddMember("scale", scl, alloc);
+        result.AddMember("transform", tf, alloc);
+    }
+
+    rapidjson::Value comps(rapidjson::kArrayType);
+    CollectEntityComponents(registry, entity, comps, alloc, true);
+    result.AddMember("components", comps, alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_entity_duplicate ────────────────────────────────────────
+
+static JsonRpcResponse HandleEntityDuplicate(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+
+    auto src = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& world = engine.pipeline()->world();
+    auto& registry = world.registry();
+
+    if (!registry.valid(src)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    auto dst = world.CreateEntity();
+
+    std::string new_name = "Copy";
+    if (registry.all_of<EditorNameComponent>(src))
+        new_name = registry.get<EditorNameComponent>(src).name + " (Copy)";
+    registry.emplace<EditorNameComponent>(dst, new_name);
+
+    if (registry.all_of<TransformComponent>(src)) {
+        auto tf = registry.get<TransformComponent>(src);
+        tf.position += glm::vec3(0.5f, 0.0f, 0.5f);
+        tf.dirty = true;
+        registry.emplace<TransformComponent>(dst, tf);
+    } else {
+        registry.emplace<TransformComponent>(dst);
+    }
+
+    if (registry.all_of<MeshRendererComponent>(src))
+        registry.emplace<MeshRendererComponent>(dst, registry.get<MeshRendererComponent>(src));
+    if (registry.all_of<Camera3DComponent>(src))
+        registry.emplace<Camera3DComponent>(dst, registry.get<Camera3DComponent>(src));
+    if (registry.all_of<DirectionalLight3DComponent>(src))
+        registry.emplace<DirectionalLight3DComponent>(dst, registry.get<DirectionalLight3DComponent>(src));
+    if (registry.all_of<PointLightComponent>(src))
+        registry.emplace<PointLightComponent>(dst, registry.get<PointLightComponent>(src));
+    if (registry.all_of<SpotLightComponent>(src))
+        registry.emplace<SpotLightComponent>(dst, registry.get<SpotLightComponent>(src));
+    if (registry.all_of<RigidBody3DComponent>(src))
+        registry.emplace<RigidBody3DComponent>(dst, registry.get<RigidBody3DComponent>(src));
+    if (registry.all_of<BoxCollider3DComponent>(src))
+        registry.emplace<BoxCollider3DComponent>(dst, registry.get<BoxCollider3DComponent>(src));
+    if (registry.all_of<SphereCollider3DComponent>(src))
+        registry.emplace<SphereCollider3DComponent>(dst, registry.get<SphereCollider3DComponent>(src));
+    if (registry.all_of<AudioSourceComponent>(src))
+        registry.emplace<AudioSourceComponent>(dst, registry.get<AudioSourceComponent>(src));
+    if (registry.all_of<SkyLightComponent>(src))
+        registry.emplace<SkyLightComponent>(dst, registry.get<SkyLightComponent>(src));
+    if (registry.all_of<PostProcessComponent>(src))
+        registry.emplace<PostProcessComponent>(dst, registry.get<PostProcessComponent>(src));
+    if (registry.all_of<dse::Animator3DComponent>(src))
+        registry.emplace<dse::Animator3DComponent>(dst, registry.get<dse::Animator3DComponent>(src));
+
+    // Undo: destroy the duplicate
+    {
+        entt::entity dup = dst;
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+            "Duplicate Entity (RPC)",
+            []() {},
+            [dup, &reg]() { if (reg.valid(dup)) reg.destroy(dup); }
+        ));
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(dst), alloc);
+    result.AddMember("name", rapidjson::Value(new_name.c_str(), alloc), alloc);
+    result.AddMember("source_entity_id", static_cast<uint32_t>(src), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_prefab_save ──────────────────────────────────────────────
+
+static JsonRpcResponse HandlePrefabSave(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+    if (!params.HasMember("path") || !params["path"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: path");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    std::string path = params["path"].GetString();
+    if (path.find("..") != std::string::npos) {
+        return MakeToolError(-32602, "Path must not contain '..'");
+    }
+
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    if (!SaveEntityAsPrefab(registry, entity, path)) {
+        return MakeToolError(-32603, "Failed to save prefab: " + path);
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("path", rapidjson::Value(path.c_str(), alloc), alloc);
+    result.AddMember("saved", rapidjson::Value(true), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_prefab_instantiate ───────────────────────────────────────
+
+static JsonRpcResponse HandlePrefabInstantiate(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("path") || !params["path"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: path");
+    }
+
+    std::string path = params["path"].GetString();
+    if (!std::filesystem::exists(path)) {
+        return MakeToolError(-32602, "Prefab file not found: " + path);
+    }
+
+    auto& world = engine.pipeline()->world();
+    auto& registry = world.registry();
+    auto entity = InstantiatePrefab(world, registry, path);
+
+    if (entity == entt::null) {
+        return MakeToolError(-32603, "Failed to instantiate prefab: " + path);
+    }
+
+    // Undo: destroy the instantiated entity
+    {
+        entt::entity inst = entity;
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+            "Instantiate Prefab (RPC)",
+            []() {},
+            [inst, &reg]() { if (reg.valid(inst)) reg.destroy(inst); }
+        ));
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+    std::string inst_name = "Prefab Instance";
+    if (registry.all_of<EditorNameComponent>(entity))
+        inst_name = registry.get<EditorNameComponent>(entity).name;
+    result.AddMember("name", rapidjson::Value(inst_name.c_str(), alloc), alloc);
+    result.AddMember("source_path", rapidjson::Value(path.c_str(), alloc), alloc);
+    return MakeOk(std::move(result));
+}
+
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
 struct ToolEntry {
@@ -1359,6 +1609,10 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_scene_load",                HandleSceneLoad },
     { "dsengine_asset_import",              HandleAssetImport },
     { "dsengine_material_create",           HandleMaterialCreate },
+    { "dsengine_entity_get_state",          HandleEntityGetState },
+    { "dsengine_entity_duplicate",          HandleEntityDuplicate },
+    { "dsengine_prefab_save",               HandlePrefabSave },
+    { "dsengine_prefab_instantiate",        HandlePrefabInstantiate },
 };
 
 void RegisterBuiltinTools(ControlServer& server) {
