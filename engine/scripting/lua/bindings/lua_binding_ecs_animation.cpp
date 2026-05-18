@@ -8,7 +8,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/animation.h"
 #include "engine/ecs/components_3d.h"
-#include "modules/gameplay_3d/animation/animation_state_machine.h"
+#include "engine/ecs/animation_state_machine.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }

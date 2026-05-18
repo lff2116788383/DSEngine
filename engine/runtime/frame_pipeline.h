@@ -40,9 +40,9 @@
 #include "engine/render/reflection_probe_system.h"
 #include "engine/render/gi/ddgi_system.h"
 #include "engine/assets/streaming_manager.h"
+#include "engine/runtime/i_builtin_modules.h"
 
 class AssetManager;
-struct FramePipelineModules;
 
 /**
  * @class FramePipeline
@@ -245,7 +245,7 @@ private:
 
     dse::runtime::RuntimeContext runtime_context_{};
     
-    std::unique_ptr<FramePipelineModules> modules_impl_;
+    std::unique_ptr<IBuiltinModules> modules_impl_;
     int gpu_culled_last_frame_ = 0;  ///< GPU Driven: 上一帧被剔除的 draw command 数
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
     dse::physics3d::Physics3DSystem physics3d_system_;

@@ -9,6 +9,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
+#include "engine/render/hiz_types.h"
 #include <glm/glm.hpp>
 class AssetManager;
 
@@ -16,12 +17,6 @@ namespace dse { namespace render { struct RenderPassContext; } }
 
 namespace dse {
 namespace gameplay3d {
-
-/// Hi-Z AABB 数据（std430 layout: 2 x vec4 per object）
-struct HiZAABB {
-    glm::vec4 min_point;  // xyz = world min, w = 0
-    glm::vec4 max_point;  // xyz = world max, w = 0
-};
 
 /**
  * @class MeshRenderSystem

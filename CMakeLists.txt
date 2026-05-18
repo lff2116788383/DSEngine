@@ -213,6 +213,7 @@ set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 file(GLOB_RECURSE engine_cpp
     "engine/*.cpp"
     "modules/gameplay_2d/*.cpp"
+    "modules/runtime_bridge/*.cpp"
 )
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
@@ -242,7 +243,6 @@ endif()
 if(NOT DSE_ENABLE_3D)
     list(APPEND engine_cpp
         "modules/gameplay_3d/rendering/mesh_render_system.cpp"
-        "modules/gameplay_3d/animation/animation_state_machine.cpp"
         "modules/gameplay_3d/animation/animator_system.cpp"
         "modules/gameplay_3d/animation/anim_layer_blend_system.cpp"
         "modules/gameplay_3d/animation/ik_solver_system.cpp"
