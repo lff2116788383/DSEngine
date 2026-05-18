@@ -175,6 +175,10 @@ def main():
         print(f"[FAIL] {resp}")
         failed += 1
 
+    # Create a fresh entity for component tests 11-12
+    resp = rpc_call(ws, "dsengine_entity_create", {"name": "CompTestEntity", "position": [0, 0, 0]}, req_id=110)
+    created_id = resp.get("result", {}).get("entity_id")
+
     # Test 11: entity_add_component
     print("\n--- Test 11: entity_add_component ---")
     if created_id is not None:
