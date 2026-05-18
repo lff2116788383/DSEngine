@@ -1118,25 +1118,36 @@ static JsonRpcResponse HandleEditorScreenshot(
 
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
+struct ToolEntry {
+    const char* method;
+    ToolHandler handler;
+};
+
+static const ToolEntry kBuiltinTools[] = {
+    { "dsengine_ping",                      HandlePing },
+    { "dsengine_lua_execute",               HandleLuaExecute },
+    { "dsengine_scene_get_state",           HandleSceneGetState },
+    { "dsengine_entity_create",             HandleEntityCreate },
+    { "dsengine_entity_delete",             HandleEntityDelete },
+    { "dsengine_entity_modify",             HandleEntityModify },
+    { "dsengine_entity_add_component",      HandleEntityAddComponent },
+    { "dsengine_entity_remove_component",   HandleEntityRemoveComponent },
+    { "dsengine_entity_get_components",     HandleEntityGetComponents },
+    { "dsengine_script_create",             HandleScriptCreate },
+    { "dsengine_editor_get_state",          HandleEditorGetState },
+    { "dsengine_editor_play",               HandleEditorPlay },
+    { "dsengine_editor_stop",               HandleEditorStop },
+    { "dsengine_editor_undo",               HandleEditorUndo },
+    { "dsengine_editor_redo",               HandleEditorRedo },
+    { "dsengine_editor_screenshot",         HandleEditorScreenshot },
+    { "dsengine_scene_save",                HandleSceneSave },
+    { "dsengine_scene_load",                HandleSceneLoad },
+};
+
 void RegisterBuiltinTools(ControlServer& server) {
-    server.RegisterTool("dsengine_ping",                HandlePing);
-    server.RegisterTool("dsengine_lua_execute",         HandleLuaExecute);
-    server.RegisterTool("dsengine_scene_get_state",     HandleSceneGetState);
-    server.RegisterTool("dsengine_entity_create",       HandleEntityCreate);
-    server.RegisterTool("dsengine_entity_delete",       HandleEntityDelete);
-    server.RegisterTool("dsengine_entity_modify",       HandleEntityModify);
-    server.RegisterTool("dsengine_entity_add_component", HandleEntityAddComponent);
-    server.RegisterTool("dsengine_entity_remove_component", HandleEntityRemoveComponent);
-    server.RegisterTool("dsengine_entity_get_components", HandleEntityGetComponents);
-    server.RegisterTool("dsengine_script_create",       HandleScriptCreate);
-    server.RegisterTool("dsengine_editor_get_state",    HandleEditorGetState);
-    server.RegisterTool("dsengine_editor_play",         HandleEditorPlay);
-    server.RegisterTool("dsengine_editor_stop",         HandleEditorStop);
-    server.RegisterTool("dsengine_editor_undo",         HandleEditorUndo);
-    server.RegisterTool("dsengine_editor_redo",         HandleEditorRedo);
-    server.RegisterTool("dsengine_editor_screenshot",   HandleEditorScreenshot);
-    server.RegisterTool("dsengine_scene_save",          HandleSceneSave);
-    server.RegisterTool("dsengine_scene_load",          HandleSceneLoad);
+    for (const auto& tool : kBuiltinTools) {
+        server.RegisterTool(tool.method, tool.handler);
+    }
 }
 
 } // namespace dse::editor

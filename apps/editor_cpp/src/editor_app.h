@@ -6,6 +6,9 @@
 
 #include <memory>
 #include <entt/entt.hpp>
+#include "engine/profiler/cpu_profiler.h"
+#include "engine/profiler/memory_profiler.h"
+#include "engine/profiler/render_profiler.h"
 #include "editor_test_harness.h"
 #include "editor_control_server.h"
 #include "editor_plugin_manager.h"
@@ -78,6 +81,19 @@ private:
     char localization_preview_fallback_[128] = "Language: {lang}";
     bool show_plugins_panel_ = false;
     bool show_preferences_ = false;
+
+    // Profiler 实例（每帧通过 EditorContext 传递引用）
+    dse::profiler::CPUProfiler cpu_profiler_;
+    dse::profiler::MemoryProfiler memory_profiler_;
+    dse::profiler::RenderProfiler render_profiler_;
+
+    // Gizmo 状态
+    int current_gizmo_operation_ = 0;
+    int current_gizmo_mode_ = 0;
+
+    // Language preview
+    std::vector<std::string> editor_languages_;
+    int editor_language_index_ = 0;
 };
 
 } // namespace dse::editor

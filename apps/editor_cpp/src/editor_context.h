@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+#include <vector>
 #include <entt/entt.hpp>
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
@@ -34,6 +36,10 @@ struct EditorContext {
     // Gizmo
     int& current_gizmo_operation;
     int& current_gizmo_mode;
+
+    // Language preview
+    std::vector<std::string>& editor_languages;
+    int& editor_language_index;
 };
 
 } // namespace dse::editor

@@ -16,10 +16,6 @@
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "editor_scene_io.h"
 
-int g_current_gizmo_operation = 0;
-int g_current_gizmo_mode = 0;
-std::vector<std::string> g_editor_languages;
-int g_editor_language_index = 0;
 std::unique_ptr<entt::registry> g_backup_registry;
 
 namespace dse::editor {
@@ -78,6 +74,10 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
 void DrawEditorToolbar(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto& selected_entity = ctx.selected_entity;
+    auto& gizmo_op = ctx.current_gizmo_operation;
+    auto& gizmo_mode = ctx.current_gizmo_mode;
+    auto& languages = ctx.editor_languages;
+    auto& lang_index = ctx.editor_language_index;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 4));
     ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);
@@ -93,13 +93,13 @@ void DrawEditorToolbar(EditorContext& ctx) {
         ImGui::SameLine();
     };
 
-    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, "Hand Tool (H)", -1, g_current_gizmo_operation);
-    tool_button(MDI_ICON_ARROW_ALL, "Translate Tool (W)", 0, g_current_gizmo_operation);
-    tool_button(MDI_ICON_ROTATE_3D_VARIANT, "Rotate Tool (E)", 1, g_current_gizmo_operation);
-    tool_button(MDI_ICON_RESIZE, "Scale Tool (R)", 2, g_current_gizmo_operation);
+    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, "Hand Tool (H)", -1, gizmo_op);
+    tool_button(MDI_ICON_ARROW_ALL, "Translate Tool (W)", 0, gizmo_op);
+    tool_button(MDI_ICON_ROTATE_3D_VARIANT, "Rotate Tool (E)", 1, gizmo_op);
+    tool_button(MDI_ICON_RESIZE, "Scale Tool (R)", 2, gizmo_op);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button(g_current_gizmo_mode == 0 ? "Local" : "World", ImVec2(48, 24))) { g_current_gizmo_mode = 1 - g_current_gizmo_mode; }
+    if (ImGui::Button(gizmo_mode == 0 ? "Local" : "World", ImVec2(48, 24))) { gizmo_mode = 1 - gizmo_mode; }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Gizmo Coordinate Space");
     ImGui::PopStyleColor();
     ImGui::SameLine();
@@ -142,16 +142,16 @@ void DrawEditorToolbar(EditorContext& ctx) {
 
     ImGui::SameLine();
     ImGui::SetCursorPosX(avail_width - 320);
-    if (!g_editor_languages.empty()) {
+    if (!languages.empty()) {
         std::vector<const char*> language_items;
-        language_items.reserve(g_editor_languages.size());
-        for (const auto& lang : g_editor_languages) {
+        language_items.reserve(languages.size());
+        for (const auto& lang : languages) {
             language_items.push_back(lang.c_str());
         }
         ImGui::SetNextItemWidth(110.0f);
-        if (ImGui::Combo("##LanguagePreview", &g_editor_language_index, language_items.data(), static_cast<int>(language_items.size()))) {
+        if (ImGui::Combo("##LanguagePreview", &lang_index, language_items.data(), static_cast<int>(language_items.size()))) {
             auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
-            localization.SetCurrentLanguage(g_editor_languages[g_editor_language_index]);
+            localization.SetCurrentLanguage(languages[lang_index]);
             MarkAllUILabelsDirty(registry);
         }
         ImGui::SameLine();

@@ -73,15 +73,7 @@
 #include "editor_lua_console.h"
 #include "editor_build_game.h"
 
-extern std::vector<std::string> g_editor_languages;
-extern int g_editor_language_index;
-extern int g_current_gizmo_operation;
-extern int g_current_gizmo_mode;
 
-// 全局 profiler 实例（供其他面板通过 extern 访问）
-dse::profiler::CPUProfiler g_cpu_profiler;
-dse::profiler::MemoryProfiler g_memory_profiler;
-dse::profiler::RenderProfiler g_render_profiler;
 
 namespace {
 
@@ -454,8 +446,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     // Load editor settings and restore state
     dse::editor::EditorSettings editor_settings = dse::editor::LoadEditorSettings();
-    g_current_gizmo_operation = editor_settings.default_gizmo_operation;
-    g_current_gizmo_mode = editor_settings.default_gizmo_mode;
+    current_gizmo_operation_ = editor_settings.default_gizmo_operation;
+    current_gizmo_mode_ = editor_settings.default_gizmo_mode;
 
     if (!test_config_.scene_path.empty()) {
         editor_settings.last_scene_path = test_config_.scene_path;
@@ -493,9 +485,9 @@ void EditorApp::Run() {
 
     while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
-        g_cpu_profiler.BeginFrame();
-        g_render_profiler.BeginFrame();
-        g_memory_profiler.Reset();
+        cpu_profiler_.BeginFrame();
+        render_profiler_.BeginFrame();
+        memory_profiler_.Reset();
 
         glfwPollEvents();
 
@@ -522,7 +514,7 @@ void EditorApp::Run() {
 
         // Tick Engine
         {
-            dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EngineTick");
+            dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "EngineTick");
             if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
                 Time::Update();
                 dse::runtime::PumpLuaScriptHotReloads();
@@ -538,28 +530,28 @@ void EditorApp::Run() {
 
         // Metrics
         {
-            dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EditorMetrics");
+            dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "EditorMetrics");
             World& profiler_world = engine_instance_->pipeline()->world();
             auto& profiler_registry = profiler_world.registry();
             const int entity_count = static_cast<int>(profiler_registry.storage<entt::entity>().size());
             auto sprite_view = profiler_registry.view<SpriteRendererComponent>();
             const int sprite_count = static_cast<int>(std::distance(sprite_view.begin(), sprite_view.end()));
 
-            g_memory_profiler.RecordAlloc("World.Entities", static_cast<size_t>(std::max(entity_count, 0)) * sizeof(entt::entity));
-            g_memory_profiler.RecordAlloc("Render.SceneTexture", static_cast<size_t>(1280 * 720 * 4));
-            g_memory_profiler.RecordAlloc("Render.GameTexture", static_cast<size_t>(1280 * 720 * 4));
-            g_memory_profiler.RecordAlloc("UI.ImGui", static_cast<size_t>(256 * 1024));
+            memory_profiler_.RecordAlloc("World.Entities", static_cast<size_t>(std::max(entity_count, 0)) * sizeof(entt::entity));
+            memory_profiler_.RecordAlloc("Render.SceneTexture", static_cast<size_t>(1280 * 720 * 4));
+            memory_profiler_.RecordAlloc("Render.GameTexture", static_cast<size_t>(1280 * 720 * 4));
+            memory_profiler_.RecordAlloc("UI.ImGui", static_cast<size_t>(256 * 1024));
 
-            g_render_profiler.RecordSpriteBatch(std::max(sprite_count, 0));
-            g_render_profiler.RecordDrawCall(6, 2);
-            g_render_profiler.RecordTextureBind();
-            g_render_profiler.RecordShaderSwitch();
-            g_render_profiler.SetTextureMemory(static_cast<size_t>(1280 * 720 * 4 * 2));
+            render_profiler_.RecordSpriteBatch(std::max(sprite_count, 0));
+            render_profiler_.RecordDrawCall(6, 2);
+            render_profiler_.RecordTextureBind();
+            render_profiler_.RecordShaderSwitch();
+            render_profiler_.SetTextureMemory(static_cast<size_t>(1280 * 720 * 4 * 2));
         }
 
         // ImGui frame
         {
-            dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "ImGuiFrame");
+            dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiFrame");
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
@@ -568,7 +560,7 @@ void EditorApp::Run() {
 
         // Draw Editor UI
         {
-            dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "DrawEditorUI");
+            dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "DrawEditorUI");
             DrawEditorUI(scene_texture, game_texture);
         }
 
@@ -597,7 +589,7 @@ void EditorApp::Run() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
-            dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "ImGuiRender");
+            dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiRender");
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
@@ -611,8 +603,8 @@ void EditorApp::Run() {
 
         glfwSwapBuffers(window_);
 
-        g_render_profiler.EndFrame();
-        g_cpu_profiler.EndFrame();
+        render_profiler_.EndFrame();
+        cpu_profiler_.EndFrame();
     }
 }
 
@@ -623,8 +615,8 @@ void EditorApp::Shutdown() {
     dse::editor::EditorSettings editor_settings = dse::editor::LoadEditorSettings();
     editor_settings.last_scene_path = dse::editor::SceneTabManager::Get().GetActiveFilePath();
     if (editor_settings.last_scene_path.empty()) editor_settings.last_scene_path = dse::editor::GetCurrentScenePath();
-    editor_settings.default_gizmo_operation = g_current_gizmo_operation;
-    editor_settings.default_gizmo_mode = g_current_gizmo_mode;
+    editor_settings.default_gizmo_operation = current_gizmo_operation_;
+    editor_settings.default_gizmo_mode = current_gizmo_mode_;
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
 
@@ -683,9 +675,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::EditorContext ctx{
         *engine_instance_, world, registry, selected_entity_,
         is_play, is_2d_,
-        g_cpu_profiler, g_memory_profiler, g_render_profiler,
+        cpu_profiler_, memory_profiler_, render_profiler_,
         inspector_active_, inspector_static_,
-        g_current_gizmo_operation, g_current_gizmo_mode
+        current_gizmo_operation_, current_gizmo_mode_,
+        editor_languages_, editor_language_index_
     };
 
     dse::editor::BeginEditorShell();
@@ -752,18 +745,18 @@ void EditorApp::EnsureEditorLocalizationData() {
         {"ja", R"({"editor":{"preview":{"title":"\u30a8\u30c7\u30a3\u30bf\u30fc\u30d7\u30ec\u30d3\u30e5\u30fc","status":"\u73fe\u5728\u306e\u8a00\u8a9e: {lang}","selection":"\u9078\u629e\u4e2d: {entity}"}}})"}
     }};
 
-    g_editor_languages.clear();
+    editor_languages_.clear();
     for (const auto& seed : seeds) {
         const std::filesystem::path file_path = dir / (std::string(seed.first) + ".json");
         ExportTextFile(file_path, seed.second);
         if (localization.LoadLanguage(seed.first, file_path.string())) {
-            g_editor_languages.emplace_back(seed.first);
+            editor_languages_.emplace_back(seed.first);
         }
     }
 
-    if (!g_editor_languages.empty()) {
-        localization.SetCurrentLanguage(g_editor_languages.front());
-        g_editor_language_index = 0;
+    if (!editor_languages_.empty()) {
+        localization.SetCurrentLanguage(editor_languages_.front());
+        editor_language_index_ = 0;
     }
 }
 
