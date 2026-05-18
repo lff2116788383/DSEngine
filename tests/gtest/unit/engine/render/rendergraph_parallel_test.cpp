@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "engine/render/render_graph.h"
-#include "engine/render/rhi/gl_command_buffer.h"
+#include "engine/render/rhi/opengl/gl_command_buffer.h"
 #include <atomic>
 
 using namespace dse::render;

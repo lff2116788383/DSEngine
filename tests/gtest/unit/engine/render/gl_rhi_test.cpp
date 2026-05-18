@@ -19,14 +19,14 @@
 #include <gtest/gtest.h>
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/rhi_factory.h"
-#include "engine/render/rhi/gl_rhi_device.h"
-#include "engine/render/rhi/gl_command_buffer.h"
-#include "engine/render/rhi/gl_draw_executor.h"
-#include "engine/render/rhi/gl_shader_manager.h"
-#include "engine/render/rhi/gl_resource_manager.h"
-#include "engine/render/rhi/gl_pipeline_state_manager.h"
-#include "engine/render/rhi/ubo_manager.h"
-#include "engine/render/rhi/gl_enum_convert.h"
+#include "engine/render/rhi/opengl/gl_rhi_device.h"
+#include "engine/render/rhi/opengl/gl_command_buffer.h"
+#include "engine/render/rhi/opengl/gl_draw_executor.h"
+#include "engine/render/rhi/opengl/gl_shader_manager.h"
+#include "engine/render/rhi/opengl/gl_resource_manager.h"
+#include "engine/render/rhi/opengl/gl_pipeline_state_manager.h"
+#include "engine/render/rhi/opengl/ubo_manager.h"
+#include "engine/render/rhi/opengl/gl_enum_convert.h"
 #include "engine/render/rhi/draw_executor_common.h"
 
 #include <glm/glm.hpp>

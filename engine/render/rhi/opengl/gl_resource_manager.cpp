@@ -3,7 +3,7 @@
  * @brief GLResourceManager 实现 - GPU 资源管理器
  */
 
-#include "engine/render/rhi/gl_resource_manager.h"
+#include "engine/render/rhi/opengl/gl_resource_manager.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>

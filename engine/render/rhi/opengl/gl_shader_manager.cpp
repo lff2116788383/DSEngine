@@ -3,7 +3,7 @@
  * @brief GLShaderManager 实现 - 着色器管理器
  */
 
-#include "engine/render/rhi/gl_shader_manager.h"
+#include "engine/render/rhi/opengl/gl_shader_manager.h"
 #include "engine/render/rhi/ubo_types.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>

@@ -3,8 +3,8 @@
  * @brief GLPipelineStateManager 实现 - 管线状态管理器（带 Diff 优化）
  */
 
-#include "engine/render/rhi/gl_pipeline_state_manager.h"
-#include "engine/render/rhi/gl_enum_convert.h"
+#include "engine/render/rhi/opengl/gl_pipeline_state_manager.h"
+#include "engine/render/rhi/opengl/gl_enum_convert.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>
 

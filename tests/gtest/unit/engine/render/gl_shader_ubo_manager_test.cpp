@@ -9,8 +9,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "engine/render/rhi/gl_shader_manager.h"
-#include "engine/render/rhi/ubo_manager.h"
+#include "engine/render/rhi/opengl/gl_shader_manager.h"
+#include "engine/render/rhi/opengl/ubo_manager.h"
 
 using namespace dse::render;
 

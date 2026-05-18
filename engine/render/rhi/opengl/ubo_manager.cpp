@@ -3,7 +3,7 @@
  * @brief UBO 管理器实现
  */
 
-#include "engine/render/rhi/ubo_manager.h"
+#include "engine/render/rhi/opengl/ubo_manager.h"
 #include "engine/base/debug.h"
 #include <glad/gl.h>
 

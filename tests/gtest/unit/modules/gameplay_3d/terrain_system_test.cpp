@@ -14,7 +14,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/render/rhi/rhi_device.h"
-#include "engine/render/rhi/gl_command_buffer.h"
+#include "engine/render/rhi/opengl/gl_command_buffer.h"
 
 using namespace dse;
 using namespace dse::render;

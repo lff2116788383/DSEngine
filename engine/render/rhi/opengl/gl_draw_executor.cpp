@@ -3,12 +3,12 @@
  * @brief GLDrawExecutor 实现 - 绘制执行器
  */
 
-#include "engine/render/rhi/gl_draw_executor.h"
-#include "engine/render/rhi/gl_pipeline_state_manager.h"
-#include "engine/render/rhi/gl_shader_manager.h"
-#include "engine/render/rhi/gl_resource_manager.h"
-#include "engine/render/rhi/ubo_manager.h"
-#include "engine/render/rhi/gl_enum_convert.h"
+#include "engine/render/rhi/opengl/gl_draw_executor.h"
+#include "engine/render/rhi/opengl/gl_pipeline_state_manager.h"
+#include "engine/render/rhi/opengl/gl_shader_manager.h"
+#include "engine/render/rhi/opengl/gl_resource_manager.h"
+#include "engine/render/rhi/opengl/ubo_manager.h"
+#include "engine/render/rhi/opengl/gl_enum_convert.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/platform/screen.h"
 #include "engine/base/debug.h"
