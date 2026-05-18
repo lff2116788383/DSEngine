@@ -26,7 +26,7 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 ## 二、方案选择：Tool Provider 优于内建 Chat
 
 > **✅ Phase 1 已完成** — Engine Control Server + MCP adapter 已全部实现并通过端到端测试。
-> 当前共暴露 **15 个 Tool**，覆盖场景操控、实体 CRUD、编辑器控制、脚本执行、截图等。
+> 当前共暴露 **18 个 Tool**，覆盖场景操控、实体 CRUD、**组件 CRUD**、编辑器控制、脚本执行、截图等。
 
 ### 不推荐：在 C++ ImGui 里造 AI Chat
 
@@ -62,13 +62,16 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 │  │                                                    │   │
 │  │  协议: JSON-RPC over WebSocket (或 MCP stdio)      │   │
 │  │                                                    │   │
-│  │  暴露的 Tools (15 个, Phase 1 已全部实现):          │   │
+│  │  暴露的 Tools (18 个, Phase 1 已全部实现):          │   │
 │  │  ├─ ping              → 连通性测试               ✅ │   │
-│  │  ├─ scene.get_state   → 返回场景 JSON 摘要       ✅ │   │
+│  │  ├─ scene.get_state   → 场景摘要 (20 种组件)     ✅ │   │
 │  │  ├─ scene.load / save → 场景读写                 ✅ │   │
-│  │  ├─ entity.create     → 创建实体 + 组件          ✅ │   │
-│  │  ├─ entity.modify     → 修改组件属性             ✅ │   │
+│  │  ├─ entity.create     → 创建实体 + 13 种组件     ✅ │   │
+│  │  ├─ entity.modify     → 修改 transform + 组件属性 ✅ │   │
 │  │  ├─ entity.delete     → 删除实体                 ✅ │   │
+│  │  ├─ entity.add_component    → 添加组件            ✅ │   │
+│  │  ├─ entity.remove_component → 移除组件            ✅ │   │
+│  │  ├─ entity.get_components   → 查询组件 + 属性     ✅ │   │
 │  │  ├─ lua.execute       → ExecuteLuaString()       ✅ │   │
 │  │  ├─ script.create     → 写入 .lua 文件 + 热重载  ✅ │   │
 │  │  ├─ editor.get_state  → 编辑器状态 + 实体计数     ✅ │   │
@@ -328,14 +331,18 @@ AI:
 apps/editor_cpp/src/
 ├── editor_control_server.cpp   // WebSocket JSON-RPC 服务器（端口 9527）
 ├── editor_control_server.h     // ControlServer 类 + Tool 注册 + 消息分发
-├── editor_control_tools.cpp    // 15 个 Tool handler 实现（含 Base64 编码 + stb PNG）
+├── editor_control_tools.cpp    // 18 个 Tool handler 实现（含 Base64 编码 + stb PNG）
 ├── editor_plugin_manager.h     // 插件管理器（Python 进程外插件）
 └── editor_plugin_manager.cpp   //
 
 tools/
 ├── mcp_adapter/
-│   └── dsengine_mcp.py         // MCP stdio 适配器（15 个 Tool 定义 + WsBridge）
-└── test_control_server.py      // 端到端测试脚本（11 项测试）
+│   └── dsengine_mcp.py         // MCP stdio 适配器（18 个 Tool 定义 + WsBridge）
+├── test_control_server.py      // 端到端测试脚本（14 项测试）
+
+.windsurf/
+└── mcp.json                    // Windsurf IDE MCP 配置
+mcp_config.json                 // 通用 MCP 配置模板（Cursor / Claude Desktop）
 ```
 
 改动文件：
@@ -343,7 +350,7 @@ tools/
 - `editor_toolbar.h/cpp` — 暴露 `EnterPlayMode` / `ExitPlayMode`
 - `CMakeLists.txt` — 新增源文件 + WebSocket 依赖
 
-### Phase 1 Tool 清单（✅ 15 个已实现）
+### Phase 1 Tool 清单（✅ 18 个已实现）
 
 | Tool | 功能 | 类别 |
 |------|------|------|
@@ -354,14 +361,40 @@ tools/
 | `dsengine_editor_undo` | 撤销 | 编辑器 |
 | `dsengine_editor_redo` | 重做 | 编辑器 |
 | `dsengine_editor_screenshot` | 截图返回 base64 PNG | 编辑器 |
-| `dsengine_scene_get_state` | 场景结构化摘要（实体 + 组件） | 场景 |
+| `dsengine_scene_get_state` | 场景结构化摘要（20 种组件 + 属性详情） | 场景 |
 | `dsengine_scene_save` | 保存场景 | 场景 |
 | `dsengine_scene_load` | 加载场景 | 场景 |
-| `dsengine_entity_create` | 创建实体 + Transform | 实体 |
+| `dsengine_entity_create` | 创建实体 + mesh/color/13 种组件 | 实体 |
 | `dsengine_entity_delete` | 删除实体 | 实体 |
-| `dsengine_entity_modify` | 修改实体属性（name/position/rotation/scale） | 实体 |
+| `dsengine_entity_modify` | 修改 transform + 组件属性（8 种） | 实体 |
+| `dsengine_entity_add_component` | 向已有实体添加组件（13 种） | 组件 |
+| `dsengine_entity_remove_component` | 移除实体上的组件（13 种） | 组件 |
+| `dsengine_entity_get_components` | 查询实体全部组件 + 属性详情 | 组件 |
 | `dsengine_lua_execute` | 执行 Lua 代码（最通用 Tool） | 脚本 |
 | `dsengine_script_create` | 创建 .lua 文件 + 热重载 | 脚本 |
+
+### 支持的组件类型（13 种可添加/移除，20 种可检测）
+
+| 组件 | create | add | remove | modify | detect |
+|------|--------|-----|--------|--------|--------|
+| MeshRenderer | ✅ | ✅ | ✅ | ✅ mesh_path/color/metallic/roughness | ✅ |
+| Camera3D | ✅ | ✅ | ✅ | ✅ fov/near_clip/far_clip | ✅ |
+| DirectionalLight | ✅ | ✅ | ✅ | ✅ intensity/color/direction | ✅ |
+| PointLight | ✅ | ✅ | ✅ | ✅ intensity/color/range | ✅ |
+| SpotLight | ✅ | ✅ | ✅ | ✅ intensity/range/cone angles | ✅ |
+| RigidBody3D | ✅ | ✅ | ✅ | ✅ mass/body_type | ✅ |
+| BoxCollider3D | ✅ | ✅ | ✅ | — | ✅ |
+| SphereCollider3D | ✅ | ✅ | ✅ | — | ✅ |
+| AudioSource | ✅ | ✅ | ✅ | ✅ volume/pitch/loop | ✅ |
+| AudioListener | ✅ | ✅ | ✅ | — | ✅ |
+| SkyLight | ✅ | ✅ | ✅ | — | ✅ |
+| Skybox | ✅ | ✅ | ✅ | — | ✅ |
+| PostProcess | ✅ | ✅ | ✅ | — | ✅ |
+| SpriteRenderer | — | — | — | — | ✅ |
+| Animator3D | — | — | — | — | ✅ |
+| Water | — | — | — | — | ✅ |
+| Terrain | — | — | — | — | ✅ |
+| Decal | — | — | — | — | ✅ |
 
 ### Phase 3 说明
 

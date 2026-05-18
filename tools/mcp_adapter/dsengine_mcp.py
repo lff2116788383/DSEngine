@@ -202,6 +202,18 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "dsengine_entity_remove_component",
+        "description": "Remove a component from an existing entity by type name",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "integer", "description": "Entity ID (uint32)"},
+                "type": {"type": "string", "description": "Component type name to remove"}
+            },
+            "required": ["entity_id", "type"]
+        }
+    },
+    {
         "name": "dsengine_editor_play",
         "description": "Enter Play mode (run the game in editor)",
         "inputSchema": {

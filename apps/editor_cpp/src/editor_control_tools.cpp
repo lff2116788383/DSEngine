@@ -740,6 +740,73 @@ static JsonRpcResponse HandleEntityAddComponent(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_entity_remove_component ─────────────────────────────────
+
+static bool RemoveComponentByType(entt::registry& registry, entt::entity entity,
+                                   const std::string& type) {
+    if (type == "MeshRenderer" || type == "MeshRendererComponent") {
+        if (registry.all_of<MeshRendererComponent>(entity)) { registry.remove<MeshRendererComponent>(entity); return true; }
+    } else if (type == "Camera3D" || type == "Camera3DComponent") {
+        if (registry.all_of<Camera3DComponent>(entity)) { registry.remove<Camera3DComponent>(entity); return true; }
+    } else if (type == "DirectionalLight" || type == "DirectionalLight3DComponent") {
+        if (registry.all_of<DirectionalLight3DComponent>(entity)) { registry.remove<DirectionalLight3DComponent>(entity); return true; }
+    } else if (type == "PointLight" || type == "PointLightComponent") {
+        if (registry.all_of<PointLightComponent>(entity)) { registry.remove<PointLightComponent>(entity); return true; }
+    } else if (type == "SpotLight" || type == "SpotLightComponent") {
+        if (registry.all_of<SpotLightComponent>(entity)) { registry.remove<SpotLightComponent>(entity); return true; }
+    } else if (type == "RigidBody3D" || type == "RigidBody3DComponent") {
+        if (registry.all_of<RigidBody3DComponent>(entity)) { registry.remove<RigidBody3DComponent>(entity); return true; }
+    } else if (type == "BoxCollider3D" || type == "BoxCollider3DComponent") {
+        if (registry.all_of<BoxCollider3DComponent>(entity)) { registry.remove<BoxCollider3DComponent>(entity); return true; }
+    } else if (type == "SphereCollider3D" || type == "SphereCollider3DComponent") {
+        if (registry.all_of<SphereCollider3DComponent>(entity)) { registry.remove<SphereCollider3DComponent>(entity); return true; }
+    } else if (type == "AudioSource" || type == "AudioSourceComponent") {
+        if (registry.all_of<AudioSourceComponent>(entity)) { registry.remove<AudioSourceComponent>(entity); return true; }
+    } else if (type == "AudioListener" || type == "AudioListenerComponent") {
+        if (registry.all_of<AudioListenerComponent>(entity)) { registry.remove<AudioListenerComponent>(entity); return true; }
+    } else if (type == "SkyLight" || type == "SkyLightComponent") {
+        if (registry.all_of<SkyLightComponent>(entity)) { registry.remove<SkyLightComponent>(entity); return true; }
+    } else if (type == "Skybox" || type == "SkyboxComponent") {
+        if (registry.all_of<SkyboxComponent>(entity)) { registry.remove<SkyboxComponent>(entity); return true; }
+    } else if (type == "PostProcess" || type == "PostProcessComponent") {
+        if (registry.all_of<PostProcessComponent>(entity)) { registry.remove<PostProcessComponent>(entity); return true; }
+    }
+    return false;
+}
+
+static JsonRpcResponse HandleEntityRemoveComponent(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+    if (!params.HasMember("type") || !params["type"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: type (string)");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    std::string comp_type = params["type"].GetString();
+    bool removed = RemoveComponentByType(registry, entity, comp_type);
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+    result.AddMember("component", rapidjson::Value(comp_type.c_str(), alloc), alloc);
+    result.AddMember("removed", rapidjson::Value(removed), alloc);
+    if (!removed) {
+        result.AddMember("reason", "Component not found on entity", alloc);
+    }
+    return MakeOk(std::move(result));
+}
+
 // ─── Helper: 收集实体上的组件列表 ───────────────────────────────────────────
 
 static void CollectEntityComponents(entt::registry& registry, entt::entity entity,
@@ -1014,6 +1081,7 @@ void RegisterBuiltinTools(ControlServer& server) {
     server.RegisterTool("dsengine_entity_delete",       HandleEntityDelete);
     server.RegisterTool("dsengine_entity_modify",       HandleEntityModify);
     server.RegisterTool("dsengine_entity_add_component", HandleEntityAddComponent);
+    server.RegisterTool("dsengine_entity_remove_component", HandleEntityRemoveComponent);
     server.RegisterTool("dsengine_entity_get_components", HandleEntityGetComponents);
     server.RegisterTool("dsengine_script_create",       HandleScriptCreate);
     server.RegisterTool("dsengine_editor_get_state",    HandleEditorGetState);
