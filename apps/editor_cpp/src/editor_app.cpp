@@ -444,7 +444,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     engine_config.window_title = "DSEngine Editor";
     engine_config.business_mode = BusinessMode::Lua;
     engine_config.enable_editor = true;
-    engine_config.startup_lua_script_path = (GetProjectRootPath() / "samples" / "lua" / "main.lua").string();
+    // Editor mode: no Lua startup script needed; engine will skip bootstrap gracefully.
 
     if (std::getenv("DSE_DATA_ROOT") == nullptr) {
 #if defined(_WIN32)

@@ -605,8 +605,11 @@ bool FramePipeline::Init() {
                    runtime_context_.business_mode == BusinessMode::Lua ? "Lua" : "Cpp",
                    business_bootstrap_ok ? "OK" : "FAILED");
     if (!business_bootstrap_ok) {
-        Shutdown();
-        return false;
+        if (!runtime_context_.editor_mode) {
+            Shutdown();
+            return false;
+        }
+        DEBUG_LOG_INFO("Editor mode: business bootstrap failed, continuing with empty scene");
     }
     lap("business bootstrap");
     KeepAlive();
