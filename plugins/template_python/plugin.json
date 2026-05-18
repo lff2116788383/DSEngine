@@ -1,0 +1,9 @@
+{
+    "name": "Batch Rename",
+    "version": "1.0.0",
+    "author": "DSEngine",
+    "description": "Batch rename entities in the scene using pattern matching and replacement rules.",
+    "runtime": "python",
+    "entry": "main.py",
+    "requires_ui": false
+}

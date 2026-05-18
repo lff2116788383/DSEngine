@@ -1,0 +1,9 @@
+{
+    "name": "AI Texture Generator",
+    "version": "1.0.0",
+    "author": "DSEngine",
+    "description": "Generate PBR textures using OpenAI DALL-E 3 and import them into the engine.",
+    "runtime": "node",
+    "entry": "index.js",
+    "requires_ui": false
+}
