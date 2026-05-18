@@ -5,9 +5,18 @@
 
 namespace dse::editor {
 
+struct PanelVisibility {
+    bool* localization_preview = nullptr;
+    bool* profiler = nullptr;
+    bool* animation = nullptr;
+    bool* tile_palette = nullptr;
+    bool* terrain_editor = nullptr;
+    bool* lua_console = nullptr;
+};
+
 void BeginEditorShell();
 void EndEditorShell();
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr, bool* show_chat = nullptr);
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr, bool* show_chat = nullptr, const PanelVisibility* panels = nullptr);
 
 /// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
 void DrawSceneTabBar(EditorContext& ctx);

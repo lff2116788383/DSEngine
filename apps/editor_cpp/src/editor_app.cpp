@@ -391,7 +391,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Layout version check: if the stored version doesn't match, delete the old ini
     // so BuildDefaultDockLayout rebuilds from scratch on next launch.
     {
-        static constexpr int kLayoutVersion = 2;
+        static constexpr int kLayoutVersion = 3;
         const auto ini_path = GetEditorBinPath() / "editor_layout.ini";
         const auto ver_path = GetEditorBinPath() / "editor_layout.ver";
         bool needs_reset = true;
@@ -748,7 +748,11 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     };
 
     dse::editor::BeginEditorShell();
-    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_);
+    dse::editor::PanelVisibility panel_vis{
+        &show_localization_preview_, &show_profiler_, &show_animation_,
+        &show_tile_palette_, &show_terrain_editor_, &show_lua_console_
+    };
+    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
     if (!is_play) {
         dse::editor::DrawSceneTabBar(ctx);
@@ -765,16 +769,18 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::DrawProjectPanel();
     dse::editor::DrawConsolePanel();
 
-    dse::editor::DrawLocalizationPreviewPanel(ctx,
-        localization_preview_key_, sizeof(localization_preview_key_),
-        localization_preview_fallback_, sizeof(localization_preview_fallback_));
+    if (show_localization_preview_) {
+        dse::editor::DrawLocalizationPreviewPanel(ctx,
+            localization_preview_key_, sizeof(localization_preview_key_),
+            localization_preview_fallback_, sizeof(localization_preview_fallback_));
+    }
 
-    dse::editor::DrawProfilerPanel(ctx);
-    dse::editor::DrawAnimationPanel(ctx);
+    if (show_profiler_)       dse::editor::DrawProfilerPanel(ctx);
+    if (show_animation_)      dse::editor::DrawAnimationPanel(ctx);
     dse::editor::DrawMaterialPanel(ctx);
-    dse::editor::DrawTilePalettePanel(ctx);
-    dse::editor::DrawTerrainEditorPanel(ctx);
-    dse::editor::DrawLuaConsolePanel();
+    if (show_tile_palette_)   dse::editor::DrawTilePalettePanel(ctx);
+    if (show_terrain_editor_) dse::editor::DrawTerrainEditorPanel(ctx);
+    if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
     dse::editor::DrawBuildGameDialog();
 
     dse::editor::DrawPreferencesPanel(&show_preferences_);

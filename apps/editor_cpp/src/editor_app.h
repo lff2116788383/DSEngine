@@ -87,6 +87,14 @@ private:
     bool show_plugins_panel_ = false;
     bool show_preferences_ = false;
 
+    // Optional panels (hidden by default, toggle via Window menu)
+    bool show_localization_preview_ = false;
+    bool show_profiler_ = false;
+    bool show_animation_ = false;
+    bool show_tile_palette_ = false;
+    bool show_terrain_editor_ = false;
+    bool show_lua_console_ = false;
+
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;
     dse::profiler::MemoryProfiler memory_profiler_;

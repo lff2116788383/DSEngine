@@ -56,11 +56,6 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
     ImGui::DockBuilderDockWindow("Material",              dock_id_right);
     ImGui::DockBuilderDockWindow("Project",               dock_id_bottom);
     ImGui::DockBuilderDockWindow("Console",               dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Animation",             dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Profiler",              dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Tile Palette",          dock_id_bottom);
-    ImGui::DockBuilderDockWindow("Localization Preview",  dock_id_bottom);
-    ImGui::DockBuilderDockWindow(MDI_ICON_CODE "  Lua Console", dock_id_bottom);
     ImGui::DockBuilderDockWindow("Scene",                 dock_id_main);
     ImGui::DockBuilderDockWindow("Game",                  dock_id_main);
 
@@ -106,7 +101,7 @@ void EndEditorShell() {
     ImGui::End();
 }
 
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins, bool* show_chat) {
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins, bool* show_chat, const PanelVisibility* panels) {
     if (!ImGui::BeginMenuBar()) {
         return;
     }
@@ -208,6 +203,24 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Separator();
         if (show_chat && ImGui::MenuItem("AI Chat")) {
             *show_chat = true;
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Panels")) {
+            if (panels) {
+                if (panels->profiler)
+                    ImGui::MenuItem("Profiler", nullptr, panels->profiler);
+                if (panels->animation)
+                    ImGui::MenuItem("Animation", nullptr, panels->animation);
+                if (panels->tile_palette)
+                    ImGui::MenuItem("Tile Palette", nullptr, panels->tile_palette);
+                if (panels->terrain_editor)
+                    ImGui::MenuItem("Terrain Editor", nullptr, panels->terrain_editor);
+                if (panels->lua_console)
+                    ImGui::MenuItem("Lua Console", nullptr, panels->lua_console);
+                if (panels->localization_preview)
+                    ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
+            }
+            ImGui::EndMenu();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout")) {
