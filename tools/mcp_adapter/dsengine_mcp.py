@@ -153,6 +153,33 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "dsengine_entity_add_component",
+        "description": "Add a component to an existing entity. "
+                       "Supported types: MeshRenderer, Camera3D, DirectionalLight, PointLight, SpotLight, "
+                       "RigidBody3D, BoxCollider3D, SphereCollider3D, AudioSource, AudioListener, SkyLight, Skybox, PostProcess.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "integer", "description": "Entity ID (uint32)"},
+                "type": {"type": "string", "description": "Component type name"},
+                "properties": {"type": "object", "description": "Optional component properties"}
+            },
+            "required": ["entity_id", "type"]
+        }
+    },
+    {
+        "name": "dsengine_entity_get_components",
+        "description": "Get all components on an entity with optional property details",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "integer", "description": "Entity ID (uint32)"},
+                "detailed": {"type": "boolean", "default": True, "description": "Include property values (default true)"}
+            },
+            "required": ["entity_id"]
+        }
+    },
+    {
         "name": "dsengine_editor_play",
         "description": "Enter Play mode (run the game in editor)",
         "inputSchema": {

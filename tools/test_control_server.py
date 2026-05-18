@@ -175,9 +175,65 @@ def main():
         print(f"[FAIL] {resp}")
         failed += 1
 
-    # Test 11: method_not_found
-    print("\n--- Test 11: unknown method ---")
-    resp = rpc_call(ws, "nonexistent_method", req_id=11)
+    # Test 11: entity_add_component
+    print("\n--- Test 11: entity_add_component ---")
+    if created_id is not None:
+        resp = rpc_call(ws, "dsengine_entity_add_component", {
+            "entity_id": created_id,
+            "type": "PointLight",
+            "properties": {"intensity": 2.0, "range": 15.0}
+        }, req_id=11)
+        if resp.get("result", {}).get("added"):
+            print(f"[PASS] Added PointLight to entity {created_id}")
+            passed += 1
+        else:
+            print(f"[FAIL] {resp}")
+            failed += 1
+    else:
+        print("[SKIP] No entity to add component to")
+
+    # Test 12: entity_get_components
+    print("\n--- Test 12: entity_get_components ---")
+    if created_id is not None:
+        resp = rpc_call(ws, "dsengine_entity_get_components", {
+            "entity_id": created_id,
+            "detailed": True
+        }, req_id=12)
+        comps = resp.get("result", {}).get("components", [])
+        comp_types = [c.get("type") if isinstance(c, dict) else c for c in comps]
+        if "Transform" in comp_types and "PointLight" in comp_types:
+            print(f"[PASS] Components: {comp_types}")
+            passed += 1
+        else:
+            print(f"[FAIL] Expected Transform+PointLight, got: {comp_types}")
+            failed += 1
+    else:
+        print("[SKIP] No entity to query")
+
+    # Test 13: entity_create with components
+    print("\n--- Test 13: entity_create with components ---")
+    resp = rpc_call(ws, "dsengine_entity_create", {
+        "name": "TestRichEntity",
+        "position": [10, 5, 0],
+        "mesh": "models/cube.dmesh",
+        "components": [
+            "Camera3D",
+            {"type": "RigidBody3D", "properties": {"mass": 10, "body_type": "dynamic"}},
+            {"type": "BoxCollider3D", "properties": {"size": [2, 2, 2]}}
+        ]
+    }, req_id=13)
+    result_comps = resp.get("result", {}).get("components", [])
+    if "MeshRenderer" in result_comps and "Camera3D" in result_comps and "RigidBody3D" in result_comps:
+        rich_id = resp["result"]["entity_id"]
+        print(f"[PASS] Created rich entity {rich_id} with components: {result_comps}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 14: method_not_found
+    print("\n--- Test 14: unknown method ---")
+    resp = rpc_call(ws, "nonexistent_method", req_id=14)
     if resp.get("error", {}).get("code") == -32601:
         print(f"[PASS] Got expected error: {resp['error']['message']}")
         passed += 1

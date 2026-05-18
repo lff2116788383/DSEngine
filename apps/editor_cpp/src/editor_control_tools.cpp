@@ -640,6 +640,164 @@ static JsonRpcResponse HandleEntityModify(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_entity_add_component ────────────────────────────────────
+
+static JsonRpcResponse HandleEntityAddComponent(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+    if (!params.HasMember("type") || !params["type"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: type (string)");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    std::string comp_type = params["type"].GetString();
+    const rapidjson::Value* props = nullptr;
+    if (params.HasMember("properties") && params["properties"].IsObject()) {
+        props = &params["properties"];
+    }
+
+    AddComponentByType(registry, entity, comp_type, props);
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+    result.AddMember("component", rapidjson::Value(comp_type.c_str(), alloc), alloc);
+    result.AddMember("added", rapidjson::Value(true), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Helper: 收集实体上的组件列表 ───────────────────────────────────────────
+
+static void CollectEntityComponents(entt::registry& registry, entt::entity entity,
+                                     rapidjson::Value& arr, rapidjson::Document::AllocatorType& alloc,
+                                     bool include_properties) {
+    auto addComp = [&](const char* type_name) {
+        if (include_properties) {
+            rapidjson::Value comp(rapidjson::kObjectType);
+            comp.AddMember("type", rapidjson::Value(type_name, alloc), alloc);
+            arr.PushBack(comp, alloc);
+        } else {
+            arr.PushBack(rapidjson::Value(type_name, alloc), alloc);
+        }
+    };
+
+    if (registry.all_of<TransformComponent>(entity)) {
+        if (include_properties) {
+            const auto& t = registry.get<TransformComponent>(entity);
+            rapidjson::Value comp(rapidjson::kObjectType);
+            comp.AddMember("type", "Transform", alloc);
+            rapidjson::Value pos(rapidjson::kArrayType);
+            pos.PushBack(t.position.x, alloc).PushBack(t.position.y, alloc).PushBack(t.position.z, alloc);
+            comp.AddMember("position", pos, alloc);
+            rapidjson::Value rot(rapidjson::kArrayType);
+            glm::vec3 euler = glm::degrees(glm::eulerAngles(t.rotation));
+            rot.PushBack(euler.x, alloc).PushBack(euler.y, alloc).PushBack(euler.z, alloc);
+            comp.AddMember("rotation", rot, alloc);
+            rapidjson::Value scl(rapidjson::kArrayType);
+            scl.PushBack(t.scale.x, alloc).PushBack(t.scale.y, alloc).PushBack(t.scale.z, alloc);
+            comp.AddMember("scale", scl, alloc);
+            arr.PushBack(comp, alloc);
+        } else {
+            arr.PushBack(rapidjson::Value("Transform", alloc), alloc);
+        }
+    }
+    if (registry.all_of<MeshRendererComponent>(entity)) {
+        if (include_properties) {
+            const auto& mr = registry.get<MeshRendererComponent>(entity);
+            rapidjson::Value comp(rapidjson::kObjectType);
+            comp.AddMember("type", "MeshRenderer", alloc);
+            comp.AddMember("mesh_path", rapidjson::Value(mr.mesh_path.c_str(), alloc), alloc);
+            comp.AddMember("shader_variant", rapidjson::Value(mr.shader_variant.c_str(), alloc), alloc);
+            comp.AddMember("metallic", mr.metallic, alloc);
+            comp.AddMember("roughness", mr.roughness, alloc);
+            rapidjson::Value col(rapidjson::kArrayType);
+            col.PushBack(mr.color.r, alloc).PushBack(mr.color.g, alloc).PushBack(mr.color.b, alloc).PushBack(mr.color.a, alloc);
+            comp.AddMember("color", col, alloc);
+            arr.PushBack(comp, alloc);
+        } else {
+            arr.PushBack(rapidjson::Value("MeshRenderer", alloc), alloc);
+        }
+    }
+    if (registry.all_of<Camera3DComponent>(entity)) {
+        if (include_properties) {
+            const auto& c = registry.get<Camera3DComponent>(entity);
+            rapidjson::Value comp(rapidjson::kObjectType);
+            comp.AddMember("type", "Camera3D", alloc);
+            comp.AddMember("fov", c.fov, alloc);
+            comp.AddMember("near_clip", c.near_clip, alloc);
+            comp.AddMember("far_clip", c.far_clip, alloc);
+            arr.PushBack(comp, alloc);
+        } else {
+            arr.PushBack(rapidjson::Value("Camera3D", alloc), alloc);
+        }
+    }
+    if (registry.all_of<DirectionalLight3DComponent>(entity))  addComp("DirectionalLight");
+    if (registry.all_of<PointLightComponent>(entity))          addComp("PointLight");
+    if (registry.all_of<SpotLightComponent>(entity))           addComp("SpotLight");
+    if (registry.all_of<RigidBody3DComponent>(entity))         addComp("RigidBody3D");
+    if (registry.all_of<BoxCollider3DComponent>(entity))       addComp("BoxCollider3D");
+    if (registry.all_of<SphereCollider3DComponent>(entity))    addComp("SphereCollider3D");
+    if (registry.all_of<AudioSourceComponent>(entity))         addComp("AudioSource");
+    if (registry.all_of<AudioListenerComponent>(entity))       addComp("AudioListener");
+    if (registry.all_of<SkyLightComponent>(entity))            addComp("SkyLight");
+    if (registry.all_of<SkyboxComponent>(entity))              addComp("Skybox");
+    if (registry.all_of<PostProcessComponent>(entity))         addComp("PostProcess");
+    if (registry.all_of<SpriteRendererComponent>(entity))      addComp("SpriteRenderer");
+    if (registry.all_of<Animator3DComponent>(entity))          addComp("Animator3D");
+    if (registry.all_of<WaterComponent>(entity))               addComp("Water");
+    if (registry.all_of<TerrainComponent>(entity))             addComp("Terrain");
+    if (registry.all_of<DecalComponent>(entity))               addComp("Decal");
+}
+
+// ─── Tool: dsengine_entity_get_components ───────────────────────────────────
+
+static JsonRpcResponse HandleEntityGetComponents(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    bool detailed = true;
+    if (params.HasMember("detailed") && params["detailed"].IsBool()) {
+        detailed = params["detailed"].GetBool();
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+
+    if (registry.all_of<EditorNameComponent>(entity)) {
+        result.AddMember("name",
+            rapidjson::Value(registry.get<EditorNameComponent>(entity).name.c_str(), alloc), alloc);
+    }
+
+    rapidjson::Value comps(rapidjson::kArrayType);
+    CollectEntityComponents(registry, entity, comps, alloc, detailed);
+    result.AddMember("components", comps, alloc);
+    return MakeOk(std::move(result));
+}
+
 // ─── Tool: dsengine_scene_save ──────────────────────────────────────────────
 
 static JsonRpcResponse HandleSceneSave(
@@ -792,6 +950,8 @@ void RegisterBuiltinTools(ControlServer& server) {
     server.RegisterTool("dsengine_entity_create",       HandleEntityCreate);
     server.RegisterTool("dsengine_entity_delete",       HandleEntityDelete);
     server.RegisterTool("dsengine_entity_modify",       HandleEntityModify);
+    server.RegisterTool("dsengine_entity_add_component", HandleEntityAddComponent);
+    server.RegisterTool("dsengine_entity_get_components", HandleEntityGetComponents);
     server.RegisterTool("dsengine_script_create",       HandleScriptCreate);
     server.RegisterTool("dsengine_editor_get_state",    HandleEditorGetState);
     server.RegisterTool("dsengine_editor_play",         HandleEditorPlay);
