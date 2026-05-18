@@ -1581,6 +1581,124 @@ static JsonRpcResponse HandlePrefabInstantiate(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_scene_new ────────────────────────────────────────────────
+
+static JsonRpcResponse HandleSceneNew(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& engine) {
+
+    auto& registry = engine.pipeline()->world().registry();
+    registry.clear();
+    GetUndoRedoManager().Clear();
+    SetCurrentScenePath("Untitled");
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("cleared", rapidjson::Value(true), alloc);
+    result.AddMember("path", rapidjson::Value("Untitled", alloc), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_entity_reparent ──────────────────────────────────────────
+
+static JsonRpcResponse HandleEntityReparent(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_id") || !params["entity_id"].IsUint()) {
+        return MakeToolError(-32602, "Missing required param: entity_id (uint)");
+    }
+
+    auto entity = static_cast<entt::entity>(params["entity_id"].GetUint());
+    auto& registry = engine.pipeline()->world().registry();
+
+    if (!registry.valid(entity)) {
+        return MakeToolError(-32602, "Invalid entity_id");
+    }
+
+    // parent_id: optional uint. Omit or 0xFFFFFFFF to detach (set root).
+    entt::entity new_parent = entt::null;
+    if (params.HasMember("parent_id") && params["parent_id"].IsUint()) {
+        uint32_t pid = params["parent_id"].GetUint();
+        if (pid != 0xFFFFFFFFu) {
+            new_parent = static_cast<entt::entity>(pid);
+            if (!registry.valid(new_parent)) {
+                return MakeToolError(-32602, "Invalid parent_id");
+            }
+            // Cycle detection: new_parent must not be a descendant of entity
+            entt::entity cur = new_parent;
+            while (cur != entt::null && registry.valid(cur)) {
+                if (cur == entity) return MakeToolError(-32602, "Circular parenting detected");
+                if (!registry.all_of<ParentComponent>(cur)) break;
+                cur = registry.get<ParentComponent>(cur).parent;
+            }
+        }
+    }
+
+    entt::entity old_parent = entt::null;
+    int old_sibling = 0;
+    if (registry.all_of<ParentComponent>(entity))
+        old_parent = registry.get<ParentComponent>(entity).parent;
+    if (registry.all_of<SiblingIndexComponent>(entity))
+        old_sibling = registry.get<SiblingIndexComponent>(entity).index;
+
+    // Apply new parent
+    if (new_parent == entt::null) {
+        registry.remove<ParentComponent>(entity);
+    } else if (registry.all_of<ParentComponent>(entity)) {
+        registry.get<ParentComponent>(entity).parent = new_parent;
+    } else {
+        registry.emplace<ParentComponent>(entity, new_parent);
+    }
+
+    // Apply sibling_index if provided
+    if (params.HasMember("sibling_index") && params["sibling_index"].IsInt()) {
+        int si = params["sibling_index"].GetInt();
+        if (registry.all_of<SiblingIndexComponent>(entity))
+            registry.get<SiblingIndexComponent>(entity).index = si;
+        else
+            registry.emplace<SiblingIndexComponent>(entity, si);
+    }
+
+    // Dirty transform
+    if (registry.all_of<TransformComponent>(entity))
+        registry.get<TransformComponent>(entity).dirty = true;
+
+    // Undo
+    {
+        auto& reg = registry;
+        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+            "Reparent Entity (RPC)",
+            []() {},
+            [&reg, entity, old_parent, old_sibling]() {
+                if (!reg.valid(entity)) return;
+                if (old_parent == entt::null) {
+                    reg.remove<ParentComponent>(entity);
+                } else if (reg.all_of<ParentComponent>(entity)) {
+                    reg.get<ParentComponent>(entity).parent = old_parent;
+                } else {
+                    reg.emplace<ParentComponent>(entity, old_parent);
+                }
+                if (reg.all_of<SiblingIndexComponent>(entity))
+                    reg.get<SiblingIndexComponent>(entity).index = old_sibling;
+                if (reg.all_of<TransformComponent>(entity))
+                    reg.get<TransformComponent>(entity).dirty = true;
+            }
+        ));
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("entity_id", static_cast<uint32_t>(entity), alloc);
+    result.AddMember("parent_id",
+        new_parent == entt::null ? rapidjson::Value(rapidjson::kNullType) :
+        rapidjson::Value(static_cast<uint32_t>(new_parent)),
+        alloc);
+    return MakeOk(std::move(result));
+}
+
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
 struct ToolEntry {
@@ -1613,6 +1731,8 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_entity_duplicate",          HandleEntityDuplicate },
     { "dsengine_prefab_save",               HandlePrefabSave },
     { "dsengine_prefab_instantiate",        HandlePrefabInstantiate },
+    { "dsengine_scene_new",                 HandleSceneNew },
+    { "dsengine_entity_reparent",           HandleEntityReparent },
 };
 
 void RegisterBuiltinTools(ControlServer& server) {

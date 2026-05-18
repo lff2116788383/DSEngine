@@ -43,6 +43,7 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/audio.h"
+#include "engine/ecs/transform.h"
 #include <glm/gtc/quaternion.hpp>
 
 namespace fs = std::filesystem;
@@ -1273,4 +1274,93 @@ TEST_F(ControlServerTest, PrefabSaveAndInstantiate_RoundTrip) {
     EXPECT_TRUE(registry.valid(inst));
     EXPECT_TRUE(registry.all_of<dse::MeshRendererComponent>(inst));
     EXPECT_TRUE(dse::editor::IsPrefabInstance(registry, inst));
+}
+
+// ─── Test 84: scene_new 清空所有实体 ─────────────────────────────────────────
+
+TEST_F(ControlServerTest, SceneNew_ClearsAllEntities) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"Ent1"})");
+    ASSERT_FALSE(cr.is_error);
+    Dispatch("dsengine_entity_create", R"({"name":"Ent2"})");
+
+    auto& registry = world_.registry();
+    EXPECT_GT(static_cast<int>(registry.storage<entt::entity>().size()), 0);
+
+    auto resp = Dispatch("dsengine_scene_new", "{}");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["cleared"].GetBool());
+
+    int alive = 0;
+    for (auto e : registry.storage<entt::entity>()) {
+        if (registry.valid(e)) ++alive;
+    }
+    EXPECT_EQ(alive, 0);
+}
+
+// ─── Test 85: entity_reparent 设置父节点 ─────────────────────────────────────
+
+TEST_F(ControlServerTest, EntityReparent_SetsParentComponent) {
+    auto pr = Dispatch("dsengine_entity_create", R"({"name":"Parent"})");
+    ASSERT_FALSE(pr.is_error);
+    uint32_t parent_id = pr.result["entity_id"].GetUint();
+
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"Child"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t child_id = cr.result["entity_id"].GetUint();
+
+    std::string p = R"({"entity_id":)" + std::to_string(child_id) +
+        R"(,"parent_id":)" + std::to_string(parent_id) + R"(})";
+    auto resp = Dispatch("dsengine_entity_reparent", p.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["entity_id"].GetUint(), child_id);
+
+    auto& registry = world_.registry();
+    auto child = static_cast<entt::entity>(child_id);
+    ASSERT_TRUE(registry.all_of<ParentComponent>(child));
+    EXPECT_EQ(static_cast<uint32_t>(registry.get<ParentComponent>(child).parent), parent_id);
+}
+
+// ─── Test 86: entity_reparent 用 0xFFFFFFFF 解除父节点 ───────────────────────
+
+TEST_F(ControlServerTest, EntityReparent_DetachWithMaxUint) {
+    auto pr = Dispatch("dsengine_entity_create", R"({"name":"Parent"})");
+    uint32_t parent_id = pr.result["entity_id"].GetUint();
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"Child"})");
+    uint32_t child_id = cr.result["entity_id"].GetUint();
+
+    // 先绑定
+    std::string attach = R"({"entity_id":)" + std::to_string(child_id) +
+        R"(,"parent_id":)" + std::to_string(parent_id) + R"(})";
+    Dispatch("dsengine_entity_reparent", attach.c_str());
+
+    // 用 0xFFFFFFFF 解绑
+    std::string detach = R"({"entity_id":)" + std::to_string(child_id) +
+        R"(,"parent_id":4294967295})";
+    auto resp = Dispatch("dsengine_entity_reparent", detach.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["parent_id"].IsNull());
+
+    auto& registry = world_.registry();
+    auto child = static_cast<entt::entity>(child_id);
+    EXPECT_FALSE(registry.all_of<ParentComponent>(child));
+}
+
+// ─── Test 87: entity_reparent 循环检测报错 ───────────────────────────────────
+
+TEST_F(ControlServerTest, EntityReparent_CircularParent_ReturnsError) {
+    auto ar = Dispatch("dsengine_entity_create", R"({"name":"A"})");
+    uint32_t a_id = ar.result["entity_id"].GetUint();
+    auto br = Dispatch("dsengine_entity_create", R"({"name":"B"})");
+    uint32_t b_id = br.result["entity_id"].GetUint();
+
+    // A → parent=B
+    std::string p1 = R"({"entity_id":)" + std::to_string(a_id) +
+        R"(,"parent_id":)" + std::to_string(b_id) + R"(})";
+    Dispatch("dsengine_entity_reparent", p1.c_str());
+
+    // B → parent=A (circular)
+    std::string p2 = R"({"entity_id":)" + std::to_string(b_id) +
+        R"(,"parent_id":)" + std::to_string(a_id) + R"(})";
+    auto resp = Dispatch("dsengine_entity_reparent", p2.c_str());
+    EXPECT_TRUE(resp.is_error);
 }
