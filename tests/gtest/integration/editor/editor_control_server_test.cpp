@@ -90,6 +90,15 @@ protected:
         auto params = ParseParams(params_json);
         return server_.DispatchTool(method, params, *engine_);
     }
+
+    int CountAliveEntities() {
+        auto& reg = world_.registry();
+        int alive = 0;
+        for (auto e : reg.storage<entt::entity>()) {
+            if (reg.valid(e)) ++alive;
+        }
+        return alive;
+    }
 };
 
 // ─── DispatchTool: 未知方法 ──────────────────────────────────────────────────
@@ -1426,4 +1435,59 @@ TEST_F(ControlServerTest, SelectionClear_ClearsSelection) {
 
     auto gr = Dispatch("dsengine_selection_get", "{}");
     EXPECT_EQ(gr.result["count"].GetInt(), 0);
+}
+
+// ─── Test 92: entity_batch_delete 批量删除多个实体 ────────────────────────────
+
+TEST_F(ControlServerTest, EntityBatchDelete_DeletesMultiple) {
+    auto r1 = Dispatch("dsengine_entity_create", R"({"name":"BatchA"})");
+    auto r2 = Dispatch("dsengine_entity_create", R"({"name":"BatchB"})");
+    auto r3 = Dispatch("dsengine_entity_create", R"({"name":"BatchC"})");
+    uint32_t id1 = r1.result["entity_id"].GetUint();
+    uint32_t id2 = r2.result["entity_id"].GetUint();
+    uint32_t id3 = r3.result["entity_id"].GetUint();
+
+    int count_before = CountAliveEntities(); (void)id1; (void)id2; (void)id3;
+
+    std::string p = R"({"entity_ids":[)" +
+        std::to_string(id1) + "," +
+        std::to_string(id2) + "," +
+        std::to_string(id3) + "]}";
+    auto resp = Dispatch("dsengine_entity_batch_delete", p.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["deleted_count"].GetInt(), 3);
+    EXPECT_EQ(resp.result["deleted_ids"].Size(), 3u);
+    EXPECT_EQ(CountAliveEntities(), count_before - 3);
+}
+
+// ─── Test 93: entity_batch_delete 过滤无效 id ────────────────────────────────
+
+TEST_F(ControlServerTest, EntityBatchDelete_FiltersInvalidIds) {
+    auto r = Dispatch("dsengine_entity_create", R"({"name":"OnlyOne"})");
+    uint32_t valid_id = r.result["entity_id"].GetUint();
+    int count_before = CountAliveEntities();
+
+    std::string p = R"({"entity_ids":[)" + std::to_string(valid_id) + R"(,9999999]})";
+    auto resp = Dispatch("dsengine_entity_batch_delete", p.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_EQ(resp.result["deleted_count"].GetInt(), 1);
+    EXPECT_EQ(CountAliveEntities(), count_before - 1);
+}
+
+// ─── Test 94: entity_batch_delete Undo 恢复所有实体 ──────────────────────────
+
+TEST_F(ControlServerTest, EntityBatchDelete_UndoRestoresEntities) {
+    auto r1 = Dispatch("dsengine_entity_create", R"({"name":"UndoA"})");
+    auto r2 = Dispatch("dsengine_entity_create", R"({"name":"UndoB"})");
+    uint32_t id1 = r1.result["entity_id"].GetUint();
+    uint32_t id2 = r2.result["entity_id"].GetUint();
+    int count_before = CountAliveEntities();
+
+    std::string p = R"({"entity_ids":[)" + std::to_string(id1) + "," +
+        std::to_string(id2) + "]}";
+    Dispatch("dsengine_entity_batch_delete", p.c_str());
+    EXPECT_EQ(CountAliveEntities(), count_before - 2);
+
+    Dispatch("dsengine_editor_undo", "{}");
+    EXPECT_EQ(CountAliveEntities(), count_before);
 }

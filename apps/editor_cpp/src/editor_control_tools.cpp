@@ -488,6 +488,69 @@ static JsonRpcResponse HandleEntityDelete(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_entity_batch_delete ─────────────────────────────────────
+
+static JsonRpcResponse HandleEntityBatchDelete(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("entity_ids") || !params["entity_ids"].IsArray()) {
+        return MakeToolError(-32602, "Missing required param: entity_ids (array of uint)");
+    }
+
+    auto& registry = engine.pipeline()->world().registry();
+    auto& w = engine.pipeline()->world();
+
+    struct EntitySnapshot {
+        std::string name;
+        TransformComponent tf;
+        bool has_tf = false;
+    };
+
+    auto compound = std::make_unique<CompoundCommand>("Batch Delete");
+    std::vector<uint32_t> deleted_ids;
+
+    for (const auto& v : params["entity_ids"].GetArray()) {
+        if (!v.IsUint()) continue;
+        auto entity = static_cast<entt::entity>(v.GetUint());
+        if (!registry.valid(entity)) continue;
+
+        EntitySnapshot snap;
+        if (registry.all_of<EditorNameComponent>(entity))
+            snap.name = registry.get<EditorNameComponent>(entity).name;
+        if (registry.all_of<TransformComponent>(entity)) {
+            snap.tf = registry.get<TransformComponent>(entity);
+            snap.has_tf = true;
+        }
+
+        deleted_ids.push_back(static_cast<uint32_t>(entity));
+        registry.destroy(entity);
+
+        auto& reg = registry;
+        compound->AddCommand(std::make_unique<LambdaCommand>(
+            "Delete Entity",
+            []() {},
+            [snap, &w, &reg]() {
+                auto e = w.CreateEntity();
+                if (!snap.name.empty()) reg.emplace<EditorNameComponent>(e, snap.name);
+                if (snap.has_tf) reg.emplace<TransformComponent>(e, snap.tf);
+            }
+        ));
+    }
+
+    if (!compound->IsEmpty())
+        GetUndoRedoManager().Execute(std::move(compound), false);
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("deleted_count", rapidjson::Value(static_cast<int>(deleted_ids.size())), alloc);
+    rapidjson::Value ids_arr(rapidjson::kArrayType);
+    for (auto id : deleted_ids) ids_arr.PushBack(id, alloc);
+    result.AddMember("deleted_ids", ids_arr, alloc);
+    return MakeOk(std::move(result));
+}
+
 // ─── Tool: dsengine_script_create ───────────────────────────────────────────
 
 static JsonRpcResponse HandleScriptCreate(
@@ -1789,6 +1852,7 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_scene_get_state",           HandleSceneGetState },
     { "dsengine_entity_create",             HandleEntityCreate },
     { "dsengine_entity_delete",             HandleEntityDelete },
+    { "dsengine_entity_batch_delete",       HandleEntityBatchDelete },
     { "dsengine_entity_modify",             HandleEntityModify },
     { "dsengine_entity_add_component",      HandleEntityAddComponent },
     { "dsengine_entity_remove_component",   HandleEntityRemoveComponent },
