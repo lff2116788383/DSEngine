@@ -1491,3 +1491,46 @@ TEST_F(ControlServerTest, EntityBatchDelete_UndoRestoresEntities) {
     Dispatch("dsengine_editor_undo", "{}");
     EXPECT_EQ(CountAliveEntities(), count_before);
 }
+
+// ─── Test 95: undo_history 空栈时 can_undo=false ──────────────────────────────
+
+TEST_F(ControlServerTest, UndoHistory_EmptyStack) {
+    Dispatch("dsengine_scene_new", "{}");  // clears undo stack
+    auto resp = Dispatch("dsengine_undo_history", "{}");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_FALSE(resp.result["can_undo"].GetBool());
+    EXPECT_FALSE(resp.result["can_redo"].GetBool());
+    EXPECT_EQ(resp.result["undo_count"].GetInt(), 0);
+    EXPECT_EQ(resp.result["redo_count"].GetInt(), 0);
+    EXPECT_TRUE(resp.result["undo_history"].IsArray());
+    EXPECT_EQ(resp.result["undo_history"].Size(), 0u);
+}
+
+// ─── Test 96: undo_history 创建实体后 can_undo=true ──────────────────────────
+
+TEST_F(ControlServerTest, UndoHistory_AfterCreate_CanUndo) {
+    Dispatch("dsengine_scene_new", "{}");
+    Dispatch("dsengine_entity_create", R"({"name":"H1"})");
+    Dispatch("dsengine_entity_create", R"({"name":"H2"})");
+
+    auto resp = Dispatch("dsengine_undo_history", "{}");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["can_undo"].GetBool());
+    EXPECT_GE(resp.result["undo_count"].GetInt(), 1);
+    EXPECT_FALSE(std::string(resp.result["undo_description"].GetString()).empty());
+    EXPECT_GE(resp.result["undo_history"].Size(), 1u);
+}
+
+// ─── Test 97: undo 后 can_redo=true，redo_description 非空 ──────────────────
+
+TEST_F(ControlServerTest, UndoHistory_AfterUndo_CanRedo) {
+    Dispatch("dsengine_scene_new", "{}");
+    Dispatch("dsengine_entity_create", R"({"name":"RedoMe"})");
+    Dispatch("dsengine_editor_undo", "{}");
+
+    auto resp = Dispatch("dsengine_undo_history", "{}");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["can_redo"].GetBool());
+    EXPECT_GE(resp.result["redo_count"].GetInt(), 1);
+    EXPECT_FALSE(std::string(resp.result["redo_description"].GetString()).empty());
+}

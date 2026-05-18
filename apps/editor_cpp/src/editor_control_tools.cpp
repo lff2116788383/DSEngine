@@ -1763,6 +1763,39 @@ static JsonRpcResponse HandleEntityReparent(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_undo_history ────────────────────────────────────────────
+
+static JsonRpcResponse HandleUndoHistory(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& /*engine*/) {
+
+    auto& mgr = GetUndoRedoManager();
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+
+    result.AddMember("can_undo", rapidjson::Value(mgr.CanUndo()), alloc);
+    result.AddMember("can_redo", rapidjson::Value(mgr.CanRedo()), alloc);
+    result.AddMember("undo_count", rapidjson::Value(mgr.GetUndoCount()), alloc);
+    result.AddMember("redo_count", rapidjson::Value(mgr.GetRedoCount()), alloc);
+    result.AddMember("undo_description",
+        rapidjson::Value(mgr.GetUndoDescription().c_str(), alloc), alloc);
+    result.AddMember("redo_description",
+        rapidjson::Value(mgr.GetRedoDescription().c_str(), alloc), alloc);
+
+    rapidjson::Value undo_list(rapidjson::kArrayType);
+    for (const auto& s : mgr.GetUndoHistory())
+        undo_list.PushBack(rapidjson::Value(s.c_str(), alloc), alloc);
+    result.AddMember("undo_history", undo_list, alloc);
+
+    rapidjson::Value redo_list(rapidjson::kArrayType);
+    for (const auto& s : mgr.GetRedoHistory())
+        redo_list.PushBack(rapidjson::Value(s.c_str(), alloc), alloc);
+    result.AddMember("redo_history", redo_list, alloc);
+
+    return MakeOk(std::move(result));
+}
+
 // ─── Tool: dsengine_selection_get ───────────────────────────────────────────
 
 static JsonRpcResponse HandleSelectionGet(
@@ -1874,6 +1907,7 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_prefab_instantiate",        HandlePrefabInstantiate },
     { "dsengine_scene_new",                 HandleSceneNew },
     { "dsengine_entity_reparent",           HandleEntityReparent },
+    { "dsengine_undo_history",              HandleUndoHistory },
     { "dsengine_selection_get",             HandleSelectionGet },
     { "dsengine_selection_set",             HandleSelectionSet },
     { "dsengine_selection_clear",           HandleSelectionClear },
