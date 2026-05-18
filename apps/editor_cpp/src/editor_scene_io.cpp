@@ -80,6 +80,7 @@ void CopyRegistry(entt::registry& dst, entt::registry& src) {
         auto new_ent = dst.create(entity);
 
         if (src.all_of<EditorNameComponent>(entity)) dst.emplace<EditorNameComponent>(new_ent, src.get<EditorNameComponent>(entity));
+        if (src.all_of<SiblingIndexComponent>(entity)) dst.emplace<SiblingIndexComponent>(new_ent, src.get<SiblingIndexComponent>(entity));
         if (src.all_of<TransformComponent>(entity)) dst.emplace<TransformComponent>(new_ent, src.get<TransformComponent>(entity));
         if (src.all_of<SpriteRendererComponent>(entity)) dst.emplace<SpriteRendererComponent>(new_ent, src.get<SpriteRendererComponent>(entity));
         if (src.all_of<UIRendererComponent>(entity)) {
@@ -168,6 +169,12 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             rapidjson::Value name_val;
             name_val.SetString(registry.get<EditorNameComponent>(entity).name.c_str(), allocator);
             ent_obj.AddMember("name", name_val, allocator);
+        }
+
+        if (registry.all_of<SiblingIndexComponent>(entity)) {
+            rapidjson::Value si_obj(rapidjson::kObjectType);
+            si_obj.AddMember("index", registry.get<SiblingIndexComponent>(entity).index, allocator);
+            ent_obj.AddMember("sibling_index", si_obj, allocator);
         }
 
         if (registry.all_of<TransformComponent>(entity)) {
@@ -537,6 +544,12 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
 
         if (v.HasMember("name") && v["name"].IsString()) {
             registry.emplace<EditorNameComponent>(entity, v["name"].GetString());
+        }
+
+        if (v.HasMember("sibling_index") && v["sibling_index"].IsObject()) {
+            const auto& si_obj = v["sibling_index"];
+            auto& si = registry.emplace<SiblingIndexComponent>(entity);
+            if (si_obj.HasMember("index") && si_obj["index"].IsInt()) si.index = si_obj["index"].GetInt();
         }
 
         if (v.HasMember("transform") && v["transform"].IsObject()) {

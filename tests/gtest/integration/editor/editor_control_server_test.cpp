@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -39,6 +40,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/audio.h"
+#include <glm/gtc/quaternion.hpp>
 
 namespace fs = std::filesystem;
 
@@ -571,4 +573,86 @@ TEST_F(ControlServerTest, MaterialCreate_非法路径返回error) {
         R"({"name":"x","save_path":"Z:\\nonexistent_dir_xyz\\a\\b\\c.dmat"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32603);
+}
+
+// ─── EntityModify rotation / scale ───────────────────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_修改rotation欧拉角) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RotTest"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"rotation":[30.0,0.0,0.0]})";
+    auto resp = Dispatch("dsengine_entity_modify", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["modified"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<TransformComponent>(entity));
+    const auto& t = registry.get<TransformComponent>(entity);
+    glm::vec3 euler = glm::degrees(glm::eulerAngles(t.rotation));
+    EXPECT_NEAR(std::abs(euler.x), 30.0f, 1.0f);
+}
+
+TEST_F(ControlServerTest, EntityModify_修改scale) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"ScaleTest"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"scale":[2.0,3.0,4.0]})";
+    auto resp = Dispatch("dsengine_entity_modify", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<TransformComponent>(entity));
+    const auto& t = registry.get<TransformComponent>(entity);
+    EXPECT_NEAR(t.scale.x, 2.0f, 0.01f);
+    EXPECT_NEAR(t.scale.y, 3.0f, 0.01f);
+    EXPECT_NEAR(t.scale.z, 4.0f, 0.01f);
+}
+
+// ─── EntityAddComponent DirectionalLight / PointLight ────────────────────────
+
+TEST_F(ControlServerTest, EntityAddComponent_添加DirectionalLight成功) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"DirLightEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"DirectionalLight","properties":{"intensity":2.5}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<DirectionalLight3DComponent>(entity));
+    EXPECT_NEAR(registry.get<DirectionalLight3DComponent>(entity).intensity, 2.5f, 0.01f);
+}
+
+TEST_F(ControlServerTest, EntityAddComponent_添加PointLight成功) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"PointLightEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"PointLight","properties":{"intensity":1.8,"range":15.0}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<PointLightComponent>(entity));
+    const auto& pl = registry.get<PointLightComponent>(entity);
+    EXPECT_NEAR(pl.intensity, 1.8f, 0.01f);
+    EXPECT_NEAR(pl.radius, 15.0f, 0.01f);
 }

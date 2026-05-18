@@ -14,9 +14,11 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <cmath>
 
 #include "engine/ecs/world.h"
@@ -771,4 +773,263 @@ TEST_F(EditorFunctionalTest, UndoRedo_NewCommandClearsRedo) {
     EXPECT_EQ(v, 99);
     EXPECT_EQ(mgr.GetRedoCount(), 0);
     EXPECT_FALSE(mgr.CanRedo());
+}
+
+// ============================================================
+// Test 17: SceneIO SpriteRenderer 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SpriteRendererRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Sprite");
+    reg().emplace<TransformComponent>(e);
+    auto& s = reg().emplace<SpriteRendererComponent>(e);
+    s.color = glm::vec4(0.2f, 0.4f, 0.8f, 0.9f);
+    s.sorting_layer = 3;
+    s.visible = false;
+
+    const auto path = TempPath("dse_test_sprite.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<SpriteRendererComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<SpriteRendererComponent>(en);
+        EXPECT_NEAR(r.color.r, 0.2f, 0.01f);
+        EXPECT_NEAR(r.color.g, 0.4f, 0.01f);
+        EXPECT_NEAR(r.color.b, 0.8f, 0.01f);
+        EXPECT_EQ(r.sorting_layer, 3);
+        EXPECT_FALSE(r.visible);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 18: SceneIO UILabel 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UILabelRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Label");
+    auto& label = reg().emplace<UILabelComponent>(e);
+    label.text = "Hello, DSEngine!";
+    label.use_localization = true;
+    label.localization_key = "ui.greeting";
+
+    const auto path = TempPath("dse_test_uilabel.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UILabelComponent>(en)) continue;
+        found = true;
+        const auto& l = loaded.get<UILabelComponent>(en);
+        EXPECT_EQ(l.text, "Hello, DSEngine!");
+        EXPECT_TRUE(l.use_localization);
+        EXPECT_EQ(l.localization_key, "ui.greeting");
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 19: SceneIO ParticleEmitter 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_ParticleEmitterRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Particles");
+    auto& emitter = reg().emplace<ParticleEmitterComponent>(e);
+    emitter.emit_rate = 50.0f;
+    emitter.max_particles = 200;
+    emitter.emitting = false;
+
+    const auto path = TempPath("dse_test_particle.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<ParticleEmitterComponent>(en)) continue;
+        found = true;
+        const auto& pe = loaded.get<ParticleEmitterComponent>(en);
+        EXPECT_NEAR(pe.emit_rate, 50.0f, 0.01f);
+        EXPECT_EQ(pe.max_particles, 200);
+        EXPECT_FALSE(pe.emitting);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 20: SceneIO SiblingIndex 多实体排序往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexPreserved) {
+    Entity e0 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e0, "E0");
+    reg().emplace<dse::editor::SiblingIndexComponent>(e0).index = 2;
+
+    Entity e1 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e1, "E1");
+    reg().emplace<dse::editor::SiblingIndexComponent>(e1).index = 0;
+
+    Entity e2 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e2, "E2");
+    reg().emplace<dse::editor::SiblingIndexComponent>(e2).index = 1;
+
+    const auto path = TempPath("dse_test_sibling.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 3u);
+
+    std::vector<int> indices;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::editor::SiblingIndexComponent>(en)) continue;
+        indices.push_back(loaded.get<dse::editor::SiblingIndexComponent>(en).index);
+    }
+    ASSERT_EQ(indices.size(), 3u);
+    std::sort(indices.begin(), indices.end());
+    EXPECT_EQ(indices[0], 0);
+    EXPECT_EQ(indices[1], 1);
+    EXPECT_EQ(indices[2], 2);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 21: Prefab 实例化后 IsPrefabInstance 为真
+// ============================================================
+
+TEST_F(EditorFunctionalTest, PrefabInstance_IsPrefabInstance) {
+    Entity src = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(src, "SourceEntity");
+    reg().emplace<TransformComponent>(src);
+
+    const auto prefab_path = TempPath("dse_test_isprefab.dprefab");
+    ASSERT_TRUE(dse::editor::SaveEntityAsPrefab(reg(), src, prefab_path.string()));
+
+    Entity inst = dse::editor::InstantiatePrefab(world, reg(), prefab_path.string());
+    ASSERT_TRUE(reg().valid(inst));
+
+    EXPECT_TRUE(reg().all_of<EditorNameComponent>(inst));
+    EXPECT_TRUE(dse::editor::IsPrefabInstance(reg(), inst));
+    EXPECT_FALSE(dse::editor::IsPrefabInstance(reg(), src));
+
+    CleanupFile(prefab_path);
+}
+
+// ============================================================
+// Test 22: Prefab 多实例独立性
+// ============================================================
+
+TEST_F(EditorFunctionalTest, PrefabMultipleInstances_Independent) {
+    Entity src = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(src, "PrefabSrc");
+    reg().emplace<TransformComponent>(src);
+
+    const auto prefab_path = TempPath("dse_test_multi_prefab.dprefab");
+    ASSERT_TRUE(dse::editor::SaveEntityAsPrefab(reg(), src, prefab_path.string()));
+
+    Entity inst1 = dse::editor::InstantiatePrefab(world, reg(), prefab_path.string());
+    Entity inst2 = dse::editor::InstantiatePrefab(world, reg(), prefab_path.string());
+    ASSERT_NE(inst1, inst2);
+    ASSERT_TRUE(reg().valid(inst1));
+    ASSERT_TRUE(reg().valid(inst2));
+
+    ASSERT_TRUE(reg().all_of<EditorNameComponent>(inst1));
+    reg().get<EditorNameComponent>(inst1).name = "ModifiedInst1";
+
+    ASSERT_TRUE(reg().all_of<EditorNameComponent>(inst2));
+    EXPECT_NE(reg().get<EditorNameComponent>(inst2).name, "ModifiedInst1");
+
+    CleanupFile(prefab_path);
+}
+
+// ============================================================
+// Test 23: SceneTabManager 实体隔离
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneTabManager_EntityIsolation) {
+    auto& tab_mgr = dse::editor::SceneTabManager::Get();
+    tab_mgr.Init("Untitled");
+
+    Entity e_a = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e_a, "Tab0EntityA");
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(reg()), 1u);
+
+    int tab1 = tab_mgr.NewScene(reg());
+    EXPECT_EQ(tab1, 1);
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 1);
+
+    Entity e_b = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e_b, "Tab1EntityB");
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(reg()), 1u);
+
+    tab_mgr.SwitchTo(0, reg());
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 0);
+
+    bool found_a = false, found_b = false;
+    for (auto en : reg().storage<entt::entity>()) {
+        if (!reg().valid(en)) continue;
+        if (!reg().all_of<EditorNameComponent>(en)) continue;
+        const auto& name = reg().get<EditorNameComponent>(en).name;
+        if (name == "Tab0EntityA") found_a = true;
+        if (name == "Tab1EntityB") found_b = true;
+    }
+    EXPECT_TRUE(found_a);
+    EXPECT_FALSE(found_b);
+}
+
+// ============================================================
+// Test 24: CopyRegistry 多组件完整性
+// ============================================================
+
+TEST_F(EditorFunctionalTest, CopyRegistry_MultiComponent_Integrity) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "MultiComp");
+    reg().emplace<TransformComponent>(e);
+    auto& dl = reg().emplace<dse::DirectionalLight3DComponent>(e);
+    dl.intensity = 2.5f;
+    dl.cast_shadow = true;
+    auto& rb = reg().emplace<RigidBody2DComponent>(e);
+    rb.type = RigidBody2DType::Dynamic;
+    rb.gravity_scale = 2.0f;
+
+    entt::registry copy;
+    dse::editor::CopyRegistry(copy, reg());
+
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(copy), 1u);
+
+    bool found = false;
+    for (auto en : copy.storage<entt::entity>()) {
+        if (!copy.valid(en)) continue;
+        if (!copy.all_of<dse::DirectionalLight3DComponent, RigidBody2DComponent>(en)) continue;
+        found = true;
+        const auto& d = copy.get<dse::DirectionalLight3DComponent>(en);
+        const auto& r = copy.get<RigidBody2DComponent>(en);
+        EXPECT_NEAR(d.intensity, 2.5f, 0.01f);
+        EXPECT_TRUE(d.cast_shadow);
+        EXPECT_EQ(r.type, RigidBody2DType::Dynamic);
+        EXPECT_NEAR(r.gravity_scale, 2.0f, 0.01f);
+    }
+    EXPECT_TRUE(found);
 }
