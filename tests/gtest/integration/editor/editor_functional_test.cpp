@@ -33,6 +33,7 @@
 #include "apps/editor_cpp/src/editor_scene_io.h"
 #include "apps/editor_cpp/src/editor_prefab.h"
 #include "apps/editor_cpp/src/editor_scene_tabs.h"
+#include "apps/editor_cpp/src/editor_shell.h"
 #include "apps/editor_cpp/src/editor_test_harness.h"
 #include "apps/editor_cpp/src/editor_snapshot.h"
 
@@ -1526,4 +1527,118 @@ TEST_F(EditorFunctionalTest, SceneIO_UICanvasScalerRoundTrip) {
     }
     EXPECT_TRUE(found);
     CleanupFile(path);
+}
+
+// ============================================================
+// Test 42: SceneIO UIAnimation 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UIAnimationRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "UIAnimEnt");
+    auto& anim = reg().emplace<UIAnimationComponent>(e);
+    anim.duration = 0.8f;
+    anim.target_alpha = 0.5f;
+    anim.loop = true;
+    anim.ping_pong = true;
+    anim.animate_alpha = true;
+    anim.easing = 2;
+    anim.target_position = glm::vec2(100.0f, -50.0f);
+
+    const auto path = TempPath("dse_test_uianim.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UIAnimationComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<UIAnimationComponent>(en);
+        EXPECT_NEAR(r.duration, 0.8f, 0.001f);
+        EXPECT_NEAR(r.target_alpha, 0.5f, 0.001f);
+        EXPECT_TRUE(r.loop);
+        EXPECT_TRUE(r.ping_pong);
+        EXPECT_TRUE(r.animate_alpha);
+        EXPECT_EQ(r.easing, 2);
+        EXPECT_NEAR(r.target_position.x, 100.0f, 0.01f);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 43: SceneIO Camera3D 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_Camera3DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "CamEnt");
+    auto& cam = reg().emplace<dse::Camera3DComponent>(e);
+    cam.fov = 90.0f;
+    cam.near_clip = 0.3f;
+    cam.far_clip = 800.0f;
+    cam.priority = 2;
+    cam.enabled = false;
+
+    const auto path = TempPath("dse_test_camera3d.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::Camera3DComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::Camera3DComponent>(en);
+        EXPECT_NEAR(r.fov, 90.0f, 0.01f);
+        EXPECT_NEAR(r.near_clip, 0.3f, 0.001f);
+        EXPECT_NEAR(r.far_clip, 800.0f, 0.1f);
+        EXPECT_EQ(r.priority, 2);
+        EXPECT_FALSE(r.enabled);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 44: SceneTabManager SwitchTo 恢复 Registry
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneTabManager_SwitchTo_RestoresRegistry) {
+    auto& tab_mgr = dse::editor::SceneTabManager::Get();
+    tab_mgr.Init("Tab0");
+
+    Entity e0 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e0, "Tab0Entity");
+
+    // NewScene snapshots tab0 (with Tab0Entity) before switching to empty tab1
+    tab_mgr.NewScene(reg());
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 1);
+
+    Entity e1 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e1, "Tab1Entity");
+
+    // SwitchTo(0) snapshots tab1, then restores tab0's snapshot (Tab0Entity)
+    tab_mgr.SwitchTo(0, reg());
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 0);
+
+    bool found_tab0 = false;
+    for (auto en : reg().storage<entt::entity>()) {
+        if (!reg().valid(en)) continue;
+        if (!reg().all_of<EditorNameComponent>(en)) continue;
+        if (reg().get<EditorNameComponent>(en).name == "Tab0Entity") {
+            found_tab0 = true;
+        }
+    }
+    EXPECT_TRUE(found_tab0);
+
+    tab_mgr.Init("Untitled");
+    dse::editor::SetCurrentScenePath("Untitled");
 }

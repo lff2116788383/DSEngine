@@ -29,6 +29,7 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
+#include <set>
 
 #include "apps/editor_cpp/src/editor_control_server.h"
 #include "apps/editor_cpp/src/editor_shared_components.h"
@@ -756,4 +757,75 @@ TEST_F(ControlServerTest, EntityAddComponent_BoxCollider3D_WithProps) {
     EXPECT_NEAR(bc.size.y, 3.0f, 0.01f);
     EXPECT_NEAR(bc.size.z, 1.5f, 0.01f);
     EXPECT_TRUE(bc.is_trigger);
+}
+
+// ─── Test 57: modify_component 修改 PointLight 属性 ─────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponent_PointLight) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"PLEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string add = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"PointLight","properties":{"intensity":1.0}})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", add.c_str()).is_error);
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_component":{"type":"PointLight","properties":{"intensity":5.5,"range":20.0}}})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    auto& registry = world_.registry();
+    const auto& pl = registry.get<dse::PointLightComponent>(
+        static_cast<entt::entity>(eid));
+    EXPECT_NEAR(pl.intensity, 5.5f, 0.01f);
+    EXPECT_NEAR(pl.radius, 20.0f, 0.01f);
+}
+
+// ─── Test 58: get_components 返回正确组件列表 ────────────────────────────────
+
+TEST_F(ControlServerTest, EntityGetComponents_ReturnsCorrectList) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"MultiCompEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    auto add = [&](const char* type) {
+        std::string p = R"({"entity_id":)" + std::to_string(eid) +
+            R"(,"type":")" + type + R"(","properties":{}})";
+        ASSERT_FALSE(Dispatch("dsengine_entity_add_component", p.c_str()).is_error);
+    };
+    add("Camera3D");
+    add("PointLight");
+
+    std::string gp = R"({"entity_id":)" + std::to_string(eid) + R"(})";
+    auto resp = Dispatch("dsengine_entity_get_components", gp.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+
+    ASSERT_TRUE(resp.result.HasMember("components"));
+    ASSERT_TRUE(resp.result["components"].IsArray());
+
+    std::set<std::string> names;
+    for (const auto& c : resp.result["components"].GetArray()) {
+        if (c.IsString()) {
+            names.insert(c.GetString());
+        } else if (c.IsObject() && c.HasMember("type") && c["type"].IsString()) {
+            names.insert(c["type"].GetString());
+        }
+    }
+    EXPECT_TRUE(names.count("Camera3D") || names.count("Camera3DComponent"));
+    EXPECT_TRUE(names.count("PointLight") || names.count("PointLightComponent"));
+}
+
+// ─── Test 59: remove_component 移除不存在组件不崩溃 ─────────────────────────
+
+TEST_F(ControlServerTest, EntityRemoveComponent_NonExistent_ReturnsFalse) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"NoCompEnt"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string params = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"MeshRenderer"})";
+    auto resp = Dispatch("dsengine_entity_remove_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_FALSE(resp.result["removed"].GetBool());
 }
