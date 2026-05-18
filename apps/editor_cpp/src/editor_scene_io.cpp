@@ -71,6 +71,8 @@ void ReadVec4(const rapidjson::Value& parent, const char* name, glm::vec4& out) 
 }
 }
 
+namespace dse::editor {
+
 void CopyRegistry(entt::registry& dst, entt::registry& src) {
     dst.clear();
     for (auto entity : src.storage<entt::entity>()) {
@@ -872,3 +874,5 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
         }
     }
 }
+
+} // namespace dse::editor
