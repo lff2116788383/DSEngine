@@ -75,7 +75,9 @@ protected:
 
 TEST_F(SpatialSceneTest, 空场景BuildStatic不崩溃) {
     EXPECT_NO_THROW(spatial_.BuildStatic(world_));
-    EXPECT_TRUE(spatial_.IsBuilt());
+    // 空场景无 BoundingBoxComponent 实体时 IsBuilt() 返回 false，
+    // 这是预期行为：允许 FrustumCullingSystem 下一帧重试以捕获异步加载的实体
+    EXPECT_FALSE(spatial_.IsBuilt());
     EXPECT_EQ(spatial_.GetStaticCount(), 0u);
     EXPECT_EQ(spatial_.GetDynamicCount(), 0u);
 }

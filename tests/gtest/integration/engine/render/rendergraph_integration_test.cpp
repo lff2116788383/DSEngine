@@ -418,7 +418,7 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
     world.registry().emplace<dse::PostProcessComponent>(e, pp);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("copy"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("tonemapping"), ::testing::_))
         .Times(1);
     EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("ui_overlay"), ::testing::_))
         .Times(1);

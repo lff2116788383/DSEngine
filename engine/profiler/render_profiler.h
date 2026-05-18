@@ -20,6 +20,10 @@ struct RenderFrameStats {
     size_t texture_memory = 0;
     int texture_binds = 0;
     int shader_switches = 0;
+    int instanced_draw_calls = 0;
+    int instanced_mesh_count = 0;
+    int indirect_draw_calls = 0;
+    int gpu_culled_count = 0;
 };
 
 struct RenderAccumulatedStats {

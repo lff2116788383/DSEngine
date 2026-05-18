@@ -8,7 +8,7 @@ if(NOT OBJ_DIR)
     message(FATAL_ERROR "OBJ_DIR not set")
 endif()
 
-file(GLOB obj_files "${OBJ_DIR}/*.obj")
+file(GLOB_RECURSE obj_files "${OBJ_DIR}/*.obj")
 list(SORT obj_files)
 
 set(content "")

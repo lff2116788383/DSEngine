@@ -179,7 +179,7 @@ void SpatialScene::BuildStatic(World& world) {
     }
 
     // 如果没有找到任何实体（BoundingBoxComponent 可能尚未就绪），
-    // 不标记为已构建，允许下一帧重建
+    // 不标记为已构建，允许下一帧重建以捕获异步加载完成的实体
     built_ = !static_entities_.empty() || !dynamic_entities_.empty();
 }
 
