@@ -40,7 +40,6 @@ public:
     MOCK_METHOD(void, EndRenderPass, (), (override));
     MOCK_METHOD(void, SetPipelineState, (unsigned int), (override));
     MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
-    MOCK_METHOD(void, DrawBatch, (const std::vector<DrawBatchItem>&), (override));
     MOCK_METHOD(void, DrawMeshBatch, (const std::vector<MeshDrawItem>&), (override));
     MOCK_METHOD(void, DrawSpriteBatch, (const std::vector<SpriteDrawItem>&), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
@@ -48,12 +47,12 @@ public:
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
     MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
     MOCK_METHOD(void, DrawSkybox, (unsigned int), (override));
-    MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest), (override));
+    MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest request), (override));
     MOCK_METHOD(void, DrawParticles3D, (const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
-    MOCK_METHOD(void, DeferSetGlobalShadowMap, (unsigned int, unsigned int), (override));
-    MOCK_METHOD(void, DeferSetGlobalSpotShadowMap, (unsigned int, unsigned int), (override));
-    MOCK_METHOD(void, DeferSetGlobalPointShadowMap, (unsigned int, unsigned int), (override));
+    MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, unsigned int), (override));
+    MOCK_METHOD(void, BindGlobalSpotShadowMap, (unsigned int, unsigned int), (override));
+    MOCK_METHOD(void, BindGlobalPointShadowMap, (unsigned int, unsigned int), (override));
 };
 
 // ============================================================

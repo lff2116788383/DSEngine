@@ -177,10 +177,10 @@ TEST(DX11CommandBufferTest, 无device时DrawSpriteBatch安全) {
     cmd.DrawSpriteBatch(items);
 }
 
-TEST(DX11CommandBufferTest, 无device时DrawBatch安全) {
+TEST(DX11CommandBufferTest, 无device时DrawSpriteBatch空列表安全) {
     DX11CommandBuffer cmd;
-    std::vector<DrawBatchItem> items;
-    cmd.DrawBatch(items);
+    std::vector<SpriteDrawItem> items;
+    cmd.DrawSpriteBatch(items);
 }
 
 TEST(DX11CommandBufferTest, 无device时DrawSkybox安全) {
@@ -211,9 +211,9 @@ TEST(DX11CommandBufferTest, 无device时SetPipelineState安全) {
 
 TEST(DX11CommandBufferTest, 无device时DeferShadowMap安全) {
     DX11CommandBuffer cmd;
-    cmd.DeferSetGlobalShadowMap(0, 100);
-    cmd.DeferSetGlobalSpotShadowMap(0, 200);
-    cmd.DeferSetGlobalPointShadowMap(0, 300);
+    cmd.BindGlobalShadowMap(0, 100);
+    cmd.BindGlobalSpotShadowMap(0, 200);
+    cmd.BindGlobalPointShadowMap(0, 300);
 }
 
 TEST(DX11CommandBufferTest, SetCamera存储矩阵不崩溃) {

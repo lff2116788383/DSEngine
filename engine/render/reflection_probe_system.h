@@ -15,11 +15,12 @@
 #include <vector>
 
 class World;
-class RhiDevice;
-class CommandBuffer;
 
 namespace dse {
 namespace render {
+
+class RhiDevice;
+class CommandBuffer;
 
 struct RenderPassContext;
 

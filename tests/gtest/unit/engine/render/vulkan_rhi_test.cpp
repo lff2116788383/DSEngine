@@ -207,10 +207,10 @@ TEST(VulkanCommandBufferTest, 全局uniform暂存和清除) {
     EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
-TEST(VulkanCommandBufferTest, 无device时DrawBatch安全) {
+TEST(VulkanCommandBufferTest, 无device时DrawSpriteBatch空列表安全) {
     VulkanCommandBuffer cmd;
-    std::vector<DrawBatchItem> items;
-    cmd.DrawBatch(items);
+    std::vector<SpriteDrawItem> items;
+    cmd.DrawSpriteBatch(items);
 }
 
 TEST(VulkanCommandBufferTest, 无device时DrawMeshBatch安全) {
@@ -262,9 +262,9 @@ TEST(VulkanCommandBufferTest, 无device时DrawParticles3D安全) {
 
 TEST(VulkanCommandBufferTest, 无device时DeferShadowMap安全) {
     VulkanCommandBuffer cmd;
-    cmd.DeferSetGlobalShadowMap(0, 100);
-    cmd.DeferSetGlobalSpotShadowMap(0, 200);
-    cmd.DeferSetGlobalPointShadowMap(0, 300);
+    cmd.BindGlobalShadowMap(0, 100);
+    cmd.BindGlobalSpotShadowMap(0, 200);
+    cmd.BindGlobalPointShadowMap(0, 300);
 }
 
 TEST(VulkanCommandBufferTest, SetDevice和SetVkCommandBuffer) {

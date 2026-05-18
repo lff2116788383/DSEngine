@@ -15,7 +15,7 @@
 namespace dse {
 namespace gameplay3d {
 
-void HairSystem::Init(::RhiDevice* rhi_device) {
+void HairSystem::Init(RhiDevice* rhi_device) {
     rhi_ = rhi_device;
     InitComputeShaders();
     DEBUG_LOG_INFO("[HairSystem] Initialized, gpu_compute={}", gpu_compute_enabled_);

@@ -16,13 +16,13 @@
 #include <cstdint>
 
 class World;
-class RhiDevice;
-class CommandBuffer;
 class AssetManager;
 
 namespace dse {
 namespace render {
 
+class RhiDevice;
+class CommandBuffer;
 struct RenderPassContext;
 
 /// SH L2 系数（9 个 vec3，RGB 通道）

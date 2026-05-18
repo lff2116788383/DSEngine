@@ -5,8 +5,7 @@
  * DX11、Vulkan、OpenGL 三端的 CommandBuffer 均继承此类。
  * 提取的共享逻辑：
  * - SetCamera()：缓存 view/projection 矩阵
- * - DrawBatch()：转发到 DrawSpriteBatch
- * - DeferSetGlobal*()：阴影贴图绑定直接委托 RhiDevice 基类指针
+ * - BindGlobal*ShadowMap()：阴影贴图绑定直接委托 RhiDevice 基类指针
  * - pending uniform 暂存与清理
  */
 
@@ -16,6 +15,9 @@
 #include "engine/render/rhi/rhi_device.h"
 #include <unordered_map>
 
+namespace dse {
+namespace render {
+
 class ForwardingCommandBuffer : public CommandBuffer {
 public:
     // --- 共享实现（三端完全一致） ---
@@ -23,12 +25,6 @@ public:
     void SetCamera(const glm::mat4& view, const glm::mat4& projection) override {
         view_ = view;
         projection_ = projection;
-    }
-
-    void DrawBatch(const std::vector<DrawBatchItem>& items) override {
-        if (!items.empty()) {
-            DrawSpriteBatch(items);
-        }
     }
 
     void SetGlobalMat4(const std::string& name, const glm::mat4& value) override {
@@ -43,15 +39,15 @@ public:
         pending_float_array_[name] = values;
     }
 
-    void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override {
         if (base_device_) base_device_->SetGlobalShadowMap(index, texture_handle);
     }
 
-    void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override {
         if (base_device_) base_device_->SetGlobalSpotShadowMap(index, texture_handle);
     }
 
-    void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override {
         if (base_device_) base_device_->SetGlobalPointShadowMap(index, texture_handle);
     }
 
@@ -109,5 +105,8 @@ protected:
     std::unordered_map<std::string, std::vector<glm::mat4>> pending_mat4_array_;
     std::unordered_map<std::string, std::vector<float>> pending_float_array_;
 };
+
+} // namespace render
+} // namespace dse
 
 #endif // DSE_FORWARDING_COMMAND_BUFFER_H

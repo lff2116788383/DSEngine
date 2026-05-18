@@ -166,7 +166,7 @@ public:
                      DX11ShaderManager& shader_mgr,
                      DX11ResourceManager& resource_mgr);
 
-    void DrawPostProcess(const dse::render::PostProcessRequest& request,
+    void DrawPostProcess(const PostProcessRequest& request,
                           DX11PipelineStateManager& pipeline_mgr,
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);

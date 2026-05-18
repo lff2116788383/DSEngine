@@ -12,8 +12,6 @@
 
 class World;
 class AssetManager;
-class RhiDevice;
-class CommandBuffer;
 
 namespace dse {
 namespace core {
@@ -23,6 +21,9 @@ class IModule;
 
 namespace dse {
 namespace render {
+
+class RhiDevice;
+class CommandBuffer;
 
 class LightBuffer;
 class ClusterGrid;

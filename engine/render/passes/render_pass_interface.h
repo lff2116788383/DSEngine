@@ -6,17 +6,13 @@
 #ifndef DSE_RENDER_PASSES_RENDER_PASS_INTERFACE_H
 #define DSE_RENDER_PASSES_RENDER_PASS_INTERFACE_H
 
-namespace dse {
-namespace render {
-class RenderGraph;
-} // namespace render
-} // namespace dse
-
-class CommandBuffer;
 class World;
 
 namespace dse {
 namespace render {
+
+class RenderGraph;
+class CommandBuffer;
 
 /**
  * @class IRenderPass

@@ -16,10 +16,10 @@
 #include <memory>
 #include <string>
 
-class RhiDevice;
-
 namespace dse {
 namespace render {
+
+class RhiDevice;
 
 /**
  * @brief 根据指定后端类型创建 RhiDevice 实例

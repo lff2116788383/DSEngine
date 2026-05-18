@@ -19,10 +19,10 @@
 #include <cstdint>
 #include <vector>
 
-class RhiDevice;
-
 namespace dse {
 namespace render {
+
+class RhiDevice;
 
 /// 毛发物理模拟参数
 struct HairSimParams {
@@ -94,13 +94,13 @@ struct HairInstance {
     std::vector<int> draw_counts_;   ///< 每 strand 的顶点数
 
     /// 在 GPU 上创建 SSBO 资源
-    bool CreateGPUResources(::RhiDevice* rhi, const HairAsset& hair_asset);
+    bool CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asset);
 
     /// 释放 GPU 资源
-    void DestroyGPUResources(::RhiDevice* rhi);
+    void DestroyGPUResources(RhiDevice* rhi);
 
     /// 上传初始位置数据
-    void UploadInitialPositions(::RhiDevice* rhi, const HairAsset& hair_asset);
+    void UploadInitialPositions(RhiDevice* rhi, const HairAsset& hair_asset);
 
     /// 更新 LOD 级别（基于相机距离）
     void UpdateLOD(float camera_distance);

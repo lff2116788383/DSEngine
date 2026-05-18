@@ -32,7 +32,7 @@ public:
     ~HairSystem() = default;
 
     /// 初始化（在 RhiDevice 就绪后调用）
-    void Init(::RhiDevice* rhi_device);
+    void Init(RhiDevice* rhi_device);
 
     /// 关闭并释放所有 GPU 资源
     void Shutdown(::World& world);
@@ -67,7 +67,7 @@ private:
     /// GPU compute 模拟一帧
     void SimulateCompute(float dt);
 
-    ::RhiDevice* rhi_ = nullptr;
+    RhiDevice* rhi_ = nullptr;
 
     /// 资产缓存 (path → asset)
     std::unordered_map<std::string, render::HairAsset> asset_cache_;

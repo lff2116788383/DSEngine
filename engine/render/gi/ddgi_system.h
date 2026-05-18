@@ -4,11 +4,13 @@
 #include "engine/render/gi/ddgi_types.h"
 #include <string>
 
-class RhiDevice;
 class World;
 
 namespace dse {
 namespace render {
+
+class RhiDevice;
+
 namespace gi {
 
 /**

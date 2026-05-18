@@ -23,6 +23,9 @@
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/postprocess_common.h"
 
+namespace dse {
+namespace render {
+
 /**
  * @class CommandBuffer
  * @brief 命令缓冲抽象类，负责收集和记录一帧内所有的渲染指令
@@ -34,7 +37,6 @@ public:
     virtual void EndRenderPass() = 0;
     virtual void SetPipelineState(unsigned int pipeline_state_handle) = 0;
     virtual void SetCamera(const glm::mat4& view, const glm::mat4& projection) = 0;
-    virtual void DrawBatch(const std::vector<DrawBatchItem>& items) = 0;
     virtual void DrawMeshBatch(const std::vector<MeshDrawItem>& items) = 0;
     virtual void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) = 0;
     virtual void ClearColor(const glm::vec4& color) = 0;
@@ -42,14 +44,14 @@ public:
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
     virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
     virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
-    virtual void DrawPostProcess(dse::render::PostProcessRequest request) = 0;
+    virtual void DrawPostProcess(PostProcessRequest request) = 0;
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
     /// 阴影贴图绑定命令（Pass 中调用，直接委托到 RhiDevice）
-    virtual void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
-    virtual void DeferSetGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
-    virtual void DeferSetGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
 };
 
 /**
@@ -396,5 +398,12 @@ protected:
     std::function<void()> init_keep_alive_;
     void KeepAlive() { if (init_keep_alive_) init_keep_alive_(); }
 };
+
+} // namespace render
+} // namespace dse
+
+// 兼容性 using：大量上层代码仍以全局命名空间形式引用这两个类
+using dse::render::CommandBuffer;
+using dse::render::RhiDevice;
 
 #endif

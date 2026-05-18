@@ -17,6 +17,7 @@
 #include "engine/render/rhi/gl_command_buffer.h"
 
 using namespace dse;
+using namespace dse::render;
 using namespace dse::gameplay3d;
 
 // ============================================================

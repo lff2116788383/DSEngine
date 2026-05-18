@@ -18,6 +18,9 @@
 #include <unordered_set>
 #include <unordered_map>
 
+namespace dse {
+namespace render {
+
 /**
  * @class OpenGLRhiDevice
  * @brief RHI 的 OpenGL 实现 - 协调器，持有五个子系统并委托调用
@@ -173,30 +176,30 @@ public:
     void RealEndRenderPass();
     void RealSetPipelineState(unsigned int pipeline_state_handle);
     void RealClearColor(const glm::vec4& color);
-    void RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection);
+    void RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection);
-    void RealSubmitDrawPostProcess(const dse::render::PostProcessRequest& request);
+    void RealSubmitDrawPostProcess(const PostProcessRequest& request);
     void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
 
     // --- 子系统访问器 ---
-    dse::render::GLResourceManager& resource_mgr() { return resource_mgr_; }
-    dse::render::GLPipelineStateManager& state_mgr() { return state_mgr_; }
-    dse::render::GLShaderManager& shader_mgr() { return shader_mgr_; }
-    dse::render::GLDrawExecutor& draw_executor() { return draw_executor_; }
-    dse::render::UBOManager& ubo_mgr() { return ubo_mgr_; }
+    GLResourceManager& resource_mgr() { return resource_mgr_; }
+    GLPipelineStateManager& state_mgr() { return state_mgr_; }
+    GLShaderManager& shader_mgr() { return shader_mgr_; }
+    GLDrawExecutor& draw_executor() { return draw_executor_; }
+    UBOManager& ubo_mgr() { return ubo_mgr_; }
 
 private:
     void EnsureInitialized();
     void LogResourceLedger() const;
 
     /// 子系统实例
-    dse::render::GLResourceManager resource_mgr_;
-    dse::render::GLPipelineStateManager state_mgr_;
-    dse::render::GLShaderManager shader_mgr_;
-    dse::render::GLDrawExecutor draw_executor_;
-    dse::render::UBOManager ubo_mgr_;
+    GLResourceManager resource_mgr_;
+    GLPipelineStateManager state_mgr_;
+    GLShaderManager shader_mgr_;
+    GLDrawExecutor draw_executor_;
+    UBOManager ubo_mgr_;
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理
     std::unordered_set<unsigned int> external_shader_programs_;
@@ -221,5 +224,8 @@ private:
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
 };
+
+} // namespace render
+} // namespace dse
 
 #endif

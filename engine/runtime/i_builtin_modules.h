@@ -18,18 +18,21 @@
 
 class World;
 class AssetManager;
-class RhiDevice;
-class CommandBuffer;
 
 namespace dse {
 namespace gameplay2d { class AudioSystem; }
 namespace core { class IModule; }
 namespace render {
+class RhiDevice;
+class CommandBuffer;
 class RenderGraph;
 class IRenderPass;
 struct RenderPassContext;
 } // namespace render
 } // namespace dse
+
+using dse::render::RhiDevice;
+using dse::render::CommandBuffer;
 
 
 /**

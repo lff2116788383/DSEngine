@@ -19,7 +19,8 @@
 #include <chrono>
 #include <thread>
 #include <glm/glm.hpp>
-class RhiDevice;
+namespace dse::render { class RhiDevice; }
+using dse::render::RhiDevice;
 namespace dse::core {
 class EventBus;
 class JobSystem;

@@ -327,7 +327,6 @@ struct DrawElementsIndirectCommand {
 
 #define CSM_CASCADES 3
 
-using DrawBatchItem = SpriteDrawItem;
 
 /// 渲染统计信息
 struct RenderStats {

@@ -19,11 +19,12 @@
 #include <glm/glm.hpp>
 #include <cstring>
 
-class RhiDevice;
 class World;
 
 namespace dse {
 namespace render {
+
+class RhiDevice;
 
 /// 最大支持光源数（SSBO 容量上限）
 static constexpr int kMaxClusteredPointLights = 256;

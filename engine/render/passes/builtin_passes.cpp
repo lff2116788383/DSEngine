@@ -189,7 +189,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        cmd_buffer.DeferSetGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
+        cmd_buffer.BindGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
     }
 }
 
@@ -237,7 +237,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         // Sampling matrix: no Z remap, shader remaps Z uniformly
         const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
         spot_light_space_matrices.push_back(sample_proj * light_view_mat);
-        cmd_buffer.DeferSetGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
+        cmd_buffer.BindGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
         ++shadow_slot;
     }
     for (size_t i = 0; i < spot_light_space_matrices.size() && i < 4; ++i) {
@@ -298,7 +298,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             cmd_buffer.EndRenderPass();
         }
 
-        cmd_buffer.DeferSetGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
+        cmd_buffer.BindGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
         ++shadow_slot;
     }
 }

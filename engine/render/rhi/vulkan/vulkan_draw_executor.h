@@ -146,7 +146,7 @@ public:
                      VulkanShaderManager& shader_mgr);
 
     void DrawPostProcess(VkCommandBuffer cmd_buf,
-                          const dse::render::PostProcessRequest& request,
+                          const PostProcessRequest& request,
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 

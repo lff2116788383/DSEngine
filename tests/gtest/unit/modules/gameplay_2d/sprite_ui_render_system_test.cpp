@@ -19,6 +19,8 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+using namespace dse::render;
+
 // ============================================================
 // SpriteRenderSystem
 // ============================================================

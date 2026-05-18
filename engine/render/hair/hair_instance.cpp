@@ -10,7 +10,7 @@
 namespace dse {
 namespace render {
 
-bool HairInstance::CreateGPUResources(::RhiDevice* rhi, const HairAsset& hair_asset) {
+bool HairInstance::CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asset) {
     if (!rhi || !hair_asset.IsValid()) return false;
 
     asset = &hair_asset;
@@ -61,7 +61,7 @@ bool HairInstance::CreateGPUResources(::RhiDevice* rhi, const HairAsset& hair_as
     return true;
 }
 
-void HairInstance::DestroyGPUResources(::RhiDevice* rhi) {
+void HairInstance::DestroyGPUResources(RhiDevice* rhi) {
     if (!rhi) return;
 
     if (position_ssbo)      { rhi->DeleteSSBO(position_ssbo);      position_ssbo = 0; }
@@ -74,7 +74,7 @@ void HairInstance::DestroyGPUResources(::RhiDevice* rhi) {
     asset = nullptr;
 }
 
-void HairInstance::UploadInitialPositions(::RhiDevice* rhi, const HairAsset& hair_asset) {
+void HairInstance::UploadInitialPositions(RhiDevice* rhi, const HairAsset& hair_asset) {
     if (!rhi || !gpu_resources_valid) return;
 
     // 提取 position (vec4) 和 tangent (vec4) 数据

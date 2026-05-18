@@ -18,10 +18,10 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
-class RhiDevice;
-
 namespace dse {
 namespace render {
+
+class RhiDevice;
 
 struct GPUPointLight;
 struct GPUSpotLight;

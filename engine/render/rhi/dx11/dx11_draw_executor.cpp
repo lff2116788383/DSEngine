@@ -829,7 +829,7 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     dc->OMSetDepthStencilState(prev_dss.Get(), prev_stencil_ref);
 }
 
-void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& request,
+void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
                                          DX11PipelineStateManager& pipeline_mgr,
                                          DX11ShaderManager& shader_mgr,
                                          DX11ResourceManager& resource_mgr) {

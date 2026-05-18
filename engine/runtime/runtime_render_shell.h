@@ -4,7 +4,8 @@
 #include <memory>
 
 class FramePipeline;
-class CommandBuffer;
+namespace dse::render { class CommandBuffer; }
+using dse::render::CommandBuffer;
 
 namespace dse::runtime {
 

@@ -74,7 +74,7 @@ void VulkanCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
         device_->state_mgr(), device_->shader_mgr());
 }
 
-void VulkanCommandBuffer::DrawPostProcess(dse::render::PostProcessRequest request) {
+void VulkanCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DrawPostProcess(
         vk_command_buffer_, request,

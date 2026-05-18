@@ -42,7 +42,7 @@ public:
     void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(dse::render::PostProcessRequest request) override;
+    void DrawPostProcess(PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
 

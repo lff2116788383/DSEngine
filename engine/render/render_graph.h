@@ -39,11 +39,11 @@
 #include <cstdint>
 #include "engine/render/rhi/rhi_types.h"
 
-class CommandBuffer;
-class RhiDevice;
-
 namespace dse {
 namespace render {
+
+class CommandBuffer;
+class RhiDevice;
 
 /// 渲染资源句柄
 struct RenderResourceHandle {

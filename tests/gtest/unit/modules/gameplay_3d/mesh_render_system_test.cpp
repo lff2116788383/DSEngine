@@ -20,6 +20,7 @@
 #include <glm/glm.hpp>
 #include <stdexcept>
 
+using namespace dse::render;
 using namespace dse::gameplay3d;
 
 // ============================================================

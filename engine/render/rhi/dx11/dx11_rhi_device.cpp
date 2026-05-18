@@ -70,7 +70,7 @@ void DX11CommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void DX11CommandBuffer::DrawPostProcess(dse::render::PostProcessRequest request) {
+void DX11CommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->draw_executor().DrawPostProcess(request,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());

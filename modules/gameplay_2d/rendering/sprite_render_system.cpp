@@ -119,7 +119,7 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
         return a.order_in_layer < b.order_in_layer;
     });
-    cmd_buffer.DrawBatch(items);
+    cmd_buffer.DrawSpriteBatch(items);
 }
 
 void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
@@ -141,7 +141,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             parent_h * ui.anchor_min.y
         );
 
-        // 2. Convert authoring position/pivot into the quad center expected by DrawBatch.
+        // 2. Convert authoring position/pivot into the quad center expected by DrawSpriteBatch.
         glm::vec2 pivot_to_center = glm::vec2(
             ui.size.x * (0.5f - ui.pivot.x),
             ui.size.y * (0.5f - ui.pivot.y)
@@ -199,5 +199,5 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
     glm::mat4 view_mat = glm::mat4(1.0f);
     
     cmd_buffer.SetCamera(view_mat, ortho);
-    cmd_buffer.DrawBatch(items);
+    cmd_buffer.DrawSpriteBatch(items);
 }

@@ -108,6 +108,9 @@ static void InitComputeProcAddresses() {
 #include <functional>
 #include <string>
 
+namespace dse {
+namespace render {
+
 // ============================================================
 // OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice
 // ============================================================
@@ -140,7 +143,7 @@ void OpenGLCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) 
 
 void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
     if (!device_ || items.empty()) return;
-    device_->RealSubmitDrawBatch(items, view_, projection_);
+    device_->RealSubmitDrawSpriteBatch(items, view_, projection_);
 }
 
 void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
@@ -153,7 +156,7 @@ void OpenGLCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
     device_->RealSubmitDrawSkybox(cubemap_texture_handle, view_, projection_);
 }
 
-void OpenGLCommandBuffer::DrawPostProcess(dse::render::PostProcessRequest request) {
+void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->RealSubmitDrawPostProcess(request);
 }
@@ -574,7 +577,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
-    dse::render::RenderTargetResource rt{};
+    RenderTargetResource rt{};
     rt.desc = desc;
     rt.fbo_handle = fbo_handle;
     rt.color_texture_handle = num_color > 0 ? color_handles[0] : 0;
@@ -630,7 +633,7 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
 // --- 着色器 ---
 
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
-    unsigned int shader_program = dse::render::GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
+    unsigned int shader_program = GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
     resource_mgr_.ledger().shader_programs_created += 1;
     external_shader_programs_.insert(shader_program);
     return shader_program;
@@ -680,8 +683,7 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     state_mgr_.ApplyState(pipeline_state_handle);
 }
 
-void OpenGLRhiDevice::RealSubmitDrawBatch(const std::vector<DrawBatchItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    // DrawBatchItem 是 SpriteDrawItem 的别名，直接传递
+void OpenGLRhiDevice::RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawBatch(items, view, projection, state_mgr_, shader_mgr_, ubo_mgr_);
 }
 
@@ -693,7 +695,7 @@ void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, 
     draw_executor_.DrawSkybox(cubemap_texture_handle, view, projection, shader_mgr_);
 }
 
-void OpenGLRhiDevice::RealSubmitDrawPostProcess(const dse::render::PostProcessRequest& request) {
+void OpenGLRhiDevice::RealSubmitDrawPostProcess(const PostProcessRequest& request) {
     draw_executor_.DrawPostProcess(request, shader_mgr_);
 }
 
@@ -1217,3 +1219,6 @@ void OpenGLRhiDevice::LogResourceLedger() const {
                        shader_mgr_.programs_created(), shader_mgr_.programs_destroyed());
     }
 }
+
+} // namespace render
+} // namespace dse
