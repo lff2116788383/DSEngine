@@ -4,8 +4,10 @@
 #include <vector>
 #include <filesystem>
 
+#include <memory>
 #include <entt/entt.hpp>
 #include "editor_test_harness.h"
+#include "editor_control_server.h"
 
 struct GLFWwindow;
 
@@ -51,6 +53,8 @@ private:
     // Engine
     dse::runtime::EngineInstance* engine_instance_ = nullptr;
 
+    // Control Server (WebSocket JSON-RPC)
+    std::unique_ptr<ControlServer> control_server_;
 
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};

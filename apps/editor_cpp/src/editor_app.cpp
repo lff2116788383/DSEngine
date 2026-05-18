@@ -471,6 +471,13 @@ bool EditorApp::Init(int argc, char* argv[]) {
         }
     }
 
+    // 启动 Control Server (WebSocket JSON-RPC)
+    control_server_ = std::make_unique<ControlServer>();
+    RegisterBuiltinTools(*control_server_);
+    if (!control_server_->Start(9527)) {
+        std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
+    }
+
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
     return true;
 }
@@ -487,6 +494,11 @@ void EditorApp::Run() {
         g_memory_profiler.Reset();
 
         glfwPollEvents();
+
+        // Process Control Server requests (JSON-RPC)
+        if (control_server_ && control_server_->IsRunning()) {
+            control_server_->Poll(*engine_instance_);
+        }
 
         // Update editor camera (Edit mode only)
         if (GetEditorState() == EditorState::Edit) {
@@ -608,6 +620,12 @@ void EditorApp::Shutdown() {
     editor_settings.default_gizmo_mode = g_current_gizmo_mode;
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
+
+    // 停止 Control Server
+    if (control_server_) {
+        control_server_->Stop();
+        control_server_.reset();
+    }
 
     if (engine_instance_) {
         engine_instance_->Shutdown();
