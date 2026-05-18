@@ -1116,6 +1116,215 @@ static JsonRpcResponse HandleEditorScreenshot(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_asset_import ─────────────────────────────────────────────
+
+static JsonRpcResponse HandleAssetImport(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("path") || !params["path"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: path");
+    }
+    std::string path = params["path"].GetString();
+
+    std::string type = "auto";
+    if (params.HasMember("type") && params["type"].IsString()) {
+        type = params["type"].GetString();
+    }
+
+    auto* am = engine.asset_manager();
+    if (!am) {
+        return MakeToolError(-32603, "AssetManager not available");
+    }
+
+    // auto-detect type from extension
+    if (type == "auto") {
+        auto ext_pos = path.rfind('.');
+        if (ext_pos != std::string::npos) {
+            std::string ext = path.substr(ext_pos);
+            for (auto& c : ext) c = static_cast<char>(std::tolower(c));
+            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
+                ext == ".tga" || ext == ".dds" || ext == ".hdr" || ext == ".ppm")
+                type = "texture";
+            else if (ext == ".dmesh")
+                type = "mesh";
+            else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac")
+                type = "audio";
+            else if (ext == ".dmat")
+                type = "material";
+        }
+        if (type == "auto") {
+            return MakeToolError(-32602, "Cannot auto-detect asset type for: " + path);
+        }
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+
+    if (type == "texture") {
+        auto tex = am->LoadTexture(path);
+        if (!tex) return MakeToolError(-32603, "Failed to load texture: " + path);
+        result.AddMember("type", "texture", alloc);
+        result.AddMember("handle", tex->GetHandle(), alloc);
+        result.AddMember("width", tex->GetWidth(), alloc);
+        result.AddMember("height", tex->GetHeight(), alloc);
+        result.AddMember("channels", tex->GetChannels(), alloc);
+    } else if (type == "mesh") {
+        auto mesh = am->LoadDmesh(path);
+        if (!mesh) return MakeToolError(-32603, "Failed to load mesh: " + path);
+        result.AddMember("type", "mesh", alloc);
+        result.AddMember("path", rapidjson::Value(mesh->GetPath().c_str(), alloc), alloc);
+        result.AddMember("size_bytes", static_cast<uint64_t>(mesh->GetData().size()), alloc);
+    } else if (type == "audio") {
+        auto clip = am->LoadAudioClip(path);
+        if (!clip) return MakeToolError(-32603, "Failed to load audio: " + path);
+        result.AddMember("type", "audio", alloc);
+        result.AddMember("path", rapidjson::Value(clip->GetPath().c_str(), alloc), alloc);
+        result.AddMember("size_bytes", static_cast<uint64_t>(clip->GetData().size()), alloc);
+    } else if (type == "material") {
+        std::size_t idx = 0;
+        if (params.HasMember("material_index") && params["material_index"].IsUint())
+            idx = params["material_index"].GetUint();
+        auto mat = am->LoadMaterialInstanceFromDmat(path, idx);
+        if (!mat) return MakeToolError(-32603, "Failed to load material: " + path);
+        result.AddMember("type", "material", alloc);
+        result.AddMember("material_id", mat->GetId(), alloc);
+        result.AddMember("name", rapidjson::Value(mat->GetName().c_str(), alloc), alloc);
+    } else {
+        return MakeToolError(-32602, "Unknown asset type: " + type);
+    }
+
+    result.AddMember("success", true, alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_material_create ─────────────────────────────────────────
+
+static JsonRpcResponse HandleMaterialCreate(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    std::string name = "untitled_material";
+    if (params.HasMember("name") && params["name"].IsString()) {
+        name = params["name"].GetString();
+    }
+
+    auto* am = engine.asset_manager();
+    if (!am) {
+        return MakeToolError(-32603, "AssetManager not available");
+    }
+
+    // Build .dmat JSON
+    rapidjson::Document dmat;
+    dmat.SetObject();
+    auto& da = dmat.GetAllocator();
+
+    rapidjson::Value mat_obj(rapidjson::kObjectType);
+    mat_obj.AddMember("name", rapidjson::Value(name.c_str(), da), da);
+
+    // shader_variant
+    std::string shader_variant = "MESH_PBR";
+    if (params.HasMember("shader_variant") && params["shader_variant"].IsString())
+        shader_variant = params["shader_variant"].GetString();
+    mat_obj.AddMember("shader_variant", rapidjson::Value(shader_variant.c_str(), da), da);
+
+    // base_color [r,g,b,a]
+    if (params.HasMember("base_color") && params["base_color"].IsArray()) {
+        rapidjson::Value bc(rapidjson::kArrayType);
+        for (auto& v : params["base_color"].GetArray()) bc.PushBack(v.GetFloat(), da);
+        mat_obj.AddMember("base_color", bc, da);
+    } else {
+        rapidjson::Value bc(rapidjson::kArrayType);
+        bc.PushBack(1.0f, da).PushBack(1.0f, da).PushBack(1.0f, da).PushBack(1.0f, da);
+        mat_obj.AddMember("base_color", bc, da);
+    }
+
+    // emissive [r,g,b]
+    if (params.HasMember("emissive") && params["emissive"].IsArray()) {
+        rapidjson::Value em(rapidjson::kArrayType);
+        for (auto& v : params["emissive"].GetArray()) em.PushBack(v.GetFloat(), da);
+        mat_obj.AddMember("emissive", em, da);
+    }
+
+    // scalars
+    auto addFloat = [&](const char* key) {
+        if (params.HasMember(key) && params[key].IsNumber())
+            mat_obj.AddMember(rapidjson::Value(key, da),
+                              rapidjson::Value(params[key].GetFloat()), da);
+    };
+    addFloat("metallic");
+    addFloat("roughness");
+    addFloat("occlusion_strength");
+    addFloat("normal_scale");
+    addFloat("alpha_cutoff");
+
+    if (params.HasMember("alpha_test") && params["alpha_test"].IsBool())
+        mat_obj.AddMember("alpha_test", params["alpha_test"].GetBool(), da);
+    if (params.HasMember("double_sided") && params["double_sided"].IsBool())
+        mat_obj.AddMember("double_sided", params["double_sided"].GetBool(), da);
+
+    // texture paths
+    auto addTex = [&](const char* key) {
+        if (params.HasMember(key) && params[key].IsString())
+            mat_obj.AddMember(rapidjson::Value(key, da),
+                              rapidjson::Value(params[key].GetString(), da), da);
+    };
+    addTex("base_color_texture");
+    addTex("normal_texture");
+    addTex("metallic_roughness_texture");
+    addTex("emissive_texture");
+    addTex("occlusion_texture");
+
+    rapidjson::Value materials_arr(rapidjson::kArrayType);
+    materials_arr.PushBack(mat_obj, da);
+    dmat.AddMember("materials", materials_arr, da);
+
+    // Serialize to JSON string
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    dmat.Accept(writer);
+    std::string json_str = sb.GetString();
+
+    // Save to file
+    std::string save_path;
+    if (params.HasMember("save_path") && params["save_path"].IsString()) {
+        save_path = params["save_path"].GetString();
+    } else {
+        std::string data_root = am->GetDataRoot();
+        save_path = data_root + "/materials/" + name + ".dmat";
+    }
+
+    // Ensure directory exists
+    std::filesystem::path file_path(save_path);
+    if (file_path.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(file_path.parent_path(), ec);
+    }
+
+    {
+        std::ofstream f(save_path, std::ios::binary);
+        if (!f.is_open()) {
+            return MakeToolError(-32603, "Failed to write material file: " + save_path);
+        }
+        f.write(json_str.data(), static_cast<std::streamsize>(json_str.size()));
+    }
+
+    // Load into engine
+    auto loaded = am->LoadMaterialInstanceFromDmat(save_path, 0);
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("success", true, alloc);
+    result.AddMember("file_path", rapidjson::Value(save_path.c_str(), alloc), alloc);
+    if (loaded) {
+        result.AddMember("material_id", loaded->GetId(), alloc);
+        result.AddMember("material_name", rapidjson::Value(loaded->GetName().c_str(), alloc), alloc);
+    }
+    return MakeOk(std::move(result));
+}
+
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
 struct ToolEntry {
@@ -1142,6 +1351,8 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_editor_screenshot",         HandleEditorScreenshot },
     { "dsengine_scene_save",                HandleSceneSave },
     { "dsengine_scene_load",                HandleSceneLoad },
+    { "dsengine_asset_import",              HandleAssetImport },
+    { "dsengine_material_create",           HandleMaterialCreate },
 };
 
 void RegisterBuiltinTools(ControlServer& server) {

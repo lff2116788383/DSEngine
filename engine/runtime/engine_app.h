@@ -70,6 +70,7 @@ public:
      * @brief 获取渲染管线
      */
     FramePipeline* pipeline() const { return pipeline_.get(); }
+    AssetManager* asset_manager() const { return services_.asset_manager; }
     dse::core::ServiceLocator& service_locator() { return dse::core::ServiceLocator::Instance(); }
     const dse::core::ServiceLocator& service_locator() const { return dse::core::ServiceLocator::Instance(); }
 
