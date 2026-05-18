@@ -500,6 +500,12 @@ static JsonRpcResponse HandleEditorGetState(
     result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
     result.AddMember("entity_count",
         static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+
+    auto* am = engine.asset_manager();
+    if (am) {
+        std::string dr = am->GetDataRoot();
+        result.AddMember("data_root", rapidjson::Value(dr.c_str(), alloc), alloc);
+    }
     return MakeOk(std::move(result));
 }
 

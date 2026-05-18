@@ -235,9 +235,61 @@ def main():
         print(f"[FAIL] {resp}")
         failed += 1
 
-    # Test 14: method_not_found
-    print("\n--- Test 14: unknown method ---")
-    resp = rpc_call(ws, "nonexistent_method", req_id=14)
+    # Test 14: editor_get_state includes data_root
+    print("\n--- Test 14: editor_get_state has data_root ---")
+    resp = rpc_call(ws, "dsengine_editor_get_state", req_id=14)
+    result = resp.get("result", {})
+    if "data_root" in result and isinstance(result["data_root"], str):
+        print(f"[PASS] data_root = {result['data_root']}")
+        passed += 1
+    else:
+        print(f"[FAIL] data_root missing: {resp}")
+        failed += 1
+
+    # Test 15: material_create
+    print("\n--- Test 15: dsengine_material_create ---")
+    resp = rpc_call(ws, "dsengine_material_create", {
+        "name": "test_ai_mat",
+        "base_color": [0.8, 0.2, 0.2, 1.0],
+        "metallic": 0.5,
+        "roughness": 0.3
+    }, req_id=15)
+    result = resp.get("result", {})
+    if result.get("success") and "file_path" in result:
+        print(f"[PASS] Material created: {result['file_path']}, id={result.get('material_id')}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 16: asset_import (texture - expect fail for missing file, validates handler works)
+    print("\n--- Test 16: dsengine_asset_import (missing file) ---")
+    resp = rpc_call(ws, "dsengine_asset_import", {
+        "path": "nonexistent_texture_12345.png",
+        "type": "texture"
+    }, req_id=16)
+    if resp.get("error"):
+        print(f"[PASS] Expected error for missing file: {resp['error']['message'][:60]}")
+        passed += 1
+    else:
+        print(f"[FAIL] Should have failed: {resp}")
+        failed += 1
+
+    # Test 17: asset_import auto-detect unknown extension
+    print("\n--- Test 17: dsengine_asset_import (unknown ext) ---")
+    resp = rpc_call(ws, "dsengine_asset_import", {
+        "path": "test.xyz"
+    }, req_id=17)
+    if resp.get("error"):
+        print(f"[PASS] Expected error for unknown ext: {resp['error']['message'][:60]}")
+        passed += 1
+    else:
+        print(f"[FAIL] Should have failed: {resp}")
+        failed += 1
+
+    # Test 18: method_not_found
+    print("\n--- Test 18: unknown method ---")
+    resp = rpc_call(ws, "nonexistent_method", req_id=18)
     if resp.get("error", {}).get("code") == -32601:
         print(f"[PASS] Got expected error: {resp['error']['message']}")
         passed += 1
