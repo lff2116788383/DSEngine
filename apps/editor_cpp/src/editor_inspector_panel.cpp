@@ -1419,15 +1419,19 @@ void DrawInspectorPanel(EditorContext& context,
 
     auto& selection = SelectionManager::Get();
     if (selection.IsMultiSelect()) {
+        static glm::vec3 s_ms_pos_delta{0.0f, 0.0f, 0.0f};
+        static glm::vec3 s_ms_scale_factor{1.0f, 1.0f, 1.0f};
+
         ImGui::Text("%d entities selected", selection.Count());
         ImGui::Separator();
 
+        // ── Average info (read-only) ──────────────────────────────────────
         glm::vec3 avg_pos(0.0f);
         glm::vec3 avg_scale(0.0f);
         int transform_count = 0;
         for (auto ent : selection.GetAll()) {
             if (context.registry.valid(ent) && context.registry.all_of<TransformComponent>(ent)) {
-                auto& t = context.registry.get<TransformComponent>(ent);
+                const auto& t = context.registry.get<TransformComponent>(ent);
                 avg_pos += t.position;
                 avg_scale += t.scale;
                 transform_count++;
@@ -1436,11 +1440,80 @@ void DrawInspectorPanel(EditorContext& context,
         if (transform_count > 0) {
             avg_pos /= static_cast<float>(transform_count);
             avg_scale /= static_cast<float>(transform_count);
-            ImGui::Text("Average Position: (%.2f, %.2f, %.2f)", avg_pos.x, avg_pos.y, avg_pos.z);
-            ImGui::Text("Average Scale: (%.2f, %.2f, %.2f)", avg_scale.x, avg_scale.y, avg_scale.z);
+            ImGui::TextDisabled("Avg pos  (%.2f, %.2f, %.2f)", avg_pos.x, avg_pos.y, avg_pos.z);
+            ImGui::TextDisabled("Avg scale (%.2f, %.2f, %.2f)", avg_scale.x, avg_scale.y, avg_scale.z);
         }
         ImGui::Separator();
-        ImGui::TextDisabled("Multi-selection: individual editing disabled");
+
+        // ── Batch Move (delta) ────────────────────────────────────────────
+        if (ImGui::CollapsingHeader(MDI_ICON_ARROW_ALL "  Batch Move", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Move Delta:");
+            float pd[3] = {s_ms_pos_delta.x, s_ms_pos_delta.y, s_ms_pos_delta.z};
+            DrawVec3WithColorLabels("##ms_pd", pd);
+            s_ms_pos_delta = {pd[0], pd[1], pd[2]};
+
+            if (ImGui::Button("Apply Move##ms")) {
+                auto compound = std::make_unique<CompoundCommand>("Batch Move");
+                for (auto ent : selection.GetAll()) {
+                    if (!context.registry.valid(ent)) continue;
+                    if (!context.registry.all_of<TransformComponent>(ent)) continue;
+                    auto& t = context.registry.get<TransformComponent>(ent);
+                    glm::vec3 old_pos = t.position;
+                    glm::vec3 new_pos = t.position + s_ms_pos_delta;
+                    t.position = new_pos;
+                    t.dirty = true;
+                    auto& reg = context.registry;
+                    compound->AddCommand(std::make_unique<PropertyChangeCommand<glm::vec3>>(
+                        "Transform.Position", old_pos, new_pos,
+                        [&reg, ent](const glm::vec3& v) {
+                            if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                reg.get<TransformComponent>(ent).position = v;
+                                reg.get<TransformComponent>(ent).dirty = true;
+                            }
+                        }));
+                }
+                if (!compound->IsEmpty())
+                    GetUndoRedoManager().Execute(std::move(compound), false);
+                s_ms_pos_delta = {0.0f, 0.0f, 0.0f};
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset##ms_pos")) s_ms_pos_delta = {0.0f, 0.0f, 0.0f};
+        }
+
+        // ── Batch Scale (factor) ──────────────────────────────────────────
+        if (ImGui::CollapsingHeader(MDI_ICON_RESIZE "  Batch Scale", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Scale Factor:");
+            float sf[3] = {s_ms_scale_factor.x, s_ms_scale_factor.y, s_ms_scale_factor.z};
+            DrawVec3WithColorLabels("##ms_sf", sf, 0.01f);
+            s_ms_scale_factor = {sf[0], sf[1], sf[2]};
+
+            if (ImGui::Button("Apply Scale##ms")) {
+                auto compound = std::make_unique<CompoundCommand>("Batch Scale");
+                for (auto ent : selection.GetAll()) {
+                    if (!context.registry.valid(ent)) continue;
+                    if (!context.registry.all_of<TransformComponent>(ent)) continue;
+                    auto& t = context.registry.get<TransformComponent>(ent);
+                    glm::vec3 old_scale = t.scale;
+                    glm::vec3 new_scale = t.scale * s_ms_scale_factor;
+                    t.scale = new_scale;
+                    t.dirty = true;
+                    auto& reg = context.registry;
+                    compound->AddCommand(std::make_unique<PropertyChangeCommand<glm::vec3>>(
+                        "Transform.Scale", old_scale, new_scale,
+                        [&reg, ent](const glm::vec3& v) {
+                            if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                reg.get<TransformComponent>(ent).scale = v;
+                                reg.get<TransformComponent>(ent).dirty = true;
+                            }
+                        }));
+                }
+                if (!compound->IsEmpty())
+                    GetUndoRedoManager().Execute(std::move(compound), false);
+                s_ms_scale_factor = {1.0f, 1.0f, 1.0f};
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset##ms_scale")) s_ms_scale_factor = {1.0f, 1.0f, 1.0f};
+        }
     } else if (context.selected_entity != entt::null && context.registry.valid(context.selected_entity)) {
         DrawInspectorHeader(context);
 
