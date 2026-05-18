@@ -16,9 +16,9 @@
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "editor_scene_io.h"
 
-std::unique_ptr<entt::registry> g_backup_registry;
-
 namespace dse::editor {
+
+static std::unique_ptr<entt::registry> s_backup_registry;
 
 void MarkAllUILabelsDirty(entt::registry& registry) {
     auto view = registry.view<UILabelComponent>();
@@ -29,14 +29,14 @@ void MarkAllUILabelsDirty(entt::registry& registry) {
     }
 }
 
-EditorState g_editor_state = EditorState::Edit;
+static EditorState s_editor_state = EditorState::Edit;
 
 EditorState GetEditorState() {
-    return g_editor_state;
+    return s_editor_state;
 }
 
 bool IsEditorInPlayMode() {
-    return g_editor_state == EditorState::Play;
+    return s_editor_state == EditorState::Play;
 }
 
 static void ResetPlayModeRuntimeState() {
@@ -47,28 +47,28 @@ static void ResetPlayModeRuntimeState() {
 }
 
 void EnterPlayMode(entt::registry& registry) {
-    if (g_editor_state != EditorState::Edit) {
+    if (s_editor_state != EditorState::Edit) {
         return;
     }
-    g_backup_registry = std::make_unique<entt::registry>();
-    CopyRegistry(*g_backup_registry, registry);
+    s_backup_registry = std::make_unique<entt::registry>();
+    CopyRegistry(*s_backup_registry, registry);
     ResetPlayModeRuntimeState();
-    g_editor_state = EditorState::Play;
+    s_editor_state = EditorState::Play;
 }
 
 void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
-    if (g_editor_state == EditorState::Edit) {
+    if (s_editor_state == EditorState::Edit) {
         return;
     }
     ResetPlayModeRuntimeState();
-    if (g_backup_registry) {
-        CopyRegistry(registry, *g_backup_registry);
-        g_backup_registry.reset();
+    if (s_backup_registry) {
+        CopyRegistry(registry, *s_backup_registry);
+        s_backup_registry.reset();
     }
     MarkAllUILabelsDirty(registry);
     ResetProfilerPanelState();
     selected_entity = entt::null;
-    g_editor_state = EditorState::Edit;
+    s_editor_state = EditorState::Edit;
 }
 
 void DrawEditorToolbar(EditorContext& ctx) {
@@ -121,7 +121,7 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::SameLine();
     ImGui::SetCursorPosX((avail_width / 2.0f) - 60);
 
-    if (g_editor_state == EditorState::Edit) {
+    if (s_editor_state == EditorState::Edit) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.18f, 1.0f));
         if (ImGui::Button(MDI_ICON_PLAY "##play", ImVec2(32, 24))) {
             EnterPlayMode(registry);
