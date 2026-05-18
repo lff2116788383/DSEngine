@@ -206,11 +206,11 @@
 
 | 文件 | 用例数 | 覆盖内容 |
 |------|--------|---------|
-| `editor_functional_test.cpp` | 15 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪（max_history trim）、SaveScene/LoadScene 全组件往返、Camera3D+MeshRenderer 往返、Prefab 导入导出、SceneTabManager 多标签、CLI 参数解析、RegistrySnapshot 导出/对比、实体数差异检测、CopyRegistry |
-| `editor_selection_integration_test.cpp` | 8 | SelectionManager 单选/多选/切换/Ctrl+Click/Shift+Click/批量移除/主实体 |
+| `editor_functional_test.cpp` | 19 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D 往返、空场景往返、Prefab 导入导出、SceneTabManager 多标签、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry |
+| `editor_selection_integration_test.cpp` | 11 | SelectionManager 单选/多选/切换/防重复添加/移除/多选→单选/移除不存在不崩溃/主实体/GetPrimary 返回最后添加/null 清空 |
 | `editor_control_server_test.cpp` | 47 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify/add_component/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
 
-**总计：70 个集成测试用例，全部通过。**
+**总计：77 个集成测试用例，全部通过。**
 
 ### 测试基础设施
 

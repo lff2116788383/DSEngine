@@ -140,3 +140,33 @@ TEST_F(SelectionManagerTest, SetSingle_null清空) {
     sm_.SetSingle(kNullEntity);
     EXPECT_TRUE(sm_.IsEmpty());
 }
+
+TEST_F(SelectionManagerTest, SetSingle_多选变单选) {
+    sm_.Add(1);
+    sm_.Add(2);
+    sm_.Add(3);
+    EXPECT_EQ(sm_.Count(), 3);
+
+    sm_.SetSingle(2);
+    EXPECT_EQ(sm_.Count(), 1);
+    EXPECT_TRUE(sm_.Contains(2));
+    EXPECT_FALSE(sm_.Contains(1));
+    EXPECT_FALSE(sm_.Contains(3));
+}
+
+TEST_F(SelectionManagerTest, Remove_不存在实体不崩溃) {
+    sm_.Add(10);
+    sm_.Remove(99);  // 不存在，不应崩溃
+    EXPECT_EQ(sm_.Count(), 1);
+    EXPECT_TRUE(sm_.Contains(10));
+}
+
+TEST_F(SelectionManagerTest, GetPrimary_返回最后添加的) {
+    sm_.Add(1);
+    sm_.Add(2);
+    sm_.Add(3);
+    EXPECT_EQ(sm_.GetPrimary(), 3u);
+
+    sm_.Remove(3);
+    EXPECT_EQ(sm_.GetPrimary(), 2u);
+}

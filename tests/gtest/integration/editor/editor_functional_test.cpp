@@ -660,3 +660,115 @@ TEST_F(EditorFunctionalTest, SnapshotEntityCountMismatch) {
     auto self_diffs = dse::editor::test::CompareSnapshot(snap1, snap1);
     EXPECT_TRUE(self_diffs.empty());
 }
+
+// ============================================================
+// Test 13: SceneIO 空场景往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_EmptySceneRoundTrip) {
+    const auto path = TempPath("dse_test_empty.dscene");
+    SaveScene(reg(), path.string());
+    ASSERT_TRUE(std::filesystem::exists(path));
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    EXPECT_EQ(dse::editor::test::CountAliveEntities(loaded), 0u);
+
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 14: SceneIO DirectionalLight3D 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_DirectionalLight3DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Sun");
+    reg().emplace<TransformComponent>(e);
+    auto& light = reg().emplace<DirectionalLight3DComponent>(e);
+    light.intensity = 3.5f;
+    light.cast_shadow = true;
+    light.color = glm::vec3(1.0f, 0.95f, 0.8f);
+
+    const auto path = TempPath("dse_test_dirlight.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<DirectionalLight3DComponent>(en)) continue;
+        found = true;
+        const auto& dl = loaded.get<DirectionalLight3DComponent>(en);
+        EXPECT_NEAR(dl.intensity, 3.5f, 0.01f);
+        EXPECT_TRUE(dl.cast_shadow);
+        EXPECT_NEAR(dl.color.r, 1.0f, 0.01f);
+        EXPECT_NEAR(dl.color.g, 0.95f, 0.01f);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 15: SceneIO RigidBody2D 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_RigidBody2DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Phys2D");
+    reg().emplace<TransformComponent>(e);
+    auto& rb = reg().emplace<RigidBody2DComponent>(e);
+    rb.type = RigidBody2DType::Static;
+    rb.gravity_scale = 0.0f;
+    rb.fixed_rotation = true;
+
+    const auto path = TempPath("dse_test_rb2d.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<RigidBody2DComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<RigidBody2DComponent>(en);
+        EXPECT_EQ(r.type, RigidBody2DType::Static);
+        EXPECT_NEAR(r.gravity_scale, 0.0f, 0.001f);
+        EXPECT_TRUE(r.fixed_rotation);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 16: UndoRedo 新命令执行后清空 Redo 栈
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_NewCommandClearsRedo) {
+    dse::editor::UndoRedoManager mgr;
+    int v = 0;
+
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<int>>(
+        "A", 0, 1, [&v](const int& x){ v = x; }));
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<int>>(
+        "B", 1, 2, [&v](const int& x){ v = x; }));
+    EXPECT_EQ(v, 2);
+
+    // 撤销一步，Redo 栈应有 1 条
+    mgr.Undo();
+    EXPECT_EQ(v, 1);
+    EXPECT_EQ(mgr.GetRedoCount(), 1);
+
+    // 执行新命令，Redo 栈应被清空
+    mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<int>>(
+        "C", 1, 99, [&v](const int& x){ v = x; }));
+    EXPECT_EQ(v, 99);
+    EXPECT_EQ(mgr.GetRedoCount(), 0);
+    EXPECT_FALSE(mgr.CanRedo());
+}
