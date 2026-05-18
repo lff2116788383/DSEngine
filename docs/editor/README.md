@@ -16,6 +16,6 @@
 - **技术栈**：C++ / Dear ImGui (Docking) / GLFW / OpenGL / ImGuizmo / RapidJSON
 - **代码规模**：~65 文件，~14,000 行，25 个功能面板
 - **完成度**：Phase 1-7 全部交付，覆盖完整游戏编辑工作流
-- **AI Control Server**：✅ 已完成 — WebSocket JSON-RPC (端口 9527) + MCP adapter，18 个 Tool（13 种组件 CRUD）
-- **架构改进**：✅ main.cpp → EditorApp 拆分，✅ Inspector 注册式重构 (29 组件)，✅ EditorContext 统一上下文
-- **下一步**：Phase 2 资产生成 Tool (外部 API)
+- **AI Control Server**：✅ Phase 1+2 完成 — WebSocket JSON-RPC + MCP adapter + AI 资产生成，23 个 Tool（13 种组件 CRUD + DALL·E/Meshy/ElevenLabs）
+- **架构改进**：✅ main.cpp → EditorApp 拆分，✅ Inspector 注册式重构 (29 组件)，✅ EditorContext 统一 + 全局变量消除
+- **下一步**：编辑器走 RHI / Phase 3 内建 Chat Panel (可选) / 插件模板+文档

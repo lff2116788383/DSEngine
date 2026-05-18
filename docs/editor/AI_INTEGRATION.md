@@ -1,6 +1,6 @@
 # DSEngine 编辑器 AI 集成方案
 
-> 更新日期: 2026-05-18
+> 更新日期: 2026-05-18 (最近修订: Phase 2 资产生成 Tool 完成)
 > 目标：让开发者通过对话驱动游戏开发，资产由 AI 生成
 
 ---
@@ -25,8 +25,8 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 
 ## 二、方案选择：Tool Provider 优于内建 Chat
 
-> **✅ Phase 1 已完成** — Engine Control Server + MCP adapter 已全部实现并通过端到端测试。
-> 当前共暴露 **18 个 Tool**，覆盖场景操控、实体 CRUD、**组件 CRUD**、编辑器控制、脚本执行、截图等。
+> **✅ Phase 1+2 已完成** — Engine Control Server + MCP adapter + 资产生成 Tool 已全部实现。
+> 当前共暴露 **23 个 Tool**（18 个引擎 + 5 个资产），覆盖场景操控、实体 CRUD、组件 CRUD、编辑器控制、脚本执行、截图、**资产导入、材质创建、AI 纹理/模型/音效生成**。
 
 ### 不推荐：在 C++ ImGui 里造 AI Chat
 
@@ -78,8 +78,8 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 │  │  ├─ editor.play/stop  → 控制 Play 模式           ✅ │   │
 │  │  ├─ editor.screenshot → 截图返回 base64 PNG      ✅ │   │
 │  │  ├─ editor.undo/redo  → 撤销/重做                ✅ │   │
-│  │  ├─ material.create   → 生成 DSSL 材质文件   (Phase 2) │   │
-│  │  └─ asset.import      → 导入资产文件到项目   (Phase 2) │   │
+│  │  ├─ material.create   → 生成 PBR 材质文件        ✅ │   │
+│  │  └─ asset.import      → 导入资产文件到项目        ✅ │   │
 │  └──────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
                            │
@@ -321,7 +321,7 @@ AI:
 |------|------|--------|---------|------|------|
 | **Phase 1a** | Engine Control Server（WebSocket JSON-RPC） | 1 周 | ~1200 行 C++ | WebSocket 库 | ✅ 完成 |
 | **Phase 1b** | MCP stdio adapter（Python） | 2-3 天 | ~300 行 Python | websocket-client | ✅ 完成 |
-| **Phase 2** | 资产生成 Tool（接外部 API） | 2 周 | ~1500 行 | HTTP 库 | 待开始 |
+| **Phase 2** | 资产生成 Tool（接外部 API） | 2 周 | ~450 行 | requests | ✅ 完成 |
 | **Phase 3** | 内建 Chat Panel（可选，用 Tauri） | 1-2 周 | ~500 行 TS | launcher_tauri | 待开始 |
 | **总计** | | 5-7 周 | ~3500 行 | | |
 
@@ -331,13 +331,13 @@ AI:
 apps/editor_cpp/src/
 ├── editor_control_server.cpp   // WebSocket JSON-RPC 服务器（端口 9527）
 ├── editor_control_server.h     // ControlServer 类 + Tool 注册 + 消息分发
-├── editor_control_tools.cpp    // 18 个 Tool handler 实现（含 Base64 编码 + stb PNG）
+├── editor_control_tools.cpp    // 20 个 Tool handler 实现（含 Base64 编码 + stb PNG + 资产导入/材质创建）
 ├── editor_plugin_manager.h     // 插件管理器（Python 进程外插件）
 └── editor_plugin_manager.cpp   //
 
 tools/
 ├── mcp_adapter/
-│   └── dsengine_mcp.py         // MCP stdio 适配器（18 个 Tool 定义 + WsBridge）
+│   └── dsengine_mcp.py         // MCP stdio 适配器（23 个 Tool 定义 + WsBridge + AI 生成）
 ├── test_control_server.py      // 端到端测试脚本（14 项测试）
 
 .windsurf/
@@ -350,7 +350,7 @@ mcp_config.json                 // 通用 MCP 配置模板（Cursor / Claude Des
 - `editor_toolbar.h/cpp` — 暴露 `EnterPlayMode` / `ExitPlayMode`
 - `CMakeLists.txt` — 新增源文件 + WebSocket 依赖
 
-### Phase 1 Tool 清单（✅ 18 个已实现）
+### Phase 1+2 Tool 清单（✅ 23 个已实现）
 
 | Tool | 功能 | 类别 |
 |------|------|------|
@@ -372,6 +372,11 @@ mcp_config.json                 // 通用 MCP 配置模板（Cursor / Claude Des
 | `dsengine_entity_get_components` | 查询实体全部组件 + 属性详情 | 组件 |
 | `dsengine_lua_execute` | 执行 Lua 代码（最通用 Tool） | 脚本 |
 | `dsengine_script_create` | 创建 .lua 文件 + 热重载 | 脚本 |
+| `dsengine_asset_import` | 导入纹理/mesh/音频/材质到引擎 | 资产 |
+| `dsengine_material_create` | 创建 PBR .dmat 材质文件并加载 | 资产 |
+| `dsengine_asset_generate_texture` | AI 生成纹理（DALL·E 3）并导入 | AI 生成 |
+| `dsengine_asset_generate_model` | AI 生成 3D 模型（Meshy.ai）并下载 | AI 生成 |
+| `dsengine_asset_generate_sfx` | AI 生成音效（ElevenLabs）并导入 | AI 生成 |
 
 ### 支持的组件类型（13 种可添加/移除，20 种可检测）
 
@@ -455,6 +460,6 @@ mcp_config.json                 // 通用 MCP 配置模板（Cursor / Claude Des
 
 ## 九、总结
 
-**最优策略**：Phase 1a 先做 Engine Control Server（1 周），让引擎立刻可被任何 AI 客户端驱动。后续按需加 MCP adapter 和资产生成 Tool。
+**最优策略**：Phase 1（Control Server + MCP adapter）和 Phase 2（资产生成 Tool）均已完成。引擎已可被任何 AI 客户端驱动，并支持 AI 生成纹理/3D 模型/音效。Phase 3（内建 Chat Panel）为可选项。
 
 **核心原则**：引擎做 Tool Provider，AI 能力由生态提供。这比自建 AI Chat 更灵活、更低成本、更高扩展性。
