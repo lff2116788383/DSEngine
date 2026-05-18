@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "dsengine": {
+      "command": "python",
+      "args": ["tools/mcp_adapter/dsengine_mcp.py"],
+      "env": {}
+    }
+  }
+}

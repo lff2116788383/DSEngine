@@ -1,0 +1,11 @@
+{
+  "_comment": "MCP configuration for DSEngine Editor. Copy the 'mcpServers' section to your AI client's settings (Cursor / Claude Desktop / Windsurf).",
+
+  "mcpServers": {
+    "dsengine": {
+      "command": "python",
+      "args": ["tools/mcp_adapter/dsengine_mcp.py"],
+      "env": {}
+    }
+  }
+}

@@ -72,14 +72,36 @@ MCP_TOOLS = [
     },
     {
         "name": "dsengine_entity_create",
-        "description": "Create a new entity in the scene",
+        "description": "Create a new entity in the scene with optional mesh, color, and components. "
+                       "Supported component types: MeshRenderer, Camera3D, DirectionalLight, PointLight, SpotLight, "
+                       "RigidBody3D, BoxCollider3D, SphereCollider3D, AudioSource, AudioListener, SkyLight, Skybox, PostProcess. "
+                       "Components can be strings (type name only) or objects {type, properties}.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Entity name"},
                 "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"},
                 "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[pitch,yaw,roll] degrees"},
-                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"}
+                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"},
+                "mesh": {"type": "string", "description": "Mesh asset path (auto-adds MeshRenderer with MESH_PBR shader)"},
+                "color": {"type": "array", "items": {"type": "number"}, "minItems": 4, "description": "[r,g,b,a] 0-1 range"},
+                "components": {
+                    "type": "array",
+                    "description": "Components to add. Each item is a type name string or {type, properties} object.",
+                    "items": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string"},
+                                    "properties": {"type": "object"}
+                                },
+                                "required": ["type"]
+                            }
+                        ]
+                    }
+                }
             },
             "required": ["name"]
         }
