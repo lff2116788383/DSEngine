@@ -12,6 +12,8 @@
 #include "apps/editor_cpp/src/editor_shortcuts.h"
 #include "apps/editor_cpp/src/editor_shell.h"
 #include "apps/editor_cpp/src/editor_console_panel.h"
+#include "apps/editor_cpp/src/editor_toolbar.h"
+#include "apps/editor_cpp/src/editor_context.h"
 
 namespace dse::editor {
 
@@ -42,5 +44,26 @@ void EditorLog(LogLevel /*level*/, const std::string& /*message*/) {
 void InstallEditorLogSink() {
     // No-op
 }
+
+// ─── editor_toolbar stubs (no ImGui) ────────────────────────────────────────
+
+static EditorState g_editor_state_stub = EditorState::Edit;
+
+EditorState GetEditorState() { return g_editor_state_stub; }
+bool IsEditorInPlayMode() { return g_editor_state_stub == EditorState::Play; }
+
+void MarkAllUILabelsDirty(entt::registry& /*registry*/) {}
+
+void EnterPlayMode(entt::registry& /*registry*/) {
+    g_editor_state_stub = EditorState::Play;
+}
+
+void ExitPlayMode(entt::registry& /*registry*/, entt::entity& /*selected*/) {
+    g_editor_state_stub = EditorState::Edit;
+}
+
+void DrawEditorToolbar(EditorContext& /*ctx*/) {}
+
+void ResetEditorStateStub() { g_editor_state_stub = EditorState::Edit; }
 
 } // namespace dse::editor

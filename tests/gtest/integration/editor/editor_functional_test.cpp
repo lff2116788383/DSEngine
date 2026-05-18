@@ -33,6 +33,12 @@
 #include "apps/editor_cpp/src/editor_test_harness.h"
 #include "apps/editor_cpp/src/editor_snapshot.h"
 
+using namespace dse;
+using dse::editor::EditorNameComponent;
+using dse::editor::CopyRegistry;
+using dse::editor::SaveScene;
+using dse::editor::LoadScene;
+
 // ============================================================
 // Test Fixture
 // ============================================================

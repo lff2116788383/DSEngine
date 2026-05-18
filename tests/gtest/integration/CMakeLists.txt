@@ -49,12 +49,15 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     # editor (headless functional tests)
     editor/editor_functional_test.cpp
     editor/editor_selection_integration_test.cpp
+    editor/editor_control_server_test.cpp
     editor/editor_test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_snapshot.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_io.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_prefab.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_tabs.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_control_server.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_control_tools.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
@@ -81,6 +84,7 @@ target_link_libraries(${DSE_GTEST_INTEGRATION_TARGET}
         GTest::gtest_main
         GTest::gmock
         dse_engine
+        ixwebsocket
 )
 
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
