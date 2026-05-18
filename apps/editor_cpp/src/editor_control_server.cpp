@@ -210,6 +210,22 @@ std::string ControlServer::SerializeResponse(const JsonRpcResponse& response) {
     return buf.GetString();
 }
 
+JsonRpcResponse ControlServer::DispatchTool(const std::string& method,
+                                              const rapidjson::Document& params,
+                                              dse::runtime::EngineInstance& engine) {
+    auto it = tools_.find(method);
+    if (it == tools_.end()) {
+        return MakeError("local", kMethodNotFound, "Method not found: " + method);
+    }
+    try {
+        auto resp = it->second(params, engine);
+        resp.id = "local";
+        return resp;
+    } catch (const std::exception& e) {
+        return MakeError("local", kInternalError, std::string("Internal error: ") + e.what());
+    }
+}
+
 JsonRpcResponse ControlServer::MakeError(const std::string& id, int code, const std::string& msg) {
     JsonRpcResponse resp;
     resp.id = id;

@@ -322,7 +322,7 @@ AI:
 | **Phase 1a** | Engine Control Server（WebSocket JSON-RPC） | 1 周 | ~1200 行 C++ | WebSocket 库 | ✅ 完成 |
 | **Phase 1b** | MCP stdio adapter（Python） | 2-3 天 | ~300 行 Python | websocket-client | ✅ 完成 |
 | **Phase 2** | 资产生成 Tool（接外部 API） | 2 周 | ~450 行 | requests | ✅ 完成 |
-| **Phase 3** | 内建 Chat Panel（可选，用 Tauri） | 1-2 周 | ~500 行 TS | launcher_tauri | 待开始 |
+| **Phase 3** | 内建 Chat Panel（ImGui + Python LLM bridge） | 2-3 天 | ~310 行 C++/Python | IXWebSocket (已有) | 🔧 进行中 |
 | **总计** | | 5-7 周 | ~3500 行 | | |
 
 ### Phase 1a 实际文件（✅ 已完成）

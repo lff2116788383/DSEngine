@@ -96,7 +96,7 @@ void EndEditorShell() {
     ImGui::End();
 }
 
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins) {
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins, bool* show_chat) {
     if (!ImGui::BeginMenuBar()) {
         return;
     }
@@ -194,6 +194,10 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         if (show_plugins && ImGui::MenuItem("Plugins")) {
             *show_plugins = true;
+        }
+        ImGui::Separator();
+        if (show_chat && ImGui::MenuItem("AI Chat")) {
+            *show_chat = true;
         }
         ImGui::EndMenu();
     }

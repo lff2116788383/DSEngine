@@ -7,7 +7,7 @@ namespace dse::editor {
 
 void BeginEditorShell();
 void EndEditorShell();
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr);
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr, bool* show_chat = nullptr);
 
 /// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
 void DrawSceneTabBar(EditorContext& ctx);

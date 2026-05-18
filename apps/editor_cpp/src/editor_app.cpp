@@ -471,6 +471,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
 
+    // 初始化 AI Chat Panel bridge 路径
+    chat_panel_.SetBridgePath(
+        (GetProjectRootPath() / "tools" / "ai_chat_bridge.py").string());
+
     // 扫描插件目录
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
 
@@ -682,7 +686,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     };
 
     dse::editor::BeginEditorShell();
-    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_);
+    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_);
 
     if (!is_play) {
         dse::editor::DrawSceneTabBar(ctx);
@@ -718,6 +722,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Plugins", &show_plugins_panel_)) {
             dse::editor::DrawPluginManagerPanel(plugin_manager_);
+        }
+        ImGui::End();
+    }
+
+    // AI Chat 面板
+    if (show_chat_panel_) {
+        ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("AI Chat", &show_chat_panel_)) {
+            chat_panel_.Draw(*control_server_, *engine_instance_);
         }
         ImGui::End();
     }

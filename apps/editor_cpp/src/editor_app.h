@@ -12,6 +12,7 @@
 #include "editor_test_harness.h"
 #include "editor_control_server.h"
 #include "editor_plugin_manager.h"
+#include "editor_chat_panel.h"
 
 struct GLFWwindow;
 
@@ -63,6 +64,10 @@ private:
     // Plugin Manager
     PluginManager plugin_manager_;
     bool show_plugins_ = false;
+
+    // AI Chat Panel
+    ChatPanel chat_panel_;
+    bool show_chat_panel_ = false;
 
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};

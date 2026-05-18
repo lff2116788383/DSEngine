@@ -145,7 +145,7 @@
 | **国际化** | 多语言切换 + 参数预览 | ✅ 完整 |
 | **探针** | Light Probe + Reflection Probe 可视化 | ✅ 完整 |
 | **自动化** | headless + 快照对比 | ✅ 完整 |
-| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，15 个 Tool | ✅ 完整 |
+| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，23 个 Tool + 插件模板文档 | ✅ 完整 |
 | **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
 | **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
 
@@ -153,13 +153,13 @@
 
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
-| 🔴 P0 | Visual Shader Graph / 节点编辑器 | 可视化连线式 shader 编辑 |
+| � P2 | Visual Shader Graph / 节点编辑器 | DSSL 已覆盖 shader 自定义，Graph 仅面向非代码用户 |
 | 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具 |
 | 🟡 P1 | 物理碰撞体可视化编辑 | Scene 中直接调整碰撞体形状 |
 | 🟡 P1 | NavMesh 可视化烘焙 | 导航网格生成与预览 |
 | 🟢 P2 | Multi-viewport | ImGui 多视口（因 CRT 稳定性暂禁） |
 | 🟢 P2 | 蓝图/可视化脚本 | 节点式逻辑编辑 |
-| 🟢 P3 | AI 辅助 | ✅ Phase 1 已完成（Control Server + MCP），详见 AI_INTEGRATION.md |
+| � P1 | AI Chat Panel | 编辑器内建 AI 对话面板，🔧 Phase 3 进行中 |
 
 ---
 
@@ -210,4 +210,4 @@
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成，AI Control Server (18 个 Tool) 已全部实现。下一步可聚焦编辑器走 RHI、Phase 2 资产生成 Tool、或插件模板与文档。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成，AI Control Server (18 个 Tool) 已全部实现。下一步：AI Chat Panel (Phase 3 进行中)、编辑器走 RHI、碰撞体可视化编辑。

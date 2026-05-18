@@ -71,6 +71,11 @@ public:
     int GetPort() const { return port_; }
     int GetClientCount() const;
 
+    /// 本地调用 Tool handler（供 ChatPanel 等同进程组件使用，不走 WebSocket）
+    JsonRpcResponse DispatchTool(const std::string& method,
+                                  const rapidjson::Document& params,
+                                  dse::runtime::EngineInstance& engine);
+
 private:
     void EnqueueRequest(JsonRpcRequest request);
     void SendResponse(void* connection, const std::string& json);
