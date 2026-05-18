@@ -1292,3 +1292,69 @@ TEST_F(EditorFunctionalTest, SceneIO_RigidBody3DRoundTrip) {
     }
     EXPECT_TRUE(copy_found);
 }
+
+// ============================================================
+// Test 32: SceneIO UIAnchor 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UIAnchorRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "AnchorEnt");
+    auto& anchor = reg().emplace<UIAnchorComponent>(e);
+    anchor.anchor = 3;
+    anchor.offset = glm::vec2(10.0f, -5.0f);
+
+    const auto path = TempPath("dse_test_uianchor.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UIAnchorComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<UIAnchorComponent>(en);
+        EXPECT_EQ(r.anchor, 3);
+        EXPECT_NEAR(r.offset.x, 10.0f, 0.01f);
+        EXPECT_NEAR(r.offset.y, -5.0f, 0.01f);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 33: SceneIO 50 实体压力测试（无 ID 碰撞/无丢失）
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_MultiEntityStressTest) {
+    const int kCount = 50;
+    for (int i = 0; i < kCount; ++i) {
+        Entity e = world.CreateEntity();
+        reg().emplace<EditorNameComponent>(e, "StressEnt_" + std::to_string(i));
+        auto& t = reg().emplace<TransformComponent>(e);
+        t.position = glm::vec3(static_cast<float>(i), 0.0f, 0.0f);
+    }
+
+    const auto path = TempPath("dse_test_stress.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    EXPECT_EQ(dse::editor::test::CountAliveEntities(loaded), static_cast<size_t>(kCount));
+
+    int found_25 = 0;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<EditorNameComponent, TransformComponent>(en)) continue;
+        const auto& name = loaded.get<EditorNameComponent>(en).name;
+        if (name == "StressEnt_25") {
+            found_25++;
+            EXPECT_NEAR(loaded.get<TransformComponent>(en).position.x, 25.0f, 0.01f);
+        }
+    }
+    EXPECT_EQ(found_25, 1);
+    CleanupFile(path);
+}

@@ -38,6 +38,7 @@
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/audio.h"
 #include <glm/gtc/quaternion.hpp>
@@ -655,4 +656,61 @@ TEST_F(ControlServerTest, EntityAddComponent_添加PointLight成功) {
     const auto& pl = registry.get<PointLightComponent>(entity);
     EXPECT_NEAR(pl.intensity, 1.8f, 0.01f);
     EXPECT_NEAR(pl.radius, 15.0f, 0.01f);
+}
+
+TEST_F(ControlServerTest, EntityAddComponent_添加SpotLight成功) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SpotLightEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"SpotLight","properties":{"intensity":3.0,"inner_cone":20.0,"outer_cone":35.0}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<dse::SpotLightComponent>(entity));
+    const auto& sl = registry.get<dse::SpotLightComponent>(entity);
+    EXPECT_NEAR(sl.intensity, 3.0f, 0.01f);
+    EXPECT_NEAR(sl.inner_cone_angle, 20.0f, 0.01f);
+    EXPECT_NEAR(sl.outer_cone_angle, 35.0f, 0.01f);
+}
+
+TEST_F(ControlServerTest, EntityAddComponent_添加RigidBody3D成功) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RB3DEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"RigidBody3D","properties":{"mass":2.5,"body_type":"dynamic"}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<dse::RigidBody3DComponent>(entity));
+    const auto& rb = registry.get<dse::RigidBody3DComponent>(entity);
+    EXPECT_NEAR(rb.mass, 2.5f, 0.01f);
+    EXPECT_EQ(rb.type, dse::RigidBody3DType::Dynamic);
+}
+
+TEST_F(ControlServerTest, EntityAddComponent_添加SkyLight成功) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SkyLightEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) + R"(,"type":"SkyLight"})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    EXPECT_TRUE(registry.all_of<dse::SkyLightComponent>(entity));
 }

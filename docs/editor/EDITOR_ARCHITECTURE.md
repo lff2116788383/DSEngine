@@ -206,11 +206,11 @@
 
 | 文件 | 用例数 | 覆盖内容 |
 |------|--------|---------|
-| `editor_functional_test.cpp` | 34 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返 |
+| `editor_functional_test.cpp` | 36 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返、UIAnchor 往返、50 实体压力测试 |
 | `editor_selection_integration_test.cpp` | 11 | SelectionManager 单选/多选/切换/防重复添加/移除/多选→单选/移除不存在不崩溃/主实体/GetPrimary 返回最后添加/null 清空 |
-| `editor_control_server_test.cpp` | 51 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight）/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
+| `editor_control_server_test.cpp` | 54 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight/SpotLight/RigidBody3D/SkyLight）/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
 
-**总计：96 个集成测试用例，全部通过。**
+**总计：101 个集成测试用例，全部通过。**
 
 ### 测试基础设施
 
