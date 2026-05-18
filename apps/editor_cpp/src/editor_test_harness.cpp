@@ -37,6 +37,10 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
             config.verify_path = ExtractValue(arg, "--verify=");
         } else if (StartsWith(arg, "--scene=")) {
             config.scene_path = ExtractValue(arg, "--scene=");
+        } else if (StartsWith(arg, "--screenshot=")) {
+            config.screenshot_path = ExtractValue(arg, "--screenshot=");
+        } else if (StartsWith(arg, "--screenshot-frame=")) {
+            config.screenshot_frame = std::atoi(ExtractValue(arg, "--screenshot-frame="));
         } else if (StartsWith(arg, "--max-frames=")) {
             config.max_frames = std::atoi(ExtractValue(arg, "--max-frames="));
             if (config.max_frames <= 0) config.max_frames = 300;

@@ -42,6 +42,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include <stb/stb_image_write.h>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
@@ -486,9 +487,12 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
 void EditorApp::Run() {
     ImGuiIO& io = ImGui::GetIO();
+    int frame_counter = 0;
+    bool screenshot_taken = false;
 
     while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
+        ++frame_counter;
         cpu_profiler_.BeginFrame();
         render_profiler_.BeginFrame();
         memory_profiler_.Reset();
@@ -606,6 +610,42 @@ void EditorApp::Run() {
         }
 
         glfwSwapBuffers(window_);
+
+        // Auto-screenshot: 在指定帧或退出前最后一帧截图
+        if (!test_config_.screenshot_path.empty() && !screenshot_taken) {
+            bool should_capture = false;
+            if (test_config_.screenshot_frame >= 0 && frame_counter >= test_config_.screenshot_frame) {
+                should_capture = true;
+            } else if (test_config_.screenshot_frame < 0 && frames_remaining_ == 0) {
+                should_capture = true;
+            }
+            if (should_capture) {
+                auto readback = engine_instance_->pipeline()->ReadSceneColorRgba8WithSize();
+                if (!readback.pixels.empty() && readback.width > 0 && readback.height > 0) {
+                    if (engine_instance_->pipeline()->NeedsReadbackYFlip()) {
+                        const int stride = readback.width * 4;
+                        std::vector<unsigned char> row(stride);
+                        for (int y = 0; y < readback.height / 2; ++y) {
+                            unsigned char* top = readback.pixels.data() + y * stride;
+                            unsigned char* bot = readback.pixels.data() + (readback.height - 1 - y) * stride;
+                            std::memcpy(row.data(), top, stride);
+                            std::memcpy(top, bot, stride);
+                            std::memcpy(bot, row.data(), stride);
+                        }
+                    }
+                    std::filesystem::path ss_path(test_config_.screenshot_path);
+                    ss_path.parent_path().empty() || std::filesystem::create_directories(ss_path.parent_path());
+                    stbi_write_png(test_config_.screenshot_path.c_str(),
+                                   readback.width, readback.height, 4,
+                                   readback.pixels.data(), readback.width * 4);
+                    std::cout << "[EditorApp] Screenshot saved: " << test_config_.screenshot_path
+                              << " (" << readback.width << "x" << readback.height << ")" << std::endl;
+                } else {
+                    std::cerr << "[EditorApp] Screenshot FAILED: no framebuffer data" << std::endl;
+                }
+                screenshot_taken = true;
+            }
+        }
 
         render_profiler_.EndFrame();
         cpu_profiler_.EndFrame();

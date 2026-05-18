@@ -19,6 +19,8 @@ struct EditorTestConfig {
     std::string replay_path;            ///< --replay=<path.json>: 输入回放文件
     std::string verify_path;            ///< --verify=<path.json>: 期望快照文件
     std::string scene_path;             ///< --scene=<path>: 指定启动场景
+    std::string screenshot_path;         ///< --screenshot=<path>: 退出前截图保存路径
+    int screenshot_frame = -1;           ///< --screenshot-frame=<N>: 第 N 帧截图（-1 表示最后一帧）
     int max_frames = 300;               ///< --max-frames=<N>: 自动退出帧数
 };
 
