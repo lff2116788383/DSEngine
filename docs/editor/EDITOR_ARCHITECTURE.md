@@ -197,6 +197,40 @@
 
 ---
 
+## 六、测试覆盖
+
+> 测试目录：`tests/gtest/integration/editor/`
+> 所有测试均为无头（headless）模式，不依赖 GPU / ImGui / GLFW。
+
+### 测试文件一览
+
+| 文件 | 用例数 | 覆盖内容 |
+|------|--------|---------|
+| `editor_functional_test.cpp` | 15 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪（max_history trim）、SaveScene/LoadScene 全组件往返、Camera3D+MeshRenderer 往返、Prefab 导入导出、SceneTabManager 多标签、CLI 参数解析、RegistrySnapshot 导出/对比、实体数差异检测、CopyRegistry |
+| `editor_selection_integration_test.cpp` | 8 | SelectionManager 单选/多选/切换/Ctrl+Click/Shift+Click/批量移除/主实体 |
+| `editor_control_server_test.cpp` | 47 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify/add_component/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
+
+**总计：70 个集成测试用例，全部通过。**
+
+### 测试基础设施
+
+| 文件 | 作用 |
+|------|------|
+| `editor_test_stubs.cpp` | 无头桩实现：UndoRedoManager 单例、GetCurrentScenePath/SetCurrentScenePath、EditorLog、editor_toolbar 全部函数（GetEditorState/EnterPlayMode/ExitPlayMode 等） |
+| `editor_test_harness.cpp` | CLI 参数解析、headless 测试入口 |
+| `editor_snapshot.cpp` | Registry 快照导出 / JSON 差异对比 |
+
+### 未覆盖（需 GPU / ImGui）
+
+| 模块 | 原因 |
+|------|------|
+| Viewport / Gizmo / Color-ID 拾取 | 依赖 OpenGL FBO |
+| Inspector 属性绘制 | 依赖 ImGui 渲染循环 |
+| Play 模式 Registry 备份/恢复 | 依赖完整 EngineInstance::Init() |
+| 地形雕刻 / Splat Map | 依赖 GPU 纹理写入 |
+
+---
+
 ## 五、方案评估
 
 ### 与其他方案对比

@@ -552,3 +552,111 @@ TEST_F(EditorFunctionalTest, CopyRegistryRoundTrip) {
     }
     EXPECT_TRUE(found);
 }
+
+// ============================================================
+// Test 10: UndoRedo max-history trim
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedoMaxHistoryTrim) {
+    dse::editor::UndoRedoManager undo_mgr(3);  // 最多保留 3 步
+
+    int value = 0;
+    for (int i = 1; i <= 5; ++i) {
+        undo_mgr.Execute(std::make_unique<dse::editor::PropertyChangeCommand<int>>(
+            "Set " + std::to_string(i), value, i,
+            [&value](const int& v) { value = v; }));
+    }
+
+    // 执行了 5 条，但上限 3，undo 栈只剩最新 3 条
+    EXPECT_EQ(undo_mgr.GetUndoCount(), 3);
+    EXPECT_EQ(value, 5);
+
+    // 撤销 3 步后应回到第 2 条命令执行后的状态 (value=2)
+    EXPECT_TRUE(undo_mgr.Undo());  // 5→4
+    EXPECT_TRUE(undo_mgr.Undo());  // 4→3
+    EXPECT_TRUE(undo_mgr.Undo());  // 3→2
+    EXPECT_EQ(value, 2);
+    EXPECT_FALSE(undo_mgr.CanUndo());  // 最旧两条已被丢弃
+}
+
+// ============================================================
+// Test 11: SceneIO Camera3D + MeshRenderer roundtrip
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_Camera3DAndMeshRendererRoundTrip) {
+    // 创建带 Camera3D 和 MeshRenderer 的实体
+    Entity cam_e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(cam_e, "MainCamera");
+    reg().emplace<TransformComponent>(cam_e).position = glm::vec3(0.f, 10.f, -20.f);
+    auto& cam = reg().emplace<Camera3DComponent>(cam_e);
+    cam.fov = 75.0f;
+    cam.near_clip = 0.1f;
+    cam.far_clip = 500.0f;
+
+    Entity mesh_e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(mesh_e, "MeshObj");
+    reg().emplace<TransformComponent>(mesh_e);
+    auto& mr = reg().emplace<MeshRendererComponent>(mesh_e);
+    mr.mesh_path = "assets/cube.dmesh";
+    mr.receive_shadow = false;
+
+    const auto path = TempPath("dse_test_3d_components.dscene");
+    SaveScene(reg(), path.string());
+    ASSERT_TRUE(std::filesystem::exists(path));
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+
+    // 统计
+    size_t count = dse::editor::test::CountAliveEntities(loaded);
+    EXPECT_EQ(count, 2u);
+
+    bool found_cam = false, found_mesh = false;
+    for (auto e : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(e)) continue;
+        if (!loaded.all_of<EditorNameComponent>(e)) continue;
+        const auto& name = loaded.get<EditorNameComponent>(e).name;
+        if (name == "MainCamera") {
+            found_cam = true;
+            ASSERT_TRUE(loaded.all_of<Camera3DComponent>(e));
+            EXPECT_NEAR(loaded.get<Camera3DComponent>(e).fov, 75.0f, 0.01f);
+            EXPECT_NEAR(loaded.get<Camera3DComponent>(e).far_clip, 500.0f, 0.01f);
+        } else if (name == "MeshObj") {
+            found_mesh = true;
+            ASSERT_TRUE(loaded.all_of<MeshRendererComponent>(e));
+            EXPECT_EQ(loaded.get<MeshRendererComponent>(e).mesh_path, "assets/cube.dmesh");
+            EXPECT_FALSE(loaded.get<MeshRendererComponent>(e).receive_shadow);
+        }
+    }
+    EXPECT_TRUE(found_cam);
+    EXPECT_TRUE(found_mesh);
+
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 12: Snapshot entity-count mismatch detection
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SnapshotEntityCountMismatch) {
+    Entity e1 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e1, "Alpha");
+    reg().emplace<TransformComponent>(e1).position = glm::vec3(1.f, 0.f, 0.f);
+
+    std::string snap1 = dse::editor::test::ExportRegistrySnapshot(reg());
+
+    // 添加第二个实体
+    Entity e2 = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e2, "Beta");
+    reg().emplace<TransformComponent>(e2).position = glm::vec3(2.f, 0.f, 0.f);
+
+    std::string snap2 = dse::editor::test::ExportRegistrySnapshot(reg());
+
+    // snap2(2 实体) vs snap1(1 实体) 应检测到差异
+    auto diffs = dse::editor::test::CompareSnapshot(snap2, snap1);
+    EXPECT_FALSE(diffs.empty()) << "实体数不同应有差异";
+
+    // snap1(1 实体) 与自身比较应无差异
+    auto self_diffs = dse::editor::test::CompareSnapshot(snap1, snap1);
+    EXPECT_TRUE(self_diffs.empty());
+}
