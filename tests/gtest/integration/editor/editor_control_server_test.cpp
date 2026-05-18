@@ -714,3 +714,46 @@ TEST_F(ControlServerTest, EntityAddComponent_添加SkyLight成功) {
     auto entity = static_cast<entt::entity>(eid);
     EXPECT_TRUE(registry.all_of<dse::SkyLightComponent>(entity));
 }
+
+TEST_F(ControlServerTest, EntityAddComponent_Camera3D_NearFarClip) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"CamNearFar"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"Camera3D","properties":{"fov":45.0,"near":0.2,"far":2000.0}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<dse::Camera3DComponent>(entity));
+    const auto& cam = registry.get<dse::Camera3DComponent>(entity);
+    EXPECT_NEAR(cam.fov, 45.0f, 0.01f);
+    EXPECT_FLOAT_EQ(cam.near_clip, 0.2f);
+    EXPECT_FLOAT_EQ(cam.far_clip, 2000.0f);
+}
+
+TEST_F(ControlServerTest, EntityAddComponent_BoxCollider3D_WithProps) {
+    auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"ColliderEnt"})");
+    ASSERT_FALSE(create_resp.is_error);
+    uint32_t eid = create_resp.result["entity_id"].GetUint();
+
+    std::string params =
+        R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"BoxCollider3D","properties":{"size":[2.0,3.0,1.5],"is_trigger":true}})";
+    auto resp = Dispatch("dsengine_entity_add_component", params.c_str());
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result["added"].GetBool());
+
+    auto& registry = world_.registry();
+    auto entity = static_cast<entt::entity>(eid);
+    ASSERT_TRUE(registry.all_of<dse::BoxCollider3DComponent>(entity));
+    const auto& bc = registry.get<dse::BoxCollider3DComponent>(entity);
+    EXPECT_NEAR(bc.size.x, 2.0f, 0.01f);
+    EXPECT_NEAR(bc.size.y, 3.0f, 0.01f);
+    EXPECT_NEAR(bc.size.z, 1.5f, 0.01f);
+    EXPECT_TRUE(bc.is_trigger);
+}

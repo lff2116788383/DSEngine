@@ -1358,3 +1358,138 @@ TEST_F(EditorFunctionalTest, SceneIO_MultiEntityStressTest) {
     EXPECT_EQ(found_25, 1);
     CleanupFile(path);
 }
+
+// ============================================================
+// Test 34: SceneIO Skybox 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SkyboxRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "SkyboxEnt");
+    auto& sb = reg().emplace<dse::SkyboxComponent>(e);
+    sb.cubemap_path = "assets/sky_night.dcubemap";
+    sb.enabled = true;
+
+    const auto path = TempPath("dse_test_skybox.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::SkyboxComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::SkyboxComponent>(en);
+        EXPECT_EQ(r.cubemap_path, "assets/sky_night.dcubemap");
+        EXPECT_TRUE(r.enabled);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 35: SceneIO UIGridLayout 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UIGridLayoutRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "GridLayoutEnt");
+    auto& grid = reg().emplace<UIGridLayoutComponent>(e);
+    grid.columns = 4;
+    grid.rows = 2;
+    grid.cell_size = glm::vec2(120.0f, 80.0f);
+    grid.spacing = glm::vec2(8.0f, 6.0f);
+    grid.alignment = 1;
+
+    const auto path = TempPath("dse_test_uigrid.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UIGridLayoutComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<UIGridLayoutComponent>(en);
+        EXPECT_EQ(r.columns, 4);
+        EXPECT_EQ(r.rows, 2);
+        EXPECT_NEAR(r.cell_size.x, 120.0f, 0.01f);
+        EXPECT_NEAR(r.spacing.y, 6.0f, 0.01f);
+        EXPECT_EQ(r.alignment, 1);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 36: SceneTabManager CloseTab 行为
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneTabManager_CloseTab) {
+    auto& tab_mgr = dse::editor::SceneTabManager::Get();
+    tab_mgr.Init("Untitled");
+    EXPECT_EQ(tab_mgr.GetTabCount(), 1);
+
+    int tab1 = tab_mgr.NewScene(reg());
+    EXPECT_EQ(tab_mgr.GetTabCount(), 2);
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 1);
+
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Tab1Ent");
+
+    bool closed = tab_mgr.CloseTab(1, reg());
+    EXPECT_TRUE(closed);
+    EXPECT_EQ(tab_mgr.GetTabCount(), 1);
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 0);
+
+    bool reset = tab_mgr.CloseTab(0, reg());
+    EXPECT_FALSE(reset);
+    EXPECT_EQ(tab_mgr.GetTabCount(), 1);
+    EXPECT_EQ(tab_mgr.GetActiveIndex(), 0);
+    EXPECT_EQ(tab_mgr.GetActiveDisplayName(), "Untitled");
+
+    tab_mgr.Init("Untitled");
+}
+
+// ============================================================
+// Test 37: UndoRedo + SaveScene 非破坏性集成测试
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_SaveScene_NonDestructive) {
+    Entity e = world.CreateEntity();
+    auto& name_comp = reg().emplace<EditorNameComponent>(e, "OriginalName");
+
+    dse::editor::UndoRedoManager undo_mgr;
+    auto cmd = std::make_unique<dse::editor::PropertyChangeCommand<std::string>>(
+        "Rename",
+        std::string("OriginalName"), std::string("ModifiedName"),
+        [&name_comp](const std::string& v) { name_comp.name = v; }
+    );
+    undo_mgr.Execute(std::move(cmd));
+    EXPECT_EQ(name_comp.name, "ModifiedName");
+
+    const auto path = TempPath("dse_test_undo_save.dscene");
+    SaveScene(reg(), path.string());
+
+    undo_mgr.Undo();
+    EXPECT_EQ(name_comp.name, "OriginalName");
+
+    entt::registry saved;
+    LoadScene(saved, path.string());
+    bool found_modified = false;
+    for (auto en : saved.storage<entt::entity>()) {
+        if (!saved.valid(en)) continue;
+        if (!saved.all_of<EditorNameComponent>(en)) continue;
+        if (saved.get<EditorNameComponent>(en).name == "ModifiedName") {
+            found_modified = true;
+        }
+    }
+    EXPECT_TRUE(found_modified);
+    CleanupFile(path);
+}
