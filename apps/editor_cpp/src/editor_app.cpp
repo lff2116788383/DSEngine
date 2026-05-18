@@ -163,7 +163,7 @@ void ExportTextFile(const std::filesystem::path& path, const std::string& conten
 
 // UI Layout Inspector (passed as callback to DrawInspectorPanel)
 void DrawUILayoutInspector(entt::registry& registry, entt::entity entity) {
-    const bool read_only = GetEditorState() == EditorState::Play;
+    const bool read_only = dse::editor::GetEditorState() == dse::editor::EditorState::Play;
 
     if (registry.all_of<UIAnchorComponent>(entity)) {
         if (ImGui::CollapsingHeader(MDI_ICON_IMAGE "  UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -508,7 +508,7 @@ void EditorApp::Run() {
         plugin_manager_.PollStatus();
 
         // Update editor camera (Edit mode only)
-        if (GetEditorState() == EditorState::Edit) {
+        if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
             int fb_w, fb_h;
             glfwGetFramebufferSize(window_, &fb_w, &fb_h);
             float aspect = (fb_h > 0) ? static_cast<float>(fb_w) / static_cast<float>(fb_h) : 1.7777f;
@@ -523,7 +523,7 @@ void EditorApp::Run() {
         // Tick Engine
         {
             dse::profiler::ScopedCPUProfile scope(g_cpu_profiler, "EngineTick");
-            if (GetEditorState() == EditorState::Edit) {
+            if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
                 Time::Update();
                 dse::runtime::PumpLuaScriptHotReloads();
                 engine_instance_->pipeline()->Render();
@@ -580,9 +580,9 @@ void EditorApp::Run() {
             std::string title = "DSEngine Editor - " + scene_name;
             if (tab_mgr.GetActiveTab().dirty) title += " *";
             if (tab_count > 1) title += " [" + std::to_string(tab_mgr.GetActiveIndex() + 1) + "/" + std::to_string(tab_count) + "]";
-            if (GetEditorState() == EditorState::Play) {
+            if (dse::editor::GetEditorState() == dse::editor::EditorState::Play) {
                 title += " [PLAYING]";
-            } else if (GetEditorState() == EditorState::Pause) {
+            } else if (dse::editor::GetEditorState() == dse::editor::EditorState::Pause) {
                 title += " [PAUSED]";
             }
             glfwSetWindowTitle(window_, title.c_str());
@@ -663,9 +663,9 @@ void EditorApp::Shutdown() {
 void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_texture) {
     World& world = engine_instance_->pipeline()->world();
     auto& registry = world.registry();
-    const bool is_play = (GetEditorState() == EditorState::Play);
+    const bool is_play = (dse::editor::GetEditorState() == dse::editor::EditorState::Play);
 
-    if (static_cast<int>(last_editor_state_) != static_cast<int>(GetEditorState()) && GetEditorState() == EditorState::Edit) {
+    if (static_cast<int>(last_editor_state_) != static_cast<int>(dse::editor::GetEditorState()) && dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
         selected_entity_ = entt::null;
         inspector_active_ = true;
         inspector_static_ = false;
@@ -677,7 +677,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         std::strncpy(localization_preview_fallback_, "Language: {lang}", sizeof(localization_preview_fallback_) - 1);
         localization_preview_fallback_[sizeof(localization_preview_fallback_) - 1] = '\0';
     }
-    last_editor_state_ = static_cast<int>(GetEditorState());
+    last_editor_state_ = static_cast<int>(dse::editor::GetEditorState());
 
     // ─── 统一上下文 ─────────────────────────────────────────────────────────
     dse::editor::EditorContext ctx{
@@ -697,7 +697,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::ProcessShortcuts(ctx);
 
-    DrawEditorToolbar(ctx);
+    dse::editor::DrawEditorToolbar(ctx);
 
     dse::editor::DrawHierarchyPanel(ctx);
 

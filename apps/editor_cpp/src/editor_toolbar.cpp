@@ -22,6 +22,8 @@ std::vector<std::string> g_editor_languages;
 int g_editor_language_index = 0;
 std::unique_ptr<entt::registry> g_backup_registry;
 
+namespace dse::editor {
+
 void MarkAllUILabelsDirty(entt::registry& registry) {
     auto view = registry.view<UILabelComponent>();
     for (auto entity : view) {
@@ -68,12 +70,12 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
         g_backup_registry.reset();
     }
     MarkAllUILabelsDirty(registry);
-    dse::editor::ResetProfilerPanelState();
+    ResetProfilerPanelState();
     selected_entity = entt::null;
     g_editor_state = EditorState::Edit;
 }
 
-void DrawEditorToolbar(dse::editor::EditorContext& ctx) {
+void DrawEditorToolbar(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto& selected_entity = ctx.selected_entity;
 
@@ -161,3 +163,5 @@ void DrawEditorToolbar(dse::editor::EditorContext& ctx) {
     ImGui::End();
     ImGui::PopStyleVar();
 }
+
+} // namespace dse::editor

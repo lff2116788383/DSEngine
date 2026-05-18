@@ -96,8 +96,8 @@ static JsonRpcResponse HandleSceneGetState(
 
     result.AddMember("editor_state",
         rapidjson::Value(
-            GetEditorState() == EditorState::Play ? "play" :
-            GetEditorState() == EditorState::Pause ? "pause" : "edit",
+            dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
+            dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit",
             alloc),
         alloc);
 
@@ -495,8 +495,8 @@ static JsonRpcResponse HandleEditorGetState(
     auto& alloc = result.GetAllocator();
 
     const char* state_str =
-        GetEditorState() == EditorState::Play ? "play" :
-        GetEditorState() == EditorState::Pause ? "pause" : "edit";
+        dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
+        dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
     result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
     result.AddMember("entity_count",
         static_cast<int>(registry.storage<entt::entity>().size()), alloc);
@@ -522,12 +522,12 @@ static JsonRpcResponse HandleEditorPlay(
     const rapidjson::Document& /*params*/,
     dse::runtime::EngineInstance& engine) {
 
-    if (GetEditorState() != EditorState::Edit) {
+    if (dse::editor::GetEditorState() != dse::editor::EditorState::Edit) {
         return MakeToolError(-32603, "Already in play/pause mode");
     }
 
     auto& registry = engine.pipeline()->world().registry();
-    EnterPlayMode(registry);
+    dse::editor::EnterPlayMode(registry);
 
     rapidjson::Document result;
     result.SetObject();
@@ -542,13 +542,13 @@ static JsonRpcResponse HandleEditorStop(
     const rapidjson::Document& /*params*/,
     dse::runtime::EngineInstance& engine) {
 
-    if (GetEditorState() == EditorState::Edit) {
+    if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
         return MakeToolError(-32603, "Not in play mode");
     }
 
     auto& registry = engine.pipeline()->world().registry();
     entt::entity dummy = entt::null;
-    ExitPlayMode(registry, dummy);
+    dse::editor::ExitPlayMode(registry, dummy);
 
     rapidjson::Document result;
     result.SetObject();
