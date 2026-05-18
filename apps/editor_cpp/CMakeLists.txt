@@ -5,6 +5,7 @@ endif()
 
 add_executable(dse_editor_cpp WIN32
     src/main.cpp
+    src/editor_app.cpp
     src/editor_aux_panels.cpp
     src/editor_console_panel.cpp
     src/editor_file_dialog.cpp
