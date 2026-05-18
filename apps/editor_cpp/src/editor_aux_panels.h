@@ -1,29 +1,19 @@
 #pragma once
 
 #include <filesystem>
-#include <entt/entt.hpp>
-
+#include "editor_context.h"
 #include "editor_shared_components.h"
 
 struct UILabelComponent;
 
 namespace dse::editor {
 
-struct EditorAuxPanelsContext {
-    entt::registry& registry;
-    entt::entity selected_entity;
-    bool is_2d = false;
-    bool read_only = false;
-    char* localization_preview_key = nullptr;
-    std::size_t localization_preview_key_size = 0;
-    char* localization_preview_fallback = nullptr;
-    std::size_t localization_preview_fallback_size = 0;
-};
-
 void DrawProjectPanel();
 void DrawConsolePanel();
-void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context);
+void DrawLocalizationPreviewPanel(EditorContext& ctx,
+                                  char* key_buf, std::size_t key_size,
+                                  char* fallback_buf, std::size_t fallback_size);
 void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity);
-void DrawTilePalettePanel(const EditorAuxPanelsContext& context);
+void DrawTilePalettePanel(EditorContext& ctx);
 
 } // namespace dse::editor

@@ -684,46 +684,36 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         *engine_instance_, world, registry, selected_entity_,
         is_play, is_2d_,
         g_cpu_profiler, g_memory_profiler, g_render_profiler,
+        inspector_active_, inspector_static_,
         g_current_gizmo_operation, g_current_gizmo_mode
     };
 
     dse::editor::BeginEditorShell();
-    dse::editor::EditorShellContext shell_context{ctx.engine, ctx.registry, ctx.selected_entity, ctx.read_only, &show_preferences_, &show_plugins_panel_};
-    dse::editor::DrawEditorMainMenu(shell_context);
+    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_);
 
     if (!is_play) {
         dse::editor::DrawSceneTabBar(ctx.registry);
     }
 
-    dse::editor::ShortcutContext shortcut_ctx{ctx.world, ctx.registry, ctx.selected_entity, ctx.read_only};
-    dse::editor::ProcessShortcuts(shortcut_ctx);
+    dse::editor::ProcessShortcuts(ctx);
 
     DrawEditorToolbar(ctx.engine, ctx.registry, ctx.selected_entity);
 
-    dse::editor::EditorHierarchyPanelContext hierarchy_context{ctx.world, ctx.registry, ctx.selected_entity, ctx.read_only};
-    dse::editor::DrawHierarchyPanel(hierarchy_context);
+    dse::editor::DrawHierarchyPanel(ctx);
 
-    dse::editor::EditorInspectorPanelContext inspector_context{
-        ctx.registry, ctx.selected_entity, ctx.is_2d,
-        inspector_active_, inspector_static_, ctx.read_only
-    };
-    dse::editor::DrawInspectorPanel(inspector_context, DrawUILayoutInspector);
+    dse::editor::DrawInspectorPanel(ctx, DrawUILayoutInspector);
 
     dse::editor::DrawProjectPanel();
     dse::editor::DrawConsolePanel();
 
-    dse::editor::EditorAuxPanelsContext aux_panels_context{
-        ctx.registry, ctx.selected_entity, ctx.is_2d, ctx.read_only,
+    dse::editor::DrawLocalizationPreviewPanel(ctx,
         localization_preview_key_, sizeof(localization_preview_key_),
-        localization_preview_fallback_, sizeof(localization_preview_fallback_)
-    };
-    dse::editor::DrawLocalizationPreviewPanel(aux_panels_context);
+        localization_preview_fallback_, sizeof(localization_preview_fallback_));
 
-    dse::editor::EditorProfilerContext profiler_context{ctx.cpu_profiler, ctx.memory_profiler, ctx.render_profiler};
-    dse::editor::DrawProfilerPanel(profiler_context);
+    dse::editor::DrawProfilerPanel(ctx);
     dse::editor::DrawAnimationPanel(ctx.registry, ctx.selected_entity);
     dse::editor::DrawMaterialPanel(ctx.registry, ctx.selected_entity);
-    dse::editor::DrawTilePalettePanel(aux_panels_context);
+    dse::editor::DrawTilePalettePanel(ctx);
     dse::editor::DrawTerrainEditorPanel(ctx.registry, ctx.selected_entity);
     dse::editor::DrawLuaConsolePanel();
     dse::editor::DrawBuildGameDialog();
@@ -739,12 +729,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::End();
     }
 
-    dse::editor::EditorViewportPanelContext scene_viewport_context{ctx.registry, ctx.selected_entity, scene_texture};
-    dse::editor::DrawSceneViewportPanel(scene_viewport_context, ctx.current_gizmo_operation, ctx.current_gizmo_mode, BuildActiveCameraMatrices);
+    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices);
     dse::editor::DrawGameViewportPanel(game_texture);
 
-    dse::editor::EditorStatusBarContext status_bar_context{ctx.cpu_profiler, ctx.render_profiler, ctx.registry, ctx.current_gizmo_operation, ctx.current_gizmo_mode};
-    dse::editor::DrawStatusBar(status_bar_context);
+    dse::editor::DrawStatusBar(ctx);
 
     dse::editor::EndEditorShell();
 }

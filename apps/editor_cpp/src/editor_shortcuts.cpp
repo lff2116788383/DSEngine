@@ -24,7 +24,7 @@ namespace dse::editor {
 namespace {
 
 /// Duplicate the currently selected entity (mirrors Hierarchy panel logic)
-void DuplicateSelectedEntity(ShortcutContext& context) {
+void DuplicateSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
     }
@@ -111,7 +111,7 @@ void DuplicateSelectedEntity(ShortcutContext& context) {
 }
 
 /// Delete the currently selected entity
-void DeleteSelectedEntity(ShortcutContext& context) {
+void DeleteSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
     }
@@ -126,7 +126,7 @@ UndoRedoManager& GetUndoRedoManager() {
     return instance;
 }
 
-void ProcessShortcuts(ShortcutContext& context) {
+void ProcessShortcuts(EditorContext& context) {
     // Don't process shortcuts when a text input is active
     if (ImGui::GetIO().WantTextInput) {
         return;

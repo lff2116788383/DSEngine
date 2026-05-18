@@ -36,7 +36,7 @@ namespace {
     code; \
     ImGui::NextColumn();
 
-bool IsInspectorReadOnly(const EditorInspectorPanelContext& context) {
+bool IsInspectorReadOnly(const EditorContext& context) {
     return IsEditorInPlayMode() && !context.is_2d;
 }
 
@@ -126,13 +126,13 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
     return changed;
 }
 
-void BeginInspectorReadOnlyScope(const EditorInspectorPanelContext& context) {
+void BeginInspectorReadOnlyScope(const EditorContext& context) {
     if (IsInspectorReadOnly(context)) {
         ImGui::BeginDisabled(true);
     }
 }
 
-void EndInspectorReadOnlyScope(const EditorInspectorPanelContext& context) {
+void EndInspectorReadOnlyScope(const EditorContext& context) {
     if (IsInspectorReadOnly(context)) {
         ImGui::EndDisabled();
     }
@@ -151,7 +151,7 @@ void MarkParticleEmitterDirty(ParticleEmitterComponent& emitter) {
     emitter.pending_burst = 0;
 }
 
-void DrawInspectorHeader(EditorInspectorPanelContext& context) {
+void DrawInspectorHeader(EditorContext& context) {
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.18f, 0.18f, 0.22f, 1.0f));
     ImGui::AlignTextToFramePadding();
     ImGui::Checkbox("##Active", &context.inspector_active);
@@ -179,7 +179,7 @@ void DrawInspectorHeader(EditorInspectorPanelContext& context) {
     ImGui::Separator();
 }
 
-void DrawTransformSection(EditorInspectorPanelContext& context) {
+void DrawTransformSection(EditorContext& context) {
     if (!context.registry.all_of<TransformComponent>(context.selected_entity)) {
         return;
     }
@@ -323,7 +323,7 @@ void DrawTransformSection(EditorInspectorPanelContext& context) {
     ImGui::PopID();
 }
 
-void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
+void DrawSpriteRendererSection(EditorContext& context) {
     if (!context.registry.all_of<SpriteRendererComponent>(context.selected_entity)) {
         return;
     }
@@ -363,7 +363,7 @@ void DrawSpriteRendererSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawRigidBody2DSection(EditorInspectorPanelContext& context) {
+void DrawRigidBody2DSection(EditorContext& context) {
     if (!context.registry.all_of<RigidBody2DComponent>(context.selected_entity)) {
         return;
     }
@@ -396,7 +396,7 @@ void DrawRigidBody2DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
+void DrawMeshRendererSection(EditorContext& context) {
     if (!context.registry.all_of<dse::MeshRendererComponent>(context.selected_entity)) {
         return;
     }
@@ -451,7 +451,7 @@ void DrawMeshRendererSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawCamera3DSection(EditorInspectorPanelContext& context) {
+void DrawCamera3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::Camera3DComponent>(context.selected_entity)) {
         return;
     }
@@ -481,7 +481,7 @@ void DrawCamera3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawDirectionalLightSection(EditorInspectorPanelContext& context) {
+void DrawDirectionalLightSection(EditorContext& context) {
     if (!context.registry.all_of<dse::DirectionalLight3DComponent>(context.selected_entity)) {
         return;
     }
@@ -511,7 +511,7 @@ void DrawDirectionalLightSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawPointLightSection(EditorInspectorPanelContext& context) {
+void DrawPointLightSection(EditorContext& context) {
     if (!context.registry.all_of<dse::PointLightComponent>(context.selected_entity)) {
         return;
     }
@@ -542,7 +542,7 @@ void DrawPointLightSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawSpotLightSection(EditorInspectorPanelContext& context) {
+void DrawSpotLightSection(EditorContext& context) {
     if (!context.registry.all_of<dse::SpotLightComponent>(context.selected_entity)) {
         return;
     }
@@ -582,7 +582,7 @@ void DrawSpotLightSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawSkyLightSection(EditorInspectorPanelContext& context) {
+void DrawSkyLightSection(EditorContext& context) {
     if (!context.registry.all_of<dse::SkyLightComponent>(context.selected_entity)) {
         return;
     }
@@ -609,7 +609,7 @@ void DrawSkyLightSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawSkyboxSection(EditorInspectorPanelContext& context) {
+void DrawSkyboxSection(EditorContext& context) {
     if (!context.registry.all_of<dse::SkyboxComponent>(context.selected_entity)) {
         return;
     }
@@ -640,7 +640,7 @@ void DrawSkyboxSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
+void DrawAnimator3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::Animator3DComponent>(context.selected_entity)) {
         return;
     }
@@ -757,7 +757,7 @@ void DrawAnimator3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawFreeCameraControllerSection(EditorInspectorPanelContext& context) {
+void DrawFreeCameraControllerSection(EditorContext& context) {
     if (!context.registry.all_of<dse::FreeCameraControllerComponent>(context.selected_entity)) {
         return;
     }
@@ -779,7 +779,7 @@ void DrawFreeCameraControllerSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawTerrainSection(EditorInspectorPanelContext& context) {
+void DrawTerrainSection(EditorContext& context) {
     if (!context.registry.all_of<dse::TerrainComponent>(context.selected_entity)) {
         return;
     }
@@ -838,7 +838,7 @@ void DrawTerrainSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawUILabelSection(EditorInspectorPanelContext& context) {
+void DrawUILabelSection(EditorContext& context) {
     if (!context.registry.all_of<UILabelComponent>(context.selected_entity)) {
         return;
     }
@@ -938,7 +938,7 @@ void DrawUILabelSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
+void DrawParticleEmitterSection(EditorContext& context) {
     if (!context.registry.all_of<ParticleEmitterComponent>(context.selected_entity)) {
         return;
     }
@@ -1013,7 +1013,7 @@ void DrawParticleEmitterSection(EditorInspectorPanelContext& context) {
     ImGui::TextDisabled("Active Particles: %d", static_cast<int>(emitter.particles.size()));
 }
 
-void DrawRigidBody3DSection(EditorInspectorPanelContext& context) {
+void DrawRigidBody3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::RigidBody3DComponent>(context.selected_entity)) {
         return;
     }
@@ -1040,7 +1040,7 @@ void DrawRigidBody3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawBoxCollider3DSection(EditorInspectorPanelContext& context) {
+void DrawBoxCollider3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::BoxCollider3DComponent>(context.selected_entity)) {
         return;
     }
@@ -1062,7 +1062,7 @@ void DrawBoxCollider3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawSphereCollider3DSection(EditorInspectorPanelContext& context) {
+void DrawSphereCollider3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::SphereCollider3DComponent>(context.selected_entity)) {
         return;
     }
@@ -1084,7 +1084,7 @@ void DrawSphereCollider3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawParticleSystem3DSection(EditorInspectorPanelContext& context) {
+void DrawParticleSystem3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::ParticleSystem3DComponent>(context.selected_entity)) {
         return;
     }
@@ -1121,7 +1121,7 @@ void DrawParticleSystem3DSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawPostProcessSection(EditorInspectorPanelContext& context) {
+void DrawPostProcessSection(EditorContext& context) {
     if (!context.registry.all_of<dse::PostProcessComponent>(context.selected_entity)) {
         return;
     }
@@ -1156,7 +1156,7 @@ void DrawPostProcessSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawLightProbeSection(EditorInspectorPanelContext& context) {
+void DrawLightProbeSection(EditorContext& context) {
     if (!context.registry.all_of<dse::LightProbeComponent>(context.selected_entity)) {
         return;
     }
@@ -1187,7 +1187,7 @@ void DrawLightProbeSection(EditorInspectorPanelContext& context) {
     ImGui::Columns(1);
 }
 
-void DrawReflectionProbeSection(EditorInspectorPanelContext& context) {
+void DrawReflectionProbeSection(EditorContext& context) {
     if (!context.registry.all_of<dse::ReflectionProbeComponent>(context.selected_entity)) {
         return;
     }
@@ -1366,7 +1366,7 @@ void RegisterAllInspectorSections() {
 
 // ─── InspectorRegistry 方法实现 ─────────────────────────────────────────────
 
-void InspectorRegistry::DrawAll(EditorInspectorPanelContext& context) {
+void InspectorRegistry::DrawAll(EditorContext& context) {
     for (const auto& entry : GetEntries()) {
         if (entry.draw) {
             entry.draw(context);
@@ -1374,7 +1374,7 @@ void InspectorRegistry::DrawAll(EditorInspectorPanelContext& context) {
     }
 }
 
-void InspectorRegistry::DrawAddComponentMenu(EditorInspectorPanelContext& context) {
+void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
     const bool read_only = IsEditorInPlayMode() && !context.is_2d;
     ImGui::Separator();
     ImGui::Spacing();
@@ -1411,7 +1411,7 @@ void InspectorRegistry::DrawAddComponentMenu(EditorInspectorPanelContext& contex
 
 // ─── DrawInspectorPanel（注册表驱动） ────────────────────────────────────────
 
-void DrawInspectorPanel(EditorInspectorPanelContext& context,
+void DrawInspectorPanel(EditorContext& context,
                         void (*draw_ui_layout_inspector)(entt::registry&, entt::entity)) {
     RegisterAllInspectorSections();
 

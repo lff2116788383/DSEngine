@@ -1,26 +1,13 @@
 #pragma once
 
 #include <string>
-#include <entt/entt.hpp>
-
-namespace dse::runtime {
-class EngineInstance;
-}
+#include "editor_context.h"
 
 namespace dse::editor {
 
-struct EditorShellContext {
-    dse::runtime::EngineInstance& engine;
-    entt::registry& registry;
-    entt::entity& selected_entity;
-    bool read_only = false;
-    bool* show_preferences = nullptr;
-    bool* show_plugins = nullptr;
-};
-
 void BeginEditorShell();
 void EndEditorShell();
-void DrawEditorMainMenu(EditorShellContext& context);
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr);
 
 /// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
 void DrawSceneTabBar(entt::registry& registry);

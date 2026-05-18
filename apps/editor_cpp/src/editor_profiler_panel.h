@@ -1,18 +1,10 @@
 #pragma once
 
-#include "engine/profiler/cpu_profiler.h"
-#include "engine/profiler/memory_profiler.h"
-#include "engine/profiler/render_profiler.h"
+#include "editor_context.h"
 
 namespace dse::editor {
 
-struct EditorProfilerContext {
-    dse::profiler::CPUProfiler& cpu_profiler;
-    dse::profiler::MemoryProfiler& memory_profiler;
-    dse::profiler::RenderProfiler& render_profiler;
-};
-
 void ResetProfilerPanelState();
-void DrawProfilerPanel(EditorProfilerContext& context);
+void DrawProfilerPanel(EditorContext& ctx);
 
 } // namespace dse::editor

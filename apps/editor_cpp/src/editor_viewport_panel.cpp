@@ -508,10 +508,13 @@ void DrawSceneGizmo(ImDrawList* draw_list,
 
 } // namespace
 
-void DrawSceneViewportPanel(EditorViewportPanelContext& context,
-                            int& current_gizmo_operation,
-                            int current_gizmo_mode,
+void DrawSceneViewportPanel(EditorContext& ctx,
+                            unsigned int scene_texture_id,
                             bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&)) {
+    // 兼容旧引用名
+    auto& context = ctx;
+    int& current_gizmo_operation = ctx.current_gizmo_operation;
+    int current_gizmo_mode = ctx.current_gizmo_mode;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("Scene");
     ImVec2 scene_panel_size = ImGui::GetContentRegionAvail();
@@ -626,8 +629,8 @@ void DrawSceneViewportPanel(EditorViewportPanelContext& context,
     // Process editor camera input while Scene window is active
     ProcessEditorCameraInput(GetEditorCamera());
 
-    if (context.texture_id != 0) {
-        ImGui::Image((ImTextureID)(intptr_t)context.texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
+    if (scene_texture_id != 0) {
+        ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
 
         // Tilemap grid overlay + Terrain brush overlay
         {

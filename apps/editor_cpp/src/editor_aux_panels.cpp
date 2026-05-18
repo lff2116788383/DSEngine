@@ -355,38 +355,40 @@ void DrawConsolePanel() {
     DrawConsolePanelImpl();
 }
 
-void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {
+void DrawLocalizationPreviewPanel(EditorContext& ctx,
+                                  char* key_buf, std::size_t key_size,
+                                  char* fallback_buf, std::size_t fallback_size) {
     ImGui::Begin("Localization Preview");
     auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
     ImGui::Text("Current Language: %s", localization.GetCurrentLanguage().c_str());
-    if (context.read_only) {
+    if (ctx.read_only) {
         ImGui::BeginDisabled(true);
     }
-    ImGui::InputText("Preview Key", context.localization_preview_key, context.localization_preview_key_size);
-    ImGui::InputText("Fallback", context.localization_preview_fallback, context.localization_preview_fallback_size);
+    ImGui::InputText("Preview Key", key_buf, key_size);
+    ImGui::InputText("Fallback", fallback_buf, fallback_size);
 
     std::unordered_map<std::string, std::string> preview_params;
     preview_params["lang"] = localization.GetCurrentLanguage();
-    preview_params["entity"] = context.selected_entity == entt::null
+    preview_params["entity"] = ctx.selected_entity == entt::null
         ? std::string("None")
-        : std::to_string(static_cast<uint32_t>(context.selected_entity));
+        : std::to_string(static_cast<uint32_t>(ctx.selected_entity));
 
     const std::string preview_text = localization.GetTextWithParams(
-        context.localization_preview_key,
+        key_buf,
         preview_params,
-        context.localization_preview_fallback);
+        fallback_buf);
 
     ImGui::Separator();
     ImGui::TextWrapped("%s", preview_text.c_str());
 
-    if (context.selected_entity != entt::null &&
-        context.registry.valid(context.selected_entity) &&
-        context.registry.all_of<UILabelComponent>(context.selected_entity)) {
+    if (ctx.selected_entity != entt::null &&
+        ctx.registry.valid(ctx.selected_entity) &&
+        ctx.registry.all_of<UILabelComponent>(ctx.selected_entity)) {
         if (ImGui::Button("Apply To Selected UILabel")) {
-            auto& label = context.registry.get<UILabelComponent>(context.selected_entity);
+            auto& label = ctx.registry.get<UILabelComponent>(ctx.selected_entity);
             label.use_localization = true;
-            label.localization_key = context.localization_preview_key;
-            label.fallback_text = context.localization_preview_fallback;
+            label.localization_key = key_buf;
+            label.fallback_text = fallback_buf;
             label.localization_params = preview_params;
             label.dirty = true;
         }
@@ -394,7 +396,7 @@ void DrawLocalizationPreviewPanel(EditorAuxPanelsContext& context) {
         ImGui::TextDisabled("Select a UILabel entity to apply preview settings.");
     }
 
-    if (context.read_only) {
+    if (ctx.read_only) {
         ImGui::EndDisabled();
         ImGui::TextDisabled("Play 模式下已禁用本地化预览写入。请退出 Play 后应用到 UILabel。");
     }
@@ -590,8 +592,8 @@ void DrawAnimationPanel(entt::registry& registry, entt::entity selected_entity) 
     ImGui::End();
 }
 
-void DrawTilePalettePanel(const EditorAuxPanelsContext& context) {
-    DrawTilemapEditorPanel(context.registry, context.selected_entity);
+void DrawTilePalettePanel(EditorContext& ctx) {
+    DrawTilemapEditorPanel(ctx.registry, ctx.selected_entity);
 }
 
 } // namespace dse::editor

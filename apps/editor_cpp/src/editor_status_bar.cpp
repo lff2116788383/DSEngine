@@ -6,7 +6,7 @@
 
 namespace dse::editor {
 
-void DrawStatusBar(EditorStatusBarContext& context) {
+void DrawStatusBar(EditorContext& context) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float status_bar_height = 24.0f;
 

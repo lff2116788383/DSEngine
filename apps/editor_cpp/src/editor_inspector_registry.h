@@ -7,12 +7,12 @@
 
 namespace dse::editor {
 
-struct EditorInspectorPanelContext;
+struct EditorContext;
 
 // ─── Inspector 组件绘制注册表 ────────────────────────────────────────────────
 
 /// 单个组件的 Inspector 绘制入口
-using InspectorDrawFunc = void(*)(EditorInspectorPanelContext&);
+using InspectorDrawFunc = void(*)(EditorContext&);
 
 /// 组件是否存在的检测函数
 using ComponentCheckFunc = bool(*)(entt::registry&, entt::entity);
@@ -54,8 +54,8 @@ public:
         return entries_;
     }
 
-    void DrawAll(EditorInspectorPanelContext& context);
-    void DrawAddComponentMenu(EditorInspectorPanelContext& context);
+    void DrawAll(EditorContext& context);
+    void DrawAddComponentMenu(EditorContext& context);
 
 private:
     InspectorRegistry() = default;

@@ -96,72 +96,72 @@ void EndEditorShell() {
     ImGui::End();
 }
 
-void DrawEditorMainMenu(EditorShellContext& context) {
+void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins) {
     if (!ImGui::BeginMenuBar()) {
         return;
     }
 
     if (ImGui::BeginMenu("File")) {
         auto& tab_mgr = SceneTabManager::Get();
-        if (ImGui::MenuItem("New Scene", "Ctrl+N", false, !context.read_only)) {
-            tab_mgr.NewScene(context.registry);
-            context.selected_entity = entt::null;
+        if (ImGui::MenuItem("New Scene", "Ctrl+N", false, !ctx.read_only)) {
+            tab_mgr.NewScene(ctx.registry);
+            ctx.selected_entity = entt::null;
         }
-        if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !context.read_only)) {
+        if (ImGui::MenuItem("Open Scene", "Ctrl+O", false, !ctx.read_only)) {
             std::string path = dse::editor::OpenSceneFileDialog();
             if (!path.empty()) {
-                tab_mgr.OpenScene(context.registry, path);
-                context.selected_entity = entt::null;
+                tab_mgr.OpenScene(ctx.registry, path);
+                ctx.selected_entity = entt::null;
                 EditorSettings settings = LoadEditorSettings();
                 AddRecentFile(settings, path);
                 SaveEditorSettings(settings);
             }
         }
-        if (ImGui::BeginMenu("Recent Files", !context.read_only)) {
+        if (ImGui::BeginMenu("Recent Files", !ctx.read_only)) {
             EditorSettings settings = LoadEditorSettings();
             if (settings.recent_files.empty()) {
                 ImGui::TextDisabled("No recent files");
             } else {
                 for (const auto& recent : settings.recent_files) {
                     if (ImGui::MenuItem(recent.c_str())) {
-                        tab_mgr.OpenScene(context.registry, recent);
-                        context.selected_entity = entt::null;
+                        tab_mgr.OpenScene(ctx.registry, recent);
+                        ctx.selected_entity = entt::null;
                     }
                 }
             }
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Save", "Ctrl+S", false, !context.read_only)) {
+        if (ImGui::MenuItem("Save", "Ctrl+S", false, !ctx.read_only)) {
             const std::string& current_path = tab_mgr.GetActiveFilePath();
             if (current_path.empty()) {
                 std::string path = dse::editor::SaveSceneFileDialog();
                 if (!path.empty()) {
-                    SaveScene(context.registry, path);
+                    SaveScene(ctx.registry, path);
                     tab_mgr.SetCurrentPath(path);
                     tab_mgr.MarkClean();
                     EditorLog(LogLevel::Info, "Scene saved: " + path);
                 }
             } else {
-                SaveScene(context.registry, current_path);
+                SaveScene(ctx.registry, current_path);
                 tab_mgr.MarkClean();
                 EditorLog(LogLevel::Info, "Scene saved: " + current_path);
             }
         }
-        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !context.read_only)) {
+        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !ctx.read_only)) {
             std::string path = dse::editor::SaveSceneFileDialog();
             if (!path.empty()) {
-                SaveScene(context.registry, path);
+                SaveScene(ctx.registry, path);
                 tab_mgr.SetCurrentPath(path);
                 tab_mgr.MarkClean();
                 EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
-        if (context.read_only) {
+        if (ctx.read_only) {
             ImGui::TextDisabled("Play 模式下已禁用场景文件读写。");
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Build Game...", nullptr, false, !context.read_only)) {
+        if (ImGui::MenuItem("Build Game...", nullptr, false, !ctx.read_only)) {
             OpenBuildGameDialog();
         }
         ImGui::Separator();
@@ -189,11 +189,11 @@ void DrawEditorMainMenu(EditorShellContext& context) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
-        if (context.show_preferences && ImGui::MenuItem("Preferences")) {
-            *context.show_preferences = true;
+        if (show_preferences && ImGui::MenuItem("Preferences")) {
+            *show_preferences = true;
         }
-        if (context.show_plugins && ImGui::MenuItem("Plugins")) {
-            *context.show_plugins = true;
+        if (show_plugins && ImGui::MenuItem("Plugins")) {
+            *show_plugins = true;
         }
         ImGui::EndMenu();
     }

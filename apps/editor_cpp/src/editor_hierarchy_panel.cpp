@@ -83,7 +83,7 @@ std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity par
     return children;
 }
 
-void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
+void DrawEntityNode(EditorContext& context, entt::entity entity) {
     if (!context.registry.valid(entity)) return;
 
     std::string entity_name = "Entity " + std::to_string(static_cast<uint32_t>(entity));
@@ -342,7 +342,7 @@ void DrawEntityNode(EditorHierarchyPanelContext& context, entt::entity entity) {
 
 } // namespace
 
-void DrawHierarchyPanel(EditorHierarchyPanelContext& context) {
+void DrawHierarchyPanel(EditorContext& context) {
     ImGui::Begin("Hierarchy");
 
     // Search bar

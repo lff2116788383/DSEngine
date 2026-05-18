@@ -1,15 +1,13 @@
 #pragma once
 
 #include <entt/entt.hpp>
+#include "engine/profiler/cpu_profiler.h"
+#include "engine/profiler/memory_profiler.h"
+#include "engine/profiler/render_profiler.h"
 
 class World;
 
 namespace dse::runtime { class EngineInstance; }
-namespace dse::profiler {
-    class CPUProfiler;
-    class MemoryProfiler;
-    class RenderProfiler;
-}
 
 namespace dse::editor {
 
@@ -28,6 +26,10 @@ struct EditorContext {
     dse::profiler::CPUProfiler& cpu_profiler;
     dse::profiler::MemoryProfiler& memory_profiler;
     dse::profiler::RenderProfiler& render_profiler;
+
+    // Inspector
+    bool& inspector_active;
+    bool& inspector_static;
 
     // Gizmo
     int& current_gizmo_operation;

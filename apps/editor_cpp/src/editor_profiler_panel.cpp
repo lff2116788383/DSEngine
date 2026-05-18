@@ -84,7 +84,7 @@ void ResetProfilerPanelState() {
     ProfilerExportStatus().clear();
 }
 
-void DrawProfilerPanel(EditorProfilerContext& context) {
+void DrawProfilerPanel(EditorContext& context) {
     auto& g_cpu_profiler = context.cpu_profiler;
     auto& g_memory_profiler = context.memory_profiler;
     auto& g_render_profiler = context.render_profiler;
