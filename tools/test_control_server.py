@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""
+端到端测试：连接 DSEngine Editor Control Server (ws://127.0.0.1:9527)
+用法：先启动编辑器，然后运行此脚本。
+
+依赖：pip install websocket-client
+"""
+
+import json
+import sys
+import time
+
+try:
+    import websocket
+except ImportError:
+    print("请安装 websocket-client: pip install websocket-client")
+    sys.exit(1)
+
+
+def rpc_call(ws, method, params=None, req_id=1):
+    """发送 JSON-RPC 请求并等待响应"""
+    request = {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "method": method,
+        "params": params or {}
+    }
+    ws.send(json.dumps(request))
+    raw = ws.recv()
+    return json.loads(raw)
+
+
+def main():
+    url = "ws://127.0.0.1:9527"
+    print(f"[Test] Connecting to {url} ...")
+
+    try:
+        ws = websocket.create_connection(url, timeout=5)
+    except Exception as e:
+        print(f"[FAIL] Cannot connect: {e}")
+        print("       请确保编辑器已启动且 Control Server 运行在端口 9527")
+        return 1
+
+    print("[OK]   Connected\n")
+    passed = 0
+    failed = 0
+
+    # Test 1: ping
+    print("--- Test 1: dsengine_ping ---")
+    resp = rpc_call(ws, "dsengine_ping", req_id=1)
+    if resp.get("result", {}).get("pong") is True:
+        print(f"[PASS] {resp['result']}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 2: editor_get_state
+    print("\n--- Test 2: dsengine_editor_get_state ---")
+    resp = rpc_call(ws, "dsengine_editor_get_state", req_id=2)
+    result = resp.get("result", {})
+    if "editor_state" in result:
+        print(f"[PASS] state={result['editor_state']}, entities={result.get('entity_count')}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 3: lua_execute
+    print("\n--- Test 3: dsengine_lua_execute ---")
+    resp = rpc_call(ws, "dsengine_lua_execute", {"code": "return 1 + 2"}, req_id=3)
+    result = resp.get("result", {})
+    if result.get("success") and result.get("output") == "3":
+        print(f"[PASS] 1+2 = {result['output']}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 4: entity_create
+    print("\n--- Test 4: dsengine_entity_create ---")
+    resp = rpc_call(ws, "dsengine_entity_create", {
+        "name": "TestEntity_ControlServer",
+        "position": [10.0, 20.0, 30.0]
+    }, req_id=4)
+    result = resp.get("result", {})
+    entity_id = result.get("entity_id")
+    if entity_id is not None:
+        print(f"[PASS] Created entity id={entity_id}, name={result.get('name')}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 5: scene_get_state (should contain our new entity)
+    print("\n--- Test 5: dsengine_scene_get_state ---")
+    resp = rpc_call(ws, "dsengine_scene_get_state", {"include_components": True}, req_id=5)
+    result = resp.get("result", {})
+    entities = result.get("entities", [])
+    found = any(e.get("name") == "TestEntity_ControlServer" for e in entities)
+    if found:
+        print(f"[PASS] Found TestEntity in {result.get('entity_count')} entities")
+        passed += 1
+    else:
+        print(f"[FAIL] TestEntity not found in {len(entities)} entities")
+        failed += 1
+
+    # Test 6: entity_delete
+    if entity_id is not None:
+        print("\n--- Test 6: dsengine_entity_delete ---")
+        resp = rpc_call(ws, "dsengine_entity_delete", {"entity_id": entity_id}, req_id=6)
+        if resp.get("result", {}).get("deleted"):
+            print(f"[PASS] Deleted entity {entity_id}")
+            passed += 1
+        else:
+            print(f"[FAIL] {resp}")
+            failed += 1
+
+    # Test 7: method_not_found
+    print("\n--- Test 7: unknown method ---")
+    resp = rpc_call(ws, "nonexistent_method", req_id=7)
+    if resp.get("error", {}).get("code") == -32601:
+        print(f"[PASS] Got expected error: {resp['error']['message']}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    ws.close()
+
+    print(f"\n{'='*40}")
+    print(f"Results: {passed} passed, {failed} failed, {passed+failed} total")
+    return 0 if failed == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
