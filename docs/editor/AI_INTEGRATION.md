@@ -25,6 +25,9 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 
 ## 二、方案选择：Tool Provider 优于内建 Chat
 
+> **✅ Phase 1 已完成** — Engine Control Server + MCP adapter 已全部实现并通过端到端测试。
+> 当前共暴露 **15 个 Tool**，覆盖场景操控、实体 CRUD、编辑器控制、脚本执行、截图等。
+
 ### 不推荐：在 C++ ImGui 里造 AI Chat
 
 | 问题 | 说明 |
@@ -59,19 +62,21 @@ DSEngine 编辑器已具备 AI 集成的关键基础设施：
 │  │                                                    │   │
 │  │  协议: JSON-RPC over WebSocket (或 MCP stdio)      │   │
 │  │                                                    │   │
-│  │  暴露的 Tools:                                     │   │
-│  │  ├─ scene.get_state    → 返回场景 JSON 摘要        │   │
-│  │  ├─ scene.load / save  → 场景读写                  │   │
-│  │  ├─ entity.create      → 创建实体 + 组件           │   │
-│  │  ├─ entity.modify      → 修改组件属性              │   │
-│  │  ├─ entity.delete      → 删除实体                  │   │
-│  │  ├─ lua.execute        → ExecuteLuaString()        │   │
-│  │  ├─ script.create      → 写入 .lua 文件 + 热重载   │   │
-│  │  ├─ material.create    → 生成 DSSL 材质文件         │   │
-│  │  ├─ asset.import       → 导入资产文件到项目         │   │
-│  │  ├─ editor.play/stop   → 控制 Play 模式            │   │
-│  │  ├─ editor.screenshot  → 截图返回                  │   │
-│  │  └─ editor.undo/redo   → 撤销/重做                 │   │
+│  │  暴露的 Tools (15 个, Phase 1 已全部实现):          │   │
+│  │  ├─ ping              → 连通性测试               ✅ │   │
+│  │  ├─ scene.get_state   → 返回场景 JSON 摘要       ✅ │   │
+│  │  ├─ scene.load / save → 场景读写                 ✅ │   │
+│  │  ├─ entity.create     → 创建实体 + 组件          ✅ │   │
+│  │  ├─ entity.modify     → 修改组件属性             ✅ │   │
+│  │  ├─ entity.delete     → 删除实体                 ✅ │   │
+│  │  ├─ lua.execute       → ExecuteLuaString()       ✅ │   │
+│  │  ├─ script.create     → 写入 .lua 文件 + 热重载  ✅ │   │
+│  │  ├─ editor.get_state  → 编辑器状态 + 实体计数     ✅ │   │
+│  │  ├─ editor.play/stop  → 控制 Play 模式           ✅ │   │
+│  │  ├─ editor.screenshot → 截图返回 base64 PNG      ✅ │   │
+│  │  ├─ editor.undo/redo  → 撤销/重做                ✅ │   │
+│  │  ├─ material.create   → 生成 DSSL 材质文件   (Phase 2) │   │
+│  │  └─ asset.import      → 导入资产文件到项目   (Phase 2) │   │
 │  └──────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
                            │
@@ -309,29 +314,54 @@ AI:
 
 ## 六、分阶段实施计划
 
-| 阶段 | 内容 | 工作量 | 新增代码 | 依赖 |
-|------|------|--------|---------|------|
-| **Phase 1a** | Engine Control Server（WebSocket JSON-RPC） | **1 周** | ~800 行 C++ | WebSocket 库 |
-| **Phase 1b** | MCP stdio adapter | **2-3 天** | ~300 行 C++ | 无 |
-| **Phase 2** | 资产生成 Tool（接外部 API） | **2 周** | ~1500 行 | HTTP 库 |
-| **Phase 3** | 内建 Chat Panel（可选，用 Tauri） | **1-2 周** | ~500 行 TS | launcher_tauri |
-| **总计** | | **5-7 周** | ~3100 行 | |
+| 阶段 | 内容 | 工作量 | 新增代码 | 依赖 | 状态 |
+|------|------|--------|---------|------|------|
+| **Phase 1a** | Engine Control Server（WebSocket JSON-RPC） | 1 周 | ~1200 行 C++ | WebSocket 库 | ✅ 完成 |
+| **Phase 1b** | MCP stdio adapter（Python） | 2-3 天 | ~300 行 Python | websocket-client | ✅ 完成 |
+| **Phase 2** | 资产生成 Tool（接外部 API） | 2 周 | ~1500 行 | HTTP 库 | 待开始 |
+| **Phase 3** | 内建 Chat Panel（可选，用 Tauri） | 1-2 周 | ~500 行 TS | launcher_tauri | 待开始 |
+| **总计** | | 5-7 周 | ~3500 行 | | |
 
-### Phase 1a 文件规划
+### Phase 1a 实际文件（✅ 已完成）
 
 ```
 apps/editor_cpp/src/
-├── editor_control_server.cpp   // WebSocket JSON-RPC 服务器
-├── editor_control_server.h     // Tool 注册表 + 消息分发
-└── editor_control_tools.cpp    // 12 个 Tool handler 实现
+├── editor_control_server.cpp   // WebSocket JSON-RPC 服务器（端口 9527）
+├── editor_control_server.h     // ControlServer 类 + Tool 注册 + 消息分发
+├── editor_control_tools.cpp    // 15 个 Tool handler 实现（含 Base64 编码 + stb PNG）
+├── editor_plugin_manager.h     // 插件管理器（Python 进程外插件）
+└── editor_plugin_manager.cpp   //
 
-depends/
-└── uwebsockets/                // 或 libwebsockets（单头文件）
+tools/
+├── mcp_adapter/
+│   └── dsengine_mcp.py         // MCP stdio 适配器（15 个 Tool 定义 + WsBridge）
+└── test_control_server.py      // 端到端测试脚本（11 项测试）
 ```
 
 改动文件：
-- `main.cpp` — 启动时 `ControlServer::Start(port)`，主循环中 `ControlServer::Poll()`
-- `CMakeLists.txt` — 加源文件 + WebSocket 依赖
+- `editor_app.cpp` — `ControlServer::Start(9527)` + 每帧 `Poll()`
+- `editor_toolbar.h/cpp` — 暴露 `EnterPlayMode` / `ExitPlayMode`
+- `CMakeLists.txt` — 新增源文件 + WebSocket 依赖
+
+### Phase 1 Tool 清单（✅ 15 个已实现）
+
+| Tool | 功能 | 类别 |
+|------|------|------|
+| `dsengine_ping` | 连通性测试 | 基础 |
+| `dsengine_editor_get_state` | 编辑器状态 + 实体计数 | 编辑器 |
+| `dsengine_editor_play` | 进入 Play 模式 | 编辑器 |
+| `dsengine_editor_stop` | 退出 Play 模式（恢复场景） | 编辑器 |
+| `dsengine_editor_undo` | 撤销 | 编辑器 |
+| `dsengine_editor_redo` | 重做 | 编辑器 |
+| `dsengine_editor_screenshot` | 截图返回 base64 PNG | 编辑器 |
+| `dsengine_scene_get_state` | 场景结构化摘要（实体 + 组件） | 场景 |
+| `dsengine_scene_save` | 保存场景 | 场景 |
+| `dsengine_scene_load` | 加载场景 | 场景 |
+| `dsengine_entity_create` | 创建实体 + Transform | 实体 |
+| `dsengine_entity_delete` | 删除实体 | 实体 |
+| `dsengine_entity_modify` | 修改实体属性（name/position/rotation/scale） | 实体 |
+| `dsengine_lua_execute` | 执行 Lua 代码（最通用 Tool） | 脚本 |
+| `dsengine_script_create` | 创建 .lua 文件 + 热重载 | 脚本 |
 
 ### Phase 3 说明
 

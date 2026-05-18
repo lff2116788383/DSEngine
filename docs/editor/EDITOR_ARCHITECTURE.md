@@ -1,6 +1,6 @@
 # DSEngine 编辑器架构分析
 
-> 更新日期: 2026-05-18
+> 更新日期: 2026-05-18 (最近修订: Inspector 注册式重构 + AI Control Server 完成)
 > 基于 `apps/editor_cpp/` 源码审查
 
 ---
@@ -145,6 +145,9 @@
 | **国际化** | 多语言切换 + 参数预览 | ✅ 完整 |
 | **探针** | Light Probe + Reflection Probe 可视化 | ✅ 完整 |
 | **自动化** | headless + 快照对比 | ✅ 完整 |
+| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，15 个 Tool | ✅ 完整 |
+| **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
+| **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
 
 ### 缺失功能
 
@@ -156,7 +159,7 @@
 | 🟡 P1 | NavMesh 可视化烘焙 | 导航网格生成与预览 |
 | 🟢 P2 | Multi-viewport | ImGui 多视口（因 CRT 稳定性暂禁） |
 | 🟢 P2 | 蓝图/可视化脚本 | 节点式逻辑编辑 |
-| 🟢 P3 | AI 辅助 | 详见 AI_INTEGRATION.md |
+| 🟢 P3 | AI 辅助 | ✅ Phase 1 已完成（Control Server + MCP），详见 AI_INTEGRATION.md |
 
 ---
 
@@ -176,21 +179,21 @@
 
 | 问题 | 严重性 | 说明 |
 |------|--------|------|
-| **main.cpp 过重** | 🟡 中 | 769 行，含 UI Layout Inspector、全局状态、主循环，应拆分 EditorApp 类 |
-| **大量 static 全局状态** | 🟡 中 | DrawEditorUI() 中 10+ 个 static 变量，无统一 EditorContext |
-| **Inspector 膨胀** | 🟡 中 | 单文件 71KB，每个 Component UI 硬编码，应走注册式 |
+| ~~main.cpp 过重~~ | ✅ 已修 | 拆分为 EditorApp 类，main.cpp 仅 10 行 |
+| ~~大量 static 全局状态~~ | ✅ 大部分已修 | static 变量已收拢到 EditorApp 成员 |
+| ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
 | **仅 OpenGL** | 🟡 中 | 编辑器直接 `#include <glad/gl.h>`，未走 RHI |
 | **Multi-viewport 禁用** | 🟡 中 | CRT heap 断言，注释标注了原因 |
 
 ### 改进建议
 
-| 优先级 | 改进 | 预估 |
-|--------|------|------|
-| 🔴 高 | 拆分 main.cpp → EditorApp 类管理生命周期和全局状态 | 1-2 天 |
-| 🔴 高 | Inspector 走注册式（Component → DrawFunc 映射表） | 1 周 |
-| 🟡 中 | 统一 EditorContext 替代 static 全局变量 | 2-3 天 |
-| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 |
-| 🟢 低 | 修复 Multi-viewport CRT 问题 | 未知 |
+| 优先级 | 改进 | 预估 | 状态 |
+|--------|------|------|------|
+| ~~🔴 高~~ | ~~拆分 main.cpp → EditorApp 类~~ | ~~1-2 天~~ | ✅ 完成 |
+| ~~🔴 高~~ | ~~Inspector 注册式 (Component → DrawFunc)~~ | ~~1 周~~ | ✅ 完成 |
+| 🟡 中 | 统一 EditorContext 替代残余 static 变量 | 2-3 天 | 待开始 |
+| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 待开始 |
+| 🟢 低 | 修复 Multi-viewport CRT 问题 | 未知 | 待开始 |
 
 ---
 
@@ -207,4 +210,4 @@
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付），短期应聚焦代码质量改进（main.cpp 拆分、Inspector 注册式），而非更换 UI 框架。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分和 Inspector 注册式已完成，AI Control Server (15 个 Tool) 已全部实现。下一步可聚焦 Phase 2 资产生成或 EditorContext 统一。

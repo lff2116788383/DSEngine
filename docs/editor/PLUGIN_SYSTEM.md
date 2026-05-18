@@ -121,7 +121,9 @@
 
 ### 3.1 核心洞察
 
-AI_INTEGRATION.md 中定义的 Control Server（WebSocket JSON-RPC + 12 个 Tool）换个角度看就是**通用插件 API**。
+AI_INTEGRATION.md 中定义的 Control Server（WebSocket JSON-RPC + **15 个 Tool**）换个角度看就是**通用插件 API**。
+
+> **✅ Control Server 已完成（端口 9527）**，插件管理器 + Plugin Manager 面板也已实现。
 
 **一套协议同时服务三个场景**：
 1. AI 客户端（Cursor / Claude Desktop）→ 对话驱动开发
@@ -133,18 +135,20 @@ AI_INTEGRATION.md 中定义的 Control Server（WebSocket JSON-RPC + 12 个 Tool
 已在 AI_INTEGRATION.md 定义的 Tool 即为插件可调用的 API：
 
 ```
-scene.get_state      → 获取场景实体/组件摘要
-scene.load / save    → 场景读写
-entity.create        → 创建实体 + 组件
-entity.modify        → 修改组件属性
-entity.delete        → 删除实体
-lua.execute          → 执行任意 Lua（万能后门）
-script.create        → 写 .lua 文件 + 热重载
-material.create      → 生成 DSSL 材质
-asset.import         → 导入资产
-editor.play / stop   → 控制 Play 模式
-editor.screenshot    → 截图返回 base64
-editor.undo / redo   → 撤销/重做
+ping                 → 连通性测试                        ✅
+scene.get_state      → 获取场景实体/组件摘要                ✅
+scene.load / save    → 场景读写                            ✅
+entity.create        → 创建实体 + Transform                 ✅
+entity.modify        → 修改实体属性 (name/pos/rot/scale)    ✅
+entity.delete        → 删除实体                            ✅
+lua.execute          → 执行任意 Lua（万能后门）               ✅
+script.create        → 写 .lua 文件 + 热重载                ✅
+editor.get_state     → 编辑器状态 + 实体计数               ✅
+editor.play / stop   → 控制 Play 模式                      ✅
+editor.screenshot    → 截图返回 base64 PNG                 ✅
+editor.undo / redo   → 撤销/重做                           ✅
+material.create      → 生成 DSSL 材质              (Phase 2)
+asset.import         → 导入资产                     (Phase 2)
 ```
 
 ### 3.3 插件示例
@@ -156,20 +160,21 @@ editor.undo / redo   → 撤销/重做
 import websocket, json
 
 def main():
-    ws = websocket.create_connection("ws://localhost:9900")
+    ws = websocket.create_connection("ws://localhost:9527")
 
     # 获取场景
-    ws.send(json.dumps({"id": 1, "method": "scene.get_state"}))
+    ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "dsengine_scene_get_state", "params": {}}))
     state = json.loads(ws.recv())
 
     # 批量重命名所有 Enemy 实体
     for entity in state["result"]["entities"]:
         if "Enemy" in entity["name"]:
             ws.send(json.dumps({
+                "jsonrpc": "2.0",
                 "id": 2,
-                "method": "entity.modify",
+                "method": "dsengine_entity_modify",
                 "params": {
-                    "id": entity["id"],
+                    "entity_id": entity["id"],
                     "name": entity["name"].replace("Enemy", "Mob")
                 }
             }))
@@ -190,7 +195,7 @@ const WebSocket = require('ws');
 const OpenAI = require('openai');
 const fs = require('fs');
 
-const ws = new WebSocket('ws://localhost:9900');
+const ws = new WebSocket('ws://localhost:9527');
 const openai = new OpenAI();
 
 ws.on('open', async () => {
@@ -207,9 +212,10 @@ ws.on('open', async () => {
 
     // 通知引擎导入
     ws.send(JSON.stringify({
+        jsonrpc: "2.0",
         id: 1,
-        method: "asset.import",
-        params: { path: "textures/rust_metal.png" }
+        method: "dsengine_lua_execute",
+        params: { code: "dse.assets.load_texture('textures/rust_metal.png')" }
     }));
 });
 ```
@@ -231,7 +237,7 @@ def index():
 @app.route('/api/generate', methods=['POST'])
 def generate():
     params = request.json
-    ws = websocket.create_connection("ws://localhost:9900")
+    ws = websocket.create_connection("ws://localhost:9527")
 
     # 用 Lua 批量创建实体
     lua_code = f"""
@@ -242,7 +248,7 @@ def generate():
         dse.ecs.set_mesh(e, "models/cube.dmesh")
     end
     """
-    ws.send(json.dumps({"id": 1, "method": "lua.execute", "params": {"code": lua_code}}))
+    ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "dsengine_lua_execute", "params": {"code": lua_code}}))
     result = json.loads(ws.recv())
     ws.close()
     return result
@@ -259,7 +265,7 @@ if __name__ == '__main__':
 |------|------|------|---------|------|
 | **游戏逻辑** | Lua 脚本 | Lua | 游戏玩法/AI/UI | ✅ 已完整 |
 | **引擎模块** | 编译期静态链接 | C++ | 引擎核心功能扩展 | ✅ 已有 modules/ |
-| **编辑器/工具插件** | Control Server | 任意 | 编辑器扩展/AI/自动化 | 🔲 待实现 |
+| **编辑器/工具插件** | Control Server | 任意 | 编辑器扩展/AI/自动化 | ✅ 已实现 |
 | **原生高性能插件** | DLL + 纯 C API | C/C++ | 第三方二进制分发 | 🔲 远期可选 |
 
 ---
@@ -268,12 +274,12 @@ if __name__ == '__main__':
 
 Control Server 的实施已在 AI_INTEGRATION.md 中规划，此处不重复。插件系统是 Control Server 的自然延伸。
 
-| 阶段 | 内容 | 增量工作 |
-|------|------|---------|
-| Phase 1a | Control Server（WebSocket JSON-RPC） | AI_INTEGRATION Phase 1a |
-| Phase 1b | 插件发现 + 管理 | ~200 行（扫描 plugins/ 目录 + 启停子进程） |
-| Phase 1c | 编辑器 Plugin Manager 面板 | ~150 行 ImGui（列表 + Enable/Disable + 日志） |
-| Phase 2 | 插件模板 + 文档 | Python / Node.js 模板项目 |
+| 阶段 | 内容 | 增量工作 | 状态 |
+|------|------|--------|------|
+| Phase 1a | Control Server（WebSocket JSON-RPC） | ~1200 行 C++ | ✅ 完成 |
+| Phase 1b | 插件发现 + 管理 | ~200 行（PluginManager 扫描 plugins/ + 启停子进程） | ✅ 完成 |
+| Phase 1c | 编辑器 Plugin Manager 面板 | ~150 行 ImGui | ✅ 完成 |
+| Phase 2 | 插件模板 + 文档 | Python / Node.js 模板项目 | 待开始 |
 
 ### Phase 1b：插件管理器
 
@@ -320,4 +326,4 @@ plugins/
 | 为什么不用 Lua？ | 无标准库、无包管理、ImGui 绑定体验差、不适合编辑器工具 |
 | Lua 做什么？ | 游戏逻辑脚本（已有，保持不变） |
 | 与 AI 方案关系？ | **同一套 Control Server，一次实现，两个场景复用** |
-| 工作量？ | Control Server ~800 行 + 插件管理 ~350 行 ≈ **1.5 周** |
+| 工作量？ | ✅ 已完成：Control Server ~1200 行 + 插件管理 ~350 行 + MCP adapter ~300 行 Python |
