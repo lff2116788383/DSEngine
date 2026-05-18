@@ -1009,3 +1009,78 @@ TEST_F(ControlServerTest, AssetImport_UnknownExtension_ReturnsError) {
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
+
+// ─── Test 69: modify_component 无效组件类型 ─────────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_ModifyComponent_InvalidType_NoEffect) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"NoComp"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string mod = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"modify_component":{"type":"NonExistentComponent","properties":{"x":1}}})";
+    auto resp = Dispatch("dsengine_entity_modify", mod.c_str());
+    ASSERT_FALSE(resp.is_error);
+    // 没有匹配组件，modified_components 为空
+    if (resp.result.HasMember("modified_components")) {
+        EXPECT_EQ(resp.result["modified_components"].Size(), 0u);
+    }
+}
+
+// ─── Test 70: scene_load 不存在路径 ─────────────────────────────────────────
+
+TEST_F(ControlServerTest, SceneLoad_NonExistentPath_ReturnsError) {
+    auto resp = Dispatch("dsengine_scene_load",
+        R"({"path":"__non_existent_path_12345__.dscene"})");
+    EXPECT_TRUE(resp.is_error);
+}
+
+// ─── Test 71: add_component 重复添加同类型 ──────────────────────────────────
+
+TEST_F(ControlServerTest, EntityAddComponent_Duplicate_NoError) {
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"DupTest"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string add = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"PointLight","properties":{}})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", add.c_str()).is_error);
+
+    auto resp2 = Dispatch("dsengine_entity_add_component", add.c_str());
+    // 重复添加不应崩溃，可能返回成功或错误取决于实现
+    (void)resp2;
+    SUCCEED();
+}
+
+// ─── Test 72: entity_modify 无效 entity_id ──────────────────────────────────
+
+TEST_F(ControlServerTest, EntityModify_InvalidEntityId_ReturnsError) {
+    auto resp = Dispatch("dsengine_entity_modify",
+        R"({"entity_id":99999,"name":"Ghost"})");
+    EXPECT_TRUE(resp.is_error);
+    EXPECT_EQ(resp.error_code, -32602);
+}
+
+// ─── Test 73: material_create 基本调用 ──────────────────────────────────────
+
+TEST_F(ControlServerTest, MaterialCreate_Basic) {
+    auto resp = Dispatch("dsengine_material_create",
+        R"({"name":"test_mat_new","shader_variant":"MESH_PBR","base_color":[1,1,1,1]})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    EXPECT_TRUE(resp.result.IsObject());
+}
+
+// ─── Test 74: scene_get_state include_components=true 有 components 字段 ───
+
+TEST_F(ControlServerTest, SceneGetState_WithComponents_HasComponentsField) {
+    Dispatch("dsengine_entity_create", R"({"name":"CompEnt"})");
+
+    auto resp = Dispatch("dsengine_scene_get_state",
+        R"({"include_components": true})");
+    ASSERT_FALSE(resp.is_error) << resp.error_message;
+    ASSERT_TRUE(resp.result.HasMember("entities"));
+    ASSERT_GT(resp.result["entities"].Size(), 0u);
+
+    const auto& first = resp.result["entities"][0];
+    EXPECT_TRUE(first.HasMember("components"));
+}

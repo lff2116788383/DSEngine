@@ -41,6 +41,7 @@
 
 using namespace dse;
 using dse::editor::EditorNameComponent;
+using dse::editor::SiblingIndexComponent;
 using dse::editor::CopyRegistry;
 using dse::editor::SaveScene;
 using dse::editor::LoadScene;
@@ -2023,4 +2024,126 @@ TEST_F(EditorFunctionalTest, Snapshot_CompareSnapshot_DetectsDifference) {
 
     auto diffs = dse::editor::test::CompareSnapshot(snap2, snap1);
     EXPECT_FALSE(diffs.empty());
+}
+
+// ============================================================
+// Test 61: UndoRedo 新 Execute 清空 Redo 栈
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_ExecuteClearsRedoStack) {
+    dse::editor::UndoRedoManager mgr;
+    int val = 0;
+
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "A", [&] { val = 1; }, [&] { val = 0; }));
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "B", [&] { val = 2; }, [&] { val = 1; }));
+
+    mgr.Undo();
+    EXPECT_TRUE(mgr.CanRedo());
+
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "C", [&] { val = 3; }, [&] { val = 1; }));
+    EXPECT_FALSE(mgr.CanRedo());
+}
+
+// ============================================================
+// Test 62: UndoRedo Clear 后栈为空
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_ClearEmptiesStack) {
+    dse::editor::UndoRedoManager mgr;
+    int val = 0;
+
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "X", [&] { val = 1; }, [&] { val = 0; }));
+    mgr.Undo();
+    EXPECT_TRUE(mgr.CanRedo());
+
+    mgr.Clear();
+    EXPECT_FALSE(mgr.CanUndo());
+    EXPECT_FALSE(mgr.CanRedo());
+    EXPECT_EQ(mgr.GetUndoCount(), 0);
+    EXPECT_EQ(mgr.GetRedoCount(), 0);
+}
+
+// ============================================================
+// Test 63: UndoRedo GetHistory 返回正确顺序
+// ============================================================
+
+TEST_F(EditorFunctionalTest, UndoRedo_GetHistoryOrder) {
+    dse::editor::UndoRedoManager mgr;
+    int dummy = 0;
+
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "First", [&] { dummy = 1; }, [&] { dummy = 0; }));
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "Second", [&] { dummy = 2; }, [&] { dummy = 1; }));
+    mgr.Execute(std::make_unique<dse::editor::LambdaCommand>(
+        "Third", [&] { dummy = 3; }, [&] { dummy = 2; }));
+
+    auto history = mgr.GetUndoHistory();
+    ASSERT_EQ(history.size(), 3u);
+    EXPECT_EQ(history[0], "Third");
+    EXPECT_EQ(history[2], "First");
+}
+
+// ============================================================
+// Test 64: Prefab IsPrefabInstance 标记
+// ============================================================
+
+TEST_F(EditorFunctionalTest, Prefab_IsPrefabInstance_AfterInstantiate) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "PrefabSrc");
+    reg().emplace<TransformComponent>(e).position = glm::vec3(5, 0, 0);
+
+    auto path = TempPath("dse_test_prefab_flag.dprefab");
+    bool saved = dse::editor::SaveEntityAsPrefab(reg(), e, path.string());
+    ASSERT_TRUE(saved);
+
+    auto inst = dse::editor::InstantiatePrefab(world, reg(), path.string());
+    EXPECT_TRUE(dse::editor::IsPrefabInstance(reg(), inst));
+    EXPECT_FALSE(dse::editor::IsPrefabInstance(reg(), e));
+
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 65: SceneIO SiblingIndex 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "SiblingEnt");
+    reg().emplace<TransformComponent>(e);
+    reg().emplace<SiblingIndexComponent>(e).index = 42;
+
+    auto path = TempPath("dse_test_sibling.dscene");
+    SaveScene(reg(), path.string());
+
+    World w2;
+    LoadScene(w2.registry(), path.string());
+
+    bool found = false;
+    w2.registry().view<SiblingIndexComponent>().each(
+        [&](auto, const SiblingIndexComponent& r) {
+            found = true;
+            EXPECT_EQ(r.index, 42);
+        });
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 66: EditorSettings AddRecentFile 忽略 Untitled 和空路径
+// ============================================================
+
+TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_IgnoresUntitledAndEmpty) {
+    dse::editor::EditorSettings settings;
+    dse::editor::AddRecentFile(settings, "valid.dscene");
+    dse::editor::AddRecentFile(settings, "Untitled");
+    dse::editor::AddRecentFile(settings, "");
+
+    EXPECT_EQ(settings.recent_files.size(), 1u);
+    EXPECT_EQ(settings.recent_files[0], "valid.dscene");
 }
