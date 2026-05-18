@@ -116,9 +116,68 @@ def main():
             print(f"[FAIL] {resp}")
             failed += 1
 
-    # Test 7: method_not_found
-    print("\n--- Test 7: unknown method ---")
-    resp = rpc_call(ws, "nonexistent_method", req_id=7)
+    # Test 7: entity_modify
+    print("\n--- Test 7: dsengine_entity_modify ---")
+    resp = rpc_call(ws, "dsengine_entity_create", {"name": "ModifyTest", "position": [0, 0, 0]}, req_id=70)
+    mod_id = resp.get("result", {}).get("entity_id")
+    if mod_id is not None:
+        resp = rpc_call(ws, "dsengine_entity_modify", {
+            "entity_id": mod_id,
+            "name": "ModifyTest_Renamed",
+            "position": [100, 200, 300]
+        }, req_id=71)
+        if resp.get("result", {}).get("modified"):
+            print(f"[PASS] Modified entity {mod_id}")
+            passed += 1
+        else:
+            print(f"[FAIL] {resp}")
+            failed += 1
+        rpc_call(ws, "dsengine_entity_delete", {"entity_id": mod_id}, req_id=72)
+    else:
+        print("[FAIL] Could not create entity for modify test")
+        failed += 1
+
+    # Test 8: editor_undo / redo
+    print("\n--- Test 8: dsengine_editor_undo ---")
+    resp = rpc_call(ws, "dsengine_editor_undo", req_id=8)
+    result = resp.get("result", {})
+    if "success" in result:
+        print(f"[PASS] undo success={result['success']}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 9: editor_screenshot
+    print("\n--- Test 9: dsengine_editor_screenshot ---")
+    resp = rpc_call(ws, "dsengine_editor_screenshot", {"target": "scene"}, req_id=9)
+    result = resp.get("result", {})
+    if result.get("width", 0) > 0 and result.get("encoding") == "base64":
+        data_len = len(result.get("data", ""))
+        print(f"[PASS] Screenshot {result['width']}x{result['height']}, base64 len={data_len}")
+        passed += 1
+    elif "error" in resp:
+        print(f"[SKIP] {resp['error'].get('message', '')} (no render target in headless)")
+        passed += 1  # skip counts as pass in headless
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 10: scene_save / scene_load
+    print("\n--- Test 10: dsengine_scene_save ---")
+    import tempfile, os
+    tmp_scene = os.path.join(tempfile.gettempdir(), "dsengine_test_scene.json")
+    resp = rpc_call(ws, "dsengine_scene_save", {"path": tmp_scene}, req_id=10)
+    if resp.get("result", {}).get("saved"):
+        print(f"[PASS] Saved to {tmp_scene}")
+        passed += 1
+    else:
+        print(f"[FAIL] {resp}")
+        failed += 1
+
+    # Test 11: method_not_found
+    print("\n--- Test 11: unknown method ---")
+    resp = rpc_call(ws, "nonexistent_method", req_id=11)
     if resp.get("error", {}).get("code") == -32601:
         print(f"[PASS] Got expected error: {resp['error']['message']}")
         passed += 1

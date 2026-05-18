@@ -40,9 +40,7 @@ bool IsEditorInPlayMode() {
     return g_editor_state == EditorState::Play;
 }
 
-namespace {
-
-void ResetPlayModeRuntimeState() {
+static void ResetPlayModeRuntimeState() {
     dse::runtime::ShutdownLuaRuntime();
     dse::runtime::ConfigureLuaApiContext(dse::runtime::LuaApiContext{});
     dse::runtime::SetStartupLuaScriptPath("");
@@ -73,8 +71,6 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
     selected_entity = entt::null;
     g_editor_state = EditorState::Edit;
 }
-
-} // namespace
 
 void DrawEditorToolbar(dse::runtime::EngineInstance& engine,
                        entt::registry& registry,

@@ -114,6 +114,89 @@ MCP_TOOLS = [
             "type": "object",
             "properties": {}
         }
+    },
+    {
+        "name": "dsengine_entity_modify",
+        "description": "Modify an existing entity's name, position, rotation, or scale",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "integer", "description": "Entity ID (uint32)"},
+                "name": {"type": "string", "description": "New entity name"},
+                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"},
+                "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[pitch,yaw,roll] degrees"},
+                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "description": "[x,y,z]"}
+            },
+            "required": ["entity_id"]
+        }
+    },
+    {
+        "name": "dsengine_editor_play",
+        "description": "Enter Play mode (run the game in editor)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "dsengine_editor_stop",
+        "description": "Exit Play mode (return to Edit mode, restoring scene state)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "dsengine_editor_undo",
+        "description": "Undo the last editor action",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "dsengine_editor_redo",
+        "description": "Redo the last undone editor action",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "dsengine_editor_screenshot",
+        "description": "Capture a screenshot of the scene or game viewport, returns base64 PNG",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "enum": ["scene", "game"],
+                    "default": "scene",
+                    "description": "Which viewport to capture"
+                }
+            }
+        }
+    },
+    {
+        "name": "dsengine_scene_save",
+        "description": "Save the current scene to a file",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path to save (optional, uses current if omitted)"}
+            }
+        }
+    },
+    {
+        "name": "dsengine_scene_load",
+        "description": "Load a scene from a file",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Scene file path to load"}
+            },
+            "required": ["path"]
+        }
     }
 ]
 
