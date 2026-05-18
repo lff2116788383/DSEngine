@@ -1493,3 +1493,37 @@ TEST_F(EditorFunctionalTest, UndoRedo_SaveScene_NonDestructive) {
     EXPECT_TRUE(found_modified);
     CleanupFile(path);
 }
+
+// ============================================================
+// Test 41: SceneIO UICanvasScaler 往返
+// ============================================================
+
+TEST_F(EditorFunctionalTest, SceneIO_UICanvasScalerRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "CanvasScalerEnt");
+    auto& scaler = reg().emplace<UICanvasScalerComponent>(e);
+    scaler.reference_resolution = glm::vec2(1280.0f, 720.0f);
+    scaler.scale_factor = 1.5f;
+    scaler.match_width_or_height = false;
+
+    const auto path = TempPath("dse_test_uicanvas.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<UICanvasScalerComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<UICanvasScalerComponent>(en);
+        EXPECT_NEAR(r.reference_resolution.x, 1280.0f, 0.01f);
+        EXPECT_NEAR(r.reference_resolution.y, 720.0f, 0.01f);
+        EXPECT_NEAR(r.scale_factor, 1.5f, 0.001f);
+        EXPECT_FALSE(r.match_width_or_height);
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}

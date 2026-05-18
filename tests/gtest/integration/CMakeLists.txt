@@ -50,6 +50,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     editor/editor_functional_test.cpp
     editor/editor_selection_integration_test.cpp
     editor/editor_control_server_test.cpp
+    editor/editor_plugin_manager_test.cpp
     editor/editor_test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_snapshot.cpp
@@ -58,6 +59,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_tabs.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_control_server.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_control_tools.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_plugin_manager.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
