@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <string>
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/rhi/postprocess_common.h"
 
 class OpenGLRhiDevice;
 
@@ -43,7 +44,7 @@ public:
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
     virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
     virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
-    virtual void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) = 0;
+    virtual void DrawPostProcess(dse::render::PostProcessRequest request) = 0;
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
@@ -71,7 +72,7 @@ public:
     void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override;
     void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
+    void DrawPostProcess(dse::render::PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;
@@ -124,9 +125,7 @@ private:
     };
     struct DrawPostProcessCmd {
         uint64_t order;
-        unsigned int source_texture;
-        std::string effect_name;
-        std::vector<float> params;
+        dse::render::PostProcessRequest request;
     };
     struct DrawParticles3DCmd {
         uint64_t order;

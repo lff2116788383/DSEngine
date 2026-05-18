@@ -1872,11 +1872,13 @@ void VulkanDrawExecutor::DrawSkybox(
 
 void VulkanDrawExecutor::DrawPostProcess(
     VkCommandBuffer cmd_buf,
-    unsigned int source_texture,
-    const std::string& effect_name,
-    const std::vector<float>& params,
+    const dse::render::PostProcessRequest& request,
     VulkanPipelineStateManager& pipeline_mgr,
     VulkanShaderManager& shader_mgr) {
+
+    const unsigned int source_texture = request.source_texture;
+    const std::string& effect_name = request.effect_name;
+    const std::vector<float>& params = request.params;
 
     DEBUG_LOG_TRACE("[Vulkan] DrawPostProcess: effect='{}' source_texture={} skip={}", effect_name, source_texture, skip_current_pass_);
     if (skip_current_pass_) return;

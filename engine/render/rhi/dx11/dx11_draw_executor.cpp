@@ -829,12 +829,13 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     dc->OMSetDepthStencilState(prev_dss.Get(), prev_stencil_ref);
 }
 
-void DX11DrawExecutor::DrawPostProcess(unsigned int source_texture,
-                                         const std::string& effect_name,
-                                         const std::vector<float>& params,
+void DX11DrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& request,
                                          DX11PipelineStateManager& pipeline_mgr,
                                          DX11ShaderManager& shader_mgr,
                                          DX11ResourceManager& resource_mgr) {
+    const unsigned int source_texture = request.source_texture;
+    const std::string& effect_name = request.effect_name;
+    const std::vector<float>& params = request.params;
     ID3D11DeviceContext* dc = context_->device_context();
 
     // Compute Shader 路径：bloom 降采样/升采样

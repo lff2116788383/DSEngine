@@ -190,7 +190,7 @@ TEST(DX11CommandBufferTest, 无device时DrawSkybox安全) {
 
 TEST(DX11CommandBufferTest, 无device时DrawPostProcess安全) {
     DX11CommandBuffer cmd;
-    cmd.DrawPostProcess(100, "bloom_downsample", {1.0f, 0.5f});
+    cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
 }
 
 TEST(DX11CommandBufferTest, 无device时DrawParticles3D安全) {

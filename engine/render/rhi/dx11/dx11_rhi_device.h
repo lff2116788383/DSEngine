@@ -47,7 +47,7 @@ public:
     void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override;
     void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override;
     void DrawSkybox(unsigned int cubemap_texture_handle) override;
-    void DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) override;
+    void DrawPostProcess(dse::render::PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DeferSetGlobalShadowMap(unsigned int index, unsigned int texture_handle) override;

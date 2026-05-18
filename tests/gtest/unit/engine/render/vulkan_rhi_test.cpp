@@ -251,7 +251,7 @@ TEST(VulkanCommandBufferTest, 无device时DrawSkybox安全) {
 
 TEST(VulkanCommandBufferTest, 无device时DrawPostProcess安全) {
     VulkanCommandBuffer cmd;
-    cmd.DrawPostProcess(100, "bloom", {1.0f, 0.5f});
+    cmd.DrawPostProcess({"bloom", 100, {1.0f, 0.5f}});
 }
 
 TEST(VulkanCommandBufferTest, 无device时DrawParticles3D安全) {

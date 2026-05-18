@@ -48,7 +48,7 @@ public:
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
     MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
     MOCK_METHOD(void, DrawSkybox, (unsigned int), (override));
-    MOCK_METHOD(void, DrawPostProcess, (unsigned int, const std::string&, const std::vector<float>&), (override));
+    MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest), (override));
     MOCK_METHOD(void, DrawParticles3D, (const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DeferSetGlobalShadowMap, (unsigned int, unsigned int), (override));
@@ -360,7 +360,7 @@ TEST_F(BloomPassTest, BloomPass_Disabled_不调用DrawPostProcess) {
     world.registry().emplace<dse::PostProcessComponent>(e, pp);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::_, ::testing::_)).Times(0);
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_)).Times(0);
 
     dse::render::BloomPass pass(ctx);
     pass.Execute(mock);
@@ -376,12 +376,12 @@ TEST_F(BloomPassTest, BloomPass_Enabled_调用downsample和upsample) {
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     // 兜底：允许 bloom_extract 等其他效果自由调用
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::_, ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::_))
         .Times(::testing::AnyNumber());
     // 具体验证
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_downsample"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_downsample")))
         .Times(::testing::AtLeast(1));
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_upsample"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_upsample")))
         .Times(::testing::AtLeast(1));
     EXPECT_CALL(mock, BeginRenderPass(::testing::_))
         .Times(::testing::AtLeast(6));
@@ -418,9 +418,9 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
     world.registry().emplace<dse::PostProcessComponent>(e, pp);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("tonemapping"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "tonemapping")))
         .Times(1);
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("ui_overlay"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "ui_overlay")))
         .Times(1);
 
     dse::render::CompositePass pass(ctx);
@@ -437,9 +437,9 @@ TEST_F(CompositePassTest, CompositePass_BloomEnabled_使用bloom_composite) {
     world.registry().emplace<dse::PostProcessComponent>(e, pp);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("bloom_composite"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_composite")))
         .Times(1);
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_, ::testing::StrEq("ui_overlay"), ::testing::_))
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "ui_overlay")))
         .Times(1);
 
     dse::render::CompositePass pass(ctx);

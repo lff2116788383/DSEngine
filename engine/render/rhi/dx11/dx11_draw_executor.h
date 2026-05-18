@@ -17,6 +17,7 @@
 
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/draw_executor_common.h"
+#include "engine/render/rhi/postprocess_common.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <glm/glm.hpp>
@@ -165,9 +166,7 @@ public:
                      DX11ShaderManager& shader_mgr,
                      DX11ResourceManager& resource_mgr);
 
-    void DrawPostProcess(unsigned int source_texture,
-                          const std::string& effect_name,
-                          const std::vector<float>& params,
+    void DrawPostProcess(const dse::render::PostProcessRequest& request,
                           DX11PipelineStateManager& pipeline_mgr,
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);

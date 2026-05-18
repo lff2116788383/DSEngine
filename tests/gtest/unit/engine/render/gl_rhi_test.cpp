@@ -200,7 +200,7 @@ TEST(OpenGLCommandBufferTest, 无device时DrawSkybox安全) {
 
 TEST(OpenGLCommandBufferTest, 无device时DrawPostProcess安全) {
     OpenGLCommandBuffer cmd;
-    cmd.DrawPostProcess(100, "bloom_downsample", {1.0f, 0.5f});
+    cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
 }
 
 TEST(OpenGLCommandBufferTest, 无device时DrawParticles3D安全) {

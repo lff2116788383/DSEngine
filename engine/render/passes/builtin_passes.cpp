@@ -437,7 +437,7 @@ void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
     params.push_back(light_intensity);
     params.push_back(ambient_intensity);
 
-    cmd_buffer.DrawPostProcess(gbuf_albedo, "deferred_lighting", params);
+    cmd_buffer.DrawPostProcess({"deferred_lighting", gbuf_albedo, params});
     cmd_buffer.EndRenderPass();
 }
 
@@ -671,7 +671,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_extract", {pp_config.bloom_threshold});
+    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {pp_config.bloom_threshold}});
     cmd_buffer.EndRenderPass();
 
     unsigned int current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
@@ -679,7 +679,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     int mip_h = Screen::height() / 2;
     for (size_t i = 0; i < ctx_.render_targets.bloom_mips.size(); ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_mips[i], glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess(current_src, "bloom_downsample", {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)});
+        cmd_buffer.DrawPostProcess({"bloom_downsample", current_src, {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)}});
         cmd_buffer.EndRenderPass();
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         mip_w /= 2;
@@ -692,7 +692,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         unsigned int target_rt = ctx_.render_targets.bloom_mips[i - 1];
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess(current_src, "bloom_upsample", {0.005f});
+        cmd_buffer.DrawPostProcess({"bloom_upsample", current_src, {0.005f}});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -816,7 +816,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         const unsigned int bloom_tex = (pp_config.bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
             ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
             : 0;
-        cmd_buffer.DrawPostProcess(scene_color_tex, "bloom_composite", {
+        cmd_buffer.DrawPostProcess({"bloom_composite", scene_color_tex, {
             static_cast<float>(bloom_tex),
             pp_config.exposure,
             pp_config.bloom_intensity,
@@ -834,16 +834,16 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             pp_config.film_grain_enabled ? 1.0f : 0.0f,
             pp_config.film_grain_intensity,
             film_grain_time
-        });
+        }});
     } else {
         if (ssao_tex != 0) {
-            cmd_buffer.DrawPostProcess(scene_color_tex, "ssao_apply", {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
+            cmd_buffer.DrawPostProcess({"ssao_apply", scene_color_tex, {static_cast<float>(ssao_tex), pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity}});
         } else {
-            cmd_buffer.DrawPostProcess(scene_color_tex, "tonemapping", {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity});
+            cmd_buffer.DrawPostProcess({"tonemapping", scene_color_tex, {pp_config.exposure, static_cast<float>(ae_tex), lut_tex, lut_intensity}});
         }
     }
 
-    cmd_buffer.DrawPostProcess(ui_color_tex, "ui_overlay", {});
+    cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
     cmd_buffer.EndRenderPass();
 }
 
@@ -889,7 +889,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: 场景 → 64x64 log luminance (8x8 采样网格)
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_temp, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(scene_color_tex, "lum_compute", {});
+    cmd_buffer.DrawPostProcess({"lum_compute", scene_color_tex});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 64x64 → 1x1 adapted exposure (EMA blend with previous frame)
@@ -897,7 +897,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
 
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_adapted[write_idx], glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess(lum_temp_tex, "lum_adapt", {
+    cmd_buffer.DrawPostProcess({"lum_adapt", lum_temp_tex, {
         static_cast<float>(prev_adapted_tex),
         ctx_.delta_time,
         pp_config.adaptation_speed_up,
@@ -905,7 +905,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
         pp_config.exposure_min,
         pp_config.exposure_max,
         pp_config.exposure_compensation
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // 翻转 ping-pong
@@ -963,20 +963,20 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: SSAO 计算（半分辨率）
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "ssao", {
+    cmd_buffer.DrawPostProcess({"ssao", depth_tex, {
         pp_config.ssao_radius,
         pp_config.ssao_bias,
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height())
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 双边模糊
     const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess(ssao_tex, "ssao_blur", {});
+    cmd_buffer.DrawPostProcess({"ssao_blur", ssao_tex});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1038,7 +1038,7 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.contact_shadow, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "contact_shadow", {
+    cmd_buffer.DrawPostProcess({"contact_shadow", depth_tex, {
         light_dir.x, light_dir.y, light_dir.z,
         near_plane,
         far_plane,
@@ -1047,7 +1047,7 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
         pp_config.contact_shadow_strength,
         static_cast<float>(pp_config.contact_shadow_steps),
         pp_config.contact_shadow_step_size
-    });
+    }});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1086,10 +1086,10 @@ void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fxaa, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(main_color_tex, "fxaa", {
+    cmd_buffer.DrawPostProcess({"fxaa", main_color_tex, {
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height())
-    });
+    }});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1121,7 +1121,7 @@ void PresentPass::Execute(CommandBuffer& cmd_buffer) {
     }
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(present_tex, "copy", {});
+    cmd_buffer.DrawPostProcess({"copy", present_tex});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1199,7 +1199,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const int write_idx = history_index_;
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({history_rt_[write_idx], glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(main_color_tex, "taa_resolve", {
+    cmd_buffer.DrawPostProcess({"taa_resolve", main_color_tex, {
         static_cast<float>(history_tex),
         blend_factor,
         current_jitter_.x,
@@ -1208,14 +1208,14 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(mv_tex),
         static_cast<float>(sw),
         static_cast<float>(sh)
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // 将 TAA 结果 copy 到 taa RT（供 Present/FXAA 读取）
     const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
     if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess(taa_out_tex, "copy", {});
+        cmd_buffer.DrawPostProcess({"copy", taa_out_tex});
         cmd_buffer.EndRenderPass();
     }
 
@@ -1294,7 +1294,7 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: DOF → dof RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "dof", {
+    cmd_buffer.DrawPostProcess({"dof", depth_tex, {
         pp_config.dof_focus_distance,
         pp_config.dof_focus_range,
         pp_config.dof_bokeh_radius,
@@ -1303,14 +1303,14 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height()),
         static_cast<float>(main_color_tex)
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: dof RT → main RT（回写）
     const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (dof_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess(dof_tex, "copy", {});
+        cmd_buffer.DrawPostProcess({"copy", dof_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1378,7 +1378,7 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "motion_vector", params);
+    cmd_buffer.DrawPostProcess({"motion_vector", depth_tex, params});
     cmd_buffer.EndRenderPass();
 
     prev_vp_ = current_vp;
@@ -1423,20 +1423,20 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(mv_tex, "motion_blur", {
+    cmd_buffer.DrawPostProcess({"motion_blur", mv_tex, {
         pp_config.motion_blur_intensity,
         static_cast<float>(pp_config.motion_blur_samples),
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height()),
         static_cast<float>(main_color_tex)
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // dof RT → main RT
     const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (mb_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess(mb_tex, "copy", {});
+        cmd_buffer.DrawPostProcess({"copy", mb_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1490,7 +1490,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: 渲染 SSR 到半分辨率 ssr RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssr, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "ssr", {
+    cmd_buffer.DrawPostProcess({"ssr", depth_tex, {
         pp_config.ssr_max_distance,
         pp_config.ssr_thickness,
         pp_config.ssr_step_size,
@@ -1500,14 +1500,14 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height()),
         static_cast<float>(scene_color_tex)
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 将 SSR 结果叠加到 scene RT（利用 SSR alpha 作为混合权重）
     const unsigned int ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
     if (ssr_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess(ssr_tex, "ui_overlay", {});
+        cmd_buffer.DrawPostProcess({"ui_overlay", ssr_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1558,7 +1558,7 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: 边缘检测 → outline RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
-    cmd_buffer.DrawPostProcess(depth_tex, "edge_detect", {
+    cmd_buffer.DrawPostProcess({"edge_detect", depth_tex, {
         pp_ptr->outline_thickness,
         pp_ptr->outline_depth_threshold,
         pp_ptr->outline_normal_threshold,
@@ -1569,14 +1569,14 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
         far_plane,
         static_cast<float>(Screen::width()),
         static_cast<float>(Screen::height())
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 将边缘结果叠加到 scene RT
     const unsigned int outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
     if (outline_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess(outline_tex, "ui_overlay", {});
+        cmd_buffer.DrawPostProcess({"ui_overlay", outline_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1657,7 +1657,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     // [12-15] reserved (pad to 16)
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(scene_tex, "light_shaft", {
+    cmd_buffer.DrawPostProcess({"light_shaft", scene_tex, {
         static_cast<float>(depth_tex),
         sun_uv_x, sun_uv_y,
         pp->light_shaft_color.r, pp->light_shaft_color.g, pp->light_shaft_color.b,
@@ -1668,7 +1668,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(pp->light_shaft_samples),
         pp->light_shaft_intensity,
         0.0f, 0.0f, 0.0f, 0.0f
-    });
+    }});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1754,7 +1754,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     // [29]     aspect
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(scene_tex, "volumetric_fog", {
+    cmd_buffer.DrawPostProcess({"volumetric_fog", scene_tex, {
         static_cast<float>(depth_tex),
         pp->fog_color.r, pp->fog_color.g, pp->fog_color.b,
         pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset,
@@ -1768,14 +1768,14 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
         cam_up.x, cam_up.y, cam_up.z,
         cam_fwd.x, cam_fwd.y, cam_fwd.z,
         tan_fov_y, aspect
-    });
+    }});
     cmd_buffer.EndRenderPass();
 
     // 将雾效结果（已包含 scene 颜色）覆写回 scene RT
     const unsigned int fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
     if (fog_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess(fog_tex, "copy", {});
+        cmd_buffer.DrawPostProcess({"copy", fog_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1838,9 +1838,9 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(accum_tex, "wboit_composite", {
+    cmd_buffer.DrawPostProcess({"wboit_composite", accum_tex, {
         static_cast<float>(reveal_tex)
-    });
+    }});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1956,7 +1956,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         params[36] = wc.underwater_fog_density;
         params[37] = wc.underwater_fog_color.r; params[38] = wc.underwater_fog_color.g; params[39] = wc.underwater_fog_color.b;
 
-        cmd_buffer.DrawPostProcess(scene_tex, "water", params);
+        cmd_buffer.DrawPostProcess({"water", scene_tex, params});
     }
     cmd_buffer.EndRenderPass();
 }
@@ -2044,7 +2044,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
         params[24] = decal_up.y;
         params[25] = decal_up.z;
 
-        cmd_buffer.DrawPostProcess(scene_tex, "decal", params);
+        cmd_buffer.DrawPostProcess({"decal", scene_tex, params});
     }
     cmd_buffer.EndRenderPass();
 }

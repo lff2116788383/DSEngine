@@ -166,8 +166,8 @@ void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     clear_cmds_.push_back({next_cmd_order_++, color});
 }
 
-void OpenGLCommandBuffer::DrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) {
-    draw_post_process_cmds_.push_back({next_cmd_order_++, source_texture, effect_name, params});
+void OpenGLCommandBuffer::DrawPostProcess(dse::render::PostProcessRequest request) {
+    draw_post_process_cmds_.push_back({next_cmd_order_++, std::move(request)});
 }
 
 void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
@@ -329,7 +329,7 @@ void OpenGLCommandBuffer::Execute(OpenGLRhiDevice* device) {
         } else if (cmd.type == 7) {
             device->RealSubmitDrawSkybox(draw_skybox_cmds_[cmd.index].cubemap_texture_handle, draw_skybox_cmds_[cmd.index].view, draw_skybox_cmds_[cmd.index].projection);
         } else if (cmd.type == 11) {
-            device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].source_texture, draw_post_process_cmds_[cmd.index].effect_name, draw_post_process_cmds_[cmd.index].params);
+            device->RealSubmitDrawPostProcess(draw_post_process_cmds_[cmd.index].request);
         } else if (cmd.type == 12) {
             device->RealSubmitDrawParticles3D(draw_particles3d_cmds_[cmd.index].items, draw_particles3d_cmds_[cmd.index].view, draw_particles3d_cmds_[cmd.index].projection);
         } else if (cmd.type == 14) {
@@ -870,8 +870,8 @@ void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, 
     draw_executor_.DrawSkybox(cubemap_texture_handle, view, projection, shader_mgr_);
 }
 
-void OpenGLRhiDevice::RealSubmitDrawPostProcess(unsigned int source_texture, const std::string& effect_name, const std::vector<float>& params) {
-    draw_executor_.DrawPostProcess(source_texture, effect_name, params, shader_mgr_);
+void OpenGLRhiDevice::RealSubmitDrawPostProcess(const dse::render::PostProcessRequest& request) {
+    draw_executor_.DrawPostProcess(request, shader_mgr_);
 }
 
 void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {

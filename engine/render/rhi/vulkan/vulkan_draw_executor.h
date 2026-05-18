@@ -19,6 +19,7 @@
 
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/draw_executor_common.h"
+#include "engine/render/rhi/postprocess_common.h"
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <vector>
@@ -145,9 +146,7 @@ public:
                      VulkanShaderManager& shader_mgr);
 
     void DrawPostProcess(VkCommandBuffer cmd_buf,
-                          unsigned int source_texture,
-                          const std::string& effect_name,
-                          const std::vector<float>& params,
+                          const dse::render::PostProcessRequest& request,
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 

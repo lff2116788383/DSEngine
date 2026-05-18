@@ -13,7 +13,9 @@
 #define DSE_RENDER_POSTPROCESS_COMMON_H
 
 #include <vector>
+#include <string>
 #include <cstddef>
+#include <cstdint>
 
 namespace dse {
 namespace render {
@@ -118,6 +120,51 @@ inline BloomCompositeParams PrepareBloomCompositeParams(const CompositeParamsVie
     p.film_grain_time      = cv.Float(CompositeParamsView::kFilmGrainTime, 0.0f);
     return p;
 }
+
+// ============================================================
+// PostProcessRequest — 三端统一的后处理效果请求描述
+//
+// 将纹理句柄与着色器参数彻底分离，消除 vector<float> 位置语义：
+// - source_texture / source_binding: 主输入纹理（多数效果 binding=1，light_shaft binding=0）
+// - textures[]: 额外纹理（显式声明 slot + handle）
+// - params:     纯着色器 uniform 数据（不再混入纹理句柄）
+// - blend_enabled: 是否启用混合（decal / water / wboit_composite / ui_overlay）
+// ============================================================
+
+static constexpr int kMaxPPTextures = 8;
+
+struct PPTextureBinding {
+    uint32_t slot    = 0;   ///< 绑定点（对应 GLSL layout(binding=N) / HLSL tN / VK set2 binding）
+    unsigned int handle = 0; ///< 纹理句柄，0 表示空
+};
+
+struct PostProcessRequest {
+    std::string effect_name;
+    unsigned int source_texture = 0;
+    int source_binding          = 1;    ///< 主纹理绑定点（light_shaft = 0，其余 = 1）
+
+    PPTextureBinding textures[kMaxPPTextures] = {};  ///< 额外纹理，遇到 handle==0 终止
+
+    std::vector<float> params;          ///< 纯着色器 uniform 参数（不含纹理句柄）
+
+    bool blend_enabled = false;         ///< 是否启用 alpha 混合
+
+    PostProcessRequest() = default;
+
+    /// 便利构造：PostProcessRequest("effect", src_tex, {p0, p1, ...})
+    PostProcessRequest(std::string name, unsigned int src,
+                       std::vector<float> p = {}, bool blend = false, int src_bind = 1)
+        : effect_name(std::move(name)), source_texture(src),
+          source_binding(src_bind), params(std::move(p)), blend_enabled(blend) {}
+
+    /// 便利方法：添加一个额外纹理绑定
+    PostProcessRequest& Tex(uint32_t slot, unsigned int handle) {
+        for (auto& t : textures) {
+            if (t.handle == 0) { t = {slot, handle}; return *this; }
+        }
+        return *this;
+    }
+};
 
 } // namespace render
 } // namespace dse

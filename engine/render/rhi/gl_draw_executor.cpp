@@ -1133,10 +1133,11 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
 // 后处理绘制
 // ============================================================
 
-void GLDrawExecutor::DrawPostProcess(unsigned int source_texture,
-                                       const std::string& effect_name,
-                                       const std::vector<float>& params,
+void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& request,
                                        GLShaderManager& shader_mgr) {
+    const unsigned int source_texture = request.source_texture;
+    const std::string& effect_name = request.effect_name;
+    const std::vector<float>& params = request.params;
     // 后处理全屏四边形 VAO/VBO
     if (pp_vao_handle_ == 0) {
         float quadVertices[] = {
