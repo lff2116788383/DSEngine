@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include "engine/render/rhi/shader_manager_base.h"
 
 namespace dse {
 namespace render {
@@ -45,9 +46,9 @@ struct DX11ComputeProgram {
  * @class DX11ShaderManager
  * @brief D3D11 着色器管理器
  */
-class DX11ShaderManager {
+class DX11ShaderManager : public ShaderManagerBase {
 public:
-    DX11ShaderManager() = default;
+    DX11ShaderManager() { next_handle_ = 840000; }
     ~DX11ShaderManager() = default;
 
     /// 初始化
@@ -84,44 +85,7 @@ public:
     /// 获取着色器对应的 InputLayout（由 InitBuiltinShaders 创建）
     ID3D11InputLayout* GetInputLayout(unsigned int shader_handle) const;
 
-    // --- 内置着色器访问器 ---
-    unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
-    unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
-    unsigned int particle_shader_handle() const { return particle_shader_handle_; }
-    unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
-    unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
-    unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
-    unsigned int bloom_extract_shader_handle() const { return bloom_extract_shader_handle_; }
-    unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
-    unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
-    unsigned int bloom_composite_shader_handle() const { return bloom_composite_shader_handle_; }
-    unsigned int bloom_composite_ssao_shader_handle() const { return bloom_composite_ssao_shader_handle_; }
-    unsigned int fxaa_shader_handle() const { return fxaa_shader_handle_; }
-    unsigned int ssao_shader_handle() const { return ssao_shader_handle_; }
-    unsigned int ssao_blur_shader_handle() const { return ssao_blur_shader_handle_; }
-    unsigned int ssao_apply_shader_handle() const { return ssao_apply_shader_handle_; }
-    unsigned int contact_shadow_shader_handle() const { return contact_shadow_shader_handle_; }
-    unsigned int lum_compute_shader_handle() const { return lum_compute_shader_handle_; }
-    unsigned int lum_adapt_shader_handle() const { return lum_adapt_shader_handle_; }
-    unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
-    unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
-    unsigned int color_grading_shader_handle() const { return color_grading_shader_handle_; }
-    unsigned int taa_resolve_shader_handle() const { return taa_resolve_shader_handle_; }
-    unsigned int dof_shader_handle() const { return dof_shader_handle_; }
-    unsigned int motion_blur_shader_handle() const { return motion_blur_shader_handle_; }
-    unsigned int ssr_shader_handle() const { return ssr_shader_handle_; }
-    unsigned int motion_vector_shader_handle() const { return motion_vector_shader_handle_; }
-    unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
-    unsigned int deferred_lighting_shader_handle() const { return deferred_lighting_shader_handle_; }
-    unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
-    unsigned int volumetric_fog_shader_handle() const { return volumetric_fog_shader_handle_; }
-    unsigned int decal_shader_handle() const { return decal_shader_handle_; }
-    unsigned int wboit_composite_shader_handle() const { return wboit_composite_shader_handle_; }
-    unsigned int water_shader_handle() const { return water_shader_handle_; }
-    unsigned int light_shaft_shader_handle() const { return light_shaft_shader_handle_; }
-
-    std::size_t programs_created() const { return programs_created_; }
-    std::size_t programs_destroyed() const { return programs_destroyed_; }
+    // 内置着色器句柄访问器继承自 ShaderManagerBase
 
 private:
     /// 编译 HLSL 源码
@@ -134,45 +98,6 @@ private:
     DX11Context* context_ = nullptr;
 
     std::unordered_map<unsigned int, DX11ShaderProgram> programs_;
-    unsigned int next_handle_ = 840000;
-
-    unsigned int pbr_shader_handle_ = 0;
-    unsigned int skybox_shader_handle_ = 0;
-    unsigned int particle_shader_handle_ = 0;
-    unsigned int sprite_shader_handle_ = 0;
-    unsigned int postprocess_shader_handle_ = 0;
-    unsigned int shadow_shader_handle_ = 0;
-    unsigned int bloom_extract_shader_handle_ = 0;
-    unsigned int bloom_downsample_cs_handle_ = 0;
-    unsigned int bloom_upsample_cs_handle_ = 0;
-    unsigned int bloom_composite_shader_handle_ = 0;
-    unsigned int bloom_composite_ssao_shader_handle_ = 0;
-    unsigned int fxaa_shader_handle_ = 0;
-    unsigned int ssao_shader_handle_ = 0;
-    unsigned int ssao_blur_shader_handle_ = 0;
-    unsigned int ssao_apply_shader_handle_ = 0;
-    unsigned int contact_shadow_shader_handle_ = 0;
-    unsigned int lum_compute_shader_handle_ = 0;
-    unsigned int lum_adapt_shader_handle_ = 0;
-    unsigned int tonemapping_shader_handle_ = 0;
-    unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
-    unsigned int color_grading_shader_handle_ = 0;
-    unsigned int taa_resolve_shader_handle_ = 0;
-    unsigned int dof_shader_handle_ = 0;
-    unsigned int motion_blur_shader_handle_ = 0;
-    unsigned int ssr_shader_handle_ = 0;
-    unsigned int motion_vector_shader_handle_ = 0;
-    unsigned int gbuffer_shader_handle_ = 0;
-    unsigned int deferred_lighting_shader_handle_ = 0;
-    unsigned int edge_detect_shader_handle_ = 0;
-    unsigned int volumetric_fog_shader_handle_ = 0;
-    unsigned int decal_shader_handle_ = 0;
-    unsigned int wboit_composite_shader_handle_ = 0;
-    unsigned int water_shader_handle_ = 0;
-    unsigned int light_shaft_shader_handle_ = 0;
-
-    std::size_t programs_created_ = 0;
-    std::size_t programs_destroyed_ = 0;
 
     /// 着色器句柄 → InputLayout 映射
     std::unordered_map<unsigned int, ComPtr<ID3D11InputLayout>> input_layouts_;

@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include "engine/render/rhi/shader_manager_base.h"
 
 namespace dse {
 namespace render {
@@ -78,9 +79,9 @@ struct ParticleShaderLocations {
  * 3. 天空盒/粒子着色器管理
  * 4. 后处理着色器效果缓存
  */
-class GLShaderManager {
+class GLShaderManager : public ShaderManagerBase {
 public:
-    GLShaderManager() = default;
+    GLShaderManager() { next_handle_ = 100000; }
     ~GLShaderManager() = default;
 
     /// 编译并链接着色器程序（通用接口）
@@ -100,23 +101,19 @@ public:
     void Shutdown();
 
     // --- PBR 主着色器 ---
-    unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
     const PBRShaderLocations& pbr_locations() const { return pbr_locations_; }
 
     // --- 天空盒着色器 ---
-    unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
     void InitSkyboxShader();
     void set_skybox_shader_handle(unsigned int h) { skybox_shader_handle_ = h; }
 
     // --- 粒子着色器 ---
-    unsigned int particle_shader_handle() const { return particle_shader_handle_; }
     const ParticleShaderLocations& particle_locations() const { return particle_locations_; }
     void InitParticleShader();
     void set_particle_shader_handle(unsigned int h) { particle_shader_handle_ = h; }
 
     // --- GBuffer 着色器（延迟渲染几何通道） ---
-    unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
     void InitGBufferShader();
 
     // --- 后处理着色器缓存 ---
@@ -128,31 +125,18 @@ public:
     /// gen.h 统一后处理着色器：使用 GLSL 430 预编译源（VS + FS 均来自 gen.h）
     unsigned int GetOrCreateGenPPShader(const std::string& effect_name);
 
-    /// 着色器程序计数（用于资源账本）
-    std::size_t programs_created() const { return programs_created_; }
-    std::size_t programs_destroyed() const { return programs_destroyed_; }
+    // 着色器句柄访问器、计数器继承自 ShaderManagerBase
 
 private:
     /// 缓存 PBR 着色器的所有 uniform location
     void CachePBRLocations();
 
-    unsigned int pbr_shader_handle_ = 0;
     PBRShaderLocations pbr_locations_;
-
-    unsigned int skybox_shader_handle_ = 0;
     SkyboxShaderLocations skybox_locations_;
-
-    unsigned int particle_shader_handle_ = 0;
     ParticleShaderLocations particle_locations_;
-
-    unsigned int gbuffer_shader_handle_ = 0;
 
     /// 后处理着色器缓存：effect_name → shader_program_handle
     std::unordered_map<std::string, unsigned int> pp_shaders_;
-
-    /// 着色器程序创建/销毁计数
-    std::size_t programs_created_ = 0;
-    std::size_t programs_destroyed_ = 0;
 
     /// GL 3.3 UBO fallback 模式：从 SSBO GLSL 430 运行时高效生成 GLSL 330 UBO 变体
     static std::string GenerateUBOGLSL();

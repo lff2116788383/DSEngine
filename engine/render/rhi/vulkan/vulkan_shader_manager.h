@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "engine/render/rhi/shader_manager_base.h"
 
 namespace dse {
 namespace render {
@@ -72,9 +73,9 @@ struct VulkanShaderProgram {
  * 负责将 GLSL 源码编译为 SPIR-V，创建 VkShaderModule，
  * 通过反射构建 DescriptorSetLayout 和 PipelineLayout。
  */
-class VulkanShaderManager {
+class VulkanShaderManager : public ShaderManagerBase {
 public:
-    VulkanShaderManager() = default;
+    VulkanShaderManager() { next_handle_ = 540000; }
     ~VulkanShaderManager() = default;
 
     /// 初始化（需在 VulkanContext 初始化后调用）
@@ -138,41 +139,7 @@ public:
     /// 查询 Compute 程序
     const VulkanComputeProgram* GetComputeProgram(unsigned int handle) const;
 
-    // --- 内置着色器访问器 ---
-    unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
-    unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
-    unsigned int particle_shader_handle() const { return particle_shader_handle_; }
-    unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
-    unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
-    unsigned int bloom_extract_shader_handle() const { return bloom_extract_shader_handle_; }
-    unsigned int bloom_downsample_cs_handle() const { return bloom_downsample_cs_handle_; }
-    unsigned int bloom_upsample_cs_handle() const { return bloom_upsample_cs_handle_; }
-    unsigned int fxaa_shader_handle() const { return fxaa_shader_handle_; }
-    unsigned int ssao_shader_handle() const { return ssao_shader_handle_; }
-    unsigned int ssao_blur_shader_handle() const { return ssao_blur_shader_handle_; }
-    unsigned int contact_shadow_shader_handle() const { return contact_shadow_shader_handle_; }
-    unsigned int lum_compute_shader_handle() const { return lum_compute_shader_handle_; }
-    unsigned int lum_adapt_shader_handle() const { return lum_adapt_shader_handle_; }
-    unsigned int tonemapping_shader_handle() const { return tonemapping_shader_handle_; }
-    unsigned int bloom_composite_ssao_ae_shader_handle() const { return bloom_composite_ssao_ae_shader_handle_; }
-    unsigned int color_grading_shader_handle() const { return color_grading_shader_handle_; }
-    unsigned int taa_resolve_shader_handle() const { return taa_resolve_shader_handle_; }
-    unsigned int dof_shader_handle() const { return dof_shader_handle_; }
-    unsigned int motion_blur_shader_handle() const { return motion_blur_shader_handle_; }
-    unsigned int ssr_shader_handle() const { return ssr_shader_handle_; }
-    unsigned int motion_vector_shader_handle() const { return motion_vector_shader_handle_; }
-    unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
-    unsigned int deferred_lighting_shader_handle() const { return deferred_lighting_shader_handle_; }
-    unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
-    unsigned int volumetric_fog_shader_handle() const { return volumetric_fog_shader_handle_; }
-    unsigned int decal_shader_handle() const { return decal_shader_handle_; }
-    unsigned int wboit_composite_shader_handle() const { return wboit_composite_shader_handle_; }
-    unsigned int water_shader_handle() const { return water_shader_handle_; }
-    unsigned int light_shaft_shader_handle() const { return light_shaft_shader_handle_; }
-
-    /// 着色器程序计数
-    std::size_t programs_created() const { return programs_created_; }
-    std::size_t programs_destroyed() const { return programs_destroyed_; }
+    // 内置着色器句柄访问器、计数器继承自 ShaderManagerBase
 
 private:
     /// 编译 GLSL → SPIR-V
@@ -207,49 +174,13 @@ private:
 
     /// 着色器程序句柄 → Vulkan 对象
     std::unordered_map<unsigned int, VulkanShaderProgram> programs_;
-    unsigned int next_handle_ = 540000;
 
     /// Descriptor set layout 缓存
     std::unordered_map<DescriptorLayoutKey, VkDescriptorSetLayout,
                        DescriptorLayoutKeyHash> descriptor_layout_cache_;
 
-    /// 内置着色器句柄
-    unsigned int pbr_shader_handle_ = 0;
-    unsigned int skybox_shader_handle_ = 0;
-    unsigned int particle_shader_handle_ = 0;
-    unsigned int sprite_shader_handle_ = 0;
-    unsigned int postprocess_shader_handle_ = 0;
-    unsigned int bloom_extract_shader_handle_ = 0;
-    unsigned int bloom_downsample_cs_handle_ = 0;
-    unsigned int bloom_upsample_cs_handle_ = 0;
-    unsigned int fxaa_shader_handle_ = 0;
-    unsigned int ssao_shader_handle_ = 0;
-    unsigned int ssao_blur_shader_handle_ = 0;
-    unsigned int contact_shadow_shader_handle_ = 0;
-    unsigned int lum_compute_shader_handle_ = 0;
-    unsigned int lum_adapt_shader_handle_ = 0;
-    unsigned int tonemapping_shader_handle_ = 0;
-    unsigned int bloom_composite_ssao_ae_shader_handle_ = 0;
-    unsigned int color_grading_shader_handle_ = 0;
-    unsigned int taa_resolve_shader_handle_ = 0;
-    unsigned int dof_shader_handle_ = 0;
-    unsigned int motion_blur_shader_handle_ = 0;
-    unsigned int ssr_shader_handle_ = 0;
-    unsigned int motion_vector_shader_handle_ = 0;
-    unsigned int gbuffer_shader_handle_ = 0;
-    unsigned int deferred_lighting_shader_handle_ = 0;
-    unsigned int edge_detect_shader_handle_ = 0;
-    unsigned int volumetric_fog_shader_handle_ = 0;
-    unsigned int decal_shader_handle_ = 0;
-    unsigned int wboit_composite_shader_handle_ = 0;
-    unsigned int water_shader_handle_ = 0;
-    unsigned int light_shaft_shader_handle_ = 0;
-
     /// Compute 着色器程序
     std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;
-
-    std::size_t programs_created_ = 0;
-    std::size_t programs_destroyed_ = 0;
 };
 
 } // namespace render
