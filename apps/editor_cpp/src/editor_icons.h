@@ -66,3 +66,14 @@
 #define MDI_ICON_CONTENT_SAVE           "\xef\x83\x87" // U+F0C7 fa-floppy-disk
 #define MDI_ICON_EXPORT                 "\xef\x95\xae" // U+F56E fa-file-export
 #define MDI_ICON_PUZZLE                 "\xef\x84\xae" // U+F12E fa-puzzle-piece
+
+// Project panel view toggles
+#define MDI_ICON_VIEW_LIST              "\xef\x80\xba" // U+F03A fa-list
+#define MDI_ICON_VIEW_GRID              "\xef\x80\x8a" // U+F00A fa-table-cells (fa-th)
+
+// Project panel file-type icons
+#define MDI_ICON_FILE_OUTLINE           "\xef\x85\x9b" // U+F15B fa-file
+#define MDI_ICON_SCRIPT_TEXT_OUTLINE    "\xef\x87\x89" // U+F1C9 fa-file-code
+#define MDI_ICON_IMAGE_MULTIPLE         "\xef\x8c\x82" // U+F302 fa-images
+#define MDI_ICON_HUMAN                  "\xef\x80\x87" // U+F007 fa-user
+#define MDI_ICON_MUSIC_NOTE             "\xef\x80\x81" // U+F001 fa-music

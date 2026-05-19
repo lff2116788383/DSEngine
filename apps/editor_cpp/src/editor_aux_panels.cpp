@@ -129,6 +129,7 @@ namespace dse::editor {
 void DrawProjectPanel() {
     static char s_search_filter[128] = "";
     static bool s_grid_view = false;
+    static float s_grid_size = 80.0f;
     static std::filesystem::path s_rename_target;
     static char s_rename_buf[128] = "";
 
@@ -137,14 +138,34 @@ void DrawProjectPanel() {
     const std::filesystem::path base_data_path = GetProjectBaseDataPath();
     std::filesystem::path& current_path = GetCurrentProjectPanelPath();
 
-    // Toolbar: Search + View toggle
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 140);
+    // Toolbar: Search + View toggles (List | Grid) + optional size slider
+    const float right_w = s_grid_view ? 130.0f : 82.0f;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - right_w);
     ImGui::InputTextWithHint("##project_search", MDI_ICON_MAGNIFY " Search...", s_search_filter, sizeof(s_search_filter));
     ImGui::SameLine();
-    if (ImGui::Button(s_grid_view ? "List" : "Grid", ImVec2(60, 0))) {
-        s_grid_view = !s_grid_view;
+
+    // List view toggle button
+    if (!s_grid_view) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    if (ImGui::Button(MDI_ICON_VIEW_LIST "##list_view", ImVec2(26, 0))) s_grid_view = false;
+    if (!s_grid_view) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("List View");
+    ImGui::SameLine(0, 2);
+
+    // Grid view toggle button
+    if (s_grid_view) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    if (ImGui::Button(MDI_ICON_VIEW_GRID "##grid_view", ImVec2(26, 0))) s_grid_view = true;
+    if (s_grid_view) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Grid View");
+
+    // Grid size slider (only in grid view)
+    if (s_grid_view) {
+        ImGui::SameLine(0, 6);
+        ImGui::SetNextItemWidth(48);
+        ImGui::SliderFloat("##grid_sz", &s_grid_size, 48.0f, 128.0f, "");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Thumbnail size: %.0f", s_grid_size);
     }
-    ImGui::SameLine();
+
+    ImGui::SameLine(0, 6);
     if (ImGui::Button(MDI_ICON_COG, ImVec2(24, 0))) {
         AssetDatabase::Get().Refresh();
     }
@@ -222,7 +243,7 @@ void DrawProjectPanel() {
 
         if (s_grid_view) {
             // Grid view
-            const float cell_size = 80.0f;
+            const float cell_size = s_grid_size;
             const float panel_width = ImGui::GetContentRegionAvail().x;
             int columns = (std::max)(1, static_cast<int>(panel_width / cell_size));
             int col = 0;
@@ -264,8 +285,11 @@ void DrawProjectPanel() {
                     ImGui::Dummy(ImVec2(thumb_w, thumb_h));
                 }
 
-                // Truncate long filenames
-                std::string display_name = filename.size() > 10 ? filename.substr(0, 9) + "..." : filename;
+                // Truncate long filenames based on cell size
+                const int max_chars = (std::max)(5, static_cast<int>(cell_size / 8));
+                std::string display_name = static_cast<int>(filename.size()) > max_chars
+                    ? filename.substr(0, max_chars - 1) + "..."
+                    : filename;
                 ImGui::TextUnformatted(display_name.c_str());
                 ImGui::EndGroup();
 
@@ -325,14 +349,25 @@ void DrawProjectPanel() {
                 }
             }
         } else {
-            // List view
+            // List view — two columns: icon+name | type/size
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 2));
+            if (ImGui::BeginTable("project_list", 3,
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY)) {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Name",  ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Type",  ImGuiTableColumnFlags_WidthFixed, 72);
+                ImGui::TableSetupColumn("Size",  ImGuiTableColumnFlags_WidthFixed, 56);
+                ImGui::TableHeadersRow();
+
             for (const auto& entry : entries) {
                 const auto& path = entry.path();
                 const std::string filename = path.filename().string();
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
 
                 // Inline rename
                 if (s_rename_target == path) {
-                    ImGui::SetNextItemWidth(200);
+                    ImGui::SetNextItemWidth(-1);
                     if (ImGui::InputText("##rename_project", s_rename_buf, sizeof(s_rename_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
                         try {
                             std::filesystem::rename(path, path.parent_path() / s_rename_buf);
@@ -342,15 +377,41 @@ void DrawProjectPanel() {
                     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                         s_rename_target.clear();
                     }
+                    ImGui::TableSetColumnIndex(1); ImGui::TableSetColumnIndex(2);
                     continue;
                 }
 
+                // Pick icon by type
+                const char* type_icon = MDI_ICON_FILE_OUTLINE;
+                const char* type_str  = "File";
                 if (entry.is_directory()) {
-                    if (ImGui::Selectable((std::string(MDI_ICON_PACKAGE_VARIANT " ") + filename).c_str())) {
-                        current_path /= path.filename();
+                    type_icon = MDI_ICON_PACKAGE_VARIANT;
+                    type_str  = "Folder";
+                } else {
+                    std::string ext2 = path.extension().string();
+                    for (auto& c : ext2) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    if (ext2 == ".lua")                      { type_icon = MDI_ICON_SCRIPT_TEXT_OUTLINE;  type_str = "Script"; }
+                    else if (ext2 == ".dmesh")               { type_icon = MDI_ICON_SPHERE;               type_str = "Mesh"; }
+                    else if (ext2 == ".dscene")              { type_icon = MDI_ICON_IMAGE_MULTIPLE;       type_str = "Scene"; }
+                    else if (ext2 == ".dprefab")             { type_icon = MDI_ICON_CUBE_OUTLINE;         type_str = "Prefab"; }
+                    else if (ext2 == ".danim")               { type_icon = MDI_ICON_ANIMATION;            type_str = "Anim"; }
+                    else if (ext2 == ".dskel")               { type_icon = MDI_ICON_HUMAN;                type_str = "Skeleton"; }
+                    else if (IsImageExtension(ext2))         { type_icon = MDI_ICON_IMAGE;                type_str = "Texture"; }
+                    else if (ext2==".wav"||ext2==".ogg"||ext2==".mp3") { type_icon = MDI_ICON_MUSIC_NOTE; type_str = "Audio"; }
+                    else if (ext2 == ".dpak")                { type_icon = MDI_ICON_PACKAGE_VARIANT;      type_str = "Pak"; }
+                }
+
+                std::string label = std::string(type_icon) + "  " + filename;
+                bool selected = false;
+                if (entry.is_directory()) {
+                    if (ImGui::Selectable(label.c_str(), &selected,
+                        ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
+                        if (ImGui::IsMouseDoubleClicked(0))
+                            current_path /= path.filename();
                     }
                 } else {
-                    ImGui::Selectable((std::string(MDI_ICON_IMAGE " ") + filename).c_str());
+                    ImGui::Selectable(label.c_str(), &selected,
+                        ImGuiSelectableFlags_SpanAllColumns);
 
                     if (ImGui::BeginDragDropSource()) {
                         const std::string relative_path = std::filesystem::relative(path, base_data_path).string();
@@ -370,6 +431,22 @@ void DrawProjectPanel() {
                             ImGui::TextDisabled("Type: %s", AssetTypeToString(info->type));
                             ImGui::EndTooltip();
                         }
+                    }
+                }
+
+                // Type column
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextDisabled("%s", type_str);
+
+                // Size column
+                ImGui::TableSetColumnIndex(2);
+                if (!entry.is_directory()) {
+                    std::error_code fec;
+                    auto fsz = std::filesystem::file_size(path, fec);
+                    if (!fec) {
+                        if (fsz < 1024) ImGui::TextDisabled("%zu B", fsz);
+                        else if (fsz < 1024*1024) ImGui::TextDisabled("%.0f KB", fsz/1024.0);
+                        else ImGui::TextDisabled("%.1f MB", fsz/(1024.0*1024.0));
                     }
                 }
 
@@ -394,7 +471,10 @@ void DrawProjectPanel() {
 #endif
                     ImGui::EndPopup();
                 }
-            }
+            } // for entries
+            ImGui::EndTable();
+            } // if BeginTable
+            ImGui::PopStyleVar();
         }
     }
 
