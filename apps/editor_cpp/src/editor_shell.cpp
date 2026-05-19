@@ -316,6 +316,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                     ImGui::MenuItem("Lua Console", nullptr, panels->lua_console);
                 if (panels->localization_preview)
                     ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
+                if (panels->undo_history)
+                    ImGui::MenuItem("Undo History", nullptr, panels->undo_history);
             }
             ImGui::EndMenu();
         }

@@ -44,6 +44,9 @@
 #define MDI_ICON_CREATION               "\xef\x97\x91" // U+F5D1 fa-atom - Particle
 #define MDI_ICON_FORMAT_TEXT            "\xef\x80\xb1" // U+F031 fa-font - UILabel
 #define MDI_ICON_POST_PROCESS           "\xef\x94\xab" // U+F52B fa-wand-magic-sparkles - PostProcess
+#define MDI_ICON_FILE                   "\xef\x85\x9b" // U+F15B fa-file - Script
+#define MDI_ICON_BUTTON                 "\xef\x82\x96" // U+F096 fa-square (outline) - UIButton
+#define MDI_ICON_CIRCLE                 "\xef\x84\x91" // U+F111 fa-circle - CircleCollider
 
 // Console panel icons
 #define MDI_ICON_INFORMATION            "\xef\x81\x9a" // U+F05A fa-circle-info

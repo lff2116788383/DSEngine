@@ -1020,6 +1020,318 @@ void DrawParticleEmitterSection(EditorContext& context) {
     ImGui::TextDisabled("Active Particles: %d", static_cast<int>(emitter.particles.size()));
 }
 
+// ─── Script ─────────────────────────────────────────────────────────────────
+
+void DrawScriptSection(EditorContext& context) {
+    if (!context.registry.all_of<ScriptComponent>(context.selected_entity)) return;
+    auto& script = context.registry.get<ScriptComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_FILE "  Script", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "script_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+
+    static char path_buf[256] = "";
+    static entt::entity s_last_script_entity = entt::null;
+    if (s_last_script_entity != context.selected_entity) {
+        s_last_script_entity = context.selected_entity;
+        std::strncpy(path_buf, script.script_path.c_str(), sizeof(path_buf) - 1);
+        path_buf[sizeof(path_buf) - 1] = '\0';
+    }
+    INSPECTOR_PROPERTY("Script Path", if (ImGui::InputText("##script_path", path_buf, sizeof(path_buf))) {
+        script.script_path = path_buf;
+    });
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            std::string p(static_cast<const char*>(payload->Data));
+            if (p.ends_with(".lua")) {
+                script.script_path = p;
+                std::strncpy(path_buf, p.c_str(), sizeof(path_buf) - 1);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##script_enabled", &script.enabled));
+
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+// ─── 2D Physics Colliders ───────────────────────────────────────────────────
+
+void DrawBoxCollider2DSection(EditorContext& context) {
+    if (!context.registry.all_of<BoxCollider2DComponent>(context.selected_entity)) return;
+    auto& col = context.registry.get<BoxCollider2DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Box Collider 2D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "boxcol2d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##bc2d_size", glm::value_ptr(col.size), 0.1f, 0.01f));
+    INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##bc2d_off", glm::value_ptr(col.offset), 0.1f));
+    INSPECTOR_PROPERTY("Density", ImGui::DragFloat("##bc2d_dens", &col.density, 0.1f, 0.0f));
+    INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##bc2d_fric", &col.friction, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##bc2d_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##bc2d_trigger", &col.is_trigger));
+    ImGui::Columns(1);
+}
+
+void DrawCircleCollider2DSection(EditorContext& context) {
+    if (!context.registry.all_of<CircleCollider2DComponent>(context.selected_entity)) return;
+    auto& col = context.registry.get<CircleCollider2DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_CIRCLE "  Circle Collider 2D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "circlecol2d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##cc2d_rad", &col.radius, 0.1f, 0.01f));
+    INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##cc2d_off", glm::value_ptr(col.offset), 0.1f));
+    INSPECTOR_PROPERTY("Density", ImGui::DragFloat("##cc2d_dens", &col.density, 0.1f, 0.0f));
+    INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##cc2d_fric", &col.friction, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##cc2d_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##cc2d_trigger", &col.is_trigger));
+    ImGui::Columns(1);
+}
+
+// ─── 3D Physics Extended ────────────────────────────────────────────────────
+
+void DrawCapsuleCollider3DSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::CapsuleCollider3DComponent>(context.selected_entity)) return;
+    auto& col = context.registry.get<dse::CapsuleCollider3DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Capsule Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "capcol3d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##capcol_rad", &col.radius, 0.05f, 0.01f));
+    INSPECTOR_PROPERTY("Height", ImGui::DragFloat("##capcol_h", &col.height, 0.1f, 0.01f));
+    INSPECTOR_PROPERTY("Center", ImGui::DragFloat3("##capcol_center", glm::value_ptr(col.center), 0.1f));
+    const char* dirs[] = { "X", "Y", "Z" };
+    INSPECTOR_PROPERTY("Direction", ImGui::Combo("##capcol_dir", &col.direction, dirs, 3));
+    INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##capcol_trigger", &col.is_trigger));
+    INSPECTOR_PROPERTY("Bounciness", ImGui::DragFloat("##capcol_bounce", &col.bounciness, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##capcol_fric", &col.friction, 0.05f, 0.0f, 1.0f));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawCharacterController3DSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::CharacterController3DComponent>(context.selected_entity)) return;
+    auto& cc = context.registry.get<dse::CharacterController3DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_RUN "  Character Controller 3D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "cc3d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##cc3d_rad", &cc.radius, 0.05f, 0.01f));
+    INSPECTOR_PROPERTY("Height", ImGui::DragFloat("##cc3d_h", &cc.height, 0.1f, 0.01f));
+    INSPECTOR_PROPERTY("Slope Limit", ImGui::DragFloat("##cc3d_slope", &cc.slope_limit, 1.0f, 0.0f, 89.0f, "%.0f deg"));
+    INSPECTOR_PROPERTY("Step Offset", ImGui::DragFloat("##cc3d_step", &cc.step_offset, 0.05f, 0.0f));
+    INSPECTOR_PROPERTY("Skin Width", ImGui::DragFloat("##cc3d_skin", &cc.skin_width, 0.005f, 0.001f, 0.5f));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Is Grounded", ImGui::Text(cc.is_grounded ? "Yes" : "No"));
+    INSPECTOR_PROPERTY("Velocity", ImGui::Text("(%.2f, %.2f, %.2f)", cc.velocity.x, cc.velocity.y, cc.velocity.z));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+// ─── UI Components ──────────────────────────────────────────────────────────
+
+void DrawUIRendererSection(EditorContext& context) {
+    if (!context.registry.all_of<UIRendererComponent>(context.selected_entity)) return;
+    auto& ui = context.registry.get<UIRendererComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_IMAGE "  UI Renderer", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uirender_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Color", ImGui::ColorEdit4("##ui_color", glm::value_ptr(ui.color)));
+    INSPECTOR_PROPERTY("Order", ImGui::DragInt("##ui_order", &ui.order, 1));
+    INSPECTOR_PROPERTY("Visible", ImGui::Checkbox("##ui_visible", &ui.visible));
+    INSPECTOR_PROPERTY("Interactable", ImGui::Checkbox("##ui_interact", &ui.interactable));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##ui_size", glm::value_ptr(ui.size), 1.0f, 0.0f));
+    INSPECTOR_PROPERTY("Pivot", ImGui::DragFloat2("##ui_pivot", glm::value_ptr(ui.pivot), 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Anchor Min", ImGui::DragFloat2("##ui_anc_min", glm::value_ptr(ui.anchor_min), 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Anchor Max", ImGui::DragFloat2("##ui_anc_max", glm::value_ptr(ui.anchor_max), 0.05f, 0.0f, 1.0f));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Hover Scale", ImGui::DragFloat("##ui_hscale", &ui.hover_scale, 0.01f, 0.5f, 2.0f));
+    INSPECTOR_PROPERTY("Pressed Scale", ImGui::DragFloat("##ui_pscale", &ui.pressed_scale, 0.01f, 0.5f, 2.0f));
+    INSPECTOR_PROPERTY("Nine Slice", ImGui::Checkbox("##ui_9slice", &ui.nine_slice_enabled));
+    if (ui.nine_slice_enabled) {
+        INSPECTOR_PROPERTY("Border", ImGui::DragFloat4("##ui_9border", glm::value_ptr(ui.nine_slice_border), 0.01f, 0.0f, 0.5f));
+    }
+    ImGui::Columns(1);
+}
+
+void DrawUIButtonSection(EditorContext& context) {
+    if (!context.registry.all_of<UIButtonComponent>(context.selected_entity)) return;
+    auto& btn = context.registry.get<UIButtonComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_BUTTON "  UI Button", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uibtn_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Normal Color", ImGui::ColorEdit4("##btn_normal", glm::value_ptr(btn.normal_color)));
+    INSPECTOR_PROPERTY("Hover Color", ImGui::ColorEdit4("##btn_hover", glm::value_ptr(btn.hover_color)));
+    INSPECTOR_PROPERTY("Pressed Color", ImGui::ColorEdit4("##btn_pressed", glm::value_ptr(btn.pressed_color)));
+    INSPECTOR_PROPERTY("Disabled Color", ImGui::ColorEdit4("##btn_disabled", glm::value_ptr(btn.disabled_color)));
+    ImGui::Columns(1);
+}
+
+void DrawUIPanelSection(EditorContext& context) {
+    if (!context.registry.all_of<UIPanelComponent>(context.selected_entity)) return;
+    auto& panel = context.registry.get<UIPanelComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  UI Panel", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uipanel_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Blocks Input", ImGui::Checkbox("##panel_blocks", &panel.blocks_input));
+    ImGui::Columns(1);
+}
+
+void DrawUIMaskSection(EditorContext& context) {
+    if (!context.registry.all_of<UIMaskComponent>(context.selected_entity)) return;
+    auto& mask = context.registry.get<UIMaskComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  UI Mask", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uimask_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##mask_en", &mask.enabled));
+    INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##mask_size", glm::value_ptr(mask.size), 1.0f));
+    INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##mask_off", glm::value_ptr(mask.offset), 1.0f));
+    ImGui::Columns(1);
+}
+
+void DrawUIRichTextSection(EditorContext& context) {
+    if (!context.registry.all_of<UIRichTextComponent>(context.selected_entity)) return;
+    auto& rt = context.registry.get<UIRichTextComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_FILE "  UI Rich Text", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uirt_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    static char rt_buf[512] = "";
+    static entt::entity s_last_rt_entity = entt::null;
+    if (s_last_rt_entity != context.selected_entity) {
+        s_last_rt_entity = context.selected_entity;
+        std::strncpy(rt_buf, rt.text.c_str(), sizeof(rt_buf) - 1);
+        rt_buf[sizeof(rt_buf) - 1] = '\0';
+    }
+    INSPECTOR_PROPERTY("Text", if (ImGui::InputTextMultiline("##rt_text", rt_buf, sizeof(rt_buf), ImVec2(-1, 60))) {
+        rt.text = rt_buf;
+    });
+    INSPECTOR_PROPERTY("Default Color", ImGui::ColorEdit4("##rt_def_color", glm::value_ptr(rt.default_color)));
+    INSPECTOR_PROPERTY("Shadow", ImGui::Checkbox("##rt_shadow", &rt.enable_shadow));
+    if (rt.enable_shadow) {
+        INSPECTOR_PROPERTY("Shadow Offset", ImGui::DragFloat2("##rt_sh_off", glm::value_ptr(rt.shadow_offset), 0.5f));
+        INSPECTOR_PROPERTY("Shadow Color", ImGui::ColorEdit4("##rt_sh_color", glm::value_ptr(rt.shadow_color)));
+    }
+    INSPECTOR_PROPERTY("Outline", ImGui::Checkbox("##rt_outline", &rt.enable_outline));
+    if (rt.enable_outline) {
+        INSPECTOR_PROPERTY("Outline Color", ImGui::ColorEdit4("##rt_ol_color", glm::value_ptr(rt.outline_color)));
+    }
+    ImGui::Columns(1);
+}
+
+// ─── UI Layout (migrated from DrawUILayoutInspector callback) ───────────────
+
+void DrawUIAnchorSection(EditorContext& context) {
+    if (!context.registry.all_of<UIAnchorComponent>(context.selected_entity)) return;
+    auto& anchor = context.registry.get<UIAnchorComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_IMAGE "  UI Anchor", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uianchor_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    const char* anchor_types[] = {
+        "Center", "TopLeft", "TopCenter", "TopRight",
+        "MiddleLeft", "MiddleRight", "BottomLeft", "BottomCenter",
+        "BottomRight", "StretchAll", "StretchHorizontal", "StretchVertical"
+    };
+    int current_anchor = static_cast<int>(anchor.anchor);
+    INSPECTOR_PROPERTY("Anchor Preset", if (ImGui::Combo("##ui_anchor_preset", &current_anchor, anchor_types, IM_ARRAYSIZE(anchor_types))) {
+        anchor.anchor = current_anchor;
+    });
+    INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##ui_anchor_off", glm::value_ptr(anchor.offset), 1.0f));
+    ImGui::Columns(1);
+}
+
+void DrawUIGridLayoutSection(EditorContext& context) {
+    if (!context.registry.all_of<UIGridLayoutComponent>(context.selected_entity)) return;
+    auto& grid = context.registry.get<UIGridLayoutComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  UI Grid Layout", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uigrid_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Columns", ImGui::DragInt("##grid_cols", &grid.columns, 0.1f, 0, 100));
+    INSPECTOR_PROPERTY("Rows", ImGui::DragInt("##grid_rows", &grid.rows, 0.1f, 0, 100));
+    INSPECTOR_PROPERTY("Cell Size", ImGui::DragFloat2("##grid_cell", glm::value_ptr(grid.cell_size), 1.0f));
+    INSPECTOR_PROPERTY("Spacing", ImGui::DragFloat2("##grid_space", glm::value_ptr(grid.spacing), 1.0f));
+    const char* align_types[] = {
+        "TopLeft", "TopCenter", "TopRight",
+        "MiddleLeft", "MiddleCenter", "MiddleRight",
+        "BottomLeft", "BottomCenter", "BottomRight"
+    };
+    int current_align = static_cast<int>(grid.alignment);
+    INSPECTOR_PROPERTY("Alignment", if (ImGui::Combo("##grid_align", &current_align, align_types, IM_ARRAYSIZE(align_types))) {
+        grid.alignment = current_align;
+    });
+    ImGui::Columns(1);
+}
+
+void DrawUICanvasScalerSection(EditorContext& context) {
+    if (!context.registry.all_of<UICanvasScalerComponent>(context.selected_entity)) return;
+    auto& scaler = context.registry.get<UICanvasScalerComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_RESIZE "  UI Canvas Scaler", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uiscaler_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Reference Res", ImGui::DragFloat2("##scaler_ref", glm::value_ptr(scaler.reference_resolution), 1.0f));
+    INSPECTOR_PROPERTY("Match W/H", ImGui::Checkbox("##scaler_match", &scaler.match_width_or_height));
+    if (scaler.match_width_or_height) {
+        INSPECTOR_PROPERTY("Factor", ImGui::SliderFloat("##scaler_factor", &scaler.scale_factor, 0.0f, 1.0f));
+    }
+    ImGui::Columns(1);
+}
+
+void DrawUIAnimationSection(EditorContext& context) {
+    if (!context.registry.all_of<UIAnimationComponent>(context.selected_entity)) return;
+    auto& anim = context.registry.get<UIAnimationComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_ANIMATION "  UI Animation", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uianim_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    if (anim.playing) {
+        INSPECTOR_PROPERTY("Control", if (ImGui::Button("Stop##uianim", ImVec2(-1, 0))) anim.playing = false);
+    } else {
+        INSPECTOR_PROPERTY("Control", if (ImGui::Button("Play##uianim", ImVec2(-1, 0))) {
+            anim.playing = true; anim.elapsed = 0.0f;
+            anim.delay_remaining = anim.delay; anim.reverse = false;
+        });
+    }
+    INSPECTOR_PROPERTY("Duration", ImGui::DragFloat("##uia_dur", &anim.duration, 0.01f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY("Delay", ImGui::DragFloat("##uia_delay", &anim.delay, 0.01f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY("Loop", ImGui::Checkbox("##uia_loop", &anim.loop));
+    INSPECTOR_PROPERTY("Ping Pong", ImGui::Checkbox("##uia_pp", &anim.ping_pong));
+    const char* easing_types[] = { "Linear", "Ease-In", "Ease-Out", "Ease-In-Out" };
+    INSPECTOR_PROPERTY("Easing", ImGui::Combo("##uia_ease", &anim.easing, easing_types, IM_ARRAYSIZE(easing_types)));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Anim Position", ImGui::Checkbox("##uia_pos", &anim.animate_position));
+    if (anim.animate_position) {
+        INSPECTOR_PROPERTY("Target Pos", ImGui::DragFloat2("##uia_tpos", glm::value_ptr(anim.target_position), 1.0f));
+    }
+    INSPECTOR_PROPERTY("Anim Scale", ImGui::Checkbox("##uia_scl", &anim.animate_scale));
+    if (anim.animate_scale) {
+        INSPECTOR_PROPERTY("Target Scale", ImGui::DragFloat2("##uia_tscl", glm::value_ptr(anim.target_scale), 0.05f));
+    }
+    INSPECTOR_PROPERTY("Anim Alpha", ImGui::Checkbox("##uia_alp", &anim.animate_alpha));
+    if (anim.animate_alpha) {
+        INSPECTOR_PROPERTY("Target Alpha", ImGui::DragFloat("##uia_talp", &anim.target_alpha, 0.05f, 0.0f, 1.0f));
+    }
+    INSPECTOR_PROPERTY("Anim Color", ImGui::Checkbox("##uia_col", &anim.animate_color));
+    if (anim.animate_color) {
+        INSPECTOR_PROPERTY("Target Color", ImGui::ColorEdit4("##uia_tcol", glm::value_ptr(anim.target_color)));
+    }
+    ImGui::Columns(1);
+}
+
+// ─── 3D Physics (existing) ──────────────────────────────────────────────────
+
 void DrawRigidBody3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::RigidBody3DComponent>(context.selected_entity)) {
         return;
@@ -1254,6 +1566,23 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<ParticleEmitterComponent>(e)) r.emplace<ParticleEmitterComponent>(e); },
         22,
         [](entt::registry& r, entt::entity e) { if (r.all_of<ParticleEmitterComponent>(e)) r.erase<ParticleEmitterComponent>(e); }});
+    reg.Register({"Box Collider 2D", "2D", DrawBoxCollider2DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<BoxCollider2DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<BoxCollider2DComponent>(e)) r.emplace<BoxCollider2DComponent>(e); },
+        23,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<BoxCollider2DComponent>(e)) r.erase<BoxCollider2DComponent>(e); }});
+    reg.Register({"Circle Collider 2D", "2D", DrawCircleCollider2DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<CircleCollider2DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<CircleCollider2DComponent>(e)) r.emplace<CircleCollider2DComponent>(e); },
+        24,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<CircleCollider2DComponent>(e)) r.erase<CircleCollider2DComponent>(e); }});
+
+    // --- Script ---
+    reg.Register({"Script", "Script", DrawScriptSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<ScriptComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<ScriptComponent>(e)) r.emplace<ScriptComponent>(e); },
+        15,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<ScriptComponent>(e)) r.erase<ScriptComponent>(e); }});
 
     // --- UI ---
     reg.Register({"UI Label", "UI", DrawUILabelSection,
@@ -1340,10 +1669,20 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SphereCollider3DComponent>(e)) r.emplace<dse::SphereCollider3DComponent>(e); },
         62,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SphereCollider3DComponent>(e)) r.erase<dse::SphereCollider3DComponent>(e); }});
+    reg.Register({"Capsule Collider 3D", "Physics", DrawCapsuleCollider3DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::CapsuleCollider3DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::CapsuleCollider3DComponent>(e)) r.emplace<dse::CapsuleCollider3DComponent>(e); },
+        63,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::CapsuleCollider3DComponent>(e)) r.erase<dse::CapsuleCollider3DComponent>(e); }});
+    reg.Register({"Character Controller 3D", "Physics", DrawCharacterController3DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::CharacterController3DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::CharacterController3DComponent>(e)) r.emplace<dse::CharacterController3DComponent>(e); },
+        64,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::CharacterController3DComponent>(e)) r.erase<dse::CharacterController3DComponent>(e); }});
     reg.Register({"Particle System 3D", "3D", DrawParticleSystem3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::ParticleSystem3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ParticleSystem3DComponent>(e)) r.emplace<dse::ParticleSystem3DComponent>(e); },
-        63,
+        65,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ParticleSystem3DComponent>(e)) r.erase<dse::ParticleSystem3DComponent>(e); }});
 
     // --- Probes ---
@@ -1378,22 +1717,47 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<AudioListenerComponent>(e)) r.emplace<AudioListenerComponent>(e); },
         81,
         [](entt::registry& r, entt::entity e) { if (r.all_of<AudioListenerComponent>(e)) r.erase<AudioListenerComponent>(e); }});
-    reg.Register({"UI Anchor", "UI", nullptr,
+    reg.Register({"UI Renderer", "UI", DrawUIRendererSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIRendererComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIRendererComponent>(e)) r.emplace<UIRendererComponent>(e); },
+        28,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIRendererComponent>(e)) r.erase<UIRendererComponent>(e); }});
+    reg.Register({"UI Button", "UI", DrawUIButtonSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIButtonComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIButtonComponent>(e)) r.emplace<UIButtonComponent>(e); },
+        29,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIButtonComponent>(e)) r.erase<UIButtonComponent>(e); }});
+    reg.Register({"UI Panel", "UI", DrawUIPanelSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIPanelComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIPanelComponent>(e)) r.emplace<UIPanelComponent>(e); },
+        35,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIPanelComponent>(e)) r.erase<UIPanelComponent>(e); }});
+    reg.Register({"UI Mask", "UI", DrawUIMaskSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIMaskComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIMaskComponent>(e)) r.emplace<UIMaskComponent>(e); },
+        36,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIMaskComponent>(e)) r.erase<UIMaskComponent>(e); }});
+    reg.Register({"UI Rich Text", "UI", DrawUIRichTextSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIRichTextComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIRichTextComponent>(e)) r.emplace<UIRichTextComponent>(e); },
+        37,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIRichTextComponent>(e)) r.erase<UIRichTextComponent>(e); }});
+    reg.Register({"UI Anchor", "UI", DrawUIAnchorSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIAnchorComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnchorComponent>(e)) r.emplace<UIAnchorComponent>(e); },
         31,
         [](entt::registry& r, entt::entity e) { if (r.all_of<UIAnchorComponent>(e)) r.erase<UIAnchorComponent>(e); }});
-    reg.Register({"UI Grid Layout", "UI", nullptr,
+    reg.Register({"UI Grid Layout", "UI", DrawUIGridLayoutSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIGridLayoutComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIGridLayoutComponent>(e)) r.emplace<UIGridLayoutComponent>(e); },
         32,
         [](entt::registry& r, entt::entity e) { if (r.all_of<UIGridLayoutComponent>(e)) r.erase<UIGridLayoutComponent>(e); }});
-    reg.Register({"UI Canvas Scaler", "UI", nullptr,
+    reg.Register({"UI Canvas Scaler", "UI", DrawUICanvasScalerSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<UICanvasScalerComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UICanvasScalerComponent>(e)) r.emplace<UICanvasScalerComponent>(e); },
         33,
         [](entt::registry& r, entt::entity e) { if (r.all_of<UICanvasScalerComponent>(e)) r.erase<UICanvasScalerComponent>(e); }});
-    reg.Register({"UI Animation", "UI", nullptr,
+    reg.Register({"UI Animation", "UI", DrawUIAnimationSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIAnimationComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnimationComponent>(e)) r.emplace<UIAnimationComponent>(e); },
         34,

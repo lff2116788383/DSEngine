@@ -12,6 +12,7 @@ struct PanelVisibility {
     bool* tile_palette = nullptr;
     bool* terrain_editor = nullptr;
     bool* lua_console = nullptr;
+    bool* undo_history = nullptr;
 };
 
 void BeginEditorShell();

@@ -40,6 +40,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_audio_panel.cpp
     src/editor_particle_panel.cpp
     src/editor_lua_console.cpp
+    src/editor_undo_panel.cpp
     src/editor_build_game.cpp
     src/editor_project.cpp
     src/editor_project_hub.cpp

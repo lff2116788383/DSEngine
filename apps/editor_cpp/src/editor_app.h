@@ -94,6 +94,7 @@ private:
     bool show_tile_palette_ = false;
     bool show_terrain_editor_ = false;
     bool show_lua_console_ = false;
+    bool show_undo_history_ = false;
 
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;
