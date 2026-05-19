@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iterator>
 #include <utility>
+#include <filesystem>
+#include <cstdint>
 
 #include <glm/gtc/type_ptr.hpp>
 #include <rapidjson/document.h>
@@ -69,6 +71,456 @@ void ReadVec4(const rapidjson::Value& parent, const char* name, glm::vec4& out) 
         }
     }
 }
+}
+
+// ============================================================
+// Scene binary cache  (.dscene.bin)
+// Format: magic(4) + version(4) + entity_count(4) +
+//   per entity: id(4) + comp_flags(8) + component data
+// Strings: uint32 length + raw bytes (no null terminator)
+// ============================================================
+
+static constexpr uint32_t kSceneBinMagic   = 0x42435344u; // 'DSCB'
+static constexpr uint32_t kSceneBinVersion = 3u;
+
+enum CompFlags : uint64_t {
+    CF_NAME             = 1ull << 0,
+    CF_SIBLING_INDEX    = 1ull << 1,
+    CF_TRANSFORM        = 1ull << 2,
+    CF_SPRITE           = 1ull << 3,
+    CF_UI_RENDERER      = 1ull << 4,
+    CF_UI_LABEL         = 1ull << 5,
+    CF_UI_ANCHOR        = 1ull << 6,
+    CF_UI_GRID          = 1ull << 7,
+    CF_UI_CANVAS_SCALER = 1ull << 8,
+    CF_UI_ANIMATION     = 1ull << 9,
+    CF_RIGIDBODY2D      = 1ull << 10,
+    CF_PARTICLE_EMITTER = 1ull << 11,
+    CF_CAMERA3D         = 1ull << 12,
+    CF_DIR_LIGHT3D      = 1ull << 13,
+    CF_MESH_RENDERER    = 1ull << 14,
+    CF_POINT_LIGHT      = 1ull << 15,
+    CF_SPOT_LIGHT       = 1ull << 16,
+    CF_SKY_LIGHT        = 1ull << 17,
+    CF_SKYBOX           = 1ull << 18,
+    CF_ANIMATOR3D       = 1ull << 19,
+    CF_TERRAIN          = 1ull << 20,
+    CF_RIGIDBODY3D      = 1ull << 21,
+};
+
+template<typename T>
+static void WPod(std::ofstream& f, const T& v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+}
+template<typename T>
+static bool RPod(std::ifstream& f, T& v) {
+    return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), sizeof(v)));
+}
+static void WStr(std::ofstream& f, const std::string& s) {
+    uint32_t len = static_cast<uint32_t>(s.size());
+    WPod(f, len);
+    if (len > 0) f.write(s.data(), len);
+}
+static bool RStr(std::ifstream& f, std::string& s) {
+    uint32_t len = 0;
+    if (!RPod(f, len)) return false;
+    if (len > 4u * 1024u * 1024u) return false;
+    s.resize(len);
+    if (len > 0 && !f.read(s.data(), len)) return false;
+    return true;
+}
+
+static bool SceneBinaryIsValid(const std::string& json_path,
+                               const std::string& bin_path) {
+    std::error_code ec;
+    auto jt = std::filesystem::last_write_time(json_path, ec);
+    if (ec) return false;
+    auto bt = std::filesystem::last_write_time(bin_path, ec);
+    if (ec) return false;
+    return bt >= jt;
+}
+
+static void SaveSceneBinary(entt::registry& registry,
+                            const std::string& bin_path) {
+    std::ofstream f(bin_path, std::ios::binary);
+    if (!f.is_open()) return;
+    WPod(f, kSceneBinMagic);
+    WPod(f, kSceneBinVersion);
+    uint32_t count = 0;
+    for (auto e : registry.storage<entt::entity>())
+        if (registry.valid(e)) ++count;
+    WPod(f, count);
+    for (auto entity : registry.storage<entt::entity>()) {
+        if (!registry.valid(entity)) continue;
+        uint64_t flags = 0;
+        if (registry.all_of<dse::editor::EditorNameComponent>(entity))          flags |= CF_NAME;
+        if (registry.all_of<dse::editor::SiblingIndexComponent>(entity))        flags |= CF_SIBLING_INDEX;
+        if (registry.all_of<TransformComponent>(entity))                        flags |= CF_TRANSFORM;
+        if (registry.all_of<SpriteRendererComponent>(entity))                   flags |= CF_SPRITE;
+        if (registry.all_of<UIRendererComponent>(entity))                       flags |= CF_UI_RENDERER;
+        if (registry.all_of<UILabelComponent>(entity))                          flags |= CF_UI_LABEL;
+        if (registry.all_of<UIAnchorComponent>(entity))                         flags |= CF_UI_ANCHOR;
+        if (registry.all_of<UIGridLayoutComponent>(entity))                     flags |= CF_UI_GRID;
+        if (registry.all_of<UICanvasScalerComponent>(entity))                   flags |= CF_UI_CANVAS_SCALER;
+        if (registry.all_of<UIAnimationComponent>(entity))                      flags |= CF_UI_ANIMATION;
+        if (registry.all_of<RigidBody2DComponent>(entity))                      flags |= CF_RIGIDBODY2D;
+        if (registry.all_of<ParticleEmitterComponent>(entity))                  flags |= CF_PARTICLE_EMITTER;
+        if (registry.all_of<dse::Camera3DComponent>(entity))                    flags |= CF_CAMERA3D;
+        if (registry.all_of<dse::DirectionalLight3DComponent>(entity))          flags |= CF_DIR_LIGHT3D;
+        if (registry.all_of<dse::MeshRendererComponent>(entity))                flags |= CF_MESH_RENDERER;
+        if (registry.all_of<dse::PointLightComponent>(entity))                  flags |= CF_POINT_LIGHT;
+        if (registry.all_of<dse::SpotLightComponent>(entity))                   flags |= CF_SPOT_LIGHT;
+        if (registry.all_of<dse::SkyLightComponent>(entity))                    flags |= CF_SKY_LIGHT;
+        if (registry.all_of<dse::SkyboxComponent>(entity))                      flags |= CF_SKYBOX;
+        if (registry.all_of<dse::Animator3DComponent>(entity))                  flags |= CF_ANIMATOR3D;
+        if (registry.all_of<dse::TerrainComponent>(entity))                     flags |= CF_TERRAIN;
+        if (registry.all_of<dse::RigidBody3DComponent>(entity))                 flags |= CF_RIGIDBODY3D;
+        WPod(f, static_cast<uint32_t>(entity));
+        WPod(f, flags);
+        if (flags & CF_NAME)             WStr(f, registry.get<dse::editor::EditorNameComponent>(entity).name);
+        if (flags & CF_SIBLING_INDEX)    WPod(f, registry.get<dse::editor::SiblingIndexComponent>(entity).index);
+        if (flags & CF_TRANSFORM) {
+            auto& t = registry.get<TransformComponent>(entity);
+            WPod(f, t.position); WPod(f, t.rotation); WPod(f, t.scale); WPod(f, t.dirty);
+        }
+        if (flags & CF_SPRITE) {
+            auto& s = registry.get<SpriteRendererComponent>(entity);
+            WStr(f, s.shader_variant); WPod(f, s.color); WPod(f, s.uv);
+            WPod(f, s.uv_offset); WPod(f, s.uv_scroll_speed);
+            WPod(f, s.sorting_layer); WPod(f, s.order_in_layer); WPod(f, s.visible);
+        }
+        if (flags & CF_UI_RENDERER) {
+            auto& ui = registry.get<UIRendererComponent>(entity);
+            WPod(f, ui.texture_handle); WPod(f, ui.color); WPod(f, ui.uv);
+            WPod(f, ui.order); WPod(f, ui.visible); WPod(f, ui.scale);
+            WPod(f, ui.hover_scale); WPod(f, ui.pressed_scale); WPod(f, ui.scale_lerp_speed);
+            WPod(f, ui.position); WPod(f, ui.size);
+            WPod(f, ui.anchor_min); WPod(f, ui.anchor_max); WPod(f, ui.pivot);
+            WPod(f, ui.interactable);
+        }
+        if (flags & CF_UI_LABEL) {
+            auto& lb = registry.get<UILabelComponent>(entity);
+            WStr(f, lb.text); WPod(f, lb.use_localization);
+            WStr(f, lb.localization_key); WStr(f, lb.fallback_text);
+            uint32_t pc = static_cast<uint32_t>(lb.localization_params.size()); WPod(f, pc);
+            for (auto& [k, v] : lb.localization_params) { WStr(f, k); WStr(f, v); }
+            WPod(f, lb.number_value); WPod(f, lb.numeric_mode);
+            WPod(f, lb.font_texture_handle); WPod(f, lb.glyph_size); WPod(f, lb.offset);
+            WPod(f, lb.spacing); WPod(f, lb.atlas_cols); WPod(f, lb.atlas_rows);
+            WPod(f, lb.ascii_start); WPod(f, lb.color);
+        }
+        if (flags & CF_UI_ANCHOR) {
+            auto& a = registry.get<UIAnchorComponent>(entity);
+            WPod(f, a.anchor); WPod(f, a.offset);
+        }
+        if (flags & CF_UI_GRID) {
+            auto& g = registry.get<UIGridLayoutComponent>(entity);
+            WPod(f, g.columns); WPod(f, g.rows); WPod(f, g.cell_size);
+            WPod(f, g.spacing); WPod(f, g.alignment);
+        }
+        if (flags & CF_UI_CANVAS_SCALER) {
+            auto& cs = registry.get<UICanvasScalerComponent>(entity);
+            WPod(f, cs.reference_resolution); WPod(f, cs.scale_factor);
+            WPod(f, cs.match_width_or_height);
+        }
+        if (flags & CF_UI_ANIMATION) {
+            auto& an = registry.get<UIAnimationComponent>(entity);
+            WPod(f, an.target_position); WPod(f, an.target_scale); WPod(f, an.target_alpha);
+            WPod(f, an.target_color); WPod(f, an.animate_position); WPod(f, an.animate_scale);
+            WPod(f, an.animate_alpha); WPod(f, an.animate_color); WPod(f, an.duration);
+            WPod(f, an.elapsed); WPod(f, an.delay); WPod(f, an.delay_remaining);
+            WPod(f, an.loop); WPod(f, an.ping_pong); WPod(f, an.playing); WPod(f, an.reverse);
+            WPod(f, an.easing); WPod(f, an.start_position); WPod(f, an.start_scale);
+            WPod(f, an.start_alpha); WPod(f, an.start_color);
+        }
+        if (flags & CF_RIGIDBODY2D) {
+            auto& rb = registry.get<RigidBody2DComponent>(entity);
+            WPod(f, static_cast<int>(rb.type)); WPod(f, rb.velocity);
+            WPod(f, rb.gravity_scale); WPod(f, rb.fixed_rotation);
+        }
+        if (flags & CF_PARTICLE_EMITTER) {
+            auto& pe = registry.get<ParticleEmitterComponent>(entity);
+            WPod(f, pe.texture_handle); WPod(f, pe.max_particles);
+            WPod(f, pe.emit_rate); WPod(f, pe.emit_rate_scale); WPod(f, pe.emitting);
+            WPod(f, pe.start_life_time); WPod(f, pe.start_size); WPod(f, pe.start_color);
+            WPod(f, pe.velocity_min); WPod(f, pe.velocity_max);
+            WPod(f, pe.life_time_min); WPod(f, pe.life_time_max);
+            WPod(f, pe.size_min); WPod(f, pe.size_max);
+            WPod(f, pe.rotation_min); WPod(f, pe.rotation_max);
+            WPod(f, pe.angular_velocity_min); WPod(f, pe.angular_velocity_max);
+            WPod(f, pe.use_random_params); WPod(f, pe.use_size_curve); WPod(f, pe.size_curve_end);
+            WPod(f, pe.use_alpha_curve); WPod(f, pe.alpha_curve_end);
+            WPod(f, pe.use_color_curve); WPod(f, pe.color_curve_end);
+            WPod(f, pe.use_speed_curve); WPod(f, pe.speed_curve_end_scale);
+            auto wc = [&](const ParticleCurve& c) {
+                WPod(f, c.enabled); WPod(f, static_cast<int>(c.type));
+                WPod(f, c.start_value); WPod(f, c.end_value);
+            };
+            wc(pe.size_curve); wc(pe.alpha_curve); wc(pe.speed_curve);
+            WPod(f, pe.gravity); WPod(f, pe.enable_collision);
+            WPod(f, static_cast<int>(pe.collision_mode));
+            WPod(f, pe.collision_bounce); WPod(f, pe.collision_friction);
+            WPod(f, pe.collision_life_loss); WPod(f, pe.ground_y);
+            WPod(f, pe.use_ground_collision);
+        }
+        if (flags & CF_CAMERA3D) {
+            auto& cam = registry.get<dse::Camera3DComponent>(entity);
+            WPod(f, cam.enabled); WPod(f, cam.priority); WPod(f, cam.fov);
+            WPod(f, cam.near_clip); WPod(f, cam.far_clip);
+        }
+        if (flags & CF_DIR_LIGHT3D) {
+            auto& l = registry.get<dse::DirectionalLight3DComponent>(entity);
+            WPod(f, l.enabled); WPod(f, l.color); WPod(f, l.intensity);
+            WPod(f, l.cast_shadow); WPod(f, l.shadow_strength);
+        }
+        if (flags & CF_MESH_RENDERER) {
+            auto& m = registry.get<dse::MeshRendererComponent>(entity);
+            WPod(f, m.visible); WPod(f, m.receive_shadow);
+            WStr(f, m.mesh_path); WPod(f, m.material_instance_id);
+            WStr(f, m.shader_variant); WPod(f, static_cast<int>(m.material_data_source));
+            WPod(f, m.color); WPod(f, m.emissive); WPod(f, m.metallic);
+            WPod(f, m.roughness); WPod(f, m.ao); WPod(f, m.normal_strength);
+            WPod(f, m.material_alpha_cutoff); WPod(f, m.material_alpha_test);
+            WPod(f, m.material_double_sided);
+        }
+        if (flags & CF_POINT_LIGHT) {
+            auto& l = registry.get<dse::PointLightComponent>(entity);
+            WPod(f, l.enabled); WPod(f, l.color); WPod(f, l.intensity);
+            WPod(f, l.radius); WPod(f, l.falloff); WPod(f, l.cast_shadow);
+        }
+        if (flags & CF_SPOT_LIGHT) {
+            auto& l = registry.get<dse::SpotLightComponent>(entity);
+            WPod(f, l.enabled); WPod(f, l.color); WPod(f, l.direction);
+            WPod(f, l.intensity); WPod(f, l.radius); WPod(f, l.falloff);
+            WPod(f, l.inner_cone_angle); WPod(f, l.outer_cone_angle); WPod(f, l.cast_shadow);
+        }
+        if (flags & CF_SKY_LIGHT) {
+            auto& l = registry.get<dse::SkyLightComponent>(entity);
+            WPod(f, l.enabled); WPod(f, l.up_color); WPod(f, l.down_color); WPod(f, l.intensity);
+        }
+        if (flags & CF_SKYBOX) {
+            auto& s = registry.get<dse::SkyboxComponent>(entity);
+            WPod(f, s.enabled); WPod(f, s.cubemap_handle); WStr(f, s.cubemap_path);
+        }
+        if (flags & CF_ANIMATOR3D) {
+            auto& a = registry.get<dse::Animator3DComponent>(entity);
+            WPod(f, a.enabled); WStr(f, a.dskel_path); WStr(f, a.danim_path);
+            WPod(f, a.speed); WPod(f, a.loop); WPod(f, a.use_anim_tree);
+            WStr(f, a.blend_parameter); WPod(f, a.blend_parameter_value);
+            uint32_t nc = static_cast<uint32_t>(a.blend_nodes.size()); WPod(f, nc);
+            for (auto& nd : a.blend_nodes) {
+                WStr(f, nd.name); WStr(f, nd.danim_path);
+                WPod(f, nd.current_time); WPod(f, nd.speed); WPod(f, nd.loop);
+                WPod(f, nd.weight); WPod(f, nd.threshold);
+            }
+        }
+        if (flags & CF_TERRAIN) {
+            auto& t = registry.get<dse::TerrainComponent>(entity);
+            WPod(f, t.enabled); WStr(f, t.heightmap_path); WPod(f, t.texture_handle);
+            WPod(f, t.width); WPod(f, t.depth); WPod(f, t.max_height);
+            WPod(f, t.resolution_x); WPod(f, t.resolution_z);
+            WPod(f, t.use_dynamic_lod); WPod(f, t.max_lod_levels);
+            WPod(f, t.lod_distance_factor); WPod(f, t.visible);
+        }
+        if (flags & CF_RIGIDBODY3D) {
+            auto& rb = registry.get<dse::RigidBody3DComponent>(entity);
+            WPod(f, static_cast<int>(rb.type)); WPod(f, rb.mass);
+            WPod(f, rb.drag); WPod(f, rb.angular_drag); WPod(f, rb.gravity_scale);
+            WPod(f, rb.use_gravity); WPod(f, rb.is_kinematic);
+        }
+    }
+}
+
+static bool LoadSceneBinary(entt::registry& registry,
+                            const std::string& bin_path) {
+    std::ifstream f(bin_path, std::ios::binary);
+    if (!f.is_open()) return false;
+    uint32_t magic = 0, ver = 0;
+    if (!RPod(f, magic) || magic != kSceneBinMagic) return false;
+    if (!RPod(f, ver)   || ver   != kSceneBinVersion) return false;
+    uint32_t count = 0;
+    if (!RPod(f, count)) return false;
+    registry.clear();
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t eid = 0; uint64_t flags = 0;
+        if (!RPod(f, eid) || !RPod(f, flags)) return false;
+        auto entity = registry.create();
+        if (flags & CF_NAME) {
+            std::string nm; if (!RStr(f, nm)) return false;
+            registry.emplace<dse::editor::EditorNameComponent>(entity, std::move(nm));
+        }
+        if (flags & CF_SIBLING_INDEX) {
+            int idx = 0; if (!RPod(f, idx)) return false;
+            registry.emplace<dse::editor::SiblingIndexComponent>(entity).index = idx;
+        }
+        if (flags & CF_TRANSFORM) {
+            auto& t = registry.emplace<TransformComponent>(entity);
+            if (!RPod(f, t.position)||!RPod(f, t.rotation)||!RPod(f, t.scale)||!RPod(f, t.dirty)) return false;
+        }
+        if (flags & CF_SPRITE) {
+            auto& s = registry.emplace<SpriteRendererComponent>(entity);
+            if (!RStr(f, s.shader_variant)||!RPod(f, s.color)||!RPod(f, s.uv)) return false;
+            if (!RPod(f, s.uv_offset)||!RPod(f, s.uv_scroll_speed)) return false;
+            if (!RPod(f, s.sorting_layer)||!RPod(f, s.order_in_layer)||!RPod(f, s.visible)) return false;
+        }
+        if (flags & CF_UI_RENDERER) {
+            auto& ui = registry.emplace<UIRendererComponent>(entity);
+            if (!RPod(f, ui.texture_handle)||!RPod(f, ui.color)||!RPod(f, ui.uv)) return false;
+            if (!RPod(f, ui.order)||!RPod(f, ui.visible)||!RPod(f, ui.scale)) return false;
+            if (!RPod(f, ui.hover_scale)||!RPod(f, ui.pressed_scale)||!RPod(f, ui.scale_lerp_speed)) return false;
+            if (!RPod(f, ui.position)||!RPod(f, ui.size)) return false;
+            if (!RPod(f, ui.anchor_min)||!RPod(f, ui.anchor_max)||!RPod(f, ui.pivot)) return false;
+            if (!RPod(f, ui.interactable)) return false;
+        }
+        if (flags & CF_UI_LABEL) {
+            auto& lb = registry.emplace<UILabelComponent>(entity);
+            if (!RStr(f, lb.text)||!RPod(f, lb.use_localization)) return false;
+            if (!RStr(f, lb.localization_key)||!RStr(f, lb.fallback_text)) return false;
+            uint32_t pc = 0; if (!RPod(f, pc)) return false;
+            for (uint32_t pi = 0; pi < pc; ++pi) {
+                std::string k, v;
+                if (!RStr(f, k)||!RStr(f, v)) return false;
+                lb.localization_params[std::move(k)] = std::move(v);
+            }
+            if (!RPod(f, lb.number_value)||!RPod(f, lb.numeric_mode)) return false;
+            if (!RPod(f, lb.font_texture_handle)||!RPod(f, lb.glyph_size)||!RPod(f, lb.offset)) return false;
+            if (!RPod(f, lb.spacing)||!RPod(f, lb.atlas_cols)||!RPod(f, lb.atlas_rows)) return false;
+            if (!RPod(f, lb.ascii_start)||!RPod(f, lb.color)) return false;
+            lb.runtime_glyph_entities.clear(); lb.dirty = true;
+        }
+        if (flags & CF_UI_ANCHOR) {
+            auto& a = registry.emplace<UIAnchorComponent>(entity);
+            if (!RPod(f, a.anchor)||!RPod(f, a.offset)) return false;
+        }
+        if (flags & CF_UI_GRID) {
+            auto& g = registry.emplace<UIGridLayoutComponent>(entity);
+            if (!RPod(f, g.columns)||!RPod(f, g.rows)||!RPod(f, g.cell_size)) return false;
+            if (!RPod(f, g.spacing)||!RPod(f, g.alignment)) return false;
+        }
+        if (flags & CF_UI_CANVAS_SCALER) {
+            auto& cs = registry.emplace<UICanvasScalerComponent>(entity);
+            if (!RPod(f, cs.reference_resolution)||!RPod(f, cs.scale_factor)) return false;
+            if (!RPod(f, cs.match_width_or_height)) return false;
+        }
+        if (flags & CF_UI_ANIMATION) {
+            auto& an = registry.emplace<UIAnimationComponent>(entity);
+            if (!RPod(f, an.target_position)||!RPod(f, an.target_scale)||!RPod(f, an.target_alpha)) return false;
+            if (!RPod(f, an.target_color)||!RPod(f, an.animate_position)||!RPod(f, an.animate_scale)) return false;
+            if (!RPod(f, an.animate_alpha)||!RPod(f, an.animate_color)||!RPod(f, an.duration)) return false;
+            if (!RPod(f, an.elapsed)||!RPod(f, an.delay)||!RPod(f, an.delay_remaining)) return false;
+            if (!RPod(f, an.loop)||!RPod(f, an.ping_pong)||!RPod(f, an.playing)||!RPod(f, an.reverse)) return false;
+            if (!RPod(f, an.easing)||!RPod(f, an.start_position)||!RPod(f, an.start_scale)) return false;
+            if (!RPod(f, an.start_alpha)||!RPod(f, an.start_color)) return false;
+        }
+        if (flags & CF_RIGIDBODY2D) {
+            auto& rb = registry.emplace<RigidBody2DComponent>(entity);
+            int ti = 0; if (!RPod(f, ti)) return false;
+            rb.type = static_cast<RigidBody2DType>(ti);
+            if (!RPod(f, rb.velocity)||!RPod(f, rb.gravity_scale)||!RPod(f, rb.fixed_rotation)) return false;
+            rb.runtime_body = nullptr;
+        }
+        if (flags & CF_PARTICLE_EMITTER) {
+            auto& pe = registry.emplace<ParticleEmitterComponent>(entity);
+            if (!RPod(f, pe.texture_handle)||!RPod(f, pe.max_particles)) return false;
+            if (!RPod(f, pe.emit_rate)||!RPod(f, pe.emit_rate_scale)||!RPod(f, pe.emitting)) return false;
+            if (!RPod(f, pe.start_life_time)||!RPod(f, pe.start_size)||!RPod(f, pe.start_color)) return false;
+            if (!RPod(f, pe.velocity_min)||!RPod(f, pe.velocity_max)) return false;
+            if (!RPod(f, pe.life_time_min)||!RPod(f, pe.life_time_max)) return false;
+            if (!RPod(f, pe.size_min)||!RPod(f, pe.size_max)) return false;
+            if (!RPod(f, pe.rotation_min)||!RPod(f, pe.rotation_max)) return false;
+            if (!RPod(f, pe.angular_velocity_min)||!RPod(f, pe.angular_velocity_max)) return false;
+            if (!RPod(f, pe.use_random_params)||!RPod(f, pe.use_size_curve)||!RPod(f, pe.size_curve_end)) return false;
+            if (!RPod(f, pe.use_alpha_curve)||!RPod(f, pe.alpha_curve_end)) return false;
+            if (!RPod(f, pe.use_color_curve)||!RPod(f, pe.color_curve_end)) return false;
+            if (!RPod(f, pe.use_speed_curve)||!RPod(f, pe.speed_curve_end_scale)) return false;
+            auto rc = [&](ParticleCurve& c) -> bool {
+                int ti2 = 0;
+                if (!RPod(f, c.enabled)||!RPod(f, ti2)) return false;
+                c.type = static_cast<ParticleCurveType>(ti2);
+                return RPod(f, c.start_value) && RPod(f, c.end_value);
+            };
+            if (!rc(pe.size_curve)||!rc(pe.alpha_curve)||!rc(pe.speed_curve)) return false;
+            if (!RPod(f, pe.gravity)||!RPod(f, pe.enable_collision)) return false;
+            int cm = 0; if (!RPod(f, cm)) return false;
+            pe.collision_mode = static_cast<ParticleCollisionMode>(cm);
+            if (!RPod(f, pe.collision_bounce)||!RPod(f, pe.collision_friction)) return false;
+            if (!RPod(f, pe.collision_life_loss)||!RPod(f, pe.ground_y)||!RPod(f, pe.use_ground_collision)) return false;
+            pe.particles.clear(); pe.emit_accumulator = 0.0f; pe.pending_burst = 0;
+        }
+        if (flags & CF_CAMERA3D) {
+            auto& cam = registry.emplace<dse::Camera3DComponent>(entity);
+            if (!RPod(f, cam.enabled)||!RPod(f, cam.priority)||!RPod(f, cam.fov)) return false;
+            if (!RPod(f, cam.near_clip)||!RPod(f, cam.far_clip)) return false;
+        }
+        if (flags & CF_DIR_LIGHT3D) {
+            auto& l = registry.emplace<dse::DirectionalLight3DComponent>(entity);
+            if (!RPod(f, l.enabled)||!RPod(f, l.color)||!RPod(f, l.intensity)) return false;
+            if (!RPod(f, l.cast_shadow)||!RPod(f, l.shadow_strength)) return false;
+        }
+        if (flags & CF_MESH_RENDERER) {
+            auto& m = registry.emplace<dse::MeshRendererComponent>(entity);
+            if (!RPod(f, m.visible)||!RPod(f, m.receive_shadow)) return false;
+            if (!RStr(f, m.mesh_path)||!RPod(f, m.material_instance_id)) return false;
+            if (!RStr(f, m.shader_variant)) return false;
+            int mds = 0; if (!RPod(f, mds)) return false;
+            m.material_data_source = static_cast<dse::MeshRendererComponent::MaterialDataSource>(mds);
+            if (!RPod(f, m.color)||!RPod(f, m.emissive)||!RPod(f, m.metallic)) return false;
+            if (!RPod(f, m.roughness)||!RPod(f, m.ao)||!RPod(f, m.normal_strength)) return false;
+            if (!RPod(f, m.material_alpha_cutoff)||!RPod(f, m.material_alpha_test)) return false;
+            if (!RPod(f, m.material_double_sided)) return false;
+        }
+        if (flags & CF_POINT_LIGHT) {
+            auto& l = registry.emplace<dse::PointLightComponent>(entity);
+            if (!RPod(f, l.enabled)||!RPod(f, l.color)||!RPod(f, l.intensity)) return false;
+            if (!RPod(f, l.radius)||!RPod(f, l.falloff)||!RPod(f, l.cast_shadow)) return false;
+        }
+        if (flags & CF_SPOT_LIGHT) {
+            auto& l = registry.emplace<dse::SpotLightComponent>(entity);
+            if (!RPod(f, l.enabled)||!RPod(f, l.color)||!RPod(f, l.direction)) return false;
+            if (!RPod(f, l.intensity)||!RPod(f, l.radius)||!RPod(f, l.falloff)) return false;
+            if (!RPod(f, l.inner_cone_angle)||!RPod(f, l.outer_cone_angle)||!RPod(f, l.cast_shadow)) return false;
+        }
+        if (flags & CF_SKY_LIGHT) {
+            auto& l = registry.emplace<dse::SkyLightComponent>(entity);
+            if (!RPod(f, l.enabled)||!RPod(f, l.up_color)||!RPod(f, l.down_color)||!RPod(f, l.intensity)) return false;
+        }
+        if (flags & CF_SKYBOX) {
+            auto& s = registry.emplace<dse::SkyboxComponent>(entity);
+            if (!RPod(f, s.enabled)||!RPod(f, s.cubemap_handle)||!RStr(f, s.cubemap_path)) return false;
+        }
+        if (flags & CF_ANIMATOR3D) {
+            auto& a = registry.emplace<dse::Animator3DComponent>(entity);
+            if (!RPod(f, a.enabled)||!RStr(f, a.dskel_path)||!RStr(f, a.danim_path)) return false;
+            if (!RPod(f, a.speed)||!RPod(f, a.loop)||!RPod(f, a.use_anim_tree)) return false;
+            if (!RStr(f, a.blend_parameter)||!RPod(f, a.blend_parameter_value)) return false;
+            uint32_t nc = 0; if (!RPod(f, nc)) return false;
+            a.blend_nodes.resize(nc);
+            for (auto& nd : a.blend_nodes) {
+                if (!RStr(f, nd.name)||!RStr(f, nd.danim_path)) return false;
+                if (!RPod(f, nd.current_time)||!RPod(f, nd.speed)||!RPod(f, nd.loop)) return false;
+                if (!RPod(f, nd.weight)||!RPod(f, nd.threshold)) return false;
+            }
+            a.state_machine.reset(); a.final_bone_matrices.clear();
+        }
+        if (flags & CF_TERRAIN) {
+            auto& t = registry.emplace<dse::TerrainComponent>(entity);
+            if (!RPod(f, t.enabled)||!RStr(f, t.heightmap_path)||!RPod(f, t.texture_handle)) return false;
+            if (!RPod(f, t.width)||!RPod(f, t.depth)||!RPod(f, t.max_height)) return false;
+            if (!RPod(f, t.resolution_x)||!RPod(f, t.resolution_z)) return false;
+            if (!RPod(f, t.use_dynamic_lod)||!RPod(f, t.max_lod_levels)||!RPod(f, t.lod_distance_factor)) return false;
+            if (!RPod(f, t.visible)) return false;
+            t.is_dirty = true;
+        }
+        if (flags & CF_RIGIDBODY3D) {
+            auto& rb = registry.emplace<dse::RigidBody3DComponent>(entity);
+            int ti = 0; if (!RPod(f, ti)) return false;
+            rb.type = static_cast<dse::RigidBody3DType>(ti);
+            if (!RPod(f, rb.mass)||!RPod(f, rb.drag)||!RPod(f, rb.angular_drag)) return false;
+            if (!RPod(f, rb.gravity_scale)||!RPod(f, rb.use_gravity)||!RPod(f, rb.is_kinematic)) return false;
+            rb.runtime_body = nullptr;
+        }
+    }
+    return true;
 }
 
 namespace dse::editor {
@@ -531,9 +983,13 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
     if (ofs.is_open()) {
         ofs << buffer.GetString();
     }
+    SaveSceneBinary(registry, filepath + ".bin");
 }
 
 void LoadScene(entt::registry& registry, const std::string& filepath) {
+    const std::string bin_path = filepath + ".bin";
+    if (SceneBinaryIsValid(filepath, bin_path) && LoadSceneBinary(registry, bin_path)) return;
+
     std::ifstream ifs(filepath);
     if (!ifs.is_open()) return;
 
@@ -891,6 +1347,7 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             if (rb_obj.HasMember("is_kinematic") && rb_obj["is_kinematic"].IsBool()) rb.is_kinematic = rb_obj["is_kinematic"].GetBool();
         }
     }
+    SaveSceneBinary(registry, bin_path);
 }
 
 } // namespace dse::editor
