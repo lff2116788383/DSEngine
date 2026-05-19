@@ -235,8 +235,18 @@ file(GLOB_RECURSE engine_cpp
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 
-# 排除 codegen 生成文件（*.gen.cpp）— 生成文件作为参考暂存，需显式 opt-in 后才编入构建
+# 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
+# 注意：dse_api.gen.cpp 与手写 dse_api.cpp 冲突，必须保持排除
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
+
+# 显式加回已完成迁移的 Lua 绑定 gen 文件（手写版本已删除，无符号冲突）
+list(APPEND engine_cpp
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_transform.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_camera3d.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dir_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_point_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_mesh_renderer.gen.cpp"
+)
 
 # Vulkan RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_VULKAN)

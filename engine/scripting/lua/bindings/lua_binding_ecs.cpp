@@ -23,13 +23,19 @@ void RegisterEcsBindings(lua_State* L) {
     lua_newtable(L);
 
     RegisterEcsCoreBindings(L);
-    RegisterEcsTransformBindings(L);
     RegisterEcsRenderingBindings(L);
     RegisterEcsPhysics2DBindings(L);
     RegisterEcsPhysics3DBindings(L);
     RegisterEcsAnimationBindings(L);
     RegisterEcsParticlesBindings(L);
     RegisterEcsGameplay3DBindings(L);
+
+    // Codegen 生成的组件属性绑定
+    RegisterTransformComponentGenBindings(L);
+    RegisterCamera3DComponentGenBindings(L);
+    RegisterDirectionalLight3DComponentGenBindings(L);
+    RegisterPointLightComponentGenBindings(L);
+    RegisterMeshRendererComponentGenBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding

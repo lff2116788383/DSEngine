@@ -97,6 +97,8 @@ DSE_CAPI float dse_mesh_renderer_get_roughness(uint32_t e);
 DSE_CAPI void  dse_mesh_renderer_set_roughness(uint32_t e, float v);
 DSE_CAPI void  dse_mesh_renderer_get_emissive(uint32_t e, float* r, float* g, float* b);
 DSE_CAPI void  dse_mesh_renderer_set_emissive(uint32_t e, float r, float g, float b);
+DSE_CAPI int   dse_mesh_renderer_get_receive_shadow(uint32_t e);
+DSE_CAPI void  dse_mesh_renderer_set_receive_shadow(uint32_t e, int v);
 
 // ============================================================
 // DirectionalLight3DComponent

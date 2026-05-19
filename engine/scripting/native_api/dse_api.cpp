@@ -288,6 +288,15 @@ extern "C" void dse_mesh_renderer_set_emissive(uint32_t e, float r, float g, flo
         m->emissive = glm::vec3(r, g, b);
 }
 
+extern "C" int dse_mesh_renderer_get_receive_shadow(uint32_t e) {
+    auto* m = GetComp<dse::MeshRendererComponent>(e);
+    return m ? (int)m->receive_shadow : 1;
+}
+extern "C" void dse_mesh_renderer_set_receive_shadow(uint32_t e, int v) {
+    if (auto* m = GetComp<dse::MeshRendererComponent>(e))
+        m->receive_shadow = (v != 0);
+}
+
 // ============================================================
 // DirectionalLight3DComponent
 // ============================================================

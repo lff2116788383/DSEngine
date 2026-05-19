@@ -7,9 +7,12 @@
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/transform.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/sub_scene.h"
 #include "engine/assets/asset_manager.h"
+
+#include <glm/glm.hpp>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -107,6 +110,23 @@ int L_EcsFindEntitiesByMeshPath(lua_State* L) {
     return 1;
 }
 
+int L_EcsAddTransform(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float x  = helper::CheckFloat(L, 2);
+    float y  = helper::CheckFloat(L, 3);
+    float z  = helper::OptFloat(L, 4, 0.0f);
+    float sx = helper::OptFloat(L, 5, 1.0f);
+    float sy = helper::OptFloat(L, 6, 1.0f);
+    float sz = helper::OptFloat(L, 7, 1.0f);
+    auto& transform = world->registry().emplace_or_replace<TransformComponent>(e);
+    transform.position = glm::vec3(x, y, z);
+    transform.scale    = glm::vec3(sx, sy, sz);
+    transform.dirty    = true;
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
@@ -117,6 +137,7 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"load_scene",                 L_EcsLoadScene},
         {"load_sub_scene",             L_EcsLoadSubScene},
         {"find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath},
+        {"add_transform",              L_EcsAddTransform},
     });
 }
 
