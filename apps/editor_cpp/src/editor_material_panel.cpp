@@ -4,11 +4,14 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
+#include "engine/runtime/engine_app.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <unordered_map>
 
 namespace dse::editor {
 
@@ -87,28 +90,52 @@ void DrawMaterialPanel(EditorContext& ctx) {
     ImGui::Text(MDI_ICON_IMAGE "  Texture Slots");
     ImGui::Spacing();
 
+    // handle → display-name cache (session-scoped, no serialization needed)
+    static std::unordered_map<unsigned int, std::string> s_handle_names;
+
+    AssetManager* asset_mgr = ctx.engine.asset_manager();
+
     // Texture slots with drag-drop support
-    auto DrawTextureSlot = [](const char* label, unsigned int& texture_handle) {
+    auto DrawTextureSlot = [&](const char* label, unsigned int& texture_handle) {
         ImGui::PushID(label);
         ImGui::Text("%s", label);
         ImGui::SameLine(140);
 
-        char buf[64];
+        char buf[128];
         if (texture_handle != 0) {
-            snprintf(buf, sizeof(buf), "Texture #%u", texture_handle);
+            auto it = s_handle_names.find(texture_handle);
+            if (it != s_handle_names.end()) {
+                snprintf(buf, sizeof(buf), "%s", it->second.c_str());
+            } else {
+                snprintf(buf, sizeof(buf), "Texture #%u", texture_handle);
+            }
         } else {
             snprintf(buf, sizeof(buf), "(None)");
         }
 
         ImGui::Button(buf, ImVec2(ImGui::GetContentRegionAvail().x - 30, 0));
+        if (ImGui::IsItemHovered() && texture_handle != 0) {
+            auto it = s_handle_names.find(texture_handle);
+            if (it != s_handle_names.end())
+                ImGui::SetTooltip("%s", it->second.c_str());
+        }
 
-        // Accept drag-drop from Project panel
+        // Accept drag-drop of image assets from Project panel
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                // In a real implementation, we'd load the texture here
-                // For now, just indicate a texture was assigned
-                (void)payload;
-                texture_handle = 1; // placeholder handle
+                std::string rel_path(static_cast<const char*>(payload->Data));
+                const auto ext = std::filesystem::path(rel_path).extension().string();
+                const bool is_image = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+                                       ext == ".tga" || ext == ".bmp" || ext == ".hdr" ||
+                                       ext == ".ktx");
+                if (is_image && asset_mgr) {
+                    auto tex = asset_mgr->LoadTexture(rel_path);
+                    if (tex) {
+                        texture_handle = tex->GetHandle();
+                        s_handle_names[texture_handle] =
+                            std::filesystem::path(rel_path).filename().string();
+                    }
+                }
             }
             ImGui::EndDragDropTarget();
         }
@@ -116,6 +143,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
         ImGui::SameLine();
         if (texture_handle != 0) {
             if (ImGui::SmallButton("X")) {
+                s_handle_names.erase(texture_handle);
                 texture_handle = 0;
             }
         } else {

@@ -12,6 +12,7 @@
 #include "editor_console_panel.h"
 #include "editor_selection.h"
 #include "editor_prefab.h"
+#include "editor_project.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -359,7 +360,11 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                 std::string asset_path(static_cast<const char*>(payload->Data));
                 if (asset_path.size() > 8 && asset_path.substr(asset_path.size() - 8) == ".dprefab") {
-                    std::filesystem::path full_path = std::filesystem::current_path() / "samples" / "lua" / "data" / asset_path;
+                    auto& proj = ProjectManager::Get();
+                    std::filesystem::path base = proj.HasOpenProject()
+                        ? proj.GetAssetDir()
+                        : (std::filesystem::current_path() / "samples" / "lua" / "data");
+                    std::filesystem::path full_path = base / asset_path;
                     entt::entity new_ent = InstantiatePrefab(context.world, context.registry, full_path.string());
                     if (new_ent != entt::null) {
                         context.selected_entity = new_ent;
