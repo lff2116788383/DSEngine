@@ -143,7 +143,7 @@ static const uint32_t kssao_apply_frag_spv[] = {
 };
 static const size_t kssao_apply_frag_spv_size = 1038;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kssao_apply_frag_glsl330 = R"(#version 430
 
 struct SsaoApplyParams
@@ -193,6 +193,64 @@ void main()
         result = mix(result, lutColor, vec3(_79.lutIntensity));
     }
     float ign = fract(52.98291778564453125 * fract((0.067110560834407806396484375 * gl_FragCoord.x) + (0.005837149918079376220703125 * gl_FragCoord.y)));
+    result += vec3((ign - 0.5) / 255.0);
+    FragColor = vec4(result, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kssao_apply_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct SsaoApplyParams
+{
+    highp float exposure;
+    int autoExposureEnabled;
+    int lutEnabled;
+    highp float lutIntensity;
+};
+
+uniform SsaoApplyParams _79;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D ssaoTexture;
+layout(binding = 3) uniform highp sampler2D autoExposureTex;
+layout(binding = 5) uniform highp sampler3D lutTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp vec3 AcesFilmic(highp vec3 x)
+{
+    highp float a = 2.5099999904632568359375;
+    highp float b = 0.02999999932944774627685546875;
+    highp float c = 2.4300000667572021484375;
+    highp float d = 0.589999973773956298828125;
+    highp float e = 0.14000000059604644775390625;
+    return clamp((x * ((x * a) + vec3(b))) / ((x * ((x * c) + vec3(d))) + vec3(e)), vec3(0.0), vec3(1.0));
+}
+
+void main()
+{
+    highp vec3 hdrColor = texture(screenTexture, vTexCoords).xyz;
+    highp float ao = texture(ssaoTexture, vTexCoords).x;
+    hdrColor *= ao;
+    highp float finalExposure = _79.exposure;
+    if (_79.autoExposureEnabled != 0)
+    {
+        finalExposure = texture(autoExposureTex, vec2(0.5)).x;
+    }
+    highp vec3 param = hdrColor * finalExposure;
+    highp vec3 result = AcesFilmic(param);
+    result = pow(result, vec3(0.4545454680919647216796875));
+    if (_79.lutEnabled != 0)
+    {
+        highp vec3 lutColor = texture(lutTexture, clamp(result, vec3(0.0), vec3(1.0))).xyz;
+        result = mix(result, lutColor, vec3(_79.lutIntensity));
+    }
+    highp float ign = fract(52.98291778564453125 * fract((0.067110560834407806396484375 * gl_FragCoord.x) + (0.005837149918079376220703125 * gl_FragCoord.y)));
     result += vec3((ign - 0.5) / 255.0);
     FragColor = vec4(result, 1.0);
 }

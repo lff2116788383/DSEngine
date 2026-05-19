@@ -1,11 +1,11 @@
-/**
+﻿/**
  * @file ubo_manager.cpp
- * @brief UBO 管理器实现
+ * @brief UBO 绠＄悊鍣ㄥ疄鐜?
  */
 
 #include "engine/render/rhi/opengl/ubo_manager.h"
 #include "engine/base/debug.h"
-#include <glad/gl.h>
+#include "engine/render/rhi/opengl/gl_loader.h"
 
 namespace dse {
 namespace render {
@@ -13,7 +13,7 @@ namespace render {
 void UBOManager::Init() {
     if (initialized_) return;
 
-    // 使用空数据创建 UBO，后续通过 Upload 填充
+    // 浣跨敤绌烘暟鎹垱寤?UBO锛屽悗缁€氳繃 Upload 濉厖
     PerFrameUBO frame_data{};
     PerSceneUBO scene_data{};
     PerMaterialUBO material_data{};
@@ -150,7 +150,7 @@ unsigned int UBOManager::CreateUBO(size_t size, const void* data, UBOBindingPoin
     glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(size), data, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-    // 绑定到对应的 binding point
+    // 缁戝畾鍒板搴旂殑 binding point
     glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(binding), buffer);
 
     return buffer;

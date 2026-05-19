@@ -163,7 +163,7 @@ static const uint32_t kdof_frag_spv[] = {
 };
 static const size_t kdof_frag_spv_size = 1194;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kdof_frag_glsl330 = R"(#version 430
 
 struct DofParams
@@ -210,6 +210,71 @@ void main()
         float sample_depth = linearizeDepth(param_1);
         float sample_coc = clamp(abs(sample_depth - _20.focus_distance) / _20.focus_range, 0.0, 1.0);
         float w = max(sample_coc, coc);
+        color += (texture(u_color_texture, vTexCoords + offset).xyz * w);
+        total_weight += w;
+    }
+    if (total_weight > 0.0)
+    {
+        color /= vec3(total_weight);
+    }
+    else
+    {
+        color = texture(u_color_texture, vTexCoords).xyz;
+    }
+    FragColor = vec4(color, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kdof_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct DofParams
+{
+    highp float focus_distance;
+    highp float focus_range;
+    highp float bokeh_radius;
+    highp float near_plane;
+    highp float far_plane;
+    highp float screen_w;
+    highp float screen_h;
+};
+
+uniform DofParams _20;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_color_texture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float linearizeDepth(highp float d)
+{
+    highp float z = (d * 2.0) - 1.0;
+    return ((2.0 * _20.near_plane) * _20.far_plane) / ((_20.far_plane + _20.near_plane) - (z * (_20.far_plane - _20.near_plane)));
+}
+
+void main()
+{
+    highp float depth = texture(screenTexture, vTexCoords).x;
+    highp float param = depth;
+    highp float lin_depth = linearizeDepth(param);
+    highp float coc = clamp(abs(lin_depth - _20.focus_distance) / _20.focus_range, 0.0, 1.0);
+    highp vec2 texel = vec2(1.0) / vec2(_20.screen_w, _20.screen_h);
+    highp float radius = coc * _20.bokeh_radius;
+    highp vec3 color = vec3(0.0);
+    highp float total_weight = 0.0;
+    for (int i = 0; i < 16; i++)
+    {
+        highp float r = sqrt(float(i) / 16.0) * radius;
+        highp float theta = float(i) * 2.3999631404876708984375;
+        highp vec2 offset = (vec2(cos(theta), sin(theta)) * r) * texel;
+        highp float param_1 = texture(screenTexture, vTexCoords + offset).x;
+        highp float sample_depth = linearizeDepth(param_1);
+        highp float sample_coc = clamp(abs(sample_depth - _20.focus_distance) / _20.focus_range, 0.0, 1.0);
+        highp float w = max(sample_coc, coc);
         color += (texture(u_color_texture, vTexCoords + offset).xyz * w);
         total_weight += w;
     }

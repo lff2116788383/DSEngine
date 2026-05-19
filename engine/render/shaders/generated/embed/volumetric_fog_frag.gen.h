@@ -287,7 +287,7 @@ static const uint32_t kvolumetric_fog_frag_spv[] = {
 };
 static const size_t kvolumetric_fog_frag_spv_size = 2189;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kvolumetric_fog_frag_glsl330 = R"(#version 430
 
 struct VolumetricFogParams
@@ -381,6 +381,114 @@ void main()
         float h = max(pos.y - _20.u_height_offset, 0.0);
         float den = _20.u_fog_density * exp((-_20.u_height_falloff) * h);
         float sT = exp((-den) * stepLen);
+        inscatter += ((fogColor + (vec3(1.0) * (mie * _20.u_sun_scatter))) * (transmit * (1.0 - sT)));
+        transmit *= sT;
+        if (transmit < 0.001000000047497451305389404296875)
+        {
+            break;
+        }
+    }
+    FragColor = vec4((scene.xyz * transmit) + inscatter, scene.w);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kvolumetric_fog_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct VolumetricFogParams
+{
+    highp float u_depth_handle;
+    highp float u_fog_r;
+    highp float u_fog_g;
+    highp float u_fog_b;
+    highp float u_fog_density;
+    highp float u_height_falloff;
+    highp float u_height_offset;
+    highp float u_fog_start;
+    highp float u_fog_end;
+    highp float u_fog_steps;
+    highp float u_sun_scatter;
+    highp float u_sun_dir_x;
+    highp float u_sun_dir_y;
+    highp float u_sun_dir_z;
+    highp float u_cam_pos_x;
+    highp float u_cam_pos_y;
+    highp float u_cam_pos_z;
+    highp float u_near;
+    highp float u_far;
+    highp float u_right_x;
+    highp float u_right_y;
+    highp float u_right_z;
+    highp float u_up_x;
+    highp float u_up_y;
+    highp float u_up_z;
+    highp float u_fwd_x;
+    highp float u_fwd_y;
+    highp float u_fwd_z;
+    highp float u_tan_fov_y;
+    highp float u_aspect;
+};
+
+uniform VolumetricFogParams _20;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_depth_tex;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float VFogLinZ(highp float d)
+{
+    highp float z = (d * 2.0) - 1.0;
+    return ((2.0 * _20.u_near) * _20.u_far) / ((_20.u_far + _20.u_near) - (z * (_20.u_far - _20.u_near)));
+}
+
+void main()
+{
+    highp vec4 scene = texture(screenTexture, vTexCoords);
+    highp float depth = texture(u_depth_tex, vTexCoords).x;
+    if (depth >= 0.99989998340606689453125)
+    {
+        FragColor = scene;
+        return;
+    }
+    highp float param = depth;
+    highp float viewZ = VFogLinZ(param);
+    highp vec2 ndc = (vTexCoords * 2.0) - vec2(1.0);
+    highp vec3 camFwd = vec3(_20.u_fwd_x, _20.u_fwd_y, _20.u_fwd_z);
+    highp vec3 camRight = vec3(_20.u_right_x, _20.u_right_y, _20.u_right_z);
+    highp vec3 camUp = vec3(_20.u_up_x, _20.u_up_y, _20.u_up_z);
+    highp vec3 viewDir = normalize((camFwd + (((camRight * ndc.x) * _20.u_tan_fov_y) * _20.u_aspect)) + ((camUp * ndc.y) * _20.u_tan_fov_y));
+    highp float cosAngle = max(dot(viewDir, camFwd), 9.9999997473787516355514526367188e-05);
+    highp float rayLen = viewZ / cosAngle;
+    highp float marchStart = _20.u_fog_start;
+    highp float marchEnd = min(rayLen, _20.u_fog_end);
+    highp float steps = max(_20.u_fog_steps, 1.0);
+    if (marchEnd <= marchStart)
+    {
+        FragColor = scene;
+        return;
+    }
+    highp float stepLen = (marchEnd - marchStart) / steps;
+    highp vec3 sunDir = vec3(_20.u_sun_dir_x, _20.u_sun_dir_y, _20.u_sun_dir_z);
+    highp float cosTheta = dot(viewDir, -sunDir);
+    highp float g = 0.7599999904632568359375;
+    highp float g2 = g * g;
+    highp float mie = (1.0 - g2) / (12.56637096405029296875 * pow(max((1.0 + g2) - ((2.0 * g) * cosTheta), 0.001000000047497451305389404296875), 1.5));
+    highp vec3 fogColor = vec3(_20.u_fog_r, _20.u_fog_g, _20.u_fog_b);
+    highp vec3 camPos = vec3(_20.u_cam_pos_x, _20.u_cam_pos_y, _20.u_cam_pos_z);
+    highp float transmit = 1.0;
+    highp vec3 inscatter = vec3(0.0);
+    for (highp float i = 0.0; i < steps; i += 1.0)
+    {
+        highp float t = marchStart + ((i + 0.5) * stepLen);
+        highp vec3 pos = camPos + (viewDir * t);
+        highp float h = max(pos.y - _20.u_height_offset, 0.0);
+        highp float den = _20.u_fog_density * exp((-_20.u_height_falloff) * h);
+        highp float sT = exp((-den) * stepLen);
         inscatter += ((fogColor + (vec3(1.0) * (mie * _20.u_sun_scatter))) * (transmit * (1.0 - sT)));
         transmit *= sT;
         if (transmit < 0.001000000047497451305389404296875)

@@ -32,13 +32,30 @@ static const uint32_t kskybox_frag_spv[] = {
 };
 static const size_t kskybox_frag_spv_size = 149;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kskybox_frag_glsl330 = R"(#version 430
 
 layout(binding = 1) uniform samplerCube skybox;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 0) in vec3 vTexCoords;
+
+void main()
+{
+    FragColor = texture(skybox, vTexCoords);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kskybox_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 1) uniform highp samplerCube skybox;
+
+layout(location = 0) out highp vec4 FragColor;
+layout(location = 0) in highp vec3 vTexCoords;
 
 void main()
 {

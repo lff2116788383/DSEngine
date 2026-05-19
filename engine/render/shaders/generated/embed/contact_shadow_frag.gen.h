@@ -179,7 +179,7 @@ static const uint32_t kcontact_shadow_frag_spv[] = {
 };
 static const size_t kcontact_shadow_frag_spv_size = 1322;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kcontact_shadow_frag_glsl330 = R"(#version 430
 
 struct ContactShadowParams
@@ -291,6 +291,125 @@ void main()
         _200 = 1.0;
     }
     float shadow = _200;
+    FragColor = vec4(vec3(shadow), 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kcontact_shadow_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct ContactShadowParams
+{
+    highp vec3 u_light_dir;
+    highp float u_near;
+    highp float u_far;
+    highp vec2 u_screen_size;
+    highp float u_strength;
+    highp float u_step_size;
+    int u_num_steps;
+};
+
+uniform ContactShadowParams _23;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float linearizeDepth(highp float d)
+{
+    highp float z = (d * 2.0) - 1.0;
+    return ((2.0 * _23.u_near) * _23.u_far) / ((_23.u_far + _23.u_near) - (z * (_23.u_far - _23.u_near)));
+}
+
+void main()
+{
+    highp float depth = texture(screenTexture, vTexCoords).x;
+    if (depth >= 1.0)
+    {
+        FragColor = vec4(1.0);
+        return;
+    }
+    highp float param = depth;
+    highp float linDepth = linearizeDepth(param);
+    highp vec3 lightDir = normalize(_23.u_light_dir);
+    highp vec2 texelSize = vec2(1.0) / _23.u_screen_size;
+    highp float occlusion = 0.0;
+    int validSteps = 0;
+    for (int i = 1; i <= _23.u_num_steps; i++)
+    {
+        highp float dist = _23.u_step_size * float(i);
+        highp vec2 sampleUV = vTexCoords + (((lightDir.xy * texelSize) * dist) * 50.0);
+        bool _127 = sampleUV.x < 0.0;
+        bool _135;
+        if (!_127)
+        {
+            _135 = sampleUV.y < 0.0;
+        }
+        else
+        {
+            _135 = _127;
+        }
+        bool _142;
+        if (!_135)
+        {
+            _142 = sampleUV.x > 1.0;
+        }
+        else
+        {
+            _142 = _135;
+        }
+        bool _149;
+        if (!_142)
+        {
+            _149 = sampleUV.y > 1.0;
+        }
+        else
+        {
+            _149 = _142;
+        }
+        if (_149)
+        {
+            break;
+        }
+        highp float sampleDepth = textureLod(screenTexture, sampleUV, 0.0).x;
+        if (sampleDepth >= 1.0)
+        {
+            continue;
+        }
+        highp float param_1 = sampleDepth;
+        highp float sampleLin = linearizeDepth(param_1);
+        highp float diff = sampleLin - linDepth;
+        bool _172 = diff > 0.0;
+        bool _179;
+        if (_172)
+        {
+            _179 = diff < _23.u_step_size;
+        }
+        else
+        {
+            _179 = _172;
+        }
+        if (_179)
+        {
+            highp float k = 1.0 - (diff / _23.u_step_size);
+            occlusion += (k * k);
+        }
+        validSteps++;
+    }
+    highp float _200;
+    if (validSteps > 0)
+    {
+        _200 = 1.0 - clamp((occlusion / float(validSteps)) * _23.u_strength, 0.0, 1.0);
+    }
+    else
+    {
+        _200 = 1.0;
+    }
+    highp float shadow = _200;
     FragColor = vec4(vec3(shadow), 1.0);
 }
 

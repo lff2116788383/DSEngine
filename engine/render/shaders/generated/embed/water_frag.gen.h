@@ -562,7 +562,7 @@ static const uint32_t kwater_frag_spv[] = {
 };
 static const size_t kwater_frag_spv_size = 4390;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kwater_frag_glsl330 = R"(#version 430
 
 struct WaterParams
@@ -761,6 +761,212 @@ void main()
     }
     float edge_fade = smoothstep(0.0, 0.5, underwater_depth);
     float alpha = _29.u_transparency * edge_fade;
+    FragColor = vec4(mix(scene.xyz, surface, vec3(alpha)), scene.w);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kwater_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct WaterParams
+{
+    highp float u_depth_handle;
+    highp float u_water_level;
+    highp float u_deep_r;
+    highp float u_deep_g;
+    highp float u_deep_b;
+    highp float u_shallow_r;
+    highp float u_shallow_g;
+    highp float u_shallow_b;
+    highp float u_max_depth;
+    highp float u_transparency;
+    highp float u_wave_amplitude;
+    highp float u_wave_frequency;
+    highp float u_wave_speed;
+    highp float u_wave_dir_x;
+    highp float u_wave_dir_y;
+    highp float u_refraction_strength;
+    highp float u_specular_power;
+    highp float u_reflection_strength;
+    highp float u_time;
+    highp float u_sun_dir_x;
+    highp float u_sun_dir_y;
+    highp float u_sun_dir_z;
+    highp float u_cam_pos_x;
+    highp float u_cam_pos_y;
+    highp float u_cam_pos_z;
+    highp float u_near;
+    highp float u_far;
+    highp float u_fwd_x;
+    highp float u_fwd_y;
+    highp float u_fwd_z;
+    highp float u_tan_fov_y;
+    highp float u_aspect;
+    highp float u_caustic_intensity;
+    highp float u_caustic_scale;
+    highp float u_foam_intensity;
+    highp float u_foam_depth_threshold;
+    highp float u_uw_fog_density;
+    highp float u_uw_fog_r;
+    highp float u_uw_fog_g;
+    highp float u_uw_fog_b;
+};
+
+uniform WaterParams _29;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_depth_tex;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float WaterLinZ(highp float d)
+{
+    highp float z = (d * 2.0) - 1.0;
+    return ((2.0 * _29.u_near) * _29.u_far) / ((_29.u_far + _29.u_near) - (z * (_29.u_far - _29.u_near)));
+}
+
+highp vec3 GerstnerNormal(highp vec2 xz, highp float t, highp vec2 d1)
+{
+    highp float k = _29.u_wave_frequency;
+    highp float a = _29.u_wave_amplitude;
+    highp float sp = _29.u_wave_speed;
+    highp vec2 d2 = vec2(-d1.y, d1.x);
+    highp float p1 = (dot(d1, xz) * k) - (t * sp);
+    highp float p2 = ((dot(d2, xz) * k) * 1.2999999523162841796875) - ((t * sp) * 0.699999988079071044921875);
+    highp float dx = ((-k) * a) * ((d1.x * cos(p1)) + ((d2.x * 0.5) * cos(p2)));
+    highp float dz = ((-k) * a) * ((d1.y * cos(p1)) + ((d2.y * 0.5) * cos(p2)));
+    return normalize(vec3(-dx, 1.0, -dz));
+}
+
+void main()
+{
+    highp vec4 scene = texture(screenTexture, vTexCoords);
+    highp float depth_raw = texture(u_depth_tex, vTexCoords).x;
+    highp vec3 camFwd = vec3(_29.u_fwd_x, _29.u_fwd_y, _29.u_fwd_z);
+    highp vec3 camPos = vec3(_29.u_cam_pos_x, _29.u_cam_pos_y, _29.u_cam_pos_z);
+    highp vec3 worldUp = vec3(0.0, 1.0, 0.0);
+    highp vec3 camRight = normalize(cross(worldUp, camFwd));
+    highp vec3 camUp = cross(camFwd, camRight);
+    highp vec2 ndc = (vTexCoords * 2.0) - vec2(1.0);
+    highp vec3 rayDir = normalize((camFwd + (((camRight * ndc.x) * _29.u_tan_fov_y) * _29.u_aspect)) + ((camUp * ndc.y) * _29.u_tan_fov_y));
+    highp float denom = rayDir.y;
+    if (abs(denom) < 9.9999999747524270787835121154785e-07)
+    {
+        FragColor = scene;
+        return;
+    }
+    highp float t_hit = (_29.u_water_level - camPos.y) / denom;
+    if (t_hit < 0.0)
+    {
+        FragColor = scene;
+        return;
+    }
+    highp float _262;
+    if (depth_raw < 0.99989998340606689453125)
+    {
+        highp float param = depth_raw;
+        _262 = WaterLinZ(param) / max(dot(rayDir, camFwd), 9.9999997473787516355514526367188e-05);
+    }
+    else
+    {
+        _262 = 1000000.0;
+    }
+    highp float scene_linear = _262;
+    if (t_hit > scene_linear)
+    {
+        FragColor = scene;
+        return;
+    }
+    highp vec3 water_world = camPos + (rayDir * t_hit);
+    highp vec2 waveDir = vec2(_29.u_wave_dir_x, _29.u_wave_dir_y);
+    highp float underwater_depth = max(scene_linear - t_hit, 0.0);
+    highp float depth_factor = clamp(underwater_depth / max(_29.u_max_depth, 0.00999999977648258209228515625), 0.0, 1.0);
+    highp vec3 deepC = vec3(_29.u_deep_r, _29.u_deep_g, _29.u_deep_b);
+    highp vec3 shallowC = vec3(_29.u_shallow_r, _29.u_shallow_g, _29.u_shallow_b);
+    highp vec3 water_color = mix(shallowC, deepC, vec3(depth_factor));
+    highp vec2 param_1 = water_world.xz;
+    highp float param_2 = _29.u_time;
+    highp vec2 param_3 = waveDir;
+    highp vec3 wave_normal = GerstnerNormal(param_1, param_2, param_3);
+    highp vec2 refract_offset = wave_normal.xz * _29.u_refraction_strength;
+    highp vec2 refract_uv = clamp(vTexCoords + refract_offset, vec2(0.0), vec2(1.0));
+    highp vec3 refracted = texture(screenTexture, refract_uv).xyz;
+    highp float cos_theta = max(dot(-rayDir, wave_normal), 0.0);
+    highp float fresnel = _29.u_reflection_strength + ((1.0 - _29.u_reflection_strength) * pow(1.0 - cos_theta, 5.0));
+    highp vec3 reflected_dir = reflect(rayDir, wave_normal);
+    highp float sky_grad = clamp((reflected_dir.y * 0.5) + 0.5, 0.0, 1.0);
+    highp vec3 sky_color = mix(vec3(0.300000011920928955078125, 0.4000000059604644775390625, 0.5), vec3(0.60000002384185791015625, 0.75, 1.0), vec3(sky_grad));
+    highp vec3 sunDir = vec3(_29.u_sun_dir_x, _29.u_sun_dir_y, _29.u_sun_dir_z);
+    highp vec3 half_vec = normalize((-rayDir) + (-sunDir));
+    highp float spec = pow(max(dot(wave_normal, half_vec), 0.0), _29.u_specular_power);
+    highp vec3 caustic = vec3(0.0);
+    if (_29.u_caustic_intensity > 0.001000000047497451305389404296875)
+    {
+        highp vec2 cUV = water_world.xz / vec2(_29.u_caustic_scale);
+        highp float v1 = 1.0;
+        highp float v2 = 1.0;
+        for (int ci = 0; ci < 2; ci++)
+        {
+            highp float speed = (ci == 0) ? 0.4000000059604644775390625 : (-0.300000011920928955078125);
+            highp vec2 uvc = cUV + vec2(_29.u_time * speed, (_29.u_time * speed) * 0.699999988079071044921875);
+            highp vec2 cell = floor(uvc);
+            highp vec2 frac_uv = fract(uvc);
+            highp float minD = 1.0;
+            for (int y = -1; y <= 1; y++)
+            {
+                for (int x = -1; x <= 1; x++)
+                {
+                    highp vec2 nb = vec2(float(x), float(y));
+                    highp vec2 h = fract(sin(vec2(dot(cell + nb, vec2(127.09999847412109375, 311.70001220703125)), dot(cell + nb, vec2(269.5, 183.3000030517578125)))) * 43758.546875);
+                    highp vec2 diff = (nb + h) - frac_uv;
+                    minD = min(minD, dot(diff, diff));
+                }
+            }
+            if (ci == 0)
+            {
+                v1 = minD;
+            }
+            else
+            {
+                v2 = minD;
+            }
+        }
+        highp float pattern = clamp(pow(min(v1, v2), 0.5) * 2.0, 0.0, 1.0);
+        pattern = 1.0 - pattern;
+        pattern = pow(pattern, 2.5);
+        caustic = (vec3(pattern) * _29.u_caustic_intensity) * (1.0 - depth_factor);
+    }
+    highp float foam = 0.0;
+    if (_29.u_foam_intensity > 0.001000000047497451305389404296875)
+    {
+        foam = (1.0 - smoothstep(0.0, _29.u_foam_depth_threshold, underwater_depth)) * _29.u_foam_intensity;
+        highp float foam_noise = fract(sin(dot((water_world.xz * 5.0) + vec2(_29.u_time * 0.300000011920928955078125), vec2(12.98980045318603515625, 78.233001708984375))) * 43758.546875);
+        foam *= (0.60000002384185791015625 + (0.4000000059604644775390625 * foam_noise));
+    }
+    highp vec3 underwater = mix(refracted, water_color, vec3(depth_factor * _29.u_transparency)) + caustic;
+    highp vec3 surface = (mix(underwater, sky_color, vec3(fresnel)) + vec3(spec)) + vec3(foam);
+    bool _642 = camPos.y < _29.u_water_level;
+    bool _649;
+    if (_642)
+    {
+        _649 = _29.u_uw_fog_density > 0.001000000047497451305389404296875;
+    }
+    else
+    {
+        _649 = _642;
+    }
+    if (_649)
+    {
+        highp float fog_dist = length(water_world - camPos);
+        highp float fog_factor = 1.0 - exp((-_29.u_uw_fog_density) * fog_dist);
+        surface = mix(surface, vec3(_29.u_uw_fog_r, _29.u_uw_fog_g, _29.u_uw_fog_b), vec3(clamp(fog_factor, 0.0, 1.0)));
+    }
+    highp float edge_fade = smoothstep(0.0, 0.5, underwater_depth);
+    highp float alpha = _29.u_transparency * edge_fade;
     FragColor = vec4(mix(scene.xyz, surface, vec3(alpha)), scene.w);
 }
 

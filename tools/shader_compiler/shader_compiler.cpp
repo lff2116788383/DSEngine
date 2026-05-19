@@ -246,6 +246,35 @@ static std::string CrossCompileToGLSL330(const std::vector<uint32_t>& spirv,
 }
 
 // ============================================================================
+// spirv-cross: SPIR-V → ESSL 310 (OpenGL ES 3.1, Android)
+// ============================================================================
+
+static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
+                                          EShLanguage stage) {
+    try {
+        spirv_cross::CompilerGLSL compiler(spirv);
+        spirv_cross::CompilerGLSL::Options options;
+        options.version = 310;
+        options.es = true;
+        options.vulkan_semantics = false;
+        options.enable_420pack_extension = false;
+        compiler.set_common_options(options);
+
+        auto resources = compiler.get_shader_resources();
+        for (auto& pc : resources.push_constant_buffers) {
+            compiler.set_decoration(pc.id, spv::DecorationBinding, 0);
+        }
+
+        std::string essl = compiler.compile();
+        essl = FlattenPushConstantsInGLSL(essl);
+        return essl;
+    } catch (const spirv_cross::CompilerError& e) {
+        std::cerr << "[ERROR] spirv-cross ESSL310: " << e.what() << "\n";
+        return "";
+    }
+}
+
+// ============================================================================
 // spirv-cross: SPIR-V → HLSL SM5.0
 // ============================================================================
 
@@ -749,6 +778,7 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
                                         const std::string& stage_suffix,
                                         const std::vector<uint32_t>& spirv,
                                         const std::string& glsl330,
+                                        const std::string& essl310,
                                         const std::string& hlsl,
                                         const std::vector<uint8_t>& dxbc = {}) {
     std::ostringstream ss;
@@ -776,9 +806,13 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
     ss << "static const size_t k" << id << "_" << stage_suffix << "_spv_size = "
        << spirv.size() << ";\n\n";
 
-    // GLSL 330 — split into chunks to avoid MSVC C2026 (max 16380 bytes per literal)
-    ss << "// OpenGL GLSL 330\n";
+    // GLSL 430 (OpenGL desktop) — split into chunks to avoid MSVC C2026
+    ss << "// OpenGL GLSL 430\n";
     EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_glsl330", glsl330);
+
+    // ESSL 310 (OpenGL ES 3.1 / Android)
+    ss << "// OpenGL ES ESSL 310\n";
+    EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_essl310", essl310);
 
     // HLSL SM5 — split into chunks to avoid MSVC C2026
     ss << "// DX11 HLSL SM5.0\n";
@@ -931,8 +965,10 @@ int main(int argc, char* argv[]) {
         }
 
         // Generate embed header
+        std::string essl310;
         if (opts.embed) {
             if (glsl330.empty()) glsl330 = CrossCompileToGLSL330(spirv, stage);
+            essl310 = CrossCompileToESSL310(spirv, stage);
             if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage);
 
             // Compile HLSL to DXBC bytecode (Windows only)
@@ -951,7 +987,7 @@ int main(int argc, char* argv[]) {
             }
 #endif
 
-            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl330, hlsl, dxbc);
+            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl330, essl310, hlsl, dxbc);
             fs::path header_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + ".gen.h");
             WriteFile(header_path, header);
 
@@ -964,6 +1000,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "OK (spv:" << spirv.size() * 4 << "B";
         if (!glsl330.empty()) std::cout << " glsl:" << glsl330.size() << "B";
+        if (!essl310.empty() && opts.embed) std::cout << " essl310:" << essl310.size() << "B";
         if (!hlsl.empty()) std::cout << " hlsl:" << hlsl.size() << "B";
         std::cout << ")\n";
         success_count++;

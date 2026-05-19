@@ -83,7 +83,7 @@ static const uint32_t kmotion_vector_frag_spv[] = {
 };
 static const size_t kmotion_vector_frag_spv_size = 552;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kmotion_vector_frag_glsl330 = R"(#version 430
 
 struct MvParams
@@ -114,6 +114,44 @@ void main()
     prev_clip.y = _60.y;
     vec2 prev_uv = (prev_clip.xy * 0.5) + vec2(0.5);
     vec2 velocity = vTexCoords - prev_uv;
+    FragColor = vec4(velocity, 0.0, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kmotion_vector_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct MvParams
+{
+    highp float screen_w;
+    highp float screen_h;
+    highp mat4 reproj;
+};
+
+uniform MvParams _46;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp float depth = texture(screenTexture, vTexCoords).x;
+    highp vec2 ndc = (vTexCoords * 2.0) - vec2(1.0);
+    highp float z_ndc = (depth * 2.0) - 1.0;
+    highp vec4 clip_pos = vec4(ndc, z_ndc, 1.0);
+    highp vec4 prev_clip = _46.reproj * clip_pos;
+    highp float _56 = prev_clip.w;
+    highp vec4 _57 = prev_clip;
+    highp vec2 _60 = _57.xy / vec2(_56);
+    prev_clip.x = _60.x;
+    prev_clip.y = _60.y;
+    highp vec2 prev_uv = (prev_clip.xy * 0.5) + vec2(0.5);
+    highp vec2 velocity = vTexCoords - prev_uv;
     FragColor = vec4(velocity, 0.0, 1.0);
 }
 

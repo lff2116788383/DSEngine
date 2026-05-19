@@ -80,7 +80,7 @@ static const uint32_t kcolor_grading_frag_spv[] = {
 };
 static const size_t kcolor_grading_frag_spv_size = 530;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kcolor_grading_frag_glsl330 = R"(#version 430
 
 struct ColorGradingParams
@@ -102,6 +102,36 @@ void main()
     vec3 lutColor = texture(u_lut, clamp(color, vec3(0.0), vec3(1.0))).xyz;
     color = mix(color, lutColor, vec3(_40.u_lut_intensity));
     float ign = fract(52.98291778564453125 * fract((0.067110560834407806396484375 * gl_FragCoord.x) + (0.005837149918079376220703125 * gl_FragCoord.y)));
+    color += vec3((ign - 0.5) / 255.0);
+    FragColor = vec4(color, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kcolor_grading_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct ColorGradingParams
+{
+    highp float u_lut_intensity;
+};
+
+uniform ColorGradingParams _40;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 5) uniform highp sampler3D u_lut;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp vec3 color = texture(screenTexture, vTexCoords).xyz;
+    highp vec3 lutColor = texture(u_lut, clamp(color, vec3(0.0), vec3(1.0))).xyz;
+    color = mix(color, lutColor, vec3(_40.u_lut_intensity));
+    highp float ign = fract(52.98291778564453125 * fract((0.067110560834407806396484375 * gl_FragCoord.x) + (0.005837149918079376220703125 * gl_FragCoord.y)));
     color += vec3((ign - 0.5) / 255.0);
     FragColor = vec4(color, 1.0);
 }

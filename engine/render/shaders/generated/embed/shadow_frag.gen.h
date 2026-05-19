@@ -20,8 +20,19 @@ static const uint32_t kshadow_frag_spv[] = {
 };
 static const size_t kshadow_frag_spv_size = 54;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kshadow_frag_glsl330 = R"(#version 430
+
+void main()
+{
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kshadow_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
 
 void main()
 {

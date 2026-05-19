@@ -32,13 +32,30 @@ static const uint32_t kpostprocess_passthrough_frag_spv[] = {
 };
 static const size_t kpostprocess_passthrough_frag_spv_size = 151;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kpostprocess_passthrough_frag_glsl330 = R"(#version 430
 
 layout(binding = 1) uniform sampler2D screenTexture;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 0) in vec2 vTexCoords;
+
+void main()
+{
+    FragColor = texture(screenTexture, vTexCoords);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kpostprocess_passthrough_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) out highp vec4 FragColor;
+layout(location = 0) in highp vec2 vTexCoords;
 
 void main()
 {

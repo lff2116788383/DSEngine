@@ -38,7 +38,7 @@ static const uint32_t ksprite_frag_spv[] = {
 };
 static const size_t ksprite_frag_spv_size = 196;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* ksprite_frag_glsl330 = R"(#version 430
 
 layout(binding = 1) uniform sampler2D u_texture;
@@ -50,6 +50,25 @@ layout(location = 0) in vec4 vColor;
 void main()
 {
     vec4 texColor = texture(u_texture, vTexCoord);
+    FragColor = texColor * vColor;
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* ksprite_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 1) uniform highp sampler2D u_texture;
+
+layout(location = 1) in highp vec2 vTexCoord;
+layout(location = 0) out highp vec4 FragColor;
+layout(location = 0) in highp vec4 vColor;
+
+void main()
+{
+    highp vec4 texColor = texture(u_texture, vTexCoord);
     FragColor = texColor * vColor;
 }
 

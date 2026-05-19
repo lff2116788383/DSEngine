@@ -1,7 +1,7 @@
 # DSEngine 跨平台抽象方案
 
-> 状态：**Phase 2 已完成**  
-> 日期：2025-05-19（规划）→ 2026-05-19（Phase 1 实施）→ 2026-05-19（Phase 2 实施）  
+> 状态：**Phase 3 已完成**  
+> 日期：2025-05-19（规划）→ 2026-05-19（Phase 1 实施）→ 2026-05-19（Phase 2 实施）→ 2026-05-19（Phase 3 实施）  
 > 前置完成：RHI 三后端统一 + Shader 生成架构 + Reflection 驱动绑定
 
 ---
@@ -346,11 +346,12 @@ endif()
 |-------|------|-----------|---------|
 | **Phase 1** | PlatformApp + GlfwApp + EngineInstance 解耦 | ~300 行新增 + ~200 行改写 | 无 | ✅ **已完成** |
 | **Phase 2** | 虚拟文件系统 | ~200 行新增 + ~150 行改写 | Phase 1 | ✅ **已完成** |
-| **Phase 3** | ESSL 310 + GL Loader 抽象 | ~100 行新增 + ~50 行改写 | Phase 1 | 待实施 |
+| **Phase 3** | ESSL 310 + GL Loader 抽象 | ~100 行新增 + ~50 行改写 | Phase 1 | ✅ **已完成** |
 | **Phase 4** | Android NDK 构建 + AndroidApp | ~400 行新增 | Phase 1+2+3 | 待实施 |
 
 **Phase 1 已完成**，桌面端 GLFW 依赖已全部封装进 `engine/platform/glfw/`。  
-**Phase 2 已完成**，`FileSystem` 接口 + `NativeFileSystem` 桌面实现已建立，`AssetManager::LoadFileToMemory` 通过 `FileSystem*` 委托读取，`ServiceLocator` 注册 `FileSystem` 服务。Phase 3-4 在需要 Android 构建时推进。
+**Phase 2 已完成**，`FileSystem` 接口 + `NativeFileSystem` 桌面实现已建立，`AssetManager::LoadFileToMemory` 通过 `FileSystem*` 委托读取，`ServiceLocator` 注册 `FileSystem` 服务。  
+**Phase 3 已完成**，`shader_compiler` 新增 ESSL 310 交叉编译，所有 44 个 gen.h 已包含 `k*_essl310` 常量；新建 `engine/render/rhi/opengl/gl_loader.h` 统一 GL/GLES include；6 个 OpenGL 后端源文件替换为 `gl_loader.h`。Phase 4 在需要 Android 构建时推进。
 
 ---
 

@@ -63,7 +63,7 @@ static const uint32_t kwboit_composite_frag_spv[] = {
 };
 static const size_t kwboit_composite_frag_spv_size = 398;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kwboit_composite_frag_glsl330 = R"(#version 430
 
 struct WboitParams
@@ -88,6 +88,38 @@ void main()
         discard;
     }
     vec3 avg_color = accum.xyz / vec3(max(accum.w, 9.9999997473787516355514526367188e-06));
+    FragColor = vec4(avg_color, 1.0 - revealage);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kwboit_composite_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct WboitParams
+{
+    highp float u_reveal_handle;
+};
+
+uniform WboitParams _61;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_reveal_tex;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp vec4 accum = texture(screenTexture, vTexCoords);
+    highp float revealage = texture(u_reveal_tex, vTexCoords).x;
+    if (accum.w < 9.9999997473787516355514526367188e-05)
+    {
+        discard;
+    }
+    highp vec3 avg_color = accum.xyz / vec3(max(accum.w, 9.9999997473787516355514526367188e-06));
     FragColor = vec4(avg_color, 1.0 - revealage);
 }
 

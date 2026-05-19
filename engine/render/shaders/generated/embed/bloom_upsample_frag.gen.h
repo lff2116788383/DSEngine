@@ -136,7 +136,7 @@ static const uint32_t kbloom_upsample_frag_spv[] = {
 };
 static const size_t kbloom_upsample_frag_spv_size = 982;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kbloom_upsample_frag_glsl330 = R"(#version 430
 
 layout(binding = 2, std140) uniform BloomParams
@@ -163,6 +163,43 @@ void main()
     vec3 h = texture(screenTexture, vec2(vTexCoords.x, vTexCoords.y - y)).xyz;
     vec3 i = texture(screenTexture, vec2(vTexCoords.x + x, vTexCoords.y - y)).xyz;
     vec3 upsample = e * 4.0;
+    upsample += ((((b + d) + f) + h) * 2.0);
+    upsample += (((a + c) + g) + i);
+    upsample *= 0.0625;
+    FragColor = vec4(upsample, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kbloom_upsample_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 2, std140) uniform BloomParams
+{
+    highp float filterRadius;
+} _11;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp float x = _11.filterRadius;
+    highp float y = _11.filterRadius;
+    highp vec3 a = texture(screenTexture, vec2(vTexCoords.x - x, vTexCoords.y + y)).xyz;
+    highp vec3 b = texture(screenTexture, vec2(vTexCoords.x, vTexCoords.y + y)).xyz;
+    highp vec3 c = texture(screenTexture, vec2(vTexCoords.x + x, vTexCoords.y + y)).xyz;
+    highp vec3 d = texture(screenTexture, vec2(vTexCoords.x - x, vTexCoords.y)).xyz;
+    highp vec3 e = texture(screenTexture, vec2(vTexCoords.x, vTexCoords.y)).xyz;
+    highp vec3 f = texture(screenTexture, vec2(vTexCoords.x + x, vTexCoords.y)).xyz;
+    highp vec3 g = texture(screenTexture, vec2(vTexCoords.x - x, vTexCoords.y - y)).xyz;
+    highp vec3 h = texture(screenTexture, vec2(vTexCoords.x, vTexCoords.y - y)).xyz;
+    highp vec3 i = texture(screenTexture, vec2(vTexCoords.x + x, vTexCoords.y - y)).xyz;
+    highp vec3 upsample = e * 4.0;
     upsample += ((((b + d) + f) + h) * 2.0);
     upsample += (((a + c) + g) + i);
     upsample *= 0.0625;

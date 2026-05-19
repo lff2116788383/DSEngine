@@ -157,7 +157,7 @@ static const uint32_t klight_shaft_frag_spv[] = {
 };
 static const size_t klight_shaft_frag_spv_size = 1145;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* klight_shaft_frag_glsl330 = R"(#version 430
 
 struct LightShaftParams
@@ -214,6 +214,70 @@ void main()
         }
     }
     vec3 result = scene.xyz + (((accumulated * _25.u_exposure) * vec3(_25.u_light_r, _25.u_light_g, _25.u_light_b)) * _25.u_intensity);
+    FragColor = vec4(result, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* klight_shaft_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct LightShaftParams
+{
+    highp float u_depth_handle;
+    highp float u_sun_x;
+    highp float u_sun_y;
+    highp float u_light_r;
+    highp float u_light_g;
+    highp float u_light_b;
+    highp float u_density;
+    highp float u_weight;
+    highp float u_decay;
+    highp float u_exposure;
+    highp float u_num_samples;
+    highp float u_intensity;
+    highp float pad0;
+    highp float pad1;
+    highp float pad2;
+    highp float pad3;
+};
+
+uniform LightShaftParams _25;
+
+layout(binding = 0) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_depth_tex;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp vec4 scene = texture(screenTexture, vTexCoords);
+    int samples = int(_25.u_num_samples);
+    highp vec2 delta_uv = ((vec2(_25.u_sun_x, _25.u_sun_y) - vTexCoords) * _25.u_density) / vec2(float(samples));
+    highp vec2 uv = vTexCoords;
+    highp float illum_decay = 1.0;
+    highp vec3 accumulated = vec3(0.0);
+    for (int i = 0; i < samples; i++)
+    {
+        uv += delta_uv;
+        highp vec2 suv = clamp(uv, vec2(0.001000000047497451305389404296875), vec2(0.999000012874603271484375));
+        highp float d = texture(u_depth_tex, suv).x;
+        highp vec3 s = texture(screenTexture, suv).xyz;
+        highp float sky = step(0.99989998340606689453125, d);
+        highp float lum = dot(s, vec3(0.2125999927520751953125, 0.715200006961822509765625, 0.072200000286102294921875));
+        highp float bright = smoothstep(0.800000011920928955078125, 1.2000000476837158203125, lum);
+        highp float mask = max(sky, bright);
+        accumulated += (((s * mask) * illum_decay) * _25.u_weight);
+        illum_decay *= _25.u_decay;
+        if (illum_decay < 0.0030000000260770320892333984375)
+        {
+            break;
+        }
+    }
+    highp vec3 result = scene.xyz + (((accumulated * _25.u_exposure) * vec3(_25.u_light_r, _25.u_light_g, _25.u_light_b)) * _25.u_intensity);
     FragColor = vec4(result, 1.0);
 }
 

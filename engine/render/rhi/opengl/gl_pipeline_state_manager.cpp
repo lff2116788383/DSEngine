@@ -1,12 +1,12 @@
-/**
+﻿/**
  * @file gl_pipeline_state_manager.cpp
- * @brief GLPipelineStateManager 实现 - 管线状态管理器（带 Diff 优化）
+ * @brief GLPipelineStateManager 瀹炵幇 - 绠＄嚎鐘舵€佺鐞嗗櫒锛堝甫 Diff 浼樺寲锛?
  */
 
 #include "engine/render/rhi/opengl/gl_pipeline_state_manager.h"
 #include "engine/render/rhi/opengl/gl_enum_convert.h"
 #include "engine/base/debug.h"
-#include <glad/gl.h>
+#include "engine/render/rhi/opengl/gl_loader.h"
 
 namespace dse {
 namespace render {
@@ -23,7 +23,7 @@ const PipelineStateDesc* GLPipelineStateManager::GetPipelineState(unsigned int h
 }
 
 void GLPipelineStateManager::ApplyState(unsigned int handle) {
-    // 快速路径：同一管线状态连续 Apply，直接跳过
+    // 蹇€熻矾寰勶細鍚屼竴绠＄嚎鐘舵€佽繛缁?Apply锛岀洿鎺ヨ烦杩?
     if (active_pipeline_state_ == handle && handle != 0) {
         ++diff_hits_;
         return;
@@ -33,7 +33,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
 
     auto it = pipeline_states_.find(handle);
     if (it == pipeline_states_.end()) {
-        // 未找到状态时回退到默认混合状态
+        // 鏈壘鍒扮姸鎬佹椂鍥為€€鍒伴粯璁ゆ贩鍚堢姸鎬?
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         return;
@@ -42,7 +42,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     const auto& state = it->second;
     const auto& cached = cached_gl_state_;
 
-    // --- 混合状态 Diff ---
+    // --- 娣峰悎鐘舵€?Diff ---
     if (state.blend_enabled != cached.blend_enabled) {
         if (state.blend_enabled) {
             glEnable(GL_BLEND);
@@ -56,7 +56,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
                             ToGLBlendFactor(state.alpha_blend_src), ToGLBlendFactor(state.alpha_blend_dst));
     }
 
-    // --- 深度测试 Diff ---
+    // --- 娣卞害娴嬭瘯 Diff ---
     if (state.depth_test_enabled != cached.depth_test_enabled) {
         if (state.depth_test_enabled) {
             glEnable(GL_DEPTH_TEST);
@@ -71,7 +71,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         glDepthFunc(ToGLCompareFunc(state.depth_func));
     }
 
-    // --- 裁剪面 Diff ---
+    // --- 瑁佸壀闈?Diff ---
     if (state.culling_enabled != cached.culling_enabled) {
         if (state.culling_enabled) {
             glEnable(GL_CULL_FACE);
@@ -83,13 +83,13 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         glCullFace(ToGLCullFace(state.cull_face));
     }
 
-    // 更新缓存
+    // 鏇存柊缂撳瓨
     cached_gl_state_ = state;
 }
 
 void GLPipelineStateManager::ClearActiveState() {
     active_pipeline_state_ = 0;
-    // 重置缓存为默认值，确保下次 ApplyState 会完整设置所有 GL 状态
+    // 閲嶇疆缂撳瓨涓洪粯璁ゅ€硷紝纭繚涓嬫 ApplyState 浼氬畬鏁磋缃墍鏈?GL 鐘舵€?
     cached_gl_state_ = PipelineStateDesc{};
 }
 

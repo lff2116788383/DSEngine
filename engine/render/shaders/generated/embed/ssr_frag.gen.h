@@ -234,7 +234,7 @@ static const uint32_t kssr_frag_spv[] = {
 };
 static const size_t kssr_frag_spv_size = 1766;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kssr_frag_glsl330 = R"(#version 430
 
 struct SsrParams
@@ -350,6 +350,133 @@ void main()
         {
             float fade = 1.0 - (float(i) / float(_28.max_steps));
             vec3 hit_color = textureLod(u_color_texture, ray_uv, 0.0).xyz;
+            FragColor = vec4(hit_color * fade, fade);
+            return;
+        }
+    }
+    FragColor = vec4(0.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kssr_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct SsrParams
+{
+    highp float max_distance;
+    highp float thickness;
+    highp float step_size;
+    int max_steps;
+    highp float near_plane;
+    highp float far_plane;
+    highp float screen_w;
+    highp float screen_h;
+};
+
+uniform SsrParams _28;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_color_texture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float linearizeDepth(highp float d)
+{
+    highp float z = (d * 2.0) - 1.0;
+    return ((2.0 * _28.near_plane) * _28.far_plane) / ((_28.far_plane + _28.near_plane) - (z * (_28.far_plane - _28.near_plane)));
+}
+
+highp vec3 reconstructNormal(highp vec2 uv)
+{
+    highp vec2 texel = vec2(1.0) / vec2(_28.screen_w, _28.screen_h);
+    highp float param = texture(screenTexture, uv).x;
+    highp float dc = linearizeDepth(param);
+    highp float param_1 = texture(screenTexture, uv - vec2(texel.x, 0.0)).x;
+    highp float dl = linearizeDepth(param_1);
+    highp float param_2 = texture(screenTexture, uv + vec2(texel.x, 0.0)).x;
+    highp float dr = linearizeDepth(param_2);
+    highp float param_3 = texture(screenTexture, uv - vec2(0.0, texel.y)).x;
+    highp float db = linearizeDepth(param_3);
+    highp float param_4 = texture(screenTexture, uv + vec2(0.0, texel.y)).x;
+    highp float dt = linearizeDepth(param_4);
+    return normalize(vec3(dl - dr, db - dt, (2.0 * texel.x) * dc));
+}
+
+void main()
+{
+    highp float depth = texture(screenTexture, vTexCoords).x;
+    if (depth >= 1.0)
+    {
+        FragColor = vec4(0.0);
+        return;
+    }
+    highp float param = depth;
+    highp float lin_depth = linearizeDepth(param);
+    highp vec2 param_1 = vTexCoords;
+    highp vec3 normal = reconstructNormal(param_1);
+    highp vec3 view_dir = vec3((vTexCoords * 2.0) - vec2(1.0), 1.0);
+    view_dir = normalize(view_dir);
+    highp vec3 reflect_dir = reflect(view_dir, normal);
+    highp vec2 texel = vec2(1.0) / vec2(_28.screen_w, _28.screen_h);
+    highp vec2 ray_uv = vTexCoords;
+    highp float ray_depth = lin_depth;
+    for (int i = 0; i < _28.max_steps; i++)
+    {
+        ray_uv += ((reflect_dir.xy * texel) * _28.step_size);
+        bool _216 = ray_uv.x < 0.0;
+        bool _223;
+        if (!_216)
+        {
+            _223 = ray_uv.x > 1.0;
+        }
+        else
+        {
+            _223 = _216;
+        }
+        bool _230;
+        if (!_223)
+        {
+            _230 = ray_uv.y < 0.0;
+        }
+        else
+        {
+            _230 = _223;
+        }
+        bool _237;
+        if (!_230)
+        {
+            _237 = ray_uv.y > 1.0;
+        }
+        else
+        {
+            _237 = _230;
+        }
+        if (_237)
+        {
+            break;
+        }
+        highp float param_2 = textureLod(screenTexture, ray_uv, 0.0).x;
+        highp float sample_depth = linearizeDepth(param_2);
+        ray_depth += (reflect_dir.z * _28.step_size);
+        highp float depth_diff = ray_depth - sample_depth;
+        bool _261 = depth_diff > 0.0;
+        bool _269;
+        if (_261)
+        {
+            _269 = depth_diff < _28.thickness;
+        }
+        else
+        {
+            _269 = _261;
+        }
+        if (_269)
+        {
+            highp float fade = 1.0 - (float(i) / float(_28.max_steps));
+            highp vec3 hit_color = textureLod(u_color_texture, ray_uv, 0.0).xyz;
             FragColor = vec4(hit_color * fade, fade);
             return;
         }

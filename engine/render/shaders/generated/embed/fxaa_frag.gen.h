@@ -194,7 +194,7 @@ static const uint32_t kfxaa_frag_spv[] = {
 };
 static const size_t kfxaa_frag_spv_size = 1447;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kfxaa_frag_glsl330 = R"(#version 430
 
 struct FxaaParams
@@ -245,6 +245,71 @@ void main()
     vec3 rgbB = (rgbA * 0.5) + ((texture(screenTexture, vTexCoords + (dir * (-0.5))).xyz + texture(screenTexture, vTexCoords + (dir * 0.5)).xyz) * 0.25);
     vec3 param_5 = rgbB;
     float lumaB = luma(param_5);
+    if ((lumaB < lumaMin) || (lumaB > lumaMax))
+    {
+        FragColor = vec4(rgbA, 1.0);
+    }
+    else
+    {
+        FragColor = vec4(rgbB, 1.0);
+    }
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kfxaa_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct FxaaParams
+{
+    highp vec2 u_resolution;
+};
+
+uniform FxaaParams _27;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+highp float luma(highp vec3 c)
+{
+    return dot(c, vec3(0.2989999949932098388671875, 0.58700001239776611328125, 0.114000000059604644775390625));
+}
+
+void main()
+{
+    highp vec2 texel = vec2(1.0) / _27.u_resolution;
+    highp vec3 param = texture(screenTexture, vTexCoords).xyz;
+    highp float lumaM = luma(param);
+    highp vec3 param_1 = texture(screenTexture, vTexCoords + (vec2(-1.0) * texel)).xyz;
+    highp float lumaNW = luma(param_1);
+    highp vec3 param_2 = texture(screenTexture, vTexCoords + (vec2(1.0, -1.0) * texel)).xyz;
+    highp float lumaNE = luma(param_2);
+    highp vec3 param_3 = texture(screenTexture, vTexCoords + (vec2(-1.0, 1.0) * texel)).xyz;
+    highp float lumaSW = luma(param_3);
+    highp vec3 param_4 = texture(screenTexture, vTexCoords + (vec2(1.0) * texel)).xyz;
+    highp float lumaSE = luma(param_4);
+    highp float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    highp float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    highp float lumaRange = lumaMax - lumaMin;
+    if (lumaRange < max(0.031199999153614044189453125, lumaMax * 0.125))
+    {
+        FragColor = texture(screenTexture, vTexCoords);
+        return;
+    }
+    highp vec2 dir;
+    dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    dir.y = (lumaNW + lumaSW) - (lumaNE + lumaSE);
+    highp float dirReduce = max(((((lumaNW + lumaNE) + lumaSW) + lumaSE) * 0.25) * 0.25, 0.0078125);
+    highp float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = min(vec2(8.0), max(vec2(-8.0), dir * rcpDirMin)) * texel;
+    highp vec3 rgbA = (texture(screenTexture, vTexCoords + (dir * (-0.16666667163372039794921875))).xyz + texture(screenTexture, vTexCoords + (dir * 0.16666667163372039794921875)).xyz) * 0.5;
+    highp vec3 rgbB = (rgbA * 0.5) + ((texture(screenTexture, vTexCoords + (dir * (-0.5))).xyz + texture(screenTexture, vTexCoords + (dir * 0.5)).xyz) * 0.25);
+    highp vec3 param_5 = rgbB;
+    highp float lumaB = luma(param_5);
     if ((lumaB < lumaMin) || (lumaB > lumaMax))
     {
         FragColor = vec4(rgbA, 1.0);

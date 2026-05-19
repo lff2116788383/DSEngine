@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @file gl_draw_executor.cpp
- * @brief GLDrawExecutor 实现 - 绘制执行器
+ * @brief GLDrawExecutor 瀹炵幇 - 缁樺埗鎵ц鍣?
  */
 
 #include "engine/render/rhi/opengl/gl_draw_executor.h"
@@ -12,9 +12,9 @@
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/platform/screen.h"
 #include "engine/base/debug.h"
-#include <glad/gl.h>
+#include "engine/render/rhi/opengl/gl_loader.h"
 
-// GL 4.3 SSBO 常量 — glad/gl.h 仅包含 GL 3.3 定义
+// GL 4.3 SSBO 甯搁噺 鈥?glad/gl.h 浠呭寘鍚?GL 3.3 瀹氫箟
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
 #endif
@@ -112,13 +112,13 @@ void LogVse1522OceanPlaneTriangleDiagnostics(int frame,
 } // namespace
 
 // ============================================================
-// 几何缓冲区初始化
+// 鍑犱綍缂撳啿鍖哄垵濮嬪寲
 // ============================================================
 
 void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
                                           InitCreateVboFn create_vbo_fn,
                                           InitUpdateVboFn update_vbo_fn) {
-    // 构建精灵索引模板
+    // 鏋勫缓绮剧伒绱㈠紩妯℃澘
     std::vector<unsigned short> indices(MAX_SPRITE_INDICES);
     for (size_t i = 0, j = 0; i < MAX_SPRITES; ++i) {
         indices[j++] = static_cast<unsigned short>(i * 4 + 0);
@@ -131,7 +131,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
 
     std::vector<BatchVertex> vertices(MAX_SPRITE_VERTICES);
 
-    // 2D 精灵批处理 VAO
+    // 2D 绮剧伒鎵瑰鐞?VAO
     vao_handle_ = create_vao_fn();
     glBindVertexArray(vao_handle_);
     vbo_handle_ = create_vbo_fn(vertices.size() * sizeof(BatchVertex), vertices.data(), true, false);
@@ -146,9 +146,9 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, uv)));
     glBindVertexArray(0);
-    // ebo 生命周期随 vao，这里不需要单独存储
+    // ebo 鐢熷懡鍛ㄦ湡闅?vao锛岃繖閲屼笉闇€瑕佸崟鐙瓨鍌?
 
-    // 3D 网格 VAO
+    // 3D 缃戞牸 VAO
     mesh_vbo_handle_ = create_vbo_fn(MAX_MESH_VERTICES * sizeof(BatchVertex), nullptr, true, false);
     mesh_ibo_handle_ = create_vbo_fn(MAX_MESH_INDICES * sizeof(unsigned short), nullptr, true, true);
     mesh_vao_handle_ = create_vao_fn();
@@ -171,7 +171,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
     glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex), reinterpret_cast<const void*>(offsetof(BatchVertex, joints)));
     glBindVertexArray(0);
 
-    // GPU Instancing: instance VBO（初始 256 个实例 = 16KB）
+    // GPU Instancing: instance VBO锛堝垵濮?256 涓疄渚?= 16KB锛?
     {
         constexpr size_t kInitialInstanceCapacity = 256;
         instance_vbo_capacity_ = kInitialInstanceCapacity * sizeof(glm::mat4);
@@ -185,7 +185,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
         }
     }
 
-    // 白色 1x1 默认纹理
+    // 鐧借壊 1x1 榛樿绾圭悊
     unsigned char white_texture[] = {255, 255, 255, 255};
     if (create_texture_fn_) {
         white_texture_handle_ = create_texture_fn_(1, 1, white_texture, false);
@@ -202,7 +202,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
 }
 
 void GLDrawExecutor::ShutdownGeometryBuffers() {
-    // 白色纹理
+    // 鐧借壊绾圭悊
     if (white_texture_handle_ != 0) {
         if (delete_texture_fn_) { delete_texture_fn_(white_texture_handle_); }
         else { glDeleteTextures(1, &white_texture_handle_); }
@@ -215,7 +215,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         instance_vbo_handle_ = 0;
         instance_vbo_capacity_ = 0;
     }
-    // 3D 网格缓冲
+    // 3D 缃戞牸缂撳啿
     if (mesh_vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(mesh_vao_handle_); }
         else { glDeleteVertexArrays(1, &mesh_vao_handle_); }
@@ -231,7 +231,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &mesh_ibo_handle_); }
         mesh_ibo_handle_ = 0;
     }
-    // 2D 精灵缓冲
+    // 2D 绮剧伒缂撳啿
     if (vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(vao_handle_); }
         else { glDeleteVertexArrays(1, &vao_handle_); }
@@ -247,7 +247,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &ebo_handle_); }
         ebo_handle_ = 0;
     }
-    // 天空盒缓冲
+    // 澶╃┖鐩掔紦鍐?
     if (skybox_vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(skybox_vao_handle_); }
         else { glDeleteVertexArrays(1, &skybox_vao_handle_); }
@@ -258,7 +258,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &skybox_vbo_handle_); }
         skybox_vbo_handle_ = 0;
     }
-    // 后处理全屏四边形
+    // 鍚庡鐞嗗叏灞忓洓杈瑰舰
     if (pp_vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(pp_vao_handle_); }
         else { glDeleteVertexArrays(1, &pp_vao_handle_); }
@@ -274,7 +274,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &pp_param_ubo_); }
         pp_param_ubo_ = 0;
     }
-    // 3D 粒子四边形
+    // 3D 绮掑瓙鍥涜竟褰?
     if (particle_quad_vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(particle_quad_vao_handle_); }
         else { glDeleteVertexArrays(1, &particle_quad_vao_handle_); }
@@ -286,7 +286,7 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         particle_quad_vbo_handle_ = 0;
     }
 
-    // 毛发渲染资源
+    // 姣涘彂娓叉煋璧勬簮
     if (hair_vao_handle_ != 0) {
         if (delete_vao_fn_) { delete_vao_fn_(hair_vao_handle_); }
         else { glDeleteVertexArrays(1, &hair_vao_handle_); }
@@ -349,9 +349,9 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     if (render_pass.clear_color_enabled) {
         glClearColor(render_pass.clear_color.r, render_pass.clear_color.g, render_pass.clear_color.b, render_pass.clear_color.a);
         if (has_depth) {
-            // 确保 depth mask 开启：glClear(GL_DEPTH_BUFFER_BIT) 受 glDepthMask 控制，
-            // 若上一帧 composite/present pass 关闭了 depth write（glDepthMask(GL_FALSE)），
-            // 此处 clear 将静默失效，导致 depth buffer 残留旧值而非 1.0。
+            // 纭繚 depth mask 寮€鍚細glClear(GL_DEPTH_BUFFER_BIT) 鍙?glDepthMask 鎺у埗锛?
+            // 鑻ヤ笂涓€甯?composite/present pass 鍏抽棴浜?depth write锛坓lDepthMask(GL_FALSE)锛夛紝
+            // 姝ゅ clear 灏嗛潤榛樺け鏁堬紝瀵艰嚧 depth buffer 娈嬬暀鏃у€艰€岄潪 1.0銆?
             glDepthMask(GL_TRUE);
         }
         glClearDepth(1.0);
@@ -363,12 +363,12 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     }
 
 #ifdef DSE_VSE_1522_DIAG
-    // VSE 15.22 深度诊断：scene pass clear 后验证 depth buffer 初始值
+    // VSE 15.22 娣卞害璇婃柇锛歴cene pass clear 鍚庨獙璇?depth buffer 鍒濆鍊?
     static int vse1522_beginpass_diag_frames = 0;
     if (vse1522_beginpass_diag_frames < 5 && has_depth && render_pass.render_target != 0) {
         auto diag_rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (diag_rt && diag_rt->desc.has_depth && diag_rt->desc.has_color) {
-            // 只对同时有 color+depth 的 render target（即 scene pass）做诊断
+            // 鍙鍚屾椂鏈?color+depth 鐨?render target锛堝嵆 scene pass锛夊仛璇婃柇
             float post_clear_depth = -1.0f;
             glReadPixels(Screen::width() / 2, Screen::height() / 2, 1, 1,
                          GL_DEPTH_COMPONENT, GL_FLOAT, &post_clear_depth);
@@ -411,7 +411,7 @@ void GLDrawExecutor::ClearColor(const glm::vec4& color) {
 }
 
 // ============================================================
-// 3D PBR 网格绘制
+// 3D PBR 缃戞牸缁樺埗
 // ============================================================
 
 void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
@@ -433,7 +433,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             return !item.debug_label.empty();
         });
     if (emit_vse1522_depth_diag) {
-        // 诊断：检查当前 FBO 绑定和 depth attachment 状态
+        // 璇婃柇锛氭鏌ュ綋鍓?FBO 缁戝畾鍜?depth attachment 鐘舵€?
         GLint bound_fbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound_fbo);
         GLint depth_attached_type = 0;
@@ -453,7 +453,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         GLint depth_func = 0;
         glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
 
-        // 尝试读取一个中心像素的深度值，验证 depth readback 是否正常工作
+        // 灏濊瘯璇诲彇涓€涓腑蹇冨儚绱犵殑娣卞害鍊硷紝楠岃瘉 depth readback 鏄惁姝ｅ父宸ヤ綔
         float center_depth = -1.0f;
         glReadPixels(Screen::width() / 2, Screen::height() / 2, 1, 1,
                      GL_DEPTH_COMPONENT, GL_FLOAT, &center_depth);
@@ -498,17 +498,17 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    // === PerFrame UBO：每帧上传一次 ===
+    // === PerFrame UBO锛氭瘡甯т笂浼犱竴娆?===
     PerFrameUBO per_frame;
     per_frame.vp = vp;
     per_frame.view = view;
     per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
     ubo_mgr.UploadPerFrame(per_frame);
 
-    // PerScene UBO 需要在 for 循环中被 shading_mode 变更引用，声明在此处
+    // PerScene UBO 闇€瑕佸湪 for 寰幆涓 shading_mode 鍙樻洿寮曠敤锛屽０鏄庡湪姝ゅ
     PerSceneUBO per_scene{};
     if (!gbuffer_mode) {
-    // === PerScene UBO：使用第一个 item 的光照数据（同一批次光照通常一致） ===
+    // === PerScene UBO锛氫娇鐢ㄧ涓€涓?item 鐨勫厜鐓ф暟鎹紙鍚屼竴鎵规鍏夌収閫氬父涓€鑷达級 ===
     const auto& first_item = items[0];
     per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
@@ -519,19 +519,19 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     }
     ubo_mgr.UploadPerScene(per_scene);
 
-    // === LightProbeData UBO: SH 球谐系数 ===
+    // === LightProbeData UBO: SH 鐞冭皭绯绘暟 ===
     LightProbeDataUBO lp_data{};
     for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_state_.light_probe_sh[i];
     lp_data.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     ubo_mgr.UploadLightProbeData(lp_data);
     } // !gbuffer_mode
 
-    // 绑定所有 UBO
+    // 缁戝畾鎵€鏈?UBO
     ubo_mgr.BindAll();
 
-    // GL 3.3 UBO fallback: BindAll() 会将 UBOManager 的空 PointLights/SpotLights UBO
-    // 绑定到 binding 3/4，覆盖 LightBuffer::Bind() 的透明映射。
-    // 此处从 MeshDrawItem 的光源列表填充并上传，与 Vulkan 后端 UpdatePointSpotLightUBOs 对齐。
+    // GL 3.3 UBO fallback: BindAll() 浼氬皢 UBOManager 鐨勭┖ PointLights/SpotLights UBO
+    // 缁戝畾鍒?binding 3/4锛岃鐩?LightBuffer::Bind() 鐨勯€忔槑鏄犲皠銆?
+    // 姝ゅ浠?MeshDrawItem 鐨勫厜婧愬垪琛ㄥ～鍏呭苟涓婁紶锛屼笌 Vulkan 鍚庣 UpdatePointSpotLightUBOs 瀵归綈銆?
     if (!shader_mgr.supports_ssbo() && !items.empty()) {
         const auto& ref = items[0];
 
@@ -564,12 +564,12 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         ubo_mgr.UploadSpotLights(sl_ubo);
     }
 
-    // 纹理采样器（全局设置，非逐对象变化）
+    // 绾圭悊閲囨牱鍣紙鍏ㄥ眬璁剧疆锛岄潪閫愬璞″彉鍖栵級
     unsigned int active_shader = gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle();
     glUniform1i(glGetUniformLocation(active_shader, "u_texture"), slots.albedo);
     const int gbuffer_model_loc = gbuffer_mode ? glGetUniformLocation(active_shader, "u_model") : -1;
 
-    // DDGI uniforms（全局，每 batch 一次）
+    // DDGI uniforms锛堝叏灞€锛屾瘡 batch 涓€娆★級
     if (!gbuffer_mode && global_state_.ddgi_enabled && global_state_.ddgi_irradiance_atlas != 0) {
         glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 1.0f);
         glUniform3fv(glGetUniformLocation(active_shader, "u_ddgi_grid_origin"), 1, &global_state_.ddgi_grid_origin.x);
@@ -622,7 +622,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
             const float ndc_avg_z = valid_clip_vertices > 0 ? ndc_sum_z / static_cast<float>(valid_clip_vertices) : 0.0f;
 
-            // 额外诊断：记录当前 GL depth state
+            // 棰濆璇婃柇锛氳褰曞綋鍓?GL depth state
             GLboolean gl_depth_test = glIsEnabled(GL_DEPTH_TEST);
             GLboolean gl_depth_write = GL_TRUE;
             glGetBooleanv(GL_DEPTH_WRITEMASK, &gl_depth_write);
@@ -748,7 +748,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         if (!gbuffer_mode) {
-        // === PerMaterial UBO：每材质切换上传 ===
+        // === PerMaterial UBO锛氭瘡鏉愯川鍒囨崲涓婁紶 ===
         PerMaterialUBO per_mat;
         per_mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
         per_mat.roughness_ao = glm::vec4(item.material_roughness, item.material_ao, item.material_normal_strength, item.material_alpha_cutoff);
@@ -780,8 +780,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
         ubo_mgr.UploadPerMaterial(per_mat);
 
-        // 点光源/聚光灯数据：GL 4.3+ 由 LightBuffer SSBO 提供；GL 3.3 已由上方 UBO fallback 上传
-        // 仅绑定点光源阴影贴图
+        // 鐐瑰厜婧?鑱氬厜鐏暟鎹細GL 4.3+ 鐢?LightBuffer SSBO 鎻愪緵锛汫L 3.3 宸茬敱涓婃柟 UBO fallback 涓婁紶
+        // 浠呯粦瀹氱偣鍏夋簮闃村奖璐村浘
         for (int i = 0; i < 4; ++i) {
             if (loc.point_shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE0 + slots.point_shadow_base + i);
@@ -790,7 +790,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 聚光灯空间矩阵 UBO
+        // 鑱氬厜鐏┖闂寸煩闃?UBO
         {
             SpotLightDataUBO sld_ubo{};
             for (int i = 0; i < 4; ++i)
@@ -798,7 +798,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadSpotLightData(sld_ubo);
         }
 
-        // CSM 阴影贴图（sampler2DShadow 需要硬件深度比较）
+        // CSM 闃村奖璐村浘锛坰ampler2DShadow 闇€瑕佺‖浠舵繁搴︽瘮杈冿級
         for (int i = 0; i < 3; ++i) {
             if (loc.shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE0 + slots.shadow_base + i);
@@ -831,7 +831,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
         } // !gbuffer_mode
 
-        // 双面材质
+        // 鍙岄潰鏉愯川
         if (item.material_double_sided) {
             glDisable(GL_CULL_FACE);
         } else if (state_mgr.active_pipeline_state() != 0) {
@@ -847,7 +847,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glCullFace(GL_BACK);
         }
 
-        // 骨骼动画（push constant → 独立 uniform + BoneMatrices UBO）
+        // 楠ㄩ鍔ㄧ敾锛坧ush constant 鈫?鐙珛 uniform + BoneMatrices UBO锛?
         if (loc.skinned != -1) {
             glUniform1i(loc.skinned, item.skinned ? 1 : 0);
         }
@@ -858,7 +858,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadBoneMatrices(bm_ubo);
         }
 
-        // 变形目标（push constant → 独立 uniform + MorphWeights UBO）
+        // 鍙樺舰鐩爣锛坧ush constant 鈫?鐙珛 uniform + MorphWeights UBO锛?
         if (loc.morph_enabled != -1) {
             glUniform1i(loc.morph_enabled, item.morph_enabled ? 1 : 0);
         }
@@ -870,7 +870,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadMorphWeights(mw_ubo);
         }
 
-        // GPU Instancing 标记
+        // GPU Instancing 鏍囪
         const bool is_instanced = item.instance_transforms.size() > 1;
         {
             int inst_loc = gbuffer_mode ? -1 : loc.use_instancing;
@@ -879,7 +879,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 模型矩阵（逐对象 uniform）
+        // 妯″瀷鐭╅樀锛堥€愬璞?uniform锛?
         if (!is_instanced) {
             int model_loc = gbuffer_mode ? gbuffer_model_loc : loc.model;
             if (model_loc != -1) {
@@ -903,7 +903,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             continue;
         }
 
-        // 实际绘制
+        // 瀹為檯缁樺埗
         if (item.vao_override > 0) {
             glBindVertexArray(item.vao_override);
             if (item.ebo_override > 0) {
@@ -921,7 +921,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             const size_t instance_count = item.instance_transforms.size();
             const size_t inst_data_size = instance_count * sizeof(glm::mat4);
 
-            // 动态扩容 instance VBO
+            // 鍔ㄦ€佹墿瀹?instance VBO
             if (inst_data_size > instance_vbo_capacity_) {
                 if (instance_vbo_handle_ != 0) {
                     if (delete_buffer_fn_) { delete_buffer_fn_(instance_vbo_handle_); }
@@ -937,13 +937,13 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 }
             }
 
-            // 上传 instance model 矩阵
+            // 涓婁紶 instance model 鐭╅樀
             glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_handle_);
             glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(inst_data_size), item.instance_transforms.data());
 
             glBindVertexArray(mesh_vao_handle_);
 
-            // 配置 instance attributes (location 7-10, 每列 vec4)
+            // 閰嶇疆 instance attributes (location 7-10, 姣忓垪 vec4)
             const GLsizei mat4_stride = static_cast<GLsizei>(sizeof(glm::mat4));
             for (int col = 0; col < 4; ++col) {
                 GLuint attr = 7 + static_cast<GLuint>(col);
@@ -956,7 +956,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()),
                                     GL_UNSIGNED_SHORT, nullptr, static_cast<GLsizei>(instance_count));
 
-            // 清理 instance attribute 状态
+            // 娓呯悊 instance attribute 鐘舵€?
             for (int col = 0; col < 4; ++col) {
                 GLuint attr = 7 + static_cast<GLuint>(col);
                 glVertexAttribDivisor(attr, 0);
@@ -988,14 +988,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 分阶段深度采样：Monster/OceanPlane 绘制后立即采样
+        // 鍒嗛樁娈垫繁搴﹂噰鏍凤細Monster/OceanPlane 缁樺埗鍚庣珛鍗抽噰鏍?
         if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
 #ifdef DSE_VSE_1522_DIAG
             const int vw = Screen::width();
             const int vh = Screen::height();
             float post_depth = -1.0f;
             glReadPixels(vw / 2, vh / 2, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &post_depth);
-            // 在屏幕 1/4 位置（更可能在 Monster 正下方/地面上）采样
+            // 鍦ㄥ睆骞?1/4 浣嶇疆锛堟洿鍙兘鍦?Monster 姝ｄ笅鏂?鍦伴潰涓婏級閲囨牱
             float ground_depth = -1.0f;
             glReadPixels(vw / 2, vh / 4, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &ground_depth);
             unsigned char post_color[4] = {0, 0, 0, 0};
@@ -1024,7 +1024,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     }
     if (emit_vse1522_depth_diag) {
 #ifdef DSE_VSE_1522_DIAG
-        // 最终深度采样：验证 FBO 绑定和 depth attachment
+        // 鏈€缁堟繁搴﹂噰鏍凤細楠岃瘉 FBO 缁戝畾鍜?depth attachment
         GLint final_fbo = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &final_fbo);
         GLint final_depth_type = 0;
@@ -1045,11 +1045,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             depth_sum += depth_samples[static_cast<std::size_t>(i)];
         }
 
-        // 同时采样中心区域的 color 值，确认渲染有输出
+        // 鍚屾椂閲囨牱涓績鍖哄煙鐨?color 鍊硷紝纭娓叉煋鏈夎緭鍑?
         unsigned char center_rgba[4] = {0, 0, 0, 0};
         glReadPixels(viewport_w / 2, viewport_h / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, center_rgba);
 
-        // 检查 GL depth state
+        // 妫€鏌?GL depth state
         GLboolean final_depth_test = glIsEnabled(GL_DEPTH_TEST);
         GLboolean final_depth_write = GL_TRUE;
         glGetBooleanv(GL_DEPTH_WRITEMASK, &final_depth_write);
@@ -1077,7 +1077,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 }
 
 // ============================================================
-// 天空盒绘制
+// 澶╃┖鐩掔粯鍒?
 // ============================================================
 
 void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
@@ -1086,7 +1086,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
                                   GLShaderManager& shader_mgr) {
     if (cubemap_texture_handle == 0) return;
 
-    // 懒初始化天空盒着色器和几何
+    // 鎳掑垵濮嬪寲澶╃┖鐩掔潃鑹插櫒鍜屽嚑浣?
     if (shader_mgr.skybox_shader_handle() == 0) {
         shader_mgr.InitSkyboxShader();
 
@@ -1119,7 +1119,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     const auto& skybox_loc = shader_mgr.skybox_locations();
     glDepthFunc(GL_LEQUAL);
     glUseProgram(shader_mgr.skybox_shader_handle());
-    // 合成 VP 矩阵：移除平移分量后乘以投影
+    // 鍚堟垚 VP 鐭╅樀锛氱Щ闄ゅ钩绉诲垎閲忓悗涔樹互鎶曞奖
     glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
     glm::mat4 vp = projection * skybox_view;
     glUniformMatrix4fv(skybox_loc.vp, 1, GL_FALSE, glm::value_ptr(vp));
@@ -1136,7 +1136,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
 }
 
 // ============================================================
-// 后处理绘制
+// 鍚庡鐞嗙粯鍒?
 // ============================================================
 
 void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& request,
@@ -1144,7 +1144,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
     const unsigned int source_texture = request.source_texture;
     const std::string& effect_name = request.effect_name;
     const std::vector<float>& params = request.params;
-    // 后处理全屏四边形 VAO/VBO
+    // 鍚庡鐞嗗叏灞忓洓杈瑰舰 VAO/VBO
     if (pp_vao_handle_ == 0) {
         float quadVertices[] = {
             -1.0f,  1.0f,  0.0f, 1.0f,
@@ -1173,27 +1173,27 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
         glBindVertexArray(0);
     }
 
-    // ====== gen.h GLSL 430 统一路径（Phase 3）======
-    // gen.h shader 是完整独立的 GLSL 430 源，不需要 header 拼接。
-    // sampler 使用 layout(binding=N) 自动绑定纹理单元。
-    // 参数通过 std140 uniform block (binding=2) 或 plain struct uniform 传递。
+    // ====== gen.h GLSL 430 缁熶竴璺緞锛圥hase 3锛?=====
+    // gen.h shader 鏄畬鏁寸嫭绔嬬殑 GLSL 430 婧愶紝涓嶉渶瑕?header 鎷兼帴銆?
+    // sampler 浣跨敤 layout(binding=N) 鑷姩缁戝畾绾圭悊鍗曞厓銆?
+    // 鍙傛暟閫氳繃 std140 uniform block (binding=2) 鎴?plain struct uniform 浼犻€掋€?
     {
         unsigned int gen_shader = shader_mgr.GetOrCreateGenPPShader(effect_name);
         if (gen_shader != 0) {
             glUseProgram(gen_shader);
 
-            // gen.h: screenTexture — binding=source_binding (light_shaft=0, others=1)
+            // gen.h: screenTexture 鈥?binding=source_binding (light_shaft=0, others=1)
             glActiveTexture(GL_TEXTURE0 + request.source_binding);
             glBindTexture(GL_TEXTURE_2D, source_texture);
 
-            // 绑定 request.textures[] 中声明的额外纹理
+            // 缁戝畾 request.textures[] 涓０鏄庣殑棰濆绾圭悊
             for (const auto& tb : request.textures) {
                 if (tb.handle == 0) break;
                 glActiveTexture(GL_TEXTURE0 + tb.slot);
                 glBindTexture(tb.is_3d ? GL_TEXTURE_3D : GL_TEXTURE_2D, tb.handle);
             }
 
-            // 参数 UBO 懒创建（用于 std140 uniform block 类 shader）
+            // 鍙傛暟 UBO 鎳掑垱寤猴紙鐢ㄤ簬 std140 uniform block 绫?shader锛?
             auto ensure_param_ubo = [&]() {
                 if (pp_param_ubo_ == 0) {
                     glGenBuffers(1, &pp_param_ubo_);
@@ -1209,7 +1209,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
             };
 
             if (effect_name == "fxaa" && params.size() >= 2) {
-                // plain struct uniform: uniform FxaaParams _27; → _27.u_resolution
+                // plain struct uniform: uniform FxaaParams _27; 鈫?_27.u_resolution
                 glUniform2f(glGetUniformLocation(gen_shader, "_27.u_resolution"),
                             params[0], params[1]);
             } else if (effect_name == "bloom_extract" && params.size() >= 1) {
@@ -1252,7 +1252,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
                 glUniform1f(glGetUniformLocation(gen_shader, "_28.u_screen_w"), params[8]);
                 glUniform1f(glGetUniformLocation(gen_shader, "_28.u_screen_h"), params[9]);
             } else if (effect_name == "postprocess_passthrough") {
-                // no params — screenTexture already bound at unit 1
+                // no params 鈥?screenTexture already bound at unit 1
             } else if (effect_name == "bloom_composite") {
                 // gen.h: bloom_composite_ssao_ae, plain struct BloomCompositeAeParams _90
                 const CompositeParamsView cv(params);
@@ -1312,7 +1312,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
                 glUniform1f(glGetUniformLocation(gen_shader, "_27.u_far"), params[3]);
                 glUniform2f(glGetUniformLocation(gen_shader, "_27.u_screen_size"), params[4], params[5]);
             } else if (effect_name == "ssao_blur") {
-                // no params — screenTexture(1) only
+                // no params 鈥?screenTexture(1) only
             } else if (effect_name == "contact_shadow" && params.size() >= 10) {
                 // plain struct ContactShadowParams _23, sampler: screenTexture(1)
                 glUniform3f(glGetUniformLocation(gen_shader, "_23.u_light_dir"), params[0], params[1], params[2]);
@@ -1417,7 +1417,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
                 glUniform1f(glGetUniformLocation(gen_shader, "_20.u_tan_fov_y"), params[27]);
                 glUniform1f(glGetUniformLocation(gen_shader, "_20.u_aspect"), params[28]);
             } else if (effect_name == "lum_compute") {
-                // no params — screenTexture(1) only
+                // no params 鈥?screenTexture(1) only
             } else if (effect_name == "lum_adapt" && params.size() >= 6) {
                 // plain struct LumAdaptParams _34
                 // samplers: screenTexture(1), prevAdaptedTex(2)
@@ -1503,10 +1503,10 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
                 glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_g"), params[37]);
                 glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_b"), params[38]);
             } else if (effect_name == "bloom_blur_h" || effect_name == "bloom_blur_v") {
-                // no params — screenTexture(1) only
+                // no params 鈥?screenTexture(1) only
             }
 
-            // 绘制全屏四边形
+            // 缁樺埗鍏ㄥ睆鍥涜竟褰?
             glDisable(GL_DEPTH_TEST);
             if (effect_name == "decal" || effect_name == "wboit_composite" || effect_name == "water") {
                 glEnable(GL_BLEND);
@@ -1520,9 +1520,9 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
             return;
         }
     }
-    // ====== 旧路径：动态拼接 GLSL 330 ======
+    // ====== 鏃ц矾寰勶細鍔ㄦ€佹嫾鎺?GLSL 330 ======
 
-    // 构建后处理片段着色器
+    // 鏋勫缓鍚庡鐞嗙墖娈电潃鑹插櫒
     const char* vs_src = R"(
         #version 330 core
         layout (location = 0) in vec2 aPos;
@@ -2873,7 +2873,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
 }
 
 // ============================================================
-// 2D 精灵批处理绘制
+// 2D 绮剧伒鎵瑰鐞嗙粯鍒?
 // ============================================================
 
 void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
@@ -2895,7 +2895,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
     ubo_mgr.UploadPerFrame(per_frame);
 
-    // 2D 精灵不需要光照/材质，填充默认值
+    // 2D 绮剧伒涓嶉渶瑕佸厜鐓?鏉愯川锛屽～鍏呴粯璁ゅ€?
     PerSceneUBO per_scene{};
     per_scene.light_dir_and_enabled.w = 0.0f;  // lighting_enabled = false
     per_scene.light_params.w = 1.0f;  // skip_tonemapping = true (UI sprites are already sRGB)
@@ -3026,7 +3026,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
 }
 
 // ============================================================
-// 3D 粒子绘制
+// 3D 绮掑瓙缁樺埗
 // ============================================================
 
 void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& items,
@@ -3035,12 +3035,12 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
                                        GLShaderManager& shader_mgr) {
     if (items.empty()) return;
 
-    // 懒初始化粒子着色器
+    // 鎳掑垵濮嬪寲绮掑瓙鐫€鑹插櫒
     if (shader_mgr.particle_shader_handle() == 0) {
         shader_mgr.InitParticleShader();
     }
 
-    // 粒子四边形 VAO/VBO
+    // 绮掑瓙鍥涜竟褰?VAO/VBO
     if (particle_quad_vao_handle_ == 0) {
         float quad_vertices[] = {
              -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
@@ -3071,7 +3071,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
 
     const auto& p_loc = shader_mgr.particle_locations();
     glUseProgram(shader_mgr.particle_shader_handle());
-    // 粒子着色器使用 PerFrame UBO（vp + view），相机方向由着色器从 view 矩阵提取
+    // 绮掑瓙鐫€鑹插櫒浣跨敤 PerFrame UBO锛坴p + view锛夛紝鐩告満鏂瑰悜鐢辩潃鑹插櫒浠?view 鐭╅樀鎻愬彇
     glUniform1i(p_loc.texture, 0);
 
     glDepthMask(GL_FALSE);
@@ -3114,7 +3114,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
 }
 
 // ============================================================
-// Hair Strand 渲染
+// Hair Strand 娓叉煋
 // ============================================================
 
 static const char* kHairVertSource = R"(
@@ -3138,7 +3138,7 @@ void main() {
     vec4 world_pos = u_model * vec4(pos.xyz, 1.0);
     v_world_pos = world_pos.xyz;
     v_tangent = normalize(mat3(u_model) * tan.xyz);
-    v_t = 1.0 - tan.w; // tangent.w = thickness: 1 at root, 0 at tip → v_t: 0 at root, 1 at tip
+    v_t = 1.0 - tan.w; // tangent.w = thickness: 1 at root, 0 at tip 鈫?v_t: 0 at root, 1 at tip
 
     gl_Position = u_projection * u_view * world_pos;
 }
@@ -3211,7 +3211,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     if (items.empty()) return;
     (void)shader_mgr;
 
-    // 懒初始化 hair shader
+    // 鎳掑垵濮嬪寲 hair shader
     if (hair_shader_handle_ == 0) {
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vs, 1, &kHairVertSource, nullptr);
@@ -3255,7 +3255,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         glDeleteShader(fs);
         hair_shader_handle_ = prog;
 
-        // 缓存 uniform locations
+        // 缂撳瓨 uniform locations
         hair_loc_model_   = glGetUniformLocation(prog, "u_model");
         hair_loc_view_    = glGetUniformLocation(prog, "u_view");
         hair_loc_proj_    = glGetUniformLocation(prog, "u_projection");
@@ -3274,7 +3274,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         hair_loc_scol_    = glGetUniformLocation(prog, "u_spec_color");
     }
 
-    // 懒初始化空 VAO
+    // 鎳掑垵濮嬪寲绌?VAO
     if (hair_vao_handle_ == 0) {
         if (create_vao_fn_) {
             hair_vao_handle_ = create_vao_fn_();
@@ -3286,7 +3286,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     glUseProgram(hair_shader_handle_);
     glBindVertexArray(hair_vao_handle_);
 
-    // 使用缓存的 uniform locations
+    // 浣跨敤缂撳瓨鐨?uniform locations
     glUniformMatrix4fv(hair_loc_view_, 1, GL_FALSE, &view[0][0]);
     glUniformMatrix4fv(hair_loc_proj_, 1, GL_FALSE, &projection[0][0]);
 
@@ -3294,7 +3294,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     glm::vec3 cam_pos(inv_view[3]);
     glUniform3fv(hair_loc_cam_, 1, &cam_pos[0]);
 
-    // 半透明混合 + 深度测试（只读）
+    // 鍗婇€忔槑娣峰悎 + 娣卞害娴嬭瘯锛堝彧璇伙級
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
@@ -3305,11 +3305,11 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         if (item.strand_count == 0 || item.total_vertex_count == 0) continue;
         if (!item.strand_firsts || !item.strand_counts) continue;
 
-        // 发丝宽度（clamped to driver支持范围）
+        // 鍙戜笣瀹藉害锛坈lamped to driver鏀寔鑼冨洿锛?
         float line_w = (std::max)(1.0f, item.fiber_radius * 40.0f);
         glLineWidth(line_w);
 
-        // 绑定 SSBO
+        // 缁戝畾 SSBO
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, item.position_ssbo);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, item.tangent_ssbo);
 
@@ -3328,7 +3328,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         glUniform1f(hair_loc_sstr2_,   item.specular_strength_secondary);
         glUniform3fv(hair_loc_scol_,   1, &item.specular_color[0]);
 
-        // glMultiDrawArrays: 每个 strand 是一个 GL_LINE_STRIP
+        // glMultiDrawArrays: 姣忎釜 strand 鏄竴涓?GL_LINE_STRIP
         glMultiDrawArrays(GL_LINE_STRIP,
                           item.strand_firsts,
                           item.strand_counts,
@@ -3337,7 +3337,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         global_state_.current_frame_stats.draw_calls += 1;
     }
 
-    // 恢复状态
+    // 鎭㈠鐘舵€?
     glDisable(GL_BLEND);
     glLineWidth(1.0f);
     glDepthMask(GL_TRUE);
@@ -3349,7 +3349,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
 }
 
 // ============================================================
-// 帧生命周期
+// 甯х敓鍛藉懆鏈?
 // ============================================================
 
 void GLDrawExecutor::BeginFrame() {

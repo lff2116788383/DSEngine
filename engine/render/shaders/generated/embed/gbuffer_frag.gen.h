@@ -78,7 +78,7 @@ static const uint32_t kgbuffer_frag_spv[] = {
 };
 static const size_t kgbuffer_frag_spv_size = 513;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kgbuffer_frag_glsl330 = R"(#version 430
 
 layout(binding = 0, std140) uniform PerFrame
@@ -106,6 +106,47 @@ layout(location = 2) in vec3 vFragPos;
 void main()
 {
     vec4 albedo = texture(u_texture, vTexCoord) * vColor;
+    if (albedo.w < 0.00999999977648258209228515625)
+    {
+        discard;
+    }
+    gAlbedo = albedo;
+    gNormal = vec4((normalize(vNormal) * 0.5) + vec3(0.5), 1.0);
+    gPosition = vec4(vFragPos, 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kgbuffer_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 0, std140) uniform PerFrame
+{
+    highp mat4 vp;
+    highp mat4 view;
+    highp vec4 camera_pos;
+} _63;
+
+layout(binding = 0, std140) uniform PerScene
+{
+    highp vec4 _gbuf_dummy;
+} _66;
+
+layout(binding = 1) uniform highp sampler2D u_texture;
+
+layout(location = 1) in highp vec2 vTexCoord;
+layout(location = 0) in highp vec4 vColor;
+layout(location = 0) out highp vec4 gAlbedo;
+layout(location = 1) out highp vec4 gNormal;
+layout(location = 3) in highp vec3 vNormal;
+layout(location = 2) out highp vec4 gPosition;
+layout(location = 2) in highp vec3 vFragPos;
+
+void main()
+{
+    highp vec4 albedo = texture(u_texture, vTexCoord) * vColor;
     if (albedo.w < 0.00999999977648258209228515625)
     {
         discard;

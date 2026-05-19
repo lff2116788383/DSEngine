@@ -107,7 +107,7 @@ static const uint32_t kmotion_blur_frag_spv[] = {
 };
 static const size_t kmotion_blur_frag_spv_size = 746;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kmotion_blur_frag_glsl330 = R"(#version 430
 
 struct MotionBlurParams
@@ -136,6 +136,76 @@ void main()
     {
         float t = float(i) / float(samples);
         vec2 sample_uv = vTexCoords + (velocity * t);
+        bool _75 = sample_uv.x >= 0.0;
+        bool _81;
+        if (_75)
+        {
+            _81 = sample_uv.x <= 1.0;
+        }
+        else
+        {
+            _81 = _75;
+        }
+        bool _88;
+        if (_81)
+        {
+            _88 = sample_uv.y >= 0.0;
+        }
+        else
+        {
+            _88 = _81;
+        }
+        bool _94;
+        if (_88)
+        {
+            _94 = sample_uv.y <= 1.0;
+        }
+        else
+        {
+            _94 = _88;
+        }
+        if (_94)
+        {
+            color += texture(u_color_texture, sample_uv).xyz;
+            total += 1.0;
+        }
+    }
+    FragColor = vec4(color / vec3(total), 1.0);
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kmotion_blur_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+struct MotionBlurParams
+{
+    highp float intensity;
+    highp float num_samples;
+    highp float screen_w;
+    highp float screen_h;
+};
+
+uniform MotionBlurParams _23;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+layout(binding = 2) uniform highp sampler2D u_color_texture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp vec2 velocity = texture(screenTexture, vTexCoords).xy * _23.intensity;
+    int samples = max(int(_23.num_samples), 1);
+    highp vec3 color = texture(u_color_texture, vTexCoords).xyz;
+    highp float total = 1.0;
+    for (int i = 1; i < samples; i++)
+    {
+        highp float t = float(i) / float(samples);
+        highp vec2 sample_uv = vTexCoords + (velocity * t);
         bool _75 = sample_uv.x >= 0.0;
         bool _81;
         if (_75)

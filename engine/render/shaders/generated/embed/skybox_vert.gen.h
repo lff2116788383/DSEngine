@@ -56,8 +56,24 @@ static const uint32_t kskybox_vert_spv[] = {
 };
 static const size_t kskybox_vert_spv_size = 340;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kskybox_vert_glsl330 = R"(#version 430
+
+uniform mat4 u_vp;
+layout(location = 0) out vec3 vTexCoords;
+layout(location = 0) in vec3 aPos;
+
+void main()
+{
+    vTexCoords = aPos;
+    vec4 pos = u_vp * vec4(aPos * 10000.0, 1.0);
+    gl_Position = pos.xyww;
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kskybox_vert_essl310 = R"(#version 310 es
 
 uniform mat4 u_vp;
 layout(location = 0) out vec3 vTexCoords;

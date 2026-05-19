@@ -58,7 +58,7 @@ static const uint32_t kbloom_extract_frag_spv[] = {
 };
 static const size_t kbloom_extract_frag_spv_size = 355;
 
-// OpenGL GLSL 330
+// OpenGL GLSL 430
 static const char* kbloom_extract_frag_glsl330 = R"(#version 430
 
 layout(binding = 2, std140) uniform BloomParams
@@ -75,6 +75,37 @@ void main()
 {
     vec3 color = texture(screenTexture, vTexCoords).xyz;
     float brightness = dot(color, vec3(0.2125999927520751953125, 0.715200006961822509765625, 0.072200000286102294921875));
+    if (brightness > _33.threshold)
+    {
+        FragColor = vec4(color, 1.0);
+    }
+    else
+    {
+        FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+}
+
+)";
+
+// OpenGL ES ESSL 310
+static const char* kbloom_extract_frag_essl310 = R"(#version 310 es
+precision mediump float;
+precision highp int;
+
+layout(binding = 2, std140) uniform BloomParams
+{
+    highp float threshold;
+} _33;
+
+layout(binding = 1) uniform highp sampler2D screenTexture;
+
+layout(location = 0) in highp vec2 vTexCoords;
+layout(location = 0) out highp vec4 FragColor;
+
+void main()
+{
+    highp vec3 color = texture(screenTexture, vTexCoords).xyz;
+    highp float brightness = dot(color, vec3(0.2125999927520751953125, 0.715200006961822509765625, 0.072200000286102294921875));
     if (brightness > _33.threshold)
     {
         FragColor = vec4(color, 1.0);
