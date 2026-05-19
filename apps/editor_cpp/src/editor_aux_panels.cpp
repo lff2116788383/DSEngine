@@ -313,6 +313,13 @@ void DrawProjectPanel() {
                 std::string display_name = static_cast<int>(filename.size()) > max_chars
                     ? filename.substr(0, max_chars - 1) + "..."
                     : filename;
+                // Center filename text under thumbnail
+                {
+                    float tw = ImGui::CalcTextSize(display_name.c_str()).x;
+                    float cx = p.x + (thumb_w - tw) * 0.5f;
+                    if (cx > ImGui::GetCursorScreenPos().x)
+                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (thumb_w - tw) * 0.5f);
+                }
                 ImGui::TextUnformatted(display_name.c_str());
                 ImGui::EndGroup();
 
@@ -385,6 +392,7 @@ void DrawProjectPanel() {
             for (const auto& entry : entries) {
                 const auto& path = entry.path();
                 const std::string filename = path.filename().string();
+                ImGui::PushID(filename.c_str());
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
 
@@ -401,6 +409,7 @@ void DrawProjectPanel() {
                         s_rename_target.clear();
                     }
                     ImGui::TableSetColumnIndex(1); ImGui::TableSetColumnIndex(2);
+                    ImGui::PopID();
                     continue;
                 }
 
@@ -494,6 +503,7 @@ void DrawProjectPanel() {
 #endif
                     ImGui::EndPopup();
                 }
+                ImGui::PopID();
             } // for entries
             ImGui::EndTable();
             } // if BeginTable
