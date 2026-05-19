@@ -55,6 +55,11 @@
 // Reflection metadata for automated binding
 #include "embed/pbr_vert_reflect.gen.h"
 #include "embed/pbr_frag_reflect.gen.h"
+#include "embed/shadow_vert_reflect.gen.h"
+#include "embed/shadow_frag_reflect.gen.h"
+#include "embed/sprite_vert_reflect.gen.h"
+#include "embed/sprite_frag_reflect.gen.h"
+#include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
 
 namespace dse {
@@ -303,15 +308,6 @@ void GLShaderManager::InitBuiltinPBRShader() {
     CachePBRLocations();
 }
 
-// helper: 绑定 UBO block 到指定 binding point
-static void BindUBOBlock(unsigned int prog, const char* block_name,
-                         UBOBindingPoint bp, unsigned int& out_index) {
-    out_index = glGetUniformBlockIndex(prog, block_name);
-    if (out_index != GL_INVALID_INDEX) {
-        glUniformBlockBinding(prog, out_index, static_cast<unsigned int>(bp));
-    }
-}
-
 // UBO name → engine UBOBindingPoint 映射表（用于 reflection 自动绑定）
 static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     if (std::strcmp(name, "PerFrame") == 0)       return UBOBindingPoint::PerFrame;
@@ -326,25 +322,27 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     return static_cast<UBOBindingPoint>(0xFF); // unknown — skipped
 }
 
+// 从 reflection 数据自动绑定单个 stage 的所有 UBO block
+static void BindUBOsFromReflection(unsigned int prog,
+                                    const shader_reflect::StageReflection& refl) {
+    for (uint32_t i = 0; i < refl.uniform_buffer_count; ++i) {
+        const auto& ubo = refl.uniform_buffers[i];
+        UBOBindingPoint bp = MapUBONameToBindingPoint(ubo.name);
+        if (static_cast<uint32_t>(bp) == 0xFF) continue;
+        unsigned int idx = glGetUniformBlockIndex(prog, ubo.name);
+        if (idx != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, idx, static_cast<unsigned int>(bp));
+    }
+}
+
 void GLShaderManager::CachePBRLocations() {
     auto& loc = pbr_locations_;
     unsigned int h = pbr_shader_handle_;
 
     // --- UBO block 绑定（reflection 驱动）---
     using namespace dse::render::generated_shaders::reflect;
-    auto bind_ubos_from_reflection = [&](const shader_reflect::StageReflection& refl) {
-        for (uint32_t i = 0; i < refl.uniform_buffer_count; ++i) {
-            const auto& ubo = refl.uniform_buffers[i];
-            UBOBindingPoint bp = MapUBONameToBindingPoint(ubo.name);
-            if (static_cast<uint32_t>(bp) == 0xFF) continue;
-            unsigned int block_idx = glGetUniformBlockIndex(h, ubo.name);
-            if (block_idx != GL_INVALID_INDEX) {
-                glUniformBlockBinding(h, block_idx, static_cast<unsigned int>(bp));
-            }
-        }
-    };
-    bind_ubos_from_reflection(kpbr_vert_reflection);
-    bind_ubos_from_reflection(kpbr_frag_reflection);
+    BindUBOsFromReflection(h, kpbr_vert_reflection);
+    BindUBOsFromReflection(h, kpbr_frag_reflection);
 
     // 缓存 block index 到 locations struct（向后兼容）
     loc.per_frame_block_index = glGetUniformBlockIndex(h, "PerFrame");
@@ -446,12 +444,10 @@ void GLShaderManager::InitGBufferShader() {
     gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kgbuffer_frag_glsl330);
     programs_created_ += 1;
 
-    // GBuffer shader 也需要 PerFrame UBO 和 BoneMatrices/MorphWeights
-    unsigned int pf_idx = GL_INVALID_INDEX;
-    BindUBOBlock(gbuffer_shader_handle_, "PerFrame",     UBOBindingPoint::PerFrame,     pf_idx);
-    BindUBOBlock(gbuffer_shader_handle_, "PerScene",     UBOBindingPoint::PerScene,     pf_idx);
-    BindUBOBlock(gbuffer_shader_handle_, "BoneMatrices", UBOBindingPoint::BoneMatrices, pf_idx);
-    BindUBOBlock(gbuffer_shader_handle_, "MorphWeights", UBOBindingPoint::MorphWeights, pf_idx);
+    // GBuffer UBO 绑定（reflection 驱动）
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(gbuffer_shader_handle_, kpbr_vert_reflection);
+    BindUBOsFromReflection(gbuffer_shader_handle_, kgbuffer_frag_reflection);
 }
 
 // ============================================================
@@ -464,8 +460,10 @@ void GLShaderManager::InitSpriteShader() {
     sprite_shader_handle_ = CompileProgram(ksprite_vert_glsl330, ksprite_frag_glsl330);
     programs_created_ += 1;
 
-    unsigned int pf_idx = GL_INVALID_INDEX;
-    BindUBOBlock(sprite_shader_handle_, "PerFrame", UBOBindingPoint::PerFrame, pf_idx);
+    // Sprite UBO 绑定（reflection 驱动）
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite_shader_handle_, ksprite_vert_reflection);
+    BindUBOsFromReflection(sprite_shader_handle_, ksprite_frag_reflection);
 }
 
 // ============================================================
@@ -478,10 +476,10 @@ void GLShaderManager::InitShadowShader() {
     shadow_shader_handle_ = CompileProgram(kshadow_vert_glsl330, kshadow_frag_glsl330);
     programs_created_ += 1;
 
-    unsigned int pf_idx = GL_INVALID_INDEX;
-    BindUBOBlock(shadow_shader_handle_, "PerFrame",     UBOBindingPoint::PerFrame,     pf_idx);
-    BindUBOBlock(shadow_shader_handle_, "BoneMatrices", UBOBindingPoint::BoneMatrices, pf_idx);
-    BindUBOBlock(shadow_shader_handle_, "MorphWeights", UBOBindingPoint::MorphWeights, pf_idx);
+    // Shadow UBO 绑定（reflection 驱动）
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(shadow_shader_handle_, kshadow_vert_reflection);
+    BindUBOsFromReflection(shadow_shader_handle_, kshadow_frag_reflection);
 }
 
 // ============================================================

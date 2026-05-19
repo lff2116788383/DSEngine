@@ -49,6 +49,9 @@
 // Reflection metadata for automated InputLayout creation
 #include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/postprocess_vert_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
 
 #include "engine/base/debug.h"
@@ -317,12 +320,11 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         ksprite_frag_dxbc, ksprite_frag_dxbc_size);
     if (sprite_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin sprite shader created (DXBC): {}", sprite_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,       0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(sprite_shader_handle_, layout, 3);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> sprite_layout;
+        CreateInputLayoutFromReflection(ksprite_vert_reflection, sprite_layout);
+        CreateInputLayoutForShader(sprite_shader_handle_, sprite_layout.data(),
+                                   static_cast<int>(sprite_layout.size()));
     }
 
     pulse();
@@ -344,10 +346,11 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         kskybox_frag_dxbc, kskybox_frag_dxbc_size);
     if (skybox_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin skybox shader created (DXBC): {}", skybox_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(skybox_shader_handle_, layout, 1);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> skybox_layout;
+        CreateInputLayoutFromReflection(kskybox_vert_reflection, skybox_layout);
+        CreateInputLayoutForShader(skybox_shader_handle_, skybox_layout.data(),
+                                   static_cast<int>(skybox_layout.size()));
     }
 
     // ---- 粒子着色器 (DXBC) ----
@@ -372,11 +375,11 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         kpostprocess_passthrough_frag_dxbc, kpostprocess_passthrough_frag_dxbc_size);
     if (postprocess_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin postprocess shader created (DXBC): {}", postprocess_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(postprocess_shader_handle_, layout, 2);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> pp_layout;
+        CreateInputLayoutFromReflection(kpostprocess_vert_reflection, pp_layout);
+        CreateInputLayoutForShader(postprocess_shader_handle_, pp_layout.data(),
+                                   static_cast<int>(pp_layout.size()));
     }
 
     pulse();
@@ -410,11 +413,11 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
             ps_dxbc, ps_dxbc_sz);
         if (h) {
             DEBUG_LOG_INFO("[D3D11] Builtin {} shader created (DXBC): {}", name, h);
-            D3D11_INPUT_ELEMENT_DESC layout[] = {
-                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-                {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            };
-            CreateInputLayoutForShader(h, layout, 2);
+            using namespace generated_shaders::reflect;
+            std::vector<D3D11_INPUT_ELEMENT_DESC> pp_layout;
+            CreateInputLayoutFromReflection(kpostprocess_vert_reflection, pp_layout);
+            CreateInputLayoutForShader(h, pp_layout.data(),
+                                       static_cast<int>(pp_layout.size()));
         }
         return h;
     };
