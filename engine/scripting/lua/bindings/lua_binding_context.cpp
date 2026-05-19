@@ -4,6 +4,7 @@
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/assets/asset_manager.h"
 #include <stdexcept>
 
@@ -20,6 +21,16 @@ int L_GetMemoryUsage(lua_State* L) {
 
 void ConfigureBindingContext(const LuaApiContext& context) {
     g_binding_context = context;
+
+    dse_native_api_init(
+        context.world,
+        context.asset_manager,
+        context.audio_system,
+        []() { if (g_binding_context.quit_app) g_binding_context.quit_app(); },
+        [](const char* t) { if (g_binding_context.set_window_title) g_binding_context.set_window_title(t); },
+        []() -> float { return g_binding_context.get_target_fps ? g_binding_context.get_target_fps() : 60.0f; },
+        [](float f) { if (g_binding_context.set_target_fps) g_binding_context.set_target_fps(f); },
+        []() -> int { return g_binding_context.get_draw_calls ? g_binding_context.get_draw_calls() : 0; });
 }
 
 void RegisterContextBindings(lua_State* L) {

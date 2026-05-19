@@ -1,0 +1,91 @@
+/**
+ * @file dse_api.gen.cpp
+ * @brief 自动生成 — 勿手动修改
+ *        来源：tools/codegen/binding_defs.json
+ *
+ * 注意：本文件当前被 CMakeLists.txt 过滤（*.gen.cpp 不参与构建）。
+ * 仅当手写 dse_api.cpp 中对应函数被删除后，才将本文件 opt-in 进构建。
+ * 依赖 dse_api.h 提供的 dse_get_world_ptr() 访问已初始化的 World 指针。
+ */
+
+#include "engine/scripting/native_api/dse_api.h"
+#include "engine/ecs/world.h"
+{% for inc in includes %}
+#include "{{ inc }}"
+{% endfor %}
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <entt/entt.hpp>
+
+using Entity = entt::entity;
+
+namespace {
+inline World* GW() { return static_cast<World*>(dse_get_world_ptr()); }
+inline bool V(uint32_t e) { World* w = GW(); return w && w->registry().valid(static_cast<Entity>(static_cast<entt::id_type>(e))); }
+inline Entity TE(uint32_t e) { return static_cast<Entity>(static_cast<entt::id_type>(e)); }
+template<typename T> T* GC(uint32_t e) { World* w = GW(); if (!V(e)) return nullptr; return w->registry().try_get<T>(TE(e)); }
+template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
+}
+
+{% for comp in components %}
+/* ---- {{ comp.name }} ---- */
+{% set ns = (comp.namespace + "::") if comp.namespace else "" %}
+{% for field in comp.fields %}
+{% if field.type == "float" %}
+extern "C" float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
+    const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
+    return c ? c->{{ field.name }} : {{ field.get("default", "0.0f") }};
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = v;
+}
+{% elif field.type == "int" %}
+extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
+    const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
+    return c ? c->{{ field.name }} : {{ field.get("default", "0") }};
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = v;
+}
+{% elif field.type == "bool" %}
+extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
+    const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
+    return (c && c->{{ field.name }}) ? 1 : 0;
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = (v != 0);
+}
+{% elif field.type == "vec3" %}
+extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; }
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
+        c->{{ field.name }} = glm::vec3(x, y, z);
+{% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
+{% endif %}    }
+}
+{% elif field.type == "euler_quat" %}
+extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) {
+        glm::vec3 euler = glm::degrees(glm::eulerAngles(c->{{ field.name }}));
+        *x = euler.x; *y = euler.y; *z = euler.z;
+    }
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
+        c->{{ field.name }} = glm::quat(glm::vec3(glm::radians(x), glm::radians(y), glm::radians(z)));
+{% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
+{% endif %}    }
+}
+{% elif field.type == "vec4" %}
+extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; *w = c->{{ field.name }}.w; }
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = glm::vec4(x, y, z, w);
+}
+{% endif %}
+{% endfor %}
+
+{% endfor %}

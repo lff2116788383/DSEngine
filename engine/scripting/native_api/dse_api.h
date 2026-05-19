@@ -1,0 +1,194 @@
+/**
+ * @file dse_api.h
+ * @brief DSEngine Native C ABI — Lua 与 C# 共享的底层引擎接口
+ *
+ * 纯 C 函数导出，消除 Lua / C# 两套绑定的重复逻辑。
+ * C# 侧通过 Mono InternalCall 或 P/Invoke 调用。
+ * Lua 侧 lua_binding_ecs_*.cpp 逐步迁移为调用本层函数。
+ */
+
+#ifndef DSE_API_H
+#define DSE_API_H
+
+#include <stdint.h>
+
+#ifdef _WIN32
+#  define DSE_CAPI __declspec(dllexport)
+#else
+#  define DSE_CAPI __attribute__((visibility("default")))
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================
+// Context Setup — 引擎初始化时调用一次
+// ============================================================
+
+DSE_CAPI void dse_native_api_init(
+    void* world,           // World*
+    void* asset_manager,   // AssetManager*
+    void* audio_system,    // AudioSystem* (可为 nullptr)
+    void  (*quit_fn)(void),
+    void  (*set_title_fn)(const char*),
+    float (*get_fps_fn)(void),
+    void  (*set_fps_fn)(float),
+    int   (*get_draw_calls_fn)(void)   // 可为 nullptr
+);
+
+// 供生成代码（dse_api.gen.cpp）访问内部 World 指针
+DSE_CAPI void* dse_get_world_ptr(void);
+
+// ============================================================
+// Entity
+// ============================================================
+
+DSE_CAPI uint32_t dse_entity_create(void);
+DSE_CAPI void     dse_entity_destroy(uint32_t e);
+DSE_CAPI int      dse_entity_valid(uint32_t e);
+
+// ============================================================
+// TransformComponent
+// ============================================================
+
+DSE_CAPI void dse_transform_add(uint32_t e,
+    float x, float y, float z,
+    float sx, float sy, float sz);
+
+DSE_CAPI void dse_transform_get_position(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_transform_set_position(uint32_t e, float x, float y, float z);
+
+DSE_CAPI void dse_transform_get_rotation(uint32_t e, float* x, float* y, float* z); // Euler degrees
+DSE_CAPI void dse_transform_set_rotation(uint32_t e, float x, float y, float z);    // Euler degrees
+
+DSE_CAPI void dse_transform_get_scale(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_transform_set_scale(uint32_t e, float x, float y, float z);
+
+// ============================================================
+// Camera3DComponent
+// ============================================================
+
+DSE_CAPI void  dse_camera3d_add(uint32_t e, float fov, float near_clip, float far_clip);
+DSE_CAPI float dse_camera3d_get_fov(uint32_t e);
+DSE_CAPI void  dse_camera3d_set_fov(uint32_t e, float v);
+DSE_CAPI float dse_camera3d_get_near_clip(uint32_t e);
+DSE_CAPI void  dse_camera3d_set_near_clip(uint32_t e, float v);
+DSE_CAPI float dse_camera3d_get_far_clip(uint32_t e);
+DSE_CAPI void  dse_camera3d_set_far_clip(uint32_t e, float v);
+DSE_CAPI int   dse_camera3d_get_enabled(uint32_t e);
+DSE_CAPI void  dse_camera3d_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_camera3d_get_priority(uint32_t e);
+DSE_CAPI void  dse_camera3d_set_priority(uint32_t e, int v);
+
+// ============================================================
+// MeshRendererComponent
+// ============================================================
+
+DSE_CAPI void  dse_mesh_renderer_add(uint32_t e, const char* mesh_path);
+DSE_CAPI void  dse_mesh_renderer_set_mesh(uint32_t e, const char* mesh_path);
+DSE_CAPI void  dse_mesh_renderer_get_color(uint32_t e, float* r, float* g, float* b, float* a);
+DSE_CAPI void  dse_mesh_renderer_set_color(uint32_t e, float r, float g, float b, float a);
+DSE_CAPI int   dse_mesh_renderer_get_visible(uint32_t e);
+DSE_CAPI void  dse_mesh_renderer_set_visible(uint32_t e, int v);
+DSE_CAPI float dse_mesh_renderer_get_metallic(uint32_t e);
+DSE_CAPI void  dse_mesh_renderer_set_metallic(uint32_t e, float v);
+DSE_CAPI float dse_mesh_renderer_get_roughness(uint32_t e);
+DSE_CAPI void  dse_mesh_renderer_set_roughness(uint32_t e, float v);
+DSE_CAPI void  dse_mesh_renderer_get_emissive(uint32_t e, float* r, float* g, float* b);
+DSE_CAPI void  dse_mesh_renderer_set_emissive(uint32_t e, float r, float g, float b);
+
+// ============================================================
+// DirectionalLight3DComponent
+// ============================================================
+
+DSE_CAPI void  dse_dir_light_add(uint32_t e);
+DSE_CAPI void  dse_dir_light_get_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void  dse_dir_light_set_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI void  dse_dir_light_get_color(uint32_t e, float* r, float* g, float* b);
+DSE_CAPI void  dse_dir_light_set_color(uint32_t e, float r, float g, float b);
+DSE_CAPI float dse_dir_light_get_intensity(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_intensity(uint32_t e, float v);
+DSE_CAPI float dse_dir_light_get_ambient_intensity(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_ambient_intensity(uint32_t e, float v);
+DSE_CAPI int   dse_dir_light_get_cast_shadow(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_cast_shadow(uint32_t e, int v);
+DSE_CAPI float dse_dir_light_get_shadow_strength(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_shadow_strength(uint32_t e, float v);
+
+// ============================================================
+// PointLightComponent
+// ============================================================
+
+DSE_CAPI void  dse_point_light_add(uint32_t e);
+DSE_CAPI void  dse_point_light_get_color(uint32_t e, float* r, float* g, float* b);
+DSE_CAPI void  dse_point_light_set_color(uint32_t e, float r, float g, float b);
+DSE_CAPI float dse_point_light_get_intensity(uint32_t e);
+DSE_CAPI void  dse_point_light_set_intensity(uint32_t e, float v);
+DSE_CAPI float dse_point_light_get_radius(uint32_t e);
+DSE_CAPI void  dse_point_light_set_radius(uint32_t e, float v);
+DSE_CAPI int   dse_point_light_get_enabled(uint32_t e);
+DSE_CAPI void  dse_point_light_set_enabled(uint32_t e, int v);
+
+// ============================================================
+// SpotLightComponent
+// ============================================================
+
+DSE_CAPI void  dse_spot_light_add(uint32_t e);
+DSE_CAPI void  dse_spot_light_get_color(uint32_t e, float* r, float* g, float* b);
+DSE_CAPI void  dse_spot_light_set_color(uint32_t e, float r, float g, float b);
+DSE_CAPI float dse_spot_light_get_intensity(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_intensity(uint32_t e, float v);
+DSE_CAPI float dse_spot_light_get_radius(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_radius(uint32_t e, float v);
+DSE_CAPI float dse_spot_light_get_inner_angle(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_inner_angle(uint32_t e, float v);
+DSE_CAPI float dse_spot_light_get_outer_angle(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_outer_angle(uint32_t e, float v);
+DSE_CAPI void  dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void  dse_spot_light_set_direction(uint32_t e, float x, float y, float z);
+
+// ============================================================
+// Input
+// ============================================================
+
+DSE_CAPI int   dse_input_get_key(int key_code);
+DSE_CAPI int   dse_input_get_key_down(int key_code);
+DSE_CAPI int   dse_input_get_key_up(int key_code);
+DSE_CAPI int   dse_input_get_mouse_button(int button);
+DSE_CAPI int   dse_input_get_mouse_button_down(int button);
+DSE_CAPI int   dse_input_get_mouse_button_up(int button);
+DSE_CAPI float dse_input_get_mouse_x(void);
+DSE_CAPI float dse_input_get_mouse_y(void);
+DSE_CAPI float dse_input_get_mouse_scroll(void);
+DSE_CAPI float dse_input_get_gamepad_axis(int gamepad_id, int axis);
+
+// ============================================================
+// Assets
+// ============================================================
+
+DSE_CAPI uint32_t dse_assets_load_texture(const char* path);
+DSE_CAPI void     dse_assets_set_data_root(const char* path);
+
+// ============================================================
+// App / System
+// ============================================================
+
+DSE_CAPI void  dse_app_quit(void);
+DSE_CAPI void  dse_app_set_window_title(const char* title);
+DSE_CAPI float dse_app_get_time(void);
+DSE_CAPI float dse_app_get_delta_time(void);
+DSE_CAPI void  dse_app_set_target_fps(float fps);
+DSE_CAPI float dse_app_get_target_fps(void);
+
+// ============================================================
+// Metrics
+// ============================================================
+
+DSE_CAPI int dse_metrics_get_draw_calls(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // DSE_API_H

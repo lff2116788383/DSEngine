@@ -1,0 +1,213 @@
+{
+    "_comment": "DSEngine 组件字段绑定定义 — 唯一数据源，驱动 C ABI / Lua / C# 三端同步生成",
+    "components": [
+        {
+            "name": "TransformComponent",
+            "prefix": "transform",
+            "lua_table": "ecs",
+            "include": "engine/ecs/transform.h",
+            "namespace": "",
+            "fields": [
+                {
+                    "name": "position",
+                    "type": "vec3",
+                    "dirty_flag": "dirty",
+                    "lua_getter": "get_transform_position",
+                    "lua_setter": "set_transform_position"
+                },
+                {
+                    "name": "rotation",
+                    "type": "euler_quat",
+                    "dirty_flag": "dirty",
+                    "lua_getter": "get_transform_rotation",
+                    "lua_setter": "set_transform_rotation"
+                },
+                {
+                    "name": "scale",
+                    "type": "vec3",
+                    "dirty_flag": "dirty",
+                    "lua_getter": "get_transform_scale",
+                    "lua_setter": "set_transform_scale"
+                }
+            ]
+        },
+        {
+            "name": "Camera3DComponent",
+            "prefix": "camera3d",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "fov",
+                    "type": "float",
+                    "default": "60.0f",
+                    "lua_getter": "get_camera3d_fov",
+                    "lua_setter": "set_camera3d_fov"
+                },
+                {
+                    "name": "near_clip",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_camera3d_near_clip",
+                    "lua_setter": "set_camera3d_near_clip"
+                },
+                {
+                    "name": "far_clip",
+                    "type": "float",
+                    "default": "1000.0f",
+                    "lua_getter": "get_camera3d_far_clip",
+                    "lua_setter": "set_camera3d_far_clip"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_camera3d_enabled",
+                    "lua_setter": "set_camera3d_enabled"
+                },
+                {
+                    "name": "priority",
+                    "type": "int",
+                    "default": "0",
+                    "lua_getter": "get_camera3d_priority",
+                    "lua_setter": "set_camera3d_priority"
+                }
+            ]
+        },
+        {
+            "name": "MeshRendererComponent",
+            "prefix": "mesh_renderer",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "color",
+                    "type": "vec4",
+                    "lua_getter": "get_mesh_color",
+                    "lua_setter": "set_mesh_color"
+                },
+                {
+                    "name": "visible",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_mesh_visible",
+                    "lua_setter": "set_mesh_visible"
+                },
+                {
+                    "name": "metallic",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_mesh_metallic",
+                    "lua_setter": "set_mesh_metallic"
+                },
+                {
+                    "name": "roughness",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_mesh_roughness",
+                    "lua_setter": "set_mesh_roughness"
+                },
+                {
+                    "name": "emissive",
+                    "type": "vec3",
+                    "lua_getter": "get_mesh_emissive",
+                    "lua_setter": "set_mesh_emissive"
+                },
+                {
+                    "name": "receive_shadow",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_mesh_receive_shadow",
+                    "lua_setter": "set_mesh_receive_shadow"
+                }
+            ]
+        },
+        {
+            "name": "DirectionalLight3DComponent",
+            "prefix": "dir_light",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "direction",
+                    "type": "vec3",
+                    "lua_getter": "get_dir_light_direction",
+                    "lua_setter": "set_dir_light_direction"
+                },
+                {
+                    "name": "color",
+                    "type": "vec3",
+                    "lua_getter": "get_dir_light_color",
+                    "lua_setter": "set_dir_light_color"
+                },
+                {
+                    "name": "intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_dir_light_intensity",
+                    "lua_setter": "set_dir_light_intensity"
+                },
+                {
+                    "name": "ambient_intensity",
+                    "type": "float",
+                    "default": "0.2f",
+                    "lua_getter": "get_dir_light_ambient",
+                    "lua_setter": "set_dir_light_ambient"
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_dir_light_cast_shadow",
+                    "lua_setter": "set_dir_light_cast_shadow"
+                },
+                {
+                    "name": "shadow_strength",
+                    "type": "float",
+                    "default": "0.35f",
+                    "lua_getter": "get_dir_light_shadow_strength",
+                    "lua_setter": "set_dir_light_shadow_strength"
+                }
+            ]
+        },
+        {
+            "name": "PointLightComponent",
+            "prefix": "point_light",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "color",
+                    "type": "vec3",
+                    "lua_getter": "get_point_light_color",
+                    "lua_setter": "set_point_light_color"
+                },
+                {
+                    "name": "intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_point_light_intensity",
+                    "lua_setter": "set_point_light_intensity"
+                },
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "default": "10.0f",
+                    "lua_getter": "get_point_light_radius",
+                    "lua_setter": "set_point_light_radius"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_point_light_enabled",
+                    "lua_setter": "set_point_light_enabled"
+                }
+            ]
+        }
+    ]
+}

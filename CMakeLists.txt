@@ -235,6 +235,9 @@ file(GLOB_RECURSE engine_cpp
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 
+# 排除 codegen 生成文件（*.gen.cpp）— 生成文件作为参考暂存，需显式 opt-in 后才编入构建
+list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
+
 # Vulkan RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
@@ -725,5 +728,19 @@ if(NPM_EXECUTABLE AND NPX_EXECUTABLE AND DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE)
         NAME editor_scene_schema_migrate_regression
         COMMAND ${NPM_EXECUTABLE} run regress:scene-schema-migrate
         WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
+    )
+endif()
+
+# ── S1.5 Codegen Target ─────────────────────────────────────────────────────
+# 用法: cmake --build build_vs2022 --target dse_codegen
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_FOUND)
+    add_custom_target(dse_codegen
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py
+                --defs  ${CMAKE_SOURCE_DIR}/tools/codegen/binding_defs.json
+                --out   ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running DSEngine binding codegen..."
+        VERBATIM
     )
 endif()

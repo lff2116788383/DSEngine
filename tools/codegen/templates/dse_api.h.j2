@@ -1,0 +1,54 @@
+/**
+ * @file dse_api.gen.h
+ * @brief 自动生成 — 勿手动修改
+ *        来源：tools/codegen/binding_defs.json
+ *
+ * 迁移路径说明：
+ *   当前（S1）：手写的 dse_api.h / dse_api.cpp 是权威实现，本文件为 staging。
+ *   未来（S2+）：手写文件被废弃后，本文件升级为权威头文件。
+ *   在过渡期内，不要同时 #include "dse_api.h" 和 "dse_api.gen.h"。
+ */
+
+#pragma once
+
+// 若 dse_api.h 已被包含（手写版本），直接复用其声明，不产生重复符号。
+#ifndef DSE_API_H
+#include <stdint.h>
+
+#ifdef _WIN32
+#  define DSE_CAPI_GEN __declspec(dllexport)
+#else
+#  define DSE_CAPI_GEN __attribute__((visibility("default")))
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+{% for comp in components %}
+/* ---- {{ comp.name }} ---- */
+{% for field in comp.fields %}
+{% if field.type == "float" %}
+DSE_CAPI_GEN float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI_GEN void  dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v);
+{% elif field.type == "int" %}
+DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+{% elif field.type == "bool" %}
+DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+{% elif field.type in ("vec3", "euler_quat") %}
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z);
+{% elif field.type == "vec4" %}
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w);
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+#ifdef __cplusplus
+}
+#endif
+
+#endif // DSE_API_H not yet included
