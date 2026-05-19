@@ -248,6 +248,12 @@ if(ANDROID)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
 endif()
 
+# 非 Android: 排除 Android 专用实现（防止 NDK 头文件缺失导致编译失败）
+if(NOT ANDROID)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/android/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/android_asset_fs\\.cpp$")
+endif()
+
 # D3D11 RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_D3D11)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/dx11/.*\\.cpp$")
