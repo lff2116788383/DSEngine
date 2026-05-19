@@ -5,6 +5,7 @@
 #include "editor_file_dialog.h"
 #include "editor_console_panel.h"
 #include "editor_scene_tabs.h"
+#include "editor_project.h"
 
 #include "engine/assets/pak_writer.h"
 #include "engine/assets/asset_scanner.h"
@@ -16,6 +17,11 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace dse::editor {
 
@@ -34,8 +40,12 @@ struct BuildState {
     std::mutex log_mutex;
     std::vector<std::string> build_log;
     std::thread build_thread;
+    std::string last_output_dir;
+    std::string last_exe_name;
 
     bool dialog_open = false;
+    bool launch_after_build = false;
+    float spinner_angle = 0.0f;
 };
 
 BuildState& GetState() {
@@ -63,6 +73,10 @@ void DoBuild(BuildState& state) {
         state.building = false;
         return;
     }
+
+    // Capture output info for later
+    state.last_output_dir = out_dir.string();
+    state.last_exe_name   = std::string(state.game_title) + ".exe";
 
     // 1. Locate the standalone exe next to editor
     fs::path exe_path;
@@ -125,13 +139,24 @@ void DoBuild(BuildState& state) {
 
     // 3. Collect files to pack
     std::vector<std::string> files_to_pack;
-    std::string data_root = "data";
-    // Try to find data directory
+    // Prefer the open project's asset directory
     fs::path data_dir;
-    for (const auto& candidate : {fs::current_path() / "data", exe_dir / "data", exe_dir / ".." / "data"}) {
-        if (fs::exists(candidate) && fs::is_directory(candidate)) {
-            data_dir = fs::canonical(candidate);
-            break;
+    {
+        auto& proj = ProjectManager::Get();
+        if (proj.HasOpenProject()) {
+            fs::path pd = proj.GetAssetDir();
+            if (fs::exists(pd) && fs::is_directory(pd)) {
+                data_dir = fs::canonical(pd);
+            }
+        }
+    }
+    // Fallback: search relative to editor exe
+    if (data_dir.empty()) {
+        for (const auto& candidate : {fs::current_path() / "data", exe_dir / "data", exe_dir / ".." / "data"}) {
+            if (fs::exists(candidate) && fs::is_directory(candidate)) {
+                data_dir = fs::canonical(candidate);
+                break;
+            }
         }
     }
 
@@ -192,6 +217,18 @@ void DoBuild(BuildState& state) {
         }
     }
 
+    // Report final pak size
+    fs::path pak_path_final = out_dir / "game.dpak";
+    if (fs::exists(pak_path_final)) {
+        auto sz = fs::file_size(pak_path_final, ec);
+        if (!ec) {
+            double mb = static_cast<double>(sz) / (1024.0 * 1024.0);
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Pak size: %.1f MB", mb);
+            AppendLog(state, buf);
+        }
+    }
+
     AppendLog(state, "=== Build Complete ===");
     AppendLog(state, "Output: " + out_dir.string());
     state.build_success = true;
@@ -201,11 +238,25 @@ void DoBuild(BuildState& state) {
 
 } // namespace
 
+static void OpenInExplorer(const std::string& path) {
+#if defined(_WIN32)
+    ShellExecuteA(nullptr, "explore", path.c_str(), nullptr, nullptr, SW_SHOWDEFAULT);
+#endif
+}
+
+static void LaunchExe(const std::string& dir, const std::string& exe_name) {
+#if defined(_WIN32)
+    std::filesystem::path full = std::filesystem::path(dir) / exe_name;
+    ShellExecuteA(nullptr, "open", full.string().c_str(), nullptr, dir.c_str(), SW_SHOWDEFAULT);
+#endif
+}
+
 void OpenBuildGameDialog() {
     auto& state = GetState();
     state.dialog_open = true;
     state.build_done = false;
     state.build_log.clear();
+    state.launch_after_build = false;
     ImGui::OpenPopup("Build Game");
 }
 
@@ -249,33 +300,62 @@ void DrawBuildGameDialog() {
 
         ImGui::Separator();
 
-        // --- Build button ---
-        if (!busy && !state.build_done.load()) {
+        // --- Build buttons ---
+        auto do_build = [&state](bool launch) {
+            state.building = true;
+            state.build_done = false;
+            state.build_success = false;
+            state.build_log.clear();
+            state.launch_after_build = launch;
+            if (state.build_thread.joinable()) state.build_thread.join();
+            state.build_thread = std::thread([&state]() { DoBuild(state); });
+            state.build_thread.detach();
+        };
+
+        if (!busy) {
             bool can_build = state.output_dir[0] != '\0' && state.game_title[0] != '\0';
             ImGui::BeginDisabled(!can_build);
-            if (ImGui::Button("Build", ImVec2(120, 0))) {
-                state.building = true;
-                state.build_done = false;
-                state.build_success = false;
-                state.build_log.clear();
-                if (state.build_thread.joinable()) state.build_thread.join();
-                state.build_thread = std::thread([&state]() { DoBuild(state); });
-                state.build_thread.detach();
-            }
-            ImGui::EndDisabled();
-        } else if (busy) {
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Building...");
-        } else if (state.build_done.load()) {
-            if (state.build_success.load()) {
-                ImGui::TextColored(ImVec4(0.2f, 1, 0.2f, 1), "Build Succeeded!");
-            } else {
-                ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "Build Failed");
-            }
+
+            const char* build_label = state.build_done.load() ? "Rebuild" : "Build";
+            if (ImGui::Button(build_label, ImVec2(100, 0))) { do_build(false); }
             ImGui::SameLine();
-            if (ImGui::SmallButton("Close")) {
-                state.dialog_open = false;
-                ImGui::CloseCurrentPopup();
+            if (ImGui::Button("Build & Run", ImVec2(100, 0))) { do_build(true); }
+            ImGui::EndDisabled();
+
+            if (state.build_done.load()) {
+                ImGui::SameLine();
+                if (state.build_success.load()) {
+                    ImGui::TextColored(ImVec4(0.2f, 1, 0.2f, 1), "  Build Succeeded!");
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton(MDI_ICON_FOLDER_OPEN " Open Folder")) {
+                        OpenInExplorer(state.last_output_dir);
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton(MDI_ICON_PLAY " Run")) {
+                        LaunchExe(state.last_output_dir, state.last_exe_name);
+                    }
+                } else {
+                    ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "  Build Failed");
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Close")) {
+                    state.dialog_open = false;
+                    ImGui::CloseCurrentPopup();
+                }
             }
+        } else {
+            // Spinning progress indicator
+            state.spinner_angle += ImGui::GetIO().DeltaTime * 4.0f;
+            if (state.spinner_angle > 6.2832f) state.spinner_angle -= 6.2832f;
+            const char* spinners[] = {"|" , "/", "-", "\\"};
+            int idx = static_cast<int>(state.spinner_angle / 6.2832f * 4.0f) % 4;
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s  Building...", spinners[idx]);
+        }
+
+        // Auto-launch after successful build
+        if (state.build_done.load() && state.build_success.load() && state.launch_after_build) {
+            state.launch_after_build = false;
+            LaunchExe(state.last_output_dir, state.last_exe_name);
         }
 
         // --- Log ---
