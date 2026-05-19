@@ -1,6 +1,33 @@
 /**
  * @file builtin_passes.cpp
  * @brief 引擎内置渲染 Pass 实现
+ *
+ * --- Section Index ---
+ *   PreZPass                    ~91
+ *   CSMShadowPass               ~139
+ *   SpotShadowPass              ~200
+ *   PointShadowPass             ~252
+ *   GBufferPass                 ~310
+ *   DeferredLightingPass        ~397
+ *   ForwardScenePass            ~451
+ *   BloomPass                   ~638
+ *   UIPass                      ~707
+ *   CompositePass               ~728
+ *   AutoExposurePass            ~861
+ *   SSAOPass                    ~925
+ *   ContactShadowPass           ~993
+ *   FXAAPass                    ~1064
+ *   PresentPass                 ~1106
+ *   TAAPass                     ~1138
+ *   DOFPass                     ~1255
+ *   MotionVectorPass            ~1325
+ *   MotionBlurPass              ~1394
+ *   SSRPass                     ~1450
+ *   OutlinePass                 ~1520
+ *   LightShaftPass              ~1589
+ *   VolumetricFogPass           ~1678
+ *   WBOITPass                   ~1785
+ *   WaterPass                   ~1847
  */
 
 #include "engine/render/passes/builtin_passes.h"
