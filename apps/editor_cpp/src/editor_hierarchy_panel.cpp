@@ -413,7 +413,7 @@ void DrawHierarchyPanel(EditorContext& context) {
         ImGui::TreePop();
     }
 
-    if (hierarchy_clicked) {
+    if (hierarchy_clicked && !ImGui::IsAnyItemHovered()) {
         context.selected_entity = entt::null;
         SelectionManager::Get().Clear();
     }
