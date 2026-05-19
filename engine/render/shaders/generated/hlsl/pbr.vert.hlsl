@@ -1,14 +1,14 @@
-cbuffer BoneMatrices : register(b8)
+cbuffer BoneMatrices : register(b2)
 {
     row_major float4x4 _36_u_bone_matrices[100] : packoffset(c0);
 };
 
-cbuffer MorphWeights : register(b9)
+cbuffer MorphWeights : register(b3)
 {
     float _138_u_morph_weights[4] : packoffset(c0);
 };
 
-cbuffer PerFrame : register(b0)
+cbuffer PerFrame : register(b1)
 {
     row_major float4x4 _166_vp : packoffset(c0);
     row_major float4x4 _166_view : packoffset(c4);

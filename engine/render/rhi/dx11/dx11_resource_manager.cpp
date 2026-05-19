@@ -437,9 +437,9 @@ void DX11ResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t 
 void DX11ResourceManager::BindSSBO(unsigned int handle, unsigned int binding_point) {
     auto it = ssbos_.find(handle);
     if (it == ssbos_.end()) return;
-    // 绑定到 PS t-register (slot 16+ 避免与现有纹理冲突)
+    // 绑定到 PS t-register（ssbo_register_base_ 由 reflection 计算，避免与纹理冲突）
     ID3D11ShaderResourceView* srv = it->second.srv.Get();
-    dc_->PSSetShaderResources(16 + binding_point, 1, &srv);
+    dc_->PSSetShaderResources(ssbo_register_base_ + binding_point, 1, &srv);
 }
 
 void DX11ResourceManager::DeleteSSBO(unsigned int handle) {

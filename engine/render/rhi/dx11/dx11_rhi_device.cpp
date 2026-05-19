@@ -134,6 +134,8 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
     KeepAlive();
     // 初始化内置着色器（传入 keep-alive 回调防止编译期间窗口"未响应"）
     shader_mgr_.InitBuiltinShaders(init_keep_alive_);
+    resource_mgr_.set_ssbo_register_base(
+        static_cast<unsigned int>(shader_mgr_.pbr_texture_slots().ssbo_base));
 
     initialized_ = true;
     DEBUG_LOG_INFO("[D3D11] RhiDevice initialized (all subsystems ready)");

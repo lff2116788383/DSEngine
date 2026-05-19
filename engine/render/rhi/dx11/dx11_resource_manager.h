@@ -124,6 +124,7 @@ public:
     void BindSSBO(unsigned int handle, unsigned int binding_point);
     void DeleteSSBO(unsigned int handle);
     const DX11SSBO* GetSSBO(unsigned int handle) const;
+    void set_ssbo_register_base(unsigned int base) { ssbo_register_base_ = base; }
 
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
@@ -170,6 +171,7 @@ private:
     unsigned int next_vao_handle_ = 830000;
 
     bool initialized_ = false;
+    unsigned int ssbo_register_base_ = 16; ///< SSBO t-register 起始偏移（由 reflection 计算填充）
 
     /// 异步纹理上传条目
     struct PendingUpload {

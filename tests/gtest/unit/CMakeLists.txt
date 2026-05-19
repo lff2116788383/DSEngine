@@ -65,6 +65,7 @@ add_executable(${DSE_GTEST_UNIT_TARGET}
     engine/render/projection_correction_test.cpp
     engine/render/draw_executor_backend_test.cpp
     engine/render/shader_manager_test.cpp
+    engine/render/shader_reflection_test.cpp
     # engine/scene
     engine/scene/octree_test.cpp
     engine/scene/quad_tree_test.cpp

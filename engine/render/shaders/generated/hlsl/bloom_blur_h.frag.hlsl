@@ -1,7 +1,7 @@
 static const float _69[5] = { 0.227026998996734619140625f, 0.19459460675716400146484375f, 0.121621601283550262451171875f, 0.054053999483585357666015625f, 0.01621600054204463958740234375f };
 
-Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
+Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
 
 static float2 vTexCoords;
 static float4 FragColor;

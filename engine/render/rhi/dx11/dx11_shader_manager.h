@@ -42,6 +42,24 @@ struct DX11ComputeProgram {
     ComPtr<ID3D11Buffer> params_cb;   ///< BloomParams CB（float2 src + float2 dst）
 };
 
+/// PBR 纹理 SRV slot 映射（reflection 驱动，初始化时一次性计算）
+/// 每个字段 = PSSetShaderResources(slot, ...) 使用的 t-register 编号
+struct DX11PBRTextureSlots {
+    int albedo = 0;                ///< u_texture
+    int normal = 1;                ///< u_normal_map
+    int metallic_roughness = 2;    ///< u_metallic_roughness_map
+    int emissive = 3;              ///< u_emissive_map
+    int occlusion = 4;             ///< u_occlusion_map
+    int shadow_base = 5;           ///< u_shadow_maps[0..2]
+    int spot_shadow_base = 8;      ///< u_spot_shadow_maps[0..3]
+    int reflection_cubemap = 12;   ///< u_reflection_cubemap
+    int brdf_lut = 13;             ///< u_brdf_lut
+    int splat_weight = 14;         ///< u_splat_weight_map
+    int splat_layer_base = 15;     ///< u_splat_layer0..3
+    int point_shadow_base = 19;    ///< u_point_shadow_maps[0..3]
+    int ssbo_base = 23;            ///< SSBO t-register 起始偏移
+};
+
 /**
  * @class DX11ShaderManager
  * @brief D3D11 着色器管理器
@@ -91,6 +109,8 @@ public:
 
     // 内置着色器句柄访问器继承自 ShaderManagerBase
 
+    const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
+
 private:
     /// 编译 HLSL 源码
     ComPtr<ID3DBlob> CompileShader(const std::string& source, const std::string& entry_point,
@@ -100,6 +120,7 @@ private:
     void CreateInputLayoutForShader(unsigned int handle, const D3D11_INPUT_ELEMENT_DESC* elements, UINT count);
 
     DX11Context* context_ = nullptr;
+    DX11PBRTextureSlots pbr_texture_slots_;
 
     std::unordered_map<unsigned int, DX11ShaderProgram> programs_;
 

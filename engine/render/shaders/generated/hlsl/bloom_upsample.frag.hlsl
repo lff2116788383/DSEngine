@@ -1,10 +1,10 @@
-cbuffer BloomParams : register(b2)
+cbuffer BloomParams : register(b0)
 {
     float _11_filterRadius : packoffset(c0);
 };
 
-Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
+Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
 
 static float2 vTexCoords;
 static float4 FragColor;

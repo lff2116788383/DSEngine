@@ -30,6 +30,8 @@ void main()
     vec3 param = color * _73.exposure;
     color = AcesFilmic(param);
     color = pow(color, vec3(0.4545454680919647216796875));
+    float ign = fract(52.98291778564453125 * fract((0.067110560834407806396484375 * gl_FragCoord.x) + (0.005837149918079376220703125 * gl_FragCoord.y)));
+    color += vec3((ign - 0.5) / 255.0);
     FragColor = vec4(color, 1.0);
 }
 

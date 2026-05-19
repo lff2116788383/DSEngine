@@ -381,17 +381,47 @@ inline uint32_t ValidateUBOBindings(
     uint32_t mismatches = 0;
     for (uint32_t i = 0; i < reflection.uniform_buffer_count; ++i) {
         const auto& ubo = reflection.uniform_buffers[i];
-        // 基础校验：binding 不应超过合理范围
         if (ubo.binding > 32) {
             ++mismatches;
+#ifndef NDEBUG
+            std::fprintf(stderr, "[REFLECT WARN] %s: UBO '%s' binding %u exceeds 32\n",
+                         stage_name, ubo.name, ubo.binding);
+#endif
         }
-        // size 校验：UBO 大小应为 16 字节对齐（std140）
         if (ubo.size > 0 && (ubo.size % 16) != 0) {
-            // std140 结构体总大小应为 16 字节对齐
-            // 注意：spirv-cross 报告的大小可能不含尾部 padding，这里仅作警告
+#ifndef NDEBUG
+            std::fprintf(stderr, "[REFLECT WARN] %s: UBO '%s' size %u not 16B aligned\n",
+                         stage_name, ubo.name, ubo.size);
+#endif
         }
     }
     return mismatches;
+}
+
+/// 校验 C++ 侧 UBO struct 大小与反射数据是否一致
+/// @param expected_name  UBO 名称（用于匹配反射中的条目）
+/// @param cpp_size       C++ sizeof(UBOStruct)
+/// @return true = 匹配或未找到（不报错）
+inline bool ValidateUBOSize(
+    const shader_reflect::StageReflection& reflection,
+    const char* expected_name,
+    uint32_t cpp_size) {
+
+    for (uint32_t i = 0; i < reflection.uniform_buffer_count; ++i) {
+        const auto& ubo = reflection.uniform_buffers[i];
+        if (std::strcmp(ubo.name, expected_name) == 0) {
+            if (ubo.size != 0 && ubo.size != cpp_size) {
+#ifndef NDEBUG
+                std::fprintf(stderr,
+                    "[REFLECT ERROR] UBO '%s': C++ size %u != shader size %u\n",
+                    expected_name, cpp_size, ubo.size);
+#endif
+                return false;
+            }
+            return true;
+        }
+    }
+    return true; // 未找到 = 不报错
 }
 
 /// 校验 vertex input 的 location 连续性和 byte_size 合理性
@@ -403,9 +433,38 @@ inline uint32_t ValidateVertexInputs(
         const auto& input = reflection.inputs[i];
         if (input.byte_size == 0) {
             ++issues;
+#ifndef NDEBUG
+            std::fprintf(stderr, "[REFLECT WARN] vertex input '%s' has byte_size=0\n",
+                         input.name);
+#endif
         }
     }
     return issues;
+}
+
+/// 校验 texture unit 分配无重叠
+/// @param entries  ComputeFlatTextureUnits 的输出
+/// @return 重叠数量（0 = 全部正确）
+inline uint32_t ValidateTextureSlotOverlaps(
+    const std::vector<gl_reflect::TextureUnitEntry>& entries) {
+
+    uint32_t overlaps = 0;
+    for (size_t i = 0; i < entries.size(); ++i) {
+        uint32_t i_end = entries[i].unit + entries[i].array_count;
+        for (size_t j = i + 1; j < entries.size(); ++j) {
+            uint32_t j_end = entries[j].unit + entries[j].array_count;
+            if (entries[i].unit < j_end && entries[j].unit < i_end) {
+                ++overlaps;
+#ifndef NDEBUG
+                std::fprintf(stderr,
+                    "[REFLECT ERROR] texture slot overlap: '%s' [%u..%u) vs '%s' [%u..%u)\n",
+                    entries[i].name, entries[i].unit, i_end,
+                    entries[j].name, entries[j].unit, j_end);
+#endif
+            }
+        }
+    }
+    return overlaps;
 }
 
 } // namespace shader_reflect_debug

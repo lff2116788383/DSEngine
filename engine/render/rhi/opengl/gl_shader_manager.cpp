@@ -386,6 +386,13 @@ void GLShaderManager::CachePBRLocations() {
             else if (std::strcmp(e.name, "u_splat_layer0") == 0)    slots.splat_layer_base = u;
             else if (std::strcmp(e.name, "u_point_shadow_maps") == 0) slots.point_shadow_base = u;
         }
+
+#ifndef NDEBUG
+        // Debug 校验：纹理 slot 无重叠
+        shader_reflect_debug::ValidateTextureSlotOverlaps(tex_entries);
+        shader_reflect_debug::ValidateUBOBindings(kpbr_frag_reflection, "PBR.frag");
+        shader_reflect_debug::ValidateVertexInputs(kpbr_vert_reflection);
+#endif
     }
 
     // --- 缓存 sampler location（向后兼容 draw executor）---
@@ -472,10 +479,20 @@ void GLShaderManager::InitGBufferShader() {
     gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kgbuffer_frag_glsl330);
     programs_created_ += 1;
 
-    // GBuffer UBO 绑定（reflection 驱动）
+    // GBuffer UBO 绑定（reflection 驱動）
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(gbuffer_shader_handle_, kpbr_vert_reflection);
     BindUBOsFromReflection(gbuffer_shader_handle_, kgbuffer_frag_reflection);
+
+    // GBuffer 纹理 sampler 一次性绑定
+    {
+        using namespace dse::render::gl_reflect;
+        std::vector<TextureUnitEntry> entries;
+        ComputeFlatTextureUnits(kgbuffer_frag_reflection, entries);
+        glUseProgram(gbuffer_shader_handle_);
+        BindSamplersOnce(gbuffer_shader_handle_, entries, glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
 }
 
 // ============================================================

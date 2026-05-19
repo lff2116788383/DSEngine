@@ -48,6 +48,7 @@
 
 // Reflection metadata for automated InputLayout creation
 #include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/pbr_frag_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
@@ -338,6 +339,36 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kpbr_vert_reflection, pbr_layout);
         CreateInputLayoutForShader(pbr_shader_handle_, pbr_layout.data(),
                                    static_cast<int>(pbr_layout.size()));
+
+        // 纹理 slot 自动计算（reflection 驱动）
+        {
+            using namespace dse::render::gl_reflect;
+            std::vector<TextureUnitEntry> tex_entries;
+            uint32_t next_unit = ComputeFlatTextureUnits(kpbr_frag_reflection, tex_entries);
+            auto& slots = pbr_texture_slots_;
+            slots.ssbo_base = static_cast<int>((next_unit < 16) ? 16 : next_unit);
+            for (const auto& e : tex_entries) {
+                int u = static_cast<int>(e.unit);
+                if (std::strcmp(e.name, "u_texture") == 0)              slots.albedo = u;
+                else if (std::strcmp(e.name, "u_normal_map") == 0)      slots.normal = u;
+                else if (std::strcmp(e.name, "u_metallic_roughness_map") == 0) slots.metallic_roughness = u;
+                else if (std::strcmp(e.name, "u_emissive_map") == 0)    slots.emissive = u;
+                else if (std::strcmp(e.name, "u_occlusion_map") == 0)   slots.occlusion = u;
+                else if (std::strcmp(e.name, "u_shadow_maps") == 0)     slots.shadow_base = u;
+                else if (std::strcmp(e.name, "u_spot_shadow_maps") == 0) slots.spot_shadow_base = u;
+                else if (std::strcmp(e.name, "u_reflection_cubemap") == 0) slots.reflection_cubemap = u;
+                else if (std::strcmp(e.name, "u_brdf_lut") == 0)        slots.brdf_lut = u;
+                else if (std::strcmp(e.name, "u_splat_weight_map") == 0) slots.splat_weight = u;
+                else if (std::strcmp(e.name, "u_splat_layer0") == 0)    slots.splat_layer_base = u;
+                else if (std::strcmp(e.name, "u_point_shadow_maps") == 0) slots.point_shadow_base = u;
+            }
+
+#ifndef NDEBUG
+            shader_reflect_debug::ValidateTextureSlotOverlaps(tex_entries);
+            shader_reflect_debug::ValidateUBOBindings(kpbr_frag_reflection, "DX11 PBR.frag");
+            shader_reflect_debug::ValidateVertexInputs(kpbr_vert_reflection);
+#endif
+        }
     }
 
     // ---- 天空盒着色器 (DXBC) ----

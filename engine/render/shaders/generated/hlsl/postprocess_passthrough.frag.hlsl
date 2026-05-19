@@ -1,5 +1,5 @@
-Texture2D<float4> screenTexture : register(t1);
-SamplerState _screenTexture_sampler : register(s1);
+Texture2D<float4> screenTexture : register(t0);
+SamplerState _screenTexture_sampler : register(s0);
 
 static float4 FragColor;
 static float2 vTexCoords;

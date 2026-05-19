@@ -538,29 +538,30 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 绑定常量缓冲
     ID3D11Buffer* vs_cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get()};
     dc->VSSetConstantBuffers(0, 2, vs_cbs);
+    const auto& slots = shader_mgr.pbr_texture_slots();
     if (!is_depth_only_pass_ && !gbuffer_mode) {
         ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), nullptr, per_scene_cb_.Get(), per_material_cb_.Get()};
         dc->PSSetConstantBuffers(0, 4, ps_cbs);
 
-        // 绑定 CSM 阴影贴图到 t5/t6/t7
+        // CSM 阴影贴图
         for (int i = 0; i < 3; ++i) {
             if (global_state_.shadow_map[i] != 0) {
                 const auto* sm = resource_mgr.GetTexture(global_state_.shadow_map[i]);
-                if (sm) dc->PSSetShaderResources(5 + i, 1, sm->srv.GetAddressOf());
+                if (sm) dc->PSSetShaderResources(slots.shadow_base + i, 1, sm->srv.GetAddressOf());
             }
         }
-        // 绑定阴影采样器到 s1
+        // 阴影采样器
         if (shadow_sampler_) {
             dc->PSSetSamplers(1, 1, shadow_sampler_.GetAddressOf());
         }
 
-        // 点光源/聚光灯数据已由 LightBuffer SSBO 提供（ForwardScenePass 中 BindSSBO 到 t17/t18）
+        // 点光源/聚光灯数据已由 LightBuffer SSBO 提供
 
-        // 绑定点光源立方体阴影贴图到 t8~t11
+        // 点光源立方体阴影贴图
         for (int i = 0; i < 4; ++i) {
             if (global_state_.point_shadow_map[i] != 0) {
                 const auto* sm = resource_mgr.GetTexture(global_state_.point_shadow_map[i]);
-                if (sm) dc->PSSetShaderResources(8 + i, 1, sm->srv.GetAddressOf());
+                if (sm) dc->PSSetShaderResources(slots.point_shadow_base + i, 1, sm->srv.GetAddressOf());
             }
         }
 
@@ -582,11 +583,11 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             dc->PSSetConstantBuffers(9, 1, light_probe_data_cb_.GetAddressOf());
         }
 
-        // 绑定聚光灯阴影贴图到 t12~t15
+        // 聚光灯阴影贴图
         for (int i = 0; i < 4; ++i) {
             if (global_state_.spot_shadow_map[i] != 0) {
                 const auto* sm = resource_mgr.GetTexture(global_state_.spot_shadow_map[i]);
-                if (sm) dc->PSSetShaderResources(12 + i, 1, sm->srv.GetAddressOf());
+                if (sm) dc->PSSetShaderResources(slots.spot_shadow_base + i, 1, sm->srv.GetAddressOf());
             }
         }
     }
@@ -727,30 +728,30 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
         }
 
-        // 绑定纹理（t0 反照/漫反射，t1 法线，t2 MR，t3 发光，t4 AO）
+        // PBR 纹理绑定（slot 编号由 reflection 驱动）
         const auto* tex = resource_mgr.GetTexture(item.texture_handle);
         if (tex) {
-            dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
+            dc->PSSetShaderResources(slots.albedo, 1, tex->srv.GetAddressOf());
+            dc->PSSetSamplers(slots.albedo, 1, tex->sampler.GetAddressOf());
         } else if (white_texture_srv_) {
-            dc->PSSetShaderResources(0, 1, white_texture_srv_.GetAddressOf());
-            dc->PSSetSamplers(0, 1, white_texture_sampler_.GetAddressOf());
+            dc->PSSetShaderResources(slots.albedo, 1, white_texture_srv_.GetAddressOf());
+            dc->PSSetSamplers(slots.albedo, 1, white_texture_sampler_.GetAddressOf());
         }
         if (item.normal_map_handle) {
             const auto* nm = resource_mgr.GetTexture(item.normal_map_handle);
-            if (nm) dc->PSSetShaderResources(1, 1, nm->srv.GetAddressOf());
+            if (nm) dc->PSSetShaderResources(slots.normal, 1, nm->srv.GetAddressOf());
         }
         if (item.metallic_roughness_map_handle) {
             const auto* mr = resource_mgr.GetTexture(item.metallic_roughness_map_handle);
-            if (mr) dc->PSSetShaderResources(2, 1, mr->srv.GetAddressOf());
+            if (mr) dc->PSSetShaderResources(slots.metallic_roughness, 1, mr->srv.GetAddressOf());
         }
         if (item.emissive_map_handle) {
             const auto* em = resource_mgr.GetTexture(item.emissive_map_handle);
-            if (em) dc->PSSetShaderResources(3, 1, em->srv.GetAddressOf());
+            if (em) dc->PSSetShaderResources(slots.emissive, 1, em->srv.GetAddressOf());
         }
         if (item.occlusion_map_handle) {
             const auto* oc = resource_mgr.GetTexture(item.occlusion_map_handle);
-            if (oc) dc->PSSetShaderResources(4, 1, oc->srv.GetAddressOf());
+            if (oc) dc->PSSetShaderResources(slots.occlusion, 1, oc->srv.GetAddressOf());
         }
 
         dc->DrawIndexedInstanced(static_cast<UINT>(item.indices.size()), instance_count, 0, 0, 0);

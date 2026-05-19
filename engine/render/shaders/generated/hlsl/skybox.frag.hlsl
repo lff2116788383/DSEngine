@@ -1,5 +1,5 @@
-TextureCube<float4> skybox : register(t1);
-SamplerState _skybox_sampler : register(s1);
+TextureCube<float4> skybox : register(t0);
+SamplerState _skybox_sampler : register(s0);
 
 static float4 FragColor;
 static float3 vTexCoords;
