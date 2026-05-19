@@ -391,6 +391,320 @@ static std::vector<uint8_t> CompileHLSLToDXBC(const std::string& hlsl,
 #endif
 
 // ============================================================================
+// SPIR-V Reflection → *_reflect.gen.h 生成
+// ============================================================================
+
+struct ReflectedVertexInput {
+    std::string name;
+    uint32_t location;
+    std::string base_type;  // "BaseType::Vec3" etc.
+    uint32_t vec_size;
+    uint32_t columns;
+    uint32_t byte_size;
+};
+
+struct ReflectedResource {
+    std::string name;
+    std::string resource_type;  // "ResourceType::UniformBuffer" etc.
+    uint32_t set;
+    uint32_t binding;
+    uint32_t size;
+    uint32_t array_count;
+    std::string image_dim;      // "ImageDimension::Dim2D" etc.
+    bool depth_compare;
+};
+
+struct ReflectedPushConstant {
+    std::string name;
+    uint32_t offset;
+    uint32_t size;
+    std::string base_type;
+    uint32_t array_size;
+};
+
+struct StageReflectionData {
+    std::vector<ReflectedResource> uniform_buffers;
+    std::vector<ReflectedResource> storage_buffers;
+    std::vector<ReflectedResource> sampled_images;
+    std::vector<ReflectedVertexInput> inputs;
+    std::vector<ReflectedPushConstant> push_constants;
+    uint32_t push_constant_size = 0;
+};
+
+static std::string SpirvBaseTypeToEnum(const spirv_cross::SPIRType& type) {
+    if (type.basetype == spirv_cross::SPIRType::Float) {
+        if (type.columns > 1) {
+            if (type.columns == 4) return "BaseType::Mat4";
+            if (type.columns == 3) return "BaseType::Mat3";
+        }
+        switch (type.vecsize) {
+            case 1: return "BaseType::Float";
+            case 2: return "BaseType::Vec2";
+            case 3: return "BaseType::Vec3";
+            case 4: return "BaseType::Vec4";
+        }
+    }
+    if (type.basetype == spirv_cross::SPIRType::Int) {
+        if (type.vecsize == 4) return "BaseType::IVec4";
+        return "BaseType::Int";
+    }
+    if (type.basetype == spirv_cross::SPIRType::UInt) {
+        if (type.vecsize == 4) return "BaseType::UVec4";
+        return "BaseType::UInt";
+    }
+    if (type.basetype == spirv_cross::SPIRType::Boolean)
+        return "BaseType::Bool";
+    if (type.basetype == spirv_cross::SPIRType::Double)
+        return "BaseType::Double";
+    if (type.basetype == spirv_cross::SPIRType::SampledImage ||
+        type.basetype == spirv_cross::SPIRType::Image) {
+        if (type.image.dim == spv::DimCube) return "BaseType::SamplerCube";
+        if (type.image.depth) return "BaseType::Sampler2DShadow";
+        return "BaseType::Sampler2D";
+    }
+    return "BaseType::Float";
+}
+
+static std::string ImageDimToEnum(const spirv_cross::SPIRType& type) {
+    if (type.image.dim == spv::DimCube) return "ImageDimension::DimCube";
+    if (type.image.dim == spv::Dim3D) return "ImageDimension::Dim3D";
+    if (type.image.dim == spv::Dim1D) return "ImageDimension::Dim1D";
+    return "ImageDimension::Dim2D";
+}
+
+static StageReflectionData ExtractReflection(const std::vector<uint32_t>& spirv,
+                                              EShLanguage stage) {
+    StageReflectionData result;
+    try {
+        spirv_cross::CompilerGLSL compiler(spirv);
+        auto resources = compiler.get_shader_resources();
+
+        // --- Vertex inputs (只对 vertex shader) ---
+        if (stage == EShLangVertex) {
+            for (auto& input : resources.stage_inputs) {
+                auto& type = compiler.get_type(input.type_id);
+                ReflectedVertexInput vi;
+                vi.name = input.name;
+                vi.location = compiler.get_decoration(input.id, spv::DecorationLocation);
+                vi.base_type = SpirvBaseTypeToEnum(type);
+                vi.vec_size = type.vecsize;
+                vi.columns = type.columns;
+                // byte size: vecsize * columns * base_size
+                uint32_t base_size = 4; // float/int
+                if (type.basetype == spirv_cross::SPIRType::Double) base_size = 8;
+                vi.byte_size = type.vecsize * type.columns * base_size;
+                result.inputs.push_back(std::move(vi));
+            }
+            // 按 location 排序
+            std::sort(result.inputs.begin(), result.inputs.end(),
+                [](const ReflectedVertexInput& a, const ReflectedVertexInput& b) {
+                    return a.location < b.location;
+                });
+        }
+
+        // --- Uniform buffers ---
+        for (auto& ubo : resources.uniform_buffers) {
+            auto& type = compiler.get_type(ubo.base_type_id);
+            ReflectedResource rb;
+            rb.name = ubo.name;
+            rb.resource_type = "ResourceType::UniformBuffer";
+            rb.set = compiler.get_decoration(ubo.id, spv::DecorationDescriptorSet);
+            rb.binding = compiler.get_decoration(ubo.id, spv::DecorationBinding);
+            rb.size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
+            rb.array_count = 1;
+            rb.image_dim = "ImageDimension::Dim2D";
+            rb.depth_compare = false;
+            result.uniform_buffers.push_back(std::move(rb));
+        }
+
+        // --- Storage buffers (SSBO) ---
+        for (auto& ssbo : resources.storage_buffers) {
+            ReflectedResource rb;
+            rb.name = ssbo.name;
+            rb.resource_type = "ResourceType::StorageBuffer";
+            rb.set = compiler.get_decoration(ssbo.id, spv::DecorationDescriptorSet);
+            rb.binding = compiler.get_decoration(ssbo.id, spv::DecorationBinding);
+            rb.size = 0; // runtime-sized
+            rb.array_count = 1;
+            rb.image_dim = "ImageDimension::Dim2D";
+            rb.depth_compare = false;
+            result.storage_buffers.push_back(std::move(rb));
+        }
+
+        // --- Sampled images (combined image samplers) ---
+        for (auto& img : resources.sampled_images) {
+            auto& type = compiler.get_type(img.type_id);
+            ReflectedResource rb;
+            rb.name = img.name;
+            rb.resource_type = "ResourceType::SampledImage";
+            rb.set = compiler.get_decoration(img.id, spv::DecorationDescriptorSet);
+            rb.binding = compiler.get_decoration(img.id, spv::DecorationBinding);
+            rb.size = 0;
+            // 检查数组
+            rb.array_count = 1;
+            if (!type.array.empty()) {
+                rb.array_count = type.array[0];
+            }
+            rb.image_dim = ImageDimToEnum(type);
+            rb.depth_compare = type.image.depth;
+            result.sampled_images.push_back(std::move(rb));
+        }
+
+        // --- Separate images ---
+        for (auto& img : resources.separate_images) {
+            auto& type = compiler.get_type(img.type_id);
+            ReflectedResource rb;
+            rb.name = img.name;
+            rb.resource_type = "ResourceType::SeparateImage";
+            rb.set = compiler.get_decoration(img.id, spv::DecorationDescriptorSet);
+            rb.binding = compiler.get_decoration(img.id, spv::DecorationBinding);
+            rb.size = 0;
+            rb.array_count = 1;
+            if (!type.array.empty()) rb.array_count = type.array[0];
+            rb.image_dim = ImageDimToEnum(type);
+            rb.depth_compare = type.image.depth;
+            result.sampled_images.push_back(std::move(rb));
+        }
+
+        // --- Push constants ---
+        for (auto& pc : resources.push_constant_buffers) {
+            auto& type = compiler.get_type(pc.base_type_id);
+            uint32_t total_size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
+            result.push_constant_size = total_size;
+
+            for (uint32_t m = 0; m < type.member_types.size(); ++m) {
+                auto& member_type = compiler.get_type(type.member_types[m]);
+                ReflectedPushConstant pm;
+                pm.name = compiler.get_member_name(pc.base_type_id, m);
+                pm.offset = compiler.type_struct_member_offset(type, m);
+                pm.size = static_cast<uint32_t>(compiler.get_declared_struct_member_size(type, m));
+                pm.base_type = SpirvBaseTypeToEnum(member_type);
+                pm.array_size = 0;
+                if (!member_type.array.empty()) pm.array_size = member_type.array[0];
+                result.push_constants.push_back(std::move(pm));
+            }
+        }
+
+    } catch (const spirv_cross::CompilerError& e) {
+        std::cerr << "[WARN] Reflection extraction failed: " << e.what() << "\n";
+    }
+    return result;
+}
+
+static std::string GenerateReflectHeader(const std::string& shader_name,
+                                          const std::string& stage_suffix,
+                                          const StageReflectionData& data) {
+    std::ostringstream ss;
+    std::string id = SanitizeIdentifier(shader_name);
+
+    ss << "// Auto-generated by dse_shader_compiler. DO NOT EDIT.\n";
+    ss << "#pragma once\n\n";
+    ss << "#include \"engine/render/shader_reflection_types.h\"\n\n";
+    ss << "namespace dse {\n";
+    ss << "namespace render {\n";
+    ss << "namespace generated_shaders {\n";
+    ss << "namespace reflect {\n\n";
+
+    // --- Vertex inputs ---
+    if (!data.inputs.empty()) {
+        ss << "static constexpr shader_reflect::VertexInput k" << id << "_" << stage_suffix << "_inputs[] = {\n";
+        for (auto& vi : data.inputs) {
+            ss << "    {\"" << vi.name << "\", " << vi.location << ", "
+               << "shader_reflect::" << vi.base_type << ", "
+               << vi.vec_size << ", " << vi.columns << ", " << vi.byte_size << "},\n";
+        }
+        ss << "};\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_input_count = "
+           << data.inputs.size() << ";\n\n";
+    } else {
+        ss << "static constexpr shader_reflect::VertexInput* k" << id << "_" << stage_suffix << "_inputs = nullptr;\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_input_count = 0;\n\n";
+    }
+
+    // --- Uniform buffers ---
+    if (!data.uniform_buffers.empty()) {
+        ss << "static constexpr shader_reflect::ResourceBinding k" << id << "_" << stage_suffix << "_ubos[] = {\n";
+        for (auto& rb : data.uniform_buffers) {
+            ss << "    {\"" << rb.name << "\", shader_reflect::" << rb.resource_type << ", "
+               << rb.set << ", " << rb.binding << ", " << rb.size << ", " << rb.array_count << ", "
+               << "shader_reflect::" << rb.image_dim << ", " << (rb.depth_compare ? "true" : "false") << "},\n";
+        }
+        ss << "};\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_ubo_count = "
+           << data.uniform_buffers.size() << ";\n\n";
+    } else {
+        ss << "static constexpr shader_reflect::ResourceBinding* k" << id << "_" << stage_suffix << "_ubos = nullptr;\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_ubo_count = 0;\n\n";
+    }
+
+    // --- Storage buffers ---
+    if (!data.storage_buffers.empty()) {
+        ss << "static constexpr shader_reflect::ResourceBinding k" << id << "_" << stage_suffix << "_ssbos[] = {\n";
+        for (auto& rb : data.storage_buffers) {
+            ss << "    {\"" << rb.name << "\", shader_reflect::" << rb.resource_type << ", "
+               << rb.set << ", " << rb.binding << ", " << rb.size << ", " << rb.array_count << ", "
+               << "shader_reflect::" << rb.image_dim << ", " << (rb.depth_compare ? "true" : "false") << "},\n";
+        }
+        ss << "};\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_ssbo_count = "
+           << data.storage_buffers.size() << ";\n\n";
+    } else {
+        ss << "static constexpr shader_reflect::ResourceBinding* k" << id << "_" << stage_suffix << "_ssbos = nullptr;\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_ssbo_count = 0;\n\n";
+    }
+
+    // --- Sampled images ---
+    if (!data.sampled_images.empty()) {
+        ss << "static constexpr shader_reflect::ResourceBinding k" << id << "_" << stage_suffix << "_textures[] = {\n";
+        for (auto& rb : data.sampled_images) {
+            ss << "    {\"" << rb.name << "\", shader_reflect::" << rb.resource_type << ", "
+               << rb.set << ", " << rb.binding << ", " << rb.size << ", " << rb.array_count << ", "
+               << "shader_reflect::" << rb.image_dim << ", " << (rb.depth_compare ? "true" : "false") << "},\n";
+        }
+        ss << "};\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_texture_count = "
+           << data.sampled_images.size() << ";\n\n";
+    } else {
+        ss << "static constexpr shader_reflect::ResourceBinding* k" << id << "_" << stage_suffix << "_textures = nullptr;\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_texture_count = 0;\n\n";
+    }
+
+    // --- Push constants ---
+    if (!data.push_constants.empty()) {
+        ss << "static constexpr shader_reflect::PushConstantMember k" << id << "_" << stage_suffix << "_push_constants[] = {\n";
+        for (auto& pm : data.push_constants) {
+            ss << "    {\"" << pm.name << "\", " << pm.offset << ", " << pm.size << ", "
+               << "shader_reflect::" << pm.base_type << ", " << pm.array_size << "},\n";
+        }
+        ss << "};\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_push_constant_count = "
+           << data.push_constants.size() << ";\n";
+    } else {
+        ss << "static constexpr shader_reflect::PushConstantMember* k" << id << "_" << stage_suffix << "_push_constants = nullptr;\n";
+        ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_push_constant_count = 0;\n";
+    }
+    ss << "static constexpr uint32_t k" << id << "_" << stage_suffix << "_push_constant_size = "
+       << data.push_constant_size << ";\n\n";
+
+    // --- Aggregate StageReflection struct ---
+    ss << "static constexpr shader_reflect::StageReflection k" << id << "_" << stage_suffix << "_reflection = {\n";
+    ss << "    k" << id << "_" << stage_suffix << "_ubos, k" << id << "_" << stage_suffix << "_ubo_count,\n";
+    ss << "    k" << id << "_" << stage_suffix << "_ssbos, k" << id << "_" << stage_suffix << "_ssbo_count,\n";
+    ss << "    k" << id << "_" << stage_suffix << "_textures, k" << id << "_" << stage_suffix << "_texture_count,\n";
+    ss << "    k" << id << "_" << stage_suffix << "_inputs, k" << id << "_" << stage_suffix << "_input_count,\n";
+    ss << "    k" << id << "_" << stage_suffix << "_push_constants, k" << id << "_" << stage_suffix << "_push_constant_count,\n";
+    ss << "    k" << id << "_" << stage_suffix << "_push_constant_size,\n";
+    ss << "};\n\n";
+
+    ss << "} // namespace reflect\n";
+    ss << "} // namespace generated_shaders\n";
+    ss << "} // namespace render\n";
+    ss << "} // namespace dse\n";
+
+    return ss.str();
+}
+
+// ============================================================================
 // 内嵌头文件生成
 // ============================================================================
 
@@ -633,6 +947,12 @@ int main(int argc, char* argv[]) {
             std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl330, hlsl, dxbc);
             fs::path header_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + ".gen.h");
             WriteFile(header_path, header);
+
+            // Generate reflection metadata header
+            StageReflectionData reflect_data = ExtractReflection(spirv, stage);
+            std::string reflect_header = GenerateReflectHeader(shader_name, stage_suffix, reflect_data);
+            fs::path reflect_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + "_reflect.gen.h");
+            WriteFile(reflect_path, reflect_header);
         }
 
         std::cout << "OK (spv:" << spirv.size() * 4 << "B";

@@ -45,6 +45,12 @@
 #include "engine/render/shaders/generated/embed/wboit_composite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/water_frag.gen.h"
 #include "engine/render/shaders/generated/embed/light_shaft_frag.gen.h"
+
+// Reflection metadata for automated InputLayout creation
+#include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
+#include "engine/render/shader_reflection.h"
+
 #include "engine/base/debug.h"
 
 #include <fstream>
@@ -54,6 +60,43 @@
 
 namespace dse {
 namespace render {
+
+// 从 reflection 数据自动生成 D3D11 InputLayout
+static void CreateInputLayoutFromReflection(
+    const shader_reflect::StageReflection& vert_reflection,
+    std::vector<D3D11_INPUT_ELEMENT_DESC>& out_layout) {
+    out_layout.clear();
+    uint32_t byte_offset = 0;
+    for (uint32_t i = 0; i < vert_reflection.input_count; ++i) {
+        const auto& input = vert_reflection.inputs[i];
+        DXGI_FORMAT fmt = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        switch (input.type) {
+            case shader_reflect::BaseType::Float: fmt = DXGI_FORMAT_R32_FLOAT; break;
+            case shader_reflect::BaseType::Vec2:  fmt = DXGI_FORMAT_R32G32_FLOAT; break;
+            case shader_reflect::BaseType::Vec3:  fmt = DXGI_FORMAT_R32G32B32_FLOAT; break;
+            case shader_reflect::BaseType::Vec4:  fmt = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
+            case shader_reflect::BaseType::Int:   fmt = DXGI_FORMAT_R32_SINT; break;
+            case shader_reflect::BaseType::IVec4: fmt = DXGI_FORMAT_R32G32B32A32_SINT; break;
+            default: fmt = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
+        }
+        if (input.columns > 1) {
+            DXGI_FORMAT col_fmt = (input.vec_size == 4) ? DXGI_FORMAT_R32G32B32A32_FLOAT :
+                                  (input.vec_size == 3) ? DXGI_FORMAT_R32G32B32_FLOAT :
+                                  (input.vec_size == 2) ? DXGI_FORMAT_R32G32_FLOAT :
+                                                          DXGI_FORMAT_R32_FLOAT;
+            uint32_t col_size = input.vec_size * 4;
+            for (uint32_t c = 0; c < input.columns; ++c) {
+                out_layout.push_back({"TEXCOORD", input.location + c, col_fmt,
+                    0, byte_offset, D3D11_INPUT_PER_VERTEX_DATA, 0});
+                byte_offset += col_size;
+            }
+        } else {
+            out_layout.push_back({"TEXCOORD", input.location, fmt,
+                0, byte_offset, D3D11_INPUT_PER_VERTEX_DATA, 0});
+            byte_offset += input.byte_size;
+        }
+    }
+}
 
 static constexpr const char* kShaderCacheDir = "data/shader_cache";
 
@@ -287,16 +330,12 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     pbr_shader_handle_ = CreateProgram(kpbr_vert_hlsl, kpbr_frag_hlsl, "main", "main");
     if (pbr_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin PBR shader created: {}", pbr_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 3, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 4, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 5, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 6, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(pbr_shader_handle_, layout, 7);
+        // InputLayout from reflection data
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> pbr_layout;
+        CreateInputLayoutFromReflection(kpbr_vert_reflection, pbr_layout);
+        CreateInputLayoutForShader(pbr_shader_handle_, pbr_layout.data(),
+                                   static_cast<int>(pbr_layout.size()));
     }
 
     // ---- 天空盒着色器 (DXBC) ----
@@ -347,16 +386,12 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         kshadow_frag_dxbc, kshadow_frag_dxbc_size);
     if (shadow_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin shadow shader created (DXBC): {}", shadow_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 3, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 4, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 5, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 6, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(shadow_shader_handle_, layout, 7);
+        // InputLayout from reflection data
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> shadow_layout;
+        CreateInputLayoutFromReflection(kshadow_vert_reflection, shadow_layout);
+        CreateInputLayoutForShader(shadow_shader_handle_, shadow_layout.data(),
+                                   static_cast<int>(shadow_layout.size()));
     }
 
     // ---- Bloom Compute Shaders (仍用 HLSL 编译，CS 无 DXBC 通用路径) ----
@@ -420,16 +455,12 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         kgbuffer_frag_dxbc, kgbuffer_frag_dxbc_size);
     if (gbuffer_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin GBuffer shader created (DXBC): {}", gbuffer_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 3, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 4, DXGI_FORMAT_R32G32B32_FLOAT,    0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 5, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 6, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 76, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(gbuffer_shader_handle_, layout, 7);
+        // GBuffer uses same vertex layout as PBR (shares VS)
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> gb_layout;
+        CreateInputLayoutFromReflection(kpbr_vert_reflection, gb_layout);
+        CreateInputLayoutForShader(gbuffer_shader_handle_, gb_layout.data(),
+                                   static_cast<int>(gb_layout.size()));
     }
 }
 

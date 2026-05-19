@@ -12,6 +12,7 @@
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_context.h"
 #include "engine/base/debug.h"
+#include <algorithm>
 
 // 离线编译生成的 SPIR-V 内嵌头文件
 #include "embed/pbr_vert.gen.h"
@@ -54,6 +55,13 @@
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
+
+// Reflection metadata for automated descriptor layout
+#include "embed/pbr_vert_reflect.gen.h"
+#include "embed/pbr_frag_reflect.gen.h"
+#include "embed/shadow_vert_reflect.gen.h"
+#include "embed/shadow_frag_reflect.gen.h"
+#include "engine/render/shader_reflection.h"
 
 // glslang 运行时编译支持
 #ifdef DSE_HAS_GLSLANG
@@ -225,98 +233,43 @@ bool VulkanShaderManager::ReflectSpirv(
     ShaderReflection& out_reflection) {
     out_reflection = {};
 
-    auto reflect_one = [&](const std::vector<uint32_t>& spirv,
-                           VkShaderStageFlagBits stage) {
-        // 简化版反射：遍历 SPIR-V 指令提取 OpDescriptorSet 和 OpPushConstant
-        const uint32_t* words = spirv.data();
-        size_t word_count = spirv.size();
+    // 使用离线生成的 reflection 数据构建 descriptor bindings
+    // 合并 vert + frag 的所有资源绑定
+    using namespace generated_shaders::reflect;
+    shader_reflect::ProgramReflection prog_refl =
+        dse::render::MakeProgramReflection(kpbr_vert_reflection, kpbr_frag_reflection);
 
-        if (word_count < 5) return;
+    std::vector<vk_reflect::DescriptorBinding> vk_bindings;
+    vk_reflect::ExtractDescriptorBindings(prog_refl, vk_bindings);
 
-        // SPIR-V 头部：magic, version, generator, bound, schema
-        uint32_t bound = words[3];
-        (void)bound;
+    out_reflection.bindings.clear();
+    for (const auto& b : vk_bindings) {
+        out_reflection.bindings.push_back({
+            b.set, b.binding,
+            static_cast<VkDescriptorType>(b.descriptor_type),
+            static_cast<VkShaderStageFlags>(b.stage_flags),
+            b.count
+        });
+    }
 
-        size_t i = 5; // 跳过头部
-        while (i < word_count) {
-            uint32_t inst_word = words[i];
-            uint16_t opcode = static_cast<uint16_t>(inst_word & 0xFFFF);
-            uint16_t word_count_inst = static_cast<uint16_t>(inst_word >> 16);
-
-            if (word_count_inst == 0) break; // 防止无限循环
-
-            // OpDecorate (71)
-            if (opcode == 71 && word_count_inst >= 4) {
-                uint32_t target_id = words[i + 1];
-                uint32_t decoration = words[i + 2];
-
-                // Decoration::DescriptorSet (34)
-                if (decoration == 34 && word_count_inst >= 4) {
-                    uint32_t set = words[i + 3];
-                    // 暂存，后续与 binding 配对
-                    // 实际反射需要完整的 ID→binding 映射
-                    (void)target_id; (void)set;
-                }
-                // Decoration::Binding (33)
-                if (decoration == 33 && word_count_inst >= 4) {
-                    uint32_t binding = words[i + 3];
-                    (void)binding;
-                }
-                // Decoration::Block (2) — UBO 标记
-            }
-
-            // OpTypeStruct (30) — 用于检测 push constant block
-
-            i += word_count_inst;
-        }
-    };
-
-    reflect_one(vert_spirv, VK_SHADER_STAGE_VERTEX_BIT);
-    reflect_one(frag_spirv, VK_SHADER_STAGE_FRAGMENT_BIT);
-
-    // TODO: [CodeBuddy-2026-05-04] 完整的 SPIR-V 反射需要维护 ID→binding 映射表
-    // 当前使用简化的 fallback：根据着色器名称和约定的 set/binding 布局
-    // 后续应替换为 SPIRV-Reflect 库
-
-    // 约定的 descriptor set 布局（与 GL UBO 布局对齐）：
-    // Set 0: PerFrame UBO (binding 0)
-    // Set 1: PerScene UBO (binding 0)
-    // Set 2: PerMaterial UBO (binding 0) + 纹理采样器 (binding 1-5)
-    // Set 3: 逐对象 push constant (model matrix)
-
-    out_reflection.bindings = {
-        // Set 0: PerFrame
-        {0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1},
-        // Set 1: PerScene + PointLights + SpotLights
-        {1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1},
-        {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // PointLightSSBO
-        {1, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // SpotLightSSBO
-        {1, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // ClusterInfoSSBO
-        {1, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // LightIndexSSBO
-        {1, 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // LightProbeData UBO
-        // Set 2: PerMaterial + 纹理
-        {2, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1},
-        {2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // albedo
-        {2, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // normal
-        {2, 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // metallic-roughness
-        {2, 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // emissive
-        {2, 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1}, // occlusion
-        // 阴影贴图
-        {2, 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3}, // shadow_map[3]
-        {2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // spot_shadow_map[4]
-        // BoneMatrices / MorphWeights（VS 使用，即使未 skinned 也需声明以匹配 SPIR-V 布局）
-        {2, 8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1}, // BoneMatrices
-        {2, 9, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1}, // MorphWeights
-        // Set 3: 点光源立方体阴影贴图（手动比较深度）
-        {3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4}, // u_point_shadow_maps[4]
-    };
-
-    out_reflection.has_push_constant = true;
-    out_reflection.push_constant_range = {
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        0,
-        160  // model matrix (64) + 额外数据 / 后处理最大 water 40 float
-    };
+    // Push constants
+    uint32_t pc_flags = 0, pc_offset = 0, pc_size = 0;
+    vk_reflect::ExtractPushConstantRange(prog_refl, pc_flags, pc_offset, pc_size);
+    if (pc_size > 0) {
+        out_reflection.has_push_constant = true;
+        // 保留较大的 push constant 范围以兼容后处理着色器
+        out_reflection.push_constant_range = {
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            0,
+            std::max(pc_size, uint32_t(160))  // 最小 160B 保证后处理兼容
+        };
+    } else {
+        out_reflection.has_push_constant = true;
+        out_reflection.push_constant_range = {
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            0, 160
+        };
+    }
 
     return true;
 }

@@ -52,6 +52,11 @@
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 
+// Reflection metadata for automated binding
+#include "embed/pbr_vert_reflect.gen.h"
+#include "embed/pbr_frag_reflect.gen.h"
+#include "engine/render/shader_reflection.h"
+
 namespace dse {
 namespace render {
 
@@ -307,25 +312,55 @@ static void BindUBOBlock(unsigned int prog, const char* block_name,
     }
 }
 
+// UBO name → engine UBOBindingPoint 映射表（用于 reflection 自动绑定）
+static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
+    if (std::strcmp(name, "PerFrame") == 0)       return UBOBindingPoint::PerFrame;
+    if (std::strcmp(name, "PerScene") == 0)       return UBOBindingPoint::PerScene;
+    if (std::strcmp(name, "PerMaterial") == 0)    return UBOBindingPoint::PerMaterial;
+    if (std::strcmp(name, "PointLightUBO") == 0)  return UBOBindingPoint::PointLights;
+    if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
+    if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
+    if (std::strcmp(name, "BoneMatrices") == 0)   return UBOBindingPoint::BoneMatrices;
+    if (std::strcmp(name, "MorphWeights") == 0)   return UBOBindingPoint::MorphWeights;
+    if (std::strcmp(name, "LightProbeData") == 0) return UBOBindingPoint::LightProbeData;
+    return static_cast<UBOBindingPoint>(0xFF); // unknown — skipped
+}
+
 void GLShaderManager::CachePBRLocations() {
     auto& loc = pbr_locations_;
     unsigned int h = pbr_shader_handle_;
 
-    // --- UBO block 绑定 ---
-    BindUBOBlock(h, "PerFrame",       UBOBindingPoint::PerFrame,      loc.per_frame_block_index);
-    BindUBOBlock(h, "PerScene",       UBOBindingPoint::PerScene,      loc.per_scene_block_index);
-    BindUBOBlock(h, "PerMaterial",    UBOBindingPoint::PerMaterial,   loc.per_material_block_index);
+    // --- UBO block 绑定（reflection 驱动）---
+    using namespace dse::render::generated_shaders::reflect;
+    auto bind_ubos_from_reflection = [&](const shader_reflect::StageReflection& refl) {
+        for (uint32_t i = 0; i < refl.uniform_buffer_count; ++i) {
+            const auto& ubo = refl.uniform_buffers[i];
+            UBOBindingPoint bp = MapUBONameToBindingPoint(ubo.name);
+            if (static_cast<uint32_t>(bp) == 0xFF) continue;
+            unsigned int block_idx = glGetUniformBlockIndex(h, ubo.name);
+            if (block_idx != GL_INVALID_INDEX) {
+                glUniformBlockBinding(h, block_idx, static_cast<unsigned int>(bp));
+            }
+        }
+    };
+    bind_ubos_from_reflection(kpbr_vert_reflection);
+    bind_ubos_from_reflection(kpbr_frag_reflection);
+
+    // 缓存 block index 到 locations struct（向后兼容）
+    loc.per_frame_block_index = glGetUniformBlockIndex(h, "PerFrame");
+    loc.per_scene_block_index = glGetUniformBlockIndex(h, "PerScene");
+    loc.per_material_block_index = glGetUniformBlockIndex(h, "PerMaterial");
     if (!supports_ssbo_) {
-        BindUBOBlock(h, "PointLightUBO", UBOBindingPoint::PointLights, loc.point_lights_block_index);
-        BindUBOBlock(h, "SpotLightUBO",  UBOBindingPoint::SpotLights,  loc.spot_lights_block_index);
+        loc.point_lights_block_index = glGetUniformBlockIndex(h, "PointLightUBO");
+        loc.spot_lights_block_index = glGetUniformBlockIndex(h, "SpotLightUBO");
     } else {
         loc.point_lights_block_index = GL_INVALID_INDEX;
         loc.spot_lights_block_index  = GL_INVALID_INDEX;
     }
-    BindUBOBlock(h, "SpotLightData",  UBOBindingPoint::SpotLightData, loc.spot_light_data_block_index);
-    BindUBOBlock(h, "BoneMatrices",   UBOBindingPoint::BoneMatrices,  loc.bone_matrices_block_index);
-    BindUBOBlock(h, "MorphWeights",   UBOBindingPoint::MorphWeights,  loc.morph_weights_block_index);
-    BindUBOBlock(h, "LightProbeData", UBOBindingPoint::LightProbeData, loc.light_probe_data_block_index);
+    loc.spot_light_data_block_index = glGetUniformBlockIndex(h, "SpotLightData");
+    loc.bone_matrices_block_index = glGetUniformBlockIndex(h, "BoneMatrices");
+    loc.morph_weights_block_index = glGetUniformBlockIndex(h, "MorphWeights");
+    loc.light_probe_data_block_index = glGetUniformBlockIndex(h, "LightProbeData");
 
     // --- 纹理采样器 uniform location ---
     loc.texture = glGetUniformLocation(h, "u_texture");
