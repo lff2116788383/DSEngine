@@ -210,13 +210,13 @@ void GrassSystem::ShutdownComputeResources() {
         rhi_->DeleteComputeShader(wind_compute_shader_);
         wind_compute_shader_ = 0;
     }
-    if (input_ssbo_ != 0) {
-        rhi_->DeleteSSBO(input_ssbo_);
-        input_ssbo_ = 0;
+    if (input_ssbo_) {
+        rhi_->DeleteGpuBuffer(input_ssbo_);
+        input_ssbo_ = {};
     }
-    if (output_ssbo_ != 0) {
-        rhi_->DeleteSSBO(output_ssbo_);
-        output_ssbo_ = 0;
+    if (output_ssbo_) {
+        rhi_->DeleteGpuBuffer(output_ssbo_);
+        output_ssbo_ = {};
     }
     ssbo_capacity_ = 0;
     gpu_compute_enabled_ = false;
@@ -228,16 +228,22 @@ void GrassSystem::EnsureSSBOCapacity(size_t required_count) {
     size_t new_cap = std::max(required_count, ssbo_capacity_ * 2);
     new_cap = std::max(new_cap, size_t(1024));
 
-    if (input_ssbo_ != 0) rhi_->DeleteSSBO(input_ssbo_);
-    if (output_ssbo_ != 0) rhi_->DeleteSSBO(output_ssbo_);
+    if (input_ssbo_) rhi_->DeleteGpuBuffer(input_ssbo_);
+    if (output_ssbo_) rhi_->DeleteGpuBuffer(output_ssbo_);
 
-    input_ssbo_ = rhi_->CreateSSBO(new_cap * sizeof(GrassGPUInstance), nullptr);
-    output_ssbo_ = rhi_->CreateSSBO(new_cap * sizeof(glm::mat4), nullptr);
+    {
+        dse::render::GpuBufferDesc d{new_cap * sizeof(GrassGPUInstance), dse::render::GpuBufferUsage::kStorage, true, "grass_input"};
+        input_ssbo_ = rhi_->CreateGpuBuffer(d, nullptr);
+    }
+    {
+        dse::render::GpuBufferDesc d{new_cap * sizeof(glm::mat4), dse::render::GpuBufferUsage::kStorage, true, "grass_output"};
+        output_ssbo_ = rhi_->CreateGpuBuffer(d, nullptr);
+    }
 
-    if (input_ssbo_ == 0 || output_ssbo_ == 0) {
+    if (!input_ssbo_ || !output_ssbo_) {
         DEBUG_LOG_ERROR("[GrassSystem] SSBO allocation failed, disabling GPU compute");
-        if (input_ssbo_ != 0) { rhi_->DeleteSSBO(input_ssbo_); input_ssbo_ = 0; }
-        if (output_ssbo_ != 0) { rhi_->DeleteSSBO(output_ssbo_); output_ssbo_ = 0; }
+        if (input_ssbo_) { rhi_->DeleteGpuBuffer(input_ssbo_); input_ssbo_ = {}; }
+        if (output_ssbo_) { rhi_->DeleteGpuBuffer(output_ssbo_); output_ssbo_ = {}; }
         ssbo_capacity_ = 0;
         gpu_compute_enabled_ = false;
         return;
@@ -675,15 +681,15 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
         }
 
         if (use_gpu) {
-            rhi_->UpdateSSBO(input_ssbo_, 0,
+            rhi_->UpdateGpuBuffer(input_ssbo_, 0,
                 lod0_count * sizeof(GrassGPUInstance), lod0_gpu.data());
             if (!lod1_gpu.empty()) {
-                rhi_->UpdateSSBO(input_ssbo_,
+                rhi_->UpdateGpuBuffer(input_ssbo_,
                     lod0_count * sizeof(GrassGPUInstance),
                     lod1_gpu.size() * sizeof(GrassGPUInstance), lod1_gpu.data());
             }
-            rhi_->BindSSBO(input_ssbo_, 11);
-            rhi_->BindSSBO(output_ssbo_, 12);
+            rhi_->BindGpuBuffer(input_ssbo_, 11);
+            rhi_->BindGpuBuffer(output_ssbo_, 12);
 
             rhi_->SetComputeUniformVec2f(wind_compute_shader_, "u_wind_dir", wind_norm.x, wind_norm.y);
             rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_speed", grass.wind_speed);
@@ -696,7 +702,7 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             rhi_->DispatchCompute(wind_compute_shader_, groups, 1, 1);
             rhi_->ComputeMemoryBarrier();
 
-            rhi_->ReadSSBO(output_ssbo_, 0, total_count * sizeof(glm::mat4), all_matrices.data());
+            rhi_->ReadGpuBuffer(output_ssbo_, 0, total_count * sizeof(glm::mat4), all_matrices.data());
         } else {
             auto compute_cpu = [&](const std::vector<GrassGPUInstance>& gpu_vec, size_t out_offset) {
                 for (size_t i = 0; i < gpu_vec.size(); ++i) {
