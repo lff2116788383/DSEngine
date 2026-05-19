@@ -3,19 +3,16 @@
  * @brief 引擎应用外壳，负责运行时生命周期与服务装配。
  */
 
-#define GLFW_INCLUDE_NONE
 #include "engine/runtime/engine_app.h"
+#include "engine/platform/platform_app.h"
 #ifdef DSE_ENABLE_LUA
 #include "engine/scripting/lua/lua_runtime.h"
 #endif
 #include "engine/scene/scene.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include "engine/render/rhi/ubo_types.h"
-#include <GLFW/glfw3.h>
-#include <glad/gl.h>
 #ifdef _WIN32
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
+#include <windows.h>
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
 #endif
@@ -42,21 +39,6 @@
 
 namespace dse::runtime {
 namespace {
-void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    Input::RecordKey(key, action);
-}
-
-void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-    Input::RecordKey(button, action);
-}
-
-void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
-    Input::RecordMouseScroll(yoffset);
-}
-
-void CursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
-    Input::RecordMousePosition(xpos, ypos);
-}
 
 std::string ReadNonEmptyEnv(const char* name) {
     if (const char* value = std::getenv(name)) {
@@ -238,7 +220,7 @@ void EngineInstance::CleanupOnInitFailure() {
         services_.job_system->Shutdown();
     }
     Debug::ShutDown();
-    if (!config_.enable_editor) glfwTerminate();
+    if (!config_.enable_editor && platform_) platform_->Shutdown();
 }
 
 bool EngineInstance::Init() {
@@ -246,115 +228,66 @@ bool EngineInstance::Init() {
     if (is_initialized_) return true;
 
     // 如果未启用编辑器模式，则初始化系统环境
+    const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
+                                   rhi_backend != RhiBackend::Vulkan);
+
+    platform_ = dse::platform::CreateDefaultPlatformApp();
+
     if (!config_.enable_editor) {
-        if (!glfwInit()) {
-            std::cerr << "Failed to initialize GLFW\n";
-            return false;
-        }
+        dse::platform::WindowConfig win_cfg;
+        win_cfg.width  = config_.window_width;
+        win_cfg.height = config_.window_height;
+        win_cfg.title  = config_.window_title;
+        win_cfg.no_graphics_api = !needs_gl_context;
+        win_cfg.gl_fallback_33  = true;
 
-        // 根据 RHI 后端选择 GLFW 窗口 client API（验证编译时可用性）
-        const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
-        const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
-                                       rhi_backend != RhiBackend::Vulkan);
-        if (needs_gl_context) {
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        } else {
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        }
-
-        GLFWwindow* window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
-        if (!window && needs_gl_context) {
-            // GL 4.3 不可用，降级到 GL 3.3（UBO fallback 模式，无 SSBO）
-            fprintf(stderr, "[DSEngine] GL 4.3 unavailable, falling back to GL 3.3 (UBO light mode, max %d lights)\n",
-                    dse::render::kMaxUBOLights);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-            window = glfwCreateWindow(config_.window_width, config_.window_height, config_.window_title.c_str(), nullptr, nullptr);
-        }
-        if (!window) {
-            std::cerr << "Failed to create GLFW window\n";
-            glfwTerminate();
+        if (!platform_->Init(win_cfg)) {
             return false;
         }
 
         if (needs_gl_context) {
-            glfwMakeContextCurrent(window);
-            glfwSwapInterval(1); // Enable VSync to prevent double-buffer flicker
-            if (!gladLoadGL(glfwGetProcAddress)) {
-                std::cerr << "Failed to initialize OpenGL (glad)\n";
-                glfwDestroyWindow(window);
-                glfwTerminate();
+            if (!platform_->LoadGLFunctions()) {
+                platform_->Shutdown();
                 return false;
-            }
-            // 立即清黑屏并 swap，消除初始化期间的白屏
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glfwSwapBuffers(window);
-
-            // 打印当前使用的 GPU 信息
-            const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-            const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-            const char* gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-            DEBUG_LOG_INFO("OpenGL GPU: {} | Vendor: {} | Version: {}",
-                           gl_renderer ? gl_renderer : "unknown",
-                           gl_vendor ? gl_vendor : "unknown",
-                           gl_version ? gl_version : "unknown");
-            // DEBUG: 写入文件以便可靠捕获 GPU 信息
-            if (FILE* f = fopen("gpu_info.txt", "w")) {
-                fprintf(f, "Renderer: %s\nVendor: %s\nVersion: %s\n",
-                        gl_renderer ? gl_renderer : "unknown",
-                        gl_vendor ? gl_vendor : "unknown",
-                        gl_version ? gl_version : "unknown");
-                fclose(f);
             }
         }
 
         int framebuffer_width = config_.window_width;
         int framebuffer_height = config_.window_height;
-        if (needs_gl_context) {
-            glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
-        }
+        platform_->GetFramebufferSize(framebuffer_width, framebuffer_height);
         Screen::set_width_height(framebuffer_width, framebuffer_height);
-        glfw_window_ = window;
 
         // 注入平台窗口句柄（D3D11/Vulkan 需要在 FramePipeline::Init 中使用）
-#ifdef _WIN32
         if (!needs_gl_context) {
-            pipeline_->SetNativeWindowHandle((void*)glfwGetWin32Window(window));
+            void* native_handle = platform_->GetNativeWindowHandle();
+            if (native_handle) {
+                pipeline_->SetNativeWindowHandle(native_handle);
+            }
         }
-#endif
     } else {
-        // 在编辑器模式下，gladLoadGL 通常已经在编辑器主程序中初始化过了，
-        // 但由于引擎是 DLL，exe 中的 glad 初始化不会影响 DLL 中的 glad 函数指针，
-        // 所以我们必须在 DLL 中再次调用 gladLoadGL。
-        gladLoadGL(glfwGetProcAddress);
-        
-        // 确保 Screen 大小被正确初始化
+        // 编辑器模式：外部窗口已由编辑器创建
+        platform_->AttachExternal(nullptr);  // 无特定窗口，仅用于 LoadGLFunctions
+        platform_->LoadGLFunctions();
+
         Screen::set_width_height(config_.window_width, config_.window_height);
     }
 
-    GLFWwindow* current_window = glfw_window_
-        ? static_cast<GLFWwindow*>(glfw_window_)
-        : glfwGetCurrentContext();
-    if (current_window) {
-        if (!config_.enable_editor) {
-            glfwSetKeyCallback(current_window, KeyCallback);
-            glfwSetMouseButtonCallback(current_window, MouseButtonCallback);
-            glfwSetScrollCallback(current_window, ScrollCallback);
-            glfwSetCursorPosCallback(current_window, CursorPositionCallback);
-            
-            pipeline_->SetWindowTitleSetter([current_window](const std::string& title) {
-                glfwSetWindowTitle(current_window, title.c_str());
-            });
-        } else {
-            // 在编辑器模式下，忽略来自业务逻辑（Lua/C++）对窗口标题的修改，
-            // 保持编辑器窗口自身的标题不受干扰
-            pipeline_->SetWindowTitleSetter([](const std::string&) {
-                // Do nothing
-            });
-        }
+    if (!config_.enable_editor) {
+        platform_->SetInputCallbacks(
+            [](int key, int action) { Input::RecordKey(static_cast<unsigned short>(key), static_cast<unsigned short>(action)); },
+            [](int btn, int action) { Input::RecordKey(static_cast<unsigned short>(btn), static_cast<unsigned short>(action)); },
+            [](float y) { Input::RecordMouseScroll(y); },
+            [](float x, float y) { Input::RecordMousePosition(x, y); }
+        );
+
+        pipeline_->SetWindowTitleSetter([this](const std::string& title) {
+            platform_->SetWindowTitle(title);
+        });
+    } else {
+        pipeline_->SetWindowTitleSetter([](const std::string&) {
+            // Do nothing — 编辑器模式保持编辑器窗口标题不受干扰
+        });
     }
 
     Debug::Init();
@@ -366,11 +299,11 @@ bool EngineInstance::Init() {
     RegisterRuntimeServices();
 
     // 初始化期间保持窗口消息泵送，防止 Windows 标记"未响应"
-    if (glfw_window_) glfwPollEvents();
+    if (platform_) platform_->PollEvents();
 
-    if (glfw_window_) {
-        pipeline_->SetInitKeepAlive([w = static_cast<GLFWwindow*>(glfw_window_)]() {
-            glfwPollEvents();
+    if (platform_) {
+        pipeline_->SetInitKeepAlive([this]() {
+            platform_->PollEvents();
         });
     }
     pipeline_->EnableEditorMode(config_.enable_editor);
@@ -381,9 +314,9 @@ bool EngineInstance::Init() {
         services_.asset_manager->SetJobSystem(services_.job_system);
     }
     pipeline_->SetBusinessMode(config_.business_mode);
-    if (current_window) {
-        pipeline_->SetQuitCallback([current_window]() {
-            glfwSetWindowShouldClose(current_window, GLFW_TRUE);
+    if (platform_) {
+        pipeline_->SetQuitCallback([this]() {
+            platform_->RequestClose();
         });
     }
     pipeline_->SetTargetFpsCallbacks(
@@ -399,7 +332,7 @@ bool EngineInstance::Init() {
     
     std::cout << "Business mode: " << (config_.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
 
-    if (glfw_window_) glfwPollEvents();
+    if (platform_) platform_->PollEvents();
     
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
@@ -447,10 +380,6 @@ void EngineInstance::Tick() {
 void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
 
-    GLFWwindow* current_window = glfw_window_
-        ? static_cast<GLFWwindow*>(glfw_window_)
-        : glfwGetCurrentContext();
-
     pipeline_->SetWindowTitleSetter(nullptr);
     pipeline_->Shutdown();
     if (services_.job_system) {
@@ -466,7 +395,7 @@ void EngineInstance::Shutdown() {
     ResetRuntimeServices();
 
     // FramePipeline and the default runtime services own objects whose destructors may touch
-    // engine/runtime state. Destroy owned instances while GLFW/GL and the debug logger are still
+    // engine/runtime state. Destroy owned instances while platform and the debug logger are still
     // alive instead of deferring to EngineInstance member destruction after RunEngine() returns.
     pipeline_.reset();
     if (default_world_) {
@@ -485,16 +414,10 @@ void EngineInstance::Shutdown() {
 
     Debug::ShutDown();
 
-    if (!config_.enable_editor) {
-        if (current_window) {
-            glfwSetKeyCallback(current_window, nullptr);
-            glfwSetMouseButtonCallback(current_window, nullptr);
-            glfwSetScrollCallback(current_window, nullptr);
-            glfwSetCursorPosCallback(current_window, nullptr);
-            glfwDestroyWindow(current_window);
-        }
-        glfwTerminate();
+    if (!config_.enable_editor && platform_) {
+        platform_->Shutdown();
     }
+    platform_.reset();
 
     is_initialized_ = false;
 }
@@ -502,11 +425,8 @@ void EngineInstance::Shutdown() {
 int EngineInstance::Run() {
     if (!Init()) return -1;
 
-    GLFWwindow* window = glfw_window_
-        ? static_cast<GLFWwindow*>(glfw_window_)
-        : glfwGetCurrentContext();
-    if (!window) {
-        std::cerr << "No current GLFW context found\n";
+    if (!platform_) {
+        std::cerr << "No platform app available\n";
         return -1;
     }
 
@@ -525,31 +445,31 @@ int EngineInstance::Run() {
     }
     bool screenshot_taken = false;
     int frame_counter = 0;
-    while (!glfwWindowShouldClose(window)) {
-        const double frame_start = glfwGetTime();
-        glfwPollEvents();
+    while (!platform_->ShouldClose()) {
+        const double frame_start = platform_->GetTime();
+        platform_->PollEvents();
 
         int width = 0;
         int height = 0;
-        glfwGetFramebufferSize(window, &width, &height);
+        platform_->GetFramebufferSize(width, height);
         Screen::set_width_height(width, height);
 
         Tick();
 
-        // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 glfwSwapBuffers
-        if (glfwGetCurrentContext() != nullptr) {
-            glfwSwapBuffers(window);
+        // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 SwapBuffers
+        if (platform_->HasGLContext()) {
+            platform_->SwapBuffers();
         }
         if (target_fps_ > 0.0f) {
             const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
-            double remaining = target_frame_time - (glfwGetTime() - frame_start);
+            double remaining = target_frame_time - (platform_->GetTime() - frame_start);
             // sleep 大部分等待时间（保留 1.5ms 给 spin-wait 以补偿 OS 调度抖动）
             if (remaining > 0.0015) {
                 std::this_thread::sleep_for(
                     std::chrono::microseconds(static_cast<int>((remaining - 0.0015) * 1e6)));
             }
             // spin-wait 精确到目标时刻
-            while ((glfwGetTime() - frame_start) < target_frame_time) {
+            while ((platform_->GetTime() - frame_start) < target_frame_time) {
                 // busy wait
             }
         }

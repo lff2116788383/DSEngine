@@ -9,6 +9,8 @@
 #include <string>
 #include <memory>
 #include "engine/runtime/frame_pipeline.h"
+
+namespace dse::platform { class PlatformApp; }
 #include "engine/runtime/runtime_services.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/core/service_locator.h"
@@ -101,8 +103,7 @@ private:
     float fixed_time_step_ = 0.02f;
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
     bool is_initialized_ = false;
-    /// 保存 GLFW 窗口指针（D3D11 后端无 GL 上下文，不能用 glfwGetCurrentContext 获取）
-    void* glfw_window_ = nullptr;
+    std::unique_ptr<dse::platform::PlatformApp> platform_;
 };
 
 int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility
