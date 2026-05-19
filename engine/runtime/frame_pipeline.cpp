@@ -149,13 +149,6 @@ std::vector<std::string> ResolveRuntimeModules() {
 }
 }
 
-FramePipeline& FramePipeline::Instance() {
-    if (auto* registered = dse::core::ServiceLocator::Instance().Get<FramePipeline>()) {
-        return *registered;
-    }
-    throw std::runtime_error("FramePipeline::Instance() requires an EngineInstance-managed FramePipeline registration");
-}
-
 bool FramePipeline::Init() {
     if (initialized_) {
         return true;

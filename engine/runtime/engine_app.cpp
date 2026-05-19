@@ -129,15 +129,6 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
 EngineInstance::EngineInstance(const EngineRunConfig& config)
     : config_(config)
     , services_(config.services) {
-    if (services_.world == nullptr && config_.world != nullptr) {
-        services_.world = config_.world;
-    }
-    if (services_.asset_manager == nullptr && config_.asset_manager != nullptr) {
-        services_.asset_manager = config_.asset_manager;
-    }
-    if (services_.job_system == nullptr && config_.job_system != nullptr) {
-        services_.job_system = config_.job_system;
-    }
     if (services_.world == nullptr) {
         default_world_ = std::make_unique<World>();
         services_.world = default_world_.get();
@@ -150,12 +141,6 @@ EngineInstance::EngineInstance(const EngineRunConfig& config)
         default_job_system_ = std::make_unique<core::JobSystem>();
         services_.job_system = default_job_system_.get();
     }
-
-    // Keep backward-compatible mirrors in sync for older call sites.
-    config_.world = services_.world;
-    config_.asset_manager = services_.asset_manager;
-    config_.job_system = services_.job_system;
-    config_.services = services_;
 
     pipeline_ = std::make_unique<FramePipeline>();
 }
@@ -415,8 +400,6 @@ void EngineInstance::Shutdown() {
         // the default world to avoid a late registry destructor re-entering released state.
         (void)default_world_.release();
         services_.world = nullptr;
-        config_.world = nullptr;
-        config_.services.world = nullptr;
     }
     default_asset_manager_.reset();
     default_job_system_.reset();

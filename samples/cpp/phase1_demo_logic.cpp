@@ -1,6 +1,7 @@
 #include "samples/cpp/phase1_demo_logic.h"
 #include "samples/cpp/phase1_demo_config.h"
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/core/service_locator.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/scene/scene.h"
 #include "engine/ecs/components_2d.h"
@@ -362,9 +363,10 @@ void Tick(World& world, float delta_time) {
         return;
     }
 
-    const int draw_calls = FramePipeline::Instance().LastDrawCalls();
-    const int max_batch = FramePipeline::Instance().LastMaxBatchSprites();
-    const int sprite_count = FramePipeline::Instance().LastSpriteCount();
+    auto* fp = dse::core::ServiceLocator::Instance().Get<FramePipeline>();
+    const int draw_calls   = fp ? fp->LastDrawCalls()      : 0;
+    const int max_batch    = fp ? fp->LastMaxBatchSprites() : 0;
+    const int sprite_count = fp ? fp->LastSpriteCount()    : 0;
     const char* status = draw_calls > 9 ? "FAIL" : "PASS";
     std::cout << "[3D-Smoke][CPP] draw_calls=" << draw_calls
               << " max_batch=" << max_batch

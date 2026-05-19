@@ -50,9 +50,6 @@ class AssetManager;
  */
 class FramePipeline {
 public:
-    [[deprecated("Use EngineInstance::pipeline() or injected FramePipeline instance")]]
-    static FramePipeline& Instance();
-
     FramePipeline();
     ~FramePipeline();
 

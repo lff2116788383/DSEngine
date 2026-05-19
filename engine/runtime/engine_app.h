@@ -28,10 +28,6 @@ struct EngineRunConfig {
     bool enable_editor = false;
     std::string startup_lua_script_path;
     RuntimeServices services{};
-    // Backward-compatible aliases; EngineInstance will fold them into services.
-    World* world = nullptr;
-    AssetManager* asset_manager = nullptr;
-    dse::core::JobSystem* job_system = nullptr;
 
     EngineRunConfig& WithServices(RuntimeServices runtime_services) {
         services = runtime_services;
