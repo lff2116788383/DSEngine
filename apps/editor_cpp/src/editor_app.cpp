@@ -230,7 +230,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     std::cout << "Editor window created successfully." << std::endl;
 
     glfwMakeContextCurrent(window_);
-    glfwSwapInterval(1);
+    glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
 
     // Drag & Drop: accept file drops from OS — opens Asset Importer with the first importable file
     glfwSetDropCallback(window_, [](GLFWwindow*, int count, const char** paths) {

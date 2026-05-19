@@ -69,7 +69,7 @@
 
 // Project panel view toggles
 #define MDI_ICON_VIEW_LIST              "\xef\x80\xba" // U+F03A fa-list
-#define MDI_ICON_VIEW_GRID              "\xef\x80\x8a" // U+F00A fa-table-cells (fa-th)
+#define MDI_ICON_VIEW_GRID              "\xef\x83\x8e" // U+F0CE fa-table
 
 // Project panel file-type icons
 #define MDI_ICON_FILE_OUTLINE           "\xef\x85\x9b" // U+F15B fa-file
