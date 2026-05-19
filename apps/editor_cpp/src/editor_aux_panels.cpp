@@ -280,8 +280,31 @@ void DrawProjectPanel() {
                         ImGui::Dummy(ImVec2(thumb_w, thumb_h));
                     }
                 } else {
-                    ImU32 bg_color = entry.is_directory() ? IM_COL32(60, 80, 120, 180) : IM_COL32(60, 60, 70, 180);
-                    ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + thumb_w, p.y + thumb_h), bg_color, 4.0f);
+                    // Background
+                    ImU32 bg_color = entry.is_directory() ? IM_COL32(50, 75, 115, 220) : IM_COL32(55, 55, 65, 220);
+                    auto* dl = ImGui::GetWindowDrawList();
+                    dl->AddRectFilled(p, ImVec2(p.x + thumb_w, p.y + thumb_h), bg_color, 6.0f);
+
+                    // Pick icon for this type
+                    const char* type_icon2 = MDI_ICON_FILE_OUTLINE;
+                    if (entry.is_directory())                        type_icon2 = MDI_ICON_PACKAGE_VARIANT;
+                    else if (ext == ".lua")                          type_icon2 = MDI_ICON_SCRIPT_TEXT_OUTLINE;
+                    else if (ext == ".dmesh")                        type_icon2 = MDI_ICON_SPHERE;
+                    else if (ext == ".dscene")                       type_icon2 = MDI_ICON_IMAGE_MULTIPLE;
+                    else if (ext == ".dprefab")                      type_icon2 = MDI_ICON_CUBE_OUTLINE;
+                    else if (ext == ".danim")                        type_icon2 = MDI_ICON_ANIMATION;
+                    else if (ext == ".dskel")                        type_icon2 = MDI_ICON_HUMAN;
+                    else if (ext==".wav"||ext==".ogg"||ext==".mp3")  type_icon2 = MDI_ICON_MUSIC_NOTE;
+                    else if (ext == ".dpak")                         type_icon2 = MDI_ICON_PACKAGE_VARIANT;
+
+                    // Draw icon centered in thumbnail (scale up with cell)
+                    const float icon_size = (std::max)(14.0f, thumb_h * 0.45f);
+                    ImFont* cur_font = ImGui::GetFont();
+                    ImVec2 icon_sz = cur_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, type_icon2);
+                    ImVec2 icon_pos(p.x + (thumb_w - icon_sz.x) * 0.5f,
+                                    p.y + (thumb_h - icon_sz.y) * 0.5f);
+                    dl->AddText(cur_font, icon_size, icon_pos, IM_COL32(200, 210, 230, 200), type_icon2);
+
                     ImGui::Dummy(ImVec2(thumb_w, thumb_h));
                 }
 
