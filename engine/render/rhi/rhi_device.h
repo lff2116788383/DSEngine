@@ -98,7 +98,13 @@ public:
 
     // --- 统一 GPU Buffer API（Phase 2）---
     // 默认实现转发到旧 API，后端可覆写以获取完整 usage 信息。
-    // 旧 CreateBuffer/CreateSSBO/CreateIndirectBuffer 将在全量迁移后标记 deprecated。
+    // 旧 CreateBuffer/CreateSSBO/CreateIndirectBuffer 已标记 deprecated。
+    // 以下默认实现有意调用旧 API 做路由，后端可覆写以直接处理。
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996)  // deprecated
+#endif
 
     virtual BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
         BufferHandle h;
@@ -145,6 +151,10 @@ public:
     virtual void ReadGpuBuffer(BufferHandle handle, size_t offset, size_t size, void* dst) {
         ReadSSBO(handle.raw(), offset, size, dst);
     }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     virtual unsigned int CreateVertexArray() = 0;
     virtual void DeleteVertexArray(unsigned int handle) = 0;
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;

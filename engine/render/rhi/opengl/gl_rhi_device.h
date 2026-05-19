@@ -111,6 +111,9 @@ public:
     }
 
     // --- SSBO（Clustered Forward+ 所需） ---
+    // 旧 API 已 deprecated，但后端实现仍需覆写供基类路由调用
+#pragma warning(push)
+#pragma warning(disable: 4996)
     unsigned int CreateSSBO(size_t size, const void* data) override;
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
@@ -153,6 +156,7 @@ public:
     unsigned int CreateIndirectBuffer(size_t size, const void* data) override;
     void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void DeleteIndirectBuffer(unsigned int handle) override;
+#pragma warning(pop)
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
     bool SupportsIndirectDraw() const override { return supports_ssbo_; }
 

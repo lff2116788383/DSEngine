@@ -31,16 +31,19 @@ public:
     virtual bool SupportsIndirectDraw() const { return false; }
 
     /// 创建 Indirect Draw Buffer
+    [[deprecated("使用 CreateGpuBuffer(kIndirect) 替代")]]
     virtual unsigned int CreateIndirectBuffer(size_t size, const void* data) {
         (void)size; (void)data; return 0;
     }
 
     /// 更新 Indirect Draw Buffer 子区域
+    [[deprecated("使用 UpdateGpuBuffer 替代")]]
     virtual void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
         (void)handle; (void)offset; (void)size; (void)data;
     }
 
     /// 删除 Indirect Draw Buffer
+    [[deprecated("使用 DeleteGpuBuffer 替代")]]
     virtual void DeleteIndirectBuffer(unsigned int handle) { (void)handle; }
 
     /// 绑定 indirect buffer 并发起 Multi-Draw Indexed Indirect
