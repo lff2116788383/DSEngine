@@ -1091,6 +1091,76 @@ void DrawCircleCollider2DSection(EditorContext& context) {
     ImGui::Columns(1);
 }
 
+void DrawPolygonCollider2DSection(EditorContext& context) {
+    if (!context.registry.all_of<PolygonCollider2DComponent>(context.selected_entity)) return;
+    auto& col = context.registry.get<PolygonCollider2DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Polygon Collider 2D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "polycol2d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Vertices", ImGui::Text("%d", static_cast<int>(col.vertices.size())));
+    for (int i = 0; i < static_cast<int>(col.vertices.size()); ++i) {
+        char label[32];
+        std::snprintf(label, sizeof(label), "V[%d]", i);
+        char id[32];
+        std::snprintf(id, sizeof(id), "##poly_v%d", i);
+        INSPECTOR_PROPERTY(label, ImGui::DragFloat2(id, glm::value_ptr(col.vertices[i]), 0.1f));
+    }
+    INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##poly_off", glm::value_ptr(col.offset), 0.1f));
+    INSPECTOR_PROPERTY("Density", ImGui::DragFloat("##poly_dens", &col.density, 0.1f, 0.0f));
+    INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##poly_fric", &col.friction, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##poly_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##poly_trigger", &col.is_trigger));
+    ImGui::Columns(1);
+}
+
+void DrawJoint2DSection(EditorContext& context) {
+    if (!context.registry.all_of<Joint2DComponent>(context.selected_entity)) return;
+    auto& joint = context.registry.get<Joint2DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Joint 2D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "joint2d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    const char* joint_types[] = { "Revolute", "Distance", "Prismatic", "Weld" };
+    int type_idx = static_cast<int>(joint.type);
+    INSPECTOR_PROPERTY("Type", if (ImGui::Combo("##j2d_type", &type_idx, joint_types, IM_ARRAYSIZE(joint_types))) {
+        joint.type = static_cast<Joint2DType>(type_idx);
+    });
+    INSPECTOR_PROPERTY("Entity A", ImGui::Text("%u", static_cast<uint32_t>(joint.entity_a)));
+    INSPECTOR_PROPERTY("Entity B", ImGui::Text("%u", static_cast<uint32_t>(joint.entity_b)));
+    INSPECTOR_PROPERTY("Anchor A", ImGui::DragFloat2("##j2d_anc_a", glm::value_ptr(joint.anchor_a), 0.1f));
+    INSPECTOR_PROPERTY("Anchor B", ImGui::DragFloat2("##j2d_anc_b", glm::value_ptr(joint.anchor_b), 0.1f));
+    INSPECTOR_PROPERTY("Collide Conn.", ImGui::Checkbox("##j2d_collide", &joint.collide_connected));
+
+    if (joint.type == Joint2DType::Revolute) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Enable Limit", ImGui::Checkbox("##j2d_limit", &joint.enable_limit));
+        if (joint.enable_limit) {
+            INSPECTOR_PROPERTY("Lower Angle", ImGui::DragFloat("##j2d_la", &joint.lower_angle, 1.0f, -360.0f, 360.0f));
+            INSPECTOR_PROPERTY("Upper Angle", ImGui::DragFloat("##j2d_ua", &joint.upper_angle, 1.0f, -360.0f, 360.0f));
+        }
+        INSPECTOR_PROPERTY("Enable Motor", ImGui::Checkbox("##j2d_motor", &joint.enable_motor));
+        if (joint.enable_motor) {
+            INSPECTOR_PROPERTY("Motor Speed", ImGui::DragFloat("##j2d_ms", &joint.motor_speed, 1.0f));
+            INSPECTOR_PROPERTY("Max Torque", ImGui::DragFloat("##j2d_mt", &joint.max_motor_torque, 1.0f, 0.0f));
+        }
+    } else if (joint.type == Joint2DType::Distance) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Min Length", ImGui::DragFloat("##j2d_minl", &joint.min_length, 0.1f, 0.0f));
+        INSPECTOR_PROPERTY("Max Length", ImGui::DragFloat("##j2d_maxl", &joint.max_length, 0.1f, 0.0f));
+        INSPECTOR_PROPERTY("Stiffness", ImGui::DragFloat("##j2d_stiff", &joint.stiffness, 0.1f, 0.0f));
+        INSPECTOR_PROPERTY("Damping", ImGui::DragFloat("##j2d_damp", &joint.damping, 0.1f, 0.0f));
+    } else if (joint.type == Joint2DType::Prismatic) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Axis", ImGui::DragFloat2("##j2d_axis", glm::value_ptr(joint.prismatic_axis), 0.1f));
+        INSPECTOR_PROPERTY("Lower Trans.", ImGui::DragFloat("##j2d_lt", &joint.lower_translation, 0.1f));
+        INSPECTOR_PROPERTY("Upper Trans.", ImGui::DragFloat("##j2d_ut", &joint.upper_translation, 0.1f));
+        INSPECTOR_PROPERTY("Motor Speed", ImGui::DragFloat("##j2d_pms", &joint.prismatic_motor_speed, 1.0f));
+        INSPECTOR_PROPERTY("Max Force", ImGui::DragFloat("##j2d_pmf", &joint.max_motor_force, 1.0f, 0.0f));
+    }
+    ImGui::Columns(1);
+}
+
 // ─── 3D Physics Extended ────────────────────────────────────────────────────
 
 void DrawCapsuleCollider3DSection(EditorContext& context) {
@@ -1226,6 +1296,22 @@ void DrawUIRichTextSection(EditorContext& context) {
     if (rt.enable_outline) {
         INSPECTOR_PROPERTY("Outline Color", ImGui::ColorEdit4("##rt_ol_color", glm::value_ptr(rt.outline_color)));
     }
+    ImGui::Columns(1);
+}
+
+void DrawUIJoystickSection(EditorContext& context) {
+    if (!context.registry.all_of<UIJoystickComponent>(context.selected_entity)) return;
+    auto& joy = context.registry.get<UIJoystickComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_CIRCLE "  UI Joystick", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "uijoy_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Max Radius", ImGui::DragFloat("##joy_rad", &joy.max_radius, 1.0f, 1.0f, 500.0f));
+    INSPECTOR_PROPERTY("Follow Pointer", ImGui::Checkbox("##joy_follow", &joy.follow_pointer));
+    INSPECTOR_PROPERTY("Reset On Release", ImGui::Checkbox("##joy_reset", &joy.reset_on_release));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Direction", ImGui::Text("(%.2f, %.2f)", joy.direction.x, joy.direction.y));
+    INSPECTOR_PROPERTY("Is Dragging", ImGui::Text(joy.is_dragging ? "Yes" : "No"));
     ImGui::Columns(1);
 }
 
@@ -1576,6 +1662,16 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<CircleCollider2DComponent>(e)) r.emplace<CircleCollider2DComponent>(e); },
         24,
         [](entt::registry& r, entt::entity e) { if (r.all_of<CircleCollider2DComponent>(e)) r.erase<CircleCollider2DComponent>(e); }});
+    reg.Register({"Polygon Collider 2D", "2D", DrawPolygonCollider2DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<PolygonCollider2DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<PolygonCollider2DComponent>(e)) r.emplace<PolygonCollider2DComponent>(e); },
+        25,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<PolygonCollider2DComponent>(e)) r.erase<PolygonCollider2DComponent>(e); }});
+    reg.Register({"Joint 2D", "2D", DrawJoint2DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<Joint2DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<Joint2DComponent>(e)) r.emplace<Joint2DComponent>(e); },
+        26,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<Joint2DComponent>(e)) r.erase<Joint2DComponent>(e); }});
 
     // --- Script ---
     reg.Register({"Script", "Script", DrawScriptSection,
@@ -1742,6 +1838,11 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIRichTextComponent>(e)) r.emplace<UIRichTextComponent>(e); },
         37,
         [](entt::registry& r, entt::entity e) { if (r.all_of<UIRichTextComponent>(e)) r.erase<UIRichTextComponent>(e); }});
+    reg.Register({"UI Joystick", "UI", DrawUIJoystickSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<UIJoystickComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<UIJoystickComponent>(e)) r.emplace<UIJoystickComponent>(e); },
+        38,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIJoystickComponent>(e)) r.erase<UIJoystickComponent>(e); }});
     reg.Register({"UI Anchor", "UI", DrawUIAnchorSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIAnchorComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnchorComponent>(e)) r.emplace<UIAnchorComponent>(e); },

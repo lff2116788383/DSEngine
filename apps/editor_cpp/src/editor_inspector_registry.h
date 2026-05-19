@@ -114,15 +114,18 @@ private:
     }
 
 /// 自定义 has/add 逻辑的注册
-#define REGISTER_INSPECTOR_CUSTOM(name_str, draw_func, cat, order, has_fn, add_fn) \
-    namespace {                                                                     \
-    struct AutoReg_Custom_##__LINE__ {                                               \
-        AutoReg_Custom_##__LINE__() {                                                \
-            InspectorRegistry::Get().Register({                                      \
-                name_str, cat, draw_func, has_fn, add_fn, order                      \
-            });                                                                      \
-        }                                                                            \
-    } g_auto_reg_custom_##__LINE__;                                                  \
+/// 注意：使用二级展开确保 __LINE__ 被正确替换为行号
+#define REGISTER_INSPECTOR_CUSTOM_IMPL(name_str, draw_func, cat, order, has_fn, add_fn, line) \
+    namespace {                                                                                \
+    struct AutoReg_Custom_##line {                                                              \
+        AutoReg_Custom_##line() {                                                               \
+            InspectorRegistry::Get().Register({                                                 \
+                name_str, cat, draw_func, has_fn, add_fn, order                                 \
+            });                                                                                 \
+        }                                                                                       \
+    } g_auto_reg_custom_##line;                                                                 \
     }
+#define REGISTER_INSPECTOR_CUSTOM(name_str, draw_func, cat, order, has_fn, add_fn) \
+    REGISTER_INSPECTOR_CUSTOM_IMPL(name_str, draw_func, cat, order, has_fn, add_fn, __LINE__)
 
 } // namespace dse::editor
