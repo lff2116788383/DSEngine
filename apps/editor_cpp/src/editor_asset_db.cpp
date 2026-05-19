@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <cstdint>
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -126,7 +127,33 @@ static bool IsHidden(const std::filesystem::path& p) {
     return !name.empty() && name[0] == '.';
 }
 
-void AssetDatabase::ScanDirectory(const std::filesystem::path& dir) {
+// ─── Binary DB cache helpers ─────────────────────────────────────────────────
+
+static constexpr uint32_t kDbCacheMagic   = 0x42445344u; // 'DSDB'
+static constexpr uint32_t kDbCacheVersion = 1u;
+
+static void DbW32(std::ofstream& f, uint32_t v)  { f.write(reinterpret_cast<const char*>(&v), 4); }
+static void DbW64(std::ofstream& f, int64_t v)   { f.write(reinterpret_cast<const char*>(&v), 8); }
+static void DbWStr(std::ofstream& f, const std::string& s) {
+    DbW32(f, static_cast<uint32_t>(s.size()));
+    if (!s.empty()) f.write(s.data(), s.size());
+}
+static bool DbR32(std::ifstream& f, uint32_t& v) { return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), 4)); }
+static bool DbR64(std::ifstream& f, int64_t& v)  { return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), 8)); }
+static bool DbRStr(std::ifstream& f, std::string& s) {
+    uint32_t len = 0;
+    if (!DbR32(f, len) || len > 65536u) return false;
+    s.resize(len);
+    return len == 0 || static_cast<bool>(f.read(s.data(), len));
+}
+static int64_t DbGetMtime(const std::filesystem::path& p) {
+    std::error_code ec;
+    auto t = std::filesystem::last_write_time(p, ec);
+    return ec ? -1LL : static_cast<int64_t>(t.time_since_epoch().count());
+}
+
+void AssetDatabase::ScanDirectory(const std::filesystem::path& dir,
+                                   const std::unordered_map<std::string, CachedDbEntry>& cache_map) {
     std::error_code ec;
     for (auto& entry : std::filesystem::recursive_directory_iterator(dir, ec)) {
         if (ec) { ec.clear(); continue; }
@@ -136,21 +163,31 @@ void AssetDatabase::ScanDirectory(const std::filesystem::path& dir) {
         if (IsMeta(path) || IsHidden(path.filename())) continue;
 
         std::string ext = path.extension().string();
-        // Lowercase extension
         for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-        std::string guid = ReadOrCreateMeta(path);
+        std::string rel_path = std::filesystem::relative(path, asset_root_, ec).string();
+        std::replace(rel_path.begin(), rel_path.end(), '\\', '/');
+
+        const int64_t asset_mtime = DbGetMtime(path);
+        const int64_t meta_mtime  = DbGetMtime(std::filesystem::path(path.string() + ".meta"));
 
         AssetInfo info;
-        info.guid          = guid;
         info.absolute_path = path.string();
-        info.relative_path = std::filesystem::relative(path, asset_root_, ec).string();
-        // Normalize to forward slashes
-        std::replace(info.relative_path.begin(), info.relative_path.end(), '\\', '/');
-        info.type          = AssetTypeFromExtension(ext);
+        info.relative_path = rel_path;
         info.extension     = ext;
         info.display_name  = path.stem().string();
         info.file_size     = static_cast<int64_t>(entry.file_size(ec));
+
+        auto it = cache_map.find(rel_path);
+        if (it != cache_map.end() &&
+            it->second.asset_mtime == asset_mtime &&
+            it->second.meta_mtime  == meta_mtime) {
+            info.guid = it->second.guid;
+            info.type = it->second.type;
+        } else {
+            info.guid = ReadOrCreateMeta(path);
+            info.type = AssetTypeFromExtension(ext);
+        }
 
         size_t idx = assets_.size();
         assets_.push_back(std::move(info));
@@ -178,7 +215,13 @@ void AssetDatabase::Refresh() {
         std::filesystem::create_directories(asset_root_);
     }
 
-    ScanDirectory(asset_root_);
+    const std::filesystem::path cache_path =
+        asset_root_.parent_path() / "Cache" / "asset_db.bin";
+    std::unordered_map<std::string, CachedDbEntry> cache_map;
+    LoadDbCache(cache_path, cache_map);
+
+    ScanDirectory(asset_root_, cache_map);
+    SaveDbCache(cache_path);
 
     is_valid_ = true;
     EditorLog(LogLevel::Info,
@@ -198,6 +241,57 @@ const AssetInfo* AssetDatabase::FindByPath(const std::string& rel_path) const {
     auto it = by_path_.find(normalized);
     if (it == by_path_.end()) return nullptr;
     return &assets_[it->second];
+}
+
+void AssetDatabase::LoadDbCache(const std::filesystem::path& cache_path,
+                                std::unordered_map<std::string, CachedDbEntry>& out) const {
+    out.clear();
+    std::ifstream f(cache_path, std::ios::binary);
+    if (!f.is_open()) return;
+    uint32_t magic = 0, version = 0, count = 0;
+    if (!DbR32(f, magic) || magic != kDbCacheMagic) return;
+    if (!DbR32(f, version) || version != kDbCacheVersion) return;
+    if (!DbR32(f, count)) return;
+    out.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        std::string rel_path;
+        CachedDbEntry e;
+        uint8_t type_u8 = 0;
+        if (!DbRStr(f, rel_path)) return;
+        if (!DbRStr(f, e.guid)) return;
+        if (!DbRStr(f, e.extension)) return;
+        if (!DbRStr(f, e.display_name)) return;
+        if (!f.read(reinterpret_cast<char*>(&type_u8), 1)) return;
+        e.type = static_cast<AssetType>(type_u8);
+        if (!DbR64(f, e.file_size)) return;
+        if (!DbR64(f, e.asset_mtime)) return;
+        if (!DbR64(f, e.meta_mtime)) return;
+        out[rel_path] = std::move(e);
+    }
+}
+
+void AssetDatabase::SaveDbCache(const std::filesystem::path& cache_path) const {
+    std::error_code ec;
+    std::filesystem::create_directories(cache_path.parent_path(), ec);
+    std::ofstream f(cache_path, std::ios::binary);
+    if (!f.is_open()) return;
+    DbW32(f, kDbCacheMagic);
+    DbW32(f, kDbCacheVersion);
+    DbW32(f, static_cast<uint32_t>(assets_.size()));
+    for (const auto& info : assets_) {
+        std::filesystem::path abs(info.absolute_path);
+        const int64_t asset_mt = DbGetMtime(abs);
+        const int64_t meta_mt  = DbGetMtime(std::filesystem::path(info.absolute_path + ".meta"));
+        DbWStr(f, info.relative_path);
+        DbWStr(f, info.guid);
+        DbWStr(f, info.extension);
+        DbWStr(f, info.display_name);
+        const uint8_t type_u8 = static_cast<uint8_t>(info.type);
+        f.write(reinterpret_cast<const char*>(&type_u8), 1);
+        DbW64(f, info.file_size);
+        DbW64(f, asset_mt);
+        DbW64(f, meta_mt);
+    }
 }
 
 std::vector<const AssetInfo*> AssetDatabase::GetByType(AssetType type) const {

@@ -398,6 +398,14 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndMenu();
     }
 
+    // ─── Build ───────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Build")) {
+        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Export Windows Build...", "Ctrl+B")) {
+            dse::editor::OpenBuildGameDialog();
+        }
+        ImGui::EndMenu();
+    }
+
     // ─── Help ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Help"))) {
         if (ImGui::MenuItem("About DSEngine")) {

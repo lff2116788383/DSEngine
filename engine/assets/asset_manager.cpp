@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
+#include <cstdint>
 #include <rapidjson/document.h>
 #include "bundle/bundle.h"
 #if defined(_WIN32)
@@ -28,6 +29,115 @@ extern "C" {
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+
+// ─── .dmat binary cache helpers ──────────────────────────────────────────
+static constexpr uint32_t kDmatBinMagic   = 0x42544D44u; // 'DMTB'
+static constexpr uint32_t kDmatBinVersion = 1u;
+
+static void DmW32(std::ofstream& f, uint32_t v)  { f.write(reinterpret_cast<const char*>(&v), 4); }
+static void DmWF32(std::ofstream& f, float v)    { f.write(reinterpret_cast<const char*>(&v), 4); }
+static void DmW64(std::ofstream& f, int64_t v)   { f.write(reinterpret_cast<const char*>(&v), 8); }
+static void DmWStr(std::ofstream& f, const std::string& s) {
+    DmW32(f, static_cast<uint32_t>(s.size()));
+    if (!s.empty()) f.write(s.data(), s.size());
+}
+static bool DmR32(std::ifstream& f, uint32_t& v)  { return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), 4)); }
+static bool DmRF32(std::ifstream& f, float& v)    { return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), 4)); }
+static bool DmR64(std::ifstream& f, int64_t& v)   { return static_cast<bool>(f.read(reinterpret_cast<char*>(&v), 8)); }
+static bool DmRStr(std::ifstream& f, std::string& s) {
+    uint32_t len = 0;
+    if (!DmR32(f, len) || len > 8192u) return false;
+    s.resize(len);
+    return len == 0 || static_cast<bool>(f.read(s.data(), len));
+}
+static int64_t DmatGetMtime(const std::string& p) {
+    std::error_code ec;
+    auto t = std::filesystem::last_write_time(std::filesystem::path(p), ec);
+    return ec ? -1LL : static_cast<int64_t>(t.time_since_epoch().count());
+}
+
+struct DmatBinEntry {
+    std::string name;
+    float base_color[4] = {1,1,1,1};
+    float metallic = 0.f, roughness = 0.5f;
+    float emissive[3] = {0,0,0};
+    float normal_scale = 1.f, ao = 1.f, alpha_cutoff = 0.5f;
+    uint8_t double_sided = 0, alpha_test = 0;
+    std::string tex_albedo, tex_normal, tex_mr, tex_emissive, tex_occlusion;
+};
+
+static bool LoadDmatBin(const std::string& bin_path, std::vector<DmatBinEntry>& out) {
+    out.clear();
+    std::ifstream f(bin_path, std::ios::binary);
+    if (!f.is_open()) return false;
+    uint32_t magic = 0, ver = 0, count = 0;
+    int64_t src_mtime = 0;
+    if (!DmR32(f, magic) || magic != kDmatBinMagic) return false;
+    if (!DmR32(f, ver)   || ver   != kDmatBinVersion) return false;
+    if (!DmR64(f, src_mtime)) return false;
+    if (!DmR32(f, count) || count > 1024u) return false;
+    out.resize(count);
+    for (auto& e : out) {
+        if (!DmRStr(f, e.name)) return false;
+        for (float& c : e.base_color) if (!DmRF32(f, c)) return false;
+        if (!DmRF32(f, e.metallic) || !DmRF32(f, e.roughness)) return false;
+        for (float& c : e.emissive) if (!DmRF32(f, c)) return false;
+        if (!DmRF32(f, e.normal_scale) || !DmRF32(f, e.ao) || !DmRF32(f, e.alpha_cutoff)) return false;
+        if (!f.read(reinterpret_cast<char*>(&e.double_sided), 1)) return false;
+        if (!f.read(reinterpret_cast<char*>(&e.alpha_test), 1)) return false;
+        if (!DmRStr(f, e.tex_albedo) || !DmRStr(f, e.tex_normal) ||
+            !DmRStr(f, e.tex_mr)     || !DmRStr(f, e.tex_emissive) ||
+            !DmRStr(f, e.tex_occlusion)) return false;
+    }
+    return true;
+}
+
+static void SaveDmatBin(const std::string& dmat_path,
+                         const std::string& bin_path,
+                         const rapidjson::Document& doc) {
+    if (!doc.IsObject() || !doc.HasMember("materials") || !doc["materials"].IsArray()) return;
+    const auto& mats = doc["materials"];
+    std::ofstream f(bin_path, std::ios::binary);
+    if (!f.is_open()) return;
+    DmW32(f, kDmatBinMagic);
+    DmW32(f, kDmatBinVersion);
+    DmW64(f, DmatGetMtime(dmat_path));
+    DmW32(f, static_cast<uint32_t>(mats.Size()));
+    auto gs = [](const rapidjson::Value& v, const char* k, const char* def = "") -> std::string {
+        return (v.HasMember(k) && v[k].IsString()) ? v[k].GetString() : def;
+    };
+    auto gf = [](const rapidjson::Value& v, const char* k, float def) -> float {
+        return (v.HasMember(k) && v[k].IsNumber()) ? v[k].GetFloat() : def;
+    };
+    for (rapidjson::SizeType i = 0; i < mats.Size(); ++i) {
+        const auto& m = mats[i];
+        DmWStr(f, gs(m, "name"));
+        float bc[4] = {1,1,1,1};
+        if (m.HasMember("base_color") && m["base_color"].IsArray() && m["base_color"].Size() >= 4) {
+            for (int j = 0; j < 4; ++j) bc[j] = m["base_color"][j].GetFloat();
+        }
+        for (float v : bc) DmWF32(f, v);
+        DmWF32(f, gf(m, "metallic", 0.f));
+        DmWF32(f, gf(m, "roughness", 0.5f));
+        float em[3] = {0,0,0};
+        if (m.HasMember("emissive") && m["emissive"].IsArray() && m["emissive"].Size() >= 3) {
+            for (int j = 0; j < 3; ++j) em[j] = m["emissive"][j].GetFloat();
+        }
+        for (float v : em) DmWF32(f, v);
+        DmWF32(f, gf(m, "normal_scale", 1.f));
+        DmWF32(f, gf(m, "occlusion_strength", 1.f));
+        DmWF32(f, gf(m, "alpha_cutoff", 0.5f));
+        uint8_t ds = (m.HasMember("double_sided") && m["double_sided"].IsBool() && m["double_sided"].GetBool()) ? 1 : 0;
+        uint8_t at = (m.HasMember("alpha_test")   && m["alpha_test"].IsBool()   && m["alpha_test"].GetBool())   ? 1 : 0;
+        f.write(reinterpret_cast<const char*>(&ds), 1);
+        f.write(reinterpret_cast<const char*>(&at), 1);
+        DmWStr(f, gs(m, "base_color_texture"));
+        DmWStr(f, gs(m, "normal_texture"));
+        DmWStr(f, gs(m, "metallic_roughness_texture"));
+        DmWStr(f, gs(m, "emissive_texture"));
+        DmWStr(f, gs(m, "occlusion_texture"));
+    }
+}
 
 namespace {
 std::string NormalizePath(const std::string& path) {
@@ -1256,6 +1366,64 @@ std::shared_ptr<MaterialAsset> AssetManager::CreateMaterialInstance(const std::s
 }
 
 std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const std::string& dmat_path, std::size_t material_index) {
+    const std::string bin_path = dmat_path + ".bin";
+
+    auto load_textures = [this](std::shared_ptr<MaterialAsset>& mat,
+                                const std::string& albedo, const std::string& normal,
+                                const std::string& mr,     const std::string& emissive,
+                                const std::string& occ) {
+        auto try_tex = [this](const std::string& p) -> unsigned int {
+            if (p.empty()) return 0;
+            auto t = LoadTexture(p);
+            return t ? t->GetHandle() : 0;
+        };
+        MaterialAsset::TextureSlots s;
+        s.albedo             = try_tex(albedo);
+        s.normal             = try_tex(normal);
+        s.metallic_roughness = try_tex(mr);
+        s.emissive           = try_tex(emissive);
+        s.occlusion          = try_tex(occ);
+        mat->SetTextureSlots(s);
+        if (s.albedo) mat->SetTextureHandle(s.albedo);
+    };
+
+    // 尝试二进制缓存
+    {
+        const int64_t dmat_t = DmatGetMtime(dmat_path);
+        const int64_t bin_t  = DmatGetMtime(bin_path);
+        if (dmat_t > 0 && bin_t >= dmat_t) {
+            std::vector<DmatBinEntry> entries;
+            if (LoadDmatBin(bin_path, entries) && material_index < entries.size()) {
+                const auto& e = entries[material_index];
+                const std::string name = e.name.empty()
+                    ? (std::filesystem::path(dmat_path).stem().string() + "_" + std::to_string(material_index))
+                    : e.name;
+                auto material = CreateMaterialInstance(name);
+                if (material) {
+                    material->SetBaseColor(glm::vec4(e.base_color[0], e.base_color[1],
+                                                     e.base_color[2], e.base_color[3]));
+                    material->SetEmissiveColor(glm::vec3(e.emissive[0], e.emissive[1], e.emissive[2]));
+                    MaterialAsset::RasterOverrides raster;
+                    raster.double_sided = e.double_sided != 0;
+                    material->SetRasterOverrides(raster);
+                    material->SetBlendMode(MaterialBlendMode::Opaque);
+                    MaterialAsset::ScalarOverrides scalars;
+                    scalars.metallic        = e.metallic;
+                    scalars.roughness       = e.roughness;
+                    scalars.ao              = e.ao;
+                    scalars.normal_strength = e.normal_scale;
+                    scalars.alpha_cutoff    = e.alpha_cutoff;
+                    scalars.alpha_test      = e.alpha_test != 0;
+                    material->SetScalarOverrides(scalars);
+                    load_textures(material, e.tex_albedo, e.tex_normal,
+                                  e.tex_mr, e.tex_emissive, e.tex_occlusion);
+                    return material;
+                }
+            }
+        }
+    }
+
+    // 回退到 JSON 解析
     std::vector<uint8_t> file_data;
     if (!LoadFileToMemory(dmat_path, file_data)) {
         return nullptr;
@@ -1326,27 +1494,23 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
     }
     material->SetScalarOverrides(scalars);
 
-    MaterialAsset::TextureSlots slots = material->GetTextureSlots();
     auto try_load_texture = [this](const rapidjson::Value& object, const char* key) -> unsigned int {
-        if (!object.HasMember(key) || !object[key].IsString()) {
-            return 0;
-        }
+        if (!object.HasMember(key) || !object[key].IsString()) return 0;
         const char* texture_path = object[key].GetString();
-        if (texture_path == nullptr || texture_path[0] == '\0') {
-            return 0;
-        }
+        if (!texture_path || texture_path[0] == '\0') return 0;
         auto texture = LoadTexture(texture_path);
         return texture ? texture->GetHandle() : 0;
     };
-    slots.albedo = try_load_texture(mat, "base_color_texture");
-    slots.normal = try_load_texture(mat, "normal_texture");
+    MaterialAsset::TextureSlots slots;
+    slots.albedo             = try_load_texture(mat, "base_color_texture");
+    slots.normal             = try_load_texture(mat, "normal_texture");
     slots.metallic_roughness = try_load_texture(mat, "metallic_roughness_texture");
-    slots.emissive = try_load_texture(mat, "emissive_texture");
-    slots.occlusion = try_load_texture(mat, "occlusion_texture");
+    slots.emissive           = try_load_texture(mat, "emissive_texture");
+    slots.occlusion          = try_load_texture(mat, "occlusion_texture");
     material->SetTextureSlots(slots);
-    if (slots.albedo != 0) {
-        material->SetTextureHandle(slots.albedo);
-    }
+    if (slots.albedo) material->SetTextureHandle(slots.albedo);
+
+    SaveDmatBin(dmat_path, bin_path, doc);
 
     return material;
 }

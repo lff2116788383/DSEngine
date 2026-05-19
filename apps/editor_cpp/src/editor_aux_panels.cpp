@@ -19,6 +19,10 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
+#include <sstream>
+#include <iomanip>
+#include <vector>
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -100,11 +104,53 @@ bool IsImageExtension(const std::string& ext) {
     return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga";
 }
 
-unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
-    int w, h, channels;
-    unsigned char* data = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
-    if (!data) return 0;
+static constexpr uint32_t kThumbMagic   = 0x4D485444u; // 'DTHM'
+static constexpr uint32_t kThumbVersion = 1u;
+static constexpr int      kThumbSize    = 128;
 
+static uint64_t FNV1aPath(const std::string& s) {
+    uint64_t h = 14695981039346656037ULL;
+    for (unsigned char c : s) { h ^= c; h *= 1099511628211ULL; }
+    return h;
+}
+
+static int64_t ThumbGetMtime(const std::filesystem::path& p) {
+    std::error_code ec;
+    auto t = std::filesystem::last_write_time(p, ec);
+    return ec ? -1LL : static_cast<int64_t>(t.time_since_epoch().count());
+}
+
+static std::filesystem::path GetThumbFilePath(const std::filesystem::path& src) {
+    const auto& asset_root = dse::editor::AssetDatabase::Get().GetAssetRoot();
+    if (asset_root.empty()) return {};
+    const std::filesystem::path cache_dir = asset_root.parent_path() / "Cache" / "thumbnails";
+    std::ostringstream oss;
+    oss << std::hex << std::setw(16) << std::setfill('0') << FNV1aPath(src.string()) << ".thumb";
+    return cache_dir / oss.str();
+}
+
+static void BoxResize(const uint8_t* src, int sw, int sh,
+                      uint8_t* dst, int dw, int dh) {
+    for (int dy = 0; dy < dh; ++dy) {
+        for (int dx = 0; dx < dw; ++dx) {
+            const int sx0 = dx * sw / dw;
+            const int sx1 = (std::max)(sx0 + 1, (dx + 1) * sw / dw);
+            const int sy0 = dy * sh / dh;
+            const int sy1 = (std::max)(sy0 + 1, (dy + 1) * sh / dh);
+            uint32_t r = 0, g = 0, b = 0, a = 0, n = 0;
+            for (int sy = sy0; sy < sy1; ++sy)
+                for (int sx = sx0; sx < sx1; ++sx) {
+                    const uint8_t* p = src + (sy * sw + sx) * 4;
+                    r += p[0]; g += p[1]; b += p[2]; a += p[3]; ++n;
+                }
+            uint8_t* d = dst + (dy * dw + dx) * 4;
+            d[0] = uint8_t(r/n); d[1] = uint8_t(g/n); d[2] = uint8_t(b/n); d[3] = uint8_t(a/n);
+        }
+    }
+}
+
+static unsigned int UploadThumbTexture(const uint8_t* rgba, int w, int h,
+                                       const std::filesystem::path& path_key) {
     unsigned int tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -112,14 +158,62 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     glBindTexture(GL_TEXTURE_2D, 0);
+    GetThumbnailCache()[path_key.string()] = {tex, w, h};
+    return tex;
+}
 
+unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
+    const int64_t src_mtime = ThumbGetMtime(path);
+    const std::filesystem::path thumb_path = GetThumbFilePath(path);
+
+    if (!thumb_path.empty()) {
+        std::ifstream tf(thumb_path, std::ios::binary);
+        if (tf.is_open()) {
+            uint32_t magic = 0, ver = 0, tw = 0, th = 0;
+            int64_t cached_mtime = 0;
+            auto r32 = [&](uint32_t& v){ return static_cast<bool>(tf.read(reinterpret_cast<char*>(&v), 4)); };
+            auto r64 = [&](int64_t&  v){ return static_cast<bool>(tf.read(reinterpret_cast<char*>(&v), 8)); };
+            if (r32(magic) && magic == kThumbMagic &&
+                r32(ver)   && ver   == kThumbVersion &&
+                r32(tw) && r32(th)  && r64(cached_mtime) &&
+                cached_mtime == src_mtime) {
+                std::vector<uint8_t> rgba(tw * th * 4);
+                if (tf.read(reinterpret_cast<char*>(rgba.data()),
+                            static_cast<std::streamsize>(rgba.size()))) {
+                    return UploadThumbTexture(rgba.data(), int(tw), int(th), path);
+                }
+            }
+        }
+    }
+
+    int w, h, channels;
+    unsigned char* data = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+    if (!data) return 0;
+
+    const int dw = (std::min)(w, kThumbSize);
+    const int dh = (std::min)(h, kThumbSize);
+    std::vector<uint8_t> thumb(dw * dh * 4);
+    BoxResize(data, w, h, thumb.data(), dw, dh);
     stbi_image_free(data);
 
-    auto& cache = GetThumbnailCache();
-    cache[path.string()] = {tex, w, h};
-    return tex;
+    if (!thumb_path.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(thumb_path.parent_path(), ec);
+        std::ofstream tf(thumb_path, std::ios::binary);
+        if (tf.is_open()) {
+            auto w32 = [&](uint32_t v){ tf.write(reinterpret_cast<const char*>(&v), 4); };
+            auto w64 = [&](int64_t  v){ tf.write(reinterpret_cast<const char*>(&v), 8); };
+            w32(kThumbMagic); w32(kThumbVersion);
+            w32(uint32_t(dw)); w32(uint32_t(dh));
+            w64(src_mtime);
+            tf.write(reinterpret_cast<const char*>(thumb.data()),
+                     static_cast<std::streamsize>(thumb.size()));
+        }
+    }
+
+    return UploadThumbTexture(thumb.data(), dw, dh, path);
 }
 
 } // namespace

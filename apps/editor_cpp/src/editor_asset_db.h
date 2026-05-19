@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <filesystem>
+#include <cstdint>
 
 namespace dse::editor {
 
@@ -70,9 +71,23 @@ public:
 private:
     AssetDatabase() = default;
 
-    void ScanDirectory(const std::filesystem::path& dir);
+    struct CachedDbEntry {
+        std::string guid;
+        std::string extension;
+        std::string display_name;
+        AssetType   type        = AssetType::Unknown;
+        int64_t     file_size   = 0;
+        int64_t     asset_mtime = 0;
+        int64_t     meta_mtime  = 0;
+    };
+
+    void ScanDirectory(const std::filesystem::path& dir,
+                       const std::unordered_map<std::string, CachedDbEntry>& cache_map);
     std::string ReadOrCreateMeta(const std::filesystem::path& file_path);
     static std::string GenerateGUID();
+    void LoadDbCache(const std::filesystem::path& cache_path,
+                     std::unordered_map<std::string, CachedDbEntry>& out) const;
+    void SaveDbCache(const std::filesystem::path& cache_path) const;
 
     std::filesystem::path asset_root_;
     std::vector<AssetInfo> assets_;
