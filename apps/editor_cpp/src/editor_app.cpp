@@ -159,13 +159,6 @@ void ExportTextFile(const std::filesystem::path& path, const std::string& conten
     }
 }
 
-// UI Layout Inspector (legacy callback - now handled by InspectorRegistry)
-void DrawUILayoutInspector(entt::registry& /*registry*/, entt::entity /*entity*/) {
-    // All UI layout components (Anchor, GridLayout, CanvasScaler, Animation)
-    // and Audio are now drawn via InspectorRegistry. This callback is kept
-    // as a no-op stub for API compatibility with DrawInspectorPanel.
-}
-
 } // anonymous namespace
 
 namespace dse::editor {
@@ -650,7 +643,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawHierarchyPanel(ctx);
 
-    dse::editor::DrawInspectorPanel(ctx, DrawUILayoutInspector);
+    dse::editor::DrawInspectorPanel(ctx);
 
     dse::editor::DrawProjectPanel();
     dse::editor::DrawConsolePanel();

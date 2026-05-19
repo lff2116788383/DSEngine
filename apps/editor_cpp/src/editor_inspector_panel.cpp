@@ -1066,12 +1066,14 @@ void DrawBoxCollider2DSection(EditorContext& context) {
 
     ImGui::Columns(2, "boxcol2d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##bc2d_size", glm::value_ptr(col.size), 0.1f, 0.01f));
     INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##bc2d_off", glm::value_ptr(col.offset), 0.1f));
     INSPECTOR_PROPERTY("Density", ImGui::DragFloat("##bc2d_dens", &col.density, 0.1f, 0.0f));
     INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##bc2d_fric", &col.friction, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##bc2d_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##bc2d_trigger", &col.is_trigger));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1082,12 +1084,14 @@ void DrawCircleCollider2DSection(EditorContext& context) {
 
     ImGui::Columns(2, "circlecol2d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##cc2d_rad", &col.radius, 0.1f, 0.01f));
     INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##cc2d_off", glm::value_ptr(col.offset), 0.1f));
     INSPECTOR_PROPERTY("Density", ImGui::DragFloat("##cc2d_dens", &col.density, 0.1f, 0.0f));
     INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##cc2d_fric", &col.friction, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##cc2d_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##cc2d_trigger", &col.is_trigger));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1098,6 +1102,7 @@ void DrawPolygonCollider2DSection(EditorContext& context) {
 
     ImGui::Columns(2, "polycol2d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Vertices", ImGui::Text("%d", static_cast<int>(col.vertices.size())));
     for (int i = 0; i < static_cast<int>(col.vertices.size()); ++i) {
         char label[32];
@@ -1111,6 +1116,7 @@ void DrawPolygonCollider2DSection(EditorContext& context) {
     INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##poly_fric", &col.friction, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Restitution", ImGui::DragFloat("##poly_rest", &col.restitution, 0.05f, 0.0f, 1.0f));
     INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##poly_trigger", &col.is_trigger));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1121,6 +1127,7 @@ void DrawJoint2DSection(EditorContext& context) {
 
     ImGui::Columns(2, "joint2d_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     const char* joint_types[] = { "Revolute", "Distance", "Prismatic", "Weld" };
     int type_idx = static_cast<int>(joint.type);
     INSPECTOR_PROPERTY("Type", if (ImGui::Combo("##j2d_type", &type_idx, joint_types, IM_ARRAYSIZE(joint_types))) {
@@ -1158,6 +1165,7 @@ void DrawJoint2DSection(EditorContext& context) {
         INSPECTOR_PROPERTY("Motor Speed", ImGui::DragFloat("##j2d_pms", &joint.prismatic_motor_speed, 1.0f));
         INSPECTOR_PROPERTY("Max Force", ImGui::DragFloat("##j2d_pmf", &joint.max_motor_force, 1.0f, 0.0f));
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1203,6 +1211,222 @@ void DrawCharacterController3DSection(EditorContext& context) {
     ImGui::Columns(1);
 }
 
+void DrawMeshCollider3DSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::MeshCollider3DComponent>(context.selected_entity)) return;
+    auto& col = context.registry.get<dse::MeshCollider3DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Mesh Collider 3D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "meshcol3d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Convex", ImGui::Checkbox("##meshcol_convex", &col.convex));
+    INSPECTOR_PROPERTY("Is Trigger", ImGui::Checkbox("##meshcol_trigger", &col.is_trigger));
+    INSPECTOR_PROPERTY("Bounciness", ImGui::DragFloat("##meshcol_bounce", &col.bounciness, 0.05f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Friction", ImGui::DragFloat("##meshcol_fric", &col.friction, 0.05f, 0.0f, 1.0f));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawJoint3DSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::Joint3DComponent>(context.selected_entity)) return;
+    auto& joint = context.registry.get<dse::Joint3DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Joint 3D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "joint3d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    const char* j3d_types[] = { "Fixed", "Hinge", "Spring", "Distance" };
+    int type_idx = static_cast<int>(joint.type);
+    INSPECTOR_PROPERTY("Type", if (ImGui::Combo("##j3d_type", &type_idx, j3d_types, IM_ARRAYSIZE(j3d_types))) {
+        joint.type = static_cast<dse::Joint3DType>(type_idx);
+    });
+    INSPECTOR_PROPERTY("Connected ID", ImGui::DragScalar("##j3d_conn", ImGuiDataType_U32, &joint.connected_entity_id, 1.0f));
+    INSPECTOR_PROPERTY("Anchor", ImGui::DragFloat3("##j3d_anc", glm::value_ptr(joint.anchor), 0.1f));
+    INSPECTOR_PROPERTY("Conn. Anchor", ImGui::DragFloat3("##j3d_canc", glm::value_ptr(joint.connected_anchor), 0.1f));
+    INSPECTOR_PROPERTY("Axis", ImGui::DragFloat3("##j3d_axis", glm::value_ptr(joint.axis), 0.05f));
+    if (joint.type == dse::Joint3DType::Hinge) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Use Limits", ImGui::Checkbox("##j3d_lim", &joint.use_limits));
+        if (joint.use_limits) {
+            INSPECTOR_PROPERTY("Lower Limit", ImGui::DragFloat("##j3d_ll", &joint.lower_limit, 1.0f, -180.0f, 180.0f));
+            INSPECTOR_PROPERTY("Upper Limit", ImGui::DragFloat("##j3d_ul", &joint.upper_limit, 1.0f, -180.0f, 180.0f));
+        }
+    } else if (joint.type == dse::Joint3DType::Distance) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Min Distance", ImGui::DragFloat("##j3d_mind", &joint.min_distance, 0.1f, 0.0f));
+        INSPECTOR_PROPERTY("Max Distance", ImGui::DragFloat("##j3d_maxd", &joint.max_distance, 0.1f, 0.0f));
+    } else if (joint.type == dse::Joint3DType::Spring) {
+        ImGui::Separator();
+        INSPECTOR_PROPERTY("Stiffness", ImGui::DragFloat("##j3d_stiff", &joint.spring_stiffness, 1.0f, 0.0f));
+        INSPECTOR_PROPERTY("Damping", ImGui::DragFloat("##j3d_damp", &joint.spring_damping, 0.5f, 0.0f));
+    }
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Break Force", ImGui::DragFloat("##j3d_bf", &joint.break_force, 10.0f, 0.0f));
+    INSPECTOR_PROPERTY("Break Torque", ImGui::DragFloat("##j3d_bt", &joint.break_torque, 10.0f, 0.0f));
+    INSPECTOR_PROPERTY("Is Broken", ImGui::Text(joint.is_broken ? "Yes" : "No"));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+// ─── Advanced Physics ───────────────────────────────────────────────────────
+
+void DrawRagdollSection(EditorContext& context) {
+#ifdef DSE_ENABLE_PHYSX
+    if (!context.registry.all_of<dse::RagdollComponent>(context.selected_entity)) return;
+    auto& rag = context.registry.get<dse::RagdollComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_RUN "  Ragdoll", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "ragdoll_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Active", ImGui::Checkbox("##rag_active", &rag.active));
+    INSPECTOR_PROPERTY("Auto Setup", ImGui::Checkbox("##rag_auto", &rag.auto_setup));
+    INSPECTOR_PROPERTY("Total Mass", ImGui::DragFloat("##rag_mass", &rag.total_mass, 0.5f, 0.1f, 1000.0f));
+    INSPECTOR_PROPERTY("Stiffness", ImGui::DragFloat("##rag_stiff", &rag.joint_stiffness, 1.0f, 0.0f));
+    INSPECTOR_PROPERTY("Damping", ImGui::DragFloat("##rag_damp", &rag.joint_damping, 1.0f, 0.0f));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Bones", ImGui::Text("%d setup / %d runtime",
+        static_cast<int>(rag.bone_setups.size()), static_cast<int>(rag.runtime_bones.size())));
+    INSPECTOR_PROPERTY("Initialized", ImGui::Text(rag.initialized ? "Yes" : "No"));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+#endif
+}
+
+void DrawSoftBodySection(EditorContext& context) {
+    if (!context.registry.all_of<dse::SoftBodyComponent>(context.selected_entity)) return;
+    auto& sb = context.registry.get<dse::SoftBodyComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Soft Body", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "softbody_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##sb_en", &sb.enabled));
+    INSPECTOR_PROPERTY("Stiffness", ImGui::DragFloat("##sb_stiff", &sb.stiffness, 0.01f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Iterations", ImGui::DragInt("##sb_iter", &sb.solver_iterations, 0.1f, 1, 32));
+    INSPECTOR_PROPERTY("Damping", ImGui::DragFloat("##sb_damp", &sb.damping, 0.01f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Use Gravity", ImGui::Checkbox("##sb_grav", &sb.use_gravity));
+    INSPECTOR_PROPERTY("Gravity Scale", ImGui::DragFloat("##sb_gscale", &sb.gravity_scale, 0.1f));
+    INSPECTOR_PROPERTY("Volume Stiff.", ImGui::DragFloat("##sb_vol", &sb.volume_stiffness, 0.01f, 0.0f, 1.0f));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Particles", ImGui::Text("%d", static_cast<int>(sb.positions.size())));
+    INSPECTOR_PROPERTY("Constraints", ImGui::Text("%d", static_cast<int>(sb.constraints.size())));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawVehicleSection(EditorContext& context) {
+#ifdef DSE_ENABLE_PHYSX
+    if (!context.registry.all_of<dse::VehicleComponent>(context.selected_entity)) return;
+    auto& veh = context.registry.get<dse::VehicleComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_RUN "  Vehicle", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "vehicle_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##veh_en", &veh.enabled));
+    INSPECTOR_PROPERTY("Engine Force", ImGui::DragFloat("##veh_eng", &veh.max_engine_force, 100.0f, 0.0f));
+    INSPECTOR_PROPERTY("Brake Force", ImGui::DragFloat("##veh_brake", &veh.max_brake_force, 100.0f, 0.0f));
+    INSPECTOR_PROPERTY("Max Steer", ImGui::DragFloat("##veh_steer", &veh.max_steer_angle, 1.0f, 0.0f, 90.0f, "%.0f deg"));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Throttle", ImGui::Text("%.2f", veh.throttle));
+    INSPECTOR_PROPERTY("Brake", ImGui::Text("%.2f", veh.brake));
+    INSPECTOR_PROPERTY("Steering", ImGui::Text("%.2f", veh.steering));
+    INSPECTOR_PROPERTY("Speed", ImGui::Text("%.1f m/s", veh.current_speed));
+    INSPECTOR_PROPERTY("Wheels", ImGui::Text("%d", static_cast<int>(veh.wheels.size())));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+#endif
+}
+
+void DrawRopeSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::RopeComponent>(context.selected_entity)) return;
+    auto& rope = context.registry.get<dse::RopeComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Rope", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "rope_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##rope_en", &rope.enabled));
+    INSPECTOR_PROPERTY("Segments", ImGui::DragInt("##rope_seg", &rope.segment_count, 0.1f, 2, 200));
+    INSPECTOR_PROPERTY("Seg. Length", ImGui::DragFloat("##rope_slen", &rope.segment_length, 0.01f, 0.01f));
+    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##rope_rad", &rope.radius, 0.005f, 0.001f));
+    INSPECTOR_PROPERTY("Damping", ImGui::DragFloat("##rope_damp", &rope.damping, 0.01f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Iterations", ImGui::DragInt("##rope_iter", &rope.solver_iterations, 0.1f, 1, 32));
+    INSPECTOR_PROPERTY("Use Gravity", ImGui::Checkbox("##rope_grav", &rope.use_gravity));
+    ImGui::Separator();
+    INSPECTOR_PROPERTY("Anchor A", ImGui::Text("Entity %u", rope.anchor_entity_a));
+    INSPECTOR_PROPERTY("Anchor B", ImGui::Text("Entity %u", rope.anchor_entity_b));
+    INSPECTOR_PROPERTY("Particles", ImGui::Text("%d", static_cast<int>(rope.positions.size())));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
+void DrawBuoyancySection(EditorContext& context) {
+#ifdef DSE_ENABLE_PHYSX
+    if (!context.registry.all_of<dse::BuoyancyComponent>(context.selected_entity)) return;
+    auto& buoy = context.registry.get<dse::BuoyancyComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Buoyancy", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "buoy_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##buoy_en", &buoy.enabled));
+    INSPECTOR_PROPERTY("Water Level", ImGui::DragFloat("##buoy_wl", &buoy.water_level, 0.5f));
+    INSPECTOR_PROPERTY("Use Fluid", ImGui::Checkbox("##buoy_fluid", &buoy.use_fluid_system));
+    INSPECTOR_PROPERTY("Force", ImGui::DragFloat("##buoy_force", &buoy.buoyancy_force, 0.5f, 0.0f));
+    INSPECTOR_PROPERTY("Water Drag", ImGui::DragFloat("##buoy_drag", &buoy.water_drag, 0.1f, 0.0f));
+    INSPECTOR_PROPERTY("Angular Drag", ImGui::DragFloat("##buoy_adrag", &buoy.water_angular_drag, 0.1f, 0.0f));
+    INSPECTOR_PROPERTY("Submerge Depth", ImGui::DragFloat("##buoy_sub", &buoy.submerge_depth, 0.1f, 0.01f));
+    INSPECTOR_PROPERTY("Sample Pts", ImGui::Text("%d", static_cast<int>(buoy.sample_points.size())));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+#endif
+}
+
+// ─── Spine ──────────────────────────────────────────────────────────────────
+
+void DrawSpineRendererSection(EditorContext& context) {
+    if (!context.registry.all_of<SpineRendererComponent>(context.selected_entity)) return;
+    auto& spine = context.registry.get<SpineRendererComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_ANIMATION "  Spine Renderer", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "spine_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Visible", ImGui::Checkbox("##spine_vis", &spine.visible));
+
+    static char skel_buf[256] = "";
+    static char atlas_buf[256] = "";
+    static char anim_buf[128] = "";
+    static entt::entity s_last_spine = entt::null;
+    if (s_last_spine != context.selected_entity) {
+        s_last_spine = context.selected_entity;
+        std::strncpy(skel_buf, spine.skeleton_data_path.c_str(), sizeof(skel_buf) - 1);
+        skel_buf[sizeof(skel_buf) - 1] = '\0';
+        std::strncpy(atlas_buf, spine.atlas_path.c_str(), sizeof(atlas_buf) - 1);
+        atlas_buf[sizeof(atlas_buf) - 1] = '\0';
+        std::strncpy(anim_buf, spine.current_animation.c_str(), sizeof(anim_buf) - 1);
+        anim_buf[sizeof(anim_buf) - 1] = '\0';
+    }
+    INSPECTOR_PROPERTY("Skeleton", if (ImGui::InputText("##spine_skel", skel_buf, sizeof(skel_buf))) {
+        spine.skeleton_data_path = skel_buf;
+    });
+    INSPECTOR_PROPERTY("Atlas", if (ImGui::InputText("##spine_atlas", atlas_buf, sizeof(atlas_buf))) {
+        spine.atlas_path = atlas_buf;
+    });
+    INSPECTOR_PROPERTY("Animation", if (ImGui::InputText("##spine_anim", anim_buf, sizeof(anim_buf))) {
+        spine.current_animation = anim_buf;
+        spine.dirty_animation = true;
+    });
+    INSPECTOR_PROPERTY("Loop", ImGui::Checkbox("##spine_loop", &spine.loop));
+    INSPECTOR_PROPERTY("Time Scale", ImGui::DragFloat("##spine_ts", &spine.time_scale, 0.05f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY("Sort Layer", ImGui::DragInt("##spine_sl", &spine.sorting_layer, 1));
+    INSPECTOR_PROPERTY("Order", ImGui::DragInt("##spine_order", &spine.order_in_layer, 1));
+    EndInspectorReadOnlyScope(context);
+    ImGui::Columns(1);
+}
+
 // ─── UI Components ──────────────────────────────────────────────────────────
 
 void DrawUIRendererSection(EditorContext& context) {
@@ -1212,6 +1436,7 @@ void DrawUIRendererSection(EditorContext& context) {
 
     ImGui::Columns(2, "uirender_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Color", ImGui::ColorEdit4("##ui_color", glm::value_ptr(ui.color)));
     INSPECTOR_PROPERTY("Order", ImGui::DragInt("##ui_order", &ui.order, 1));
     INSPECTOR_PROPERTY("Visible", ImGui::Checkbox("##ui_visible", &ui.visible));
@@ -1228,6 +1453,7 @@ void DrawUIRendererSection(EditorContext& context) {
     if (ui.nine_slice_enabled) {
         INSPECTOR_PROPERTY("Border", ImGui::DragFloat4("##ui_9border", glm::value_ptr(ui.nine_slice_border), 0.01f, 0.0f, 0.5f));
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1238,10 +1464,11 @@ void DrawUIButtonSection(EditorContext& context) {
 
     ImGui::Columns(2, "uibtn_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Normal Color", ImGui::ColorEdit4("##btn_normal", glm::value_ptr(btn.normal_color)));
     INSPECTOR_PROPERTY("Hover Color", ImGui::ColorEdit4("##btn_hover", glm::value_ptr(btn.hover_color)));
     INSPECTOR_PROPERTY("Pressed Color", ImGui::ColorEdit4("##btn_pressed", glm::value_ptr(btn.pressed_color)));
-    INSPECTOR_PROPERTY("Disabled Color", ImGui::ColorEdit4("##btn_disabled", glm::value_ptr(btn.disabled_color)));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1252,7 +1479,9 @@ void DrawUIPanelSection(EditorContext& context) {
 
     ImGui::Columns(2, "uipanel_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Blocks Input", ImGui::Checkbox("##panel_blocks", &panel.blocks_input));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1263,9 +1492,11 @@ void DrawUIMaskSection(EditorContext& context) {
 
     ImGui::Columns(2, "uimask_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##mask_en", &mask.enabled));
     INSPECTOR_PROPERTY("Size", ImGui::DragFloat2("##mask_size", glm::value_ptr(mask.size), 1.0f));
     INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##mask_off", glm::value_ptr(mask.offset), 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1276,6 +1507,7 @@ void DrawUIRichTextSection(EditorContext& context) {
 
     ImGui::Columns(2, "uirt_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     static char rt_buf[512] = "";
     static entt::entity s_last_rt_entity = entt::null;
     if (s_last_rt_entity != context.selected_entity) {
@@ -1296,6 +1528,7 @@ void DrawUIRichTextSection(EditorContext& context) {
     if (rt.enable_outline) {
         INSPECTOR_PROPERTY("Outline Color", ImGui::ColorEdit4("##rt_ol_color", glm::value_ptr(rt.outline_color)));
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1306,12 +1539,14 @@ void DrawUIJoystickSection(EditorContext& context) {
 
     ImGui::Columns(2, "uijoy_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Max Radius", ImGui::DragFloat("##joy_rad", &joy.max_radius, 1.0f, 1.0f, 500.0f));
     INSPECTOR_PROPERTY("Follow Pointer", ImGui::Checkbox("##joy_follow", &joy.follow_pointer));
     INSPECTOR_PROPERTY("Reset On Release", ImGui::Checkbox("##joy_reset", &joy.reset_on_release));
     ImGui::Separator();
     INSPECTOR_PROPERTY("Direction", ImGui::Text("(%.2f, %.2f)", joy.direction.x, joy.direction.y));
     INSPECTOR_PROPERTY("Is Dragging", ImGui::Text(joy.is_dragging ? "Yes" : "No"));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1324,6 +1559,7 @@ void DrawUIAnchorSection(EditorContext& context) {
 
     ImGui::Columns(2, "uianchor_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     const char* anchor_types[] = {
         "Center", "TopLeft", "TopCenter", "TopRight",
         "MiddleLeft", "MiddleRight", "BottomLeft", "BottomCenter",
@@ -1334,6 +1570,7 @@ void DrawUIAnchorSection(EditorContext& context) {
         anchor.anchor = current_anchor;
     });
     INSPECTOR_PROPERTY("Offset", ImGui::DragFloat2("##ui_anchor_off", glm::value_ptr(anchor.offset), 1.0f));
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1344,6 +1581,7 @@ void DrawUIGridLayoutSection(EditorContext& context) {
 
     ImGui::Columns(2, "uigrid_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Columns", ImGui::DragInt("##grid_cols", &grid.columns, 0.1f, 0, 100));
     INSPECTOR_PROPERTY("Rows", ImGui::DragInt("##grid_rows", &grid.rows, 0.1f, 0, 100));
     INSPECTOR_PROPERTY("Cell Size", ImGui::DragFloat2("##grid_cell", glm::value_ptr(grid.cell_size), 1.0f));
@@ -1357,6 +1595,7 @@ void DrawUIGridLayoutSection(EditorContext& context) {
     INSPECTOR_PROPERTY("Alignment", if (ImGui::Combo("##grid_align", &current_align, align_types, IM_ARRAYSIZE(align_types))) {
         grid.alignment = current_align;
     });
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1367,11 +1606,13 @@ void DrawUICanvasScalerSection(EditorContext& context) {
 
     ImGui::Columns(2, "uiscaler_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     INSPECTOR_PROPERTY("Reference Res", ImGui::DragFloat2("##scaler_ref", glm::value_ptr(scaler.reference_resolution), 1.0f));
     INSPECTOR_PROPERTY("Match W/H", ImGui::Checkbox("##scaler_match", &scaler.match_width_or_height));
     if (scaler.match_width_or_height) {
         INSPECTOR_PROPERTY("Factor", ImGui::SliderFloat("##scaler_factor", &scaler.scale_factor, 0.0f, 1.0f));
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1382,6 +1623,7 @@ void DrawUIAnimationSection(EditorContext& context) {
 
     ImGui::Columns(2, "uianim_cols", false);
     ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
     if (anim.playing) {
         INSPECTOR_PROPERTY("Control", if (ImGui::Button("Stop##uianim", ImVec2(-1, 0))) anim.playing = false);
     } else {
@@ -1413,6 +1655,7 @@ void DrawUIAnimationSection(EditorContext& context) {
     if (anim.animate_color) {
         INSPECTOR_PROPERTY("Target Color", ImGui::ColorEdit4("##uia_tcol", glm::value_ptr(anim.target_color)));
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
 
@@ -1775,10 +2018,20 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::CharacterController3DComponent>(e)) r.emplace<dse::CharacterController3DComponent>(e); },
         64,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::CharacterController3DComponent>(e)) r.erase<dse::CharacterController3DComponent>(e); }});
+    reg.Register({"Mesh Collider 3D", "Physics", DrawMeshCollider3DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::MeshCollider3DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::MeshCollider3DComponent>(e)) r.emplace<dse::MeshCollider3DComponent>(e); },
+        65,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::MeshCollider3DComponent>(e)) r.erase<dse::MeshCollider3DComponent>(e); }});
+    reg.Register({"Joint 3D", "Physics", DrawJoint3DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::Joint3DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::Joint3DComponent>(e)) r.emplace<dse::Joint3DComponent>(e); },
+        66,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::Joint3DComponent>(e)) r.erase<dse::Joint3DComponent>(e); }});
     reg.Register({"Particle System 3D", "3D", DrawParticleSystem3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::ParticleSystem3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ParticleSystem3DComponent>(e)) r.emplace<dse::ParticleSystem3DComponent>(e); },
-        65,
+        67,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ParticleSystem3DComponent>(e)) r.erase<dse::ParticleSystem3DComponent>(e); }});
 
     // --- Probes ---
@@ -1863,6 +2116,42 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnimationComponent>(e)) r.emplace<UIAnimationComponent>(e); },
         34,
         [](entt::registry& r, entt::entity e) { if (r.all_of<UIAnimationComponent>(e)) r.erase<UIAnimationComponent>(e); }});
+
+    // --- Advanced Physics ---
+#ifdef DSE_ENABLE_PHYSX
+    reg.Register({"Ragdoll", "Physics", DrawRagdollSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::RagdollComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::RagdollComponent>(e)) r.emplace<dse::RagdollComponent>(e); },
+        90,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::RagdollComponent>(e)) r.erase<dse::RagdollComponent>(e); }});
+    reg.Register({"Vehicle", "Physics", DrawVehicleSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::VehicleComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::VehicleComponent>(e)) r.emplace<dse::VehicleComponent>(e); },
+        92,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::VehicleComponent>(e)) r.erase<dse::VehicleComponent>(e); }});
+    reg.Register({"Buoyancy", "Physics", DrawBuoyancySection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::BuoyancyComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::BuoyancyComponent>(e)) r.emplace<dse::BuoyancyComponent>(e); },
+        94,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::BuoyancyComponent>(e)) r.erase<dse::BuoyancyComponent>(e); }});
+#endif
+    reg.Register({"Soft Body", "Physics", DrawSoftBodySection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::SoftBodyComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SoftBodyComponent>(e)) r.emplace<dse::SoftBodyComponent>(e); },
+        91,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SoftBodyComponent>(e)) r.erase<dse::SoftBodyComponent>(e); }});
+    reg.Register({"Rope", "Physics", DrawRopeSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::RopeComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::RopeComponent>(e)) r.emplace<dse::RopeComponent>(e); },
+        93,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::RopeComponent>(e)) r.erase<dse::RopeComponent>(e); }});
+
+    // --- Spine ---
+    reg.Register({"Spine Renderer", "2D", DrawSpineRendererSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<SpineRendererComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<SpineRendererComponent>(e)) r.emplace<SpineRendererComponent>(e); },
+        27,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<SpineRendererComponent>(e)) r.erase<SpineRendererComponent>(e); }});
 }
 
 } // namespace
@@ -1951,8 +2240,7 @@ void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
 
 // ─── DrawInspectorPanel（注册表驱动） ────────────────────────────────────────
 
-void DrawInspectorPanel(EditorContext& context,
-                        void (*draw_ui_layout_inspector)(entt::registry&, entt::entity)) {
+void DrawInspectorPanel(EditorContext& context) {
     RegisterAllInspectorSections();
 
     ImGui::Begin("Inspector");
@@ -2062,11 +2350,6 @@ void DrawInspectorPanel(EditorContext& context,
 
         // 粒子曲线编辑器（特殊签名，跟随 ParticleEmitter Section 后绘制）
         DrawParticleCurveEditor(context.registry, context.selected_entity);
-
-        // 外部回调（UI Layout Inspector 等）
-        if (draw_ui_layout_inspector) {
-            draw_ui_layout_inspector(context.registry, context.selected_entity);
-        }
 
         // Add / Remove Component 菜单（注册表驱动）
         InspectorRegistry::Get().DrawAddComponentMenu(context);
