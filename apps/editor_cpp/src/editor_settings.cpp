@@ -104,6 +104,20 @@ EditorSettings LoadEditorSettings() {
     if (doc.HasMember("snap_scale") && doc["snap_scale"].IsNumber()) {
         settings.snap_scale = doc["snap_scale"].GetFloat();
     }
+    if (doc.HasMember("grid_size") && doc["grid_size"].IsNumber()) {
+        settings.grid_size = doc["grid_size"].GetFloat();
+    }
+    if (doc.HasMember("grid_lines") && doc["grid_lines"].IsInt()) {
+        settings.grid_lines = doc["grid_lines"].GetInt();
+    }
+
+    // Scene camera
+    if (doc.HasMember("cam_focal_x") && doc["cam_focal_x"].IsNumber()) settings.cam_focal_x = doc["cam_focal_x"].GetFloat();
+    if (doc.HasMember("cam_focal_y") && doc["cam_focal_y"].IsNumber()) settings.cam_focal_y = doc["cam_focal_y"].GetFloat();
+    if (doc.HasMember("cam_focal_z") && doc["cam_focal_z"].IsNumber()) settings.cam_focal_z = doc["cam_focal_z"].GetFloat();
+    if (doc.HasMember("cam_distance") && doc["cam_distance"].IsNumber()) settings.cam_distance = doc["cam_distance"].GetFloat();
+    if (doc.HasMember("cam_yaw") && doc["cam_yaw"].IsNumber()) settings.cam_yaw = doc["cam_yaw"].GetFloat();
+    if (doc.HasMember("cam_pitch") && doc["cam_pitch"].IsNumber()) settings.cam_pitch = doc["cam_pitch"].GetFloat();
 
     return settings;
 }
@@ -139,6 +153,16 @@ void SaveEditorSettings(const EditorSettings& settings) {
     doc.AddMember("snap_translate", settings.snap_translate, alloc);
     doc.AddMember("snap_rotate", settings.snap_rotate, alloc);
     doc.AddMember("snap_scale", settings.snap_scale, alloc);
+    doc.AddMember("grid_size", settings.grid_size, alloc);
+    doc.AddMember("grid_lines", settings.grid_lines, alloc);
+
+    // Scene camera
+    doc.AddMember("cam_focal_x", settings.cam_focal_x, alloc);
+    doc.AddMember("cam_focal_y", settings.cam_focal_y, alloc);
+    doc.AddMember("cam_focal_z", settings.cam_focal_z, alloc);
+    doc.AddMember("cam_distance", settings.cam_distance, alloc);
+    doc.AddMember("cam_yaw", settings.cam_yaw, alloc);
+    doc.AddMember("cam_pitch", settings.cam_pitch, alloc);
 
     rapidjson::StringBuffer buffer;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);

@@ -9,6 +9,8 @@ void InitPreferencesFromSettings();
 
 /// Grid / Snap settings getters (persisted in Preferences panel)
 bool GetShowGrid();
+float GetGridSize();
+int GetGridLines();
 float GetSnapTranslate();
 float GetSnapRotate();
 float GetSnapScale();

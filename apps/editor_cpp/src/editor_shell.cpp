@@ -208,6 +208,17 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             ctx.selected_entity = entt::null;
         }
         ImGui::Separator();
+        bool has_sel_edit = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
+        if (ImGui::MenuItem("Copy", "Ctrl+C", false, has_sel_edit && !ctx.read_only)) {
+            CopySelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Cut", "Ctrl+X", false, has_sel_edit && !ctx.read_only)) {
+            CutSelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Paste", "Ctrl+V", false, HasEntityClipboard() && !ctx.read_only)) {
+            PasteEntity(ctx);
+        }
+        ImGui::Separator();
         if (show_preferences && ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
             *show_preferences = true;
         }
@@ -218,6 +229,23 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     if (ImGui::BeginMenu("Entity")) {
         if (ImGui::MenuItem(MDI_ICON_PLUS "  Create Empty", nullptr, false, !ctx.read_only)) {
             CreateEmptyEntity(ctx);
+        }
+        if (ImGui::BeginMenu("3D Object", !ctx.read_only)) {
+            if (ImGui::MenuItem("Cube"))              CreateEntity3DCube(ctx);
+            if (ImGui::MenuItem("Sphere"))            CreateEntity3DSphere(ctx);
+            if (ImGui::MenuItem("Plane"))             CreateEntity3DPlane(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Light", !ctx.read_only)) {
+            if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
+            if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Camera", nullptr, false, !ctx.read_only)) {
+            CreateEntity3DCamera(ctx);
+        }
+        if (ImGui::MenuItem("2D Sprite", nullptr, false, !ctx.read_only)) {
+            CreateEntity2DSprite(ctx);
         }
         ImGui::Separator();
         bool has_sel = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));

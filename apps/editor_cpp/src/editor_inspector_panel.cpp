@@ -2342,6 +2342,125 @@ void DrawInspectorPanel(EditorContext& context) {
             ImGui::SameLine();
             if (ImGui::Button("Reset##ms_scale")) s_ms_scale_factor = {1.0f, 1.0f, 1.0f};
         }
+
+        // ── Batch Rotate (delta, euler degrees) ─────────────────────────────
+        {
+            static glm::vec3 s_ms_rot_delta{0.0f, 0.0f, 0.0f};
+            if (ImGui::CollapsingHeader(MDI_ICON_ROTATE_3D_VARIANT "  Batch Rotate")) {
+                ImGui::Text("Rotation Delta (degrees):");
+                float rd[3] = {s_ms_rot_delta.x, s_ms_rot_delta.y, s_ms_rot_delta.z};
+                DrawVec3WithColorLabels("##ms_rd", rd, 1.0f);
+                s_ms_rot_delta = {rd[0], rd[1], rd[2]};
+
+                if (ImGui::Button("Apply Rotate##ms")) {
+                    auto compound = std::make_unique<CompoundCommand>("Batch Rotate");
+                    for (auto ent : selection.GetAll()) {
+                        if (!context.registry.valid(ent)) continue;
+                        if (!context.registry.all_of<TransformComponent>(ent)) continue;
+                        auto& t = context.registry.get<TransformComponent>(ent);
+                        glm::quat delta_q = glm::quat(glm::radians(s_ms_rot_delta));
+                        glm::quat old_rot = t.rotation;
+                        glm::quat new_rot = delta_q * t.rotation;
+                        t.rotation = new_rot;
+                        t.dirty = true;
+                        auto& reg = context.registry;
+                        compound->AddCommand(std::make_unique<PropertyChangeCommand<glm::quat>>(
+                            "Transform.Rotation", old_rot, new_rot,
+                            [&reg, ent](const glm::quat& v) {
+                                if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                    reg.get<TransformComponent>(ent).rotation = v;
+                                    reg.get<TransformComponent>(ent).dirty = true;
+                                }
+                            }));
+                    }
+                    if (!compound->IsEmpty())
+                        GetUndoRedoManager().Execute(std::move(compound), false);
+                    s_ms_rot_delta = {0.0f, 0.0f, 0.0f};
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##ms_rot")) s_ms_rot_delta = {0.0f, 0.0f, 0.0f};
+            }
+        }
+
+        ImGui::Separator();
+
+        // ── Batch Set Position (absolute) ───────────────────────────────────
+        {
+            static glm::vec3 s_ms_set_pos{0.0f, 0.0f, 0.0f};
+            if (ImGui::CollapsingHeader("Set All Positions")) {
+                float sp[3] = {s_ms_set_pos.x, s_ms_set_pos.y, s_ms_set_pos.z};
+                DrawVec3WithColorLabels("##ms_sp", sp);
+                s_ms_set_pos = {sp[0], sp[1], sp[2]};
+                if (ImGui::Button("Apply##ms_setpos")) {
+                    auto compound = std::make_unique<CompoundCommand>("Batch Set Position");
+                    for (auto ent : selection.GetAll()) {
+                        if (!context.registry.valid(ent)) continue;
+                        if (!context.registry.all_of<TransformComponent>(ent)) continue;
+                        auto& t = context.registry.get<TransformComponent>(ent);
+                        glm::vec3 old_pos = t.position;
+                        t.position = s_ms_set_pos;
+                        t.dirty = true;
+                        auto& reg = context.registry;
+                        compound->AddCommand(std::make_unique<PropertyChangeCommand<glm::vec3>>(
+                            "Transform.Position", old_pos, s_ms_set_pos,
+                            [&reg, ent](const glm::vec3& v) {
+                                if (reg.valid(ent) && reg.all_of<TransformComponent>(ent)) {
+                                    reg.get<TransformComponent>(ent).position = v;
+                                    reg.get<TransformComponent>(ent).dirty = true;
+                                }
+                            }));
+                    }
+                    if (!compound->IsEmpty())
+                        GetUndoRedoManager().Execute(std::move(compound), false);
+                }
+            }
+        }
+
+        ImGui::Separator();
+
+        // ── Common Components Summary ───────────────────────────────────────
+        if (ImGui::CollapsingHeader("Common Components")) {
+            auto all_ents = selection.GetAll();
+            if (!all_ents.empty()) {
+                auto check_all_have = [&](auto tag, const char* name) {
+                    using C = decltype(tag);
+                    int count = 0;
+                    for (auto ent : all_ents) {
+                        if (context.registry.valid(ent) && context.registry.all_of<C>(ent)) count++;
+                    }
+                    if (count == static_cast<int>(all_ents.size())) {
+                        ImGui::BulletText("%s (%d/%d)", name, count, (int)all_ents.size());
+                    } else if (count > 0) {
+                        ImGui::BulletText("%s (%d/%d - partial)", name, count, (int)all_ents.size());
+                    }
+                };
+                check_all_have(TransformComponent{}, "Transform");
+                check_all_have(SpriteRendererComponent{}, "SpriteRenderer");
+                check_all_have(dse::MeshRendererComponent{}, "MeshRenderer");
+                check_all_have(dse::Camera3DComponent{}, "Camera3D");
+                check_all_have(dse::DirectionalLight3DComponent{}, "DirectionalLight");
+                check_all_have(dse::PointLightComponent{}, "PointLight");
+                check_all_have(dse::RigidBody3DComponent{}, "RigidBody3D");
+                check_all_have(dse::BoxCollider3DComponent{}, "BoxCollider3D");
+                check_all_have(dse::SphereCollider3DComponent{}, "SphereCollider3D");
+            }
+        }
+
+        // ── Batch Delete ────────────────────────────────────────────────────
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+        if (ImGui::Button("Delete All Selected", ImVec2(-1, 0))) {
+            auto entities = selection.GetAll();
+            for (auto ent : entities) {
+                if (context.registry.valid(ent)) {
+                    context.world.DestroyEntity(ent);
+                }
+            }
+            selection.Clear();
+            context.selected_entity = entt::null;
+            EditorLog(LogLevel::Info, "Deleted " + std::to_string(entities.size()) + " entities");
+        }
+        ImGui::PopStyleColor();
     } else if (context.selected_entity != entt::null && context.registry.valid(context.selected_entity)) {
         DrawInspectorHeader(context);
 

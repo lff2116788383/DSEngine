@@ -10,6 +10,8 @@ namespace dse::editor {
 namespace {
     int s_theme_index = 0; // 0=Dark, 1=Light
     bool s_show_grid = true;
+    float s_grid_size = 1.0f;
+    int s_grid_lines = 50;
     float s_snap_translate = 0.5f;
     float s_snap_rotate = 15.0f;
     float s_snap_scale = 0.1f;
@@ -32,6 +34,8 @@ namespace {
         EditorSettings settings = LoadEditorSettings();
         settings.theme_index = s_theme_index;
         settings.show_grid = s_show_grid;
+        settings.grid_size = s_grid_size;
+        settings.grid_lines = s_grid_lines;
         settings.snap_translate = s_snap_translate;
         settings.snap_rotate = s_snap_rotate;
         settings.snap_scale = s_snap_scale;
@@ -40,6 +44,8 @@ namespace {
 } // namespace
 
 bool GetShowGrid() { return s_show_grid; }
+float GetGridSize() { return s_grid_size; }
+int GetGridLines() { return s_grid_lines; }
 float GetSnapTranslate() { return s_snap_translate; }
 float GetSnapRotate() { return s_snap_rotate; }
 float GetSnapScale() { return s_snap_scale; }
@@ -51,6 +57,8 @@ void InitPreferencesFromSettings() {
     EditorSettings settings = LoadEditorSettings();
     s_theme_index = settings.theme_index;
     s_show_grid = settings.show_grid;
+    s_grid_size = settings.grid_size;
+    s_grid_lines = settings.grid_lines;
     s_snap_translate = settings.snap_translate;
     s_snap_rotate = settings.snap_rotate;
     s_snap_scale = settings.snap_scale;
@@ -92,6 +100,10 @@ void DrawPreferencesPanel(bool* p_open) {
         if (ImGui::Checkbox("Show Grid", &s_show_grid)) {
             changed = true;
         }
+        if (s_show_grid) {
+            if (ImGui::DragFloat("Grid Size", &s_grid_size, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
+            if (ImGui::DragInt("Grid Lines", &s_grid_lines, 1, 5, 200)) changed = true;
+        }
     }
 
     if (ImGui::CollapsingHeader(MDI_ICON_COG "  Snapping", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -109,6 +121,9 @@ void DrawPreferencesPanel(bool* p_open) {
         ImGui::BulletText("Ctrl+O - Open Scene");
         ImGui::BulletText("Ctrl+N - New Scene");
         ImGui::BulletText("Delete - Delete Selected Entity");
+        ImGui::BulletText("Ctrl+C - Copy Entity");
+        ImGui::BulletText("Ctrl+X - Cut Entity");
+        ImGui::BulletText("Ctrl+V - Paste Entity");
         ImGui::BulletText("Ctrl+D - Duplicate Selected Entity");
         ImGui::BulletText("F2 - Rename Selected Entity");
         ImGui::Separator();

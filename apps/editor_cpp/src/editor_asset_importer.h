@@ -10,4 +10,7 @@ void DrawAssetImporterDialog(EditorContext& ctx);
 /// Open the importer dialog from the menu
 void OpenAssetImporter();
 
+/// Pre-fill the source path (used by drag-and-drop)
+void SetAssetImporterSourcePath(const char* path);
+
 } // namespace dse::editor

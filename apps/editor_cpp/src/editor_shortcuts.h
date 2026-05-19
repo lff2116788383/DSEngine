@@ -16,4 +16,19 @@ void CreateEmptyEntity(EditorContext& ctx);
 void DuplicateSelectedEntity(EditorContext& ctx);
 void DeleteSelectedEntity(EditorContext& ctx);
 
+/// Copy/Paste entity clipboard
+void CopySelectedEntity(EditorContext& ctx);
+void CutSelectedEntity(EditorContext& ctx);
+void PasteEntity(EditorContext& ctx);
+bool HasEntityClipboard();
+
+/// Entity template creation helpers
+void CreateEntity3DCube(EditorContext& ctx);
+void CreateEntity3DSphere(EditorContext& ctx);
+void CreateEntity3DPlane(EditorContext& ctx);
+void CreateEntity3DCamera(EditorContext& ctx);
+void CreateEntity3DDirectionalLight(EditorContext& ctx);
+void CreateEntity3DPointLight(EditorContext& ctx);
+void CreateEntity2DSprite(EditorContext& ctx);
+
 } // namespace dse::editor

@@ -129,6 +129,176 @@ UndoRedoManager& GetUndoRedoManager() {
     return instance;
 }
 
+// ─── Clipboard (Copy/Cut/Paste) ────────────────────────────────────────────
+static std::unique_ptr<entt::registry> s_clipboard_registry;
+static bool s_clipboard_has_data = false;
+
+void CopySelectedEntity(EditorContext& ctx) {
+    if (ctx.selected_entity == entt::null || !ctx.registry.valid(ctx.selected_entity)) return;
+    s_clipboard_registry = std::make_unique<entt::registry>();
+    entt::entity src = ctx.selected_entity;
+    entt::entity dst = s_clipboard_registry->create();
+
+    auto copy_c = [&](auto tag) {
+        using C = decltype(tag);
+        if (ctx.registry.all_of<C>(src)) s_clipboard_registry->emplace<C>(dst, ctx.registry.get<C>(src));
+    };
+    copy_c(EditorNameComponent{});
+    copy_c(TransformComponent{});
+    copy_c(SpriteRendererComponent{});
+    copy_c(UIRendererComponent{});
+    copy_c(UILabelComponent{});
+    copy_c(UIAnchorComponent{});
+    copy_c(UIGridLayoutComponent{});
+    copy_c(UICanvasScalerComponent{});
+    copy_c(UIAnimationComponent{});
+    copy_c(UIRichTextComponent{});
+    copy_c(RigidBody2DComponent{});
+    copy_c(ParticleEmitterComponent{});
+    copy_c(dse::Camera3DComponent{});
+    copy_c(dse::DirectionalLight3DComponent{});
+    copy_c(dse::PointLightComponent{});
+    copy_c(dse::MeshRendererComponent{});
+    copy_c(dse::Animator3DComponent{});
+    copy_c(dse::FreeCameraControllerComponent{});
+    copy_c(dse::TerrainComponent{});
+    copy_c(dse::RigidBody3DComponent{});
+    copy_c(dse::BoxCollider3DComponent{});
+    copy_c(dse::SphereCollider3DComponent{});
+    copy_c(dse::ParticleSystem3DComponent{});
+    copy_c(dse::PostProcessComponent{});
+
+    s_clipboard_has_data = true;
+    EditorLog(LogLevel::Info, "Entity copied to clipboard");
+}
+
+void CutSelectedEntity(EditorContext& ctx) {
+    CopySelectedEntity(ctx);
+    DeleteSelectedEntity(ctx);
+    SelectionManager::Get().Clear();
+    EditorLog(LogLevel::Info, "Entity cut to clipboard");
+}
+
+void PasteEntity(EditorContext& ctx) {
+    if (!s_clipboard_has_data || !s_clipboard_registry) return;
+    auto clipboard_view = s_clipboard_registry->view<EditorNameComponent>();
+    for (auto src_ent : clipboard_view) {
+        auto new_ent = ctx.world.CreateEntity();
+        auto paste_c = [&](auto tag) {
+            using C = decltype(tag);
+            if (s_clipboard_registry->all_of<C>(src_ent))
+                ctx.registry.emplace_or_replace<C>(new_ent, s_clipboard_registry->get<C>(src_ent));
+        };
+        paste_c(EditorNameComponent{});
+        paste_c(TransformComponent{});
+        paste_c(SpriteRendererComponent{});
+        paste_c(UIRendererComponent{});
+        paste_c(UILabelComponent{});
+        paste_c(UIAnchorComponent{});
+        paste_c(UIGridLayoutComponent{});
+        paste_c(UICanvasScalerComponent{});
+        paste_c(UIAnimationComponent{});
+        paste_c(UIRichTextComponent{});
+        paste_c(RigidBody2DComponent{});
+        paste_c(ParticleEmitterComponent{});
+        paste_c(dse::Camera3DComponent{});
+        paste_c(dse::DirectionalLight3DComponent{});
+        paste_c(dse::PointLightComponent{});
+        paste_c(dse::MeshRendererComponent{});
+        paste_c(dse::Animator3DComponent{});
+        paste_c(dse::FreeCameraControllerComponent{});
+        paste_c(dse::TerrainComponent{});
+        paste_c(dse::RigidBody3DComponent{});
+        paste_c(dse::BoxCollider3DComponent{});
+        paste_c(dse::SphereCollider3DComponent{});
+        paste_c(dse::ParticleSystem3DComponent{});
+        paste_c(dse::PostProcessComponent{});
+
+        if (ctx.registry.all_of<EditorNameComponent>(new_ent)) {
+            ctx.registry.get<EditorNameComponent>(new_ent).name += " (Paste)";
+        }
+        if (ctx.registry.all_of<TransformComponent>(new_ent)) {
+            ctx.registry.get<TransformComponent>(new_ent).dirty = true;
+        }
+        ctx.selected_entity = new_ent;
+    }
+    EditorLog(LogLevel::Info, "Entity pasted from clipboard");
+}
+
+bool HasEntityClipboard() {
+    return s_clipboard_has_data && s_clipboard_registry != nullptr;
+}
+
+// ─── Entity Templates ──────────────────────────────────────────────────────
+void CreateEntity3DCube(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Cube");
+    ctx.registry.emplace<TransformComponent>(ent);
+    auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
+    mesh.mesh_path = "primitives/cube.dmesh";
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Cube entity");
+}
+
+void CreateEntity3DSphere(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Sphere");
+    ctx.registry.emplace<TransformComponent>(ent);
+    auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
+    mesh.mesh_path = "primitives/sphere.dmesh";
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Sphere entity");
+}
+
+void CreateEntity3DPlane(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Plane");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.scale = glm::vec3(10.0f, 1.0f, 10.0f);
+    auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
+    mesh.mesh_path = "primitives/plane.dmesh";
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Plane entity");
+}
+
+void CreateEntity3DCamera(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Camera");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.position = glm::vec3(0.0f, 2.0f, 5.0f);
+    ctx.registry.emplace<dse::Camera3DComponent>(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Camera entity");
+}
+
+void CreateEntity3DDirectionalLight(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Directional Light");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<dse::DirectionalLight3DComponent>(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Directional Light entity");
+}
+
+void CreateEntity3DPointLight(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Point Light");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.position = glm::vec3(0.0f, 3.0f, 0.0f);
+    ctx.registry.emplace<dse::PointLightComponent>(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Point Light entity");
+}
+
+void CreateEntity2DSprite(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Sprite");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<SpriteRendererComponent>(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Sprite entity");
+}
+
 void ProcessShortcuts(EditorContext& context) {
     // Don't process shortcuts when a text input is active
     if (ImGui::GetIO().WantTextInput) {
@@ -184,6 +354,19 @@ void ProcessShortcuts(EditorContext& context) {
                 AddRecentFile(settings, path);
                 SaveEditorSettings(settings);
             }
+        }
+    }
+
+    // --- Copy/Cut/Paste (blocked in Play mode) ---
+    if (!context.read_only) {
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, ImGuiInputFlags_RouteGlobal)) {
+            CopySelectedEntity(context);
+        }
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_X, ImGuiInputFlags_RouteGlobal)) {
+            CutSelectedEntity(context);
+        }
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V, ImGuiInputFlags_RouteGlobal)) {
+            PasteEntity(context);
         }
     }
 

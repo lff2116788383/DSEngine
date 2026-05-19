@@ -230,6 +230,22 @@ bool EditorApp::Init(int argc, char* argv[]) {
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1);
 
+    // Drag & Drop: accept file drops from OS — opens Asset Importer with the first importable file
+    glfwSetDropCallback(window_, [](GLFWwindow*, int count, const char** paths) {
+        for (int i = 0; i < count; ++i) {
+            std::filesystem::path p(paths[i]);
+            std::string ext = p.extension().string();
+            for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (ext == ".gltf" || ext == ".glb" || ext == ".fbx" ||
+                ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".tga" || ext == ".bmp" ||
+                ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
+                dse::editor::OpenAssetImporter();
+                dse::editor::SetAssetImporterSourcePath(paths[i]);
+                break;
+            }
+        }
+    });
+
     if (!gladLoadGL(glfwGetProcAddress)) {
         std::cerr << "Failed to initialize OpenGL (gladLoadGL) in Editor." << std::endl;
         glfwDestroyWindow(window_);
@@ -333,6 +349,15 @@ bool EditorApp::Init(int argc, char* argv[]) {
         dse::editor::ProjectManager::Get().ApplyDataRoot();
         engine_instance_->asset_manager()->ConfigureDataRoot(
             dse::editor::ProjectManager::Get().GetAssetDir().string());
+    }
+
+    // Restore scene camera
+    {
+        auto& cam = dse::editor::GetEditorCamera();
+        cam.focal_point = glm::vec3(editor_settings.cam_focal_x, editor_settings.cam_focal_y, editor_settings.cam_focal_z);
+        cam.distance = editor_settings.cam_distance;
+        cam.yaw = editor_settings.cam_yaw;
+        cam.pitch = editor_settings.cam_pitch;
     }
 
     if (!test_config_.scene_path.empty()) {
@@ -546,6 +571,16 @@ void EditorApp::Shutdown() {
     if (editor_settings.last_scene_path.empty()) editor_settings.last_scene_path = dse::editor::GetCurrentScenePath();
     editor_settings.default_gizmo_operation = current_gizmo_operation_;
     editor_settings.default_gizmo_mode = current_gizmo_mode_;
+    // Save scene camera
+    {
+        auto& cam = dse::editor::GetEditorCamera();
+        editor_settings.cam_focal_x = cam.focal_point.x;
+        editor_settings.cam_focal_y = cam.focal_point.y;
+        editor_settings.cam_focal_z = cam.focal_point.z;
+        editor_settings.cam_distance = cam.distance;
+        editor_settings.cam_yaw = cam.yaw;
+        editor_settings.cam_pitch = cam.pitch;
+    }
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
 

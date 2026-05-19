@@ -200,6 +200,22 @@ void OpenAssetImporter() {
     s_state = ImportState{};
 }
 
+void SetAssetImporterSourcePath(const char* path) {
+    std::strncpy(s_state.source_path, path, sizeof(s_state.source_path) - 1);
+    s_state.source_path[sizeof(s_state.source_path) - 1] = '\0';
+    // Auto-detect type from extension
+    fs::path p(path);
+    std::string ext = p.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (ext == ".gltf" || ext == ".glb" || ext == ".fbx" || ext == ".obj") {
+        s_state.type = ImportType::Mesh3D;
+    } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".tga" || ext == ".bmp") {
+        s_state.type = ImportType::Texture;
+    } else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac") {
+        s_state.type = ImportType::Audio;
+    }
+}
+
 void DrawAssetImporterDialog(EditorContext& ctx) {
     if (!s_open) return;
 

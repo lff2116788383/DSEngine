@@ -19,9 +19,17 @@ struct EditorSettings {
     // Preferences (persisted)
     int theme_index = 0;           // 0=Dark, 1=Light
     bool show_grid = true;
+    float grid_size = 1.0f;
+    int grid_lines = 50;
     float snap_translate = 0.5f;
     float snap_rotate = 15.0f;
     float snap_scale = 0.1f;
+
+    // Scene camera state (persisted)
+    float cam_focal_x = 0.0f, cam_focal_y = 0.0f, cam_focal_z = 0.0f;
+    float cam_distance = 10.0f;
+    float cam_yaw = 0.0f;
+    float cam_pitch = 0.3f;
 };
 
 /// Load editor settings from bin/editor_settings.json
