@@ -15,8 +15,7 @@
 
 #include <gtest/gtest.h>
 #include "engine/runtime/engine_app.h"
-#include "engine/ecs/world.h"
-#include "engine/assets/asset_manager.h"
+#include "engine/runtime/runtime_services.h"
 
 using namespace dse::runtime;
 
@@ -48,9 +47,9 @@ TEST(EngineRunConfigTest, 默认无启动Lua脚本) {
 
 TEST(EngineRunConfigTest, 默认服务指针为空) {
     EngineRunConfig config;
-    EXPECT_EQ(config.world, nullptr);
-    EXPECT_EQ(config.asset_manager, nullptr);
-    EXPECT_EQ(config.job_system, nullptr);
+    EXPECT_EQ(config.services.world, nullptr);
+    EXPECT_EQ(config.services.asset_manager, nullptr);
+    EXPECT_EQ(config.services.job_system, nullptr);
 }
 
 TEST(EngineRunConfigTest, WithServices链式调用) {
@@ -88,8 +87,8 @@ TEST(EngineInstanceTest, 未初始化时Shutdown不崩溃) {
 
 TEST(EngineInstanceTest, 注入外部World后ServiceLocator可获取) {
     EngineRunConfig config;
-    World external_world;
-    config.world = &external_world;
+    RuntimeServices svc;
+    config.WithServices(svc);
     EngineInstance instance(config);
     // EngineInstance 构造时不会注册到 ServiceLocator，那是 Init 的职责
     // 此处验证 config 注入路径正确传递
@@ -98,8 +97,6 @@ TEST(EngineInstanceTest, 注入外部World后ServiceLocator可获取) {
 
 TEST(EngineInstanceTest, 注入外部AssetManager不崩溃) {
     EngineRunConfig config;
-    AssetManager external_am;
-    config.asset_manager = &external_am;
     EXPECT_NO_THROW({
         EngineInstance instance(config);
     });

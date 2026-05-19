@@ -89,6 +89,12 @@ struct HairInstance {
 
     bool gpu_resources_valid = false;
 
+    /// Compute shader 句柄（懒加载，首次 Simulate 时编译）
+    unsigned int cs_integrate_   = 0;
+    unsigned int cs_length_      = 0;
+    unsigned int cs_local_shape_ = 0;
+    unsigned int cs_tangent_     = 0;
+
     /// CPU 侧 per-strand 绘制参数（用于 glMultiDrawArrays）
     std::vector<int> draw_firsts_;   ///< 每 strand 的顶点起始索引
     std::vector<int> draw_counts_;   ///< 每 strand 的顶点数
@@ -104,6 +110,12 @@ struct HairInstance {
 
     /// 更新 LOD 级别（基于相机距离）
     void UpdateLOD(float camera_distance);
+
+    /// 物理模拟：执行四个 compute pass（懒加载 shader，首次调用时编译）
+    void Simulate(RhiDevice* rhi, float dt, float time);
+
+    /// 释放 compute shader 句柄（Shutdown 时调用）
+    void DestroyComputeShaders(RhiDevice* rhi);
 };
 
 } // namespace render

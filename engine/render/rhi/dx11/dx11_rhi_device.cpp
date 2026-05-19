@@ -407,14 +407,15 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
 
     dc->CSSetShader(prog->cs.Get(), nullptr, 0);
 
-    // 将追踪的 SSBO 绑定到 CS 阶段（SRV slot 16+ 与 PS 保持一致）
+    // 将 uniform staging 内容上传到 scratch cbuffer，绑定到 b0
+    FlushComputeParamsCB();
+
+    // SSBO 绑定（SRV slot 16+ 与 PS 保持一致）
     for (auto& [binding_point, ssbo_handle] : bound_ssbos_) {
         const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
         if (!ssbo) continue;
         ID3D11ShaderResourceView* srv = ssbo->srv.Get();
-        if (srv) {
-            dc->CSSetShaderResources(16 + binding_point, 1, &srv);
-        }
+        if (srv) dc->CSSetShaderResources(16 + binding_point, 1, &srv);
     }
 
     dc->Dispatch(groups_x, groups_y, groups_z);
@@ -424,7 +425,9 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
         ID3D11ShaderResourceView* null_srv = nullptr;
         dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
     }
+    { ID3D11Buffer* null_cb = nullptr; dc->CSSetConstantBuffers(0, 1, &null_cb); }
     dc->CSSetShader(nullptr, nullptr, 0);
+    ClearComputeParams();
 }
 
 void DX11RhiDevice::ComputeMemoryBarrier() {
@@ -445,12 +448,18 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
             dc->CSSetShaderResources(binding, 1, &srv);
         }
     } else {
-        // 绑定为 UAV（需要从 render target 获取，或创建专用 UAV）
-        // 当前仅支持 render target 的 UAV
-        const auto* rt = resource_mgr_.GetRenderTarget(texture_handle);
-        if (rt && rt->color_uav) {
-            ID3D11UnorderedAccessView* uav = rt->color_uav.Get();
+        // 先尝试按纹理字典的 UAV（CreateComputeWriteTexture2D 创建）
+        const auto* tex = resource_mgr_.GetTexture(texture_handle);
+        if (tex && tex->uav) {
+            ID3D11UnorderedAccessView* uav = tex->uav.Get();
             dc->CSSetUnorderedAccessViews(binding, 1, &uav, nullptr);
+        } else {
+            // 备用：尝试按 render target 的 UAV
+            const auto* rt = resource_mgr_.GetRenderTarget(texture_handle);
+            if (rt && rt->color_uav) {
+                ID3D11UnorderedAccessView* uav = rt->color_uav.Get();
+                dc->CSSetUnorderedAccessViews(binding, 1, &uav, nullptr);
+            }
         }
     }
 }
@@ -462,8 +471,18 @@ void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int
 }
 
 void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
-    // TODO: DX11 Hi-Z — 绑定纹理 SRV + sampler 到 CS
-    (void)unit; (void)texture_handle;
+    if (!initialized_) return;
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+    const auto* tex = resource_mgr_.GetTexture(texture_handle);
+    if (tex && tex->srv) {
+        ID3D11ShaderResourceView* srv = tex->srv.Get();
+        dc->CSSetShaderResources(unit, 1, &srv);
+    }
+    if (tex && tex->sampler) {
+        ID3D11SamplerState* ss = tex->sampler.Get();
+        dc->CSSetSamplers(unit, 1, &ss);
+    }
 }
 
 unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
@@ -486,26 +505,78 @@ unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
     return 0;
 }
 
-void DX11RhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
-    (void)shader; (void)name; (void)value;
+void DX11RhiDevice::AppendComputeParam(const void* data, size_t bytes) {
+    size_t off = compute_params_staging_.size();
+    compute_params_staging_.resize(off + bytes);
+    memcpy(compute_params_staging_.data() + off, data, bytes);
 }
-void DX11RhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
-    (void)shader; (void)name; (void)value;
+void DX11RhiDevice::FlushComputeParamsCB() {
+    if (compute_params_staging_.empty()) return;
+    ID3D11Device* dev = context_.device();
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dev || !dc) return;
+    // cbuffer 大小必须 16-byte 对齐
+    size_t aligned = (compute_params_staging_.size() + 15) & ~size_t(15);
+    if (aligned > compute_params_cb_capacity_) {
+        compute_params_cb_.Reset();
+        D3D11_BUFFER_DESC bd{};
+        bd.ByteWidth      = static_cast<UINT>(aligned);
+        bd.Usage          = D3D11_USAGE_DYNAMIC;
+        bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        if (FAILED(dev->CreateBuffer(&bd, nullptr, compute_params_cb_.GetAddressOf()))) return;
+        compute_params_cb_capacity_ = aligned;
+    }
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(dc->Map(compute_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        memcpy(mapped.pData, compute_params_staging_.data(), compute_params_staging_.size());
+        dc->Unmap(compute_params_cb_.Get(), 0);
+    }
+    ID3D11Buffer* cb = compute_params_cb_.Get();
+    dc->CSSetConstantBuffers(0, 1, &cb);
+}
+void DX11RhiDevice::ClearComputeParams() {
+    compute_params_staging_.clear();
+}
+
+void DX11RhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int v) {
+    (void)shader; (void)name; AppendComputeParam(&v, sizeof(v));
+}
+void DX11RhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float v) {
+    (void)shader; (void)name; AppendComputeParam(&v, sizeof(v));
 }
 void DX11RhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
-    (void)shader; (void)name; (void)x; (void)y;
+    (void)shader; (void)name; int d[2]{x,y}; AppendComputeParam(d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
-    (void)shader; (void)name; (void)x; (void)y;
+    (void)shader; (void)name; float d[2]{x,y}; AppendComputeParam(d, sizeof(d));
+}
+void DX11RhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+    (void)shader; (void)name; float d[3]{x,y,z}; AppendComputeParam(d, sizeof(d));
+}
+void DX11RhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+    (void)shader; (void)name; int d[3]{x,y,z}; AppendComputeParam(d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
-    (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
+    (void)shader; (void)name; float d[4]{x,y,z,w}; AppendComputeParam(d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    (void)shader; (void)name; (void)data;
+    (void)shader; (void)name; AppendComputeParam(data, 64);
 }
 void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
     (void)handle; (void)offset; (void)size; (void)dst;
+}
+
+unsigned int DX11RhiDevice::CreateComputeShaderEx(
+    const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& hlsl_src,
+    uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/,
+    uint32_t /*sampler_count*/, uint32_t /*push_constant_bytes*/) {
+    return shader_mgr_.CreateComputeProgram(hlsl_src);
+}
+
+unsigned int DX11RhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    if (!initialized_) return 0;
+    return resource_mgr_.CreateComputeWriteTexture2D(width, height);
 }
 
 } // namespace render

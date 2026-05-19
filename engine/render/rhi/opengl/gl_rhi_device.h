@@ -128,6 +128,7 @@ public:
     void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
     bool SupportsCompute() const override { return supports_ssbo_; }
     bool SupportsSSBOCompute() const override { return supports_ssbo_; }
+    unsigned int CreateComputeWriteTexture2D(int width, int height) override;
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;

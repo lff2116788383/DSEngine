@@ -494,31 +494,71 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prog->pipeline);
 
-    // 绑定 SSBO descriptor set
-    if (prog->descriptor_set_layout != VK_NULL_HANDLE && !bound_ssbos_.empty()) {
+    // 绑定 descriptor set（SSBO + storage image + sampler）
+    if (prog->descriptor_set_layout != VK_NULL_HANDLE) {
         VkDescriptorSet ds = resource_mgr_.AllocateDescriptorSet(prog->descriptor_set_layout);
         if (ds != VK_NULL_HANDLE) {
             std::vector<VkWriteDescriptorSet> writes;
             std::vector<VkDescriptorBufferInfo> buffer_infos;
+            std::vector<VkDescriptorImageInfo>  image_infos;
             buffer_infos.reserve(bound_ssbos_.size());
+            image_infos.reserve(pending_compute_images_.size() + pending_compute_samplers_.size());
 
+            // SSBO 绑定（binding 0..ssbo_binding_count-1）
             for (auto& [binding, ssbo_handle] : bound_ssbos_) {
                 const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
                 if (!ssbo) continue;
-
                 VkDescriptorBufferInfo buf_info{};
                 buf_info.buffer = ssbo->buffer;
                 buf_info.offset = 0;
-                buf_info.range = ssbo->size;
+                buf_info.range  = ssbo->size;
                 buffer_infos.push_back(buf_info);
-
                 VkWriteDescriptorSet w{};
-                w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                w.dstSet = ds;
-                w.dstBinding = binding;
+                w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                w.dstSet          = ds;
+                w.dstBinding      = binding;
                 w.descriptorCount = 1;
-                w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                w.pBufferInfo = &buffer_infos.back();
+                w.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                w.pBufferInfo     = &buffer_infos.back();
+                writes.push_back(w);
+            }
+
+            // Storage image 绑定（layout binding = ssbo_count + user_binding）
+            uint32_t img_base = prog->ssbo_binding_count;
+            for (auto& [binding, img_info] : pending_compute_images_) {
+                const auto* tex = resource_mgr_.GetTexture(img_info.texture_handle);
+                if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
+                VkDescriptorImageInfo ii{};
+                ii.imageView   = tex->image_view;
+                ii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                image_infos.push_back(ii);
+                VkWriteDescriptorSet w{};
+                w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                w.dstSet          = ds;
+                w.dstBinding      = img_base + binding;
+                w.descriptorCount = 1;
+                w.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                w.pImageInfo      = &image_infos.back();
+                writes.push_back(w);
+            }
+
+            // Sampler 绑定（layout binding = ssbo_count + storage_image_count + user_unit）
+            uint32_t smp_base = prog->ssbo_binding_count + prog->storage_image_count;
+            for (auto& [unit, tex_handle] : pending_compute_samplers_) {
+                const auto* tex = resource_mgr_.GetTexture(tex_handle);
+                if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
+                VkDescriptorImageInfo ii{};
+                ii.sampler     = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
+                ii.imageView   = tex->image_view;
+                ii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_infos.push_back(ii);
+                VkWriteDescriptorSet w{};
+                w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                w.dstSet          = ds;
+                w.dstBinding      = smp_base + unit;
+                w.descriptorCount = 1;
+                w.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                w.pImageInfo      = &image_infos.back();
                 writes.push_back(w);
             }
 
@@ -539,6 +579,8 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, size,
                            compute_push_constants_.data());
     }
+    // Dispatch 后清空 push constant 缓存，避免跨 dispatch 累积
+    compute_push_constants_.clear();
 
     vkCmdDispatch(cmd, groups_x, groups_y, groups_z);
 
@@ -635,6 +677,20 @@ void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* na
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
+void VulkanRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+    (void)shader; (void)name;
+    float data[3] = { x, y, z };
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
+    memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
+}
+void VulkanRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+    (void)shader; (void)name;
+    int data[3] = { x, y, z };
+    size_t offset = compute_push_constants_.size();
+    EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
+    memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
+}
 void VulkanRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
     (void)shader; (void)name;
     float data[4] = { x, y, z, w };
@@ -648,6 +704,21 @@ void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* nam
     EnsurePushConstantCapacity(compute_push_constants_, offset, 64);
     memcpy(compute_push_constants_.data() + offset, data, 64);
 }
+unsigned int VulkanRhiDevice::CreateComputeShaderEx(
+    const std::string& /*gl_src*/, const std::string& vk_src, const std::string& /*hlsl_src*/,
+    uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
+    uint32_t push_constant_bytes) {
+    if (ssbo_count == 0 && storage_image_count == 0 && sampler_count == 0)
+        return shader_mgr_.CreateComputeProgramSSBO(vk_src, 0, push_constant_bytes);
+    return shader_mgr_.CreateComputeProgramFull(
+        vk_src, ssbo_count, storage_image_count, sampler_count, push_constant_bytes);
+}
+
+unsigned int VulkanRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    if (!initialized_) return 0;
+    return resource_mgr_.CreateComputeWriteTexture2D(width, height);
+}
+
 void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
     if (!initialized_) return;
     const auto* ssbo = resource_mgr_.GetSSBO(handle);

@@ -4,6 +4,7 @@
  */
 
 #include "engine/render/hair/hair_instance.h"
+#include "engine/render/hair/hair_compute_shaders.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 
@@ -119,6 +120,103 @@ void HairInstance::UpdateLOD(float camera_distance) {
     if (active_strand_count == 0 && current_lod < 3) {
         active_strand_count = 1;
     }
+}
+
+void HairInstance::DestroyComputeShaders(RhiDevice* rhi) {
+    if (!rhi) return;
+    if (cs_integrate_)   { rhi->DeleteComputeShader(cs_integrate_);   cs_integrate_   = 0; }
+    if (cs_length_)      { rhi->DeleteComputeShader(cs_length_);      cs_length_      = 0; }
+    if (cs_local_shape_) { rhi->DeleteComputeShader(cs_local_shape_); cs_local_shape_ = 0; }
+    if (cs_tangent_)     { rhi->DeleteComputeShader(cs_tangent_);     cs_tangent_     = 0; }
+}
+
+void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
+    if (!rhi || !gpu_resources_valid || current_lod >= 3) return;
+    if (!rhi->SupportsCompute()) return;
+
+    // --- 懒加载 shader ---
+    if (cs_integrate_ == 0) {
+        cs_integrate_ = rhi->CreateComputeShaderEx(
+            kHairIntegrateSource, kHairIntegrateSourceVK, kHairIntegrateSourceHLSL,
+            4, 0, 0, 48);
+        if (cs_integrate_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile integrate CS"); return; }
+    }
+    if (cs_length_ == 0) {
+        cs_length_ = rhi->CreateComputeShaderEx(
+            kHairLengthConstraintSource, kHairLengthConstraintSourceVK, kHairLengthConstraintSourceHLSL,
+            3, 0, 0, 4);
+        if (cs_length_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile length CS"); return; }
+    }
+    if (cs_local_shape_ == 0) {
+        cs_local_shape_ = rhi->CreateComputeShaderEx(
+            kHairLocalShapeSource, kHairLocalShapeSourceVK, kHairLocalShapeSourceHLSL,
+            3, 0, 0, 12);
+        if (cs_local_shape_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile local shape CS"); return; }
+    }
+    if (cs_tangent_ == 0) {
+        cs_tangent_ = rhi->CreateComputeShaderEx(
+            kHairUpdateTangentSource, kHairUpdateTangentSourceVK, kHairUpdateTangentSourceHLSL,
+            3, 0, 0, 12);
+        if (cs_tangent_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile tangent CS"); return; }
+    }
+
+    const int nv = static_cast<int>(total_vertex_count);
+    const int ns = static_cast<int>(active_strand_count);
+    const int vps = (ns > 0) ? (nv / ns) : nv;
+
+    rhi->BeginComputePass();
+
+    // --- Pass 1: Verlet Integration ---
+    // All backends: binding 0=pos_cur, 1=pos_prev, 2=pos_rest, 3=strand_info
+    rhi->BindSSBO(position_ssbo,      0);
+    rhi->BindSSBO(position_prev_ssbo, 1);
+    rhi->BindSSBO(position_rest_ssbo, 2);
+    rhi->BindSSBO(strand_info_ssbo,   3);
+    rhi->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", nv);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_dt",           dt);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_damping",      sim_params.damping);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_gx",           sim_params.gravity_dir.x);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_gy",           sim_params.gravity_dir.y);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_gz",           sim_params.gravity_dir.z);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_gw",           sim_params.gravity_magnitude);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_wx",           sim_params.wind.x);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_wy",           sim_params.wind.y);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_wz",           sim_params.wind.z);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_ww",           sim_params.wind_turbulence);
+    rhi->SetComputeUniformFloat(cs_integrate_, "u_time",         time);
+    rhi->DispatchCompute(cs_integrate_, static_cast<unsigned int>((nv + 63) / 64), 1, 1);
+    rhi->ComputeMemoryBarrier();
+
+    // --- Pass 2 & 3: Constraints (多次迭代) ---
+    // All backends: binding 0=pos_cur, 1=pos_rest, 2=strand_info
+    rhi->BindSSBO(position_ssbo,      0);
+    rhi->BindSSBO(position_rest_ssbo, 1);
+    rhi->BindSSBO(strand_info_ssbo,   2);
+    for (int i = 0; i < sim_params.length_constraint_iterations; ++i) {
+        rhi->SetComputeUniformInt(cs_length_, "u_num_strands", ns);
+        rhi->DispatchCompute(cs_length_, static_cast<unsigned int>((ns + 63) / 64), 1, 1);
+        rhi->ComputeMemoryBarrier();
+    }
+    for (int i = 0; i < sim_params.local_constraint_iterations; ++i) {
+        rhi->SetComputeUniformInt(cs_local_shape_,   "u_num_strands",    ns);
+        rhi->SetComputeUniformFloat(cs_local_shape_, "u_stiffness_local",  sim_params.stiffness_local);
+        rhi->SetComputeUniformFloat(cs_local_shape_, "u_stiffness_global", sim_params.stiffness_global);
+        rhi->DispatchCompute(cs_local_shape_, static_cast<unsigned int>((ns + 63) / 64), 1, 1);
+        rhi->ComputeMemoryBarrier();
+    }
+
+    // --- Pass 4: Tangent Update ---
+    // All backends: binding 0=pos_cur, 1=tangent, 2=strand_info
+    rhi->BindSSBO(position_ssbo,  0);
+    rhi->BindSSBO(tangent_ssbo,   1);
+    rhi->BindSSBO(strand_info_ssbo, 2);
+    rhi->SetComputeUniformInt(cs_tangent_, "u_num_vertices",  nv);
+    rhi->SetComputeUniformInt(cs_tangent_, "u_num_strands",   ns);
+    rhi->SetComputeUniformInt(cs_tangent_, "u_verts_per_strand", vps);
+    rhi->DispatchCompute(cs_tangent_, static_cast<unsigned int>((nv + 63) / 64), 1, 1);
+    rhi->ComputeMemoryBarrier();
+
+    rhi->EndComputePass();
 }
 
 } // namespace render

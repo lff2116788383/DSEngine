@@ -878,6 +878,19 @@ void OpenGLRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int t
     glBindTexture(GL_TEXTURE_2D, texture_handle);
 }
 
+unsigned int OpenGLRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return static_cast<unsigned int>(tex);
+}
+
 // --- Hi-Z Occlusion Culling ---
 
 unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
