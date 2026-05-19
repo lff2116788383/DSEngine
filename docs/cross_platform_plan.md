@@ -352,12 +352,27 @@ endif()
 **Phase 1 已完成**，桌面端 GLFW 依赖已全部封装进 `engine/platform/glfw/`。  
 **Phase 2 已完成**，`FileSystem` 接口 + `NativeFileSystem` 桌面实现已建立，`AssetManager::LoadFileToMemory` 通过 `FileSystem*` 委托读取，`ServiceLocator` 注册 `FileSystem` 服务。  
 **Phase 3 已完成**，`shader_compiler` 新增 ESSL 310 交叉编译，所有 44 个 gen.h 已包含 `k*_essl310` 常量；新建 `engine/render/rhi/opengl/gl_loader.h` 统一 GL/GLES include；6 个 OpenGL 后端源文件替换为 `gl_loader.h`。  
-**Phase 4 已完成（核心准备）**，完成 Android 交叉编译所需的基础设施改造：
+**Phase 4 已完成**，Android 代码层完整交付：
+
+基础设施（上一阶段）：
 - `VulkanContext::CreateSurface` 补 `VK_KHR_ANDROID_SURFACE_EXTENSION_NAME` + `VkAndroidSurfaceCreateInfoKHR` 分支
 - `gl_rhi_device.cpp` 补 `#ifdef __ANDROID__` 直接绑定 GLES 3.1 原生函数，跳过 `wglGetProcAddress`
 - `gl_loader.h` 补 `GLAD_API_PTR` 空定义，保证 GLES 下函数指针类型兼容
 - `CMakeLists.txt` 新增 Android 块：自动禁用 PhysX/D3D11/GTest/Editor，跳过 GLFW/glad/imgui_impl_glfw 编译，链接 `EGL GLESv3 android log`
-- 桌面端编译验证：289 目标文件，零错误
+
+平台实现（本阶段）：
+- `engine/platform/android/android_app.h/.cpp`：`AndroidApp` 实现 `PlatformApp` 全部接口
+  - EGL 初始化（GLES 3.0 context + ANativeWindow surface）
+  - `AInputQueue` touch/key 事件泵送 → 统一回调接口
+  - Vulkan Surface：`VkAndroidSurfaceCreateInfoKHR`（`DSE_ENABLE_VULKAN` 条件编译）
+  - `CreateDefaultPlatformApp()` 返回 `AndroidApp`，与 `GlfwApp` 工厂函数互斥
+- `engine/assets/android_asset_fs.h/.cpp`：`AndroidAssetFileSystem` 实现 `FileSystem` 全部接口
+  - `AAssetManager` 读取 APK `assets/` 目录，`AASSET_MODE_BUFFER` 零拷贝读取
+- `CMakeLists.txt`：非 Android 构建过滤 `android/*.cpp` + `android_asset_fs.cpp`
+- 桌面端编译验证：290 目标文件，零错误
+
+剩余工作（需 Android Studio 环境）：
+- `apps/android_host/`：Android Studio 项目（`build.gradle` + JNI 桥接 + CMakePresets）
 
 ---
 
