@@ -77,6 +77,16 @@ EditorSettings LoadEditorSettings() {
             }
         }
     }
+    if (doc.HasMember("last_project_path") && doc["last_project_path"].IsString()) {
+        settings.last_project_path = doc["last_project_path"].GetString();
+    }
+    if (doc.HasMember("recent_projects") && doc["recent_projects"].IsArray()) {
+        for (auto& v : doc["recent_projects"].GetArray()) {
+            if (v.IsString()) {
+                settings.recent_projects.emplace_back(v.GetString());
+            }
+        }
+    }
 
     return settings;
 }
@@ -97,6 +107,14 @@ void SaveEditorSettings(const EditorSettings& settings) {
         recent_arr.PushBack(rapidjson::Value(path.c_str(), alloc), alloc);
     }
     doc.AddMember("recent_files", recent_arr, alloc);
+
+    doc.AddMember("last_project_path", rapidjson::Value(settings.last_project_path.c_str(), alloc), alloc);
+
+    rapidjson::Value project_arr(rapidjson::kArrayType);
+    for (const auto& path : settings.recent_projects) {
+        project_arr.PushBack(rapidjson::Value(path.c_str(), alloc), alloc);
+    }
+    doc.AddMember("recent_projects", project_arr, alloc);
 
     rapidjson::StringBuffer buffer;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
@@ -122,6 +140,20 @@ void AddRecentFile(EditorSettings& settings, const std::string& path) {
     // Trim to max
     if (static_cast<int>(settings.recent_files.size()) > settings.max_recent_files) {
         settings.recent_files.resize(settings.max_recent_files);
+    }
+}
+
+void AddRecentProject(EditorSettings& settings, const std::string& path) {
+    if (path.empty()) {
+        return;
+    }
+    auto it = std::find(settings.recent_projects.begin(), settings.recent_projects.end(), path);
+    if (it != settings.recent_projects.end()) {
+        settings.recent_projects.erase(it);
+    }
+    settings.recent_projects.insert(settings.recent_projects.begin(), path);
+    if (static_cast<int>(settings.recent_projects.size()) > settings.max_recent_projects) {
+        settings.recent_projects.resize(settings.max_recent_projects);
     }
 }
 

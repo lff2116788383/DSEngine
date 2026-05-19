@@ -8,6 +8,7 @@
 #include "editor_console_panel.h"
 #include "editor_icons.h"
 #include "editor_tilemap_panel.h"
+#include "editor_project.h"
 
 #include <glad/gl.h>
 #include "stb/stb_image.h"
@@ -30,7 +31,17 @@ std::filesystem::path GetProjectRootPath() {
 }
 
 std::filesystem::path GetProjectBaseDataPath() {
-    static std::filesystem::path base_data_path = []() {
+    auto& proj_mgr = dse::editor::ProjectManager::Get();
+    if (proj_mgr.HasOpenProject()) {
+        auto asset_dir = proj_mgr.GetAssetDir();
+        if (!std::filesystem::exists(asset_dir)) {
+            std::error_code ec;
+            std::filesystem::create_directories(asset_dir, ec);
+        }
+        return asset_dir;
+    }
+
+    static std::filesystem::path fallback_path = []() {
         std::filesystem::path p = GetProjectRootPath();
         std::filesystem::path target_path = p / "samples" / "lua" / "data";
         if (!std::filesystem::exists(target_path)) {
@@ -42,11 +53,18 @@ std::filesystem::path GetProjectBaseDataPath() {
         }
         return target_path;
     }();
-    return base_data_path;
+    return fallback_path;
 }
 
 std::filesystem::path& GetCurrentProjectPanelPath() {
     static std::filesystem::path current_path = GetProjectBaseDataPath();
+    static bool s_last_has_project = false;
+
+    bool has_project = dse::editor::ProjectManager::Get().HasOpenProject();
+    if (has_project != s_last_has_project) {
+        current_path = GetProjectBaseDataPath();
+        s_last_has_project = has_project;
+    }
     return current_path;
 }
 

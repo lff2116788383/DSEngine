@@ -41,6 +41,8 @@ add_executable(dse_editor_cpp WIN32
     src/editor_particle_panel.cpp
     src/editor_lua_console.cpp
     src/editor_build_game.cpp
+    src/editor_project.cpp
+    src/editor_project_hub.cpp
     src/editor_scene_tabs.cpp
     src/editor_test_harness.cpp
     src/editor_snapshot.cpp

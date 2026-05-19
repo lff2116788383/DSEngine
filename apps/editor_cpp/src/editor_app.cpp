@@ -74,6 +74,8 @@
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
 #include "editor_build_game.h"
+#include "editor_project.h"
+#include "editor_project_hub.h"
 
 
 
@@ -471,6 +473,14 @@ bool EditorApp::Init(int argc, char* argv[]) {
     current_gizmo_operation_ = editor_settings.default_gizmo_operation;
     current_gizmo_mode_ = editor_settings.default_gizmo_mode;
 
+    // 尝试自动打开上次项目
+    if (!editor_settings.last_project_path.empty()) {
+        std::filesystem::path dseproj = std::filesystem::path(editor_settings.last_project_path) / "project.dseproj";
+        if (std::filesystem::exists(dseproj)) {
+            dse::editor::ProjectManager::Get().OpenProject(dseproj);
+        }
+    }
+
     if (!test_config_.scene_path.empty()) {
         editor_settings.last_scene_path = test_config_.scene_path;
     }
@@ -685,6 +695,9 @@ void EditorApp::Shutdown() {
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
 
+    // 关闭当前项目（释放 .lock）
+    dse::editor::ProjectManager::Get().CloseProject();
+
     // 停止所有插件
     plugin_manager_.StopAll();
 
@@ -718,6 +731,12 @@ void EditorApp::Shutdown() {
 // ─── DrawEditorUI ───────────────────────────────────────────────────────────
 
 void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_texture) {
+    // 无项目打开时显示 Project Hub
+    if (!dse::editor::ProjectManager::Get().HasOpenProject()) {
+        dse::editor::DrawProjectHub();
+        return;
+    }
+
     World& world = engine_instance_->pipeline()->world();
     auto& registry = world.registry();
     const bool is_play = (dse::editor::GetEditorState() == dse::editor::EditorState::Play);

@@ -14,6 +14,7 @@
 #include "editor_build_game.h"
 #include "editor_icons.h"
 #include "editor_selection.h"
+#include "editor_project.h"
 #include "engine/dse_version.h"
 
 #include <filesystem>
@@ -237,7 +238,59 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ─── Project ────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Project")) {
-        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, !ctx.read_only)) {
+        auto& proj_mgr = ProjectManager::Get();
+
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Project...", "Ctrl+Shift+N", false, !ctx.read_only)) {
+            ImGui::OpenPopup("NewProjectPopup");
+        }
+        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Project...", "Ctrl+Shift+O", false, !ctx.read_only)) {
+            std::string path = OpenProjectFileDialog();
+            if (!path.empty()) {
+                if (proj_mgr.OpenProject(path)) {
+                    EditorSettings settings = LoadEditorSettings();
+                    settings.last_project_path = proj_mgr.GetProjectRoot().string();
+                    AddRecentProject(settings, proj_mgr.GetProjectRoot().string());
+                    SaveEditorSettings(settings);
+                }
+            }
+        }
+        if (ImGui::BeginMenu("Recent Projects")) {
+            EditorSettings settings = LoadEditorSettings();
+            if (settings.recent_projects.empty()) {
+                ImGui::TextDisabled("No recent projects");
+            } else {
+                for (const auto& recent : settings.recent_projects) {
+                    std::filesystem::path proj_path = std::filesystem::path(recent) / "project.dseproj";
+                    if (ImGui::MenuItem(recent.c_str())) {
+                        if (proj_mgr.OpenProject(proj_path)) {
+                            EditorSettings s = LoadEditorSettings();
+                            s.last_project_path = recent;
+                            AddRecentProject(s, recent);
+                            SaveEditorSettings(s);
+                        }
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Clear Recent")) {
+                    EditorSettings s = LoadEditorSettings();
+                    s.recent_projects.clear();
+                    SaveEditorSettings(s);
+                }
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save Project", nullptr, false, proj_mgr.HasOpenProject())) {
+            proj_mgr.SaveProject();
+        }
+        if (ImGui::MenuItem("Close Project", nullptr, false, proj_mgr.HasOpenProject())) {
+            proj_mgr.CloseProject();
+            EditorSettings settings = LoadEditorSettings();
+            settings.last_project_path.clear();
+            SaveEditorSettings(settings);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, !ctx.read_only && proj_mgr.HasOpenProject())) {
             OpenBuildGameDialog();
         }
         ImGui::Separator();
@@ -302,6 +355,62 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
+    }
+
+    // New Project popup
+    {
+        static char s_new_proj_name[128] = "MyGame";
+        static char s_new_proj_location[512] = "";
+        static int s_new_proj_template = 0;
+
+        if (ImGui::BeginPopupModal("NewProjectPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Create New Project");
+            ImGui::Separator();
+
+            ImGui::SetNextItemWidth(300);
+            ImGui::InputText("Project Name", s_new_proj_name, sizeof(s_new_proj_name));
+
+            ImGui::SetNextItemWidth(300);
+            ImGui::InputText("Location", s_new_proj_location, sizeof(s_new_proj_location));
+            ImGui::SameLine();
+            if (ImGui::Button("Browse...")) {
+                std::string folder = BrowseNewProjectLocationDialog();
+                if (!folder.empty()) {
+                    strncpy(s_new_proj_location, folder.c_str(), sizeof(s_new_proj_location) - 1);
+                    s_new_proj_location[sizeof(s_new_proj_location) - 1] = '\0';
+                }
+            }
+
+            ImGui::SetNextItemWidth(300);
+            const char* template_names[] = { "Empty", "2D Game", "3D Game", "Lua Scripting" };
+            ImGui::Combo("Template", &s_new_proj_template, template_names, 4);
+
+            ImGui::Separator();
+
+            bool can_create = (strlen(s_new_proj_name) > 0 && strlen(s_new_proj_location) > 0);
+            if (!can_create) ImGui::BeginDisabled();
+            if (ImGui::Button("Create", ImVec2(120, 0))) {
+                auto& proj_mgr = ProjectManager::Get();
+                if (proj_mgr.CreateProject(
+                        s_new_proj_location,
+                        s_new_proj_name,
+                        static_cast<ProjectTemplate>(s_new_proj_template))) {
+                    EditorSettings settings = LoadEditorSettings();
+                    settings.last_project_path = proj_mgr.GetProjectRoot().string();
+                    AddRecentProject(settings, proj_mgr.GetProjectRoot().string());
+                    SaveEditorSettings(settings);
+                    EditorLog(LogLevel::Info, "Created project: " + std::string(s_new_proj_name));
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            if (!can_create) ImGui::EndDisabled();
+
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
     }
 
     ImGui::EndMenuBar();
