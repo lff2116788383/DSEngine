@@ -28,6 +28,9 @@ class JobSystem;
 namespace dse::pak {
 class PakReader;
 }
+namespace dse::assets {
+class FileSystem;
+}
 
 /**
  * @class TextureAsset
@@ -307,6 +310,8 @@ public:
     void SetJobSystem(dse::core::JobSystem* job_system);
     dse::core::EventBus* GetEventBus() const;
     dse::core::JobSystem* GetJobSystem() const;
+    void SetFileSystem(dse::assets::FileSystem* file_system);
+    dse::assets::FileSystem* GetFileSystem() const;
     /**
      * @brief 配置数据根目录
      * @param data_root 资源文件的基础路径
@@ -573,6 +578,7 @@ private:
     RhiDevice* rhi_device_ = nullptr;
     dse::core::EventBus* event_bus_ = nullptr;
     dse::core::JobSystem* job_system_ = nullptr;
+    dse::assets::FileSystem* file_system_ = nullptr;
     std::deque<std::function<void()>> pending_main_thread_callbacks_;
     std::size_t pending_callbacks_high_watermark_ = 0;
     bool callback_backlog_warned_ = false;

@@ -11,6 +11,7 @@
 #include "engine/runtime/frame_pipeline.h"
 
 namespace dse::platform { class PlatformApp; }
+namespace dse::assets { class NativeFileSystem; }
 #include "engine/runtime/runtime_services.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/core/service_locator.h"
@@ -104,6 +105,7 @@ private:
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
     bool is_initialized_ = false;
     std::unique_ptr<dse::platform::PlatformApp> platform_;
+    std::unique_ptr<dse::assets::NativeFileSystem> default_file_system_;
 };
 
 int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility

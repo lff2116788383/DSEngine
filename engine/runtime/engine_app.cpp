@@ -5,6 +5,7 @@
 
 #include "engine/runtime/engine_app.h"
 #include "engine/platform/platform_app.h"
+#include "engine/assets/native_file_system.h"
 #ifdef DSE_ENABLE_LUA
 #include "engine/scripting/lua/lua_runtime.h"
 #endif
@@ -205,6 +206,7 @@ void EngineInstance::ResetRuntimeServices() {
     service_locator().Reset<core::EventBus>();
     service_locator().Reset<FramePipeline>();
     service_locator().Reset<World>();
+    service_locator().Reset<dse::assets::FileSystem>();
     event_bus_.reset();
 
     core::ServiceLocator::Instance().Reset<core::JobSystem>();
@@ -312,6 +314,12 @@ bool EngineInstance::Init() {
     if (services_.asset_manager) {
         services_.asset_manager->SetEventBus(event_bus_.get());
         services_.asset_manager->SetJobSystem(services_.job_system);
+        if (!services_.asset_manager->GetFileSystem()) {
+            default_file_system_ = std::make_unique<dse::assets::NativeFileSystem>();
+            services_.asset_manager->SetFileSystem(default_file_system_.get());
+            auto fs_shared = std::shared_ptr<dse::assets::FileSystem>(default_file_system_.get(), [](dse::assets::FileSystem*) {});
+            service_locator().Register<dse::assets::FileSystem, dse::assets::FileSystem>(fs_shared);
+        }
     }
     pipeline_->SetBusinessMode(config_.business_mode);
     if (platform_) {
@@ -389,6 +397,7 @@ void EngineInstance::Shutdown() {
     if (services_.asset_manager) {
         services_.asset_manager->SetEventBus(nullptr);
         services_.asset_manager->SetJobSystem(nullptr);
+        services_.asset_manager->SetFileSystem(nullptr);
     }
 
     // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World 本身，由 EngineInstance 管理）
@@ -411,6 +420,7 @@ void EngineInstance::Shutdown() {
     }
     default_asset_manager_.reset();
     default_job_system_.reset();
+    default_file_system_.reset();
 
     Debug::ShutDown();
 

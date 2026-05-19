@@ -5,6 +5,7 @@
 
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/pak_reader.h"
+#include "engine/assets/native_file_system.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
@@ -193,6 +194,16 @@ dse::core::JobSystem* AssetManager::GetJobSystem() const {
     return job_system_;
 }
 
+void AssetManager::SetFileSystem(dse::assets::FileSystem* file_system) {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    file_system_ = file_system;
+}
+
+dse::assets::FileSystem* AssetManager::GetFileSystem() const {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    return file_system_;
+}
+
 void AssetManager::ConfigureDataRoot(const std::string& data_root) {
     std::lock_guard<std::mutex> lock(config_mutex_);
     if (data_root.empty()) {
@@ -352,6 +363,16 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
     }
     
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
+
+    dse::assets::FileSystem* fs;
+    {
+        std::lock_guard<std::mutex> lock(config_mutex_);
+        fs = file_system_;
+    }
+    if (fs) {
+        return fs->ReadFile(load_path, out_data);
+    }
+
     std::ifstream file(load_path, std::ios::binary | std::ios::ate);
     if (!file) return false;
     std::streamsize size = file.tellg();
@@ -365,7 +386,6 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
     }
     return false;
 }
-
 
 bool AssetManager::LoadImageRgba(const std::string& path, std::vector<unsigned char>& out_pixels, int& out_width, int& out_height, int& out_channels) {
     out_pixels.clear();
