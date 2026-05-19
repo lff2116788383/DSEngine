@@ -592,10 +592,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         // 绘制
-        if (item.vao_override > 0) {
-            glBindVertexArray(item.vao_override);
-            if (item.ebo_override > 0) {
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, item.ebo_override);
+        if (item.vao_override) {
+            glBindVertexArray(item.vao_override.raw());
+            if (item.ebo_override) {
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, item.ebo_override.raw());
             }
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.index_count_override), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
@@ -629,7 +629,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_handle_);
             glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(inst_data_size), item.instance_transforms.data());
 
-            glBindVertexArray(mesh_vao_handle_);
+            glBindVertexArray(mesh_vao_handle_.raw());
 
             // 配置 instance attributes (location 7-10, 每列 vec4)
             const GLsizei mat4_stride = static_cast<GLsizei>(sizeof(glm::mat4));
@@ -660,7 +660,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
             }
 
-            glBindVertexArray(mesh_vao_handle_);
+            glBindVertexArray(mesh_vao_handle_.raw());
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_SHORT, nullptr);
             glBindVertexArray(0);
         }

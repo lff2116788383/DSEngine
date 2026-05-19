@@ -208,7 +208,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     }
 
     // 娉ㄥ叆鍑芥暟鎸囬拡鍒?DrawExecutor锛堢敤浜庣紦鍐插尯鎿嶄綔鍥炶皟锛?
-    draw_executor_.set_create_vao_fn([this]() -> unsigned int {
+    draw_executor_.set_create_vao_fn([this]() -> VertexArrayHandle {
         return CreateVertexArray();
     });
     draw_executor_.set_create_buffer_fn([this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int {
@@ -217,7 +217,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     draw_executor_.set_update_buffer_fn([this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
         UpdateBuffer(handle, offset, size, data, is_index);
     });
-    draw_executor_.set_delete_vao_fn([this](unsigned int handle) {
+    draw_executor_.set_delete_vao_fn([this](VertexArrayHandle handle) {
         DeleteVertexArray(handle);
     });
     draw_executor_.set_delete_buffer_fn([this](unsigned int handle) {
@@ -246,7 +246,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
 
     // 鍒濆鍖栧嚑浣曠紦鍐插尯锛?D 绮剧伒 + 3D 缃戞牸 + 鐧借壊绾圭悊锛?
     draw_executor_.InitGeometryBuffers(
-        [this]() -> unsigned int { return CreateVertexArray(); },
+        [this]() -> VertexArrayHandle { return CreateVertexArray(); },
         [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index); },
         [this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { UpdateBuffer(handle, offset, size, data, is_index); }
     );
@@ -345,15 +345,16 @@ void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
 
 // --- 椤剁偣鏁扮粍 ---
 
-unsigned int OpenGLRhiDevice::CreateVertexArray() {
+VertexArrayHandle OpenGLRhiDevice::CreateVertexArray() {
     unsigned int handle = 0;
     glGenVertexArrays(1, &handle);
     resource_mgr_.ledger().vertex_arrays_created += 1;
-    return handle;
+    return VertexArrayHandle{handle};
 }
 
-void OpenGLRhiDevice::DeleteVertexArray(unsigned int handle) {
-    glDeleteVertexArrays(1, &handle);
+void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
+    unsigned int raw = handle.raw();
+    glDeleteVertexArrays(1, &raw);
     resource_mgr_.ledger().vertex_arrays_destroyed += 1;
 }
 
@@ -1083,8 +1084,8 @@ void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
 
 // --- Mega Buffer (GPU Driven) ---
 
-unsigned int OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
-                                             unsigned int& out_vbo, unsigned int& out_ibo) {
+VertexArrayHandle OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                             BufferHandle& out_vbo, BufferHandle& out_ibo) {
     unsigned int vao = 0, vbo = 0, ibo = 0;
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
@@ -1093,8 +1094,8 @@ unsigned int OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_si
         if (vao) glDeleteVertexArrays(1, &vao);
         if (vbo) glDeleteBuffers(1, &vbo);
         if (ibo) glDeleteBuffers(1, &ibo);
-        out_vbo = 0; out_ibo = 0;
-        return 0;
+        out_vbo = {}; out_ibo = {};
+        return {};
     }
 
     glBindVertexArray(vao);
@@ -1128,34 +1129,35 @@ unsigned int OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_si
     glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(76));
 
     glBindVertexArray(0);
-    out_vbo = vbo;
-    out_ibo = ibo;
+    out_vbo = BufferHandle{vbo};
+    out_ibo = BufferHandle{ibo};
     resource_mgr_.ledger().buffers_created += 2;
-    return vao;
+    return VertexArrayHandle{vao};
 }
 
-void OpenGLRhiDevice::UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) {
-    if (vbo == 0 || size == 0 || !data) return;
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+void OpenGLRhiDevice::UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) {
+    if (!vbo || size == 0 || !data) return;
+    glBindBuffer(GL_ARRAY_BUFFER, vbo.raw());
     glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size), data);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void OpenGLRhiDevice::UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) {
-    if (ibo == 0 || size == 0 || !data) return;
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+void OpenGLRhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) {
+    if (!ibo || size == 0 || !data) return;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo.raw());
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size), data);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-void OpenGLRhiDevice::DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) {
-    if (vao) glDeleteVertexArrays(1, &vao);
-    if (vbo) glDeleteBuffers(1, &vbo);
-    if (ibo) glDeleteBuffers(1, &ibo);
+void OpenGLRhiDevice::DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
+    unsigned int v = vao.raw(), b = vbo.raw(), i = ibo.raw();
+    if (v) glDeleteVertexArrays(1, &v);
+    if (b) glDeleteBuffers(1, &b);
+    if (i) glDeleteBuffers(1, &i);
 }
 
-void OpenGLRhiDevice::BindMegaVAO(unsigned int vao) {
-    if (vao) glBindVertexArray(vao);
+void OpenGLRhiDevice::BindMegaVAO(VertexArrayHandle vao) {
+    if (vao) glBindVertexArray(vao.raw());
 }
 
 void OpenGLRhiDevice::UnbindVAO() {
@@ -1166,15 +1168,15 @@ void OpenGLRhiDevice::UnbindVAO() {
 
 // --- Static Mesh VAO ---
 
-unsigned int OpenGLRhiDevice::CreateStaticMeshVAO(
+VertexArrayHandle OpenGLRhiDevice::CreateStaticMeshVAO(
     const void* vertex_data, size_t vertex_bytes,
     const std::vector<const void*>& ebo_datas,
     const std::vector<size_t>& ebo_sizes,
-    unsigned int& out_vbo,
-    std::vector<unsigned int>& out_ebos)
+    BufferHandle& out_vbo,
+    std::vector<BufferHandle>& out_ebos)
 {
-    if (!vertex_data || vertex_bytes == 0) { out_vbo = 0; out_ebos.clear(); return 0; }
-    if (ebo_datas.size() != ebo_sizes.size()) { out_vbo = 0; out_ebos.clear(); return 0; }
+    if (!vertex_data || vertex_bytes == 0) { out_vbo = {}; out_ebos.clear(); return {}; }
+    if (ebo_datas.size() != ebo_sizes.size()) { out_vbo = {}; out_ebos.clear(); return {}; }
 
     unsigned int vao = 0, vbo = 0;
     glGenVertexArrays(1, &vao);
@@ -1182,7 +1184,7 @@ unsigned int OpenGLRhiDevice::CreateStaticMeshVAO(
     if (vao == 0 || vbo == 0) {
         if (vao) glDeleteVertexArrays(1, &vao);
         if (vbo) glDeleteBuffers(1, &vbo);
-        out_vbo = 0; out_ebos.clear(); return 0;
+        out_vbo = {}; out_ebos.clear(); return {};
     }
 
     glBindVertexArray(vao);
@@ -1209,39 +1211,42 @@ unsigned int OpenGLRhiDevice::CreateStaticMeshVAO(
     glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, joints)));
 
     // 鍒涘缓澶氫釜 EBO锛堜竴涓?per LOD level锛?
-    out_ebos.resize(ebo_datas.size(), 0);
+    out_ebos.resize(ebo_datas.size());
     if (!ebo_datas.empty()) {
-        glGenBuffers(static_cast<GLsizei>(ebo_datas.size()), out_ebos.data());
-        // 缁戝畾绗竴涓?EBO 鍒?VAO 鐨?element buffer
+        std::vector<unsigned int> raw_ebos(ebo_datas.size(), 0);
+        glGenBuffers(static_cast<GLsizei>(ebo_datas.size()), raw_ebos.data());
         for (size_t i = 0; i < ebo_datas.size(); ++i) {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, out_ebos[i]);
+            out_ebos[i] = BufferHandle{raw_ebos[i]};
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, raw_ebos[i]);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                          static_cast<GLsizeiptr>(ebo_sizes[i]),
                          ebo_datas[i], GL_STATIC_DRAW);
         }
-        // VAO 璁颁綇鏈€鍚庣粦瀹氱殑 EBO锛涜繍琛屾椂閫氳繃 BindVAOWithEBO 鍒囨崲
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, out_ebos[0]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, raw_ebos[0]);
     }
 
     glBindVertexArray(0);
-    out_vbo = vbo;
+    out_vbo = BufferHandle{vbo};
     resource_mgr_.ledger().buffers_created += 1 + static_cast<int>(ebo_datas.size());
-    return vao;
+    return VertexArrayHandle{vao};
 }
 
-void OpenGLRhiDevice::DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
-                                           const std::vector<unsigned int>& ebos) {
+void OpenGLRhiDevice::DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                                           const std::vector<BufferHandle>& ebos) {
     if (!ebos.empty()) {
-        glDeleteBuffers(static_cast<GLsizei>(ebos.size()), ebos.data());
+        std::vector<unsigned int> raw_ebos(ebos.size());
+        for (size_t i = 0; i < ebos.size(); ++i) raw_ebos[i] = ebos[i].raw();
+        glDeleteBuffers(static_cast<GLsizei>(raw_ebos.size()), raw_ebos.data());
         resource_mgr_.ledger().buffers_destroyed += static_cast<int>(ebos.size());
     }
-    if (vbo) { glDeleteBuffers(1, &vbo); resource_mgr_.ledger().buffers_destroyed += 1; }
-    if (vao) { glDeleteVertexArrays(1, &vao); }
+    unsigned int raw_vbo = vbo.raw(), raw_vao = vao.raw();
+    if (raw_vbo) { glDeleteBuffers(1, &raw_vbo); resource_mgr_.ledger().buffers_destroyed += 1; }
+    if (raw_vao) { glDeleteVertexArrays(1, &raw_vao); }
 }
 
-void OpenGLRhiDevice::BindVAOWithEBO(unsigned int vao, unsigned int ebo) {
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+void OpenGLRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
+    glBindVertexArray(vao.raw());
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo.raw());
 }
 
 void OpenGLRhiDevice::LogResourceLedger() const {

@@ -114,9 +114,9 @@ private:
     std::vector<uint32_t> mega_ibo_data_;    ///< 累积的索引数据（32-bit）
     uint32_t mega_vbo_vertex_count_ = 0;     ///< mega VBO 中已有的顶点总数
     uint32_t mega_ibo_index_count_ = 0;      ///< mega IBO 中已有的 index 总数
-    unsigned int mega_vao_ = 0;              ///< mega buffer 的 VAO
-    unsigned int mega_vbo_ = 0;              ///< mega VBO GL handle
-    unsigned int mega_ibo_ = 0;              ///< mega IBO GL handle
+    dse::render::VertexArrayHandle mega_vao_;              ///< mega buffer 的 VAO
+    dse::render::BufferHandle mega_vbo_;              ///< mega VBO handle
+    dse::render::BufferHandle mega_ibo_;              ///< mega IBO handle
     bool mega_buffer_dirty_ = false;         ///< 需要重新上传
 };
 

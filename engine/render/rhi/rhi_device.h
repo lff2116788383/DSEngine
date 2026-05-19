@@ -155,8 +155,8 @@ public:
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-    virtual unsigned int CreateVertexArray() = 0;
-    virtual void DeleteVertexArray(unsigned int handle) = 0;
+    virtual VertexArrayHandle CreateVertexArray() = 0;
+    virtual void DeleteVertexArray(VertexArrayHandle handle) = 0;
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;
     virtual void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) = 0;
     virtual void EndFrame() = 0;

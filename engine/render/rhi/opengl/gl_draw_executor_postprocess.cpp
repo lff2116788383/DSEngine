@@ -19,7 +19,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
     const std::string& effect_name = request.effect_name;
     const std::vector<float>& params = request.params;
     // 后处理全屏四边形 VAO/VBO
-    if (pp_vao_handle_ == 0) {
+    if (!pp_vao_handle_) {
         float quadVertices[] = {
             -1.0f,  1.0f,  0.0f, 1.0f,
             -1.0f, -1.0f,  0.0f, 0.0f,
@@ -32,10 +32,10 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
             pp_vao_handle_ = create_vao_fn_();
             pp_vbo_handle_ = create_buffer_fn_(sizeof(quadVertices), &quadVertices, false, false);
         } else {
-            glGenVertexArrays(1, &pp_vao_handle_);
+            unsigned int pp_v = 0; glGenVertexArrays(1, &pp_v); pp_vao_handle_ = VertexArrayHandle{pp_v};
             glGenBuffers(1, &pp_vbo_handle_);
         }
-        glBindVertexArray(pp_vao_handle_);
+        glBindVertexArray(pp_vao_handle_.raw());
         glBindBuffer(GL_ARRAY_BUFFER, pp_vbo_handle_);
         if (!create_buffer_fn_) {
             glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
@@ -387,7 +387,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
             } else {
                 glDisable(GL_BLEND);
             }
-            glBindVertexArray(pp_vao_handle_);
+            glBindVertexArray(pp_vao_handle_.raw());
             glDrawArrays(GL_TRIANGLES, 0, 6);
             glBindVertexArray(0);
             return;
@@ -1740,7 +1740,7 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
     } else {
         glDisable(GL_BLEND);
     }
-    glBindVertexArray(pp_vao_handle_);
+    glBindVertexArray(pp_vao_handle_.raw());
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 }

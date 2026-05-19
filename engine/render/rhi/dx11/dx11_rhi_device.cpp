@@ -280,11 +280,11 @@ void DX11RhiDevice::DeleteBuffer(unsigned int handle) {
     resource_mgr_.DeleteBuffer(handle);
 }
 
-unsigned int DX11RhiDevice::CreateVertexArray() {
+VertexArrayHandle DX11RhiDevice::CreateVertexArray() {
     return resource_mgr_.CreateVertexArray();
 }
 
-void DX11RhiDevice::DeleteVertexArray(unsigned int handle) {
+void DX11RhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
     resource_mgr_.DeleteVertexArray(handle);
 }
 

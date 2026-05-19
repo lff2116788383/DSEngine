@@ -171,8 +171,8 @@ struct BatchVertex {
 
 /// 3D 网格绘制项
 struct MeshDrawItem {
-    unsigned int vao_override = 0;       ///< 非零时直接使用此 VAO（仅 GL 后端有效）
-    unsigned int ebo_override = 0;       ///< 非零时绑定此 EBO 覆盖 VAO 默认的 element buffer
+    dse::render::VertexArrayHandle vao_override;       ///< 有效时直接使用此 VAO（仅 GL 后端有效）
+    dse::render::BufferHandle ebo_override;       ///< 有效时绑定此 EBO 覆盖 VAO 默认的 element buffer
     unsigned int index_count_override = 0;
 
     unsigned int texture_handle = 0;

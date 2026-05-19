@@ -35,7 +35,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
     }
 
     // 粒子四边形 VAO/VBO
-    if (particle_quad_vao_handle_ == 0) {
+    if (!particle_quad_vao_handle_) {
         float quad_vertices[] = {
              -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
               0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
@@ -48,10 +48,10 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
             particle_quad_vao_handle_ = create_vao_fn_();
             particle_quad_vbo_handle_ = create_buffer_fn_(sizeof(quad_vertices), quad_vertices, false, false);
         } else {
-            glGenVertexArrays(1, &particle_quad_vao_handle_);
+            unsigned int pq_vao = 0; glGenVertexArrays(1, &pq_vao); particle_quad_vao_handle_ = VertexArrayHandle{pq_vao};
             glGenBuffers(1, &particle_quad_vbo_handle_);
         }
-        glBindVertexArray(particle_quad_vao_handle_);
+        glBindVertexArray(particle_quad_vao_handle_.raw());
         glBindBuffer(GL_ARRAY_BUFFER, particle_quad_vbo_handle_);
         if (!create_buffer_fn_) {
             glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
@@ -78,7 +78,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle);
 
-        glBindVertexArray(particle_quad_vao_handle_);
+        glBindVertexArray(particle_quad_vao_handle_.raw());
         glBindBuffer(GL_ARRAY_BUFFER, item.instance_vbo);
 
         size_t stride = 8 * sizeof(float);
@@ -269,16 +269,16 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     }
 
     // 懒初始化空 VAO
-    if (hair_vao_handle_ == 0) {
+    if (!hair_vao_handle_) {
         if (create_vao_fn_) {
             hair_vao_handle_ = create_vao_fn_();
         } else {
-            glGenVertexArrays(1, &hair_vao_handle_);
+            unsigned int hv = 0; glGenVertexArrays(1, &hv); hair_vao_handle_ = VertexArrayHandle{hv};
         }
     }
 
     glUseProgram(hair_shader_handle_);
-    glBindVertexArray(hair_vao_handle_);
+    glBindVertexArray(hair_vao_handle_.raw());
 
     // 缓存 uniform locations
     glUniformMatrix4fv(hair_loc_view_, 1, GL_FALSE, &view[0][0]);

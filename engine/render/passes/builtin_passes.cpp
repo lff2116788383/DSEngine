@@ -621,7 +621,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
         // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
         const bool use_gpu_indirect = ctx_.gpu_driven_enabled
-            && ctx_.gpu_mega_vao != 0
+            && ctx_.gpu_mega_vao
             && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
 

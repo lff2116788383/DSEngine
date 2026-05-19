@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include "engine/ecs/transform.h"
+#include "engine/render/rhi/rhi_handle.h"
 namespace dse { namespace gameplay3d { class AnimationStateMachine; } }
 
 namespace dse {
@@ -519,10 +520,10 @@ struct TerrainComponent {
     // Internal state
     bool is_dirty = true;
     std::vector<float> height_data;
-    unsigned int vao = 0;
-    unsigned int vbo = 0;
-    unsigned int ebo = 0; // The base EBO (max LOD)
-    std::vector<unsigned int> lod_ebos; // EBOs for different LOD levels
+    dse::render::VertexArrayHandle vao;
+    dse::render::BufferHandle vbo;
+    dse::render::BufferHandle ebo; // The base EBO (max LOD)
+    std::vector<dse::render::BufferHandle> lod_ebos; // EBOs for different LOD levels
     std::vector<unsigned int> lod_index_counts;
     unsigned int index_count = 0;
 };

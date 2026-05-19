@@ -63,8 +63,8 @@ public:
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
     void DeleteBuffer(unsigned int handle) override;
-    unsigned int CreateVertexArray() override;
-    void DeleteVertexArray(unsigned int handle) override;
+    VertexArrayHandle CreateVertexArray() override;
+    void DeleteVertexArray(VertexArrayHandle handle) override;
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;

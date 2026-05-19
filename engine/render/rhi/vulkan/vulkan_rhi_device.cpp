@@ -797,14 +797,14 @@ void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
     vkFreeMemory(device, staging_mem, nullptr);
 }
 
-unsigned int VulkanRhiDevice::CreateVertexArray() {
+VertexArrayHandle VulkanRhiDevice::CreateVertexArray() {
     // Vulkan 不需要 VAO 概念，顶点格式在 VkPipeline 创建时指定
     // 返回占位句柄以兼容 RhiDevice 接口
     static unsigned int vao_counter = 600000;
-    return vao_counter++;
+    return VertexArrayHandle{vao_counter++};
 }
 
-void VulkanRhiDevice::DeleteVertexArray(unsigned int handle) {
+void VulkanRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
     // Vulkan 不需要 VAO 概念，no-op
     (void)handle;
 }

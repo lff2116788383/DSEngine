@@ -50,9 +50,9 @@ struct RenderPipelineResources {
     dse::render::BufferHandle gpu_visible_indices_ssbo;  // visible instance indices SSBO
     dse::render::BufferHandle gpu_atomic_counter_ssbo;   // atomic draw count SSBO
     dse::render::BufferHandle gpu_draw_cmd_ssbo;         // DrawElementsIndirectCommand[] as SSBO (for compute write)
-    unsigned int gpu_mega_vbo = 0;              // 统一顶点缓冲区
-    unsigned int gpu_mega_ibo = 0;              // 统一索引缓冲区
-    unsigned int gpu_mega_vao = 0;              // Mega buffer VAO
+    dse::render::BufferHandle gpu_mega_vbo;              // 统一顶点缓冲区
+    dse::render::BufferHandle gpu_mega_ibo;              // 统一索引缓冲区
+    dse::render::VertexArrayHandle gpu_mega_vao;              // Mega buffer VAO
     unsigned int gpu_cull_shader = 0;           // GPU Driven culling compute shader
     size_t gpu_instance_capacity = 0;           // instance SSBO 当前容量
     size_t gpu_material_capacity = 0;           // material SSBO 当前容量
@@ -126,9 +126,9 @@ struct RenderPipelineResources {
         gpu_visible_indices_ssbo = {};
         gpu_atomic_counter_ssbo = {};
         gpu_draw_cmd_ssbo = {};
-        gpu_mega_vbo = 0;
-        gpu_mega_ibo = 0;
-        gpu_mega_vao = 0;
+        gpu_mega_vbo = {};
+        gpu_mega_ibo = {};
+        gpu_mega_vao = {};
         gpu_cull_shader = 0;
         gpu_instance_capacity = 0;
         gpu_material_capacity = 0;

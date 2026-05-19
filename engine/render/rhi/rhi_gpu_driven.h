@@ -9,6 +9,7 @@
 #ifndef DSE_RHI_GPU_DRIVEN_H
 #define DSE_RHI_GPU_DRIVEN_H
 
+#include "engine/render/rhi/rhi_handle.h"
 #include <cstddef>
 #include <vector>
 
@@ -68,28 +69,28 @@ public:
     // --- Mega Buffer (GPU Driven) ---
 
     /// 创建 Mega VAO（BatchVertex 布局），同时创建 VBO 和 IBO
-    virtual unsigned int CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
-                                       unsigned int& out_vbo, unsigned int& out_ibo) {
-        (void)vbo_size_bytes; (void)ibo_size_bytes; out_vbo = 0; out_ibo = 0; return 0;
+    virtual VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                       BufferHandle& out_vbo, BufferHandle& out_ibo) {
+        (void)vbo_size_bytes; (void)ibo_size_bytes; out_vbo = {}; out_ibo = {}; return {};
     }
 
     /// 更新 Mega VBO 子区域数据
-    virtual void UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) {
+    virtual void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) {
         (void)vbo; (void)offset; (void)size; (void)data;
     }
 
     /// 更新 Mega IBO 子区域数据
-    virtual void UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) {
+    virtual void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) {
         (void)ibo; (void)offset; (void)size; (void)data;
     }
 
     /// 删除 Mega VAO + VBO + IBO
-    virtual void DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) {
+    virtual void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
         (void)vao; (void)vbo; (void)ibo;
     }
 
     /// 绑定 Mega VAO 供 indirect draw 使用
-    virtual void BindMegaVAO(unsigned int vao) { (void)vao; }
+    virtual void BindMegaVAO(VertexArrayHandle vao) { (void)vao; }
 
     /// 解绑 VAO
     virtual void UnbindVAO() {}
@@ -97,26 +98,26 @@ public:
     // --- Static Mesh VAO ---
 
     /// 创建静态网格 VAO（含 VBO + 多个 EBO），使用 BatchVertex 属性布局
-    virtual unsigned int CreateStaticMeshVAO(
+    virtual VertexArrayHandle CreateStaticMeshVAO(
         const void* vertex_data, size_t vertex_bytes,
         const std::vector<const void*>& ebo_datas,
         const std::vector<size_t>& ebo_sizes,
-        unsigned int& out_vbo,
-        std::vector<unsigned int>& out_ebos) {
+        BufferHandle& out_vbo,
+        std::vector<BufferHandle>& out_ebos) {
         (void)vertex_data; (void)vertex_bytes;
         (void)ebo_datas; (void)ebo_sizes;
-        out_vbo = 0; out_ebos.clear();
-        return 0;
+        out_vbo = {}; out_ebos.clear();
+        return {};
     }
 
     /// 删除静态网格 VAO + VBO + 所有 EBO
-    virtual void DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
-                                      const std::vector<unsigned int>& ebos) {
+    virtual void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                                      const std::vector<BufferHandle>& ebos) {
         (void)vao; (void)vbo; (void)ebos;
     }
 
     /// 绑定 VAO 并切换到指定 EBO 进行绘制
-    virtual void BindVAOWithEBO(unsigned int vao, unsigned int ebo) {
+    virtual void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
         (void)vao; (void)ebo;
     }
 };

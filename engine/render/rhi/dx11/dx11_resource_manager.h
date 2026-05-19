@@ -153,8 +153,8 @@ public:
     ReadbackResult ReadRenderTargetColor(unsigned int handle) const;
 
     // --- 顶点数组（D3D11 无 VAO，占位） ---
-    unsigned int CreateVertexArray();
-    void DeleteVertexArray(unsigned int handle);
+    dse::render::VertexArrayHandle CreateVertexArray();
+    void DeleteVertexArray(dse::render::VertexArrayHandle handle);
 
     // --- Indirect Draw Buffer ---
     unsigned int CreateIndirectBuffer(size_t size, const void* data);

@@ -58,7 +58,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
 
     // 2D 精灵批处理 VAO
     vao_handle_ = create_vao_fn();
-    glBindVertexArray(vao_handle_);
+    glBindVertexArray(vao_handle_.raw());
     vbo_handle_ = create_vbo_fn(vertices.size() * sizeof(BatchVertex), vertices.data(), true, false);
     ebo_handle_ = create_vbo_fn(indices.size() * sizeof(unsigned short), indices.data(), false, true);
 
@@ -77,7 +77,7 @@ void GLDrawExecutor::InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
     mesh_vbo_handle_ = create_vbo_fn(MAX_MESH_VERTICES * sizeof(BatchVertex), nullptr, true, false);
     mesh_ibo_handle_ = create_vbo_fn(MAX_MESH_INDICES * sizeof(unsigned short), nullptr, true, true);
     mesh_vao_handle_ = create_vao_fn();
-    glBindVertexArray(mesh_vao_handle_);
+    glBindVertexArray(mesh_vao_handle_.raw());
     glBindBuffer(GL_ARRAY_BUFFER, mesh_vbo_handle_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
     glEnableVertexAttribArray(0);
@@ -141,10 +141,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         instance_vbo_capacity_ = 0;
     }
     // 3D 网格缓冲
-    if (mesh_vao_handle_ != 0) {
+    if (mesh_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(mesh_vao_handle_); }
-        else { glDeleteVertexArrays(1, &mesh_vao_handle_); }
-        mesh_vao_handle_ = 0;
+        else { unsigned int r = mesh_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        mesh_vao_handle_ = {};
     }
     if (mesh_vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(mesh_vbo_handle_); }
@@ -157,10 +157,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         mesh_ibo_handle_ = 0;
     }
     // 2D 精灵缓冲
-    if (vao_handle_ != 0) {
+    if (vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(vao_handle_); }
-        else { glDeleteVertexArrays(1, &vao_handle_); }
-        vao_handle_ = 0;
+        else { unsigned int r = vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        vao_handle_ = {};
     }
     if (vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(vbo_handle_); }
@@ -173,10 +173,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         ebo_handle_ = 0;
     }
     // 天空盒缓冲
-    if (skybox_vao_handle_ != 0) {
+    if (skybox_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(skybox_vao_handle_); }
-        else { glDeleteVertexArrays(1, &skybox_vao_handle_); }
-        skybox_vao_handle_ = 0;
+        else { unsigned int r = skybox_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        skybox_vao_handle_ = {};
     }
     if (skybox_vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(skybox_vbo_handle_); }
@@ -184,10 +184,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         skybox_vbo_handle_ = 0;
     }
     // 后处理全屏四边形
-    if (pp_vao_handle_ != 0) {
+    if (pp_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(pp_vao_handle_); }
-        else { glDeleteVertexArrays(1, &pp_vao_handle_); }
-        pp_vao_handle_ = 0;
+        else { unsigned int r = pp_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        pp_vao_handle_ = {};
     }
     if (pp_vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(pp_vbo_handle_); }
@@ -200,10 +200,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         pp_param_ubo_ = 0;
     }
     // 3D 粒子四边形
-    if (particle_quad_vao_handle_ != 0) {
+    if (particle_quad_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(particle_quad_vao_handle_); }
-        else { glDeleteVertexArrays(1, &particle_quad_vao_handle_); }
-        particle_quad_vao_handle_ = 0;
+        else { unsigned int r = particle_quad_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        particle_quad_vao_handle_ = {};
     }
     if (particle_quad_vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(particle_quad_vbo_handle_); }
@@ -212,10 +212,10 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
     }
 
     // 毛发渲染资源
-    if (hair_vao_handle_ != 0) {
+    if (hair_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(hair_vao_handle_); }
-        else { glDeleteVertexArrays(1, &hair_vao_handle_); }
-        hair_vao_handle_ = 0;
+        else { unsigned int r = hair_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        hair_vao_handle_ = {};
     }
     if (hair_shader_handle_ != 0) {
         glDeleteProgram(hair_shader_handle_);
@@ -371,7 +371,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
         if (create_vao_fn_ && create_buffer_fn_) {
             skybox_vao_handle_ = create_vao_fn_();
             skybox_vbo_handle_ = create_buffer_fn_(sizeof(skyboxVertices), skyboxVertices, false, false);
-            glBindVertexArray(skybox_vao_handle_);
+            glBindVertexArray(skybox_vao_handle_.raw());
             glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo_handle_);
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
@@ -387,7 +387,7 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     glm::mat4 vp = projection * skybox_view;
     glUniformMatrix4fv(skybox_loc.vp, 1, GL_FALSE, glm::value_ptr(vp));
 
-    glBindVertexArray(skybox_vao_handle_);
+    glBindVertexArray(skybox_vao_handle_.raw());
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_texture_handle);
     glUniform1i(skybox_loc.tex, 0);
@@ -495,7 +495,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
         apply_blend(current_blend_mode, current_shader_variant);
         glActiveTexture(GL_TEXTURE0 + slots.albedo);
         glBindTexture(GL_TEXTURE_2D, current_texture);
-        glBindVertexArray(vao_handle_);
+        glBindVertexArray(vao_handle_.raw());
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>((batch_vertices.size() / 4) * 6), GL_UNSIGNED_SHORT, nullptr);
         glBindVertexArray(0);
         batch_vertices.clear();

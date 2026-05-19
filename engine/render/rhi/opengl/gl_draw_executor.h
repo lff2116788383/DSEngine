@@ -51,7 +51,7 @@ public:
     ~GLDrawExecutor() = default;
 
     /// 初始化几何缓冲区（2D 批处理 VAO/VBO/EBO + 3D 网格 VAO/VBO/EBO + 白色纹理）
-    using InitCreateVaoFn = std::function<unsigned int()>;
+    using InitCreateVaoFn = std::function<VertexArrayHandle()>;
     using InitCreateVboFn = std::function<unsigned int(size_t, const void*, bool, bool)>;
     using InitUpdateVboFn = std::function<void(unsigned int, size_t, size_t, const void*, bool)>;
     void InitGeometryBuffers(InitCreateVaoFn create_vao_fn,
@@ -135,13 +135,13 @@ public:
 
     // --- 访问器（供 OpenGLRhiDevice 委托使用） ---
     unsigned int white_texture_handle() const { return white_texture_handle_; }
-    unsigned int vao_handle() const { return vao_handle_; }
+    VertexArrayHandle vao_handle() const { return vao_handle_; }
     unsigned int vbo_handle() const { return vbo_handle_; }
     unsigned int ebo_handle() const { return ebo_handle_; }
-    unsigned int mesh_vao_handle() const { return mesh_vao_handle_; }
+    VertexArrayHandle mesh_vao_handle() const { return mesh_vao_handle_; }
     unsigned int mesh_vbo_handle() const { return mesh_vbo_handle_; }
     unsigned int mesh_ibo_handle() const { return mesh_ibo_handle_; }
-    unsigned int skybox_vao_handle() const { return skybox_vao_handle_; }
+    VertexArrayHandle skybox_vao_handle() const { return skybox_vao_handle_; }
     unsigned int skybox_vbo_handle() const { return skybox_vbo_handle_; }
 
     unsigned int active_render_target() const { return active_render_target_; }
@@ -152,12 +152,12 @@ public:
 
     /// 设置 CreateBuffer/CreateVertexArray 函数指针
     using CreateBufferFn = std::function<unsigned int(size_t, const void*, bool, bool)>;
-    using CreateVaoFn = std::function<unsigned int()>;
+    using CreateVaoFn = std::function<VertexArrayHandle()>;
     void set_create_buffer_fn(CreateBufferFn fn) { create_buffer_fn_ = fn; }
     void set_create_vao_fn(CreateVaoFn fn) { create_vao_fn_ = fn; }
 
     /// 设置 DeleteVertexArray/DeleteBuffer/DeleteTexture 函数指针（供 Shutdown 走账本）
-    using DeleteVaoFn = std::function<void(unsigned int)>;
+    using DeleteVaoFn = std::function<void(VertexArrayHandle)>;
     using DeleteBufferFn = std::function<void(unsigned int)>;
     using DeleteTextureFn = std::function<void(unsigned int)>;
     void set_delete_vao_fn(DeleteVaoFn fn) { delete_vao_fn_ = fn; }
@@ -170,10 +170,10 @@ public:
 
 private:
     // 几何缓冲区
-    unsigned int vao_handle_ = 0;
+    VertexArrayHandle vao_handle_;
     unsigned int vbo_handle_ = 0;
     unsigned int ebo_handle_ = 0;
-    unsigned int mesh_vao_handle_ = 0;
+    VertexArrayHandle mesh_vao_handle_;
     unsigned int mesh_vbo_handle_ = 0;
     unsigned int mesh_ibo_handle_ = 0;
     unsigned int instance_vbo_handle_ = 0;
@@ -181,20 +181,20 @@ private:
     unsigned int white_texture_handle_ = 0;
 
     // 天空盒几何
-    unsigned int skybox_vao_handle_ = 0;
+    VertexArrayHandle skybox_vao_handle_;
     unsigned int skybox_vbo_handle_ = 0;
 
     // 后处理全屏四边形
-    unsigned int pp_vao_handle_ = 0;
+    VertexArrayHandle pp_vao_handle_;
     unsigned int pp_vbo_handle_ = 0;
     unsigned int pp_param_ubo_ = 0;  ///< gen.h PP shader 参数 UBO (binding=2)
 
     // 3D 粒子四边形
-    unsigned int particle_quad_vao_handle_ = 0;
+    VertexArrayHandle particle_quad_vao_handle_;
     unsigned int particle_quad_vbo_handle_ = 0;
 
     // 毛发 (Hair strands)
-    unsigned int hair_vao_handle_ = 0;
+    VertexArrayHandle hair_vao_handle_;
     unsigned int hair_shader_handle_ = 0;
     // 缓存 uniform locations (在 shader 编译后填充)
     int hair_loc_model_ = -1, hair_loc_view_ = -1, hair_loc_proj_ = -1;

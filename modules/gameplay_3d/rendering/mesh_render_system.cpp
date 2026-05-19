@@ -1398,14 +1398,14 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     if (mega_buffer_dirty_ && mega_vbo_vertex_count_ > 0) {
         const size_t vbo_bytes = mega_vbo_data_.size() * sizeof(float);
         const size_t ibo_bytes = mega_ibo_data_.size() * sizeof(uint32_t);
-        if (mega_vao_ == 0) {
+        if (!mega_vao_) {
             mega_vao_ = rhi->CreateMegaVAO(vbo_bytes, ibo_bytes, mega_vbo_, mega_ibo_);
         } else {
             // 需要扩容时重建
             rhi->DeleteMegaVAO(mega_vao_, mega_vbo_, mega_ibo_);
             mega_vao_ = rhi->CreateMegaVAO(vbo_bytes, ibo_bytes, mega_vbo_, mega_ibo_);
         }
-        if (mega_vao_ != 0) {
+        if (mega_vao_) {
             rhi->UpdateMegaVBO(mega_vbo_, 0, vbo_bytes, mega_vbo_data_.data());
             rhi->UpdateMegaIBO(mega_ibo_, 0, ibo_bytes, mega_ibo_data_.data());
         }
@@ -1468,11 +1468,11 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
 
 void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {
     if (!rhi) return;
-    if (mega_vao_ != 0) {
+    if (mega_vao_) {
         rhi->DeleteMegaVAO(mega_vao_, mega_vbo_, mega_ibo_);
-        mega_vao_ = 0;
-        mega_vbo_ = 0;
-        mega_ibo_ = 0;
+        mega_vao_ = {};
+        mega_vbo_ = {};
+        mega_ibo_ = {};
     }
     mega_vbo_data_.clear();
     mega_ibo_data_.clear();

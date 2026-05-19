@@ -793,14 +793,14 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
 // 顶点数组（D3D11 无 VAO 概念，占位实现）
 // ============================================================
 
-unsigned int DX11ResourceManager::CreateVertexArray() {
+dse::render::VertexArrayHandle DX11ResourceManager::CreateVertexArray() {
     unsigned int handle = next_vao_handle_++;
     vertex_arrays_[handle] = DX11VertexArray{handle};
-    return handle;
+    return dse::render::VertexArrayHandle{handle};
 }
 
-void DX11ResourceManager::DeleteVertexArray(unsigned int handle) {
-    vertex_arrays_.erase(handle);
+void DX11ResourceManager::DeleteVertexArray(dse::render::VertexArrayHandle handle) {
+    vertex_arrays_.erase(handle.raw());
 }
 
 // ============================================================

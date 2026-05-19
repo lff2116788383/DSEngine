@@ -52,8 +52,8 @@ public:
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
     void DeleteBuffer(unsigned int handle) override;
-    unsigned int CreateVertexArray() override;
-    void DeleteVertexArray(unsigned int handle) override;
+    VertexArrayHandle CreateVertexArray() override;
+    void DeleteVertexArray(VertexArrayHandle handle) override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,
@@ -161,24 +161,24 @@ public:
     bool SupportsIndirectDraw() const override { return supports_ssbo_; }
 
     // --- Mega Buffer (GPU Driven) ---
-    unsigned int CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
-                               unsigned int& out_vbo, unsigned int& out_ibo) override;
-    void UpdateMegaVBO(unsigned int vbo, size_t offset, size_t size, const void* data) override;
-    void UpdateMegaIBO(unsigned int ibo, size_t offset, size_t size, const void* data) override;
-    void DeleteMegaVAO(unsigned int vao, unsigned int vbo, unsigned int ibo) override;
-    void BindMegaVAO(unsigned int vao) override;
+    VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                               BufferHandle& out_vbo, BufferHandle& out_ibo) override;
+    void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) override;
+    void BindMegaVAO(VertexArrayHandle vao) override;
     void UnbindVAO() override;
 
     // --- Static Mesh VAO ---
-    unsigned int CreateStaticMeshVAO(
+    VertexArrayHandle CreateStaticMeshVAO(
         const void* vertex_data, size_t vertex_bytes,
         const std::vector<const void*>& ebo_datas,
         const std::vector<size_t>& ebo_sizes,
-        unsigned int& out_vbo,
-        std::vector<unsigned int>& out_ebos) override;
-    void DeleteStaticMeshVAO(unsigned int vao, unsigned int vbo,
-                              const std::vector<unsigned int>& ebos) override;
-    void BindVAOWithEBO(unsigned int vao, unsigned int ebo) override;
+        BufferHandle& out_vbo,
+        std::vector<BufferHandle>& out_ebos) override;
+    void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                              const std::vector<BufferHandle>& ebos) override;
+    void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
 
     // --- 内部方法（供 OpenGLCommandBuffer 直接调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);

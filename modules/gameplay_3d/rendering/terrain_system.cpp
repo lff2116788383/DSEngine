@@ -31,13 +31,13 @@ void TerrainSystem::Shutdown(World& world) {
 // ============================================================
 
 void TerrainSystem::DestroyTerrainGPU(TerrainComponent& terrain) {
-    if (terrain.vao != 0 && rhi_) {
+    if (terrain.vao && rhi_) {
         rhi_->DeleteStaticMeshVAO(terrain.vao, terrain.vbo, terrain.lod_ebos);
-        terrain.vao = 0;
-        terrain.vbo = 0;
+        terrain.vao = {};
+        terrain.vbo = {};
         terrain.lod_ebos.clear();
         terrain.lod_index_counts.clear();
-        terrain.ebo = 0;
+        terrain.ebo = {};
         terrain.index_count = 0;
     }
 }
@@ -202,14 +202,14 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
         ebo_datas, ebo_sizes,
         terrain.vbo, terrain.lod_ebos);
 
-    if (terrain.vao != 0) {
-        terrain.ebo = terrain.lod_ebos.empty() ? 0 : terrain.lod_ebos[0];
+    if (terrain.vao) {
+        terrain.ebo = terrain.lod_ebos.empty() ? dse::render::BufferHandle{} : terrain.lod_ebos[0];
         terrain.index_count = terrain.lod_index_counts.empty() ? 0 : terrain.lod_index_counts[0];
     }
 
     terrain.is_dirty = false;
-    DEBUG_LOG_INFO("[TerrainSystem] Rebuilt terrain '{}x{}' → {} verts, {} LODs, vao={}",
-                  rx, rz, total_vert_count, terrain.max_lod_levels, terrain.vao);
+    DEBUG_LOG_INFO("[TerrainSystem] Rebuilt terrain '{}x{}' \u2192 {} verts, {} LODs, vao={}",
+                  rx, rz, total_vert_count, terrain.max_lod_levels, terrain.vao.raw());
 }
 
 // ============================================================
@@ -247,7 +247,7 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         if (!terrain.visible) continue;
-        if (terrain.vao == 0) continue;
+        if (!terrain.vao) continue;
 
         // LOD 选择
         if (terrain.use_dynamic_lod) {
