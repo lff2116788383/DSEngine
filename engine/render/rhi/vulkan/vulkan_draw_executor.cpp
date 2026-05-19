@@ -1599,12 +1599,16 @@ void VulkanDrawExecutor::DrawMeshBatch(
     if (skip_current_pass_) return;
 
     const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
-    unsigned int active_shader_handle = gbuffer_mode
-        ? shader_mgr.gbuffer_shader_handle()
-        : shader_mgr.pbr_shader_handle();
+    const bool is_depth_only = (current_color_attachment_count_ == 0);
+    unsigned int active_shader_handle = is_depth_only
+        ? shader_mgr.shadow_shader_handle()
+        : (gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle());
+    if (is_depth_only && active_shader_handle == 0)
+        active_shader_handle = shader_mgr.pbr_shader_handle();  // fallback
     const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(active_shader_handle);
     if (!pbr_program) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor: {} shader not available", gbuffer_mode ? "GBuffer" : "PBR");
+        DEBUG_LOG_WARN("VulkanDrawExecutor: {} shader not available",
+                       is_depth_only ? "Shadow" : (gbuffer_mode ? "GBuffer" : "PBR"));
         return;
     }
 

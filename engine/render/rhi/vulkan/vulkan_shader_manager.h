@@ -114,6 +114,9 @@ public:
     /// 初始化 2D 精灵着色器
     void InitSpriteShader();
 
+    /// 初始化阴影深度着色器
+    void InitShadowShader();
+
     /// 初始化后处理着色器（直通/全屏四边形）
     void InitPostProcessShader();
 

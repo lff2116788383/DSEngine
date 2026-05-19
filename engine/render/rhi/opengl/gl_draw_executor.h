@@ -206,6 +206,7 @@ private:
 
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;
+    bool is_depth_only_pass_ = false;
 
     // 全局渲染状态（共享结构体，消除三端重复）
     DrawExecutorGlobalState global_state_;

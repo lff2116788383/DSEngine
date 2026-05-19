@@ -50,6 +50,7 @@
 #include <fstream>
 #include <filesystem>
 #include <functional>
+#include <cstring>
 
 namespace dse {
 namespace render {
@@ -198,6 +199,34 @@ unsigned int DX11ShaderManager::CreateProgram(const std::string& vert_src, const
     return handle;
 }
 
+unsigned int DX11ShaderManager::CreateProgramFromDXBC(const uint8_t* vs_bytecode, size_t vs_size,
+                                                        const uint8_t* ps_bytecode, size_t ps_size) {
+    if (!context_ || !vs_bytecode || !ps_bytecode || vs_size == 0 || ps_size == 0) return 0;
+
+    DX11ShaderProgram program;
+    ID3D11Device* device = context_->device();
+
+    // 创建 VS blob 用于 InputLayout
+    D3DCreateBlob(vs_size, program.vs_blob.GetAddressOf());
+    memcpy(program.vs_blob->GetBufferPointer(), vs_bytecode, vs_size);
+
+    D3DCreateBlob(ps_size, program.ps_blob.GetAddressOf());
+    memcpy(program.ps_blob->GetBufferPointer(), ps_bytecode, ps_size);
+
+    HRESULT hr = device->CreateVertexShader(vs_bytecode, vs_size,
+                                             nullptr, program.vertex_shader.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    hr = device->CreatePixelShader(ps_bytecode, ps_size,
+                                    nullptr, program.pixel_shader.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    unsigned int handle = next_handle_++;
+    programs_[handle] = std::move(program);
+    programs_created_++;
+    return handle;
+}
+
 void DX11ShaderManager::DeleteProgram(unsigned int handle) {
     auto it = programs_.find(handle);
     if (it == programs_.end()) return;
@@ -236,11 +265,15 @@ ID3D11InputLayout* DX11ShaderManager::GetInputLayout(unsigned int shader_handle)
 }
 
 void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
+    using namespace generated_shaders;
     auto pulse = [&]() { if (keep_alive) keep_alive(); };
-    // ---- 精灵着色器 ----
-    sprite_shader_handle_ = CreateProgram(generated_shaders::ksprite_vert_hlsl, generated_shaders::ksprite_frag_hlsl, "main", "main");
+
+    // ---- 精灵着色器 (DXBC) ----
+    sprite_shader_handle_ = CreateProgramFromDXBC(
+        ksprite_vert_dxbc, ksprite_vert_dxbc_size,
+        ksprite_frag_dxbc, ksprite_frag_dxbc_size);
     if (sprite_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin sprite shader created: {}", sprite_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin sprite shader created (DXBC): {}", sprite_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,       0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -250,8 +283,8 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     }
 
     pulse();
-    // ---- PBR 着色器 ----
-    pbr_shader_handle_ = CreateProgram(generated_shaders::kpbr_vert_hlsl, generated_shaders::kpbr_frag_hlsl, "main", "main");
+    // ---- PBR 着色器 (HLSL 运行时编译: 动态采样器数组不兼容 fxc 离线编译) ----
+    pbr_shader_handle_ = CreateProgram(kpbr_vert_hlsl, kpbr_frag_hlsl, "main", "main");
     if (pbr_shader_handle_) {
         DEBUG_LOG_INFO("[D3D11] Builtin PBR shader created: {}", pbr_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
@@ -266,25 +299,27 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(pbr_shader_handle_, layout, 7);
     }
 
-    // ---- 天空盒着色器 ----
-    skybox_shader_handle_ = CreateProgram(generated_shaders::kskybox_vert_hlsl, generated_shaders::kskybox_frag_hlsl, "main", "main");
+    // ---- 天空盒着色器 (DXBC) ----
+    skybox_shader_handle_ = CreateProgramFromDXBC(
+        kskybox_vert_dxbc, kskybox_vert_dxbc_size,
+        kskybox_frag_dxbc, kskybox_frag_dxbc_size);
     if (skybox_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin skybox shader created: {}", skybox_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin skybox shader created (DXBC): {}", skybox_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
         };
         CreateInputLayoutForShader(skybox_shader_handle_, layout, 1);
     }
 
-    // ---- 粒子着色器 ----
-    particle_shader_handle_ = CreateProgram(generated_shaders::kparticle_vert_hlsl, generated_shaders::kparticle_frag_hlsl, "main", "main");
+    // ---- 粒子着色器 (DXBC) ----
+    particle_shader_handle_ = CreateProgramFromDXBC(
+        kparticle_vert_dxbc, kparticle_vert_dxbc_size,
+        kparticle_frag_dxbc, kparticle_frag_dxbc_size);
     if (particle_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin particle shader created: {}", particle_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin particle shader created (DXBC): {}", particle_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
-            // Per-vertex (slot 0): float3 pos + float2 uv
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
             {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0},
-            // Per-instance (slot 1): float3 iPos + float4 iCol + float iSize
             {"TEXCOORD", 2, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
             {"TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 12, D3D11_INPUT_PER_INSTANCE_DATA, 1},
             {"TEXCOORD", 4, DXGI_FORMAT_R32_FLOAT,           1, 28, D3D11_INPUT_PER_INSTANCE_DATA, 1},
@@ -292,10 +327,12 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(particle_shader_handle_, layout, 5);
     }
 
-    // ---- 后处理着色器 ----
-    postprocess_shader_handle_ = CreateProgram(generated_shaders::kpostprocess_vert_hlsl, generated_shaders::kpostprocess_passthrough_frag_hlsl, "main", "main");
+    // ---- 后处理着色器 (DXBC) ----
+    postprocess_shader_handle_ = CreateProgramFromDXBC(
+        kpostprocess_vert_dxbc, kpostprocess_vert_dxbc_size,
+        kpostprocess_passthrough_frag_dxbc, kpostprocess_passthrough_frag_dxbc_size);
     if (postprocess_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin postprocess shader created: {}", postprocess_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin postprocess shader created (DXBC): {}", postprocess_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -304,11 +341,12 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     }
 
     pulse();
-    // ---- 阴影着色器 ----
-    shadow_shader_handle_ = CreateProgram(generated_shaders::kshadow_vert_hlsl, generated_shaders::kshadow_frag_hlsl, "main", "main");
+    // ---- 阴影着色器 (DXBC) ----
+    shadow_shader_handle_ = CreateProgramFromDXBC(
+        kshadow_vert_dxbc, kshadow_vert_dxbc_size,
+        kshadow_frag_dxbc, kshadow_frag_dxbc_size);
     if (shadow_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin shadow shader created: {}", shadow_shader_handle_);
-        // 复用 PBR 顶点格式（BatchVertex）+ GPU Instancing
+        DEBUG_LOG_INFO("[D3D11] Builtin shadow shader created (DXBC): {}", shadow_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -321,33 +359,22 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(shadow_shader_handle_, layout, 7);
     }
 
-    // ---- Bloom Compute Shaders ----
-    bloom_downsample_cs_handle_ = CreateComputeProgram(generated_shaders::kbloom_downsample_comp_hlsl, "main");
+    // ---- Bloom Compute Shaders (仍用 HLSL 编译，CS 无 DXBC 通用路径) ----
+    bloom_downsample_cs_handle_ = CreateComputeProgram(kbloom_downsample_comp_hlsl, "main");
     if (bloom_downsample_cs_handle_)
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom downsample CS created (gen.h): {}", bloom_downsample_cs_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom downsample CS created: {}", bloom_downsample_cs_handle_);
 
-    bloom_upsample_cs_handle_ = CreateComputeProgram(generated_shaders::kbloom_upsample_comp_hlsl, "main");
+    bloom_upsample_cs_handle_ = CreateComputeProgram(kbloom_upsample_comp_hlsl, "main");
     if (bloom_upsample_cs_handle_)
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created (gen.h): {}", bloom_upsample_cs_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin bloom upsample CS created: {}", bloom_upsample_cs_handle_);
 
-    // ---- Bloom Composite 着色器（ACES Filmic Tone Mapping）----
-    bloom_composite_shader_handle_ = CreateProgram(generated_shaders::kpostprocess_vert_hlsl,
-                                                     generated_shaders::kbloom_composite_frag_hlsl,
-                                                     "main", "main");
-    if (bloom_composite_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin bloom composite shader created (gen.h): {}", bloom_composite_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-        CreateInputLayoutForShader(bloom_composite_shader_handle_, layout, 2);
-    }
-
-    // ---- gen.h shader 创建 lambda（VS 保留手写版，PS 入口点为 "main"）----
-    auto create_pp_gen = [&](const char* ps_src, const char* name) -> unsigned int {
-        unsigned int h = CreateProgram(generated_shaders::kpostprocess_vert_hlsl, ps_src, "main", "main");
+    // ---- 后处理着色器 DXBC 批量创建 lambda ----
+    auto create_pp_dxbc = [&](const uint8_t* ps_dxbc, size_t ps_dxbc_sz, const char* name) -> unsigned int {
+        unsigned int h = CreateProgramFromDXBC(
+            kpostprocess_vert_dxbc, kpostprocess_vert_dxbc_size,
+            ps_dxbc, ps_dxbc_sz);
         if (h) {
-            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created (gen.h): {}", name, h);
+            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created (DXBC): {}", name, h);
             D3D11_INPUT_ELEMENT_DESC layout[] = {
                 {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
                 {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0,  8, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -356,39 +383,43 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         }
         return h;
     };
-    pulse();
-    bloom_extract_shader_handle_ = create_pp_gen(generated_shaders::kbloom_extract_frag_hlsl, "bloom_extract");
-    fxaa_shader_handle_ = create_pp_gen(generated_shaders::kfxaa_frag_hlsl, "fxaa");
-    ssao_shader_handle_ = create_pp_gen(generated_shaders::kssao_frag_hlsl, "ssao");
-    ssao_blur_shader_handle_ = create_pp_gen(generated_shaders::kssao_blur_frag_hlsl, "ssao_blur");
-    ssao_apply_shader_handle_ = create_pp_gen(generated_shaders::kssao_apply_frag_hlsl, "ssao_apply");
-    contact_shadow_shader_handle_ = create_pp_gen(generated_shaders::kcontact_shadow_frag_hlsl, "contact_shadow");
-    bloom_composite_ssao_shader_handle_ = create_pp_gen(generated_shaders::kbloom_composite_ssao_frag_hlsl, "bloom_composite_ssao");
-    lum_compute_shader_handle_ = create_pp_gen(generated_shaders::klum_compute_frag_hlsl, "lum_compute");
-    lum_adapt_shader_handle_ = create_pp_gen(generated_shaders::klum_adapt_frag_hlsl, "lum_adapt");
-    pulse();
-    tonemapping_shader_handle_ = create_pp_gen(generated_shaders::ktonemapping_frag_hlsl, "tonemapping");
-    bloom_composite_ssao_ae_shader_handle_ = create_pp_gen(generated_shaders::kbloom_composite_ssao_ae_frag_hlsl, "bloom_composite_ssao_ae");
-    color_grading_shader_handle_ = create_pp_gen(generated_shaders::kcolor_grading_frag_hlsl, "color_grading");
-    taa_resolve_shader_handle_ = create_pp_gen(generated_shaders::ktaa_resolve_frag_hlsl, "taa_resolve");
-    dof_shader_handle_ = create_pp_gen(generated_shaders::kdof_frag_hlsl, "dof");
-    pulse();
-    motion_blur_shader_handle_ = create_pp_gen(generated_shaders::kmotion_blur_frag_hlsl, "motion_blur");
-    ssr_shader_handle_ = create_pp_gen(generated_shaders::kssr_frag_hlsl, "ssr");
-    motion_vector_shader_handle_ = create_pp_gen(generated_shaders::kmotion_vector_frag_hlsl, "motion_vector");
-    deferred_lighting_shader_handle_ = create_pp_gen(generated_shaders::kdeferred_lighting_frag_hlsl, "deferred_lighting");
-    edge_detect_shader_handle_ = create_pp_gen(generated_shaders::kedge_detect_frag_hlsl, "edge_detect");
-    volumetric_fog_shader_handle_ = create_pp_gen(generated_shaders::kvolumetric_fog_frag_hlsl, "volumetric_fog");
-    decal_shader_handle_ = create_pp_gen(generated_shaders::kdecal_frag_hlsl, "decal");
-    wboit_composite_shader_handle_ = create_pp_gen(generated_shaders::kwboit_composite_frag_hlsl, "wboit_composite");
-    water_shader_handle_ = create_pp_gen(generated_shaders::kwater_frag_hlsl, "water");
-    light_shaft_shader_handle_ = create_pp_gen(generated_shaders::klight_shaft_frag_hlsl, "light_shaft");
 
     pulse();
-    // ---- GBuffer 着色器（复用 PBR VS + GBuffer PS）----
-    gbuffer_shader_handle_ = CreateProgram(generated_shaders::kpbr_vert_hlsl, generated_shaders::kgbuffer_frag_hlsl, "main", "main");
+    bloom_composite_shader_handle_ = create_pp_dxbc(kbloom_composite_frag_dxbc, kbloom_composite_frag_dxbc_size, "bloom_composite");
+    bloom_extract_shader_handle_ = create_pp_dxbc(kbloom_extract_frag_dxbc, kbloom_extract_frag_dxbc_size, "bloom_extract");
+    fxaa_shader_handle_ = create_pp_dxbc(kfxaa_frag_dxbc, kfxaa_frag_dxbc_size, "fxaa");
+    ssao_shader_handle_ = create_pp_dxbc(kssao_frag_dxbc, kssao_frag_dxbc_size, "ssao");
+    ssao_blur_shader_handle_ = create_pp_dxbc(kssao_blur_frag_dxbc, kssao_blur_frag_dxbc_size, "ssao_blur");
+    ssao_apply_shader_handle_ = create_pp_dxbc(kssao_apply_frag_dxbc, kssao_apply_frag_dxbc_size, "ssao_apply");
+    contact_shadow_shader_handle_ = create_pp_dxbc(kcontact_shadow_frag_dxbc, kcontact_shadow_frag_dxbc_size, "contact_shadow");
+    bloom_composite_ssao_shader_handle_ = create_pp_dxbc(kbloom_composite_ssao_frag_dxbc, kbloom_composite_ssao_frag_dxbc_size, "bloom_composite_ssao");
+    lum_compute_shader_handle_ = create_pp_dxbc(klum_compute_frag_dxbc, klum_compute_frag_dxbc_size, "lum_compute");
+    lum_adapt_shader_handle_ = create_pp_dxbc(klum_adapt_frag_dxbc, klum_adapt_frag_dxbc_size, "lum_adapt");
+    pulse();
+    tonemapping_shader_handle_ = create_pp_dxbc(ktonemapping_frag_dxbc, ktonemapping_frag_dxbc_size, "tonemapping");
+    bloom_composite_ssao_ae_shader_handle_ = create_pp_dxbc(kbloom_composite_ssao_ae_frag_dxbc, kbloom_composite_ssao_ae_frag_dxbc_size, "bloom_composite_ssao_ae");
+    color_grading_shader_handle_ = create_pp_dxbc(kcolor_grading_frag_dxbc, kcolor_grading_frag_dxbc_size, "color_grading");
+    taa_resolve_shader_handle_ = create_pp_dxbc(ktaa_resolve_frag_dxbc, ktaa_resolve_frag_dxbc_size, "taa_resolve");
+    dof_shader_handle_ = create_pp_dxbc(kdof_frag_dxbc, kdof_frag_dxbc_size, "dof");
+    pulse();
+    motion_blur_shader_handle_ = create_pp_dxbc(kmotion_blur_frag_dxbc, kmotion_blur_frag_dxbc_size, "motion_blur");
+    ssr_shader_handle_ = create_pp_dxbc(kssr_frag_dxbc, kssr_frag_dxbc_size, "ssr");
+    motion_vector_shader_handle_ = create_pp_dxbc(kmotion_vector_frag_dxbc, kmotion_vector_frag_dxbc_size, "motion_vector");
+    deferred_lighting_shader_handle_ = create_pp_dxbc(kdeferred_lighting_frag_dxbc, kdeferred_lighting_frag_dxbc_size, "deferred_lighting");
+    edge_detect_shader_handle_ = create_pp_dxbc(kedge_detect_frag_dxbc, kedge_detect_frag_dxbc_size, "edge_detect");
+    volumetric_fog_shader_handle_ = create_pp_dxbc(kvolumetric_fog_frag_dxbc, kvolumetric_fog_frag_dxbc_size, "volumetric_fog");
+    decal_shader_handle_ = create_pp_dxbc(kdecal_frag_dxbc, kdecal_frag_dxbc_size, "decal");
+    wboit_composite_shader_handle_ = create_pp_dxbc(kwboit_composite_frag_dxbc, kwboit_composite_frag_dxbc_size, "wboit_composite");
+    water_shader_handle_ = create_pp_dxbc(kwater_frag_dxbc, kwater_frag_dxbc_size, "water");
+    light_shaft_shader_handle_ = create_pp_dxbc(klight_shaft_frag_dxbc, klight_shaft_frag_dxbc_size, "light_shaft");
+
+    pulse();
+    // ---- GBuffer 着色器（复用 PBR VS DXBC + GBuffer PS DXBC）----
+    gbuffer_shader_handle_ = CreateProgramFromDXBC(
+        kpbr_vert_dxbc, kpbr_vert_dxbc_size,
+        kgbuffer_frag_dxbc, kgbuffer_frag_dxbc_size);
     if (gbuffer_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin GBuffer shader created: {}", gbuffer_shader_handle_);
+        DEBUG_LOG_INFO("[D3D11] Builtin GBuffer shader created (DXBC): {}", gbuffer_shader_handle_);
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},

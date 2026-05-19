@@ -338,10 +338,12 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
         }
     }
     global_state_.current_frame_stats.render_passes += 1;
+    is_depth_only_pass_ = false;
     if (render_pass.render_target != 0) {
         auto stat_rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (stat_rt && !stat_rt->desc.has_color && stat_rt->desc.has_depth) {
             global_state_.current_frame_stats.shadow_passes += 1;
+            is_depth_only_pass_ = true;
         }
     }
     if (render_pass.clear_color_enabled) {
@@ -477,7 +479,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
 
-    if (gbuffer_mode) {
+    if (is_depth_only_pass_) {
+        shader_mgr.InitShadowShader();
+        glUseProgram(shader_mgr.shadow_shader_handle());
+    } else if (gbuffer_mode) {
         shader_mgr.InitGBufferShader();
         glUseProgram(shader_mgr.gbuffer_shader_handle());
     } else {

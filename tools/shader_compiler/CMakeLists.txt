@@ -38,6 +38,12 @@ target_link_libraries(dse_shader_compiler PRIVATE
     spirv-cross-hlsl
 )
 
+# Windows: link d3dcompiler for offline HLSL→DXBC compilation
+if(WIN32)
+    target_link_libraries(dse_shader_compiler PRIVATE d3dcompiler.lib)
+    target_compile_definitions(dse_shader_compiler PRIVATE DSE_HAS_D3DCOMPILE=1)
+endif()
+
 if(MSVC)
     set_property(TARGET dse_shader_compiler PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     target_compile_options(dse_shader_compiler PRIVATE /utf-8)

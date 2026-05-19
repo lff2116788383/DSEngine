@@ -120,6 +120,7 @@ void VulkanRhiDevice::EnsureInitialized() {
     shader_mgr_.InitSkyboxShader();
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitShadowShader();
     shader_mgr_.InitPostProcessShader();
     shader_mgr_.InitBloomComputeShaders();
 
@@ -150,12 +151,13 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     shader_mgr_.Init(&context_);
     KeepAlive();
 
-    // 4. 编译内置着色器（PBR/天空盒/粒子/精灵/后处理）
+    // 4. 编译内置着色器（PBR/天空盒/粒子/精灵/阴影/后处理）
     shader_mgr_.InitBuiltinPBRShader();
     KeepAlive();
     shader_mgr_.InitSkyboxShader();
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitShadowShader();
     KeepAlive();
     shader_mgr_.InitPostProcessShader();
     shader_mgr_.InitBloomComputeShaders();

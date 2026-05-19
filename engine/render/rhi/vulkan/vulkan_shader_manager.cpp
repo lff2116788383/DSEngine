@@ -52,6 +52,8 @@
 #include "embed/water_frag.gen.h"
 #include "embed/light_shaft_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
+#include "embed/shadow_vert.gen.h"
+#include "embed/shadow_frag.gen.h"
 
 // glslang 运行时编译支持
 #ifdef DSE_HAS_GLSLANG
@@ -636,6 +638,18 @@ void VulkanShaderManager::InitSpriteShader() {
         DEBUG_LOG_ERROR("Vulkan sprite shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan sprite shader created: handle={}", sprite_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitShadowShader() {
+    using namespace dse::render::generated_shaders;
+    shadow_shader_handle_ = CreateProgramFromSpirv(
+        kshadow_vert_spv, kshadow_vert_spv_size,
+        kshadow_frag_spv, kshadow_frag_spv_size);
+    if (shadow_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan shadow shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan shadow shader created: handle={}", shadow_shader_handle_);
     }
 }
 

@@ -113,6 +113,12 @@ public:
     void InitParticleShader();
     void set_particle_shader_handle(unsigned int h) { particle_shader_handle_ = h; }
 
+    // --- 精灵着色器 ---
+    void InitSpriteShader();
+
+    // --- 阴影深度着色器 ---
+    void InitShadowShader();
+
     // --- GBuffer 着色器（延迟渲染几何通道） ---
     void InitGBufferShader();
 

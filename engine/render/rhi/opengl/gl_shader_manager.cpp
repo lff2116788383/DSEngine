@@ -47,6 +47,10 @@
 #include "embed/lum_compute_frag.gen.h"
 #include "embed/lum_adapt_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
+#include "embed/sprite_vert.gen.h"
+#include "embed/sprite_frag.gen.h"
+#include "embed/shadow_vert.gen.h"
+#include "embed/shadow_frag.gen.h"
 
 namespace dse {
 namespace render {
@@ -413,6 +417,36 @@ void GLShaderManager::InitGBufferShader() {
     BindUBOBlock(gbuffer_shader_handle_, "PerScene",     UBOBindingPoint::PerScene,     pf_idx);
     BindUBOBlock(gbuffer_shader_handle_, "BoneMatrices", UBOBindingPoint::BoneMatrices, pf_idx);
     BindUBOBlock(gbuffer_shader_handle_, "MorphWeights", UBOBindingPoint::MorphWeights, pf_idx);
+}
+
+// ============================================================
+// 精灵着色器
+// ============================================================
+
+void GLShaderManager::InitSpriteShader() {
+    if (sprite_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite_shader_handle_ = CompileProgram(ksprite_vert_glsl330, ksprite_frag_glsl330);
+    programs_created_ += 1;
+
+    unsigned int pf_idx = GL_INVALID_INDEX;
+    BindUBOBlock(sprite_shader_handle_, "PerFrame", UBOBindingPoint::PerFrame, pf_idx);
+}
+
+// ============================================================
+// 阴影深度着色器
+// ============================================================
+
+void GLShaderManager::InitShadowShader() {
+    if (shadow_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    shadow_shader_handle_ = CompileProgram(kshadow_vert_glsl330, kshadow_frag_glsl330);
+    programs_created_ += 1;
+
+    unsigned int pf_idx = GL_INVALID_INDEX;
+    BindUBOBlock(shadow_shader_handle_, "PerFrame",     UBOBindingPoint::PerFrame,     pf_idx);
+    BindUBOBlock(shadow_shader_handle_, "BoneMatrices", UBOBindingPoint::BoneMatrices, pf_idx);
+    BindUBOBlock(shadow_shader_handle_, "MorphWeights", UBOBindingPoint::MorphWeights, pf_idx);
 }
 
 // ============================================================

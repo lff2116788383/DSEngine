@@ -79,6 +79,10 @@ public:
     /// 查询 Compute Shader 程序
     const DX11ComputeProgram* GetComputeProgram(unsigned int handle) const;
 
+    /// 从预编译 DXBC 字节码创建着色器程序（跳过运行时编译），返回句柄（0 = 失败）
+    unsigned int CreateProgramFromDXBC(const uint8_t* vs_bytecode, size_t vs_size,
+                                        const uint8_t* ps_bytecode, size_t ps_size);
+
     /// 初始化内置着色器
     void InitBuiltinShaders(std::function<void()> keep_alive = nullptr);
 
