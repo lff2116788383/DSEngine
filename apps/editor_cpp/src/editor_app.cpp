@@ -79,6 +79,7 @@
 #include "editor_project_hub.h"
 #include "editor_undo_panel.h"
 #include "editor_asset_importer.h"
+#include "editor_asset_db.h"
 #include "editor_autosave.h"
 
 
@@ -350,6 +351,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         dse::editor::ProjectManager::Get().ApplyDataRoot();
         engine_instance_->asset_manager()->ConfigureDataRoot(
             dse::editor::ProjectManager::Get().GetAssetDir().string());
+        dse::editor::AssetDatabase::Get().Refresh();
     }
 
     // Restore scene camera
@@ -633,6 +635,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
             dse::editor::ProjectManager::Get().ApplyDataRoot();
             engine_instance_->asset_manager()->ConfigureDataRoot(
                 dse::editor::ProjectManager::Get().GetAssetDir().string());
+            dse::editor::AssetDatabase::Get().Refresh();
         }
         return;
     }

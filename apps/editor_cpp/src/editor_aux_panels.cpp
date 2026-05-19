@@ -9,6 +9,7 @@
 #include "editor_icons.h"
 #include "editor_tilemap_panel.h"
 #include "editor_project.h"
+#include "editor_asset_db.h"
 
 #include <glad/gl.h>
 #include "stb/stb_image.h"
@@ -137,12 +138,17 @@ void DrawProjectPanel() {
     std::filesystem::path& current_path = GetCurrentProjectPanelPath();
 
     // Toolbar: Search + View toggle
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80);
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 140);
     ImGui::InputTextWithHint("##project_search", MDI_ICON_MAGNIFY " Search...", s_search_filter, sizeof(s_search_filter));
     ImGui::SameLine();
     if (ImGui::Button(s_grid_view ? "List" : "Grid", ImVec2(60, 0))) {
         s_grid_view = !s_grid_view;
     }
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_COG, ImVec2(24, 0))) {
+        AssetDatabase::Get().Refresh();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Refresh Asset Database (%zu assets)", AssetDatabase::Get().Count());
     ImGui::Separator();
 
     // Clear thumbnail cache when directory changes
@@ -275,6 +281,19 @@ void DrawProjectPanel() {
                     ImGui::EndDragDropSource();
                 }
 
+                // Asset DB tooltip
+                if (!entry.is_directory() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                    const std::string rel = std::filesystem::relative(path, base_data_path).string();
+                    const auto* info = AssetDatabase::Get().FindByPath(rel);
+                    if (info) {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("%s", filename.c_str());
+                        ImGui::TextDisabled("GUID: %s", info->guid.c_str());
+                        ImGui::TextDisabled("Type: %s", AssetTypeToString(info->type));
+                        ImGui::EndTooltip();
+                    }
+                }
+
                 // Per-item context menu
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem("Rename")) {
@@ -338,6 +357,19 @@ void DrawProjectPanel() {
                         ImGui::SetDragDropPayload("ASSET_PATH", relative_path.c_str(), relative_path.size() + 1);
                         ImGui::Text("%s", filename.c_str());
                         ImGui::EndDragDropSource();
+                    }
+
+                    // Asset DB tooltip
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                        const std::string rel = std::filesystem::relative(path, base_data_path).string();
+                        const auto* info = AssetDatabase::Get().FindByPath(rel);
+                        if (info) {
+                            ImGui::BeginTooltip();
+                            ImGui::Text("%s", filename.c_str());
+                            ImGui::TextDisabled("GUID: %s", info->guid.c_str());
+                            ImGui::TextDisabled("Type: %s", AssetTypeToString(info->type));
+                            ImGui::EndTooltip();
+                        }
                     }
                 }
 
