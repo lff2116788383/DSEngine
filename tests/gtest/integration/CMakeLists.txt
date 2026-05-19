@@ -82,6 +82,15 @@ if(MSVC)
     target_compile_options(${DSE_GTEST_INTEGRATION_TARGET} PRIVATE /utf-8)
 endif()
 
+# IXWebSocket — 若 editor 未构建则自行引入
+if(NOT TARGET ixwebsocket)
+    set(USE_TLS OFF CACHE BOOL "" FORCE)
+    set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+    set(BUILD_DEMO OFF CACHE BOOL "" FORCE)
+    set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/depends/IXWebSocket ${CMAKE_CURRENT_BINARY_DIR}/IXWebSocket)
+endif()
+
 target_link_libraries(${DSE_GTEST_INTEGRATION_TARGET}
     PRIVATE
         GTest::gtest_main

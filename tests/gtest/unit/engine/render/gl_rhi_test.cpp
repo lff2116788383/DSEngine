@@ -301,13 +301,13 @@ TEST(GLDrawExecutorTest, BeginEndFrame不崩溃) {
 TEST(GLDrawExecutorTest, 默认句柄为零) {
     GLDrawExecutor exec;
     EXPECT_EQ(exec.white_texture_handle(), 0u);
-    EXPECT_EQ(exec.vao_handle(), 0u);
+    EXPECT_EQ(exec.vao_handle().raw(), 0u);
     EXPECT_EQ(exec.vbo_handle(), 0u);
     EXPECT_EQ(exec.ebo_handle(), 0u);
-    EXPECT_EQ(exec.mesh_vao_handle(), 0u);
+    EXPECT_EQ(exec.mesh_vao_handle().raw(), 0u);
     EXPECT_EQ(exec.mesh_vbo_handle(), 0u);
     EXPECT_EQ(exec.mesh_ibo_handle(), 0u);
-    EXPECT_EQ(exec.skybox_vao_handle(), 0u);
+    EXPECT_EQ(exec.skybox_vao_handle().raw(), 0u);
     EXPECT_EQ(exec.skybox_vbo_handle(), 0u);
     EXPECT_EQ(exec.active_render_target(), 0u);
 }

@@ -50,8 +50,8 @@ public:
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override { (void)size; (void)data; (void)is_dynamic; (void)is_index; return 0; }
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override { (void)handle; (void)offset; (void)size; (void)data; (void)is_index; }
     void DeleteBuffer(unsigned int handle) override { (void)handle; }
-    unsigned int CreateVertexArray() override { return 0; }
-    void DeleteVertexArray(unsigned int handle) override { (void)handle; }
+    dse::render::VertexArrayHandle CreateVertexArray() override { return {}; }
+    void DeleteVertexArray(dse::render::VertexArrayHandle handle) override { (void)handle; }
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override { (void)cmd_buffer; }
     void EndFrame() override {}

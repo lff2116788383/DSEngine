@@ -58,7 +58,8 @@ void EnterPlayMode(entt::registry& /*registry*/) {
     g_editor_state_stub = EditorState::Play;
 }
 
-void ExitPlayMode(entt::registry& /*registry*/, entt::entity& /*selected*/) {
+void ExitPlayMode(entt::registry& /*registry*/, entt::entity& /*selected*/,
+                  dse::runtime::EngineInstance* /*engine*/) {
     g_editor_state_stub = EditorState::Edit;
 }
 

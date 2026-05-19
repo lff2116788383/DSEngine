@@ -93,16 +93,16 @@ TEST(DX11RhiDeviceTest, 未初始化时CreateTexture2D返回零) {
 
 TEST(DX11RhiDeviceTest, CreateVertexArray返回递增句柄) {
     DX11RhiDevice device;
-    unsigned int h1 = device.CreateVertexArray();
-    unsigned int h2 = device.CreateVertexArray();
+    auto h1 = device.CreateVertexArray();
+    auto h2 = device.CreateVertexArray();
     EXPECT_NE(h1, h2);
-    EXPECT_GT(h2, h1);
+    EXPECT_GT(h2.raw(), h1.raw());
 }
 
 TEST(DX11RhiDeviceTest, DeleteVertexArray_NoOp不崩溃) {
     DX11RhiDevice device;
-    device.DeleteVertexArray(99999);
-    device.DeleteVertexArray(0);
+    device.DeleteVertexArray(VertexArrayHandle{99999});
+    device.DeleteVertexArray(VertexArrayHandle{0});
 }
 
 TEST(DX11RhiDeviceTest, LastFrameStats默认值为零) {

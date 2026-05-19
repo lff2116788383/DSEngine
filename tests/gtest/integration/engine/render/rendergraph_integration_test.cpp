@@ -317,8 +317,8 @@ public:
     unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 0; }
     void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
     void DeleteBuffer(unsigned int) override {}
-    unsigned int CreateVertexArray() override { return 0; }
-    void DeleteVertexArray(unsigned int) override {}
+    VertexArrayHandle CreateVertexArray() override { return {}; }
+    void DeleteVertexArray(VertexArrayHandle) override {}
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
     void Submit(std::shared_ptr<CommandBuffer>) override {}
     void EndFrame() override {}

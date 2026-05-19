@@ -76,7 +76,7 @@ TEST(BatchVertexTest, 默认值) {
 
 TEST(MeshDrawItemTest, 默认值) {
     MeshDrawItem item;
-    EXPECT_EQ(item.vao_override, 0u);
+    EXPECT_FALSE(static_cast<bool>(item.vao_override));
     EXPECT_EQ(item.index_count_override, 0u);
     EXPECT_EQ(item.model, glm::mat4(1.0f));
     EXPECT_FALSE(item.lighting_enabled);

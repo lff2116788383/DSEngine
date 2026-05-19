@@ -60,9 +60,9 @@ TEST(TerrainComponentTest, 内部状态默认值) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.is_dirty);
     EXPECT_TRUE(tc.height_data.empty());
-    EXPECT_EQ(tc.vao, 0u);
-    EXPECT_EQ(tc.vbo, 0u);
-    EXPECT_EQ(tc.ebo, 0u);
+    EXPECT_EQ(tc.vao.raw(), 0u);
+    EXPECT_EQ(tc.vbo.raw(), 0u);
+    EXPECT_EQ(tc.ebo.raw(), 0u);
     EXPECT_TRUE(tc.lod_ebos.empty());
     EXPECT_TRUE(tc.lod_index_counts.empty());
     EXPECT_EQ(tc.index_count, 0u);
