@@ -15,6 +15,9 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
+#elif defined(__ANDROID__)
+#define VK_USE_PLATFORM_ANDROID_KHR
+#include <vulkan/vulkan_android.h>
 #endif
 
 namespace dse {
@@ -242,6 +245,8 @@ std::vector<const char*> VulkanContext::GetRequiredExtensions(bool enable_valida
     extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 #ifdef _WIN32
     extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(__ANDROID__)
+    extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
 #endif
     if (enable_validation) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -285,6 +290,16 @@ bool VulkanContext::CreateSurface(void* window_handle) {
     VkResult result = vkCreateWin32SurfaceKHR(instance_, &create_info, nullptr, &surface_);
     if (result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create Win32 surface: {}", static_cast<int>(result));
+        return false;
+    }
+#elif defined(__ANDROID__)
+    VkAndroidSurfaceCreateInfoKHR create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+    create_info.window = static_cast<ANativeWindow*>(window_handle);
+
+    VkResult result = vkCreateAndroidSurfaceKHR(instance_, &create_info, nullptr, &surface_);
+    if (result != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create Android surface: {}", static_cast<int>(result));
         return false;
     }
 #else

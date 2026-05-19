@@ -53,6 +53,19 @@ option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
+# --- Android NDK 交叉编译默认值 ---
+if(ANDROID)
+    set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_LUASOCKET OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
+    add_definitions(-D __ANDROID__)
+    message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
+endif()
+
 
 if(DSE_ENABLE_NAVMESH)
     add_definitions(-D DSE_ENABLE_NAVMESH)
@@ -103,7 +116,11 @@ if (MSVC)
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
     add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
-include(cmake/CMakeLists.txt.glfw)
+if(NOT ANDROID)
+    include(cmake/CMakeLists.txt.glfw)
+else()
+    set(glfw_sources "")
+endif()
 include(cmake/CMakeLists.txt.FreeType)
 if(DSE_ENABLE_PROFILER)
     include(cmake/CMakeLists.txt.easy_profile_core)
@@ -223,6 +240,11 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
+# Android: 排除 GLFW platform 实现（使用 AndroidApp 替代）
+if(ANDROID)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
+endif()
+
 # D3D11 RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_D3D11)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/dx11/.*\\.cpp$")
@@ -286,9 +308,11 @@ set(imgui_src
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp"
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_tables.cpp"
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui_widgets.cpp"
-    "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp"
     "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp"
 )
+if(NOT ANDROID)
+    list(APPEND imgui_src "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp")
+endif()
 
 add_library(dse_engine SHARED
     ${glfw_sources}
@@ -373,9 +397,16 @@ if(MSVC)
 endif()
 
 target_include_directories(dse_engine PRIVATE
-    ${CMAKE_SOURCE_DIR}/depends/glad/include
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
+if(NOT ANDROID)
+    target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/glad/include)
+endif()
+
+# --- Android 链接库 ---
+if(ANDROID)
+    target_link_libraries(dse_engine PRIVATE EGL GLESv3 android log)
+endif()
 if(DSE_ENABLE_LUA)
     target_include_directories(dse_engine PRIVATE
         ${CMAKE_SOURCE_DIR}/depends/lua

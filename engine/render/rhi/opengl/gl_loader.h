@@ -12,6 +12,9 @@
 #ifdef __ANDROID__
 #   include <GLES3/gl31.h>
 #   include <GLES3/gl3ext.h>
+#   ifndef GLAD_API_PTR
+#       define GLAD_API_PTR
+#   endif
 #else
 #   include <glad/gl.h>
 #endif

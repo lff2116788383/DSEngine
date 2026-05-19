@@ -51,7 +51,7 @@
 #endif
 
 // GL 4.2+/4.3 鍑芥暟鎸囬拡锛坓lad 浠呭姞杞?GL 3.3 core锛岄渶鎵嬪姩瑙ｆ瀽锛?
-#ifdef _WIN32
+#if defined(_WIN32)
 extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
 #endif
 
@@ -64,7 +64,12 @@ static void InitComputeProcAddresses() {
     static bool done = false;
     if (done) return;
     done = true;
-#ifdef _WIN32
+#if defined(__ANDROID__)
+    pfn_glDispatchCompute = ::glDispatchCompute;
+    pfn_glMemoryBarrier = ::glMemoryBarrier;
+    pfn_glBindImageTexture = ::glBindImageTexture;
+    pfn_glMultiDrawElementsIndirect = nullptr; // GLES 3.1 不支持 MultiDrawIndirect
+#elif defined(_WIN32)
     pfn_glDispatchCompute = reinterpret_cast<decltype(pfn_glDispatchCompute)>(wglGetProcAddress("glDispatchCompute"));
     pfn_glMemoryBarrier = reinterpret_cast<decltype(pfn_glMemoryBarrier)>(wglGetProcAddress("glMemoryBarrier"));
     pfn_glBindImageTexture = reinterpret_cast<decltype(pfn_glBindImageTexture)>(wglGetProcAddress("glBindImageTexture"));
