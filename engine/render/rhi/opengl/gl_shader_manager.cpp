@@ -46,6 +46,7 @@
 #include "embed/wboit_composite_frag.gen.h"
 #include "embed/lum_compute_frag.gen.h"
 #include "embed/lum_adapt_frag.gen.h"
+#include "embed/gbuffer_frag.gen.h"
 
 namespace dse {
 namespace render {
@@ -403,35 +404,13 @@ void GLShaderManager::InitGBufferShader() {
     if (gbuffer_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
 
-    static const char* gbuffer_fs = R"(#version 430
-
-layout(location = 0) in vec4 vColor;
-layout(location = 1) in vec2 vTexCoord;
-layout(location = 2) in vec3 vFragPos;
-layout(location = 3) in vec3 vNormal;
-
-uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 gAlbedo;
-layout(location = 1) out vec4 gNormal;
-layout(location = 2) out vec4 gPosition;
-
-void main()
-{
-    vec4 albedo = texture(u_texture, vTexCoord) * vColor;
-    if (albedo.a < 0.01) discard;
-    gAlbedo   = albedo;
-    gNormal   = vec4(normalize(vNormal) * 0.5 + 0.5, 1.0);
-    gPosition = vec4(vFragPos, 1.0);
-}
-)";
-
-    gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl330, gbuffer_fs);
+    gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kgbuffer_frag_glsl330);
     programs_created_ += 1;
 
     // GBuffer shader 也需要 PerFrame UBO 和 BoneMatrices/MorphWeights
     unsigned int pf_idx = GL_INVALID_INDEX;
     BindUBOBlock(gbuffer_shader_handle_, "PerFrame",     UBOBindingPoint::PerFrame,     pf_idx);
+    BindUBOBlock(gbuffer_shader_handle_, "PerScene",     UBOBindingPoint::PerScene,     pf_idx);
     BindUBOBlock(gbuffer_shader_handle_, "BoneMatrices", UBOBindingPoint::BoneMatrices, pf_idx);
     BindUBOBlock(gbuffer_shader_handle_, "MorphWeights", UBOBindingPoint::MorphWeights, pf_idx);
 }

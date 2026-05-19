@@ -133,8 +133,13 @@ layout(set = 2, binding = 12) uniform sampler2D u_splat_layer0;
 layout(set = 2, binding = 13) uniform sampler2D u_splat_layer1;
 layout(set = 2, binding = 14) uniform sampler2D u_splat_layer2;
 layout(set = 2, binding = 15) uniform sampler2D u_splat_layer3;
-uniform float u_splat_enabled;  // >0.5 = splatmap mode
-uniform vec4  u_splat_tiling;   // per-layer UV tiling factor
+layout(std140, set = 2, binding = 16) uniform TerrainParams {
+    float u_splat_enabled;  // >0.5 = splatmap mode
+    float _tp_pad0;
+    float _tp_pad1;
+    float _tp_pad2;
+    vec4  u_splat_tiling;   // per-layer UV tiling factor
+};
 
 const float PI = 3.14159265359;
 

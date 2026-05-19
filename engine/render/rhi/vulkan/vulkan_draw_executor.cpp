@@ -18,7 +18,6 @@
 #include "engine/render/rhi/vulkan/vulkan_resource_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
-#include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
 #include <glm/gtc/matrix_transform.hpp>

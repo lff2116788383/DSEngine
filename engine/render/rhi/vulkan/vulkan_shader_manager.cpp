@@ -11,7 +11,6 @@
 
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_context.h"
-#include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
 #include "engine/base/debug.h"
 
 // 离线编译生成的 SPIR-V 内嵌头文件
@@ -52,6 +51,7 @@
 #include "embed/wboit_composite_frag.gen.h"
 #include "embed/water_frag.gen.h"
 #include "embed/light_shaft_frag.gen.h"
+#include "embed/gbuffer_frag.gen.h"
 
 // glslang 运行时编译支持
 #ifdef DSE_HAS_GLSLANG
@@ -698,11 +698,13 @@ void VulkanShaderManager::InitPostProcessShader() {
     ssr_shader_handle_ = create_pp_spv(generated_shaders::kssr_frag_spv, generated_shaders::kssr_frag_spv_size, "SSR");
     motion_vector_shader_handle_ = create_pp_spv(generated_shaders::kmotion_vector_frag_spv, generated_shaders::kmotion_vector_frag_spv_size, "Motion Vector");
 
-    // GBuffer shader（复用 PBR 顶点着色器 + GBuffer 片段着色器）
+    // GBuffer shader（复用 PBR 顶点着色器 + GBuffer 片段着色器，预编译 SPIR-V）
     {
-        gbuffer_shader_handle_ = CreateProgram(vulkan_shaders::kPbrVertex, vulkan_shaders::kGBufferFragment);
+        gbuffer_shader_handle_ = CreateProgramFromSpirv(
+            generated_shaders::kpbr_vert_spv, generated_shaders::kpbr_vert_spv_size,
+            generated_shaders::kgbuffer_frag_spv, generated_shaders::kgbuffer_frag_spv_size);
         if (gbuffer_shader_handle_)
-            DEBUG_LOG_INFO("[Vulkan] GBuffer shader created: handle={}", gbuffer_shader_handle_);
+            DEBUG_LOG_INFO("[Vulkan] GBuffer shader created (SPIR-V): handle={}", gbuffer_shader_handle_);
         else
             DEBUG_LOG_WARN("[Vulkan] GBuffer shader creation failed");
     }
