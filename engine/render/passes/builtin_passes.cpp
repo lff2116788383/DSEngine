@@ -494,7 +494,12 @@ void ForwardScenePass::Setup(RenderGraph& graph) {
 }
 
 void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
-    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.02f, 0.02f, 0.02f, 1.0f), true});
+    // Editor camera: use a legible dark-slate background (Unity-like) instead of near-black.
+    // Game camera: intentional black so the skybox/camera fill is visually dominant.
+    const glm::vec4 bg_color = (ctx_.editor_mode && ctx_.use_editor_camera)
+        ? glm::vec4(0.17f, 0.17f, 0.21f, 1.0f)
+        : glm::vec4(0.02f, 0.02f, 0.02f, 1.0f);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, bg_color, true});
 
     bool render_3d = false; // Only render 3D meshes when a valid camera is active
 
