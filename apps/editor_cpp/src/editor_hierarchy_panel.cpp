@@ -51,6 +51,8 @@ const char* GetEntityTypeIcon(entt::registry& registry, entt::entity entity) {
         return MDI_ICON_CREATION;
     } else if (registry.all_of<dse::TerrainComponent>(entity)) {
         return MDI_ICON_TERRAIN;
+    } else if (registry.all_of<dse::SubSceneComponent>(entity)) {
+        return MDI_ICON_IMAGE_MULTIPLE;
     }
     return MDI_ICON_CUBE_OUTLINE;
 }
@@ -359,7 +361,17 @@ void DrawHierarchyPanel(EditorContext& context) {
         if (!context.read_only && ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                 std::string asset_path(static_cast<const char*>(payload->Data));
-                if (asset_path.size() > 8 && asset_path.substr(asset_path.size() - 8) == ".dprefab") {
+                if (asset_path.size() > 7 && asset_path.substr(asset_path.size() - 7) == ".dscene") {
+                    auto new_ent = context.world.CreateEntity();
+                    std::string sub_name = std::filesystem::path(asset_path).stem().string();
+                    context.registry.emplace<EditorNameComponent>(new_ent, sub_name);
+                    context.registry.emplace<TransformComponent>(new_ent);
+                    dse::SubSceneComponent sub;
+                    sub.scene_path = asset_path;
+                    context.registry.emplace<dse::SubSceneComponent>(new_ent, sub);
+                    context.selected_entity = new_ent;
+                    EditorLog(LogLevel::Info, "Created sub-scene instance: " + asset_path);
+                } else if (asset_path.size() > 8 && asset_path.substr(asset_path.size() - 8) == ".dprefab") {
                     auto& proj = ProjectManager::Get();
                     std::filesystem::path base = proj.HasOpenProject()
                         ? proj.GetAssetDir()

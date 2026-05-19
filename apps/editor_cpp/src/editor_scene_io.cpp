@@ -914,6 +914,14 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
             ent_obj.AddMember("skybox", skybox_obj, allocator);
         }
 
+        if (registry.all_of<dse::SubSceneComponent>(entity)) {
+            auto& sub = registry.get<dse::SubSceneComponent>(entity);
+            rapidjson::Value sub_obj(rapidjson::kObjectType);
+            sub_obj.AddMember("enabled", sub.enabled, allocator);
+            sub_obj.AddMember("scene_path", rapidjson::Value(sub.scene_path.c_str(), allocator).Move(), allocator);
+            ent_obj.AddMember("sub_scene", sub_obj, allocator);
+        }
+
         if (registry.all_of<dse::Animator3DComponent>(entity)) {
             auto& animator = registry.get<dse::Animator3DComponent>(entity);
             rapidjson::Value animator_obj(rapidjson::kObjectType);
@@ -1284,6 +1292,13 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
             if (skybox_obj.HasMember("enabled") && skybox_obj["enabled"].IsBool()) skybox.enabled = skybox_obj["enabled"].GetBool();
             if (skybox_obj.HasMember("cubemap_handle") && skybox_obj["cubemap_handle"].IsUint()) skybox.cubemap_handle = skybox_obj["cubemap_handle"].GetUint();
             if (skybox_obj.HasMember("cubemap_path") && skybox_obj["cubemap_path"].IsString()) skybox.cubemap_path = skybox_obj["cubemap_path"].GetString();
+        }
+
+        if (v.HasMember("sub_scene") && v["sub_scene"].IsObject()) {
+            const auto& sub_obj = v["sub_scene"];
+            auto& sub = registry.emplace<dse::SubSceneComponent>(entity);
+            if (sub_obj.HasMember("enabled") && sub_obj["enabled"].IsBool()) sub.enabled = sub_obj["enabled"].GetBool();
+            if (sub_obj.HasMember("scene_path") && sub_obj["scene_path"].IsString()) sub.scene_path = sub_obj["scene_path"].GetString();
         }
 
         if (v.HasMember("animator3d") && v["animator3d"].IsObject()) {

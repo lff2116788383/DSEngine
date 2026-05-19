@@ -641,6 +641,53 @@ void DrawSkyboxSection(EditorContext& context) {
     ImGui::Columns(1);
 }
 
+void DrawSubSceneSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::SubSceneComponent>(context.selected_entity)) return;
+    auto& sub = context.registry.get<dse::SubSceneComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_IMAGE_MULTIPLE "  Sub-Scene", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::Columns(2, "subscene_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    BeginInspectorReadOnlyScope(context);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##sub_en", &sub.enabled));
+
+    static char s_sub_path[512] = {};
+    static entt::entity s_sub_last = entt::null;
+    if (s_sub_last != context.selected_entity) {
+        s_sub_last = context.selected_entity;
+        std::strncpy(s_sub_path, sub.scene_path.c_str(), sizeof(s_sub_path) - 1);
+        s_sub_path[sizeof(s_sub_path) - 1] = '\0';
+    }
+    INSPECTOR_PROPERTY("Scene Path", if (ImGui::InputText("##sub_path", s_sub_path, sizeof(s_sub_path))) {
+        sub.scene_path = s_sub_path;
+    });
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            std::string p(static_cast<const char*>(payload->Data));
+            if (p.size() > 7 && p.substr(p.size() - 7) == ".dscene") {
+                sub.scene_path = p;
+                std::strncpy(s_sub_path, p.c_str(), sizeof(s_sub_path) - 1);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::Columns(1);
+
+    if (!sub.scene_path.empty()) {
+        ImGui::TextDisabled("Drag to re-order or reassign scene path.");
+    }
+    EndInspectorReadOnlyScope(context);
+}
+
+REGISTER_INSPECTOR_CUSTOM(
+    "Sub-Scene",
+    DrawSubSceneSection,
+    "3D",
+    35,
+    [](entt::registry& r, entt::entity e) -> bool { return r.all_of<dse::SubSceneComponent>(e); },
+    [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SubSceneComponent>(e)) r.emplace<dse::SubSceneComponent>(e); }
+);
+
 void DrawAnimator3DSection(EditorContext& context) {
     if (!context.registry.all_of<dse::Animator3DComponent>(context.selected_entity)) {
         return;

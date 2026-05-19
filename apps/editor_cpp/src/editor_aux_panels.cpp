@@ -23,6 +23,9 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include <cmath>
+
+#include <rapidjson/document.h>
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -149,6 +152,53 @@ static void BoxResize(const uint8_t* src, int sw, int sh,
     }
 }
 
+// 生成 CPU Phong 着色球体预览（用于 .dmat / .dmesh 缩略图）
+// base_color: [0,1] RGB, emissive: [0,1] RGB, roughness: [0,1]
+static unsigned int GenerateSpherePreviewTexture(float r, float g, float b,
+                                                 float er, float eg, float eb,
+                                                 float roughness) {
+    constexpr int sz = kThumbSize;
+    std::vector<uint8_t> pixels(sz * sz * 4, 0);
+    const float half = sz * 0.5f;
+    const float lx = 0.5773f, ly = 0.5773f, lz = 0.5773f; // normalized light
+    for (int y = 0; y < sz; ++y) {
+        for (int x = 0; x < sz; ++x) {
+            const float nx = (x - half) / half;
+            const float ny = -(y - half) / half;
+            const float r2 = nx*nx + ny*ny;
+            uint8_t* p = pixels.data() + (y * sz + x) * 4;
+            if (r2 > 1.0f) {
+                // 棋盘格背景
+                const uint8_t bg = ((x/8 + y/8) % 2 == 0) ? 58 : 42;
+                p[0] = p[1] = p[2] = bg; p[3] = 255;
+            } else {
+                const float nz = sqrtf(1.0f - r2);
+                const float ndotl = (std::max)(0.0f, nx*lx + ny*ly + nz*lz);
+                const float refl_z = lz - 2.0f * ndotl * nz; // R = L - 2*(N.L)*N, dot with view (0,0,1)
+                const float spec_exp = (std::max)(1.0f, (1.0f - roughness) * 64.0f);
+                const float spec = powf((std::max)(0.0f, refl_z), spec_exp)
+                                   * (1.0f - roughness * 0.8f) * 0.6f;
+                const float ambient = 0.10f;
+                auto clamp01 = [](float v){ return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); };
+                p[0] = uint8_t(clamp01(r*(ambient + ndotl*0.9f) + er + spec) * 255.0f);
+                p[1] = uint8_t(clamp01(g*(ambient + ndotl*0.9f) + eg + spec) * 255.0f);
+                p[2] = uint8_t(clamp01(b*(ambient + ndotl*0.9f) + eb + spec) * 255.0f);
+                p[3] = 255;
+            }
+        }
+    }
+    unsigned int tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sz, sz, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+
 static unsigned int UploadThumbTexture(const uint8_t* rgba, int w, int h,
                                        const std::filesystem::path& path_key) {
     unsigned int tex = 0;
@@ -185,6 +235,44 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
                     return UploadThumbTexture(rgba.data(), int(tw), int(th), path);
                 }
             }
+        }
+    }
+
+    // .dmat → Phong 球体预览（解析 JSON base_color / emissive / roughness）
+    {
+        std::string ext = path.extension().string();
+        for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (ext == ".dmat") {
+            float cr = 0.8f, cg = 0.8f, cb = 0.8f;
+            float er = 0.0f, eg = 0.0f, eb = 0.0f;
+            float rough = 0.5f;
+            std::ifstream f(path);
+            if (f.is_open()) {
+                std::string js((std::istreambuf_iterator<char>(f)),
+                               std::istreambuf_iterator<char>());
+                rapidjson::Document doc;
+                if (!doc.Parse(js.c_str()).HasParseError() && doc.IsArray() && doc.Size() > 0) {
+                    const auto& mat = doc[0];
+                    if (mat.HasMember("base_color_factor") && mat["base_color_factor"].IsArray()) {
+                        const auto bc = mat["base_color_factor"].GetArray();
+                        if (bc.Size() >= 3) { cr = bc[0].GetFloat(); cg = bc[1].GetFloat(); cb = bc[2].GetFloat(); }
+                    }
+                    if (mat.HasMember("emissive_factor") && mat["emissive_factor"].IsArray()) {
+                        const auto em = mat["emissive_factor"].GetArray();
+                        if (em.Size() >= 3) { er = em[0].GetFloat(); eg = em[1].GetFloat(); eb = em[2].GetFloat(); }
+                    }
+                    if (mat.HasMember("roughness_factor") && mat["roughness_factor"].IsNumber())
+                        rough = mat["roughness_factor"].GetFloat();
+                }
+            }
+            unsigned int tex = GenerateSpherePreviewTexture(cr, cg, cb, er, eg, eb, rough);
+            GetThumbnailCache()[path.string()] = {tex, kThumbSize, kThumbSize};
+            return tex;
+        }
+        if (ext == ".dmesh") {
+            unsigned int tex = GenerateSpherePreviewTexture(0.58f, 0.60f, 0.65f, 0.0f, 0.0f, 0.0f, 0.72f);
+            GetThumbnailCache()[path.string()] = {tex, kThumbSize, kThumbSize};
+            return tex;
         }
     }
 
@@ -355,7 +443,8 @@ void DrawProjectPanel() {
                 // Check if this is an image file for thumbnail display
                 std::string ext = path.extension().string();
                 for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                bool is_image = !entry.is_directory() && IsImageExtension(ext);
+                bool is_image = !entry.is_directory() &&
+                    (IsImageExtension(ext) || ext == ".dmat" || ext == ".dmesh");
 
                 if (is_image) {
                     auto& cache = GetThumbnailCache();

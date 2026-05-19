@@ -485,6 +485,13 @@ struct FreeCameraControllerComponent {
     float yaw = -90.0f;
 };
 
+/// Sub-Scene: 将另一个 .dscene 文件作为嵌套场景实例化到当前层级中。
+/// 编辑模式下作为占位节点显示；运行时由脚本/运行时系统负责加载实际场景内容。
+struct SubSceneComponent {
+    bool enabled = true;
+    std::string scene_path;  ///< 相对于 data root 的 .dscene 路径
+};
+
 struct TerrainComponent {
     bool enabled = true;
     std::string heightmap_path;
