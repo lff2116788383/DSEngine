@@ -2,6 +2,9 @@
 
 #include "editor_context.h"
 #include <glm/mat4x4.hpp>
+#include <entt/entt.hpp>
+#include "imgui.h"
+#include <glm/vec2.hpp>
 
 namespace dse::editor {
 
@@ -10,5 +13,11 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                             bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&));
 
 void DrawGameViewportPanel(unsigned int texture_id);
+
+void DrawPhysicsColliderOverlay(entt::registry& registry,
+                                entt::entity selected,
+                                ImDrawList* dl,
+                                const glm::vec2& vp_pos, const glm::vec2& vp_size,
+                                const glm::mat4& view, const glm::mat4& proj);
 
 } // namespace dse::editor

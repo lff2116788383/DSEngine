@@ -109,6 +109,90 @@ Output binaries go to `bin/`.
 
 ---
 
+## Getting Started — Indie Developer Guide
+
+> 从零开始到导出游戏的完整流程。
+
+### 步骤 1：构建
+
+```powershell
+# 生成工程（仅第一次）
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+
+# 构建编辑器（会自动同时构建 AssetBuilder + 独立运行时）
+cmake --build build_vs2022 --config Release --target dse_editor_cpp
+```
+
+> 构建成功后，`bin/` 目录里应包含：
+> - `dsengine-editor.exe` — 编辑器
+> - `DSEngine_Game.exe` — 独立游戏运行时
+> - `AssetBuilder.exe` — 资产转换工具
+
+### 步骤 2：创建项目
+
+1. 双击启动 `bin\dsengine-editor.exe`
+2. 在 **Project Hub** 点击 **New Project**，选择一个空目录
+3. 编辑器会自动创建 `data/` 资产目录并打开
+
+### 步骤 3：导入资产
+
+| 资产类型 | 操作 |
+|---------|------|
+| 3D 模型 (.glb / .gltf / .fbx) | **Assets → Import Asset...** → 选文件 → 会调用 AssetBuilder 生成 `.dmesh` / `.dmat` |
+| 贴图 (.png / .jpg / .hdr) | 直接拖拽文件到 Project 面板，或 **Assets → Import Asset...** |
+| 音频 (.wav / .ogg / .mp3) | 同上 |
+
+也可以将文件直接拖拽到编辑器窗口触发导入弹窗。
+
+### 步骤 4：搭建场景
+
+1. **Hierarchy** 面板右键 → **Create Entity** 创建实体
+2. 选中实体 → **Inspector** 面板点 **Add Component** 添加组件：
+   - `MeshRendererComponent` — 渲染 3D 网格
+   - `RigidBody3DComponent` + `BoxCollider3DComponent` — 物理模拟
+   - `LuaScriptComponent` — 绑定 Lua 脚本
+3. 将 Project 面板里的 `.dmesh` 文件拖拽到 Viewport，自动创建带 Mesh 的实体
+4. 在 Viewport 里用 **W/E/R** 切换移动/旋转/缩放 Gizmo
+5. **Ctrl+S** 保存场景为 `.dscene`
+
+### 步骤 5：编写 Lua 脚本
+
+在 `data/scripts/` 下新建 `.lua` 文件，模板：
+
+```lua
+local MyScript = {}
+
+function MyScript:on_start()
+    -- 初始化
+end
+
+function MyScript:on_update(dt)
+    -- 每帧逻辑
+end
+
+return MyScript
+```
+
+将脚本文件拖入 Viewport 或拖到实体的 `LuaScriptComponent` 的 script_path 字段。
+
+### 步骤 6：在编辑器中运行
+
+- 点击工具栏 ▶ **Play** — 启动 Lua 脚本和物理
+- ⏸ **Pause** — 暂停（可单帧步进）
+- ⏹ **Stop** — 停止并恢复场景初始状态
+
+### 步骤 7：构建独立游戏
+
+1. **File → Build Game...**
+2. 填写输出目录和游戏名称
+3. 点击 **Build** — 编辑器会：
+   - 将 `DSEngine_Game.exe` 复制并重命名
+   - 将所有资产打包为 `game.dpak`
+   - 复制必要的 DLL
+4. 构建完成后点 **Open Folder** 或 **Run** 直接测试
+
+---
+
 ## Quick Start
 
 ### Run the Editor

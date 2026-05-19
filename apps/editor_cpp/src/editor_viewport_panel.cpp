@@ -16,6 +16,7 @@
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_preferences_panel.h"
+#include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
 #include <algorithm>
 #include <cmath>
@@ -668,6 +669,13 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);
+            DrawPhysicsColliderOverlay(
+                context.registry,
+                context.selected_entity,
+                ImGui::GetWindowDrawList(),
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
             DrawProbeOverlays(
                 context.registry,
                 glm::vec2(window_pos.x, window_pos.y),
@@ -976,6 +984,137 @@ void DrawSceneViewportPanel(EditorContext& ctx,
 
     ImGui::End();
     ImGui::PopStyleVar();
+}
+
+// ─── Physics Collider Wireframe Overlay ─────────────────────────────────────
+
+namespace {
+
+inline bool W2S(const glm::vec3& world, const glm::mat4& vp,
+                const glm::vec2& vp_pos, const glm::vec2& vp_size, ImVec2& out) {
+    glm::vec4 clip = vp * glm::vec4(world, 1.0f);
+    if (clip.w <= 0.001f) return false;
+    glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    if (ndc.x < -1.5f || ndc.x > 1.5f || ndc.y < -1.5f || ndc.y > 1.5f) return false;
+    out = ImVec2(vp_pos.x + (ndc.x * 0.5f + 0.5f) * vp_size.x,
+                 vp_pos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * vp_size.y);
+    return true;
+}
+
+void DrawBox(ImDrawList* dl, const glm::mat4& vp,
+             const glm::vec2& vp_pos, const glm::vec2& vp_size,
+             const glm::mat4& model, const glm::vec3& half, ImU32 col) {
+    static const int edges[12][2] = {
+        {0,1},{1,3},{3,2},{2,0},{4,5},{5,7},{7,6},{6,4},{0,4},{1,5},{2,6},{3,7}};
+    glm::vec3 corners[8];
+    int idx = 0;
+    for (int x : {-1,1}) for (int y : {-1,1}) for (int z : {-1,1})
+        corners[idx++] = glm::vec3(model * glm::vec4(half.x*x, half.y*y, half.z*z, 1.0f));
+    for (auto& e : edges) {
+        ImVec2 a, b;
+        if (W2S(corners[e[0]], vp, vp_pos, vp_size, a) &&
+            W2S(corners[e[1]], vp, vp_pos, vp_size, b))
+            dl->AddLine(a, b, col, 1.5f);
+    }
+}
+
+void DrawCircle3D(ImDrawList* dl, const glm::mat4& vp,
+                  const glm::vec2& vp_pos, const glm::vec2& vp_size,
+                  const glm::vec3& center, const glm::vec3& axisA, const glm::vec3& axisB,
+                  float r, ImU32 col, int segs = 32) {
+    ImVec2 prev; bool prev_ok = false;
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i / (float)segs * 6.28318530f;
+        glm::vec3 p = center + axisA * (r * std::cos(a)) + axisB * (r * std::sin(a));
+        ImVec2 s; bool ok = W2S(p, vp, vp_pos, vp_size, s);
+        if (ok && prev_ok) dl->AddLine(prev, s, col, 1.5f);
+        prev = s; prev_ok = ok;
+    }
+}
+
+} // anon namespace
+
+void DrawPhysicsColliderOverlay(
+    entt::registry& registry,
+    entt::entity selected,
+    ImDrawList* dl,
+    const glm::vec2& vp_pos, const glm::vec2& vp_size,
+    const glm::mat4& view, const glm::mat4& proj)
+{
+    if (!dl) return;
+    glm::mat4 vp_mat = proj * view;
+
+    auto draw_one = [&](entt::entity e) {
+        if (!registry.valid(e)) return;
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::vec3 world_pos(0.0f);
+        glm::quat world_rot(1.0f,0.0f,0.0f,0.0f);
+        glm::vec3 world_scale(1.0f);
+        if (registry.all_of<TransformComponent>(e)) {
+            auto& tf = registry.get<TransformComponent>(e);
+            world_pos   = tf.position;
+            world_rot   = tf.rotation;
+            world_scale = tf.scale;
+            model = tf.local_to_world;
+        }
+
+        if (registry.all_of<BoxCollider3DComponent>(e)) {
+            auto& bc = registry.get<BoxCollider3DComponent>(e);
+            ImU32 col = bc.is_trigger ? IM_COL32(255,200,0,220) : IM_COL32(100,230,100,220);
+            glm::mat4 m = glm::translate(model, bc.center);
+            glm::vec3 half = bc.size * 0.5f * world_scale;
+            glm::mat4 rot_m = glm::mat4_cast(world_rot);
+            glm::mat4 box_m = glm::translate(glm::mat4(1.0f), world_pos + glm::vec3(rot_m * glm::vec4(bc.center, 0.0f)))
+                            * rot_m;
+            DrawBox(dl, vp_mat, vp_pos, vp_size, box_m, half, col);
+        }
+
+        if (registry.all_of<SphereCollider3DComponent>(e)) {
+            auto& sc = registry.get<SphereCollider3DComponent>(e);
+            ImU32 col = sc.is_trigger ? IM_COL32(255,200,0,220) : IM_COL32(100,230,100,220);
+            float r = sc.radius * std::max({world_scale.x, world_scale.y, world_scale.z});
+            glm::vec3 c = world_pos + glm::vec3(glm::mat4_cast(world_rot) * glm::vec4(sc.center, 0.0f));
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, c, {1,0,0}, {0,1,0}, r, col);
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, c, {1,0,0}, {0,0,1}, r, col);
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, c, {0,1,0}, {0,0,1}, r, col);
+        }
+
+        if (registry.all_of<CapsuleCollider3DComponent>(e)) {
+            auto& cc = registry.get<CapsuleCollider3DComponent>(e);
+            ImU32 col = cc.is_trigger ? IM_COL32(255,200,0,220) : IM_COL32(100,230,100,220);
+            float r = cc.radius * std::max(world_scale.x, world_scale.z);
+            float hh = cc.height * 0.5f * world_scale.y;
+            glm::mat4 rot_m = glm::mat4_cast(world_rot);
+            glm::vec3 c = world_pos + glm::vec3(rot_m * glm::vec4(cc.center, 0.0f));
+            glm::vec3 up   = cc.direction==1 ? glm::vec3(rot_m[1]) :
+                             cc.direction==0 ? glm::vec3(rot_m[0]) : glm::vec3(rot_m[2]);
+            glm::vec3 side = cc.direction==1 ? glm::vec3(rot_m[0]) : glm::vec3(rot_m[1]);
+            glm::vec3 fwd  = glm::normalize(glm::cross(up, side));
+            glm::vec3 top_c = c + up * hh;
+            glm::vec3 bot_c = c - up * hh;
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, top_c, side, fwd, r, col);
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, bot_c, side, fwd, r, col);
+            for (int qi = 0; qi < 4; qi++) {
+                float a = qi * 1.5707963f;
+                glm::vec3 off = side * (r * std::cos(a)) + fwd * (r * std::sin(a));
+                ImVec2 ta, ba;
+                if (W2S(top_c + off, vp_mat, vp_pos, vp_size, ta) &&
+                    W2S(bot_c + off, vp_mat, vp_pos, vp_size, ba))
+                    dl->AddLine(ta, ba, col, 1.5f);
+            }
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, top_c, side, up, r, col, 16);
+            DrawCircle3D(dl, vp_mat, vp_pos, vp_size, bot_c, side, glm::vec3(-up.x,-up.y,-up.z), r, col, 16);
+        }
+    };
+
+    // Always draw all entities with colliders; highlight selected
+    for (auto e : registry.storage<entt::entity>()) {
+        if (!registry.valid(e)) continue;
+        bool has_collider = registry.all_of<BoxCollider3DComponent>(e) ||
+                            registry.all_of<SphereCollider3DComponent>(e) ||
+                            registry.all_of<CapsuleCollider3DComponent>(e);
+        if (has_collider) draw_one(e);
+    }
 }
 
 void DrawGameViewportPanel(unsigned int texture_id) {

@@ -92,3 +92,12 @@ set_target_properties(dse_editor_cpp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
     OUTPUT_NAME "dsengine-editor"
 )
+
+# 确保构建编辑器时同步构建 AssetBuilder 和 standalone runtime，
+# 让 bin/ 目录里的工具链开箱可用，不需要开发者手动触发额外目标。
+if(TARGET AssetBuilder)
+    add_dependencies(dse_editor_cpp AssetBuilder)
+endif()
+if(TARGET dse_standalone)
+    add_dependencies(dse_editor_cpp dse_standalone)
+endif()
