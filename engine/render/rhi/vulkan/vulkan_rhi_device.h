@@ -151,12 +151,15 @@ public:
         uint32_t push_constant_bytes) override;
     unsigned int CreateComputeWriteTexture2D(int width, int height) override;
 
-    // --- Indirect Draw Buffer (桩) ---
-    unsigned int CreateIndirectBuffer(size_t size, const void* data) override { (void)size; (void)data; return 0; }
-    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override { (void)handle; (void)offset; (void)size; (void)data; }
-    void DeleteIndirectBuffer(unsigned int handle) override { (void)handle; }
-    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override { (void)indirect_buffer; (void)draw_count; (void)stride; }
-    bool SupportsIndirectDraw() const override { return false; }
+    // --- Indirect Draw Buffer ---
+    unsigned int CreateIndirectBuffer(size_t size, const void* data) override;
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void DeleteIndirectBuffer(unsigned int handle) override;
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
+    bool SupportsIndirectDraw() const override { return true; }
+
+    void SetActiveRenderCommandBuffer(VkCommandBuffer cmd) { active_render_cmd_ = cmd; }
+    void ClearActiveRenderCommandBuffer() { active_render_cmd_ = VK_NULL_HANDLE; }
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
@@ -211,6 +214,9 @@ private:
 
     /// 本帧待提交的命令缓冲列表
     std::vector<VkCommandBuffer> pending_command_buffers_;
+
+    /// 当前活跃的渲染命令缓冲（由 VulkanCommandBuffer::BeginRenderPass 设置）
+    VkCommandBuffer active_render_cmd_ = VK_NULL_HANDLE;
 
     /// 当前帧绑定的 SSBO 状态 (binding_point → handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;

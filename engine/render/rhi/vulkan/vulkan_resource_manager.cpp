@@ -899,6 +899,72 @@ const VulkanBuffer* VulkanResourceManager::GetSSBO(unsigned int handle) const {
 }
 
 // ============================================================
+// Indirect Draw Buffer
+// ============================================================
+
+unsigned int VulkanResourceManager::CreateIndirectBuffer(size_t size, const void* data) {
+    unsigned int handle = next_indirect_handle_++;
+    VulkanBuffer buf;
+    buf.size = size;
+    buf.is_dynamic = true;
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(device_, &buffer_info, nullptr, &buf.buffer) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device_, buf.buffer, &mem_reqs);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = FindMemoryType(mem_reqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    if (vkAllocateMemory(device_, &alloc_info, nullptr, &buf.memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device_, buf.buffer, nullptr);
+        return 0;
+    }
+    vkBindBufferMemory(device_, buf.buffer, buf.memory, 0);
+    vkMapMemory(device_, buf.memory, 0, size, 0, &buf.mapped);
+
+    if (data && buf.mapped) {
+        memcpy(buf.mapped, data, size);
+    }
+
+    indirect_buffers_[handle] = buf;
+    return handle;
+}
+
+void VulkanResourceManager::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    auto it = indirect_buffers_.find(handle);
+    if (it == indirect_buffers_.end()) return;
+    auto& buf = it->second;
+    if (buf.mapped) {
+        memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
+    }
+}
+
+void VulkanResourceManager::DeleteIndirectBuffer(unsigned int handle) {
+    auto it = indirect_buffers_.find(handle);
+    if (it == indirect_buffers_.end()) return;
+    auto& buf = it->second;
+    if (buf.mapped) vkUnmapMemory(device_, buf.memory);
+    if (buf.buffer != VK_NULL_HANDLE) vkDestroyBuffer(device_, buf.buffer, nullptr);
+    if (buf.memory != VK_NULL_HANDLE) vkFreeMemory(device_, buf.memory, nullptr);
+    indirect_buffers_.erase(it);
+}
+
+const VulkanBuffer* VulkanResourceManager::GetIndirectBuffer(unsigned int handle) const {
+    auto it = indirect_buffers_.find(handle);
+    return it != indirect_buffers_.end() ? &it->second : nullptr;
+}
+
+// ============================================================
 // 渲染目标
 // ============================================================
 

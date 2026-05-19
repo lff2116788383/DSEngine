@@ -117,6 +117,12 @@ public:
     void DeleteSSBO(unsigned int handle);
     const VulkanBuffer* GetSSBO(unsigned int handle) const;
 
+    // --- Indirect Draw Buffer ---
+    unsigned int CreateIndirectBuffer(size_t size, const void* data);
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data);
+    void DeleteIndirectBuffer(unsigned int handle);
+    const VulkanBuffer* GetIndirectBuffer(unsigned int handle) const;
+
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(int width, int height, bool has_color, bool has_depth,
                                      bool generate_mipmaps, bool cube_map,
@@ -191,12 +197,14 @@ private:
     std::unordered_map<unsigned int, VulkanTexture> textures_;
     std::unordered_map<unsigned int, VulkanBuffer> buffers_;
     std::unordered_map<unsigned int, VulkanBuffer> ssbos_;
+    std::unordered_map<unsigned int, VulkanBuffer> indirect_buffers_;
     std::unordered_map<unsigned int, VulkanRenderTarget> render_targets_;
 
     // 句柄计数器
     unsigned int next_texture_handle_ = 400000;
     unsigned int next_buffer_handle_ = 410000;
     unsigned int next_ssbo_handle_ = 415000;
+    unsigned int next_indirect_handle_ = 418000;
     unsigned int next_render_target_handle_ = 420000;
 
     bool initialized_ = false;

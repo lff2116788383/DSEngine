@@ -30,6 +30,7 @@ void VulkanCommandBuffer::SetDevice(VulkanRhiDevice* device) {
 
 void VulkanCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->SetActiveRenderCommandBuffer(vk_command_buffer_);
     device_->draw_executor().BeginRenderPass(
         vk_command_buffer_, render_pass,
         device_->resource_mgr(), device_->state_mgr());
@@ -38,6 +39,7 @@ void VulkanCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
 void VulkanCommandBuffer::EndRenderPass() {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().EndRenderPass(vk_command_buffer_);
+    device_->ClearActiveRenderCommandBuffer();
 }
 
 void VulkanCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
@@ -450,6 +452,32 @@ void VulkanRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size
 
 void VulkanRhiDevice::DeleteSSBO(unsigned int handle) {
     resource_mgr_.DeleteSSBO(handle);
+}
+
+// --- Indirect Draw Buffer ---
+
+unsigned int VulkanRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    return resource_mgr_.CreateIndirectBuffer(size, data);
+}
+
+void VulkanRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateIndirectBuffer(handle, offset, size, data);
+}
+
+void VulkanRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
+    resource_mgr_.DeleteIndirectBuffer(handle);
+}
+
+void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
+    if (draw_count <= 0 || indirect_buffer == 0) return;
+
+    const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    if (!buf || buf->buffer == VK_NULL_HANDLE) return;
+
+    if (active_render_cmd_ == VK_NULL_HANDLE) return;
+
+    vkCmdDrawIndexedIndirect(active_render_cmd_, buf->buffer, 0, static_cast<uint32_t>(draw_count),
+                             static_cast<uint32_t>(stride));
 }
 
 // --- Compute Shader ---
