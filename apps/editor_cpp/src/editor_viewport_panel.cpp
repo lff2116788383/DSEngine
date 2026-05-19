@@ -2,11 +2,16 @@
 
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/script.h"
+#include "engine/ecs/world.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
 #include "editor_scene_camera.h"
 #include "editor_selection.h"
 #include "editor_shortcuts.h"
+#include "editor_shared_components.h"
+#include "editor_console_panel.h"
+#include "editor_asset_db.h"
 #include "editor_tilemap_panel.h"
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
@@ -902,6 +907,71 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             draw_list->AddLine(ImVec2(p_min.x, p_min.y + i), ImVec2(p_max.x, p_min.y + i), IM_COL32(60, 60, 60, 255));
         }
         draw_list->AddText(ImVec2(p_min.x + scene_panel_size.x / 2 - 50, p_min.y + scene_panel_size.y / 2), IM_COL32(200, 200, 200, 255), "Scene View");
+    }
+
+    // ─── Drag & Drop from Project panel ─────────────────────────────────────────
+    if (!ctx.read_only && ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            std::string rel_path(static_cast<const char*>(payload->Data));
+            std::replace(rel_path.begin(), rel_path.end(), '\\', '/');
+
+            // Ray-cast drop position onto Y=0 world plane
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            float nx = ((mouse_pos.x - window_pos.x) / scene_panel_size.x) * 2.0f - 1.0f;
+            float ny = 1.0f - ((mouse_pos.y - window_pos.y) / scene_panel_size.y) * 2.0f;
+            const float drop_aspect = scene_panel_size.y > 0.0f
+                ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
+            EditorCamera& drop_cam = GetEditorCamera();
+            glm::mat4 drop_view = drop_cam.GetViewMatrix();
+            glm::mat4 drop_proj = drop_cam.GetProjectionMatrix(drop_aspect);
+            glm::mat4 inv_vp    = glm::inverse(drop_proj * drop_view);
+            glm::vec4 near4     = inv_vp * glm::vec4(nx, ny, -1.0f, 1.0f);
+            glm::vec4 far4      = inv_vp * glm::vec4(nx, ny,  1.0f, 1.0f);
+            glm::vec3 ray_origin = glm::vec3(near4) / near4.w;
+            glm::vec3 ray_dir    = glm::normalize(glm::vec3(far4) / far4.w - ray_origin);
+            // Intersect with Y=0 plane; fallback to focal_point if ray is parallel
+            glm::vec3 drop_pos = drop_cam.focal_point;
+            if (std::abs(ray_dir.y) > 1e-4f) {
+                float t = -ray_origin.y / ray_dir.y;
+                if (t > 0.0f) drop_pos = ray_origin + t * ray_dir;
+            }
+
+            // Determine asset type and create appropriate entity
+            const auto* info = AssetDatabase::Get().FindByPath(rel_path);
+            AssetType atype = info ? info->type : AssetTypeFromExtension(
+                std::filesystem::path(rel_path).extension().string());
+
+            if (atype == AssetType::Mesh) {
+                auto ent = ctx.world.CreateEntity();
+                std::string stem = std::filesystem::path(rel_path).stem().string();
+                ctx.registry.emplace<EditorNameComponent>(ent, stem);
+                auto& tf = ctx.registry.emplace<TransformComponent>(ent);
+                tf.position = drop_pos;
+                tf.dirty = true;
+                auto& mesh = ctx.registry.emplace<MeshRendererComponent>(ent);
+                mesh.mesh_path = rel_path;
+                mesh.shader_variant = "MESH_LIT";
+                SelectionManager::Get().SetSingle(ent);
+                ctx.selected_entity = ent;
+                EditorLog(LogLevel::Info, "Dropped mesh: " + rel_path);
+            } else if (atype == AssetType::Script) {
+                auto ent = ctx.world.CreateEntity();
+                std::string stem = std::filesystem::path(rel_path).stem().string();
+                ctx.registry.emplace<EditorNameComponent>(ent, stem);
+                auto& tf = ctx.registry.emplace<TransformComponent>(ent);
+                tf.position = drop_pos;
+                tf.dirty = true;
+                auto& script = ctx.registry.emplace<LuaScriptComponent>(ent);
+                script.script_path = rel_path;
+                SelectionManager::Get().SetSingle(ent);
+                ctx.selected_entity = ent;
+                EditorLog(LogLevel::Info, "Dropped script: " + rel_path);
+            } else {
+                EditorLog(LogLevel::Warning,
+                    "Viewport drop: unsupported asset type for '" + rel_path + "'");
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
 
     ImGui::End();
