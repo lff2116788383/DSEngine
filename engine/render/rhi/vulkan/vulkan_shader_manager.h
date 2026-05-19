@@ -53,8 +53,11 @@ struct VulkanComputeProgram {
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
-    uint32_t push_constant_size = 0;  ///< push constant 大小（字节）
-    bool uses_ssbo_bindings = false;  ///< 是否使用 SSBO 绑定（运行时从 bound_ssbos_ 解析）
+    uint32_t push_constant_size = 0;    ///< push constant 大小（字节）
+    bool uses_ssbo_bindings = false;    ///< 是否使用 SSBO 绑定（从 bound_ssbos_ 解析）
+    uint32_t ssbo_binding_count = 0;    ///< SSBO binding 数量（Full layout 使用）
+    uint32_t storage_image_count = 0;   ///< storage image 绑定数量
+    uint32_t sampler_count = 0;         ///< combined image sampler 绑定数量
 };
 
 /// 着色器程序句柄对应的 Vulkan 对象集合
@@ -138,6 +141,15 @@ public:
 
     /// 从预编译 SPIR-V 创建 Compute 程序
     unsigned int CreateComputeProgramFromSpirv(const uint32_t* comp_spv, size_t comp_word_count);
+
+    /// 从 GLSL 源码创建完整布局 Compute 程序（SSBO + storage image + sampler + push constant）
+    /// binding 顺序: [0..ssbo_count-1]=STORAGE_BUFFER, [ssbo_count..+img_count-1]=STORAGE_IMAGE,
+    ///              [ssbo_count+img_count..]=COMBINED_IMAGE_SAMPLER
+    unsigned int CreateComputeProgramFull(const std::string& comp_src,
+                                          uint32_t ssbo_count,
+                                          uint32_t storage_image_count,
+                                          uint32_t sampler_count,
+                                          uint32_t push_constant_bytes);
 
     /// 查询 Compute 程序
     const VulkanComputeProgram* GetComputeProgram(unsigned int handle) const;

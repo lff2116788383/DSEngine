@@ -97,6 +97,7 @@ public:
 
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);
+    unsigned int CreateComputeWriteTexture2D(int width, int height);
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,
                                            bool linear_filter);

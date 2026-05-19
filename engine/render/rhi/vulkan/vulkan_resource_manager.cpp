@@ -214,6 +214,45 @@ unsigned int VulkanResourceManager::CreateTexture2D(int width, int height, const
     return handle;
 }
 
+unsigned int VulkanResourceManager::CreateComputeWriteTexture2D(int width, int height) {
+    unsigned int handle = AllocateTextureHandle();
+    VulkanTexture tex;
+    tex.width    = width;
+    tex.height   = height;
+    tex.channels = 4;
+    tex.format   = VK_FORMAT_R16G16B16A16_SFLOAT;
+
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT
+                            | VK_IMAGE_USAGE_SAMPLED_BIT
+                            | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    if (!CreateVulkanImage(width, height, VK_FORMAT_R16G16B16A16_SFLOAT,
+                           VK_IMAGE_TILING_OPTIMAL, usage,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT, tex)) {
+        return 0;
+    }
+
+    // 初始化为 VK_IMAGE_LAYOUT_GENERAL（compute shader storage image 需要此 layout）
+    TransitionImageLayout(tex.image, VK_FORMAT_R16G16B16A16_SFLOAT,
+                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+    // 创建默认采样器（用于后续在 PBR pass 中采样）
+    VkSamplerCreateInfo samp_ci{};
+    samp_ci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samp_ci.magFilter    = VK_FILTER_LINEAR;
+    samp_ci.minFilter    = VK_FILTER_LINEAR;
+    samp_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp_ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp_ci.maxLod       = 0.0f;
+    vkCreateSampler(device_, &samp_ci, nullptr, &tex.sampler);
+
+    textures_[handle] = tex;
+    DEBUG_LOG_INFO("[Vulkan] Compute write texture created: handle={} {}x{}", handle, width, height);
+    return handle;
+}
+
 unsigned int VulkanResourceManager::CreateCompressedTexture2D(CompressedTextureFormat format,
                                                                 const std::vector<CompressedMipLevel>& mips,
                                                                 bool linear_filter) {

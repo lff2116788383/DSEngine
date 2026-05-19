@@ -139,9 +139,17 @@ public:
     void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
     void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
     void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) override;
+    void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) override;
     void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
     void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
     void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
+
+    unsigned int CreateComputeShaderEx(
+        const std::string& gl_src, const std::string& vk_src, const std::string& hlsl_src,
+        uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
+        uint32_t push_constant_bytes) override;
+    unsigned int CreateComputeWriteTexture2D(int width, int height) override;
 
     // --- Indirect Draw Buffer (桩) ---
     unsigned int CreateIndirectBuffer(size_t size, const void* data) override { (void)size; (void)data; return 0; }

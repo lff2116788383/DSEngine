@@ -101,6 +101,30 @@ public:
     virtual void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
         (void)shader; (void)name; (void)data;
     }
+
+    /// 三后端分离源的 compute shader 创建（GL/VK/HLSL 分别传入各自语言源码）
+    /// ssbo_count / storage_image_count / sampler_count 供 VK 构建 descriptor set layout
+    /// push_constant_bytes 供 VK push constant range 声明
+    /// 默认回退到 CreateComputeShader(gl_src)，各后端 override 以使用正确源
+    virtual unsigned int CreateComputeShaderEx(
+        const std::string& gl_src,
+        const std::string& vk_src,
+        const std::string& hlsl_src,
+        uint32_t ssbo_count            = 0,
+        uint32_t storage_image_count   = 0,
+        uint32_t sampler_count         = 0,
+        uint32_t push_constant_bytes   = 0)
+    {
+        (void)vk_src; (void)hlsl_src;
+        (void)ssbo_count; (void)storage_image_count; (void)sampler_count; (void)push_constant_bytes;
+        return CreateComputeShader(gl_src);
+    }
+
+    /// 创建可供 compute shader 写入的 2D 纹理（storage image / UAV）
+    /// GL: 等同 CreateTexture2D；VK: 含 STORAGE 用法位；DX11: 含 UAV 绑定标志
+    virtual unsigned int CreateComputeWriteTexture2D(int width, int height) {
+        (void)width; (void)height; return 0;
+    }
 };
 
 } // namespace render
