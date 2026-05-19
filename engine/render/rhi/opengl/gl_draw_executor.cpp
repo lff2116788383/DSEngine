@@ -423,6 +423,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                                      UBOManager& ubo_mgr) {
     if (items.empty()) return;
     global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
+    dse::render::UpdateSortBatchStats(global_state_.current_frame_stats, items);
 
     glm::mat4 vp = projection * view;
     glm::mat4 inv_view = glm::inverse(view);

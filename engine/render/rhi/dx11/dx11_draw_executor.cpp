@@ -491,6 +491,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                                        DX11ShaderManager& shader_mgr,
                                        DX11ResourceManager& resource_mgr) {
     if (items.empty()) return;
+    global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
+    dse::render::UpdateSortBatchStats(global_state_.current_frame_stats, items);
     ID3D11DeviceContext* dc = context_->device_context();
 
     // 更新 PerFrame CB
@@ -756,7 +758,6 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         dc->DrawIndexedInstanced(static_cast<UINT>(item.indices.size()), instance_count, 0, 0, 0);
         global_state_.current_frame_stats.draw_calls++;
-        global_state_.current_frame_stats.mesh_count++;
         if (is_instanced) {
             global_state_.current_frame_stats.instanced_draw_calls++;
             global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);

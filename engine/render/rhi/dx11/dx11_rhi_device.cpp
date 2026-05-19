@@ -579,5 +579,34 @@ unsigned int DX11RhiDevice::CreateComputeWriteTexture2D(int width, int height) {
     return resource_mgr_.CreateComputeWriteTexture2D(width, height);
 }
 
+// ============================================================
+// Indirect Draw Buffer
+// ============================================================
+
+unsigned int DX11RhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    return resource_mgr_.CreateIndirectBuffer(size, data);
+}
+
+void DX11RhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset,
+                                          size_t size, const void* data) {
+    resource_mgr_.UpdateIndirectBuffer(handle, offset, size, data);
+}
+
+void DX11RhiDevice::DeleteIndirectBuffer(unsigned int handle) {
+    resource_mgr_.DeleteIndirectBuffer(handle);
+}
+
+void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
+                                              int draw_count, size_t stride) {
+    const DX11IndirectBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    if (!buf || !buf->buffer || draw_count <= 0) return;
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+    for (int i = 0; i < draw_count; ++i) {
+        const UINT byte_offset = static_cast<UINT>(i * stride);
+        dc->DrawIndexedInstancedIndirect(buf->buffer.Get(), byte_offset);
+    }
+}
+
 } // namespace render
 } // namespace dse

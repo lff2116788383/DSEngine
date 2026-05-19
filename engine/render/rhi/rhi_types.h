@@ -342,4 +342,21 @@ struct RenderStats {
     int instanced_mesh_count = 0;  ///< GPU Instancing 合批的实体总数
     int indirect_draw_calls = 0;   ///< GPU Driven indirect draw call 数
     int gpu_culled_count = 0;      ///< GPU 剔除的对象数
+    int sorted_draw_calls = 0;     ///< 排序后提交给后端的实际 DrawCall 数
+    int material_batch_count = 0;  ///< 排序后相邻同材质批次组数（越少表示合批率越高）
 };
+
+// ============================================================
+// 材质排序键
+// ============================================================
+
+/// 生成 MeshDrawItem 的 64 位排序键，用于 std::sort 减少 GPU 状态切换
+/// 优先级(高→低): blend_mode > shading_mode > texture_handle > normal_map_handle
+inline uint64_t MakeSortKey(const MeshDrawItem& item) noexcept {
+    uint64_t key = 0;
+    key |= (static_cast<uint64_t>(item.blend_mode   & 0xFu)        << 60u);
+    key |= (static_cast<uint64_t>(item.shading_mode & 0xFFu)       << 52u);
+    key |= (static_cast<uint64_t>(item.texture_handle)              << 20u);
+    key |= (static_cast<uint64_t>(item.normal_map_handle & 0xFFFFFu));
+    return key;
+}

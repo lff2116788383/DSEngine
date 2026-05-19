@@ -667,6 +667,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         
         EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
         if (!mesh_renderer.visible) continue;
+        if (mesh_renderer.is_static && static_batches_built_) continue;
 
         // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
         if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
@@ -887,8 +888,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.material_emissive += skylight_ambient * 0.05f;
         }
 
-        // GPU Instancing: 非蛮皮非变形 + 有 mesh_path → 检查合批
+        // GPU Instancing: 非蒙皮非变形 + 有 mesh_path → 检查合批（静态物体走 StaticBatch）
         const bool can_instance = !item.skinned && !item.morph_enabled
+            && !mesh_renderer.is_static
             && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
             && !mesh_renderer.mesh_path.empty()
             && !mesh_renderer.temp_vertices.empty()
@@ -1172,11 +1174,22 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         if (!item.vertices.empty() && !item.indices.empty()) {
-            batch_items.push_back(item);
-            if (can_instance) {
-                instancing_map[inst_key] = batch_items.size() - 1;
+            if (mesh_renderer.is_static && !static_batches_built_) {
+                static_batch_builder_.Add(item);
+            } else {
+                batch_items.push_back(item);
+                if (can_instance) {
+                    instancing_map[inst_key] = batch_items.size() - 1;
+                }
             }
         }
+    }
+
+    // 静态合批：首帧构建完成后缓存，后续帧复用
+    if (!static_batches_built_ && !static_batch_builder_.empty()) {
+        static_batch_items_ = static_batch_builder_.Build();
+        static_batch_builder_.Clear();
+        static_batches_built_ = true;
     }
 
     // 分离不透明与透明绘制项
@@ -1202,9 +1215,28 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             if (a.order_in_layer != b.order_in_layer) {
                 return a.order_in_layer < b.order_in_layer;
             }
-            return a.model[3].z < b.model[3].z;
+            return MakeSortKey(a) < MakeSortKey(b);
         });
         cmd_buffer.DrawMeshBatch(opaque_items);
+    }
+
+    // 静态合批结果：已按 MakeSortKey 排序，直接提交（零拷贝引用），刷新本帧光照
+    if (!static_batch_items_.empty()) {
+        for (auto& sb_item : static_batch_items_) {
+            sb_item.point_lights = point_lights;
+            sb_item.spot_lights = spot_lights;
+            if (has_light) {
+                sb_item.lighting_enabled = true;
+                sb_item.light_direction = light_data.direction;
+                sb_item.light_color = light_data.color;
+                sb_item.light_intensity = light_data.intensity;
+                sb_item.ambient_intensity = light_data.ambient_intensity + skylight_intensity;
+                sb_item.shadow_strength = light_data.shadow_strength;
+            } else {
+                sb_item.ambient_intensity = skylight_intensity;
+            }
+        }
+        cmd_buffer.DrawMeshBatch(static_batch_items_);
     }
 }
 

@@ -125,12 +125,12 @@ public:
     void FlushComputeParamsCB();
     void ClearComputeParams();
 
-    // --- Indirect Draw Buffer (桩) ---
-    unsigned int CreateIndirectBuffer(size_t size, const void* data) override { (void)size; (void)data; return 0; }
-    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override { (void)handle; (void)offset; (void)size; (void)data; }
-    void DeleteIndirectBuffer(unsigned int handle) override { (void)handle; }
-    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override { (void)indirect_buffer; (void)draw_count; (void)stride; }
-    bool SupportsIndirectDraw() const override { return false; }
+    // --- Indirect Draw Buffer ---
+    bool SupportsIndirectDraw() const override { return true; }
+    unsigned int CreateIndirectBuffer(size_t size, const void* data) override;
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
+    void DeleteIndirectBuffer(unsigned int handle) override;
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }

@@ -10,6 +10,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/hiz_types.h"
+#include "engine/render/static_batch/static_batch_builder.h"
 #include <glm/glm.hpp>
 class AssetManager;
 
@@ -55,6 +56,15 @@ public:
         mega_buffer_dirty_ = true;
     }
 
+    /// 场景切换或静态物体变化时调用：下帧重建静态合批
+    void InvalidateStaticBatches() {
+        static_batches_built_ = false;
+        static_batch_items_.clear();
+    }
+
+    /// 静态合批统计：上帧合并后的批次数
+    int static_batch_count() const { return static_cast<int>(static_batch_items_.size()); }
+
     /**
      * @brief GPU Driven: 准备每帧 GPU 场景数据
      * 收集不透明非蒙皮 mesh，填充 DrawElementsIndirectCommand / GPUInstanceData / AABB，
@@ -80,6 +90,11 @@ public:
 private:
     AssetManager* asset_manager_ = nullptr;
     std::vector<MeshDrawItem> transparent_items_;  ///< 每帧缓存的透明绘制项
+
+    /// 静态合批：首帧构建后缓存，后续帧直接复用
+    dse::render::StaticBatchBuilder static_batch_builder_;
+    std::vector<MeshDrawItem> static_batch_items_;   ///< 合批结果（缓存至场景切换）
+    bool static_batches_built_ = false;              ///< 是否已完成首帧静态合批
 
     /// Hi-Z: 上一帧收集的不透明 mesh AABB（供下一帧 GPU 剔除使用）
     std::vector<HiZAABB> cached_aabbs_;

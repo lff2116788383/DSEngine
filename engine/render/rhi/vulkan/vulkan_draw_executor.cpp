@@ -1598,6 +1598,9 @@ void VulkanDrawExecutor::DrawMeshBatch(
     if (items.empty()) return;
     if (skip_current_pass_) return;
 
+    global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
+    dse::render::UpdateSortBatchStats(global_state_.current_frame_stats, items);
+
     const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
     const bool is_depth_only = (current_color_attachment_count_ == 0);
     unsigned int active_shader_handle = is_depth_only
@@ -1793,8 +1796,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
         }
         global_state_.current_frame_stats.draw_calls++;
     }
-
-    global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
 }
 
 // ============================================================================

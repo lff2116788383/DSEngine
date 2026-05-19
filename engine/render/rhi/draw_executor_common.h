@@ -212,6 +212,24 @@ inline LightProbeDataUBO PrepareLightProbeUBO(const DrawExecutorGlobalState& sta
     return ubo;
 }
 
+/// 更新排序批次统计（每个后端 DrawMeshBatch 入口处调用一次）
+/// sorted_draw_calls += items.size()，material_batch_count += 排序后相邻不同 key 的组数
+inline void UpdateSortBatchStats(RenderStats& stats,
+                                  const std::vector<MeshDrawItem>& items) noexcept {
+    stats.sorted_draw_calls += static_cast<int>(items.size());
+    if (items.empty()) return;
+    int batches = 1;
+    uint64_t prev_key = MakeSortKey(items[0]);
+    for (size_t i = 1; i < items.size(); ++i) {
+        uint64_t key = MakeSortKey(items[i]);
+        if (key != prev_key) {
+            ++batches;
+            prev_key = key;
+        }
+    }
+    stats.material_batch_count += batches;
+}
+
 /// 从 DrawExecutorGlobalState 中提取 SpotLightData UBO 数据
 inline SpotLightDataUBO PrepareSpotLightDataUBO(const DrawExecutorGlobalState& state) {
     SpotLightDataUBO ubo{};

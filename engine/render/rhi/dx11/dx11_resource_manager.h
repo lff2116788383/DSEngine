@@ -29,6 +29,7 @@ class DX11Context;
 struct DX11Texture {
     ComPtr<ID3D11Texture2D> texture;
     ComPtr<ID3D11ShaderResourceView> srv;
+    ComPtr<ID3D11UnorderedAccessView> uav;  ///< compute write 用（仅 CreateComputeWriteTexture2D 创建时有效）
     ComPtr<ID3D11SamplerState> sampler;
     int width = 0;
     int height = 0;
@@ -87,6 +88,12 @@ struct DX11VertexArray {
     unsigned int placeholder = 0;
 };
 
+/// D3D11 Indirect Draw Buffer 封装（D3D11_BIND_INDIRECT_ARGS_BUFFER）
+struct DX11IndirectBuffer {
+    ComPtr<ID3D11Buffer> buffer;
+    size_t size = 0;
+};
+
 /**
  * @class DX11ResourceManager
  * @brief D3D11 GPU 资源管理器
@@ -104,6 +111,7 @@ public:
 
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);
+    unsigned int CreateComputeWriteTexture2D(int width, int height);
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,
                                            bool linear_filter);
@@ -148,6 +156,13 @@ public:
     unsigned int CreateVertexArray();
     void DeleteVertexArray(unsigned int handle);
 
+    // --- Indirect Draw Buffer ---
+    unsigned int CreateIndirectBuffer(size_t size, const void* data);
+    /// 注意：底层使用 MAP_WRITE_DISCARD，调用者应保证 offset==0 且 size 覆盖整个缓冲
+    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data);
+    void DeleteIndirectBuffer(unsigned int handle);
+    const DX11IndirectBuffer* GetIndirectBuffer(unsigned int handle) const;
+
     // --- 异步纹理上传 ---
     unsigned int CreateTexture2DAsync(int width, int height);
     void FlushPendingUploads();
@@ -163,12 +178,14 @@ private:
     std::unordered_map<unsigned int, DX11SSBO> ssbos_;
     std::unordered_map<unsigned int, DX11RenderTarget> render_targets_;
     std::unordered_map<unsigned int, DX11VertexArray> vertex_arrays_;
+    std::unordered_map<unsigned int, DX11IndirectBuffer> indirect_buffers_;
 
     unsigned int next_texture_handle_ = 800000;
     unsigned int next_buffer_handle_ = 810000;
     unsigned int next_ssbo_handle_ = 815000;
     unsigned int next_render_target_handle_ = 820000;
     unsigned int next_vao_handle_ = 830000;
+    unsigned int next_indirect_handle_ = 840000;
 
     bool initialized_ = false;
     unsigned int ssbo_register_base_ = 16; ///< SSBO t-register 起始偏移（由 reflection 计算填充）

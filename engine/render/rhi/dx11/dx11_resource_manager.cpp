@@ -55,6 +55,7 @@ void DX11ResourceManager::Shutdown() {
     ssbos_.clear();
     render_targets_.clear();
     vertex_arrays_.clear();
+    indirect_buffers_.clear();
 
     initialized_ = false;
     DEBUG_LOG_INFO("[D3D11] ResourceManager shutdown");
@@ -115,6 +116,55 @@ unsigned int DX11ResourceManager::CreateTexture2D(int width, int height,
 
     unsigned int handle = next_texture_handle_++;
     textures_[handle] = std::move(tex);
+    return handle;
+}
+
+unsigned int DX11ResourceManager::CreateComputeWriteTexture2D(int width, int height) {
+    if (!device_) return 0;
+    DX11Texture tex;
+    tex.width = width;
+    tex.height = height;
+
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width     = static_cast<UINT>(width);
+    td.Height    = static_cast<UINT>(height);
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format    = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    td.SampleDesc.Count = 1;
+    td.Usage     = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+    HRESULT hr = device_->CreateTexture2D(&td, nullptr, tex.texture.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateComputeWriteTexture2D failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = td.Format;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+    hr = device_->CreateShaderResourceView(tex.texture.Get(), &srv_desc, tex.srv.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+    uav_desc.Format        = td.Format;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+    hr = device_->CreateUnorderedAccessView(tex.texture.Get(), &uav_desc, tex.uav.GetAddressOf());
+    if (FAILED(hr)) return 0;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxAnisotropy = 1;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
+
+    unsigned int handle = next_texture_handle_++;
+    textures_[handle] = std::move(tex);
+    DEBUG_LOG_INFO("[D3D11] Compute write texture created: handle={} {}x{}", handle, width, height);
     return handle;
 }
 
@@ -845,6 +895,57 @@ void DX11ResourceManager::FlushPendingUploads() {
 
         pending_uploads_.pop();
     }
+}
+
+// ============================================================
+// Indirect Draw Buffer
+// ============================================================
+
+unsigned int DX11ResourceManager::CreateIndirectBuffer(size_t size, const void* data) {
+    if (!device_ || size == 0) return 0;
+    DX11IndirectBuffer buf;
+    buf.size = size;
+
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth = static_cast<UINT>(size);
+    bd.Usage = D3D11_USAGE_DYNAMIC;
+    bd.BindFlags = 0;  // DX11 spec: MISC_DRAWINDIRECT_ARGS 不允许任何 BindFlags
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    bd.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    bd.StructureByteStride = 0;
+
+    D3D11_SUBRESOURCE_DATA sd{};
+    sd.pSysMem = data;
+    HRESULT hr = device_->CreateBuffer(&bd, data ? &sd : nullptr, &buf.buffer);
+    if (FAILED(hr)) {
+        DEBUG_LOG_WARN("[D3D11] CreateIndirectBuffer failed: size={}", size);
+        return 0;
+    }
+    unsigned int handle = next_indirect_handle_++;
+    indirect_buffers_[handle] = std::move(buf);
+    return handle;
+}
+
+void DX11ResourceManager::UpdateIndirectBuffer(unsigned int handle,
+                                                size_t offset, size_t size,
+                                                const void* data) {
+    if (!dc_ || !data) return;
+    auto it = indirect_buffers_.find(handle);
+    if (it == indirect_buffers_.end() || !it->second.buffer) return;
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    HRESULT hr = dc_->Map(it->second.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(hr)) return;
+    std::memcpy(static_cast<unsigned char*>(mapped.pData) + offset, data, size);
+    dc_->Unmap(it->second.buffer.Get(), 0);
+}
+
+void DX11ResourceManager::DeleteIndirectBuffer(unsigned int handle) {
+    indirect_buffers_.erase(handle);
+}
+
+const DX11IndirectBuffer* DX11ResourceManager::GetIndirectBuffer(unsigned int handle) const {
+    auto it = indirect_buffers_.find(handle);
+    return (it != indirect_buffers_.end()) ? &it->second : nullptr;
 }
 
 } // namespace render

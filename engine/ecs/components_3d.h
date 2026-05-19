@@ -58,6 +58,7 @@ struct MeshRendererComponent {
     bool depth_test_enabled = true;
     bool depth_write_enabled = true;
     bool visible = true;
+    bool is_static = false;  ///< 标记为静态网格，首帧触发 StaticBatchBuilder 合批
     int sorting_layer = 0;
     int order_in_layer = 0;
     MaterialDataSource material_data_source = MaterialDataSource::ComponentFallback;
