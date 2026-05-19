@@ -16,6 +16,7 @@
 #include "editor_icons.h"
 #include "editor_selection.h"
 #include "editor_project.h"
+#include "editor_preferences_panel.h"
 #include "engine/dse_version.h"
 
 #include <filesystem>
@@ -115,15 +116,22 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         return;
     }
 
+    auto& tab_mgr  = SceneTabManager::Get();
+    auto& proj_mgr  = ProjectManager::Get();
+    auto& undo_mgr  = GetUndoRedoManager();
+    bool has_sel     = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
+    bool editable    = !ctx.read_only;
+    bool has_project = proj_mgr.HasOpenProject();
+
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("File")) {
-        auto& tab_mgr = SceneTabManager::Get();
-        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Scene", "Ctrl+N", false, !ctx.read_only)) {
+        // -- Scene --
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Scene", "Ctrl+N", false, editable)) {
             tab_mgr.NewScene(ctx.registry);
             ctx.selected_entity = entt::null;
         }
-        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Scene...", "Ctrl+O", false, !ctx.read_only)) {
-            std::string path = dse::editor::OpenSceneFileDialog();
+        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Scene...", "Ctrl+O", false, editable)) {
+            std::string path = OpenSceneFileDialog();
             if (!path.empty()) {
                 tab_mgr.OpenScene(ctx.registry, path);
                 ctx.selected_entity = entt::null;
@@ -132,25 +140,28 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 SaveEditorSettings(settings);
             }
         }
-        if (ImGui::BeginMenu("Recent Files", !ctx.read_only)) {
+        if (ImGui::BeginMenu("Recent Scenes", editable)) {
             EditorSettings settings = LoadEditorSettings();
             if (settings.recent_files.empty()) {
-                ImGui::TextDisabled("No recent files");
+                ImGui::TextDisabled("(empty)");
             } else {
                 for (const auto& recent : settings.recent_files) {
-                    if (ImGui::MenuItem(recent.c_str())) {
+                    std::filesystem::path p(recent);
+                    if (ImGui::MenuItem(p.filename().string().c_str())) {
                         tab_mgr.OpenScene(ctx.registry, recent);
                         ctx.selected_entity = entt::null;
                     }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("%s", recent.c_str());
                 }
             }
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save", "Ctrl+S", false, !ctx.read_only)) {
+        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save Scene", "Ctrl+S", false, editable)) {
             const std::string& current_path = tab_mgr.GetActiveFilePath();
             if (current_path.empty()) {
-                std::string path = dse::editor::SaveSceneFileDialog();
+                std::string path = SaveSceneFileDialog();
                 if (!path.empty()) {
                     SaveScene(ctx.registry, path);
                     tab_mgr.SetCurrentPath(path);
@@ -163,8 +174,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 EditorLog(LogLevel::Info, "Scene saved: " + current_path);
             }
         }
-        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, !ctx.read_only)) {
-            std::string path = dse::editor::SaveSceneFileDialog();
+        if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, editable)) {
+            std::string path = SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(ctx.registry, path);
                 tab_mgr.SetCurrentPath(path);
@@ -172,107 +183,13 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
-        if (ctx.read_only) {
-            ImGui::TextDisabled("Play mode: file operations disabled.");
-        }
         ImGui::Separator();
-        if (ImGui::MenuItem("Exit", "Alt+F4")) {
-            std::exit(0);
-        }
-        ImGui::EndMenu();
-    }
 
-    // ─── Edit ───────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Edit")) {
-        auto& undo_mgr = dse::editor::GetUndoRedoManager();
-        std::string undo_label = "Undo";
-        if (undo_mgr.CanUndo()) undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
-        if (ImGui::MenuItem(undo_label.c_str(), "Ctrl+Z", false, undo_mgr.CanUndo())) {
-            undo_mgr.Undo();
-        }
-        std::string redo_label = "Redo";
-        if (undo_mgr.CanRedo()) redo_label += " (" + undo_mgr.GetRedoDescription() + ")";
-        if (ImGui::MenuItem(redo_label.c_str(), "Ctrl+Y", false, undo_mgr.CanRedo())) {
-            undo_mgr.Redo();
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Select All", "Ctrl+A", false, !ctx.read_only)) {
-            auto& sel = SelectionManager::Get();
-            sel.Clear();
-            auto view = ctx.registry.view<EditorNameComponent>();
-            for (auto e : view) sel.Add(e);
-            if (!sel.IsEmpty()) ctx.selected_entity = sel.GetPrimary();
-        }
-        if (ImGui::MenuItem("Deselect All", nullptr, false, !ctx.read_only)) {
-            SelectionManager::Get().Clear();
-            ctx.selected_entity = entt::null;
-        }
-        ImGui::Separator();
-        bool has_sel_edit = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
-        if (ImGui::MenuItem("Copy", "Ctrl+C", false, has_sel_edit && !ctx.read_only)) {
-            CopySelectedEntity(ctx);
-        }
-        if (ImGui::MenuItem("Cut", "Ctrl+X", false, has_sel_edit && !ctx.read_only)) {
-            CutSelectedEntity(ctx);
-        }
-        if (ImGui::MenuItem("Paste", "Ctrl+V", false, HasEntityClipboard() && !ctx.read_only)) {
-            PasteEntity(ctx);
-        }
-        ImGui::Separator();
-        if (show_preferences && ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
-            *show_preferences = true;
-        }
-        ImGui::EndMenu();
-    }
-
-    // ─── Entity ─────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Entity")) {
-        if (ImGui::MenuItem(MDI_ICON_PLUS "  Create Empty", nullptr, false, !ctx.read_only)) {
-            CreateEmptyEntity(ctx);
-        }
-        if (ImGui::BeginMenu("3D Object", !ctx.read_only)) {
-            if (ImGui::MenuItem("Cube"))              CreateEntity3DCube(ctx);
-            if (ImGui::MenuItem("Sphere"))            CreateEntity3DSphere(ctx);
-            if (ImGui::MenuItem("Plane"))             CreateEntity3DPlane(ctx);
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Light", !ctx.read_only)) {
-            if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
-            if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
-            ImGui::EndMenu();
-        }
-        if (ImGui::MenuItem("Camera", nullptr, false, !ctx.read_only)) {
-            CreateEntity3DCamera(ctx);
-        }
-        if (ImGui::MenuItem("2D Sprite", nullptr, false, !ctx.read_only)) {
-            CreateEntity2DSprite(ctx);
-        }
-        ImGui::Separator();
-        bool has_sel = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
-        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && !ctx.read_only)) {
-            DuplicateSelectedEntity(ctx);
-            EditorLog(LogLevel::Info, "Entity duplicated");
-        }
-        if (ImGui::MenuItem("Delete", "Del", false, has_sel && !ctx.read_only)) {
-            DeleteSelectedEntity(ctx);
-            SelectionManager::Get().Clear();
-            EditorLog(LogLevel::Info, "Entity deleted");
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Focus Selected", "F", false, has_sel)) {
-            // Handled by ProcessShortcuts — this is a visual reminder
-        }
-        ImGui::EndMenu();
-    }
-
-    // ─── Project ────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Project")) {
-        auto& proj_mgr = ProjectManager::Get();
-
-        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Project...", "Ctrl+Shift+N", false, !ctx.read_only)) {
+        // -- Project --
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  New Project...", nullptr, false, editable)) {
             ImGui::OpenPopup("NewProjectPopup");
         }
-        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Project...", "Ctrl+Shift+O", false, !ctx.read_only)) {
+        if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Project...", nullptr, false, editable)) {
             std::string path = OpenProjectFileDialog();
             if (!path.empty()) {
                 if (proj_mgr.OpenProject(path)) {
@@ -286,11 +203,12 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::BeginMenu("Recent Projects")) {
             EditorSettings settings = LoadEditorSettings();
             if (settings.recent_projects.empty()) {
-                ImGui::TextDisabled("No recent projects");
+                ImGui::TextDisabled("(empty)");
             } else {
                 for (const auto& recent : settings.recent_projects) {
-                    std::filesystem::path proj_path = std::filesystem::path(recent) / "project.dseproj";
-                    if (ImGui::MenuItem(recent.c_str())) {
+                    std::filesystem::path root(recent);
+                    std::filesystem::path proj_path = root / "project.dseproj";
+                    if (ImGui::MenuItem(root.filename().string().c_str())) {
                         if (proj_mgr.OpenProject(proj_path)) {
                             EditorSettings s = LoadEditorSettings();
                             s.last_project_path = recent;
@@ -298,9 +216,11 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                             SaveEditorSettings(s);
                         }
                     }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("%s", recent.c_str());
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Clear Recent")) {
+                if (ImGui::MenuItem("Clear Recent Projects")) {
                     EditorSettings s = LoadEditorSettings();
                     s.recent_projects.clear();
                     SaveEditorSettings(s);
@@ -308,54 +228,165 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             }
             ImGui::EndMenu();
         }
-        ImGui::Separator();
-        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save Project", nullptr, false, proj_mgr.HasOpenProject())) {
+        if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save Project", nullptr, false, has_project)) {
             proj_mgr.SaveProject();
         }
-        if (ImGui::MenuItem("Close Project", nullptr, false, proj_mgr.HasOpenProject())) {
+        if (ImGui::MenuItem("Close Project", nullptr, false, has_project)) {
             proj_mgr.CloseProject();
             EditorSettings settings = LoadEditorSettings();
             settings.last_project_path.clear();
             SaveEditorSettings(settings);
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, !ctx.read_only && proj_mgr.HasOpenProject())) {
+
+        // -- Build / Import --
+        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, editable && has_project)) {
             OpenBuildGameDialog();
         }
-        if (ImGui::MenuItem("Import Asset...", nullptr, false, !ctx.read_only)) {
+        if (ImGui::MenuItem("Import Asset...", nullptr, false, editable)) {
             OpenAssetImporter();
         }
         ImGui::Separator();
-        if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
-            *show_plugins = true;
+        if (ImGui::MenuItem("Exit", "Alt+F4")) {
+            std::exit(0);
         }
         ImGui::EndMenu();
     }
 
-    // ─── Window ─────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Window")) {
-        if (ImGui::BeginMenu("Panels")) {
-            if (panels) {
-                if (panels->profiler)
-                    ImGui::MenuItem("Profiler", nullptr, panels->profiler);
-                if (panels->animation)
-                    ImGui::MenuItem("Animation", nullptr, panels->animation);
-                if (panels->tile_palette)
-                    ImGui::MenuItem("Tile Palette", nullptr, panels->tile_palette);
-                if (panels->terrain_editor)
-                    ImGui::MenuItem("Terrain Editor", nullptr, panels->terrain_editor);
-                if (panels->lua_console)
-                    ImGui::MenuItem("Lua Console", nullptr, panels->lua_console);
-                if (panels->localization_preview)
-                    ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
-                if (panels->undo_history)
-                    ImGui::MenuItem("Undo History", nullptr, panels->undo_history);
-            }
+    // ─── Edit ────────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Edit")) {
+        std::string undo_label = "Undo";
+        if (undo_mgr.CanUndo()) undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
+        if (ImGui::MenuItem(undo_label.c_str(), "Ctrl+Z", false, undo_mgr.CanUndo())) {
+            undo_mgr.Undo();
+        }
+        std::string redo_label = "Redo";
+        if (undo_mgr.CanRedo()) redo_label += " (" + undo_mgr.GetRedoDescription() + ")";
+        if (ImGui::MenuItem(redo_label.c_str(), "Ctrl+Y", false, undo_mgr.CanRedo())) {
+            undo_mgr.Redo();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Cut", "Ctrl+X", false, has_sel && editable)) {
+            CutSelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Copy", "Ctrl+C", false, has_sel && editable)) {
+            CopySelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Paste", "Ctrl+V", false, HasEntityClipboard() && editable)) {
+            PasteEntity(ctx);
+        }
+        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && editable)) {
+            DuplicateSelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Delete", "Del", false, has_sel && editable)) {
+            DeleteSelectedEntity(ctx);
+            SelectionManager::Get().Clear();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Select All", "Ctrl+A", false, editable)) {
+            auto& sel = SelectionManager::Get();
+            sel.Clear();
+            auto view = ctx.registry.view<EditorNameComponent>();
+            for (auto e : view) sel.Add(e);
+            if (!sel.IsEmpty()) ctx.selected_entity = sel.GetPrimary();
+        }
+        if (ImGui::MenuItem("Deselect All", nullptr, false, editable)) {
+            SelectionManager::Get().Clear();
+            ctx.selected_entity = entt::null;
+        }
+        ImGui::Separator();
+        if (show_preferences && ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
+            *show_preferences = true;
+        }
+        ImGui::EndMenu();
+    }
+
+    // ─── Entity ──────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Entity")) {
+        if (ImGui::MenuItem(MDI_ICON_PLUS "  Create Empty", nullptr, false, editable)) {
+            CreateEmptyEntity(ctx);
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu(MDI_ICON_CUBE_OUTLINE "  3D Object", editable)) {
+            if (ImGui::MenuItem("Cube"))     CreateEntity3DCube(ctx);
+            if (ImGui::MenuItem("Sphere"))   CreateEntity3DSphere(ctx);
+            if (ImGui::MenuItem("Plane"))    CreateEntity3DPlane(ctx);
             ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_IMAGE "  2D Object", editable)) {
+            if (ImGui::MenuItem("Sprite"))   CreateEntity2DSprite(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_LIGHTBULB "  Light", editable)) {
+            if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
+            if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem(MDI_ICON_CAMERA "  Camera", nullptr, false, editable)) {
+            CreateEntity3DCamera(ctx);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && editable)) {
+            DuplicateSelectedEntity(ctx);
+        }
+        if (ImGui::MenuItem("Delete", "Del", false, has_sel && editable)) {
+            DeleteSelectedEntity(ctx);
+            SelectionManager::Get().Clear();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Focus Selected", "F", false, has_sel)) {
+            // Handled via ProcessShortcuts
+        }
+        ImGui::EndMenu();
+    }
+
+    // ─── View ────────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("View")) {
+        bool grid_on = GetShowGrid();
+        if (ImGui::MenuItem("Show Grid", nullptr, grid_on)) {
+            SetShowGrid(!grid_on);
+        }
+        ImGui::Separator();
+        ImGui::TextDisabled("Snap Settings");
+        ImGui::Text("  Translate: %.1f", GetSnapTranslate());
+        ImGui::Text("  Rotate:    %.0f" "\xc2\xb0", GetSnapRotate());
+        ImGui::Text("  Scale:     %.2f", GetSnapScale());
+        ImGui::Separator();
+        if (ImGui::MenuItem("Gizmo: Translate", "W")) ctx.current_gizmo_operation = 0;
+        if (ImGui::MenuItem("Gizmo: Rotate",    "E")) ctx.current_gizmo_operation = 1;
+        if (ImGui::MenuItem("Gizmo: Scale",     "R")) ctx.current_gizmo_operation = 2;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Local Space", nullptr, ctx.current_gizmo_mode == 0)) ctx.current_gizmo_mode = 0;
+        if (ImGui::MenuItem("World Space", nullptr, ctx.current_gizmo_mode == 1)) ctx.current_gizmo_mode = 1;
+        ImGui::EndMenu();
+    }
+
+    // ─── Window ──────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("Window")) {
+        // Core panels (always present as dock windows)
+        ImGui::TextDisabled("Panels");
+        if (panels) {
+            if (panels->profiler)
+                ImGui::MenuItem(MDI_ICON_COG "  Profiler", nullptr, panels->profiler);
+            if (panels->animation)
+                ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation", nullptr, panels->animation);
+            if (panels->tile_palette)
+                ImGui::MenuItem("Tile Palette", nullptr, panels->tile_palette);
+            if (panels->terrain_editor)
+                ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, panels->terrain_editor);
+            if (panels->lua_console)
+                ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, panels->lua_console);
+            if (panels->localization_preview)
+                ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
+            if (panels->undo_history)
+                ImGui::MenuItem("Undo History", nullptr, panels->undo_history);
         }
         ImGui::Separator();
         if (show_chat && ImGui::MenuItem("AI Chat")) {
             *show_chat = true;
+        }
+        if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
+            *show_plugins = true;
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout")) {
@@ -364,26 +395,45 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndMenu();
     }
 
-    // ─── Help ───────────────────────────────────────────────────────────────
+    // ─── Help ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Help")) {
         if (ImGui::MenuItem("About DSEngine")) {
             ImGui::OpenPopup("AboutDSEngine");
         }
+        ImGui::Separator();
 #if defined(_WIN32)
-        if (ImGui::MenuItem("Documentation (GitHub)")) {
+        if (ImGui::MenuItem(MDI_ICON_MAGNIFY "  Documentation")) {
             ShellExecuteA(nullptr, "open", "https://github.com/lff2116788383/DSEngine", nullptr, nullptr, SW_SHOWNORMAL);
         }
+        if (ImGui::MenuItem("Report Issue")) {
+            ShellExecuteA(nullptr, "open", "https://github.com/lff2116788383/DSEngine/issues", nullptr, nullptr, SW_SHOWNORMAL);
+        }
 #endif
+        ImGui::Separator();
+        ImGui::TextDisabled("Keyboard Shortcuts");
+        ImGui::BulletText("Ctrl+N   New Scene");
+        ImGui::BulletText("Ctrl+O   Open Scene");
+        ImGui::BulletText("Ctrl+S   Save");
+        ImGui::BulletText("Ctrl+Z/Y Undo / Redo");
+        ImGui::BulletText("Ctrl+D   Duplicate");
+        ImGui::BulletText("W/E/R    Translate / Rotate / Scale");
+        ImGui::BulletText("F        Focus Selected");
+        ImGui::BulletText("Del      Delete");
         ImGui::EndMenu();
     }
 
-    // About popup (must be at menu bar scope to avoid clipping)
+    // ── About popup ──────────────────────────────────────────────────────────
     if (ImGui::BeginPopupModal("AboutDSEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : nullptr);
         ImGui::Text("DSEngine Editor");
+        ImGui::PopFont();
         ImGui::Separator();
-        ImGui::Text("Version: %d.%d.%d", DSE_VERSION_MAJOR, DSE_VERSION_MINOR, DSE_VERSION_PATCH);
-        ImGui::Text("C++ Editor with ImGui, entt ECS, OpenGL/Vulkan/DX11");
-        ImGui::Text("(c) 2024-2026 DSEngine Contributors");
+        ImGui::Text("Version %d.%d.%d", DSE_VERSION_MAJOR, DSE_VERSION_MINOR, DSE_VERSION_PATCH);
+        ImGui::Spacing();
+        ImGui::Text("Rendering: OpenGL / Vulkan / Direct3D 11");
+        ImGui::Text("ECS: entt  |  UI: Dear ImGui  |  Physics: PhysX 4.1");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(c) 2024-2026 DSEngine Contributors");
         ImGui::Separator();
         if (ImGui::Button("Close", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
@@ -391,7 +441,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndPopup();
     }
 
-    // New Project popup
+    // ── New Project popup ────────────────────────────────────────────────────
     {
         static char s_new_proj_name[128] = "MyGame";
         static char s_new_proj_location[512] = "";
@@ -424,7 +474,6 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             bool can_create = (strlen(s_new_proj_name) > 0 && strlen(s_new_proj_location) > 0);
             if (!can_create) ImGui::BeginDisabled();
             if (ImGui::Button("Create", ImVec2(120, 0))) {
-                auto& proj_mgr = ProjectManager::Get();
                 if (proj_mgr.CreateProject(
                         s_new_proj_location,
                         s_new_proj_name,

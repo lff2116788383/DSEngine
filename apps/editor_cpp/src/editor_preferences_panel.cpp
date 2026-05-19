@@ -44,6 +44,7 @@ namespace {
 } // namespace
 
 bool GetShowGrid() { return s_show_grid; }
+void SetShowGrid(bool v) { s_show_grid = v; s_dirty = true; }
 float GetGridSize() { return s_grid_size; }
 int GetGridLines() { return s_grid_lines; }
 float GetSnapTranslate() { return s_snap_translate; }
