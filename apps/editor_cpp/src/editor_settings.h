@@ -25,6 +25,10 @@ struct EditorSettings {
     float snap_rotate = 15.0f;
     float snap_scale = 0.1f;
 
+    // Auto-save
+    bool auto_save_enabled = true;
+    int auto_save_interval_sec = 120;  // seconds
+
     // Scene camera state (persisted)
     float cam_focal_x = 0.0f, cam_focal_y = 0.0f, cam_focal_z = 0.0f;
     float cam_distance = 10.0f;

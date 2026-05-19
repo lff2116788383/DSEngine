@@ -113,6 +113,22 @@ void DrawPreferencesPanel(bool* p_open) {
         if (ImGui::DragFloat("Scale Snap", &s_snap_scale, 0.01f, 0.01f, 10.0f, "%.2f")) changed = true;
     }
 
+    if (ImGui::CollapsingHeader(MDI_ICON_CONTENT_SAVE "  Auto Save", ImGuiTreeNodeFlags_DefaultOpen)) {
+        EditorSettings as = LoadEditorSettings();
+        bool as_changed = false;
+        if (ImGui::Checkbox("Enable Auto Save", &as.auto_save_enabled)) as_changed = true;
+        if (as.auto_save_enabled) {
+            int interval = as.auto_save_interval_sec;
+            if (ImGui::SliderInt("Interval (sec)", &interval, 30, 600)) {
+                as.auto_save_interval_sec = interval;
+                as_changed = true;
+            }
+        }
+        if (as_changed) {
+            SaveEditorSettings(as);
+        }
+    }
+
     if (ImGui::CollapsingHeader(MDI_ICON_COG "  Keyboard Shortcuts (Read-only)", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextDisabled("Global shortcuts:");
         ImGui::BulletText("Ctrl+Z - Undo");

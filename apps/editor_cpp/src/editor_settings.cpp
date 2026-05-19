@@ -111,6 +111,14 @@ EditorSettings LoadEditorSettings() {
         settings.grid_lines = doc["grid_lines"].GetInt();
     }
 
+    // Auto-save
+    if (doc.HasMember("auto_save_enabled") && doc["auto_save_enabled"].IsBool()) {
+        settings.auto_save_enabled = doc["auto_save_enabled"].GetBool();
+    }
+    if (doc.HasMember("auto_save_interval_sec") && doc["auto_save_interval_sec"].IsInt()) {
+        settings.auto_save_interval_sec = doc["auto_save_interval_sec"].GetInt();
+    }
+
     // Scene camera
     if (doc.HasMember("cam_focal_x") && doc["cam_focal_x"].IsNumber()) settings.cam_focal_x = doc["cam_focal_x"].GetFloat();
     if (doc.HasMember("cam_focal_y") && doc["cam_focal_y"].IsNumber()) settings.cam_focal_y = doc["cam_focal_y"].GetFloat();
@@ -155,6 +163,10 @@ void SaveEditorSettings(const EditorSettings& settings) {
     doc.AddMember("snap_scale", settings.snap_scale, alloc);
     doc.AddMember("grid_size", settings.grid_size, alloc);
     doc.AddMember("grid_lines", settings.grid_lines, alloc);
+
+    // Auto-save
+    doc.AddMember("auto_save_enabled", settings.auto_save_enabled, alloc);
+    doc.AddMember("auto_save_interval_sec", settings.auto_save_interval_sec, alloc);
 
     // Scene camera
     doc.AddMember("cam_focal_x", settings.cam_focal_x, alloc);

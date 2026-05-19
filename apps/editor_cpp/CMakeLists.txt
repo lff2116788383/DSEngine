@@ -24,6 +24,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_scene_camera.cpp
     src/editor_inspector_panel.cpp
     src/editor_profiler_panel.cpp
+    src/editor_autosave.cpp
     src/editor_scene_io.cpp
     src/editor_settings.cpp
     src/editor_shortcuts.cpp

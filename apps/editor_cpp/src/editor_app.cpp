@@ -79,6 +79,7 @@
 #include "editor_project_hub.h"
 #include "editor_undo_panel.h"
 #include "editor_asset_importer.h"
+#include "editor_autosave.h"
 
 
 
@@ -400,6 +401,8 @@ void EditorApp::Run() {
     int frame_counter = 0;
     bool screenshot_taken = false;
 
+    dse::editor::AutoSaveManager::Get().CheckRecovery();
+
     while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
@@ -584,6 +587,8 @@ void EditorApp::Shutdown() {
     dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
     dse::editor::SaveEditorSettings(editor_settings);
 
+    dse::editor::AutoSaveManager::Get().OnExit();
+
     // 关闭当前项目（释放 .lock）
     dse::editor::ProjectManager::Get().CloseProject();
 
@@ -722,6 +727,9 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices);
     dse::editor::DrawGameViewportPanel(game_texture);
+
+    dse::editor::AutoSaveManager::Get().Tick(registry);
+    dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);
 
     dse::editor::DrawStatusBar(ctx);
 

@@ -17,6 +17,7 @@
 #include "editor_selection.h"
 #include "editor_project.h"
 #include "editor_preferences_panel.h"
+#include "editor_autosave.h"
 #include "engine/dse_version.h"
 
 #include <filesystem>
@@ -166,11 +167,13 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                     SaveScene(ctx.registry, path);
                     tab_mgr.SetCurrentPath(path);
                     tab_mgr.MarkClean();
+                    AutoSaveManager::Get().OnManualSave();
                     EditorLog(LogLevel::Info, "Scene saved: " + path);
                 }
             } else {
                 SaveScene(ctx.registry, current_path);
                 tab_mgr.MarkClean();
+                AutoSaveManager::Get().OnManualSave();
                 EditorLog(LogLevel::Info, "Scene saved: " + current_path);
             }
         }
@@ -180,6 +183,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 SaveScene(ctx.registry, path);
                 tab_mgr.SetCurrentPath(path);
                 tab_mgr.MarkClean();
+                AutoSaveManager::Get().OnManualSave();
                 EditorLog(LogLevel::Info, "Scene saved: " + path);
             }
         }
