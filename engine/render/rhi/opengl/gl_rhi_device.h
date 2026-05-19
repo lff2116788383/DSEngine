@@ -17,6 +17,7 @@
 #include "engine/render/rhi/opengl/ubo_manager.h"
 #include <unordered_set>
 #include <unordered_map>
+#include <memory>
 
 namespace dse {
 namespace render {
@@ -34,6 +35,9 @@ namespace render {
  */
 class OpenGLRhiDevice final : public RhiDevice {
 public:
+    OpenGLRhiDevice();
+    ~OpenGLRhiDevice() override;
+
     using RhiDevice::SetGlobalSpotShadowMap;
     using RhiDevice::SetGlobalSpotLightSpaceMatrix;
 
@@ -207,15 +211,9 @@ private:
     /// 通过 CreateComputeShader 创建的 compute 程序句柄
     std::unordered_set<unsigned int> compute_programs_;
 
-    /// Hi-Z 纹理信息
-    struct HiZTextureInfo {
-        unsigned int gl_texture = 0;
-        int width = 0;
-        int height = 0;
-        int mip_count = 0;
-    };
-    std::unordered_map<unsigned int, HiZTextureInfo> hiz_textures_;
-    unsigned int next_hiz_handle_ = 500000;
+    /// Hi-Z 纹理信息（pimpl 隐藏实现，避免 WINDOWS_EXPORT_ALL_SYMBOLS 模板泄漏）
+    struct HiZImpl;
+    std::unique_ptr<HiZImpl> hiz_impl_;
 
     /// Indirect draw buffer 管理
     std::unordered_map<unsigned int, unsigned int> indirect_buffers_; ///< handle → GL buffer ID

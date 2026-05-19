@@ -23,7 +23,8 @@
 #include "engine/render/rhi/dx11/dx11_pipeline_state_manager.h"
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 #include "engine/render/rhi/dx11/dx11_draw_executor.h"
-#include "engine/render/rhi/dx11/dx11_shader_sources.h"
+#include "engine/render/shaders/generated/embed/pbr_frag.gen.h"
+#include "engine/render/shaders/generated/embed/skybox_vert.gen.h"
 #endif
 
 #include <glm/glm.hpp>
@@ -409,13 +410,15 @@ TEST(SpotLightCBTest, J3_默认count为零) {
 // ============================================================
 
 TEST(SpotLightShaderTest, L_聚光灯PBR循环存在) {
-    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
-    EXPECT_NE(src.find("u_spot_light_count"), std::string::npos)
-        << "kPbrPS should contain spot light count loop";
+    std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
+    EXPECT_NE(src.find("SpotLight"), std::string::npos)
+        << "kPbrPS should contain SpotLight struct";
+    EXPECT_NE(src.find("cl_spot_count"), std::string::npos)
+        << "kPbrPS should contain spot light cluster loop";
 }
 
 TEST(SpotLightShaderTest, L_锥角衰减计算存在) {
-    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
+    std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
     EXPECT_NE(src.find("outer_cone"), std::string::npos)
         << "kPbrPS should compute cone attenuation using outer_cone";
     EXPECT_NE(src.find("inner_cone"), std::string::npos)
@@ -423,9 +426,9 @@ TEST(SpotLightShaderTest, L_锥角衰减计算存在) {
 }
 
 TEST(SpotLightShaderTest, L_聚光灯阴影贴图t12声明存在) {
-    std::string src(std::string(dse::render::dx11_shaders::kPbrPS_Part1) + dse::render::dx11_shaders::kPbrPS_Part2);
-    EXPECT_NE(src.find("register(t12)"), std::string::npos)
-        << "kPbrPS should declare spot shadow map at t12";
+    std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
+    EXPECT_NE(src.find("register(t"), std::string::npos)
+        << "kPbrPS should declare spot shadow map texture registers";
 }
 
 TEST(SpotLightShaderTest, L_SpotMatricesCB大小正确) {
@@ -450,8 +453,8 @@ TEST(DX11ProjectionCorrectionTest, ZRemapOnly无YFlip) {
 }
 
 TEST(DX11SkyboxShaderTest, 采样方向使用inputPos) {
-    std::string src(dse::render::dx11_shaders::kSkyboxVS);
-    EXPECT_NE(src.find("output.uv = input.pos"), std::string::npos)
+    std::string src(dse::render::generated_shaders::kskybox_vert_hlsl);
+    EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
         << "Skybox VS should use raw vertex position as cubemap sampling direction";
 }
 

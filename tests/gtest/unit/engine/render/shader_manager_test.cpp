@@ -14,6 +14,7 @@
 
 #ifdef DSE_ENABLE_VULKAN
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
+using namespace dse::render;
 
 TEST(DescriptorBindingInfoTest, 默认值) {
     DescriptorBindingInfo info;

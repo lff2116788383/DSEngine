@@ -112,6 +112,24 @@ namespace dse {
 namespace render {
 
 // ============================================================
+// HiZImpl — pimpl 实现，避免 unordered_map<uint, HiZTextureInfo> 模板符号泄漏
+// ============================================================
+
+struct OpenGLRhiDevice::HiZImpl {
+    struct HiZTextureInfo {
+        unsigned int gl_texture = 0;
+        int width = 0;
+        int height = 0;
+        int mip_count = 0;
+    };
+    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    unsigned int next_handle = 500000;
+};
+
+OpenGLRhiDevice::OpenGLRhiDevice() : hiz_impl_(std::make_unique<HiZImpl>()) {}
+OpenGLRhiDevice::~OpenGLRhiDevice() = default;
+
+// ============================================================
 // OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice
 // ============================================================
 
@@ -656,9 +674,9 @@ unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc)
 // --- 命令缓冲 ---
 
 std::shared_ptr<CommandBuffer> OpenGLRhiDevice::CreateCommandBuffer() {
-    auto cmd = std::make_shared<OpenGLCommandBuffer>();
-    cmd->SetDevice(this);
-    return cmd;
+    auto* raw = new OpenGLCommandBuffer();
+    raw->SetDevice(this);
+    return std::shared_ptr<CommandBuffer>(raw);
 }
 
 void OpenGLRhiDevice::Submit(std::shared_ptr<CommandBuffer> /*cmd_buffer*/) {
@@ -889,30 +907,30 @@ unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mip_count - 1);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    unsigned int handle = next_hiz_handle_++;
-    hiz_textures_[handle] = {tex, width, height, mip_count};
+    unsigned int handle = hiz_impl_->next_handle++;
+    hiz_impl_->textures[handle] = {tex, width, height, mip_count};
     DEBUG_LOG_INFO("Hi-Z texture created: handle={} gl_tex={} {}x{} mips={}",
                    handle, tex, width, height, mip_count);
     return handle;
 }
 
 void OpenGLRhiDevice::DeleteHiZTexture(unsigned int handle) {
-    auto it = hiz_textures_.find(handle);
-    if (it == hiz_textures_.end()) return;
+    auto it = hiz_impl_->textures.find(handle);
+    if (it == hiz_impl_->textures.end()) return;
     if (it->second.gl_texture) {
         glDeleteTextures(1, &it->second.gl_texture);
     }
-    hiz_textures_.erase(it);
+    hiz_impl_->textures.erase(it);
 }
 
 int OpenGLRhiDevice::GetHiZMipCount(unsigned int handle) const {
-    auto it = hiz_textures_.find(handle);
-    return it != hiz_textures_.end() ? it->second.mip_count : 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
 unsigned int OpenGLRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
-    auto it = hiz_textures_.find(handle);
-    return it != hiz_textures_.end() ? it->second.gl_texture : 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? it->second.gl_texture : 0;
 }
 
 // --- Compute Uniform ---

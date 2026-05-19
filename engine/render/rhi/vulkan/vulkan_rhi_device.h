@@ -23,6 +23,7 @@
 #include <vulkan/vulkan.h>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace dse {
 namespace render {

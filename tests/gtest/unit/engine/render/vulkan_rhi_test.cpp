@@ -44,7 +44,9 @@
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_draw_executor.h"
-#include "engine/render/rhi/vulkan/vulkan_shader_sources.h"
+#include "engine/render/shaders/generated/embed/pbr_frag.gen.h"
+#include "engine/render/shaders/generated/embed/pbr_frag_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/skybox_vert.gen.h"
 #endif
 
 #include <glm/glm.hpp>
@@ -588,30 +590,42 @@ TEST(VulkanSpotLightsUBOTest, J1_默认count为零) {
 // Phase K: GLSL 着色器字符串关键声明验证（无 GPU 依赖）
 // ============================================================
 
-TEST(VulkanGLSLShaderTest, K_PointLightsUBO声明存在) {
-    std::string src(dse::render::vulkan_shaders::kPbrFragment);
-    EXPECT_NE(src.find("set = 1, binding = 1"), std::string::npos)
-        << "kPbrFragment should declare PointLights UBO at set=1 binding=1";
+TEST(VulkanGLSLShaderTest, K_PointLightsSSBO声明存在) {
+    using namespace dse::render::generated_shaders::reflect;
+    bool found = false;
+    for (uint32_t i = 0; i < kpbr_frag_ssbo_count; ++i) {
+        if (std::string(kpbr_frag_ssbos[i].name) == "PointLightSSBO" &&
+            kpbr_frag_ssbos[i].set == 1 && kpbr_frag_ssbos[i].binding == 1) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "PointLightSSBO should be at set=1 binding=1";
 }
 
-TEST(VulkanGLSLShaderTest, K_SpotLightsUBO声明存在) {
-    std::string src(dse::render::vulkan_shaders::kPbrFragment);
-    EXPECT_NE(src.find("set = 1, binding = 2"), std::string::npos)
-        << "kPbrFragment should declare SpotLights UBO at set=1 binding=2";
+TEST(VulkanGLSLShaderTest, K_SpotLightsSSBO声明存在) {
+    using namespace dse::render::generated_shaders::reflect;
+    bool found = false;
+    for (uint32_t i = 0; i < kpbr_frag_ssbo_count; ++i) {
+        if (std::string(kpbr_frag_ssbos[i].name) == "SpotLightSSBO" &&
+            kpbr_frag_ssbos[i].set == 1 && kpbr_frag_ssbos[i].binding == 2) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "SpotLightSSBO should be at set=1 binding=2";
 }
 
 TEST(VulkanGLSLShaderTest, K_点光源立方体阴影采样器声明存在) {
-    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    std::string src(dse::render::generated_shaders::kpbr_frag_glsl330);
     EXPECT_NE(src.find("u_point_shadow_maps"), std::string::npos)
         << "kPbrFragment should declare u_point_shadow_maps samplerCube";
 }
 
 TEST(VulkanGLSLShaderTest, K_SpotLight使用float_pad非vec2_pad) {
-    std::string src(dse::render::vulkan_shaders::kPbrFragment);
+    std::string src(dse::render::generated_shaders::kpbr_frag_glsl330);
     // SpotLight 含有 outer_cone 字段；在 outer_cone 之后到下一个 "};" 之间
     // 必须是 float _pad 而非 vec2 _pad（vec2 对齐会使 stride 从 64B 变成 80B）
     auto outer_pos = src.find("float outer_cone;");
-    ASSERT_NE(outer_pos, std::string::npos) << "outer_cone field not found in kPbrFragment";
+    ASSERT_NE(outer_pos, std::string::npos) << "outer_cone field not found in PBR fragment source";
     auto struct_end = src.find("};", outer_pos);
     ASSERT_NE(struct_end, std::string::npos);
     auto vec2_pos = src.find("vec2 _pad", outer_pos);
@@ -623,9 +637,9 @@ TEST(VulkanGLSLShaderTest, K_SpotLight使用float_pad非vec2_pad) {
 // RHI 统一回归测试
 // ============================================================
 
-TEST(VulkanPipelineStateManagerTest, FrontFace为CW因投影YFlip) {
-    // 投影修正矩阵包含 Y-flip → 屏幕空间绕序 CCW→CW
-    EXPECT_EQ(VulkanPipelineStateManager::ToVkFrontFace(), VK_FRONT_FACE_CLOCKWISE);
+TEST(VulkanPipelineStateManagerTest, FrontFace为CCW因YFlip与ViewportY抵消) {
+    // 投影 Y-flip 与 Vulkan viewport Y-inversion 相互抵消 → 帧缓冲绕序保持 CCW
+    EXPECT_EQ(VulkanPipelineStateManager::ToVkFrontFace(), VK_FRONT_FACE_COUNTER_CLOCKWISE);
 }
 
 TEST(VulkanProjectionCorrectionTest, YFlip行列值正确) {
@@ -641,7 +655,7 @@ TEST(VulkanProjectionCorrectionTest, YFlip行列值正确) {
 }
 
 TEST(VulkanSkyboxShaderTest, 采样方向使用aPos) {
-    std::string src(dse::render::vulkan_shaders::kSkyboxVertex);
+    std::string src(dse::render::generated_shaders::kskybox_vert_glsl330);
     EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
         << "Skybox VS should use raw vertex position as cubemap sampling direction";
 }
