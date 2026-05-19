@@ -10,6 +10,8 @@
 #pragma once
 
 #include "engine/render/shader_reflection_types.h"
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
@@ -70,6 +72,82 @@ inline uint32_t AutoBindAllUBOs(
     total += AutoBindUBOs(gl_program, reflection.vertex, glGetUniformBlockIndex_fn, glUniformBlockBinding_fn);
     total += AutoBindUBOs(gl_program, reflection.fragment, glGetUniformBlockIndex_fn, glUniformBlockBinding_fn);
     return total;
+}
+
+// ---- 纹理 Slot 自动绑定 ----
+
+/// 平坦化后的纹理 unit 分配条目
+struct TextureUnitEntry {
+    const char* name;       ///< sampler uniform 名称
+    uint32_t unit;          ///< 分配的 GL texture unit
+    uint32_t array_count;   ///< 数组元素数（1=非数组）
+};
+
+/// 从反射数据计算平坦化的、不重叠的纹理 unit 分配
+/// sampled_images 按 (set, binding) 排序后，顺序分配 texture unit，数组占多个连续 unit
+/// @param reflection  fragment stage 反射数据
+/// @param out_entries 输出条目数组
+/// @param base_unit   起始 unit 编号（默认 0）
+/// @return 分配的最大 unit+1（即下一可用 unit）
+inline uint32_t ComputeFlatTextureUnits(
+    const shader_reflect::StageReflection& reflection,
+    std::vector<TextureUnitEntry>& out_entries,
+    uint32_t base_unit = 0) {
+
+    out_entries.clear();
+
+    // 收集 sampled images，按 (set, binding) 排序
+    struct SortEntry {
+        uint32_t set;
+        uint32_t binding;
+        uint32_t index; // 在 sampled_images 中的下标
+    };
+    std::vector<SortEntry> sorted;
+    sorted.reserve(reflection.sampled_image_count);
+    for (uint32_t i = 0; i < reflection.sampled_image_count; ++i) {
+        const auto& tex = reflection.sampled_images[i];
+        sorted.push_back({tex.set, tex.binding, i});
+    }
+    std::sort(sorted.begin(), sorted.end(), [](const SortEntry& a, const SortEntry& b) {
+        return (a.set < b.set) || (a.set == b.set && a.binding < b.binding);
+    });
+
+    uint32_t next_unit = base_unit;
+    for (const auto& se : sorted) {
+        const auto& tex = reflection.sampled_images[se.index];
+        uint32_t count = (tex.array_count > 0) ? tex.array_count : 1;
+        out_entries.push_back({tex.name, next_unit, count});
+        next_unit += count;
+    }
+    return next_unit;
+}
+
+/// 一次性为所有 sampler uniform 设置 texture unit 绑定
+/// 必须在 glUseProgram(prog) 之后调用
+/// @param prog  GL program handle
+/// @param entries  ComputeFlatTextureUnits 的输出
+/// @param glGetUniformLocation_fn  函数指针
+/// @param glUniform1i_fn  函数指针
+inline void BindSamplersOnce(
+    unsigned int prog,
+    const std::vector<TextureUnitEntry>& entries,
+    int (*glGetUniformLocation_fn)(unsigned int, const char*),
+    void (*glUniform1i_fn)(int, int)) {
+
+    for (const auto& entry : entries) {
+        if (entry.array_count > 1) {
+            // 数组 sampler: 逐元素设置 u_name[0], u_name[1], ...
+            for (uint32_t i = 0; i < entry.array_count; ++i) {
+                char elem_name[256];
+                std::snprintf(elem_name, sizeof(elem_name), "%s[%u]", entry.name, i);
+                int loc = glGetUniformLocation_fn(prog, elem_name);
+                if (loc != -1) glUniform1i_fn(loc, static_cast<int>(entry.unit + i));
+            }
+        } else {
+            int loc = glGetUniformLocation_fn(prog, entry.name);
+            if (loc != -1) glUniform1i_fn(loc, static_cast<int>(entry.unit));
+        }
+    }
 }
 
 } // namespace gl_reflect

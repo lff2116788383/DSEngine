@@ -57,6 +57,24 @@ struct PBRShaderLocations {
     int use_instancing = -1;
 };
 
+/// PBR 纹理 slot 映射（reflection 驱动，初始化时一次性计算）
+/// 每个字段 = glActiveTexture(GL_TEXTURE0 + slot) 使用的 texture unit
+struct PBRTextureSlots {
+    int albedo = 0;                ///< u_texture
+    int normal = 1;                ///< u_normal_map
+    int metallic_roughness = 2;    ///< u_metallic_roughness_map
+    int emissive = 3;              ///< u_emissive_map
+    int occlusion = 4;             ///< u_occlusion_map
+    int shadow_base = 5;           ///< u_shadow_maps[0..2]
+    int spot_shadow_base = 8;      ///< u_spot_shadow_maps[0..3]
+    int reflection_cubemap = 12;   ///< u_reflection_cubemap
+    int brdf_lut = 13;             ///< u_brdf_lut
+    int splat_weight = 14;         ///< u_splat_weight_map
+    int splat_layer_base = 15;     ///< u_splat_layer0..3
+    int point_shadow_base = 19;    ///< u_point_shadow_maps[0..3]
+    int ddgi_atlas = 23;           ///< u_ddgi_irradiance_atlas（预留）
+};
+
 /// 天空盒着色器 uniform location 缓存
 struct SkyboxShaderLocations {
     int vp = -1;     ///< 合并的 view-projection 矩阵
@@ -102,6 +120,7 @@ public:
 
     // --- PBR 主着色器 ---
     const PBRShaderLocations& pbr_locations() const { return pbr_locations_; }
+    const PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
     // --- 天空盒着色器 ---
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
@@ -138,6 +157,7 @@ private:
     void CachePBRLocations();
 
     PBRShaderLocations pbr_locations_;
+    PBRTextureSlots pbr_texture_slots_;
     SkyboxShaderLocations skybox_locations_;
     ParticleShaderLocations particle_locations_;
 

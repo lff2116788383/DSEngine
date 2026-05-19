@@ -360,7 +360,35 @@ void GLShaderManager::CachePBRLocations() {
     loc.morph_weights_block_index = glGetUniformBlockIndex(h, "MorphWeights");
     loc.light_probe_data_block_index = glGetUniformBlockIndex(h, "LightProbeData");
 
-    // --- 纹理采样器 uniform location ---
+    // --- 纹理 unit 自动分配（reflection 驱动，一次性绑定）---
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kpbr_frag_reflection, tex_entries);
+
+        // glUseProgram 必须在 BindSamplersOnce 之前调用
+        glUseProgram(h);
+        gl_reflect::BindSamplersOnce(h, tex_entries, glGetUniformLocation, glUniform1i);
+
+        // 从计算结果填充 PBRTextureSlots（draw executor 使用）
+        auto& slots = pbr_texture_slots_;
+        for (const auto& e : tex_entries) {
+            int u = static_cast<int>(e.unit);
+            if (std::strcmp(e.name, "u_texture") == 0)              slots.albedo = u;
+            else if (std::strcmp(e.name, "u_normal_map") == 0)      slots.normal = u;
+            else if (std::strcmp(e.name, "u_metallic_roughness_map") == 0) slots.metallic_roughness = u;
+            else if (std::strcmp(e.name, "u_emissive_map") == 0)    slots.emissive = u;
+            else if (std::strcmp(e.name, "u_occlusion_map") == 0)   slots.occlusion = u;
+            else if (std::strcmp(e.name, "u_shadow_maps") == 0)     slots.shadow_base = u;
+            else if (std::strcmp(e.name, "u_spot_shadow_maps") == 0) slots.spot_shadow_base = u;
+            else if (std::strcmp(e.name, "u_reflection_cubemap") == 0) slots.reflection_cubemap = u;
+            else if (std::strcmp(e.name, "u_brdf_lut") == 0)        slots.brdf_lut = u;
+            else if (std::strcmp(e.name, "u_splat_weight_map") == 0) slots.splat_weight = u;
+            else if (std::strcmp(e.name, "u_splat_layer0") == 0)    slots.splat_layer_base = u;
+            else if (std::strcmp(e.name, "u_point_shadow_maps") == 0) slots.point_shadow_base = u;
+        }
+    }
+
+    // --- 缓存 sampler location（向后兼容 draw executor）---
     loc.texture = glGetUniformLocation(h, "u_texture");
     loc.normal_map = glGetUniformLocation(h, "u_normal_map");
     loc.metallic_roughness_map = glGetUniformLocation(h, "u_metallic_roughness_map");

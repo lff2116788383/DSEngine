@@ -489,6 +489,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         glUseProgram(shader_mgr.pbr_shader_handle());
     }
     const auto& loc = shader_mgr.pbr_locations();
+    const auto& slots = shader_mgr.pbr_texture_slots();
 
     if (state_mgr.active_pipeline_state() != 0) {
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
@@ -565,7 +566,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     // 纹理采样器（全局设置，非逐对象变化）
     unsigned int active_shader = gbuffer_mode ? shader_mgr.gbuffer_shader_handle() : shader_mgr.pbr_shader_handle();
-    glUniform1i(glGetUniformLocation(active_shader, "u_texture"), 0);
+    glUniform1i(glGetUniformLocation(active_shader, "u_texture"), slots.albedo);
     const int gbuffer_model_loc = gbuffer_mode ? glGetUniformLocation(active_shader, "u_model") : -1;
 
     // DDGI uniforms（全局，每 batch 一次）
@@ -577,9 +578,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_texels"), global_state_.ddgi_irradiance_texels);
         glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_gi_intensity"), global_state_.ddgi_gi_intensity);
         glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_normal_bias"), global_state_.ddgi_normal_bias);
-        glActiveTexture(GL_TEXTURE21);
+        glActiveTexture(GL_TEXTURE0 + slots.ddgi_atlas);
         glBindTexture(GL_TEXTURE_2D, global_state_.ddgi_irradiance_atlas);
-        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_atlas"), 21);
+        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_atlas"), slots.ddgi_atlas);
     } else if (!gbuffer_mode) {
         glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 0.0f);
     }
@@ -673,7 +674,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
             last_texture_handle = tex;
         }
-        glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0 + slots.albedo);
         glBindTexture(GL_TEXTURE_2D, tex);
 
         if (last_normal_map_handle != item.normal_map_handle) {
@@ -683,9 +684,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             last_normal_map_handle = item.normal_map_handle;
         }
         if (item.normal_map_handle != 0) {
-            glActiveTexture(GL_TEXTURE1);
+            glActiveTexture(GL_TEXTURE0 + slots.normal);
             glBindTexture(GL_TEXTURE_2D, item.normal_map_handle);
-            glUniform1i(loc.normal_map, 1);
+            glUniform1i(loc.normal_map, slots.normal);
         }
 
         if (last_metallic_roughness_map_handle != item.metallic_roughness_map_handle) {
@@ -695,9 +696,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             last_metallic_roughness_map_handle = item.metallic_roughness_map_handle;
         }
         if (item.metallic_roughness_map_handle != 0) {
-            glActiveTexture(GL_TEXTURE13);
+            glActiveTexture(GL_TEXTURE0 + slots.metallic_roughness);
             glBindTexture(GL_TEXTURE_2D, item.metallic_roughness_map_handle);
-            glUniform1i(loc.metallic_roughness_map, 13);
+            glUniform1i(loc.metallic_roughness_map, slots.metallic_roughness);
         }
 
         if (last_emissive_map_handle != item.emissive_map_handle) {
@@ -707,9 +708,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             last_emissive_map_handle = item.emissive_map_handle;
         }
         if (item.emissive_map_handle != 0) {
-            glActiveTexture(GL_TEXTURE14);
+            glActiveTexture(GL_TEXTURE0 + slots.emissive);
             glBindTexture(GL_TEXTURE_2D, item.emissive_map_handle);
-            glUniform1i(loc.emissive_map, 14);
+            glUniform1i(loc.emissive_map, slots.emissive);
         }
 
         if (last_occlusion_map_handle != item.occlusion_map_handle) {
@@ -719,9 +720,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             last_occlusion_map_handle = item.occlusion_map_handle;
         }
         if (item.occlusion_map_handle != 0) {
-            glActiveTexture(GL_TEXTURE15);
+            glActiveTexture(GL_TEXTURE0 + slots.occlusion);
             glBindTexture(GL_TEXTURE_2D, item.occlusion_map_handle);
-            glUniform1i(loc.occlusion_map, 15);
+            glUniform1i(loc.occlusion_map, slots.occlusion);
         }
 
         // Terrain splatmap
@@ -733,15 +734,15 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 glUniform4fv(loc.splat_tiling, 1, &item.splat_tiling.x);
             }
             if (item.splat_weight_map_handle != 0 && loc.splat_weight_map != -1) {
-                glActiveTexture(GL_TEXTURE16);
+                glActiveTexture(GL_TEXTURE0 + slots.splat_weight);
                 glBindTexture(GL_TEXTURE_2D, item.splat_weight_map_handle);
-                glUniform1i(loc.splat_weight_map, 16);
+                glUniform1i(loc.splat_weight_map, slots.splat_weight);
             }
             for (int si = 0; si < 4; ++si) {
                 if (item.splat_layer_handles[si] != 0 && loc.splat_layer[si] != -1) {
-                    glActiveTexture(GL_TEXTURE17 + si);
+                    glActiveTexture(GL_TEXTURE0 + slots.splat_layer_base + si);
                     glBindTexture(GL_TEXTURE_2D, item.splat_layer_handles[si]);
-                    glUniform1i(loc.splat_layer[si], 17 + si);
+                    glUniform1i(loc.splat_layer[si], slots.splat_layer_base + si);
                 }
             }
         }
@@ -783,9 +784,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // 仅绑定点光源阴影贴图
         for (int i = 0; i < 4; ++i) {
             if (loc.point_shadow_map[i] != -1) {
-                glActiveTexture(GL_TEXTURE9 + i);
+                glActiveTexture(GL_TEXTURE0 + slots.point_shadow_base + i);
                 glBindTexture(GL_TEXTURE_CUBE_MAP, global_state_.point_shadow_map[i]);
-                glUniform1i(loc.point_shadow_map[i], 9 + i);
+                glUniform1i(loc.point_shadow_map[i], slots.point_shadow_base + i);
             }
         }
 
@@ -800,18 +801,18 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // CSM 阴影贴图（sampler2DShadow 需要硬件深度比较）
         for (int i = 0; i < 3; ++i) {
             if (loc.shadow_map[i] != -1) {
-                glActiveTexture(GL_TEXTURE2 + i);
+                glActiveTexture(GL_TEXTURE0 + slots.shadow_base + i);
                 glBindTexture(GL_TEXTURE_2D, global_state_.shadow_map[i]);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-                glUniform1i(loc.shadow_map[i], 2 + i);
+                glUniform1i(loc.shadow_map[i], slots.shadow_base + i);
             }
         }
         for (int i = 0; i < 4; ++i) {
             if (loc.spot_shadow_map[i] != -1) {
-                glActiveTexture(GL_TEXTURE5 + i);
+                glActiveTexture(GL_TEXTURE0 + slots.spot_shadow_base + i);
                 glBindTexture(GL_TEXTURE_2D, global_state_.spot_shadow_map[i]);
-                glUniform1i(loc.spot_shadow_map[i], 5 + i);
+                glUniform1i(loc.spot_shadow_map[i], slots.spot_shadow_base + i);
             }
         }
 
@@ -2908,6 +2909,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     ubo_mgr.BindAll();
 
     const auto& loc = shader_mgr.pbr_locations();
+    const auto& slots = shader_mgr.pbr_texture_slots();
     glUseProgram(shader_mgr.pbr_shader_handle());
     if (state_mgr.active_pipeline_state() != 0) {
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
@@ -2915,7 +2917,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
-    glUniform1i(loc.texture, 0);
+    glUniform1i(loc.texture, slots.albedo);
     if (loc.model >= 0) {
         const glm::mat4 identity_model(1.0f);
         glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(identity_model));
@@ -2961,7 +2963,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
         }
 
         apply_blend(current_blend_mode, current_shader_variant);
-        glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0 + slots.albedo);
         glBindTexture(GL_TEXTURE_2D, current_texture);
         glBindVertexArray(vao_handle_);
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>((batch_vertices.size() / 4) * 6), GL_UNSIGNED_SHORT, nullptr);
