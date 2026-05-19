@@ -12,6 +12,7 @@
 #include "editor_settings.h"
 #include "editor_scene_tabs.h"
 #include "editor_build_game.h"
+#include "editor_asset_importer.h"
 #include "editor_icons.h"
 #include "editor_selection.h"
 #include "editor_project.h"
@@ -292,6 +293,9 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Separator();
         if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, !ctx.read_only && proj_mgr.HasOpenProject())) {
             OpenBuildGameDialog();
+        }
+        if (ImGui::MenuItem("Import Asset...", nullptr, false, !ctx.read_only)) {
+            OpenAssetImporter();
         }
         ImGui::Separator();
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {

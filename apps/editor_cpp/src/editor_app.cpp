@@ -78,6 +78,7 @@
 #include "editor_project.h"
 #include "editor_project_hub.h"
 #include "editor_undo_panel.h"
+#include "editor_asset_importer.h"
 
 
 
@@ -661,6 +662,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_terrain_editor_) dse::editor::DrawTerrainEditorPanel(ctx);
     if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
     dse::editor::DrawBuildGameDialog();
+    dse::editor::DrawAssetImporterDialog(ctx);
 
     dse::editor::DrawPreferencesPanel(&show_preferences_);
     dse::editor::DrawUndoHistoryPanel(&show_undo_history_);

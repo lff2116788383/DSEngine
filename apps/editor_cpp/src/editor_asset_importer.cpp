@@ -1,0 +1,311 @@
+#include "editor_asset_importer.h"
+
+#include <string>
+#include <vector>
+#include <filesystem>
+#include <fstream>
+#include <algorithm>
+
+#include "imgui.h"
+#include "editor_file_dialog.h"
+#include "engine/assets/asset_manager.h"
+#include "engine/runtime/engine_app.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#include <shlobj.h>
+#endif
+
+namespace fs = std::filesystem;
+
+namespace {
+
+// ─── State ─────────────────────────────────────────────────────────────────
+bool s_open = false;
+
+enum class ImportType { Mesh3D, Texture, Audio };
+const char* kImportTypeNames[] = { "3D Model (.gltf/.glb/.fbx)", "Texture (.png/.jpg/.hdr/.tga)", "Audio (.wav/.ogg/.mp3)" };
+
+struct ImportState {
+    ImportType type = ImportType::Mesh3D;
+    char source_path[512] = "";
+    char output_dir[512] = "";       // relative to project assets
+    bool import_animations = true;
+    bool import_skeleton = true;
+    bool import_materials = true;
+    bool generate_mipmaps = true;
+    bool compress_texture = false;
+    // Results
+    bool importing = false;
+    bool import_done = false;
+    bool import_success = false;
+    std::string import_message;
+    std::vector<std::string> imported_files;
+};
+
+ImportState s_state{};
+
+// ─── Platform file dialog ──────────────────────────────────────────────────
+std::string OpenFileDialogWithFilter(const char* title, const char* filter) {
+#ifdef _WIN32
+    char filename[MAX_PATH] = "";
+    OPENFILENAMEA ofn{};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.lpstrTitle = title;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    if (GetOpenFileNameA(&ofn)) return filename;
+#endif
+    return "";
+}
+
+const char* GetFilterForType(ImportType type) {
+    switch (type) {
+    case ImportType::Mesh3D:
+        return "3D Models\0*.gltf;*.glb;*.fbx;*.obj\0All Files\0*.*\0";
+    case ImportType::Texture:
+        return "Images\0*.png;*.jpg;*.jpeg;*.hdr;*.tga;*.bmp\0All Files\0*.*\0";
+    case ImportType::Audio:
+        return "Audio\0*.wav;*.ogg;*.mp3;*.flac\0All Files\0*.*\0";
+    }
+    return "All Files\0*.*\0";
+}
+
+// ─── Locate AssetBuilder ───────────────────────────────────────────────────
+fs::path FindAssetBuilder() {
+    // Look next to the editor executable, then in bin/
+    fs::path exe_dir = fs::path(".");
+#ifdef _WIN32
+    char module_path[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
+        exe_dir = fs::path(module_path).parent_path();
+    }
+#endif
+    fs::path candidate = exe_dir / "AssetBuilder.exe";
+    if (fs::exists(candidate)) return candidate;
+    candidate = exe_dir / "AssetBuilder";
+    if (fs::exists(candidate)) return candidate;
+    // fallback: rely on PATH
+    return fs::path("AssetBuilder");
+}
+
+// ─── Import Logic ──────────────────────────────────────────────────────────
+void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
+    fs::path src(state.source_path);
+    fs::path out_dir = fs::path(project_asset_dir) / state.output_dir;
+    fs::create_directories(out_dir);
+
+    fs::path asset_builder = FindAssetBuilder();
+    std::string cmd = "\"" + asset_builder.string() + "\" "
+                    + "\"" + std::string(state.source_path) + "\" "
+                    + "--out-dir \"" + out_dir.string() + "\"";
+
+#ifdef _WIN32
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    std::vector<char> cmd_buf(cmd.begin(), cmd.end());
+    cmd_buf.push_back('\0');
+    BOOL ok = CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    if (!ok) {
+        state.import_success = false;
+        state.import_message = "Failed to launch AssetBuilder: " + cmd;
+        return;
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    if (exit_code != 0) {
+        state.import_success = false;
+        state.import_message = "AssetBuilder failed (exit code " + std::to_string(exit_code) + ")";
+        return;
+    }
+#else
+    int ret = std::system(cmd.c_str());
+    if (ret != 0) {
+        state.import_success = false;
+        state.import_message = "AssetBuilder failed (exit code " + std::to_string(ret) + ")";
+        return;
+    }
+#endif
+
+    // Collect produced files
+    std::string base_name = src.stem().string();
+    const char* extensions[] = { ".dmesh", ".dmat", ".danim", ".dskel" };
+    for (auto ext : extensions) {
+        fs::path out_file = out_dir / (base_name + ext);
+        if (fs::exists(out_file)) {
+            state.imported_files.push_back(out_file.string());
+        }
+    }
+
+    state.import_success = !state.imported_files.empty();
+    if (state.import_success) {
+        state.import_message = "Successfully imported " + std::to_string(state.imported_files.size()) + " file(s)";
+    } else {
+        state.import_message = "Import produced no output files. Check AssetBuilder output.";
+    }
+}
+
+void DoImportTexture(ImportState& state, const std::string& project_asset_dir) {
+    fs::path src(state.source_path);
+    fs::path out_dir = fs::path(project_asset_dir) / state.output_dir;
+    fs::create_directories(out_dir);
+
+    fs::path dest = out_dir / src.filename();
+    std::error_code ec;
+    fs::copy_file(src, dest, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        state.import_success = false;
+        state.import_message = "Copy failed: " + ec.message();
+    } else {
+        state.import_success = true;
+        state.imported_files.push_back(dest.string());
+        state.import_message = "Texture copied to: " + dest.string();
+    }
+}
+
+void DoImportAudio(ImportState& state, const std::string& project_asset_dir) {
+    fs::path src(state.source_path);
+    fs::path out_dir = fs::path(project_asset_dir) / state.output_dir;
+    fs::create_directories(out_dir);
+
+    fs::path dest = out_dir / src.filename();
+    std::error_code ec;
+    fs::copy_file(src, dest, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        state.import_success = false;
+        state.import_message = "Copy failed: " + ec.message();
+    } else {
+        state.import_success = true;
+        state.imported_files.push_back(dest.string());
+        state.import_message = "Audio file copied to: " + dest.string();
+    }
+}
+
+} // anonymous namespace
+
+namespace dse::editor {
+
+void OpenAssetImporter() {
+    s_open = true;
+    s_state = ImportState{};
+}
+
+void DrawAssetImporterDialog(EditorContext& ctx) {
+    if (!s_open) return;
+
+    ImGui::SetNextWindowSize(ImVec2(560, 400), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Asset Importer", &s_open)) {
+        ImGui::End();
+        return;
+    }
+
+    auto& state = s_state;
+
+    // ─── Type selector ─────────────────────────────────────────────────────
+    ImGui::Text("Import Type:");
+    ImGui::SameLine();
+    int type_idx = static_cast<int>(state.type);
+    if (ImGui::Combo("##import_type", &type_idx, kImportTypeNames, IM_ARRAYSIZE(kImportTypeNames))) {
+        state.type = static_cast<ImportType>(type_idx);
+    }
+
+    ImGui::Separator();
+
+    // ─── Source file ────────────────────────────────────────────────────────
+    ImGui::Text("Source File:");
+    ImGui::InputText("##src_path", state.source_path, sizeof(state.source_path), ImGuiInputTextFlags_ReadOnly);
+    ImGui::SameLine();
+    if (ImGui::Button("Browse...")) {
+        std::string result = OpenFileDialogWithFilter("Select Source File", GetFilterForType(state.type));
+        if (!result.empty()) {
+            strncpy(state.source_path, result.c_str(), sizeof(state.source_path) - 1);
+            state.source_path[sizeof(state.source_path) - 1] = '\0';
+        }
+    }
+
+    // ─── Output directory (relative to project assets) ─────────────────────
+    ImGui::Text("Output Subdirectory (relative to project assets):");
+    ImGui::InputText("##out_dir", state.output_dir, sizeof(state.output_dir));
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("e.g. 'models/knight' or 'textures/environment'");
+    }
+
+    ImGui::Separator();
+
+    // ─── Type-specific options ──────────────────────────────────────────────
+    if (state.type == ImportType::Mesh3D) {
+        ImGui::Text("Mesh Import Options:");
+        ImGui::Checkbox("Import Animations (.danim)", &state.import_animations);
+        ImGui::Checkbox("Import Skeleton (.dskel)", &state.import_skeleton);
+        ImGui::Checkbox("Import Materials (.dmat)", &state.import_materials);
+    } else if (state.type == ImportType::Texture) {
+        ImGui::Text("Texture Import Options:");
+        ImGui::Checkbox("Generate Mipmaps", &state.generate_mipmaps);
+        ImGui::Checkbox("Compress (BCn)", &state.compress_texture);
+        ImGui::TextDisabled("Note: Compression is not yet implemented.");
+    } else if (state.type == ImportType::Audio) {
+        ImGui::Text("Audio Import Options:");
+        ImGui::TextDisabled("Audio files are copied as-is to the project.");
+    }
+
+    ImGui::Separator();
+
+    // ─── Import button ──────────────────────────────────────────────────────
+    bool can_import = (strlen(state.source_path) > 0) && !state.importing;
+    if (!can_import) ImGui::BeginDisabled();
+    if (ImGui::Button("Import", ImVec2(120, 0))) {
+        state.importing = true;
+        state.import_done = false;
+        state.import_success = false;
+        state.import_message.clear();
+        state.imported_files.clear();
+
+        // Resolve project asset directory
+        AssetManager* am = ctx.engine.asset_manager();
+        std::string asset_dir = am ? am->GetDataRoot() : "data";
+        if (asset_dir.empty()) asset_dir = "data";
+
+        switch (state.type) {
+        case ImportType::Mesh3D:  DoImportMesh(state, asset_dir); break;
+        case ImportType::Texture: DoImportTexture(state, asset_dir); break;
+        case ImportType::Audio:   DoImportAudio(state, asset_dir); break;
+        }
+
+        state.importing = false;
+        state.import_done = true;
+    }
+    if (!can_import) ImGui::EndDisabled();
+
+    // ─── Results ────────────────────────────────────────────────────────────
+    if (state.import_done) {
+        ImGui::Separator();
+        if (state.import_success) {
+            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "%s", state.import_message.c_str());
+        } else {
+            ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "%s", state.import_message.c_str());
+        }
+
+        if (!state.imported_files.empty()) {
+            ImGui::Text("Imported Files:");
+            for (auto& f : state.imported_files) {
+                ImGui::BulletText("%s", f.c_str());
+            }
+        }
+    }
+
+    ImGui::End();
+}
+
+} // namespace dse::editor
