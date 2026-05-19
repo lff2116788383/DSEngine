@@ -148,8 +148,8 @@ TEST(RenderTargetDescExtTest, MSAA相等性) {
 
 TEST(HairDrawItemTest, 默认值) {
     HairDrawItem hdi;
-    EXPECT_EQ(hdi.position_ssbo, 0u);
-    EXPECT_EQ(hdi.tangent_ssbo, 0u);
+    EXPECT_FALSE(hdi.position_ssbo);
+    EXPECT_FALSE(hdi.tangent_ssbo);
     EXPECT_EQ(hdi.total_vertex_count, 0u);
     EXPECT_EQ(hdi.strand_count, 0u);
     EXPECT_FLOAT_EQ(hdi.fiber_radius, 0.04f);

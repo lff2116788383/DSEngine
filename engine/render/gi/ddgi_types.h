@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <cmath>
 #include <algorithm>
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 namespace render {
@@ -160,7 +161,7 @@ struct alignas(16) RSMSample {
 struct DDGIResources {
     unsigned int irradiance_atlas = 0;       ///< RGBA16F 纹理（辐照度 octahedral atlas）
     unsigned int visibility_atlas = 0;       ///< RG16F 纹理（深度 + 深度² atlas）
-    unsigned int probe_state_ssbo = 0;       ///< ProbeState[] SSBO
+    BufferHandle probe_state_ssbo;            ///< ProbeState[] SSBO
     unsigned int update_compute_shader = 0;  ///< 探针更新 compute shader
     bool initialized = false;
 };

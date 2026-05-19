@@ -490,9 +490,9 @@ void DDGISystem::Shutdown(RhiDevice* rhi) {
         rhi->DeleteTexture(resources_.visibility_atlas);
         resources_.visibility_atlas = 0;
     }
-    if (resources_.probe_state_ssbo != 0) {
-        rhi->DeleteSSBO(resources_.probe_state_ssbo);
-        resources_.probe_state_ssbo = 0;
+    if (resources_.probe_state_ssbo) {
+        rhi->DeleteGpuBuffer(resources_.probe_state_ssbo);
+        resources_.probe_state_ssbo = {};
     }
     if (resources_.update_compute_shader != 0) {
         rhi->DeleteComputeShader(resources_.update_compute_shader);
@@ -539,7 +539,7 @@ void DDGISystem::UpdateProbes(RhiDevice* rhi,
     rhi->SetComputeTextureSampler(2, rsm_flux);
 
     // Probe state SSBO
-    rhi->BindSSBO(resources_.probe_state_ssbo, 0);
+    rhi->BindGpuBuffer(resources_.probe_state_ssbo, 0);
 
     // Set uniforms
     unsigned int shader = resources_.update_compute_shader;
@@ -639,8 +639,9 @@ void DDGISystem::InitProbeStates(RhiDevice* rhi) {
     }
 
     size_t byte_size = total * sizeof(ProbeState);
-    resources_.probe_state_ssbo = rhi->CreateSSBO(byte_size, states.data());
-    if (resources_.probe_state_ssbo == 0) {
+    GpuBufferDesc desc{byte_size, GpuBufferUsage::kStorage, true, "ddgi_probe_state"};
+    resources_.probe_state_ssbo = rhi->CreateGpuBuffer(desc, states.data());
+    if (!resources_.probe_state_ssbo) {
         DEBUG_LOG_ERROR("[DDGI] Failed to create probe state SSBO ({} probes)", total);
     }
 }

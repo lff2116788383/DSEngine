@@ -9,6 +9,7 @@
 #include <functional>
 #include <vector>
 #include <glm/glm.hpp>
+#include "engine/render/rhi/rhi_handle.h"
 
 class World;
 class AssetManager;
@@ -86,8 +87,8 @@ struct RenderPassContext {
     } render_targets;
 
     /// Hi-Z Occlusion Culling 状态
-    unsigned int hiz_visibility_ssbo = 0;   ///< 可见性 SSBO（每个 mesh 1 uint: 1=visible, 0=occluded）
-    unsigned int hiz_aabb_ssbo = 0;         ///< AABB SSBO（每个 mesh 6 floats: min_xyz, max_xyz）
+    BufferHandle hiz_visibility_ssbo;      ///< 可见性 SSBO（每个 mesh 1 uint: 1=visible, 0=occluded）
+    BufferHandle hiz_aabb_ssbo;            ///< AABB SSBO（每个 mesh 6 floats: min_xyz, max_xyz）
     int hiz_object_count = 0;               ///< 当前帧 mesh 数量
     bool hiz_culling_enabled = false;       ///< Hi-Z 剔除是否激活
     unsigned int hiz_copy_shader = 0;       ///< Compute: depth → Hi-Z mip 0（由 FramePipeline 管理生命周期）
@@ -96,12 +97,12 @@ struct RenderPassContext {
 
     /// GPU Driven 渲染状态
     bool gpu_driven_enabled = false;              ///< 本帧是否激活 GPU Driven 路径
-    unsigned int gpu_indirect_buffer = 0;         ///< indirect draw argument buffer
-    unsigned int gpu_instance_ssbo = 0;           ///< GPUInstanceData[] SSBO
-    unsigned int gpu_material_ssbo = 0;           ///< GPUMaterialData[] SSBO
-    unsigned int gpu_draw_cmd_ssbo = 0;           ///< DrawCommands as SSBO (compute write)
-    unsigned int gpu_visible_indices_ssbo = 0;    ///< visible instance index buffer SSBO
-    unsigned int gpu_atomic_counter_ssbo = 0;     ///< atomic draw count SSBO
+    BufferHandle gpu_indirect_buffer;            ///< indirect draw argument buffer
+    BufferHandle gpu_instance_ssbo;              ///< GPUInstanceData[] SSBO
+    BufferHandle gpu_material_ssbo;              ///< GPUMaterialData[] SSBO
+    BufferHandle gpu_draw_cmd_ssbo;              ///< DrawCommands as SSBO (compute write)
+    BufferHandle gpu_visible_indices_ssbo;       ///< visible instance index buffer SSBO
+    BufferHandle gpu_atomic_counter_ssbo;        ///< atomic draw count SSBO
     unsigned int gpu_mega_vao = 0;                ///< mega buffer VAO
     unsigned int gpu_cull_shader = 0;             ///< GPU Driven culling compute shader
     int gpu_indirect_draw_count = 0;              ///< indirect draw command 条数

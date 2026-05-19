@@ -248,11 +248,11 @@ TEST_F(HairInstanceLODTest, 边界距离_LOD0阈值) {
 TEST(HairInstanceTest, 默认状态) {
     HairInstance inst;
     EXPECT_EQ(inst.asset, nullptr);
-    EXPECT_EQ(inst.position_ssbo, 0u);
-    EXPECT_EQ(inst.position_prev_ssbo, 0u);
-    EXPECT_EQ(inst.position_rest_ssbo, 0u);
-    EXPECT_EQ(inst.tangent_ssbo, 0u);
-    EXPECT_EQ(inst.strand_info_ssbo, 0u);
+    EXPECT_FALSE(inst.position_ssbo);
+    EXPECT_FALSE(inst.position_prev_ssbo);
+    EXPECT_FALSE(inst.position_rest_ssbo);
+    EXPECT_FALSE(inst.tangent_ssbo);
+    EXPECT_FALSE(inst.strand_info_ssbo);
     EXPECT_FALSE(inst.gpu_resources_valid);
     EXPECT_EQ(inst.current_lod, 0);
     EXPECT_EQ(inst.total_vertex_count, 0u);

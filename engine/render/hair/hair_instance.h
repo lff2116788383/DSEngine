@@ -15,6 +15,7 @@
 #define DSE_RENDER_HAIR_INSTANCE_H
 
 #include "engine/render/hair/hair_asset.h"
+#include "engine/render/rhi/rhi_handle.h"
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <vector>
@@ -68,11 +69,11 @@ struct HairInstance {
     const HairAsset* asset = nullptr;
 
     /// GPU SSBO 句柄
-    unsigned int position_ssbo       = 0;  ///< vec4[total_verts] 当前位置
-    unsigned int position_prev_ssbo  = 0;  ///< vec4[total_verts] 上帧位置（Verlet）
-    unsigned int position_rest_ssbo  = 0;  ///< vec4[total_verts] 静止姿态
-    unsigned int tangent_ssbo        = 0;  ///< vec4[total_verts] 切线
-    unsigned int strand_info_ssbo    = 0;  ///< uvec2[num_strands] (offset, count)
+    BufferHandle position_ssbo;       ///< vec4[total_verts] 当前位置
+    BufferHandle position_prev_ssbo;  ///< vec4[total_verts] 上帧位置（Verlet）
+    BufferHandle position_rest_ssbo;  ///< vec4[total_verts] 静止姿态
+    BufferHandle tangent_ssbo;        ///< vec4[total_verts] 切线
+    BufferHandle strand_info_ssbo;    ///< uvec2[num_strands] (offset, count)
 
     /// 参数
     HairSimParams    sim_params;

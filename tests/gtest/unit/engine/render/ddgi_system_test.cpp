@@ -211,7 +211,7 @@ TEST(DDGIResourcesTest, 默认值) {
     DDGIResources res;
     EXPECT_EQ(res.irradiance_atlas, 0u);
     EXPECT_EQ(res.visibility_atlas, 0u);
-    EXPECT_EQ(res.probe_state_ssbo, 0u);
+    EXPECT_FALSE(res.probe_state_ssbo);
     EXPECT_EQ(res.update_compute_shader, 0u);
     EXPECT_FALSE(res.initialized);
 }

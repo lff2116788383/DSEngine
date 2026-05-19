@@ -1420,9 +1420,9 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     }
 
     // 上传 AABB SSBO（复用 Hi-Z AABB binding point 0）
-    if (ctx.hiz_aabb_ssbo != 0) {
+    if (ctx.hiz_aabb_ssbo) {
         const size_t aabb_size = gpu_aabbs_.size() * sizeof(HiZAABB);
-        rhi->UpdateSSBO(ctx.hiz_aabb_ssbo, 0, aabb_size, gpu_aabbs_.data());
+        rhi->UpdateGpuBuffer(ctx.hiz_aabb_ssbo, 0, aabb_size, gpu_aabbs_.data());
     }
 
     const size_t required_count = static_cast<size_t>(cmd_index);
@@ -1430,31 +1430,33 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     // 上传 DrawCommands 到 SSBO（binding 6，供 compute shader 读写）
     {
         const size_t cmd_size = required_count * sizeof(DrawElementsIndirectCommand);
-        if (ctx.gpu_draw_cmd_ssbo != 0 && required_count > gpu_draw_cmd_capacity_) {
-            rhi->DeleteSSBO(ctx.gpu_draw_cmd_ssbo);
-            ctx.gpu_draw_cmd_ssbo = 0;
+        if (ctx.gpu_draw_cmd_ssbo && required_count > gpu_draw_cmd_capacity_) {
+            rhi->DeleteGpuBuffer(ctx.gpu_draw_cmd_ssbo);
+            ctx.gpu_draw_cmd_ssbo = {};
         }
-        if (ctx.gpu_draw_cmd_ssbo == 0) {
+        if (!ctx.gpu_draw_cmd_ssbo) {
             const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
-            ctx.gpu_draw_cmd_ssbo = rhi->CreateSSBO(alloc_count * sizeof(DrawElementsIndirectCommand), nullptr);
+            dse::render::GpuBufferDesc desc{alloc_count * sizeof(DrawElementsIndirectCommand), dse::render::GpuBufferUsage::kStorage, true, "gpu_draw_cmd"};
+            ctx.gpu_draw_cmd_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
             gpu_draw_cmd_capacity_ = alloc_count;
         }
-        rhi->UpdateSSBO(ctx.gpu_draw_cmd_ssbo, 0, cmd_size, gpu_draw_cmds_.data());
+        rhi->UpdateGpuBuffer(ctx.gpu_draw_cmd_ssbo, 0, cmd_size, gpu_draw_cmds_.data());
     }
 
     // 上传 GPUInstanceData SSBO（binding 5）
     {
         const size_t inst_size = required_count * sizeof(dse::render::GPUInstanceData);
-        if (ctx.gpu_instance_ssbo != 0 && required_count > gpu_instance_capacity_) {
-            rhi->DeleteSSBO(ctx.gpu_instance_ssbo);
-            ctx.gpu_instance_ssbo = 0;
+        if (ctx.gpu_instance_ssbo && required_count > gpu_instance_capacity_) {
+            rhi->DeleteGpuBuffer(ctx.gpu_instance_ssbo);
+            ctx.gpu_instance_ssbo = {};
         }
-        if (ctx.gpu_instance_ssbo == 0) {
+        if (!ctx.gpu_instance_ssbo) {
             const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
-            ctx.gpu_instance_ssbo = rhi->CreateSSBO(alloc_count * sizeof(dse::render::GPUInstanceData), nullptr);
+            dse::render::GpuBufferDesc desc{alloc_count * sizeof(dse::render::GPUInstanceData), dse::render::GpuBufferUsage::kStorage, true, "gpu_instance"};
+            ctx.gpu_instance_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
             gpu_instance_capacity_ = alloc_count;
         }
-        rhi->UpdateSSBO(ctx.gpu_instance_ssbo, 0, inst_size, gpu_instances_.data());
+        rhi->UpdateGpuBuffer(ctx.gpu_instance_ssbo, 0, inst_size, gpu_instances_.data());
     }
 
     ctx.gpu_indirect_draw_count = cmd_index;

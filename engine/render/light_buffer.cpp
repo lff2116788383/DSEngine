@@ -25,8 +25,17 @@ void LightBuffer::Init(RhiDevice* device) {
     const size_t point_ssbo_size = sizeof(LightBufferHeader) + sizeof(GPUPointLight) * initial_point;
     const size_t spot_ssbo_size  = sizeof(LightBufferHeader) + sizeof(GPUSpotLight)  * initial_spot;
 
-    point_light_ssbo_ = device_->CreateSSBO(point_ssbo_size, nullptr);
-    spot_light_ssbo_  = device_->CreateSSBO(spot_ssbo_size, nullptr);
+    GpuBufferDesc desc;
+    desc.usage = GpuBufferUsage::kStorage;
+    desc.is_dynamic = true;
+
+    desc.size = point_ssbo_size;
+    desc.debug_name = "point_light_ssbo";
+    point_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
+
+    desc.size = spot_ssbo_size;
+    desc.debug_name = "spot_light_ssbo";
+    spot_light_ssbo_  = device_->CreateGpuBuffer(desc, nullptr);
 
     point_light_capacity_ = initial_point;
     spot_light_capacity_  = initial_spot;
@@ -108,40 +117,42 @@ void LightBuffer::Upload() {
 
     // 如果当前容量不足，重新分配 SSBO
     if (pc > point_light_capacity_) {
-        if (point_light_ssbo_ != 0) {
-            device_->DeleteSSBO(point_light_ssbo_);
+        if (point_light_ssbo_) {
+            device_->DeleteGpuBuffer(point_light_ssbo_);
         }
         point_light_capacity_ = std::max(pc, point_light_capacity_ * 2);
         const size_t new_size = sizeof(LightBufferHeader) + sizeof(GPUPointLight) * point_light_capacity_;
-        point_light_ssbo_ = device_->CreateSSBO(new_size, nullptr);
+        GpuBufferDesc desc{new_size, GpuBufferUsage::kStorage, true, "point_light_ssbo"};
+        point_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
     }
     if (sc > spot_light_capacity_) {
-        if (spot_light_ssbo_ != 0) {
-            device_->DeleteSSBO(spot_light_ssbo_);
+        if (spot_light_ssbo_) {
+            device_->DeleteGpuBuffer(spot_light_ssbo_);
         }
         spot_light_capacity_ = std::max(sc, spot_light_capacity_ * 2);
         const size_t new_size = sizeof(LightBufferHeader) + sizeof(GPUSpotLight) * spot_light_capacity_;
-        spot_light_ssbo_ = device_->CreateSSBO(new_size, nullptr);
+        GpuBufferDesc desc{new_size, GpuBufferUsage::kStorage, true, "spot_light_ssbo"};
+        spot_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
     }
 
     // 上传点光源 SSBO
-    if (point_light_ssbo_ != 0) {
+    if (point_light_ssbo_) {
         LightBufferHeader header{};
         header.count = pc;
-        device_->UpdateSSBO(point_light_ssbo_, 0, sizeof(header), &header);
+        device_->UpdateGpuBuffer(point_light_ssbo_, 0, sizeof(header), &header);
         if (pc > 0) {
-            device_->UpdateSSBO(point_light_ssbo_, sizeof(header),
+            device_->UpdateGpuBuffer(point_light_ssbo_, sizeof(header),
                                 sizeof(GPUPointLight) * pc, point_lights_.data());
         }
     }
 
     // 上传聚光灯 SSBO
-    if (spot_light_ssbo_ != 0) {
+    if (spot_light_ssbo_) {
         LightBufferHeader header{};
         header.count = sc;
-        device_->UpdateSSBO(spot_light_ssbo_, 0, sizeof(header), &header);
+        device_->UpdateGpuBuffer(spot_light_ssbo_, 0, sizeof(header), &header);
         if (sc > 0) {
-            device_->UpdateSSBO(spot_light_ssbo_, sizeof(header),
+            device_->UpdateGpuBuffer(spot_light_ssbo_, sizeof(header),
                                 sizeof(GPUSpotLight) * sc, spot_lights_.data());
         }
     }
@@ -149,19 +160,19 @@ void LightBuffer::Upload() {
 
 void LightBuffer::Bind() {
     if (!device_) return;
-    device_->BindSSBO(point_light_ssbo_, kSSBOBindingPointLights);
-    device_->BindSSBO(spot_light_ssbo_,  kSSBOBindingSpotLights);
+    device_->BindGpuBuffer(point_light_ssbo_, kSSBOBindingPointLights);
+    device_->BindGpuBuffer(spot_light_ssbo_,  kSSBOBindingSpotLights);
 }
 
 void LightBuffer::Shutdown() {
     if (!device_) return;
-    if (point_light_ssbo_ != 0) {
-        device_->DeleteSSBO(point_light_ssbo_);
-        point_light_ssbo_ = 0;
+    if (point_light_ssbo_) {
+        device_->DeleteGpuBuffer(point_light_ssbo_);
+        point_light_ssbo_ = {};
     }
-    if (spot_light_ssbo_ != 0) {
-        device_->DeleteSSBO(spot_light_ssbo_);
-        spot_light_ssbo_ = 0;
+    if (spot_light_ssbo_) {
+        device_->DeleteGpuBuffer(spot_light_ssbo_);
+        spot_light_ssbo_ = {};
     }
     point_lights_.clear();
     spot_lights_.clear();

@@ -18,6 +18,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <cstdint>
+#include "engine/render/rhi/rhi_handle.h"
 #include <string>
 
 // ============================================================
@@ -284,8 +285,8 @@ struct Particle3DDrawItem {
 
 /// 毛发绘制项 (per-instance)
 struct HairDrawItem {
-    unsigned int position_ssbo = 0;     ///< 当前帧位置 SSBO (vec4[N])
-    unsigned int tangent_ssbo = 0;      ///< 切线 SSBO (vec4[N])
+    dse::render::BufferHandle position_ssbo;  ///< 当前帧位置 SSBO (vec4[N])
+    dse::render::BufferHandle tangent_ssbo;   ///< 切线 SSBO (vec4[N])
     uint32_t total_vertex_count = 0;
     uint32_t strand_count = 0;
     const int* strand_firsts = nullptr; ///< per-strand 起始索引 (CPU array)

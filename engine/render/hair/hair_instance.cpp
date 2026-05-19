@@ -22,18 +22,29 @@ bool HairInstance::CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asse
     const size_t strand_bytes = hair_asset.num_guide_strands() * sizeof(uint32_t) * 2;
 
     // 位置 SSBO × 3 (current / prev / rest)
-    position_ssbo      = rhi->CreateSSBO(vert_bytes, nullptr);
-    position_prev_ssbo = rhi->CreateSSBO(vert_bytes, nullptr);
-    position_rest_ssbo = rhi->CreateSSBO(vert_bytes, nullptr);
+    GpuBufferDesc desc;
+    desc.usage = GpuBufferUsage::kStorage;
+    desc.is_dynamic = true;
+
+    desc.size = vert_bytes;
+    desc.debug_name = "hair_position";
+    position_ssbo      = rhi->CreateGpuBuffer(desc, nullptr);
+    desc.debug_name = "hair_position_prev";
+    position_prev_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
+    desc.debug_name = "hair_position_rest";
+    position_rest_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
 
     // 切线 SSBO
-    tangent_ssbo = rhi->CreateSSBO(vert_bytes, nullptr);
+    desc.debug_name = "hair_tangent";
+    tangent_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
 
     // Strand info SSBO: uvec2(offset, count) per strand
-    strand_info_ssbo = rhi->CreateSSBO(strand_bytes, nullptr);
+    desc.size = strand_bytes;
+    desc.debug_name = "hair_strand_info";
+    strand_info_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
 
-    if (position_ssbo == 0 || position_prev_ssbo == 0 || position_rest_ssbo == 0 ||
-        tangent_ssbo == 0 || strand_info_ssbo == 0) {
+    if (!position_ssbo || !position_prev_ssbo || !position_rest_ssbo ||
+        !tangent_ssbo || !strand_info_ssbo) {
         DEBUG_LOG_ERROR("[HairInstance] Failed to allocate GPU SSBOs");
         DestroyGPUResources(rhi);
         return false;
@@ -45,7 +56,7 @@ bool HairInstance::CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asse
         strand_data[i * 2 + 0] = hair_asset.strands[i].vertex_offset;
         strand_data[i * 2 + 1] = hair_asset.strands[i].vertex_count;
     }
-    rhi->UpdateSSBO(strand_info_ssbo, 0, strand_bytes, strand_data.data());
+    rhi->UpdateGpuBuffer(strand_info_ssbo, 0, strand_bytes, strand_data.data());
 
     // CPU 侧 per-strand 绘制参数
     draw_firsts_.resize(hair_asset.num_guide_strands());
@@ -65,11 +76,11 @@ bool HairInstance::CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asse
 void HairInstance::DestroyGPUResources(RhiDevice* rhi) {
     if (!rhi) return;
 
-    if (position_ssbo)      { rhi->DeleteSSBO(position_ssbo);      position_ssbo = 0; }
-    if (position_prev_ssbo) { rhi->DeleteSSBO(position_prev_ssbo); position_prev_ssbo = 0; }
-    if (position_rest_ssbo) { rhi->DeleteSSBO(position_rest_ssbo); position_rest_ssbo = 0; }
-    if (tangent_ssbo)       { rhi->DeleteSSBO(tangent_ssbo);       tangent_ssbo = 0; }
-    if (strand_info_ssbo)   { rhi->DeleteSSBO(strand_info_ssbo);   strand_info_ssbo = 0; }
+    if (position_ssbo)      { rhi->DeleteGpuBuffer(position_ssbo);      position_ssbo = {}; }
+    if (position_prev_ssbo) { rhi->DeleteGpuBuffer(position_prev_ssbo); position_prev_ssbo = {}; }
+    if (position_rest_ssbo) { rhi->DeleteGpuBuffer(position_rest_ssbo); position_rest_ssbo = {}; }
+    if (tangent_ssbo)       { rhi->DeleteGpuBuffer(tangent_ssbo);       tangent_ssbo = {}; }
+    if (strand_info_ssbo)   { rhi->DeleteGpuBuffer(strand_info_ssbo);   strand_info_ssbo = {}; }
 
     gpu_resources_valid = false;
     asset = nullptr;
@@ -88,10 +99,10 @@ void HairInstance::UploadInitialPositions(RhiDevice* rhi, const HairAsset& hair_
     }
 
     const size_t pos_bytes = total_vertex_count * sizeof(glm::vec4);
-    rhi->UpdateSSBO(position_ssbo,      0, pos_bytes, positions.data());
-    rhi->UpdateSSBO(position_prev_ssbo, 0, pos_bytes, positions.data());
-    rhi->UpdateSSBO(position_rest_ssbo, 0, pos_bytes, positions.data());
-    rhi->UpdateSSBO(tangent_ssbo,       0, pos_bytes, tangents.data());
+    rhi->UpdateGpuBuffer(position_ssbo,      0, pos_bytes, positions.data());
+    rhi->UpdateGpuBuffer(position_prev_ssbo, 0, pos_bytes, positions.data());
+    rhi->UpdateGpuBuffer(position_rest_ssbo, 0, pos_bytes, positions.data());
+    rhi->UpdateGpuBuffer(tangent_ssbo,       0, pos_bytes, tangents.data());
 }
 
 void HairInstance::UpdateLOD(float camera_distance) {
@@ -168,10 +179,10 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
 
     // --- Pass 1: Verlet Integration ---
     // All backends: binding 0=pos_cur, 1=pos_prev, 2=pos_rest, 3=strand_info
-    rhi->BindSSBO(position_ssbo,      0);
-    rhi->BindSSBO(position_prev_ssbo, 1);
-    rhi->BindSSBO(position_rest_ssbo, 2);
-    rhi->BindSSBO(strand_info_ssbo,   3);
+    rhi->BindGpuBuffer(position_ssbo,      0);
+    rhi->BindGpuBuffer(position_prev_ssbo, 1);
+    rhi->BindGpuBuffer(position_rest_ssbo, 2);
+    rhi->BindGpuBuffer(strand_info_ssbo,   3);
     rhi->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", nv);
     rhi->SetComputeUniformFloat(cs_integrate_, "u_dt",           dt);
     rhi->SetComputeUniformFloat(cs_integrate_, "u_damping",      sim_params.damping);
@@ -189,9 +200,9 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
 
     // --- Pass 2 & 3: Constraints (多次迭代) ---
     // All backends: binding 0=pos_cur, 1=pos_rest, 2=strand_info
-    rhi->BindSSBO(position_ssbo,      0);
-    rhi->BindSSBO(position_rest_ssbo, 1);
-    rhi->BindSSBO(strand_info_ssbo,   2);
+    rhi->BindGpuBuffer(position_ssbo,      0);
+    rhi->BindGpuBuffer(position_rest_ssbo, 1);
+    rhi->BindGpuBuffer(strand_info_ssbo,   2);
     for (int i = 0; i < sim_params.length_constraint_iterations; ++i) {
         rhi->SetComputeUniformInt(cs_length_, "u_num_strands", ns);
         rhi->DispatchCompute(cs_length_, static_cast<unsigned int>((ns + 63) / 64), 1, 1);
@@ -207,9 +218,9 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
 
     // --- Pass 4: Tangent Update ---
     // All backends: binding 0=pos_cur, 1=tangent, 2=strand_info
-    rhi->BindSSBO(position_ssbo,  0);
-    rhi->BindSSBO(tangent_ssbo,   1);
-    rhi->BindSSBO(strand_info_ssbo, 2);
+    rhi->BindGpuBuffer(position_ssbo,  0);
+    rhi->BindGpuBuffer(tangent_ssbo,   1);
+    rhi->BindGpuBuffer(strand_info_ssbo, 2);
     rhi->SetComputeUniformInt(cs_tangent_, "u_num_vertices",  nv);
     rhi->SetComputeUniformInt(cs_tangent_, "u_num_strands",   ns);
     rhi->SetComputeUniformInt(cs_tangent_, "u_verts_per_strand", vps);

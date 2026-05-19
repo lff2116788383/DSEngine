@@ -17,6 +17,7 @@
 #include <vector>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 namespace render {
@@ -110,8 +111,8 @@ private:
     std::vector<uint32_t> light_indices_;
 
     // GPU SSBO 句柄
-    unsigned int cluster_info_ssbo_ = 0;
-    unsigned int light_index_ssbo_  = 0;
+    BufferHandle cluster_info_ssbo_;
+    BufferHandle light_index_ssbo_;
 
     // SSBO 容量跟踪
     size_t cluster_info_capacity_bytes_ = 0;

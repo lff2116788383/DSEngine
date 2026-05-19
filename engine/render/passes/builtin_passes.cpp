@@ -622,15 +622,15 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
         const bool use_gpu_indirect = ctx_.gpu_driven_enabled
             && ctx_.gpu_mega_vao != 0
-            && ctx_.gpu_draw_cmd_ssbo != 0
+            && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
 
         if (use_gpu_indirect) {
             // 绑定 instance SSBO 供 vertex shader 读取 model matrix
             auto* rhi = ctx_.rhi_device;
-            rhi->BindSSBO(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
                                           ctx_.gpu_indirect_draw_count,
                                           sizeof(DrawElementsIndirectCommand));
             rhi->UnbindVAO();
@@ -2318,7 +2318,7 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     EnsureShader();
     if (hiz_cull_shader_ == 0) return;
     if (ctx_.render_targets.hiz_texture == 0) return;
-    if (ctx_.hiz_aabb_ssbo == 0 || ctx_.hiz_visibility_ssbo == 0) return;
+    if (!ctx_.hiz_aabb_ssbo || !ctx_.hiz_visibility_ssbo) return;
     if (ctx_.hiz_object_count <= 0) return;
 
     auto* rhi = ctx_.rhi_device;
@@ -2330,8 +2330,8 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
     // Bind SSBOs
-    rhi->BindSSBO(ctx_.hiz_aabb_ssbo, 0);
-    rhi->BindSSBO(ctx_.hiz_visibility_ssbo, 1);
+    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0);
+    rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1);
 
     // Bind Hi-Z texture as sampler
     rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
@@ -2505,7 +2505,7 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     if (!ctx_.gpu_driven_enabled) return;
     if (ctx_.gpu_cull_shader == 0) return;
     if (ctx_.render_targets.hiz_texture == 0) return;
-    if (ctx_.gpu_draw_cmd_ssbo == 0) return;
+    if (!ctx_.gpu_draw_cmd_ssbo) return;
     if (ctx_.gpu_indirect_draw_count <= 0) return;
 
     auto* rhi = ctx_.rhi_device;
@@ -2517,8 +2517,8 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
     // Bind SSBOs
-    rhi->BindSSBO(ctx_.hiz_aabb_ssbo, 0);           // AABB input
-    rhi->BindSSBO(ctx_.gpu_draw_cmd_ssbo, 6);        // DrawCommands (read/write)
+    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0);        // AABB input
+    rhi->BindGpuBuffer(ctx_.gpu_draw_cmd_ssbo, 6);    // DrawCommands (read/write)
 
     // Bind Hi-Z texture
     rhi->SetComputeTextureSampler(0, hiz_gpu_tex);

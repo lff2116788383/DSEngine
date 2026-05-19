@@ -18,6 +18,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <cstring>
+#include "engine/render/rhi/rhi_handle.h"
 
 class World;
 
@@ -98,8 +99,8 @@ private:
     RhiDevice* device_ = nullptr;
 
     // GPU SSBO 句柄
-    unsigned int point_light_ssbo_ = 0;
-    unsigned int spot_light_ssbo_  = 0;
+    BufferHandle point_light_ssbo_;
+    BufferHandle spot_light_ssbo_;
 
     // SSBO 当前分配容量（元素数）
     int point_light_capacity_ = 0;

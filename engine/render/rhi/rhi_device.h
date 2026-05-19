@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <functional>
+#include <unordered_map>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -100,22 +101,41 @@ public:
     // 旧 CreateBuffer/CreateSSBO/CreateIndirectBuffer 将在全量迁移后标记 deprecated。
 
     virtual BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
-        bool is_index = has(desc.usage, GpuBufferUsage::kIndex);
+        BufferHandle h;
         if (has(desc.usage, GpuBufferUsage::kStorage)) {
-            return BufferHandle{CreateSSBO(desc.size, initial_data)};
+            h = BufferHandle{CreateSSBO(desc.size, initial_data)};
+        } else if (has(desc.usage, GpuBufferUsage::kIndirect)) {
+            h = BufferHandle{CreateIndirectBuffer(desc.size, initial_data)};
+        } else {
+            bool is_index = has(desc.usage, GpuBufferUsage::kIndex);
+            h = BufferHandle{CreateBuffer(desc.size, initial_data, desc.is_dynamic, is_index)};
         }
-        if (has(desc.usage, GpuBufferUsage::kIndirect)) {
-            return BufferHandle{CreateIndirectBuffer(desc.size, initial_data)};
-        }
-        return BufferHandle{CreateBuffer(desc.size, initial_data, desc.is_dynamic, is_index)};
+        if (h) gpu_buffer_usage_map_[h.raw()] = desc.usage;
+        return h;
     }
 
     virtual void UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
-        UpdateBuffer(handle.raw(), offset, size, data, false);
+        auto usage = GetBufferUsage_(handle);
+        if (has(usage, GpuBufferUsage::kStorage)) {
+            UpdateSSBO(handle.raw(), offset, size, data);
+        } else if (has(usage, GpuBufferUsage::kIndirect)) {
+            UpdateIndirectBuffer(handle.raw(), offset, size, data);
+        } else {
+            bool is_index = has(usage, GpuBufferUsage::kIndex);
+            UpdateBuffer(handle.raw(), offset, size, data, is_index);
+        }
     }
 
     virtual void DeleteGpuBuffer(BufferHandle handle) {
-        DeleteBuffer(handle.raw());
+        auto usage = GetBufferUsage_(handle);
+        if (has(usage, GpuBufferUsage::kStorage)) {
+            DeleteSSBO(handle.raw());
+        } else if (has(usage, GpuBufferUsage::kIndirect)) {
+            DeleteIndirectBuffer(handle.raw());
+        } else {
+            DeleteBuffer(handle.raw());
+        }
+        gpu_buffer_usage_map_.erase(handle.raw());
     }
 
     virtual void BindGpuBuffer(BufferHandle handle, uint32_t binding_point) {
@@ -183,6 +203,13 @@ public:
 protected:
     std::function<void()> init_keep_alive_;
     void KeepAlive() { if (init_keep_alive_) init_keep_alive_(); }
+
+    GpuBufferUsage GetBufferUsage_(BufferHandle handle) const {
+        auto it = gpu_buffer_usage_map_.find(handle.raw());
+        return it != gpu_buffer_usage_map_.end() ? it->second : GpuBufferUsage::kVertex;
+    }
+
+    std::unordered_map<unsigned int, GpuBufferUsage> gpu_buffer_usage_map_;
 };
 
 } // namespace render

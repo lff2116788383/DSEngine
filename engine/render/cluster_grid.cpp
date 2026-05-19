@@ -127,43 +127,45 @@ void ClusterGrid::Upload() {
 
     // ClusterInfo SSBO = header + ClusterInfo[]
     if (total_info_bytes > cluster_info_capacity_bytes_) {
-        if (cluster_info_ssbo_ != 0) device_->DeleteSSBO(cluster_info_ssbo_);
+        if (cluster_info_ssbo_) device_->DeleteGpuBuffer(cluster_info_ssbo_);
         cluster_info_capacity_bytes_ = total_info_bytes;
-        cluster_info_ssbo_ = device_->CreateSSBO(total_info_bytes, nullptr);
+        GpuBufferDesc desc{total_info_bytes, GpuBufferUsage::kStorage, true, "cluster_info_ssbo"};
+        cluster_info_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
     }
-    if (cluster_info_ssbo_ != 0) {
-        device_->UpdateSSBO(cluster_info_ssbo_, 0, header_bytes, &header_);
+    if (cluster_info_ssbo_) {
+        device_->UpdateGpuBuffer(cluster_info_ssbo_, 0, header_bytes, &header_);
         if (!cluster_infos_.empty()) {
-            device_->UpdateSSBO(cluster_info_ssbo_, header_bytes, info_bytes, cluster_infos_.data());
+            device_->UpdateGpuBuffer(cluster_info_ssbo_, header_bytes, info_bytes, cluster_infos_.data());
         }
     }
 
     // Light index SSBO
     if (index_bytes > light_index_capacity_bytes_) {
-        if (light_index_ssbo_ != 0) device_->DeleteSSBO(light_index_ssbo_);
+        if (light_index_ssbo_) device_->DeleteGpuBuffer(light_index_ssbo_);
         light_index_capacity_bytes_ = index_bytes;
-        light_index_ssbo_ = device_->CreateSSBO(index_bytes, nullptr);
+        GpuBufferDesc desc{index_bytes, GpuBufferUsage::kStorage, true, "light_index_ssbo"};
+        light_index_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
     }
-    if (light_index_ssbo_ != 0 && !light_indices_.empty()) {
-        device_->UpdateSSBO(light_index_ssbo_, 0, light_indices_.size() * sizeof(uint32_t), light_indices_.data());
+    if (light_index_ssbo_ && !light_indices_.empty()) {
+        device_->UpdateGpuBuffer(light_index_ssbo_, 0, light_indices_.size() * sizeof(uint32_t), light_indices_.data());
     }
 }
 
 void ClusterGrid::Bind() {
     if (!device_) return;
-    device_->BindSSBO(cluster_info_ssbo_,  kSSBOBindingClusterInfo);
-    device_->BindSSBO(light_index_ssbo_,   kSSBOBindingLightIndices);
+    device_->BindGpuBuffer(cluster_info_ssbo_,  kSSBOBindingClusterInfo);
+    device_->BindGpuBuffer(light_index_ssbo_,   kSSBOBindingLightIndices);
 }
 
 void ClusterGrid::Shutdown() {
     if (!device_) return;
-    if (cluster_info_ssbo_ != 0) {
-        device_->DeleteSSBO(cluster_info_ssbo_);
-        cluster_info_ssbo_ = 0;
+    if (cluster_info_ssbo_) {
+        device_->DeleteGpuBuffer(cluster_info_ssbo_);
+        cluster_info_ssbo_ = {};
     }
-    if (light_index_ssbo_ != 0) {
-        device_->DeleteSSBO(light_index_ssbo_);
-        light_index_ssbo_ = 0;
+    if (light_index_ssbo_) {
+        device_->DeleteGpuBuffer(light_index_ssbo_);
+        light_index_ssbo_ = {};
     }
     cluster_infos_.clear();
     light_indices_.clear();

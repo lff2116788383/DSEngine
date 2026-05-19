@@ -280,11 +280,11 @@ void HairSystem::SimulateCompute(float dt) {
         const auto& sim = inst.sim_params;
 
         // 绑定 SSBO
-        rhi_->BindSSBO(inst.position_ssbo,      0);
-        rhi_->BindSSBO(inst.position_prev_ssbo, 1);
-        rhi_->BindSSBO(inst.position_rest_ssbo, 2);
-        rhi_->BindSSBO(inst.tangent_ssbo,       3);
-        rhi_->BindSSBO(inst.strand_info_ssbo,   4);
+        rhi_->BindGpuBuffer(inst.position_ssbo,      0);
+        rhi_->BindGpuBuffer(inst.position_prev_ssbo, 1);
+        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 2);
+        rhi_->BindGpuBuffer(inst.tangent_ssbo,       3);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   4);
 
         // --- Pass 1: Integration ---
         rhi_->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", static_cast<int>(num_verts));

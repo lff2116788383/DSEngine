@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @file frame_pipeline.cpp
- * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
+ * @brief 寮曟搸涓诲惊鐜笌甯ф祦姘寸嚎锛屽崗璋冩洿鏂般€佺墿鐞嗗拰娓叉煋鐨勬墽琛岄『搴?
  */
 
 #include "engine/runtime/frame_pipeline.h"
@@ -167,9 +167,9 @@ bool FramePipeline::Init() {
     };
     const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
-    DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
+    DEBUG_LOG_INFO("FramePipeline RHI 鍚庣: {}", dse::render::RhiBackendToString(rhi_backend));
 
-    // D3D11 / Vulkan 后端需要用平台窗口句柄完成设备初始化
+    // D3D11 / Vulkan 鍚庣闇€瑕佺敤骞冲彴绐楀彛鍙ユ焺瀹屾垚璁惧鍒濆鍖?
     runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
     if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
         const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
@@ -190,7 +190,7 @@ bool FramePipeline::Init() {
                 dse::render::RhiBackendToString(rhi_backend));
             return false;
         }
-        // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
+        // 绔嬪嵆 present 涓€甯ч粦灞忥紝娑堥櫎绐楀彛鍒涘缓鍚庡埌棣栧抚娓叉煋鍓嶇殑鐧藉睆
         runtime_context_.rhi_device->BeginFrame();
         runtime_context_.rhi_device->EndFrame();
     }
@@ -230,7 +230,7 @@ bool FramePipeline::Init() {
     const int render_width = Screen::width();
     const int render_height = Screen::height();
     
-    // 始终创建最终合成 RenderTarget：editor 直接展示该纹理，runtime 再 present 到默认 framebuffer。
+    // 濮嬬粓鍒涘缓鏈€缁堝悎鎴?RenderTarget锛歟ditor 鐩存帴灞曠ず璇ョ汗鐞嗭紝runtime 鍐?present 鍒伴粯璁?framebuffer銆?
     RenderTargetDesc main_rt_desc{};
     main_rt_desc.width = render_width;
     main_rt_desc.height = render_height;
@@ -243,8 +243,8 @@ bool FramePipeline::Init() {
 
 
     
-    // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
-    // msaa_samples=4：开启 4x MSAA（不支持时 resource_mgr 自动降级为 1x）
+    // 浣跨敤鏀寔 HDR 鐨勬诞鐐圭汗鐞嗕綔涓?Scene Render Target锛岃繖鏄硾鍏夊拰鑹茶皟鏄犲皠鐨勫熀纭€
+    // msaa_samples=4锛氬紑鍚?4x MSAA锛堜笉鏀寔鏃?resource_mgr 鑷姩闄嶇骇涓?1x锛?
     {
         RenderTargetDesc scene_desc{};
         scene_desc.width = render_width;
@@ -281,7 +281,7 @@ bool FramePipeline::Init() {
     }
     
     // Create mip chain for Dual Filter Bloom (5 levels)
-    // allow_uav=true：允许 CS 写入（D3D11 Bloom Compute Shader 路径使用）
+    // allow_uav=true锛氬厑璁?CS 鍐欏叆锛圖3D11 Bloom Compute Shader 璺緞浣跨敤锛?
     if (render_resources_.pp_bloom_mip_rts.empty()) {
         int mip_width = render_width / 2;
         int mip_height = render_height / 2;
@@ -301,7 +301,7 @@ bool FramePipeline::Init() {
         }
     }
 
-    // SSAO: 半分辨率单通道 RT
+    // SSAO: 鍗婂垎杈ㄧ巼鍗曢€氶亾 RT
     if (render_resources_.pp_ssao_rt == 0) {
         render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width / 2, render_height / 2, true, false, false});
@@ -310,59 +310,59 @@ bool FramePipeline::Init() {
         render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width / 2, render_height / 2, true, false, false});
     }
-    // Contact Shadow: 半分辨率单通道 RT
+    // Contact Shadow: 鍗婂垎杈ㄧ巼鍗曢€氶亾 RT
     if (render_resources_.pp_contact_shadow_rt == 0) {
         render_resources_.pp_contact_shadow_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width / 2, render_height / 2, true, false, false});
     }
-    // FXAA: 全分辨率 RT
+    // FXAA: 鍏ㄥ垎杈ㄧ巼 RT
     if (render_resources_.pp_fxaa_rt == 0) {
         render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // TAA: 全分辨率 RT
+    // TAA: 鍏ㄥ垎杈ㄧ巼 RT
     if (render_resources_.pp_taa_rt == 0) {
         render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // DOF: 全分辨率 RT
+    // DOF: 鍏ㄥ垎杈ㄧ巼 RT
     if (render_resources_.pp_dof_rt == 0) {
         render_resources_.pp_dof_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // SSR: 半分辨率 RT
+    // SSR: 鍗婂垎杈ㄧ巼 RT
     if (render_resources_.pp_ssr_rt == 0) {
         render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width / 2, render_height / 2, true, false, false});
     }
-    // Motion Vector: 全分辨率 RT (RG16F 速度场)
+    // Motion Vector: 鍏ㄥ垎杈ㄧ巼 RT (RG16F 閫熷害鍦?
     if (render_resources_.pp_motion_vector_rt == 0) {
         render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // Outline / Edge Detection: 全分辨率 RT
+    // Outline / Edge Detection: 鍏ㄥ垎杈ㄧ巼 RT
     if (render_resources_.pp_outline_rt == 0) {
         render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // Volumetric Fog: 全分辨率 RT（存储 scene+fog 合成结果）
+    // Volumetric Fog: 鍏ㄥ垎杈ㄧ巼 RT锛堝瓨鍌?scene+fog 鍚堟垚缁撴灉锛?
     if (render_resources_.pp_fog_rt == 0) {
         render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
 
-    // WBOIT accumulation: 全分辨率 RGBA16F（需要 HDR 精度累积加权颜色）
+    // WBOIT accumulation: 鍏ㄥ垎杈ㄧ巼 RGBA16F锛堥渶瑕?HDR 绮惧害绱Н鍔犳潈棰滆壊锛?
     if (render_resources_.wboit_accum_rt == 0) {
         render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
-    // WBOIT revealage: 全分辨率（R 通道存储 prod(1-alpha_i)）
+    // WBOIT revealage: 鍏ㄥ垎杈ㄧ巼锛圧 閫氶亾瀛樺偍 prod(1-alpha_i)锛?
     if (render_resources_.wboit_reveal_rt == 0) {
         render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
 
-    // GBuffer MRT: 3 颜色附件 (albedo, normal, position) + 深度
+    // GBuffer MRT: 3 棰滆壊闄勪欢 (albedo, normal, position) + 娣卞害
     if (render_resources_.gbuffer_rt == 0) {
         RenderTargetDesc gbuf_desc;
         gbuf_desc.width = render_width;
@@ -373,13 +373,13 @@ bool FramePipeline::Init() {
         gbuf_desc.color_attachment_count = 3;
         render_resources_.gbuffer_rt = runtime_context_.rhi_device->CreateRenderTarget(gbuf_desc);
     }
-    // Deferred Lighting output: 全分辨率单颜色附件
+    // Deferred Lighting output: 鍏ㄥ垎杈ㄧ巼鍗曢鑹查檮浠?
     if (render_resources_.deferred_lighting_rt == 0) {
         render_resources_.deferred_lighting_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {render_width, render_height, true, false, false});
     }
 
-    // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
+    // Auto Exposure: 64x64 涓存椂浜害 + 2 涓?1x1 ping-pong RT
     if (render_resources_.pp_lum_temp_rt == 0) {
         render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget(
             {64, 64, true, false, false});
@@ -391,26 +391,30 @@ bool FramePipeline::Init() {
         }
     }
 
-    // Hi-Z Occlusion Culling: R32F 纹理 + 完整 mip chain
+    // Hi-Z Occlusion Culling: R32F 绾圭悊 + 瀹屾暣 mip chain
     if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
         if (render_resources_.hiz_texture != 0) {
             const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
-            render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateSSBO(
-                cap * sizeof(uint32_t), nullptr);
-            render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateSSBO(
-                cap * 8 * sizeof(float), nullptr);
+            {
+                dse::render::GpuBufferDesc d{cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
+                render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+            }
+            {
+                dse::render::GpuBufferDesc d{cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
+                render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+            }
             render_resources_.hiz_ssbo_capacity = cap;
 
-            // 创建 compute shader（仅一次，缓存句柄）— 源码定义在 builtin_passes.cpp
+            // 鍒涘缓 compute shader锛堜粎涓€娆★紝缂撳瓨鍙ユ焺锛夆€?婧愮爜瀹氫箟鍦?builtin_passes.cpp
             render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCopyShaderSource);
             render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZDownsampleShaderSource);
             render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCullShaderSource);
 
             DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
                            render_resources_.hiz_texture,
-                           render_resources_.hiz_visibility_ssbo,
-                           render_resources_.hiz_aabb_ssbo,
+                           render_resources_.hiz_visibility_ssbo.raw(),
+                           render_resources_.hiz_aabb_ssbo.raw(),
                            cap,
                            render_resources_.hiz_copy_shader,
                            render_resources_.hiz_downsample_shader,
@@ -418,7 +422,7 @@ bool FramePipeline::Init() {
         }
     }
 
-    // GPU Driven Rendering 能力检测
+    // GPU Driven Rendering 鑳藉姏妫€娴?
     if (runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
         runtime_context_.rhi_device->SupportsSSBO()) {
@@ -547,9 +551,9 @@ bool FramePipeline::Init() {
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
 #if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
-    // PhysX 3D 物理必须在 Gameplay3D 模块之前初始化并注册到 ServiceLocator，
-    // 否则 FractureSystem::SetPhysics3D() 会拿到 nullptr，导致碎片同时启用
-    // CPU fallback 物理和 PhysX 物理，两套物理交替覆写 transform → 闪烁。
+    // PhysX 3D 鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
+    // 鍚﹀垯 FractureSystem::SetPhysics3D() 浼氭嬁鍒?nullptr锛屽鑷寸鐗囧悓鏃跺惎鐢?
+    // CPU fallback 鐗╃悊鍜?PhysX 鐗╃悊锛屼袱濂楃墿鐞嗕氦鏇胯鍐?transform 鈫?闂儊銆?
     if (physics3d_system_.Init(*runtime_context_.world)) {
         dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
             std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
@@ -609,22 +613,22 @@ bool FramePipeline::Init() {
     BuildRenderGraph();
     lap("BuildRenderGraph");
 
-    // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
+    // Clustered Forward+ 鍏夋簮 SSBO + Cluster 缃戞牸鍒濆鍖?
     light_buffer_.Init(runtime_context_.rhi_device.get());
     cluster_grid_.Init(runtime_context_.rhi_device.get());
     lap("light buffer + cluster grid");
 
-    // Light Probe SH Bake 系统初始化
+    // Light Probe SH Bake 绯荤粺鍒濆鍖?
     light_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("LightProbeSystem");
 
-    // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
+    // Reflection Probe + IBL 绯荤粺鍒濆鍖栵紙鐢熸垚 BRDF LUT锛?
     reflection_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("ReflectionProbeSystem");
 
-    // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
+    // DDGI 绯荤粺寤惰繜鍒濆鍖栵紙棣栧抚妫€娴?GIProbeVolumeComponent 鍚庢寜闇€鍒濆鍖栵級
 
-    // 资源流式加载管理器初始化
+    // 璧勬簮娴佸紡鍔犺浇绠＄悊鍣ㄥ垵濮嬪寲
     streaming_manager_.Init(&asset_manager);
     {
         auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&streaming_manager_, [](auto*) {});
@@ -645,7 +649,7 @@ void FramePipeline::Shutdown() {
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
-    // 资源流式加载管理器关闭
+    // 璧勬簮娴佸紡鍔犺浇绠＄悊鍣ㄥ叧闂?
     streaming_manager_.Shutdown();
     dse::core::ServiceLocator::Instance().Reset<dse::streaming::StreamingManager>();
 
@@ -711,7 +715,7 @@ void FramePipeline::Shutdown() {
 
     asset_manager.ReleaseGpuResources();
 
-    // Hi-Z: 释放 GPU 资源
+    // Hi-Z: 閲婃斁 GPU 璧勬簮
     if (runtime_context_.rhi_device) {
         if (render_resources_.hiz_copy_shader != 0) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_copy_shader);
@@ -729,30 +733,30 @@ void FramePipeline::Shutdown() {
             runtime_context_.rhi_device->DeleteHiZTexture(render_resources_.hiz_texture);
             render_resources_.hiz_texture = 0;
         }
-        if (render_resources_.hiz_visibility_ssbo != 0) {
-            runtime_context_.rhi_device->DeleteSSBO(render_resources_.hiz_visibility_ssbo);
-            render_resources_.hiz_visibility_ssbo = 0;
+        if (render_resources_.hiz_visibility_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
+            render_resources_.hiz_visibility_ssbo = {};
         }
-        if (render_resources_.hiz_aabb_ssbo != 0) {
-            runtime_context_.rhi_device->DeleteSSBO(render_resources_.hiz_aabb_ssbo);
-            render_resources_.hiz_aabb_ssbo = 0;
+        if (render_resources_.hiz_aabb_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
+            render_resources_.hiz_aabb_ssbo = {};
         }
     }
 
-    // GPU Driven 资源清理
+    // GPU Driven 璧勬簮娓呯悊
     if (runtime_context_.rhi_device) {
         modules_impl_->CleanupGPUResources(runtime_context_.rhi_device.get());
-        if (render_resources_.gpu_draw_cmd_ssbo != 0) {
-            runtime_context_.rhi_device->DeleteSSBO(render_resources_.gpu_draw_cmd_ssbo);
-            render_resources_.gpu_draw_cmd_ssbo = 0;
+        if (render_resources_.gpu_draw_cmd_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_draw_cmd_ssbo);
+            render_resources_.gpu_draw_cmd_ssbo = {};
         }
-        if (render_resources_.gpu_instance_ssbo != 0) {
-            runtime_context_.rhi_device->DeleteSSBO(render_resources_.gpu_instance_ssbo);
-            render_resources_.gpu_instance_ssbo = 0;
+        if (render_resources_.gpu_instance_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_instance_ssbo);
+            render_resources_.gpu_instance_ssbo = {};
         }
-        if (render_resources_.gpu_indirect_buffer != 0) {
-            runtime_context_.rhi_device->DeleteIndirectBuffer(render_resources_.gpu_indirect_buffer);
-            render_resources_.gpu_indirect_buffer = 0;
+        if (render_resources_.gpu_indirect_buffer) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_indirect_buffer);
+            render_resources_.gpu_indirect_buffer = {};
         }
     }
 
@@ -798,7 +802,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
     asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
     asset_manager.PumpHotReloads();
 
-    // 资源流式加载：获取摄像机位置并 tick
+    // 璧勬簮娴佸紡鍔犺浇锛氳幏鍙栨憚鍍忔満浣嶇疆骞?tick
     if (runtime_context_.world) {
         glm::vec3 streaming_cam_pos(0.0f);
         auto streaming_cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
@@ -843,12 +847,12 @@ void FramePipeline::RunRenderInternal() {
     
     dse::runtime::BindRuntimeShadowMaps(*this);
 
-    // Clustered Forward+: 每帧收集光源 → 构建 Cluster → 上传 SSBO
+    // Clustered Forward+: 姣忓抚鏀堕泦鍏夋簮 鈫?鏋勫缓 Cluster 鈫?涓婁紶 SSBO
     if (runtime_context_.world) {
         light_buffer_.CollectLights(*runtime_context_.world);
         light_buffer_.Upload();
 
-        // 获取主相机参数用于 cluster 构建
+        // 鑾峰彇涓荤浉鏈哄弬鏁扮敤浜?cluster 鏋勫缓
         auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
         entt::entity cam_entity = entt::null;
         int cam_priority = std::numeric_limits<int>::min();
@@ -879,7 +883,7 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
-    // Light Probe SH: 查询最近 probe，传给 GPU UBO（无 probe 时 fallback 到 ambient_intensity）
+    // Light Probe SH: 鏌ヨ鏈€杩?probe锛屼紶缁?GPU UBO锛堟棤 probe 鏃?fallback 鍒?ambient_intensity锛?
     if (runtime_context_.world) {
         glm::vec3 cam_pos(0.0f);
         auto cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
@@ -897,7 +901,7 @@ void FramePipeline::RunRenderInternal() {
         runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
     }
 
-    // TAA: 预检测 ECS 组件，提前设置 taa_active（ForwardScenePass 需要在场景渲染前知道是否应用 jitter）
+    // TAA: 棰勬娴?ECS 缁勪欢锛屾彁鍓嶈缃?taa_active锛團orwardScenePass 闇€瑕佸湪鍦烘櫙娓叉煋鍓嶇煡閬撴槸鍚﹀簲鐢?jitter锛?
     render_pass_context_.taa_active = false;
     if (taa_pass_ && runtime_context_.world) {
         auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
@@ -912,10 +916,10 @@ void FramePipeline::RunRenderInternal() {
         render_pass_context_.taa_jitter = taa_pass_->GetCurrentJitter();
     }
 
-    // 每帧更新 Auto Exposure 所需的 delta_time
+    // 姣忓抚鏇存柊 Auto Exposure 鎵€闇€鐨?delta_time
     render_pass_context_.delta_time = Time::delta_time();
 
-    // DDGI: 检测 GIProbeVolumeComponent，按需初始化/更新系统
+    // DDGI: 妫€娴?GIProbeVolumeComponent锛屾寜闇€鍒濆鍖?鏇存柊绯荤粺
     render_pass_context_.ddgi_active = false;
     render_pass_context_.ddgi_system = nullptr;
     if (runtime_context_.world && runtime_context_.rhi_device->SupportsCompute()) {
@@ -924,7 +928,7 @@ void FramePipeline::RunRenderInternal() {
             auto& gi = gi_view.get<dse::GIProbeVolumeComponent>(entity);
             if (!gi.enabled) continue;
 
-            // 按需初始化或重配置
+            // 鎸夐渶鍒濆鍖栨垨閲嶉厤缃?
             if (gi.needs_reinit_ || !ddgi_system_.IsInitialized()) {
                 dse::render::gi::DDGIVolumeConfig cfg;
                 cfg.origin = gi.origin;
@@ -951,10 +955,10 @@ void FramePipeline::RunRenderInternal() {
                 render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
                 render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
             }
-            break;  // 仅支持单个 GI Volume
+            break;  // 浠呮敮鎸佸崟涓?GI Volume
         }
     }
-    // 同步 DDGI 状态到 RHI 全局渲染状态
+    // 鍚屾 DDGI 鐘舵€佸埌 RHI 鍏ㄥ眬娓叉煋鐘舵€?
     if (render_pass_context_.ddgi_active) {
         const auto& cfg = ddgi_system_.GetConfig();
         runtime_context_.rhi_device->SetGlobalDDGI(
@@ -968,12 +972,12 @@ void FramePipeline::RunRenderInternal() {
             false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
     }
 
-    // Hi-Z: 上传上一帧收集的 AABB 到 GPU SSBO（供 HiZCullPass 使用）
-    if (render_resources_.hiz_aabb_ssbo != 0 && render_resources_.hiz_visibility_ssbo != 0) {
+    // Hi-Z: 涓婁紶涓婁竴甯ф敹闆嗙殑 AABB 鍒?GPU SSBO锛堜緵 HiZCullPass 浣跨敤锛?
+    if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
         const auto& aabbs = modules_impl_->CachedAABBs();
         const int count = modules_impl_->CachedAABBCount();
         if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
-            runtime_context_.rhi_device->UpdateSSBO(
+            runtime_context_.rhi_device->UpdateGpuBuffer(
                 render_resources_.hiz_aabb_ssbo, 0,
                 count * sizeof(dse::gameplay3d::HiZAABB),
                 aabbs.data());
@@ -983,10 +987,10 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
-    // GPU Driven: 准备 GPU 场景数据（AABB + DrawCommands + Instance 数据）
+    // GPU Driven: 鍑嗗 GPU 鍦烘櫙鏁版嵁锛圓ABB + DrawCommands + Instance 鏁版嵁锛?
     if (render_resources_.gpu_driven_supported) {
         modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
-        // 同步动态创建的句柄回 render_resources_，确保下帧不被覆盖
+        // 鍚屾鍔ㄦ€佸垱寤虹殑鍙ユ焺鍥?render_resources_锛岀‘淇濅笅甯т笉琚鐩?
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
     }
@@ -995,13 +999,13 @@ void FramePipeline::RunRenderInternal() {
     
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
-    // Hi-Z / GPU Driven: GPU 执行完毕后，读回可见性供下一帧 MeshRenderSystem 使用
+    // Hi-Z / GPU Driven: GPU 鎵ц瀹屾瘯鍚庯紝璇诲洖鍙鎬т緵涓嬩竴甯?MeshRenderSystem 浣跨敤
     if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
-        && render_pass_context_.gpu_draw_cmd_ssbo != 0) {
-        // GPU Driven 路径：从 draw commands SSBO 读回 instance_count 作为可见性
+        && render_pass_context_.gpu_draw_cmd_ssbo) {
+        // GPU Driven 璺緞锛氫粠 draw commands SSBO 璇诲洖 instance_count 浣滀负鍙鎬?
         const int count = render_pass_context_.gpu_indirect_draw_count;
         std::vector<DrawElementsIndirectCommand> cmds(count);
-        runtime_context_.rhi_device->ReadSSBO(
+        runtime_context_.rhi_device->ReadGpuBuffer(
             render_pass_context_.gpu_draw_cmd_ssbo, 0,
             count * sizeof(DrawElementsIndirectCommand), cmds.data());
         std::vector<uint32_t> visibility(count);
@@ -1013,12 +1017,12 @@ void FramePipeline::RunRenderInternal() {
         modules_impl_->SetHiZVisibility(visibility);
         gpu_culled_last_frame_ = culled;
         runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-    } else if (render_resources_.hiz_visibility_ssbo != 0 && render_pass_context_.hiz_object_count > 0
+    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
-        // 传统 Hi-Z 路径：从 visibility SSBO 读回
+        // 浼犵粺 Hi-Z 璺緞锛氫粠 visibility SSBO 璇诲洖
         const int count = render_pass_context_.hiz_object_count;
         std::vector<uint32_t> visibility(count, 1);
-        runtime_context_.rhi_device->ReadSSBO(
+        runtime_context_.rhi_device->ReadGpuBuffer(
             render_resources_.hiz_visibility_ssbo, 0,
             count * sizeof(uint32_t), visibility.data());
         modules_impl_->SetHiZVisibility(visibility);
@@ -1117,7 +1121,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.Reset();
     registered_passes_.clear();
 
-    // ---- 填充 RenderPassContext ----
+    // ---- 濉厖 RenderPassContext ----
     render_pass_context_.world = runtime_context_.world;
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
@@ -1181,7 +1185,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
     render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
 
-    // GPU Driven 状态
+    // GPU Driven 鐘舵€?
     render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
     render_pass_context_.gpu_indirect_buffer = render_resources_.gpu_indirect_buffer;
     render_pass_context_.gpu_instance_ssbo = render_resources_.gpu_instance_ssbo;
@@ -1219,7 +1223,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RenderTransparentMeshes(world, cmd, wboit_mode);
     };
 
-    // ---- 声明外部输出 ----
+    // ---- 澹版槑澶栭儴杈撳嚭 ----
     auto main_color  = render_graph_dag_.DeclareResource("main_color");
     auto scene_color = render_graph_dag_.DeclareResource("scene_color");
     auto taa_color   = render_graph_dag_.DeclareResource("taa_color");
@@ -1240,23 +1244,23 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.MarkOutput(deferred_lit);
     render_graph_dag_.MarkOutput(outline_color);
 
-    // ---- 注册内置 Pass ----
+    // ---- 娉ㄥ唽鍐呯疆 Pass ----
     registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
-    // Hi-Z passes — 紧跟 PreZ 之后，在 Forward 之前
+    // Hi-Z passes 鈥?绱ц窡 PreZ 涔嬪悗锛屽湪 Forward 涔嬪墠
     if (render_resources_.hiz_texture != 0) {
         registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
         registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
     }
-    // GPU Driven Cull Pass — 视锥 + Hi-Z 剔除，直接写 indirect draw commands
+    // GPU Driven Cull Pass 鈥?瑙嗛敟 + Hi-Z 鍓旈櫎锛岀洿鎺ュ啓 indirect draw commands
     if (render_resources_.gpu_driven_supported) {
         registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
     }
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
-    // RSM — 从方向光视角渲染 GBuffer 到 RSM MRT（DDGI 的 VPL 数据源）
+    // RSM 鈥?浠庢柟鍚戝厜瑙嗚娓叉煋 GBuffer 鍒?RSM MRT锛圖DGI 鐨?VPL 鏁版嵁婧愶級
     registered_passes_.push_back(std::make_unique<dse::render::RSMRenderPass>(render_pass_context_));
-    // DDGI Probe Update — RSM 之后、光照/Forward pass 之前
+    // DDGI Probe Update 鈥?RSM 涔嬪悗銆佸厜鐓?Forward pass 涔嬪墠
     registered_passes_.push_back(std::make_unique<dse::render::DDGIUpdatePass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
@@ -1287,7 +1291,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         registered_passes_.push_back(std::make_unique<dse::render::PresentPass>(render_pass_context_));
     }
 
-    // ---- 模块动态注册自定义 Pass ----
+    // ---- 妯″潡鍔ㄦ€佹敞鍐岃嚜瀹氫箟 Pass ----
     for (auto& mod : modules_) {
         if (mod.instance) {
             mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
@@ -1299,14 +1303,14 @@ void FramePipeline::BuildRenderGraphInternal() {
     }
 #endif
 
-    // ---- 所有 Pass 在 RenderGraph 上声明依赖 ----
+    // ---- 鎵€鏈?Pass 鍦?RenderGraph 涓婂０鏄庝緷璧?----
     for (auto& pass : registered_passes_) {
         pass->Setup(render_graph_dag_);
     }
 
-    // 编译 DAG（拓扑排序 + 无用 Pass 剔除）
+    // 缂栬瘧 DAG锛堟嫇鎵戞帓搴?+ 鏃犵敤 Pass 鍓旈櫎锛?
     if (!render_graph_dag_.Compile()) {
-        DEBUG_LOG_ERROR("RenderGraph 编译失败：检测到循环依赖");
+        DEBUG_LOG_ERROR("RenderGraph 缂栬瘧澶辫触锛氭娴嬪埌寰幆渚濊禆");
     }
 }
 
@@ -1315,12 +1319,12 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
 }
 
-/// 预热 builtin Pass 在 Execute() 中用到的所有 ECS 组件池。
-/// 新增 Pass 若使用新组件类型，必须在此处补充对应 view 调用。
-/// Debug 模式下 ExecuteRenderGraphInternal 会在并行执行后断言池数量未增长，
-/// 以检测遗漏的组件类型。
+/// 棰勭儹 builtin Pass 鍦?Execute() 涓敤鍒扮殑鎵€鏈?ECS 缁勪欢姹犮€?
+/// 鏂板 Pass 鑻ヤ娇鐢ㄦ柊缁勪欢绫诲瀷锛屽繀椤诲湪姝ゅ琛ュ厖瀵瑰簲 view 璋冪敤銆?
+/// Debug 妯″紡涓?ExecuteRenderGraphInternal 浼氬湪骞惰鎵ц鍚庢柇瑷€姹犳暟閲忔湭澧為暱锛?
+/// 浠ユ娴嬮仐婕忕殑缁勪欢绫诲瀷銆?
 static void WarmUpRenderECSPools(entt::registry& reg) {
-    // --- builtin Pass 直接使用 ---
+    // --- builtin Pass 鐩存帴浣跨敤 ---
     (void)reg.view<TransformComponent>();
     (void)reg.view<CameraComponent>();
     (void)reg.view<dse::Camera3DComponent>();
@@ -1331,7 +1335,7 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
     (void)reg.view<dse::SkyboxComponent>();
     (void)reg.view<dse::DecalComponent, TransformComponent>();
     (void)reg.view<dse::WaterComponent>();
-    // --- 模块渲染回调 (OnRenderScene / OnRenderTransparent) 间接使用 ---
+    // --- 妯″潡娓叉煋鍥炶皟 (OnRenderScene / OnRenderTransparent) 闂存帴浣跨敤 ---
     (void)reg.view<TransformComponent, dse::MeshRendererComponent>();
     (void)reg.view<dse::SkyLightComponent>();
     (void)reg.view<dse::TerrainComponent, TransformComponent>();
@@ -1343,10 +1347,10 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    // 串行执行 RenderGraph。
-    // 并行路径 (ExecuteParallel) 已禁用：仅做 ECS 池预热不足以消除
-    // EnTT registry 的多线程竞争（view 迭代 + Lua Update 同帧修改实体）。
-    // 恢复并行需完整的主线程 view 缓存方案，暂不实施。
+    // 涓茶鎵ц RenderGraph銆?
+    // 骞惰璺緞 (ExecuteParallel) 宸茬鐢細浠呭仛 ECS 姹犻鐑笉瓒充互娑堥櫎
+    // EnTT registry 鐨勫绾跨▼绔炰簤锛坴iew 杩唬 + Lua Update 鍚屽抚淇敼瀹炰綋锛夈€?
+    // 鎭㈠骞惰闇€瀹屾暣鐨勪富绾跨▼ view 缂撳瓨鏂规锛屾殏涓嶅疄鏂姐€?
     render_graph_dag_.Execute(cmd_buffer);
 }
 

@@ -304,8 +304,8 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         glLineWidth(line_w);
 
         // 绑定 SSBO
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, item.position_ssbo);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, item.tangent_ssbo);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, item.position_ssbo.raw());
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, item.tangent_ssbo.raw());
 
         // Per-instance uniform
         glUniformMatrix4fv(hair_loc_model_, 1, GL_FALSE, &item.world_transform[0][0]);

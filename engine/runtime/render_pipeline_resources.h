@@ -36,20 +36,20 @@ struct RenderPipelineResources {
 
     static constexpr size_t kHiZMaxObjects = 8192;
     unsigned int hiz_texture = 0;        // Hi-Z depth mipmap (R32F, RHI handle)
-    unsigned int hiz_visibility_ssbo = 0; // Visibility SSBO for Hi-Z culling
-    unsigned int hiz_aabb_ssbo = 0;       // AABB SSBO for Hi-Z culling
+    dse::render::BufferHandle hiz_visibility_ssbo; // Visibility SSBO for Hi-Z culling
+    dse::render::BufferHandle hiz_aabb_ssbo;         // AABB SSBO for Hi-Z culling
     size_t hiz_ssbo_capacity = 0;        // SSBO 当前容量（对象数）
     unsigned int hiz_copy_shader = 0;    // Compute: depth → Hi-Z mip 0
     unsigned int hiz_downsample_shader = 0; // Compute: mip N-1 → mip N
     unsigned int hiz_cull_shader = 0;    // Compute: AABB 過濾
 
     // --- GPU Driven Rendering ---
-    unsigned int gpu_indirect_buffer = 0;       // Indirect draw argument buffer
-    unsigned int gpu_instance_ssbo = 0;         // GPUInstanceData[] SSBO
-    unsigned int gpu_material_ssbo = 0;         // GPUMaterialData[] SSBO
-    unsigned int gpu_visible_indices_ssbo = 0;  // visible instance indices SSBO
-    unsigned int gpu_atomic_counter_ssbo = 0;   // atomic draw count SSBO
-    unsigned int gpu_draw_cmd_ssbo = 0;         // DrawElementsIndirectCommand[] as SSBO (for compute write)
+    dse::render::BufferHandle gpu_indirect_buffer;       // Indirect draw argument buffer
+    dse::render::BufferHandle gpu_instance_ssbo;         // GPUInstanceData[] SSBO
+    dse::render::BufferHandle gpu_material_ssbo;         // GPUMaterialData[] SSBO
+    dse::render::BufferHandle gpu_visible_indices_ssbo;  // visible instance indices SSBO
+    dse::render::BufferHandle gpu_atomic_counter_ssbo;   // atomic draw count SSBO
+    dse::render::BufferHandle gpu_draw_cmd_ssbo;         // DrawElementsIndirectCommand[] as SSBO (for compute write)
     unsigned int gpu_mega_vbo = 0;              // 统一顶点缓冲区
     unsigned int gpu_mega_ibo = 0;              // 统一索引缓冲区
     unsigned int gpu_mega_vao = 0;              // Mega buffer VAO
@@ -114,18 +114,18 @@ struct RenderPipelineResources {
         wboit_accum_pipeline_state = 0;
         wboit_reveal_pipeline_state = 0;
         hiz_texture = 0;
-        hiz_visibility_ssbo = 0;
-        hiz_aabb_ssbo = 0;
+        hiz_visibility_ssbo = {};
+        hiz_aabb_ssbo = {};
         hiz_ssbo_capacity = 0;
         hiz_copy_shader = 0;
         hiz_downsample_shader = 0;
         hiz_cull_shader = 0;
-        gpu_indirect_buffer = 0;
-        gpu_instance_ssbo = 0;
-        gpu_material_ssbo = 0;
-        gpu_visible_indices_ssbo = 0;
-        gpu_atomic_counter_ssbo = 0;
-        gpu_draw_cmd_ssbo = 0;
+        gpu_indirect_buffer = {};
+        gpu_instance_ssbo = {};
+        gpu_material_ssbo = {};
+        gpu_visible_indices_ssbo = {};
+        gpu_atomic_counter_ssbo = {};
+        gpu_draw_cmd_ssbo = {};
         gpu_mega_vbo = 0;
         gpu_mega_ibo = 0;
         gpu_mega_vao = 0;
