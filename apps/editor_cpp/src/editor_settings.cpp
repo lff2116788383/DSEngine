@@ -88,6 +88,23 @@ EditorSettings LoadEditorSettings() {
         }
     }
 
+    // Preferences
+    if (doc.HasMember("theme_index") && doc["theme_index"].IsInt()) {
+        settings.theme_index = doc["theme_index"].GetInt();
+    }
+    if (doc.HasMember("show_grid") && doc["show_grid"].IsBool()) {
+        settings.show_grid = doc["show_grid"].GetBool();
+    }
+    if (doc.HasMember("snap_translate") && doc["snap_translate"].IsNumber()) {
+        settings.snap_translate = doc["snap_translate"].GetFloat();
+    }
+    if (doc.HasMember("snap_rotate") && doc["snap_rotate"].IsNumber()) {
+        settings.snap_rotate = doc["snap_rotate"].GetFloat();
+    }
+    if (doc.HasMember("snap_scale") && doc["snap_scale"].IsNumber()) {
+        settings.snap_scale = doc["snap_scale"].GetFloat();
+    }
+
     return settings;
 }
 
@@ -115,6 +132,13 @@ void SaveEditorSettings(const EditorSettings& settings) {
         project_arr.PushBack(rapidjson::Value(path.c_str(), alloc), alloc);
     }
     doc.AddMember("recent_projects", project_arr, alloc);
+
+    // Preferences
+    doc.AddMember("theme_index", settings.theme_index, alloc);
+    doc.AddMember("show_grid", settings.show_grid, alloc);
+    doc.AddMember("snap_translate", settings.snap_translate, alloc);
+    doc.AddMember("snap_rotate", settings.snap_rotate, alloc);
+    doc.AddMember("snap_scale", settings.snap_scale, alloc);
 
     rapidjson::StringBuffer buffer;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);

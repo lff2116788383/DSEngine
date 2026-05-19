@@ -20,6 +20,9 @@ using ComponentCheckFunc = bool(*)(entt::registry&, entt::entity);
 /// 添加组件的工厂函数
 using ComponentAddFunc = void(*)(entt::registry&, entt::entity);
 
+/// 移除组件的函数
+using ComponentRemoveFunc = void(*)(entt::registry&, entt::entity);
+
 /// 注册条目
 struct InspectorEntry {
     std::string component_name;     // 显示名（用于 AddComponent 菜单）
@@ -28,6 +31,7 @@ struct InspectorEntry {
     ComponentCheckFunc has;         // 是否存在检测
     ComponentAddFunc add;           // 添加组件工厂（nullptr = 不可手动添加）
     int sort_order = 100;           // 排序优先级（越小越靠前）
+    ComponentRemoveFunc remove = nullptr; // 移除组件函数（nullptr = 不可移除，如 Transform）
 };
 
 /// 全局注册表
@@ -56,6 +60,7 @@ public:
 
     void DrawAll(EditorContext& context);
     void DrawAddComponentMenu(EditorContext& context);
+    void DrawRemoveComponentMenu(EditorContext& context);
 
 private:
     InspectorRegistry() = default;
@@ -80,7 +85,10 @@ private:
                 [](entt::registry& r, entt::entity e) {                        \
                     if (!r.all_of<CompType>(e)) r.emplace<CompType>(e);          \
                 },                                                             \
-                order                                                          \
+                order,                                                         \
+                [](entt::registry& r, entt::entity e) {                        \
+                    if (r.all_of<CompType>(e)) r.erase<CompType>(e);             \
+                }                                                              \
             });                                                                \
         }                                                                      \
     } g_auto_reg_##CompType;                                                   \

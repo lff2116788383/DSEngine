@@ -23,6 +23,7 @@
 #include "editor_console_panel.h"
 #include "editor_selection.h"
 #include "editor_particle_panel.h"
+#include "editor_audio_panel.h"
 
 namespace dse::editor {
 
@@ -909,6 +910,12 @@ void DrawUILabelSection(EditorContext& context) {
 
         static char new_param_name[64] = "";
         static char new_param_value[128] = "";
+        static entt::entity s_last_label_entity = entt::null;
+        if (s_last_label_entity != context.selected_entity) {
+            s_last_label_entity = context.selected_entity;
+            new_param_name[0] = '\0';
+            new_param_value[0] = '\0';
+        }
         INSPECTOR_PROPERTY("New Param", ImGui::InputTextWithHint("##new_param_name", "Key (e.g. name)", new_param_name, sizeof(new_param_name)));
         INSPECTOR_PROPERTY("New Value", ImGui::InputTextWithHint("##new_param_value", "Value", new_param_value, sizeof(new_param_value)));
         INSPECTOR_PROPERTY("", if (ImGui::Button("Add Parameter", ImVec2(-1, 0))) {
@@ -1235,15 +1242,18 @@ void RegisterAllInspectorSections() {
     reg.Register({"Sprite Renderer", "2D", DrawSpriteRendererSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<SpriteRendererComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<SpriteRendererComponent>(e)) r.emplace<SpriteRendererComponent>(e); },
-        20});
+        20,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<SpriteRendererComponent>(e)) r.erase<SpriteRendererComponent>(e); }});
     reg.Register({"RigidBody 2D", "2D", DrawRigidBody2DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<RigidBody2DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<RigidBody2DComponent>(e)) r.emplace<RigidBody2DComponent>(e); },
-        21});
+        21,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<RigidBody2DComponent>(e)) r.erase<RigidBody2DComponent>(e); }});
     reg.Register({"Particle Emitter", "2D", DrawParticleEmitterSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<ParticleEmitterComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<ParticleEmitterComponent>(e)) r.emplace<ParticleEmitterComponent>(e); },
-        22});
+        22,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<ParticleEmitterComponent>(e)) r.erase<ParticleEmitterComponent>(e); }});
 
     // --- UI ---
     reg.Register({"UI Label", "UI", DrawUILabelSection,
@@ -1255,45 +1265,55 @@ void RegisterAllInspectorSections() {
                 label.fallback_text = "Label";
             }
         },
-        30});
+        30,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UILabelComponent>(e)) r.erase<UILabelComponent>(e); }});
 
     // --- 3D Rendering ---
     reg.Register({"Mesh Renderer", "3D", DrawMeshRendererSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::MeshRendererComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::MeshRendererComponent>(e)) r.emplace<dse::MeshRendererComponent>(e); },
-        40});
+        40,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::MeshRendererComponent>(e)) r.erase<dse::MeshRendererComponent>(e); }});
     reg.Register({"Camera 3D", "3D", DrawCamera3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::Camera3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::Camera3DComponent>(e)) r.emplace<dse::Camera3DComponent>(e); },
-        41});
+        41,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::Camera3DComponent>(e)) r.erase<dse::Camera3DComponent>(e); }});
     reg.Register({"Directional Light", "3D", DrawDirectionalLightSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::DirectionalLight3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::DirectionalLight3DComponent>(e)) r.emplace<dse::DirectionalLight3DComponent>(e); },
-        42});
+        42,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::DirectionalLight3DComponent>(e)) r.erase<dse::DirectionalLight3DComponent>(e); }});
     reg.Register({"Point Light", "3D", DrawPointLightSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::PointLightComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::PointLightComponent>(e)) r.emplace<dse::PointLightComponent>(e); },
-        43});
+        43,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::PointLightComponent>(e)) r.erase<dse::PointLightComponent>(e); }});
     reg.Register({"Spot Light", "3D", DrawSpotLightSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::SpotLightComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SpotLightComponent>(e)) r.emplace<dse::SpotLightComponent>(e); },
-        44});
+        44,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SpotLightComponent>(e)) r.erase<dse::SpotLightComponent>(e); }});
     reg.Register({"Sky Light", "3D", DrawSkyLightSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::SkyLightComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SkyLightComponent>(e)) r.emplace<dse::SkyLightComponent>(e); },
-        45});
+        45,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SkyLightComponent>(e)) r.erase<dse::SkyLightComponent>(e); }});
     reg.Register({"Skybox", "3D", DrawSkyboxSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::SkyboxComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SkyboxComponent>(e)) r.emplace<dse::SkyboxComponent>(e); },
-        46});
+        46,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SkyboxComponent>(e)) r.erase<dse::SkyboxComponent>(e); }});
     reg.Register({"Animator 3D", "3D", DrawAnimator3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::Animator3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::Animator3DComponent>(e)) r.emplace<dse::Animator3DComponent>(e); },
-        47});
+        47,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::Animator3DComponent>(e)) r.erase<dse::Animator3DComponent>(e); }});
     reg.Register({"Free Camera Controller", "3D", DrawFreeCameraControllerSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::FreeCameraControllerComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::FreeCameraControllerComponent>(e)) r.emplace<dse::FreeCameraControllerComponent>(e); },
-        48});
+        48,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::FreeCameraControllerComponent>(e)) r.erase<dse::FreeCameraControllerComponent>(e); }});
     reg.Register({"Terrain", "3D", DrawTerrainSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<TerrainComponent>(e); },
         nullptr,  // Terrain 不通过 Add Component 添加
@@ -1301,65 +1321,83 @@ void RegisterAllInspectorSections() {
     reg.Register({"Post Process", "3D", DrawPostProcessSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::PostProcessComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::PostProcessComponent>(e)) r.emplace<dse::PostProcessComponent>(e); },
-        50});
+        50,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::PostProcessComponent>(e)) r.erase<dse::PostProcessComponent>(e); }});
 
     // --- Physics 3D ---
     reg.Register({"RigidBody 3D", "Physics", DrawRigidBody3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::RigidBody3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::RigidBody3DComponent>(e)) r.emplace<dse::RigidBody3DComponent>(e); },
-        60});
+        60,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::RigidBody3DComponent>(e)) r.erase<dse::RigidBody3DComponent>(e); }});
     reg.Register({"Box Collider 3D", "Physics", DrawBoxCollider3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::BoxCollider3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::BoxCollider3DComponent>(e)) r.emplace<dse::BoxCollider3DComponent>(e); },
-        61});
+        61,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::BoxCollider3DComponent>(e)) r.erase<dse::BoxCollider3DComponent>(e); }});
     reg.Register({"Sphere Collider 3D", "Physics", DrawSphereCollider3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::SphereCollider3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::SphereCollider3DComponent>(e)) r.emplace<dse::SphereCollider3DComponent>(e); },
-        62});
+        62,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::SphereCollider3DComponent>(e)) r.erase<dse::SphereCollider3DComponent>(e); }});
     reg.Register({"Particle System 3D", "3D", DrawParticleSystem3DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::ParticleSystem3DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ParticleSystem3DComponent>(e)) r.emplace<dse::ParticleSystem3DComponent>(e); },
-        63});
+        63,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ParticleSystem3DComponent>(e)) r.erase<dse::ParticleSystem3DComponent>(e); }});
 
     // --- Probes ---
     reg.Register({"Light Probe", "3D", DrawLightProbeSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::LightProbeComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::LightProbeComponent>(e)) r.emplace<dse::LightProbeComponent>(e); },
-        70});
+        70,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::LightProbeComponent>(e)) r.erase<dse::LightProbeComponent>(e); }});
     reg.Register({"Reflection Probe", "3D", DrawReflectionProbeSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<dse::ReflectionProbeComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ReflectionProbeComponent>(e)) r.emplace<dse::ReflectionProbeComponent>(e); },
-        71});
+        71,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ReflectionProbeComponent>(e)) r.erase<dse::ReflectionProbeComponent>(e); }});
 
-    // --- Add-only (无 Inspector Section 但可通过 Add Component 添加) ---
+    // --- Audio (使用 editor_audio_panel.h 的 DrawAudioSection 适配) ---
     reg.Register({"Name", "Core", nullptr,
         [](entt::registry& r, entt::entity e) { return r.all_of<EditorNameComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<EditorNameComponent>(e)) r.emplace<EditorNameComponent>(e, "New Component"); },
         11});
-    reg.Register({"Audio Source", "Audio", nullptr,
+    reg.Register({"Audio Source", "Audio",
+        [](EditorContext& ctx) { DrawAudioSection(ctx.registry, ctx.selected_entity); },
         [](entt::registry& r, entt::entity e) { return r.all_of<AudioSourceComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<AudioSourceComponent>(e)) r.emplace<AudioSourceComponent>(e); },
-        80});
-    reg.Register({"Audio Listener", "Audio", nullptr,
+        80,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<AudioSourceComponent>(e)) r.erase<AudioSourceComponent>(e); }});
+    reg.Register({"Audio Listener", "Audio",
+        [](EditorContext& ctx) {
+            if (!ctx.registry.all_of<AudioSourceComponent>(ctx.selected_entity))
+                DrawAudioSection(ctx.registry, ctx.selected_entity);
+        },
         [](entt::registry& r, entt::entity e) { return r.all_of<AudioListenerComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<AudioListenerComponent>(e)) r.emplace<AudioListenerComponent>(e); },
-        81});
+        81,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<AudioListenerComponent>(e)) r.erase<AudioListenerComponent>(e); }});
     reg.Register({"UI Anchor", "UI", nullptr,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIAnchorComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnchorComponent>(e)) r.emplace<UIAnchorComponent>(e); },
-        31});
+        31,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIAnchorComponent>(e)) r.erase<UIAnchorComponent>(e); }});
     reg.Register({"UI Grid Layout", "UI", nullptr,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIGridLayoutComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIGridLayoutComponent>(e)) r.emplace<UIGridLayoutComponent>(e); },
-        32});
+        32,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIGridLayoutComponent>(e)) r.erase<UIGridLayoutComponent>(e); }});
     reg.Register({"UI Canvas Scaler", "UI", nullptr,
         [](entt::registry& r, entt::entity e) { return r.all_of<UICanvasScalerComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UICanvasScalerComponent>(e)) r.emplace<UICanvasScalerComponent>(e); },
-        33});
+        33,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UICanvasScalerComponent>(e)) r.erase<UICanvasScalerComponent>(e); }});
     reg.Register({"UI Animation", "UI", nullptr,
         [](entt::registry& r, entt::entity e) { return r.all_of<UIAnimationComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<UIAnimationComponent>(e)) r.emplace<UIAnimationComponent>(e); },
-        34});
+        34,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<UIAnimationComponent>(e)) r.erase<UIAnimationComponent>(e); }});
 }
 
 } // namespace
@@ -1406,6 +1444,43 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
             entry.add(context.registry, context.selected_entity);
         }
     }
+    ImGui::EndPopup();
+}
+
+void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
+    const bool read_only = IsEditorInPlayMode() && !context.is_2d;
+    if (read_only) return;
+
+    ImGui::SameLine();
+    if (ImGui::Button("Remove Component", ImVec2(120, 30))) {
+        ImGui::OpenPopup("RemoveComponentPopup");
+    }
+
+    if (!ImGui::BeginPopup("RemoveComponentPopup")) return;
+
+    bool any_removable = false;
+    std::string last_category;
+    for (const auto& entry : GetEntries()) {
+        if (!entry.remove) continue;
+        if (!entry.has || !entry.has(context.registry, context.selected_entity)) continue;
+
+        any_removable = true;
+        if (!last_category.empty() && entry.category != last_category) {
+            ImGui::Separator();
+        }
+        last_category = entry.category;
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
+        if (ImGui::MenuItem(entry.component_name.c_str())) {
+            entry.remove(context.registry, context.selected_entity);
+        }
+        ImGui::PopStyleColor();
+    }
+
+    if (!any_removable) {
+        ImGui::TextDisabled("No removable components");
+    }
+
     ImGui::EndPopup();
 }
 
@@ -1528,8 +1603,9 @@ void DrawInspectorPanel(EditorContext& context,
             draw_ui_layout_inspector(context.registry, context.selected_entity);
         }
 
-        // Add Component 菜单（注册表驱动）
+        // Add / Remove Component 菜单（注册表驱动）
         InspectorRegistry::Get().DrawAddComponentMenu(context);
+        InspectorRegistry::Get().DrawRemoveComponentMenu(context);
         ImGui::PopStyleColor();
     } else {
         ImGui::TextDisabled("No Entity Selected");

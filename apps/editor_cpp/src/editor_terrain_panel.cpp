@@ -316,12 +316,18 @@ void DrawTerrainEditorPanel(EditorContext& ctx) {
             ImGui::SliderFloat("Target H", &state.flatten_target_height, 0.0f, terrain.max_height, "%.1f");
             ImGui::SameLine();
             if (ImGui::SmallButton("Pick##flatten_pick")) {
-                // Pick height from center of terrain under cursor (simplified)
-                int cx = terrain.resolution_x / 2;
-                int cz = terrain.resolution_z / 2;
-                if (!terrain.height_data.empty()) {
-                    state.flatten_target_height = terrain.height_data[cz * terrain.resolution_x + cx];
+                if (state.last_brush_hit_valid && !terrain.height_data.empty()) {
+                    auto& tf = registry.get<TransformComponent>(state.active_terrain);
+                    float gx, gz;
+                    if (WorldToTerrainGrid(state.last_brush_hit, terrain, tf, gx, gz)) {
+                        int ix = std::clamp(static_cast<int>(std::round(gx)), 0, terrain.resolution_x - 1);
+                        int iz = std::clamp(static_cast<int>(std::round(gz)), 0, terrain.resolution_z - 1);
+                        state.flatten_target_height = terrain.height_data[iz * terrain.resolution_x + ix];
+                    }
                 }
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Pick height from brush cursor position");
             }
         }
 
@@ -428,6 +434,9 @@ void DrawTerrainBrushOverlay(entt::registry& registry,
     ImVec2 mouse = ImGui::GetMousePos();
     glm::vec3 hit = ScreenToWorldOnTerrain(glm::vec2(mouse.x, mouse.y), view, proj,
                                             window_pos, panel_size, tf.position.y);
+
+    state.last_brush_hit = hit;
+    state.last_brush_hit_valid = true;
 
     // Draw a projected circle on the Y=terrain_y plane
     ImDrawList* dl = ImGui::GetWindowDrawList();

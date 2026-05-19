@@ -15,6 +15,13 @@ struct EditorSettings {
     std::vector<std::string> recent_projects;
     std::string last_project_path;
     int max_recent_projects = 5;
+
+    // Preferences (persisted)
+    int theme_index = 0;           // 0=Dark, 1=Light
+    bool show_grid = true;
+    float snap_translate = 0.5f;
+    float snap_rotate = 15.0f;
+    float snap_scale = 0.1f;
 };
 
 /// Load editor settings from bin/editor_settings.json

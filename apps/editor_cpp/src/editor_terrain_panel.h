@@ -30,6 +30,10 @@ struct TerrainEditorState {
     int active_splat_layer = 0;       // 0-3
     float splat_brush_opacity = 0.5f; // splat paint opacity
 
+    // Last brush hit position in world space (updated every frame in brush overlay)
+    glm::vec3 last_brush_hit{0.0f};
+    bool last_brush_hit_valid = false;
+
     // Undo state: snapshot at stroke start
     std::vector<float> height_snapshot;
     std::vector<float> splat_snapshot;

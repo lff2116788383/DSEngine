@@ -13,6 +13,30 @@ namespace {
     float s_snap_translate = 0.5f;
     float s_snap_rotate = 15.0f;
     float s_snap_scale = 0.1f;
+    bool s_initialized = false;
+    bool s_dirty = false;
+    float s_save_timer = 0.0f;
+    constexpr float kSaveDelaySec = 0.5f;
+
+    void MarkPreferencesDirty() {
+        s_dirty = true;
+        s_save_timer = kSaveDelaySec;
+    }
+
+    void FlushPreferencesIfNeeded(float dt) {
+        if (!s_dirty) return;
+        s_save_timer -= dt;
+        if (s_save_timer > 0.0f) return;
+        s_dirty = false;
+
+        EditorSettings settings = LoadEditorSettings();
+        settings.theme_index = s_theme_index;
+        settings.show_grid = s_show_grid;
+        settings.snap_translate = s_snap_translate;
+        settings.snap_rotate = s_snap_rotate;
+        settings.snap_scale = s_snap_scale;
+        SaveEditorSettings(settings);
+    }
 } // namespace
 
 bool GetShowGrid() { return s_show_grid; }
@@ -20,14 +44,38 @@ float GetSnapTranslate() { return s_snap_translate; }
 float GetSnapRotate() { return s_snap_rotate; }
 float GetSnapScale() { return s_snap_scale; }
 
+void InitPreferencesFromSettings() {
+    if (s_initialized) return;
+    s_initialized = true;
+
+    EditorSettings settings = LoadEditorSettings();
+    s_theme_index = settings.theme_index;
+    s_show_grid = settings.show_grid;
+    s_snap_translate = settings.snap_translate;
+    s_snap_rotate = settings.snap_rotate;
+    s_snap_scale = settings.snap_scale;
+
+    if (s_theme_index == 0) {
+        ImGui::StyleColorsDark();
+        SetupEditorStyle();
+    } else {
+        ImGui::StyleColorsLight();
+    }
+}
+
 void DrawPreferencesPanel(bool* p_open) {
-    if (!p_open || !*p_open) return;
+    if (!p_open || !*p_open) {
+        if (s_dirty) FlushPreferencesIfNeeded(kSaveDelaySec + 1.0f);
+        return;
+    }
 
     ImGui::SetNextWindowSize(ImVec2(450, 400), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Preferences", p_open)) {
         ImGui::End();
         return;
     }
+
+    bool changed = false;
 
     if (ImGui::CollapsingHeader(MDI_ICON_PALETTE "  Appearance", ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* themes[] = { "Dark (Default)", "Light" };
@@ -38,15 +86,18 @@ void DrawPreferencesPanel(bool* p_open) {
             } else {
                 ImGui::StyleColorsLight();
             }
+            changed = true;
         }
 
-        ImGui::Checkbox("Show Grid", &s_show_grid);
+        if (ImGui::Checkbox("Show Grid", &s_show_grid)) {
+            changed = true;
+        }
     }
 
     if (ImGui::CollapsingHeader(MDI_ICON_COG "  Snapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Translate Snap", &s_snap_translate, 0.1f, 0.1f, 100.0f, "%.1f");
-        ImGui::DragFloat("Rotate Snap (deg)", &s_snap_rotate, 1.0f, 1.0f, 180.0f, "%.0f");
-        ImGui::DragFloat("Scale Snap", &s_snap_scale, 0.01f, 0.01f, 10.0f, "%.2f");
+        if (ImGui::DragFloat("Translate Snap", &s_snap_translate, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
+        if (ImGui::DragFloat("Rotate Snap (deg)", &s_snap_rotate, 1.0f, 1.0f, 180.0f, "%.0f")) changed = true;
+        if (ImGui::DragFloat("Scale Snap", &s_snap_scale, 0.01f, 0.01f, 10.0f, "%.2f")) changed = true;
     }
 
     if (ImGui::CollapsingHeader(MDI_ICON_COG "  Keyboard Shortcuts (Read-only)", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -59,13 +110,24 @@ void DrawPreferencesPanel(bool* p_open) {
         ImGui::BulletText("Ctrl+N - New Scene");
         ImGui::BulletText("Delete - Delete Selected Entity");
         ImGui::BulletText("Ctrl+D - Duplicate Selected Entity");
+        ImGui::BulletText("F2 - Rename Selected Entity");
         ImGui::Separator();
         ImGui::TextDisabled("Gizmo shortcuts:");
         ImGui::BulletText("W - Translate");
         ImGui::BulletText("E - Rotate");
         ImGui::BulletText("R - Scale");
         ImGui::BulletText("Q - Hand (No Gizmo)");
+        ImGui::Separator();
+        ImGui::TextDisabled("Viewport shortcuts:");
+        ImGui::BulletText("F - Focus Selected Entity");
     }
+
+    if (changed) {
+        MarkPreferencesDirty();
+    }
+
+    float dt = ImGui::GetIO().DeltaTime;
+    FlushPreferencesIfNeeded(dt);
 
     ImGui::End();
 }

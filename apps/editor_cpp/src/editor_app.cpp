@@ -425,6 +425,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     ImGui::StyleColorsDark();
     dse::editor::SetupEditorStyle();
+    dse::editor::InitPreferencesFromSettings();
 
     {
         std::filesystem::path fonts_dir = GetProjectRootPath() / "apps" / "editor_cpp" / "fonts";

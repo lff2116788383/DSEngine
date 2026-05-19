@@ -18,6 +18,7 @@
 #include "editor_selection.h"
 #include "editor_scene_tabs.h"
 #include "editor_settings.h"
+#include "editor_hierarchy_panel.h"
 
 namespace dse::editor {
 
@@ -221,9 +222,14 @@ void ProcessShortcuts(EditorContext& context) {
             }
         }
         if (ImGui::Shortcut(ImGuiKey_F2, ImGuiInputFlags_RouteGlobal)) {
-            // F2 rename: handled by focusing the Inspector name field
-            // For now we just select the entity — the Inspector's InputText will
-            // be focused when we add the rename-in-place feature to Hierarchy.
+            if (context.selected_entity != entt::null &&
+                context.registry.valid(context.selected_entity)) {
+                std::string name = "Entity";
+                if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
+                    name = context.registry.get<EditorNameComponent>(context.selected_entity).name;
+                }
+                BeginHierarchyRename(context.selected_entity, name);
+            }
         }
     }
 

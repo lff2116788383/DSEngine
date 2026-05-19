@@ -625,4 +625,10 @@ void DrawHierarchyPanel(EditorContext& context) {
     ImGui::End();
 }
 
+void BeginHierarchyRename(entt::entity entity, const std::string& current_name) {
+    s_renaming_entity = entity;
+    std::strncpy(s_rename_buf, current_name.c_str(), sizeof(s_rename_buf) - 1);
+    s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
+}
+
 } // namespace dse::editor

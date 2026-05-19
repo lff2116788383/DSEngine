@@ -175,16 +175,19 @@ bool TryOpenSourceFromLog(const std::string& message) {
         }
     }
 
-    // Try to open with VS Code (most common for engine dev)
-    std::string vscode_cmd = "code --goto \"" + file_path + ":" + line_str + "\"";
-    int result = std::system(vscode_cmd.c_str());
-    if (result == 0) {
+    // Try to open with VS Code (non-blocking via ShellExecuteW)
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, nullptr, 0);
+    std::wstring wide_file(wlen > 0 ? wlen - 1 : 0, L'\0');
+    if (wlen > 0) MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, wide_file.data(), wlen);
+    std::wstring goto_arg = L"--goto \"" + wide_file + L":" +
+        std::wstring(line_str.begin(), line_str.end()) + L"\"";
+    HINSTANCE hr = ShellExecuteW(nullptr, L"open", L"code", goto_arg.c_str(), nullptr, SW_HIDE);
+    if (reinterpret_cast<intptr_t>(hr) > 32) {
         return true;
     }
 
-    // Fallback: open file with default associated application
-    std::wstring wide_path(file_path.begin(), file_path.end());
-    ShellExecuteW(nullptr, L"open", wide_path.c_str(), nullptr, nullptr, SW_SHOW);
+    // Fallback: open file with default associated application (also non-blocking)
+    ShellExecuteW(nullptr, L"open", wide_file.c_str(), nullptr, nullptr, SW_SHOW);
     return true;
 }
 
