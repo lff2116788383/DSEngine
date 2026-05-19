@@ -7,6 +7,19 @@
 namespace dse::editor {
 
 void DrawStatusBar(EditorContext& context) {
+    // Smooth FPS: update display value at most twice per second
+    static float s_display_fps = 60.0f;
+    static float s_fps_timer = 0.0f;
+    {
+        const float dt = ImGui::GetIO().DeltaTime;
+        s_fps_timer += dt;
+        if (s_fps_timer >= 0.5f) {
+            s_fps_timer = 0.0f;
+            const auto& frame = context.cpu_profiler.GetFrameStats();
+            s_display_fps = frame.fps;
+        }
+    }
+
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float status_bar_height = 24.0f;
 
@@ -24,26 +37,25 @@ void DrawStatusBar(EditorContext& context) {
 
     ImGui::Begin("##StatusBar", nullptr, flags);
 
-    // FPS
-    const auto& frame = context.cpu_profiler.GetFrameStats();
-    ImGui::Text("FPS: %.0f", frame.fps);
-    ImGui::SameLine();
+    // FPS (fixed width to prevent layout jitter)
+    ImGui::Text("FPS: %3.0f", s_display_fps);
+    ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
 
     // Entity count
     const int entity_count = static_cast<int>(context.registry.storage<entt::entity>().in_use());
     ImGui::Text("Entities: %d", entity_count);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
 
     // Draw calls
     const auto& render_frame = context.render_profiler.GetCurrentFrameStats();
-    ImGui::Text("Draw Calls: %d", render_frame.draw_calls);
-    ImGui::SameLine();
+    ImGui::Text("Draws: %d", render_frame.draw_calls);
+    ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
 
     // Gizmo tool
     const char* tool_name = "Hand";
@@ -54,9 +66,9 @@ void DrawStatusBar(EditorContext& context) {
         default: tool_name = "Hand"; break;
     }
     ImGui::Text("Tool: %s", tool_name);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
+    ImGui::SameLine(0, 12);
 
     // Coordinate space
     ImGui::Text("%s", context.current_gizmo_mode == 0 ? "Local" : "World");

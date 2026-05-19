@@ -34,7 +34,8 @@
 #define MDI_ICON_LABEL                  "\xef\x80\xab" // U+F02B fa-tag
 #define MDI_ICON_COG                    "\xef\x80\x93" // U+F013 fa-gear
 #define MDI_ICON_FLASK                  "\xef\x83\x83" // U+F0C3 fa-flask
-#define MDI_ICON_PACKAGE_VARIANT        "\xef\x91\xae" // U+F46E fa-box-open (approx)
+#define MDI_ICON_PACKAGE_VARIANT        "\xef\x81\xbb" // U+F07B fa-folder
+#define MDI_ICON_FOLDER                 "\xef\x81\xbb" // U+F07B fa-folder
 
 // Inspector component icons
 #define MDI_ICON_AXIS_ARROW             "\xef\x82\xb2" // U+F0B2 fa-arrows - Transform
