@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/rhi_gpu_buffer.h"
 
 #include <unordered_set>
 #include <set>
@@ -120,4 +121,55 @@ TEST(TypedHandleTest, DifferentTagsAreDifferentTypes) {
     EXPECT_FALSE((std::is_same_v<BufferHandle, VertexArrayHandle>));
     EXPECT_FALSE((std::is_same_v<TextureHandle, RenderTargetHandle>));
     EXPECT_FALSE((std::is_same_v<RenderTargetHandle, PipelineHandle>));
+}
+
+// ============================================================
+// GpuBufferUsage — 位运算
+// ============================================================
+
+TEST(GpuBufferUsageTest, BitwiseOr) {
+    auto combined = GpuBufferUsage::kVertex | GpuBufferUsage::kStorage;
+    EXPECT_TRUE(has(combined, GpuBufferUsage::kVertex));
+    EXPECT_TRUE(has(combined, GpuBufferUsage::kStorage));
+    EXPECT_FALSE(has(combined, GpuBufferUsage::kIndex));
+    EXPECT_FALSE(has(combined, GpuBufferUsage::kIndirect));
+}
+
+TEST(GpuBufferUsageTest, BitwiseOrAssign) {
+    auto flags = GpuBufferUsage::kIndex;
+    flags |= GpuBufferUsage::kTransferDst;
+    EXPECT_TRUE(has(flags, GpuBufferUsage::kIndex));
+    EXPECT_TRUE(has(flags, GpuBufferUsage::kTransferDst));
+}
+
+TEST(GpuBufferUsageTest, NoneIsEmpty) {
+    EXPECT_FALSE(has(GpuBufferUsage::kNone, GpuBufferUsage::kVertex));
+    EXPECT_FALSE(has(GpuBufferUsage::kNone, GpuBufferUsage::kStorage));
+}
+
+// ============================================================
+// GpuBufferDesc — 默认值
+// ============================================================
+
+TEST(GpuBufferDescTest, Defaults) {
+    GpuBufferDesc desc;
+    EXPECT_EQ(desc.size, 0u);
+    EXPECT_EQ(desc.usage, GpuBufferUsage::kVertex);
+    EXPECT_FALSE(desc.is_dynamic);
+    EXPECT_EQ(desc.debug_name, nullptr);
+}
+
+TEST(GpuBufferDescTest, CustomValues) {
+    GpuBufferDesc desc;
+    desc.size = 4096;
+    desc.usage = GpuBufferUsage::kStorage | GpuBufferUsage::kIndirect;
+    desc.is_dynamic = true;
+    desc.debug_name = "test_buffer";
+
+    EXPECT_EQ(desc.size, 4096u);
+    EXPECT_TRUE(has(desc.usage, GpuBufferUsage::kStorage));
+    EXPECT_TRUE(has(desc.usage, GpuBufferUsage::kIndirect));
+    EXPECT_FALSE(has(desc.usage, GpuBufferUsage::kVertex));
+    EXPECT_TRUE(desc.is_dynamic);
+    EXPECT_STREQ(desc.debug_name, "test_buffer");
 }

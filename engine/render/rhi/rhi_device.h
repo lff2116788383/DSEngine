@@ -22,6 +22,7 @@
 #include "engine/render/rhi/rhi_compute.h"
 #include "engine/render/rhi/rhi_storage_buffer.h"
 #include "engine/render/rhi/rhi_gpu_driven.h"
+#include "engine/render/rhi/rhi_gpu_buffer.h"
 
 namespace dse {
 namespace render {
@@ -93,6 +94,37 @@ public:
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
     virtual void DeleteBuffer(unsigned int handle) = 0;
+
+    // --- 统一 GPU Buffer API（Phase 2）---
+    // 默认实现转发到旧 API，后端可覆写以获取完整 usage 信息。
+    // 旧 CreateBuffer/CreateSSBO/CreateIndirectBuffer 将在全量迁移后标记 deprecated。
+
+    virtual BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
+        bool is_index = has(desc.usage, GpuBufferUsage::kIndex);
+        if (has(desc.usage, GpuBufferUsage::kStorage)) {
+            return BufferHandle{CreateSSBO(desc.size, initial_data)};
+        }
+        if (has(desc.usage, GpuBufferUsage::kIndirect)) {
+            return BufferHandle{CreateIndirectBuffer(desc.size, initial_data)};
+        }
+        return BufferHandle{CreateBuffer(desc.size, initial_data, desc.is_dynamic, is_index)};
+    }
+
+    virtual void UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
+        UpdateBuffer(handle.raw(), offset, size, data, false);
+    }
+
+    virtual void DeleteGpuBuffer(BufferHandle handle) {
+        DeleteBuffer(handle.raw());
+    }
+
+    virtual void BindGpuBuffer(BufferHandle handle, uint32_t binding_point) {
+        BindSSBO(handle.raw(), binding_point);
+    }
+
+    virtual void ReadGpuBuffer(BufferHandle handle, size_t offset, size_t size, void* dst) {
+        ReadSSBO(handle.raw(), offset, size, dst);
+    }
     virtual unsigned int CreateVertexArray() = 0;
     virtual void DeleteVertexArray(unsigned int handle) = 0;
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;
