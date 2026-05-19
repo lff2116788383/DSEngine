@@ -348,8 +348,8 @@ void DrawProjectPanel() {
                     }
                 }
 
-                // Per-item context menu
-                if (ImGui::BeginPopupContextItem()) {
+                // Per-item context menu — explicit ID so PushID(filename) scope is used
+                if (ImGui::BeginPopupContextItem("##ctx")) {
                     if (ImGui::MenuItem("Rename")) {
                         s_rename_target = path;
                         std::strncpy(s_rename_buf, filename.c_str(), sizeof(s_rename_buf) - 1);
