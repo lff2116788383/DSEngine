@@ -25,6 +25,7 @@
 #include "ImGuizmo.h"
 
 #include "engine/runtime/engine_app.h"
+#include "engine/assets/asset_manager.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
@@ -480,6 +481,12 @@ bool EditorApp::Init(int argc, char* argv[]) {
             dse::editor::ProjectManager::Get().OpenProject(dseproj);
         }
     }
+    // 项目打开后同步 data root 到 AssetManager
+    if (dse::editor::ProjectManager::Get().HasOpenProject()) {
+        dse::editor::ProjectManager::Get().ApplyDataRoot();
+        engine_instance_->asset_manager()->ConfigureDataRoot(
+            dse::editor::ProjectManager::Get().GetAssetDir().string());
+    }
 
     if (!test_config_.scene_path.empty()) {
         editor_settings.last_scene_path = test_config_.scene_path;
@@ -734,6 +741,12 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     // 无项目打开时显示 Project Hub
     if (!dse::editor::ProjectManager::Get().HasOpenProject()) {
         dse::editor::DrawProjectHub();
+        // Hub 中可能刚打开了项目，此时同步 data root
+        if (dse::editor::ProjectManager::Get().HasOpenProject()) {
+            dse::editor::ProjectManager::Get().ApplyDataRoot();
+            engine_instance_->asset_manager()->ConfigureDataRoot(
+                dse::editor::ProjectManager::Get().GetAssetDir().string());
+        }
         return;
     }
 

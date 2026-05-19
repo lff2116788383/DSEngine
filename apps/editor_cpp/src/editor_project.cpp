@@ -42,6 +42,21 @@ std::filesystem::path ProjectManager::GetScriptDir() const {
     return project_root_ / descriptor_.script_dir;
 }
 
+void ProjectManager::ApplyDataRoot() {
+    if (!is_open_) {
+        return;
+    }
+    std::string asset_path = GetAssetDir().string();
+    // 更新环境变量（引擎内部通过 std::getenv 读取）
+#if defined(_WIN32)
+    _putenv_s("DSE_DATA_ROOT", asset_path.c_str());
+#else
+    setenv("DSE_DATA_ROOT", asset_path.c_str(), 1);
+#endif
+    data_root_applied_ = true;
+    EditorLog(LogLevel::Info, "Data root set to: " + asset_path);
+}
+
 // ============================================================
 // 项目锁
 // ============================================================

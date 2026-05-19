@@ -57,6 +57,10 @@ public:
     /// 获取项目脚本目录的绝对路径
     std::filesystem::path GetScriptDir() const;
 
+    /// 将项目 asset_dir 同步到引擎 AssetManager 的 data root
+    /// 需要在引擎初始化完成后调用
+    void ApplyDataRoot();
+
     /// 从指定路径加载 project.dseproj，成功返回 true
     bool OpenProject(const std::filesystem::path& dseproj_path);
 
@@ -90,6 +94,7 @@ private:
     std::filesystem::path project_root_;
     std::filesystem::path lock_path_;
     bool is_open_ = false;
+    bool data_root_applied_ = false;
 };
 
 /// 打开 .dseproj 文件的对话框，返回空字符串表示取消
