@@ -8,17 +8,20 @@
 #include "imgui_internal.h"
 #include "editor_icons.h"
 #include "editor_profiler_panel.h"
+#include "editor_scene_io.h"
+#include "editor_scene_tabs.h"
 #include "engine/runtime/engine_app.h"
+#include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/world.h"
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/base/time.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
-#include "editor_scene_io.h"
 
 namespace dse::editor {
 
 static std::unique_ptr<entt::registry> s_backup_registry;
+static bool s_step_pending = false;
 
 void MarkAllUILabelsDirty(entt::registry& registry) {
     auto view = registry.view<UILabelComponent>();
@@ -56,19 +59,39 @@ void EnterPlayMode(entt::registry& registry) {
     s_editor_state = EditorState::Play;
 }
 
-void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity) {
+void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity,
+                  dse::runtime::EngineInstance* engine) {
     if (s_editor_state == EditorState::Edit) {
         return;
     }
+    // 1. Tear down Lua before touching registry
     ResetPlayModeRuntimeState();
+    // 2. Release PhysX actors that were created during play
+    if (engine) {
+        engine->pipeline()->ResetPhysics3D();
+    }
+    // 3. Restore edit-mode registry snapshot
     if (s_backup_registry) {
         CopyRegistry(registry, *s_backup_registry);
         s_backup_registry.reset();
     }
+    // 4. Restored state == clean (nothing to save)
+    SceneTabManager::Get().MarkClean();
     MarkAllUILabelsDirty(registry);
     ResetProfilerPanelState();
     selected_entity = entt::null;
+    s_step_pending = false;
     s_editor_state = EditorState::Edit;
+}
+
+bool IsEditorPaused() {
+    return s_editor_state == EditorState::Pause;
+}
+
+bool ConsumeStepFrame() {
+    if (!s_step_pending) return false;
+    s_step_pending = false;
+    return true;
 }
 
 void DrawEditorToolbar(EditorContext& ctx) {
@@ -130,15 +153,34 @@ void DrawEditorToolbar(EditorContext& ctx) {
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
         if (ImGui::Button(MDI_ICON_STOP "##stop", ImVec2(32, 24))) {
-            ExitPlayMode(registry, selected_entity);
+            ExitPlayMode(registry, selected_entity, &ctx.engine);
         }
         ImGui::PopStyleColor();
     }
 
     ImGui::SameLine();
-    if (ImGui::Button(MDI_ICON_PAUSE "##pause", ImVec2(32, 24))) {}
+    {
+        const bool is_paused = (s_editor_state == EditorState::Pause);
+        if (is_paused) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+        const bool can_pause = (s_editor_state == EditorState::Play || s_editor_state == EditorState::Pause);
+        if (!can_pause) ImGui::BeginDisabled();
+        if (ImGui::Button(MDI_ICON_PAUSE "##pause", ImVec2(32, 24))) {
+            s_editor_state = is_paused ? EditorState::Play : EditorState::Pause;
+        }
+        if (!can_pause) ImGui::EndDisabled();
+        if (is_paused) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(is_paused ? "Resume" : "Pause");
+    }
     ImGui::SameLine();
-    if (ImGui::Button(MDI_ICON_SKIP_NEXT "##step", ImVec2(32, 24))) {}
+    {
+        const bool can_step = (s_editor_state == EditorState::Pause);
+        if (!can_step) ImGui::BeginDisabled();
+        if (ImGui::Button(MDI_ICON_SKIP_NEXT "##step", ImVec2(32, 24))) {
+            s_step_pending = true;
+        }
+        if (!can_step) ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step one fixed-update frame");
+    }
 
     ImGui::SameLine();
     ImGui::SetCursorPosX(avail_width - 320);

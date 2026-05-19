@@ -438,11 +438,19 @@ void EditorApp::Run() {
         // Tick Engine
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "EngineTick");
-            if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
+            const auto editor_state = dse::editor::GetEditorState();
+            if (editor_state == dse::editor::EditorState::Edit) {
                 Time::Update();
                 dse::runtime::PumpLuaScriptHotReloads();
                 engine_instance_->pipeline()->Render();
                 Input::Update();
+            } else if (editor_state == dse::editor::EditorState::Pause) {
+                // Paused: step one frame if requested, then render-only to keep view alive
+                if (dse::editor::ConsumeStepFrame()) {
+                    engine_instance_->Tick();
+                } else {
+                    engine_instance_->pipeline()->Render();
+                }
             } else {
                 engine_instance_->Tick();
             }

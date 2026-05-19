@@ -2,6 +2,8 @@
 
 #include <entt/entt.hpp>
 
+namespace dse::runtime { class EngineInstance; }
+
 namespace dse::editor {
 
 struct EditorContext;
@@ -18,7 +20,11 @@ bool IsEditorInPlayMode();
 
 /// Play 模式控制（Tool handler 可调用）
 void EnterPlayMode(entt::registry& registry);
-void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity);
+void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity,
+                  dse::runtime::EngineInstance* engine = nullptr);
+
+bool IsEditorPaused();
+bool ConsumeStepFrame();
 
 void DrawEditorToolbar(EditorContext& ctx);
 

@@ -83,6 +83,11 @@ public:
      */
     void EnableEditorMode(bool enable);
 
+    /// Reset the Physics3D system (release all PhysX actors from play-mode registry).
+    /// Call before restoring the edit-mode registry snapshot on Play→Stop transition.
+    /// No-op when Physics3D is not compiled in or not initialized.
+    void ResetPhysics3D();
+
     /**
      * @brief 注入平台原生窗口句柄（Win32 HWND），D3D11/Vulkan 后端初始化时需要
      * @param handle Win32 HWND（或其他平台的等价指针）

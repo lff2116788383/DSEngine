@@ -1363,6 +1363,16 @@ void FramePipeline::EnableEditorMode(bool enable) {
     }
 }
 
+void FramePipeline::ResetPhysics3D() {
+#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+    if (physics3d_system_initialized_) {
+        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
+        physics3d_system_.Shutdown();
+        physics3d_system_initialized_ = false;
+    }
+#endif
+}
+
 void FramePipeline::SetNativeWindowHandle(void* handle) {
     runtime_context_.native_window_handle = handle;
 }
