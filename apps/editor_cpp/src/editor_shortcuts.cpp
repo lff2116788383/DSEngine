@@ -26,6 +26,7 @@ void CreateEmptyEntity(EditorContext& context) {
     auto new_ent = context.world.CreateEntity();
     context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
     context.registry.emplace<TransformComponent>(new_ent);
+    SelectionManager::Get().SetSingle(new_ent);
     context.selected_entity = new_ent;
     EditorLog(LogLevel::Info, "Created empty entity");
 }
@@ -236,6 +237,7 @@ void CreateEntity3DCube(EditorContext& ctx) {
     ctx.registry.emplace<TransformComponent>(ent);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "primitives/cube.dmesh";
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Cube entity");
 }
@@ -246,6 +248,7 @@ void CreateEntity3DSphere(EditorContext& ctx) {
     ctx.registry.emplace<TransformComponent>(ent);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "primitives/sphere.dmesh";
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Sphere entity");
 }
@@ -257,6 +260,7 @@ void CreateEntity3DPlane(EditorContext& ctx) {
     transform.scale = glm::vec3(10.0f, 1.0f, 10.0f);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "primitives/plane.dmesh";
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Plane entity");
 }
@@ -267,6 +271,7 @@ void CreateEntity3DCamera(EditorContext& ctx) {
     auto& transform = ctx.registry.emplace<TransformComponent>(ent);
     transform.position = glm::vec3(0.0f, 2.0f, 5.0f);
     ctx.registry.emplace<dse::Camera3DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Camera entity");
 }
@@ -276,6 +281,7 @@ void CreateEntity3DDirectionalLight(EditorContext& ctx) {
     ctx.registry.emplace<EditorNameComponent>(ent, "Directional Light");
     ctx.registry.emplace<TransformComponent>(ent);
     ctx.registry.emplace<dse::DirectionalLight3DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Directional Light entity");
 }
@@ -286,6 +292,7 @@ void CreateEntity3DPointLight(EditorContext& ctx) {
     auto& transform = ctx.registry.emplace<TransformComponent>(ent);
     transform.position = glm::vec3(0.0f, 3.0f, 0.0f);
     ctx.registry.emplace<dse::PointLightComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Point Light entity");
 }
@@ -295,6 +302,7 @@ void CreateEntity2DSprite(EditorContext& ctx) {
     ctx.registry.emplace<EditorNameComponent>(ent, "Sprite");
     ctx.registry.emplace<TransformComponent>(ent);
     ctx.registry.emplace<SpriteRendererComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Sprite entity");
 }

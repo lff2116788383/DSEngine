@@ -26,7 +26,7 @@
 #define MDI_ICON_SHAPE                  "\xef\x97\x9e" // U+F5DE fa-shapes
 #define MDI_ICON_ATOM                   "\xef\x97\x91" // U+F5D1 fa-atom (approx, might not exist in solid)
 #define MDI_ICON_ANIMATION              "\xef\x80\x88" // U+F008 fa-film
-#define MDI_ICON_TERRAIN                "\xef\x9b\xb6" // U+F6F6 fa-mountain-sun
+#define MDI_ICON_TERRAIN                "\xef\x89\xb9" // U+F279 fa-map (fa-mountain-sun is FA6 Pro only)
 #define MDI_ICON_EYE                    "\xef\x81\xae" // U+F06E fa-eye
 #define MDI_ICON_COLLIDE                "\xef\x84\x9c" // U+F11C fa-keyboard (approx for collider)
 #define MDI_ICON_WEATHER_SUNNY          "\xef\x86\x85" // U+F185 fa-sun
@@ -64,5 +64,5 @@
 #define MDI_ICON_PLUS                   "\xef\x81\xa7" // U+F067 fa-plus
 #define MDI_ICON_FOLDER_OPEN            "\xef\x81\xbc" // U+F07C fa-folder-open
 #define MDI_ICON_CONTENT_SAVE           "\xef\x83\x87" // U+F0C7 fa-floppy-disk
-#define MDI_ICON_EXPORT                 "\xef\x95\x6e" // U+F56E fa-file-export
+#define MDI_ICON_EXPORT                 "\xef\x95\xae" // U+F56E fa-file-export
 #define MDI_ICON_PUZZLE                 "\xef\x84\xae" // U+F12E fa-puzzle-piece

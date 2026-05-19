@@ -125,7 +125,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("File")) {
-        // -- Scene --
+        ImGui::TextDisabled("Scene");
         if (ImGui::MenuItem(MDI_ICON_PLUS "  New Scene", "Ctrl+N", false, editable)) {
             tab_mgr.NewScene(ctx.registry);
             ctx.selected_entity = entt::null;
@@ -184,8 +184,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             }
         }
         ImGui::Separator();
-
-        // -- Project --
+        ImGui::TextDisabled("Project");
         if (ImGui::MenuItem(MDI_ICON_PLUS "  New Project...", nullptr, false, editable)) {
             ImGui::OpenPopup("NewProjectPopup");
         }
@@ -238,8 +237,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             SaveEditorSettings(settings);
         }
         ImGui::Separator();
-
-        // -- Build / Import --
+        ImGui::TextDisabled("Build");
         if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, editable && has_project)) {
             OpenBuildGameDialog();
         }
