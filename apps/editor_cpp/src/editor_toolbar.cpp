@@ -10,6 +10,9 @@
 #include "editor_profiler_panel.h"
 #include "editor_scene_io.h"
 #include "editor_scene_tabs.h"
+#include "engine/ecs/components_3d.h"
+#include "engine/ecs/transform.h"
+#include "engine/base/debug.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/components_2d.h"
@@ -57,6 +60,18 @@ void EnterPlayMode(entt::registry& registry) {
     }
     s_backup_registry = std::make_unique<entt::registry>();
     CopyRegistry(*s_backup_registry, registry);
+
+    // SubScene 实例化：将引用的 .dscene 文件加载为子节点
+    // 先收集到 vector，避免 LoadSceneAdditive 修改 registry 导致 view 迭代器失效
+    std::vector<entt::entity> sub_entities;
+    for (auto e : registry.view<dse::SubSceneComponent>()) sub_entities.push_back(e);
+    for (auto entity : sub_entities) {
+        auto& sub = registry.get<dse::SubSceneComponent>(entity);
+        if (!sub.enabled || sub.scene_path.empty()) continue;
+        LoadSceneAdditive(registry, sub.scene_path, entity);
+        DEBUG_LOG_INFO("[SubScene] Loaded '{}' as child of entity {}", sub.scene_path, static_cast<uint32_t>(entity));
+    }
+
     ResetPlayModeRuntimeState();
     s_editor_state = EditorState::Play;
 }

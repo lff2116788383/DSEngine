@@ -14,6 +14,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/transform.h"
 
 #include "editor_shared_components.h"
 
@@ -609,6 +610,10 @@ void CopyRegistry(entt::registry& dst, entt::registry& src) {
             rb.runtime_body = nullptr;
             dst.emplace<dse::RigidBody3DComponent>(new_ent, std::move(rb));
         }
+        if (src.all_of<dse::SubSceneComponent>(entity))
+            dst.emplace<dse::SubSceneComponent>(new_ent, src.get<dse::SubSceneComponent>(entity));
+        if (src.all_of<ParentComponent>(entity))
+            dst.emplace<ParentComponent>(new_ent, src.get<ParentComponent>(entity));
     }
 }
 
@@ -1363,6 +1368,76 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
         }
     }
     SaveSceneBinary(registry, bin_path);
+}
+
+void LoadSceneAdditive(entt::registry& dst, const std::string& filepath, entt::entity parent) {
+    entt::registry temp;
+    LoadScene(temp, filepath);
+
+    for (auto e : temp.storage<entt::entity>()) {
+        if (!temp.valid(e)) continue;
+        auto ne = dst.create();
+
+        if (parent != entt::null)
+            dst.emplace<ParentComponent>(ne, parent);
+
+        if (temp.all_of<EditorNameComponent>(e))
+            dst.emplace<EditorNameComponent>(ne, temp.get<EditorNameComponent>(e));
+        if (temp.all_of<SiblingIndexComponent>(e))
+            dst.emplace<SiblingIndexComponent>(ne, temp.get<SiblingIndexComponent>(e));
+        if (temp.all_of<TransformComponent>(e))
+            dst.emplace<TransformComponent>(ne, temp.get<TransformComponent>(e));
+        if (temp.all_of<dse::MeshRendererComponent>(e))
+            dst.emplace<dse::MeshRendererComponent>(ne, temp.get<dse::MeshRendererComponent>(e));
+        if (temp.all_of<dse::Camera3DComponent>(e))
+            dst.emplace<dse::Camera3DComponent>(ne, temp.get<dse::Camera3DComponent>(e));
+        if (temp.all_of<dse::DirectionalLight3DComponent>(e))
+            dst.emplace<dse::DirectionalLight3DComponent>(ne, temp.get<dse::DirectionalLight3DComponent>(e));
+        if (temp.all_of<dse::PointLightComponent>(e))
+            dst.emplace<dse::PointLightComponent>(ne, temp.get<dse::PointLightComponent>(e));
+        if (temp.all_of<dse::SpotLightComponent>(e))
+            dst.emplace<dse::SpotLightComponent>(ne, temp.get<dse::SpotLightComponent>(e));
+        if (temp.all_of<dse::SkyLightComponent>(e))
+            dst.emplace<dse::SkyLightComponent>(ne, temp.get<dse::SkyLightComponent>(e));
+        if (temp.all_of<dse::SkyboxComponent>(e))
+            dst.emplace<dse::SkyboxComponent>(ne, temp.get<dse::SkyboxComponent>(e));
+        if (temp.all_of<dse::Animator3DComponent>(e)) {
+            auto anim = temp.get<dse::Animator3DComponent>(e);
+            anim.state_machine.reset();
+            anim.final_bone_matrices.clear();
+            anim.current_time = 0.0f;
+            dst.emplace<dse::Animator3DComponent>(ne, std::move(anim));
+        }
+        if (temp.all_of<dse::TerrainComponent>(e)) {
+            auto ter = temp.get<dse::TerrainComponent>(e);
+            ter.is_dirty = true;
+            dst.emplace<dse::TerrainComponent>(ne, std::move(ter));
+        }
+        if (temp.all_of<dse::RigidBody3DComponent>(e)) {
+            auto rb = temp.get<dse::RigidBody3DComponent>(e);
+            rb.runtime_body = nullptr;
+            dst.emplace<dse::RigidBody3DComponent>(ne, std::move(rb));
+        }
+        if (temp.all_of<SpriteRendererComponent>(e))
+            dst.emplace<SpriteRendererComponent>(ne, temp.get<SpriteRendererComponent>(e));
+        if (temp.all_of<ParticleEmitterComponent>(e)) {
+            auto emit = temp.get<ParticleEmitterComponent>(e);
+            emit.particles.clear(); emit.emit_accumulator = 0.0f; emit.pending_burst = 0;
+            dst.emplace<ParticleEmitterComponent>(ne, std::move(emit));
+        }
+        if (temp.all_of<UIRendererComponent>(e)) {
+            auto ui = temp.get<UIRendererComponent>(e);
+            ui.is_hovered = ui.is_pressed = false;
+            dst.emplace<UIRendererComponent>(ne, std::move(ui));
+        }
+        if (temp.all_of<UILabelComponent>(e)) {
+            auto lbl = temp.get<UILabelComponent>(e);
+            lbl.runtime_glyph_entities.clear(); lbl.dirty = true;
+            dst.emplace<UILabelComponent>(ne, std::move(lbl));
+        }
+        if (temp.all_of<dse::SubSceneComponent>(e))
+            dst.emplace<dse::SubSceneComponent>(ne, temp.get<dse::SubSceneComponent>(e));
+    }
 }
 
 } // namespace dse::editor

@@ -26,6 +26,9 @@
 #include <cmath>
 
 #include <rapidjson/document.h>
+#include "engine/assets/asset_manager.h"
+#include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/runtime/engine_app.h"
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -252,7 +255,22 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
                                std::istreambuf_iterator<char>());
                 rapidjson::Document doc;
                 if (!doc.Parse(js.c_str()).HasParseError() && doc.IsArray() && doc.Size() > 0) {
-                    const auto& mat = doc[0];
+                    // 选饱和度最高的材质作为预览色
+                    int best_idx = 0;
+                    float best_sat = -1.0f;
+                    for (rapidjson::SizeType mi = 0; mi < doc.Size(); ++mi) {
+                        const auto& m = doc[mi];
+                        if (m.HasMember("base_color_factor") && m["base_color_factor"].IsArray()) {
+                            const auto bc = m["base_color_factor"].GetArray();
+                            if (bc.Size() >= 3) {
+                                float r = bc[0].GetFloat(), g = bc[1].GetFloat(), b = bc[2].GetFloat();
+                                float mx = std::max({r,g,b}), mn = std::min({r,g,b});
+                                float sat = mx - mn;
+                                if (sat > best_sat) { best_sat = sat; best_idx = static_cast<int>(mi); }
+                            }
+                        }
+                    }
+                    const auto& mat = doc[best_idx];
                     if (mat.HasMember("base_color_factor") && mat["base_color_factor"].IsArray()) {
                         const auto bc = mat["base_color_factor"].GetArray();
                         if (bc.Size() >= 3) { cr = bc[0].GetFloat(); cg = bc[1].GetFloat(); cb = bc[2].GetFloat(); }
@@ -750,16 +768,85 @@ void DrawLocalizationPreviewPanel(EditorContext& ctx,
     ImGui::End();
 }
 
+// ─── Animation panel clip cache ─────────────────────────────────────────────
+namespace {
+struct AnimTrackData {
+    std::string name;
+    std::vector<float> key_times;
+};
+struct AnimClipCache {
+    float duration = 2.0f;
+    std::vector<AnimTrackData> tracks;
+};
+static std::unordered_map<std::string, AnimClipCache> s_anim_clip_cache;
+
+const AnimClipCache* GetOrLoadAnimClipCache(const std::string& anim_path, AssetManager* am) {
+    if (!am || anim_path.empty()) return nullptr;
+    auto it = s_anim_clip_cache.find(anim_path);
+    if (it != s_anim_clip_cache.end()) return &it->second;
+
+    auto danim = am->LoadDanim(anim_path);
+    if (!danim || danim->GetData().empty()) return nullptr;
+
+    const uint8_t* data = danim->GetData().data();
+    const size_t data_size = danim->GetData().size();
+    if (data_size < sizeof(dse::asset::compiler::AnimHeader)) return nullptr;
+    const auto* header = reinterpret_cast<const dse::asset::compiler::AnimHeader*>(data);
+    if (header->magic[0]!='D'||header->magic[1]!='S'||header->magic[2]!='E'||header->magic[3]!='A') return nullptr;
+    if (header->duration < 0.0f) return nullptr;
+
+    AnimClipCache cache;
+    cache.duration = header->duration > 0.0f ? header->duration : 2.0f;
+
+    const auto* channels = reinterpret_cast<const dse::asset::compiler::AnimChannelDesc*>(
+        data + sizeof(dse::asset::compiler::AnimHeader));
+
+    // 读取 v2 channel 名称表
+    std::vector<std::string> channel_names;
+    if (header->version >= 2 && header->channel_count > 0) {
+        const uint8_t* nt = data + sizeof(dse::asset::compiler::AnimHeader)
+                          + header->channel_count * sizeof(dse::asset::compiler::AnimChannelDesc);
+        if (nt + 4 <= data + data_size) {
+            uint32_t nt_total = 0; std::memcpy(&nt_total, nt, 4);
+            const uint8_t* np = nt + 4;
+            const uint8_t* ne = nt + nt_total;
+            if (ne > data + data_size) ne = data + data_size;
+            channel_names.reserve(header->channel_count);
+            for (uint32_t ci = 0; ci < header->channel_count && np + 2 <= ne; ++ci) {
+                uint16_t nl = static_cast<uint16_t>(np[0]|(np[1]<<8)); np += 2;
+                if (np + nl > ne) break;
+                channel_names.emplace_back(reinterpret_cast<const char*>(np), nl);
+                np += nl;
+            }
+        }
+    }
+
+    cache.tracks.reserve(header->channel_count);
+    for (uint32_t i = 0; i < header->channel_count; ++i) {
+        const auto& ch = channels[i];
+        AnimTrackData t;
+        t.name = (i < channel_names.size() && !channel_names[i].empty())
+                   ? channel_names[i]
+                   : ("CH_" + std::to_string(i));
+        uint32_t kcount = std::max({ch.position_key_count, ch.rotation_key_count, ch.scale_key_count});
+        if (kcount > 0 && ch.time_offset + kcount * sizeof(float) <= data_size) {
+            t.key_times.resize(kcount);
+            std::memcpy(t.key_times.data(), data + ch.time_offset, kcount * sizeof(float));
+        }
+        cache.tracks.push_back(std::move(t));
+    }
+    return &s_anim_clip_cache.emplace(anim_path, std::move(cache)).first->second;
+}
+} // namespace
+
 void DrawAnimationPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
     ImGui::Begin("Animation");
 
-    // Check if selected entity has Animator3DComponent
     bool has_animator = (selected_entity != entt::null &&
                          registry.valid(selected_entity) &&
                          registry.all_of<dse::Animator3DComponent>(selected_entity));
-
     if (!has_animator) {
         ImGui::TextDisabled("Select an entity with Animator3DComponent to view its timeline.");
         ImGui::End();
@@ -768,15 +855,20 @@ void DrawAnimationPanel(EditorContext& ctx) {
 
     auto& animator = registry.get<dse::Animator3DComponent>(selected_entity);
 
-    // Animation panel persistent state
     static bool s_playing = false;
     static float s_timeline_zoom = 1.0f;
     static float s_timeline_scroll_x = 0.0f;
     static float s_scrub_time = 0.0f;
     static bool s_dragging_playhead = false;
+    static std::string s_last_anim_path;
+    if (s_last_anim_path != animator.danim_path) {
+        s_last_anim_path = animator.danim_path;
+        s_scrub_time = 0.0f; s_playing = false; s_timeline_scroll_x = 0.0f;
+    }
 
-    // Clip info
-    const float clip_duration = 2.0f; // Default 2 seconds if unknown
+    // 从二进制加载真实关键帧数据
+    const AnimClipCache* clip = GetOrLoadAnimClipCache(animator.danim_path, ctx.engine.asset_manager());
+    const float clip_duration = clip ? clip->duration : 2.0f;
     const float fps = 30.0f;
     const int total_frames = static_cast<int>(clip_duration * fps);
 
@@ -854,27 +946,58 @@ void DrawAnimationPanel(EditorContext& ctx) {
         }
     }
 
-    // Draw keyframe diamonds (simulated — show one every 10 frames)
-    float track_y = timeline_pos.y + ruler_height + 20.0f;
-    for (int f = 0; f <= total_frames; f += 10) {
-        float time_at_frame = static_cast<float>(f) / fps;
-        float x = timeline_pos.x + (time_at_frame - visible_start) * pixels_per_second;
-        if (x < timeline_pos.x || x > timeline_end.x) continue;
+    // 真实关键帧轨道（每个 channel 一行）
+    const float track_height = 18.0f;
+    const float label_width = 110.0f;
+    const float diamond_size = 4.5f;
+    constexpr ImU32 kTrackColors[] = {
+        IM_COL32(255, 200, 50, 255), IM_COL32(80, 200, 120, 255),
+        IM_COL32(80, 160, 255, 255), IM_COL32(255, 120, 80, 255),
+        IM_COL32(200, 80, 255, 255), IM_COL32(80, 230, 220, 255)
+    };
+    constexpr int kColorCount = 6;
 
-        // Diamond shape
-        const float diamond_size = 5.0f;
-        ImVec2 center(x, track_y);
-        draw_list->AddQuadFilled(
-            ImVec2(center.x, center.y - diamond_size),
-            ImVec2(center.x + diamond_size, center.y),
-            ImVec2(center.x, center.y + diamond_size),
-            ImVec2(center.x - diamond_size, center.y),
-            IM_COL32(255, 200, 50, 255));
+    if (clip && !clip->tracks.empty()) {
+        int visible_count = 0;
+        for (size_t ti = 0; ti < clip->tracks.size(); ++ti) {
+            const auto& track = clip->tracks[ti];
+            float row_y = timeline_pos.y + ruler_height + static_cast<float>(visible_count) * (track_height + 2.0f) + track_height * 0.5f;
+            if (row_y > timeline_end.y - track_height) break;
+
+            ImU32 col = kTrackColors[ti % kColorCount];
+
+            // 行背景
+            ImVec2 row_bg0(timeline_pos.x, row_y - track_height * 0.5f);
+            ImVec2 row_bg1(timeline_end.x, row_y + track_height * 0.5f);
+            draw_list->AddRectFilled(row_bg0, row_bg1, IM_COL32(40, 40, 50, 200));
+
+            // 轨道标签（截断显示）
+            std::string display_name = track.name;
+            if (display_name.size() > 14) display_name = display_name.substr(0, 12) + "..";
+            draw_list->AddText(ImVec2(timeline_pos.x + 2.0f, row_y - 7.0f),
+                               IM_COL32(180, 180, 180, 255), display_name.c_str());
+
+            // 关键帧菱形
+            for (float kt : track.key_times) {
+                float x = timeline_pos.x + label_width + (kt - visible_start) * pixels_per_second;
+                if (x < timeline_pos.x + label_width || x > timeline_end.x) continue;
+                ImVec2 c(x, row_y);
+                draw_list->AddQuadFilled(
+                    ImVec2(c.x, c.y - diamond_size), ImVec2(c.x + diamond_size, c.y),
+                    ImVec2(c.x, c.y + diamond_size), ImVec2(c.x - diamond_size, c.y), col);
+            }
+            ++visible_count;
+        }
+        if (clip->tracks.size() > static_cast<size_t>(visible_count)) {
+            ImGui::SetCursorScreenPos(ImVec2(timeline_pos.x, timeline_pos.y + timeline_height - 16.0f));
+            ImGui::TextDisabled("(+%d channels hidden — zoom out or resize)", static_cast<int>(clip->tracks.size()) - visible_count);
+        }
+    } else {
+        // 无 clip 数据时显示占位单轨道
+        float track_y = timeline_pos.y + ruler_height + 20.0f;
+        draw_list->AddText(ImVec2(timeline_pos.x + 4, track_y - 6),
+                           IM_COL32(100, 100, 110, 255), "(no animation data)");
     }
-
-    // Track label
-    draw_list->AddText(ImVec2(timeline_pos.x + 4, track_y - 6),
-                       IM_COL32(160, 160, 160, 255), "Transform");
 
     // Current frame indicator (red playhead)
     {
