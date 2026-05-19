@@ -155,6 +155,73 @@ void SetupEditorStyle() {
     style.TabBorderSize     = 0.0f;
 }
 
+void SetupEditorStyleLight() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4* c = style.Colors;
+
+    // Clean light palette — VS Code Light+ inspired, blue accent (#2878E0)
+    c[ImGuiCol_Text]                   = ImVec4(0.10f, 0.10f, 0.15f, 1.00f);
+    c[ImGuiCol_TextDisabled]           = ImVec4(0.52f, 0.52f, 0.56f, 1.00f);
+    c[ImGuiCol_WindowBg]               = ImVec4(0.94f, 0.94f, 0.96f, 1.00f);
+    c[ImGuiCol_ChildBg]                = ImVec4(0.91f, 0.91f, 0.93f, 1.00f);
+    c[ImGuiCol_PopupBg]                = ImVec4(0.98f, 0.98f, 0.99f, 0.98f);
+    c[ImGuiCol_Border]                 = ImVec4(0.74f, 0.74f, 0.78f, 1.00f);
+    c[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    c[ImGuiCol_FrameBg]                = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    c[ImGuiCol_FrameBgHovered]         = ImVec4(0.85f, 0.89f, 0.97f, 1.00f);
+    c[ImGuiCol_FrameBgActive]          = ImVec4(0.78f, 0.84f, 0.96f, 1.00f);
+    c[ImGuiCol_TitleBg]                = ImVec4(0.86f, 0.86f, 0.90f, 1.00f);
+    c[ImGuiCol_TitleBgActive]          = ImVec4(0.82f, 0.82f, 0.88f, 1.00f);
+    c[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.90f, 0.90f, 0.94f, 0.80f);
+    c[ImGuiCol_MenuBarBg]              = ImVec4(0.88f, 0.88f, 0.92f, 1.00f);
+    c[ImGuiCol_ScrollbarBg]            = ImVec4(0.88f, 0.88f, 0.92f, 0.60f);
+    c[ImGuiCol_ScrollbarGrab]          = ImVec4(0.65f, 0.65f, 0.70f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.50f, 0.50f, 0.58f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.38f, 0.38f, 0.48f, 1.00f);
+    c[ImGuiCol_CheckMark]              = ImVec4(0.16f, 0.47f, 0.88f, 1.00f);
+    c[ImGuiCol_SliderGrab]             = ImVec4(0.16f, 0.47f, 0.88f, 1.00f);
+    c[ImGuiCol_SliderGrabActive]       = ImVec4(0.10f, 0.38f, 0.78f, 1.00f);
+    c[ImGuiCol_Button]                 = ImVec4(0.86f, 0.86f, 0.92f, 1.00f);
+    c[ImGuiCol_ButtonHovered]          = ImVec4(0.68f, 0.80f, 0.98f, 1.00f);
+    c[ImGuiCol_ButtonActive]           = ImVec4(0.16f, 0.47f, 0.88f, 1.00f);
+    c[ImGuiCol_Header]                 = ImVec4(0.80f, 0.86f, 0.96f, 1.00f);
+    c[ImGuiCol_HeaderHovered]          = ImVec4(0.68f, 0.80f, 0.98f, 0.80f);
+    c[ImGuiCol_HeaderActive]           = ImVec4(0.16f, 0.47f, 0.88f, 0.85f);
+    c[ImGuiCol_Separator]              = ImVec4(0.74f, 0.74f, 0.78f, 1.00f);
+    c[ImGuiCol_SeparatorHovered]       = ImVec4(0.16f, 0.47f, 0.88f, 0.78f);
+    c[ImGuiCol_SeparatorActive]        = ImVec4(0.16f, 0.47f, 0.88f, 1.00f);
+    c[ImGuiCol_ResizeGrip]             = ImVec4(0.16f, 0.47f, 0.88f, 0.20f);
+    c[ImGuiCol_ResizeGripHovered]      = ImVec4(0.16f, 0.47f, 0.88f, 0.67f);
+    c[ImGuiCol_ResizeGripActive]       = ImVec4(0.16f, 0.47f, 0.88f, 0.95f);
+    c[ImGuiCol_Tab]                    = ImVec4(0.88f, 0.88f, 0.92f, 1.00f);
+    c[ImGuiCol_TabHovered]             = ImVec4(0.68f, 0.80f, 0.98f, 0.85f);
+    c[ImGuiCol_TabActive]              = ImVec4(0.97f, 0.97f, 0.99f, 1.00f);
+    c[ImGuiCol_TabUnfocused]           = ImVec4(0.90f, 0.90f, 0.94f, 1.00f);
+    c[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.93f, 0.93f, 0.96f, 1.00f);
+    c[ImGuiCol_DockingPreview]         = ImVec4(0.16f, 0.47f, 0.88f, 0.70f);
+    c[ImGuiCol_DockingEmptyBg]         = ImVec4(0.90f, 0.90f, 0.94f, 1.00f);
+
+    style.WindowPadding     = ImVec2(8.0f, 8.0f);
+    style.FramePadding      = ImVec2(8.0f, 5.0f);
+    style.ItemSpacing       = ImVec2(8.0f, 6.0f);
+    style.ItemInnerSpacing  = ImVec2(6.0f, 4.0f);
+    style.IndentSpacing     = 20.0f;
+    style.ScrollbarSize     = 13.0f;
+    style.GrabMinSize       = 10.0f;
+    style.WindowRounding    = 6.0f;
+    style.ChildRounding     = 4.0f;
+    style.FrameRounding     = 4.0f;
+    style.PopupRounding     = 4.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.GrabRounding      = 3.0f;
+    style.TabRounding       = 4.0f;
+    style.WindowBorderSize  = 1.0f;
+    style.ChildBorderSize   = 1.0f;
+    style.PopupBorderSize   = 1.0f;
+    style.FrameBorderSize   = 0.0f;
+    style.TabBorderSize     = 0.0f;
+}
+
 const EditorFonts& GetEditorFonts() {
     return g_editor_fonts;
 }

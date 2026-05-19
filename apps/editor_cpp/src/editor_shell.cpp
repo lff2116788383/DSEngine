@@ -19,6 +19,7 @@
 #include "editor_preferences_panel.h"
 #include "editor_autosave.h"
 #include "engine/dse_version.h"
+#include "editor_locale.h"
 
 #include <filesystem>
 
@@ -125,7 +126,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     bool has_project = proj_mgr.HasOpenProject();
 
     // ─── File ────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("File")) {
+    if (ImGui::BeginMenu(T("File"))) {
         ImGui::TextDisabled("Scene");
         if (ImGui::MenuItem(MDI_ICON_PLUS "  New Scene", "Ctrl+N", false, editable)) {
             tab_mgr.NewScene(ctx.registry);
@@ -141,7 +142,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 SaveEditorSettings(settings);
             }
         }
-        if (ImGui::BeginMenu("Recent Scenes", editable)) {
+        if (ImGui::BeginMenu(T("Recent Scenes"), editable)) {
             EditorSettings settings = LoadEditorSettings();
             if (settings.recent_files.empty()) {
                 ImGui::TextDisabled("(empty)");
@@ -203,7 +204,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 }
             }
         }
-        if (ImGui::BeginMenu("Recent Projects")) {
+        if (ImGui::BeginMenu(T("Recent Projects"))) {
             EditorSettings settings = LoadEditorSettings();
             if (settings.recent_projects.empty()) {
                 ImGui::TextDisabled("(empty)");
@@ -256,7 +257,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ─── Edit ────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Edit")) {
+    if (ImGui::BeginMenu(T("Edit"))) {
         std::string undo_label = "Undo";
         if (undo_mgr.CanUndo()) undo_label += " (" + undo_mgr.GetUndoDescription() + ")";
         if (ImGui::MenuItem(undo_label.c_str(), "Ctrl+Z", false, undo_mgr.CanUndo())) {
@@ -304,7 +305,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ─── Entity ──────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Entity")) {
+    if (ImGui::BeginMenu(T("Entity"))) {
         if (ImGui::MenuItem(MDI_ICON_PLUS "  Create Empty", nullptr, false, editable)) {
             CreateEmptyEntity(ctx);
         }
@@ -343,7 +344,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ─── View ────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("View")) {
+    if (ImGui::BeginMenu(T("View"))) {
         bool grid_on = GetShowGrid();
         if (ImGui::MenuItem("Show Grid", nullptr, grid_on)) {
             SetShowGrid(!grid_on);
@@ -364,7 +365,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ─── Window ──────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Window")) {
+    if (ImGui::BeginMenu(T("Window"))) {
         // Core panels (always present as dock windows)
         ImGui::TextDisabled("Panels");
         if (panels) {
@@ -391,14 +392,14 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             *show_plugins = true;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset Layout")) {
+        if (ImGui::MenuItem(T("Reset Layout"))) {
             ResetEditorLayout();
         }
         ImGui::EndMenu();
     }
 
     // ─── Help ────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Help")) {
+    if (ImGui::BeginMenu(T("Help"))) {
         if (ImGui::MenuItem("About DSEngine")) {
             ImGui::OpenPopup("AboutDSEngine");
         }

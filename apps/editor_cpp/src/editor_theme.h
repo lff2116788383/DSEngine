@@ -20,6 +20,9 @@ bool LoadEditorFonts(const std::filesystem::path& fonts_dir);
 // Call AFTER ImGui::CreateContext().
 void SetupEditorStyle();
 
+// Apply the DSEngine light theme (clean VS Code-inspired light palette).
+void SetupEditorStyleLight();
+
 // Access the loaded fonts (valid after LoadEditorFonts succeeds).
 const EditorFonts& GetEditorFonts();
 

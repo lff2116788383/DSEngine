@@ -30,6 +30,7 @@
 #define MDI_ICON_EYE                    "\xef\x81\xae" // U+F06E fa-eye
 #define MDI_ICON_COLLIDE                "\xef\x84\x9c" // U+F11C fa-keyboard (approx for collider)
 #define MDI_ICON_WEATHER_SUNNY          "\xef\x86\x85" // U+F185 fa-sun
+#define MDI_ICON_MOON                   "\xef\x86\x86" // U+F186 fa-moon
 #define MDI_ICON_VIEW_IN_AR             "\xef\x86\xb2" // U+F1B2 fa-cube
 #define MDI_ICON_LABEL                  "\xef\x80\xab" // U+F02B fa-tag
 #define MDI_ICON_COG                    "\xef\x80\x93" // U+F013 fa-gear

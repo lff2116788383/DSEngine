@@ -81,6 +81,7 @@
 #include "editor_asset_importer.h"
 #include "editor_asset_db.h"
 #include "editor_autosave.h"
+#include "editor_locale.h"
 
 
 
@@ -338,6 +339,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     dse::editor::EditorSettings editor_settings = dse::editor::LoadEditorSettings();
     current_gizmo_operation_ = editor_settings.default_gizmo_operation;
     current_gizmo_mode_ = editor_settings.default_gizmo_mode;
+    dse::editor::SetEditorLocale(editor_settings.editor_ui_locale);
 
     // 尝试自动打开上次项目
     if (!editor_settings.last_project_path.empty()) {

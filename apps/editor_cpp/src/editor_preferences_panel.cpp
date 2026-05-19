@@ -4,6 +4,7 @@
 #include "editor_settings.h"
 #include "editor_theme.h"
 #include "editor_icons.h"
+#include "editor_locale.h"
 
 namespace dse::editor {
 
@@ -68,8 +69,21 @@ void InitPreferencesFromSettings() {
         ImGui::StyleColorsDark();
         SetupEditorStyle();
     } else {
-        ImGui::StyleColorsLight();
+        SetupEditorStyleLight();
     }
+}
+
+int GetCurrentThemeIndex() { return s_theme_index; }
+
+void ToggleEditorTheme() {
+    s_theme_index = 1 - s_theme_index;
+    if (s_theme_index == 0) {
+        ImGui::StyleColorsDark();
+        SetupEditorStyle();
+    } else {
+        SetupEditorStyleLight();
+    }
+    MarkPreferencesDirty();
 }
 
 void DrawPreferencesPanel(bool* p_open) {
@@ -79,47 +93,73 @@ void DrawPreferencesPanel(bool* p_open) {
     }
 
     ImGui::SetNextWindowSize(ImVec2(450, 400), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Preferences", p_open)) {
+    if (!ImGui::Begin(T("Preferences"), p_open)) {
         ImGui::End();
         return;
     }
 
     bool changed = false;
 
-    if (ImGui::CollapsingHeader(MDI_ICON_PALETTE "  Appearance", ImGuiTreeNodeFlags_DefaultOpen)) {
-        const char* themes[] = { "Dark (Default)", "Light" };
-        if (ImGui::Combo("Theme", &s_theme_index, themes, 2)) {
+    {
+        char hdr_app[64]; snprintf(hdr_app, sizeof(hdr_app), MDI_ICON_PALETTE "  %s", T("Appearance"));
+    if (ImGui::CollapsingHeader(hdr_app, ImGuiTreeNodeFlags_DefaultOpen)) {
+        const char* themes[] = { T("Dark (Default)"), T("Light") };
+        if (ImGui::Combo(T("Theme"), &s_theme_index, themes, 2)) {
             if (s_theme_index == 0) {
                 ImGui::StyleColorsDark();
                 SetupEditorStyle();
             } else {
-                ImGui::StyleColorsLight();
+                SetupEditorStyleLight();
             }
             changed = true;
         }
 
-        if (ImGui::Checkbox("Show Grid", &s_show_grid)) {
+        ImGui::Separator();
+        ImGui::TextUnformatted(T("Editor Language"));
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Takes effect after restart"));
+        static int s_locale_idx = -1;
+        if (s_locale_idx < 0) {
+            const auto& cur = GetEditorLocale();
+            s_locale_idx = (cur == "zh-CN") ? 1 : 0;
+        }
+        const char* locales[] = { T("English"), T("Chinese Simplified") };
+        if (ImGui::Combo("##EditorLocale", &s_locale_idx, locales, 2)) {
+            EditorSettings ls = LoadEditorSettings();
+            ls.editor_ui_locale = (s_locale_idx == 1) ? "zh-CN" : "en";
+            SaveEditorSettings(ls);
+        }
+
+        ImGui::Separator();
+        if (ImGui::Checkbox(T("Show Grid"), &s_show_grid)) {
             changed = true;
         }
         if (s_show_grid) {
-            if (ImGui::DragFloat("Grid Size", &s_grid_size, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
-            if (ImGui::DragInt("Grid Lines", &s_grid_lines, 1, 5, 200)) changed = true;
+            if (ImGui::DragFloat(T("Grid Size"), &s_grid_size, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
+            if (ImGui::DragInt(T("Grid Lines"), &s_grid_lines, 1, 5, 200)) changed = true;
         }
     }
 
-    if (ImGui::CollapsingHeader(MDI_ICON_COG "  Snapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::DragFloat("Translate Snap", &s_snap_translate, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
-        if (ImGui::DragFloat("Rotate Snap (deg)", &s_snap_rotate, 1.0f, 1.0f, 180.0f, "%.0f")) changed = true;
-        if (ImGui::DragFloat("Scale Snap", &s_snap_scale, 0.01f, 0.01f, 10.0f, "%.2f")) changed = true;
+    }
+    {
+        char hdr_snap[64]; snprintf(hdr_snap, sizeof(hdr_snap), MDI_ICON_COG "  %s", T("Snapping"));
+    if (ImGui::CollapsingHeader(hdr_snap, ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::DragFloat(T("Translate Snap"), &s_snap_translate, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
+        if (ImGui::DragFloat(T("Rotate Snap (deg)"), &s_snap_rotate, 1.0f, 1.0f, 180.0f, "%.0f")) changed = true;
+        if (ImGui::DragFloat(T("Scale Snap"), &s_snap_scale, 0.01f, 0.01f, 10.0f, "%.2f")) changed = true;
     }
 
-    if (ImGui::CollapsingHeader(MDI_ICON_CONTENT_SAVE "  Auto Save", ImGuiTreeNodeFlags_DefaultOpen)) {
+    }
+    {
+        char hdr_as[64]; snprintf(hdr_as, sizeof(hdr_as), MDI_ICON_CONTENT_SAVE "  %s", T("Auto Save"));
+    if (ImGui::CollapsingHeader(hdr_as, ImGuiTreeNodeFlags_DefaultOpen)) {
         EditorSettings as = LoadEditorSettings();
         bool as_changed = false;
-        if (ImGui::Checkbox("Enable Auto Save", &as.auto_save_enabled)) as_changed = true;
+        if (ImGui::Checkbox(T("Enable Auto Save"), &as.auto_save_enabled)) as_changed = true;
         if (as.auto_save_enabled) {
             int interval = as.auto_save_interval_sec;
-            if (ImGui::SliderInt("Interval (sec)", &interval, 30, 600)) {
+            if (ImGui::SliderInt(T("Interval (sec)"), &interval, 30, 600)) {
                 as.auto_save_interval_sec = interval;
                 as_changed = true;
             }
@@ -129,7 +169,10 @@ void DrawPreferencesPanel(bool* p_open) {
         }
     }
 
-    if (ImGui::CollapsingHeader(MDI_ICON_COG "  Keyboard Shortcuts (Read-only)", ImGuiTreeNodeFlags_DefaultOpen)) {
+    }
+    {
+        char hdr_kb[80]; snprintf(hdr_kb, sizeof(hdr_kb), MDI_ICON_COG "  %s", T("Keyboard Shortcuts (Read-only)"));
+    if (ImGui::CollapsingHeader(hdr_kb, ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextDisabled("Global shortcuts:");
         ImGui::BulletText("Ctrl+Z - Undo");
         ImGui::BulletText("Ctrl+Y / Ctrl+Shift+Z - Redo");
@@ -153,6 +196,7 @@ void DrawPreferencesPanel(bool* p_open) {
         ImGui::TextDisabled("Viewport shortcuts:");
         ImGui::BulletText("F - Focus Selected Entity");
     }
+    } // keyboard shortcuts block
 
     if (changed) {
         MarkPreferencesDirty();

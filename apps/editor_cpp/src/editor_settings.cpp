@@ -118,6 +118,9 @@ EditorSettings LoadEditorSettings() {
     if (doc.HasMember("auto_save_interval_sec") && doc["auto_save_interval_sec"].IsInt()) {
         settings.auto_save_interval_sec = doc["auto_save_interval_sec"].GetInt();
     }
+    if (doc.HasMember("editor_ui_locale") && doc["editor_ui_locale"].IsString()) {
+        settings.editor_ui_locale = doc["editor_ui_locale"].GetString();
+    }
 
     // Scene camera
     if (doc.HasMember("cam_focal_x") && doc["cam_focal_x"].IsNumber()) settings.cam_focal_x = doc["cam_focal_x"].GetFloat();
@@ -167,6 +170,7 @@ void SaveEditorSettings(const EditorSettings& settings) {
     // Auto-save
     doc.AddMember("auto_save_enabled", settings.auto_save_enabled, alloc);
     doc.AddMember("auto_save_interval_sec", settings.auto_save_interval_sec, alloc);
+    doc.AddMember("editor_ui_locale", rapidjson::Value(settings.editor_ui_locale.c_str(), alloc), alloc);
 
     // Scene camera
     doc.AddMember("cam_focal_x", settings.cam_focal_x, alloc);

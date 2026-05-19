@@ -29,6 +29,9 @@ struct EditorSettings {
     bool auto_save_enabled = true;
     int auto_save_interval_sec = 120;  // seconds
 
+    // Editor UI locale: "en" or "zh-CN" (takes effect after restart)
+    std::string editor_ui_locale = "en";
+
     // Scene camera state (persisted)
     float cam_focal_x = 0.0f, cam_focal_y = 0.0f, cam_focal_z = 0.0f;
     float cam_distance = 10.0f;

@@ -27,6 +27,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_asset_db.cpp
     src/editor_autosave.cpp
     src/editor_scene_io.cpp
+    src/editor_locale.cpp
     src/editor_settings.cpp
     src/editor_shortcuts.cpp
     src/editor_shell.cpp

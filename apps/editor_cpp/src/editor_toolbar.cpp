@@ -17,6 +17,8 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/base/time.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
+#include "editor_locale.h"
+#include "editor_preferences_panel.h"
 
 namespace dse::editor {
 
@@ -116,14 +118,14 @@ void DrawEditorToolbar(EditorContext& ctx) {
         ImGui::SameLine();
     };
 
-    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, "Hand Tool (H)", -1, gizmo_op);
-    tool_button(MDI_ICON_ARROW_ALL, "Translate Tool (W)", 0, gizmo_op);
-    tool_button(MDI_ICON_ROTATE_3D_VARIANT, "Rotate Tool (E)", 1, gizmo_op);
-    tool_button(MDI_ICON_RESIZE, "Scale Tool (R)", 2, gizmo_op);
+    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, T("Hand Tool (H)"), -1, gizmo_op);
+    tool_button(MDI_ICON_ARROW_ALL, T("Translate Tool (W)"), 0, gizmo_op);
+    tool_button(MDI_ICON_ROTATE_3D_VARIANT, T("Rotate Tool (E)"), 1, gizmo_op);
+    tool_button(MDI_ICON_RESIZE, T("Scale Tool (R)"), 2, gizmo_op);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button(gizmo_mode == 0 ? "Local" : "World", ImVec2(48, 24))) { gizmo_mode = 1 - gizmo_mode; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Gizmo Coordinate Space");
+    if (ImGui::Button(gizmo_mode == 0 ? T("Local") : T("World"), ImVec2(48, 24))) { gizmo_mode = 1 - gizmo_mode; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Toggle Gizmo Coordinate Space"));
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
@@ -169,7 +171,7 @@ void DrawEditorToolbar(EditorContext& ctx) {
         }
         if (!can_pause) ImGui::EndDisabled();
         if (is_paused) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip(is_paused ? "Resume" : "Pause");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", is_paused ? T("Resume") : T("Pause"));
     }
     ImGui::SameLine();
     {
@@ -179,11 +181,24 @@ void DrawEditorToolbar(EditorContext& ctx) {
             s_step_pending = true;
         }
         if (!can_step) ImGui::EndDisabled();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step one fixed-update frame");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Step one fixed-update frame"));
     }
 
     ImGui::SameLine();
-    ImGui::SetCursorPosX(avail_width - 320);
+    ImGui::SetCursorPosX(avail_width - 360);
+
+    // ─── Theme toggle ───────────────────────────────────────────────────────
+    {
+        const bool is_light = (GetCurrentThemeIndex() == 1);
+        const char* icon    = is_light ? MDI_ICON_MOON : MDI_ICON_WEATHER_SUNNY;
+        const char* tip     = is_light ? T("Switch to Dark Theme") : T("Switch to Light Theme");
+        if (ImGui::Button(icon, ImVec2(32, 24))) {
+            ToggleEditorTheme();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        ImGui::SameLine();
+    }
+
     if (!languages.empty()) {
         std::vector<const char*> language_items;
         language_items.reserve(languages.size());

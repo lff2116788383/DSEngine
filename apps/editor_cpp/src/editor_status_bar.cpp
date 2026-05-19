@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
+#include "editor_locale.h"
 
 namespace dse::editor {
 
@@ -45,25 +46,25 @@ void DrawStatusBar(EditorContext& context) {
 
     // Entity count
     const int entity_count = static_cast<int>(context.registry.storage<entt::entity>().in_use());
-    ImGui::Text("Entities: %d", entity_count);
+    ImGui::Text("%s %d", T("Entities:"), entity_count);
     ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine(0, 12);
 
     // Draw calls
     const auto& render_frame = context.render_profiler.GetCurrentFrameStats();
-    ImGui::Text("Draws: %d", render_frame.draw_calls);
+    ImGui::Text("%s %d", T("Draws:"), render_frame.draw_calls);
     ImGui::SameLine(0, 12);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine(0, 12);
 
     // Gizmo tool
-    const char* tool_name = "Hand";
+    const char* tool_name = T("Hand");
     switch (context.current_gizmo_operation) {
-        case 0: tool_name = "Translate"; break;
-        case 1: tool_name = "Rotate"; break;
-        case 2: tool_name = "Scale"; break;
-        default: tool_name = "Hand"; break;
+        case 0: tool_name = T("Translate"); break;
+        case 1: tool_name = T("Rotate"); break;
+        case 2: tool_name = T("Scale"); break;
+        default: tool_name = T("Hand"); break;
     }
     ImGui::Text("Tool: %s", tool_name);
     ImGui::SameLine(0, 12);
@@ -71,7 +72,7 @@ void DrawStatusBar(EditorContext& context) {
     ImGui::SameLine(0, 12);
 
     // Coordinate space
-    ImGui::Text("%s", context.current_gizmo_mode == 0 ? "Local" : "World");
+    ImGui::Text("%s", context.current_gizmo_mode == 0 ? T("Local") : T("World"));
 
     ImGui::End();
     ImGui::PopStyleColor();
