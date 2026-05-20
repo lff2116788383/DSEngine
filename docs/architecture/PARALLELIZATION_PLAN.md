@@ -2,7 +2,7 @@
 
 > **一句话：利用多核 CPU 资源，降低主循环每帧耗时，提高 FPS 帧率，不改变画质、不省显存、不加速磁盘。**
 
-> 最后更新：2026-05-20（修订：修正收益预测、补全灯光快照、删除 EnTT scheduler 误引用）
+> 最后更新：2026-05-21（修订：更新 GPU Driven 三端对齐状态、Phase 0/4 缩减、路线图优先级调整）
 
 ## 一、问题现状
 
@@ -185,18 +185,20 @@ Phase 3        Render Pass 并行录制             1.2~1.4x（叠加）
 
 ---
 
-## 三、Phase 0：GPU Driven 默认化（约 2~3 天）
+## 三、Phase 0：GPU Driven 默认化（✅ 基本完成，剩余验证约 1 天）
 
 ### 3.1 背景
 
-DSEngine 已有完整的 GPU Driven 渲染基础设施，但当前并非默认开启：
+DSEngine 已有完整的 GPU Driven 渲染基础设施，**三后端（GL/VK/DX11）已全部实现并对齐**：
 
 | 组件 | 位置 | 状态 |
 |------|------|------|
 | GPUInstanceData / DrawElementsIndirectCommand | [`engine/render/rhi/gpu_scene_types.h`](../../engine/render/rhi/gpu_scene_types.h) | ✅ 已定义 |
-| MegaVAO / Instance SSBO / Indirect Draw | [`engine/render/rhi/rhi_gpu_driven.h`](../../engine/render/rhi/rhi_gpu_driven.h) | ✅ 接口已定义，仅 GL 有完整实现 |
+| MegaVAO / Instance SSBO / Indirect Draw | [`engine/render/rhi/rhi_gpu_driven.h`](../../engine/render/rhi/rhi_gpu_driven.h) | ✅ 接口已定义，**GL/VK/DX11 三端均有完整实现** |
 | PrepareGPUScene | [`engine/runtime/frame_pipeline.cpp`](../../engine/runtime/frame_pipeline.cpp#L1042) | ✅ 已调用 |
 | GPU Driven 分支路径 | [`engine/render/passes/builtin_passes.cpp`](../../engine/render/passes/builtin_passes.cpp#L683-L710) | ✅ 条件已就绪 |
+| Hi-Z Occlusion Culling | GL/VK/DX11 三端 | ✅ 三端均有完整实现 |
+| GPU Cull Compute Shader | [`builtin_passes.cpp`](../../engine/render/passes/builtin_passes.cpp) GPUCullPass | ✅ 已实现 |
 
 ### 3.2 为什么需要这一步
 
@@ -215,24 +217,18 @@ if (!use_gpu_indirect) {
 
 **让 GPU Driven 成为默认路径后，这个回调不再执行**，ECS 的 mesh 渲染数据由 `PrepareGPUScene`（在 Render 准备阶段）一次性提取到 GPU 缓冲区中。
 
-### 3.3 OpenGL 后端的处理
+### 3.3 三后端当前状态
 
-OpenGL 后端只有 `OpenGLRhiDevice` 有完整的 MegaVAO + Indirect Draw 实现（[`gl_rhi_device.cpp`](../../engine/render/rhi/opengl/gl_rhi_device.cpp#L1087-L1250)）。Vulkan 和 DX11 的 `IRhiGpuDriven` 接口只是继承的默认空实现。
+**✅ GL/VK/DX11 三端的 `IRhiGpuDriven` 接口已全部实现并对齐**（包括 CreateMegaVAO、UpdateMegaVBO/IBO、BindMegaVAO、MultiDrawIndexedIndirect、CreateStaticMeshVAO、Hi-Z、ReadSSBO 等）。
 
-对 VK/DX11，有两种选择：
+`gpu_driven_supported` 运行时检测逻辑已就位（检查 `SupportsCompute` + `SupportsIndirectDraw` + `SupportsSSBO`），三后端均返回 `true`。
 
-1. **等待 Phase 1 之后再补**：GPU Driven 只对 GL 生效，VK/DX11 走原有 CPU 路径。Phase 1 延迟一帧后，VK/DX11 上 `render_meshes` 回调读的是上一帧的 ECS 快照（薄快照），不会数据竞争。
-2. **立即补齐 VK/DX11 的 GPU Driven 实现**：工程量较大（需要在两个后端实现 MegaBuffer / Instance SSBO / Indirect Draw），但收益更长久。
-
-**推荐走方案 1**：GL 走 GPU Driven，VK/DX11 走薄快照路径。两个并行策略互不冲突。
-
-### 3.4 改动清单
+### 3.4 剩余工作
 
 | 文件 | 改动 |
 |------|------|
-| `frame_pipeline.cpp` → `RunRenderInternal()` | 在 GPU Driven 条件判断前添加 `gpu_driven_supported` 的后端无关检测 |
-| `builtin_passes.cpp` → `ForwardScenePass::Execute()` | 确认 GPU Driven 路径在所有后端的有效性 |
-| `render_pipeline_resources.h` | 可能需要在初始化时预分配 MegaBuffer |
+| 端到端验证 | 运行同样场景，确认三后端 GPU Driven 路径绘制结果与 CPU 路径一致 |
+| `frame_pipeline.cpp` | 确认 `gpu_driven_supported` 默认开启时无回归 |
 
 ### 3.5 风险 & 验收
 
@@ -296,7 +292,7 @@ Render 中所有对 ECS 的读取可以分为两类：
 | DOF Pass | PostProcessComponent | 1 次 | 1 |
 | 2D Camera fallback | CameraComponent | 1 次 | 1 |
 
-**总计：约 15 次查询，每次读取 1~3 个实体，总数据量 < 1KB。**
+**总计：约 30+ 次查询（含重复），每次读取 1~3 个实体，总数据量 < 2KB。**
 
 关键观察：**同一个 PostProcessComponent 被 7 个不同的 Pass 各查了一次**——这正是快照的价值：查一次，多处复用。
 
@@ -1149,30 +1145,13 @@ OpenGL 后端不支持：GL 没有多线程录制命令的概念。
 
 ---
 
-## 七、Phase 4：GPU Driven VK/DX11 补全 + 全局优化（约 4~6 周）
+## 七、Phase 4：全局优化——三级缓冲（约 1~2 周）
 
 ### 7.1 背景
 
-Phase 0 中 GPU Driven 只在 OpenGL 后端完整实现。Phase 1~3 中 VK/DX11 走的是薄快照 + 常规 CPU 渲染路径。对于高物体数场景，**CPU 端提交 Draw Call 的开销**在 VK/DX11 上可能成为瓶颈。
+> **✅ GPU Driven VK/DX11 补全已完成。** GL/VK/DX11 三端的 `IRhiGpuDriven` 接口（CreateMegaVAO、UpdateMegaVBO/IBO、BindMegaVAO、MultiDrawIndexedIndirect、CreateStaticMeshVAO、Hi-Z、ReadSSBO 等）已全部实现并对齐。此 Phase 原计划的 4~6 周工作量已在前期完成，Phase 4 缩减为仅三级缓冲优化。
 
-### 7.2 在 Vulkan 后端实现 GPU Driven
-
-在 `VulkanRhiDevice` 中覆写以下 `IRhiGpuDriven` 方法：
-
-| 方法 | 当前状态 | 需要实现 |
-|------|---------|---------|
-| `CreateMegaVAO` | ❌ 继承空实现 | 创建包含所有静态网格的 VkBuffer + VkVertexArray |
-| `UpdateMegaVBO` | ❌ 继承空实现 | vkCmdUpdateBuffer 或 staging buffer 拷贝 |
-| `UpdateMegaIBO` | ❌ 继承空实现 | 同上 |
-| `BindMegaVAO` | ❌ 继承空实现 | vkCmdBindVertexBuffers + vkCmdBindIndexBuffer |
-| `MultiDrawIndexedIndirect` | ✅ 已实现 | 由 vkCmdDrawIndexedIndirect 完成 |
-| `CreateStaticMeshVAO` | ❌ 继承空实现 | 创建单个 mesh 的 VkBuffer 对 |
-
-### 7.3 在 D3D11 后端实现 GPU Driven
-
-在 `DX11RhiDevice` 中覆写同样方法。D3D11 有一个限制：没有 `MultiDrawElementsIndirect` 等效 API（D3D12 才有）。但可以用循环调用 `DrawIndexedInstancedIndirect` 实现相同的效果（已在 Indirect Draw 中这样做）。
-
-### 7.4 全局优化：三级缓冲
+### 7.2 三级缓冲
 
 当前 Phase 1 使用**双缓冲快照**。在重度 GPU 负载下，如果 GPU 执行时间超过帧时间，双缓冲可能导致主线程等 GPU。
 
@@ -1190,12 +1169,10 @@ Phase 0 中 GPU Driven 只在 OpenGL 后端完整实现。Phase 1~3 中 VK/DX11 
 
 三级缓冲确保主线程永远不会因为等待 GPU 而阻塞，代价是多一份快照的内存（~3KB）。
 
-### 7.5 收益预测
+### 7.3 收益预测
 
 | 优化 | 收益场景 | 加速比 |
 |------|---------|:-----:|
-| GPU Driven VK | 高物体数（>1000） | 2~3x（CPU 端 Draw Call 开销大幅降低） |
-| GPU Driven DX11 | 高物体数（>1000） | ~1.5x（受限于循环 Indirect Draw） |
 | 三级缓冲 | GPU 瓶颈场景 | 消除主线程空闲等待 |
 
 ---
@@ -1203,35 +1180,35 @@ Phase 0 中 GPU Driven 只在 OpenGL 后端完整实现。Phase 1~3 中 VK/DX11 
 ## 八、完整路线图
 
 ```
-Phase 0: GPU Driven 默认化
-  时间：2~3 天
+Phase 0: GPU Driven 默认化                          ✅ 基本完成（三端 GPU Driven 已对齐）
+  时间：剩余 ~1 天（端到端验证）
   依赖：无
   收益：≈0%（为 Phase 1 清除障碍）
   └───→
 
-Phase 1: 薄快照 + 延迟一帧流水线并行
+Phase 1: 薄快照 + 延迟一帧流水线并行                 ⭐ 最高优先级
   时间：1~2 周
   依赖：Phase 0（必须——render_meshes 回调直接读 ECS，不做 Phase 0 会 data race）
   收益：1.5~1.75x 帧率（取决于 Update/Render 哪个是瓶颈）
   ├───→ 如果只需要此级别并行，可以停在这里
 
-Phase 2: ECS System 级并行
-  时间：2~3 周
-  依赖：Phase 1
-  收益：1.2~1.5x（叠加）
-  ├───→ 如果 Update 是瓶颈，继续此阶段
-
-Phase 3: Pass 级并行录制
+Phase 3: Pass 级并行录制                             ⭐ 次高优先级（典型场景 Render 是瓶颈）
   时间：3~4 周
   依赖：Phase 1
   收益：1.2~1.4x（叠加）
   ├───→ 如果 Render 是瓶颈且 VK 后端，继续此阶段
 
-Phase 4: GPU Driven VK/DX11 + 三级缓冲
-  时间：4~6 周
+Phase 2: ECS System 级并行                           仅在 Update 是瓶颈时有收益
+  时间：2~3 周
   依赖：Phase 1
-  收益：高物体数场景 2~3x
-  └───→ 如果场景有大量物体，考虑此阶段
+  收益：1.2~1.5x（叠加，但 Render 瓶颈时帧率无提升）
+  ├───→ 如果 Update 是瓶颈（大量脚本/AI），继续此阶段
+
+Phase 4: 三级缓冲                                    ✅ GPU Driven 补全已完成，仅剩三级缓冲
+  时间：1~2 周
+  依赖：Phase 1
+  收益：消除 GPU 瓶颈场景下主线程空闲等待
+  └───→ 如果 GPU 负载重导致主线程等待，考虑此阶段
 ```
 
 ### 并行维度叠加示意图
@@ -1267,7 +1244,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 | **ECS System 并行** | ✅ TaskGraph | ❌（主线程） | ❌ | ✅ **Phase 2** |
 | **System 调度** | 显式依赖声明 | N/A | N/A | **JobSystem DAG** |
 | **Pass 级并行** | ✅ 支持 | ✅ 支持 | ❌ | ✅ **Phase 3** |
-| **GPU Driven** | ✅ Nanite | ❌ | ❌ | ✅ **Phase 4** |
+| **GPU Driven** | ✅ Nanite | ❌ | ❌ | ✅ **已实现（三端对齐）** |
 | **异步资源加载** | ✅ | ✅ | ✅ | ✅ **已有** |
 
 ---
@@ -1324,7 +1301,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 
 | 风险 | 概率 | 影响 | 涉及 Phase | 缓解方案 |
 |------|:----:|:----:|:---------:|---------|
-| `render_meshes` 回调仍读 ECS | 中 | 高 | Phase 1 | Phase 0 启动 GPU Driven 路径，使此回调不被执行 |
+| `render_meshes` 回调仍读 ECS | 低 | 高 | Phase 1 | 三端 GPU Driven 已对齐，`gpu_driven_supported` 为 true 时此回调不执行。需验证无回退场景 |
 | `ENTT_USE_ATOMIC` 未定义 | 低 | 中 | Phase 2 | 添加编译宏，确保多线程下类型索引原子操作 |
 | Lua 脚本访问 ECS 的线程安全 | 高 | 高 | Phase 2 | 确保 Lua 绑定只在主线程执行（不在 Update 并行区） |
 | Vulkan CommandPool 线程安全 | 中 | 中 | Phase 3 | 每个 worker 线程创建独立的 VkCommandPool |
@@ -1339,11 +1316,11 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 
 | Phase | 验收标准 |
 |-------|---------|
-| **Phase 0** | 相同的场景，GPU Driven 和 CPU 路径渲染结果逐像素一致 |
-| **Phase 1** | `RenderThinSnapshot` 的 15 处快照读取完全覆盖所有 Pass 的 ECS 需求；VK/DX11 后端在渲染线程上运行无崩溃；GL 后端数据安全但性能不变；帧率提升符合预期（≥1.5x） |
+| **Phase 0** | ✅ 基本完成。三端 GPU Driven 已对齐，剩余：端到端验证 GPU Driven 路径渲染结果与 CPU 路径一致 |
+| **Phase 1** | `RenderThinSnapshot` 快照读取完全覆盖所有 Pass 的 ECS 需求（当前 30+ 处 `registry()` 调用需全部替换）；VK/DX11 后端在渲染线程上运行无崩溃；GL 后端数据安全但性能不变；帧率提升符合预期（≥1.5x） |
 | **Phase 2** | JobSystem DAG 正确调度所有 ECS System；Lua 脚本和 IModule 仅在主线程执行；无 data race（用 ThreadSanitizer 验证）；每个 System 的组件访问依赖声明准确 |
 | **Phase 3** | RenderGraph 的 Level 分析正确；每个 Level 内的 Pass 录制无冲突；Barrier 插入正确（验证层无报错）；帧率提升符合预期 |
-| **Phase 4** | VK 和 DX11 后端的 GPU Driven 路径渲染结果与 CPU 路径一致；三级缓冲在不同负载下无主线程阻塞 |
+| **Phase 4** | 三级缓冲在不同负载下无主线程阻塞 |
 
 ---
 
@@ -1362,7 +1339,7 @@ Phase 0+1+2+3：   [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程
                   ←─── 渲染线程(Pass 并行, ~4ms) ─────────────────→  帧时间 = max(5, 4) = 5ms → 200 FPS
 
 Phase 全量：      [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程 5ms
-                  ←─── 渲染线程(GPU Driven + Pass 并行, ~3ms) ────→  帧时间 = max(5, 3) = 5ms → 200 FPS
+                  ←─── 渲染线程(GPU Driven(✅已有) + Pass 并行, ~3ms) →  帧时间 = max(5, 3) = 5ms → 200 FPS
 ```
 
 > ⚠️ **关键洞察**：Phase 2 在 Render 是瓶颈的典型场景中**不提供帧率收益**（帧时间仍由 Render 决定）。
