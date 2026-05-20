@@ -31,6 +31,9 @@
 #include "engine/runtime/engine_app.h"
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #include <shellapi.h>
 #endif
