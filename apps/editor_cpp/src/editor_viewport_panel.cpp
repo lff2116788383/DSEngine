@@ -16,6 +16,10 @@
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_preferences_panel.h"
+#include "editor_selection_outline.h"
+#include "editor_physics_debug.h"
+#include "editor_lighting_gizmos.h"
+#include "editor_navmesh_panel.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
 #include <algorithm>
@@ -638,6 +642,31 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     if (scene_texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
 
+        // Overlay toggle toolbar (top-right of viewport)
+        {
+            ImDrawList* ov_dl = ImGui::GetWindowDrawList();
+            float btn_x = window_pos.x + scene_panel_size.x - 140.0f;
+            float btn_y = window_pos.y + 4.0f;
+            ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+
+            bool& phys_dbg = GetPhysicsDebugEnabled();
+            if (phys_dbg) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 0.8f));
+            if (ImGui::SmallButton("Phys")) phys_dbg = !phys_dbg;
+            if (phys_dbg) ImGui::PopStyleColor();
+            ImGui::SameLine();
+
+            bool& light_giz = GetLightingGizmosEnabled();
+            if (light_giz) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.4f, 0.0f, 0.8f));
+            if (ImGui::SmallButton("Light")) light_giz = !light_giz;
+            if (light_giz) ImGui::PopStyleColor();
+
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+        }
+
         // Tilemap grid overlay + Terrain brush overlay
         {
             const float ov_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
@@ -678,6 +707,30 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 ov_view, ov_proj);
             DrawProbeOverlays(
                 context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Selection outline highlights
+            DrawSelectionOutlines(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Physics debug wireframes (toggled via Window menu)
+            DrawPhysicsDebugOverlay(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Lighting gizmos (light probes, reflection probes, light sources)
+            DrawLightingGizmos(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // NavMesh overlay
+            DrawNavMeshOverlay(context,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);

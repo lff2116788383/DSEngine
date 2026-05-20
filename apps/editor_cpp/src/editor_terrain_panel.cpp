@@ -355,27 +355,83 @@ void DrawTerrainEditorPanel(EditorContext& ctx) {
                 ImVec4(0.3f, 0.3f, 0.8f, 1.0f),
                 ImVec4(0.8f, 0.8f, 0.3f, 1.0f),
             };
+            const ImU32 layer_swatch_colors[4] = {
+                IM_COL32(200, 80, 80, 255),
+                IM_COL32(80, 200, 80, 255),
+                IM_COL32(80, 80, 200, 255),
+                IM_COL32(200, 200, 80, 255),
+            };
+            const char* layer_default_names[4] = { "Base", "Layer 1", "Layer 2", "Layer 3" };
+
+            // Layer selection cards with color swatch + texture name
             for (int i = 0; i < 4; i++) {
-                if (i > 0) ImGui::SameLine();
-                char lbl[16]; snprintf(lbl, sizeof(lbl), "L%d", i);
                 bool sel = (state.active_splat_layer == i);
-                if (sel) ImGui::PushStyleColor(ImGuiCol_Button, layer_colors[i]);
-                if (ImGui::Button(lbl, ImVec2(32, 24))) {
+                ImVec2 card_min = ImGui::GetCursorScreenPos();
+                float card_w = ImGui::GetContentRegionAvail().x;
+                float card_h = 36.0f;
+
+                if (sel) {
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(layer_colors[i].x * 0.3f, layer_colors[i].y * 0.3f, layer_colors[i].z * 0.3f, 0.5f));
+                }
+
+                char child_id[32]; snprintf(child_id, sizeof(child_id), "##splat_card_%d", i);
+                ImGui::BeginChild(child_id, ImVec2(card_w, card_h), true);
+
+                // Color swatch
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                ImVec2 swatch_min = ImGui::GetCursorScreenPos();
+                ImVec2 swatch_max = ImVec2(swatch_min.x + 24.0f, swatch_min.y + 24.0f);
+                dl->AddRectFilled(swatch_min, swatch_max, layer_swatch_colors[i], 3.0f);
+                if (sel) {
+                    dl->AddRect(swatch_min, swatch_max, IM_COL32(255, 255, 255, 255), 3.0f, 0, 2.0f);
+                }
+                ImGui::Dummy(ImVec2(28.0f, 24.0f));
+                ImGui::SameLine();
+
+                // Layer name + texture filename
+                std::string display_name;
+                if (!terrain.splat_texture_paths[i].empty()) {
+                    auto pos = terrain.splat_texture_paths[i].find_last_of("/\\");
+                    display_name = (pos != std::string::npos)
+                        ? terrain.splat_texture_paths[i].substr(pos + 1)
+                        : terrain.splat_texture_paths[i];
+                } else {
+                    display_name = layer_default_names[i];
+                }
+
+                ImGui::BeginGroup();
+                ImGui::Text("L%d: %s", i, display_name.c_str());
+                if (terrain.splat_texture_paths[i].empty()) {
+                    ImGui::TextDisabled("(no texture)");
+                } else {
+                    ImGui::TextDisabled("%s", terrain.splat_texture_paths[i].c_str());
+                }
+                ImGui::EndGroup();
+
+                // Make entire card clickable
+                ImVec2 card_content_min = ImGui::GetWindowPos();
+                ImVec2 card_content_max = ImVec2(card_content_min.x + card_w, card_content_min.y + card_h);
+                if (ImGui::IsMouseHoveringRect(card_content_min, card_content_max) && ImGui::IsMouseClicked(0)) {
                     state.active_splat_layer = i;
                 }
+
+                ImGui::EndChild();
                 if (sel) ImGui::PopStyleColor();
             }
 
             ImGui::SliderFloat("Opacity", &state.splat_brush_opacity, 0.01f, 1.0f, "%.2f");
 
-            // Splat texture path inputs
-            for (int i = 0; i < 4; i++) {
-                char label[32]; snprintf(label, sizeof(label), "Layer %d Tex", i);
-                char buf[256] = "";
-                std::strncpy(buf, terrain.splat_texture_paths[i].c_str(), sizeof(buf) - 1);
-                if (ImGui::InputText(label, buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-                    terrain.splat_texture_paths[i] = buf;
-                }
+            // Texture path input for active layer
+            ImGui::Separator();
+            ImGui::Text("Layer %d Texture:", state.active_splat_layer);
+            char tex_buf[256] = "";
+            std::strncpy(tex_buf, terrain.splat_texture_paths[state.active_splat_layer].c_str(), sizeof(tex_buf) - 1);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##splat_tex_path", tex_buf, sizeof(tex_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                terrain.splat_texture_paths[state.active_splat_layer] = tex_buf;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Enter texture path, press Enter to apply");
             }
         }
 

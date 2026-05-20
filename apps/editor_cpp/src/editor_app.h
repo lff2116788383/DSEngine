@@ -95,6 +95,12 @@ private:
     bool show_terrain_editor_ = false;
     bool show_lua_console_ = false;
     bool show_undo_history_ = false;
+    bool show_asset_browser_ = false;
+    bool show_animation_timeline_ = false;
+    bool show_navmesh_ = false;
+    bool show_shader_graph_ = false;
+    bool show_git_ = false;
+    bool show_multi_viewport_ = false;
 
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;

@@ -383,6 +383,21 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
             if (panels->undo_history)
                 ImGui::MenuItem("Undo History", nullptr, panels->undo_history);
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Advanced");
+            if (panels->asset_browser)
+                ImGui::MenuItem(MDI_ICON_FOLDER "  Asset Browser", nullptr, panels->asset_browser);
+            if (panels->animation_timeline)
+                ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation Timeline", nullptr, panels->animation_timeline);
+            if (panels->navmesh)
+                ImGui::MenuItem(MDI_ICON_MAP_MARKER_PATH "  NavMesh", nullptr, panels->navmesh);
+            if (panels->shader_graph)
+                ImGui::MenuItem(MDI_ICON_PALETTE "  Shader Graph", nullptr, panels->shader_graph);
+            if (panels->git)
+                ImGui::MenuItem(MDI_ICON_SOURCE_BRANCH "  Git", nullptr, panels->git);
+            if (panels->multi_viewport)
+                ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, panels->multi_viewport);
         }
         ImGui::Separator();
         if (show_chat && ImGui::MenuItem("AI Chat")) {

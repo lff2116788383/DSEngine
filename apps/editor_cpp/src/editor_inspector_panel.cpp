@@ -24,6 +24,7 @@
 #include "editor_selection.h"
 #include "editor_particle_panel.h"
 #include "editor_audio_panel.h"
+#include "editor_prefab_override.h"
 
 namespace dse::editor {
 
@@ -2516,6 +2517,9 @@ void DrawInspectorPanel(EditorContext& context) {
 
         // 粒子曲线编辑器（特殊签名，跟随 ParticleEmitter Section 后绘制）
         DrawParticleCurveEditor(context.registry, context.selected_entity);
+
+        // Prefab override tracking
+        DrawPrefabOverrideSection(context);
 
         // Add / Remove Component 菜单（注册表驱动）
         InspectorRegistry::Get().DrawAddComponentMenu(context);
