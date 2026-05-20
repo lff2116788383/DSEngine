@@ -122,15 +122,40 @@ public:
         (void)vao; (void)ebo;
     }
 
+    // --- GPU Compute Skinning ---
+
+    /// 创建/编译 compute skinning 着色器（引擎启动时调用一次）
+    /// 成功返回非零 handle，失败返回 0
+    virtual unsigned int CreateComputeSkinningShader() { return 0; }
+
+    /// 执行 compute skinning dispatch：
+    ///   in_verts_ssbo  — InputVertex[] 蒙皮前顶点 SSBO
+    ///   out_verts_ssbo — OutputVertex[] 蒙皮后顶点 SSBO
+    ///   bone_ubo       — BoneMatricesUBO handle（已通过 CreateGpuBuffer 创建）
+    ///   vertex_count   — 顶点数量
+    ///   shader_handle  — CreateComputeSkinningShader 返回的 handle
+    virtual void DispatchComputeSkinning(
+        unsigned int shader_handle,
+        BufferHandle in_verts_ssbo,
+        BufferHandle out_verts_ssbo,
+        unsigned int bone_ubo,
+        unsigned int vertex_count) {
+        (void)shader_handle; (void)in_verts_ssbo; (void)out_verts_ssbo;
+        (void)bone_ubo; (void)vertex_count;
+    }
+
     // --- GPU-Driven PBR Shader Setup ---
 
     /// 激活 GPU-Driven PBR 着色器并上传 PerFrame/PerScene UBO（indirect draw 前调用）
+    /// csm_shadow_textures[0..cascade_count-1]：已绑定全局阴影贴图句柄（CSMShadowPass 负责绑定）
     virtual void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
                                           const glm::vec3& camera_pos,
                                           const glm::vec3& light_dir, const glm::vec3& light_color,
-                                          float light_intensity, float ambient_intensity) {
+                                          float light_intensity, float ambient_intensity,
+                                          float shadow_strength = 0.0f) {
         (void)view; (void)proj; (void)camera_pos;
         (void)light_dir; (void)light_color; (void)light_intensity; (void)ambient_intensity;
+        (void)shadow_strength;
     }
 };
 

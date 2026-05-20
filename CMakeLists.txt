@@ -581,6 +581,16 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         string(SUBSTRING ${_ext} 1 -1 _ext_clean)
         list(APPEND GENERATED_SHADER_HEADERS "${SHADER_GEN_DIR}/embed/${_name}_${_ext_clean}.gen.h")
     endforeach()
+    # @VARIANTS: GPU_DRIVEN 变体（pbr.vert → pbr_gpu_driven_vert.gen.h）
+    list(APPEND GENERATED_SHADER_HEADERS
+        "${SHADER_GEN_DIR}/embed/pbr_gpu_driven_vert.gen.h"
+        "${SHADER_GEN_DIR}/embed/pbr_gpu_driven_vert_reflect.gen.h"
+    )
+    # compute skinning shader（skinning.comp → skinning_comp.gen.h）
+    list(APPEND GENERATED_SHADER_HEADERS
+        "${SHADER_GEN_DIR}/embed/skinning_comp.gen.h"
+        "${SHADER_GEN_DIR}/embed/skinning_comp_reflect.gen.h"
+    )
 
     add_custom_command(
         OUTPUT ${GENERATED_SHADER_HEADERS}

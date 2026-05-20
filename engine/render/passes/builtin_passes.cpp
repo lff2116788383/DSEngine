@@ -639,29 +639,31 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             && ctx_.gpu_indirect_draw_count > 0;
 
         if (use_gpu_indirect) {
-            // 从 ECS 提取主方向光参数
+            // 从 ECS 提取主方向光参数（含阴影强度）
             glm::vec3 gpu_light_dir   = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
             glm::vec3 gpu_light_color = glm::vec3(1.0f, 1.0f, 1.0f);
             float gpu_light_intensity = 1.0f;
             float gpu_ambient         = 0.1f;
+            float gpu_shadow_strength = 0.0f;
             {
                 auto dl_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
                 for (auto entity : dl_view) {
                     auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(entity);
-                    if (dl.enabled) {
-                        gpu_light_dir       = glm::normalize(dl.direction);
-                        gpu_light_color     = dl.color;
-                        gpu_light_intensity = dl.intensity;
-                        gpu_ambient         = dl.ambient_intensity;
-                        break;
-                    }
+                    if (!dl.enabled) continue;
+                    gpu_light_dir       = glm::normalize(dl.direction);
+                    gpu_light_color     = dl.color;
+                    gpu_light_intensity = dl.intensity;
+                    gpu_ambient         = dl.ambient_intensity;
+                    if (dl.cast_shadow) gpu_shadow_strength = dl.shadow_strength;
+                    break;
                 }
             }
 
             auto* rhi = ctx_.rhi_device;
             rhi->SetupGPUDrivenPBRShader(gpu_view, gpu_proj, gpu_camera_pos,
                                           gpu_light_dir, gpu_light_color,
-                                          gpu_light_intensity, gpu_ambient);
+                                          gpu_light_intensity, gpu_ambient,
+                                          gpu_shadow_strength);
 
             // 绑定 instance SSBO 供 vertex shader 读取 model matrix
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);

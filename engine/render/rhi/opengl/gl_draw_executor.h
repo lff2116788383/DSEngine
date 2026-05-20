@@ -132,6 +132,7 @@ public:
     const RenderStats& current_frame_stats() const { return global_state_.current_frame_stats; }
     RenderStats& MutableCurrentStats() { return global_state_.current_frame_stats; }
     RenderStats& MutableLastFrameStats() { return global_state_.last_frame_stats; }
+    const DrawExecutorGlobalState& global_state() const { return global_state_; }
 
     // --- 访问器（供 OpenGLRhiDevice 委托使用） ---
     unsigned int white_texture_handle() const { return white_texture_handle_; }

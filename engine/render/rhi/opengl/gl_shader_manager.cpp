@@ -53,6 +53,10 @@
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 
+// GPU-Driven PBR 变体（预编译，无运行时 string patch）
+#include "embed/pbr_gpu_driven_vert.gen.h"
+#include "embed/pbr_gpu_driven_vert_reflect.gen.h"
+
 // Reflection metadata for automated binding
 #include "embed/pbr_vert_reflect.gen.h"
 #include "embed/pbr_frag_reflect.gen.h"
@@ -610,48 +614,17 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
     using namespace dse::render::generated_shaders;
     using namespace dse::render::generated_shaders::reflect;
 
-    std::string vert_src = kpbr_vert_glsl330;
-
-    // 1. 升级到 #version 460：gl_BaseInstance 在 GLSL 4.6 起成为核心内置变量
-    const std::string version_tag = "#version 430";
-    auto pos = vert_src.find(version_tag);
-    if (pos != std::string::npos) {
-        vert_src.replace(pos, version_tag.size(), "#version 460");
-    } else {
-        fprintf(stderr, "[GLShaderManager] GPU-driven PBR: #version 430 not found in vert src\n");
-    }
-
-    // 2. 替换 u_model uniform 声明为 SSBO 实例数据块
-    const std::string u_model_decl = "uniform mat4 u_model;";
-    pos = vert_src.find(u_model_decl);
-    if (pos != std::string::npos) {
-        vert_src.replace(pos, u_model_decl.size(),
-            "struct DSEGPUInst { mat4 model; uint mat_id; uint cmd_id; uint pad0; uint pad1; };\n"
-            "layout(std430, binding = 5) readonly buffer DSEInstBuf { DSEGPUInst dse_inst[]; };");
-    } else {
-        fprintf(stderr, "[GLShaderManager] GPU-driven PBR: uniform mat4 u_model not found in vert src\n");
-    }
-
-    // 3. 替换 main() 中所有 u_model 引用
-    auto replace_all = [&](const std::string& from, const std::string& to) {
-        size_t p = 0;
-        while ((p = vert_src.find(from, p)) != std::string::npos) {
-            vert_src.replace(p, from.size(), to);
-            p += to.size();
-        }
-    };
-    replace_all("u_model * localPos",      "dse_inst[gl_BaseInstance].model * localPos");
-    replace_all("u_model * boneTransform", "dse_inst[gl_BaseInstance].model * boneTransform");
-
-    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_src.c_str(), kpbr_frag_glsl330);
+    // 直接使用离线预编译的 GPU_DRIVEN 变体（pbr_gpu_driven_vert.gen.h）
+    // 不再需要任何运行时 string patch
+    gpu_driven_pbr_shader_handle_ = CompileProgram(kpbr_gpu_driven_vert_glsl330, kpbr_frag_glsl330);
     if (gpu_driven_pbr_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven PBR shader compilation failed\n");
         return;
     }
     programs_created_ += 1;
 
-    // UBO block 绑定（复用 PBR reflection 数据）
-    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_vert_reflection);
+    // UBO block 绑定（使用 GPU_DRIVEN 变体的 reflection 数据）
+    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_gpu_driven_vert_reflection);
     BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_frag_reflection);
 
     // Sampler 一次性绑定
@@ -664,7 +637,8 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
         glUseProgram(0);
     }
 
-    // 缓存每帧固定设置的 uniform location，避免逐帧调用 glGetUniformLocation
+    // GPU_DRIVEN 变体无 u_skinned / u_morph_enabled uniform；glGetUniformLocation 返回 -1
+    // SetupGPUDrivenPBRShader 中的 glUniform1i(-1, x) 是 OpenGL 规范的 no-op
     gpu_driven_pbr_skinned_loc_ = glGetUniformLocation(gpu_driven_pbr_shader_handle_, "u_skinned");
     gpu_driven_pbr_morph_loc_   = glGetUniformLocation(gpu_driven_pbr_shader_handle_, "u_morph_enabled");
 }
