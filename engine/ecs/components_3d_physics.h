@@ -2,6 +2,7 @@
 #define DSE_COMPONENTS_3D_PHYSICS_H
 
 #include <glm/glm.hpp>
+#include <entt/entity/entity.hpp>
 #include <vector>
 #include <string>
 
@@ -218,7 +219,7 @@ struct TerrainHeightmapComponent {
     }
 };
 
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Ragdoll 布娃娃（Phase 2 — Task 1）
 // ============================================================
@@ -240,8 +241,9 @@ struct RagdollBoneSetup {
 
 /// 布娃娃运行时骨骼
 struct RagdollRuntimeBone {
-    void* actor = nullptr;         ///< PxRigidDynamic*
-    void* joint = nullptr;         ///< PxD6Joint*
+    void* actor = nullptr;         ///< PhysX: PxRigidDynamic*
+    void* joint = nullptr;         ///< PhysX: PxD6Joint*
+    entt::entity bone_entity = entt::null; ///< Jolt: ECS 骨骼刚体 entity
     int bone_index = -1;
 };
 
@@ -261,7 +263,7 @@ struct RagdollComponent {
     bool initialized = false;
 };
 
-#endif // DSE_ENABLE_PHYSX
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 // ============================================================
 // SoftBody 软体模拟（Phase 2 — Task 2）
@@ -297,7 +299,7 @@ struct SoftBodyComponent {
     bool mesh_dirty = false;         ///< 需要回写 mesh 顶点
 };
 
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Vehicle 车辆物理（Phase 2 — Task 3）
 // ============================================================
@@ -344,7 +346,7 @@ struct VehicleComponent {
     bool initialized = false;
 };
 
-#endif // DSE_ENABLE_PHYSX
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 // ============================================================
 // Rope 绳索/链条（Phase 2 — Task 4）
@@ -374,7 +376,7 @@ struct RopeComponent {
     bool initialized = false;
 };
 
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Buoyancy 浮力模拟（Phase 2 — Task 5）
 // ============================================================
@@ -401,7 +403,7 @@ struct BuoyancyComponent {
     float submerge_ratio = 0.0f;       ///< 当前淹没比例 [0,1]
 };
 
-#endif // DSE_ENABLE_PHYSX
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 } // namespace dse
 

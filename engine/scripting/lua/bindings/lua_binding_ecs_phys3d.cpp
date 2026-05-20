@@ -12,8 +12,13 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/core/service_locator.h"
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
+#elif defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#define DSE_HAS_PHYSICS3D 1
 #endif
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -68,7 +73,7 @@ int L_EcsRigidBody3DAddForce(lua_State* L) {
     float fx = helper::CheckFloat(L, 2);
     float fy = helper::CheckFloat(L, 3);
     float fz = helper::CheckFloat(L, 4);
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         physics->AddForce(e, glm::vec3(fx, fy, fz));
     }
@@ -84,7 +89,7 @@ int L_EcsRigidBody3DAddImpulse(lua_State* L) {
     float ix = helper::CheckFloat(L, 2);
     float iy = helper::CheckFloat(L, 3);
     float iz = helper::CheckFloat(L, 4);
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         physics->AddImpulse(e, glm::vec3(ix, iy, iz));
     }
@@ -100,7 +105,7 @@ int L_EcsRigidBody3DSetVelocity(lua_State* L) {
     float vx = helper::CheckFloat(L, 2);
     float vy = helper::CheckFloat(L, 3);
     float vz = helper::CheckFloat(L, 4);
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         physics->SetVelocity(e, glm::vec3(vx, vy, vz));
     }
@@ -121,7 +126,7 @@ int L_EcsRigidBody3DGetVelocity(lua_State* L) {
         return 3;
     }
     Entity e = helper::CheckEntity(L, 1);
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         glm::vec3 vel = physics->GetVelocity(e);
         helper::PushVec3(L, vel);
@@ -144,7 +149,7 @@ int L_EcsRigidBody3DSetGravity(lua_State* L) {
     if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     bool enabled = helper::CheckBool(L, 2);
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         physics->SetGravityEnabled(e, enabled);
     }
@@ -288,7 +293,7 @@ int L_Physics3DRaycast(lua_State* L) {
     }
     direction /= len;
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         const auto physx_hit = physics->Raycast(origin, direction, max_dist);
         if (physx_hit.hit) {
@@ -337,7 +342,7 @@ int L_EcsCharacterController3DMove(lua_State* L) {
     float min_dist = helper::OptFloat(L, 5, 0.0f);
     float dt = helper::OptFloat(L, 6, 1.0f / 60.0f);
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         auto result = physics->MoveCharacter(e, glm::vec3(dx, dy, dz), min_dist, dt);
         lua_pushboolean(L, result.is_grounded ? 1 : 0);
@@ -451,7 +456,7 @@ int L_EcsCharacterController3DJump(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     float jump_speed = helper::OptFloat(L, 2, 5.0f);
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         bool success = physics->JumpCharacter(e, jump_speed);
         lua_pushboolean(L, success ? 1 : 0);
@@ -466,7 +471,7 @@ int L_EcsCharacterController3DJump(lua_State* L) {
 int L_EcsCharacterController3DIsGrounded(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         lua_pushboolean(L, physics->IsCharacterGrounded(e) ? 1 : 0);
         return 1;
@@ -489,7 +494,7 @@ int L_EcsCharacterController3DIsGrounded(lua_State* L) {
 int L_EcsCharacterController3DGetPosition(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         glm::vec3 pos = physics->GetCharacterPosition(e);
         helper::PushVec3(L, pos);
@@ -578,7 +583,7 @@ int L_EcsTerrainGetHeight(lua_State* L) {
 
 /// physics_3d_get_collision_events() -> table of {type, entity_a, entity_b, px, py, pz, nx, ny, nz, impulse}
 int L_Physics3DGetCollisionEvents(lua_State* L) {
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         const auto& events = physics->GetCollisionEvents();
         lua_newtable(L);
@@ -609,7 +614,7 @@ int L_Physics3DGetCollisionEvents(lua_State* L) {
 
 /// physics_3d_get_trigger_events() -> table of {type, trigger_entity, other_entity}
 int L_Physics3DGetTriggerEvents(lua_State* L) {
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         const auto& events = physics->GetTriggerEvents();
         lua_newtable(L);
@@ -763,7 +768,7 @@ int L_EcsSetCollisionLayer(lua_State* L) {
     rb->collision_layer = static_cast<uint16_t>(layer);
     rb->collision_mask = static_cast<uint16_t>(mask);
 
-#ifdef DSE_ENABLE_PHYSX
+#ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>()) {
         physics->SetCollisionLayer(e, static_cast<uint16_t>(layer), static_cast<uint16_t>(mask));
     }

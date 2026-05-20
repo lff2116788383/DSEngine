@@ -9,6 +9,7 @@
  */
 
 #include <gtest/gtest.h>
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glm/glm.hpp>
@@ -96,3 +97,4 @@ TEST(VehicleSystemBasicTest, SetPhysics3D_nullptr安全) {
     sys.SetPhysics3D(nullptr);
     SUCCEED();
 }
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT

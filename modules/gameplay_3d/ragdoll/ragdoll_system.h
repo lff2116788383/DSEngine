@@ -47,6 +47,7 @@ private:
     void AutoSetupBones(World& world, entt::entity entity, RagdollComponent& ragdoll);
     void CreatePhysicsBodies(World& world, entt::entity entity, RagdollComponent& ragdoll);
     void DestroyPhysicsBodies(RagdollComponent& ragdoll);
+    void DestroyPhysicsBodiesJolt(World& world, RagdollComponent& ragdoll);
     void SyncBonesFromPhysics(World& world, entt::entity entity, RagdollComponent& ragdoll);
 };
 

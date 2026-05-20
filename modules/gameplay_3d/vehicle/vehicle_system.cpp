@@ -1,7 +1,11 @@
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/transform.h"
+#if defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
+#elif defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
+#endif
 #include "engine/base/debug.h"
 #include <glm/gtx/quaternion.hpp>
 #include <cmath>

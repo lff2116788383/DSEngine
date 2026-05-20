@@ -6,7 +6,9 @@
 #include <gtest/gtest.h>
 #include <glm/gtx/norm.hpp>
 #include "modules/gameplay_3d/rope/rope_system.h"
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
+#endif
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d_physics.h"
@@ -132,6 +134,7 @@ TEST_F(RopeSystemTest, 地形高度约束防止粒子低于地面加半径) {
     }
 }
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 class VehicleSystemTest : public ::testing::Test {
 protected:
     World world;
@@ -200,3 +203,4 @@ TEST_F(VehicleSystemTest, 缺少刚体或Transform时不会被处理) {
 
     EXPECT_FALSE(vehicle.initialized);
 }
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT

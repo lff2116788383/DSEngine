@@ -72,3 +72,6 @@
 [submodule "depends/IXWebSocket"]
 	path = depends/IXWebSocket
 	url = https://github.com/machinezone/IXWebSocket.git
+[submodule "depends/JoltPhysics"]
+	path = depends/JoltPhysics
+	url = https://github.com/jrouwe/JoltPhysics.git

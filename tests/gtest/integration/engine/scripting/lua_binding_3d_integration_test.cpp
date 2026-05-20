@@ -557,6 +557,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_NEAR(fluid.color.w, 0.4f, 0.001f);
     }
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     auto fracture_view = world.registry().view<FractureComponent>();
     ASSERT_EQ(fracture_view.size(), 1u);
     for (auto entity : fracture_view) {
@@ -568,7 +569,9 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_NEAR(fracture.explosion_force, 88.0f, 0.001f);
         EXPECT_NEAR(fracture.impact_point.z, 3.0f, 0.001f);
     }
+#endif
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     auto ragdoll_view = world.registry().view<RagdollComponent>();
     ASSERT_EQ(ragdoll_view.size(), 1u);
     for (auto entity : ragdoll_view) {
@@ -579,6 +582,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_EQ(ragdoll.collision_layer, 8u);
         EXPECT_EQ(ragdoll.collision_mask, 15u);
     }
+#endif
 
     auto softbody_view = world.registry().view<SoftBodyComponent>();
     ASSERT_EQ(softbody_view.size(), 1u);
@@ -590,6 +594,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_NEAR(softbody.gravity_scale, 0.25f, 0.001f);
     }
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     auto vehicle_view = world.registry().view<VehicleComponent>();
     ASSERT_EQ(vehicle_view.size(), 1u);
     for (auto entity : vehicle_view) {
@@ -604,6 +609,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_NEAR(vehicle.brake, 0.0f, 0.001f);
         EXPECT_NEAR(vehicle.steering, -1.0f, 0.001f);
     }
+#endif
 
     auto rope_view = world.registry().view<RopeComponent>();
     ASSERT_EQ(rope_view.size(), 1u);
@@ -617,6 +623,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         EXPECT_NEAR(rope.anchor_offset_b.z, 0.6f, 0.001f);
     }
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     auto buoyancy_view = world.registry().view<BuoyancyComponent>();
     ASSERT_EQ(buoyancy_view.size(), 1u);
     for (auto entity : buoyancy_view) {
@@ -627,6 +634,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
         ASSERT_EQ(buoyancy.sample_points.size(), 1u);
         EXPECT_NEAR(buoyancy.sample_points[0].force_scale, 2.0f, 0.001f);
     }
+#endif
 
     ShutdownLuaRuntime();
 }

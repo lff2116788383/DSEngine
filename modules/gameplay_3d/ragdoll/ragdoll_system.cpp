@@ -19,6 +19,8 @@
 #include <extensions/PxD6Joint.h>
 #endif
 using namespace physx;
+#elif defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
 #endif
 
 namespace { constexpr float kPi = 3.14159265358979323846f; }
@@ -74,7 +76,6 @@ void RagdollSystem::Activate(World& world, entt::entity entity,
 #ifdef DSE_ENABLE_PHYSX
     // 施加初始冲量
     if (ragdoll->initialized && glm::length(impulse) > 0.001f) {
-        // 找到离冲击点最近的刚体
         float best_dist = FLT_MAX;
         PxRigidDynamic* best_actor = nullptr;
         for (auto& rb : ragdoll->runtime_bones) {
@@ -91,6 +92,24 @@ void RagdollSystem::Activate(World& world, entt::entity entity,
             best_actor->addForce(PxVec3(impulse.x, impulse.y, impulse.z), PxForceMode::eIMPULSE);
         }
     }
+#elif defined(DSE_ENABLE_JOLT)
+    if (ragdoll->initialized && physics3d_ && glm::length(impulse) > 0.001f) {
+        float best_dist = FLT_MAX;
+        entt::entity best_entity = entt::null;
+        for (auto& rb : ragdoll->runtime_bones) {
+            if (rb.bone_entity == entt::null) continue;
+            auto* tf = world.registry().try_get<TransformComponent>(rb.bone_entity);
+            if (!tf) continue;
+            float d = glm::length(tf->position - impulse_point);
+            if (d < best_dist) {
+                best_dist = d;
+                best_entity = rb.bone_entity;
+            }
+        }
+        if (best_entity != entt::null) {
+            physics3d_->AddImpulse(best_entity, impulse);
+        }
+    }
 #else
     (void)impulse; (void)impulse_point;
 #endif
@@ -102,7 +121,11 @@ void RagdollSystem::Deactivate(World& world, entt::entity entity) {
     auto* ragdoll = world.registry().try_get<RagdollComponent>(entity);
     if (!ragdoll || !ragdoll->active) return;
 
+#ifdef DSE_ENABLE_JOLT
+    DestroyPhysicsBodiesJolt(world, *ragdoll);
+#else
     DestroyPhysicsBodies(*ragdoll);
+#endif
     ragdoll->active = false;
 
     // 重新启用动画
@@ -194,7 +217,7 @@ void RagdollSystem::AutoSetupBones(World& world, entt::entity entity, RagdollCom
 }
 
 void RagdollSystem::CreatePhysicsBodies(World& world, entt::entity entity, RagdollComponent& ragdoll) {
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX)
     if (ragdoll.initialized) return;
 
     auto* animator = world.registry().try_get<Animator3DComponent>(entity);
@@ -359,6 +382,96 @@ void RagdollSystem::CreatePhysicsBodies(World& world, entt::entity entity, Ragdo
 
     ragdoll.initialized = true;
     DEBUG_LOG_INFO("[Ragdoll] Created {} physics bodies for entity {}", ragdoll.runtime_bones.size(), static_cast<uint32_t>(entity));
+#elif defined(DSE_ENABLE_JOLT)
+    if (ragdoll.initialized) return;
+
+    auto* animator = world.registry().try_get<Animator3DComponent>(entity);
+    auto* transform = world.registry().try_get<TransformComponent>(entity);
+    if (!animator || !transform || animator->dskel_path.empty() || !asset_manager_) return;
+
+    auto dskel = asset_manager_->LoadDskel(animator->dskel_path);
+    if (!dskel || dskel->GetData().empty()) return;
+
+    const uint8_t* skel_data = dskel->GetData().data();
+    const auto* header = reinterpret_cast<const asset::compiler::SkelHeader*>(skel_data);
+    const auto* bones_data = reinterpret_cast<const asset::compiler::BoneDesc*>(skel_data + sizeof(asset::compiler::SkelHeader));
+    uint32_t bone_count = std::min(header->bone_count, static_cast<uint32_t>(MAX_BONES));
+
+    std::vector<glm::mat4> bind_globals(bone_count);
+    std::vector<bool> computed(bone_count, false);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        int pi = bones_data[i].parent_index;
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            bind_globals[i] = bones_data[i].local_transform;
+            computed[i] = true;
+        }
+    }
+    for (uint32_t pass = 0; pass < bone_count; ++pass) {
+        bool all_done = true;
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            if (computed[i]) continue;
+            int pi = bones_data[i].parent_index;
+            if (computed[pi]) { bind_globals[i] = bind_globals[pi] * bones_data[i].local_transform; computed[i] = true; }
+            else all_done = false;
+        }
+        if (all_done) break;
+    }
+
+    glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), transform->position)
+                            * glm::mat4_cast(transform->rotation)
+                            * glm::scale(glm::mat4(1.0f), transform->scale);
+
+    ragdoll.runtime_bones.resize(ragdoll.bone_setups.size());
+
+    for (size_t si = 0; si < ragdoll.bone_setups.size(); ++si) {
+        const auto& setup = ragdoll.bone_setups[si];
+        if (setup.bone_index < 0 || setup.bone_index >= static_cast<int>(bone_count)) continue;
+
+        glm::mat4 bone_world = entity_world * bind_globals[setup.bone_index];
+        glm::vec3 bone_pos = glm::vec3(bone_world[3]);
+        glm::quat bone_rot = glm::quat_cast(bone_world);
+
+        // 创建临时 ECS entity 作为骨骼刚体
+        entt::entity bone_entity = world.CreateEntity();
+
+        auto& tf = world.registry().emplace<TransformComponent>(bone_entity);
+        tf.position = bone_pos;
+        tf.rotation = bone_rot;
+        tf.scale = glm::vec3(1.0f);
+
+        auto& rb = world.registry().emplace<RigidBody3DComponent>(bone_entity);
+        rb.type = RigidBody3DType::Dynamic;
+        rb.mass = setup.mass;
+        rb.drag = 0.5f;
+        rb.angular_drag = 0.8f;
+        rb.use_gravity = true;
+        rb.collision_layer = ragdoll.collision_layer;
+        rb.collision_mask = ragdoll.collision_mask;
+
+        auto& cap = world.registry().emplace<CapsuleCollider3DComponent>(bone_entity);
+        cap.radius = setup.radius;
+        cap.height = setup.height;
+
+        ragdoll.runtime_bones[si].bone_entity = bone_entity;
+        ragdoll.runtime_bones[si].bone_index = setup.bone_index;
+
+        // 创建关节连接到父骨骼
+        if (setup.parent_setup_index >= 0 && setup.parent_setup_index < static_cast<int>(si)) {
+            entt::entity parent_entity = ragdoll.runtime_bones[setup.parent_setup_index].bone_entity;
+            if (parent_entity != entt::null) {
+                auto& jc = world.registry().emplace<Joint3DComponent>(bone_entity);
+                jc.type = Joint3DType::Spring;
+                jc.connected_entity_id = static_cast<uint32_t>(parent_entity);
+                jc.anchor = glm::vec3(0.0f);
+                jc.connected_anchor = glm::vec3(0.0f);
+                jc.spring_stiffness = ragdoll.joint_stiffness > 0.0f ? ragdoll.joint_stiffness : 500.0f;
+                jc.spring_damping = ragdoll.joint_damping;
+            }
+        }
+    }
+
+    ragdoll.initialized = true;
+    DEBUG_LOG_INFO("[Ragdoll-Jolt] Created {} ECS bone entities for entity {}", ragdoll.runtime_bones.size(), static_cast<uint32_t>(entity));
 #else
     (void)world; (void)entity; (void)ragdoll;
 #endif
@@ -385,8 +498,21 @@ void RagdollSystem::DestroyPhysicsBodies(RagdollComponent& ragdoll) {
     ragdoll.initialized = false;
 }
 
+void RagdollSystem::DestroyPhysicsBodiesJolt(World& world, RagdollComponent& ragdoll) {
+    for (auto& rb : ragdoll.runtime_bones) {
+        if (rb.bone_entity != entt::null) {
+            if (physics3d_) physics3d_->RemoveActor(rb.bone_entity);
+            if (world.registry().valid(rb.bone_entity))
+                world.registry().destroy(rb.bone_entity);
+            rb.bone_entity = entt::null;
+        }
+    }
+    ragdoll.runtime_bones.clear();
+    ragdoll.initialized = false;
+}
+
 void RagdollSystem::SyncBonesFromPhysics(World& world, entt::entity entity, RagdollComponent& ragdoll) {
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX)
     auto* animator = world.registry().try_get<Animator3DComponent>(entity);
     auto* transform = world.registry().try_get<TransformComponent>(entity);
     if (!animator || !transform) return;
@@ -442,6 +568,59 @@ void RagdollSystem::SyncBonesFromPhysics(World& world, entt::entity entity, Ragd
         glm::mat4 physics_local = inv_entity_world * physics_world;
 
         // final_bone_matrix = physics_local * inv(bind_global)
+        animator->final_bone_matrices[rb.bone_index] = physics_local * glm::inverse(bind_globals[rb.bone_index]);
+    }
+#elif defined(DSE_ENABLE_JOLT)
+    auto* animator = world.registry().try_get<Animator3DComponent>(entity);
+    auto* transform = world.registry().try_get<TransformComponent>(entity);
+    if (!animator || !transform) return;
+    if (animator->final_bone_matrices.empty()) return;
+
+    glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), transform->position)
+                            * glm::mat4_cast(transform->rotation)
+                            * glm::scale(glm::mat4(1.0f), transform->scale);
+    glm::mat4 inv_entity_world = glm::inverse(entity_world);
+
+    if (!asset_manager_) return;
+    auto dskel = asset_manager_->LoadDskel(animator->dskel_path);
+    if (!dskel || dskel->GetData().empty()) return;
+
+    const uint8_t* skel_data = dskel->GetData().data();
+    const auto* header = reinterpret_cast<const asset::compiler::SkelHeader*>(skel_data);
+    const auto* bones_data = reinterpret_cast<const asset::compiler::BoneDesc*>(skel_data + sizeof(asset::compiler::SkelHeader));
+    uint32_t bone_count = std::min(header->bone_count, static_cast<uint32_t>(MAX_BONES));
+
+    std::vector<glm::mat4> bind_globals(bone_count);
+    std::vector<bool> computed(bone_count, false);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        int pi = bones_data[i].parent_index;
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            bind_globals[i] = bones_data[i].local_transform;
+            computed[i] = true;
+        }
+    }
+    for (uint32_t pass = 0; pass < bone_count; ++pass) {
+        bool all_done = true;
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            if (computed[i]) continue;
+            int pi = bones_data[i].parent_index;
+            if (computed[pi]) { bind_globals[i] = bind_globals[pi] * bones_data[i].local_transform; computed[i] = true; }
+            else all_done = false;
+        }
+        if (all_done) break;
+    }
+
+    for (const auto& rb : ragdoll.runtime_bones) {
+        if (rb.bone_entity == entt::null || rb.bone_index < 0 || rb.bone_index >= static_cast<int>(bone_count)) continue;
+        if (rb.bone_index >= static_cast<int>(animator->final_bone_matrices.size())) continue;
+
+        auto* bone_tf = world.registry().try_get<TransformComponent>(rb.bone_entity);
+        if (!bone_tf) continue;
+
+        glm::mat4 physics_world = glm::translate(glm::mat4(1.0f), bone_tf->position)
+                                * glm::mat4_cast(bone_tf->rotation);
+
+        glm::mat4 physics_local = inv_entity_world * physics_world;
         animator->final_bone_matrices[rb.bone_index] = physics_local * glm::inverse(bind_globals[rb.bone_index]);
     }
 #else

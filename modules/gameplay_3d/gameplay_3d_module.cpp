@@ -1,7 +1,9 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/core/service_locator.h"
 #include <limits>
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
+#elif defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
 #include "engine/ecs/components_3d_fluid.h"
@@ -30,13 +32,11 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     cloth_system_.SetAssetManager(asset_manager);
     fluid_system_.Init(world, rhi_device);
     softbody_system_.SetAssetManager(asset_manager);
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     fracture_system_.SetAssetManager(asset_manager);
-    ragdoll_system_.SetAssetManager(asset_manager);
-#endif
-#if defined(DSE_ENABLE_PHYSX)
     auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>();
     fracture_system_.SetPhysics3D(physics3d);
+    ragdoll_system_.SetAssetManager(asset_manager);
     ragdoll_system_.SetPhysics3D(physics3d);
     vehicle_system_.SetPhysics3D(physics3d);
     buoyancy_system_.SetPhysics3D(physics3d);
@@ -56,7 +56,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 #ifdef DSE_ENABLE_NAVMESH
     nav_agent_system_.Update(world, delta_time);
 #endif
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     fracture_system_.Update(world, delta_time);
 #endif
     fluid_system_.Update(world, delta_time);
@@ -84,7 +84,7 @@ void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     cloth_system_.FixedUpdate(world, fixed_delta_time);
     softbody_system_.FixedUpdate(world, fixed_delta_time);
     rope_system_.FixedUpdate(world, fixed_delta_time);
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     ragdoll_system_.FixedUpdate(world, fixed_delta_time);
     vehicle_system_.FixedUpdate(world, fixed_delta_time);
     buoyancy_system_.FixedUpdate(world, fixed_delta_time);
@@ -183,7 +183,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     cloth_system_.SetAssetManager(nullptr);
     fluid_system_.Shutdown(world);
     softbody_system_.SetAssetManager(nullptr);
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     fracture_system_.SetAssetManager(nullptr);
     fracture_system_.SetPhysics3D(nullptr);
     ragdoll_system_.SetAssetManager(nullptr);

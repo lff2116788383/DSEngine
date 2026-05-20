@@ -33,7 +33,11 @@ if(MSVC)
     add_link_options(/NODEFAULTLIB:lua.lib /NODEFAULTLIB:lua5.1.lib /NODEFAULTLIB:lua51.lib /NODEFAULTLIB:lua53.lib /NODEFAULTLIB:lua54.lib)
 endif()
 
-option(DSE_ENABLE_PHYSX "Enable PhysX integration" ON)
+option(DSE_ENABLE_PHYSX "Enable PhysX integration" OFF)
+option(DSE_ENABLE_JOLT "Enable Jolt Physics integration" ON)
+if(DSE_ENABLE_PHYSX AND DSE_ENABLE_JOLT)
+    message(FATAL_ERROR "DSE_ENABLE_PHYSX and DSE_ENABLE_JOLT are mutually exclusive. Please enable only one 3D physics backend.")
+endif()
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
@@ -148,6 +152,12 @@ endif()
 # 因为 DSE_HAS_PHYSX_LIBS 在 cmake/CMakeLists.txt.Physx 中才被设置
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     add_definitions(-D DSE_ENABLE_PHYSX)
+endif()
+
+# Jolt Physics (跨平台替代 PhysX)
+include(cmake/CMakeLists.txt.Jolt)
+if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
+    add_definitions(-D DSE_ENABLE_JOLT)
 endif()
 
 #头文件目录（全局，合并为一处避免重复）
@@ -299,9 +309,19 @@ if(DSE_ENABLE_3D)
     list(APPEND engine_cpp ${gameplay_3d_cpp})
 endif()
 
-# PhysX 禁用或缺库时排除依赖 Physics3DSystem 的源文件
-# 注意：必须在 gameplay_3d append 之后执行
-if(NOT DSE_ENABLE_PHYSX OR (MSVC AND NOT DSE_HAS_PHYSX_LIBS))
+# 物理后端源文件排除逻辑（必须在 gameplay_3d append 之后执行）
+set(_HAS_ANY_PHYSICS3D OFF)
+if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
+    set(_HAS_ANY_PHYSICS3D ON)
+    # PhysX 模式下排除 Jolt 实现
+    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d_system_jolt\\.cpp$")
+elseif(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
+    set(_HAS_ANY_PHYSICS3D ON)
+    # Jolt 模式下排除 PhysX 专属实现文件
+    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d/physics3d_system\\.cpp$")
+    # Vehicle / Buoyancy / Fracture / Ragdoll 均已适配 Jolt 后端
+endif()
+if(NOT _HAS_ANY_PHYSICS3D)
     list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/vehicle/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/buoyancy/.*\\.cpp$")
@@ -364,6 +384,9 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
         $<$<CONFIG:Debug>:${PHYSX_LIB_DIR_DEBUG}/PhysXExtensions_static_64.lib>
         $<$<NOT:$<CONFIG:Debug>>:${PHYSX_LIB_DIR_RELEASE}/PhysXExtensions_static_64.lib>
     )
+endif()
+if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
+    target_link_libraries(dse_engine PRIVATE Jolt)
 endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)

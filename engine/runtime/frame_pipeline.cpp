@@ -550,15 +550,15 @@ bool FramePipeline::Init() {
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
-    // PhysX 3D 鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
+#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
+    // 3D 物理必须在鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
     // 鍚﹀垯 FractureSystem::SetPhysics3D() 浼氭嬁鍒?nullptr锛屽鑷寸鐗囧悓鏃跺惎鐢?
     // CPU fallback 鐗╃悊鍜?PhysX 鐗╃悊锛屼袱濂楃墿鐞嗕氦鏇胯鍐?transform 鈫?闂儊銆?
     if (physics3d_system_.Init(*runtime_context_.world)) {
         dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
             std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
         physics3d_system_initialized_ = true;
-        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem (PhysX) initialized and registered");
+        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem initialized and registered");
     } else {
         DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
     }
@@ -695,7 +695,7 @@ void FramePipeline::Shutdown() {
     modules_.clear();
 
     modules_impl_->ShutdownMeshSystem();
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
     if (physics3d_system_initialized_) {
         dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
         physics3d_system_.Shutdown();
@@ -1059,7 +1059,7 @@ void FramePipeline::RunRenderInternal() {
             (void)entity;
             ++physics_bodies;
         }
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
         auto physics3d_view = runtime_context_.world->registry().view<dse::RigidBody3DComponent>();
         for (auto entity : physics3d_view) {
             (void)entity;
@@ -1364,7 +1364,7 @@ void FramePipeline::EnableEditorMode(bool enable) {
 }
 
 void FramePipeline::ResetPhysics3D() {
-#if defined(DSE_ENABLE_3D) && defined(DSE_ENABLE_PHYSX)
+#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
     if (physics3d_system_initialized_) {
         dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
         physics3d_system_.Shutdown();

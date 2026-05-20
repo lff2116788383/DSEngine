@@ -5,7 +5,9 @@
 #include "engine/ecs/transform.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
+#elif defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
 #include <glm/gtc/quaternion.hpp>
@@ -620,9 +622,9 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
             }
             glm::vec3 impulse = dir * fc.explosion_force * rb.mass;
             impulse.y += fc.explosion_force * rb.mass * 0.3f;
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
             if (physics3d_) {
-                // PhysX actor 尚未创建，将脉冲存入 pending_impulse，
+                // 物理 actor 尚未创建，将脉冲存入 pending_impulse，
                 // SyncTransformsToPhysics 创建 actor 时自动应用
                 auto& emplace_rb = world.registry().get<RigidBody3DComponent>(frag_entity);
                 emplace_rb.pending_impulse = impulse;
@@ -662,7 +664,7 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
         // Destroy existing PhysX actor so it gets recreated as Static
         // (it was originally created as Dynamic)
         if (rb.runtime_body) {
-#if defined(DSE_ENABLE_PHYSX)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
             if (physics3d_) {
                 physics3d_->RemoveActor(source_entity);
             }

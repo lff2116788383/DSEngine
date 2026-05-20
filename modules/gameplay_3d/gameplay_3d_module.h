@@ -18,7 +18,7 @@
 #ifdef DSE_ENABLE_NAVMESH
 #include "modules/gameplay_3d/ai/nav_agent_system.h"
 #endif
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 #include "modules/gameplay_3d/destruction/fracture_system.h"
 #include "modules/gameplay_3d/ragdoll/ragdoll_system.h"
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
@@ -64,7 +64,7 @@ private:
 #ifdef DSE_ENABLE_NAVMESH
     NavAgentSystem nav_agent_system_;
 #endif
-#ifdef DSE_ENABLE_PHYSX
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     FractureSystem fracture_system_;
     RagdollSystem ragdoll_system_;
     VehicleSystem vehicle_system_;
