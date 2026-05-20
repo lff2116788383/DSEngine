@@ -428,6 +428,16 @@ void GLShaderManager::CachePBRLocations() {
     loc.splat_enabled = glGetUniformLocation(h, "u_splat_enabled");
     loc.splat_tiling = glGetUniformLocation(h, "u_splat_tiling");
 
+    // --- DDGI ---
+    loc.ddgi_enabled = glGetUniformLocation(h, "u_ddgi_enabled");
+    loc.ddgi_grid_origin = glGetUniformLocation(h, "u_ddgi_grid_origin");
+    loc.ddgi_grid_spacing = glGetUniformLocation(h, "u_ddgi_grid_spacing");
+    loc.ddgi_grid_resolution = glGetUniformLocation(h, "u_ddgi_grid_resolution");
+    loc.ddgi_irradiance_texels = glGetUniformLocation(h, "u_ddgi_irradiance_texels");
+    loc.ddgi_gi_intensity = glGetUniformLocation(h, "u_ddgi_gi_intensity");
+    loc.ddgi_normal_bias = glGetUniformLocation(h, "u_ddgi_normal_bias");
+    loc.ddgi_irradiance_atlas = glGetUniformLocation(h, "u_ddgi_irradiance_atlas");
+
     // --- 閫愬璞?uniform锛堜粠 push constants 灞曞钩锛?----
     loc.model = glGetUniformLocation(h, "u_model");
     loc.skinned = glGetUniformLocation(h, "u_skinned");

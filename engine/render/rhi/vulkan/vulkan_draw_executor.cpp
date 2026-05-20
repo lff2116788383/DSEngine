@@ -1924,50 +1924,41 @@ void VulkanDrawExecutor::DrawPostProcess(
     }
     unsigned int pp_state = needs_blend ? pp_blend_pipeline_state_ : pp_pipeline_state_;
 
-    // 根据 effect 名称选择专用着色器
+    // 根据 effect 名称选择专用着色器（表驱动）
+    using ShaderAccessor = unsigned int (ShaderManagerBase::*)() const;
+    static const std::unordered_map<std::string, ShaderAccessor> kShaderMap = {
+        {"bloom_extract",     &ShaderManagerBase::bloom_extract_shader_handle},
+        {"fxaa",              &ShaderManagerBase::fxaa_shader_handle},
+        {"ssao",              &ShaderManagerBase::ssao_shader_handle},
+        {"ssao_blur",         &ShaderManagerBase::ssao_blur_shader_handle},
+        {"ssao_apply",        &ShaderManagerBase::ssao_apply_shader_handle},
+        {"lum_compute",       &ShaderManagerBase::lum_compute_shader_handle},
+        {"lum_adapt",         &ShaderManagerBase::lum_adapt_shader_handle},
+        {"tonemapping",       &ShaderManagerBase::tonemapping_shader_handle},
+        {"bloom_composite",   &ShaderManagerBase::bloom_composite_ssao_ae_shader_handle},
+        {"color_grading",     &ShaderManagerBase::color_grading_shader_handle},
+        {"contact_shadow",    &ShaderManagerBase::contact_shadow_shader_handle},
+        {"taa_resolve",       &ShaderManagerBase::taa_resolve_shader_handle},
+        {"dof",               &ShaderManagerBase::dof_shader_handle},
+        {"motion_blur",       &ShaderManagerBase::motion_blur_shader_handle},
+        {"motion_vector",     &ShaderManagerBase::motion_vector_shader_handle},
+        {"ssr",               &ShaderManagerBase::ssr_shader_handle},
+        {"deferred_lighting", &ShaderManagerBase::deferred_lighting_shader_handle},
+        {"edge_detect",       &ShaderManagerBase::edge_detect_shader_handle},
+        {"volumetric_fog",    &ShaderManagerBase::volumetric_fog_shader_handle},
+        {"decal",             &ShaderManagerBase::decal_shader_handle},
+        {"wboit_composite",   &ShaderManagerBase::wboit_composite_shader_handle},
+        {"water",             &ShaderManagerBase::water_shader_handle},
+        {"light_shaft",       &ShaderManagerBase::light_shaft_shader_handle},
+    };
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
-    if (effect_name == "bloom_extract" && shader_mgr.bloom_extract_shader_handle())
-        selected_shader_handle = shader_mgr.bloom_extract_shader_handle();
-    else if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle())
-        selected_shader_handle = shader_mgr.fxaa_shader_handle();
-    else if (effect_name == "ssao" && shader_mgr.ssao_shader_handle())
-        selected_shader_handle = shader_mgr.ssao_shader_handle();
-    else if (effect_name == "ssao_blur" && shader_mgr.ssao_blur_shader_handle())
-        selected_shader_handle = shader_mgr.ssao_blur_shader_handle();
-    else if (effect_name == "lum_compute" && shader_mgr.lum_compute_shader_handle())
-        selected_shader_handle = shader_mgr.lum_compute_shader_handle();
-    else if (effect_name == "lum_adapt" && shader_mgr.lum_adapt_shader_handle())
-        selected_shader_handle = shader_mgr.lum_adapt_shader_handle();
-    else if (effect_name == "tonemapping" && shader_mgr.tonemapping_shader_handle())
-        selected_shader_handle = shader_mgr.tonemapping_shader_handle();
-    else if (effect_name == "bloom_composite" && shader_mgr.bloom_composite_ssao_ae_shader_handle())
-        selected_shader_handle = shader_mgr.bloom_composite_ssao_ae_shader_handle();
-    else if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle())
-        selected_shader_handle = shader_mgr.color_grading_shader_handle();
-    else if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle())
-        selected_shader_handle = shader_mgr.contact_shadow_shader_handle();
-    else if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle())
-        selected_shader_handle = shader_mgr.taa_resolve_shader_handle();
-    else if (effect_name == "dof" && shader_mgr.dof_shader_handle())
-        selected_shader_handle = shader_mgr.dof_shader_handle();
-    else if (effect_name == "motion_blur" && shader_mgr.motion_blur_shader_handle())
-        selected_shader_handle = shader_mgr.motion_blur_shader_handle();
-    else if (effect_name == "ssr" && shader_mgr.ssr_shader_handle())
-        selected_shader_handle = shader_mgr.ssr_shader_handle();
-    else if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle())
-        selected_shader_handle = shader_mgr.deferred_lighting_shader_handle();
-    else if (effect_name == "edge_detect" && shader_mgr.edge_detect_shader_handle())
-        selected_shader_handle = shader_mgr.edge_detect_shader_handle();
-    else if (effect_name == "volumetric_fog" && shader_mgr.volumetric_fog_shader_handle())
-        selected_shader_handle = shader_mgr.volumetric_fog_shader_handle();
-    else if (effect_name == "decal" && shader_mgr.decal_shader_handle())
-        selected_shader_handle = shader_mgr.decal_shader_handle();
-    else if (effect_name == "wboit_composite" && shader_mgr.wboit_composite_shader_handle())
-        selected_shader_handle = shader_mgr.wboit_composite_shader_handle();
-    else if (effect_name == "water" && shader_mgr.water_shader_handle())
-        selected_shader_handle = shader_mgr.water_shader_handle();
-    else if (effect_name == "light_shaft" && shader_mgr.light_shaft_shader_handle())
-        selected_shader_handle = shader_mgr.light_shaft_shader_handle();
+    {
+        auto it = kShaderMap.find(effect_name);
+        if (it != kShaderMap.end()) {
+            unsigned int h = (shader_mgr.*(it->second))();
+            if (h != 0) selected_shader_handle = h;
+        }
+    }
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1997,7 +1988,24 @@ void VulkanDrawExecutor::DrawPostProcess(
         vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pp_pipeline);
     }
 
-    // 构建额外纹理绑定列表 {set2_binding, texture_handle}
+    // 构建额外纹理绑定列表 {set2_binding, texture_handle}（表驱动）
+    struct ExtraTexSlot { uint32_t binding; int findtex_slot; };
+    static const std::unordered_map<std::string, std::vector<ExtraTexSlot>> kExtraTexTable = {
+        {"tonemapping",       {{2, 2}, {5, 5}}},
+        {"ssao_apply",        {{2, 2}, {3, 3}, {5, 5}}},
+        {"lum_adapt",         {{2, 2}}},
+        {"color_grading",     {{5, 5}}},
+        {"taa_resolve",       {{2, 2}, {5, 5}}},
+        {"dof",               {{2, 2}}},
+        {"motion_blur",       {{2, 2}}},
+        {"ssr",               {{2, 2}}},
+        {"deferred_lighting", {{2, 2}, {3, 3}}},
+        {"volumetric_fog",    {{2, 2}}},
+        {"decal",             {{2, 2}, {3, 3}}},
+        {"wboit_composite",   {{2, 2}}},
+        {"water",             {{2, 2}}},
+        {"light_shaft",       {{2, 2}}},
+    };
     std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
     if (effect_name == "bloom_composite") {
         const CompositeParamsView composite(params);
@@ -2008,34 +2016,12 @@ void VulkanDrawExecutor::DrawPostProcess(
             {5, composite.Texture(CompositeParamsView::kLutTex)},
             {6, composite.Texture(CompositeParamsView::kContactShadowTex)}
         };
-    } else if (effect_name == "tonemapping") {
-        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "ssao_apply") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "lum_adapt") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "color_grading") {
-        extra_bindings = {{5, request.FindTex(5)}};
-    } else if (effect_name == "taa_resolve") {
-        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "dof") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "motion_blur") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "ssr") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "deferred_lighting") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
-    } else if (effect_name == "volumetric_fog") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "decal") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
-    } else if (effect_name == "wboit_composite") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "water") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "light_shaft") {
-        extra_bindings = {{2, request.FindTex(2)}};
+    } else {
+        auto tex_it = kExtraTexTable.find(effect_name);
+        if (tex_it != kExtraTexTable.end()) {
+            for (const auto& s : tex_it->second)
+                extra_bindings.push_back({s.binding, request.FindTex(s.findtex_slot)});
+        }
     }
 
     // 分配并绑定后处理 DescriptorSet

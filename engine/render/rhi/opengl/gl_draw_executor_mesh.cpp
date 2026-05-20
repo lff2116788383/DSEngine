@@ -275,20 +275,20 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     glUniform1i(glGetUniformLocation(active_shader, "u_texture"), slots.albedo);
     const int gbuffer_model_loc = gbuffer_mode ? glGetUniformLocation(active_shader, "u_model") : -1;
 
-    // DDGI uniforms（全局，每 batch 一次）设置
+    // DDGI uniforms（全局，每 batch 一次）— 使用缓存的 location
     if (!gbuffer_mode && global_state_.ddgi_enabled && global_state_.ddgi_irradiance_atlas != 0) {
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 1.0f);
-        glUniform3fv(glGetUniformLocation(active_shader, "u_ddgi_grid_origin"), 1, &global_state_.ddgi_grid_origin.x);
-        glUniform3fv(glGetUniformLocation(active_shader, "u_ddgi_grid_spacing"), 1, &global_state_.ddgi_grid_spacing.x);
-        glUniform3iv(glGetUniformLocation(active_shader, "u_ddgi_grid_resolution"), 1, &global_state_.ddgi_grid_resolution.x);
-        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_texels"), global_state_.ddgi_irradiance_texels);
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_gi_intensity"), global_state_.ddgi_gi_intensity);
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_normal_bias"), global_state_.ddgi_normal_bias);
+        glUniform1f(loc.ddgi_enabled, 1.0f);
+        glUniform3fv(loc.ddgi_grid_origin, 1, &global_state_.ddgi_grid_origin.x);
+        glUniform3fv(loc.ddgi_grid_spacing, 1, &global_state_.ddgi_grid_spacing.x);
+        glUniform3iv(loc.ddgi_grid_resolution, 1, &global_state_.ddgi_grid_resolution.x);
+        glUniform1i(loc.ddgi_irradiance_texels, global_state_.ddgi_irradiance_texels);
+        glUniform1f(loc.ddgi_gi_intensity, global_state_.ddgi_gi_intensity);
+        glUniform1f(loc.ddgi_normal_bias, global_state_.ddgi_normal_bias);
         glActiveTexture(GL_TEXTURE0 + slots.ddgi_atlas);
         glBindTexture(GL_TEXTURE_2D, global_state_.ddgi_irradiance_atlas);
-        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_atlas"), slots.ddgi_atlas);
+        glUniform1i(loc.ddgi_irradiance_atlas, slots.ddgi_atlas);
     } else if (!gbuffer_mode) {
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 0.0f);
+        glUniform1f(loc.ddgi_enabled, 0.0f);
     }
 
     unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();

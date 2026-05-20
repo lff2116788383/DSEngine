@@ -50,6 +50,16 @@ struct PBRShaderLocations {
     int splat_enabled = -1;
     int splat_tiling = -1;
 
+    // --- DDGI uniform location ---
+    int ddgi_enabled = -1;
+    int ddgi_grid_origin = -1;
+    int ddgi_grid_spacing = -1;
+    int ddgi_grid_resolution = -1;
+    int ddgi_irradiance_texels = -1;
+    int ddgi_gi_intensity = -1;
+    int ddgi_normal_bias = -1;
+    int ddgi_irradiance_atlas = -1;
+
     // --- 逐对象 uniform（从 push constants 展平） ---
     int model = -1;
     int skinned = -1;

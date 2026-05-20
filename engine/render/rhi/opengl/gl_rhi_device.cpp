@@ -335,7 +335,15 @@ unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool i
 void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
     unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
     glBindBuffer(target, handle);
-    glBufferSubData(target, offset, size, data);
+    if (offset == 0) {
+        // Buffer orphaning: 用 glBufferData 替换 glBufferSubData，
+        // 驱动可立即分配新 storage 而无需等待 GPU 释放旧数据。
+        // GL_STREAM_DRAW 提示驱动：数据每帧写入一次、绘制少量次后丢弃。
+        glBufferData(target, static_cast<GLsizeiptr>(size), data, GL_STREAM_DRAW);
+    } else {
+        glBufferSubData(target, static_cast<GLintptr>(offset),
+                        static_cast<GLsizeiptr>(size), data);
+    }
 }
 
 void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
