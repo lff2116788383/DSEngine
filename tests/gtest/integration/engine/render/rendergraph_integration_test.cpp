@@ -323,13 +323,6 @@ public:
     void Submit(std::shared_ptr<CommandBuffer>) override {}
     void EndFrame() override {}
     const RenderStats& LastFrameStats() const override { return stats_; }
-    void SetGlobalShadowMap(unsigned int, unsigned int) override {}
-    void SetGlobalSpotShadowMap(unsigned int, unsigned int) override {}
-    void SetGlobalPointShadowMap(unsigned int, unsigned int) override {}
-    void SetGlobalLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
-    void SetGlobalCascadeSplit(unsigned int, float) override {}
-    void SetGlobalSpotLightSpaceMatrix(unsigned int, const glm::mat4&) override {}
-    void SetGlobalLightProbeSH(const glm::vec4[9], bool) override {}
 };
 
 // ============================================================

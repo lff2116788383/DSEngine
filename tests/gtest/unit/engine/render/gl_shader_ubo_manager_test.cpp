@@ -66,11 +66,10 @@ TEST(GLShaderManagerTest, SSBO标志) {
     EXPECT_TRUE(mgr.supports_ssbo());
 }
 
-TEST(GLShaderManagerTest, HasPostProcessShader_空缓存) {
+TEST(GLShaderManagerTest, GenPPShader_未知效果返回零) {
     GLShaderManager mgr;
-    EXPECT_FALSE(mgr.HasPostProcessShader("bloom"));
-    EXPECT_FALSE(mgr.HasPostProcessShader("tonemap"));
-    EXPECT_FALSE(mgr.HasPostProcessShader(""));
+    EXPECT_EQ(mgr.GetOrCreateGenPPShader("__nonexistent__"), 0u);
+    EXPECT_EQ(mgr.GetOrCreateGenPPShader(""), 0u);
 }
 
 TEST(GLShaderManagerTest, SetSkyboxHandle) {

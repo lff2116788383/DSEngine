@@ -132,7 +132,8 @@ static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
  */
 class DX11DrawExecutor {
 public:
-    DX11DrawExecutor() = default;
+    explicit DX11DrawExecutor(DrawExecutorGlobalState& shared_state)
+        : global_state_(shared_state) {}
     ~DX11DrawExecutor() = default;
 
     /// 初始化常量缓冲和几何缓冲
@@ -190,17 +191,6 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
-    // --- 全局阴影/光源矩阵（委托给共享状态） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_state_.SetPointShadowMap(index, handle); }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetLightSpaceMatrix(index, mat); }
-    void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
-    void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
-
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
@@ -229,8 +219,8 @@ private:
     ComPtr<ID3D11Buffer> per_scene_cb_;
     ComPtr<ID3D11Buffer> per_material_cb_;
 
-    // 全局渲染状态（共享结构体，消除三端重复）
-    DrawExecutorGlobalState global_state_;
+    // 全局渲染状态（引用 RhiDevice::global_render_state_）
+    DrawExecutorGlobalState& global_state_;
 
     // --- 几何缓冲 ---
     // 精灵四边形（动态 VBO，静态 IBO）

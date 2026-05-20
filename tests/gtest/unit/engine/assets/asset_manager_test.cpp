@@ -56,13 +56,6 @@ public:
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override { (void)cmd_buffer; }
     void EndFrame() override {}
     const RenderStats& LastFrameStats() const override { return stats_; }
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override { (void)index; (void)handle; }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override { (void)index; (void)handle; }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override { (void)index; (void)handle; }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override { (void)index; (void)mat; }
-    void SetGlobalCascadeSplit(unsigned int index, float split) override { (void)index; (void)split; }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override { (void)index; (void)mat; }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override { (void)sh; (void)enabled; }
 
     std::vector<unsigned int> deleted_textures;
 

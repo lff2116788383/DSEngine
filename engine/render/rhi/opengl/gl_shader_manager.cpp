@@ -536,25 +536,6 @@ void GLShaderManager::InitShadowShader() {
 // Post-process shader cache
 // ============================================================
 
-unsigned int GLShaderManager::GetOrCreatePostProcessShader(const std::string& effect_name,
-                                                            const char* vs_src,
-                                                            const std::string& fs_src) {
-    auto it = pp_shaders_.find(effect_name);
-    if (it != pp_shaders_.end()) {
-        return it->second;
-    }
-
-    const char* fs_c_str = fs_src.c_str();
-    unsigned int shader = CompileProgram(vs_src, fs_c_str);
-    programs_created_ += 1;
-    pp_shaders_[effect_name] = shader;
-    return shader;
-}
-
-bool GLShaderManager::HasPostProcessShader(const std::string& effect_name) const {
-    return pp_shaders_.find(effect_name) != pp_shaders_.end();
-}
-
 unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_name) {
     std::string key = "gen_" + effect_name;
     auto it = pp_shaders_.find(key);

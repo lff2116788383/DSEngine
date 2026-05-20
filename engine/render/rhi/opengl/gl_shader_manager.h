@@ -147,11 +147,6 @@ public:
     void InitGBufferShader();
 
     // --- 后处理着色器缓存 ---
-    unsigned int GetOrCreatePostProcessShader(const std::string& effect_name,
-                                               const char* vs_src,
-                                               const std::string& fs_src);
-    bool HasPostProcessShader(const std::string& effect_name) const;
-
     /// gen.h 统一后处理着色器：使用 GLSL 430 预编译源（VS + FS 均来自 gen.h）
     unsigned int GetOrCreateGenPPShader(const std::string& effect_name);
 

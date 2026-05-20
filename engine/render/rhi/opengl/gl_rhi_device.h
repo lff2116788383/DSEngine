@@ -38,9 +38,6 @@ public:
     OpenGLRhiDevice();
     ~OpenGLRhiDevice() override;
 
-    using RhiDevice::SetGlobalSpotShadowMap;
-    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
-
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
@@ -70,44 +67,6 @@ public:
     const RenderStats& LastFrameStats() const override;
     void PatchLastFrameGPUCulledCount(int culled) override {
         draw_executor_.MutableLastFrameStats().gpu_culled_count = culled;
-    }
-
-    // --- 全局阴影/光源矩阵（委托到 draw_executor_） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalShadowMap(index, handle);
-    }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalSpotShadowMap(index, handle);
-    }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalPointShadowMap(index, handle);
-    }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalCascadeSplit(unsigned int index, float split) override {
-        draw_executor_.SetGlobalCascadeSplit(index, split);
-    }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
-        draw_executor_.SetGlobalLightProbeSH(sh, enabled);
-    }
-    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
-                        const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
-                        const glm::ivec3& grid_resolution, int irradiance_texels,
-                        float gi_intensity, float normal_bias) override {
-        draw_executor_.SetGlobalDDGI(enabled, irradiance_atlas,
-                                      grid_origin, grid_spacing,
-                                      grid_resolution, irradiance_texels,
-                                      gi_intensity, normal_bias);
-    }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
-        draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
-    }
-    void SetGBufferRenderingMode(bool enabled) override {
-        draw_executor_.SetGBufferRenderingMode(enabled);
     }
 
     // --- SSBO（Clustered Forward+ 所需） ---
@@ -211,7 +170,7 @@ private:
     GLResourceManager resource_mgr_;
     GLPipelineStateManager state_mgr_;
     GLShaderManager shader_mgr_;
-    GLDrawExecutor draw_executor_;
+    GLDrawExecutor draw_executor_{global_render_state_};
     UBOManager ubo_mgr_;
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理

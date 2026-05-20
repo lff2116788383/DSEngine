@@ -253,41 +253,42 @@ TEST(OpenGLCommandBufferTest, Reset重置状态) {
 // ============================================================
 
 TEST(GLDrawExecutorTest, 全局状态接口边界检查) {
-    GLDrawExecutor exec;
-    exec.SetGlobalShadowMap(0, 100);
-    exec.SetGlobalShadowMap(2, 200);
-    exec.SetGlobalSpotShadowMap(3, 300);
-    exec.SetGlobalPointShadowMap(3, 400);
-    exec.SetGlobalLightSpaceMatrix(2, glm::mat4(1.0f));
-    exec.SetGlobalCascadeSplit(2, 0.5f);
-    exec.SetGlobalSpotLightSpaceMatrix(3, glm::mat4(1.0f));
+    DrawExecutorGlobalState state;
+    state.SetShadowMap(0, 100);
+    state.SetShadowMap(2, 200);
+    state.SetSpotShadowMap(3, 300);
+    state.SetPointShadowMap(3, 400);
+    state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
+    state.SetCascadeSplit(2, 0.5f);
+    state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
     // 越界静默忽略
-    exec.SetGlobalShadowMap(3, 999);
-    exec.SetGlobalSpotShadowMap(4, 999);
-    exec.SetGlobalPointShadowMap(4, 999);
-    exec.SetGlobalLightSpaceMatrix(3, glm::mat4(1.0f));
-    exec.SetGlobalCascadeSplit(3, 1.0f);
-    exec.SetGlobalSpotLightSpaceMatrix(4, glm::mat4(1.0f));
+    state.SetShadowMap(3, 999);
+    state.SetSpotShadowMap(4, 999);
+    state.SetPointShadowMap(4, 999);
+    state.SetLightSpaceMatrix(3, glm::mat4(1.0f));
+    state.SetCascadeSplit(3, 1.0f);
+    state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
 }
 
 TEST(GLDrawExecutorTest, LightProbeSH接口不崩溃) {
-    GLDrawExecutor exec;
+    DrawExecutorGlobalState state;
     glm::vec4 sh[9] = {};
     for (int i = 0; i < 9; ++i) sh[i] = glm::vec4(static_cast<float>(i));
-    exec.SetGlobalLightProbeSH(sh, true);
-    exec.SetGlobalLightProbeSH(sh, false);
+    state.SetLightProbeSH(sh, true);
+    state.SetLightProbeSH(sh, false);
 }
 
 TEST(GLDrawExecutorTest, GBuffer接口不崩溃) {
-    GLDrawExecutor exec;
-    exec.SetGlobalGBufferTexture(0, 100);
-    exec.SetGlobalGBufferTexture(3, 200);
-    exec.SetGBufferRenderingMode(true);
-    exec.SetGBufferRenderingMode(false);
+    DrawExecutorGlobalState state;
+    state.SetGBufferTexture(0, 100);
+    state.SetGBufferTexture(3, 200);
+    state.gbuffer_rendering_mode = true;
+    state.gbuffer_rendering_mode = false;
 }
 
 TEST(GLDrawExecutorTest, 默认stats为零) {
-    GLDrawExecutor exec;
+    DrawExecutorGlobalState state;
+    GLDrawExecutor exec(state);
     const auto& stats = exec.current_frame_stats();
     EXPECT_EQ(stats.draw_calls, 0);
     EXPECT_EQ(stats.sprite_count, 0);
@@ -299,7 +300,8 @@ TEST(GLDrawExecutorTest, BeginEndFrame不崩溃) {
 }
 
 TEST(GLDrawExecutorTest, 默认句柄为零) {
-    GLDrawExecutor exec;
+    DrawExecutorGlobalState state;
+    GLDrawExecutor exec(state);
     EXPECT_EQ(exec.white_texture_handle(), 0u);
     EXPECT_EQ(exec.vao_handle().raw(), 0u);
     EXPECT_EQ(exec.vbo_handle(), 0u);
@@ -313,7 +315,8 @@ TEST(GLDrawExecutorTest, 默认句柄为零) {
 }
 
 TEST(GLDrawExecutorTest, ShutdownGeometryBuffers未初始化不崩溃) {
-    GLDrawExecutor exec;
+    DrawExecutorGlobalState state;
+    GLDrawExecutor exec(state);
     exec.ShutdownGeometryBuffers();
 }
 
@@ -340,11 +343,10 @@ TEST(GLShaderManagerTest, 默认PBR_locations纹理为负一) {
     EXPECT_EQ(loc.model, -1);
 }
 
-TEST(GLShaderManagerTest, PostProcess缓存为空) {
+TEST(GLShaderManagerTest, GenPP未知效果返回零) {
     GLShaderManager mgr;
-    EXPECT_FALSE(mgr.HasPostProcessShader("bloom_downsample"));
-    EXPECT_FALSE(mgr.HasPostProcessShader("fxaa"));
-    EXPECT_FALSE(mgr.HasPostProcessShader(""));
+    EXPECT_EQ(mgr.GetOrCreateGenPPShader("nonexistent"), 0u);
+    EXPECT_EQ(mgr.GetOrCreateGenPPShader(""), 0u);
 }
 
 TEST(GLShaderManagerTest, Shutdown未初始化不崩溃) {

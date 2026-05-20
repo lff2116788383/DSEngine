@@ -33,9 +33,6 @@ namespace render {
  */
 class DX11RhiDevice final : public RhiDevice {
 public:
-    using RhiDevice::SetGlobalSpotShadowMap;
-    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
-
     DX11RhiDevice() = default;
     ~DX11RhiDevice() = default;
 
@@ -68,17 +65,6 @@ public:
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
-
-    // --- 阴影/光源全局状态 ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
-    void SetGlobalCascadeSplit(unsigned int index, float split) override;
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override;
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override;
-    void SetGBufferRenderingMode(bool enabled) override;
 
     // --- SSBO（Clustered Forward+ 所需） ---
 #pragma warning(push)
@@ -170,7 +156,7 @@ private:
     DX11ResourceManager resource_mgr_;
     DX11ShaderManager shader_mgr_;
     DX11PipelineStateManager state_mgr_;
-    DX11DrawExecutor draw_executor_;
+    DX11DrawExecutor draw_executor_{global_render_state_};
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;

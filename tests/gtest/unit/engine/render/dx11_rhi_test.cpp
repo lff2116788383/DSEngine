@@ -251,26 +251,27 @@ TEST(DX11CommandBufferTest, Reset重置uniform状态) {
 // ============================================================
 
 TEST(DX11DrawExecutorTest, 全局状态接口边界检查) {
-    DX11DrawExecutor exec;
+    DrawExecutorGlobalState state;
     // 有效索引
-    exec.SetGlobalShadowMap(0, 100);
-    exec.SetGlobalShadowMap(2, 200);
-    exec.SetGlobalSpotShadowMap(3, 300);
-    exec.SetGlobalPointShadowMap(3, 400);
-    exec.SetGlobalLightSpaceMatrix(2, glm::mat4(1.0f));
-    exec.SetGlobalCascadeSplit(2, 0.5f);
-    exec.SetGlobalSpotLightSpaceMatrix(3, glm::mat4(1.0f));
+    state.SetShadowMap(0, 100);
+    state.SetShadowMap(2, 200);
+    state.SetSpotShadowMap(3, 300);
+    state.SetPointShadowMap(3, 400);
+    state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
+    state.SetCascadeSplit(2, 0.5f);
+    state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
     // 越界静默忽略
-    exec.SetGlobalShadowMap(3, 999);
-    exec.SetGlobalSpotShadowMap(4, 999);
-    exec.SetGlobalPointShadowMap(4, 999);
-    exec.SetGlobalLightSpaceMatrix(3, glm::mat4(1.0f));
-    exec.SetGlobalCascadeSplit(3, 1.0f);
-    exec.SetGlobalSpotLightSpaceMatrix(4, glm::mat4(1.0f));
+    state.SetShadowMap(3, 999);
+    state.SetSpotShadowMap(4, 999);
+    state.SetPointShadowMap(4, 999);
+    state.SetLightSpaceMatrix(3, glm::mat4(1.0f));
+    state.SetCascadeSplit(3, 1.0f);
+    state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
 }
 
 TEST(DX11DrawExecutorTest, 默认stats为零) {
-    DX11DrawExecutor exec;
+    DrawExecutorGlobalState state;
+    DX11DrawExecutor exec(state);
     const auto& stats = exec.current_frame_stats();
     EXPECT_EQ(stats.draw_calls, 0);
     EXPECT_EQ(stats.sprite_count, 0);

@@ -8,7 +8,7 @@
  * - 渲染统计帧管理
  * - PerScene/PerMaterial UBO 数据准备（从 MeshDrawItem 填充共享 UBO 结构体）
  *
- * 各后端 executor 持有 DrawExecutorGlobalState 成员，通过委托调用消除重复代码。
+ * RhiDevice 持有唯一 DrawExecutorGlobalState 实例，各后端 executor 通过引用访问。
  */
 
 #ifndef DSE_RENDER_DRAW_EXECUTOR_COMMON_H
@@ -89,6 +89,19 @@ struct DrawExecutorGlobalState {
     }
     void SetGBufferTexture(unsigned int index, unsigned int handle) {
         if (index < kMaxGBufferTextures) gbuffer_texture[index] = handle;
+    }
+    void SetDDGI(bool enabled, unsigned int irradiance_atlas,
+                 const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
+                 const glm::ivec3& grid_resolution, int irradiance_texels,
+                 float gi_intensity, float normal_bias) {
+        ddgi_enabled = enabled;
+        ddgi_irradiance_atlas = irradiance_atlas;
+        ddgi_grid_origin = grid_origin;
+        ddgi_grid_spacing = grid_spacing;
+        ddgi_grid_resolution = grid_resolution;
+        ddgi_irradiance_texels = irradiance_texels;
+        ddgi_gi_intensity = gi_intensity;
+        ddgi_normal_bias = normal_bias;
     }
 
     void BeginFrame() {

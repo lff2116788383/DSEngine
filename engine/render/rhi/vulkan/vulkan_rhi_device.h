@@ -34,9 +34,6 @@ namespace render {
  */
 class VulkanRhiDevice final : public RhiDevice {
 public:
-    using RhiDevice::SetGlobalSpotShadowMap;
-    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
-
     VulkanRhiDevice() = default;
     ~VulkanRhiDevice() = default;
 
@@ -75,35 +72,6 @@ public:
     /// @param width 窗口宽度
     /// @param height 窗口高度
     bool InitVulkan(void* window_handle, int width, int height, bool enable_validation = true);
-
-    // --- Vulkan 特定扩展 ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalShadowMap(index, handle);
-    }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalSpotShadowMap(index, handle);
-    }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalPointShadowMap(index, handle);
-    }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalCascadeSplit(unsigned int index, float split) override {
-        draw_executor_.SetGlobalCascadeSplit(index, split);
-    }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
-        draw_executor_.SetGlobalLightProbeSH(sh, enabled);
-    }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
-        draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
-    }
-    void SetGBufferRenderingMode(bool enabled) override {
-        draw_executor_.SetGBufferRenderingMode(enabled);
-    }
 
     // --- SSBO（Clustered Forward+ 所需） ---
 #pragma warning(push)
@@ -207,7 +175,7 @@ private:
     VulkanResourceManager resource_mgr_;
     VulkanPipelineStateManager state_mgr_;
     VulkanShaderManager shader_mgr_;
-    VulkanDrawExecutor draw_executor_;
+    VulkanDrawExecutor draw_executor_{global_render_state_};
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;

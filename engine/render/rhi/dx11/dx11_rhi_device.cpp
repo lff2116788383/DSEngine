@@ -327,44 +327,6 @@ const RenderStats& DX11RhiDevice::LastFrameStats() const {
     return last_frame_stats_;
 }
 
-// --- 阴影/光源全局状态（委托给 DrawExecutor） ---
-
-void DX11RhiDevice::SetGlobalShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalSpotShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalPointShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalPointShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-    draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
-}
-
-void DX11RhiDevice::SetGlobalCascadeSplit(unsigned int index, float split) {
-    draw_executor_.SetGlobalCascadeSplit(index, split);
-}
-
-void DX11RhiDevice::SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-    draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
-}
-
-void DX11RhiDevice::SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
-    draw_executor_.SetGlobalLightProbeSH(sh, enabled);
-}
-
-void DX11RhiDevice::SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
-    draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
-}
-
-void DX11RhiDevice::SetGBufferRenderingMode(bool enabled) {
-    draw_executor_.SetGBufferRenderingMode(enabled);
-}
-
 // --- SSBO ---
 
 unsigned int DX11RhiDevice::CreateSSBO(size_t size, const void* data) {
