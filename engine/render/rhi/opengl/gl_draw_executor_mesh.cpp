@@ -221,6 +221,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
     per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
     per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first_item.wboit_mode));
+
+    // 编辑器 Unlit 模式: 禁用光照，仅显示 albedo
+    if (global_state_.force_unlit) {
+        per_scene.light_dir_and_enabled.w = 0.0f;
+    }
     for (int i = 0; i < 3; ++i) {
         per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }

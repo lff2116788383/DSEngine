@@ -1284,6 +1284,29 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
     if (loc_morph >= 0) glUniform1i(loc_morph, 0);
 }
 
+// --- 编辑器场景视图模式 ---
+
+void OpenGLRhiDevice::SetWireframeMode(bool enable) {
+    glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
+}
+
+void OpenGLRhiDevice::SetForceUnlit(bool enable) {
+    // 通过 draw executor 的全局状态标志控制 PBR shader 跳过光照计算
+    global_render_state_.force_unlit = enable;
+}
+
+void OpenGLRhiDevice::SetOverdrawMode(bool enable) {
+    if (enable) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
+        glDepthMask(GL_FALSE);
+    } else {
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+    }
+    global_render_state_.overdraw_mode = enable;
+}
+
 void OpenGLRhiDevice::LogResourceLedger() const {
     resource_mgr_.LogResourceLedger();
     // 鍚堝苟鐫€鑹插櫒绠＄悊鍣ㄧ殑璁℃暟

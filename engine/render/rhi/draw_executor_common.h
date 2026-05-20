@@ -59,6 +59,10 @@ struct DrawExecutorGlobalState {
     unsigned int gbuffer_texture[kMaxGBufferTextures] = {};
     bool gbuffer_rendering_mode = false;  ///< true: DrawMeshBatch 使用 GBuffer shader
 
+    // --- 编辑器场景视图模式 ---
+    bool force_unlit = false;     ///< Unlit 模式: shader 跳过光照计算
+    bool overdraw_mode = false;   ///< Overdraw 模式: 固定颜色叠加输出
+
     // --- 渲染统计 ---
     RenderStats current_frame_stats;
     RenderStats last_frame_stats;

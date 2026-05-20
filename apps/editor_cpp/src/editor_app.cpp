@@ -93,6 +93,7 @@
 #include "editor_git_panel.h"
 #include "editor_shader_graph.h"
 #include "editor_multi_viewport.h"
+#include "editor_scene_view_mode.h"
 #include "editor_anim_state_machine.h"
 
 
@@ -453,6 +454,10 @@ void EditorApp::Run() {
         } else {
             engine_instance_->pipeline()->DisableEditorCamera();
         }
+
+        // Set scene view mode for rendering pipeline
+        engine_instance_->pipeline()->SetSceneViewMode(
+            static_cast<int>(dse::editor::GetCurrentSceneViewMode()));
 
         // Tick Engine
         {
@@ -819,7 +824,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::End();
     }
 
-    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices);
+    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
+                                        engine_instance_->pipeline());
     dse::editor::DrawGameViewportPanel(game_texture);
 
     dse::editor::AutoSaveManager::Get().Tick(registry);

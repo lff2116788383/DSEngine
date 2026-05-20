@@ -196,6 +196,20 @@ public:
     void DisableEditorCamera();
 
     /**
+     * @brief 设置编辑器场景视图模式 (0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw)
+     */
+    void SetSceneViewMode(int mode);
+
+    /**
+     * @brief 用指定相机重新渲染场景到已有 scene FBO，返回场景纹理 ID
+     *
+     * 用于多视口：设置临时相机 → 执行 ForwardScenePass → 返回纹理。
+     * 调用者应在主 Render() 完成后调用此方法。
+     * 注意：每次调用会覆盖 scene_render_target 的内容。
+     */
+    unsigned int RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection);
+
+    /**
      * @brief 获取渲染管线中场景纹理的句柄 (用于编辑器集成)
      * @return 纹理 ID
      */

@@ -21,6 +21,8 @@
 #include "editor_lighting_gizmos.h"
 #include "editor_navmesh_panel.h"
 #include "editor_scene_view_mode.h"
+#include "editor_multi_viewport.h"
+#include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
 #include <algorithm>
@@ -519,9 +521,27 @@ void DrawSceneGizmo(ImDrawList* draw_list,
 
 } // namespace
 
+// 多视口辅助：绘制单个子视口（带标签和边框）
+static void DrawSubViewport(ImDrawList* dl, ImVec2 origin, ImVec2 size,
+                            unsigned int texture_id, const char* label, bool is_active) {
+    if (texture_id != 0) {
+        ImGui::SetCursorScreenPos(origin);
+        ImGui::Image((ImTextureID)(intptr_t)texture_id, size, ImVec2(0, 1), ImVec2(1, 0));
+    } else {
+        dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(30, 30, 30, 255));
+    }
+    // 标签
+    dl->AddText(ImVec2(origin.x + 4, origin.y + 4),
+        is_active ? IM_COL32(100, 255, 100, 255) : IM_COL32(180, 180, 180, 200), label);
+    // 边框
+    ImU32 border_col = is_active ? IM_COL32(100, 255, 100, 180) : IM_COL32(80, 80, 80, 180);
+    dl->AddRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), border_col, 0.0f, 0, 1.5f);
+}
+
 void DrawSceneViewportPanel(EditorContext& ctx,
                             unsigned int scene_texture_id,
-                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&)) {
+                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&),
+                            FramePipeline* pipeline) {
     // 兼容旧引用名
     auto& context = ctx;
     int& current_gizmo_operation = ctx.current_gizmo_operation;
@@ -639,6 +659,68 @@ void DrawSceneViewportPanel(EditorContext& ctx,
 
     // Process editor camera input while Scene window is active
     ProcessEditorCameraInput(GetEditorCamera());
+
+    // ═══ Multi-Viewport 分支 ═══
+    auto& mvs = GetMultiViewportState();
+    if (mvs.enabled && pipeline) {
+        int cam_count = 1;
+        if (mvs.layout == 1 || mvs.layout == 2) cam_count = 2;
+        else if (mvs.layout == 3) cam_count = 4;
+
+        ImDrawList* mv_dl = ImGui::GetWindowDrawList();
+        ImVec2 cursor_base = ImGui::GetCursorScreenPos();
+        const float gap = 2.0f;
+
+        for (int vi = 0; vi < cam_count; ++vi) {
+            ImVec2 sub_origin, sub_size;
+            if (mvs.layout == 1) { // Side-by-Side
+                float half_w = (scene_panel_size.x - gap) * 0.5f;
+                sub_origin = ImVec2(cursor_base.x + vi * (half_w + gap), cursor_base.y);
+                sub_size = ImVec2(half_w, scene_panel_size.y);
+            } else if (mvs.layout == 2) { // Top-Bottom
+                float half_h = (scene_panel_size.y - gap) * 0.5f;
+                sub_origin = ImVec2(cursor_base.x, cursor_base.y + vi * (half_h + gap));
+                sub_size = ImVec2(scene_panel_size.x, half_h);
+            } else if (mvs.layout == 3) { // Quad
+                float half_w = (scene_panel_size.x - gap) * 0.5f;
+                float half_h = (scene_panel_size.y - gap) * 0.5f;
+                int col = vi % 2, row = vi / 2;
+                sub_origin = ImVec2(cursor_base.x + col * (half_w + gap),
+                                    cursor_base.y + row * (half_h + gap));
+                sub_size = ImVec2(half_w, half_h);
+            } else { // Single
+                sub_origin = cursor_base;
+                sub_size = scene_panel_size;
+            }
+            if (sub_size.x < 1.0f || sub_size.y < 1.0f) continue;
+
+            float aspect = sub_size.x / sub_size.y;
+            glm::mat4 vp_view, vp_proj;
+            GetViewportCameraMatrices(vi, aspect, vp_view, vp_proj);
+
+            // 用该相机重新渲染场景
+            unsigned int tex = pipeline->RenderSceneWithCamera(vp_view, vp_proj);
+            bool is_active = (vi == mvs.active_camera);
+            DrawSubViewport(mv_dl, sub_origin, sub_size, tex,
+                            mvs.cameras[vi].name.c_str(), is_active);
+
+            // 点击子视口切换活跃相机
+            ImVec2 sub_max = ImVec2(sub_origin.x + sub_size.x, sub_origin.y + sub_size.y);
+            ImVec2 mpos = ImGui::GetMousePos();
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                && mpos.x >= sub_origin.x && mpos.x <= sub_max.x
+                && mpos.y >= sub_origin.y && mpos.y <= sub_max.y) {
+                mvs.active_camera = vi;
+            }
+        }
+
+        // Scene view mode overlay
+        DrawSceneViewModeOverlay(scene_texture_id, 0, 0, 0);
+
+        ImGui::End();
+        ImGui::PopStyleVar();
+        return;
+    }
 
     if (scene_texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));

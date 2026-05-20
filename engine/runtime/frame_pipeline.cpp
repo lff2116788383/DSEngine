@@ -1619,6 +1619,41 @@ void FramePipeline::DisableEditorCamera() {
     render_pass_context_.use_editor_camera = false;
 }
 
+void FramePipeline::SetSceneViewMode(int mode) {
+    render_pass_context_.scene_view_mode = mode;
+}
+
+unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection) {
+    if (!initialized_ || !runtime_context_.rhi_device) return 0;
+
+    // 保存当前编辑器相机状态
+    const bool saved_use = render_pass_context_.use_editor_camera;
+    const glm::mat4 saved_view = render_pass_context_.editor_view;
+    const glm::mat4 saved_proj = render_pass_context_.editor_projection;
+
+    // 设置临时相机
+    render_pass_context_.use_editor_camera = true;
+    render_pass_context_.editor_view = view;
+    render_pass_context_.editor_projection = projection;
+
+    // 创建命令缓冲，只执行 ForwardScenePass
+    auto cmd = runtime_context_.rhi_device->CreateCommandBuffer();
+    for (auto& pass : registered_passes_) {
+        if (std::string(pass->GetName()) == "ForwardScenePass") {
+            pass->Execute(*cmd);
+            break;
+        }
+    }
+    runtime_context_.rhi_device->Submit(cmd);
+
+    // 恢复相机
+    render_pass_context_.use_editor_camera = saved_use;
+    render_pass_context_.editor_view = saved_view;
+    render_pass_context_.editor_projection = saved_proj;
+
+    return GetSceneTextureId();
+}
+
 void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
     if (initialized_) {
         return;

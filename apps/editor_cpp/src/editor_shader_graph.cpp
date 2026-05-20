@@ -9,6 +9,11 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+#include <unordered_set>
+#include <queue>
 
 namespace dse::editor {
 
@@ -250,6 +255,370 @@ std::vector<NodeTemplate>& GetTemplates() {
     return templates;
 }
 
+// ─── JSON 序列化辅助 ─────────────────────────────────────────────────────────
+
+std::string EscapeJson(const std::string& s) {
+    std::string out;
+    for (char c : s) {
+        if (c == '"') out += "\\\"";
+        else if (c == '\\') out += "\\\\";
+        else out += c;
+    }
+    return out;
+}
+
+std::string PinTypeToStr(PinType t) {
+    switch (t) {
+        case PinType::Float: return "Float";
+        case PinType::Vec2: return "Vec2";
+        case PinType::Vec3: return "Vec3";
+        case PinType::Vec4: return "Vec4";
+        case PinType::Color: return "Color";
+        case PinType::Texture2D: return "Texture2D";
+        case PinType::Sampler: return "Sampler";
+    }
+    return "Float";
+}
+
+PinType StrToPinType(const std::string& s) {
+    if (s == "Vec2") return PinType::Vec2;
+    if (s == "Vec3") return PinType::Vec3;
+    if (s == "Vec4") return PinType::Vec4;
+    if (s == "Color") return PinType::Color;
+    if (s == "Texture2D") return PinType::Texture2D;
+    if (s == "Sampler") return PinType::Sampler;
+    return PinType::Float;
+}
+
+std::string SerializePinJson(const Pin& p) {
+    std::ostringstream o;
+    o << "{\"id\":" << p.id
+      << ",\"name\":\"" << EscapeJson(p.name) << "\""
+      << ",\"type\":\"" << PinTypeToStr(p.type) << "\""
+      << ",\"kind\":" << (p.kind == PinKind::Input ? 0 : 1)
+      << ",\"default\":[" << p.default_value[0] << "," << p.default_value[1]
+      << "," << p.default_value[2] << "," << p.default_value[3] << "]}";
+    return o.str();
+}
+
+std::string SerializeGraphJson(const ShaderGraphState& s) {
+    std::ostringstream o;
+    o << "{\n  \"next_id\":" << s.next_id << ",\n  \"nodes\":[\n";
+    for (size_t ni = 0; ni < s.nodes.size(); ++ni) {
+        auto& n = s.nodes[ni];
+        o << "    {\"id\":" << n.id
+          << ",\"name\":\"" << EscapeJson(n.name) << "\""
+          << ",\"category\":\"" << EscapeJson(n.category) << "\""
+          << ",\"pos\":[" << n.position.x << "," << n.position.y << "]"
+          << ",\"color\":" << n.header_color
+          << ",\"inputs\":[";
+        for (size_t i = 0; i < n.inputs.size(); ++i) {
+            if (i) o << ",";
+            o << SerializePinJson(n.inputs[i]);
+        }
+        o << "],\"outputs\":[";
+        for (size_t i = 0; i < n.outputs.size(); ++i) {
+            if (i) o << ",";
+            o << SerializePinJson(n.outputs[i]);
+        }
+        o << "]}";
+        if (ni + 1 < s.nodes.size()) o << ",";
+        o << "\n";
+    }
+    o << "  ],\n  \"links\":[\n";
+    for (size_t li = 0; li < s.links.size(); ++li) {
+        auto& l = s.links[li];
+        o << "    {\"id\":" << l.id << ",\"from\":" << l.from_pin << ",\"to\":" << l.to_pin << "}";
+        if (li + 1 < s.links.size()) o << ",";
+        o << "\n";
+    }
+    o << "  ]\n}\n";
+    return o.str();
+}
+
+// 极简 JSON 值提取器 (足够处理我们生成的格式)
+std::string JsonValue(const std::string& json, const std::string& key) {
+    std::string search = "\"" + key + "\":";
+    auto pos = json.find(search);
+    if (pos == std::string::npos) return "";
+    pos += search.size();
+    while (pos < json.size() && json[pos] == ' ') ++pos;
+    if (pos >= json.size()) return "";
+    if (json[pos] == '"') {
+        size_t end = json.find('"', pos + 1);
+        return json.substr(pos + 1, end - pos - 1);
+    }
+    if (json[pos] == '[') {
+        int depth = 0;
+        size_t start = pos;
+        for (size_t i = pos; i < json.size(); ++i) {
+            if (json[i] == '[') ++depth;
+            else if (json[i] == ']') { --depth; if (depth == 0) return json.substr(start, i - start + 1); }
+        }
+    }
+    size_t end = json.find_first_of(",}]\n", pos);
+    return json.substr(pos, end - pos);
+}
+
+std::vector<std::string> JsonArray(const std::string& arr) {
+    std::vector<std::string> result;
+    if (arr.size() < 2) return result;
+    // arr starts with '[' and ends with ']'
+    int depth = 0;
+    size_t start = 0;
+    for (size_t i = 1; i < arr.size() - 1; ++i) {
+        if (arr[i] == '{' || arr[i] == '[') { if (depth == 0) start = i; ++depth; }
+        else if (arr[i] == '}' || arr[i] == ']') {
+            --depth;
+            if (depth == 0) result.push_back(arr.substr(start, i - start + 1));
+        }
+    }
+    return result;
+}
+
+Pin ParsePinJson(const std::string& json) {
+    Pin p;
+    p.id = std::atoi(JsonValue(json, "id").c_str());
+    p.name = JsonValue(json, "name");
+    p.type = StrToPinType(JsonValue(json, "type"));
+    p.kind = (std::atoi(JsonValue(json, "kind").c_str()) == 0) ? PinKind::Input : PinKind::Output;
+    auto def_arr = JsonValue(json, "default");
+    if (!def_arr.empty()) {
+        sscanf(def_arr.c_str(), "[%f,%f,%f,%f]", &p.default_value[0], &p.default_value[1],
+               &p.default_value[2], &p.default_value[3]);
+    }
+    return p;
+}
+
+bool DeserializeGraph(const std::string& json, ShaderGraphState& s) {
+    s.nodes.clear();
+    s.links.clear();
+    s.next_id = std::atoi(JsonValue(json, "next_id").c_str());
+    if (s.next_id < 100) s.next_id = 100;
+    s.initialized = true;
+
+    auto nodes_arr = JsonValue(json, "nodes");
+    for (auto& nj : JsonArray(nodes_arr)) {
+        Node n;
+        n.id = std::atoi(JsonValue(nj, "id").c_str());
+        n.name = JsonValue(nj, "name");
+        n.category = JsonValue(nj, "category");
+        auto pos_str = JsonValue(nj, "pos");
+        sscanf(pos_str.c_str(), "[%f,%f]", &n.position.x, &n.position.y);
+        n.size = ImVec2(180, 0);
+        n.header_color = static_cast<ImU32>(std::stoul(JsonValue(nj, "color")));
+        auto inputs_str = JsonValue(nj, "inputs");
+        for (auto& pj : JsonArray(inputs_str)) n.inputs.push_back(ParsePinJson(pj));
+        auto outputs_str = JsonValue(nj, "outputs");
+        for (auto& pj : JsonArray(outputs_str)) n.outputs.push_back(ParsePinJson(pj));
+        s.nodes.push_back(std::move(n));
+    }
+
+    auto links_arr = JsonValue(json, "links");
+    for (auto& lj : JsonArray(links_arr)) {
+        Link l;
+        l.id = std::atoi(JsonValue(lj, "id").c_str());
+        l.from_pin = std::atoi(JsonValue(lj, "from").c_str());
+        l.to_pin = std::atoi(JsonValue(lj, "to").c_str());
+        s.links.push_back(l);
+    }
+    return true;
+}
+
+// ─── Compile: 节点图 → GLSL fragment shader ──────────────────────────────────
+
+std::string GlslTypeStr(PinType t) {
+    switch (t) {
+        case PinType::Float: return "float";
+        case PinType::Vec2: return "vec2";
+        case PinType::Vec3: return "vec3";
+        case PinType::Vec4: return "vec4";
+        case PinType::Color: return "vec4";
+        case PinType::Texture2D: return "sampler2D";
+        case PinType::Sampler: return "sampler2D";
+    }
+    return "float";
+}
+
+std::string CompileGraphToGLSL(const ShaderGraphState& s) {
+    std::ostringstream o;
+    o << "// Auto-generated by DSEngine Shader Graph\n";
+    o << "#version 330 core\n\n";
+    o << "in vec2 v_uv;\n";
+    o << "in vec3 v_normal;\n";
+    o << "in vec3 v_world_pos;\n\n";
+    o << "out vec4 FragColor;\n\n";
+
+    // 收集所有 Texture2D 输入节点用的 uniform
+    int tex_unit = 0;
+    std::unordered_map<int, std::string> tex_uniforms; // node_id -> uniform name
+    for (auto& n : s.nodes) {
+        if (n.name == "Texture Sample") {
+            std::string uname = "u_tex" + std::to_string(tex_unit++);
+            tex_uniforms[n.id] = uname;
+            o << "uniform sampler2D " << uname << ";\n";
+        }
+    }
+    o << "\n";
+
+    // 拓扑排序
+    std::unordered_map<int, int> pin_to_node;
+    for (size_t i = 0; i < s.nodes.size(); ++i) {
+        for (auto& p : s.nodes[i].inputs) pin_to_node[p.id] = static_cast<int>(i);
+        for (auto& p : s.nodes[i].outputs) pin_to_node[p.id] = static_cast<int>(i);
+    }
+    std::unordered_map<int, std::unordered_set<int>> deps; // node_idx -> set of dependency node_idx
+    for (auto& l : s.links) {
+        auto it_to = pin_to_node.find(l.to_pin);
+        auto it_from = pin_to_node.find(l.from_pin);
+        if (it_to != pin_to_node.end() && it_from != pin_to_node.end()) {
+            deps[it_to->second].insert(it_from->second);
+        }
+    }
+    // Kahn's algorithm
+    std::unordered_map<int, int> in_degree;
+    for (size_t i = 0; i < s.nodes.size(); ++i) in_degree[static_cast<int>(i)] = 0;
+    for (auto& [node_idx, dep_set] : deps) {
+        in_degree[node_idx] = static_cast<int>(dep_set.size());
+    }
+    std::queue<int> q;
+    for (auto& [idx, deg] : in_degree) {
+        if (deg == 0) q.push(idx);
+    }
+    std::vector<int> topo_order;
+    while (!q.empty()) {
+        int cur = q.front(); q.pop();
+        topo_order.push_back(cur);
+        for (size_t i = 0; i < s.nodes.size(); ++i) {
+            auto it = deps.find(static_cast<int>(i));
+            if (it != deps.end() && it->second.count(cur)) {
+                it->second.erase(cur);
+                --in_degree[static_cast<int>(i)];
+                if (in_degree[static_cast<int>(i)] == 0) q.push(static_cast<int>(i));
+            }
+        }
+    }
+
+    o << "void main() {\n";
+
+    // 为每个输出 pin 生成变量名
+    std::unordered_map<int, std::string> pin_vars; // pin_id -> variable name
+    // 为链接建立 from_pin → to_pin 映射
+    std::unordered_map<int, int> input_source; // to_pin -> from_pin
+    for (auto& l : s.links) input_source[l.to_pin] = l.from_pin;
+
+    for (int ni : topo_order) {
+        auto& n = s.nodes[ni];
+        std::string prefix = "n" + std::to_string(n.id) + "_";
+
+        if (n.name == "Float") {
+            std::string var = prefix + "val";
+            o << "    float " << var << " = " << n.outputs[0].default_value[0] << ";\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Vec2") {
+            std::string var = prefix + "val";
+            o << "    vec2 " << var << " = vec2(" << n.outputs[0].default_value[0] << ", "
+              << n.outputs[0].default_value[1] << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Vec3") {
+            std::string var = prefix + "val";
+            o << "    vec3 " << var << " = vec3(" << n.outputs[0].default_value[0] << ", "
+              << n.outputs[0].default_value[1] << ", " << n.outputs[0].default_value[2] << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Color") {
+            std::string var = prefix + "col";
+            o << "    vec4 " << var << " = vec4(" << n.outputs[0].default_value[0] << ", "
+              << n.outputs[0].default_value[1] << ", " << n.outputs[0].default_value[2] << ", "
+              << n.outputs[0].default_value[3] << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "UV") {
+            std::string var = prefix + "uv";
+            o << "    vec2 " << var << " = v_uv;\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Time") {
+            o << "    float " << prefix << "t = 0.0; // TODO: bind TIME uniform\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = prefix + "t";
+            if (n.outputs.size() > 1) { o << "    float " << prefix << "sin = sin(" << prefix << "t);\n"; pin_vars[n.outputs[1].id] = prefix + "sin"; }
+            if (n.outputs.size() > 2) { o << "    float " << prefix << "cos = cos(" << prefix << "t);\n"; pin_vars[n.outputs[2].id] = prefix + "cos"; }
+        } else if (n.name == "Texture Sample") {
+            auto it = tex_uniforms.find(n.id);
+            std::string uname = (it != tex_uniforms.end()) ? it->second : "u_tex0";
+            // UV input
+            std::string uv_expr = "v_uv";
+            if (!n.inputs.empty()) {
+                auto src = input_source.find(n.inputs[0].id);
+                if (src != input_source.end() && pin_vars.count(src->second)) uv_expr = pin_vars[src->second];
+            }
+            std::string var = prefix + "rgba";
+            o << "    vec4 " << var << " = texture(" << uname << ", " << uv_expr << ");\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = var;
+            if (n.outputs.size() > 1) pin_vars[n.outputs[1].id] = var + ".r";
+            if (n.outputs.size() > 2) pin_vars[n.outputs[2].id] = var + ".g";
+            if (n.outputs.size() > 3) pin_vars[n.outputs[3].id] = var + ".b";
+            if (n.outputs.size() > 4) pin_vars[n.outputs[4].id] = var + ".a";
+        } else if (n.name == "Add" || n.name == "Multiply") {
+            std::string a_expr = std::to_string(n.inputs[0].default_value[0]);
+            std::string b_expr = std::to_string(n.inputs[1].default_value[0]);
+            auto sa = input_source.find(n.inputs[0].id);
+            if (sa != input_source.end() && pin_vars.count(sa->second)) a_expr = pin_vars[sa->second];
+            auto sb = input_source.find(n.inputs[1].id);
+            if (sb != input_source.end() && pin_vars.count(sb->second)) b_expr = pin_vars[sb->second];
+            std::string op = (n.name == "Add") ? " + " : " * ";
+            std::string var = prefix + "out";
+            o << "    float " << var << " = " << a_expr << op << b_expr << ";\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Lerp") {
+            std::string a_expr = "0.0", b_expr = "1.0", t_expr = "0.5";
+            if (n.inputs.size() >= 3) {
+                auto sa = input_source.find(n.inputs[0].id);
+                if (sa != input_source.end() && pin_vars.count(sa->second)) a_expr = pin_vars[sa->second];
+                auto sb = input_source.find(n.inputs[1].id);
+                if (sb != input_source.end() && pin_vars.count(sb->second)) b_expr = pin_vars[sb->second];
+                auto st = input_source.find(n.inputs[2].id);
+                if (st != input_source.end() && pin_vars.count(st->second)) t_expr = pin_vars[st->second];
+            }
+            std::string var = prefix + "out";
+            o << "    float " << var << " = mix(" << a_expr << ", " << b_expr << ", " << t_expr << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Fresnel") {
+            std::string power = "5.0";
+            if (!n.inputs.empty()) {
+                auto sp = input_source.find(n.inputs[0].id);
+                if (sp != input_source.end() && pin_vars.count(sp->second)) power = pin_vars[sp->second];
+                else power = std::to_string(n.inputs[0].default_value[0]);
+            }
+            std::string var = prefix + "out";
+            o << "    float " << var << " = pow(1.0 - max(dot(normalize(v_normal), normalize(-v_world_pos)), 0.0), " << power << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Normal Map") {
+            std::string var = prefix + "out";
+            o << "    vec3 " << var << " = v_normal; // TODO: normal map decode\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "PBR Output") {
+            // 收集各输入
+            auto get_input = [&](int idx, const char* fallback) -> std::string {
+                if (idx >= static_cast<int>(n.inputs.size())) return fallback;
+                auto src = input_source.find(n.inputs[idx].id);
+                if (src != input_source.end() && pin_vars.count(src->second)) return pin_vars[src->second];
+                return fallback;
+            };
+            std::string base_color = get_input(0, "vec4(0.8, 0.8, 0.8, 1.0)");
+            std::string metallic   = get_input(1, "0.0");
+            std::string roughness  = get_input(2, "0.5");
+            std::string emission   = get_input(4, "vec4(0.0)");
+            std::string alpha      = get_input(6, "1.0");
+            o << "    // PBR Output\n";
+            o << "    vec4 base = " << base_color << ";\n";
+            o << "    FragColor = vec4(base.rgb, " << alpha << ");\n";
+            o << "    // metallic=" << metallic << " roughness=" << roughness
+              << " emission=" << emission << "\n";
+        }
+    }
+
+    o << "}\n";
+    return o.str();
+}
+
 } // namespace
 
 void DrawShaderGraphPanel() {
@@ -263,15 +632,37 @@ void DrawShaderGraphPanel() {
         ImGui::Text(MDI_ICON_PALETTE " Shader Graph");
         ImGui::SameLine(ImGui::GetWindowWidth() - 200);
         if (ImGui::Button("Compile")) {
-            // TODO: Generate DSSL/GLSL from graph
+            std::string glsl = CompileGraphToGLSL(state);
+            // 输出到文件
+            std::ofstream out("shader_graph_output.frag");
+            if (out.is_open()) { out << glsl; out.close(); }
+            // 也输出到控制台日志
+            printf("[ShaderGraph] Compiled GLSL (%zu chars) -> shader_graph_output.frag\n", glsl.size());
         }
         ImGui::SameLine();
         if (ImGui::Button("Save")) {
-            // TODO: Serialize graph to JSON
+            std::string json = SerializeGraphJson(state);
+            std::ofstream out("shader_graph.dsg");
+            if (out.is_open()) {
+                out << json;
+                out.close();
+                printf("[ShaderGraph] Saved to shader_graph.dsg (%zu bytes)\n", json.size());
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Load")) {
-            // TODO: Load graph from JSON
+            std::ifstream in("shader_graph.dsg");
+            if (in.is_open()) {
+                std::string json((std::istreambuf_iterator<char>(in)),
+                                  std::istreambuf_iterator<char>());
+                in.close();
+                if (DeserializeGraph(json, state)) {
+                    printf("[ShaderGraph] Loaded from shader_graph.dsg (%zu nodes, %zu links)\n",
+                           state.nodes.size(), state.links.size());
+                }
+            } else {
+                printf("[ShaderGraph] Failed to open shader_graph.dsg\n");
+            }
         }
     }
 

@@ -133,6 +133,9 @@ struct RenderPassContext {
     glm::mat4 editor_view = glm::mat4(1.0f);
     glm::mat4 editor_projection = glm::mat4(1.0f);
 
+    /// 编辑器场景视图模式 (0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw)
+    int scene_view_mode = 0;
+
     /// FramePipeline 拥有的子系统回调（避免 Pass 直接依赖 FramePipeline）
     std::function<void(World&, CommandBuffer&)> render_2d_scene;
     std::function<void(World&, CommandBuffer&, int, int, const glm::mat4&)> render_2d_ui;

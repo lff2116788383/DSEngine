@@ -143,6 +143,11 @@ public:
                                   const glm::vec3& light_dir, const glm::vec3& light_color,
                                   float light_intensity, float ambient_intensity) override;
 
+    // --- 编辑器场景视图模式 ---
+    void SetWireframeMode(bool enable) override;
+    void SetForceUnlit(bool enable) override;
+    void SetOverdrawMode(bool enable) override;
+
     // --- 内部方法（供 OpenGLCommandBuffer 直接调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
     void RealEndRenderPass();

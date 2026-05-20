@@ -175,6 +175,11 @@ public:
         return glm::mat4(1.0f);
     }
 
+    // TODO: DX11 场景视图模式实现 (SetWireframeMode → D3D11_FILL_WIREFRAME rasterizer state)
+    // void SetWireframeMode(bool enable) override;
+    // void SetForceUnlit(bool enable) override;
+    // void SetOverdrawMode(bool enable) override;
+
     /// 初始化 D3D11 上下文
     bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false, bool force_sdr = false);
 

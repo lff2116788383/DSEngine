@@ -6,11 +6,14 @@
 #include "imgui.h"
 #include <glm/vec2.hpp>
 
+class FramePipeline;
+
 namespace dse::editor {
 
 void DrawSceneViewportPanel(EditorContext& ctx,
                             unsigned int scene_texture_id,
-                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&));
+                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&),
+                            FramePipeline* pipeline = nullptr);
 
 void DrawGameViewportPanel(unsigned int texture_id);
 

@@ -235,6 +235,11 @@ public:
     /// OpenGL: identity (same).  Vulkan: Y-flip only.  DX11: identity.
     virtual glm::mat4 GetShadowSampleCorrection() const { return glm::mat4(1.0f); }
 
+    /// 编辑器场景视图模式: 线框/Unlit/Overdraw 等渲染状态控制
+    virtual void SetWireframeMode(bool enable) { (void)enable; }
+    virtual void SetForceUnlit(bool enable) { (void)enable; }
+    virtual void SetOverdrawMode(bool enable) { (void)enable; }
+
     // --- 扩展能力查询（委托到继承的接口，此处仅保留 PatchLastFrameGPUCulledCount）---
 
 protected:
