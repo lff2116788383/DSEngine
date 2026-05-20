@@ -127,6 +127,35 @@ public:
 #pragma warning(pop)
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
 
+    // --- Mega Buffer (GPU Driven) ---
+    VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                               BufferHandle& out_vbo, BufferHandle& out_ibo) override;
+    void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) override;
+    void BindMegaVAO(VertexArrayHandle vao) override;
+    void UnbindVAO() override;
+
+    // --- Static Mesh VAO ---
+    VertexArrayHandle CreateStaticMeshVAO(
+        const void* vertex_data, size_t vertex_bytes,
+        const std::vector<const void*>& ebo_datas,
+        const std::vector<size_t>& ebo_sizes,
+        BufferHandle& out_vbo,
+        std::vector<BufferHandle>& out_ebos) override;
+    void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                              const std::vector<BufferHandle>& ebos) override;
+    void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
+
+    // --- GPU-Driven PBR ---
+    void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                  const glm::vec3& camera_pos,
+                                  const glm::vec3& light_dir, const glm::vec3& light_color,
+                                  float light_intensity, float ambient_intensity) override;
+    void PatchLastFrameGPUCulledCount(int culled) override {
+        last_frame_stats_.gpu_culled_count = culled;
+    }
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
@@ -180,6 +209,14 @@ private:
     size_t                         compute_params_cb_capacity_ = 0;
 
     bool initialized_ = false;
+
+    /// Mega/Static VAO 追踪（VAO handle → {vbo_handle, ibo_handle}）
+    struct VAOBinding {
+        unsigned int vbo_handle = 0;
+        unsigned int ibo_handle = 0;
+    };
+    std::unordered_map<unsigned int, VAOBinding> vao_bindings_;
+    unsigned int next_vao_id_ = 900000;
 
     // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
     struct HiZImpl;

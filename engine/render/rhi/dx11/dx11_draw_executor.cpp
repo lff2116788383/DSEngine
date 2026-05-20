@@ -1817,5 +1817,55 @@ void DX11DrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     dc->RSSetState(nullptr);
 }
 
+// ============================================================
+// GPU-Driven PBR 渲染设置
+// ============================================================
+
+void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4& proj,
+                                          const glm::vec3& camera_pos,
+                                          const glm::vec3& light_dir, const glm::vec3& light_color,
+                                          float light_intensity, float ambient_intensity,
+                                          DX11PipelineStateManager& pipeline_mgr,
+                                          DX11ShaderManager& shader_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+    if (!dc) return;
+
+    // 使用 PBR shader（GPU-Driven 复用标准 PBR shader）
+    const unsigned int prog = shader_mgr.pbr_shader_handle();
+    if (prog == 0) return;
+
+    const auto* program = shader_mgr.GetProgram(prog);
+    if (!program) return;
+    if (program->vertex_shader) dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    if (program->pixel_shader) dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+    auto* layout = shader_mgr.GetInputLayout(prog);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // PerFrame CB
+    DX11PerFrameCB frame_data{};
+    frame_data.vp = proj * view;
+    frame_data.view = view;
+    frame_data.camera_pos = glm::vec4(camera_pos, 0.0f);
+    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
+
+    // PerScene CB
+    DX11PerSceneCB scene_data{};
+    scene_data.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    scene_data.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
+    scene_data.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    scene_data.cascade_splits = glm::vec4(
+        global_state_.cascade_splits[0], global_state_.cascade_splits[1],
+        global_state_.cascade_splits[2], 0.0f);
+    for (int i = 0; i < 3; ++i)
+        scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
+
+    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get(),
+                           per_scene_cb_.Get(), per_material_cb_.Get()};
+    dc->VSSetConstantBuffers(0, 4, cbs);
+    dc->PSSetConstantBuffers(0, 4, cbs);
+}
+
 } // namespace render
 } // namespace dse

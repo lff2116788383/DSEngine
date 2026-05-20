@@ -773,5 +773,140 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
     }
 }
 
+// ============================================================
+// Mega Buffer (GPU Driven)
+// ============================================================
+
+VertexArrayHandle DX11RhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                                BufferHandle& out_vbo, BufferHandle& out_ibo) {
+    unsigned int vbo_h = resource_mgr_.CreateBuffer(vbo_size_bytes, nullptr, true, false);
+    unsigned int ibo_h = resource_mgr_.CreateBuffer(ibo_size_bytes, nullptr, true, true);
+    if (vbo_h == 0 || ibo_h == 0) {
+        if (vbo_h) resource_mgr_.DeleteBuffer(vbo_h);
+        if (ibo_h) resource_mgr_.DeleteBuffer(ibo_h);
+        out_vbo = {}; out_ibo = {};
+        return {};
+    }
+    unsigned int vao_id = next_vao_id_++;
+    vao_bindings_[vao_id] = {vbo_h, ibo_h};
+    out_vbo = BufferHandle{vbo_h};
+    out_ibo = BufferHandle{ibo_h};
+    return VertexArrayHandle{vao_id};
+}
+
+void DX11RhiDevice::UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) {
+    if (!vbo || size == 0 || !data) return;
+    resource_mgr_.UpdateBuffer(vbo.raw(), offset, size, data, false);
+}
+
+void DX11RhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) {
+    if (!ibo || size == 0 || !data) return;
+    resource_mgr_.UpdateBuffer(ibo.raw(), offset, size, data, true);
+}
+
+void DX11RhiDevice::DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
+    if (vbo) resource_mgr_.DeleteBuffer(vbo.raw());
+    if (ibo) resource_mgr_.DeleteBuffer(ibo.raw());
+    vao_bindings_.erase(vao.raw());
+}
+
+void DX11RhiDevice::BindMegaVAO(VertexArrayHandle vao) {
+    auto it = vao_bindings_.find(vao.raw());
+    if (it == vao_bindings_.end()) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    const DX11Buffer* vbo_buf = resource_mgr_.GetBuffer(it->second.vbo_handle);
+    const DX11Buffer* ibo_buf = resource_mgr_.GetBuffer(it->second.ibo_handle);
+    if (vbo_buf && vbo_buf->buffer) {
+        UINT stride = sizeof(BatchVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vb = vbo_buf->buffer.Get();
+        dc->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    }
+    if (ibo_buf && ibo_buf->buffer) {
+        dc->IASetIndexBuffer(ibo_buf->buffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    }
+}
+
+void DX11RhiDevice::UnbindVAO() {
+    // DX11 无需显式解绑
+}
+
+// ============================================================
+// Static Mesh VAO
+// ============================================================
+
+VertexArrayHandle DX11RhiDevice::CreateStaticMeshVAO(
+    const void* vertex_data, size_t vertex_bytes,
+    const std::vector<const void*>& ebo_datas,
+    const std::vector<size_t>& ebo_sizes,
+    BufferHandle& out_vbo,
+    std::vector<BufferHandle>& out_ebos)
+{
+    if (!vertex_data || vertex_bytes == 0) { out_vbo = {}; out_ebos.clear(); return {}; }
+    if (ebo_datas.size() != ebo_sizes.size()) { out_vbo = {}; out_ebos.clear(); return {}; }
+
+    unsigned int vbo_h = resource_mgr_.CreateBuffer(vertex_bytes, vertex_data, false, false);
+    if (vbo_h == 0) { out_vbo = {}; out_ebos.clear(); return {}; }
+
+    out_ebos.resize(ebo_datas.size());
+    unsigned int first_ebo = 0;
+    for (size_t i = 0; i < ebo_datas.size(); ++i) {
+        unsigned int ebo_h = resource_mgr_.CreateBuffer(ebo_sizes[i], ebo_datas[i], false, true);
+        out_ebos[i] = BufferHandle{ebo_h};
+        if (i == 0) first_ebo = ebo_h;
+    }
+
+    unsigned int vao_id = next_vao_id_++;
+    vao_bindings_[vao_id] = {vbo_h, first_ebo};
+    out_vbo = BufferHandle{vbo_h};
+    return VertexArrayHandle{vao_id};
+}
+
+void DX11RhiDevice::DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                                          const std::vector<BufferHandle>& ebos) {
+    for (auto& ebo : ebos) {
+        if (ebo) resource_mgr_.DeleteBuffer(ebo.raw());
+    }
+    if (vbo) resource_mgr_.DeleteBuffer(vbo.raw());
+    vao_bindings_.erase(vao.raw());
+}
+
+void DX11RhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
+    auto it = vao_bindings_.find(vao.raw());
+    if (it == vao_bindings_.end()) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    const DX11Buffer* vbo_buf = resource_mgr_.GetBuffer(it->second.vbo_handle);
+    if (vbo_buf && vbo_buf->buffer) {
+        UINT stride = sizeof(BatchVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vb = vbo_buf->buffer.Get();
+        dc->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    }
+    const DX11Buffer* ebo_buf = resource_mgr_.GetBuffer(ebo.raw());
+    if (ebo_buf && ebo_buf->buffer) {
+        dc->IASetIndexBuffer(ebo_buf->buffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    }
+}
+
+// ============================================================
+// GPU-Driven PBR Shader Setup
+// ============================================================
+
+void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                              const glm::vec3& camera_pos,
+                                              const glm::vec3& light_dir, const glm::vec3& light_color,
+                                              float light_intensity, float ambient_intensity) {
+    draw_executor_.SetupGPUDrivenPBR(view, proj, camera_pos,
+                                      light_dir, light_color,
+                                      light_intensity, ambient_intensity,
+                                      state_mgr_, shader_mgr_);
+}
+
 } // namespace render
 } // namespace dse

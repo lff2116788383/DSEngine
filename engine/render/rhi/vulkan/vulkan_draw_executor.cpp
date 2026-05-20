@@ -2646,5 +2646,71 @@ void VulkanDrawExecutor::DispatchBloomCompute(
     global_state_.current_frame_stats.draw_calls++;
 }
 
+// ============================================================
+// GPU-Driven PBR 渲染设置
+// ============================================================
+
+void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+                                            const glm::mat4& view, const glm::mat4& proj,
+                                            const glm::vec3& camera_pos,
+                                            const glm::vec3& light_dir, const glm::vec3& light_color,
+                                            float light_intensity, float ambient_intensity,
+                                            VulkanPipelineStateManager& pipeline_mgr,
+                                            VulkanShaderManager& shader_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !context_) return;
+
+    const unsigned int shader_handle = shader_mgr.pbr_shader_handle();
+    const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_handle);
+    if (!pbr_program) return;
+
+    // 获取当前 render pass（可能是离屏 RT 的 render pass）
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    // BatchVertex 顶点格式（与 DrawMeshBatch 一致）
+    std::vector<VkVertexInputBindingDescription> mesh_bindings = {
+        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
+        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 12},   // aColor
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, 28},          // aTexCoord
+        {3, 0, VK_FORMAT_R32G32B32_SFLOAT, 36},       // aNormal
+        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
+        {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
+        {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
+    };
+
+    VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(),
+        pbr_program, active_rp, mesh_bindings, mesh_attrs,
+        context_->swapchain_extent(), current_msaa_samples_,
+        current_color_attachment_count_);
+    if (vk_pipeline == VK_NULL_HANDLE) return;
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+
+    // PerFrame UBO
+    VulkanPerFrameUBO frame_ubo{};
+    frame_ubo.vp = proj * view;
+    frame_ubo.view = view;
+    frame_ubo.camera_pos = glm::vec4(camera_pos, 0.0f);
+    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    per_frame_ubo_offset_ += kUboSlotAlignment;
+
+    // PerScene UBO
+    VulkanPerSceneUBO scene_ubo{};
+    scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    scene_ubo.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
+    scene_ubo.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        scene_ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    }
+    WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
+                  per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
+    per_scene_ubo_offset_ += kUboSlotAlignment;
+}
+
 } // namespace render
 } // namespace dse

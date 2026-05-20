@@ -165,6 +165,15 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 
+    // --- GPU-Driven PBR 渲染设置 ---
+    void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+                            const glm::mat4& view, const glm::mat4& proj,
+                            const glm::vec3& camera_pos,
+                            const glm::vec3& light_dir, const glm::vec3& light_color,
+                            float light_intensity, float ambient_intensity,
+                            VulkanPipelineStateManager& pipeline_mgr,
+                            VulkanShaderManager& shader_mgr);
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
