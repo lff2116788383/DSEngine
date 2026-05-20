@@ -236,8 +236,6 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
-
-    // 鍒濆鍖栧唴缃?PBR 鐫€鑹插櫒
     shader_mgr_.InitBuiltinPBRShader();
     resource_mgr_.ledger().shader_programs_created += 1;
 

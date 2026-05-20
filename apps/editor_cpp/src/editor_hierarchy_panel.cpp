@@ -476,22 +476,14 @@ void DrawHierarchyPanel(EditorContext& context) {
                 context.selected_entity = new_ent;
             }
             if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only)) {
-                auto new_ent = context.world.CreateEntity();
-                context.registry.emplace<EditorNameComponent>(new_ent, "Cube");
-                context.registry.emplace<TransformComponent>(new_ent);
-                auto& mesh = context.registry.emplace<dse::MeshRendererComponent>(new_ent);
-                mesh.mesh_path = "data/models/cube.dmesh";
-                context.selected_entity = new_ent;
+                CreateEntity3DCube(context);
             }
             if (ImGui::MenuItem("Physics Box", nullptr, false, !context.read_only)) {
-                auto new_ent = context.world.CreateEntity();
-                context.registry.emplace<EditorNameComponent>(new_ent, "Physics Box");
-                context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 5, 0));
-                auto& mesh = context.registry.emplace<dse::MeshRendererComponent>(new_ent);
-                mesh.mesh_path = "data/models/cube.dmesh";
-                context.registry.emplace<dse::RigidBody3DComponent>(new_ent);
-                context.registry.emplace<dse::BoxCollider3DComponent>(new_ent);
-                context.selected_entity = new_ent;
+                CreateEntity3DCube(context);
+                context.registry.get<EditorNameComponent>(context.selected_entity).name = "Physics Box";
+                context.registry.get<TransformComponent>(context.selected_entity).position = glm::vec3(0, 5, 0);
+                context.registry.emplace<dse::RigidBody3DComponent>(context.selected_entity);
+                context.registry.emplace<dse::BoxCollider3DComponent>(context.selected_entity);
             }
             if (ImGui::MenuItem("Particle System 3D", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();

@@ -51,7 +51,7 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
-#include <cstdlib>
+#include <cstdio>
 #include "engine/base/time.h"
 
 namespace dse {

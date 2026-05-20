@@ -244,13 +244,12 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     using namespace dse::render::generated_shaders;
     std::string src = kpbr_frag_glsl330;
 
-    // 1. 鐗堟湰闄嶇骇锛?version 430 鈫?#version 330锛?
+    // 1. 保持 #version 430 不降级。NVIDIA 在 GL 3.3 context 中也接受 #version 430
+    //    （gbuffer shader 已验证）；降到 330 会导致 layout(binding) 编译失败。
     {
         const auto pos = src.find("#version 430");
         if (pos == std::string::npos)
             fprintf(stderr, "[GenerateUBOGLSL] #version 430 not found\n");
-        else
-            src.replace(pos, 12, "#version 330");
     }
 
     // 2. 绉婚櫎 ClusterInfoEntry 缁撴瀯浣擄紙鎸夊悕绉板畾浣嶏紝ID 鏃犲叧锛?
@@ -275,8 +274,8 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     RemoveSSBOBlock(src, "LightIndexSSBO");
 
     // 5 & 6. PointLightSSBO + SpotLightSSBO 鈫?鍥哄畾澶у皬 UBO锛堟寜鍚嶇О瀹氫綅锛孖D 鏃犲叧锛?
-    TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights[]", kMaxUBOLights);
-    TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights[]",  kMaxUBOLights);
+    TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights", kMaxUBOLights);
+    TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights",  kMaxUBOLights);
 
     // 7. 鍔ㄦ€佹彁鍙栧疄渚嬪悕锛堥殢 shader 鍙樺姩鑷姩閫傚簲锛屼笉鍐嶇‖缂栫爜 _2008/_2190锛?
     const std::string point_inst = ExtractInstanceName(src, "PointLightUBO");
