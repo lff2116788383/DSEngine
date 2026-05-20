@@ -186,10 +186,9 @@ public:
         );
     }
 
-    // TODO: Vulkan 场景视图模式实现 (SetWireframeMode → VK_POLYGON_MODE_LINE pipeline variant)
-    // void SetWireframeMode(bool enable) override;
-    // void SetForceUnlit(bool enable) override;
-    // void SetOverdrawMode(bool enable) override;
+    void SetWireframeMode(bool enable) override;
+    void SetForceUnlit(bool enable) override;
+    void SetOverdrawMode(bool enable) override;
 
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }

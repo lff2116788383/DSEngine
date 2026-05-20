@@ -90,11 +90,8 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
             break;
 
         case SceneViewMode::Overdraw:
-            dl->AddRectFilled(win_pos,
-                ImVec2(win_pos.x + panel_size.x, win_pos.y + panel_size.y),
-                IM_COL32(0, 0, 0, 100));
             dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
-                IM_COL32(255, 100, 100, 255), "Overdraw (visualization placeholder)");
+                IM_COL32(255, 100, 100, 255), "Overdraw (Additive Heatmap)");
             break;
 
         default:

@@ -1,5 +1,6 @@
 #include "editor_shader_graph.h"
 #include "editor_icons.h"
+#include "editor_console_panel.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -14,6 +15,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace dse::editor {
 
@@ -446,8 +454,11 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
     o << "#version 330 core\n\n";
     o << "in vec2 v_uv;\n";
     o << "in vec3 v_normal;\n";
-    o << "in vec3 v_world_pos;\n\n";
+    o << "in vec3 v_world_pos;\n";
+    o << "in vec3 v_tangent;\n";
+    o << "in vec3 v_bitangent;\n\n";
     o << "out vec4 FragColor;\n\n";
+    o << "uniform float u_time;\n\n";
 
     // 收集所有 Texture2D 输入节点用的 uniform
     int tex_unit = 0;
@@ -536,7 +547,7 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
             o << "    vec2 " << var << " = v_uv;\n";
             if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
         } else if (n.name == "Time") {
-            o << "    float " << prefix << "t = 0.0; // TODO: bind TIME uniform\n";
+            o << "    float " << prefix << "t = u_time;\n";
             if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = prefix + "t";
             if (n.outputs.size() > 1) { o << "    float " << prefix << "sin = sin(" << prefix << "t);\n"; pin_vars[n.outputs[1].id] = prefix + "sin"; }
             if (n.outputs.size() > 2) { o << "    float " << prefix << "cos = cos(" << prefix << "t);\n"; pin_vars[n.outputs[2].id] = prefix + "cos"; }
@@ -591,8 +602,30 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
             o << "    float " << var << " = pow(1.0 - max(dot(normalize(v_normal), normalize(-v_world_pos)), 0.0), " << power << ");\n";
             if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
         } else if (n.name == "Normal Map") {
+            // Texture input
+            std::string tex_expr = "u_tex0";
+            if (n.inputs.size() > 0) {
+                auto st = input_source.find(n.inputs[0].id);
+                if (st != input_source.end() && pin_vars.count(st->second)) tex_expr = pin_vars[st->second];
+            }
+            // UV input
+            std::string uv_expr = "v_uv";
+            if (n.inputs.size() > 1) {
+                auto su = input_source.find(n.inputs[1].id);
+                if (su != input_source.end() && pin_vars.count(su->second)) uv_expr = pin_vars[su->second];
+            }
+            // Strength
+            std::string strength = "1.0";
+            if (n.inputs.size() > 2) {
+                auto ss = input_source.find(n.inputs[2].id);
+                if (ss != input_source.end() && pin_vars.count(ss->second)) strength = pin_vars[ss->second];
+                else strength = std::to_string(n.inputs[2].default_value[0]);
+            }
             std::string var = prefix + "out";
-            o << "    vec3 " << var << " = v_normal; // TODO: normal map decode\n";
+            o << "    vec3 " << prefix << "raw = texture(" << tex_expr << ", " << uv_expr << ").rgb * 2.0 - 1.0;\n";
+            o << "    " << prefix << "raw.xy *= " << strength << ";\n";
+            o << "    mat3 " << prefix << "TBN = mat3(normalize(v_tangent), normalize(v_bitangent), normalize(v_normal));\n";
+            o << "    vec3 " << var << " = normalize(" << prefix << "TBN * " << prefix << "raw);\n";
             if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
         } else if (n.name == "PBR Output") {
             // 收集各输入
@@ -637,31 +670,59 @@ void DrawShaderGraphPanel() {
             std::ofstream out("shader_graph_output.frag");
             if (out.is_open()) { out << glsl; out.close(); }
             // 也输出到控制台日志
-            printf("[ShaderGraph] Compiled GLSL (%zu chars) -> shader_graph_output.frag\n", glsl.size());
+            EditorLog(LogLevel::Info, "[ShaderGraph] Compiled GLSL (" + std::to_string(glsl.size()) + " chars) -> shader_graph_output.frag");
         }
         ImGui::SameLine();
         if (ImGui::Button("Save")) {
-            std::string json = SerializeGraphJson(state);
-            std::ofstream out("shader_graph.dsg");
-            if (out.is_open()) {
-                out << json;
-                out.close();
-                printf("[ShaderGraph] Saved to shader_graph.dsg (%zu bytes)\n", json.size());
+            std::string save_path;
+#ifdef _WIN32
+            char filename[MAX_PATH] = "shader_graph.dsg";
+            OPENFILENAMEA ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = "Shader Graph (*.dsg)\0*.dsg\0All Files\0*.*\0";
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.lpstrDefExt = "dsg";
+            ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+            if (GetSaveFileNameA(&ofn)) save_path = filename;
+#else
+            save_path = "shader_graph.dsg";
+#endif
+            if (!save_path.empty()) {
+                std::string json = SerializeGraphJson(state);
+                std::ofstream out(save_path);
+                if (out.is_open()) {
+                    out << json;
+                    out.close();
+                    EditorLog(LogLevel::Info, "[ShaderGraph] Saved to " + save_path + " (" + std::to_string(json.size()) + " bytes)");
+                }
             }
         }
         ImGui::SameLine();
         if (ImGui::Button("Load")) {
-            std::ifstream in("shader_graph.dsg");
-            if (in.is_open()) {
-                std::string json((std::istreambuf_iterator<char>(in)),
-                                  std::istreambuf_iterator<char>());
-                in.close();
-                if (DeserializeGraph(json, state)) {
-                    printf("[ShaderGraph] Loaded from shader_graph.dsg (%zu nodes, %zu links)\n",
-                           state.nodes.size(), state.links.size());
+            std::string load_path;
+#ifdef _WIN32
+            char filename[MAX_PATH] = "";
+            OPENFILENAMEA ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = "Shader Graph (*.dsg)\0*.dsg\0All Files\0*.*\0";
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+            if (GetOpenFileNameA(&ofn)) load_path = filename;
+#else
+            load_path = "shader_graph.dsg";
+#endif
+            if (!load_path.empty()) {
+                std::ifstream in(load_path);
+                if (in.is_open()) {
+                    std::string json((std::istreambuf_iterator<char>(in)),
+                                      std::istreambuf_iterator<char>());
+                    in.close();
+                    if (DeserializeGraph(json, state)) {
+                        EditorLog(LogLevel::Info, "[ShaderGraph] Loaded from " + load_path + " (" + std::to_string(state.nodes.size()) + " nodes, " + std::to_string(state.links.size()) + " links)");
+                    }
                 }
-            } else {
-                printf("[ShaderGraph] Failed to open shader_graph.dsg\n");
             }
         }
     }

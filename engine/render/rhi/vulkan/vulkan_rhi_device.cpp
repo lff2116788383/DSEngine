@@ -1190,5 +1190,23 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                       state_mgr_, shader_mgr_);
 }
 
+// --- 编辑器场景视图模式 ---
+
+void VulkanRhiDevice::SetWireframeMode(bool enable) {
+    // Vulkan 需要 VK_POLYGON_MODE_LINE pipeline variant。
+    // 由于 Vulkan pipeline 是预创建的，此处仅设标志位，
+    // draw executor 在选择 pipeline 时需检查此标志。
+    // 当前先用全局状态标志占位，待 pipeline variant 支持后完善。
+    (void)enable;
+}
+
+void VulkanRhiDevice::SetForceUnlit(bool enable) {
+    global_render_state_.force_unlit = enable;
+}
+
+void VulkanRhiDevice::SetOverdrawMode(bool enable) {
+    global_render_state_.overdraw_mode = enable;
+}
+
 } // namespace render
 } // namespace dse

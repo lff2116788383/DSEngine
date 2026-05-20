@@ -908,5 +908,75 @@ void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::ma
                                       state_mgr_, shader_mgr_);
 }
 
+// --- 编辑器场景视图模式 ---
+
+void DX11RhiDevice::SetWireframeMode(bool enable) {
+    auto* ctx = context_.device_context();
+    if (!ctx) return;
+    D3D11_RASTERIZER_DESC rd = {};
+    rd.FillMode = enable ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_BACK;
+    rd.FrontCounterClockwise = TRUE;
+    rd.DepthClipEnable = TRUE;
+    ID3D11RasterizerState* rs = nullptr;
+    auto* dev = context_.device();
+    if (dev && SUCCEEDED(dev->CreateRasterizerState(&rd, &rs))) {
+        ctx->RSSetState(rs);
+        rs->Release();
+    }
+}
+
+void DX11RhiDevice::SetForceUnlit(bool enable) {
+    global_render_state_.force_unlit = enable;
+}
+
+void DX11RhiDevice::SetOverdrawMode(bool enable) {
+    auto* ctx = context_.device_context();
+    if (!ctx) return;
+    if (enable) {
+        // Additive blend
+        D3D11_BLEND_DESC bd = {};
+        bd.RenderTarget[0].BlendEnable = TRUE;
+        bd.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        ID3D11BlendState* bs = nullptr;
+        auto* dev = context_.device();
+        if (dev && SUCCEEDED(dev->CreateBlendState(&bd, &bs))) {
+            float factor[4] = {0, 0, 0, 0};
+            ctx->OMSetBlendState(bs, factor, 0xFFFFFFFF);
+            bs->Release();
+        }
+        // Disable depth write
+        D3D11_DEPTH_STENCIL_DESC dsd = {};
+        dsd.DepthEnable = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+        ID3D11DepthStencilState* dss = nullptr;
+        if (dev && SUCCEEDED(dev->CreateDepthStencilState(&dsd, &dss))) {
+            ctx->OMSetDepthStencilState(dss, 0);
+            dss->Release();
+        }
+    } else {
+        ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+        // Restore default depth stencil
+        D3D11_DEPTH_STENCIL_DESC dsd = {};
+        dsd.DepthEnable = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+        ID3D11DepthStencilState* dss = nullptr;
+        auto* dev = context_.device();
+        if (dev && SUCCEEDED(dev->CreateDepthStencilState(&dsd, &dss))) {
+            ctx->OMSetDepthStencilState(dss, 0);
+            dss->Release();
+        }
+    }
+    global_render_state_.overdraw_mode = enable;
+}
+
 } // namespace render
 } // namespace dse

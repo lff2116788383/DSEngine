@@ -462,6 +462,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
         PerMaterialUBO per_mat;
+        if (global_state_.overdraw_mode) {
+            // Overdraw 可视化：每个 fragment 输出固定低亮度颜色，
+            // 通过 additive blend 叠加后高亮区域表示过度绘制
+            per_mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+            per_mat.roughness_ao = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+            per_mat.emissive = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+            per_mat.flags = glm::vec4(0.0f);
+        } else {
         per_mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
         per_mat.roughness_ao = glm::vec4(item.material_roughness, item.material_ao, item.material_normal_strength, item.material_alpha_cutoff);
         per_mat.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
@@ -471,6 +479,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             item.emissive_map_handle != 0 ? 1.0f : 0.0f,
             item.occlusion_map_handle != 0 ? 1.0f : 0.0f
         );
+        }
         per_mat.extra_params = glm::vec4(
             item.material_sss_strength,
             item.material_clear_coat,

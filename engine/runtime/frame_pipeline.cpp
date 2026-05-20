@@ -42,6 +42,7 @@ FramePipeline::~FramePipeline() = default;
 #include <limits>
 #include <cstdint>
 #include <sstream>
+#include <cstring>
 
 namespace dse::render {
     extern const char* kHiZCopyShaderSource;
@@ -1636,12 +1637,15 @@ unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const g
     render_pass_context_.editor_view = view;
     render_pass_context_.editor_projection = projection;
 
-    // 创建命令缓冲，只执行 ForwardScenePass
+    // 创建命令缓冲，执行 shadow pass + scene pass
     auto cmd = runtime_context_.rhi_device->CreateCommandBuffer();
     for (auto& pass : registered_passes_) {
-        if (std::string(pass->GetName()) == "ForwardScenePass") {
+        const char* name = pass->GetName();
+        if (std::strcmp(name, "shadow_pass") == 0 ||
+            std::strcmp(name, "spot_shadow_pass") == 0 ||
+            std::strcmp(name, "point_shadow_pass") == 0 ||
+            std::strcmp(name, "scene_pass") == 0) {
             pass->Execute(*cmd);
-            break;
         }
     }
     runtime_context_.rhi_device->Submit(cmd);

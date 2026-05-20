@@ -488,7 +488,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.rhi_device->SetWireframeMode(true);
         }
         // ShadedWireframe: 第一遍正常 fill 渲染，线框叠加在 mesh 渲染结束后
-        if (view_mode == 3) {
+        if (view_mode == 3 || view_mode == 4) {
             ctx_.rhi_device->SetForceUnlit(true);
         }
         if (view_mode == 4) {
@@ -548,7 +548,17 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         // ShadedWireframe: 正常渲染已完成，叠加一遍线框
         if (view_mode == 2) {
             ctx_.rhi_device->SetWireframeMode(true);
-            // 重新提交 mesh 渲染（wireframe overlay）
+            // GPU Driven 路径：重新 indirect draw（wireframe overlay）
+            if (use_gpu_indirect) {
+                auto* rhi = ctx_.rhi_device;
+                rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+                rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+                rhi->UnbindVAO();
+            }
+            // CPU 路径
             if (!use_gpu_indirect) {
                 if (ctx_.modules.empty() && ctx_.render_meshes) {
                     ctx_.render_meshes(*ctx_.world, cmd_buffer);
@@ -566,7 +576,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         if (view_mode == 1) {
             ctx_.rhi_device->SetWireframeMode(false);
         }
-        if (view_mode == 3) {
+        if (view_mode == 3 || view_mode == 4) {
             ctx_.rhi_device->SetForceUnlit(false);
         }
         if (view_mode == 4) {
