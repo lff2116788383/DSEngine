@@ -469,17 +469,25 @@ void EditorApp::Run() {
             const int entity_count = static_cast<int>(profiler_registry.storage<entt::entity>().size());
             auto sprite_view = profiler_registry.view<SpriteRendererComponent>();
             const int sprite_count = static_cast<int>(std::distance(sprite_view.begin(), sprite_view.end()));
+            const ImGuiIO& imgui_io = ImGui::GetIO();
+            const int render_width = static_cast<int>(imgui_io.DisplaySize.x);
+            const int render_height = static_cast<int>(imgui_io.DisplaySize.y);
+            const size_t render_target_bytes =
+                static_cast<size_t>(render_width > 0 ? render_width : 1280) *
+                static_cast<size_t>(render_height > 0 ? render_height : 720) * 4u;
+            const size_t imgui_buffer_bytes =
+                static_cast<size_t>(std::max(imgui_io.MetricsRenderIndices, 0)) * sizeof(ImDrawIdx) + 256u * 1024u;
 
             memory_profiler_.RecordAlloc("World.Entities", static_cast<size_t>(std::max(entity_count, 0)) * sizeof(entt::entity));
-            memory_profiler_.RecordAlloc("Render.SceneTexture", static_cast<size_t>(1280 * 720 * 4));
-            memory_profiler_.RecordAlloc("Render.GameTexture", static_cast<size_t>(1280 * 720 * 4));
-            memory_profiler_.RecordAlloc("UI.ImGui", static_cast<size_t>(256 * 1024));
+            memory_profiler_.RecordAlloc("Render.SceneTexture", render_target_bytes);
+            memory_profiler_.RecordAlloc("Render.GameTexture", render_target_bytes);
+            memory_profiler_.RecordAlloc("UI.ImGui", imgui_buffer_bytes);
 
             render_profiler_.RecordSpriteBatch(std::max(sprite_count, 0));
             render_profiler_.RecordDrawCall(6, 2);
             render_profiler_.RecordTextureBind();
             render_profiler_.RecordShaderSwitch();
-            render_profiler_.SetTextureMemory(static_cast<size_t>(1280 * 720 * 4 * 2));
+            render_profiler_.SetTextureMemory(render_target_bytes * 2u);
         }
 
         // ImGui frame
