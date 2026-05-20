@@ -729,6 +729,13 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         global_state_.current_frame_stats.draw_calls += 1;
+        {
+            const int tri_per_draw = item.vao_override
+                ? static_cast<int>(item.index_count_override / 3)
+                : static_cast<int>(item.indices.size() / 3);
+            const int eff_inst = is_instanced ? static_cast<int>(item.instance_transforms.size()) : 1;
+            global_state_.current_frame_stats.triangle_count += tri_per_draw * eff_inst;
+        }
     }
     if (emit_vse1522_depth_diag) {
 #ifdef DSE_VSE_1522_DIAG

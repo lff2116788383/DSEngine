@@ -1463,6 +1463,11 @@ int FramePipeline::LastDrawCalls() const {
     return last_draw_calls_;
 }
 
+dse::render::RhiDevice::RhiFrameStats FramePipeline::GetRhiFrameStats() const {
+    if (!runtime_context_.rhi_device) return {};
+    return runtime_context_.rhi_device->GetFrameStats();
+}
+
 int FramePipeline::LastMaterialSwitches() const {
     return last_material_switches_;
 }

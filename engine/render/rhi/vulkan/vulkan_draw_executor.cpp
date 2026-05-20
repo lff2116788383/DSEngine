@@ -1795,6 +1795,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
             global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
         }
         global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.triangle_count += static_cast<int>(item.indices.size() / 3) * static_cast<int>(instance_count);
     }
 }
 

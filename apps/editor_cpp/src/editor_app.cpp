@@ -82,6 +82,7 @@
 #include "editor_asset_db.h"
 #include "editor_autosave.h"
 #include "editor_locale.h"
+#include "editor_snapshot.h"
 
 
 
@@ -407,6 +408,11 @@ void EditorApp::Run() {
 
     dse::editor::AutoSaveManager::Get().CheckRecovery();
 
+    if (!test_config_.replay_path.empty()) {
+        std::cout << "[EditorApp][Replay] WARNING: --replay is not yet implemented, path ignored: "
+                  << test_config_.replay_path << std::endl;
+    }
+
     while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
@@ -467,8 +473,6 @@ void EditorApp::Run() {
             World& profiler_world = engine_instance_->pipeline()->world();
             auto& profiler_registry = profiler_world.registry();
             const int entity_count = static_cast<int>(profiler_registry.storage<entt::entity>().size());
-            auto sprite_view = profiler_registry.view<SpriteRendererComponent>();
-            const int sprite_count = static_cast<int>(std::distance(sprite_view.begin(), sprite_view.end()));
             const ImGuiIO& imgui_io = ImGui::GetIO();
             const int render_width = static_cast<int>(imgui_io.DisplaySize.x);
             const int render_height = static_cast<int>(imgui_io.DisplaySize.y);
@@ -483,10 +487,16 @@ void EditorApp::Run() {
             memory_profiler_.RecordAlloc("Render.GameTexture", render_target_bytes);
             memory_profiler_.RecordAlloc("UI.ImGui", imgui_buffer_bytes);
 
-            render_profiler_.RecordSpriteBatch(std::max(sprite_count, 0));
-            render_profiler_.RecordDrawCall(6, 2);
-            render_profiler_.RecordTextureBind();
-            render_profiler_.RecordShaderSwitch();
+            {
+                const auto rhi_stats = engine_instance_->pipeline()->GetRhiFrameStats();
+                render_profiler_.UpdateFromRhi(
+                    rhi_stats.draw_calls,
+                    0,  // vertex_count — RHI 未单独统计
+                    rhi_stats.triangle_count,
+                    rhi_stats.sprite_count,
+                    rhi_stats.texture_binds,
+                    rhi_stats.shader_switches);
+            }
             render_profiler_.SetTextureMemory(render_target_bytes * 2u);
         }
 
@@ -577,6 +587,46 @@ void EditorApp::Run() {
                     std::cerr << "[EditorApp] Screenshot FAILED: no framebuffer data" << std::endl;
                 }
                 screenshot_taken = true;
+            }
+        }
+
+        // Test harness verify: export snapshot and compare against expected on last frame
+        if (!test_config_.verify_path.empty() && frames_remaining_ == 0) {
+            auto& verify_world = engine_instance_->pipeline()->world();
+            const std::string actual_json = dse::editor::test::ExportRegistrySnapshot(verify_world.registry());
+
+            std::string expected_json;
+            {
+                std::ifstream f(test_config_.verify_path);
+                if (f.is_open()) {
+                    expected_json.assign(std::istreambuf_iterator<char>(f),
+                                        std::istreambuf_iterator<char>());
+                }
+            }
+
+            if (expected_json.empty()) {
+                // No expected file found – write actual as the new baseline
+                {
+                    auto parent = std::filesystem::path(test_config_.verify_path).parent_path();
+                    if (!parent.empty()) std::filesystem::create_directories(parent);
+                }
+                std::ofstream f(test_config_.verify_path);
+                f << actual_json;
+                std::cout << "[EditorApp][Verify] Baseline written: " << test_config_.verify_path << std::endl;
+            } else {
+                const auto diffs = dse::editor::test::CompareSnapshot(actual_json, expected_json);
+                if (diffs.empty()) {
+                    std::cout << "[EditorApp][Verify] PASSED: " << test_config_.verify_path << std::endl;
+                } else {
+                    std::cerr << "[EditorApp][Verify] FAILED: " << diffs.size() << " difference(s) vs "
+                              << test_config_.verify_path << ":" << std::endl;
+                    for (const auto& d : diffs) {
+                        std::cerr << "  " << d << std::endl;
+                    }
+                    render_profiler_.EndFrame();
+                    cpu_profiler_.EndFrame();
+                    std::exit(1);
+                }
             }
         }
 

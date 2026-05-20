@@ -56,6 +56,10 @@ public:
     void RecordTextureBind();
     void RecordShaderSwitch();
     void SetTextureMemory(size_t bytes);
+
+    /// 从 RHI 帧统计批量写入，单次加锁 O(1)
+    void UpdateFromRhi(int draw_calls, int vertex_count, int triangle_count,
+                       int sprite_count, int texture_binds, int shader_switches);
     const RenderFrameStats& GetCurrentFrameStats() const { return current_frame_; }
     const RenderAccumulatedStats& GetAccumulatedStats() const { return accumulated_; }
     void Reset();
