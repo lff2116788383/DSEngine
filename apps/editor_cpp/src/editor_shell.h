@@ -19,6 +19,7 @@ struct PanelVisibility {
     bool* shader_graph = nullptr;
     bool* git = nullptr;
     bool* multi_viewport = nullptr;
+    bool* anim_state_machine = nullptr;
 };
 
 void BeginEditorShell();

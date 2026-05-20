@@ -20,6 +20,7 @@
 #include "editor_physics_debug.h"
 #include "editor_lighting_gizmos.h"
 #include "editor_navmesh_panel.h"
+#include "editor_scene_view_mode.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
 #include <algorithm>
@@ -645,12 +646,15 @@ void DrawSceneViewportPanel(EditorContext& ctx,
         // Overlay toggle toolbar (top-right of viewport)
         {
             ImDrawList* ov_dl = ImGui::GetWindowDrawList();
-            float btn_x = window_pos.x + scene_panel_size.x - 140.0f;
+            float btn_x = window_pos.x + scene_panel_size.x - 260.0f;
             float btn_y = window_pos.y + 4.0f;
             ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+
+            DrawSceneViewModeSelector();
+            ImGui::SameLine();
 
             bool& phys_dbg = GetPhysicsDebugEnabled();
             if (phys_dbg) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 0.8f));

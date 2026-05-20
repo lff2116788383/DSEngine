@@ -61,6 +61,9 @@ add_executable(dse_editor_cpp WIN32
     src/editor_git_panel.cpp
     src/editor_shader_graph.cpp
     src/editor_multi_viewport.cpp
+    src/editor_scene_view_mode.cpp
+    src/editor_layout_manager.cpp
+    src/editor_anim_state_machine.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp

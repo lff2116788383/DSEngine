@@ -18,6 +18,7 @@
 #include "editor_project.h"
 #include "editor_preferences_panel.h"
 #include "editor_autosave.h"
+#include "editor_layout_manager.h"
 #include "engine/dse_version.h"
 #include "editor_locale.h"
 
@@ -398,6 +399,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_SOURCE_BRANCH "  Git", nullptr, panels->git);
             if (panels->multi_viewport)
                 ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, panels->multi_viewport);
+            if (panels->anim_state_machine)
+                ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
         }
         ImGui::Separator();
         if (show_chat && ImGui::MenuItem("AI Chat")) {
@@ -407,6 +410,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             *show_plugins = true;
         }
         ImGui::Separator();
+        DrawLayoutMenu();
         if (ImGui::MenuItem(T("Reset Layout"))) {
             ResetEditorLayout();
         }

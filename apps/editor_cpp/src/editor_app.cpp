@@ -93,6 +93,7 @@
 #include "editor_git_panel.h"
 #include "editor_shader_graph.h"
 #include "editor_multi_viewport.h"
+#include "editor_anim_state_machine.h"
 
 
 
@@ -753,7 +754,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_tile_palette_, &show_terrain_editor_, &show_lua_console_,
         &show_undo_history_,
         &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
-        &show_shader_graph_, &show_git_, &show_multi_viewport_
+        &show_shader_graph_, &show_git_, &show_multi_viewport_,
+        &show_anim_state_machine_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -797,6 +799,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel();
     if (show_git_)                  dse::editor::DrawGitPanel();
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
+    if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
 
     // Plugin Manager 面板
     if (show_plugins_panel_) {
