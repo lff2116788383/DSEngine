@@ -239,6 +239,18 @@ bool GlfwApp::AttachExternal(void* existing_window) {
     return true;
 }
 
+void GlfwApp::MakeContextCurrent() {
+    if (window_ && has_gl_context_) {
+        glfwMakeContextCurrent(window_);
+    }
+}
+
+void GlfwApp::ReleaseContext() {
+    if (has_gl_context_) {
+        glfwMakeContextCurrent(nullptr);
+    }
+}
+
 // --- 工厂函数 ---
 std::unique_ptr<PlatformApp> CreateDefaultPlatformApp() {
     return std::make_unique<GlfwApp>();

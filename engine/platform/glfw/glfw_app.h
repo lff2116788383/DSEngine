@@ -47,6 +47,10 @@ public:
     // --- 编辑器外部窗口注入 ---
     bool AttachExternal(void* existing_window) override;
 
+    // --- GL Context 线程管理 ---
+    void MakeContextCurrent() override;
+    void ReleaseContext() override;
+
 private:
     GLFWwindow* window_ = nullptr;
     bool owns_window_ = false;  // false = 编辑器模式 (AttachExternal)

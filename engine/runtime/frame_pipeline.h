@@ -11,6 +11,10 @@
 #include <vector>
 #include <string>
 #include <cstddef>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/scene/transform_system.h"
@@ -37,6 +41,7 @@
 #include "engine/render/render_graph.h"
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_snapshot.h"
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/light_buffer.h"
 #include "engine/render/cluster_grid.h"
@@ -88,6 +93,14 @@ public:
      * @brief 设置是否启用编辑器模式 (在Init前调用)
      */
     void EnableEditorMode(bool enable);
+
+    /// Phase 2: 注入渲染线程 context 管理回调
+    void SetRenderContextCallbacks(std::function<void()> make_current,
+                                   std::function<void()> release,
+                                   std::function<void()> present);
+
+    /// Phase 2: 查询渲染线程是否已启动
+    bool IsRenderThreadActive() const { return render_thread_active_.load(); }
 
     /// Reset the Physics3D system (release all PhysX actors from play-mode registry).
     /// Call before restoring the edit-mode registry snapshot on Play→Stop transition.
@@ -249,6 +262,15 @@ private:
     void BuildRenderGraphInternal();
     void ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer);
 
+    /// Phase 2: 渲染线程分离
+    void PrepareRenderFrame();           ///< 主线程：收集光源/构建 cluster/捕获快照 (纯 CPU)
+    void ExecuteRenderFrame();           ///< 渲染线程：上传/执行 render graph/提交 (全 GPU)
+    void StartRenderThread();            ///< Init 末尾启动渲染线程
+    void StopRenderThread();             ///< Shutdown 时停止渲染线程
+    void RenderThreadFunc();             ///< 渲染线程主循环
+    void WaitForRenderComplete();        ///< 主线程等待上一帧渲染完成
+    void SignalRenderThread();           ///< 主线程唤醒渲染线程开始新帧
+
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
 
@@ -318,6 +340,25 @@ private:
 
     /// 渲染 Pass 共享上下文
     dse::render::RenderPassContext render_pass_context_;
+
+    /// 双缓冲薄快照池（Phase 1 流水线并行基础设施）
+    dse::render::RenderThinSnapshot snapshot_pool_[2];
+    int snapshot_write_idx_ = 0;
+
+    dse::render::RenderThinSnapshot& write_snapshot() { return snapshot_pool_[snapshot_write_idx_]; }
+    const dse::render::RenderThinSnapshot& read_snapshot() const { return snapshot_pool_[1 - snapshot_write_idx_]; }
+    void CaptureThinSnapshot();
+    void FlipSnapshotIndex() { snapshot_write_idx_ = 1 - snapshot_write_idx_; }
+
+    /// Phase 2: 渲染线程同步原语
+    std::thread render_thread_;
+    std::mutex render_mutex_;
+    std::condition_variable render_cv_;      ///< 渲染线程等待新帧信号
+    std::condition_variable main_cv_;        ///< 主线程等待渲染完成
+    bool render_frame_pending_ = false;      ///< 有新帧待渲染
+    bool render_frame_done_ = true;          ///< 上一帧渲染已完成
+    bool render_thread_exit_ = false;        ///< 退出信号
+    std::atomic<bool> render_thread_active_{false};  ///< 渲染线程是否已启动
 
     /// 已注册的渲染 Pass（按注册顺序，DAG 排序由 RenderGraph 决定）
     std::vector<std::unique_ptr<dse::render::IRenderPass>> registered_passes_;

@@ -10,6 +10,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/render_snapshot.h"
 
 class World;
 class AssetManager;
@@ -38,6 +39,7 @@ class DDGISystem;
  * @brief 所有 Pass 共享的运行时上下文（非拥有型指针）
  */
 struct RenderPassContext {
+    const RenderThinSnapshot* snapshot = nullptr;  ///< 渲染线程只读快照（Phase 1）
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
