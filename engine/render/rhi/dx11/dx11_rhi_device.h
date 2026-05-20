@@ -33,8 +33,8 @@ namespace render {
  */
 class DX11RhiDevice final : public RhiDevice {
 public:
-    DX11RhiDevice() = default;
-    ~DX11RhiDevice() = default;
+    DX11RhiDevice();
+    ~DX11RhiDevice();
 
     // --- RhiDevice 接口 ---
     bool InitDevice(void* window_handle, int width, int height) override;
@@ -83,7 +83,9 @@ public:
     void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                    int mip_level, bool read_only, bool r32f = false) override;
     void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
-    bool SupportsCompute() const override { return true; }
+    bool SupportsCompute() const override {
+        return context_.feature_level() >= D3D_FEATURE_LEVEL_11_0;
+    }
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;
@@ -173,6 +175,10 @@ private:
     size_t                         compute_params_cb_capacity_ = 0;
 
     bool initialized_ = false;
+
+    // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
+    struct HiZImpl;
+    std::unique_ptr<HiZImpl> hiz_impl_;
 };
 
 } // namespace render

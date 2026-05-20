@@ -34,8 +34,8 @@ namespace render {
  */
 class VulkanRhiDevice final : public RhiDevice {
 public:
-    VulkanRhiDevice() = default;
-    ~VulkanRhiDevice() = default;
+    VulkanRhiDevice();
+    ~VulkanRhiDevice();
 
     // --- RhiDevice 接口 ---
     bool InitDevice(void* window_handle, int width, int height) override;
@@ -210,6 +210,10 @@ private:
     std::unordered_map<unsigned int, unsigned int> pending_compute_samplers_; ///< unit → tex handle
 
     bool initialized_ = false;
+
+    // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
+    struct HiZImpl;
+    std::unique_ptr<HiZImpl> hiz_impl_;
 };
 
 } // namespace render

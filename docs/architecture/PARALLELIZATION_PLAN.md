@@ -2,7 +2,7 @@
 
 > **一句话：利用多核 CPU 资源，降低主循环每帧耗时，提高 FPS 帧率，不改变画质、不省显存、不加速磁盘。**
 
-> 最后更新：2026-05-20
+> 最后更新：2026-05-20（修订：修正收益预测、补全灯光快照、删除 EnTT scheduler 误引用）
 
 ## 一、问题现状
 
@@ -312,7 +312,8 @@ Render 中所有对 ECS 的读取可以分为两类：
 namespace dse {
 namespace render {
 
-/// 渲染线程所需的 ECS 数据薄快照（总量 < 1KB）
+/// 渲染线程所需的 ECS 数据薄快照（总量 < 2KB）
+/// 包含相机、天空盒、灯光（含阴影投射者）、后处理等。
 /// 由主线程在 CaptureThinSnapshot() 中填充，渲染线程只读。
 struct RenderThinSnapshot {
     // ── 3D 相机 ──
@@ -330,6 +331,41 @@ struct RenderThinSnapshot {
         glm::quat rotation;
         bool entity_has_transform = false;  // lua 中是否旋转了天空盒
     } skybox;
+
+    // ── 方向光（CSMShadowPass + ForwardScenePass 读取）──
+    struct DirectionalLight {
+        bool valid = false;
+        bool cast_shadow = false;
+        glm::vec3 direction{0.0f, -1.0f, 0.0f};
+        glm::vec3 color{1.0f};
+        float intensity = 1.0f;
+        float ambient_intensity = 0.1f;
+        float shadow_strength = 1.0f;
+    } directional_light;
+
+    // ── 聚光灯（SpotShadowPass 读取，最多 4 盏投射阴影）──
+    static constexpr int kMaxSpotShadowLights = 4;
+    struct SpotLight {
+        bool valid = false;
+        bool cast_shadow = false;
+        glm::vec3 position;
+        glm::vec3 direction;
+        float cutoff_angle = 30.0f;
+        float range = 50.0f;
+    };
+    SpotLight spot_lights[kMaxSpotShadowLights];
+    int spot_light_count = 0;
+
+    // ── 点光源（PointShadowPass 读取，最多 4 盏投射阴影）──
+    static constexpr int kMaxPointShadowLights = 4;
+    struct PointLight {
+        bool valid = false;
+        bool cast_shadow = false;
+        glm::vec3 position;
+        float range = 50.0f;
+    };
+    PointLight point_lights[kMaxPointShadowLights];
+    int point_light_count = 0;
 
     // ── 后处理（合并多个 Pass 的重复查询）──
     struct PostProcess {
@@ -592,11 +628,16 @@ Render(read_snapshot());
 
 ### 4.10 收益预测
 
-| 场景 | 串行帧时间 | 并行帧时间 | 加速比 |
-|------|:---------:|:---------:|:-----:|
-| 轻量（几十物体, Render 3ms） | 2+4+3=9ms | max(2+4, 3)=6ms | 1.5x |
-| 中等（几百物体, Render 6ms） | 2+4+6=12ms | max(2+4, 6)=6ms | 2.0x |
-| 重度（几千物体, Render 10ms） | 2+4+10=16ms | max(2+4, 10)=10ms | 1.6x |
+> **注意**：并行帧时间 = `max(FixedUpdate + Update, Render)`。当 Render > Update 时，Render 是瓶颈，Phase 1 的帧率提升受限。
+
+| 场景 | 串行帧时间 | 并行帧时间 | 加速比 | 瓶颈 |
+|------|:---------:|:---------:|:-----:|:----:|
+| 轻量（几十物体, Render 3ms） | 2+4+3=9ms | max(6, 3)=6ms | 1.5x | Update |
+| 中等（几百物体, Render 6ms） | 2+4+6=12ms | max(6, 6)=6ms | 2.0x | 平衡 |
+| **典型**（几百物体, Render 8ms） | 2+4+8=14ms | max(6, 8)=**8ms** | **1.75x** | **Render** |
+| 重度（几千物体, Render 10ms） | 2+4+10=16ms | max(6, 10)=10ms | 1.6x | Render |
+
+> ⚠️ 典型场景下 Phase 1 并行帧时间是 **8ms（125 FPS）** 而非 6ms，因为 Render 耗时超过 Update。要进一步提升需要 Phase 3（Pass 并行录制）压缩 Render 耗时。
 
 ### 4.11 改动清单
 
@@ -689,78 +730,78 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, float delta_time) {
   → 必须串行（先 TransformSystem，再 AnimationSystem）
 ```
 
-### 5.3 使用 EnTT Scheduler
+### 5.3 调度方案：手动 JobSystem DAG
 
-EnTT 的 `scheduler` 可以自动处理这些依赖：
-
-```cpp
-#include <entt/entt.hpp>
-
-// 在 FramePipeline 初始化时注册 System
-entt::scheduler scheduler;
-
-// 每个 System 声明读写哪些组件类型
-// reads<A, B> / writes<C, D> 表示：读 A/B，写 C/D
-scheduler.group()
-    .writes<TransformComponent>()
-    .connect<TransformSystem>();
-
-scheduler.group()
-    .reads<TransformComponent, SkeletonComponent, AnimationComponent>()
-    .writes<TransformComponent>()
-    .connect<AnimationSystem>();
-
-scheduler.group()
-    .reads<TransformComponent, MeshRenderComponent>()
-    .connect<MeshRenderSystem>();
-
-scheduler.group()
-    .reads<TransformComponent, ParticleSystem3DComponent>()
-    .writes<ParticleSystem3DComponent>()
-    .connect<Particle3DSystem>();
-
-// 每帧执行
-scheduler.run(delta_time);
-```
-
-EnTT 的 scheduler 会自动：
-1. 分析 System 间组件访问的冲突
-2. 构建 System DAG
-3. 使用工作线程并行执行无依赖的 System
-4. 在依赖边界同步
-
-### 5.4 引入 EnTT Scheduler 的改动
-
-| 文件 | 改动 |
-|------|------|
-| `runtime_update_graph.h` | 添加 `entt::scheduler` 成员 |
-| `runtime_update_graph.cpp` | 将 `RunRuntimeUpdateGraph` 和 `RunRuntimeFixedUpdateGraph` 中的串行调用替换为 `scheduler.run()` |
-| `modules/gameplay_3d/gameplay_3d_module.cpp` | 将 3D 系统的 Update 拆分为独立的 ECS System 函数 |
-| `modules/gameplay_2d/gameplay_2d_module.cpp` | 同上 |
-| `engine/ecs/`（可能） | 添加几个 adapter function 将现有模块方法包装为 `entt::delegate` |
-
-### 5.5 一个关键的架构问题
-
-DSE 当前的 ECS System 不是 EnTT `delegate` 的形式——它们是通过 `IBuiltinModules::UpdateGameplay2D/3D` 接口调用的，而不是 `scheduler` 可以调度的独立函数。
-
-需要做一次适配：
+> ⚠️ **注意**：标准 EnTT 发行版**不包含** `scheduler` 类。`entt::organizer` 是实验性 API，不保证稳定。
+> DSE 的 `JobSystem::SubmitWithDependency` 已经具备等价能力，推荐直接使用。
 
 ```cpp
-// 方式一：将模块方法包装为 scheduler 兼容的 System
-// gameplay_3d_module.cpp
-struct TransformSystem {
-    void operator()(const TransformSystem&, World& world, float dt) const {
-        // 原来的 TransformSystem 逻辑
-    }
-};
+// 使用 DSE 现有 JobSystem 构建 System DAG
+void Gameplay3DModule::Update(World& world, float dt) {
+    auto& js = *ServiceLocator::Get<JobSystem>();
 
-// 方式二：保留模块接口，内部使用 scheduler
-Gameplay3DModule::Update(World& world, float dt) {
-    scheduler_.run(dt);
+    // TransformSystem 必须第一个执行（写 Transform）
+    auto tf_job = js.Submit([&]{ TransformSystem::Update(world, dt); }, JobPriority::High);
+
+    // AnimationSystem 依赖 TransformSystem（也写 Transform）
+    auto anim_job = js.SubmitWithDependency(
+        [&]{ AnimationSystem::Update(world, dt); }, {tf_job}, JobPriority::High);
+
+    // 以下 System 只读 Transform，可与 Animation 并行（如果不读骨骼输出）
+    // 或者依赖 anim_job 保证安全
+    auto particle_job = js.SubmitWithDependency(
+        [&]{ Particle3DSystem::Update(world, dt); }, {tf_job}, JobPriority::Normal);
+    auto audio_job = js.SubmitWithDependency(
+        [&]{ Audio3DSystem::Update(world, dt); }, {tf_job}, JobPriority::Normal);
+    auto light_job = js.SubmitWithDependency(
+        [&]{ LightSystem::Update(world, dt); }, {tf_job}, JobPriority::Normal);
+
+    // 等待所有完成
+    js.Wait(anim_job);
+    js.Wait(particle_job);
+    js.Wait(audio_job);
+    js.Wait(light_job);
 }
 ```
 
-推荐**方式二**——在每个模块内部使用 scheduler，对外保持 `IBuiltinModules` 接口不变。这样 Phase 2 的改动范围限制在模块内部，不影响外部调用者。
+**优势**：
+1. 无需引入新依赖，直接用现有 `JobSystem`
+2. 依赖关系显式声明，易于 review 和调试
+3. 后续可封装为通用的 `SystemScheduler` 工具类
+
+### 5.4 改动清单
+
+| 文件 | 改动 |
+|------|------|
+| `modules/gameplay_3d/gameplay_3d_module.cpp` | 将 `Update()` 拆分为独立 System 函数 + JobSystem DAG 调度 |
+| `modules/gameplay_2d/gameplay_2d_module.cpp` | 同上 |
+| `runtime_update_graph.cpp` | `RunRuntimeUpdateGraph` 确保 Lua 脚本在主线程执行（见 §5.5） |
+| `CMakeLists.txt` | 添加 `target_compile_definitions(dse_engine PRIVATE ENTT_USE_ATOMIC)` |
+
+### 5.5 关键约束：Lua 脚本和 IModule 的线程安全
+
+Phase 2 有两个**不可并行**的部分必须留在主线程：
+
+1. **Lua 脚本**（`TickBusinessRuntime`）：`lua_State` 不是线程安全的，所有 Lua 调用（包括通过绑定层访问 ECS）必须在主线程执行
+2. **用户自定义 `IModule::OnUpdate`**：无法假设第三方模块是线程安全的
+
+```
+RunRuntimeUpdateGraph 的实际并行边界：
+
+  主线程（串行，不可并行）：
+    ├── TickBusinessRuntime(Lua)     ← lua_State 不是线程安全的
+    └── 用户 IModule::OnUpdate        ← 无法假设线程安全
+
+  JobSystem（可并行）：
+    ├── TransformSystem     → AnimationSystem（依赖链）
+    ├── Particle3DSystem    （独立）
+    ├── Audio3DSystem       （独立）
+    └── LightSystem         （独立）
+```
+
+**推荐方案**：在每个 Gameplay Module 内部使用 `JobSystem` DAG 调度纯 C++ System（见 §5.3），对外保持 `IBuiltinModules` 接口不变。Lua 脚本和用户模块仍在主线程串行执行。
+
+> 这意味着 Phase 2 能并行化的只是 `UpdateGameplay3D` / `UpdateGameplay2D` 内部的纯 C++ System，而非整个 Update 阶段。收益相应受限。
 
 ### 5.6 收益预测
 
@@ -773,14 +814,15 @@ Gameplay3DModule::Update(World& world, float dt) {
 
 ### 5.7 风险
 
-| 风险 | 说明 |
-|------|------|
-| 组件冲突分析错误 | 如果两个 System 实际共享了某个组件但未被声明，会产生 data race |
-| EnTT scheduler 在 DSE 中的版本兼容性 | 需要确认 DSE 使用的 EnTT 版本是否支持 scheduler |
-| 第三方代码的线程安全性 | Lua 脚本绑定、用户自定义 `IModule` 可能不是线程安全的 |
-| TransformSystem 和 AnimationSystem 的强依赖 | 物理必须先于动画？动画必须先于渲染？需要仔细验证 |
+| 风险 | 严重度 | 说明 |
+|------|:------:|------|
+| 组件冲突分析错误 | 🔴 高 | 如果两个 System 实际共享了某个组件但未在 DAG 中声明依赖，会产生 data race |
+| Lua VM 线程不安全 | 🔴 高 | `lua_State` 不可跨线程调用。所有 Lua 绑定必须留在主线程（见 §5.5） |
+| 第三方 IModule 线程安全性 | 🟡 中 | 用户自定义模块可能不是线程安全的，只能留在主线程 |
+| TransformSystem → AnimationSystem 强依赖 | 🟡 中 | 骨骼输出写 Transform，必须等 TransformSystem 完成 |
+| `ENTT_USE_ATOMIC` 未定义 | 🟢 低 | 多线程访问不同组件类型需要此宏，否则类型索引非原子 |
 
-**建议**：Phase 2 从最简单的独立 System 开始（MeshRenderSystem ∥ AudioSystem ∥ LightSystem，这三个一定没有组件重叠），逐步扩大并行范围。
+**建议**：Phase 2 从最简单的独立 System 开始（Particle3DSystem ∥ Audio3DSystem ∥ LightSystem，这三个一定没有组件重叠），逐步扩大并行范围。用 ThreadSanitizer 验证。
 
 ### 5.8 关于 TaskGraph 的深入分析
 
@@ -1169,8 +1211,8 @@ Phase 0: GPU Driven 默认化
 
 Phase 1: 薄快照 + 延迟一帧流水线并行
   时间：1~2 周
-  依赖：Phase 0（可选）
-  收益：1.5~2.0x 帧率
+  依赖：Phase 0（必须——render_meshes 回调直接读 ECS，不做 Phase 0 会 data race）
+  收益：1.5~1.75x 帧率（取决于 Update/Render 哪个是瓶颈）
   ├───→ 如果只需要此级别并行，可以停在这里
 
 Phase 2: ECS System 级并行
@@ -1223,7 +1265,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 | **锁** | 无锁（只读快照） | 无锁（命令队列） | 无锁（快照） | **无锁** |
 | **数据延迟** | ~1 帧 | 0~1 帧 | 1 帧 | **1 帧** |
 | **ECS System 并行** | ✅ TaskGraph | ❌（主线程） | ❌ | ✅ **Phase 2** |
-| **System 调度** | 显式依赖声明 | N/A | N/A | **EnTT scheduler** |
+| **System 调度** | 显式依赖声明 | N/A | N/A | **JobSystem DAG** |
 | **Pass 级并行** | ✅ 支持 | ✅ 支持 | ❌ | ✅ **Phase 3** |
 | **GPU Driven** | ✅ Nanite | ❌ | ❌ | ✅ **Phase 4** |
 | **异步资源加载** | ✅ | ✅ | ✅ | ✅ **已有** |
@@ -1235,9 +1277,10 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 ### Phase 1 之后
 
 ```
-串行部分（FixedUpdate + Update）: S = 6ms
-可并行部分（Render）:            P = 8ms
-加速比上限:                       1 / (1 - 0.57) ≈ 2.3x
+并行帧时间 = max(FixedUpdate + Update, Render) = max(6, 8) = 8ms
+加速比:     14ms / 8ms = 1.75x（125 FPS）
+
+注意：只有 Render < Update 时才能达到 2x+。典型场景 Render 是瓶颈。
 ```
 
 ### Phase 2 之后（ECS System 并行，假设 2D/3D 完全独立）
@@ -1282,7 +1325,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 | 风险 | 概率 | 影响 | 涉及 Phase | 缓解方案 |
 |------|:----:|:----:|:---------:|---------|
 | `render_meshes` 回调仍读 ECS | 中 | 高 | Phase 1 | Phase 0 启动 GPU Driven 路径，使此回调不被执行 |
-| EnTT scheduler 版本兼容 | 低 | 高 | Phase 2 | 检查 `entt/config/version.h` 确认版本，低版本考虑手动调度 |
+| `ENTT_USE_ATOMIC` 未定义 | 低 | 中 | Phase 2 | 添加编译宏，确保多线程下类型索引原子操作 |
 | Lua 脚本访问 ECS 的线程安全 | 高 | 高 | Phase 2 | 确保 Lua 绑定只在主线程执行（不在 Update 并行区） |
 | Vulkan CommandPool 线程安全 | 中 | 中 | Phase 3 | 每个 worker 线程创建独立的 VkCommandPool |
 | DX11 Deferred Context 驱动质量 | 中 | 中 | Phase 3 | 准备 fallback：Deferred Context 失败时回退到即时模式 |
@@ -1298,7 +1341,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 |-------|---------|
 | **Phase 0** | 相同的场景，GPU Driven 和 CPU 路径渲染结果逐像素一致 |
 | **Phase 1** | `RenderThinSnapshot` 的 15 处快照读取完全覆盖所有 Pass 的 ECS 需求；VK/DX11 后端在渲染线程上运行无崩溃；GL 后端数据安全但性能不变；帧率提升符合预期（≥1.5x） |
-| **Phase 2** | EnTT scheduler 正确调度所有 ECS System；无 data race（用 ThreadSanitizer 验证）；每个 System 的组件访问声明准确 |
+| **Phase 2** | JobSystem DAG 正确调度所有 ECS System；Lua 脚本和 IModule 仅在主线程执行；无 data race（用 ThreadSanitizer 验证）；每个 System 的组件访问依赖声明准确 |
 | **Phase 3** | RenderGraph 的 Level 分析正确；每个 Level 内的 Pass 录制无冲突；Barrier 插入正确（验证层无报错）；帧率提升符合预期 |
 | **Phase 4** | VK 和 DX11 后端的 GPU Driven 路径渲染结果与 CPU 路径一致；三级缓冲在不同负载下无主线程阻塞 |
 
@@ -1309,18 +1352,22 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 ```
 串行（当前）：     [FixedUpdate(2ms)][Update(4ms)][───Render(8ms)───] = 14ms → 71 FPS
 
-Phase 0+1：       [FixedUpdate(2ms)][Update(4ms)]                =  6ms → 166 FPS
-                  ←─────── 渲染线程 Render(上一帧数据) ────────────→
+Phase 0+1：       [FixedUpdate(2ms)][Update(4ms)]                   主线程 6ms
+                  ←─────── 渲染线程 Render(上一帧数据, 8ms) ──────→  帧时间 = max(6, 8) = 8ms → 125 FPS
 
-Phase 0+1+2：     [FixedUpdate(2ms)][Upd(并行)]                  ≈  4ms → 250 FPS
-                  ←─────── 渲染线程 Render(上一帧数据) ────────────→
+Phase 0+1+2：     [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程 5ms
+                  ←─────── 渲染线程 Render(上一帧数据, 8ms) ──────→  帧时间 = max(5, 8) = 8ms → 125 FPS（Render 瓶颈）
 
-Phase 0+1+2+3：   [FixedUpdate(2ms)][Upd(并行)]                  ≈  4ms → 250 FPS
-                  ←─── 渲染线程(Pass 并行录制: PreZ∥Shadow∥...) ───→
+Phase 0+1+2+3：   [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程 5ms
+                  ←─── 渲染线程(Pass 并行, ~4ms) ─────────────────→  帧时间 = max(5, 4) = 5ms → 200 FPS
 
-Phase 全量：      [FixedUpdate(2ms)][Upd(并行)]                  ≈  4ms → 250 FPS
-                  ←─── 渲染线程(GPU Driven 万级物体, Pass 并行) ───→
+Phase 全量：      [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程 5ms
+                  ←─── 渲染线程(GPU Driven + Pass 并行, ~3ms) ────→  帧时间 = max(5, 3) = 5ms → 200 FPS
 ```
+
+> ⚠️ **关键洞察**：Phase 2 在 Render 是瓶颈的典型场景中**不提供帧率收益**（帧时间仍由 Render 决定）。
+> 只有 Phase 3（Pass 并行录制）能压缩 Render 耗时，从而突破 125 FPS 的 Phase 1 天花板。
+> **因此 Phase 3 的优先级实际上高于 Phase 2**，除非你的场景 Update > Render。
 
 ### 核心原则
 

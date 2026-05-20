@@ -337,6 +337,11 @@ private:
     // 当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
 
+    // Hair rendering 缓存
+    unsigned int hair_shader_handle_ = 0;
+    VkPipeline hair_pipeline_ = VK_NULL_HANDLE;
+    VkRenderPass hair_pipeline_rp_ = VK_NULL_HANDLE;
+
 };
 
 } // namespace render

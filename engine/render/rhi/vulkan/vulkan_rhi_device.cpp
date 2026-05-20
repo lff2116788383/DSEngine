@@ -106,6 +106,24 @@ void VulkanCommandBuffer::Reset() {
 // VulkanRhiDevice 实现
 // ============================================================
 
+struct VulkanRhiDevice::HiZImpl {
+    struct HiZTextureInfo {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView full_view = VK_NULL_HANDLE;
+        std::vector<VkImageView> mip_views;
+        int width = 0;
+        int height = 0;
+        int mip_count = 0;
+        unsigned int texture_handle = 0;
+    };
+    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    unsigned int next_handle = 450000;
+};
+
+VulkanRhiDevice::VulkanRhiDevice() = default;
+VulkanRhiDevice::~VulkanRhiDevice() = default;
+
 bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
     return InitVulkan(window_handle, width, height, true); // TODO: validation ON for debugging
 }
@@ -177,6 +195,19 @@ void VulkanRhiDevice::Shutdown() {
     if (!initialized_) return;
 
     context_.WaitIdle();
+
+    // 清理 Hi-Z 资源（必须在 VkDevice 销毁前）
+    if (hiz_impl_) {
+        VkDevice device = context_.device();
+        for (auto& [id, info] : hiz_impl_->textures) {
+            for (auto& mv : info.mip_views)
+                if (mv) vkDestroyImageView(device, mv, nullptr);
+            if (info.full_view) vkDestroyImageView(device, info.full_view, nullptr);
+            if (info.image) vkDestroyImage(device, info.image, nullptr);
+            if (info.memory) vkFreeMemory(device, info.memory, nullptr);
+        }
+        hiz_impl_->textures.clear();
+    }
 
     // 按依赖逆序关闭子系统
     draw_executor_.ShutdownGeometryBuffers();
@@ -553,11 +584,26 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
 
             // Storage image 绑定（layout binding = ssbo_count + user_binding）
             uint32_t img_base = prog->ssbo_binding_count;
-            for (auto& [binding, img_info] : pending_compute_images_) {
-                const auto* tex = resource_mgr_.GetTexture(img_info.texture_handle);
-                if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
+            for (auto& [binding, img_bind] : pending_compute_images_) {
+                VkImageView view = VK_NULL_HANDLE;
+                // 检查 Hi-Z 纹理
+                if (hiz_impl_) {
+                    auto hit = hiz_impl_->textures.find(img_bind.texture_handle);
+                    if (hit != hiz_impl_->textures.end()) {
+                        auto& hiz = hit->second;
+                        int mip = img_bind.mip_level >= 0 ? img_bind.mip_level : 0;
+                        if (mip < static_cast<int>(hiz.mip_views.size()))
+                            view = hiz.mip_views[mip];
+                    }
+                }
+                // 普通纹理
+                if (view == VK_NULL_HANDLE) {
+                    const auto* tex = resource_mgr_.GetTexture(img_bind.texture_handle);
+                    if (tex) view = tex->image_view;
+                }
+                if (view == VK_NULL_HANDLE) continue;
                 VkDescriptorImageInfo ii{};
-                ii.imageView   = tex->image_view;
+                ii.imageView   = view;
                 ii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
                 image_infos.push_back(ii);
                 VkWriteDescriptorSet w{};
@@ -573,11 +619,27 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
             // Sampler 绑定（layout binding = ssbo_count + storage_image_count + user_unit）
             uint32_t smp_base = prog->ssbo_binding_count + prog->storage_image_count;
             for (auto& [unit, tex_handle] : pending_compute_samplers_) {
-                const auto* tex = resource_mgr_.GetTexture(tex_handle);
-                if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
+                VkImageView view = VK_NULL_HANDLE;
+                VkSampler sampler = VK_NULL_HANDLE;
+                // 检查 Hi-Z 纹理
+                if (hiz_impl_) {
+                    auto hit = hiz_impl_->textures.find(tex_handle);
+                    if (hit != hiz_impl_->textures.end()) {
+                        view = hit->second.full_view;
+                        sampler = resource_mgr_.default_sampler();
+                    }
+                }
+                // 普通纹理
+                if (view == VK_NULL_HANDLE) {
+                    const auto* tex = resource_mgr_.GetTexture(tex_handle);
+                    if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
+                    view = tex->image_view;
+                    sampler = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
+                }
+                if (view == VK_NULL_HANDLE) continue;
                 VkDescriptorImageInfo ii{};
-                ii.sampler     = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
-                ii.imageView   = tex->image_view;
+                ii.sampler     = sampler;
+                ii.imageView   = view;
                 ii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 image_infos.push_back(ii);
                 VkWriteDescriptorSet w{};
@@ -652,23 +714,136 @@ void VulkanRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int t
 }
 
 unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
-    // TODO: Vulkan Hi-Z — 创建 VK_FORMAT_R32_SFLOAT 纹理，完整 mip chain
-    (void)width; (void)height;
-    return 0;
+    if (!initialized_ || width <= 0 || height <= 0) return 0;
+    if (!hiz_impl_) hiz_impl_ = std::make_unique<HiZImpl>();
+
+    VkDevice device = context_.device();
+
+    int mip_count = 1;
+    {
+        int w = width, h = height;
+        while (w > 1 || h > 1) {
+            w = (std::max)(1, w / 2);
+            h = (std::max)(1, h / 2);
+            ++mip_count;
+        }
+    }
+
+    // 创建 VkImage（R32_SFLOAT，完整 mip chain）
+    VkImageCreateInfo img_ci{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    img_ci.imageType = VK_IMAGE_TYPE_2D;
+    img_ci.format = VK_FORMAT_R32_SFLOAT;
+    img_ci.extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    img_ci.mipLevels = static_cast<uint32_t>(mip_count);
+    img_ci.arrayLayers = 1;
+    img_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_ci.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    img_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    HiZImpl::HiZTextureInfo info{};
+    info.width = width;
+    info.height = height;
+    info.mip_count = mip_count;
+
+    if (vkCreateImage(device, &img_ci, nullptr, &info.image) != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create Hi-Z image");
+        return 0;
+    }
+
+    VkMemoryRequirements mem_reqs;
+    vkGetImageMemoryRequirements(device, info.image, &mem_reqs);
+    VkMemoryAllocateInfo alloc_ci{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    alloc_ci.allocationSize = mem_reqs.size;
+    alloc_ci.memoryTypeIndex = resource_mgr_.FindMemoryType(
+        mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(device, &alloc_ci, nullptr, &info.memory) != VK_SUCCESS) {
+        vkDestroyImage(device, info.image, nullptr);
+        DEBUG_LOG_ERROR("[Vulkan] Failed to allocate Hi-Z memory");
+        return 0;
+    }
+    vkBindImageMemory(device, info.image, info.memory, 0);
+
+    // Layout transition: UNDEFINED → GENERAL（所有 mip 级别）
+    {
+        VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = info.image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = static_cast<uint32_t>(mip_count);
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &barrier);
+        resource_mgr_.EndSingleTimeCommands(cmd);
+    }
+
+    // 全 mip view（用于采样）
+    VkImageViewCreateInfo view_ci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_ci.image = info.image;
+    view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_ci.format = VK_FORMAT_R32_SFLOAT;
+    view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_ci.subresourceRange.baseMipLevel = 0;
+    view_ci.subresourceRange.levelCount = static_cast<uint32_t>(mip_count);
+    view_ci.subresourceRange.layerCount = 1;
+    vkCreateImageView(device, &view_ci, nullptr, &info.full_view);
+
+    // 每个 mip level 一个 view（用于 compute storage image 写入）
+    info.mip_views.resize(mip_count);
+    for (int i = 0; i < mip_count; ++i) {
+        VkImageViewCreateInfo mip_view_ci = view_ci;
+        mip_view_ci.subresourceRange.baseMipLevel = static_cast<uint32_t>(i);
+        mip_view_ci.subresourceRange.levelCount = 1;
+        vkCreateImageView(device, &mip_view_ci, nullptr, &info.mip_views[i]);
+    }
+
+    // 注册为纹理资源（供 GetHiZGpuTexture 通过 handle 返回）
+    // 使用 resource_mgr_ 的 compute write texture 创建方式简化
+    // 这里直接返回一个自管理 handle
+    unsigned int handle = hiz_impl_->next_handle++;
+    info.texture_handle = handle;
+    hiz_impl_->textures[handle] = std::move(info);
+
+    DEBUG_LOG_INFO("[Vulkan] Hi-Z texture created: handle={} {}x{} mips={}", handle, width, height, mip_count);
+    return handle;
 }
 
 void VulkanRhiDevice::DeleteHiZTexture(unsigned int handle) {
-    (void)handle;
+    if (!hiz_impl_) return;
+    auto it = hiz_impl_->textures.find(handle);
+    if (it == hiz_impl_->textures.end()) return;
+
+    VkDevice device = context_.device();
+    auto& info = it->second;
+    for (auto& mv : info.mip_views) {
+        if (mv) vkDestroyImageView(device, mv, nullptr);
+    }
+    if (info.full_view) vkDestroyImageView(device, info.full_view, nullptr);
+    if (info.image) vkDestroyImage(device, info.image, nullptr);
+    if (info.memory) vkFreeMemory(device, info.memory, nullptr);
+    hiz_impl_->textures.erase(it);
 }
 
 int VulkanRhiDevice::GetHiZMipCount(unsigned int handle) const {
-    (void)handle;
-    return 0;
+    if (!hiz_impl_) return 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
 unsigned int VulkanRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
-    (void)handle;
-    return 0;
+    if (!hiz_impl_) return 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? handle : 0;
 }
 
 // Push constant 辅助：确保缓冲区足够大，写入数据到指定偏移
@@ -748,7 +923,7 @@ unsigned int VulkanRhiDevice::CreateComputeWriteTexture2D(int width, int height)
 }
 
 void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
-    if (!initialized_) return;
+    if (!initialized_ || !dst || size == 0) return;
     const auto* ssbo = resource_mgr_.GetSSBO(handle);
     if (!ssbo || !ssbo->buffer) return;
 

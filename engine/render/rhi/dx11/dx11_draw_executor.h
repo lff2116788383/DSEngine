@@ -284,6 +284,38 @@ private:
     // Light Probe SH 常量缓冲（b9, 160B）
     ComPtr<ID3D11Buffer> light_probe_data_cb_;
 
+    // --- Hair rendering ---
+    struct HairVSCB {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 projection;
+        glm::vec3 camera_pos;
+        float _pad0;
+    };
+    static_assert(sizeof(HairVSCB) == 208, "HairVSCB must be 208 bytes");
+
+    struct HairPSCB {
+        glm::vec3 light_dir;
+        float light_intensity;
+        glm::vec3 light_color;
+        float ambient_intensity;
+        glm::vec4 root_color;
+        glm::vec4 tip_color;
+        float opacity;
+        float spec_primary;
+        float spec_secondary;
+        float spec_strength1;
+        float spec_strength2;
+        glm::vec3 spec_color;
+    };
+    static_assert(sizeof(HairPSCB) % 16 == 0, "HairPSCB must be 16B aligned");
+
+    unsigned int hair_shader_handle_ = 0;
+    ComPtr<ID3D11Buffer> hair_vs_cb_;
+    ComPtr<ID3D11Buffer> hair_ps_cb_;
+    ComPtr<ID3D11BlendState> hair_blend_state_;
+    ComPtr<ID3D11DepthStencilState> hair_depth_state_;
+    ComPtr<ID3D11RasterizerState> hair_raster_state_;
 
     bool initialized_ = false;
 };
