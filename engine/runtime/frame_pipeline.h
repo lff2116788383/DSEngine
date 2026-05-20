@@ -76,6 +76,8 @@ public:
      * @param fixed_delta_time 固定的时间步长
      */
     void FixedUpdate(float fixed_delta_time);
+
+    void FlushPhysicsEvents();
     
     /**
      * @brief 执行渲染图和渲染管线

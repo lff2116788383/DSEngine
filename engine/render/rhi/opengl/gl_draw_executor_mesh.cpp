@@ -109,6 +109,24 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                                      GLResourceManager& resource_mgr,
                                      UBOManager& ubo_mgr) {
     if (items.empty()) return;
+    // [BlackRectDiag] GL state at DrawMeshBatch entry (scene RT only)
+    {
+        static int scene_call = 0;
+        if (scene_call < 6) {
+            GLboolean depth_test = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean blend_on   = glIsEnabled(GL_BLEND);
+            GLint vp[4] = {0}; glGetIntegerv(GL_VIEWPORT, vp);
+            GLint fbo = 0;     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+            GLint active_ps = state_mgr.active_pipeline_state();
+            // 只记录 scene RT（非 shadow map 尺寸）
+            if (vp[2] <= 1600 && vp[3] <= 1200) {
+                DEBUG_LOG_INFO("[MeshDiag] call={} depth_test={} blend={} vp=({},{},{},{}) fbo={} active_ps={}",
+                    scene_call, (int)depth_test, (int)blend_on,
+                    vp[0], vp[1], vp[2], vp[3], fbo, active_ps);
+                ++scene_call;
+            }
+        }
+    }
     global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
     dse::render::UpdateSortBatchStats(global_state_.current_frame_stats, items);
 

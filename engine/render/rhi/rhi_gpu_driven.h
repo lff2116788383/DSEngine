@@ -10,6 +10,7 @@
 #define DSE_RHI_GPU_DRIVEN_H
 
 #include "engine/render/rhi/rhi_handle.h"
+#include <glm/glm.hpp>
 #include <cstddef>
 #include <vector>
 
@@ -119,6 +120,17 @@ public:
     /// 绑定 VAO 并切换到指定 EBO 进行绘制
     virtual void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
         (void)vao; (void)ebo;
+    }
+
+    // --- GPU-Driven PBR Shader Setup ---
+
+    /// 激活 GPU-Driven PBR 着色器并上传 PerFrame/PerScene UBO（indirect draw 前调用）
+    virtual void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                          const glm::vec3& camera_pos,
+                                          const glm::vec3& light_dir, const glm::vec3& light_color,
+                                          float light_intensity, float ambient_intensity) {
+        (void)view; (void)proj; (void)camera_pos;
+        (void)light_dir; (void)light_color; (void)light_intensity; (void)ambient_intensity;
     }
 };
 

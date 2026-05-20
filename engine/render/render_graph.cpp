@@ -419,7 +419,6 @@ void RenderGraph::MarkReachablePasses(uint32_t pass_id,
 
 void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
     if (!is_compiled_) {
-        // 未编译时回退：按添加顺序执行所有 Pass
         for (auto& p : passes_) {
             if (p.execute) {
                 p.execute(cmd_buffer);
@@ -434,6 +433,29 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
             auto& p = passes_[it->second];
             if (p.execute) {
                 p.execute(cmd_buffer);
+            }
+        }
+    }
+}
+
+void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
+                                      const std::function<void(const std::string&)>& post_pass) {
+    if (!is_compiled_) {
+        for (auto& p : passes_) {
+            if (p.execute) {
+                p.execute(cmd_buffer);
+                if (post_pass) post_pass(p.name);
+            }
+        }
+        return;
+    }
+    for (uint32_t pass_id : compiled_order_) {
+        auto it = pass_id_to_idx_.find(pass_id);
+        if (it != pass_id_to_idx_.end()) {
+            auto& p = passes_[it->second];
+            if (p.execute) {
+                p.execute(cmd_buffer);
+                if (post_pass) post_pass(p.name);
             }
         }
     }

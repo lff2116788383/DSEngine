@@ -179,6 +179,10 @@ public:
     void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
                               const std::vector<BufferHandle>& ebos) override;
     void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
+    void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                  const glm::vec3& camera_pos,
+                                  const glm::vec3& light_dir, const glm::vec3& light_color,
+                                  float light_intensity, float ambient_intensity) override;
 
     // --- 内部方法（供 OpenGLCommandBuffer 直接调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);

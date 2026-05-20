@@ -9,6 +9,7 @@
 #include "engine/render/rhi/opengl/gl_loader.h"
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 // 鍐呭祵鐨?GLSL 330 鐫€鑹插櫒婧愮爜
 #include "embed/pbr_vert.gen.h"
@@ -306,6 +307,10 @@ void GLShaderManager::InitBuiltinPBRShader() {
     }
     programs_created_ += 1;
     CachePBRLocations();
+
+    if (supports_ssbo_) {
+        InitGPUDrivenPBRShader();
+    }
 }
 
 // UBO name 鈫?engine UBOBindingPoint 鏄犲皠琛紙鐢ㄤ簬 reflection 鑷姩缁戝畾锛?
@@ -598,6 +603,73 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
 }
 
 // ============================================================
+// GPU-Driven PBR Shader Variant
+// ============================================================
+
+void GLShaderManager::InitGPUDrivenPBRShader() {
+    using namespace dse::render::generated_shaders;
+    using namespace dse::render::generated_shaders::reflect;
+
+    std::string vert_src = kpbr_vert_glsl330;
+
+    // 1. 升级到 #version 460：gl_BaseInstance 在 GLSL 4.6 起成为核心内置变量
+    const std::string version_tag = "#version 430";
+    auto pos = vert_src.find(version_tag);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, version_tag.size(), "#version 460");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven PBR: #version 430 not found in vert src\n");
+    }
+
+    // 2. 替换 u_model uniform 声明为 SSBO 实例数据块
+    const std::string u_model_decl = "uniform mat4 u_model;";
+    pos = vert_src.find(u_model_decl);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, u_model_decl.size(),
+            "struct DSEGPUInst { mat4 model; uint mat_id; uint cmd_id; uint pad0; uint pad1; };\n"
+            "layout(std430, binding = 5) readonly buffer DSEInstBuf { DSEGPUInst dse_inst[]; };");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven PBR: uniform mat4 u_model not found in vert src\n");
+    }
+
+    // 3. 替换 main() 中所有 u_model 引用
+    auto replace_all = [&](const std::string& from, const std::string& to) {
+        size_t p = 0;
+        while ((p = vert_src.find(from, p)) != std::string::npos) {
+            vert_src.replace(p, from.size(), to);
+            p += to.size();
+        }
+    };
+    replace_all("u_model * localPos",      "dse_inst[gl_BaseInstance].model * localPos");
+    replace_all("u_model * boneTransform", "dse_inst[gl_BaseInstance].model * boneTransform");
+
+    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_src.c_str(), kpbr_frag_glsl330);
+    if (gpu_driven_pbr_shader_handle_ == 0) {
+        fprintf(stderr, "[GLShaderManager] GPU-driven PBR shader compilation failed\n");
+        return;
+    }
+    programs_created_ += 1;
+
+    // UBO block 绑定（复用 PBR reflection 数据）
+    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_vert_reflection);
+    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_frag_reflection);
+
+    // Sampler 一次性绑定
+    {
+        using namespace dse::render::gl_reflect;
+        std::vector<TextureUnitEntry> tex_entries;
+        ComputeFlatTextureUnits(kpbr_frag_reflection, tex_entries);
+        glUseProgram(gpu_driven_pbr_shader_handle_);
+        BindSamplersOnce(gpu_driven_pbr_shader_handle_, tex_entries, glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+
+    // 缓存每帧固定设置的 uniform location，避免逐帧调用 glGetUniformLocation
+    gpu_driven_pbr_skinned_loc_ = glGetUniformLocation(gpu_driven_pbr_shader_handle_, "u_skinned");
+    gpu_driven_pbr_morph_loc_   = glGetUniformLocation(gpu_driven_pbr_shader_handle_, "u_morph_enabled");
+}
+
+// ============================================================
 // Cleanup
 // ============================================================
 
@@ -616,6 +688,11 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(particle_shader_handle_);
         programs_destroyed_ += 1;
         particle_shader_handle_ = 0;
+    }
+    if (gpu_driven_pbr_shader_handle_ != 0) {
+        glDeleteProgram(gpu_driven_pbr_shader_handle_);
+        programs_destroyed_ += 1;
+        gpu_driven_pbr_shader_handle_ = 0;
     }
     for (auto& [name, handle] : pp_shaders_) {
         if (handle != 0) {

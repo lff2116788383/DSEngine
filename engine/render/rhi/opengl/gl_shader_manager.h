@@ -122,6 +122,11 @@ public:
     const PBRShaderLocations& pbr_locations() const { return pbr_locations_; }
     const PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
+    /// GPU-Driven PBR 着色器句柄（SSBO model fetch via gl_BaseInstance）
+    unsigned int gpu_driven_pbr_shader_handle() const { return gpu_driven_pbr_shader_handle_; }
+    int gpu_driven_pbr_skinned_loc() const { return gpu_driven_pbr_skinned_loc_; }
+    int gpu_driven_pbr_morph_loc()    const { return gpu_driven_pbr_morph_loc_; }
+
     // --- 天空盒着色器 ---
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
     void InitSkyboxShader();
@@ -156,6 +161,9 @@ private:
     /// 缓存 PBR 着色器的所有 uniform location
     void CachePBRLocations();
 
+    /// 编译 GPU-Driven PBR 着色器变体（运行时字符串补丁）
+    void InitGPUDrivenPBRShader();
+
     PBRShaderLocations pbr_locations_;
     PBRTextureSlots pbr_texture_slots_;
     SkyboxShaderLocations skybox_locations_;
@@ -168,6 +176,10 @@ private:
     static std::string GenerateUBOGLSL();
 
     bool supports_ssbo_ = true;
+
+    unsigned int gpu_driven_pbr_shader_handle_ = 0;
+    int gpu_driven_pbr_skinned_loc_ = -1;
+    int gpu_driven_pbr_morph_loc_   = -1;
 };
 
 } // namespace render

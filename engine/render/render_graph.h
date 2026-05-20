@@ -160,6 +160,12 @@ public:
     /// @param cmd_buffer 命令缓冲区
     void Execute(CommandBuffer& cmd_buffer);
 
+    /// 执行渲染图，每个 Pass 执行后调用回调（用于诊断）
+    /// @param cmd_buffer 命令缓冲区
+    /// @param post_pass 每个 pass 执行后调用，参数为 pass 名称
+    void ExecuteWithCallback(CommandBuffer& cmd_buffer,
+                             const std::function<void(const std::string&)>& post_pass);
+
     /// 重置渲染图（清空所有 Pass 和资源声明）
     void Reset();
 

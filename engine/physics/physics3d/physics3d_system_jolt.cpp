@@ -96,6 +96,19 @@ public:
     PhysicsSystem* physics_system = nullptr;
     std::unordered_map<uint32_t, std::pair<uint16_t, uint16_t>>* body_layer_map = nullptr;
 
+    struct ContactPairInfo {
+        entt::entity entity_a = entt::null;
+        entt::entity entity_b = entt::null;
+        bool is_sensor = false;
+    };
+    std::unordered_map<uint64_t, ContactPairInfo> active_contacts_;
+
+    static uint64_t MakeContactKey(const SubShapeIDPair& pair) {
+        uint64_t a = pair.GetBody1ID().GetIndexAndSequenceNumber();
+        uint64_t b = pair.GetBody2ID().GetIndexAndSequenceNumber();
+        return (a << 32) | b;
+    }
+
     ValidateResult OnContactValidate(const Body& body1, const Body& body2, RVec3Arg base_offset, const CollideShapeResult& result) override {
         (void)base_offset; (void)result;
         if (body_layer_map && !body_layer_map->empty()) {
@@ -115,8 +128,21 @@ public:
         (void)settings;
         auto e1 = static_cast<entt::entity>(static_cast<uint32_t>(body1.GetUserData()));
         auto e2 = static_cast<entt::entity>(static_cast<uint32_t>(body2.GetUserData()));
+        bool is_sensor = body1.IsSensor() || body2.IsSensor();
 
-        if (body1.IsSensor() || body2.IsSensor()) {
+        // 记录活跃接触，供 OnContactRemoved 查询
+        // sensor 情况: entity_a = trigger, entity_b = other
+        SubShapeIDPair pair(body1.GetID(), manifold.mSubShapeID1, body2.GetID(), manifold.mSubShapeID2);
+        uint64_t key = MakeContactKey(pair);
+        if (is_sensor) {
+            entt::entity trigger_e = body1.IsSensor() ? e1 : e2;
+            entt::entity other_e   = body1.IsSensor() ? e2 : e1;
+            active_contacts_[key] = { trigger_e, other_e, true };
+        } else {
+            active_contacts_[key] = { e1, e2, false };
+        }
+
+        if (is_sensor) {
             if (trigger_events) {
                 TriggerEvent te;
                 te.type = TriggerEvent::Type::Enter;
@@ -159,8 +185,32 @@ public:
     }
 
     void OnContactRemoved(const SubShapeIDPair& shape_pair) override {
-        (void)shape_pair;
-        // Exit 事件需要额外的状态追踪，暂用简化实现
+        uint64_t key = MakeContactKey(shape_pair);
+        auto it = active_contacts_.find(key);
+        if (it == active_contacts_.end()) return;
+
+        const auto& info = it->second;
+        if (info.is_sensor) {
+            if (trigger_events) {
+                TriggerEvent te;
+                te.type = TriggerEvent::Type::Exit;
+                te.trigger_entity = info.entity_a;
+                te.other_entity = info.entity_b;
+                trigger_events->push_back(te);
+            }
+        } else {
+            if (collision_events) {
+                CollisionEvent ce;
+                ce.type = CollisionEvent::Type::Exit;
+                ce.entity_a = info.entity_a;
+                ce.entity_b = info.entity_b;
+                ce.contact_point = glm::vec3(0.0f);
+                ce.contact_normal = glm::vec3(0.0f);
+                ce.impulse = 0.0f;
+                collision_events->push_back(ce);
+            }
+        }
+        active_contacts_.erase(it);
     }
 };
 
@@ -208,6 +258,7 @@ bool Physics3DSystem::Init(World& world) {
     // 注册 Jolt 类型（全局只调一次）
     static bool s_jolt_registered = false;
     if (!s_jolt_registered) {
+        RegisterDefaultAllocator();
         Factory::sInstance = new Factory();
         RegisterTypes();
         s_jolt_registered = true;
@@ -231,7 +282,6 @@ bool Physics3DSystem::Init(World& world) {
     impl_->physics_system->Init(
         max_bodies, num_body_mutexes, max_body_pairs, max_contact_constraints,
         *impl_->bp_layer_interface, *impl_->obj_vs_bp_filter, *impl_->obj_layer_pair_filter);
-
     impl_->physics_system->SetGravity(Vec3(0.0f, -9.81f, 0.0f));
 
     // 设置碰撞监听
@@ -286,9 +336,6 @@ static inline glm::quat ToGlm(const Quat& q) { return glm::quat(q.GetW(), q.GetX
 // ---------------------------------------------------------------------------
 void Physics3DSystem::FixedUpdate(World& world, float fixed_delta_time) {
     if (!impl_) return;
-
-    collision_events_.clear();
-    trigger_events_.clear();
 
     SyncTransformsToPhysics(world);
     SyncJoints(world);
@@ -366,6 +413,7 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
             }
 
             // 传感器设置（trigger）
+            // Jolt 不支持 Static sensor，必须升级为 Kinematic
             if (registry.all_of<BoxCollider3DComponent>(entity)) {
                 if (registry.get<BoxCollider3DComponent>(entity).is_trigger)
                     body_settings.mIsSensor = true;
@@ -373,10 +421,16 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
                 if (registry.get<SphereCollider3DComponent>(entity).is_trigger)
                     body_settings.mIsSensor = true;
             }
+            if (body_settings.mIsSensor && body_settings.mMotionType == EMotionType::Static) {
+                body_settings.mMotionType = EMotionType::Kinematic;
+                body_settings.mObjectLayer = Layers::MOVING;
+            }
 
             Body* body = bi.CreateBody(body_settings);
             if (body) {
-                bi.AddBody(body->GetID(), motion_type == EMotionType::Dynamic ? EActivation::Activate : EActivation::DontActivate);
+                EActivation activation = (motion_type == EMotionType::Dynamic || body_settings.mIsSensor)
+                    ? EActivation::Activate : EActivation::DontActivate;
+                bi.AddBody(body->GetID(), activation);
                 impl_->entity_to_body[eid] = body->GetID();
                 impl_->body_layer_map[body->GetID().GetIndex()] = { rb.collision_layer, rb.collision_mask };
             }

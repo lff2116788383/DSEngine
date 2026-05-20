@@ -360,6 +360,7 @@ void EngineInstance::Tick() {
     if (accumulator_ > kMaxAccumulator) {
         accumulator_ = kMaxAccumulator;
     }
+    pipeline_->FlushPhysicsEvents();
     while (accumulator_ >= fixed_time_step_) {
         pipeline_->FixedUpdate(fixed_time_step_);
         accumulator_ -= fixed_time_step_;

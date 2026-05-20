@@ -86,14 +86,49 @@ ReadbackStats AnalyzeReadback(const RenderTargetReadback& readback) {
 
 void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
     const auto stats = AnalyzeReadback(readback);
-    DEBUG_LOG_INFO("Render readback {}: size={}x{} pixels={} non_black={} max_rgb={} avg_rgb={}",
-                   label,
-                   stats.width,
-                   stats.height,
-                   stats.pixels,
-                   stats.non_black,
-                   stats.max_rgb,
-                   stats.avg_rgb);
+    // 计算黑色区域的边界矩形
+    int black_min_x = readback.width, black_max_x = -1;
+    int black_min_y = readback.height, black_max_y = -1;
+    int black_count = 0;
+    for (int y = 0; y < readback.height; ++y) {
+        for (int x = 0; x < readback.width; ++x) {
+            const std::size_t idx = (static_cast<std::size_t>(y) * readback.width + x) * 4;
+            const unsigned int rgb = static_cast<unsigned int>(readback.pixels[idx]) +
+                                     static_cast<unsigned int>(readback.pixels[idx+1]) +
+                                     static_cast<unsigned int>(readback.pixels[idx+2]);
+            if (rgb <= 8u) {
+                ++black_count;
+                if (x < black_min_x) black_min_x = x;
+                if (x > black_max_x) black_max_x = x;
+                if (y < black_min_y) black_min_y = y;
+                if (y > black_max_y) black_max_y = y;
+            }
+        }
+    }
+    // 9 点网格采样
+    std::string grid;
+    const int W = readback.width, H = readback.height;
+    struct Pt { int x, y; const char* tag; };
+    const Pt pts[] = {
+        {10, 10, "BL"}, {W/2, 10, "BC"}, {W-11, 10, "BR"},
+        {10, H/2, "ML"}, {W/2, H/2, "MC"}, {W-11, H/2, "MR"},
+        {10, H-11, "TL"}, {W/2, H-11, "TC"}, {W-11, H-11, "TR"},
+    };
+    std::ostringstream oss;
+    for (auto& p : pts) {
+        if (p.x < 0 || p.x >= W || p.y < 0 || p.y >= H) continue;
+        const std::size_t idx = (static_cast<std::size_t>(p.y) * W + p.x) * 4;
+        oss << " " << p.tag << "=(" << static_cast<int>(readback.pixels[idx])
+            << "," << static_cast<int>(readback.pixels[idx+1])
+            << "," << static_cast<int>(readback.pixels[idx+2]) << ")";
+    }
+    grid = oss.str();
+    DEBUG_LOG_INFO("Render readback {}: size={}x{} pixels={} non_black={} max_rgb={} avg_rgb={} black_count={} black_bbox=[({},{})..({},{})]{}",
+                   label, stats.width, stats.height, stats.pixels,
+                   stats.non_black, stats.max_rgb, stats.avg_rgb,
+                   black_count,
+                   black_min_x, black_min_y, black_max_x, black_max_y,
+                   grid);
 }
 
 void LogDefaultFramebufferStats() {
@@ -423,12 +458,18 @@ bool FramePipeline::Init() {
     }
 
     // GPU Driven Rendering 鑳藉姏妫€娴?
-    if (runtime_context_.rhi_device->SupportsCompute() &&
+    const char* disable_gpu_driven_env = std::getenv("DSE_DISABLE_GPU_DRIVEN");
+    const bool gpu_driven_disabled = disable_gpu_driven_env && disable_gpu_driven_env[0] != '\0' && disable_gpu_driven_env[0] != '0';
+    if (!gpu_driven_disabled &&
+        runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
         runtime_context_.rhi_device->SupportsSSBO()) {
         render_resources_.gpu_driven_supported = true;
         render_resources_.gpu_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kGPUCullShaderSource);
         DEBUG_LOG_INFO("GPU Driven Rendering: supported, cull_shader={}", render_resources_.gpu_cull_shader);
+    } else if (gpu_driven_disabled) {
+        render_resources_.gpu_driven_supported = false;
+        DEBUG_LOG_INFO("GPU Driven Rendering: disabled by DSE_DISABLE_GPU_DRIVEN");
     } else {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: not supported, using CPU path");
@@ -551,9 +592,9 @@ bool FramePipeline::Init() {
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
 #if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    // 3D 物理必须在鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
-    // 鍚﹀垯 FractureSystem::SetPhysics3D() 浼氭嬁鍒?nullptr锛屽鑷寸鐗囧悓鏃跺惎鐢?
-    // CPU fallback 鐗╃悊鍜?PhysX 鐗╃悊锛屼袱濂楃墿鐞嗕氦鏇胯鍐?transform 鈫?闂儊銆?
+    // 3D 物理必须在鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
+    // 鍚﹀垯 FractureSystem::SetPhysics3D() 浼氭嬁鍒?nullptr锛屽鑷寸鐗囧悓鏃跺惎鐢?
+    // CPU fallback 鐗╃悊鍜?PhysX 鐗╃悊锛屼袱濂楃墿鐞嗕氦鏇胯鍐?transform 鈫?闂儊銆?
     if (physics3d_system_.Init(*runtime_context_.world)) {
         dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
             std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
@@ -783,6 +824,14 @@ void FramePipeline::Update(float delta_time) {
         return;
     }
     dse::runtime::RunFrameUpdate(*this, delta_time);
+}
+
+void FramePipeline::FlushPhysicsEvents() {
+#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
+    if (physics3d_system_initialized_) {
+        physics3d_system_.FlushEvents();
+    }
+#endif
 }
 
 void FramePipeline::FixedUpdate(float fixed_delta_time) {
@@ -1350,11 +1399,32 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
 }
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    // 涓茶鎵ц RenderGraph銆?
-    // 骞惰璺緞 (ExecuteParallel) 宸茬鐢細浠呭仛 ECS 姹犻鐑笉瓒充互娑堥櫎
-    // EnTT registry 鐨勫绾跨▼绔炰簤锛坴iew 杩唬 + Lua Update 鍚屽抚淇敼瀹炰綋锛夈€?
-    // 鎭㈠骞惰闇€瀹屾暣鐨勪富绾跨▼ view 缂撳瓨鏂规锛屾殏涓嶅疄鏂姐€?
-    render_graph_dag_.Execute(cmd_buffer);
+    static int diag_pass_frame = 0;
+    const unsigned int scene_rt = render_resources_.scene_render_target;
+    if (diag_pass_frame < 4 && scene_rt != 0 && runtime_context_.rhi_device) {
+        dse::render::RhiDevice* rhi = runtime_context_.rhi_device.get();
+        render_graph_dag_.ExecuteWithCallback(cmd_buffer, [&](const std::string& pass_name) {
+            auto rb = rhi->ReadRenderTargetColorRgba8WithSize(scene_rt);
+            if (rb.width > 0 && rb.height > 0) {
+                int cx = rb.width / 2, cy = rb.height / 2;
+                int bx = rb.width / 4, by = rb.height / 4;
+                std::size_t ci = (static_cast<std::size_t>(cy) * rb.width + cx) * 4;
+                std::size_t bi = (static_cast<std::size_t>(by) * rb.width + bx) * 4;
+                int black_count = 0;
+                for (std::size_t i = 0; i + 3 < rb.pixels.size(); i += 4) {
+                    if (static_cast<int>(rb.pixels[i]) + static_cast<int>(rb.pixels[i+1]) + static_cast<int>(rb.pixels[i+2]) <= 8)
+                        ++black_count;
+                }
+                DEBUG_LOG_INFO("[PassDiag] frame={} after={} black={} center=({},{},{}) bbox_tl=({},{},{})",
+                    diag_pass_frame, pass_name, black_count,
+                    static_cast<int>(rb.pixels[ci]), static_cast<int>(rb.pixels[ci+1]), static_cast<int>(rb.pixels[ci+2]),
+                    static_cast<int>(rb.pixels[bi]), static_cast<int>(rb.pixels[bi+1]), static_cast<int>(rb.pixels[bi+2]));
+            }
+        });
+        ++diag_pass_frame;
+    } else {
+        render_graph_dag_.Execute(cmd_buffer);
+    }
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {

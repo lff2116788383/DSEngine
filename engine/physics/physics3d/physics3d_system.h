@@ -95,6 +95,7 @@ public:
     // 碰撞/触发事件查询 API（Task 1）
     const std::vector<CollisionEvent>& GetCollisionEvents() const { return collision_events_; }
     const std::vector<TriggerEvent>& GetTriggerEvents() const { return trigger_events_; }
+    void FlushEvents() { collision_events_.clear(); trigger_events_.clear(); }
 
     // 碰撞层设置 API（Task 6）
     void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask);

@@ -51,6 +51,7 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 #include "engine/base/time.h"
 
 namespace dse {
@@ -502,12 +503,18 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, bg_color, true});
 
     bool render_3d = false; // Only render 3D meshes when a valid camera is active
+    glm::mat4 gpu_view = glm::mat4(1.0f);
+    glm::mat4 gpu_proj = glm::mat4(1.0f);
+    glm::vec3 gpu_camera_pos = glm::vec3(0.0f);
 
     // Editor camera override: use editor view/proj for Scene render target
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
         render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
+        gpu_view       = ctx_.editor_view;
+        gpu_proj       = clip_correction * ctx_.editor_projection;
+        gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
+        cmd_buffer.SetCamera(gpu_view, gpu_proj);
 
         // Still render skybox if present
         auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
@@ -558,14 +565,15 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             projection[2][1] += ctx_.taa_jitter.y * 2.0f;
         }
 
-        glm::mat4 view = glm::mat4(1.0f);
+        gpu_proj = projection;
         if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
             auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
             glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
             glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            view = glm::lookAt(transform.position, transform.position + front, up);
+            gpu_camera_pos = transform.position;
+            gpu_view = glm::lookAt(transform.position, transform.position + front, up);
         }
-        cmd_buffer.SetCamera(view, projection);
+        cmd_buffer.SetCamera(gpu_view, projection);
 
         auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
         for (auto sky_entity : skybox_view) {
@@ -583,10 +591,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 if (ctx_.world->registry().all_of<TransformComponent>(sky_entity)) {
                     auto& sky_tf = ctx_.world->registry().get<TransformComponent>(sky_entity);
                     glm::mat4 sky_inv_rot = glm::mat4_cast(glm::conjugate(sky_tf.rotation));
-                    cmd_buffer.SetCamera(view * sky_inv_rot, projection);
+                    cmd_buffer.SetCamera(gpu_view * sky_inv_rot, projection);
                 }
                 cmd_buffer.DrawSkybox(skybox.cubemap_handle);
-                cmd_buffer.SetCamera(view, projection);
+                cmd_buffer.SetCamera(gpu_view, projection);
             }
             break;
         }
@@ -631,8 +639,31 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             && ctx_.gpu_indirect_draw_count > 0;
 
         if (use_gpu_indirect) {
-            // 绑定 instance SSBO 供 vertex shader 读取 model matrix
+            // 从 ECS 提取主方向光参数
+            glm::vec3 gpu_light_dir   = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+            glm::vec3 gpu_light_color = glm::vec3(1.0f, 1.0f, 1.0f);
+            float gpu_light_intensity = 1.0f;
+            float gpu_ambient         = 0.1f;
+            {
+                auto dl_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
+                for (auto entity : dl_view) {
+                    auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(entity);
+                    if (dl.enabled) {
+                        gpu_light_dir       = glm::normalize(dl.direction);
+                        gpu_light_color     = dl.color;
+                        gpu_light_intensity = dl.intensity;
+                        gpu_ambient         = dl.ambient_intensity;
+                        break;
+                    }
+                }
+            }
+
             auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenPBRShader(gpu_view, gpu_proj, gpu_camera_pos,
+                                          gpu_light_dir, gpu_light_color,
+                                          gpu_light_intensity, gpu_ambient);
+
+            // 绑定 instance SSBO 供 vertex shader 读取 model matrix
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
             rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
@@ -655,6 +686,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             }
         }
     }
+
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.sprite);
     if (ctx_.render_2d_scene) {

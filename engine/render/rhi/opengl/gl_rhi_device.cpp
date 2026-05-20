@@ -1249,6 +1249,35 @@ void OpenGLRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo.raw());
 }
 
+void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                               const glm::vec3& camera_pos,
+                                               const glm::vec3& light_dir, const glm::vec3& light_color,
+                                               float light_intensity, float ambient_intensity) {
+    const unsigned int prog = shader_mgr_.gpu_driven_pbr_shader_handle();
+    if (prog == 0) return;
+
+    glUseProgram(prog);
+
+    PerFrameUBO per_frame{};
+    per_frame.vp = proj * view;
+    per_frame.view = view;
+    per_frame.camera_pos = glm::vec4(camera_pos, 0.0f);
+    ubo_mgr_.UploadPerFrame(per_frame);
+
+    PerSceneUBO per_scene{};
+    per_scene.light_dir_and_enabled     = glm::vec4(light_dir, 1.0f);
+    per_scene.light_color_and_ambient   = glm::vec4(light_color, ambient_intensity);
+    per_scene.light_params              = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    ubo_mgr_.UploadPerScene(per_scene);
+
+    ubo_mgr_.BindAll();
+
+    const int loc_skinned = shader_mgr_.gpu_driven_pbr_skinned_loc();
+    if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
+    const int loc_morph = shader_mgr_.gpu_driven_pbr_morph_loc();
+    if (loc_morph >= 0) glUniform1i(loc_morph, 0);
+}
+
 void OpenGLRhiDevice::LogResourceLedger() const {
     resource_mgr_.LogResourceLedger();
     // 鍚堝苟鐫€鑹插櫒绠＄悊鍣ㄧ殑璁℃暟
