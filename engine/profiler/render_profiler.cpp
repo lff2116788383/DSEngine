@@ -38,6 +38,9 @@ void RenderProfiler::EndFrame() {
     ).count();
     evt.stats = current_frame_;
     frame_events_.push_back(evt);
+    while (frame_events_.size() > kMaxFrameEvents) {
+        frame_events_.pop_front();
+    }
 }
 
 void RenderProfiler::RecordDrawCall(int vertex_count, int triangle_count) {

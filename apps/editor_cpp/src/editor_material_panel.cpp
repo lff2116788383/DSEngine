@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
+#include "editor_undo.h"
+#include "editor_shortcuts.h"
 #include "engine/runtime/engine_app.h"
 #include "editor_scene_tabs.h"
 
@@ -65,29 +67,71 @@ void DrawMaterialPanel(EditorContext& ctx) {
 
     auto& tab_mgr = SceneTabManager::Get();
 
+    auto& undo_mgr = GetUndoRedoManager();
+    const auto entity = selected_entity;
+
+    // Helper: float undo with merge (for slider drags)
+    auto UndoFloat = [&](const char* desc, float& field, float old_val) {
+        float new_val = field;
+        auto* reg = &registry;
+        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<float>>(
+            desc, old_val, new_val,
+            [reg, entity, offset = (size_t)((char*)&field - (char*)&mesh)](const float& v) {
+                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity)) {
+                    *reinterpret_cast<float*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                }
+            }
+        ), true);
+        tab_mgr.MarkDirty();
+    };
+
     // Albedo color
     float albedo[4] = { mesh.color.r, mesh.color.g, mesh.color.b, mesh.color.a };
     if (ImGui::ColorEdit4("Albedo", albedo)) {
+        glm::vec4 old_color = mesh.color;
         mesh.color = glm::vec4(albedo[0], albedo[1], albedo[2], albedo[3]);
+        glm::vec4 new_color = mesh.color;
+        auto* reg = &registry;
+        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<glm::vec4>>(
+            "Material Albedo", old_color, new_color,
+            [reg, entity](const glm::vec4& v) {
+                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                    reg->get<dse::MeshRendererComponent>(entity).color = v;
+            }
+        ), true);
         tab_mgr.MarkDirty();
     }
 
     // Metallic
-    if (ImGui::SliderFloat("Metallic", &mesh.metallic, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
+    { float old_v = mesh.metallic;
+    if (ImGui::SliderFloat("Metallic", &mesh.metallic, 0.0f, 1.0f, "%.2f")) UndoFloat("Material Metallic", mesh.metallic, old_v); }
 
     // Roughness
-    if (ImGui::SliderFloat("Roughness", &mesh.roughness, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
+    { float old_v = mesh.roughness;
+    if (ImGui::SliderFloat("Roughness", &mesh.roughness, 0.0f, 1.0f, "%.2f")) UndoFloat("Material Roughness", mesh.roughness, old_v); }
 
     // AO
-    if (ImGui::SliderFloat("Ambient Occlusion", &mesh.ao, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
+    { float old_v = mesh.ao;
+    if (ImGui::SliderFloat("Ambient Occlusion", &mesh.ao, 0.0f, 1.0f, "%.2f")) UndoFloat("Material AO", mesh.ao, old_v); }
 
     // Normal strength
-    if (ImGui::SliderFloat("Normal Strength", &mesh.normal_strength, 0.0f, 2.0f, "%.2f")) tab_mgr.MarkDirty();
+    { float old_v = mesh.normal_strength;
+    if (ImGui::SliderFloat("Normal Strength", &mesh.normal_strength, 0.0f, 2.0f, "%.2f")) UndoFloat("Material Normal Strength", mesh.normal_strength, old_v); }
 
     // Emissive
     float emissive[3] = { mesh.emissive.r, mesh.emissive.g, mesh.emissive.b };
     if (ImGui::ColorEdit3("Emissive", emissive)) {
+        glm::vec3 old_em = mesh.emissive;
         mesh.emissive = glm::vec3(emissive[0], emissive[1], emissive[2]);
+        glm::vec3 new_em = mesh.emissive;
+        auto* reg = &registry;
+        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<glm::vec3>>(
+            "Material Emissive", old_em, new_em,
+            [reg, entity](const glm::vec3& v) {
+                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                    reg->get<dse::MeshRendererComponent>(entity).emissive = v;
+            }
+        ), true);
         tab_mgr.MarkDirty();
     }
 

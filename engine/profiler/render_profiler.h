@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <deque>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -66,11 +67,13 @@ public:
     std::string ExportCSV() const;
     std::string ExportChromeTrace() const;
 
+    static constexpr size_t kMaxFrameEvents = 3600; // ~60s at 60fps
+
 private:
     RenderFrameStats current_frame_;
     RenderFrameStats last_frame_;
     RenderAccumulatedStats accumulated_;
-    std::vector<RenderFrameEvent> frame_events_;
+    std::deque<RenderFrameEvent> frame_events_;
     std::chrono::high_resolution_clock::time_point origin_time_ = std::chrono::high_resolution_clock::now();
     mutable std::mutex mutex_;
 };
