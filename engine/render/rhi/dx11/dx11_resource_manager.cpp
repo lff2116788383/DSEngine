@@ -441,12 +441,13 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
     DX11SSBO ssbo;
     // ByteAddressBuffer 要求 4 字节对齐
     ssbo.size = (size + 3) & ~3;
+    ssbo.stride = 4; // raw buffer element size
 
     D3D11_BUFFER_DESC desc{};
     desc.ByteWidth = static_cast<UINT>(ssbo.size);
-    desc.Usage = D3D11_USAGE_DYNAMIC;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+    desc.CPUAccessFlags = 0;
     desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
 
     D3D11_SUBRESOURCE_DATA init_data{};
@@ -455,6 +456,7 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
     HRESULT hr = device_->CreateBuffer(&desc, data ? &init_data : nullptr, ssbo.buffer.GetAddressOf());
     if (FAILED(hr)) return 0;
 
+    // SRV (ByteAddressBuffer readonly 访问)
     D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
     srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
@@ -465,22 +467,37 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
     hr = device_->CreateShaderResourceView(ssbo.buffer.Get(), &srv_desc, ssbo.srv.GetAddressOf());
     if (FAILED(hr)) return 0;
 
+    // UAV (RWByteAddressBuffer writable 访问)
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+    uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    uav_desc.Buffer.FirstElement = 0;
+    uav_desc.Buffer.NumElements = static_cast<UINT>(ssbo.size / 4);
+    uav_desc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+
+    hr = device_->CreateUnorderedAccessView(ssbo.buffer.Get(), &uav_desc, ssbo.uav.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[DX11] SSBO UAV creation failed: hr=0x{:08X}", static_cast<unsigned>(hr));
+        // 不致命 — 只读 SSBO 不需要 UAV
+    }
+
     ssbos_[handle] = std::move(ssbo);
     return handle;
 }
 
 void DX11ResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
     auto it = ssbos_.find(handle);
-    if (it == ssbos_.end()) return;
+    if (it == ssbos_.end() || !data || size == 0) return;
 
-    // 使用 NO_OVERWRITE 允许多次部分更新（header + data 分开上传）
-    // 首次写入（offset==0）使用 DISCARD，后续使用 NO_OVERWRITE
-    D3D11_MAP map_type = (offset == 0) ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE_NO_OVERWRITE;
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    HRESULT hr = dc_->Map(it->second.buffer.Get(), 0, map_type, 0, &mapped);
-    if (SUCCEEDED(hr)) {
-        memcpy(static_cast<unsigned char*>(mapped.pData) + offset, data, size);
-        dc_->Unmap(it->second.buffer.Get(), 0);
+    if (offset == 0 && size == it->second.size) {
+        dc_->UpdateSubresource(it->second.buffer.Get(), 0, nullptr, data, 0, 0);
+    } else {
+        D3D11_BOX dst_box{};
+        dst_box.left   = static_cast<UINT>(offset);
+        dst_box.right  = static_cast<UINT>(offset + size);
+        dst_box.top    = 0; dst_box.bottom = 1;
+        dst_box.front  = 0; dst_box.back   = 1;
+        dc_->UpdateSubresource(it->second.buffer.Get(), 0, &dst_box, data, 0, 0);
     }
 }
 
@@ -490,6 +507,24 @@ void DX11ResourceManager::BindSSBO(unsigned int handle, unsigned int binding_poi
     // 绑定到 PS t-register（ssbo_register_base_ 由 reflection 计算，避免与纹理冲突）
     ID3D11ShaderResourceView* srv = it->second.srv.Get();
     dc_->PSSetShaderResources(ssbo_register_base_ + binding_point, 1, &srv);
+}
+
+void DX11ResourceManager::BindSSBOForCompute(unsigned int handle, unsigned int binding_point, bool writable) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return;
+
+    if (writable) {
+        // 绑定 UAV 到 CS u-register
+        ID3D11UnorderedAccessView* uav = it->second.uav.Get();
+        if (uav) {
+            UINT initial_count = static_cast<UINT>(-1);
+            dc_->CSSetUnorderedAccessViews(binding_point, 1, &uav, &initial_count);
+        }
+    } else {
+        // 绑定 SRV 到 CS t-register（ssbo_register_base_ + binding）
+        ID3D11ShaderResourceView* srv = it->second.srv.Get();
+        dc_->CSSetShaderResources(ssbo_register_base_ + binding_point, 1, &srv);
+    }
 }
 
 void DX11ResourceManager::DeleteSSBO(unsigned int handle) {

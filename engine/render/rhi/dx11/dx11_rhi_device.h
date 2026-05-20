@@ -73,6 +73,7 @@ public:
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
     void DeleteSSBO(unsigned int handle) override;
+    void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) override;
 
     // --- Compute Shader ---
     unsigned int CreateComputeShader(const std::string& source) override;
@@ -163,8 +164,9 @@ private:
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;
 
-    /// Compute Shader 绑定的 SSBO 追踪（binding_point → handle）
-    std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
+    /// Compute Shader 绑定的 SSBO 追踪（binding_point → {handle, writable}）
+    struct BoundSSBO { unsigned int handle = 0; bool writable = false; };
+    std::unordered_map<unsigned int, BoundSSBO> bound_ssbos_;
 
     RenderStats last_frame_stats_;
     RenderStats current_frame_stats_;

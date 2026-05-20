@@ -47,6 +47,12 @@ namespace dse::render {
     extern const char* kHiZCopyShaderSource;
     extern const char* kHiZDownsampleShaderSource;
     extern const char* kHiZCullShaderSource;
+    extern const char* kHiZCopyShaderSourceVK;
+    extern const char* kHiZDownsampleShaderSourceVK;
+    extern const char* kHiZCullShaderSourceVK;
+    extern const char* kHiZCopyShaderSourceHLSL;
+    extern const char* kHiZDownsampleShaderSourceHLSL;
+    extern const char* kHiZCullShaderSourceHLSL;
     extern const char* kGPUCullShaderSource;
 }
 
@@ -441,10 +447,25 @@ bool FramePipeline::Init() {
             }
             render_resources_.hiz_ssbo_capacity = cap;
 
-            // 鍒涘缓 compute shader锛堜粎涓€娆★紝缂撳瓨鍙ユ焺锛夆€?婧愮爜瀹氫箟鍦?builtin_passes.cpp
-            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCopyShaderSource);
-            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZDownsampleShaderSource);
-            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCullShaderSource);
+            // 创建 compute shader（三套源码 + binding 元数据，仅一次，缓存句柄）
+            // HiZ Copy:       ssbo=0, img=1, smp=1, pc=8B  (ivec2 dst_size)
+            // HiZ Downsample: ssbo=0, img=2, smp=0, pc=16B (ivec2 src_size + ivec2 dst_size)
+            // HiZ Cull:       ssbo=2, img=0, smp=1, pc=80B (mat4 vp + vec2 screen + 2*int)
+            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZCopyShaderSource,
+                dse::render::kHiZCopyShaderSourceVK,
+                dse::render::kHiZCopyShaderSourceHLSL,
+                0, 1, 1, 8);
+            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZDownsampleShaderSource,
+                dse::render::kHiZDownsampleShaderSourceVK,
+                dse::render::kHiZDownsampleShaderSourceHLSL,
+                0, 2, 0, 16);
+            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZCullShaderSource,
+                dse::render::kHiZCullShaderSourceVK,
+                dse::render::kHiZCullShaderSourceHLSL,
+                2, 0, 1, 80);
 
             DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
                            render_resources_.hiz_texture,

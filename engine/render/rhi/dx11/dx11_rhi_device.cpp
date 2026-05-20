@@ -361,7 +361,12 @@ void DX11RhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, 
 
 void DX11RhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
     resource_mgr_.BindSSBO(handle, binding_point);
-    bound_ssbos_[binding_point] = handle;
+    bound_ssbos_[binding_point] = {handle, false};
+}
+
+void DX11RhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) {
+    // 延迟绑定：仅记录状态，实际 CS 绑定在 DispatchCompute 中执行
+    bound_ssbos_[binding_point] = {handle.raw(), writable};
 }
 
 void DX11RhiDevice::DeleteSSBO(unsigned int handle) {
@@ -394,20 +399,34 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
     // 将 uniform staging 内容上传到 scratch cbuffer，绑定到 b0
     FlushComputeParamsCB();
 
-    // SSBO 绑定（SRV slot 16+ 与 PS 保持一致）
-    for (auto& [binding_point, ssbo_handle] : bound_ssbos_) {
-        const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
+    // SSBO 绑定: readonly → CS SRV (t16+), writable → CS UAV (u0+)
+    for (auto& [binding_point, info] : bound_ssbos_) {
+        const auto* ssbo = resource_mgr_.GetSSBO(info.handle);
         if (!ssbo) continue;
-        ID3D11ShaderResourceView* srv = ssbo->srv.Get();
-        if (srv) dc->CSSetShaderResources(16 + binding_point, 1, &srv);
+        if (info.writable) {
+            ID3D11UnorderedAccessView* uav = ssbo->uav.Get();
+            if (uav) {
+                UINT init_count = static_cast<UINT>(-1);
+                dc->CSSetUnorderedAccessViews(binding_point, 1, &uav, &init_count);
+            }
+        } else {
+            ID3D11ShaderResourceView* srv = ssbo->srv.Get();
+            if (srv) dc->CSSetShaderResources(16 + binding_point, 1, &srv);
+        }
     }
 
     dc->Dispatch(groups_x, groups_y, groups_z);
 
     // 解绑 CS 资源
-    for (auto& [binding_point, _] : bound_ssbos_) {
-        ID3D11ShaderResourceView* null_srv = nullptr;
-        dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
+    for (auto& [binding_point, info] : bound_ssbos_) {
+        if (info.writable) {
+            ID3D11UnorderedAccessView* null_uav = nullptr;
+            UINT init_count = static_cast<UINT>(-1);
+            dc->CSSetUnorderedAccessViews(binding_point, 1, &null_uav, &init_count);
+        } else {
+            ID3D11ShaderResourceView* null_srv = nullptr;
+            dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
+        }
     }
     { ID3D11Buffer* null_cb = nullptr; dc->CSSetConstantBuffers(0, 1, &null_cb); }
     dc->CSSetShader(nullptr, nullptr, 0);

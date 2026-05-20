@@ -76,11 +76,13 @@ struct DX11RenderTarget {
     unsigned int depth_texture_handle = 0;
 };
 
-/// D3D11 SSBO 资源封装（StructuredBuffer + SRV）
+/// D3D11 SSBO 资源封装（StructuredBuffer + SRV + UAV）
 struct DX11SSBO {
     ComPtr<ID3D11Buffer> buffer;
     ComPtr<ID3D11ShaderResourceView> srv;
+    ComPtr<ID3D11UnorderedAccessView> uav;
     size_t size = 0;
+    size_t stride = 0; // 结构体步长（element size for StructuredBuffer）
 };
 
 /// D3D11 顶点数组模拟（InputLayout + Buffer 绑定组合）
@@ -126,10 +128,11 @@ public:
     void DeleteBuffer(unsigned int handle);
     const DX11Buffer* GetBuffer(unsigned int handle) const;
 
-    // --- SSBO (StructuredBuffer + SRV) ---
+    // --- SSBO (StructuredBuffer + SRV + UAV) ---
     unsigned int CreateSSBO(size_t size, const void* data);
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data);
     void BindSSBO(unsigned int handle, unsigned int binding_point);
+    void BindSSBOForCompute(unsigned int handle, unsigned int binding_point, bool writable);
     void DeleteSSBO(unsigned int handle);
     const DX11SSBO* GetSSBO(unsigned int handle) const;
     void set_ssbo_register_base(unsigned int base) { ssbo_register_base_ = base; }

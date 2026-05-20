@@ -2113,9 +2113,10 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
 
 const char* kHiZCopyShaderSource = R"(
 #version 430 core
+#extension GL_ARB_shading_language_420pack : enable
 layout(local_size_x = 16, local_size_y = 16) in;
 
-uniform sampler2D u_depth_texture;
+layout(binding = 0) uniform sampler2D u_depth_texture;
 layout(r32f, binding = 0) writeonly uniform image2D u_hiz_mip0;
 
 uniform ivec2 u_dst_size;
@@ -2157,8 +2158,286 @@ void main() {
 }
 )";
 
+// ---------------- Vulkan GLSL 450 版本（push constants + 显式 set/binding） ----------------
+// binding 布局对应 CreateComputeShaderEx 参数：
+//   HiZ Copy: ssbo=0, img=1, smp=1, pc=8B
+//     binding 0 = storage image hiz_mip0
+//     binding 1 = sampler2D depth_texture
+//   HiZ Downsample: ssbo=0, img=2, smp=0, pc=16B
+//     binding 0 = storage image src_mip (readonly)
+//     binding 1 = storage image dst_mip (writeonly)
+//   HiZ Cull: ssbo=2, img=0, smp=1, pc=96B
+//     binding 0 = SSBO AABB (readonly)
+//     binding 1 = SSBO Visibility (writeonly)
+//     binding 2 = sampler2D hiz_texture
+
+const char* kHiZCopyShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set=0, binding=0, r32f) writeonly uniform image2D u_hiz_mip0;
+layout(set=0, binding=1) uniform sampler2D u_depth_texture;
+
+layout(push_constant) uniform PC {
+    int u_dst_size_x;
+    int u_dst_size_y;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= pc.u_dst_size_x || coord.y >= pc.u_dst_size_y) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(pc.u_dst_size_x, pc.u_dst_size_y);
+    float depth = texture(u_depth_texture, uv).r;
+    imageStore(u_hiz_mip0, coord, vec4(depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZDownsampleShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set=0, binding=0, r32f) readonly uniform image2D u_src_mip;
+layout(set=0, binding=1, r32f) writeonly uniform image2D u_dst_mip;
+
+layout(push_constant) uniform PC {
+    int u_src_size_x;
+    int u_src_size_y;
+    int u_dst_size_x;
+    int u_dst_size_y;
+} pc;
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (dst_coord.x >= pc.u_dst_size_x || dst_coord.y >= pc.u_dst_size_y) return;
+
+    ivec2 src_coord = dst_coord * 2;
+    ivec2 src_max = ivec2(pc.u_src_size_x - 1, pc.u_src_size_y - 1);
+    float d00 = imageLoad(u_src_mip, src_coord).r;
+    float d10 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 0), src_max)).r;
+    float d01 = imageLoad(u_src_mip, min(src_coord + ivec2(0, 1), src_max)).r;
+    float d11 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 1), src_max)).r;
+
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    imageStore(u_dst_mip, dst_coord, vec4(max_depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZCullShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 64) in;
+
+struct AABB {
+    vec4 min_point;
+    vec4 max_point;
+};
+
+layout(set=0, binding=0, std430) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(set=0, binding=1, std430) writeonly buffer VisibilityBuffer {
+    uint visibility[];
+};
+
+layout(set=0, binding=2) uniform sampler2D u_hiz_texture;
+
+layout(push_constant) uniform PC {
+    mat4 u_view_projection; // 64 B
+    float u_screen_size_x;  //  4 B
+    float u_screen_size_y;  //  4 B
+    int u_mip_count;        //  4 B
+    int u_object_count;     //  4 B
+} pc; // 80 B total
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = pc.u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            visibility[idx] = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    vec2 uv_min = ndc_min * 0.5 + 0.5;
+    vec2 uv_max = ndc_max * 0.5 + 0.5;
+    uv_min = clamp(uv_min, vec2(0.0), vec2(1.0));
+    uv_max = clamp(uv_max, vec2(0.0), vec2(1.0));
+
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        visibility[idx] = 0u;
+        return;
+    }
+
+    vec2 size_pixels = (uv_max - uv_min) * vec2(pc.u_screen_size_x, pc.u_screen_size_y);
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_depth = textureLod(u_hiz_texture, uv_center, mip_level).r;
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_depth, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    visibility[idx] = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
+// ---------------- HLSL CS 5.0 版本（D3D11） ----------------
+// HLSL register 映射:
+//   HiZ Copy: cbuffer b0(PC), t0(depth sampler), s0, u0(hiz_mip0)
+//   HiZ Downsample: cbuffer b0(PC), u0(src readonly via RWTexture2D), u1(dst)
+//   HiZ Cull: cbuffer b0(PC), t0(hiz sampler), s0, t16(AABB SSBO SRV), u0(Visibility UAV)
+// SSBO 在 DX11 中可读 = StructuredBuffer (t-register), 可写 = RWStructuredBuffer (u-register)
+
+const char* kHiZCopyShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    int u_dst_size_x;
+    int u_dst_size_y;
+};
+Texture2D<float> u_depth_texture : register(t0);
+SamplerState LinearSampler        : register(s0);
+RWTexture2D<float> u_hiz_mip0    : register(u0);
+
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    int2 coord = int2(id.xy);
+    if (coord.x >= u_dst_size_x || coord.y >= u_dst_size_y) return;
+    float2 uv = (float2(coord) + 0.5) / float2(u_dst_size_x, u_dst_size_y);
+    float depth = u_depth_texture.SampleLevel(LinearSampler, uv, 0.0);
+    u_hiz_mip0[coord] = depth;
+}
+)";
+
+const char* kHiZDownsampleShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    int u_src_size_x;
+    int u_src_size_y;
+    int u_dst_size_x;
+    int u_dst_size_y;
+};
+RWTexture2D<float> u_src_mip : register(u0);
+RWTexture2D<float> u_dst_mip : register(u1);
+
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    int2 dst_coord = int2(id.xy);
+    if (dst_coord.x >= u_dst_size_x || dst_coord.y >= u_dst_size_y) return;
+    int2 src_coord = dst_coord * 2;
+    int2 src_max = int2(u_src_size_x - 1, u_src_size_y - 1);
+
+    float d00 = u_src_mip[src_coord];
+    float d10 = u_src_mip[min(src_coord + int2(1, 0), src_max)];
+    float d01 = u_src_mip[min(src_coord + int2(0, 1), src_max)];
+    float d11 = u_src_mip[min(src_coord + int2(1, 1), src_max)];
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    u_dst_mip[dst_coord] = max_depth;
+}
+)";
+
+const char* kHiZCullShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    float4x4 u_view_projection;
+    float u_screen_size_x;
+    float u_screen_size_y;
+    int u_mip_count;
+    int u_object_count;
+};
+
+struct AABB {
+    float4 min_point;
+    float4 max_point;
+};
+StructuredBuffer<AABB> aabbs : register(t16);
+RWStructuredBuffer<uint> visibility : register(u1);
+
+Texture2D<float> u_hiz_texture : register(t0);
+SamplerState LinearSampler      : register(s0);
+
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    uint idx = id.x;
+    if (int(idx) >= u_object_count) return;
+
+    float3 aabb_min = aabbs[idx].min_point.xyz;
+    float3 aabb_max = aabbs[idx].max_point.xyz;
+
+    float2 ndc_min = float2(1.0, 1.0);
+    float2 ndc_max = float2(-1.0, -1.0);
+    float nearest_z = 1.0;
+
+    [unroll]
+    for (int i = 0; i < 8; ++i) {
+        float3 corner = float3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        float4 clip = mul(u_view_projection, float4(corner, 1.0));
+        if (clip.w <= 0.0) {
+            visibility[idx] = 1u;
+            return;
+        }
+        float3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    float2 uv_min = ndc_min * 0.5 + 0.5;
+    float2 uv_max = ndc_max * 0.5 + 0.5;
+    uv_min = saturate(uv_min);
+    uv_max = saturate(uv_max);
+
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        visibility[idx] = 0u;
+        return;
+    }
+
+    float2 size_pixels = (uv_max - uv_min) * float2(u_screen_size_x, u_screen_size_y);
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+    float2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_depth = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
+    float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);
+    float hiz_br = u_hiz_texture.SampleLevel(LinearSampler, uv_max, mip_level);
+    float hiz_tr = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_max.x, uv_min.y), mip_level);
+    float hiz_bl = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_min.x, uv_max.y), mip_level);
+    float max_hiz = max(max(hiz_depth, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    visibility[idx] = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
 const char* kHiZCullShaderSource = R"(
 #version 430 core
+#extension GL_ARB_shading_language_420pack : enable
 layout(local_size_x = 64) in;
 
 struct AABB {
@@ -2174,7 +2453,7 @@ layout(std430, binding = 1) writeonly buffer VisibilityBuffer {
     uint visibility[];
 };
 
-uniform sampler2D u_hiz_texture;
+layout(binding = 0) uniform sampler2D u_hiz_texture;
 uniform mat4 u_view_projection;
 uniform vec2 u_screen_size;
 uniform int u_mip_count;
@@ -2298,7 +2577,6 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
         rhi->SetComputeTextureSampler(0, depth_tex);
         rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
 
-        rhi->SetComputeUniformInt(hiz_copy_shader_, "u_depth_texture", 0);
         rhi->SetComputeUniformVec2i(hiz_copy_shader_, "u_dst_size", base_w, base_h);
 
         unsigned int groups_x = (base_w + 15) / 16;
@@ -2366,9 +2644,9 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
-    // Bind SSBOs
-    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0);
-    rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1);
+    // Bind SSBOs (DX11 区分 SRV/UAV; GL/VK 忽略 writable)
+    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0, false);
+    rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1, true);
 
     // Bind Hi-Z texture as sampler
     rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
@@ -2395,8 +2673,7 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
         }
     }
 
-    // Set uniforms through RHI
-    rhi->SetComputeUniformInt(hiz_cull_shader_, "u_hiz_texture", 0);
+    // Set uniforms through RHI (push constants for VK, cbuffer for DX11, glUniform for GL)
     rhi->SetComputeUniformMat4(hiz_cull_shader_, "u_view_projection", &view_projection[0][0]);
     rhi->SetComputeUniformVec2f(hiz_cull_shader_, "u_screen_size",
                                 static_cast<float>(Screen::width()),

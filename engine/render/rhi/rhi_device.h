@@ -149,6 +149,12 @@ public:
         BindSSBO(handle.raw(), binding_point);
     }
 
+    /// 绑定 GPU Buffer 到指定绑定点（writable=true 时 DX11 绑定为 UAV，GL/VK 忽略此参数）
+    virtual void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) {
+        (void)writable;
+        BindGpuBuffer(handle, binding_point);
+    }
+
     virtual void ReadGpuBuffer(BufferHandle handle, size_t offset, size_t size, void* dst) {
         ReadSSBO(handle.raw(), offset, size, dst);
     }
