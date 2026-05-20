@@ -7,6 +7,8 @@
 #include "engine/render/rhi/opengl/gl_shader_manager.h"
 #include "engine/base/debug.h"
 #include "engine/render/rhi/opengl/gl_loader.h"
+#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
+#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
@@ -110,93 +112,7 @@ void GLDrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& item
 // ============================================================
 // Hair Strand 渲染
 // ============================================================
-
-static const char* kHairVertSource = R"(
-#version 430 core
-
-layout(std430, binding = 0) readonly buffer PositionBuf { vec4 positions[]; };
-layout(std430, binding = 3) readonly buffer TangentBuf  { vec4 tangents[]; };
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec3 v_world_pos;
-out vec3 v_tangent;
-out float v_t; // 0=root, 1=tip
-
-void main() {
-    vec4 pos = positions[gl_VertexID];
-    vec4 tan = tangents[gl_VertexID];
-
-    vec4 world_pos = u_model * vec4(pos.xyz, 1.0);
-    v_world_pos = world_pos.xyz;
-    v_tangent = normalize(mat3(u_model) * tan.xyz);
-    v_t = 1.0 - tan.w; // tangent.w = thickness: 1 at root, 0 at tip 鈫?v_t: 0 at root, 1 at tip
-
-    gl_Position = u_projection * u_view * world_pos;
-}
-)";
-
-static const char* kHairFragSource = R"(
-#version 430 core
-
-in vec3 v_world_pos;
-in vec3 v_tangent;
-in float v_t;
-
-uniform vec3 u_camera_pos;
-uniform vec3 u_light_dir;
-uniform vec3 u_light_color;
-uniform float u_light_intensity;
-uniform float u_ambient_intensity;
-uniform vec4 u_root_color;
-uniform vec4 u_tip_color;
-uniform float u_opacity;
-uniform float u_spec_primary;
-uniform float u_spec_secondary;
-uniform float u_spec_strength1;
-uniform float u_spec_strength2;
-uniform vec3 u_spec_color;
-
-out vec4 FragColor;
-
-// Kajiya-Kay diffuse: sin(T, L)
-float KajiyaDiffuse(vec3 T, vec3 L) {
-    float TdotL = dot(T, L);
-    return sqrt(max(0.0, 1.0 - TdotL * TdotL));
-}
-
-// Kajiya-Kay specular: sin(T, L) * sin(T, V) - cos(T, L) * cos(T, V)
-float KajiyaSpecular(vec3 T, vec3 L, vec3 V, float power) {
-    float TdotL = dot(T, L);
-    float TdotV = dot(T, V);
-    float sinTL = sqrt(max(0.0, 1.0 - TdotL * TdotL));
-    float sinTV = sqrt(max(0.0, 1.0 - TdotV * TdotV));
-    float cosAngle = sinTL * sinTV - TdotL * TdotV;
-    return pow(max(0.0, cosAngle), power);
-}
-
-void main() {
-    vec3 T = normalize(v_tangent);
-    vec3 L = normalize(-u_light_dir);
-    vec3 V = normalize(u_camera_pos - v_world_pos);
-
-    // Interpolate color from root to tip
-    float t = clamp(v_t, 0.0, 1.0);
-    vec4 hair_color = mix(u_root_color, u_tip_color, t);
-
-    // Kajiya-Kay lighting
-    float diffuse = KajiyaDiffuse(T, L);
-    float spec1 = KajiyaSpecular(T, L, V, u_spec_primary) * u_spec_strength1;
-    float spec2 = KajiyaSpecular(T, L, V, u_spec_secondary) * u_spec_strength2;
-
-    vec3 lit = hair_color.rgb * (u_ambient_intensity + diffuse * u_light_intensity) * u_light_color
-             + (spec1 + spec2) * u_spec_color * u_light_color * u_light_intensity;
-
-    FragColor = vec4(lit, hair_color.a * u_opacity);
-}
-)";
+using namespace dse::render::generated_shaders;
 
 void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
                                       const glm::mat4& view,
@@ -208,7 +124,8 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     // 懒初始化 hair shader
     if (hair_shader_handle_ == 0) {
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vs, 1, &kHairVertSource, nullptr);
+        const char* hair_vs_src = khair_vert_glsl430;
+        glShaderSource(vs, 1, &hair_vs_src, nullptr);
         glCompileShader(vs);
         GLint ok = 0;
         glGetShaderiv(vs, GL_COMPILE_STATUS, &ok);
@@ -220,7 +137,8 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
             return;
         }
         GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fs, 1, &kHairFragSource, nullptr);
+        const char* hair_fs_src = khair_frag_glsl430;
+        glShaderSource(fs, 1, &hair_fs_src, nullptr);
         glCompileShader(fs);
         glGetShaderiv(fs, GL_COMPILE_STATUS, &ok);
         if (!ok) {

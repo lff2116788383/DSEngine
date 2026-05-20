@@ -1,6 +1,9 @@
 ﻿/**
  * @file gl_draw_executor_postprocess.cpp
  * @brief GLDrawExecutor - post-process drawing (split from gl_draw_executor.cpp)
+ *
+ * 采用声明式绑定表驱动，每个效果通过 PPEffectEntry 描述参数布局。
+ * 新增后处理效果只需在 kEffectTable 中追加一条记录。
  */
 
 #include "engine/render/rhi/opengl/gl_draw_executor.h"
@@ -11,15 +14,397 @@
 
 #include <glm/gtc/type_ptr.hpp>
 #include <string>
+#include <unordered_map>
+#include <iterator>  // std::size
 
 namespace dse {
 namespace render {
+
+// ============================================================
+// 声明式 Uniform 绑定描述
+// ============================================================
+
+enum class UType : uint8_t { Float, Float2, Float3, Int, Mat4 };
+
+struct PPUniformEntry {
+    const char* name;
+    UType       type;
+    int         param_offset;  // params[offset] 起始索引，-1 表示特殊来源
+};
+
+// 通用 uniform 绑定循环
+static void ApplyBindings(unsigned int prog,
+                           const PPUniformEntry* entries, int count,
+                           const std::vector<float>& params) {
+    for (int i = 0; i < count; ++i) {
+        const auto& e = entries[i];
+        if (e.param_offset < 0) continue;
+        int loc = glGetUniformLocation(prog, e.name);
+        if (loc < 0) continue;
+        switch (e.type) {
+        case UType::Float:
+            glUniform1f(loc, params[e.param_offset]);
+            break;
+        case UType::Float2:
+            glUniform2f(loc, params[e.param_offset], params[e.param_offset + 1]);
+            break;
+        case UType::Float3:
+            glUniform3f(loc, params[e.param_offset], params[e.param_offset + 1], params[e.param_offset + 2]);
+            break;
+        case UType::Int:
+            glUniform1i(loc, static_cast<int>(params[e.param_offset]));
+            break;
+        case UType::Mat4:
+            glUniformMatrix4fv(loc, 1, GL_FALSE, &params[e.param_offset]);
+            break;
+        }
+    }
+}
+
+// ============================================================
+// 各效果绑定表（static constexpr 数组）
+// ============================================================
+
+static constexpr PPUniformEntry kFxaaBindings[] = {
+    {"_27.u_resolution", UType::Float2, 0},
+};
+static constexpr PPUniformEntry kEdgeDetectBindings[] = {
+    {"_28.u_thickness",         UType::Float, 0},
+    {"_28.u_depth_threshold",   UType::Float, 1},
+    {"_28.u_normal_threshold",  UType::Float, 2},
+    {"_28.u_outline_r",         UType::Float, 3},
+    {"_28.u_outline_g",         UType::Float, 4},
+    {"_28.u_outline_b",         UType::Float, 5},
+    {"_28.u_near",              UType::Float, 6},
+    {"_28.u_far",               UType::Float, 7},
+    {"_28.u_screen_w",          UType::Float, 8},
+    {"_28.u_screen_h",          UType::Float, 9},
+};
+static constexpr PPUniformEntry kSsaoBindings[] = {
+    {"_27.u_radius",      UType::Float,  0},
+    {"_27.u_bias",        UType::Float,  1},
+    {"_27.u_near",        UType::Float,  2},
+    {"_27.u_far",         UType::Float,  3},
+    {"_27.u_screen_size", UType::Float2, 4},
+};
+static constexpr PPUniformEntry kContactShadowBindings[] = {
+    {"_23.u_light_dir",   UType::Float3, 0},
+    {"_23.u_near",        UType::Float,  3},
+    {"_23.u_far",         UType::Float,  4},
+    {"_23.u_screen_size", UType::Float2, 5},
+    {"_23.u_strength",    UType::Float,  7},
+    {"_23.u_num_steps",   UType::Int,    8},
+    {"_23.u_step_size",   UType::Float,  9},
+};
+static constexpr PPUniformEntry kDofBindings[] = {
+    {"_20.focus_distance", UType::Float, 0},
+    {"_20.focus_range",    UType::Float, 1},
+    {"_20.bokeh_radius",   UType::Float, 2},
+    {"_20.near_plane",     UType::Float, 3},
+    {"_20.far_plane",      UType::Float, 4},
+    {"_20.screen_w",       UType::Float, 5},
+    {"_20.screen_h",       UType::Float, 6},
+};
+static constexpr PPUniformEntry kMotionVectorBindings[] = {
+    {"_46.screen_w", UType::Float, 0},
+    {"_46.screen_h", UType::Float, 1},
+    {"_46.reproj",   UType::Mat4,  2},
+};
+static constexpr PPUniformEntry kMotionBlurBindings[] = {
+    {"_23.intensity",   UType::Float, 0},
+    {"_23.num_samples", UType::Float, 1},
+    {"_23.screen_w",    UType::Float, 2},
+    {"_23.screen_h",    UType::Float, 3},
+};
+static constexpr PPUniformEntry kSsrBindings[] = {
+    {"_28.max_distance", UType::Float, 0},
+    {"_28.thickness",    UType::Float, 1},
+    {"_28.step_size",    UType::Float, 2},
+    {"_28.max_steps",    UType::Int,   3},
+    {"_28.near_plane",   UType::Float, 4},
+    {"_28.far_plane",    UType::Float, 5},
+    {"_28.screen_w",     UType::Float, 6},
+    {"_28.screen_h",     UType::Float, 7},
+};
+static constexpr PPUniformEntry kTaaBindings[] = {
+    {"_36.u_blend_factor", UType::Float, 0},
+    {"_36.u_jitter_x",    UType::Float, 1},
+    {"_36.u_jitter_y",    UType::Float, 2},
+    {"_36.u_frame_index", UType::Int,   3},
+    {"_36.u_screen_w",    UType::Float, 4},
+    {"_36.u_screen_h",    UType::Float, 5},
+};
+static constexpr PPUniformEntry kDeferredLightBindings[] = {
+    {"_58.u_light_dir",       UType::Float3, 0},
+    {"_58.u_light_color",     UType::Float3, 3},
+    {"_58.u_light_intensity", UType::Float,  6},
+    {"_58.u_ambient",         UType::Float,  7},
+};
+static constexpr PPUniformEntry kLightShaftBindings[] = {
+    {"_25.u_sun_x",       UType::Float, 0},
+    {"_25.u_sun_y",       UType::Float, 1},
+    {"_25.u_light_r",     UType::Float, 2},
+    {"_25.u_light_g",     UType::Float, 3},
+    {"_25.u_light_b",     UType::Float, 4},
+    {"_25.u_density",     UType::Float, 5},
+    {"_25.u_weight",      UType::Float, 6},
+    {"_25.u_decay",       UType::Float, 7},
+    {"_25.u_exposure",    UType::Float, 8},
+    {"_25.u_num_samples", UType::Float, 9},
+    {"_25.u_intensity",   UType::Float, 10},
+};
+static constexpr PPUniformEntry kVolumetricFogBindings[] = {
+    {"_20.u_fog_r",        UType::Float, 0},  {"_20.u_fog_g",        UType::Float, 1},
+    {"_20.u_fog_b",        UType::Float, 2},  {"_20.u_fog_density",  UType::Float, 3},
+    {"_20.u_height_falloff", UType::Float, 4}, {"_20.u_height_offset", UType::Float, 5},
+    {"_20.u_fog_start",    UType::Float, 6},  {"_20.u_fog_end",      UType::Float, 7},
+    {"_20.u_fog_steps",    UType::Float, 8},  {"_20.u_sun_scatter",  UType::Float, 9},
+    {"_20.u_sun_dir_x",   UType::Float, 10}, {"_20.u_sun_dir_y",   UType::Float, 11},
+    {"_20.u_sun_dir_z",   UType::Float, 12}, {"_20.u_cam_pos_x",   UType::Float, 13},
+    {"_20.u_cam_pos_y",   UType::Float, 14}, {"_20.u_cam_pos_z",   UType::Float, 15},
+    {"_20.u_near",         UType::Float, 16}, {"_20.u_far",          UType::Float, 17},
+    {"_20.u_right_x",     UType::Float, 18}, {"_20.u_right_y",     UType::Float, 19},
+    {"_20.u_right_z",     UType::Float, 20}, {"_20.u_up_x",        UType::Float, 21},
+    {"_20.u_up_y",        UType::Float, 22}, {"_20.u_up_z",        UType::Float, 23},
+    {"_20.u_fwd_x",       UType::Float, 24}, {"_20.u_fwd_y",       UType::Float, 25},
+    {"_20.u_fwd_z",       UType::Float, 26}, {"_20.u_tan_fov_y",   UType::Float, 27},
+    {"_20.u_aspect",      UType::Float, 28},
+};
+static constexpr PPUniformEntry kLumAdaptBindings[] = {
+    {"_34.u_dt",             UType::Float, 0},
+    {"_34.u_speed_up",       UType::Float, 1},
+    {"_34.u_speed_down",     UType::Float, 2},
+    {"_34.u_min_exposure",   UType::Float, 3},
+    {"_34.u_max_exposure",   UType::Float, 4},
+    {"_34.u_compensation",   UType::Float, 5},
+};
+static constexpr PPUniformEntry kDecalBindings[] = {
+    {"_35.m00", UType::Float, 0},  {"_35.m01", UType::Float, 1},
+    {"_35.m02", UType::Float, 2},  {"_35.m03", UType::Float, 3},
+    {"_35.m10", UType::Float, 4},  {"_35.m11", UType::Float, 5},
+    {"_35.m12", UType::Float, 6},  {"_35.m13", UType::Float, 7},
+    {"_35.m20", UType::Float, 8},  {"_35.m21", UType::Float, 9},
+    {"_35.m22", UType::Float, 10}, {"_35.m23", UType::Float, 11},
+    {"_35.m30", UType::Float, 12}, {"_35.m31", UType::Float, 13},
+    {"_35.m32", UType::Float, 14}, {"_35.m33", UType::Float, 15},
+    {"_35.u_color_r",    UType::Float, 16}, {"_35.u_color_g",    UType::Float, 17},
+    {"_35.u_color_b",    UType::Float, 18}, {"_35.u_color_a",    UType::Float, 19},
+    {"_35.u_angle_fade", UType::Float, 20},
+    {"_35.u_decal_up_x", UType::Float, 21}, {"_35.u_decal_up_y", UType::Float, 22},
+    {"_35.u_decal_up_z", UType::Float, 23},
+};
+static constexpr PPUniformEntry kWaterBindings[] = {
+    {"_29.u_water_level",  UType::Float, 0},
+    {"_29.u_deep_r",       UType::Float, 1},  {"_29.u_deep_g",       UType::Float, 2},
+    {"_29.u_deep_b",       UType::Float, 3},  {"_29.u_shallow_r",    UType::Float, 4},
+    {"_29.u_shallow_g",    UType::Float, 5},  {"_29.u_shallow_b",    UType::Float, 6},
+    {"_29.u_max_depth",    UType::Float, 7},  {"_29.u_transparency", UType::Float, 8},
+    {"_29.u_wave_amplitude", UType::Float, 9}, {"_29.u_wave_frequency", UType::Float, 10},
+    {"_29.u_wave_speed",   UType::Float, 11}, {"_29.u_wave_dir_x",   UType::Float, 12},
+    {"_29.u_wave_dir_y",   UType::Float, 13}, {"_29.u_refraction_strength", UType::Float, 14},
+    {"_29.u_specular_power", UType::Float, 15}, {"_29.u_reflection_strength", UType::Float, 16},
+    {"_29.u_time",         UType::Float, 17},
+    {"_29.u_sun_dir_x",   UType::Float, 18}, {"_29.u_sun_dir_y",   UType::Float, 19},
+    {"_29.u_sun_dir_z",   UType::Float, 20},
+    {"_29.u_cam_pos_x",   UType::Float, 21}, {"_29.u_cam_pos_y",   UType::Float, 22},
+    {"_29.u_cam_pos_z",   UType::Float, 23},
+    {"_29.u_near",         UType::Float, 24}, {"_29.u_far",          UType::Float, 25},
+    {"_29.u_fwd_x",       UType::Float, 26}, {"_29.u_fwd_y",       UType::Float, 27},
+    {"_29.u_fwd_z",       UType::Float, 28}, {"_29.u_tan_fov_y",   UType::Float, 29},
+    {"_29.u_aspect",      UType::Float, 30},
+    {"_29.u_caustic_intensity", UType::Float, 31}, {"_29.u_caustic_scale", UType::Float, 32},
+    {"_29.u_foam_intensity", UType::Float, 33}, {"_29.u_foam_depth_threshold", UType::Float, 34},
+    {"_29.u_uw_fog_density", UType::Float, 35},
+    {"_29.u_uw_fog_r",    UType::Float, 36}, {"_29.u_uw_fog_g",    UType::Float, 37},
+    {"_29.u_uw_fog_b",    UType::Float, 38},
+};
+
+// ============================================================
+// 特殊处理函数（有条件纹理绑定、UBO 上传等非平凡效果）
+// ============================================================
+
+using SpecialBindFn = void(*)(unsigned int prog,
+                              const PostProcessRequest& req,
+                              const std::vector<float>& params,
+                              unsigned int& pp_param_ubo);
+
+static void BindBloomUBO(unsigned int /*prog*/,
+                          const PostProcessRequest& /*req*/,
+                          const std::vector<float>& params,
+                          unsigned int& pp_param_ubo) {
+    if (pp_param_ubo == 0) {
+        glGenBuffers(1, &pp_param_ubo);
+        glBindBuffer(GL_UNIFORM_BUFFER, pp_param_ubo);
+        glBufferData(GL_UNIFORM_BUFFER, 256, nullptr, GL_DYNAMIC_DRAW);
+    }
+    float ubo[4] = { params[0], params.size() > 1 ? params[1] : 0.f, 0.f, 0.f };
+    glBindBuffer(GL_UNIFORM_BUFFER, pp_param_ubo);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, 16, ubo);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 2, pp_param_ubo);
+}
+
+static void BindTonemapping(unsigned int prog,
+                             const PostProcessRequest& req,
+                             const std::vector<float>& params,
+                             unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_68.u_manual_exposure"), params[0]);
+    const bool has_ae  = req.FindTex(2) != 0;
+    const bool has_lut = req.FindTex(5) != 0;
+    glUniform1i(glGetUniformLocation(prog, "_68.u_auto_exposure_enabled"), has_ae ? 1 : 0);
+    glUniform1i(glGetUniformLocation(prog, "_68.u_lut_enabled"), has_lut ? 1 : 0);
+    if (has_lut && params.size() >= 2)
+        glUniform1f(glGetUniformLocation(prog, "_68.u_lut_intensity"), params[1]);
+}
+
+static void BindColorGrading(unsigned int prog,
+                              const PostProcessRequest& /*req*/,
+                              const std::vector<float>& params,
+                              unsigned int& /*ubo*/) {
+    glActiveTexture(GL_TEXTURE5);
+    glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[0]));
+    glUniform1f(glGetUniformLocation(prog, "_40.u_lut_intensity"), params[1]);
+}
+
+static void BindBloomComposite(unsigned int prog,
+                                const PostProcessRequest& /*req*/,
+                                const std::vector<float>& params,
+                                unsigned int& /*ubo*/) {
+    const CompositeParamsView cv(params);
+    const auto bcp = PrepareBloomCompositeParams(cv);
+    glUniform1f(glGetUniformLocation(prog, "_90.exposure"), bcp.exposure);
+    glUniform1f(glGetUniformLocation(prog, "_90.bloomIntensity"), bcp.bloom_intensity);
+    glUniform1i(glGetUniformLocation(prog, "_90.bloomEnabled"), bcp.bloom_enabled);
+    glUniform1i(glGetUniformLocation(prog, "_90.ssaoEnabled"), bcp.ssao_enabled);
+    glUniform1i(glGetUniformLocation(prog, "_90.autoExposureEnabled"), bcp.ae_enabled);
+    glUniform1i(glGetUniformLocation(prog, "_90.lutEnabled"), bcp.lut_enabled);
+    glUniform1f(glGetUniformLocation(prog, "_90.lutIntensity"), bcp.lut_intensity);
+    glUniform1i(glGetUniformLocation(prog, "_90.csEnabled"), bcp.cs_enabled);
+    glUniform1f(glGetUniformLocation(prog, "_90.csStrength"), bcp.cs_strength);
+    glUniform1i(glGetUniformLocation(prog, "_90.vignetteEnabled"), bcp.vignette_enabled);
+    glUniform1f(glGetUniformLocation(prog, "_90.vignetteIntensity"), bcp.vignette_intensity);
+    glUniform1f(glGetUniformLocation(prog, "_90.vignetteRadius"), bcp.vignette_radius);
+    glUniform1f(glGetUniformLocation(prog, "_90.vignetteSoftness"), bcp.vignette_softness);
+    glUniform1i(glGetUniformLocation(prog, "_90.filmGrainEnabled"), bcp.film_grain_enabled);
+    glUniform1f(glGetUniformLocation(prog, "_90.filmGrainIntensity"), bcp.film_grain_intensity);
+    glUniform1f(glGetUniformLocation(prog, "_90.filmGrainTime"), bcp.film_grain_time);
+    if (bcp.bloom_enabled) { glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kBloomTex)); }
+    if (bcp.ssao_enabled)  { glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kSsaoTex)); }
+    if (bcp.ae_enabled)    { glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kAutoExposureTex)); }
+    if (bcp.lut_enabled)   { glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_3D, cv.Texture(CompositeParamsView::kLutTex)); }
+    if (bcp.cs_enabled)    { glActiveTexture(GL_TEXTURE6); glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kContactShadowTex)); }
+}
+
+static void BindSsaoApply(unsigned int prog,
+                           const PostProcessRequest& req,
+                           const std::vector<float>& params,
+                           unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_79.exposure"), params[0]);
+    const bool has_ae  = req.FindTex(3) != 0;
+    const bool has_lut = req.FindTex(5) != 0;
+    glUniform1i(glGetUniformLocation(prog, "_79.autoExposureEnabled"), has_ae ? 1 : 0);
+    glUniform1i(glGetUniformLocation(prog, "_79.lutEnabled"), has_lut ? 1 : 0);
+    if (has_lut && params.size() >= 2)
+        glUniform1f(glGetUniformLocation(prog, "_79.lutIntensity"), params[1]);
+}
+
+static void BindLightShaftExtra(unsigned int prog,
+                                 const PostProcessRequest& req,
+                                 const std::vector<float>& /*params*/,
+                                 unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_25.u_depth_handle"), static_cast<float>(req.FindTex(2)));
+}
+
+static void BindVolumetricFogExtra(unsigned int prog,
+                                    const PostProcessRequest& req,
+                                    const std::vector<float>& /*params*/,
+                                    unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_20.u_depth_handle"), static_cast<float>(req.FindTex(2)));
+}
+
+static void BindWboitComposite(unsigned int prog,
+                                const PostProcessRequest& req,
+                                const std::vector<float>& /*params*/,
+                                unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_61.u_reveal_handle"), static_cast<float>(req.FindTex(2)));
+}
+
+static void BindDecalExtra(unsigned int prog,
+                            const PostProcessRequest& req,
+                            const std::vector<float>& /*params*/,
+                            unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_35.u_depth_handle"), static_cast<float>(req.FindTex(2)));
+    glUniform1f(glGetUniformLocation(prog, "_35.u_decal_handle"), static_cast<float>(req.FindTex(3)));
+}
+
+static void BindWaterExtra(unsigned int prog,
+                            const PostProcessRequest& req,
+                            const std::vector<float>& /*params*/,
+                            unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_29.u_depth_handle"), static_cast<float>(req.FindTex(2)));
+}
+
+// ============================================================
+// 效果注册表
+// ============================================================
+
+struct PPEffectEntry {
+    const PPUniformEntry* bindings;
+    int                   binding_count;
+    int                   min_params;       // params.size() 最小要求
+    SpecialBindFn         special_fn;       // 非空时调用特殊处理（可与 bindings 叠加）
+    bool                  needs_blend;      // 需要开启 alpha blend
+};
+
+static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
+    static const std::unordered_map<std::string, PPEffectEntry> table = {
+        // --- 简单表驱动效果 ---
+        {"fxaa",              {kFxaaBindings,         (int)std::size(kFxaaBindings), 2, nullptr, false}},
+        {"edge_detect",       {kEdgeDetectBindings,  (int)std::size(kEdgeDetectBindings), 10, nullptr, false}},
+        {"ssao",              {kSsaoBindings,         (int)std::size(kSsaoBindings), 6, nullptr, false}},
+        {"contact_shadow",    {kContactShadowBindings, (int)std::size(kContactShadowBindings), 10, nullptr, false}},
+        {"dof",              {kDofBindings,           (int)std::size(kDofBindings), 7, nullptr, false}},
+        {"motion_vector",    {kMotionVectorBindings,  (int)std::size(kMotionVectorBindings), 18, nullptr, false}},
+        {"motion_blur",      {kMotionBlurBindings,    (int)std::size(kMotionBlurBindings), 4, nullptr, false}},
+        {"ssr",              {kSsrBindings,           (int)std::size(kSsrBindings), 8, nullptr, false}},
+        {"taa_resolve",      {kTaaBindings,           (int)std::size(kTaaBindings), 6, nullptr, false}},
+        {"deferred_lighting", {kDeferredLightBindings, (int)std::size(kDeferredLightBindings), 8, nullptr, false}},
+        {"lum_adapt",        {kLumAdaptBindings,      (int)std::size(kLumAdaptBindings), 6, nullptr, false}},
+        // --- UBO 效果 ---
+        {"bloom_extract",    {nullptr, 0, 1, BindBloomUBO, false}},
+        {"bloom_downsample", {nullptr, 0, 2, BindBloomUBO, false}},
+        {"bloom_upsample",   {nullptr, 0, 1, BindBloomUBO, false}},
+        // --- 特殊绑定效果 ---
+        {"tonemapping",      {nullptr, 0, 1, BindTonemapping, false}},
+        {"color_grading",    {nullptr, 0, 2, BindColorGrading, false}},
+        {"bloom_composite",  {nullptr, 0, 0, BindBloomComposite, false}},
+        {"ssao_apply",       {nullptr, 0, 1, BindSsaoApply, false}},
+        // --- 带额外纹理绑定的效果 ---
+        {"light_shaft",      {kLightShaftBindings, (int)std::size(kLightShaftBindings), 11, BindLightShaftExtra, false}},
+        {"volumetric_fog",   {kVolumetricFogBindings, (int)std::size(kVolumetricFogBindings), 29, BindVolumetricFogExtra, false}},
+        {"wboit_composite",  {nullptr, 0, 0, BindWboitComposite, true}},
+        {"decal",            {kDecalBindings, (int)std::size(kDecalBindings), 24, BindDecalExtra, true}},
+        {"water",            {kWaterBindings, (int)std::size(kWaterBindings), 39, BindWaterExtra, true}},
+        // --- 无参数效果 ---
+        {"postprocess_passthrough", {nullptr, 0, 0, nullptr, false}},
+        {"ssao_blur",               {nullptr, 0, 0, nullptr, false}},
+        {"lum_compute",             {nullptr, 0, 0, nullptr, false}},
+        {"bloom_blur_h",            {nullptr, 0, 0, nullptr, false}},
+        {"bloom_blur_v",            {nullptr, 0, 0, nullptr, false}},
+    };
+    return table;
+}
+
+// ============================================================
+// DrawPostProcess 主入口
+// ============================================================
+
 void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& request,
                                        GLShaderManager& shader_mgr) {
     const unsigned int source_texture = request.source_texture;
     const std::string& effect_name = request.effect_name;
     const std::vector<float>& params = request.params;
-    // 后处理全屏四边形 VAO/VBO
+
+    // 后处理全屏四边形 VAO/VBO 懒初始化
     if (!pp_vao_handle_) {
         float quadVertices[] = {
             -1.0f,  1.0f,  0.0f, 1.0f,
@@ -48,354 +433,52 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
         glBindVertexArray(0);
     }
 
-    // ====== gen.h GLSL 430 统一路径（Phase 3）======
-    // gen.h shader 是完整独立的 GLSL 430 源，不需要 header 拼接。
-    // sampler 使用 layout(binding=N) 自动绑定纹理单元。参数通过 std140 uniform block (binding=2) 或 plain struct uniform 传递。
-    {
-        unsigned int gen_shader = shader_mgr.GetOrCreateGenPPShader(effect_name);
-        if (gen_shader != 0) {
-            glUseProgram(gen_shader);
-
-            // gen.h: screenTexture — binding=source_binding (light_shaft=0, others=1)
-            glActiveTexture(GL_TEXTURE0 + request.source_binding);
-            glBindTexture(GL_TEXTURE_2D, source_texture);
-
-            // 绑定 request.textures[] 中声明的额外纹理
-            for (const auto& tb : request.textures) {
-                if (tb.handle == 0) break;
-                glActiveTexture(GL_TEXTURE0 + tb.slot);
-                glBindTexture(tb.is_3d ? GL_TEXTURE_3D : GL_TEXTURE_2D, tb.handle);
-            }
-
-            // 参数 UBO 懒创建（用于 std140 uniform block 类 shader）
-            auto ensure_param_ubo = [&]() {
-                if (pp_param_ubo_ == 0) {
-                    glGenBuffers(1, &pp_param_ubo_);
-                    glBindBuffer(GL_UNIFORM_BUFFER, pp_param_ubo_);
-                    glBufferData(GL_UNIFORM_BUFFER, 256, nullptr, GL_DYNAMIC_DRAW);
-                }
-            };
-            auto upload_ubo = [&](const void* data, size_t size) {
-                ensure_param_ubo();
-                glBindBuffer(GL_UNIFORM_BUFFER, pp_param_ubo_);
-                glBufferSubData(GL_UNIFORM_BUFFER, 0, size, data);
-                glBindBufferBase(GL_UNIFORM_BUFFER, 2, pp_param_ubo_);
-            };
-
-            if (effect_name == "fxaa" && params.size() >= 2) {
-                // plain struct uniform: uniform FxaaParams _27; → _27.u_resolution
-                glUniform2f(glGetUniformLocation(gen_shader, "_27.u_resolution"),
-                            params[0], params[1]);
-            } else if (effect_name == "bloom_extract" && params.size() >= 1) {
-                // layout(binding=2,std140) uniform BloomParams { float threshold; }
-                float ubo[4] = { params[0], 0.f, 0.f, 0.f };
-                upload_ubo(ubo, 16);
-            } else if (effect_name == "bloom_downsample" && params.size() >= 2) {
-                // layout(binding=2,std140) uniform BloomParams { vec2 srcResolution; }
-                float ubo[4] = { params[0], params[1], 0.f, 0.f };
-                upload_ubo(ubo, 16);
-            } else if (effect_name == "bloom_upsample" && params.size() >= 1) {
-                // layout(binding=2,std140) uniform BloomParams { float filterRadius; }
-                float ubo[4] = { params[0], 0.f, 0.f, 0.f };
-                upload_ubo(ubo, 16);
-            } else if (effect_name == "tonemapping" && params.size() >= 1) {
-                // plain struct TonemapParams _68
-                glUniform1f(glGetUniformLocation(gen_shader, "_68.u_manual_exposure"), params[0]);
-                const bool has_ae  = request.FindTex(2) != 0;
-                const bool has_lut = request.FindTex(5) != 0;
-                glUniform1i(glGetUniformLocation(gen_shader, "_68.u_auto_exposure_enabled"), has_ae ? 1 : 0);
-                glUniform1i(glGetUniformLocation(gen_shader, "_68.u_lut_enabled"), has_lut ? 1 : 0);
-                if (has_lut && params.size() >= 2) {
-                    glUniform1f(glGetUniformLocation(gen_shader, "_68.u_lut_intensity"), params[1]);
-                }
-            } else if (effect_name == "color_grading" && params.size() >= 2) {
-                // plain struct ColorGradingParams _40
-                glActiveTexture(GL_TEXTURE5);
-                glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[0]));
-                glUniform1f(glGetUniformLocation(gen_shader, "_40.u_lut_intensity"), params[1]);
-            } else if (effect_name == "edge_detect" && params.size() >= 10) {
-                // plain struct EdgeDetectParams _28
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_thickness"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_depth_threshold"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_normal_threshold"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_outline_r"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_outline_g"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_outline_b"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_near"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_far"), params[7]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_screen_w"), params[8]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.u_screen_h"), params[9]);
-            } else if (effect_name == "postprocess_passthrough") {
-                // no params — screenTexture already bound at unit 1
-            } else if (effect_name == "bloom_composite") {
-                // gen.h: bloom_composite_ssao_ae, plain struct BloomCompositeAeParams _90
-                const CompositeParamsView cv(params);
-                const auto bcp = PrepareBloomCompositeParams(cv);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.exposure"), bcp.exposure);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.bloomIntensity"), bcp.bloom_intensity);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.bloomEnabled"), bcp.bloom_enabled);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.ssaoEnabled"), bcp.ssao_enabled);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.autoExposureEnabled"), bcp.ae_enabled);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.lutEnabled"), bcp.lut_enabled);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.lutIntensity"), bcp.lut_intensity);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.csEnabled"), bcp.cs_enabled);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.csStrength"), bcp.cs_strength);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.vignetteEnabled"), bcp.vignette_enabled);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.vignetteIntensity"), bcp.vignette_intensity);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.vignetteRadius"), bcp.vignette_radius);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.vignetteSoftness"), bcp.vignette_softness);
-                glUniform1i(glGetUniformLocation(gen_shader, "_90.filmGrainEnabled"), bcp.film_grain_enabled);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.filmGrainIntensity"), bcp.film_grain_intensity);
-                glUniform1f(glGetUniformLocation(gen_shader, "_90.filmGrainTime"), bcp.film_grain_time);
-                if (bcp.bloom_enabled) {
-                    glActiveTexture(GL_TEXTURE2);
-                    glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kBloomTex));
-                }
-                if (bcp.ssao_enabled) {
-                    glActiveTexture(GL_TEXTURE3);
-                    glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kSsaoTex));
-                }
-                if (bcp.ae_enabled) {
-                    glActiveTexture(GL_TEXTURE4);
-                    glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kAutoExposureTex));
-                }
-                if (bcp.lut_enabled) {
-                    glActiveTexture(GL_TEXTURE5);
-                    glBindTexture(GL_TEXTURE_3D, cv.Texture(CompositeParamsView::kLutTex));
-                }
-                if (bcp.cs_enabled) {
-                    glActiveTexture(GL_TEXTURE6);
-                    glBindTexture(GL_TEXTURE_2D, cv.Texture(CompositeParamsView::kContactShadowTex));
-                }
-            } else if (effect_name == "ssao_apply" && params.size() >= 1) {
-                // plain struct SsaoApplyParams _79
-                // samplers: screenTexture(1), ssaoTexture(2), autoExposureTex(3), lutTexture(5)
-                glUniform1f(glGetUniformLocation(gen_shader, "_79.exposure"), params[0]);
-                const bool has_ae  = request.FindTex(3) != 0;
-                const bool has_lut = request.FindTex(5) != 0;
-                glUniform1i(glGetUniformLocation(gen_shader, "_79.autoExposureEnabled"), has_ae ? 1 : 0);
-                glUniform1i(glGetUniformLocation(gen_shader, "_79.lutEnabled"), has_lut ? 1 : 0);
-                if (has_lut && params.size() >= 2) {
-                    glUniform1f(glGetUniformLocation(gen_shader, "_79.lutIntensity"), params[1]);
-                }
-            } else if (effect_name == "ssao" && params.size() >= 6) {
-                // plain struct SsaoParams _27, sampler: screenTexture(1)
-                glUniform1f(glGetUniformLocation(gen_shader, "_27.u_radius"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_27.u_bias"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_27.u_near"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_27.u_far"), params[3]);
-                glUniform2f(glGetUniformLocation(gen_shader, "_27.u_screen_size"), params[4], params[5]);
-            } else if (effect_name == "ssao_blur") {
-                // no params — screenTexture(1) only
-            } else if (effect_name == "contact_shadow" && params.size() >= 10) {
-                // plain struct ContactShadowParams _23, sampler: screenTexture(1)
-                glUniform3f(glGetUniformLocation(gen_shader, "_23.u_light_dir"), params[0], params[1], params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.u_near"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.u_far"), params[4]);
-                glUniform2f(glGetUniformLocation(gen_shader, "_23.u_screen_size"), params[5], params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.u_strength"), params[7]);
-                glUniform1i(glGetUniformLocation(gen_shader, "_23.u_num_steps"), static_cast<int>(params[8]));
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.u_step_size"), params[9]);
-            } else if (effect_name == "dof" && params.size() >= 7) {
-                // plain struct DofParams _20, samplers: screenTexture(1), u_color_texture(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.focus_distance"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.focus_range"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.bokeh_radius"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.near_plane"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.far_plane"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.screen_w"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.screen_h"), params[6]);
-            } else if (effect_name == "motion_vector" && params.size() >= 18) {
-                // plain struct MvParams _46, sampler: screenTexture(1)
-                glUniform1f(glGetUniformLocation(gen_shader, "_46.screen_w"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_46.screen_h"), params[1]);
-                glUniformMatrix4fv(glGetUniformLocation(gen_shader, "_46.reproj"), 1, GL_FALSE, &params[2]);
-            } else if (effect_name == "motion_blur" && params.size() >= 4) {
-                // plain struct MotionBlurParams _23, samplers: screenTexture(1), u_color_texture(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.intensity"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.num_samples"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.screen_w"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_23.screen_h"), params[3]);
-            } else if (effect_name == "ssr" && params.size() >= 8) {
-                // plain struct SsrParams _28, samplers: screenTexture(1), u_color_texture(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.max_distance"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.thickness"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.step_size"), params[2]);
-                glUniform1i(glGetUniformLocation(gen_shader, "_28.max_steps"), static_cast<int>(params[3]));
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.near_plane"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.far_plane"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.screen_w"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_28.screen_h"), params[7]);
-            } else if (effect_name == "taa_resolve" && params.size() >= 6) {
-                // plain struct TaaParams _36
-                // samplers: screenTexture(1), u_motion_vector(2), u_history(5)
-                glUniform1f(glGetUniformLocation(gen_shader, "_36.u_blend_factor"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_36.u_jitter_x"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_36.u_jitter_y"), params[2]);
-                glUniform1i(glGetUniformLocation(gen_shader, "_36.u_frame_index"), static_cast<int>(params[3]));
-                glUniform1f(glGetUniformLocation(gen_shader, "_36.u_screen_w"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_36.u_screen_h"), params[5]);
-            } else if (effect_name == "deferred_lighting" && params.size() >= 8) {
-                // plain struct DeferredLightParams _58
-                // samplers: screenTexture(1), u_gbuf_normal(2), u_gbuf_position(3)
-                glUniform3f(glGetUniformLocation(gen_shader, "_58.u_light_dir"), params[0], params[1], params[2]);
-                glUniform3f(glGetUniformLocation(gen_shader, "_58.u_light_color"), params[3], params[4], params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_58.u_light_intensity"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_58.u_ambient"), params[7]);
-            } else if (effect_name == "light_shaft" && params.size() >= 11) {
-                // plain struct LightShaftParams _25
-                // samplers: screenTexture(0), u_depth_tex(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_depth_handle"), static_cast<float>(request.FindTex(2)));
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_sun_x"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_sun_y"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_light_r"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_light_g"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_light_b"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_density"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_weight"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_decay"), params[7]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_exposure"), params[8]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_num_samples"), params[9]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_25.u_intensity"), params[10]);
-            } else if (effect_name == "volumetric_fog" && params.size() >= 29) {
-                // plain struct VolumetricFogParams _20
-                // samplers: screenTexture(1), u_depth_tex(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_depth_handle"), static_cast<float>(request.FindTex(2)));
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_r"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_g"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_b"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_density"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_height_falloff"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_height_offset"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_start"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_end"), params[7]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fog_steps"), params[8]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_sun_scatter"), params[9]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_sun_dir_x"), params[10]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_sun_dir_y"), params[11]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_sun_dir_z"), params[12]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_cam_pos_x"), params[13]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_cam_pos_y"), params[14]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_cam_pos_z"), params[15]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_near"), params[16]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_far"), params[17]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_right_x"), params[18]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_right_y"), params[19]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_right_z"), params[20]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_up_x"), params[21]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_up_y"), params[22]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_up_z"), params[23]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fwd_x"), params[24]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fwd_y"), params[25]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_fwd_z"), params[26]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_tan_fov_y"), params[27]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_20.u_aspect"), params[28]);
-            } else if (effect_name == "lum_compute") {
-                // no params — screenTexture(1) only
-            } else if (effect_name == "lum_adapt" && params.size() >= 6) {
-                // plain struct LumAdaptParams _34
-                // samplers: screenTexture(1), prevAdaptedTex(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_dt"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_speed_up"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_speed_down"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_min_exposure"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_max_exposure"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_34.u_compensation"), params[5]);
-            } else if (effect_name == "wboit_composite") {
-                // plain struct WboitParams _61, samplers: screenTexture(1), u_reveal_tex(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_61.u_reveal_handle"), static_cast<float>(request.FindTex(2)));
-            } else if (effect_name == "decal" && params.size() >= 24) {
-                // plain struct DecalParams _35
-                // samplers: screenTexture(1), u_depth_tex(2), u_decal_tex(3)
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_depth_handle"), static_cast<float>(request.FindTex(2)));
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_decal_handle"), static_cast<float>(request.FindTex(3)));
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m00"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m01"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m02"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m03"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m10"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m11"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m12"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m13"), params[7]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m20"), params[8]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m21"), params[9]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m22"), params[10]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m23"), params[11]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m30"), params[12]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m31"), params[13]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m32"), params[14]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.m33"), params[15]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_color_r"), params[16]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_color_g"), params[17]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_color_b"), params[18]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_color_a"), params[19]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_angle_fade"), params[20]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_decal_up_x"), params[21]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_decal_up_y"), params[22]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_35.u_decal_up_z"), params[23]);
-            } else if (effect_name == "water" && params.size() >= 39) {
-                // plain struct WaterParams _29
-                // samplers: screenTexture(1), u_depth_tex(2)
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_depth_handle"), static_cast<float>(request.FindTex(2)));
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_water_level"), params[0]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_deep_r"), params[1]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_deep_g"), params[2]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_deep_b"), params[3]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_shallow_r"), params[4]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_shallow_g"), params[5]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_shallow_b"), params[6]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_max_depth"), params[7]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_transparency"), params[8]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_wave_amplitude"), params[9]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_wave_frequency"), params[10]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_wave_speed"), params[11]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_wave_dir_x"), params[12]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_wave_dir_y"), params[13]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_refraction_strength"), params[14]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_specular_power"), params[15]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_reflection_strength"), params[16]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_time"), params[17]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_sun_dir_x"), params[18]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_sun_dir_y"), params[19]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_sun_dir_z"), params[20]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_cam_pos_x"), params[21]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_cam_pos_y"), params[22]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_cam_pos_z"), params[23]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_near"), params[24]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_far"), params[25]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_fwd_x"), params[26]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_fwd_y"), params[27]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_fwd_z"), params[28]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_tan_fov_y"), params[29]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_aspect"), params[30]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_caustic_intensity"), params[31]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_caustic_scale"), params[32]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_foam_intensity"), params[33]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_foam_depth_threshold"), params[34]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_density"), params[35]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_r"), params[36]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_g"), params[37]);
-                glUniform1f(glGetUniformLocation(gen_shader, "_29.u_uw_fog_b"), params[38]);
-            } else if (effect_name == "bloom_blur_h" || effect_name == "bloom_blur_v") {
-                // no params — screenTexture(1) only
-            }
-
-            // 绘制全屏四边形
-            glDisable(GL_DEPTH_TEST);
-            if (effect_name == "decal" || effect_name == "wboit_composite" || effect_name == "water") {
-                glEnable(GL_BLEND);
-                glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-            } else {
-                glDisable(GL_BLEND);
-            }
-            glBindVertexArray(pp_vao_handle_.raw());
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-            glBindVertexArray(0);
-            return;
-        }
+    // 获取 gen.h shader
+    unsigned int gen_shader = shader_mgr.GetOrCreateGenPPShader(effect_name);
+    if (gen_shader == 0) {
+        DEBUG_LOG_WARN("PostProcess effect '{}' has no gen.h shader — skipping", effect_name.c_str());
+        return;
     }
-    // gen.h 路径已覆盖所有后处理效果，不应到达此处
-    DEBUG_LOG_WARN("PostProcess effect '{}' has no gen.h shader — skipping", effect_name.c_str());
+    glUseProgram(gen_shader);
+
+    // 绑定 source texture
+    glActiveTexture(GL_TEXTURE0 + request.source_binding);
+    glBindTexture(GL_TEXTURE_2D, source_texture);
+
+    // 绑定 request.textures[] 中声明的额外纹理
+    for (const auto& tb : request.textures) {
+        if (tb.handle == 0) break;
+        glActiveTexture(GL_TEXTURE0 + tb.slot);
+        glBindTexture(tb.is_3d ? GL_TEXTURE_3D : GL_TEXTURE_2D, tb.handle);
+    }
+
+    // 查表绑定参数
+    const auto& table = GetEffectTable();
+    auto it = table.find(effect_name);
+    if (it != table.end()) {
+        const auto& entry = it->second;
+        if (static_cast<int>(params.size()) >= entry.min_params) {
+            if (entry.special_fn)
+                entry.special_fn(gen_shader, request, params, pp_param_ubo_);
+            if (entry.bindings && entry.binding_count > 0)
+                ApplyBindings(gen_shader, entry.bindings, entry.binding_count, params);
+        }
+        // 绘制
+        glDisable(GL_DEPTH_TEST);
+        if (entry.needs_blend) {
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        } else {
+            glDisable(GL_BLEND);
+        }
+    } else {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+    }
+
+    glBindVertexArray(pp_vao_handle_.raw());
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
 }
 } // namespace render
 } // namespace dse
