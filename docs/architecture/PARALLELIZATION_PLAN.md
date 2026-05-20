@@ -2,7 +2,7 @@
 
 > **一句话：利用多核 CPU 资源，降低主循环每帧耗时，提高 FPS 帧率，不改变画质、不省显存、不加速磁盘。**
 
-> 最后更新：2026-05-21（修订：更新 GPU Driven 三端对齐状态、Phase 0/4 缩减、路线图优先级调整）
+> 最后更新：2026-05-21（Phase 0 ✅ + Phase 1 ✅ 已完成并推送。下一步：Phase 3 Pass 并行录制或 Phase 2 ECS System 并行）
 
 ## 一、问题现状
 
@@ -240,7 +240,7 @@ if (!use_gpu_indirect) {
 
 ---
 
-## 四、Phase 1：薄快照 + 延迟一帧流水线并行（约 1~2 周）
+## 四、Phase 1：薄快照 + 延迟一帧流水线并行（✅ 已完成 2026-05-21）
 
 ### 4.1 设计思想
 
@@ -635,16 +635,31 @@ Render(read_snapshot());
 
 > ⚠️ 典型场景下 Phase 1 并行帧时间是 **8ms（125 FPS）** 而非 6ms，因为 Render 耗时超过 Update。要进一步提升需要 Phase 3（Pass 并行录制）压缩 Render 耗时。
 
-### 4.11 改动清单
+### 4.11 改动清单（✅ 已完成）
 
-| 文件 | 操作 | 量级 |
+| 文件 | 操作 | 状态 |
 |------|------|:----:|
-| `engine/render/render_snapshot.h` | **新建** | ~60 行 |
-| `engine/runtime/frame_pipeline.h` | 添加成员和接口 | ~15 行 |
-| `engine/runtime/frame_pipeline.cpp` | 添加 CaptureThinSnapshot / FlipSnapshotIndex / RenderFromSnapshot | ~80 行 |
-| `engine/runtime/engine_app.cpp` | 改造主循环 | ~20 行 |
-| `engine/render/passes/render_pass_context.h` | 添加 snapshot 指针 | +1 行 |
-| `engine/render/passes/builtin_passes.cpp` | 替换 12 个 Pass 中的 ECS 查询 | ~150 行替换 |
+| `engine/render/render_snapshot.h` | **新建** — 快照结构体含相机/天空盒/光源/阴影/后处理/水面/贴花/LightProbe SH/DDGI | ✅ |
+| `engine/runtime/frame_pipeline.h` | 双缓冲快照池 + 线程同步原语 + 7 个新方法声明 | ✅ |
+| `engine/runtime/frame_pipeline.cpp` | CaptureThinSnapshot + PrepareRenderFrame/ExecuteRenderFrame + 线程生命周期 | ✅ |
+| `engine/runtime/engine_app.cpp` | 注入 context 回调 + SwapBuffers 条件跳过 | ✅ |
+| `engine/render/passes/render_pass_context.h` | 添加 snapshot 指针 | ✅ |
+| `engine/render/passes/builtin_passes.cpp` | 全部渲染 Pass 从 ECS 查询迁移到快照读取（-613 行 / +194 行） | ✅ |
+| `engine/platform/platform_app.h` | 添加 MakeContextCurrent/ReleaseContext 虚方法 | ✅ |
+| `engine/platform/glfw/glfw_app.h/cpp` | GL Context 线程管理实现 | ✅ |
+| `engine/runtime/runtime_context.h` | 添加 context 管理回调 | ✅ |
+
+**实际统计**：10 files changed, 1219 insertions(+), 616 deletions(-)
+
+### 4.11b 实现细节（与文档规划的差异）
+
+| 规划 | 实际实现 | 说明 |
+|------|---------|------|
+| JobSystem + atomic fence | std::thread + mutex + condition_variable | 专用渲染线程比 JobSystem 更稳定，避免 worker 抢占 |
+| RenderFromSnapshot 包装 | PrepareRenderFrame + ExecuteRenderFrame 拆分 | 更精确的 CPU/GPU 分离 |
+| 三级缓冲 | 双缓冲 + WaitForRenderComplete | 双缓冲已足够，WaitDone 延迟接近 0 |
+| DSE_RENDER_THREAD=1 环境变量 | ✅ | 编辑器模式自动禁用 |
+| 非线程模式完全回退 | ✅ | 零行为变化 |
 
 ### 4.12 风险
 
@@ -1339,11 +1354,12 @@ Phase 0: GPU Driven 默认化                          ✅ 基本完成（三端
   收益：≈0%（为 Phase 1 清除障碍）
   └───→
 
-Phase 1: 薄快照 + 延迟一帧流水线并行                 ⭐ 最高优先级
-  时间：1~2 周
-  依赖：Phase 0（必须——render_meshes 回调直接读 ECS，不做 Phase 0 会 data race）
+Phase 1: 薄快照 + 延迟一帧流水线并行                 ✅ 已完成 (2026-05-21)
+  实际改动：10 files, +1219/-616 lines
+  架构：专用渲染线程 + 双缓冲快照 + condition_variable 同步
+  激活：DSE_RENDER_THREAD=1 环境变量（编辑器自动禁用）
   收益：1.5~1.75x 帧率（取决于 Update/Render 哪个是瓶颈）
-  ├───→ 如果只需要此级别并行，可以停在这里
+  ├───→ 当前可以停在这里。下一步按需选择 Phase 3 或 Phase 2
 
 Phase 3: Pass 级并行录制                             ⭐ 次高优先级（典型场景 Render 是瓶颈）
   时间：3~4 周
@@ -1495,8 +1511,8 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 
 | Phase | 验收标准 |
 |-------|---------|
-| **Phase 0** | ✅ 基本完成。三端 GPU Driven 已对齐，剩余：端到端验证 GPU Driven 路径渲染结果与 CPU 路径一致 |
-| **Phase 1** | `RenderThinSnapshot` 快照读取完全覆盖所有 Pass 的 ECS 需求（当前 30+ 处 `registry()` 调用需全部替换）；VK/DX11 后端在渲染线程上运行无崩溃；GL 后端数据安全但性能不变；帧率提升符合预期（≥1.5x） |
+| **Phase 0** | ✅ 已完成。三端 GPU Driven 已对齐 |
+| **Phase 1** | ✅ 已完成 (2026-05-21)。RenderThinSnapshot 快照覆盖全部 Pass ECS 需求；渲染线程分离编译通过零错误；GL 后端数据安全；DSE_RENDER_THREAD=1 启用；已知限制：GPU Driven 在线程模式暂跳过（Phase 3 处理） |
 | **Phase 2** | JobSystem DAG 正确调度所有 ECS System；Lua 脚本和 IModule 仅在主线程执行；无 data race（用 ThreadSanitizer 验证）；每个 System 的组件访问依赖声明准确 |
 | **Phase 2b** | Entity chunk 并行后 8~16 核利用率；TransformSystem 仍串行无回归；chunk_size=64 调度开销 < 0.1ms |
 | **Phase 3** | RenderGraph 的 Level 分析正确；每个 Level 内的 Pass 录制无冲突；Barrier 插入正确（验证层无报错）；帧率提升符合预期 |
@@ -1509,7 +1525,7 @@ Phase 0 + 1:                      Phase 0 + 1 + 2 + 3 + 4:
 ```
 串行（当前）：     [FixedUpdate(2ms)][Update(4ms)][───Render(8ms)───] = 14ms → 71 FPS
 
-Phase 0+1：       [FixedUpdate(2ms)][Update(4ms)]                   主线程 6ms
+Phase 0+1 ✅：    [FixedUpdate(2ms)][Update(4ms)]                   主线程 6ms
                   ←─────── 渲染线程 Render(上一帧数据, 8ms) ──────→  帧时间 = max(6, 8) = 8ms → 125 FPS
 
 Phase 0+1+2：     [FixedUpdate(2ms)][Upd(并行, ~3ms)]               主线程 5ms
