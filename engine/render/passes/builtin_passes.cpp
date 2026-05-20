@@ -152,6 +152,11 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     glm::vec3 shadow_center = FindShadowCenter(snap);
 
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
+
     std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
     std::vector<float> cascade_splits(CSM_CASCADES);
 
@@ -172,6 +177,17 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
         cmd_buffer.SetCamera(cam.view, cam.projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+        if (use_gpu_indirect) {
+            auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
 
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
@@ -210,6 +226,11 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
     std::vector<glm::mat4> spot_light_space_matrices;
     spot_light_space_matrices.reserve(4);
 
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
+
     for (int i = 0; i < snap.spot_shadow_count; ++i) {
         if (ctx_.render_targets.spot_shadow[i] == 0) continue;
         const auto& sl = snap.spot_lights[i];
@@ -219,6 +240,18 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[i], glm::vec4(1.0f), true});
         cmd_buffer.SetCamera(light_view_mat, light_proj);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+        if (use_gpu_indirect) {
+            auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
+
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
                 mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES, light_view_mat, light_proj);
@@ -249,6 +282,11 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
+
     for (int shadow_slot = 0; shadow_slot < snap.point_shadow_count; ++shadow_slot) {
         if (ctx_.render_targets.point_shadow[shadow_slot] == 0) continue;
         const auto& pl = snap.point_lights[shadow_slot];
@@ -275,6 +313,18 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
             cmd_buffer.SetCamera(light_view_mat, light_proj);
             cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+            if (use_gpu_indirect) {
+                auto* rhi = ctx_.rhi_device;
+                rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
+                rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+                rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+                rhi->UnbindVAO();
+            }
+
             for (auto& mod : ctx_.modules) {
                 if (mod.instance) {
                     mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES + 1 + face, light_view_mat, light_proj);

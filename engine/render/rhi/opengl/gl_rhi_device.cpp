@@ -1284,6 +1284,23 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
     if (loc_morph >= 0) glUniform1i(loc_morph, 0);
 }
 
+void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+    const unsigned int prog = shader_mgr_.gpu_driven_shadow_shader_handle();
+    if (prog == 0) return;
+
+    glUseProgram(prog);
+
+    PerFrameUBO per_frame{};
+    per_frame.vp = light_proj * light_view;
+    per_frame.view = light_view;
+    per_frame.camera_pos = glm::vec4(0.0f);
+    ubo_mgr_.UploadPerFrame(per_frame);
+    ubo_mgr_.BindAll();
+
+    const int loc_skinned = shader_mgr_.gpu_driven_shadow_skinned_loc();
+    if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
+}
+
 // --- 编辑器场景视图模式 ---
 
 void OpenGLRhiDevice::SetWireframeMode(bool enable) {
@@ -1291,7 +1308,6 @@ void OpenGLRhiDevice::SetWireframeMode(bool enable) {
 }
 
 void OpenGLRhiDevice::SetForceUnlit(bool enable) {
-    // 通过 draw executor 的全局状态标志控制 PBR shader 跳过光照计算
     global_render_state_.force_unlit = enable;
 }
 

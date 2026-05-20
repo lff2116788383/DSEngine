@@ -1867,5 +1867,44 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     dc->PSSetConstantBuffers(0, 4, cbs);
 }
 
+// ============================================================
+// GPU-Driven Shadow 渲染设置
+// ============================================================
+
+void DX11DrawExecutor::SetupGPUDrivenShadow(const glm::mat4& light_view, const glm::mat4& light_proj,
+                                              DX11PipelineStateManager& pipeline_mgr,
+                                              DX11ShaderManager& shader_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+    if (!dc) return;
+
+    const unsigned int prog = shader_mgr.shadow_shader_handle();
+    if (prog == 0) return;
+
+    const auto* program = shader_mgr.GetProgram(prog);
+    if (!program) return;
+    if (program->vertex_shader) dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    if (program->pixel_shader) dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+    auto* layout = shader_mgr.GetInputLayout(prog);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    DX11PerFrameCB frame_data{};
+    frame_data.vp = light_proj * light_view;
+    frame_data.view = light_view;
+    frame_data.camera_pos = glm::vec4(0.0f);
+    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
+
+    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get(),
+                           per_scene_cb_.Get(), per_material_cb_.Get()};
+    dc->VSSetConstantBuffers(0, 4, cbs);
+    dc->PSSetConstantBuffers(0, 4, cbs);
+}
+
+void DX11DrawExecutor::UpdatePerObjectCB(const DX11PerObjectCB& data) {
+    if (per_object_cb_) {
+        UpdateConstantBuffer(per_object_cb_.Get(), &data, sizeof(data));
+    }
+}
+
 } // namespace render
 } // namespace dse

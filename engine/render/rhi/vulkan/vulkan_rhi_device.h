@@ -154,6 +154,8 @@ public:
                                   const glm::vec3& camera_pos,
                                   const glm::vec3& light_dir, const glm::vec3& light_color,
                                   float light_intensity, float ambient_intensity) override;
+    void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
+    void CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) override;
     void PatchLastFrameGPUCulledCount(int culled) override {
         last_frame_stats_.gpu_culled_count = culled;
     }
@@ -215,6 +217,11 @@ private:
 
     RenderStats last_frame_stats_;
     RenderStats current_frame_stats_;
+
+    // GPU-Driven: CPU 侧实例数据缓存（per-draw push constants 用）
+    const void* cached_gpu_models_ = nullptr;   // GPUInstanceData 数组
+    const void* cached_gpu_cmds_   = nullptr;   // DrawElementsIndirectCommand 数组
+    int         cached_gpu_count_  = 0;
 
     /// 本帧待提交的命令缓冲列表
     std::vector<VkCommandBuffer> pending_command_buffers_;

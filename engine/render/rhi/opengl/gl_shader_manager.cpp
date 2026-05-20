@@ -309,6 +309,7 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
     if (supports_ssbo_) {
         InitGPUDrivenPBRShader();
+        InitGPUDrivenShadowShader();
     }
 }
 
@@ -660,6 +661,61 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
 }
 
 // ============================================================
+// GPU-Driven Shadow Shader Variant
+// ============================================================
+
+void GLShaderManager::InitGPUDrivenShadowShader() {
+    if (gpu_driven_shadow_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    using namespace dse::render::generated_shaders::reflect;
+
+    std::string vert_src = kshadow_vert_glsl330;
+
+    // 1. 升级到 #version 460：gl_BaseInstance 在 GLSL 4.6 起成为核心内置变量
+    const std::string version_tag = "#version 430";
+    auto pos = vert_src.find(version_tag);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, version_tag.size(), "#version 460");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow: #version 430 not found in vert src\n");
+    }
+
+    // 2. 替换 u_model uniform 声明为 SSBO 实例数据块
+    const std::string u_model_decl = "uniform mat4 u_model;";
+    pos = vert_src.find(u_model_decl);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, u_model_decl.size(),
+            "struct DSEGPUInst { mat4 model; uint mat_id; uint cmd_id; uint pad0; uint pad1; };\n"
+            "layout(std430, binding = 5) readonly buffer DSEInstBuf { DSEGPUInst dse_inst[]; };");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow: uniform mat4 u_model not found in vert src\n");
+    }
+
+    // 3. 替换 main() 中所有 u_model 引用
+    auto replace_all = [&](const std::string& from, const std::string& to) {
+        size_t p = 0;
+        while ((p = vert_src.find(from, p)) != std::string::npos) {
+            vert_src.replace(p, from.size(), to);
+            p += to.size();
+        }
+    };
+    replace_all("u_model * localPos",      "dse_inst[gl_BaseInstance].model * localPos");
+    replace_all("u_model * boneTransform", "dse_inst[gl_BaseInstance].model * boneTransform");
+
+    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), kshadow_frag_glsl330);
+    if (gpu_driven_shadow_shader_handle_ == 0) {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow shader compilation failed\n");
+        return;
+    }
+    programs_created_ += 1;
+
+    BindUBOsFromReflection(gpu_driven_shadow_shader_handle_, kshadow_vert_reflection);
+    BindUBOsFromReflection(gpu_driven_shadow_shader_handle_, kshadow_frag_reflection);
+
+    gpu_driven_shadow_skinned_loc_ = glGetUniformLocation(gpu_driven_shadow_shader_handle_, "u_skinned");
+}
+
+// ============================================================
 // Cleanup
 // ============================================================
 
@@ -683,6 +739,11 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(gpu_driven_pbr_shader_handle_);
         programs_destroyed_ += 1;
         gpu_driven_pbr_shader_handle_ = 0;
+    }
+    if (gpu_driven_shadow_shader_handle_ != 0) {
+        glDeleteProgram(gpu_driven_shadow_shader_handle_);
+        programs_destroyed_ += 1;
+        gpu_driven_shadow_shader_handle_ = 0;
     }
     for (auto& [name, handle] : pp_shaders_) {
         if (handle != 0) {

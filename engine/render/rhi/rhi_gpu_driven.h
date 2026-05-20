@@ -132,6 +132,23 @@ public:
         (void)view; (void)proj; (void)camera_pos;
         (void)light_dir; (void)light_color; (void)light_intensity; (void)ambient_intensity;
     }
+
+    // --- GPU-Driven Shadow Shader Setup ---
+
+    /// 激活 GPU-Driven Shadow（depth-only）着色器并上传 PerFrame UBO（shadow indirect draw 前调用）
+    virtual void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+        (void)light_view; (void)light_proj;
+    }
+
+    // --- GPU-Driven 实例数据缓存（DX11/Vulkan per-draw model 更新用） ---
+
+    /// 缓存 CPU 侧 GPU-Driven 实例模型矩阵和 draw commands（GL 无需，DX11/Vulkan per-draw 更新用）
+    /// @param models  GPUInstanceData 数组起始（80 bytes/entry, model 在 offset 0）
+    /// @param cmds    DrawElementsIndirectCommand 数组起始（20 bytes/entry）
+    /// @param count   条目数量
+    virtual void CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
+        (void)models; (void)cmds; (void)count;
+    }
 };
 
 } // namespace render

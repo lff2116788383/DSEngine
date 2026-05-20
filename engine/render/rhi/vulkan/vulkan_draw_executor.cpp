@@ -2689,6 +2689,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     if (vk_pipeline == VK_NULL_HANDLE) return;
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    gpu_driven_pipeline_layout_ = pbr_program->pipeline_layout;
 
     // PerFrame UBO
     VulkanPerFrameUBO frame_ubo{};
@@ -2710,6 +2711,55 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
                   per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
     per_scene_ubo_offset_ += kUboSlotAlignment;
+}
+
+// ============================================================
+// GPU-Driven Shadow 渲染设置
+// ============================================================
+
+void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+                                                const glm::mat4& light_view, const glm::mat4& light_proj,
+                                                VulkanPipelineStateManager& pipeline_mgr,
+                                                VulkanShaderManager& shader_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !context_) return;
+
+    const unsigned int shader_handle = shader_mgr.shadow_shader_handle();
+    const VulkanShaderProgram* shadow_program = shader_mgr.GetProgram(shader_handle);
+    if (!shadow_program) return;
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    std::vector<VkVertexInputBindingDescription> mesh_bindings = {
+        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
+        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 12},   // aColor
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, 28},          // aTexCoord
+        {3, 0, VK_FORMAT_R32G32B32_SFLOAT, 36},       // aNormal
+        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
+        {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
+        {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
+    };
+
+    VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(),
+        shadow_program, active_rp, mesh_bindings, mesh_attrs,
+        context_->swapchain_extent(), current_msaa_samples_,
+        current_color_attachment_count_);
+    if (vk_pipeline == VK_NULL_HANDLE) return;
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    gpu_driven_pipeline_layout_ = shadow_program->pipeline_layout;
+
+    VulkanPerFrameUBO frame_ubo{};
+    frame_ubo.vp = light_proj * light_view;
+    frame_ubo.view = light_view;
+    frame_ubo.camera_pos = glm::vec4(0.0f);
+    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    per_frame_ubo_offset_ += kUboSlotAlignment;
 }
 
 } // namespace render

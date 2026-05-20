@@ -669,6 +669,18 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         if (!mesh_renderer.visible) continue;
         if (mesh_renderer.is_static && static_batches_built_) continue;
 
+        // GPU Driven: 跳过已被 PrepareGPUScene 处理的不透明非蒙皮 mesh，避免双重绘制
+        if (gpu_driven_active_ && mesh_renderer.local_bounds_valid
+            && !mesh_renderer.temp_vertices.empty()
+            && mesh_renderer.color.a >= 0.999f) {
+            bool is_skinned = false;
+            if (world.registry().all_of<Animator3DComponent>(entity)) {
+                const auto& anim = world.registry().get<Animator3DComponent>(entity);
+                if (anim.enabled && !anim.final_bone_matrices.empty()) is_skinned = true;
+            }
+            if (!is_skinned) continue;
+        }
+
         // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
         if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
             const bool is_dmesh_lb = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
@@ -1269,6 +1281,12 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
 
         if (!mesh_renderer.visible) continue;
+
+        // LOD 切换后 temp_vertices 被清空：立即加载新 LOD mesh 数据，消除 1 帧 GPU Driven 空洞
+        if ((mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty())
+            && !mesh_renderer.mesh_path.empty() && asset_manager_) {
+            EnsureMeshPathDataLoaded(*asset_manager_, world, entity, mesh_renderer);
+        }
         if (mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty()) continue;
         if (!mesh_renderer.local_bounds_valid) continue;
 
@@ -1462,6 +1480,13 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     ctx.gpu_indirect_draw_count = cmd_index;
     ctx.gpu_total_instances = cmd_index;
     ctx.hiz_object_count = cmd_index;
+    gpu_driven_active_ = (cmd_index > 0);
+
+    // DX11/Vulkan per-draw model 更新：缓存 CPU 侧实例数据指针
+    rhi->CacheGPUDrivenInstanceData(
+        gpu_instances_.empty() ? nullptr : gpu_instances_.data(),
+        gpu_draw_cmds_.empty() ? nullptr : gpu_draw_cmds_.data(),
+        cmd_index);
 
     return cmd_index;
 }

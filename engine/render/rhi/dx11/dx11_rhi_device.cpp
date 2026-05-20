@@ -10,6 +10,7 @@
  */
 
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
 
 #include <cstdlib>
@@ -767,7 +768,19 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
     if (!buf || !buf->buffer || draw_count <= 0) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
+
+    // GPU-Driven per-draw model 更新：缓存存在时，逐 draw 设置 per_object_cb_.model
+    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
+
     for (int i = 0; i < draw_count; ++i) {
+        if (inst_data && i < cached_gpu_count_) {
+            DX11PerObjectCB obj{};
+            obj.model = inst_data[i].model;
+            obj.skinned = 0;
+            obj.morph_enabled = 0;
+            obj.use_instancing = 0;
+            draw_executor_.UpdatePerObjectCB(obj);
+        }
         const UINT byte_offset = static_cast<UINT>(i * stride);
         dc->DrawIndexedInstancedIndirect(buf->buffer.Get(), byte_offset);
     }
@@ -906,6 +919,16 @@ void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::ma
                                       light_dir, light_color,
                                       light_intensity, ambient_intensity,
                                       state_mgr_, shader_mgr_);
+}
+
+void DX11RhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+    draw_executor_.SetupGPUDrivenShadow(light_view, light_proj, state_mgr_, shader_mgr_);
+}
+
+void DX11RhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
+    cached_gpu_models_ = models;
+    cached_gpu_cmds_   = cmds;
+    cached_gpu_count_  = count;
 }
 
 // --- 编辑器场景视图模式 ---

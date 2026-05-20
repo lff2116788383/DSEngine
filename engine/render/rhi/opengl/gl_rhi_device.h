@@ -142,6 +142,7 @@ public:
                                   const glm::vec3& camera_pos,
                                   const glm::vec3& light_dir, const glm::vec3& light_color,
                                   float light_intensity, float ambient_intensity) override;
+    void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
 
     // --- 编辑器场景视图模式 ---
     void SetWireframeMode(bool enable) override;

@@ -101,6 +101,9 @@ private:
     /// Hi-Z: 当前帧使用的可见性数据（从上一帧 GPU 计算结果读回）
     std::vector<uint32_t> hiz_visibility_;
 
+    /// GPU Driven: 本帧 GPU Driven 路径是否已处理不透明 mesh（避免 Render 中双重绘制）
+    bool gpu_driven_active_ = false;
+
     /// GPU Driven: 每帧缓存
     std::vector<DrawElementsIndirectCommand> gpu_draw_cmds_;
     std::vector<dse::render::GPUInstanceData> gpu_instances_;

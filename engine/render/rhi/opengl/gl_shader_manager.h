@@ -137,6 +137,10 @@ public:
     int gpu_driven_pbr_skinned_loc() const { return gpu_driven_pbr_skinned_loc_; }
     int gpu_driven_pbr_morph_loc()    const { return gpu_driven_pbr_morph_loc_; }
 
+    /// GPU-Driven Shadow 着色器句柄（depth-only, SSBO model fetch）
+    unsigned int gpu_driven_shadow_shader_handle() const { return gpu_driven_shadow_shader_handle_; }
+    int gpu_driven_shadow_skinned_loc() const { return gpu_driven_shadow_skinned_loc_; }
+
     // --- 天空盒着色器 ---
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
     void InitSkyboxShader();
@@ -169,6 +173,9 @@ private:
     /// 编译 GPU-Driven PBR 着色器变体（运行时字符串补丁）
     void InitGPUDrivenPBRShader();
 
+    /// 编译 GPU-Driven Shadow 着色器变体（运行时字符串补丁）
+    void InitGPUDrivenShadowShader();
+
     PBRShaderLocations pbr_locations_;
     PBRTextureSlots pbr_texture_slots_;
     SkyboxShaderLocations skybox_locations_;
@@ -185,6 +192,9 @@ private:
     unsigned int gpu_driven_pbr_shader_handle_ = 0;
     int gpu_driven_pbr_skinned_loc_ = -1;
     int gpu_driven_pbr_morph_loc_   = -1;
+
+    unsigned int gpu_driven_shadow_shader_handle_ = 0;
+    int gpu_driven_shadow_skinned_loc_ = -1;
 };
 
 } // namespace render

@@ -11,6 +11,8 @@
  */
 
 #include "engine/render/rhi/vulkan/vulkan_rhi_device.h"
+#include "engine/render/rhi/gpu_scene_types.h"
+#include "engine/render/rhi/rhi_types.h"
 #include "engine/base/debug.h"
 
 #include <algorithm>
@@ -501,12 +503,35 @@ void VulkanRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
 
 void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
     if (draw_count <= 0 || indirect_buffer == 0) return;
-
-    const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
-    if (!buf || buf->buffer == VK_NULL_HANDLE) return;
-
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
 
+    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
+    const auto* cmd_data  = static_cast<const DrawElementsIndirectCommand*>(cached_gpu_cmds_);
+    const VkPipelineLayout layout = draw_executor_.gpu_driven_pipeline_layout();
+
+    // GPU-Driven per-draw push constants: 缓存存在时逐 draw 推送 model 矩阵
+    if (inst_data && cmd_data && layout != VK_NULL_HANDLE && cached_gpu_count_ > 0) {
+        struct { glm::mat4 model; int skinned; int morph_enabled; int use_instancing; } pc{};
+        pc.skinned = 0;
+        pc.morph_enabled = 0;
+        pc.use_instancing = 0;
+        for (int i = 0; i < draw_count && i < cached_gpu_count_; ++i) {
+            pc.model = inst_data[i].model;
+            vkCmdPushConstants(active_render_cmd_, layout,
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            vkCmdDrawIndexed(active_render_cmd_,
+                             cmd_data[i].count,
+                             1,
+                             cmd_data[i].first_index,
+                             cmd_data[i].base_vertex,
+                             0);
+        }
+        return;
+    }
+
+    // 无缓存：fallback 到单次 indirect draw
+    const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    if (!buf || buf->buffer == VK_NULL_HANDLE) return;
     vkCmdDrawIndexedIndirect(active_render_cmd_, buf->buffer, 0, static_cast<uint32_t>(draw_count),
                              static_cast<uint32_t>(stride));
 }
@@ -1190,13 +1215,21 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                       state_mgr_, shader_mgr_);
 }
 
+void VulkanRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+    if (active_render_cmd_ == VK_NULL_HANDLE) return;
+    draw_executor_.SetupGPUDrivenShadow(active_render_cmd_, light_view, light_proj,
+                                         state_mgr_, shader_mgr_);
+}
+
+void VulkanRhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
+    cached_gpu_models_ = models;
+    cached_gpu_cmds_   = cmds;
+    cached_gpu_count_  = count;
+}
+
 // --- 编辑器场景视图模式 ---
 
 void VulkanRhiDevice::SetWireframeMode(bool enable) {
-    // Vulkan 需要 VK_POLYGON_MODE_LINE pipeline variant。
-    // 由于 Vulkan pipeline 是预创建的，此处仅设标志位，
-    // draw executor 在选择 pipeline 时需检查此标志。
-    // 当前先用全局状态标志占位，待 pipeline variant 支持后完善。
     (void)enable;
 }
 

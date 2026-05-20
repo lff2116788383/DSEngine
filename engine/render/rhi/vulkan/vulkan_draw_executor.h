@@ -174,6 +174,12 @@ public:
                             VulkanPipelineStateManager& pipeline_mgr,
                             VulkanShaderManager& shader_mgr);
 
+    // --- GPU-Driven Shadow 渲染设置 ---
+    void SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+                               const glm::mat4& light_view, const glm::mat4& light_proj,
+                               VulkanPipelineStateManager& pipeline_mgr,
+                               VulkanShaderManager& shader_mgr);
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
@@ -195,6 +201,9 @@ public:
     void SetBoundSSBOs(const std::unordered_map<unsigned int, unsigned int>& ssbos) {
         bound_ssbos_ = ssbos;
     }
+
+    /// 获取最近 GPU-Driven 设置绑定的 pipeline layout（per-draw push constants 用）
+    VkPipelineLayout gpu_driven_pipeline_layout() const { return gpu_driven_pipeline_layout_; }
 
 private:
     /// 创建单个 UBO 缓冲区（host-visible + coherent）
@@ -345,6 +354,9 @@ private:
 
     // 当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
+
+    // GPU-Driven: 最后一次 SetupGPUDriven* 绑定的 pipeline layout（per-draw push constants 用）
+    VkPipelineLayout gpu_driven_pipeline_layout_ = VK_NULL_HANDLE;
 
     // Hair rendering 缓存
     unsigned int hair_shader_handle_ = 0;

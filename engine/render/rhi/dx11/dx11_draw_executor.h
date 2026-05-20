@@ -199,6 +199,14 @@ public:
                             DX11PipelineStateManager& pipeline_mgr,
                             DX11ShaderManager& shader_mgr);
 
+    // --- GPU-Driven Shadow 渲染设置 ---
+    void SetupGPUDrivenShadow(const glm::mat4& light_view, const glm::mat4& light_proj,
+                               DX11PipelineStateManager& pipeline_mgr,
+                               DX11ShaderManager& shader_mgr);
+
+    /// 更新 per-object 常量缓冲（GPU-Driven per-draw model 更新用）
+    void UpdatePerObjectCB(const DX11PerObjectCB& data);
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();

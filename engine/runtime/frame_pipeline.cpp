@@ -1345,13 +1345,16 @@ void FramePipeline::BuildRenderGraphInternal() {
         registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
         registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
     }
-    // GPU Driven Cull Pass 鈥?瑙嗛敟 + Hi-Z 鍓旈櫎锛岀洿鎺ュ啓 indirect draw commands
-    if (render_resources_.gpu_driven_supported) {
-        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
-    }
+    // Shadow passes 必须在 GPUCullPass 之前执行：
+    // GPUCullPass 会修改 draw commands 的 instance_count（基于主摄像机视锥剔除），
+    // 而阴影 pass 需要从光源视角渲染所有物体（使用未剔除的原始 draw commands）。
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
+    // GPU Driven Cull Pass — 视锥 + Hi-Z 剔除，直接写 indirect draw commands
+    if (render_resources_.gpu_driven_supported) {
+        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
+    }
     // RSM 鈥?浠庢柟鍚戝厜瑙嗚娓叉煋 GBuffer 鍒?RSM MRT锛圖DGI 鐨?VPL 鏁版嵁婧愶級
     registered_passes_.push_back(std::make_unique<dse::render::RSMRenderPass>(render_pass_context_));
     // DDGI Probe Update 鈥?RSM 涔嬪悗銆佸厜鐓?Forward pass 涔嬪墠
