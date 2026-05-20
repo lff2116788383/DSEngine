@@ -99,15 +99,20 @@ static std::string SanitizeIdentifier(const std::string& name) {
 
 static bool CompileToSpirv(const std::string& source, EShLanguage stage,
                            const std::string& filename,
-                           std::vector<uint32_t>& spirv_out) {
+                           std::vector<uint32_t>& spirv_out,
+                           const std::string& preamble = "") {
     const char* src_cstr = source.c_str();
     const char* names[] = { filename.c_str() };
 
     glslang::TShader shader(stage);
     shader.setStringsWithLengthsAndNames(&src_cstr, nullptr, names, 1);
-    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
-    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
-    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
+    if (!preamble.empty()) {
+        shader.setPreamble(preamble.c_str());
+    }
+    // Vulkan 1.1 / SPIR-V 1.3: 支持 DrawParameters built-in (gl_BaseInstance 等)
+    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 110);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
 
     const TBuiltInResource* resources = GetDefaultResources();
     if (!shader.parse(resources, 100, false, EShMsgDefault)) {
@@ -1004,6 +1009,122 @@ int main(int argc, char* argv[]) {
         if (!hlsl.empty()) std::cout << " hlsl:" << hlsl.size() << "B";
         std::cout << ")\n";
         success_count++;
+
+        // ---- 处理 @VARIANTS 多变体编译 ----
+        {
+            const std::string sentinel = "// @VARIANTS:";
+            auto vpos = source.find(sentinel);
+            if (vpos != std::string::npos) {
+                auto line_end = source.find('\n', vpos);
+                std::string variant_line = source.substr(
+                    vpos + sentinel.size(),
+                    line_end == std::string::npos
+                        ? source.size() - vpos - sentinel.size()
+                        : line_end - vpos - sentinel.size());
+
+                std::istringstream vss(variant_line);
+                std::string vtok;
+                while (std::getline(vss, vtok, ',')) {
+                    size_t vstart = vtok.find_first_not_of(" \t");
+                    size_t vend   = vtok.find_last_not_of(" \t\r\n");
+                    if (vstart == std::string::npos) continue;
+                    std::string variant_define = vtok.substr(vstart, vend - vstart + 1);
+
+                    std::string variant_lower = variant_define;
+                    std::transform(variant_lower.begin(), variant_lower.end(),
+                                   variant_lower.begin(), ::tolower);
+                    std::string variant_name    = shader_name + "_" + variant_lower;
+                    std::string variant_preamble = "#define " + variant_define + " 1\n";
+
+                    std::cout << "[VARIANT] " << variant_name << "." << stage_suffix << " ... ";
+
+                    std::vector<uint32_t> v_spirv;
+                    if (!CompileToSpirv(source, stage, filepath.filename().string(),
+                                        v_spirv, variant_preamble)) {
+                        std::cerr << "FAILED (glslang)\n";
+                        error_count++;
+                        continue;
+                    }
+
+                    bool v_do_spv  = (opts.target == "all" || opts.target == "spv");
+                    bool v_do_glsl = (opts.target == "all" || opts.target == "glsl330");
+                    bool v_do_hlsl = (opts.target == "all" || opts.target == "hlsl");
+
+                    if (v_do_spv) {
+                        fs::path spv_path = opts.output_dir / "spv" /
+                            (variant_name + "." + stage_suffix + ".spv");
+                        WriteBinary(spv_path, v_spirv);
+                    }
+
+                    std::string v_glsl330;
+                    if (v_do_glsl) {
+                        v_glsl330 = CrossCompileToGLSL330(v_spirv, stage);
+                        if (v_glsl330.empty()) {
+                            std::cerr << "FAILED (glsl330)\n";
+                            error_count++;
+                            continue;
+                        }
+                        if (!opts.embed) {
+                            fs::path glsl_path = opts.output_dir / "glsl330" /
+                                (variant_name + "." + stage_suffix + ".glsl");
+                            WriteFile(glsl_path, v_glsl330);
+                        }
+                    }
+
+                    std::string v_hlsl;
+                    if (v_do_hlsl) {
+                        v_hlsl = CrossCompileToHLSL(v_spirv, stage);
+                        if (v_hlsl.empty()) {
+                            std::cerr << "FAILED (hlsl)\n";
+                            error_count++;
+                            continue;
+                        }
+                        if (!opts.embed) {
+                            fs::path hlsl_path = opts.output_dir / "hlsl" /
+                                (variant_name + "." + stage_suffix + ".hlsl");
+                            WriteFile(hlsl_path, v_hlsl);
+                        }
+                    }
+
+                    if (opts.embed) {
+                        if (v_glsl330.empty()) v_glsl330 = CrossCompileToGLSL330(v_spirv, stage);
+                        std::string v_essl310 = CrossCompileToESSL310(v_spirv, stage);
+                        if (v_hlsl.empty()) v_hlsl = CrossCompileToHLSL(v_spirv, stage);
+
+                        std::vector<uint8_t> v_dxbc;
+#ifdef DSE_HAS_D3DCOMPILE
+                        if (!v_hlsl.empty()) {
+                            std::string dxbc_target =
+                                (stage == EShLangVertex)   ? "vs_5_0" :
+                                (stage == EShLangFragment) ? "ps_5_0" :
+                                (stage == EShLangCompute)  ? "cs_5_0" : "";
+                            if (!dxbc_target.empty()) {
+                                v_dxbc = CompileHLSLToDXBC(v_hlsl, "main", dxbc_target);
+                            }
+                        }
+#endif
+                        std::string v_header = GenerateEmbedHeader(
+                            variant_name, stage_suffix, v_spirv,
+                            v_glsl330, v_essl310, v_hlsl, v_dxbc);
+                        fs::path v_hdr_path = opts.output_dir / "embed" /
+                            (variant_name + "_" + stage_suffix + ".gen.h");
+                        WriteFile(v_hdr_path, v_header);
+
+                        StageReflectionData v_reflect = ExtractReflection(v_spirv, stage);
+                        std::string v_reflect_hdr = GenerateReflectHeader(
+                            variant_name, stage_suffix, v_reflect);
+                        fs::path v_ref_path = opts.output_dir / "embed" /
+                            (variant_name + "_" + stage_suffix + "_reflect.gen.h");
+                        WriteFile(v_ref_path, v_reflect_hdr);
+                    }
+
+                    std::cout << "OK (spv:" << v_spirv.size() * 4 << "B";
+                    if (!v_glsl330.empty()) std::cout << " glsl:" << v_glsl330.size() << "B";
+                    std::cout << ")\n";
+                    success_count++;
+                }
+            }
+        }
     }
 
     glslang::FinalizeProcess();

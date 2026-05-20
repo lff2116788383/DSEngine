@@ -1,0 +1,65 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+const int MAX_BONES = 100;
+
+// 输入：蒙皮前的顶点数据（AoS 布局）
+struct InputVertex {
+    vec4 position;      // xyz = 位置, w = 1
+    vec4 normal;        // xyz = 法线, w = 0
+    vec4 tangent;       // xyz = 切线, w = 0
+    vec4 bone_weights;  // 四骨骼权重
+    vec4 bone_indices;  // 四骨骼索引（float 编码，取 int 时用 round）
+};
+
+// 输出：蒙皮后的顶点数据（仅位置/法线/切线）
+struct OutputVertex {
+    vec4 position;
+    vec4 normal;
+    vec4 tangent;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer InputVertices {
+    InputVertex in_verts[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer OutputVertices {
+    OutputVertex out_verts[];
+};
+
+layout(std140, set = 0, binding = 2) uniform BoneMatrices {
+    mat4 u_bone_matrices[MAX_BONES];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint vertex_count;
+} pc;
+
+void main() {
+    uint vid = gl_GlobalInvocationID.x;
+    if (vid >= pc.vertex_count) return;
+
+    InputVertex v = in_verts[vid];
+
+    ivec4 bi = ivec4(
+        int(round(v.bone_indices.x)),
+        int(round(v.bone_indices.y)),
+        int(round(v.bone_indices.z)),
+        int(round(v.bone_indices.w))
+    );
+
+    mat4 skin =
+        u_bone_matrices[bi.x] * v.bone_weights.x +
+        u_bone_matrices[bi.y] * v.bone_weights.y +
+        u_bone_matrices[bi.z] * v.bone_weights.z +
+        u_bone_matrices[bi.w] * v.bone_weights.w;
+
+    vec3 skinnedPos     = (skin * v.position).xyz;
+    mat3 normalMatrix   = transpose(inverse(mat3(skin)));
+    vec3 skinnedNormal  = normalize(normalMatrix * v.normal.xyz);
+    vec3 skinnedTangent = normalize(normalMatrix * v.tangent.xyz);
+
+    out_verts[vid].position = vec4(skinnedPos,  1.0);
+    out_verts[vid].normal   = vec4(skinnedNormal,  0.0);
+    out_verts[vid].tangent  = vec4(skinnedTangent, 0.0);
+}
