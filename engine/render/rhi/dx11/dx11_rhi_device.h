@@ -87,6 +87,9 @@ public:
     bool SupportsCompute() const override {
         return context_.feature_level() >= D3D_FEATURE_LEVEL_11_0;
     }
+    bool SupportsSSBOCompute() const override {
+        return context_.feature_level() >= D3D_FEATURE_LEVEL_11_0;
+    }
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;
