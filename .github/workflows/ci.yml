@@ -3,7 +3,7 @@ name: CI
 
 on:
   push:
-    branches: [master, feature/editor-dev]
+    branches: [master, feature/editor-dev, feature/engine-lib]
   pull_request:
     branches: [master]
 
