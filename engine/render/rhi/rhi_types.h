@@ -334,6 +334,7 @@ struct RenderStats {
     int sprite_count = 0;
     int mesh_count = 0;
     int draw_calls = 0;
+    int triangle_count = 0;        ///< 本帧提交的三角形总数
     int material_switches = 0;
     int max_batch_sprites = 0;
     int render_passes = 0;

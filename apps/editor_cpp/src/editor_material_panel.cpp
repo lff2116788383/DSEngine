@@ -5,6 +5,7 @@
 #include "imgui_internal.h"
 #include "editor_icons.h"
 #include "engine/runtime/engine_app.h"
+#include "editor_scene_tabs.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -62,28 +63,32 @@ void DrawMaterialPanel(EditorContext& ctx) {
     ImGui::Text(MDI_ICON_PALETTE "  PBR Material Properties");
     ImGui::Spacing();
 
+    auto& tab_mgr = SceneTabManager::Get();
+
     // Albedo color
     float albedo[4] = { mesh.color.r, mesh.color.g, mesh.color.b, mesh.color.a };
     if (ImGui::ColorEdit4("Albedo", albedo)) {
         mesh.color = glm::vec4(albedo[0], albedo[1], albedo[2], albedo[3]);
+        tab_mgr.MarkDirty();
     }
 
     // Metallic
-    ImGui::SliderFloat("Metallic", &mesh.metallic, 0.0f, 1.0f, "%.2f");
+    if (ImGui::SliderFloat("Metallic", &mesh.metallic, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
 
     // Roughness
-    ImGui::SliderFloat("Roughness", &mesh.roughness, 0.0f, 1.0f, "%.2f");
+    if (ImGui::SliderFloat("Roughness", &mesh.roughness, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
 
     // AO
-    ImGui::SliderFloat("Ambient Occlusion", &mesh.ao, 0.0f, 1.0f, "%.2f");
+    if (ImGui::SliderFloat("Ambient Occlusion", &mesh.ao, 0.0f, 1.0f, "%.2f")) tab_mgr.MarkDirty();
 
     // Normal strength
-    ImGui::SliderFloat("Normal Strength", &mesh.normal_strength, 0.0f, 2.0f, "%.2f");
+    if (ImGui::SliderFloat("Normal Strength", &mesh.normal_strength, 0.0f, 2.0f, "%.2f")) tab_mgr.MarkDirty();
 
     // Emissive
     float emissive[3] = { mesh.emissive.r, mesh.emissive.g, mesh.emissive.b };
     if (ImGui::ColorEdit3("Emissive", emissive)) {
         mesh.emissive = glm::vec3(emissive[0], emissive[1], emissive[2]);
+        tab_mgr.MarkDirty();
     }
 
     ImGui::Separator();
@@ -134,6 +139,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
                         texture_handle = tex->GetHandle();
                         s_handle_names[texture_handle] =
                             std::filesystem::path(rel_path).filename().string();
+                        tab_mgr.MarkDirty();
                     }
                 }
             }
@@ -145,6 +151,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
             if (ImGui::SmallButton("X")) {
                 s_handle_names.erase(texture_handle);
                 texture_handle = 0;
+                tab_mgr.MarkDirty();
             }
         } else {
             ImGui::TextDisabled("X");
@@ -170,17 +177,18 @@ void DrawMaterialPanel(EditorContext& ctx) {
     else if (mesh.shader_variant == "MESH_PBR") current_variant = 2;
     if (ImGui::Combo("Shader", &current_variant, shader_variants, 3)) {
         mesh.shader_variant = shader_variants[current_variant];
+        tab_mgr.MarkDirty();
     }
 
-    ImGui::Checkbox("Alpha Test", &mesh.material_alpha_test);
+    if (ImGui::Checkbox("Alpha Test", &mesh.material_alpha_test)) tab_mgr.MarkDirty();
     if (mesh.material_alpha_test) {
-        ImGui::SliderFloat("Alpha Cutoff", &mesh.material_alpha_cutoff, 0.0f, 1.0f);
+        if (ImGui::SliderFloat("Alpha Cutoff", &mesh.material_alpha_cutoff, 0.0f, 1.0f)) tab_mgr.MarkDirty();
     }
-    ImGui::Checkbox("Double Sided", &mesh.material_double_sided);
-    ImGui::Checkbox("Receive Shadow", &mesh.receive_shadow);
-    ImGui::Checkbox("Depth Test", &mesh.depth_test_enabled);
-    ImGui::Checkbox("Depth Write", &mesh.depth_write_enabled);
-    ImGui::Checkbox("Visible", &mesh.visible);
+    if (ImGui::Checkbox("Double Sided", &mesh.material_double_sided)) tab_mgr.MarkDirty();
+    if (ImGui::Checkbox("Receive Shadow", &mesh.receive_shadow)) tab_mgr.MarkDirty();
+    if (ImGui::Checkbox("Depth Test", &mesh.depth_test_enabled)) tab_mgr.MarkDirty();
+    if (ImGui::Checkbox("Depth Write", &mesh.depth_write_enabled)) tab_mgr.MarkDirty();
+    if (ImGui::Checkbox("Visible", &mesh.visible)) tab_mgr.MarkDirty();
 
     ImGui::End();
 }

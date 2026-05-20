@@ -162,6 +162,26 @@ public:
     virtual void EndFrame() = 0;
     virtual const RenderStats& LastFrameStats() const = 0;
 
+    /// 编辑器用帧统计概要，从 LastFrameStats() 派生
+    struct RhiFrameStats {
+        int draw_calls      = 0;
+        int triangle_count  = 0;
+        int sprite_count    = 0;
+        int texture_binds   = 0;  ///< 映射自 material_switches
+        int shader_switches = 0;  ///< 映射自 material_batch_count
+    };
+
+    virtual RhiFrameStats GetFrameStats() const {
+        const auto& s = LastFrameStats();
+        RhiFrameStats fs;
+        fs.draw_calls      = s.draw_calls;
+        fs.triangle_count  = s.triangle_count;
+        fs.sprite_count    = s.sprite_count;
+        fs.texture_binds   = s.material_switches;
+        fs.shader_switches = s.material_batch_count;
+        return fs;
+    }
+
     /// 在 EndFrame 之后补写 GPU Driven 剔除统计（因 readback 在 EndFrame 后发生）
     virtual void PatchLastFrameGPUCulledCount(int culled) { (void)culled; }
 

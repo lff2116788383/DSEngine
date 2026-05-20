@@ -758,6 +758,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         dc->DrawIndexedInstanced(static_cast<UINT>(item.indices.size()), instance_count, 0, 0, 0);
         global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.triangle_count += static_cast<int>(item.indices.size() / 3) * static_cast<int>(instance_count);
         if (is_instanced) {
             global_state_.current_frame_stats.instanced_draw_calls++;
             global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);

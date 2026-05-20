@@ -71,6 +71,17 @@ void RenderProfiler::SetTextureMemory(size_t bytes) {
     current_frame_.texture_memory = bytes;
 }
 
+void RenderProfiler::UpdateFromRhi(int draw_calls, int vertex_count, int triangle_count,
+                                   int sprite_count, int texture_binds, int shader_switches) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    current_frame_.draw_calls      += draw_calls;
+    current_frame_.vertex_count    += vertex_count;
+    current_frame_.triangle_count  += triangle_count;
+    current_frame_.sprite_count    += sprite_count;
+    current_frame_.texture_binds   += texture_binds;
+    current_frame_.shader_switches += shader_switches;
+}
+
 void RenderProfiler::Reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     current_frame_ = RenderFrameStats{};

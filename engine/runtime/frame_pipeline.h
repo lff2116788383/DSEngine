@@ -120,6 +120,11 @@ public:
     int LastDrawCalls() const;
 
     /**
+     * @brief 获取上一帧的 RHI 帧统计概要（供编辑器 Profiler 使用）
+     */
+    dse::render::RhiDevice::RhiFrameStats GetRhiFrameStats() const;
+
+    /**
      * @brief 获取上一帧中的材质切换次数
      * @return 材质状态切换总数
      */
