@@ -74,11 +74,14 @@ Use dsengine_asset_generate_model to generate 3D models with Meshy.""",
 # ─── Retry Helper ───────────────────────────────────────────────────────
 
 async def create_completion_with_retry(client, max_retries=3, **kwargs):
-    """Call client.chat.completions.create with exponential backoff on transient errors."""
+    """Call client.chat.completions.create with exponential backoff on transient errors.
+    Supports both stream=True (returns AsyncStream) and stream=False (returns ChatCompletion).
+    """
     base_delay = 1.0
     for attempt in range(max_retries + 1):
         try:
-            return await client.chat.completions.create(**kwargs)
+            result = await client.chat.completions.create(**kwargs)
+            return result
         except openai.AuthenticationError as e:
             emit({"type": "error", "message": f"认证失败：请检查 API Key。({e})"})
             raise
@@ -243,80 +246,104 @@ async def handle_message(msg, current_task_ref, stdin_queue):
         total_out  = 0
 
         try:
-            response = await create_completion_with_retry(
-                client,
-                model=model,
-                messages=messages,
-                tools=tools,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            # 真正的流式循环：每轮可能产生 tool_calls，直到 finish_reason=stop
+            while True:
+                full_content = ""
+                # tool_calls 以 index 为 key 累积 delta
+                tc_acc: dict[int, dict] = {}
+                finish_reason = None
 
-            # 累积 token 统计
-            if response.usage:
-                total_in  += getattr(response.usage, "prompt_tokens", 0)
-                total_out += getattr(response.usage, "completion_tokens", 0)
-
-            # 处理工具调用（Fix B: 全部通过 stdin_queue，不再直接 readline）
-            while response.choices[0].message.tool_calls:
-                tool_calls = response.choices[0].message.tool_calls
-
-                # 将 assistant 的 tool_call 轮次追加到历史
-                messages.append({
-                    "role": "assistant",
-                    "content": response.choices[0].message.content,
-                    "tool_calls": [tc for tc in tool_calls]
-                })
-
-                for tool_call in tool_calls:
-                    tool_name = tool_call.function.name
-                    tool_args = json.loads(tool_call.function.arguments)
-                    emit({
-                        "type": "tool_call",
-                        "name": tool_name,
-                        "arguments": json.dumps(tool_args),
-                        "call_id": tool_call.id
-                    })
-
-                    # 等待 C++ 通过 stdin_queue 返回 tool_result
-                    tool_result = "{}"
-                    try:
-                        while True:
-                            result_line = await asyncio.wait_for(
-                                stdin_queue.get(), timeout=30.0
-                            )
-                            result_msg = json.loads(result_line.strip())
-                            if result_msg.get("type") == "tool_result" and \
-                               result_msg.get("call_id") == tool_call.id:
-                                tool_result = result_msg.get("result", "{}")
-                                break
-                            # 丢弃不匹配的消息（如 cancel 等，已在外层处理）
-                    except (asyncio.TimeoutError, json.JSONDecodeError):
-                        pass
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": tool_result
-                    })
-
-                # 再次调用以获取最终回复
-                response = await create_completion_with_retry(
+                stream = await create_completion_with_retry(
                     client,
                     model=model,
                     messages=messages,
                     tools=tools,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    stream=True,
+                    stream_options={"include_usage": True},
                 )
-                if response.usage:
-                    total_in  += getattr(response.usage, "prompt_tokens", 0)
-                    total_out += getattr(response.usage, "completion_tokens", 0)
 
-            final_content = response.choices[0].message.content or ""
+                async for chunk in stream:
+                    # usage 在最后一个 chunk 返回
+                    if chunk.usage:
+                        total_in  += getattr(chunk.usage, "prompt_tokens", 0)
+                        total_out += getattr(chunk.usage, "completion_tokens", 0)
 
-            # 追加 assistant 回复到历史（不含 tool_calls）
-            _conversation_history.append({"role": "assistant", "content": final_content})
+                    if not chunk.choices:
+                        continue
+
+                    choice = chunk.choices[0]
+                    if choice.finish_reason:
+                        finish_reason = choice.finish_reason
+
+                    delta = choice.delta
+
+                    # 文本 delta：直接转发给 C++ 端
+                    if delta.content:
+                        full_content += delta.content
+                        emit_stream_chunk(delta.content, chunk_id, False)
+                        chunk_id += 1
+
+                    # tool_call delta：按 index 累积
+                    if delta.tool_calls:
+                        for tc_delta in delta.tool_calls:
+                            idx = tc_delta.index
+                            if idx not in tc_acc:
+                                tc_acc[idx] = {"id": "", "name": "", "args": ""}
+                            if tc_delta.id:
+                                tc_acc[idx]["id"] += tc_delta.id
+                            if tc_delta.function and tc_delta.function.name:
+                                tc_acc[idx]["name"] += tc_delta.function.name
+                            if tc_delta.function and tc_delta.function.arguments:
+                                tc_acc[idx]["args"] += tc_delta.function.arguments
+
+                if finish_reason == "tool_calls":
+                    # 将 assistant 轮次（含 tool_calls）追加到 messages
+                    openai_tcs = [
+                        {"id": tc_acc[i]["id"], "type": "function",
+                         "function": {"name": tc_acc[i]["name"], "arguments": tc_acc[i]["args"]}}
+                        for i in sorted(tc_acc)
+                    ]
+                    messages.append({
+                        "role": "assistant",
+                        "content": full_content or None,
+                        "tool_calls": openai_tcs,
+                    })
+
+                    for tc in openai_tcs:
+                        emit({
+                            "type": "tool_call",
+                            "name": tc["function"]["name"],
+                            "arguments": tc["function"]["arguments"],
+                            "call_id": tc["id"],
+                        })
+
+                        # 等待 C++ 通过 stdin_queue 返回 tool_result
+                        tool_result = "{}"
+                        try:
+                            while True:
+                                result_line = await asyncio.wait_for(
+                                    stdin_queue.get(), timeout=30.0)
+                                result_msg = json.loads(result_line.strip())
+                                if (result_msg.get("type") == "tool_result" and
+                                        result_msg.get("call_id") == tc["id"]):
+                                    tool_result = result_msg.get("result", "{}")
+                                    break
+                        except (asyncio.TimeoutError, json.JSONDecodeError):
+                            pass
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": tool_result,
+                        })
+                    # 继续下一轮流式请求
+                    continue
+
+                # finish_reason == "stop"（或其他），结束循环
+                _conversation_history.append({"role": "assistant", "content": full_content})
+                break
 
             # 发送累计 token 统计
             if total_in or total_out:
@@ -324,12 +351,6 @@ async def handle_message(msg, current_task_ref, stdin_queue):
                       "input_tokens": total_in,
                       "output_tokens": total_out,
                       "model": model})
-
-            # 模拟流式输出（技术债：V2 改用 stream=True）
-            for i in range(0, len(final_content), 10):
-                emit_stream_chunk(final_content[i:i+10], chunk_id, False)
-                chunk_id += 1
-                await asyncio.sleep(0.01)
 
             emit_stream_chunk("", chunk_id, True)
             emit({"type": "stream_end", "chunk_id": chunk_id})
