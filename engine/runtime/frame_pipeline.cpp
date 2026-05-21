@@ -632,7 +632,7 @@ bool FramePipeline::Init() {
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
 #ifdef DSE_ENABLE_3D
     {
-        auto sys = dse::physics3d::CreatePhysics3DSystem();
+        auto sys = CreatePhysics3DSystem();
         if (sys && sys->Init(*runtime_context_.world)) {
             physics3d_system_ = std::move(sys);
             dse::core::ServiceLocator::Instance().Register<dse::physics3d::IPhysics3DSystem,
