@@ -9,6 +9,7 @@
 #include <chrono>
 #include <functional>
 #include <sstream>
+#include <unordered_set>
 
 namespace dse::runtime {
 class EngineInstance;
@@ -87,10 +88,11 @@ private:
     std::string current_agent_id_ = "general";
     bool scroll_to_bottom_ = false;
     bool waiting_for_response_ = false;
-    bool bridge_crashed_ = false;       // bridge 意外退出
+    std::atomic<bool> bridge_crashed_{false}; // bridge 意外退出
     std::string history_path_;          // 自动保存路径
     std::function<std::string(const std::string&)> mention_resolver_; // @mention 解析器
     int edit_msg_idx_ = -1;             // 正在编辑的 User 消息索引（-1 = 无）
+    bool focus_input_next_frame_ = false; // Edit 点击后下一帧要自动聚焦 InputText
     int total_input_tokens_  = 0;       // 累计 input tokens
     int total_output_tokens_ = 0;       // 累计 output tokens
 

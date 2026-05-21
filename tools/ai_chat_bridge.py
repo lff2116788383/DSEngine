@@ -292,6 +292,16 @@ async def handle_message(msg, current_task_ref):
             else:
                 final_content = response.choices[0].message.content
 
+            # Emit token usage (accumulated across tool-call rounds)
+            usage = getattr(response, 'usage', None)
+            if usage:
+                emit({
+                    "type": "token_usage",
+                    "input_tokens":  getattr(usage, 'prompt_tokens', 0),
+                    "output_tokens": getattr(usage, 'completion_tokens', 0),
+                    "model": model
+                })
+
             # Stream the final content
             for i in range(0, len(final_content), 10):
                 chunk = final_content[i:i+10]

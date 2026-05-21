@@ -52,8 +52,8 @@ static std::string ResolveMentions(const std::string& text,
                                     const std::function<std::string(const std::string&)>& resolver) {
     if (!resolver) return {};
 
-    // 扫描所有 @word 和 @word:arg 格式的 token
     std::string context_block;
+    std::unordered_set<std::string> seen; // 去重：同一 token 只注入一次
     size_t pos = 0;
     while ((pos = text.find('@', pos)) != std::string::npos) {
         ++pos;
@@ -62,10 +62,12 @@ static std::string ResolveMentions(const std::string& text,
             ++end;
         if (end > pos) {
             std::string token = text.substr(pos - 1, end - pos + 1); // include '@'
-            std::string resolved = resolver(token);
-            if (!resolved.empty()) {
-                context_block += resolved;
-                if (context_block.back() != '\n') context_block += '\n';
+            if (seen.insert(token).second) { // only resolve each token once
+                std::string resolved = resolver(token);
+                if (!resolved.empty()) {
+                    context_block += resolved;
+                    if (context_block.back() != '\n') context_block += '\n';
+                }
             }
         }
         pos = end;
@@ -446,10 +448,6 @@ static void RenderInline(const std::string& line, const ImVec4& base_color) {
             size_t end = line.find('`', pos + 1);
             if (end != std::string::npos) {
                 if (!first) ImGui::SameLine(0, 0);
-                ImGui::PushStyleColor(ImGuiCol_Text, base_color);
-                // print preceding is handled via slices
-                ImGui::PopStyleColor();
-                if (!first) ImGui::SameLine(0, 0);
                 ImGui::PushStyleColor(ImGuiCol_Text, code_color);
                 ImGui::TextUnformatted(line.substr(pos + 1, end - pos - 1).c_str());
                 ImGui::PopStyleColor();
@@ -740,7 +738,9 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
         std::strncpy(input_buf_, original.c_str(), sizeof(input_buf_) - 1);
         input_buf_[sizeof(input_buf_) - 1] = '\0';
         edit_msg_idx_ = edit_click_idx;
-        ImGui::SetKeyboardFocusHere(-1); // focus input next frame
+        // focus_input_next_frame_ is set; SetKeyboardFocusHere must be called
+        // *before* InputText on the next frame — handled via the flag below
+        focus_input_next_frame_ = true;
     }
 
     if (waiting_for_response_) {
@@ -779,6 +779,10 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
 
     bool send = false;
     ImGui::PushItemWidth(-100);
+    if (focus_input_next_frame_) {
+        ImGui::SetKeyboardFocusHere();
+        focus_input_next_frame_ = false;
+    }
     if (ImGui::InputText("##chat_input", input_buf_, sizeof(input_buf_),
                          ImGuiInputTextFlags_EnterReturnsTrue)) {
         send = true;
@@ -808,8 +812,8 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 // If editing an existing message, truncate from that index
                 if (edit_msg_idx_ >= 0 && edit_msg_idx_ < static_cast<int>(messages_.size())) {
                     messages_.erase(messages_.begin() + edit_msg_idx_, messages_.end());
-                    edit_msg_idx_ = -1;
                 }
+                edit_msg_idx_ = -1; // always clear, even if text was empty path above
 
                 // Resolve @mentions and prepend context
                 std::string context = ResolveMentions(text, mention_resolver_);
