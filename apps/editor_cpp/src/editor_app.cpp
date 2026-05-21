@@ -402,9 +402,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
 
-    // 初始化 AI Chat Panel bridge 路径
+    // 初始化 AI Chat Panel bridge 路径 + 历史记录路径
     chat_panel_.SetBridgePath(
         (GetProjectRootPath() / "tools" / "ai_chat_bridge.py").string());
+    chat_panel_.LoadHistory("bin/ai_chat_history.json");
 
     // 扫描插件目录
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");

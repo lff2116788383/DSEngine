@@ -160,6 +160,7 @@ void ChatPanel::StartBridge() {
 #endif
 
     bridge_running_ = true;
+    bridge_crashed_ = false;
 
     // Reader thread: reads lines from subprocess stdout
     reader_thread_ = std::thread([this]() {
@@ -170,6 +171,13 @@ void ChatPanel::StartBridge() {
             DWORD bytes_read = 0;
             BOOL ok = ReadFile(stdout_read_, &ch, 1, &bytes_read, nullptr);
             if (!ok || bytes_read == 0) {
+                if (bridge_running_) {
+                    // Unexpected exit: flag crash so UI can show reconnect prompt
+                    bridge_crashed_ = true;
+                    std::lock_guard<std::mutex> lock(output_mutex_);
+                    pending_output_.push_back(
+                        R"({"type":"status","message":"[Bridge] 进程意外退出，请点击重连。"})");
+                }
                 bridge_running_ = false;
                 break;
             }
@@ -179,6 +187,12 @@ void ChatPanel::StartBridge() {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
+                }
+                if (bridge_running_) {
+                    bridge_crashed_ = true;
+                    std::lock_guard<std::mutex> lock(output_mutex_);
+                    pending_output_.push_back(
+                        R"({"type":"status","message":"[Bridge] 进程意外退出，请点击重连。"})");
                 }
                 bridge_running_ = false;
                 break;
@@ -327,6 +341,64 @@ void ChatPanel::ExecuteToolCall(const std::string& tool_name, const std::string&
 #else
     write(stdin_fd_, line.c_str(), line.size());
 #endif
+}
+
+// ─── History Persistence ─────────────────────────────────────────────────────
+
+void ChatPanel::SaveHistory(const std::string& path) {
+    if (path.empty() || messages_.empty()) return;
+
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+
+    rapidjson::Document doc(rapidjson::kArrayType);
+    auto& alloc = doc.GetAllocator();
+
+    for (const auto& msg : messages_) {
+        if (msg.role == ChatRole::ToolResult) continue; // skip tool echoes
+        rapidjson::Value obj(rapidjson::kObjectType);
+        const char* role_str =
+            msg.role == ChatRole::User      ? "user"      :
+            msg.role == ChatRole::Assistant ? "assistant" : "system";
+        obj.AddMember("role",     rapidjson::Value(role_str, alloc), alloc);
+        obj.AddMember("content",  rapidjson::Value(msg.content.c_str(), alloc), alloc);
+        obj.AddMember("agent_id", rapidjson::Value(msg.agent_id.c_str(), alloc), alloc);
+        doc.PushBack(obj, alloc);
+    }
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+
+    std::ofstream f(path);
+    if (f) f << buf.GetString();
+}
+
+void ChatPanel::LoadHistory(const std::string& path) {
+    history_path_ = path;
+    if (path.empty() || !std::filesystem::exists(path)) return;
+
+    std::ifstream f(path);
+    if (!f) return;
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+    rapidjson::Document doc;
+    doc.Parse(content.c_str());
+    if (doc.HasParseError() || !doc.IsArray()) return;
+
+    messages_.clear();
+    for (const auto& obj : doc.GetArray()) {
+        if (!obj.IsObject()) continue;
+        std::string role_str  = obj.HasMember("role")     && obj["role"].IsString()     ? obj["role"].GetString()     : "system";
+        std::string content_s = obj.HasMember("content")  && obj["content"].IsString()  ? obj["content"].GetString()  : "";
+        std::string agent_id  = obj.HasMember("agent_id") && obj["agent_id"].IsString() ? obj["agent_id"].GetString() : "";
+
+        ChatRole role = ChatRole::System;
+        if (role_str == "user")      role = ChatRole::User;
+        else if (role_str == "assistant") role = ChatRole::Assistant;
+
+        messages_.push_back({role, content_s, agent_id});
+    }
+    scroll_to_bottom_ = true;
 }
 
 // ─── ImGui Draw ─────────────────────────────────────────────────────────────
@@ -498,8 +570,16 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
         if (ImGui::Button("Stop", ImVec2(50, 0))) {
             CancelGeneration();
         }
+    } else if (bridge_crashed_) {
+        // Bridge crashed: show reconnect button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
+        if (ImGui::Button("Reconnect", ImVec2(90, 0))) {
+            bridge_crashed_ = false;
+            StartBridge();
+        }
+        ImGui::PopStyleColor();
     } else {
-        // Show Send button when idle
+        // Normal: Send button
         if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
             std::string text(input_buf_);
             if (!text.empty()) {
@@ -507,6 +587,9 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 SendToBridge(text);
                 input_buf_[0] = '\0';
                 scroll_to_bottom_ = true;
+                // Auto-save history after each user message
+                if (!history_path_.empty())
+                    SaveHistory(history_path_);
             }
         }
     }

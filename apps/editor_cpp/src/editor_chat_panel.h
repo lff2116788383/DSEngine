@@ -56,6 +56,12 @@ public:
     
     /// 清空对话历史
     void ClearHistory();
+    
+    /// 保存对话历史到 JSON 文件
+    void SaveHistory(const std::string& path);
+    
+    /// 从 JSON 文件加载对话历史
+    void LoadHistory(const std::string& path);
 
     /// 每帧调用：绘制 ImGui UI + 处理子进程 I/O
     void Draw(ControlServer& server, dse::runtime::EngineInstance& engine);
@@ -75,6 +81,8 @@ private:
     std::string current_agent_id_ = "general";
     bool scroll_to_bottom_ = false;
     bool waiting_for_response_ = false;
+    bool bridge_crashed_ = false;       // bridge 意外退出
+    std::string history_path_;          // 自动保存路径
 
     // Python 子进程
     std::string bridge_path_;

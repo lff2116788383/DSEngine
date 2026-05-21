@@ -71,6 +71,42 @@ Use dsengine_asset_generate_texture to generate textures with DALL-E.
 Use dsengine_asset_generate_model to generate 3D models with Meshy.""",
 }
 
+# ─── Retry Helper ───────────────────────────────────────────────────────
+
+async def create_completion_with_retry(client, max_retries=3, **kwargs):
+    """Call client.chat.completions.create with exponential backoff on transient errors."""
+    base_delay = 1.0
+    for attempt in range(max_retries + 1):
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except openai.AuthenticationError as e:
+            emit({"type": "error", "message": f"认证失败：请检查 API Key。({e})"})
+            raise
+        except openai.RateLimitError as e:
+            if attempt == max_retries:
+                emit({"type": "error", "message": f"请求频率超限，已重试 {max_retries} 次。"})
+                raise
+            retry_after = float(getattr(e, 'retry_after', None) or base_delay * (2 ** attempt))
+            emit({"type": "status", "message": f"请求频率超限，{retry_after:.0f}s 后重试 ({attempt+1}/{max_retries})..."})
+            await asyncio.sleep(retry_after)
+        except (openai.APIConnectionError, openai.APITimeoutError) as e:
+            if attempt == max_retries:
+                emit({"type": "error", "message": f"网络连接失败，已重试 {max_retries} 次：{e}"})
+                raise
+            delay = base_delay * (2 ** attempt)
+            emit({"type": "status", "message": f"网络错误，{delay:.0f}s 后重试 ({attempt+1}/{max_retries})..."})
+            await asyncio.sleep(delay)
+        except openai.BadRequestError as e:
+            emit({"type": "error", "message": f"请求参数错误：{e}"})
+            raise
+        except openai.InternalServerError as e:
+            if attempt == max_retries:
+                emit({"type": "error", "message": f"OpenAI 服务器错误，已重试 {max_retries} 次。"})
+                raise
+            delay = base_delay * (2 ** attempt)
+            emit({"type": "status", "message": f"服务器错误，{delay:.0f}s 后重试 ({attempt+1}/{max_retries})..."})
+            await asyncio.sleep(delay)
+
 # ─── MCP Client ─────────────────────────────────────────────────────────
 
 class MCPToolClient:
@@ -197,7 +233,8 @@ async def handle_message(msg, current_task_ref):
 
         try:
             # First, get completion with tool calls
-            response = await client.chat.completions.create(
+            response = await create_completion_with_retry(
+                client,
                 model=model,
                 messages=messages,
                 tools=tools,
@@ -246,7 +283,8 @@ async def handle_message(msg, current_task_ref):
                     })
                 
                 # Get final response after tool calls
-                final_response = await client.chat.completions.create(
+                final_response = await create_completion_with_retry(
+                    client,
                     model=model,
                     messages=messages,
                 )
