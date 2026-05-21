@@ -573,6 +573,9 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         "${SHADER_SRC_DIR}/*.comp"
     )
 
+    # Exclude hair shaders (hand-written gen.h due to SSBO, cannot cross-compile to GLSL 330)
+    list(FILTER SHADER_SOURCE_FILES EXCLUDE REGEX "hair\\.(vert|frag)$")
+
     # 生成的 embed 头文件列表（用于依赖跟踪）
     set(GENERATED_SHADER_HEADERS "")
     foreach(_shader ${SHADER_SOURCE_FILES})
