@@ -1209,11 +1209,11 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                                 const glm::vec3& light_dir, const glm::vec3& light_color,
                                                 float light_intensity, float ambient_intensity,
                                                 float shadow_strength) {
-    (void)shadow_strength; // TODO: 传递给 draw_executor_ 的 PBR push constants
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
     draw_executor_.SetupGPUDrivenPBR(active_render_cmd_, view, proj, camera_pos,
                                       light_dir, light_color,
                                       light_intensity, ambient_intensity,
+                                      shadow_strength,
                                       state_mgr_, shader_mgr_);
 }
 

@@ -2655,6 +2655,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                                             const glm::vec3& camera_pos,
                                             const glm::vec3& light_dir, const glm::vec3& light_color,
                                             float light_intensity, float ambient_intensity,
+                                            float shadow_strength,
                                             VulkanPipelineStateManager& pipeline_mgr,
                                             VulkanShaderManager& shader_mgr) {
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
@@ -2704,7 +2705,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     VulkanPerSceneUBO scene_ubo{};
     scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
     scene_ubo.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
-    scene_ubo.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    const float receive_shadow = (shadow_strength > 0.0f) ? 1.0f : 0.0f;
+    scene_ubo.light_params            = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);
     for (int i = 0; i < 3; ++i) {
         scene_ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }

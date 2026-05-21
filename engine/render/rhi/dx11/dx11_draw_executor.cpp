@@ -1825,6 +1825,7 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
                                           const glm::vec3& camera_pos,
                                           const glm::vec3& light_dir, const glm::vec3& light_color,
                                           float light_intensity, float ambient_intensity,
+                                          float shadow_strength,
                                           DX11PipelineStateManager& pipeline_mgr,
                                           DX11ShaderManager& shader_mgr) {
     ID3D11DeviceContext* dc = context_->device_context();
@@ -1853,7 +1854,8 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     DX11PerSceneCB scene_data{};
     scene_data.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
     scene_data.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
-    scene_data.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    const float receive_shadow = (shadow_strength > 0.0f) ? 1.0f : 0.0f;
+    scene_data.light_params            = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);
     scene_data.cascade_splits = glm::vec4(
         global_state_.cascade_splits[0], global_state_.cascade_splits[1],
         global_state_.cascade_splits[2], 0.0f);

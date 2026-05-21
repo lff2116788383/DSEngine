@@ -916,10 +916,10 @@ void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::ma
                                               const glm::vec3& light_dir, const glm::vec3& light_color,
                                               float light_intensity, float ambient_intensity,
                                               float shadow_strength) {
-    (void)shadow_strength; // TODO: 传递给 draw_executor_ 的 PBR cbuffer
     draw_executor_.SetupGPUDrivenPBR(view, proj, camera_pos,
                                       light_dir, light_color,
                                       light_intensity, ambient_intensity,
+                                      shadow_strength,
                                       state_mgr_, shader_mgr_);
 }
 

@@ -171,6 +171,7 @@ public:
                             const glm::vec3& camera_pos,
                             const glm::vec3& light_dir, const glm::vec3& light_color,
                             float light_intensity, float ambient_intensity,
+                            float shadow_strength,
                             VulkanPipelineStateManager& pipeline_mgr,
                             VulkanShaderManager& shader_mgr);
 
