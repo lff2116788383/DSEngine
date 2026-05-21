@@ -175,10 +175,42 @@ RenderPassHandle RenderGraph::AddPass(const std::string& name,
                                        std::vector<ResourceAccess> writes,
                                        std::function<void(CommandBuffer&)> execute) {
     RenderPassHandle handle = AddPass(name);
-    for (const auto& ra : reads)  PassRead(handle, ra.resource);
-    for (const auto& wa : writes) PassWrite(handle, wa.resource);
+    for (const auto& ra : reads) {
+        if (ra.required_state != ResourceState::Undefined)
+            PassReadWithState(handle, ra.resource, ra.required_state);
+        else
+            PassRead(handle, ra.resource);
+    }
+    for (const auto& wa : writes) {
+        if (wa.required_state != ResourceState::Undefined)
+            PassWriteWithState(handle, wa.resource, wa.required_state);
+        else
+            PassWrite(handle, wa.resource);
+    }
     PassSetExecute(handle, std::move(execute));
     return handle;
+}
+
+void RenderGraph::PassReadWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state) {
+    PassRead(pass, resource);
+    if (!pass.is_valid() || !resource.is_valid()) return;
+    for (auto& p : passes_) {
+        if (p.id == pass.id) {
+            p.resource_states[resource.id] = state;
+            break;
+        }
+    }
+}
+
+void RenderGraph::PassWriteWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state) {
+    PassWrite(pass, resource);
+    if (!pass.is_valid() || !resource.is_valid()) return;
+    for (auto& p : passes_) {
+        if (p.id == pass.id) {
+            p.resource_states[resource.id] = state;
+            break;
+        }
+    }
 }
 
 void RenderGraph::PassSetExecute(RenderPassHandle pass, std::function<void(CommandBuffer&)> execute) {
@@ -389,6 +421,49 @@ bool RenderGraph::Compile() {
         }
     }
 
+    // ---- 8. 屏障分析：资源状态追踪 + 自动 RT 绑定 ----
+    // 重置所有资源的编译状态
+    for (auto& res : resources_) {
+        res.compiled_state = ResourceState::Undefined;
+    }
+    // 清空所有 Pass 的编译输出
+    for (auto& p : passes_) {
+        p.pre_barriers.clear();
+        p.auto_bind_rt = 0;
+    }
+    // 沿编译顺序遍历，计算转换
+    for (uint32_t pass_id : compiled_order_) {
+        auto pit = pass_id_to_idx_.find(pass_id);
+        if (pit == pass_id_to_idx_.end()) continue;
+        auto& p = passes_[pit->second];
+
+        auto find_resource = [&](uint32_t res_id) -> ResourceNode* {
+            for (auto& res : resources_) {
+                if (res.id == res_id) return &res;
+            }
+            return nullptr;
+        };
+
+        // 检查该 Pass 所有读取/写入资源的状态要求
+        for (const auto& [res_id, required] : p.resource_states) {
+            if (required == ResourceState::Undefined) continue;
+            ResourceNode* res = find_resource(res_id);
+            if (!res) continue;
+
+            // 状态变化 → 插入屏障
+            if (res->compiled_state != required && res->compiled_state != ResourceState::Undefined) {
+                p.pre_barriers.push_back({res->rt_handle, res->compiled_state, required});
+            }
+
+            // 自动 RT 绑定：写入状态为 RenderTarget 且有物理 RT
+            if (required == ResourceState::RenderTarget && res->rt_handle != 0) {
+                p.auto_bind_rt = res->rt_handle;
+            }
+
+            res->compiled_state = required;
+        }
+    }
+
     is_compiled_ = true;
     return true;
 }
@@ -429,11 +504,29 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
 
     for (uint32_t pass_id : compiled_order_) {
         auto it = pass_id_to_idx_.find(pass_id);
-        if (it != pass_id_to_idx_.end()) {
-            auto& p = passes_[it->second];
-            if (p.execute) {
-                p.execute(cmd_buffer);
+        if (it == pass_id_to_idx_.end()) continue;
+        auto& p = passes_[it->second];
+        if (!p.execute) continue;
+
+        // 自动屏障插入
+        if (rhi_device_) {
+            for (const auto& b : p.pre_barriers) {
+                rhi_device_->TransitionRenderTarget(b.rt_handle, b.from, b.to);
             }
+        }
+
+        // 自动 RT 绑定
+        if (p.auto_bind_rt != 0) {
+            RenderPassDesc rpd{};
+            rpd.render_target = p.auto_bind_rt;
+            cmd_buffer.BeginRenderPass(rpd);
+        }
+
+        p.execute(cmd_buffer);
+
+        // 自动 RT 解绑
+        if (p.auto_bind_rt != 0) {
+            cmd_buffer.EndRenderPass();
         }
     }
 }
@@ -451,13 +544,32 @@ void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
     }
     for (uint32_t pass_id : compiled_order_) {
         auto it = pass_id_to_idx_.find(pass_id);
-        if (it != pass_id_to_idx_.end()) {
-            auto& p = passes_[it->second];
-            if (p.execute) {
-                p.execute(cmd_buffer);
-                if (post_pass) post_pass(p.name);
+        if (it == pass_id_to_idx_.end()) continue;
+        auto& p = passes_[it->second];
+        if (!p.execute) continue;
+
+        // 自动屏障插入
+        if (rhi_device_) {
+            for (const auto& b : p.pre_barriers) {
+                rhi_device_->TransitionRenderTarget(b.rt_handle, b.from, b.to);
             }
         }
+
+        // 自动 RT 绑定
+        if (p.auto_bind_rt != 0) {
+            RenderPassDesc rpd{};
+            rpd.render_target = p.auto_bind_rt;
+            cmd_buffer.BeginRenderPass(rpd);
+        }
+
+        p.execute(cmd_buffer);
+
+        // 自动 RT 解绑
+        if (p.auto_bind_rt != 0) {
+            cmd_buffer.EndRenderPass();
+        }
+
+        if (post_pass) post_pass(p.name);
     }
 }
 

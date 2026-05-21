@@ -352,6 +352,18 @@ struct RenderStats {
 // 材质排序键
 // ============================================================
 
+// ============================================================
+// 资源状态（RenderGraph 自动屏障 + RHI 状态转换）
+// ============================================================
+
+/// 渲染资源状态枚举
+enum class ResourceState : uint8_t {
+    Undefined,          ///< 未知/初始状态
+    RenderTarget,       ///< 作为渲染目标写入
+    ShaderRead,         ///< 作为纹理/UBO 被着色器读取
+    UnorderedAccess     ///< 作为 UAV/SSBO 被 Compute Shader 读写
+};
+
 /// 生成 MeshDrawItem 的 64 位排序键，用于 std::sort 减少 GPU 状态切换
 /// 优先级(高→低): blend_mode > shading_mode > texture_handle > normal_map_handle
 inline uint64_t MakeSortKey(const MeshDrawItem& item) noexcept {

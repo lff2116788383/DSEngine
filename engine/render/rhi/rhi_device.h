@@ -97,6 +97,19 @@ public:
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
     virtual void DeleteBuffer(unsigned int handle) = 0;
 
+    // --- 资源状态转换（RenderGraph 自动屏障） ---
+
+    /// 渲染目标状态转换，由 RenderGraph::Execute 在 Pass 之间自动调用。
+    /// 默认实现：从 UnorderedAccess 离开时插入 ComputeMemoryBarrier。
+    /// 后端可覆写以执行更精确的屏障（如 Vulkan VkImageMemoryBarrier）。
+    virtual void TransitionRenderTarget(unsigned int rt_handle,
+                                         ResourceState from, ResourceState to) {
+        (void)rt_handle;
+        if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
+            ComputeMemoryBarrier();
+        }
+    }
+
     // --- 统一 GPU Buffer API（Phase 2）---
     // 默认实现转发到旧 API，后端可覆写以获取完整 usage 信息。
     // 旧 CreateBuffer/CreateSSBO/CreateIndirectBuffer 已标记 deprecated。

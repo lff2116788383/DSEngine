@@ -59,14 +59,6 @@ struct RenderResourceHandleHash {
     }
 };
 
-/// 渲染资源状态枚举（用于屏障自动化）
-enum class ResourceState : uint8_t {
-    Undefined,
-    RenderTarget,
-    ShaderRead,
-    UnorderedAccess
-};
-
 /// 渲染资源访问描述（Pass 声明读写依赖时使用）
 struct ResourceAccess {
     RenderResourceHandle resource;
@@ -136,11 +128,18 @@ public:
                              std::vector<ResourceAccess> writes,
                              std::function<void(CommandBuffer&)> execute);
 
-    /// 为指定 Pass 声明读取资源
+    /// 为指定 Pass 声明读取资源（无状态，不参与自动屏障）
     void PassRead(RenderPassHandle pass, RenderResourceHandle resource);
 
-    /// 为指定 Pass 声明写入资源
+    /// 为指定 Pass 声明写入资源（无状态，不参与自动屏障）
     void PassWrite(RenderPassHandle pass, RenderResourceHandle resource);
+
+    /// 状态感知版本：声明读取并指定所需资源状态（参与自动屏障）
+    void PassReadWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state);
+
+    /// 状态感知版本：声明写入并指定目标资源状态
+    /// state == RenderTarget 时自动绑定 RT；state == UnorderedAccess 时标记 UAV 写
+    void PassWriteWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state);
 
     /// 为指定 Pass 设置执行函数
     void PassSetExecute(RenderPassHandle pass, std::function<void(CommandBuffer&)> execute);
@@ -197,10 +196,18 @@ private:
         unsigned int rt_handle = 0;      ///< 实际分配的 GPU RT（Transient/Imported）
         int first_use = -1;             ///< 生命周期：编译顺序中的首次使用位置
         int last_use = -1;              ///< 生命周期：编译顺序中的最后使用位置
+        ResourceState compiled_state = ResourceState::Undefined; ///< Compile 时追踪的当前状态
         /// 写入此资源的 Pass（最后一个写入者，用于依赖推断）
         std::vector<RenderPassHandle> writers;
         /// 读取此资源的 Pass 列表
         std::vector<RenderPassHandle> readers;
+    };
+
+    /// 编译阶段生成的屏障描述
+    struct BarrierEntry {
+        unsigned int rt_handle;
+        ResourceState from;
+        ResourceState to;
     };
 
     /// 内部 Pass 节点
@@ -211,6 +218,12 @@ private:
         std::vector<RenderResourceHandle> writes;
         std::function<void(CommandBuffer&)> execute;
         bool is_culled = false;  ///< 编译后标记是否被剔除
+        /// 状态感知：resource_id → 该 Pass 对此资源要求的状态
+        std::unordered_map<uint32_t, ResourceState> resource_states;
+        /// Compile 输出：执行前需插入的屏障
+        std::vector<BarrierEntry> pre_barriers;
+        /// Compile 输出：自动绑定的 RT（0 = 不自动绑定）
+        unsigned int auto_bind_rt = 0;
     };
 
     /// 递归标记可达 Pass（从外部输出反向追踪）
