@@ -11,25 +11,27 @@ namespace reflect {
 static constexpr shader_reflect::VertexInput* kskinning_comp_inputs = nullptr;
 static constexpr uint32_t kskinning_comp_input_count = 0;
 
-static constexpr shader_reflect::ResourceBinding kskinning_comp_ubos[] = {
-    {"BoneMatrices", shader_reflect::ResourceType::UniformBuffer, 0, 2, 6400, 1, shader_reflect::ImageDimension::Dim2D, false},
-};
-static constexpr uint32_t kskinning_comp_ubo_count = 1;
+static constexpr shader_reflect::ResourceBinding* kskinning_comp_ubos = nullptr;
+static constexpr uint32_t kskinning_comp_ubo_count = 0;
 
 static constexpr shader_reflect::ResourceBinding kskinning_comp_ssbos[] = {
-    {"InputVertices", shader_reflect::ResourceType::StorageBuffer, 0, 0, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
-    {"OutputVertices", shader_reflect::ResourceType::StorageBuffer, 0, 1, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
+    {"InstBuf", shader_reflect::ResourceType::StorageBuffer, 0, 4, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
+    {"SrcBuf", shader_reflect::ResourceType::StorageBuffer, 0, 0, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
+    {"MorphBuf", shader_reflect::ResourceType::StorageBuffer, 0, 3, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
+    {"BoneBuf", shader_reflect::ResourceType::StorageBuffer, 0, 2, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
+    {"DstBuf", shader_reflect::ResourceType::StorageBuffer, 0, 1, 0, 1, shader_reflect::ImageDimension::Dim2D, false},
 };
-static constexpr uint32_t kskinning_comp_ssbo_count = 2;
+static constexpr uint32_t kskinning_comp_ssbo_count = 5;
 
 static constexpr shader_reflect::ResourceBinding* kskinning_comp_textures = nullptr;
 static constexpr uint32_t kskinning_comp_texture_count = 0;
 
 static constexpr shader_reflect::PushConstantMember kskinning_comp_push_constants[] = {
-    {"vertex_count", 0, 4, shader_reflect::BaseType::UInt, 0},
+    {"total_vertices", 0, 4, shader_reflect::BaseType::UInt, 0},
+    {"instance_count", 4, 4, shader_reflect::BaseType::UInt, 0},
 };
-static constexpr uint32_t kskinning_comp_push_constant_count = 1;
-static constexpr uint32_t kskinning_comp_push_constant_size = 4;
+static constexpr uint32_t kskinning_comp_push_constant_count = 2;
+static constexpr uint32_t kskinning_comp_push_constant_size = 8;
 
 static constexpr shader_reflect::StageReflection kskinning_comp_reflection = {
     kskinning_comp_ubos, kskinning_comp_ubo_count,
