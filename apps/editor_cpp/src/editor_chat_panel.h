@@ -90,6 +90,9 @@ private:
     bool bridge_crashed_ = false;       // bridge 意外退出
     std::string history_path_;          // 自动保存路径
     std::function<std::string(const std::string&)> mention_resolver_; // @mention 解析器
+    int edit_msg_idx_ = -1;             // 正在编辑的 User 消息索引（-1 = 无）
+    int total_input_tokens_  = 0;       // 累计 input tokens
+    int total_output_tokens_ = 0;       // 累计 output tokens
 
     // Python 子进程
     std::string bridge_path_;

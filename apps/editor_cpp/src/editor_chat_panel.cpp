@@ -632,12 +632,8 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 scroll_to_bottom_ = true;
                 break;
             case BridgeMessageType::TokenUsage:
-                {
-                    std::string token_info = "Tokens: " + std::to_string(bmsg.input_tokens) +
-                                           " in, " + std::to_string(bmsg.output_tokens) + " out";
-                    messages_.push_back({ChatRole::System, token_info});
-                    scroll_to_bottom_ = true;
-                }
+                total_input_tokens_  += bmsg.input_tokens;
+                total_output_tokens_ += bmsg.output_tokens;
                 break;
             case BridgeMessageType::CancelAck:
                 waiting_for_response_ = false;
@@ -660,7 +656,11 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     ImGui::BeginChild("ChatMessages", ImVec2(0, -footer_height), true,
                       ImGuiWindowFlags_HorizontalScrollbar);
 
-    for (const auto& msg : messages_) {
+    int resend_idx = -1;   // index of message to resend (set during iteration, acted after)
+    int edit_click_idx = -1;
+
+    for (int mi = 0; mi < static_cast<int>(messages_.size()); ++mi) {
+        const auto& msg = messages_[mi];
         ImVec4 color;
         const char* prefix;
         switch (msg.role) {
@@ -681,13 +681,14 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 prefix = "";
                 break;
         }
+
         // Prefix label
         ImGui::PushStyleColor(ImGuiCol_Text, color);
         ImGui::TextUnformatted(prefix);
         ImGui::PopStyleColor();
         if (prefix[0] != '\0') ImGui::SameLine(0, 0);
 
-        // Render content: Markdown for Assistant, plain wrapped for User/System/Tool
+        // Render content
         if (msg.role == ChatRole::Assistant) {
             RenderMarkdown(msg.content, color);
         } else {
@@ -695,7 +696,51 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
             ImGui::TextWrapped("%s", msg.content.c_str());
             ImGui::PopStyleColor();
         }
+
+        // Hover actions for User messages (not while streaming)
+        if (msg.role == ChatRole::User && !waiting_for_response_ && ImGui::IsItemHovered()) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.6f, 0.6f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 1));
+            ImGui::PushID(mi * 100 + 1);
+            if (ImGui::SmallButton("Resend")) resend_idx = mi;
+            ImGui::PopID();
+            ImGui::SameLine(0, 4);
+            ImGui::PushID(mi * 100 + 2);
+            if (ImGui::SmallButton("Edit")) edit_click_idx = mi;
+            ImGui::PopID();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+        }
+
+        // Response time for completed assistant messages
+        if (msg.role == ChatRole::Assistant && !msg.is_streaming &&
+            msg.start_time.time_since_epoch().count()) {
+            float ms = msg.response_time_ms();
+            ImGui::SameLine();
+            ImGui::TextDisabled("  %.0fms", ms);
+        }
+
         ImGui::Spacing();
+    }
+
+    // Act on resend / edit clicks after iteration (avoids invalidating the loop)
+    if (resend_idx >= 0 && resend_idx < static_cast<int>(messages_.size())) {
+        std::string original_text = messages_[resend_idx].content;
+        messages_.erase(messages_.begin() + resend_idx, messages_.end());
+        messages_.push_back({ChatRole::User, original_text, current_agent_id_});
+        std::string context = ResolveMentions(original_text, mention_resolver_);
+        std::string send_text = context.empty() ? original_text : context + "\n用户问题：" + original_text;
+        SendToBridge(send_text);
+        scroll_to_bottom_ = true;
+        if (!history_path_.empty()) SaveHistory(history_path_);
+    }
+    if (edit_click_idx >= 0 && edit_click_idx < static_cast<int>(messages_.size())) {
+        const std::string& original = messages_[edit_click_idx].content;
+        std::strncpy(input_buf_, original.c_str(), sizeof(input_buf_) - 1);
+        input_buf_[sizeof(input_buf_) - 1] = '\0';
+        edit_msg_idx_ = edit_click_idx;
+        ImGui::SetKeyboardFocusHere(-1); // focus input next frame
     }
 
     if (waiting_for_response_) {
@@ -760,6 +805,12 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
         if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
             std::string text(input_buf_);
             if (!text.empty()) {
+                // If editing an existing message, truncate from that index
+                if (edit_msg_idx_ >= 0 && edit_msg_idx_ < static_cast<int>(messages_.size())) {
+                    messages_.erase(messages_.begin() + edit_msg_idx_, messages_.end());
+                    edit_msg_idx_ = -1;
+                }
+
                 // Resolve @mentions and prepend context
                 std::string context = ResolveMentions(text, mention_resolver_);
                 std::string send_text = context.empty() ? text : context + "\n用户问题：" + text;
@@ -768,7 +819,6 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 SendToBridge(send_text);
                 input_buf_[0] = '\0';
                 scroll_to_bottom_ = true;
-                // Auto-save history after each user message
                 if (!history_path_.empty())
                     SaveHistory(history_path_);
             }
@@ -778,6 +828,21 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     ImGui::SameLine();
     if (ImGui::Button("Clear")) {
         ClearHistory();
+        total_input_tokens_  = 0;
+        total_output_tokens_ = 0;
+        edit_msg_idx_ = -1;
+    }
+
+    // Token statistics (right-aligned)
+    if (total_input_tokens_ > 0 || total_output_tokens_ > 0) {
+        char token_buf[64];
+        std::snprintf(token_buf, sizeof(token_buf), "in:%d out:%d",
+                      total_input_tokens_, total_output_tokens_);
+        float text_w = ImGui::CalcTextSize(token_buf).x;
+        float avail   = ImGui::GetContentRegionAvail().x;
+        if (avail > text_w + 8.0f)
+            ImGui::SameLine(ImGui::GetCursorPosX() + avail - text_w);
+        ImGui::TextDisabled("%s", token_buf);
     }
 }
 
