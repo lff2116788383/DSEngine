@@ -83,6 +83,16 @@ void ChatPanel::ClearHistory() {
     messages_.clear();
     messages_.push_back({ChatRole::System,
         "Conversation cleared."});
+    // 同步通知 bridge 清除其 _conversation_history
+    if (bridge_running_) {
+        std::string line = BuildClearHistoryMessage();
+#ifdef _WIN32
+        DWORD written;
+        WriteFile(stdin_write_, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
+#else
+        write(stdin_fd_, line.c_str(), line.size());
+#endif
+    }
 }
 
 // ─── Bridge subprocess management ───────────────────────────────────────────
@@ -110,7 +120,15 @@ void ChatPanel::StartBridge() {
                 SetEnvironmentVariableA("OPENAI_MODEL", p.model.c_str());
             if (!p.proxy_url.empty())
                 SetEnvironmentVariableA("HTTP_PROXY", p.proxy_url.c_str());
+            // temperature / max_tokens 传给 bridge（Fix F）
+            SetEnvironmentVariableA("OPENAI_TEMPERATURE",
+                std::to_string(p.temperature).c_str());
+            SetEnvironmentVariableA("OPENAI_MAX_TOKENS",
+                std::to_string(p.max_tokens).c_str());
         }
+        // 使用配置的 default_agent 初始化（Fix G）
+        if (!cfg.default_agent.empty())
+            current_agent_id_ = cfg.default_agent;
     }
 
 #ifdef _WIN32

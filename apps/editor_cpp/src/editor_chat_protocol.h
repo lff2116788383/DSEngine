@@ -193,6 +193,18 @@ inline std::string BuildCancelMessage() {
     return std::string(buf.GetString()) + "\n";
 }
 
+// ─── 纯函数：构建清除 bridge 对话历史 JSON-line ─────────────────────────
+
+inline std::string BuildClearHistoryMessage() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    doc.AddMember("type", "clear_history", doc.GetAllocator());
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return std::string(buf.GetString()) + "\n";
+}
+
 // ─── 纯函数：构建带图片的 user_message JSON-line ───────────────────────────
 
 inline std::string BuildUserMessageWithImage(const std::string& content,

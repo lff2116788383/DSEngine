@@ -227,44 +227,46 @@ void AIConfigManager::DrawConfigWindow() {
         
         ImGui::Separator();
         
+#define SAFE_STRCPY(buf, src) do { strncpy((buf), (src).c_str(), sizeof(buf)-1); (buf)[sizeof(buf)-1]='\0'; } while(0)
+
         // Provider name
         char name_buf[64];
-        strncpy(name_buf, provider.name.c_str(), sizeof(name_buf));
+        SAFE_STRCPY(name_buf, provider.name);
         if (ImGui::InputText("Provider Name", name_buf, sizeof(name_buf))) {
             provider.name = name_buf;
         }
         
         // API Key (password masked)
         char key_buf[256];
-        strncpy(key_buf, provider.api_key.c_str(), sizeof(key_buf));
+        SAFE_STRCPY(key_buf, provider.api_key);
         if (ImGui::InputText("API Key", key_buf, sizeof(key_buf), ImGuiInputTextFlags_Password)) {
             provider.api_key = key_buf;
         }
         
         // Base URL
         char url_buf[256];
-        strncpy(url_buf, provider.base_url.c_str(), sizeof(url_buf));
+        SAFE_STRCPY(url_buf, provider.base_url);
         if (ImGui::InputText("Base URL", url_buf, sizeof(url_buf))) {
             provider.base_url = url_buf;
         }
         
         // Model
         char model_buf[64];
-        strncpy(model_buf, provider.model.c_str(), sizeof(model_buf));
+        SAFE_STRCPY(model_buf, provider.model);
         if (ImGui::InputText("Model", model_buf, sizeof(model_buf))) {
             provider.model = model_buf;
         }
         
         // Image Model
         char img_model_buf[64];
-        strncpy(img_model_buf, provider.image_model.c_str(), sizeof(img_model_buf));
+        SAFE_STRCPY(img_model_buf, provider.image_model);
         if (ImGui::InputText("Image Model", img_model_buf, sizeof(img_model_buf))) {
             provider.image_model = img_model_buf;
         }
         
         // Proxy
         char proxy_buf[256];
-        strncpy(proxy_buf, provider.proxy_url.c_str(), sizeof(proxy_buf));
+        SAFE_STRCPY(proxy_buf, provider.proxy_url);
         if (ImGui::InputText("Proxy URL", proxy_buf, sizeof(proxy_buf))) {
             provider.proxy_url = proxy_buf;
         }
@@ -290,10 +292,12 @@ void AIConfigManager::DrawConfigWindow() {
         
         // Default Agent
         char agent_buf[64];
-        strncpy(agent_buf, config_.default_agent.c_str(), sizeof(agent_buf));
+        SAFE_STRCPY(agent_buf, config_.default_agent);
         if (ImGui::InputText("Default Agent", agent_buf, sizeof(agent_buf))) {
             config_.default_agent = agent_buf;
         }
+
+#undef SAFE_STRCPY
         
         ImGui::Separator();
         

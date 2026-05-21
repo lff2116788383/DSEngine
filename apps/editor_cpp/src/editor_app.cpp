@@ -453,10 +453,19 @@ bool EditorApp::Init(int argc, char* argv[]) {
         // @script:relative/path — 脚本文件内容（最多 200 行）
         if (token.rfind("@script:", 0) == 0) {
             std::string rel_path = token.substr(8);
-            std::filesystem::path full = GetProjectRootPath() / rel_path;
+            std::filesystem::path project_root = GetProjectRootPath();
+            std::filesystem::path full = project_root / rel_path;
             if (!std::filesystem::exists(full))
-                full = GetProjectRootPath() / "samples" / "lua" / rel_path;
-            std::ifstream f(full);
+                full = project_root / "samples" / "lua" / rel_path;
+            // Fix E: 路径穿越防护 — canonical 路径必须以 project_root 开头
+            std::error_code ec;
+            auto canonical = std::filesystem::weakly_canonical(full, ec);
+            auto root_canonical = std::filesystem::weakly_canonical(project_root, ec);
+            auto canonical_str = canonical.string();
+            auto root_str = root_canonical.string();
+            if (canonical_str.rfind(root_str, 0) != 0)
+                return "[脚本: " + rel_path + "]\n（路径不在项目目录内）\n";
+            std::ifstream f(canonical);
             if (!f) return "[脚本: " + rel_path + "]\n（文件不存在）\n";
             std::string content, line;
             int lines = 0;
