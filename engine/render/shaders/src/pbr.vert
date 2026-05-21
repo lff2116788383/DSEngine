@@ -40,7 +40,7 @@ layout(push_constant) uniform PushConstants {
 } pc;
 #define MODEL_MATRIX pc.u_model
 
-const int MAX_BONES = 100;
+const int MAX_BONES = 255;
 layout(std140, set = 2, binding = 8) uniform BoneMatrices {
     mat4 u_bone_matrices[MAX_BONES];
 };

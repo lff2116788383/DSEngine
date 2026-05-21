@@ -153,7 +153,7 @@ static const char* kshadow_vert_glsl330 = R"(#version 430
 
 layout(binding = 8, std140) uniform BoneMatrices
 {
-    mat4 u_bone_matrices[100];
+    mat4 u_bone_matrices[255];
 } _36;
 
 layout(binding = 0, std140) uniform PerFrame
@@ -199,7 +199,7 @@ static const char* kshadow_vert_essl310 = R"(#version 310 es
 
 layout(binding = 8, std140) uniform BoneMatrices
 {
-    mat4 u_bone_matrices[100];
+    mat4 u_bone_matrices[255];
 } _36;
 
 layout(binding = 0, std140) uniform PerFrame
@@ -243,7 +243,7 @@ void main()
 // DX11 HLSL SM5.0
 static const char* kshadow_vert_hlsl = R"(cbuffer BoneMatrices : register(b2)
 {
-    row_major float4x4 _36_u_bone_matrices[100] : packoffset(c0);
+    row_major float4x4 _36_u_bone_matrices[255] : packoffset(c0);
 };
 
 cbuffer PerFrame : register(b1)

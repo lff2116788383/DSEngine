@@ -1,6 +1,6 @@
 cbuffer BoneMatrices : register(b2)
 {
-    row_major float4x4 _36_u_bone_matrices[100] : packoffset(c0);
+    row_major float4x4 _36_u_bone_matrices[255] : packoffset(c0);
 };
 
 cbuffer PerFrame : register(b1)

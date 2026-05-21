@@ -2,7 +2,7 @@
 
 layout(binding = 8, std140) uniform BoneMatrices
 {
-    mat4 u_bone_matrices[100];
+    mat4 u_bone_matrices[255];
 } _36;
 
 layout(binding = 0, std140) uniform PerFrame

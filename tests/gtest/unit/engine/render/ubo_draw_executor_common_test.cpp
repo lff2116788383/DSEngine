@@ -41,8 +41,8 @@ TEST(UBOTypesTest, SpotLightEntry大小64) {
     EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
-TEST(UBOTypesTest, BoneMatricesUBO大小6400) {
-    EXPECT_EQ(sizeof(BoneMatricesUBO), 6400u);
+TEST(UBOTypesTest, BoneMatricesUBO大小16320) {
+    EXPECT_EQ(sizeof(BoneMatricesUBO), 16320u);
 }
 
 TEST(UBOTypesTest, MorphWeightsUBO大小64) {

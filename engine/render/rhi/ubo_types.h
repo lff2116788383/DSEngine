@@ -187,11 +187,11 @@ static_assert(sizeof(SpotLightDataUBO) == 256, "SpotLightDataUBO must be 256 byt
 // BoneMatrices UBO (binding = 6)
 // ============================================================
 
-static constexpr int kMaxBones = 100;
+static constexpr int kMaxBones = 255;
 struct BoneMatricesUBO {
     glm::mat4 u_bone_matrices[kMaxBones];
 };
-static_assert(sizeof(BoneMatricesUBO) == 6400, "BoneMatricesUBO must be 6400 bytes");
+static_assert(sizeof(BoneMatricesUBO) == 16320, "BoneMatricesUBO must be 16320 bytes");
 
 // ============================================================
 // MorphWeights UBO (binding = 7)

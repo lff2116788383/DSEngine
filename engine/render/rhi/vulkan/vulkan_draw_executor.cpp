@@ -226,7 +226,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     }
 
     // --- BoneMatrices / MorphWeights UBO（多 mesh 累积偏移，避免 GPU 延迟执行覆盖） ---
-    constexpr size_t kBoneMatricesSize = 64 * 100 * sizeof(glm::mat4); // 64 meshes * 6400 bytes = 400KB
+    constexpr size_t kBoneMatricesSize = 64 * 255 * sizeof(glm::mat4); // 64 meshes * 16320 bytes = ~1020KB
     constexpr size_t kMorphWeightsSize = 16; // 4 floats
     CreateUBOBufferInternal(device, physical_device, kBoneMatricesSize,
                             bone_matrices_ubo_, bone_matrices_ubo_mem_);
@@ -234,7 +234,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                             morph_weights_ubo_, morph_weights_ubo_mem_);
     // 初始化 BoneMatrices 为单位矩阵
     {
-        std::vector<glm::mat4> identity_bones(64 * 100, glm::mat4(1.0f));
+        std::vector<glm::mat4> identity_bones(64 * 255, glm::mat4(1.0f));
         WriteToBuffer(device, bone_matrices_ubo_mem_, 0, kBoneMatricesSize, identity_bones.data());
     }
     // MorphWeights 初始化为 0
@@ -783,7 +783,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         VkDescriptorBufferInfo bone_buf_info{};
         bone_buf_info.buffer = bone_matrices_ubo_;
         bone_buf_info.offset = bone_offset;
-        bone_buf_info.range  = 100 * sizeof(glm::mat4);
+        bone_buf_info.range  = 255 * sizeof(glm::mat4);
 
         VkWriteDescriptorSet bone_write{};
         bone_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1713,11 +1713,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 上传骨骼矩阵到 UBO（累积偏移，避免 GPU 延迟执行时覆盖前面 mesh 的数据）
         VkDeviceSize cur_bone_offset = bone_matrices_offset_;
         if (item.skinned && !item.bone_matrices.empty()) {
-            size_t count = (std::min)(item.bone_matrices.size(), static_cast<size_t>(100));
+            size_t count = (std::min)(item.bone_matrices.size(), static_cast<size_t>(255));
             size_t bone_data_size = count * sizeof(glm::mat4);
             WriteToBuffer(context_->device(), bone_matrices_ubo_mem_, bone_matrices_offset_,
                           bone_data_size, item.bone_matrices.data());
-            bone_matrices_offset_ += 100 * sizeof(glm::mat4); // 固定步长，保持对齐
+            bone_matrices_offset_ += 255 * sizeof(glm::mat4); // 固定步长，保持对齐
         }
 
         // 分配并绑定 DescriptorSet（传入各 UBO 的当前偏移）
