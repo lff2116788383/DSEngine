@@ -338,6 +338,7 @@ unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool i
 }
 
 void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
+    if (!initialized_) return;
     unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
     glBindBuffer(target, handle);
     if (offset == 0) {
@@ -374,6 +375,7 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 // --- 绾圭悊 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+    if (!initialized_) return 0u;
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
@@ -479,6 +481,7 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
 // --- 娓叉煋鐩爣 ---
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
+    if (!initialized_) return 0u;
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
     unsigned int depth_texture_handle = 0;
     unsigned int fbo_handle = 0;

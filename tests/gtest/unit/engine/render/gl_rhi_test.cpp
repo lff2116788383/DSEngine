@@ -102,6 +102,28 @@ TEST(OpenGLRhiDeviceTest, 未初始化时CreateBuffer返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
+TEST(OpenGLRhiDeviceTest, 未初始化时CreateTexture2D返回零) {
+    OpenGLRhiDevice device;
+    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(OpenGLRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
+    OpenGLRhiDevice device;
+    RenderTargetDesc desc{};
+    desc.width = 256;
+    desc.height = 256;
+    desc.has_color = true;
+    unsigned int handle = device.CreateRenderTarget(desc);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(OpenGLRhiDeviceTest, 未初始化时UpdateBuffer安全) {
+    OpenGLRhiDevice device;
+    float data[] = {0.5f};
+    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+}
+
 TEST(OpenGLRhiDeviceTest, SetGlobalShadowMap越界静默忽略) {
     OpenGLRhiDevice device;
     device.SetGlobalShadowMap(0, 100);

@@ -81,18 +81,24 @@ TEST(VulkanRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
+TEST(VulkanRhiDeviceTest, 未初始化时UpdateBuffer安全) {
+    VulkanRhiDevice device;
+    float data[] = {0.5f};
+    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时Submit安全) {
+    VulkanRhiDevice device;
+    auto cmd = std::make_shared<VulkanCommandBuffer>();
+    device.Submit(cmd);
+}
+
 TEST(VulkanRhiDeviceTest, 未初始化时删除操作安全) {
     VulkanRhiDevice device;
     device.DeleteRenderTarget(999);
     device.DeleteTexture(999);
     device.DeleteShaderProgram(999);
     device.DeleteBuffer(999);
-}
-
-TEST(VulkanRhiDeviceTest, 未初始化时UpdateBuffer安全) {
-    VulkanRhiDevice device;
-    float data[] = {0.5f};
-    device.UpdateBuffer(999, 0, sizeof(data), data, false);
 }
 
 TEST(VulkanRhiDeviceTest, LastFrameStats默认值为零) {

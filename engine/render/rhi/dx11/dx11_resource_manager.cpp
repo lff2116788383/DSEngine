@@ -401,6 +401,7 @@ unsigned int DX11ResourceManager::CreateBuffer(size_t size, const void* data, bo
 }
 
 void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool /*is_index*/) {
+    if (!device_) return;
     auto it = buffers_.find(handle);
     if (it == buffers_.end()) return;
     auto& buf = it->second;

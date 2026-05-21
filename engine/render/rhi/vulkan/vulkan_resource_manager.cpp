@@ -189,6 +189,7 @@ void VulkanResourceManager::EndSingleTimeCommands(VkCommandBuffer command_buffer
 // ============================================================
 
 unsigned int VulkanResourceManager::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+    if (!device_) return 0;
     unsigned int handle = AllocateTextureHandle();
     VulkanTexture tex;
     tex.width = width;
@@ -776,6 +777,7 @@ unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, 
 }
 
 void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    if (!device_) return;
     auto it = buffers_.find(handle);
     if (it == buffers_.end()) return;
 
@@ -978,6 +980,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
                                                         bool generate_mipmaps, bool cube_map,
                                                         int msaa_samples, bool allow_uav,
                                                         int color_attachment_count) {
+    if (!device_) return 0;
     unsigned int handle = AllocateRenderTargetHandle();
     VulkanRenderTarget rt;
     rt.width = width;
