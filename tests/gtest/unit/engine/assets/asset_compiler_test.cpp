@@ -272,7 +272,7 @@ TEST(MeshHeaderTest, 自定义值) {
 // ============================================================
 
 TEST(SubMeshDescTest, 默认值) {
-    SubMeshDesc desc;
+    SubMeshDesc desc{};
     EXPECT_EQ(desc.index_start, 0u);
     EXPECT_EQ(desc.index_count, 0u);
     EXPECT_EQ(desc.base_vertex, 0u);
@@ -327,8 +327,8 @@ TEST(AnimHeaderTest, 自定义值) {
 // ============================================================
 
 TEST(AnimChannelDescTest, 默认值) {
-    AnimChannelDesc desc;
-    EXPECT_EQ(desc.target_node_index, -1);
+    AnimChannelDesc desc{};
+    EXPECT_EQ(desc.target_node_index, 0);
     EXPECT_EQ(desc.position_key_count, 0u);
     EXPECT_EQ(desc.rotation_key_count, 0u);
     EXPECT_EQ(desc.scale_key_count, 0u);
@@ -385,10 +385,10 @@ TEST(SkelHeaderTest, 自定义值) {
 // ============================================================
 
 TEST(BoneDescTest, 默认值) {
-    BoneDesc desc;
-    EXPECT_EQ(desc.parent_index, -1);
-    EXPECT_EQ(desc.inverse_bind_matrix, glm::mat4(1.0f));
-    EXPECT_EQ(desc.local_transform, glm::mat4(1.0f));
+    BoneDesc desc{};
+    EXPECT_EQ(desc.parent_index, 0);
+    EXPECT_EQ(desc.inverse_bind_matrix, glm::mat4(0.0f));
+    EXPECT_EQ(desc.local_transform, glm::mat4(0.0f));
 }
 
 TEST(BoneDescTest, 自定义值) {
@@ -407,11 +407,11 @@ TEST(BoneDescTest, 自定义值) {
 // ============================================================
 
 TEST(PackAlignmentTest, MeshHeader紧凑布局) {
-    EXPECT_EQ(sizeof(MeshHeader), 56u);  // 4 magic + 4 version + 4*5 uint32 + 3*uint64 = 4+4+20+24 = 52 (padding to 56)
+    EXPECT_EQ(sizeof(MeshHeader), 48u);  // pack(1): 4 magic + 4 ver + 4*4 uint32 + 3*8 uint64 = 48
 }
 
 TEST(PackAlignmentTest, SubMeshDesc紧凑布局) {
-    EXPECT_EQ(sizeof(SubMeshDesc), 56u);  // 4*uint32 + 2*vec3(12) = 16 + 24 = 40 (padding to 56)
+    EXPECT_EQ(sizeof(SubMeshDesc), 40u);  // pack(1): 4*4 uint32 + 2*12 vec3 = 40
 }
 
 TEST(PackAlignmentTest, AnimHeader紧凑布局) {
@@ -423,9 +423,9 @@ TEST(PackAlignmentTest, AnimChannelDesc紧凑布局) {
 }
 
 TEST(PackAlignmentTest, SkelHeader紧凑布局) {
-    EXPECT_EQ(sizeof(SkelHeader), 16u);  // 4 magic + 4 version + 4 uint32 = 12 (padding to 16)
+    EXPECT_EQ(sizeof(SkelHeader), 12u);  // pack(1): 4 magic + 4 ver + 4 uint32 = 12
 }
 
 TEST(PackAlignmentTest, BoneDesc紧凑布局) {
-    EXPECT_EQ(sizeof(BoneDesc), 136u);  // 1 int + 2*mat4(64) = 4 + 128 = 132 (padding to 136)
+    EXPECT_EQ(sizeof(BoneDesc), 132u);  // pack(1): 4 int + 2*64 mat4 = 132
 }

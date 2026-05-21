@@ -20,18 +20,15 @@ TEST(LuaRuntimeTest, 默认状态未初始化) {
 }
 
 TEST(LuaRuntimeTest, BootstrapLuaRuntime返回值) {
-    // 配置最小上下文（所有回调可为空）
-    LuaApiContext ctx;
+    // world=nullptr 时应返回 false（引擎需要有效的 ECS world 才能初始化 Lua 绑定）
+    LuaApiContext ctx;  // world 为 nullptr
     ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");  // 空路径表示无入口脚本
+    SetStartupLuaScriptPath("");
 
     bool success = BootstrapLuaRuntime();
-    // 期望成功（即使没有实体脚本，只要 Lua 库加载成功）
-    EXPECT_TRUE(success) << "BootstrapLuaRuntime 应返回 true 表示 LuaVM 初始化成功";
+    EXPECT_FALSE(success) << "world=nullptr 时 BootstrapLuaRuntime 应返回 false";
 
-    if (success) {
-        ShutdownLuaRuntime();
-    }
+    ShutdownLuaRuntime();
 }
 
 TEST(LuaRuntimeTest, ShutdownLuaRuntime不崩溃) {

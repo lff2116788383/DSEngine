@@ -503,6 +503,8 @@ if (MSVC)
     # 导致 WINDOWS_EXPORT_ALL_SYMBOLS 的 __create_def PreLinkEvent 失败。
     # 此自定义 PRE_LINK 命令在 __create_def 之前运行，确保 objects.txt 存在。
     add_custom_command(TARGET dse_engine PRE_LINK
+        COMMAND ${CMAKE_COMMAND} -E remove -f
+            ${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>/exports.def
         COMMAND ${CMAKE_COMMAND}
             -DOBJ_DIR=${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>
             -P ${CMAKE_SOURCE_DIR}/cmake/write_objects_txt.cmake
