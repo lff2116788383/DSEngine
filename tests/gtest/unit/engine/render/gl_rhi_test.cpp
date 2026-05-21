@@ -96,6 +96,12 @@ TEST(OpenGLRhiDeviceTest, 子系统访问器可调用) {
     (void)res; (void)state; (void)shader; (void)draw; (void)ubo;
 }
 
+TEST(OpenGLRhiDeviceTest, 未初始化时CreateBuffer返回零) {
+    OpenGLRhiDevice device;
+    unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
+    EXPECT_EQ(handle, 0u);
+}
+
 TEST(OpenGLRhiDeviceTest, SetGlobalShadowMap越界静默忽略) {
     OpenGLRhiDevice device;
     device.SetGlobalShadowMap(0, 100);

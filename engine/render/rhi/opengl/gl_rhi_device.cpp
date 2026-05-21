@@ -327,6 +327,7 @@ const RenderStats& OpenGLRhiDevice::LastFrameStats() const {
 // --- 缂撳啿鍖?---
 
 unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    if (!initialized_) return 0u;
     unsigned int handle = 0;
     glGenBuffers(1, &handle);
     resource_mgr_.ledger().buffers_created += 1;

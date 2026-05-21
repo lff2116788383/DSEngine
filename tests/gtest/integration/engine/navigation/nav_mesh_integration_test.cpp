@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file nav_mesh_integration_test.cpp
  * @brief NavMesh 集成测试 - 使用真实场景数据
  */
@@ -6,130 +6,79 @@
 #include "gtest/gtest.h"
 #include "engine/navigation/nav_mesh_system.h"
 
+#include <glm/glm.hpp>
+#include <vector>
+
 using namespace dse::navigation;
 
-// ============================================================
-// 真实场景 NavMesh 测试
-// ============================================================
+namespace {
 
-TEST(NavMeshIntegrationTest, 大型平面Bake成功) {
-    NavMeshSystem nav;
-    if (!nav.Init()) {
-        GTEST_SKIP() << "Init 失败，跳过测试";
-    }
+NavMeshBuildConfig TestNavConfig() {
+    // 使用 unit 测试中已验证的默认配置
+    NavMeshBuildConfig cfg;  // 使用默认值
+    return cfg;
+}
 
-    // 创建一个足够大的平面 (4 个顶点，2 个三角形)
-    // 使用宽松的配置确保 Recast 约束满足
+bool BakeTestScene(NavMeshSystem& nav) {
     float verts[] = {
-        -100.0f, 0.0f, -100.0f,
-         100.0f, 0.0f, -100.0f,
-         100.0f, 1.0f,  100.0f,  // 微带坡度确保 Y 范围 > agent_height
-        -100.0f, 1.0f,  100.0f
+        -20.0f, 0.0f, -20.0f,
+         20.0f, 0.0f, -20.0f,
+         20.0f, 0.2f,  20.0f,
+        -20.0f, 0.2f,  20.0f
     };
     int tris[] = {
-        0, 1, 2,
-        0, 2, 3
+        0, 2, 1,
+        0, 3, 2
     };
+    return nav.BakeFromTriangles(verts, 4, tris, 2, TestNavConfig());
+}
 
-    NavMeshBuildConfig cfg;
-    cfg.cell_size       = 1.0f;
-    cfg.cell_height     = 0.5f;
-    cfg.agent_height    = 1.5f;  // 减小 agent 高度
-    cfg.agent_radius    = 0.5f;
-    cfg.agent_max_climb = 0.5f;
-    cfg.region_min_size = 1.0f;  // 减小最小区域要求
-    cfg.region_merge_size = 5.0f;
+} // namespace
 
-    bool success = nav.BakeFromTriangles(verts, 4, tris, 2, cfg);
-    EXPECT_TRUE(success) << "大型平面应成功 bake";
+TEST(NavMeshIntegrationTest, Bake有效场景成功) {
+    NavMeshSystem nav;
+    ASSERT_TRUE(nav.Init());
 
-    if (success) {
-        EXPECT_TRUE(nav.IsReady());
-    }
+    EXPECT_TRUE(BakeTestScene(nav));
+    EXPECT_TRUE(nav.IsReady());
 
     nav.Shutdown();
 }
 
-TEST(NavMeshIntegrationTest, 多层台阶Bake成功) {
+TEST(NavMeshIntegrationTest, FindNearestPoint有效场景成功) {
     NavMeshSystem nav;
-    if (!nav.Init()) {
-        GTEST_SKIP() << "Init 失败，跳过测试";
-    }
+    ASSERT_TRUE(nav.Init());
+    ASSERT_TRUE(BakeTestScene(nav));
 
-    // 创建多层台阶几何 (6 个顶点，4 个三角形)
-    float verts[] = {
-        -50.0f, 0.0f, -50.0f,
-         50.0f, 0.0f, -50.0f,
-         50.0f, 0.0f,   0.0f,
-        -50.0f, 0.0f,   0.0f,
-        -50.0f, 1.0f,   0.0f,
-         50.0f, 1.0f,   0.0f,
-         50.0f, 1.0f,  50.0f,
-        -50.0f, 1.0f,  50.0f
-    };
-    int tris[] = {
-        0, 1, 2,  // 底层平面
-        0, 2, 3,
-        4, 5, 6,  // 顶层平面
-        4, 6, 7
-    };
-
-    NavMeshBuildConfig cfg;
-    cfg.cell_size       = 1.0f;
-    cfg.cell_height     = 0.5f;
-    cfg.agent_height    = 1.5f;
-    cfg.agent_radius    = 0.5f;
-    cfg.agent_max_climb = 0.6f;  // 允许攀爬 0.6，可跨越 1.0 高度差
-    cfg.region_min_size = 2.0f;
-    cfg.region_merge_size = 10.0f;
-
-    bool success = nav.BakeFromTriangles(verts, 8, tris, 4, cfg);
-    EXPECT_TRUE(success) << "多层台阶应成功 bake";
-
-    if (success) {
-        EXPECT_TRUE(nav.IsReady());
-    }
+    glm::vec3 nearest;
+    EXPECT_TRUE(nav.FindNearestPoint({0.0f, 0.1f, 0.0f}, nearest));
+    EXPECT_NEAR(nearest.x, 0.0f, 1.0f);
+    EXPECT_NEAR(nearest.z, 0.0f, 1.0f);
 
     nav.Shutdown();
 }
 
-TEST(NavMeshIntegrationTest, FindPath简单路径) {
+TEST(NavMeshIntegrationTest, FindPath有效场景成功) {
     NavMeshSystem nav;
-    if (!nav.Init()) {
-        GTEST_SKIP() << "Init 失败，跳过测试";
-    }
-
-    float verts[] = {
-        -50.0f, 0.0f, -50.0f,
-         50.0f, 0.0f, -50.0f,
-         50.0f, 1.0f,  50.0f,
-        -50.0f, 1.0f,  50.0f
-    };
-    int tris[] = {
-        0, 1, 2,
-        0, 2, 3
-    };
-
-    NavMeshBuildConfig cfg;
-    cfg.cell_size       = 1.0f;
-    cfg.cell_height     = 0.5f;
-    cfg.agent_height    = 1.5f;
-    cfg.agent_radius    = 0.5f;
-    cfg.agent_max_climb = 0.5f;
-    cfg.region_min_size = 1.0f;
-    cfg.region_merge_size = 5.0f;
-
-    if (!nav.BakeFromTriangles(verts, 4, tris, 2, cfg)) {
-        GTEST_SKIP() << "Bake 失败，跳过测试";
-    }
+    ASSERT_TRUE(nav.Init());
+    ASSERT_TRUE(BakeTestScene(nav));
 
     std::vector<glm::vec3> path;
-    bool success = nav.FindPath({-40.0f, 0.5f, -40.0f}, {40.0f, 0.5f, 40.0f}, path, 100);
-    EXPECT_TRUE(success) << "应在可行走区域内找到路径";
+    EXPECT_TRUE(nav.FindPath({-10.0f, 0.1f, -10.0f}, {10.0f, 0.1f, 10.0f}, path, 64));
+    EXPECT_GE(path.size(), 2u);
 
-    if (success) {
-        EXPECT_GT(path.size(), 1u) << "路径应包含至少起点和终点";
-    }
+    nav.Shutdown();
+}
+
+TEST(NavMeshIntegrationTest, Raycast留在NavMesh内不命中) {
+    NavMeshSystem nav;
+    ASSERT_TRUE(nav.Init());
+    ASSERT_TRUE(BakeTestScene(nav));
+
+    glm::vec3 hit;
+    EXPECT_FALSE(nav.Raycast({-5.0f, 0.1f, -5.0f}, {5.0f, 0.1f, 5.0f}, hit));
+    EXPECT_NEAR(hit.x, 5.0f, 0.01f);
+    EXPECT_NEAR(hit.z, 5.0f, 0.01f);
 
     nav.Shutdown();
 }

@@ -691,6 +691,7 @@ const VulkanTexture* VulkanResourceManager::GetTexture(unsigned int handle) cons
 // ============================================================
 
 unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    if (!device_) return 0;
     unsigned int handle = next_buffer_handle_++;
     VulkanBuffer buf;
     buf.size = size;
