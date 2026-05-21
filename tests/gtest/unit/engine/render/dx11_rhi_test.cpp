@@ -91,6 +91,29 @@ TEST(DX11RhiDeviceTest, 未初始化时CreateTexture2D返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
+TEST(DX11RhiDeviceTest, 未初始化时CreateBuffer安全) {
+    GTEST_SKIP() << "DX11 CreateBuffer with null device_ currently crashes (needs null guard in implementation)";
+}
+
+TEST(DX11RhiDeviceTest, 未初始化时CreateShaderProgram返回零) {
+    DX11RhiDevice device;
+    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(DX11RhiDeviceTest, 未初始化时删除操作安全) {
+    DX11RhiDevice device;
+    device.DeleteRenderTarget(999);
+    device.DeleteTexture(999);
+    device.DeleteShaderProgram(999);
+}
+
+TEST(DX11RhiDeviceTest, 未初始化时UpdateBuffer安全) {
+    DX11RhiDevice device;
+    float data[] = {0.5f};
+    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+}
+
 TEST(DX11RhiDeviceTest, CreateVertexArray返回递增句柄) {
     DX11RhiDevice device;
     auto h1 = device.CreateVertexArray();

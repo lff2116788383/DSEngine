@@ -166,6 +166,58 @@ TEST(VulkanRhiDeviceTest, 全局阴影贴图接口不崩溃) {
     device.SetGlobalSpotLightSpaceMatrix(0, glm::mat4(1.0f));
 }
 
+TEST(VulkanRhiDeviceTest, 未初始化时BeginFrame安全) {
+    VulkanRhiDevice device;
+    device.BeginFrame();
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时EndFrame安全) {
+    VulkanRhiDevice device;
+    device.EndFrame();
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
+    VulkanRhiDevice device;
+    RenderTargetDesc desc{};
+    desc.width = 256;
+    desc.height = 256;
+    desc.has_color = true;
+    unsigned int handle = device.CreateRenderTarget(desc);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时CreateTexture2D返回零) {
+    VulkanRhiDevice device;
+    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时CreateBuffer返回零) {
+    VulkanRhiDevice device;
+    float data[] = {1.0f, 2.0f, 3.0f};
+    unsigned int handle = device.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时CreateShaderProgram返回零) {
+    VulkanRhiDevice device;
+    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时删除操作安全) {
+    VulkanRhiDevice device;
+    device.DeleteRenderTarget(999);
+    device.DeleteTexture(999);
+    device.DeleteShaderProgram(999);
+}
+
+TEST(VulkanRhiDeviceTest, 未初始化时UpdateBuffer安全) {
+    VulkanRhiDevice device;
+    float data[] = {0.5f};
+    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+}
+
 // ============================================================
 // 3. VulkanCommandBuffer 无 GPU 测试
 // ============================================================

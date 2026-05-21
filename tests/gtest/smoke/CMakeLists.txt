@@ -5,6 +5,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     lua_host_smoke_test.cpp
     lua_lifecycle_smoke_test.cpp
     runtime_lifecycle_smoke_test.cpp
+    gl_rhi_smoke_test.cpp
     vulkan_rhi_smoke_test.cpp
     dx11_rhi_smoke_test.cpp
     physics3d_smoke_test.cpp
