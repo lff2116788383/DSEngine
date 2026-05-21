@@ -1093,7 +1093,7 @@ void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
 // --- Indirect Draw Buffer ---
 
 unsigned int OpenGLRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
-    if (!supports_ssbo_) return 0;  // GL 4.3+ 鍚屾椂鏀寔 indirect draw
+    if (!initialized_ || !supports_ssbo_) return 0;
     InitComputeProcAddresses();
     unsigned int gl_buf = 0;
     glGenBuffers(1, &gl_buf);
@@ -1107,6 +1107,7 @@ unsigned int OpenGLRhiDevice::CreateIndirectBuffer(size_t size, const void* data
 }
 
 void OpenGLRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    if (!initialized_) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end()) return;
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, it->second);
@@ -1116,6 +1117,7 @@ void OpenGLRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, s
 }
 
 void OpenGLRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
+    if (!initialized_) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end()) return;
     glDeleteBuffers(1, &it->second);

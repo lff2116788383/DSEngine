@@ -23,6 +23,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_snapshot.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include <vector>
@@ -333,23 +334,30 @@ class BloomPassTest : public ::testing::Test {
 protected:
     World world;
     StubRhiDevice rhi_dev;
+    dse::render::RenderThinSnapshot snap;
     dse::render::RenderPassContext ctx;
 
     void SetUp() override {
+        snap.Reset();
         ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
+        ctx.snapshot    = &snap;
         ctx.render_targets.scene         = 1;
         ctx.render_targets.bloom_extract = 2;
         ctx.render_targets.bloom_mips    = {3, 4, 5, 6, 7};
     }
+
+    void SetBloomConfig(bool enabled, float threshold = 1.0f, float intensity = 0.5f) {
+        snap.post_process.valid = true;
+        snap.post_process.enabled = true;
+        snap.post_process.bloom_enabled = enabled;
+        snap.post_process.bloom_threshold = threshold;
+        snap.post_process.bloom_intensity = intensity;
+    }
 };
 
 TEST_F(BloomPassTest, BloomPass_Disabled_不调用DrawPostProcess) {
-    auto e = world.registry().create();
-    dse::PostProcessComponent pp;
-    pp.enabled       = true;
-    pp.bloom_enabled = false;
-    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+    SetBloomConfig(false);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     EXPECT_CALL(mock, DrawPostProcess(::testing::_)).Times(0);
@@ -359,12 +367,7 @@ TEST_F(BloomPassTest, BloomPass_Disabled_不调用DrawPostProcess) {
 }
 
 TEST_F(BloomPassTest, BloomPass_Enabled_调用downsample和upsample) {
-    auto e = world.registry().create();
-    dse::PostProcessComponent pp;
-    pp.enabled         = true;
-    pp.bloom_enabled   = true;
-    pp.bloom_threshold = 0.8f;
-    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+    SetBloomConfig(true, 0.8f);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     // 兜底：允许 bloom_extract 等其他效果自由调用
@@ -390,24 +393,31 @@ class CompositePassTest : public ::testing::Test {
 protected:
     World world;
     StubRhiDevice rhi_dev;
+    dse::render::RenderThinSnapshot snap;
     dse::render::RenderPassContext ctx;
 
     void SetUp() override {
+        snap.Reset();
         ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
+        ctx.snapshot    = &snap;
         ctx.render_targets.scene = 1;
         ctx.render_targets.ui    = 2;
         ctx.render_targets.main  = 3;
         ctx.render_targets.bloom_mips = {4};
     }
+
+    void SetBloomConfig(bool enabled, float intensity = 0.5f, float exposure = 1.0f) {
+        snap.post_process.valid = true;
+        snap.post_process.enabled = true;
+        snap.post_process.bloom_enabled = enabled;
+        snap.post_process.bloom_intensity = intensity;
+        snap.post_process.exposure = exposure;
+    }
 };
 
 TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
-    auto e = world.registry().create();
-    dse::PostProcessComponent pp;
-    pp.enabled       = true;
-    pp.bloom_enabled = false;
-    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+    SetBloomConfig(false);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "tonemapping")))
@@ -420,13 +430,7 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_使用copy) {
 }
 
 TEST_F(CompositePassTest, CompositePass_BloomEnabled_使用bloom_composite) {
-    auto e = world.registry().create();
-    dse::PostProcessComponent pp;
-    pp.enabled         = true;
-    pp.bloom_enabled   = true;
-    pp.bloom_intensity = 0.5f;
-    pp.exposure        = 1.0f;
-    world.registry().emplace<dse::PostProcessComponent>(e, pp);
+    SetBloomConfig(true, 0.5f, 1.0f);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
     EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_composite")))

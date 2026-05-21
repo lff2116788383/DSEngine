@@ -703,10 +703,12 @@ namespace {
 using SceneAllocator = rapidjson::Document::AllocatorType;
 using SaveComponentFn = void (*)(entt::registry&, entt::entity, rapidjson::Value&, SceneAllocator&);
 using LoadComponentFn = void (*)(entt::registry&, entt::entity, const rapidjson::Value&);
+using HasComponentFn = bool (*)(entt::registry&, entt::entity);
 
 struct ComponentJsonIOEntry {
     SaveComponentFn save = nullptr;
     LoadComponentFn load = nullptr;
+    HasComponentFn has = nullptr;  ///< 保护性检查：实体是否拥有该组件类型
 };
 
 static void AddStringMember(rapidjson::Value& parent,
@@ -1659,29 +1661,52 @@ static void LoadRigidBody3DJsonComponent(
 
 const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
     static const std::vector<ComponentJsonIOEntry> entries = {
-        {&SaveEditorNameJsonComponent, &LoadEditorNameJsonComponent},
-        {&SaveSiblingIndexJsonComponent, &LoadSiblingIndexJsonComponent},
-        {&SaveTransformJsonComponent, &LoadTransformJsonComponent},
-        {&SaveSpriteRendererJsonComponent, &LoadSpriteRendererJsonComponent},
-        {&SaveUIRendererJsonComponent, &LoadUIRendererJsonComponent},
-        {&SaveUILabelJsonComponent, &LoadUILabelJsonComponent},
-        {&SaveRigidBody2DJsonComponent, &LoadRigidBody2DJsonComponent},
-        {&SaveParticleEmitterJsonComponent, &LoadParticleEmitterJsonComponent},
-        {&SaveUIAnchorJsonComponent, &LoadUIAnchorJsonComponent},
-        {&SaveUIGridLayoutJsonComponent, &LoadUIGridLayoutJsonComponent},
-        {&SaveUICanvasScalerJsonComponent, &LoadUICanvasScalerJsonComponent},
-        {&SaveUIAnimationJsonComponent, &LoadUIAnimationJsonComponent},
-        {&SaveCamera3DJsonComponent, &LoadCamera3DJsonComponent},
-        {&SaveDirectionalLight3DJsonComponent, &LoadDirectionalLight3DJsonComponent},
-        {&SaveMeshRendererJsonComponent, &LoadMeshRendererJsonComponent},
-        {&SavePointLightJsonComponent, &LoadPointLightJsonComponent},
-        {&SaveSpotLightJsonComponent, &LoadSpotLightJsonComponent},
-        {&SaveSkyLightJsonComponent, &LoadSkyLightJsonComponent},
-        {&SaveSkyboxJsonComponent, &LoadSkyboxJsonComponent},
-        {&SaveSubSceneJsonComponent, &LoadSubSceneJsonComponent},
-        {&SaveAnimator3DJsonComponent, &LoadAnimator3DJsonComponent},
-        {&SaveTerrainJsonComponent, &LoadTerrainJsonComponent},
-        {&SaveRigidBody3DJsonComponent, &LoadRigidBody3DJsonComponent},
+        {&SaveEditorNameJsonComponent, &LoadEditorNameJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::editor::EditorNameComponent>(e); }},
+        {&SaveSiblingIndexJsonComponent, &LoadSiblingIndexJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::editor::SiblingIndexComponent>(e); }},
+        {&SaveTransformJsonComponent, &LoadTransformJsonComponent,
+         [](auto& r, auto e) { return r.all_of<TransformComponent>(e); }},
+        {&SaveSpriteRendererJsonComponent, &LoadSpriteRendererJsonComponent,
+         [](auto& r, auto e) { return r.all_of<SpriteRendererComponent>(e); }},
+        {&SaveUIRendererJsonComponent, &LoadUIRendererJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UIRendererComponent>(e); }},
+        {&SaveUILabelJsonComponent, &LoadUILabelJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UILabelComponent>(e); }},
+        {&SaveRigidBody2DJsonComponent, &LoadRigidBody2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<RigidBody2DComponent>(e); }},
+        {&SaveParticleEmitterJsonComponent, &LoadParticleEmitterJsonComponent,
+         [](auto& r, auto e) { return r.all_of<ParticleEmitterComponent>(e); }},
+        {&SaveUIAnchorJsonComponent, &LoadUIAnchorJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UIAnchorComponent>(e); }},
+        {&SaveUIGridLayoutJsonComponent, &LoadUIGridLayoutJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UIGridLayoutComponent>(e); }},
+        {&SaveUICanvasScalerJsonComponent, &LoadUICanvasScalerJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UICanvasScalerComponent>(e); }},
+        {&SaveUIAnimationJsonComponent, &LoadUIAnimationJsonComponent,
+         [](auto& r, auto e) { return r.all_of<UIAnimationComponent>(e); }},
+        {&SaveCamera3DJsonComponent, &LoadCamera3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::Camera3DComponent>(e); }},
+        {&SaveDirectionalLight3DJsonComponent, &LoadDirectionalLight3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::DirectionalLight3DComponent>(e); }},
+        {&SaveMeshRendererJsonComponent, &LoadMeshRendererJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::MeshRendererComponent>(e); }},
+        {&SavePointLightJsonComponent, &LoadPointLightJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::PointLightComponent>(e); }},
+        {&SaveSpotLightJsonComponent, &LoadSpotLightJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::SpotLightComponent>(e); }},
+        {&SaveSkyLightJsonComponent, &LoadSkyLightJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::SkyLightComponent>(e); }},
+        {&SaveSkyboxJsonComponent, &LoadSkyboxJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::SkyboxComponent>(e); }},
+        {&SaveSubSceneJsonComponent, &LoadSubSceneJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::SubSceneComponent>(e); }},
+        {&SaveAnimator3DJsonComponent, &LoadAnimator3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::Animator3DComponent>(e); }},
+        {&SaveTerrainJsonComponent, &LoadTerrainJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::TerrainComponent>(e); }},
+        {&SaveRigidBody3DJsonComponent, &LoadRigidBody3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::RigidBody3DComponent>(e); }},
     };
     return entries;
 }
@@ -1700,7 +1725,7 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
         ent_obj.AddMember("id", static_cast<uint32_t>(entity), allocator);
 
         for (const auto& io_entry : GetComponentJsonIORegistry()) {
-            if (io_entry.save) {
+            if (io_entry.save && io_entry.has && io_entry.has(registry, entity)) {
                 io_entry.save(registry, entity, ent_obj, allocator);
             }
         }
