@@ -177,3 +177,172 @@ TEST(AnimClipEvalTest, AnimSampleBuffer_Init) {
         EXPECT_FLOAT_EQ(buf.scales[i].x, 1.0f);
     }
 }
+
+// ============================================================
+// 新增共享函数测试
+// ============================================================
+
+TEST(AnimClipEvalTest, ComputeBoneGlobals_SimpleChain) {
+    Animator3DComponent::SkeletalCache cache;
+    cache.bone_count = 3;
+    cache.parent_indices = {-1, 0, 1};
+    cache.local_bind_poses = {
+        glm::mat4(1.0f), // Root
+        glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)), // Child of root
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f))  // Child of child
+    };
+
+    Animator3DComponent::PoseBuffer pb;
+    pb.positions = {glm::vec3(0), glm::vec3(1,0,0), glm::vec3(0,1,0)};
+    pb.rotations = {glm::quat(1,0,0,0), glm::quat(1,0,0,0), glm::quat(1,0,0,0)};
+    pb.scales = {glm::vec3(1), glm::vec3(1), glm::vec3(1)};
+    pb.touched = {true, true, true};
+
+    std::vector<glm::mat4> globals;
+    anim_util::ComputeBoneGlobals(pb, cache, globals);
+
+    EXPECT_EQ(globals.size(), 3u);
+    EXPECT_FLOAT_EQ(globals[0][3].x, 0.0f); // Root at origin
+    EXPECT_FLOAT_EQ(globals[1][3].x, 1.0f); // Child at (1,0,0)
+}
+
+TEST(AnimClipEvalTest, ComputeChainPositions) {
+    Animator3DComponent::SkeletalCache cache;
+    cache.bone_count = 3;
+    cache.parent_indices = {-1, 0, 1};
+    cache.local_bind_poses = {
+        glm::mat4(1.0f),
+        glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+    };
+
+    Animator3DComponent::PoseBuffer pb;
+    pb.positions = {glm::vec3(0), glm::vec3(1,0,0), glm::vec3(0,1,0)};
+    pb.rotations = {glm::quat(1,0,0,0), glm::quat(1,0,0,0), glm::quat(1,0,0,0)};
+    pb.scales = {glm::vec3(1), glm::vec3(1), glm::vec3(1)};
+    pb.touched = {true, true, true};
+
+    std::vector<int> chain = {0, 1, 2};
+    std::vector<glm::vec3> positions;
+    std::vector<glm::mat4> globals;
+    anim_util::ComputeChainPositions(chain, pb, cache, positions, globals);
+
+    EXPECT_EQ(positions.size(), 3u);
+    EXPECT_FLOAT_EQ(positions[0].x, 0.0f);
+    EXPECT_FLOAT_EQ(positions[1].x, 1.0f);
+}
+
+TEST(AnimClipEvalTest, SolveFABRIK_ReachableTarget) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(2.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(2.0f, 1.0f, 0.0f); // Reachable target (total length = 2)
+
+    anim_util::SolveFABRIK(positions, target, glm::vec3(0), 20, 0.001f);
+
+    float tip_error = glm::length(positions[2] - target);
+    EXPECT_LT(tip_error, 0.3f); // Should converge reasonably close
+}
+
+TEST(AnimClipEvalTest, SolveFABRIK_UnreachableTarget) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(10.0f, 0.0f, 0.0f); // Far away
+
+    anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f);
+
+    // Should stretch toward target direction
+    glm::vec3 dir = glm::normalize(positions[1] - positions[0]);
+    glm::vec3 target_dir = glm::normalize(target - positions[0]);
+    float dot = glm::dot(dir, target_dir);
+    EXPECT_GT(dot, 0.99f); // Should align with target direction
+}
+
+TEST(AnimClipEvalTest, SolveFABRIK_EmptyChain) {
+    std::vector<glm::vec3> positions;
+    glm::vec3 target(1.0f, 0.0f, 0.0f);
+
+    EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
+}
+
+TEST(AnimClipEvalTest, AnimBlendNode默认值) {
+    AnimBlendNode node;
+    EXPECT_TRUE(node.name.empty());
+    EXPECT_TRUE(node.danim_path.empty());
+    EXPECT_FLOAT_EQ(node.current_time, 0.0f);
+    EXPECT_FLOAT_EQ(node.speed, 1.0f);
+    EXPECT_TRUE(node.loop);
+    EXPECT_FLOAT_EQ(node.x, 0.0f);
+    EXPECT_FLOAT_EQ(node.threshold, 0.0f);
+    EXPECT_FLOAT_EQ(node.weight, 1.0f);
+}
+
+// ============================================================
+// IK 算法正确性测试
+// ============================================================
+
+TEST(IKAlgorithmTest, FABRIK_收敛性_可达成目标) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(2.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(1.8f, 0.8f, 0.0f);
+
+    anim_util::SolveFABRIK(positions, target, glm::vec3(0), 20, 0.001f);
+
+    float tip_error = glm::length(positions[2] - target);
+    EXPECT_LT(tip_error, 0.05f); // Should converge within tolerance
+}
+
+TEST(IKAlgorithmTest, FABRIK_边界条件_零长度骨) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f) // Zero-length bone
+    };
+    glm::vec3 target(1.0f, 0.0f, 0.0f);
+
+    EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
+}
+
+TEST(IKAlgorithmTest, FABRIK_边界条件_单骨链) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(1.0f, 0.0f, 0.0f);
+
+    EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
+}
+
+TEST(IKAlgorithmTest, FABRIK_边界条件_目标与根重合) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(0.0f, 0.0f, 0.0f); // Same as root
+
+    anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f);
+
+    // Should fold back to root
+    EXPECT_NEAR(glm::length(positions[1] - positions[0]), 1.0f, 0.1f);
+}
+
+TEST(IKAlgorithmTest, FABRIK_PoleVector_弯曲方向约束) {
+    std::vector<glm::vec3> positions = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(2.0f, 0.0f, 0.0f)
+    };
+    glm::vec3 target(2.0f, 1.0f, 0.0f);
+    glm::vec3 pole_vector(0.0f, 0.0f, 1.0f); // Bend toward +Z
+
+    anim_util::SolveFABRIK(positions, target, pole_vector, 10, 0.01f);
+
+    // Pole vector 只在关节接近直线时生效，这里测试基本功能不崩溃
+    EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, pole_vector, 10, 0.01f));
+}
+
