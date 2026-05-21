@@ -19,6 +19,7 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
@@ -30,6 +31,7 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
+#include <Jolt/Geometry/IndexedTriangle.h>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -241,6 +243,15 @@ struct Physics3DSystem::Impl {
 
     // Joint: entity_id → Constraint*
     std::unordered_map<uint32_t, Constraint*> entity_to_constraint;
+
+    // MeshCollider 缓存
+    std::unordered_map<std::string, ShapeRefC> convex_mesh_cache;
+    std::unordered_map<std::string, ShapeRefC> triangle_mesh_cache;
+
+    ~Impl() {
+        convex_mesh_cache.clear();
+        triangle_mesh_cache.clear();
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -383,16 +394,77 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
 
             // 确定碰撞形状
             ShapeRefC shape;
+            bool is_trigger = false;
+            float friction = 0.5f;
+            float restitution = rb.type == RigidBody3DType::Static ? 0.0f : 0.3f;
+
             if (registry.all_of<BoxCollider3DComponent>(entity)) {
                 auto& box = registry.get<BoxCollider3DComponent>(entity);
                 glm::vec3 half = box.size * 0.5f;
                 shape = new BoxShape(Vec3(half.x, half.y, half.z));
+                is_trigger = box.is_trigger;
+                friction = box.friction;
+                restitution = box.bounciness;
             } else if (registry.all_of<SphereCollider3DComponent>(entity)) {
                 auto& sphere = registry.get<SphereCollider3DComponent>(entity);
                 shape = new SphereShape(sphere.radius);
+                is_trigger = sphere.is_trigger;
+                friction = sphere.friction;
+                restitution = sphere.bounciness;
             } else if (registry.all_of<CapsuleCollider3DComponent>(entity)) {
                 auto& cap = registry.get<CapsuleCollider3DComponent>(entity);
                 shape = new CapsuleShape(cap.height * 0.5f, cap.radius);
+                is_trigger = cap.is_trigger;
+                friction = cap.friction;
+                restitution = cap.bounciness;
+            } else if (registry.all_of<MeshCollider3DComponent>(entity)) {
+                auto& mc = registry.get<MeshCollider3DComponent>(entity);
+                if (!mc.runtime_shape && registry.all_of<MeshRendererComponent>(entity)) {
+                    auto& mr = registry.get<MeshRendererComponent>(entity);
+                    if (!mr.temp_vertices.empty() && !mr.temp_indices.empty()) {
+                        bool is_dmesh = mr.mesh_path.find(".dmesh") != std::string::npos;
+                        size_t stride = is_dmesh ? static_cast<size_t>(mr.dmesh_vertex_stride) : 3;
+                        size_t vcount = mr.temp_vertices.size() / stride;
+
+                        // 提取位置
+                        std::vector<glm::vec3> vertices(vcount);
+                        for (size_t i = 0; i < vcount; ++i) {
+                            vertices[i] = glm::vec3(
+                                mr.temp_vertices[i * stride + 0],
+                                mr.temp_vertices[i * stride + 1],
+                                mr.temp_vertices[i * stride + 2]);
+                        }
+
+                        // 转换索引
+                        std::vector<uint32_t> indices(mr.temp_indices.size());
+                        for (size_t i = 0; i < mr.temp_indices.size(); ++i)
+                            indices[i] = mr.temp_indices[i];
+
+                        JPH::Shape* mesh_shape = nullptr;
+                        if (mc.convex) {
+                            mesh_shape = CreateConvexHullShape(vertices, mr.mesh_path);
+                        } else {
+                            // Triangle mesh — 仅支持 Static
+                            if (rb.type == RigidBody3DType::Static) {
+                                mesh_shape = CreateTriangleMeshShape(vertices, indices, mr.mesh_path);
+                            } else {
+                                DEBUG_LOG_ERROR("MeshCollider3D: non-convex triangle mesh only supported on Static actors");
+                            }
+                        }
+                        if (mesh_shape) {
+                            shape = mesh_shape;
+                            mc.runtime_shape = mesh_shape;
+                            mc.prev_mesh_path = mr.mesh_path;
+                            is_trigger = mc.is_trigger;
+                            friction = mc.friction;
+                            restitution = mc.bounciness;
+                        }
+                    }
+                }
+                // 如果 shape 创建失败，使用默认
+                if (!shape) {
+                    shape = new SphereShape(0.5f);
+                }
             } else {
                 // 默认 1m 球
                 shape = new SphereShape(0.5f);
@@ -403,8 +475,8 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
 
             BodyCreationSettings body_settings(shape, pos, rot, motion_type, layer);
             body_settings.mUserData = static_cast<uint64>(eid);
-            body_settings.mFriction = 0.5f;
-            body_settings.mRestitution = rb.type == RigidBody3DType::Static ? 0.0f : 0.3f;
+            body_settings.mFriction = friction;
+            body_settings.mRestitution = restitution;
 
             if (motion_type == EMotionType::Dynamic) {
                 body_settings.mLinearDamping = rb.drag;
@@ -414,12 +486,8 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
 
             // 传感器设置（trigger）
             // Jolt 不支持 Static sensor，必须升级为 Kinematic
-            if (registry.all_of<BoxCollider3DComponent>(entity)) {
-                if (registry.get<BoxCollider3DComponent>(entity).is_trigger)
-                    body_settings.mIsSensor = true;
-            } else if (registry.all_of<SphereCollider3DComponent>(entity)) {
-                if (registry.get<SphereCollider3DComponent>(entity).is_trigger)
-                    body_settings.mIsSensor = true;
+            if (is_trigger) {
+                body_settings.mIsSensor = true;
             }
             if (body_settings.mIsSensor && body_settings.mMotionType == EMotionType::Static) {
                 body_settings.mMotionType = EMotionType::Kinematic;
@@ -440,6 +508,25 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
                 BodyID body_id = impl_->entity_to_body[eid];
                 RVec3 pos(transform.position.x, transform.position.y, transform.position.z);
                 bi.MoveKinematic(body_id, pos, ToJolt(transform.rotation), 1.0f / 60.0f);
+            }
+
+            // MeshCollider 动态更新检查
+            if (registry.all_of<MeshCollider3DComponent>(entity)) {
+                auto& mc = registry.get<MeshCollider3DComponent>(entity);
+                if (mc.runtime_shape && registry.all_of<MeshRendererComponent>(entity)) {
+                    auto& mr = registry.get<MeshRendererComponent>(entity);
+                    // 检查 mesh 是否改变（通过 mesh_path）
+                    if (mc.prev_mesh_path != mr.mesh_path) {
+                        BodyID body_id = impl_->entity_to_body[eid];
+                        bi.RemoveBody(body_id);
+                        bi.DestroyBody(body_id);
+                        impl_->entity_to_body.erase(eid);
+                        impl_->body_layer_map.erase(body_id.GetIndex());
+                        mc.runtime_shape = nullptr;
+                        mc.prev_mesh_path = mr.mesh_path;
+                        // 下一次循环会重新创建 body
+                    }
+                }
             }
         }
     }
@@ -861,6 +948,87 @@ void Physics3DSystem::CheckBrokenJoints(World& world) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// MeshCollider 辅助函数
+// ---------------------------------------------------------------------------
+JPH::Shape* Physics3DSystem::CreateConvexHullShape(const std::vector<glm::vec3>& vertices, const std::string& mesh_path) {
+    if (vertices.empty() || !impl_) return nullptr;
+
+    // 检查缓存
+    if (!mesh_path.empty()) {
+        auto it = impl_->convex_mesh_cache.find(mesh_path);
+        if (it != impl_->convex_mesh_cache.end()) {
+            return const_cast<JPH::Shape*>(it->second.GetPtr());
+        }
+    }
+
+    // 转换为 Jolt Vec3
+    Array<Vec3> jolt_verts;
+    jolt_verts.reserve(vertices.size());
+    for (const auto& v : vertices) {
+        jolt_verts.push_back(Vec3(v.x, v.y, v.z));
+    }
+
+    // 创建 convex hull
+    ConvexHullShapeSettings settings(jolt_verts);
+    settings.mMaxConvexRadius = 0.05f; // 默认凸半径
+    Result<Ref<Shape>> result = settings.Create();
+    if (result.IsValid()) {
+        ShapeRefC shape = result.Get();
+        if (!mesh_path.empty()) {
+            impl_->convex_mesh_cache[mesh_path] = shape;
+        }
+        return const_cast<JPH::Shape*>(shape.GetPtr());
+    }
+
+    DEBUG_LOG_ERROR("[Physics3D-Jolt] Failed to create convex hull for mesh: {}", mesh_path);
+    return nullptr;
+}
+
+JPH::Shape* Physics3DSystem::CreateTriangleMeshShape(const std::vector<glm::vec3>& vertices, const std::vector<uint32_t>& indices, const std::string& mesh_path) {
+    if (vertices.empty() || indices.empty() || !impl_) return nullptr;
+
+    // 检查缓存
+    if (!mesh_path.empty()) {
+        auto it = impl_->triangle_mesh_cache.find(mesh_path);
+        if (it != impl_->triangle_mesh_cache.end()) {
+            return const_cast<JPH::Shape*>(it->second.GetPtr());
+        }
+    }
+
+    // 转换为 Jolt 格式 - 使用 Array<Float3> 作为 VertexList
+    Array<Float3> jolt_verts;
+    jolt_verts.reserve(vertices.size());
+    for (const auto& v : vertices) {
+        jolt_verts.push_back(Float3(v.x, v.y, v.z));
+    }
+
+    Array<IndexedTriangle> jolt_indices;
+    jolt_indices.reserve(indices.size() / 3);
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        jolt_indices.push_back(IndexedTriangle(
+            static_cast<uint32>(indices[i]),
+            static_cast<uint32>(indices[i + 1]),
+            static_cast<uint32>(indices[i + 2])
+        ));
+    }
+
+    // 创建 triangle mesh
+    MeshShapeSettings settings(jolt_verts, jolt_indices);
+    settings.mMaxTrianglesPerLeaf = 4; // 平衡性能和内存
+    Result<Ref<Shape>> result = settings.Create();
+    if (result.IsValid()) {
+        ShapeRefC shape = result.Get();
+        if (!mesh_path.empty()) {
+            impl_->triangle_mesh_cache[mesh_path] = shape;
+        }
+        return const_cast<JPH::Shape*>(shape.GetPtr());
+    }
+
+    DEBUG_LOG_ERROR("[Physics3D-Jolt] Failed to create triangle mesh for mesh: {}", mesh_path);
+    return nullptr;
 }
 
 } // namespace physics3d

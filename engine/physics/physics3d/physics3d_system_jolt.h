@@ -8,6 +8,12 @@
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <glm/glm.hpp>
+
+// Jolt 前向声明
+namespace JPH {
+    class Shape;
+}
 
 namespace dse {
 namespace physics3d {
@@ -67,6 +73,10 @@ private:
     void CreateCharacterActor(World& world, entt::entity entity, CharacterController3DComponent& cc, const ::TransformComponent& transform);
     void SyncJoints(World& world);
     void CheckBrokenJoints(World& world);
+
+    // MeshCollider 辅助函数
+    JPH::Shape* CreateConvexHullShape(const std::vector<glm::vec3>& vertices, const std::string& mesh_path);
+    JPH::Shape* CreateTriangleMeshShape(const std::vector<glm::vec3>& vertices, const std::vector<uint32_t>& indices, const std::string& mesh_path);
 };
 
 } // namespace physics3d

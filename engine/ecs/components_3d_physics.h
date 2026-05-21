@@ -77,6 +77,9 @@ struct MeshCollider3DComponent {
 
     // Backend handle
     void* runtime_shape = nullptr;
+
+    // 动态更新：记录上次的 mesh_path
+    std::string prev_mesh_path;
 };
 
 /// 胶囊碰撞体组件（Task 4）

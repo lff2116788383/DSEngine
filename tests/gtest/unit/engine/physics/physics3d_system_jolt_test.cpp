@@ -1,44 +1,44 @@
 /**
- * @file physics3d_system_test.cpp
- * @brief Physics3DSystem 三维物理系统单元测试
+ * @file physics3d_system_jolt_test.cpp
+ * @brief Physics3DSystem (Jolt 后端) 单元测试
  *
  * 覆盖场景：
  * - 默认构造与析构不崩溃
  * - 未初始化时 Shutdown / FixedUpdate / Raycast 安全
  * - RaycastResult 默认值
- * - PhysX Init→Shutdown 完整生命周期
+ * - Jolt Init→Shutdown 完整生命周期
  * - Init 后 FixedUpdate 不崩溃
  *
- * 注意：Physics3DSystem 的实现依赖 PhysX 后端，在未启用时
- *       编译期排除。本测试仅在 PhysX 可用时编译。
+ * 注意：Physics3DSystem 的 Jolt 后端实现，在未启用时
+ *       编译期排除。本测试仅在 Jolt 可用时编译。
  */
 
 #include <gtest/gtest.h>
 
-#if defined(DSE_ENABLE_PHYSX)
+#if defined(DSE_ENABLE_JOLT)
 
 #include <entt/entt.hpp>
-#include "engine/physics/physics3d/physics3d_system.h"
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
 #include "engine/ecs/world.h"
 
 using namespace dse::physics3d;
 
-TEST(Physics3DSystemTest, 默认构造不崩溃) {
+TEST(Physics3DSystemJoltTest, 默认构造不崩溃) {
     Physics3DSystem sys;
 }
 
-TEST(Physics3DSystemTest, 未初始化时Shutdown不崩溃) {
+TEST(Physics3DSystemJoltTest, 未初始化时Shutdown不崩溃) {
     Physics3DSystem sys;
     sys.Shutdown();
 }
 
-TEST(Physics3DSystemTest, 未初始化时FixedUpdate不崩溃) {
+TEST(Physics3DSystemJoltTest, 未初始化时FixedUpdate不崩溃) {
     Physics3DSystem sys;
     World world;
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST(Physics3DSystemTest, RaycastResult默认值) {
+TEST(Physics3DSystemJoltTest, RaycastResult默认值) {
     RaycastResult result;
     EXPECT_FALSE(result.hit);
     EXPECT_FLOAT_EQ(result.distance, 0.0f);
@@ -46,13 +46,13 @@ TEST(Physics3DSystemTest, RaycastResult默认值) {
     EXPECT_FLOAT_EQ(result.hit_normal.x, 0.0f);
 }
 
-TEST(Physics3DSystemTest, 未初始化时Raycast返回未命中) {
+TEST(Physics3DSystemJoltTest, 未初始化时Raycast返回未命中) {
     Physics3DSystem sys;
     auto result = sys.Raycast(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 100.0f);
     EXPECT_FALSE(result.hit);
 }
 
-TEST(Physics3DSystemTest, PhysX初始化与关闭不崩溃) {
+TEST(Physics3DSystemJoltTest, Jolt初始化与关闭不崩溃) {
     Physics3DSystem sys;
     World world;
     bool ok = sys.Init(world);
@@ -60,7 +60,7 @@ TEST(Physics3DSystemTest, PhysX初始化与关闭不崩溃) {
     sys.Shutdown();
 }
 
-TEST(Physics3DSystemTest, 初始化后FixedUpdate不崩溃) {
+TEST(Physics3DSystemJoltTest, 初始化后FixedUpdate不崩溃) {
     Physics3DSystem sys;
     World world;
     ASSERT_TRUE(sys.Init(world));
@@ -68,7 +68,7 @@ TEST(Physics3DSystemTest, 初始化后FixedUpdate不崩溃) {
     sys.Shutdown();
 }
 
-TEST(Physics3DSystemTest, 初始化后Raycast返回未命中空场景) {
+TEST(Physics3DSystemJoltTest, 初始化后Raycast返回未命中空场景) {
     Physics3DSystem sys;
     World world;
     ASSERT_TRUE(sys.Init(world));
@@ -77,7 +77,7 @@ TEST(Physics3DSystemTest, 初始化后Raycast返回未命中空场景) {
     sys.Shutdown();
 }
 
-TEST(Physics3DSystemTest, 多次InitShutdown交替不崩溃) {
+TEST(Physics3DSystemJoltTest, 多次InitShutdown交替不崩溃) {
     Physics3DSystem sys;
     World world;
     for (int i = 0; i < 3; ++i) {
@@ -87,17 +87,14 @@ TEST(Physics3DSystemTest, 多次InitShutdown交替不崩溃) {
     }
 }
 
-TEST(Physics3DSystemTest, PhysX桥接口返回有效指针) {
+TEST(Physics3DSystemJoltTest, PhysX桥接口返回nullptr) {
     Physics3DSystem sys;
-    World world;
-    ASSERT_TRUE(sys.Init(world));
-    EXPECT_NE(sys.GetPxPhysics(), nullptr);
-    EXPECT_NE(sys.GetPxScene(), nullptr);
-    EXPECT_NE(sys.GetPxCooking(), nullptr);
-    sys.Shutdown();
+    EXPECT_EQ(sys.GetPxPhysics(), nullptr);
+    EXPECT_EQ(sys.GetPxScene(), nullptr);
+    EXPECT_EQ(sys.GetPxCooking(), nullptr);
 }
 
-TEST(Physics3DSystemTest, MeshCollider3D组件默认值) {
+TEST(Physics3DSystemJoltTest, MeshCollider3D组件默认值) {
     MeshCollider3DComponent mc;
     EXPECT_FALSE(mc.convex);
     EXPECT_FALSE(mc.is_trigger);
@@ -107,4 +104,4 @@ TEST(Physics3DSystemTest, MeshCollider3D组件默认值) {
     EXPECT_TRUE(mc.prev_mesh_path.empty());
 }
 
-#endif // DSE_ENABLE_PHYSX
+#endif // DSE_ENABLE_JOLT

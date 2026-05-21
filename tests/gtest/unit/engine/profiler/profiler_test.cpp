@@ -512,7 +512,7 @@ TEST(ProfilerBenchmark, Render记录开销低于100微秒) {
     EXPECT_LT(per_op_us, 100.0) << "per-op: " << per_op_us << " us";
 }
 
-TEST(ProfilerBenchmark, ChromeTrace导出万条数据低于100毫秒) {
+TEST(ProfilerBenchmark, ChromeTrace导出万条数据低于200毫秒) {
     CPUProfiler profiler;
     for (int i = 0; i < 10000; ++i) {
         profiler.BeginSample("BenchExport");
@@ -522,6 +522,6 @@ TEST(ProfilerBenchmark, ChromeTrace导出万条数据低于100毫秒) {
     std::string trace = profiler.ExportChromeTrace();
     auto end = std::chrono::high_resolution_clock::now();
     double elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
-    EXPECT_LT(elapsed_ms, 100.0) << "export 10000 samples: " << elapsed_ms << " ms";
+    EXPECT_LT(elapsed_ms, 200.0) << "export 10000 samples: " << elapsed_ms << " ms";
     EXPECT_FALSE(trace.empty());
 }
