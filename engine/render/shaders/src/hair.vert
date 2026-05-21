@@ -6,9 +6,11 @@
 layout(std430, binding = 0) readonly buffer PositionBuf { vec4 positions[]; };
 layout(std430, binding = 3) readonly buffer TangentBuf  { vec4 tangents[]; };
 
-layout(location = 0) uniform mat4 u_model;
-layout(location = 4) uniform mat4 u_view;
-layout(location = 8) uniform mat4 u_projection;
+layout(std140, binding = 4) uniform TransformUniforms {
+    mat4 u_model;
+    mat4 u_view;
+    mat4 u_projection;
+};
 
 layout(location = 0) out vec3 v_world_pos;
 layout(location = 1) out vec3 v_tangent;

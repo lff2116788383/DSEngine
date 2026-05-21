@@ -6,19 +6,21 @@ layout(location = 0) in vec3 v_world_pos;
 layout(location = 1) in vec3 v_tangent;
 layout(location = 2) in float v_t;
 
-layout(location = 12) uniform vec3 u_camera_pos;
-layout(location = 13) uniform vec3 u_light_dir;
-layout(location = 14) uniform vec3 u_light_color;
-layout(location = 15) uniform float u_light_intensity;
-layout(location = 16) uniform float u_ambient_intensity;
-layout(location = 17) uniform vec4 u_root_color;
-layout(location = 18) uniform vec4 u_tip_color;
-layout(location = 19) uniform float u_opacity;
-layout(location = 20) uniform float u_spec_primary;
-layout(location = 21) uniform float u_spec_secondary;
-layout(location = 22) uniform float u_spec_strength1;
-layout(location = 23) uniform float u_spec_strength2;
-layout(location = 24) uniform vec3 u_spec_color;
+layout(std140, binding = 12) uniform HairUniforms {
+    vec3 u_camera_pos;
+    vec3 u_light_dir;
+    vec3 u_light_color;
+    float u_light_intensity;
+    float u_ambient_intensity;
+    vec4 u_root_color;
+    vec4 u_tip_color;
+    float u_opacity;
+    float u_spec_primary;
+    float u_spec_secondary;
+    float u_spec_strength1;
+    float u_spec_strength2;
+    vec3 u_spec_color;
+};
 
 layout(location = 0) out vec4 FragColor;
 
