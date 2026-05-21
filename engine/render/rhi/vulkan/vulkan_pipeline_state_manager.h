@@ -61,6 +61,7 @@ public:
     /// @param vertex_bindings 顶点绑定描述
     /// @param vertex_attributes 顶点属性描述
     /// @param extent 渲染区域大小
+    /// @param wireframe 是否使用线框模式
     VkPipeline GetOrCreateVkPipeline(
         unsigned int handle,
         const struct VulkanShaderProgram* shader_program,
@@ -69,7 +70,8 @@ public:
         const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
         VkExtent2D extent,
         VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
-        uint32_t color_attachment_count = 1);
+        uint32_t color_attachment_count = 1,
+        bool wireframe = false);
 
     /// 查询管线状态
     const PipelineStateDesc* GetPipelineState(unsigned int handle) const;
@@ -111,13 +113,15 @@ private:
     unsigned int next_handle_ = 530000;
     unsigned int active_pipeline_state_ = 0;
 
-    /// Pipeline 复合缓存键：(handle, renderPass, samples)
+    /// Pipeline 复合缓存键：(handle, renderPass, samples, wireframe)
     struct PipelineCacheKey {
         unsigned int handle;
         VkRenderPass render_pass;
         VkSampleCountFlagBits samples;
+        bool wireframe = false;
         bool operator==(const PipelineCacheKey& o) const {
-            return handle == o.handle && render_pass == o.render_pass && samples == o.samples;
+            return handle == o.handle && render_pass == o.render_pass && 
+                   samples == o.samples && wireframe == o.wireframe;
         }
     };
     struct PipelineCacheKeyHash {
@@ -125,6 +129,7 @@ private:
             size_t h = std::hash<unsigned int>()(k.handle);
             h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.render_pass)) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<int>()(static_cast<int>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<bool>()(k.wireframe) + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;
         }
     };

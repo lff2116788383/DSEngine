@@ -62,6 +62,7 @@ struct DrawExecutorGlobalState {
     // --- 编辑器场景视图模式 ---
     bool force_unlit = false;     ///< Unlit 模式: shader 跳过光照计算
     bool overdraw_mode = false;   ///< Overdraw 模式: 固定颜色叠加输出
+    bool wireframe_mode = false;  ///< Wireframe 模式: 线框渲染
 
     // --- 渲染统计 ---
     RenderStats current_frame_stats;

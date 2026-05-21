@@ -58,7 +58,6 @@ add_executable(dse_editor_cpp WIN32
     src/editor_animation_timeline.cpp
     src/editor_navmesh_panel.cpp
     src/editor_lighting_gizmos.cpp
-    src/editor_git_panel.cpp
     src/editor_shader_graph.cpp
     src/editor_multi_viewport.cpp
     src/editor_scene_view_mode.cpp

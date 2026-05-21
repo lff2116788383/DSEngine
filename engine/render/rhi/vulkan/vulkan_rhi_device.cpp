@@ -1345,7 +1345,7 @@ void VulkanRhiDevice::CacheGPUDrivenInstanceData(const void* models, const void*
 // --- 编辑器场景视图模式 ---
 
 void VulkanRhiDevice::SetWireframeMode(bool enable) {
-    (void)enable;
+    global_render_state_.wireframe_mode = enable;
 }
 
 void VulkanRhiDevice::SetForceUnlit(bool enable) {

@@ -163,6 +163,16 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
 void DX11RhiDevice::Shutdown() {
     if (!initialized_) return;
 
+    // 释放 wireframe rasterizer state 缓存
+    if (wireframe_rasterizer_state_) {
+        wireframe_rasterizer_state_->Release();
+        wireframe_rasterizer_state_ = nullptr;
+    }
+    if (solid_rasterizer_state_) {
+        solid_rasterizer_state_->Release();
+        solid_rasterizer_state_ = nullptr;
+    }
+
     // 清理 Hi-Z 资源（在 device 销毁前释放 COM 引用）
     if (hiz_impl_) {
         hiz_impl_->textures.clear();
@@ -963,16 +973,28 @@ void DX11RhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* c
 void DX11RhiDevice::SetWireframeMode(bool enable) {
     auto* ctx = context_.device_context();
     if (!ctx) return;
+    
+    // 使用缓存的 rasterizer state
+    ID3D11RasterizerState* target_state = enable ? wireframe_rasterizer_state_ : solid_rasterizer_state_;
+    if (target_state) {
+        ctx->RSSetState(target_state);
+        return;
+    }
+    
+    // 首次使用时创建并缓存
     D3D11_RASTERIZER_DESC rd = {};
     rd.FillMode = enable ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
     rd.CullMode = D3D11_CULL_BACK;
     rd.FrontCounterClockwise = TRUE;
     rd.DepthClipEnable = TRUE;
-    ID3D11RasterizerState* rs = nullptr;
     auto* dev = context_.device();
-    if (dev && SUCCEEDED(dev->CreateRasterizerState(&rd, &rs))) {
-        ctx->RSSetState(rs);
-        rs->Release();
+    if (dev && SUCCEEDED(dev->CreateRasterizerState(&rd, &target_state))) {
+        ctx->RSSetState(target_state);
+        if (enable) {
+            wireframe_rasterizer_state_ = target_state;
+        } else {
+            solid_rasterizer_state_ = target_state;
+        }
     }
 }
 

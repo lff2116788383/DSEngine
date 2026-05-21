@@ -90,7 +90,6 @@
 #include "editor_animation_timeline.h"
 #include "editor_navmesh_panel.h"
 #include "editor_lighting_gizmos.h"
-#include "editor_git_panel.h"
 #include "editor_shader_graph.h"
 #include "editor_multi_viewport.h"
 #include "editor_scene_view_mode.h"
@@ -295,8 +294,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // NOTE: Multi-viewport disabled due to CRT heap assertions on Windows.
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     static std::string imgui_ini_path = (GetEditorBinPath() / "editor_layout.ini").string();
     io.IniFilename = imgui_ini_path.c_str();
@@ -801,8 +799,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_asset_browser_)        dse::editor::DrawAssetBrowserPanel();
     if (show_animation_timeline_)   dse::editor::DrawAnimationTimelinePanel(ctx);
     if (show_navmesh_)              dse::editor::DrawNavMeshPanel(ctx);
-    if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel();
-    if (show_git_)                  dse::editor::DrawGitPanel();
+    if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel(ctx);
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
 

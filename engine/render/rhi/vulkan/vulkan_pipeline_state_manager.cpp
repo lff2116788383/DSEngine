@@ -130,7 +130,8 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
     VkExtent2D extent,
     VkSampleCountFlagBits samples,
-    uint32_t color_attachment_count) {
+    uint32_t color_attachment_count,
+    bool wireframe) {
 
     auto it = pipeline_states_.find(handle);
     if (it == pipeline_states_.end()) return VK_NULL_HANDLE;
@@ -138,7 +139,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     auto& state = it->second;
 
     // 复合键查找缓存：同一 handle 在不同 renderPass/samples 下各自有独立的 VkPipeline
-    PipelineCacheKey cache_key{ handle, render_pass, samples };
+    PipelineCacheKey cache_key{ handle, render_pass, samples, wireframe };
     auto cache_it = pipeline_cache_.find(cache_key);
     if (cache_it != pipeline_cache_.end()) {
         return cache_it->second;
@@ -188,7 +189,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rasterizer.cullMode = state.desc.culling_enabled
                              ? ToVkCullMode(state.desc.cull_face)
                              : VK_CULL_MODE_NONE;

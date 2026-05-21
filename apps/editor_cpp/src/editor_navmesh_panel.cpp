@@ -4,6 +4,9 @@
 
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/navigation/nav_mesh_system.h"
+#include "engine/core/service_locator.h"
+#include "engine/base/debug.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -70,76 +73,103 @@ NavMeshEditorState& GetState() {
     return state;
 }
 
-/// Simulate a navmesh bake from scene geometry (creates a simple grid-based navmesh
-/// from walkable surfaces). In production this would use Recast/Detour.
+/// Build navmesh from scene geometry using Recast/Detour
 void SimulateBake(NavMeshEditorState& state, entt::registry& reg) {
-    state.baked_data = NavMeshData{};
     state.baking = false;
+    state.bake_progress = 0.0f;
 
-    // Collect AABB of all mesh-bearing entities
-    glm::vec3 scene_min(1e6f), scene_max(-1e6f);
-    int mesh_count = 0;
+#ifdef DSE_ENABLE_NAVMESH
+    auto* nav_sys = dse::core::ServiceLocator::Instance().Get<dse::navigation::NavMeshSystem>();
+    if (!nav_sys) {
+        DEBUG_LOG_WARN("[NavMesh] NavMeshSystem not available");
+        return;
+    }
+
+    // Collect all triangle data from scene meshes
+    std::vector<float> verts;
+    std::vector<int> tris;
 
     auto view = reg.view<TransformComponent, dse::MeshRendererComponent>();
     for (auto e : view) {
         auto& tf = view.get<TransformComponent>(e);
-        glm::vec3 half = tf.scale * 0.5f;
-        scene_min = glm::min(scene_min, tf.position - half);
-        scene_max = glm::max(scene_max, tf.position + half);
-        mesh_count++;
-    }
+        auto& mesh = view.get<dse::MeshRendererComponent>(e);
 
-    // Also include terrain entities
-    auto tview = reg.view<TransformComponent, TerrainComponent>();
-    for (auto e : tview) {
-        auto& tf = tview.get<TransformComponent>(e);
-        auto& terrain = tview.get<TerrainComponent>(e);
-        glm::vec3 half(terrain.width * 0.5f, terrain.max_height, terrain.depth * 0.5f);
-        scene_min = glm::min(scene_min, tf.position - half);
-        scene_max = glm::max(scene_max, tf.position + half);
-        mesh_count++;
-    }
+        // Skip if mesh has no vertex data
+        if (mesh.temp_vertices.empty() || mesh.temp_indices.empty()) continue;
 
-    if (mesh_count == 0) return;
+        // Transform vertices to world space
+        glm::mat4 model = tf.local_to_world;
+        size_t vert_offset = verts.size() / 3;
 
-    state.baked_data.bounds_min = scene_min;
-    state.baked_data.bounds_max = scene_max;
+        for (size_t i = 0; i < mesh.temp_vertices.size(); i += 3) {
+            glm::vec4 pos(mesh.temp_vertices[i], mesh.temp_vertices[i+1],
+                          mesh.temp_vertices[i+2], 1.0f);
+            glm::vec4 world_pos = model * pos;
+            verts.push_back(world_pos.x);
+            verts.push_back(world_pos.y);
+            verts.push_back(world_pos.z);
+        }
 
-    // Generate a simple grid navmesh on the Y=0 plane (or terrain Y)
-    float cell = state.settings.cell_size;
-    float y = scene_min.y + 0.01f; // Slightly above ground
-
-    int nx = static_cast<int>((scene_max.x - scene_min.x) / cell);
-    int nz = static_cast<int>((scene_max.z - scene_min.z) / cell);
-    nx = std::clamp(nx, 1, 200);
-    nz = std::clamp(nz, 1, 200);
-
-    for (int iz = 0; iz < nz; iz++) {
-        for (int ix = 0; ix < nx; ix++) {
-            float x0 = scene_min.x + ix * cell;
-            float z0 = scene_min.z + iz * cell;
-            float x1 = x0 + cell;
-            float z1 = z0 + cell;
-
-            // Two triangles per cell
-            NavMeshTriangle t1;
-            t1.v0 = glm::vec3(x0, y, z0);
-            t1.v1 = glm::vec3(x1, y, z0);
-            t1.v2 = glm::vec3(x1, y, z1);
-            state.baked_data.triangles.push_back(t1);
-
-            NavMeshTriangle t2;
-            t2.v0 = glm::vec3(x0, y, z0);
-            t2.v1 = glm::vec3(x1, y, z1);
-            t2.v2 = glm::vec3(x0, y, z1);
-            state.baked_data.triangles.push_back(t2);
+        // Add triangle indices
+        for (size_t i = 0; i < mesh.temp_indices.size(); ++i) {
+            tris.push_back(static_cast<int>(vert_offset + mesh.temp_indices[i]));
         }
     }
 
-    state.baked_data.triangle_count = static_cast<int>(state.baked_data.triangles.size());
-    state.baked_data.vertex_count = state.baked_data.triangle_count * 3;
-    state.baked_data.poly_count = nx * nz;
+    if (verts.empty() || tris.empty()) {
+        DEBUG_LOG_WARN("[NavMesh] No geometry to bake navmesh from");
+        return;
+    }
+
+    // Convert editor settings to NavMeshBuildConfig
+    dse::navigation::NavMeshBuildConfig cfg;
+    cfg.cell_size = state.settings.cell_size;
+    cfg.cell_height = state.settings.cell_height;
+    cfg.agent_height = state.settings.agent_height;
+    cfg.agent_radius = state.settings.agent_radius;
+    cfg.agent_max_climb = state.settings.agent_max_climb;
+    cfg.agent_max_slope = state.settings.agent_max_slope;
+    cfg.region_min_size = state.settings.region_min_size;
+    cfg.region_merge_size = state.settings.region_merge_size;
+    cfg.edge_max_len = state.settings.edge_max_len;
+    cfg.edge_max_error = state.settings.edge_max_error;
+    cfg.verts_per_poly = state.settings.verts_per_poly;
+    cfg.detail_sample_dist = state.settings.detail_sample_dist;
+    cfg.detail_sample_max_error = state.settings.detail_sample_max_error;
+
+    // Bake navmesh
+    if (!nav_sys->BakeFromTriangles(verts.data(), static_cast<int>(verts.size() / 3),
+                                    tris.data(), static_cast<int>(tris.size() / 3), cfg)) {
+        DEBUG_LOG_ERROR("[NavMesh] Bake failed");
+        return;
+    }
+
+    // Update baked data for visualization
     state.baked_data.valid = true;
+    state.baked_data.vertex_count = static_cast<int>(verts.size() / 3);
+    state.baked_data.triangle_count = static_cast<int>(tris.size() / 3);
+    state.baked_data.poly_count = 0; // TODO: Get poly count from nav mesh
+
+    // Calculate bounds
+    if (!verts.empty()) {
+        glm::vec3 min(1e6f), max(-1e6f);
+        for (size_t i = 0; i < verts.size(); i += 3) {
+            min.x = std::min(min.x, verts[i]);
+            min.y = std::min(min.y, verts[i+1]);
+            min.z = std::min(min.z, verts[i+2]);
+            max.x = std::max(max.x, verts[i]);
+            max.y = std::max(max.y, verts[i+1]);
+            max.z = std::max(max.z, verts[i+2]);
+        }
+        state.baked_data.bounds_min = min;
+        state.baked_data.bounds_max = max;
+    }
+
+    DEBUG_LOG_INFO("[NavMesh] Bake completed: {} verts, {} tris",
+                  state.baked_data.vertex_count, state.baked_data.triangle_count);
+#else
+    DEBUG_LOG_WARN("[NavMesh] NavMesh support not enabled (DSE_ENABLE_NAVMESH)");
+#endif
 }
 
 ImVec2 WorldToScreen(const glm::vec3& wp,
