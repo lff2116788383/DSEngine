@@ -20,7 +20,9 @@
 #include <entt/entt.hpp>
 #include "engine/physics/physics3d/physics3d_system_jolt.h"
 #include "engine/ecs/world.h"
+#include "engine/ecs/components_3d_physics.h"
 
+using namespace dse;
 using namespace dse::physics3d;
 
 TEST(Physics3DSystemJoltTest, 默认构造不崩溃) {

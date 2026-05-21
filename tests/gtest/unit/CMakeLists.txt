@@ -1,134 +1,24 @@
 set(DSE_GTEST_UNIT_TARGET dse_gtest_unit_tests)
 
+# 公共测试：engine / gameplay_2d / apps（目录内新增文件自动发现）
+file(GLOB_RECURSE DSE_UNIT_COMMON_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/gameplay_2d/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/apps/*.cpp"
+)
+
 add_executable(${DSE_GTEST_UNIT_TARGET}
-    # engine/base
-    engine/base/time_test.cpp
-    engine/base/bezier_test.cpp
-    engine/base/tween_test.cpp
-    engine/base/debug_test.cpp
-    # engine/core
-    engine/core/event_bus_test.cpp
-    engine/core/event_id_test.cpp
-    engine/core/event_id_cross_dll_test.cpp
-    engine/core/service_locator_test.cpp
-    engine/core/job_system_test.cpp
-    engine/core/job_system_stress_test.cpp
-    engine/core/performance_baseline_test.cpp
-    engine/core/math_pool_test.cpp
-    engine/core/dynamic_library_test.cpp
-    engine/core/module_test.cpp
-    # engine/ecs
-    engine/ecs/world_test.cpp
-    engine/ecs/ecs_component_test.cpp
-    engine/ecs/animator_component_test.cpp
-    engine/ecs/sprite_component_test.cpp
-    engine/ecs/camera_component_test.cpp
-    engine/ecs/tilemap_component_test.cpp
-    engine/ecs/ui_component_test.cpp
-    engine/ecs/script_component_test.cpp
-    engine/ecs/audio_component_test.cpp
-    engine/ecs/gameplay_test.cpp
-    engine/ecs/components_3d_test.cpp
-    engine/ecs/components_2d_test.cpp
-    engine/ecs/components_3d_particle_test.cpp
-    engine/ecs/components_3d_physics_test.cpp
-    engine/ecs/components_3d_fracture_test.cpp
-    engine/ecs/components_3d_cloth_test.cpp
-    engine/ecs/components_3d_fluid_test.cpp
-    engine/ecs/particle_curve_test.cpp
-    # engine/input
-    engine/input/input_test.cpp
-    # engine/audio
-    engine/audio/audio_system_test.cpp
-    engine/audio/audio_3d_spatial_test.cpp
-    # engine/physics
-    engine/physics/physics3d_system_test.cpp
-    engine/physics/physics2d_joint_test.cpp
-    # engine/render
-    engine/render/render_graph_test.cpp
-    engine/render/rhi_types_test.cpp
-    engine/render/vulkan_rhi_test.cpp
-    engine/render/dx11_rhi_test.cpp
-    engine/render/gl_rhi_test.cpp
-    engine/render/builtin_passes_test.cpp
-    engine/render/light_probe_system_test.cpp
-    engine/render/reflection_probe_system_test.cpp
-    engine/render/ubo_draw_executor_common_test.cpp
-    engine/render/gl_shader_ubo_manager_test.cpp
-    engine/render/rendergraph_parallel_test.cpp
-    engine/render/postprocess_common_test.cpp
-    engine/render/hair_asset_test.cpp
-    engine/render/ddgi_system_test.cpp
-    engine/render/cluster_grid_test.cpp
-    engine/render/dssl_material_test.cpp
-    engine/render/gpu_instancing_test.cpp
-    engine/render/projection_correction_test.cpp
-    engine/render/draw_executor_backend_test.cpp
-    engine/render/shader_manager_test.cpp
-    engine/render/shader_reflection_test.cpp
-    engine/render/indirect_draw_test.cpp
-    engine/render/rhi_handle_test.cpp
-    # engine/scene
-    engine/scene/octree_test.cpp
-    engine/scene/quad_tree_test.cpp
-    engine/scene/transform_system_test.cpp
-    engine/scene/raw_scene_data_test.cpp
-    engine/scene/sub_scene_test.cpp
-    engine/scene/scene_manager_test.cpp
-    engine/scene/scene_transition_test.cpp
-    engine/scene/uuid_cross_scene_test.cpp
-    engine/scene/spatial_scene_test.cpp
-    # engine/assets
-    engine/assets/asset_manager_test.cpp
-    engine/assets/asset_pipeline_async_test.cpp
-    # engine/profiler
-    engine/profiler/profiler_test.cpp
-    # engine/runtime
-    engine/runtime/frame_pipeline_test.cpp
-    engine/runtime/runtime_context_test.cpp
-    engine/runtime/engine_app_test.cpp
-    engine/runtime/game_application_test.cpp
-    # modules/gameplay_2d
-    modules/gameplay_2d/animation_system_2d_test.cpp
-    modules/gameplay_2d/camera_system_2d_test.cpp
-    modules/gameplay_2d/particle_system_2d_test.cpp
-    modules/gameplay_2d/tilemap_system_test.cpp
-    modules/gameplay_2d/localization_system_test.cpp
-    modules/gameplay_2d/nine_slice_render_test.cpp
-    modules/gameplay_2d/sprite_ui_render_system_test.cpp
-    modules/gameplay_2d/ui_system_test.cpp
-    # modules/gameplay_3d（AnimationStateMachine 已编译进 dse_engine）
-    modules/gameplay_3d/animation_state_machine_test.cpp
-    modules/gameplay_3d/blend_tree_crossfade_test.cpp
-    # apps/editor (header-only classes + test harness)
-    apps/editor/editor_unit_test.cpp
+    ${DSE_UNIT_COMMON_SRCS}
+    # editor_test_harness 位于测试目录外，保持显式引用
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
 )
 
-# 3D 模块测试需要DSE_Gameplay3D 库（条件编译）
+# 3D 模块测试（全部依赖 gameplay_3d 头文件，含 AnimationStateMachine / FootIK 等）
 if(DSE_ENABLE_3D)
-    target_sources(${DSE_GTEST_UNIT_TARGET} PRIVATE
-        modules/gameplay_3d/steering_system_test.cpp
-        modules/gameplay_3d/frustum_culling_system_test.cpp
-        modules/gameplay_3d/animator_system_test.cpp
-        modules/gameplay_3d/free_camera_controller_system_test.cpp
-        modules/gameplay_3d/rope_vehicle_system_test.cpp
-        modules/gameplay_3d/anim_layer_ik_test.cpp
-        modules/gameplay_3d/foot_ik_system_test.cpp
-        modules/gameplay_3d/anim_perf_benchmark_test.cpp
-        modules/gameplay_3d/lod_system_test.cpp
-        modules/gameplay_3d/mesh_render_system_test.cpp
-        modules/gameplay_3d/softbody_system_test.cpp
-        modules/gameplay_3d/particle3d_system_test.cpp
-        modules/gameplay_3d/terrain_system_test.cpp
-        modules/gameplay_3d/anim_layer_blend_system_test.cpp
-        modules/gameplay_3d/ragdoll_system_test.cpp
-        modules/gameplay_3d/buoyancy_system_test.cpp
-        modules/gameplay_3d/hair_system_test.cpp
-        modules/gameplay_3d/grass_system_test.cpp
-        modules/gameplay_3d/vehicle_system_test.cpp
-        modules/gameplay_3d/nav_agent_system_test.cpp
+    file(GLOB_RECURSE DSE_UNIT_3D_SRCS CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/modules/gameplay_3d/*.cpp"
     )
+    target_sources(${DSE_GTEST_UNIT_TARGET} PRIVATE ${DSE_UNIT_3D_SRCS})
 endif()
 
 target_include_directories(${DSE_GTEST_UNIT_TARGET}
