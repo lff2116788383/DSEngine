@@ -369,6 +369,7 @@ const DX11Texture* DX11ResourceManager::GetTexture(unsigned int handle) const {
 // ============================================================
 
 unsigned int DX11ResourceManager::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    if (!device_) return 0;
     DX11Buffer buf;
     buf.size = size;
     buf.is_dynamic = is_dynamic;
