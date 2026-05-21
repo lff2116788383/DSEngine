@@ -13,6 +13,13 @@ struct PanelVisibility {
     bool* terrain_editor = nullptr;
     bool* lua_console = nullptr;
     bool* undo_history = nullptr;
+    bool* asset_browser = nullptr;
+    bool* animation_timeline = nullptr;
+    bool* navmesh = nullptr;
+    bool* shader_graph = nullptr;
+    bool* git = nullptr;
+    bool* multi_viewport = nullptr;
+    bool* anim_state_machine = nullptr;
 };
 
 void BeginEditorShell();

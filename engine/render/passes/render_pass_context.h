@@ -10,6 +10,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/render_snapshot.h"
 
 class World;
 class AssetManager;
@@ -38,6 +39,7 @@ class DDGISystem;
  * @brief 所有 Pass 共享的运行时上下文（非拥有型指针）
  */
 struct RenderPassContext {
+    const RenderThinSnapshot* snapshot = nullptr;  ///< 渲染线程只读快照（Phase 1）
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
@@ -130,6 +132,9 @@ struct RenderPassContext {
     bool use_editor_camera = false;
     glm::mat4 editor_view = glm::mat4(1.0f);
     glm::mat4 editor_projection = glm::mat4(1.0f);
+
+    /// 编辑器场景视图模式 (0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw)
+    int scene_view_mode = 0;
 
     /// FramePipeline 拥有的子系统回调（避免 Pass 直接依赖 FramePipeline）
     std::function<void(World&, CommandBuffer&)> render_2d_scene;

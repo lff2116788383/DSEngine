@@ -47,7 +47,8 @@ class UBOManager;
  */
 class GLDrawExecutor {
 public:
-    GLDrawExecutor() = default;
+    explicit GLDrawExecutor(DrawExecutorGlobalState& shared_state)
+        : global_state_(shared_state) {}
     ~GLDrawExecutor() = default;
 
     /// 初始化几何缓冲区（2D 批处理 VAO/VBO/EBO + 3D 网格 VAO/VBO/EBO + 白色纹理）
@@ -100,30 +101,6 @@ public:
                           const glm::mat4& view,
                           const glm::mat4& projection,
                           GLShaderManager& shader_mgr);
-
-    // --- 全局阴影/光源矩阵（委托给共享状态） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_state_.SetPointShadowMap(index, handle); }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetLightSpaceMatrix(index, mat); }
-    void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
-    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
-                        const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
-                        const glm::ivec3& grid_resolution, int irradiance_texels,
-                        float gi_intensity, float normal_bias) {
-        global_state_.ddgi_enabled = enabled;
-        global_state_.ddgi_irradiance_atlas = irradiance_atlas;
-        global_state_.ddgi_grid_origin = grid_origin;
-        global_state_.ddgi_grid_spacing = grid_spacing;
-        global_state_.ddgi_grid_resolution = grid_resolution;
-        global_state_.ddgi_irradiance_texels = irradiance_texels;
-        global_state_.ddgi_gi_intensity = gi_intensity;
-        global_state_.ddgi_normal_bias = normal_bias;
-    }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
-    void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -209,8 +186,8 @@ private:
     unsigned int active_render_target_ = 0;
     bool is_depth_only_pass_ = false;
 
-    // 全局渲染状态（共享结构体，消除三端重复）
-    DrawExecutorGlobalState global_state_;
+    // 全局渲染状态（引用 RhiDevice::global_render_state_）
+    DrawExecutorGlobalState& global_state_;
 
     // 外部函数指针（由 OpenGLRhiDevice 注入）
     UpdateBufferFn update_buffer_fn_ = nullptr;

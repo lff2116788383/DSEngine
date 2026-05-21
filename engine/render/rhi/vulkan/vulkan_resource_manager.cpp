@@ -832,6 +832,11 @@ void VulkanResourceManager::DeleteBuffer(unsigned int handle) {
     buffers_.erase(it);
 }
 
+const VulkanBuffer* VulkanResourceManager::GetBuffer(unsigned int handle) const {
+    auto it = buffers_.find(handle);
+    return it != buffers_.end() ? &it->second : nullptr;
+}
+
 // ============================================================
 // SSBO (Storage Buffer)
 // ============================================================

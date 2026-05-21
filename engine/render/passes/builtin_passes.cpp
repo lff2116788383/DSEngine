@@ -51,7 +51,7 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
-#include <cstdlib>
+#include <cstdio>
 #include "engine/base/time.h"
 
 namespace dse {
@@ -62,19 +62,8 @@ namespace render {
 // ============================================================
 namespace {
 
-glm::vec3 FindShadowCenter(World& world) {
-    glm::vec3 shadow_center(0.0f);
-    auto camera3d_view = world.registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera3d_view) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-        if (camera.enabled && world.registry().all_of<TransformComponent>(entity)) {
-            auto& transform = world.registry().get<TransformComponent>(entity);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            shadow_center = transform.position + front * 50.0f;
-            break;
-        }
-    }
-    return shadow_center;
+glm::vec3 FindShadowCenter(const dse::render::RenderThinSnapshot& snapshot) {
+    return snapshot.camera_3d.shadow_center;
 }
 
 struct DirectionalLightCamera {
@@ -125,30 +114,13 @@ void PreZPass::Setup(RenderGraph& graph) {
 
 void PreZPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.prez, glm::vec4(0.0f), true});
-    const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    entt::entity selected_camera3d = entt::null;
-    int selected_priority3d = std::numeric_limits<int>::min();
-    for (auto entity : camera3d_view) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-        if (camera.enabled && camera.priority > selected_priority3d) {
-            selected_camera3d = entity;
-            selected_priority3d = camera.priority;
-        }
-    }
-    if (selected_camera3d != entt::null) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
+    const auto& snap = *ctx_.snapshot;
+    if (snap.camera_3d.valid) {
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                camera.near_clip, camera.far_clip);
-        glm::mat4 view = glm::mat4(1.0f);
-        if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
-            auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            view = glm::lookAt(transform.position, transform.position + front, up);
-        }
-        cmd_buffer.SetCamera(view, projection);
+                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        cmd_buffer.SetCamera(snap.camera_3d.view, projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.prez);
 
         for (auto& mod : ctx_.modules) {
@@ -172,14 +144,18 @@ void CSMShadowPass::Setup(RenderGraph& graph) {
 }
 
 void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const auto& snap = *ctx_.snapshot;
+    const auto& dl = snap.directional_light;
+    if (!dl.valid || !dl.cast_shadow) return;
+
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    if (light_view.begin() == light_view.end()) return;
-    auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
-    if (!light.enabled || !light.cast_shadow) return;
+    glm::vec3 shadow_center = FindShadowCenter(snap);
 
-    glm::vec3 shadow_center = FindShadowCenter(*ctx_.world);
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
 
     std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
     std::vector<float> cascade_splits(CSM_CASCADES);
@@ -187,20 +163,31 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
 
-        float size = light.cascade_splits[i];
+        float size = dl.cascade_splits[i];
         constexpr float shadow_map_res = 2048.0f;
         auto cam = ComputeDirectionalLightCamera(
-            shadow_center, light.direction, size, clip_correction, shadow_map_res);
+            shadow_center, dl.direction, size, clip_correction, shadow_map_res);
 
         // Sampling matrix uses shadow_sample_correction (no Z remap)
         float far_dist = size * 4.0f;
         glm::mat4 sample_proj = shadow_sample_correction *
             glm::ortho(-size, size, -size, size, 1.0f, far_dist);
         light_space_matrices[i] = sample_proj * cam.view;
-        cascade_splits[i] = light.cascade_splits[i];
+        cascade_splits[i] = dl.cascade_splits[i];
 
         cmd_buffer.SetCamera(cam.view, cam.projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+        if (use_gpu_indirect) {
+            auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
 
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
@@ -233,40 +220,47 @@ void SpotShadowPass::Setup(RenderGraph& graph) {
 }
 
 void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const auto& snap = *ctx_.snapshot;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
-    auto spot_light_view = ctx_.world->registry().view<TransformComponent, dse::SpotLightComponent>();
     std::vector<glm::mat4> spot_light_space_matrices;
     spot_light_space_matrices.reserve(4);
-    int shadow_slot = 0;
-    for (auto entity : spot_light_view) {
-        auto& light = spot_light_view.get<dse::SpotLightComponent>(entity);
-        if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || ctx_.render_targets.spot_shadow[shadow_slot] == 0) {
-            continue;
-        }
 
-        auto& transform = spot_light_view.get<TransformComponent>(entity);
-        const glm::vec3 forward = glm::normalize(transform.rotation * light.direction);
-        glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-        if (std::abs(glm::dot(forward, up)) > 0.98f) {
-            up = glm::vec3(0.0f, 0.0f, 1.0f);
-        }
-        const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + forward, up);
-        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
-        cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[shadow_slot], glm::vec4(1.0f), true});
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
+
+    for (int i = 0; i < snap.spot_shadow_count; ++i) {
+        if (ctx_.render_targets.spot_shadow[i] == 0) continue;
+        const auto& sl = snap.spot_lights[i];
+
+        const glm::mat4 light_view_mat = glm::lookAt(sl.position, sl.position + sl.forward, sl.up);
+        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[i], glm::vec4(1.0f), true});
         cmd_buffer.SetCamera(light_view_mat, light_proj);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+        if (use_gpu_indirect) {
+            auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
+
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
                 mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES, light_view_mat, light_proj);
             }
         }
         cmd_buffer.EndRenderPass();
-        // Sampling matrix: no Z remap, shader remaps Z uniformly
-        const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(light.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+        const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         spot_light_space_matrices.push_back(sample_proj * light_view_mat);
-        cmd_buffer.BindGlobalSpotShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[shadow_slot]));
-        ++shadow_slot;
+        cmd_buffer.BindGlobalSpotShadowMap(static_cast<unsigned int>(i), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.spot_shadow[i]));
     }
     for (size_t i = 0; i < spot_light_space_matrices.size() && i < 4; ++i) {
         ctx_.rhi_device->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), spot_light_space_matrices[i]);
@@ -285,17 +279,18 @@ void PointShadowPass::Setup(RenderGraph& graph) {
 }
 
 void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
+    const auto& snap = *ctx_.snapshot;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    auto point_light_view = ctx_.world->registry().view<TransformComponent, dse::PointLightComponent>();
-    int shadow_slot = 0;
-    for (auto entity : point_light_view) {
-        auto& light = point_light_view.get<dse::PointLightComponent>(entity);
-        if (!light.enabled || !light.cast_shadow || shadow_slot >= 4 || ctx_.render_targets.point_shadow[shadow_slot] == 0) {
-            continue;
-        }
 
-        auto& transform = point_light_view.get<TransformComponent>(entity);
-        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, light.radius));
+    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.gpu_mega_vao
+        && ctx_.gpu_draw_cmd_ssbo
+        && ctx_.gpu_indirect_draw_count > 0;
+
+    for (int shadow_slot = 0; shadow_slot < snap.point_shadow_count; ++shadow_slot) {
+        if (ctx_.render_targets.point_shadow[shadow_slot] == 0) continue;
+        const auto& pl = snap.point_lights[shadow_slot];
+        const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, pl.radius));
         static const glm::vec3 face_directions[6] = {
             glm::vec3(1.0f, 0.0f, 0.0f),
             glm::vec3(-1.0f, 0.0f, 0.0f),
@@ -314,10 +309,22 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         };
 
         for (int face = 0; face < 6; ++face) {
-            const glm::mat4 light_view_mat = glm::lookAt(transform.position, transform.position + face_directions[face], face_ups[face]);
+            const glm::mat4 light_view_mat = glm::lookAt(pl.position, pl.position + face_directions[face], face_ups[face]);
             cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
             cmd_buffer.SetCamera(light_view_mat, light_proj);
             cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+
+            if (use_gpu_indirect) {
+                auto* rhi = ctx_.rhi_device;
+                rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
+                rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+                rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+                rhi->UnbindVAO();
+            }
+
             for (auto& mod : ctx_.modules) {
                 if (mod.instance) {
                     mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES + 1 + face, light_view_mat, light_proj);
@@ -327,7 +334,6 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         cmd_buffer.BindGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
-        ++shadow_slot;
     }
 }
 
@@ -355,44 +361,19 @@ void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
     ctx_.rhi_device->SetGBufferRenderingMode(true);
 
     // 选择相机（与 ForwardScenePass 相同逻辑）
+    const auto& snap = *ctx_.snapshot;
     bool render_3d = false;
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
         render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
-    } else {
-        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-        entt::entity selected_camera3d = entt::null;
-        int selected_priority3d = std::numeric_limits<int>::min();
-        std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
-        for (auto entity : camera3d_view) {
-            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-            if (!camera.enabled) continue;
-            const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
-            if (selected_camera3d == entt::null ||
-                camera.priority > selected_priority3d ||
-                (camera.priority == selected_priority3d && entity_id < selected_id3d)) {
-                selected_camera3d = entity;
-                selected_priority3d = camera.priority;
-                selected_id3d = entity_id;
-            }
-        }
-        if (selected_camera3d != entt::null) {
-            render_3d = true;
-            auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
-            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
-                                                    static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                    camera.near_clip, camera.far_clip);
-            glm::mat4 view = glm::mat4(1.0f);
-            if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
-                auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
-                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view = glm::lookAt(transform.position, transform.position + front, up);
-            }
-            cmd_buffer.SetCamera(view, projection);
-        }
+    } else if (snap.camera_3d.valid) {
+        render_3d = true;
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
+                                                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        cmd_buffer.SetCamera(snap.camera_3d.view, projection);
     }
 
     if (render_3d) {
@@ -443,21 +424,18 @@ void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
     unsigned int gbuf_normal   = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 1);
     unsigned int gbuf_position = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 2);
 
-    // 查找主方向光参数
+    // 从快照读取主方向光参数
+    const auto& snap = *ctx_.snapshot;
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color(1.0f);
     float light_intensity = 1.0f;
     float ambient_intensity = 0.1f;
 
-    auto dl_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    for (auto entity : dl_view) {
-        auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(entity);
-        if (!dl.enabled) continue;
-        light_dir = glm::normalize(dl.direction);
-        light_color = dl.color;
-        light_intensity = dl.intensity;
-        ambient_intensity = dl.ambient_intensity;
-        break;
+    if (snap.directional_light.valid) {
+        light_dir = glm::normalize(snap.directional_light.direction);
+        light_color = snap.directional_light.color;
+        light_intensity = snap.directional_light.intensity;
+        ambient_intensity = snap.directional_light.ambient_intensity;
     }
 
     // params: [light_dir.xyz, light_color.xyz, intensity, ambient]
@@ -502,7 +480,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         : glm::vec4(0.02f, 0.02f, 0.02f, 1.0f);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, bg_color, true});
 
-    bool render_3d = false; // Only render 3D meshes when a valid camera is active
+    const auto& snap = *ctx_.snapshot;
+    bool render_3d = false;
     glm::mat4 gpu_view = glm::mat4(1.0f);
     glm::mat4 gpu_proj = glm::mat4(1.0f);
     glm::vec3 gpu_camera_pos = glm::vec3(0.0f);
@@ -516,117 +495,55 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
         cmd_buffer.SetCamera(gpu_view, gpu_proj);
 
-        // Still render skybox if present
-        auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
-        for (auto sky_entity : skybox_view) {
-            auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-            if (!skybox.enabled) continue;
-            if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
-                if (auto cubemap = ctx_.asset_manager->LoadCubemap(skybox.cubemap_path)) {
-                    skybox.cubemap_handle = cubemap->GetHandle();
-                }
-            }
-            if (skybox.cubemap_handle != 0) {
-                cmd_buffer.DrawSkybox(skybox.cubemap_handle);
-            }
-            break;
+        if (snap.skybox.valid) {
+            cmd_buffer.DrawSkybox(snap.skybox.cubemap_handle);
         }
-    } else {
-    auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    entt::entity selected_camera3d = entt::null;
-    int selected_priority3d = std::numeric_limits<int>::min();
-    std::uint32_t selected_id3d = std::numeric_limits<std::uint32_t>::max();
-    for (auto entity : camera3d_view) {
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-        if (!camera.enabled) {
-            continue;
-        }
-        const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
-        if (selected_camera3d == entt::null ||
-            camera.priority > selected_priority3d ||
-            (camera.priority == selected_priority3d && entity_id < selected_id3d)) {
-            selected_camera3d = entity;
-            selected_priority3d = camera.priority;
-            selected_id3d = entity_id;
-        }
-    }
-
-    if (selected_camera3d != entt::null) {
+    } else if (snap.camera_3d.valid) {
         render_3d = true;
-        auto& camera = camera3d_view.get<dse::Camera3DComponent>(selected_camera3d);
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(camera.fov),
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                camera.near_clip, camera.far_clip);
+                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
 
-        // TAA jitter：对投影矩阵做子像素偏移，使每帧采样位置不同
         if (ctx_.taa_active) {
             projection[2][0] += ctx_.taa_jitter.x * 2.0f;
             projection[2][1] += ctx_.taa_jitter.y * 2.0f;
         }
 
         gpu_proj = projection;
-        if (ctx_.world->registry().all_of<TransformComponent>(selected_camera3d)) {
-            auto& transform = ctx_.world->registry().get<TransformComponent>(selected_camera3d);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            gpu_camera_pos = transform.position;
-            gpu_view = glm::lookAt(transform.position, transform.position + front, up);
-        }
+        gpu_camera_pos = snap.camera_3d.position;
+        gpu_view = snap.camera_3d.view;
         cmd_buffer.SetCamera(gpu_view, projection);
 
-        auto skybox_view = ctx_.world->registry().view<dse::SkyboxComponent>();
-        for (auto sky_entity : skybox_view) {
-            auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-            if (!skybox.enabled) {
-                continue;
+        if (snap.skybox.valid) {
+            if (snap.skybox.has_transform) {
+                glm::mat4 sky_inv_rot = glm::mat4_cast(glm::conjugate(snap.skybox.rotation));
+                cmd_buffer.SetCamera(gpu_view * sky_inv_rot, projection);
             }
-            if (skybox.cubemap_handle == 0 && !skybox.cubemap_path.empty()) {
-                if (auto cubemap = ctx_.asset_manager->LoadCubemap(skybox.cubemap_path)) {
-                    skybox.cubemap_handle = cubemap->GetHandle();
-                }
-            }
-            if (skybox.cubemap_handle != 0) {
-                // Apply skybox entity rotation to view (allows Lua to rotate skybox)
-                if (ctx_.world->registry().all_of<TransformComponent>(sky_entity)) {
-                    auto& sky_tf = ctx_.world->registry().get<TransformComponent>(sky_entity);
-                    glm::mat4 sky_inv_rot = glm::mat4_cast(glm::conjugate(sky_tf.rotation));
-                    cmd_buffer.SetCamera(gpu_view * sky_inv_rot, projection);
-                }
-                cmd_buffer.DrawSkybox(skybox.cubemap_handle);
-                cmd_buffer.SetCamera(gpu_view, projection);
-            }
-            break;
+            cmd_buffer.DrawSkybox(snap.skybox.cubemap_handle);
+            cmd_buffer.SetCamera(gpu_view, projection);
         }
-    } else {
-        auto camera_view = ctx_.world->registry().view<CameraComponent>();
-        entt::entity selected_camera = entt::null;
-        int selected_priority = std::numeric_limits<int>::min();
-        std::uint32_t selected_id = std::numeric_limits<std::uint32_t>::max();
-        for (auto entity : camera_view) {
-            auto& camera = camera_view.get<CameraComponent>(entity);
-            if (!camera.enabled) {
-                continue;
-            }
-            const std::uint32_t entity_id = static_cast<std::uint32_t>(entity);
-            if (selected_camera == entt::null ||
-                camera.priority > selected_priority ||
-                (camera.priority == selected_priority && entity_id < selected_id)) {
-                selected_camera = entity;
-                selected_priority = camera.priority;
-                selected_id = entity_id;
-            }
-        }
-        if (selected_camera != entt::null) {
-            auto& camera = camera_view.get<CameraComponent>(selected_camera);
-            const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();
-            cmd_buffer.SetCamera(camera.view, clip_correction_2d * camera.projection);
-        }
+    } else if (snap.camera_2d.valid) {
+        const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();
+        cmd_buffer.SetCamera(snap.camera_2d.view, clip_correction_2d * snap.camera_2d.projection);
     }
-    } // end else (non-editor camera)
 
     if (render_3d) {
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+
+        // 编辑器场景视图模式 (仅在 editor_mode 下生效)
+        // 0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw
+        const int view_mode = ctx_.editor_mode ? ctx_.scene_view_mode : 0;
+        if (view_mode == 1) {
+            ctx_.rhi_device->SetWireframeMode(true);
+        }
+        // ShadedWireframe: 第一遍正常 fill 渲染，线框叠加在 mesh 渲染结束后
+        if (view_mode == 3 || view_mode == 4) {
+            ctx_.rhi_device->SetForceUnlit(true);
+        }
+        if (view_mode == 4) {
+            ctx_.rhi_device->SetOverdrawMode(true);
+        }
 
         // Clustered Forward+: 绑定光源 SSBO 和 Cluster 网格 SSBO
         if (ctx_.light_buffer) ctx_.light_buffer->Bind();
@@ -639,24 +556,17 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             && ctx_.gpu_indirect_draw_count > 0;
 
         if (use_gpu_indirect) {
-            // 从 ECS 提取主方向光参数（含阴影强度）
             glm::vec3 gpu_light_dir   = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
             glm::vec3 gpu_light_color = glm::vec3(1.0f, 1.0f, 1.0f);
             float gpu_light_intensity = 1.0f;
             float gpu_ambient         = 0.1f;
             float gpu_shadow_strength = 0.0f;
-            {
-                auto dl_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-                for (auto entity : dl_view) {
-                    auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(entity);
-                    if (!dl.enabled) continue;
-                    gpu_light_dir       = glm::normalize(dl.direction);
-                    gpu_light_color     = dl.color;
-                    gpu_light_intensity = dl.intensity;
-                    gpu_ambient         = dl.ambient_intensity;
-                    if (dl.cast_shadow) gpu_shadow_strength = dl.shadow_strength;
-                    break;
-                }
+            if (snap.directional_light.valid) {
+                gpu_light_dir       = glm::normalize(snap.directional_light.direction);
+                gpu_light_color     = snap.directional_light.color;
+                gpu_light_intensity = snap.directional_light.intensity;
+                gpu_ambient         = snap.directional_light.ambient_intensity;
+                if (snap.directional_light.cast_shadow) gpu_shadow_strength = snap.directional_light.shadow_strength;
             }
 
             auto* rhi = ctx_.rhi_device;
@@ -686,6 +596,44 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             if (mod.instance) {
                 mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
             }
+        }
+
+        // ShadedWireframe: 正常渲染已完成，叠加一遍线框
+        if (view_mode == 2) {
+            ctx_.rhi_device->SetWireframeMode(true);
+            // GPU Driven 路径：重新 indirect draw（wireframe overlay）
+            if (use_gpu_indirect) {
+                auto* rhi = ctx_.rhi_device;
+                rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+                rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+                rhi->UnbindVAO();
+            }
+            // CPU 路径
+            if (!use_gpu_indirect) {
+                if (ctx_.modules.empty() && ctx_.render_meshes) {
+                    ctx_.render_meshes(*ctx_.world, cmd_buffer);
+                }
+            }
+            for (auto& mod : ctx_.modules) {
+                if (mod.instance) {
+                    mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
+                }
+            }
+            ctx_.rhi_device->SetWireframeMode(false);
+        }
+
+        // 恢复场景视图模式修改的 RHI 状态
+        if (view_mode == 1) {
+            ctx_.rhi_device->SetWireframeMode(false);
+        }
+        if (view_mode == 3 || view_mode == 4) {
+            ctx_.rhi_device->SetForceUnlit(false);
+        }
+        if (view_mode == 4) {
+            ctx_.rhi_device->SetOverdrawMode(false);
         }
     }
 
@@ -722,18 +670,10 @@ void BloomPass::Setup(RenderGraph& graph) {
 }
 
 void BloomPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool pp_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
-            pp_enabled = true;
-            pp_config = pp_view.get<dse::PostProcessComponent>(entity);
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
 
-    if (!pp_enabled || !pp_config.bloom_enabled) {
+    if (!pp_config.valid || !pp_config.bloom_enabled) {
         return;
     }
 
@@ -815,16 +755,9 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
     const unsigned int ui_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ui);
 
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool pp_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        if (pp_view.get<dse::PostProcessComponent>(entity).enabled) {
-            pp_enabled = true;
-            pp_config = pp_view.get<dse::PostProcessComponent>(entity);
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool pp_enabled = pp_config.valid;
 
     // 获取 SSAO 纹理（如果启用）
     unsigned int ssao_tex = 0;
@@ -935,17 +868,9 @@ void AutoExposurePass::Setup(RenderGraph& graph) {
 }
 
 void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool ae_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.auto_exposure_enabled) {
-            ae_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool ae_enabled = pp_config.valid && pp_config.auto_exposure_enabled;
 
     ctx_.auto_exposure_active = ae_enabled;
     if (!ae_enabled) return;
@@ -1001,17 +926,9 @@ void SSAOPass::Setup(RenderGraph& graph) {
 }
 
 void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool ssao_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.ssao_enabled) {
-            ssao_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool ssao_enabled = pp_config.valid && pp_config.ssao_enabled;
 
     if (!ssao_enabled || ctx_.render_targets.ssao == 0 || ctx_.render_targets.ssao_blur == 0) {
         return;
@@ -1020,17 +937,8 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    // 获取相机投影矩阵参数
-    float near_plane = 0.1f, far_plane = 10000.0f;
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            break;
-        }
-    }
+    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     // Pass 1: SSAO 计算（半分辨率）
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
@@ -1067,17 +975,9 @@ void ContactShadowPass::Setup(RenderGraph& graph) {
 }
 
 void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool cs_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.contact_shadow_enabled) {
-            cs_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool cs_enabled = pp_config.valid && pp_config.contact_shadow_enabled;
 
     if (!cs_enabled || ctx_.render_targets.contact_shadow == 0) {
         return;
@@ -1086,27 +986,13 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    // 获取主光源方向
     glm::vec3 light_dir(-0.4f, -1.0f, -0.3f);
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    if (light_view.begin() != light_view.end()) {
-        auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
-        if (light.enabled) {
-            light_dir = glm::normalize(light.direction);
-        }
+    if (snap.directional_light.valid) {
+        light_dir = glm::normalize(snap.directional_light.direction);
     }
 
-    // 获取相机参数
-    float near_plane = 0.1f, far_plane = 10000.0f;
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            break;
-        }
-    }
+    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.contact_shadow, glm::vec4(1.0f), true});
@@ -1138,15 +1024,8 @@ void FXAAPass::Setup(RenderGraph& graph) {
 }
 
 void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool fxaa_enabled = false;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.fxaa_enabled) {
-            fxaa_enabled = true;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    bool fxaa_enabled = snap.post_process.valid && snap.post_process.fxaa_enabled;
 
     ctx_.fxaa_active = fxaa_enabled && ctx_.render_targets.fxaa != 0;
     if (!ctx_.fxaa_active) {
@@ -1234,17 +1113,9 @@ void TAAPass::Setup(RenderGraph& graph) {
 }
 
 void TAAPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool taa_enabled = false;
-    float blend_factor = 0.1f;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.taa_enabled) {
-            taa_enabled = true;
-            blend_factor = pp.taa_blend_factor;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    bool taa_enabled = snap.post_process.valid && snap.post_process.taa_enabled;
+    float blend_factor = snap.post_process.valid ? snap.post_process.taa_blend_factor : 0.1f;
 
     ctx_.taa_active = taa_enabled && ctx_.render_targets.taa != 0;
     if (!ctx_.taa_active) {
@@ -1331,35 +1202,18 @@ void DOFPass::Setup(RenderGraph& graph) {
 }
 
 void DOFPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool dof_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.dof_enabled) {
-            dof_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool dof_enabled = pp_config.valid && pp_config.dof_enabled;
 
     if (!dof_enabled || ctx_.render_targets.dof == 0) return;
 
-    // DOF 运行于 Composite 之后，读 main RT（已完成 tonemapping）
     const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (main_color_tex == 0 || depth_tex == 0) return;
 
-    float near_plane = 0.1f, far_plane = 10000.0f;
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            break;
-        }
-    }
+    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     // Pass 1: DOF → dof RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
@@ -1404,25 +1258,14 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
+    const auto& snap = *ctx_.snapshot;
     glm::mat4 current_vp = glm::mat4(1.0f);
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-            glm::mat4 projection = clip_correction * glm::perspective(glm::radians(cam.fov),
-                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                cam.near_clip, cam.far_clip);
-            glm::mat4 view = glm::mat4(1.0f);
-            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-                auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-                glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view = glm::lookAt(transform.position, transform.position + front, up);
-            }
-            current_vp = projection * view;
-            break;
-        }
+    if (snap.camera_3d.valid) {
+        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
+            static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
+            snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        current_vp = projection * snap.camera_3d.view;
     }
 
     if (!has_prev_vp_) {
@@ -1470,17 +1313,9 @@ void MotionBlurPass::Setup(RenderGraph& graph) {
 }
 
 void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool mb_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.motion_blur_enabled) {
-            mb_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool mb_enabled = pp_config.valid && pp_config.motion_blur_enabled;
 
     if (!mb_enabled || ctx_.render_targets.dof == 0) return;
 
@@ -1526,17 +1361,9 @@ void SSRPass::Setup(RenderGraph& graph) {
 }
 
 void SSRPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    bool ssr_enabled = false;
-    dse::PostProcessComponent pp_config;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.ssr_enabled) {
-            ssr_enabled = true;
-            pp_config = pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_config = snap.post_process;
+    bool ssr_enabled = pp_config.valid && pp_config.ssr_enabled;
 
     if (!ssr_enabled || ctx_.render_targets.ssr == 0) return;
 
@@ -1544,16 +1371,8 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (scene_color_tex == 0 || depth_tex == 0) return;
 
-    float near_plane = 0.1f, far_plane = 10000.0f;
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            break;
-        }
-    }
+    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     // Pass 1: 渲染 SSR 到半分辨率 ssr RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
@@ -1596,42 +1415,27 @@ void OutlinePass::Setup(RenderGraph& graph) {
 }
 
 void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    const dse::PostProcessComponent* pp_ptr = nullptr;
-    for (auto entity : pp_view) {
-        auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-        if (pp.enabled && pp.outline_enabled) {
-            pp_ptr = &pp;
-            break;
-        }
-    }
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp = snap.post_process;
 
-    if (!pp_ptr || ctx_.render_targets.outline == 0) return;
+    if (!pp.valid || !pp.outline_enabled || ctx_.render_targets.outline == 0) return;
 
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    float near_plane = 0.1f, far_plane = 1000.0f;
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (cam.enabled) {
-            near_plane = cam.near_clip;
-            far_plane = cam.far_clip;
-            break;
-        }
-    }
+    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
 
     // Pass 1: 边缘检测 → outline RT
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
     cmd_buffer.DrawPostProcess({"edge_detect", depth_tex, {
-        pp_ptr->outline_thickness,
-        pp_ptr->outline_depth_threshold,
-        pp_ptr->outline_normal_threshold,
-        pp_ptr->outline_color.r,
-        pp_ptr->outline_color.g,
-        pp_ptr->outline_color.b,
+        pp.outline_thickness,
+        pp.outline_depth_threshold,
+        pp.outline_normal_threshold,
+        pp.outline_color.r,
+        pp.outline_color.g,
+        pp.outline_color.b,
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
@@ -1663,42 +1467,25 @@ void LightShaftPass::Setup(RenderGraph& graph) {
 }
 
 void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    const dse::PostProcessComponent* pp = nullptr;
-    for (auto entity : pp_view) {
-        auto& p = pp_view.get<dse::PostProcessComponent>(entity);
-        if (p.enabled && p.light_shaft_enabled) { pp = &p; break; }
-    }
-    if (!pp) return;
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_snap = snap.post_process;
+    if (!pp_snap.valid || !pp_snap.light_shaft_enabled) return;
 
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    glm::vec3 cam_fwd{0,0,-1}, cam_right{1,0,0}, cam_up{0,1,0};
-    float fov_y = 60.0f;
+    glm::vec3 cam_fwd = snap.camera_3d.forward;
+    glm::vec3 cam_right = snap.camera_3d.right;
+    glm::vec3 cam_up = snap.camera_3d.up;
+    float fov_y = snap.camera_3d.valid ? snap.camera_3d.fov : 60.0f;
     float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (!cam.enabled) continue;
-        fov_y = cam.fov;
-        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
-            cam_fwd   = glm::normalize(t.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
-            cam_right = glm::normalize(t.rotation * glm::vec3(1.0f, 0.0f,  0.0f));
-            cam_up    = glm::normalize(t.rotation * glm::vec3(0.0f, 1.0f,  0.0f));
-        }
-        break;
-    }
     const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
 
     glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    for (auto entity : light_view) {
-        auto& l = light_view.get<dse::DirectionalLight3DComponent>(entity);
-        if (l.enabled) { sun_dir = glm::normalize(l.direction); break; }
+    if (snap.directional_light.valid) {
+        sun_dir = glm::normalize(snap.directional_light.direction);
     }
+    const auto* pp = &pp_snap;
 
     glm::vec3 to_sun = -sun_dir;
     float d_fwd = glm::dot(to_sun, cam_fwd);
@@ -1754,47 +1541,28 @@ void VolumetricFogPass::Setup(RenderGraph& graph) {
 }
 
 void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
-    auto pp_view = ctx_.world->registry().view<dse::PostProcessComponent>();
-    const dse::PostProcessComponent* pp = nullptr;
-    for (auto entity : pp_view) {
-        auto& p = pp_view.get<dse::PostProcessComponent>(entity);
-        if (p.enabled && p.fog_enabled) { pp = &p; break; }
-    }
-    if (!pp || ctx_.render_targets.fog == 0) return;
+    const auto& snap = *ctx_.snapshot;
+    const auto& pp_snap = snap.post_process;
+    if (!pp_snap.valid || !pp_snap.fog_enabled || ctx_.render_targets.fog == 0) return;
 
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    // 获取相机参数
-    float near_p = 0.1f, far_p = 1000.0f, fov_y = 60.0f;
+    float near_p = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_p  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    float fov_y  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
     float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-    glm::vec3 cam_pos{0.0f}, cam_right{1,0,0}, cam_up{0,1,0}, cam_fwd{0,0,-1};
-
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (!cam.enabled) continue;
-        near_p = cam.near_clip;
-        far_p  = cam.far_clip;
-        fov_y  = cam.fov;
-        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
-            cam_pos   = t.position;
-            cam_fwd   = glm::normalize(t.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
-            cam_right = glm::normalize(t.rotation * glm::vec3(1.0f, 0.0f,  0.0f));
-            cam_up    = glm::normalize(t.rotation * glm::vec3(0.0f, 1.0f,  0.0f));
-        }
-        break;
-    }
+    glm::vec3 cam_pos   = snap.camera_3d.position;
+    glm::vec3 cam_right = snap.camera_3d.right;
+    glm::vec3 cam_up    = snap.camera_3d.up;
+    glm::vec3 cam_fwd   = snap.camera_3d.forward;
     const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
 
-    // 获取主平行光方向（用于 Mie 散射）
     glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    for (auto entity : light_view) {
-        auto& l = light_view.get<dse::DirectionalLight3DComponent>(entity);
-        if (l.enabled) { sun_dir = glm::normalize(l.direction); break; }
+    if (snap.directional_light.valid) {
+        sun_dir = glm::normalize(snap.directional_light.direction);
     }
+    const auto* pp = &pp_snap;
 
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
@@ -1921,63 +1689,33 @@ void WaterPass::Setup(RenderGraph& graph) {
 }
 
 void WaterPass::Execute(CommandBuffer& cmd_buffer) {
-    auto water_view = ctx_.world->registry().view<dse::WaterComponent>();
-    bool has_water = false;
-    for (auto entity : water_view) {
-        if (water_view.get<dse::WaterComponent>(entity).enabled) { has_water = true; break; }
-    }
-    if (!has_water) return;
+    const auto& snap = *ctx_.snapshot;
+    if (snap.water_count == 0) return;
 
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    // 获取相机信息
-    glm::mat4 view_mat(1.0f);
-    float cam_fov = 60.0f, cam_near = 0.1f, cam_far = 1000.0f;
-    glm::vec3 cam_pos(0.0f);
-    bool found_camera = false;
+    glm::vec3 cam_pos = snap.camera_3d.position;
+    float cam_fov  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
+    float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    glm::vec3 cam_fwd = snap.camera_3d.forward;
 
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        found_camera = true;
         cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
-        view_mat = ctx_.editor_view;
-        // 从 projection 中估算 fov 不太精确，使用默认值
-    } else {
-        auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-        for (auto entity : camera_view) {
-            auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-            if (!cam.enabled) continue;
-            cam_fov = cam.fov;
-            cam_near = cam.near_clip;
-            cam_far = cam.far_clip;
-            if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-                auto& t = ctx_.world->registry().get<TransformComponent>(entity);
-                glm::vec3 front = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up    = t.rotation * glm::vec3(0.0f, 1.0f,  0.0f);
-                view_mat = glm::lookAt(t.position, t.position + front, up);
-                cam_pos = t.position;
-            }
-            found_camera = true;
-            break;
-        }
+        glm::mat4 inv_view = glm::inverse(ctx_.editor_view);
+        cam_fwd = -glm::normalize(glm::vec3(inv_view[2]));
+    } else if (!snap.camera_3d.valid) {
+        return;
     }
-    if (!found_camera) return;
 
-    glm::mat4 inv_view = glm::inverse(view_mat);
-    glm::vec3 cam_fwd   = -glm::normalize(glm::vec3(inv_view[2]));
     float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
     float tan_fov_y = std::tan(glm::radians(cam_fov) * 0.5f);
 
-    // 获取太阳光方向
     glm::vec3 sun_dir(0.0f, -1.0f, 0.0f);
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    for (auto entity : light_view) {
-        auto& light = light_view.get<dse::DirectionalLight3DComponent>(entity);
-        if (light.enabled) {
-            sun_dir = glm::normalize(light.direction);
-            break;
-        }
+    if (snap.directional_light.valid) {
+        sun_dir = glm::normalize(snap.directional_light.direction);
     }
 
     const float current_time = Time::TimeSinceStartup();
@@ -1988,9 +1726,8 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     // params 布局（40 float = 160 bytes）
     std::vector<float> params(39);
 
-    for (auto entity : water_view) {
-        auto& wc = water_view.get<dse::WaterComponent>(entity);
-        if (!wc.enabled) continue;
+    for (int wi = 0; wi < snap.water_count; ++wi) {
+        const auto& wc = snap.waters[wi];
 
         glm::vec2 wave_dir = glm::length(wc.wave_direction) > 0.001f
             ? glm::normalize(wc.wave_direction) : glm::vec2(1.0f, 0.0f);
@@ -2037,30 +1774,15 @@ void DecalPass::Setup(RenderGraph& graph) {
 }
 
 void DecalPass::Execute(CommandBuffer& cmd_buffer) {
-    auto decal_view = ctx_.world->registry().view<dse::DecalComponent, TransformComponent>();
-    bool has_any = false;
-    for (auto entity : decal_view) {
-        auto& dc = decal_view.get<dse::DecalComponent>(entity);
-        if (dc.enabled && dc.albedo_texture != 0) { has_any = true; break; }
-    }
-    if (!has_any) return;
+    const auto& snap = *ctx_.snapshot;
+    if (snap.decal_count == 0) return;
 
-    // 获取相机 view/projection 构建 inv_vp
-    glm::mat4 view_mat(1.0f), proj_mat(1.0f);
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    auto camera_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-    for (auto entity : camera_view) {
-        auto& cam = camera_view.get<dse::Camera3DComponent>(entity);
-        if (!cam.enabled) continue;
+    glm::mat4 view_mat = snap.camera_3d.view;
+    glm::mat4 proj_mat(1.0f);
+    if (snap.camera_3d.valid) {
         float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-        proj_mat = clip_correction * glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
-        if (ctx_.world->registry().all_of<TransformComponent>(entity)) {
-            auto& t = ctx_.world->registry().get<TransformComponent>(entity);
-            glm::vec3 front = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up    = t.rotation * glm::vec3(0.0f, 1.0f,  0.0f);
-            view_mat = glm::lookAt(t.position, t.position + front, up);
-        }
-        break;
+        proj_mat = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov), aspect, snap.camera_3d.near_clip, snap.camera_3d.far_clip);
     }
     const glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
 
@@ -2072,23 +1794,14 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
-    // params 布局（26 float）：
-    // [0]      depth_tex handle
-    // [1]      decal_tex handle
-    // [2-17]   inv_model_vp (column-major, 16 floats)
-    // [18-21]  color.rgba
-    // [22]     angle_fade
-    // [23-25]  decal Y-axis in world (用于角度衰减)
     std::vector<float> params(24);
 
-    for (auto entity : decal_view) {
-        auto& dc = decal_view.get<dse::DecalComponent>(entity);
-        if (!dc.enabled || dc.albedo_texture == 0) continue;
-        auto& transform = decal_view.get<TransformComponent>(entity);
+    for (int di = 0; di < snap.decal_count; ++di) {
+        const auto& dc = snap.decals[di];
 
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), transform.position)
-                        * glm::mat4_cast(transform.rotation)
-                        * glm::scale(glm::mat4(1.0f), transform.scale);
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), dc.position)
+                        * glm::mat4_cast(dc.rotation)
+                        * glm::scale(glm::mat4(1.0f), dc.scale);
         glm::mat4 inv_model_vp = glm::inverse(model) * inv_vp;
         glm::vec3 decal_up = glm::normalize(glm::vec3(model[1]));
 
@@ -2115,9 +1828,10 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
 
 const char* kHiZCopyShaderSource = R"(
 #version 430 core
+#extension GL_ARB_shading_language_420pack : enable
 layout(local_size_x = 16, local_size_y = 16) in;
 
-uniform sampler2D u_depth_texture;
+layout(binding = 0) uniform sampler2D u_depth_texture;
 layout(r32f, binding = 0) writeonly uniform image2D u_hiz_mip0;
 
 uniform ivec2 u_dst_size;
@@ -2159,8 +1873,286 @@ void main() {
 }
 )";
 
+// ---------------- Vulkan GLSL 450 版本（push constants + 显式 set/binding） ----------------
+// binding 布局对应 CreateComputeShaderEx 参数：
+//   HiZ Copy: ssbo=0, img=1, smp=1, pc=8B
+//     binding 0 = storage image hiz_mip0
+//     binding 1 = sampler2D depth_texture
+//   HiZ Downsample: ssbo=0, img=2, smp=0, pc=16B
+//     binding 0 = storage image src_mip (readonly)
+//     binding 1 = storage image dst_mip (writeonly)
+//   HiZ Cull: ssbo=2, img=0, smp=1, pc=96B
+//     binding 0 = SSBO AABB (readonly)
+//     binding 1 = SSBO Visibility (writeonly)
+//     binding 2 = sampler2D hiz_texture
+
+const char* kHiZCopyShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set=0, binding=0, r32f) writeonly uniform image2D u_hiz_mip0;
+layout(set=0, binding=1) uniform sampler2D u_depth_texture;
+
+layout(push_constant) uniform PC {
+    int u_dst_size_x;
+    int u_dst_size_y;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= pc.u_dst_size_x || coord.y >= pc.u_dst_size_y) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(pc.u_dst_size_x, pc.u_dst_size_y);
+    float depth = texture(u_depth_texture, uv).r;
+    imageStore(u_hiz_mip0, coord, vec4(depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZDownsampleShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set=0, binding=0, r32f) readonly uniform image2D u_src_mip;
+layout(set=0, binding=1, r32f) writeonly uniform image2D u_dst_mip;
+
+layout(push_constant) uniform PC {
+    int u_src_size_x;
+    int u_src_size_y;
+    int u_dst_size_x;
+    int u_dst_size_y;
+} pc;
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (dst_coord.x >= pc.u_dst_size_x || dst_coord.y >= pc.u_dst_size_y) return;
+
+    ivec2 src_coord = dst_coord * 2;
+    ivec2 src_max = ivec2(pc.u_src_size_x - 1, pc.u_src_size_y - 1);
+    float d00 = imageLoad(u_src_mip, src_coord).r;
+    float d10 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 0), src_max)).r;
+    float d01 = imageLoad(u_src_mip, min(src_coord + ivec2(0, 1), src_max)).r;
+    float d11 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 1), src_max)).r;
+
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    imageStore(u_dst_mip, dst_coord, vec4(max_depth, 0.0, 0.0, 0.0));
+}
+)";
+
+const char* kHiZCullShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 64) in;
+
+struct AABB {
+    vec4 min_point;
+    vec4 max_point;
+};
+
+layout(set=0, binding=0, std430) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(set=0, binding=1, std430) writeonly buffer VisibilityBuffer {
+    uint visibility[];
+};
+
+layout(set=0, binding=2) uniform sampler2D u_hiz_texture;
+
+layout(push_constant) uniform PC {
+    mat4 u_view_projection; // 64 B
+    float u_screen_size_x;  //  4 B
+    float u_screen_size_y;  //  4 B
+    int u_mip_count;        //  4 B
+    int u_object_count;     //  4 B
+} pc; // 80 B total
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = pc.u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            visibility[idx] = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    vec2 uv_min = ndc_min * 0.5 + 0.5;
+    vec2 uv_max = ndc_max * 0.5 + 0.5;
+    uv_min = clamp(uv_min, vec2(0.0), vec2(1.0));
+    uv_max = clamp(uv_max, vec2(0.0), vec2(1.0));
+
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        visibility[idx] = 0u;
+        return;
+    }
+
+    vec2 size_pixels = (uv_max - uv_min) * vec2(pc.u_screen_size_x, pc.u_screen_size_y);
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_depth = textureLod(u_hiz_texture, uv_center, mip_level).r;
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_depth, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    visibility[idx] = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
+// ---------------- HLSL CS 5.0 版本（D3D11） ----------------
+// HLSL register 映射:
+//   HiZ Copy: cbuffer b0(PC), t0(depth sampler), s0, u0(hiz_mip0)
+//   HiZ Downsample: cbuffer b0(PC), u0(src readonly via RWTexture2D), u1(dst)
+//   HiZ Cull: cbuffer b0(PC), t0(hiz sampler), s0, t16(AABB SSBO SRV), u0(Visibility UAV)
+// SSBO 在 DX11 中可读 = StructuredBuffer (t-register), 可写 = RWStructuredBuffer (u-register)
+
+const char* kHiZCopyShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    int u_dst_size_x;
+    int u_dst_size_y;
+};
+Texture2D<float> u_depth_texture : register(t0);
+SamplerState LinearSampler        : register(s0);
+RWTexture2D<float> u_hiz_mip0    : register(u0);
+
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    int2 coord = int2(id.xy);
+    if (coord.x >= u_dst_size_x || coord.y >= u_dst_size_y) return;
+    float2 uv = (float2(coord) + 0.5) / float2(u_dst_size_x, u_dst_size_y);
+    float depth = u_depth_texture.SampleLevel(LinearSampler, uv, 0.0);
+    u_hiz_mip0[coord] = depth;
+}
+)";
+
+const char* kHiZDownsampleShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    int u_src_size_x;
+    int u_src_size_y;
+    int u_dst_size_x;
+    int u_dst_size_y;
+};
+RWTexture2D<float> u_src_mip : register(u0);
+RWTexture2D<float> u_dst_mip : register(u1);
+
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    int2 dst_coord = int2(id.xy);
+    if (dst_coord.x >= u_dst_size_x || dst_coord.y >= u_dst_size_y) return;
+    int2 src_coord = dst_coord * 2;
+    int2 src_max = int2(u_src_size_x - 1, u_src_size_y - 1);
+
+    float d00 = u_src_mip[src_coord];
+    float d10 = u_src_mip[min(src_coord + int2(1, 0), src_max)];
+    float d01 = u_src_mip[min(src_coord + int2(0, 1), src_max)];
+    float d11 = u_src_mip[min(src_coord + int2(1, 1), src_max)];
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    u_dst_mip[dst_coord] = max_depth;
+}
+)";
+
+const char* kHiZCullShaderSourceHLSL = R"(
+cbuffer Params : register(b0) {
+    float4x4 u_view_projection;
+    float u_screen_size_x;
+    float u_screen_size_y;
+    int u_mip_count;
+    int u_object_count;
+};
+
+struct AABB {
+    float4 min_point;
+    float4 max_point;
+};
+StructuredBuffer<AABB> aabbs : register(t16);
+RWStructuredBuffer<uint> visibility : register(u1);
+
+Texture2D<float> u_hiz_texture : register(t0);
+SamplerState LinearSampler      : register(s0);
+
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    uint idx = id.x;
+    if (int(idx) >= u_object_count) return;
+
+    float3 aabb_min = aabbs[idx].min_point.xyz;
+    float3 aabb_max = aabbs[idx].max_point.xyz;
+
+    float2 ndc_min = float2(1.0, 1.0);
+    float2 ndc_max = float2(-1.0, -1.0);
+    float nearest_z = 1.0;
+
+    [unroll]
+    for (int i = 0; i < 8; ++i) {
+        float3 corner = float3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        float4 clip = mul(u_view_projection, float4(corner, 1.0));
+        if (clip.w <= 0.0) {
+            visibility[idx] = 1u;
+            return;
+        }
+        float3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    float2 uv_min = ndc_min * 0.5 + 0.5;
+    float2 uv_max = ndc_max * 0.5 + 0.5;
+    uv_min = saturate(uv_min);
+    uv_max = saturate(uv_max);
+
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        visibility[idx] = 0u;
+        return;
+    }
+
+    float2 size_pixels = (uv_max - uv_min) * float2(u_screen_size_x, u_screen_size_y);
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+    float2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_depth = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
+    float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);
+    float hiz_br = u_hiz_texture.SampleLevel(LinearSampler, uv_max, mip_level);
+    float hiz_tr = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_max.x, uv_min.y), mip_level);
+    float hiz_bl = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_min.x, uv_max.y), mip_level);
+    float max_hiz = max(max(hiz_depth, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    visibility[idx] = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
 const char* kHiZCullShaderSource = R"(
 #version 430 core
+#extension GL_ARB_shading_language_420pack : enable
 layout(local_size_x = 64) in;
 
 struct AABB {
@@ -2176,7 +2168,7 @@ layout(std430, binding = 1) writeonly buffer VisibilityBuffer {
     uint visibility[];
 };
 
-uniform sampler2D u_hiz_texture;
+layout(binding = 0) uniform sampler2D u_hiz_texture;
 uniform mat4 u_view_projection;
 uniform vec2 u_screen_size;
 uniform int u_mip_count;
@@ -2300,7 +2292,6 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
         rhi->SetComputeTextureSampler(0, depth_tex);
         rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
 
-        rhi->SetComputeUniformInt(hiz_copy_shader_, "u_depth_texture", 0);
         rhi->SetComputeUniformVec2i(hiz_copy_shader_, "u_dst_size", base_w, base_h);
 
         unsigned int groups_x = (base_w + 15) / 16;
@@ -2368,9 +2359,9 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
-    // Bind SSBOs
-    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0);
-    rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1);
+    // Bind SSBOs (DX11 区分 SRV/UAV; GL/VK 忽略 writable)
+    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0, false);
+    rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1, true);
 
     // Bind Hi-Z texture as sampler
     rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
@@ -2378,27 +2369,18 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     // Get current camera VP matrix for AABB projection
     glm::mat4 view_projection(1.0f);
     {
-        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-        for (auto entity : camera3d_view) {
-            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-            if (!camera.enabled) continue;
-            if (!ctx_.world->registry().all_of<TransformComponent>(entity)) continue;
-            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            glm::mat4 view = glm::lookAt(transform.position, transform.position + front, up);
+        const auto& snap = *ctx_.snapshot;
+        if (snap.camera_3d.valid) {
             const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
             glm::mat4 projection = clip_correction * glm::perspective(
-                glm::radians(camera.fov),
+                glm::radians(snap.camera_3d.fov),
                 static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-                camera.near_clip, camera.far_clip);
-            view_projection = projection * view;
-            break;
+                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+            view_projection = projection * snap.camera_3d.view;
         }
     }
 
-    // Set uniforms through RHI
-    rhi->SetComputeUniformInt(hiz_cull_shader_, "u_hiz_texture", 0);
+    // Set uniforms through RHI (push constants for VK, cbuffer for DX11, glUniform for GL)
     rhi->SetComputeUniformMat4(hiz_cull_shader_, "u_view_projection", &view_projection[0][0]);
     rhi->SetComputeUniformVec2f(hiz_cull_shader_, "u_screen_size",
                                 static_cast<float>(Screen::width()),
@@ -2566,43 +2548,28 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     glm::mat4 view_projection(1.0f);
     glm::vec4 frustum_planes[6] = {};
     {
-        auto camera3d_view = ctx_.world->registry().view<dse::Camera3DComponent>();
-        for (auto entity : camera3d_view) {
-            auto& camera = camera3d_view.get<dse::Camera3DComponent>(entity);
-            if (!camera.enabled) continue;
-            if (!ctx_.world->registry().all_of<TransformComponent>(entity)) continue;
-            auto& transform = ctx_.world->registry().get<TransformComponent>(entity);
-            glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            glm::mat4 view = glm::lookAt(transform.position, transform.position + front, up);
+        const auto& snap = *ctx_.snapshot;
+        if (snap.camera_3d.valid) {
             const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
             glm::mat4 projection = clip_correction * glm::perspective(
-                glm::radians(camera.fov),
+                glm::radians(snap.camera_3d.fov),
                 static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-                camera.near_clip, camera.far_clip);
-            view_projection = projection * view;
+                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+            view_projection = projection * snap.camera_3d.view;
 
             // Extract frustum planes from VP matrix (Gribb/Hartmann method)
             const glm::mat4& m = view_projection;
-            // Left
             frustum_planes[0] = glm::vec4(m[0][3]+m[0][0], m[1][3]+m[1][0], m[2][3]+m[2][0], m[3][3]+m[3][0]);
-            // Right
             frustum_planes[1] = glm::vec4(m[0][3]-m[0][0], m[1][3]-m[1][0], m[2][3]-m[2][0], m[3][3]-m[3][0]);
-            // Bottom
             frustum_planes[2] = glm::vec4(m[0][3]+m[0][1], m[1][3]+m[1][1], m[2][3]+m[2][1], m[3][3]+m[3][1]);
-            // Top
             frustum_planes[3] = glm::vec4(m[0][3]-m[0][1], m[1][3]-m[1][1], m[2][3]-m[2][1], m[3][3]-m[3][1]);
-            // Near
             frustum_planes[4] = glm::vec4(m[0][3]+m[0][2], m[1][3]+m[1][2], m[2][3]+m[2][2], m[3][3]+m[3][2]);
-            // Far
             frustum_planes[5] = glm::vec4(m[0][3]-m[0][2], m[1][3]-m[1][2], m[2][3]-m[2][2], m[3][3]-m[3][2]);
 
-            // Normalize planes
             for (int i = 0; i < 6; ++i) {
                 float len = glm::length(glm::vec3(frustum_planes[i]));
                 if (len > 0.0f) frustum_planes[i] /= len;
             }
-            break;
         }
     }
 
@@ -2647,15 +2614,13 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     if (!ctx_.ddgi_active || ctx_.rsm_targets.position == 0) return;
     if (ctx_.rsm_render_target == 0) return;
 
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    if (light_view.begin() == light_view.end()) return;
-    auto& light = light_view.get<dse::DirectionalLight3DComponent>(*light_view.begin());
-    if (!light.enabled) return;
+    const auto& snap = *ctx_.snapshot;
+    if (!snap.directional_light.valid) return;
 
-    glm::vec3 shadow_center = FindShadowCenter(*ctx_.world);
+    glm::vec3 shadow_center = FindShadowCenter(snap);
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto cam = ComputeDirectionalLightCamera(
-        shadow_center, light.direction, light.cascade_splits[0], clip_correction);
+        shadow_center, snap.directional_light.direction, snap.directional_light.cascade_splits[0], clip_correction);
 
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
     ctx_.rhi_device->SetGBufferRenderingMode(true);
@@ -2692,17 +2657,13 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
     auto* rhi = ctx_.rhi_device;
     if (!rhi || !rhi->SupportsCompute()) return;
 
-    // 获取主方向光参数
+    const auto& snap = *ctx_.snapshot;
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color(1.0f);
 
-    auto light_view = ctx_.world->registry().view<dse::DirectionalLight3DComponent>();
-    for (auto entity : light_view) {
-        auto& light = light_view.get<dse::DirectionalLight3DComponent>(entity);
-        if (!light.enabled) continue;
-        light_dir = glm::normalize(-light.direction);  // toward light
-        light_color = glm::vec3(light.color) * light.intensity;
-        break;
+    if (snap.directional_light.valid) {
+        light_dir = glm::normalize(-snap.directional_light.direction);
+        light_color = glm::vec3(snap.directional_light.color) * snap.directional_light.intensity;
     }
 
     // 驱动 DDGI 系统更新探针（传入外部管理的 RSM 纹理句柄）

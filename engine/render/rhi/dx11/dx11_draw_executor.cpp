@@ -10,6 +10,8 @@
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
+#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
+#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 
 #include <cstring>
 #include <algorithm>
@@ -1610,7 +1612,8 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
         dc->CSSetShaderResources(0, 1, src_tex->srv.GetAddressOf());
     }
     if (dst_rt && dst_rt->color_uav) {
-        dc->CSSetUnorderedAccessViews(0, 1, dst_rt->color_uav.GetAddressOf(), nullptr);
+        UINT ic_bind = static_cast<UINT>(-1);
+        dc->CSSetUnorderedAccessViews(0, 1, dst_rt->color_uav.GetAddressOf(), &ic_bind);
     }
 
     dc->Dispatch(threads_x, threads_y, 1);
@@ -1618,7 +1621,8 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
     // 解绑 UAV / SRV
     ID3D11UnorderedAccessView* null_uav = nullptr;
     ID3D11ShaderResourceView* null_srv = nullptr;
-    dc->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+    UINT ic_unbind = 0;
+    dc->CSSetUnorderedAccessViews(0, 1, &null_uav, &ic_unbind);
     dc->CSSetShaderResources(0, 1, &null_srv);
     dc->CSSetShader(nullptr, nullptr, 0);
 }
@@ -1683,14 +1687,222 @@ void DX11DrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
                                          DX11ShaderManager& shader_mgr,
                                          DX11ResourceManager& resource_mgr) {
     if (items.empty()) return;
-    (void)view; (void)projection;
-    (void)pipeline_mgr; (void)shader_mgr; (void)resource_mgr;
 
-    static bool warned = false;
-    if (!warned) {
-        DEBUG_LOG_WARN("[DX11DrawExecutor] DrawHairStrands not yet implemented for D3D11 backend. "
-                       "Hair will not render when using D3D11.");
-        warned = true;
+    auto* dc = context_->device_context();
+    if (!dc) return;
+
+    // 懒初始化 hair shader
+    if (hair_shader_handle_ == 0) {
+        using namespace dse::render::generated_shaders;
+        hair_shader_handle_ = shader_mgr.CreateProgram(
+            std::string(khair_vert_hlsl), std::string(khair_frag_hlsl));
+        if (hair_shader_handle_ == 0) {
+            DEBUG_LOG_ERROR("[DX11DrawExecutor] Failed to compile hair shader");
+            return;
+        }
+    }
+
+    // 懒初始化 hair CB (b0 = VS params, b1 = PS params)
+    if (!hair_vs_cb_) {
+        hair_vs_cb_ = CreateConstantBuffer(sizeof(HairVSCB));
+        hair_ps_cb_ = CreateConstantBuffer(sizeof(HairPSCB));
+    }
+
+    const auto* program = shader_mgr.GetProgram(hair_shader_handle_);
+    if (!program) return;
+
+    // 绑定 shader
+    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+
+    // 设置 topology = LINE_STRIP
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+    dc->IASetInputLayout(nullptr); // vertexless (SV_VertexID)
+
+    // 混合状态：alpha blend + depth readonly
+    if (!hair_blend_state_) {
+        D3D11_BLEND_DESC bd{};
+        bd.RenderTarget[0].BlendEnable = TRUE;
+        bd.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        bd.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+        bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        context_->device()->CreateBlendState(&bd, hair_blend_state_.GetAddressOf());
+    }
+    if (!hair_depth_state_) {
+        D3D11_DEPTH_STENCIL_DESC dsd{};
+        dsd.DepthEnable = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+        context_->device()->CreateDepthStencilState(&dsd, hair_depth_state_.GetAddressOf());
+    }
+    if (!hair_raster_state_) {
+        D3D11_RASTERIZER_DESC rd{};
+        rd.FillMode = D3D11_FILL_SOLID;
+        rd.CullMode = D3D11_CULL_NONE;
+        rd.AntialiasedLineEnable = TRUE;
+        rd.DepthClipEnable = TRUE;
+        context_->device()->CreateRasterizerState(&rd, hair_raster_state_.GetAddressOf());
+    }
+
+    float blend_factor[4] = {0,0,0,0};
+    dc->OMSetBlendState(hair_blend_state_.Get(), blend_factor, 0xFFFFFFFF);
+    dc->OMSetDepthStencilState(hair_depth_state_.Get(), 0);
+    dc->RSSetState(hair_raster_state_.Get());
+
+    glm::mat4 inv_view = glm::inverse(view);
+    glm::vec3 cam_pos(inv_view[3]);
+
+    for (const auto& item : items) {
+        if (item.strand_count == 0 || item.total_vertex_count == 0) continue;
+        if (!item.strand_firsts || !item.strand_counts) continue;
+
+        // 更新 VS CB (b0)
+        HairVSCB vs_cb{};
+        vs_cb.model = item.world_transform;
+        vs_cb.view = view;
+        vs_cb.projection = projection;
+        vs_cb.camera_pos = cam_pos;
+        vs_cb._pad0 = 0.0f;
+        UpdateConstantBuffer(hair_vs_cb_.Get(), &vs_cb, sizeof(vs_cb));
+        dc->VSSetConstantBuffers(0, 1, hair_vs_cb_.GetAddressOf());
+        dc->PSSetConstantBuffers(0, 1, hair_vs_cb_.GetAddressOf());
+
+        // 更新 PS CB (b1)
+        HairPSCB ps_cb{};
+        ps_cb.light_dir = item.light_direction;
+        ps_cb.light_intensity = item.light_intensity;
+        ps_cb.light_color = item.light_color;
+        ps_cb.ambient_intensity = item.ambient_intensity;
+        ps_cb.root_color = item.root_color;
+        ps_cb.tip_color = item.tip_color;
+        ps_cb.opacity = item.opacity;
+        ps_cb.spec_primary = item.specular_primary;
+        ps_cb.spec_secondary = item.specular_secondary;
+        ps_cb.spec_strength1 = item.specular_strength_primary;
+        ps_cb.spec_strength2 = item.specular_strength_secondary;
+        ps_cb.spec_color = item.specular_color;
+        UpdateConstantBuffer(hair_ps_cb_.Get(), &ps_cb, sizeof(ps_cb));
+        dc->PSSetConstantBuffers(1, 1, hair_ps_cb_.GetAddressOf());
+
+        // 绑定 SSBO SRV 到 VS t0 (position), t1 (tangent)
+        const auto* pos_ssbo = resource_mgr.GetSSBO(item.position_ssbo.raw());
+        const auto* tan_ssbo = resource_mgr.GetSSBO(item.tangent_ssbo.raw());
+        if (!pos_ssbo || !tan_ssbo) continue;
+
+        ID3D11ShaderResourceView* vs_srvs[2] = { pos_ssbo->srv.Get(), tan_ssbo->srv.Get() };
+        dc->VSSetShaderResources(0, 2, vs_srvs);
+
+        // 逐 strand 绘制
+        for (uint32_t s = 0; s < item.strand_count; ++s) {
+            int first = item.strand_firsts[s];
+            int count = item.strand_counts[s];
+            if (count <= 0) continue;
+            dc->Draw(static_cast<UINT>(count), static_cast<UINT>(first));
+        }
+
+        global_state_.current_frame_stats.draw_calls += 1;
+
+        // 解绑 VS SRV
+        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+        dc->VSSetShaderResources(0, 2, null_srvs);
+    }
+
+    // 恢复状态
+    dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF);
+    dc->OMSetDepthStencilState(nullptr, 0);
+    dc->RSSetState(nullptr);
+}
+
+// ============================================================
+// GPU-Driven PBR 渲染设置
+// ============================================================
+
+void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4& proj,
+                                          const glm::vec3& camera_pos,
+                                          const glm::vec3& light_dir, const glm::vec3& light_color,
+                                          float light_intensity, float ambient_intensity,
+                                          DX11PipelineStateManager& pipeline_mgr,
+                                          DX11ShaderManager& shader_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+    if (!dc) return;
+
+    // 使用 PBR shader（GPU-Driven 复用标准 PBR shader）
+    const unsigned int prog = shader_mgr.pbr_shader_handle();
+    if (prog == 0) return;
+
+    const auto* program = shader_mgr.GetProgram(prog);
+    if (!program) return;
+    if (program->vertex_shader) dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    if (program->pixel_shader) dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+    auto* layout = shader_mgr.GetInputLayout(prog);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // PerFrame CB
+    DX11PerFrameCB frame_data{};
+    frame_data.vp = proj * view;
+    frame_data.view = view;
+    frame_data.camera_pos = glm::vec4(camera_pos, 0.0f);
+    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
+
+    // PerScene CB
+    DX11PerSceneCB scene_data{};
+    scene_data.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    scene_data.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
+    scene_data.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    scene_data.cascade_splits = glm::vec4(
+        global_state_.cascade_splits[0], global_state_.cascade_splits[1],
+        global_state_.cascade_splits[2], 0.0f);
+    for (int i = 0; i < 3; ++i)
+        scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
+
+    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get(),
+                           per_scene_cb_.Get(), per_material_cb_.Get()};
+    dc->VSSetConstantBuffers(0, 4, cbs);
+    dc->PSSetConstantBuffers(0, 4, cbs);
+}
+
+// ============================================================
+// GPU-Driven Shadow 渲染设置
+// ============================================================
+
+void DX11DrawExecutor::SetupGPUDrivenShadow(const glm::mat4& light_view, const glm::mat4& light_proj,
+                                              DX11PipelineStateManager& pipeline_mgr,
+                                              DX11ShaderManager& shader_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+    if (!dc) return;
+
+    const unsigned int prog = shader_mgr.shadow_shader_handle();
+    if (prog == 0) return;
+
+    const auto* program = shader_mgr.GetProgram(prog);
+    if (!program) return;
+    if (program->vertex_shader) dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    if (program->pixel_shader) dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+    auto* layout = shader_mgr.GetInputLayout(prog);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    DX11PerFrameCB frame_data{};
+    frame_data.vp = light_proj * light_view;
+    frame_data.view = light_view;
+    frame_data.camera_pos = glm::vec4(0.0f);
+    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
+
+    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get(),
+                           per_scene_cb_.Get(), per_material_cb_.Get()};
+    dc->VSSetConstantBuffers(0, 4, cbs);
+    dc->PSSetConstantBuffers(0, 4, cbs);
+}
+
+void DX11DrawExecutor::UpdatePerObjectCB(const DX11PerObjectCB& data) {
+    if (per_object_cb_) {
+        UpdateConstantBuffer(per_object_cb_.Get(), &data, sizeof(data));
     }
 }
 

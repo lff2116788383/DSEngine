@@ -41,6 +41,10 @@ public:
     virtual void SetWindowTitle(const std::string& title) = 0;
     virtual void RequestClose() = 0;
 
+    // --- 渲染 Context 线程管理 ---
+    virtual void MakeContextCurrent() {}    // GL: glfwMakeContextCurrent(window); 非 GL no-op
+    virtual void ReleaseContext() {}        // GL: glfwMakeContextCurrent(nullptr); 非 GL no-op
+
     // --- 平台桥接 ---
     virtual void* GetNativeWindowHandle() const = 0;  // HWND / X11 Window / ANativeWindow*
     virtual bool HasGLContext() const = 0;

@@ -4,6 +4,7 @@
 #include "imgui_internal.h"
 #include "editor_icons.h"
 #include "editor_shortcuts.h"
+#include "editor_scene_tabs.h"
 #include "engine/ecs/particle_2d.h"
 
 #include <algorithm>
@@ -36,7 +37,7 @@ CurveEditorState& GetCurveEditorState(const char* id) {
 // Helper: MarkParticleEmitterDirty (local declaration)
 // ============================================================================
 void MarkDirty(ParticleEmitterComponent& /*emitter*/) {
-    // Particles are rebuilt each frame from curves, no explicit dirty flag needed
+    SceneTabManager::Get().MarkDirty();
 }
 
 // ============================================================================

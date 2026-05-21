@@ -42,11 +42,18 @@ FramePipeline::~FramePipeline() = default;
 #include <limits>
 #include <cstdint>
 #include <sstream>
+#include <cstring>
 
 namespace dse::render {
     extern const char* kHiZCopyShaderSource;
     extern const char* kHiZDownsampleShaderSource;
     extern const char* kHiZCullShaderSource;
+    extern const char* kHiZCopyShaderSourceVK;
+    extern const char* kHiZDownsampleShaderSourceVK;
+    extern const char* kHiZCullShaderSourceVK;
+    extern const char* kHiZCopyShaderSourceHLSL;
+    extern const char* kHiZDownsampleShaderSourceHLSL;
+    extern const char* kHiZCullShaderSourceHLSL;
     extern const char* kGPUCullShaderSource;
 }
 
@@ -441,10 +448,25 @@ bool FramePipeline::Init() {
             }
             render_resources_.hiz_ssbo_capacity = cap;
 
-            // 鍒涘缓 compute shader锛堜粎涓€娆★紝缂撳瓨鍙ユ焺锛夆€?婧愮爜瀹氫箟鍦?builtin_passes.cpp
-            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCopyShaderSource);
-            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZDownsampleShaderSource);
-            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kHiZCullShaderSource);
+            // 创建 compute shader（三套源码 + binding 元数据，仅一次，缓存句柄）
+            // HiZ Copy:       ssbo=0, img=1, smp=1, pc=8B  (ivec2 dst_size)
+            // HiZ Downsample: ssbo=0, img=2, smp=0, pc=16B (ivec2 src_size + ivec2 dst_size)
+            // HiZ Cull:       ssbo=2, img=0, smp=1, pc=80B (mat4 vp + vec2 screen + 2*int)
+            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZCopyShaderSource,
+                dse::render::kHiZCopyShaderSourceVK,
+                dse::render::kHiZCopyShaderSourceHLSL,
+                0, 1, 1, 8);
+            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZDownsampleShaderSource,
+                dse::render::kHiZDownsampleShaderSourceVK,
+                dse::render::kHiZDownsampleShaderSourceHLSL,
+                0, 2, 0, 16);
+            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+                dse::render::kHiZCullShaderSource,
+                dse::render::kHiZCullShaderSourceVK,
+                dse::render::kHiZCullShaderSourceHLSL,
+                2, 0, 1, 80);
 
             DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
                            render_resources_.hiz_texture,
@@ -683,6 +705,15 @@ bool FramePipeline::Init() {
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
     }
+
+    // Phase 2: 渲染线程分离（DSE_RENDER_THREAD=1 启用，编辑器模式下禁用）
+    if (!runtime_context_.editor_mode) {
+        if (const char* env = std::getenv("DSE_RENDER_THREAD")) {
+            if (env[0] == '1') {
+                StartRenderThread();
+            }
+        }
+    }
     return true;
 }
 
@@ -690,6 +721,7 @@ void FramePipeline::Shutdown() {
     if (!initialized_) {
         return;
     }
+    StopRenderThread();
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
@@ -845,7 +877,13 @@ void FramePipeline::Render() {
     if (!initialized_) {
         return;
     }
-    dse::runtime::RunFrameRender(*this);
+    if (render_thread_active_.load()) {
+        WaitForRenderComplete();
+        PrepareRenderFrame();
+        SignalRenderThread();
+    } else {
+        dse::runtime::RunFrameRender(*this);
+    }
 }
 
 void FramePipeline::RunUpdateInternal(float delta_time) {
@@ -1046,6 +1084,10 @@ void FramePipeline::RunRenderInternal() {
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
     }
+
+    CaptureThinSnapshot();
+    FlipSnapshotIndex();
+    render_pass_context_.snapshot = &read_snapshot();
 
     ExecuteRenderGraph(*cmd_buffer);
     
@@ -1303,13 +1345,16 @@ void FramePipeline::BuildRenderGraphInternal() {
         registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
         registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
     }
-    // GPU Driven Cull Pass 鈥?瑙嗛敟 + Hi-Z 鍓旈櫎锛岀洿鎺ュ啓 indirect draw commands
-    if (render_resources_.gpu_driven_supported) {
-        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
-    }
+    // Shadow passes 必须在 GPUCullPass 之前执行：
+    // GPUCullPass 会修改 draw commands 的 instance_count（基于主摄像机视锥剔除），
+    // 而阴影 pass 需要从光源视角渲染所有物体（使用未剔除的原始 draw commands）。
     registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
     registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
+    // GPU Driven Cull Pass — 视锥 + Hi-Z 剔除，直接写 indirect draw commands
+    if (render_resources_.gpu_driven_supported) {
+        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
+    }
     // RSM 鈥?浠庢柟鍚戝厜瑙嗚娓叉煋 GBuffer 鍒?RSM MRT锛圖DGI 鐨?VPL 鏁版嵁婧愶級
     registered_passes_.push_back(std::make_unique<dse::render::RSMRenderPass>(render_pass_context_));
     // DDGI Probe Update 鈥?RSM 涔嬪悗銆佸厜鐓?Forward pass 涔嬪墠
@@ -1425,6 +1470,15 @@ void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
     } else {
         render_graph_dag_.Execute(cmd_buffer);
     }
+}
+
+void FramePipeline::SetRenderContextCallbacks(
+        std::function<void()> make_current,
+        std::function<void()> release,
+        std::function<void()> present) {
+    runtime_context_.make_render_context_current = std::move(make_current);
+    runtime_context_.release_render_context = std::move(release);
+    runtime_context_.present_frame = std::move(present);
 }
 
 void FramePipeline::EnableEditorMode(bool enable) {
@@ -1569,9 +1623,698 @@ void FramePipeline::DisableEditorCamera() {
     render_pass_context_.use_editor_camera = false;
 }
 
+void FramePipeline::SetSceneViewMode(int mode) {
+    render_pass_context_.scene_view_mode = mode;
+}
+
+unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection) {
+    if (!initialized_ || !runtime_context_.rhi_device) return 0;
+
+    // 保存当前编辑器相机状态
+    const bool saved_use = render_pass_context_.use_editor_camera;
+    const glm::mat4 saved_view = render_pass_context_.editor_view;
+    const glm::mat4 saved_proj = render_pass_context_.editor_projection;
+
+    // 设置临时相机
+    render_pass_context_.use_editor_camera = true;
+    render_pass_context_.editor_view = view;
+    render_pass_context_.editor_projection = projection;
+
+    // 创建命令缓冲，执行 shadow pass + scene pass
+    auto cmd = runtime_context_.rhi_device->CreateCommandBuffer();
+    for (auto& pass : registered_passes_) {
+        const char* name = pass->GetName();
+        if (std::strcmp(name, "shadow_pass") == 0 ||
+            std::strcmp(name, "spot_shadow_pass") == 0 ||
+            std::strcmp(name, "point_shadow_pass") == 0 ||
+            std::strcmp(name, "scene_pass") == 0) {
+            pass->Execute(*cmd);
+        }
+    }
+    runtime_context_.rhi_device->Submit(cmd);
+
+    // 恢复相机
+    render_pass_context_.use_editor_camera = saved_use;
+    render_pass_context_.editor_view = saved_view;
+    render_pass_context_.editor_projection = saved_proj;
+
+    return GetSceneTextureId();
+}
+
 void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
     if (initialized_) {
         return;
     }
     runtime_context_.asset_manager = asset_manager;
+}
+
+// ============================================================
+// Phase 1 薄快照：一次性提取渲染线程所需的全部 ECS 数据
+// ============================================================
+
+void FramePipeline::CaptureThinSnapshot() {
+    auto& snap = write_snapshot();
+    snap.Reset();
+
+    auto* world = runtime_context_.world;
+    if (!world) return;
+    auto& reg = world->registry();
+
+    // ── 1. 3D Camera（priority + entity id 确定唯一主相机）──
+    {
+        auto view = reg.view<dse::Camera3DComponent>();
+        entt::entity best = entt::null;
+        int best_priority = std::numeric_limits<int>::min();
+        std::uint32_t best_id = std::numeric_limits<std::uint32_t>::max();
+        for (auto e : view) {
+            auto& cam = view.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            auto eid = static_cast<std::uint32_t>(e);
+            if (best == entt::null ||
+                cam.priority > best_priority ||
+                (cam.priority == best_priority && eid < best_id)) {
+                best = e;
+                best_priority = cam.priority;
+                best_id = eid;
+            }
+        }
+        if (best != entt::null) {
+            auto& cam = view.get<dse::Camera3DComponent>(best);
+            auto& c = snap.camera_3d;
+            c.valid = true;
+            c.fov = cam.fov;
+            c.near_clip = cam.near_clip;
+            c.far_clip = cam.far_clip;
+            if (reg.all_of<TransformComponent>(best)) {
+                auto& tf = reg.get<TransformComponent>(best);
+                c.position = tf.position;
+                c.forward = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                c.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                c.right = tf.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
+                c.view = glm::lookAt(c.position, c.position + c.forward, c.up);
+                c.shadow_center = c.position + c.forward * 50.0f;
+            }
+        }
+    }
+
+    // ── 2. 2D Camera fallback ──
+    {
+        auto view = reg.view<CameraComponent>();
+        entt::entity best = entt::null;
+        int best_priority = std::numeric_limits<int>::min();
+        std::uint32_t best_id = std::numeric_limits<std::uint32_t>::max();
+        for (auto e : view) {
+            auto& cam = view.get<CameraComponent>(e);
+            if (!cam.enabled) continue;
+            auto eid = static_cast<std::uint32_t>(e);
+            if (best == entt::null ||
+                cam.priority > best_priority ||
+                (cam.priority == best_priority && eid < best_id)) {
+                best = e;
+                best_priority = cam.priority;
+                best_id = eid;
+            }
+        }
+        if (best != entt::null) {
+            auto& cam = view.get<CameraComponent>(best);
+            snap.camera_2d.valid = true;
+            snap.camera_2d.view = cam.view;
+            snap.camera_2d.projection = cam.projection;
+        }
+    }
+
+    // ── 3. Skybox（含 lazy load 写回，主线程安全）──
+    {
+        auto view = reg.view<dse::SkyboxComponent>();
+        for (auto e : view) {
+            auto& sb = view.get<dse::SkyboxComponent>(e);
+            if (!sb.enabled) continue;
+            if (sb.cubemap_handle == 0 && !sb.cubemap_path.empty()) {
+                if (auto cubemap = runtime_context_.asset_manager->LoadCubemap(sb.cubemap_path)) {
+                    sb.cubemap_handle = cubemap->GetHandle();
+                }
+            }
+            if (sb.cubemap_handle != 0) {
+                snap.skybox.valid = true;
+                snap.skybox.cubemap_handle = sb.cubemap_handle;
+                if (reg.all_of<TransformComponent>(e)) {
+                    snap.skybox.has_transform = true;
+                    snap.skybox.rotation = reg.get<TransformComponent>(e).rotation;
+                }
+            }
+            break;
+        }
+    }
+
+    // ── 4. Directional Light ──
+    {
+        auto view = reg.view<dse::DirectionalLight3DComponent>();
+        for (auto e : view) {
+            auto& dl = view.get<dse::DirectionalLight3DComponent>(e);
+            if (!dl.enabled) continue;
+            auto& s = snap.directional_light;
+            s.valid = true;
+            s.cast_shadow = dl.cast_shadow;
+            s.direction = dl.direction;
+            s.color = dl.color;
+            s.intensity = dl.intensity;
+            s.ambient_intensity = dl.ambient_intensity;
+            s.shadow_strength = dl.shadow_strength;
+            for (int i = 0; i < CSM_CASCADES; ++i)
+                s.cascade_splits[i] = dl.cascade_splits[i];
+            break;
+        }
+    }
+
+    // ── 5. Spot Lights（shadow-casting, max 4）──
+    {
+        auto view = reg.view<TransformComponent, dse::SpotLightComponent>();
+        snap.spot_shadow_count = 0;
+        for (auto e : view) {
+            if (snap.spot_shadow_count >= dse::render::RenderThinSnapshot::kMaxSpotShadowLights) break;
+            auto& light = view.get<dse::SpotLightComponent>(e);
+            if (!light.enabled || !light.cast_shadow) continue;
+            auto& tf = view.get<TransformComponent>(e);
+            auto& sl = snap.spot_lights[snap.spot_shadow_count];
+            sl.position = tf.position;
+            sl.forward = glm::normalize(tf.rotation * light.direction);
+            sl.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            if (std::abs(glm::dot(sl.forward, sl.up)) > 0.98f) {
+                sl.up = glm::vec3(0.0f, 0.0f, 1.0f);
+            }
+            sl.outer_cone_angle = light.outer_cone_angle;
+            sl.radius = light.radius;
+            ++snap.spot_shadow_count;
+        }
+    }
+
+    // ── 6. Point Lights（shadow-casting, max 4）──
+    {
+        auto view = reg.view<TransformComponent, dse::PointLightComponent>();
+        snap.point_shadow_count = 0;
+        for (auto e : view) {
+            if (snap.point_shadow_count >= dse::render::RenderThinSnapshot::kMaxPointShadowLights) break;
+            auto& light = view.get<dse::PointLightComponent>(e);
+            if (!light.enabled || !light.cast_shadow) continue;
+            auto& tf = view.get<TransformComponent>(e);
+            auto& pl = snap.point_lights[snap.point_shadow_count];
+            pl.position = tf.position;
+            pl.radius = light.radius;
+            ++snap.point_shadow_count;
+        }
+    }
+
+    // ── 7. PostProcess（合并 13 个 Pass 的重复查询）──
+    {
+        auto view = reg.view<dse::PostProcessComponent>();
+        for (auto e : view) {
+            auto& pp = view.get<dse::PostProcessComponent>(e);
+            if (!pp.enabled) continue;
+            auto& s = snap.post_process;
+            s.valid = true;
+            s.enabled = pp.enabled;
+            s.bloom_enabled = pp.bloom_enabled;
+            s.bloom_threshold = pp.bloom_threshold;
+            s.bloom_intensity = pp.bloom_intensity;
+            s.color_grading_enabled = pp.color_grading_enabled;
+            s.exposure = pp.exposure;
+            s.gamma = pp.gamma;
+            s.ssao_enabled = pp.ssao_enabled;
+            s.ssao_radius = pp.ssao_radius;
+            s.ssao_bias = pp.ssao_bias;
+            s.auto_exposure_enabled = pp.auto_exposure_enabled;
+            s.exposure_min = pp.exposure_min;
+            s.exposure_max = pp.exposure_max;
+            s.adaptation_speed_up = pp.adaptation_speed_up;
+            s.adaptation_speed_down = pp.adaptation_speed_down;
+            s.exposure_compensation = pp.exposure_compensation;
+            s.color_lut_handle = pp.color_lut_handle;
+            s.color_lut_intensity = pp.color_lut_intensity;
+            s.vignette_enabled = pp.vignette_enabled;
+            s.vignette_intensity = pp.vignette_intensity;
+            s.vignette_radius = pp.vignette_radius;
+            s.vignette_softness = pp.vignette_softness;
+            s.film_grain_enabled = pp.film_grain_enabled;
+            s.film_grain_intensity = pp.film_grain_intensity;
+            s.film_grain_time_scale = pp.film_grain_time_scale;
+            s.fxaa_enabled = pp.fxaa_enabled;
+            s.taa_enabled = pp.taa_enabled;
+            s.taa_blend_factor = pp.taa_blend_factor;
+            s.contact_shadow_enabled = pp.contact_shadow_enabled;
+            s.contact_shadow_strength = pp.contact_shadow_strength;
+            s.contact_shadow_steps = pp.contact_shadow_steps;
+            s.contact_shadow_step_size = pp.contact_shadow_step_size;
+            s.dof_enabled = pp.dof_enabled;
+            s.dof_focus_distance = pp.dof_focus_distance;
+            s.dof_focus_range = pp.dof_focus_range;
+            s.dof_bokeh_radius = pp.dof_bokeh_radius;
+            s.motion_blur_enabled = pp.motion_blur_enabled;
+            s.motion_blur_intensity = pp.motion_blur_intensity;
+            s.motion_blur_samples = pp.motion_blur_samples;
+            s.ssr_enabled = pp.ssr_enabled;
+            s.ssr_max_distance = pp.ssr_max_distance;
+            s.ssr_thickness = pp.ssr_thickness;
+            s.ssr_step_size = pp.ssr_step_size;
+            s.ssr_max_steps = pp.ssr_max_steps;
+            s.outline_enabled = pp.outline_enabled;
+            s.outline_color = pp.outline_color;
+            s.outline_thickness = pp.outline_thickness;
+            s.outline_depth_threshold = pp.outline_depth_threshold;
+            s.outline_normal_threshold = pp.outline_normal_threshold;
+            s.light_shaft_enabled = pp.light_shaft_enabled;
+            s.light_shaft_color = pp.light_shaft_color;
+            s.light_shaft_density = pp.light_shaft_density;
+            s.light_shaft_weight = pp.light_shaft_weight;
+            s.light_shaft_decay = pp.light_shaft_decay;
+            s.light_shaft_exposure = pp.light_shaft_exposure;
+            s.light_shaft_intensity = pp.light_shaft_intensity;
+            s.light_shaft_samples = pp.light_shaft_samples;
+            s.fog_enabled = pp.fog_enabled;
+            s.fog_color = pp.fog_color;
+            s.fog_density = pp.fog_density;
+            s.fog_height_falloff = pp.fog_height_falloff;
+            s.fog_height_offset = pp.fog_height_offset;
+            s.fog_start = pp.fog_start;
+            s.fog_end = pp.fog_end;
+            s.fog_steps = pp.fog_steps;
+            s.fog_sun_scatter = pp.fog_sun_scatter;
+            break;
+        }
+    }
+
+    // ── 8. Water surfaces ──
+    {
+        auto view = reg.view<dse::WaterComponent>();
+        snap.water_count = 0;
+        for (auto e : view) {
+            if (snap.water_count >= dse::render::RenderThinSnapshot::kMaxWaterSurfaces) break;
+            auto& w = view.get<dse::WaterComponent>(e);
+            if (!w.enabled) continue;
+            auto& ws = snap.waters[snap.water_count];
+            ws.water_level = w.water_level;
+            ws.deep_color = w.deep_color;
+            ws.shallow_color = w.shallow_color;
+            ws.max_depth = w.max_depth;
+            ws.transparency = w.transparency;
+            ws.wave_amplitude = w.wave_amplitude;
+            ws.wave_frequency = w.wave_frequency;
+            ws.wave_speed = w.wave_speed;
+            ws.wave_direction = w.wave_direction;
+            ws.refraction_strength = w.refraction_strength;
+            ws.reflection_strength = w.reflection_strength;
+            ws.specular_power = w.specular_power;
+            ws.caustic_intensity = w.caustic_intensity;
+            ws.caustic_scale = w.caustic_scale;
+            ws.foam_intensity = w.foam_intensity;
+            ws.foam_depth_threshold = w.foam_depth_threshold;
+            ws.underwater_fog_density = w.underwater_fog_density;
+            ws.underwater_fog_color = w.underwater_fog_color;
+            ++snap.water_count;
+        }
+    }
+
+    // ── 9. Decals ──
+    {
+        auto view = reg.view<TransformComponent, dse::DecalComponent>();
+        snap.decal_count = 0;
+        for (auto e : view) {
+            if (snap.decal_count >= dse::render::RenderThinSnapshot::kMaxDecals) break;
+            auto& dc = view.get<dse::DecalComponent>(e);
+            if (!dc.enabled || dc.albedo_texture == 0) continue;
+            auto& tf = view.get<TransformComponent>(e);
+            auto& d = snap.decals[snap.decal_count];
+            d.albedo_texture = dc.albedo_texture;
+            d.color = dc.color;
+            d.angle_fade = dc.angle_fade;
+            d.position = tf.position;
+            d.rotation = tf.rotation;
+            d.scale = tf.scale;
+            ++snap.decal_count;
+        }
+    }
+
+    // ── 10. Light Probe SH（距离加权混合最近两个 probe）──
+    {
+        glm::vec3 cam_pos = snap.camera_3d.position;
+        auto probe_view = reg.view<TransformComponent, dse::LightProbeComponent>();
+        float best_dist = std::numeric_limits<float>::max();
+        float second_dist = std::numeric_limits<float>::max();
+        const dse::LightProbeComponent* best_probe = nullptr;
+        const dse::LightProbeComponent* second_probe = nullptr;
+
+        for (auto e : probe_view) {
+            auto& probe = probe_view.get<dse::LightProbeComponent>(e);
+            if (!probe.enabled) continue;
+            auto& tf = probe_view.get<TransformComponent>(e);
+            float dist = glm::distance(tf.position, cam_pos);
+            if (dist < best_dist) {
+                second_dist = best_dist;
+                second_probe = best_probe;
+                best_dist = dist;
+                best_probe = &probe;
+            } else if (dist < second_dist) {
+                second_dist = dist;
+                second_probe = &probe;
+            }
+        }
+
+        if (best_probe) {
+            snap.light_probe_sh.valid = true;
+            if (second_probe && best_dist < best_probe->influence_radius &&
+                second_dist < second_probe->influence_radius) {
+                float total = best_dist + second_dist;
+                if (total < 0.001f) total = 0.001f;
+                float w1 = 1.0f - best_dist / total;
+                float w2 = 1.0f - second_dist / total;
+                float wsum = w1 + w2;
+                w1 /= wsum; w2 /= wsum;
+                for (int i = 0; i < 9; ++i) {
+                    glm::vec3 blended = best_probe->sh_coefficients[i] * w1 +
+                                        second_probe->sh_coefficients[i] * w2;
+                    snap.light_probe_sh.coefficients[i] = glm::vec4(blended, 0.0f);
+                }
+            } else {
+                for (int i = 0; i < 9; ++i) {
+                    snap.light_probe_sh.coefficients[i] = glm::vec4(best_probe->sh_coefficients[i], 0.0f);
+                }
+            }
+        }
+    }
+
+    // ── 11. DDGI Config ──
+    {
+        auto gi_view = reg.view<dse::GIProbeVolumeComponent>();
+        for (auto e : gi_view) {
+            auto& gi = gi_view.get<dse::GIProbeVolumeComponent>(e);
+            if (!gi.enabled) continue;
+            auto& cfg = snap.ddgi_config;
+            cfg.enabled = true;
+            cfg.needs_reinit = gi.needs_reinit_;
+            cfg.origin = gi.origin;
+            cfg.extent = gi.extent;
+            cfg.resolution_x = gi.resolution_x;
+            cfg.resolution_y = gi.resolution_y;
+            cfg.resolution_z = gi.resolution_z;
+            cfg.irradiance_texels = gi.irradiance_texels;
+            cfg.visibility_texels = gi.visibility_texels;
+            cfg.rays_per_probe = gi.rays_per_probe;
+            cfg.hysteresis = gi.hysteresis;
+            cfg.gi_intensity = gi.gi_intensity;
+            cfg.normal_bias = gi.normal_bias;
+            gi.needs_reinit_ = false;
+            break;
+        }
+    }
+}
+
+// ============================================================
+// Phase 2: 渲染线程分离
+// ============================================================
+
+void FramePipeline::StartRenderThread() {
+    if (render_thread_active_.load()) return;
+
+    {
+        std::lock_guard<std::mutex> lock(render_mutex_);
+        render_thread_exit_ = false;
+        render_frame_pending_ = false;
+        render_frame_done_ = true;
+    }
+
+    // 主线程释放 GL context，由渲染线程接管
+    if (runtime_context_.release_render_context) {
+        runtime_context_.release_render_context();
+    }
+
+    render_thread_ = std::thread(&FramePipeline::RenderThreadFunc, this);
+    render_thread_active_.store(true);
+    DEBUG_LOG_INFO("[RenderThread] Started");
+}
+
+void FramePipeline::StopRenderThread() {
+    if (!render_thread_active_.load()) return;
+
+    {
+        std::lock_guard<std::mutex> lock(render_mutex_);
+        render_thread_exit_ = true;
+        render_frame_pending_ = true;  // 唤醒线程使其检查 exit 标志
+    }
+    render_cv_.notify_one();
+
+    if (render_thread_.joinable()) {
+        render_thread_.join();
+    }
+    render_thread_active_.store(false);
+
+    // 主线程重新获取 GL context
+    if (runtime_context_.make_render_context_current) {
+        runtime_context_.make_render_context_current();
+    }
+    DEBUG_LOG_INFO("[RenderThread] Stopped");
+}
+
+void FramePipeline::RenderThreadFunc() {
+    // 渲染线程获取 GL/Vulkan/DX11 context
+    if (runtime_context_.make_render_context_current) {
+        runtime_context_.make_render_context_current();
+    }
+
+    while (true) {
+        // 等待主线程发出渲染信号
+        {
+            std::unique_lock<std::mutex> lock(render_mutex_);
+            render_cv_.wait(lock, [this] { return render_frame_pending_ || render_thread_exit_; });
+            if (render_thread_exit_) break;
+            render_frame_pending_ = false;
+        }
+
+        ExecuteRenderFrame();
+
+        // 通知主线程渲染完成
+        {
+            std::lock_guard<std::mutex> lock(render_mutex_);
+            render_frame_done_ = true;
+        }
+        main_cv_.notify_one();
+    }
+
+    // 释放 context
+    if (runtime_context_.release_render_context) {
+        runtime_context_.release_render_context();
+    }
+}
+
+void FramePipeline::WaitForRenderComplete() {
+    std::unique_lock<std::mutex> lock(render_mutex_);
+    main_cv_.wait(lock, [this] { return render_frame_done_; });
+}
+
+void FramePipeline::SignalRenderThread() {
+    {
+        std::lock_guard<std::mutex> lock(render_mutex_);
+        render_frame_pending_ = true;
+        render_frame_done_ = false;
+    }
+    render_cv_.notify_one();
+}
+
+void FramePipeline::PrepareRenderFrame() {
+    // ── 主线程：纯 CPU 工作 + ECS 读取 ──
+
+    if (runtime_context_.world) {
+        // Clustered Forward+: 收集光源（CPU）
+        light_buffer_.CollectLights(*runtime_context_.world);
+
+        // 从 ECS 获取主相机参数构建 cluster（与 RunRenderInternal 一致）
+        auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
+        entt::entity cam_entity = entt::null;
+        int cam_priority = std::numeric_limits<int>::min();
+        for (auto e : cam_view_3d) {
+            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(e);
+            if (cam.enabled && cam.priority > cam_priority) {
+                cam_entity = e;
+                cam_priority = cam.priority;
+            }
+        }
+        if (cam_entity != entt::null) {
+            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
+            const int sw = Screen::width();
+            const int sh = Screen::height();
+            glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
+                static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
+                cam.near_clip, cam.far_clip);
+            glm::mat4 view_mat = glm::mat4(1.0f);
+            if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
+                auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
+                glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+                view_mat = glm::lookAt(tf.position, tf.position + front, up);
+            }
+            cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
+                                light_buffer_.point_lights(), light_buffer_.spot_lights());
+        }
+    }
+
+    // TAA: 预检测 ECS 组件
+    render_pass_context_.taa_active = false;
+    if (taa_pass_ && runtime_context_.world) {
+        auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
+        for (auto entity : pp_view) {
+            auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
+            if (pp.enabled && pp.taa_enabled) {
+                render_pass_context_.taa_active = (render_pass_context_.render_targets.taa != 0);
+                break;
+            }
+        }
+        taa_pass_->UpdateJitter(taa_frame_index_++);
+        render_pass_context_.taa_jitter = taa_pass_->GetCurrentJitter();
+    }
+
+    render_pass_context_.delta_time = Time::delta_time();
+
+    // 捕获快照 + 翻转双缓冲
+    CaptureThinSnapshot();
+    FlipSnapshotIndex();
+    render_pass_context_.snapshot = &read_snapshot();
+}
+
+void FramePipeline::ExecuteRenderFrame() {
+    auto render_begin = std::chrono::high_resolution_clock::now();
+
+    dse::runtime::BeginRuntimeRenderFrame(*this);
+    auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
+    dse::runtime::BindRuntimeShadowMaps(*this);
+
+    // GPU 上传：光源 SSBO
+    light_buffer_.Upload();
+
+    // GPU 上传：cluster SSBO
+    cluster_grid_.Upload();
+
+    // Light Probe SH：从快照上传到 RHI 全局状态
+    const auto& snap = *render_pass_context_.snapshot;
+    if (snap.light_probe_sh.valid) {
+        runtime_context_.rhi_device->SetGlobalLightProbeSH(
+            snap.light_probe_sh.coefficients, true);
+    } else {
+        glm::vec4 zero_sh[9] = {};
+        runtime_context_.rhi_device->SetGlobalLightProbeSH(zero_sh, false);
+    }
+
+    // DDGI: 从快照配置初始化/重配置 + 同步到 RHI 全局状态
+    render_pass_context_.ddgi_active = false;
+    render_pass_context_.ddgi_system = nullptr;
+    if (snap.ddgi_config.enabled && runtime_context_.rhi_device->SupportsCompute()) {
+        const auto& dcfg = snap.ddgi_config;
+        if (dcfg.needs_reinit || !ddgi_system_.IsInitialized()) {
+            dse::render::gi::DDGIVolumeConfig cfg;
+            cfg.origin = dcfg.origin;
+            cfg.extent = dcfg.extent;
+            cfg.resolution = glm::ivec3(dcfg.resolution_x, dcfg.resolution_y, dcfg.resolution_z);
+            cfg.irradiance_texels = dcfg.irradiance_texels;
+            cfg.visibility_texels = dcfg.visibility_texels;
+            cfg.rays_per_probe = dcfg.rays_per_probe;
+            cfg.hysteresis = dcfg.hysteresis;
+            if (ddgi_system_.IsInitialized()) {
+                ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
+            } else {
+                ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
+            }
+        }
+        if (ddgi_system_.IsInitialized()) {
+            render_pass_context_.ddgi_system = &ddgi_system_;
+            render_pass_context_.ddgi_active = true;
+            render_pass_context_.ddgi_gi_intensity = dcfg.gi_intensity;
+            render_pass_context_.ddgi_normal_bias = dcfg.normal_bias;
+            const auto& res = ddgi_system_.GetResources();
+            render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
+            render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
+        }
+    }
+    if (render_pass_context_.ddgi_active) {
+        const auto& cfg = ddgi_system_.GetConfig();
+        runtime_context_.rhi_device->SetGlobalDDGI(
+            true, render_pass_context_.ddgi_irradiance_atlas,
+            cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
+            cfg.irradiance_texels,
+            render_pass_context_.ddgi_gi_intensity,
+            render_pass_context_.ddgi_normal_bias);
+    } else {
+        runtime_context_.rhi_device->SetGlobalDDGI(
+            false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
+    }
+
+    // Hi-Z AABB 上传
+    if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
+        const auto& aabbs = modules_impl_->CachedAABBs();
+        const int count = modules_impl_->CachedAABBCount();
+        if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
+            runtime_context_.rhi_device->UpdateGpuBuffer(
+                render_resources_.hiz_aabb_ssbo, 0,
+                count * sizeof(dse::gameplay3d::HiZAABB),
+                aabbs.data());
+            render_pass_context_.hiz_object_count = count;
+        } else {
+            render_pass_context_.hiz_object_count = 0;
+        }
+    }
+
+    // GPU Driven: 线程模式下跳过（需要 ECS + GPU 混合访问，Phase 3 再支持）
+    // 非线程模式在 RunRenderInternal 中处理
+
+    // ── 执行渲染图 ──
+    ExecuteRenderGraph(*cmd_buffer);
+
+    dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
+
+    // Hi-Z / GPU Driven readback
+    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+        && render_pass_context_.gpu_draw_cmd_ssbo) {
+        const int count = render_pass_context_.gpu_indirect_draw_count;
+        std::vector<DrawElementsIndirectCommand> cmds(count);
+        runtime_context_.rhi_device->ReadGpuBuffer(
+            render_pass_context_.gpu_draw_cmd_ssbo, 0,
+            count * sizeof(DrawElementsIndirectCommand), cmds.data());
+        std::vector<uint32_t> visibility(count);
+        int culled = 0;
+        for (int i = 0; i < count; ++i) {
+            visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
+            if (visibility[i] == 0) ++culled;
+        }
+        modules_impl_->SetHiZVisibility(visibility);
+        gpu_culled_last_frame_ = culled;
+        runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
+    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
+        && render_pass_context_.hiz_culling_enabled) {
+        const int count = render_pass_context_.hiz_object_count;
+        std::vector<uint32_t> visibility(count, 1);
+        runtime_context_.rhi_device->ReadGpuBuffer(
+            render_resources_.hiz_visibility_ssbo, 0,
+            count * sizeof(uint32_t), visibility.data());
+        modules_impl_->SetHiZVisibility(visibility);
+    }
+
+    dse::runtime::FinalizeRuntimeRenderFrame(*this);
+
+    // Present (SwapBuffers)
+    if (runtime_context_.present_frame) {
+        runtime_context_.present_frame();
+    }
+
+    // Render diagnostics
+    if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
+        if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
+            static int readback_diag_frame = 0;
+            if (readback_diag_frame < 5 || (readback_diag_frame % 60) == 0) {
+                LogReadbackStats("scene", ReadSceneColorRgba8WithSize());
+                LogReadbackStats("main", ReadMainColorRgba8WithSize());
+                LogDefaultFramebufferStats();
+            }
+            ++readback_diag_frame;
+        }
+    }
+
+    auto render_end = std::chrono::high_resolution_clock::now();
+    render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
+    render_samples_ += 1;
 }

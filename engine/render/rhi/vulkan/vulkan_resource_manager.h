@@ -110,6 +110,7 @@ public:
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index);
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data);
     void DeleteBuffer(unsigned int handle);
+    const VulkanBuffer* GetBuffer(unsigned int handle) const;
 
     // --- SSBO (Storage Buffer) ---
     unsigned int CreateSSBO(size_t size, const void* data);

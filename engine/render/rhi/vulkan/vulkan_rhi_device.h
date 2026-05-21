@@ -34,11 +34,8 @@ namespace render {
  */
 class VulkanRhiDevice final : public RhiDevice {
 public:
-    using RhiDevice::SetGlobalSpotShadowMap;
-    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
-
-    VulkanRhiDevice() = default;
-    ~VulkanRhiDevice() = default;
+    VulkanRhiDevice();
+    ~VulkanRhiDevice();
 
     // --- RhiDevice 接口 ---
     bool InitDevice(void* window_handle, int width, int height) override;
@@ -75,35 +72,6 @@ public:
     /// @param width 窗口宽度
     /// @param height 窗口高度
     bool InitVulkan(void* window_handle, int width, int height, bool enable_validation = true);
-
-    // --- Vulkan 特定扩展 ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalShadowMap(index, handle);
-    }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalSpotShadowMap(index, handle);
-    }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override {
-        draw_executor_.SetGlobalPointShadowMap(index, handle);
-    }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalCascadeSplit(unsigned int index, float split) override {
-        draw_executor_.SetGlobalCascadeSplit(index, split);
-    }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override {
-        draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
-    }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override {
-        draw_executor_.SetGlobalLightProbeSH(sh, enabled);
-    }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override {
-        draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
-    }
-    void SetGBufferRenderingMode(bool enabled) override {
-        draw_executor_.SetGBufferRenderingMode(enabled);
-    }
 
     // --- SSBO（Clustered Forward+ 所需） ---
 #pragma warning(push)
@@ -161,6 +129,38 @@ public:
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
     bool SupportsIndirectDraw() const override { return true; }
 
+    // --- Mega Buffer (GPU Driven) ---
+    VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                               BufferHandle& out_vbo, BufferHandle& out_ibo) override;
+    void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) override;
+    void BindMegaVAO(VertexArrayHandle vao) override;
+    void UnbindVAO() override;
+
+    // --- Static Mesh VAO ---
+    VertexArrayHandle CreateStaticMeshVAO(
+        const void* vertex_data, size_t vertex_bytes,
+        const std::vector<const void*>& ebo_datas,
+        const std::vector<size_t>& ebo_sizes,
+        BufferHandle& out_vbo,
+        std::vector<BufferHandle>& out_ebos) override;
+    void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                              const std::vector<BufferHandle>& ebos) override;
+    void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
+
+    // --- GPU-Driven PBR ---
+    void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                  const glm::vec3& camera_pos,
+                                  const glm::vec3& light_dir, const glm::vec3& light_color,
+                                  float light_intensity, float ambient_intensity,
+                                  float shadow_strength = 0.0f) override;
+    void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
+    void CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) override;
+    void PatchLastFrameGPUCulledCount(int culled) override {
+        last_frame_stats_.gpu_culled_count = culled;
+    }
+
     void SetActiveRenderCommandBuffer(VkCommandBuffer cmd) { active_render_cmd_ = cmd; }
     void ClearActiveRenderCommandBuffer() { active_render_cmd_ = VK_NULL_HANDLE; }
 
@@ -189,6 +189,10 @@ public:
         );
     }
 
+    void SetWireframeMode(bool enable) override;
+    void SetForceUnlit(bool enable) override;
+    void SetOverdrawMode(bool enable) override;
+
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }
     VulkanResourceManager& resource_mgr() { return resource_mgr_; }
@@ -207,13 +211,18 @@ private:
     VulkanResourceManager resource_mgr_;
     VulkanPipelineStateManager state_mgr_;
     VulkanShaderManager shader_mgr_;
-    VulkanDrawExecutor draw_executor_;
+    VulkanDrawExecutor draw_executor_{global_render_state_};
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;
 
     RenderStats last_frame_stats_;
     RenderStats current_frame_stats_;
+
+    // GPU-Driven: CPU 侧实例数据缓存（per-draw push constants 用）
+    const void* cached_gpu_models_ = nullptr;   // GPUInstanceData 数组
+    const void* cached_gpu_cmds_   = nullptr;   // DrawElementsIndirectCommand 数组
+    int         cached_gpu_count_  = 0;
 
     /// 本帧待提交的命令缓冲列表
     std::vector<VkCommandBuffer> pending_command_buffers_;
@@ -242,6 +251,18 @@ private:
     std::unordered_map<unsigned int, unsigned int> pending_compute_samplers_; ///< unit → tex handle
 
     bool initialized_ = false;
+
+    /// Mega/Static VAO 追踪（VAO handle → {vbo_handle, ibo_handle}）
+    struct VAOBinding {
+        unsigned int vbo_handle = 0;
+        unsigned int ibo_handle = 0;
+    };
+    std::unordered_map<unsigned int, VAOBinding> vao_bindings_;
+    unsigned int next_vao_id_ = 950000;
+
+    // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
+    struct HiZImpl;
+    std::unique_ptr<HiZImpl> hiz_impl_;
 };
 
 } // namespace render

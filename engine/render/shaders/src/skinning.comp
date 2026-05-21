@@ -1,65 +1,94 @@
 #version 450
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-const int MAX_BONES = 100;
+// P2: 单次 Dispatch 蒙皮 — 通过 InstanceInfo SSBO 区分各实例
 
-// 输入：蒙皮前的顶点数据（AoS 布局）
-struct InputVertex {
-    vec4 position;      // xyz = 位置, w = 1
-    vec4 normal;        // xyz = 法线, w = 0
-    vec4 tangent;       // xyz = 切线, w = 0
-    vec4 bone_weights;  // 四骨骼权重
-    vec4 bone_indices;  // 四骨骼索引（float 编码，取 int 时用 round）
+struct SrcVertex {
+    vec4 pos_bw0;       // xyz = position, w = bone_weight[0]
+    vec4 norm_bw1;      // xyz = normal,   w = bone_weight[1]
+    vec4 tan_bw2;       // xyz = tangent,  w = bone_weight[2]
+    vec4 joints_bw3;    // x/y/z/w = bone_index[0..3] (as float)
 };
 
-// 输出：蒙皮后的顶点数据（仅位置/法线/切线）
-struct OutputVertex {
-    vec4 position;
-    vec4 normal;
-    vec4 tangent;
+struct DstVertex {
+    vec4 pos;           // xyz = skinned position, w = 1.0
+    vec4 normal;        // xyz = skinned normal,   w = 0.0
+    vec4 tangent;       // xyz = skinned tangent,  w = 0.0
 };
 
-layout(std430, set = 0, binding = 0) readonly buffer InputVertices {
-    InputVertex in_verts[];
+struct InstanceInfo {
+    uint vertex_start;       // 本实例在全局 src_vertices 中的起始偏移
+    uint vertex_count;       // 本实例的顶点数
+    uint bone_offset;        // 本实例在 bone_matrices 中的起始索引
+    uint morph_target_count; // morph target 数量 (0-4)
+    vec4 morph_weights;      // 各 morph target 权重
+    uint morph_delta_offset; // 本实例在 morph_deltas 中的起始 vec4 索引
+    uint _pad0; uint _pad1; uint _pad2; // std430 alignment padding
 };
 
-layout(std430, set = 0, binding = 1) writeonly buffer OutputVertices {
-    OutputVertex out_verts[];
-};
+layout(std430, binding = 0) readonly buffer SrcBuf  { SrcVertex src_vertices[]; };
+layout(std430, binding = 1) writeonly buffer DstBuf { DstVertex dst_vertices[]; };
+layout(std430, binding = 2) readonly buffer BoneBuf { mat4 bone_matrices[]; };
+layout(std430, binding = 3) readonly buffer MorphBuf { vec4 morph_deltas[]; };
+layout(std430, binding = 4) readonly buffer InstBuf { InstanceInfo instances[]; };
 
-layout(std140, set = 0, binding = 2) uniform BoneMatrices {
-    mat4 u_bone_matrices[MAX_BONES];
-};
+layout(push_constant) uniform PC {
+    uint total_vertices;    // 所有实例的总顶点数
+    uint instance_count;    // 实例数
+} params;
 
-layout(push_constant) uniform PushConstants {
-    uint vertex_count;
-} pc;
+// 二分查找当前顶点所属的实例
+uint findInstance(uint gid) {
+    uint lo = 0u, hi = params.instance_count;
+    while (lo < hi) {
+        uint mid = (lo + hi) / 2u;
+        if (instances[mid].vertex_start + instances[mid].vertex_count <= gid)
+            lo = mid + 1u;
+        else
+            hi = mid;
+    }
+    return lo;
+}
 
 void main() {
-    uint vid = gl_GlobalInvocationID.x;
-    if (vid >= pc.vertex_count) return;
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= params.total_vertices) return;
 
-    InputVertex v = in_verts[vid];
+    uint inst_id = findInstance(gid);
+    if (inst_id >= params.instance_count) return;
+    InstanceInfo inst = instances[inst_id];
+    uint local_vid = gid - inst.vertex_start;
 
-    ivec4 bi = ivec4(
-        int(round(v.bone_indices.x)),
-        int(round(v.bone_indices.y)),
-        int(round(v.bone_indices.z)),
-        int(round(v.bone_indices.w))
-    );
+    SrcVertex src = src_vertices[gid];
+    vec3 pos     = src.pos_bw0.xyz;
+    vec3 normal  = src.norm_bw1.xyz;
+    vec3 tangent = src.tan_bw2.xyz;
 
-    mat4 skin =
-        u_bone_matrices[bi.x] * v.bone_weights.x +
-        u_bone_matrices[bi.y] * v.bone_weights.y +
-        u_bone_matrices[bi.z] * v.bone_weights.z +
-        u_bone_matrices[bi.w] * v.bone_weights.w;
+    // Morph target blending
+    if (inst.morph_target_count > 0u) {
+        float w[4] = float[4](inst.morph_weights.x, inst.morph_weights.y,
+                              inst.morph_weights.z, inst.morph_weights.w);
+        uint mbase = inst.morph_delta_offset;
+        for (uint m = 0u; m < inst.morph_target_count && m < 4u; ++m) {
+            if (abs(w[m]) > 0.001) {
+                pos += morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
+            }
+        }
+    }
 
-    vec3 skinnedPos     = (skin * v.position).xyz;
-    mat3 normalMatrix   = transpose(inverse(mat3(skin)));
-    vec3 skinnedNormal  = normalize(normalMatrix * v.normal.xyz);
-    vec3 skinnedTangent = normalize(normalMatrix * v.tangent.xyz);
+    // 骨骼蒙皮
+    float bw0 = src.pos_bw0.w, bw1 = src.norm_bw1.w, bw2 = src.tan_bw2.w;
+    float bw3 = 1.0 - bw0 - bw1 - bw2;
+    int bi0 = int(src.joints_bw3.x), bi1 = int(src.joints_bw3.y);
+    int bi2 = int(src.joints_bw3.z), bi3 = int(src.joints_bw3.w);
+    uint bb = inst.bone_offset;
 
-    out_verts[vid].position = vec4(skinnedPos,  1.0);
-    out_verts[vid].normal   = vec4(skinnedNormal,  0.0);
-    out_verts[vid].tangent  = vec4(skinnedTangent, 0.0);
+    mat4 sm = bone_matrices[bb + bi0] * bw0 + bone_matrices[bb + bi1] * bw1
+            + bone_matrices[bb + bi2] * bw2 + bone_matrices[bb + bi3] * bw3;
+
+    // 写入蒙皮后顶点
+    dst_vertices[gid].pos     = vec4((sm * vec4(pos, 1.0)).xyz, 1.0);
+    mat3 nm = mat3(sm);
+    dst_vertices[gid].normal  = vec4(normalize(nm * normal), 0.0);
+    dst_vertices[gid].tangent = vec4(normalize(nm * tangent), 0.0);
 }

@@ -14,6 +14,8 @@
 #include <glm/glm.hpp>
 class AssetManager;
 
+namespace dse { namespace render { class GPUSkinningSystem; } }
+
 namespace dse { namespace render { struct RenderPassContext; } }
 
 namespace dse {
@@ -42,6 +44,9 @@ public:
     void RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode);
 
     void SetAssetManager(AssetManager* asset_manager);
+
+    /// P4: 设置 GPU Skinning 系统引用（供 Render 使用 readback 数据）
+    void SetGPUSkinningSystem(dse::render::GPUSkinningSystem* sys) { gpu_skinning_ = sys; }
 
     /// 释放 GPU Driven 资源（Mega VAO/VBO/IBO），必须在 RHI Shutdown 之前调用
     void CleanupGPUResources(RhiDevice* rhi);
@@ -73,6 +78,12 @@ public:
      */
     int PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx);
 
+    /**
+     * @brief GPU Compute Skinning: 遍历 skinned mesh 并提交蒙皮请求
+     * 在 Render() 之前调用，由 Gameplay3DModule 驱动
+     */
+    void SubmitSkinningRequests(World& world, dse::render::GPUSkinningSystem& skinning_system);
+
     /// Hi-Z Occlusion Culling: 获取上一帧收集的 AABB 列表
     const std::vector<HiZAABB>& cached_aabbs() const { return cached_aabbs_; }
     int cached_aabb_count() const { return static_cast<int>(cached_aabbs_.size()); }
@@ -89,6 +100,7 @@ public:
 
 private:
     AssetManager* asset_manager_ = nullptr;
+    dse::render::GPUSkinningSystem* gpu_skinning_ = nullptr;  ///< P4: GPU skinning readback
     std::vector<MeshDrawItem> transparent_items_;  ///< 每帧缓存的透明绘制项
 
     /// 静态合批：首帧构建后缓存，后续帧直接复用
@@ -100,6 +112,9 @@ private:
     std::vector<HiZAABB> cached_aabbs_;
     /// Hi-Z: 当前帧使用的可见性数据（从上一帧 GPU 计算结果读回）
     std::vector<uint32_t> hiz_visibility_;
+
+    /// GPU Driven: 本帧 GPU Driven 路径是否已处理不透明 mesh（避免 Render 中双重绘制）
+    bool gpu_driven_active_ = false;
 
     /// GPU Driven: 每帧缓存
     std::vector<DrawElementsIndirectCommand> gpu_draw_cmds_;

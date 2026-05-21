@@ -33,6 +33,11 @@ struct RuntimeContext {
     /// 设置/获取目标帧率回调
     std::function<void(float)> set_target_fps;
     std::function<float()> get_target_fps;
+
+    /// 渲染线程 context 管理（由平台层注入）
+    std::function<void()> make_render_context_current;  ///< 在调用线程激活 GL/DX context
+    std::function<void()> release_render_context;        ///< 释放当前线程的 context
+    std::function<void()> present_frame;                 ///< SwapBuffers / Present
 };
 
 } // namespace dse::runtime

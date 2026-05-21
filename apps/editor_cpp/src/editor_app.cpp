@@ -83,6 +83,18 @@
 #include "editor_autosave.h"
 #include "editor_locale.h"
 #include "editor_snapshot.h"
+#include "editor_selection_outline.h"
+#include "editor_physics_debug.h"
+#include "editor_asset_browser.h"
+#include "editor_prefab_override.h"
+#include "editor_animation_timeline.h"
+#include "editor_navmesh_panel.h"
+#include "editor_lighting_gizmos.h"
+#include "editor_git_panel.h"
+#include "editor_shader_graph.h"
+#include "editor_multi_viewport.h"
+#include "editor_scene_view_mode.h"
+#include "editor_anim_state_machine.h"
 
 
 
@@ -443,6 +455,10 @@ void EditorApp::Run() {
             engine_instance_->pipeline()->DisableEditorCamera();
         }
 
+        // Set scene view mode for rendering pipeline
+        engine_instance_->pipeline()->SetSceneViewMode(
+            static_cast<int>(dse::editor::GetCurrentSceneViewMode()));
+
         // Tick Engine
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "EngineTick");
@@ -741,7 +757,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::PanelVisibility panel_vis{
         &show_localization_preview_, &show_profiler_, &show_animation_,
         &show_tile_palette_, &show_terrain_editor_, &show_lua_console_,
-        &show_undo_history_
+        &show_undo_history_,
+        &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
+        &show_shader_graph_, &show_git_, &show_multi_viewport_,
+        &show_anim_state_machine_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -778,6 +797,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::DrawPreferencesPanel(&show_preferences_);
     dse::editor::DrawUndoHistoryPanel(&show_undo_history_);
 
+    // New panels
+    if (show_asset_browser_)        dse::editor::DrawAssetBrowserPanel();
+    if (show_animation_timeline_)   dse::editor::DrawAnimationTimelinePanel(ctx);
+    if (show_navmesh_)              dse::editor::DrawNavMeshPanel(ctx);
+    if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel();
+    if (show_git_)                  dse::editor::DrawGitPanel();
+    if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
+    if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
+
     // Plugin Manager 面板
     if (show_plugins_panel_) {
         ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
@@ -796,7 +824,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::End();
     }
 
-    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices);
+    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
+                                        engine_instance_->pipeline());
     dse::editor::DrawGameViewportPanel(game_texture);
 
     dse::editor::AutoSaveManager::Get().Tick(registry);

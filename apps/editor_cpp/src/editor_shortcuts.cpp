@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include <cmath>
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
@@ -230,13 +231,85 @@ bool HasEntityClipboard() {
     return s_clipboard_has_data && s_clipboard_registry != nullptr;
 }
 
+// ─── Primitive Geometry Generators ──────────────────────────────────────────
+namespace {
+
+void GenerateCubeGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices) {
+    // 24 vertices (4 per face, unique normals), stride = 3 (position only)
+    const float V = 0.5f;
+    const float cube_verts[] = {
+        // +Z face
+        -V,-V, V,   V,-V, V,   V, V, V,  -V, V, V,
+        // -Z face
+         V,-V,-V,  -V,-V,-V,  -V, V,-V,   V, V,-V,
+        // +X face
+         V,-V, V,   V,-V,-V,   V, V,-V,   V, V, V,
+        // -X face
+        -V,-V,-V,  -V,-V, V,  -V, V, V,  -V, V,-V,
+        // +Y face
+        -V, V, V,   V, V, V,   V, V,-V,  -V, V,-V,
+        // -Y face
+        -V,-V,-V,   V,-V,-V,   V,-V, V,  -V,-V, V,
+    };
+    verts.assign(std::begin(cube_verts), std::end(cube_verts));
+    const unsigned short cube_idx[] = {
+         0, 1, 2,  0, 2, 3,
+         4, 5, 6,  4, 6, 7,
+         8, 9,10,  8,10,11,
+        12,13,14, 12,14,15,
+        16,17,18, 16,18,19,
+        20,21,22, 20,22,23,
+    };
+    indices.assign(std::begin(cube_idx), std::end(cube_idx));
+}
+
+void GenerateSphereGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices,
+                            int stacks = 16, int slices = 32) {
+    const float pi = 3.14159265358979323846f;
+    for (int i = 0; i <= stacks; ++i) {
+        float phi = pi * static_cast<float>(i) / static_cast<float>(stacks);
+        float y = std::cos(phi) * 0.5f;
+        float r = std::sin(phi) * 0.5f;
+        for (int j = 0; j <= slices; ++j) {
+            float theta = 2.0f * pi * static_cast<float>(j) / static_cast<float>(slices);
+            verts.push_back(r * std::cos(theta));
+            verts.push_back(y);
+            verts.push_back(r * std::sin(theta));
+        }
+    }
+    for (int i = 0; i < stacks; ++i) {
+        for (int j = 0; j < slices; ++j) {
+            unsigned short a = static_cast<unsigned short>(i * (slices + 1) + j);
+            unsigned short b = static_cast<unsigned short>(a + slices + 1);
+            indices.push_back(a); indices.push_back(b); indices.push_back(static_cast<unsigned short>(a + 1));
+            indices.push_back(static_cast<unsigned short>(a + 1)); indices.push_back(b); indices.push_back(static_cast<unsigned short>(b + 1));
+        }
+    }
+}
+
+void GeneratePlaneGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices) {
+    const float V = 0.5f;
+    const float plane_verts[] = {
+        -V, 0.0f, -V,
+         V, 0.0f, -V,
+         V, 0.0f,  V,
+        -V, 0.0f,  V,
+    };
+    verts.assign(std::begin(plane_verts), std::end(plane_verts));
+    const unsigned short plane_idx[] = { 0, 2, 1, 0, 3, 2 };
+    indices.assign(std::begin(plane_idx), std::end(plane_idx));
+}
+
+} // namespace
+
 // ─── Entity Templates ──────────────────────────────────────────────────────
 void CreateEntity3DCube(EditorContext& ctx) {
     auto ent = ctx.world.CreateEntity();
     ctx.registry.emplace<EditorNameComponent>(ent, "Cube");
     ctx.registry.emplace<TransformComponent>(ent);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
-    mesh.mesh_path = "primitives/cube.dmesh";
+    mesh.mesh_path = "procedural:cube";
+    GenerateCubeGeometry(mesh.temp_vertices, mesh.temp_indices);
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Cube entity");
@@ -247,7 +320,8 @@ void CreateEntity3DSphere(EditorContext& ctx) {
     ctx.registry.emplace<EditorNameComponent>(ent, "Sphere");
     ctx.registry.emplace<TransformComponent>(ent);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
-    mesh.mesh_path = "primitives/sphere.dmesh";
+    mesh.mesh_path = "procedural:sphere";
+    GenerateSphereGeometry(mesh.temp_vertices, mesh.temp_indices);
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Sphere entity");
@@ -259,7 +333,8 @@ void CreateEntity3DPlane(EditorContext& ctx) {
     auto& transform = ctx.registry.emplace<TransformComponent>(ent);
     transform.scale = glm::vec3(10.0f, 1.0f, 10.0f);
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
-    mesh.mesh_path = "primitives/plane.dmesh";
+    mesh.mesh_path = "procedural:plane";
+    GeneratePlaneGeometry(mesh.temp_vertices, mesh.temp_indices);
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Plane entity");

@@ -106,7 +106,8 @@ static_assert(sizeof(VulkanSpotLightsUBO) % 16 == 0,
  */
 class VulkanDrawExecutor {
 public:
-    VulkanDrawExecutor() = default;
+    explicit VulkanDrawExecutor(DrawExecutorGlobalState& shared_state)
+        : global_state_(shared_state) {}
     ~VulkanDrawExecutor() = default;
 
     /// 初始化几何缓冲区和 UBO 缓冲区
@@ -164,16 +165,20 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 
-    // --- 全局阴影/光源矩阵（委托给共享状态） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_state_.SetPointShadowMap(index, handle); }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetLightSpaceMatrix(index, mat); }
-    void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
-    void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
+    // --- GPU-Driven PBR 渲染设置 ---
+    void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+                            const glm::mat4& view, const glm::mat4& proj,
+                            const glm::vec3& camera_pos,
+                            const glm::vec3& light_dir, const glm::vec3& light_color,
+                            float light_intensity, float ambient_intensity,
+                            VulkanPipelineStateManager& pipeline_mgr,
+                            VulkanShaderManager& shader_mgr);
+
+    // --- GPU-Driven Shadow 渲染设置 ---
+    void SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+                               const glm::mat4& light_view, const glm::mat4& light_proj,
+                               VulkanPipelineStateManager& pipeline_mgr,
+                               VulkanShaderManager& shader_mgr);
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -196,6 +201,9 @@ public:
     void SetBoundSSBOs(const std::unordered_map<unsigned int, unsigned int>& ssbos) {
         bound_ssbos_ = ssbos;
     }
+
+    /// 获取最近 GPU-Driven 设置绑定的 pipeline layout（per-draw push constants 用）
+    VkPipelineLayout gpu_driven_pipeline_layout() const { return gpu_driven_pipeline_layout_; }
 
 private:
     /// 创建单个 UBO 缓冲区（host-visible + coherent）
@@ -341,11 +349,19 @@ private:
     int max_render_passes_ = -1;  // -1 = 无限制
     bool skip_current_pass_ = false;
 
-    // 全局渲染状态（共享结构体，消除三端重复）
-    DrawExecutorGlobalState global_state_;
+    // 全局渲染状态（引用 RhiDevice::global_render_state_）
+    DrawExecutorGlobalState& global_state_;
 
     // 当前帧绑定的 SSBO 状态 (binding_point → RHI handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
+
+    // GPU-Driven: 最后一次 SetupGPUDriven* 绑定的 pipeline layout（per-draw push constants 用）
+    VkPipelineLayout gpu_driven_pipeline_layout_ = VK_NULL_HANDLE;
+
+    // Hair rendering 缓存
+    unsigned int hair_shader_handle_ = 0;
+    VkPipeline hair_pipeline_ = VK_NULL_HANDLE;
+    VkRenderPass hair_pipeline_rp_ = VK_NULL_HANDLE;
 
 };
 

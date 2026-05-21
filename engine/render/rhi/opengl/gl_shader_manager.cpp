@@ -248,13 +248,12 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     using namespace dse::render::generated_shaders;
     std::string src = kpbr_frag_glsl330;
 
-    // 1. 鐗堟湰闄嶇骇锛?version 430 鈫?#version 330锛?
+    // 1. 保持 #version 430 不降级。NVIDIA 在 GL 3.3 context 中也接受 #version 430
+    //    （gbuffer shader 已验证）；降到 330 会导致 layout(binding) 编译失败。
     {
         const auto pos = src.find("#version 430");
         if (pos == std::string::npos)
             fprintf(stderr, "[GenerateUBOGLSL] #version 430 not found\n");
-        else
-            src.replace(pos, 12, "#version 330");
     }
 
     // 2. 绉婚櫎 ClusterInfoEntry 缁撴瀯浣擄紙鎸夊悕绉板畾浣嶏紝ID 鏃犲叧锛?
@@ -279,8 +278,8 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     RemoveSSBOBlock(src, "LightIndexSSBO");
 
     // 5 & 6. PointLightSSBO + SpotLightSSBO 鈫?鍥哄畾澶у皬 UBO锛堟寜鍚嶇О瀹氫綅锛孖D 鏃犲叧锛?
-    TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights[]", kMaxUBOLights);
-    TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights[]",  kMaxUBOLights);
+    TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights", kMaxUBOLights);
+    TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights",  kMaxUBOLights);
 
     // 7. 鍔ㄦ€佹彁鍙栧疄渚嬪悕锛堥殢 shader 鍙樺姩鑷姩閫傚簲锛屼笉鍐嶇‖缂栫爜 _2008/_2190锛?
     const std::string point_inst = ExtractInstanceName(src, "PointLightUBO");
@@ -314,6 +313,7 @@ void GLShaderManager::InitBuiltinPBRShader() {
 
     if (supports_ssbo_) {
         InitGPUDrivenPBRShader();
+        InitGPUDrivenShadowShader();
     }
 }
 
@@ -432,6 +432,16 @@ void GLShaderManager::CachePBRLocations() {
     loc.splat_enabled = glGetUniformLocation(h, "u_splat_enabled");
     loc.splat_tiling = glGetUniformLocation(h, "u_splat_tiling");
 
+    // --- DDGI ---
+    loc.ddgi_enabled = glGetUniformLocation(h, "u_ddgi_enabled");
+    loc.ddgi_grid_origin = glGetUniformLocation(h, "u_ddgi_grid_origin");
+    loc.ddgi_grid_spacing = glGetUniformLocation(h, "u_ddgi_grid_spacing");
+    loc.ddgi_grid_resolution = glGetUniformLocation(h, "u_ddgi_grid_resolution");
+    loc.ddgi_irradiance_texels = glGetUniformLocation(h, "u_ddgi_irradiance_texels");
+    loc.ddgi_gi_intensity = glGetUniformLocation(h, "u_ddgi_gi_intensity");
+    loc.ddgi_normal_bias = glGetUniformLocation(h, "u_ddgi_normal_bias");
+    loc.ddgi_irradiance_atlas = glGetUniformLocation(h, "u_ddgi_irradiance_atlas");
+
     // --- 閫愬璞?uniform锛堜粠 push constants 灞曞钩锛?----
     loc.model = glGetUniformLocation(h, "u_model");
     loc.skinned = glGetUniformLocation(h, "u_skinned");
@@ -540,25 +550,6 @@ void GLShaderManager::InitShadowShader() {
 // Post-process shader cache
 // ============================================================
 
-unsigned int GLShaderManager::GetOrCreatePostProcessShader(const std::string& effect_name,
-                                                            const char* vs_src,
-                                                            const std::string& fs_src) {
-    auto it = pp_shaders_.find(effect_name);
-    if (it != pp_shaders_.end()) {
-        return it->second;
-    }
-
-    const char* fs_c_str = fs_src.c_str();
-    unsigned int shader = CompileProgram(vs_src, fs_c_str);
-    programs_created_ += 1;
-    pp_shaders_[effect_name] = shader;
-    return shader;
-}
-
-bool GLShaderManager::HasPostProcessShader(const std::string& effect_name) const {
-    return pp_shaders_.find(effect_name) != pp_shaders_.end();
-}
-
 unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_name) {
     std::string key = "gen_" + effect_name;
     auto it = pp_shaders_.find(key);
@@ -644,6 +635,61 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
 }
 
 // ============================================================
+// GPU-Driven Shadow Shader Variant
+// ============================================================
+
+void GLShaderManager::InitGPUDrivenShadowShader() {
+    if (gpu_driven_shadow_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    using namespace dse::render::generated_shaders::reflect;
+
+    std::string vert_src = kshadow_vert_glsl330;
+
+    // 1. 升级到 #version 460：gl_BaseInstance 在 GLSL 4.6 起成为核心内置变量
+    const std::string version_tag = "#version 430";
+    auto pos = vert_src.find(version_tag);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, version_tag.size(), "#version 460");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow: #version 430 not found in vert src\n");
+    }
+
+    // 2. 替换 u_model uniform 声明为 SSBO 实例数据块
+    const std::string u_model_decl = "uniform mat4 u_model;";
+    pos = vert_src.find(u_model_decl);
+    if (pos != std::string::npos) {
+        vert_src.replace(pos, u_model_decl.size(),
+            "struct DSEGPUInst { mat4 model; uint mat_id; uint cmd_id; uint pad0; uint pad1; };\n"
+            "layout(std430, binding = 5) readonly buffer DSEInstBuf { DSEGPUInst dse_inst[]; };");
+    } else {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow: uniform mat4 u_model not found in vert src\n");
+    }
+
+    // 3. 替换 main() 中所有 u_model 引用
+    auto replace_all = [&](const std::string& from, const std::string& to) {
+        size_t p = 0;
+        while ((p = vert_src.find(from, p)) != std::string::npos) {
+            vert_src.replace(p, from.size(), to);
+            p += to.size();
+        }
+    };
+    replace_all("u_model * localPos",      "dse_inst[gl_BaseInstance].model * localPos");
+    replace_all("u_model * boneTransform", "dse_inst[gl_BaseInstance].model * boneTransform");
+
+    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), kshadow_frag_glsl330);
+    if (gpu_driven_shadow_shader_handle_ == 0) {
+        fprintf(stderr, "[GLShaderManager] GPU-driven Shadow shader compilation failed\n");
+        return;
+    }
+    programs_created_ += 1;
+
+    BindUBOsFromReflection(gpu_driven_shadow_shader_handle_, kshadow_vert_reflection);
+    BindUBOsFromReflection(gpu_driven_shadow_shader_handle_, kshadow_frag_reflection);
+
+    gpu_driven_shadow_skinned_loc_ = glGetUniformLocation(gpu_driven_shadow_shader_handle_, "u_skinned");
+}
+
+// ============================================================
 // Cleanup
 // ============================================================
 
@@ -667,6 +713,11 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(gpu_driven_pbr_shader_handle_);
         programs_destroyed_ += 1;
         gpu_driven_pbr_shader_handle_ = 0;
+    }
+    if (gpu_driven_shadow_shader_handle_ != 0) {
+        glDeleteProgram(gpu_driven_shadow_shader_handle_);
+        programs_destroyed_ += 1;
+        gpu_driven_shadow_shader_handle_ = 0;
     }
     for (auto& [name, handle] : pp_shaders_) {
         if (handle != 0) {

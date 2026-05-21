@@ -20,10 +20,13 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     // a second PxFoundation in its own module-local locator.
     (void)world;
 #endif
+    rhi_device_ = rhi_device;
     terrain_system_.Init(rhi_device);
     grass_system_.Init(rhi_device);
     hair_system_.Init(rhi_device);
+    gpu_skinning_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
+    mesh_render_system_.SetGPUSkinningSystem(&gpu_skinning_system_);
     lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
     anim_layer_blend_system_.SetAssetManager(asset_manager);
@@ -107,6 +110,13 @@ void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
 }
 
 void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
+    // GPU Compute Skinning: dispatch 在渲染前执行
+    if (gpu_skinning_system_.IsAvailable()) {
+        gpu_skinning_system_.BeginFrame();
+        mesh_render_system_.SubmitSkinningRequests(world, gpu_skinning_system_);
+        gpu_skinning_system_.Dispatch();
+    }
+
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
     grass_system_.Render(world, cmd_buffer);
@@ -171,10 +181,12 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {
+    gpu_skinning_system_.Shutdown();
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
     hair_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
+    mesh_render_system_.SetGPUSkinningSystem(nullptr);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);

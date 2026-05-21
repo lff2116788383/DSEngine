@@ -382,6 +382,13 @@ struct MorphComponent {
     std::vector<MorphTarget> targets;
     // GPU resources for morph targets
     unsigned int morph_buffer_handle = 0;
+
+    /// Per-vertex morph delta data (CPU 侧，供 GPU Compute Skinning 使用)
+    /// 布局: [target0: v0(xyz0), v1(xyz0), ...], [target1: v0(xyz0), v1(xyz0), ...], ...
+    /// 每个 delta 占 4 float (vec4, w=0)，总长 = morph_target_count * vertex_count * 4
+    /// 由 mesh loader 填充。为空时 GPU 蒙皮跳过 morph blending。
+    std::vector<float> morph_delta_vertices;
+    uint32_t morph_vertex_count = 0;  ///< 每个 target 的顶点数
 };
 
 struct Animator3DComponent {

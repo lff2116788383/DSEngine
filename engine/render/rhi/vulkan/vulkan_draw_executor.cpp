@@ -20,6 +20,8 @@
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
+#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
+#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
@@ -307,6 +309,12 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     if (white_texture_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_texture_handle_);
         white_texture_handle_ = 0;
+    }
+
+    if (hair_pipeline_ != VK_NULL_HANDLE) {
+        vkDestroyPipeline(device, hair_pipeline_, nullptr);
+        hair_pipeline_ = VK_NULL_HANDLE;
+        hair_pipeline_rp_ = VK_NULL_HANDLE;
     }
 
     DEBUG_LOG_INFO("VulkanDrawExecutor geometry buffers destroyed");
@@ -1924,50 +1932,41 @@ void VulkanDrawExecutor::DrawPostProcess(
     }
     unsigned int pp_state = needs_blend ? pp_blend_pipeline_state_ : pp_pipeline_state_;
 
-    // 根据 effect 名称选择专用着色器
+    // 根据 effect 名称选择专用着色器（表驱动）
+    using ShaderAccessor = unsigned int (ShaderManagerBase::*)() const;
+    static const std::unordered_map<std::string, ShaderAccessor> kShaderMap = {
+        {"bloom_extract",     &ShaderManagerBase::bloom_extract_shader_handle},
+        {"fxaa",              &ShaderManagerBase::fxaa_shader_handle},
+        {"ssao",              &ShaderManagerBase::ssao_shader_handle},
+        {"ssao_blur",         &ShaderManagerBase::ssao_blur_shader_handle},
+        {"ssao_apply",        &ShaderManagerBase::ssao_apply_shader_handle},
+        {"lum_compute",       &ShaderManagerBase::lum_compute_shader_handle},
+        {"lum_adapt",         &ShaderManagerBase::lum_adapt_shader_handle},
+        {"tonemapping",       &ShaderManagerBase::tonemapping_shader_handle},
+        {"bloom_composite",   &ShaderManagerBase::bloom_composite_ssao_ae_shader_handle},
+        {"color_grading",     &ShaderManagerBase::color_grading_shader_handle},
+        {"contact_shadow",    &ShaderManagerBase::contact_shadow_shader_handle},
+        {"taa_resolve",       &ShaderManagerBase::taa_resolve_shader_handle},
+        {"dof",               &ShaderManagerBase::dof_shader_handle},
+        {"motion_blur",       &ShaderManagerBase::motion_blur_shader_handle},
+        {"motion_vector",     &ShaderManagerBase::motion_vector_shader_handle},
+        {"ssr",               &ShaderManagerBase::ssr_shader_handle},
+        {"deferred_lighting", &ShaderManagerBase::deferred_lighting_shader_handle},
+        {"edge_detect",       &ShaderManagerBase::edge_detect_shader_handle},
+        {"volumetric_fog",    &ShaderManagerBase::volumetric_fog_shader_handle},
+        {"decal",             &ShaderManagerBase::decal_shader_handle},
+        {"wboit_composite",   &ShaderManagerBase::wboit_composite_shader_handle},
+        {"water",             &ShaderManagerBase::water_shader_handle},
+        {"light_shaft",       &ShaderManagerBase::light_shaft_shader_handle},
+    };
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
-    if (effect_name == "bloom_extract" && shader_mgr.bloom_extract_shader_handle())
-        selected_shader_handle = shader_mgr.bloom_extract_shader_handle();
-    else if (effect_name == "fxaa" && shader_mgr.fxaa_shader_handle())
-        selected_shader_handle = shader_mgr.fxaa_shader_handle();
-    else if (effect_name == "ssao" && shader_mgr.ssao_shader_handle())
-        selected_shader_handle = shader_mgr.ssao_shader_handle();
-    else if (effect_name == "ssao_blur" && shader_mgr.ssao_blur_shader_handle())
-        selected_shader_handle = shader_mgr.ssao_blur_shader_handle();
-    else if (effect_name == "lum_compute" && shader_mgr.lum_compute_shader_handle())
-        selected_shader_handle = shader_mgr.lum_compute_shader_handle();
-    else if (effect_name == "lum_adapt" && shader_mgr.lum_adapt_shader_handle())
-        selected_shader_handle = shader_mgr.lum_adapt_shader_handle();
-    else if (effect_name == "tonemapping" && shader_mgr.tonemapping_shader_handle())
-        selected_shader_handle = shader_mgr.tonemapping_shader_handle();
-    else if (effect_name == "bloom_composite" && shader_mgr.bloom_composite_ssao_ae_shader_handle())
-        selected_shader_handle = shader_mgr.bloom_composite_ssao_ae_shader_handle();
-    else if (effect_name == "color_grading" && shader_mgr.color_grading_shader_handle())
-        selected_shader_handle = shader_mgr.color_grading_shader_handle();
-    else if (effect_name == "contact_shadow" && shader_mgr.contact_shadow_shader_handle())
-        selected_shader_handle = shader_mgr.contact_shadow_shader_handle();
-    else if (effect_name == "taa_resolve" && shader_mgr.taa_resolve_shader_handle())
-        selected_shader_handle = shader_mgr.taa_resolve_shader_handle();
-    else if (effect_name == "dof" && shader_mgr.dof_shader_handle())
-        selected_shader_handle = shader_mgr.dof_shader_handle();
-    else if (effect_name == "motion_blur" && shader_mgr.motion_blur_shader_handle())
-        selected_shader_handle = shader_mgr.motion_blur_shader_handle();
-    else if (effect_name == "ssr" && shader_mgr.ssr_shader_handle())
-        selected_shader_handle = shader_mgr.ssr_shader_handle();
-    else if (effect_name == "deferred_lighting" && shader_mgr.deferred_lighting_shader_handle())
-        selected_shader_handle = shader_mgr.deferred_lighting_shader_handle();
-    else if (effect_name == "edge_detect" && shader_mgr.edge_detect_shader_handle())
-        selected_shader_handle = shader_mgr.edge_detect_shader_handle();
-    else if (effect_name == "volumetric_fog" && shader_mgr.volumetric_fog_shader_handle())
-        selected_shader_handle = shader_mgr.volumetric_fog_shader_handle();
-    else if (effect_name == "decal" && shader_mgr.decal_shader_handle())
-        selected_shader_handle = shader_mgr.decal_shader_handle();
-    else if (effect_name == "wboit_composite" && shader_mgr.wboit_composite_shader_handle())
-        selected_shader_handle = shader_mgr.wboit_composite_shader_handle();
-    else if (effect_name == "water" && shader_mgr.water_shader_handle())
-        selected_shader_handle = shader_mgr.water_shader_handle();
-    else if (effect_name == "light_shaft" && shader_mgr.light_shaft_shader_handle())
-        selected_shader_handle = shader_mgr.light_shaft_shader_handle();
+    {
+        auto it = kShaderMap.find(effect_name);
+        if (it != kShaderMap.end()) {
+            unsigned int h = (shader_mgr.*(it->second))();
+            if (h != 0) selected_shader_handle = h;
+        }
+    }
 
     const VulkanShaderProgram* pp_program = shader_mgr.GetProgram(selected_shader_handle);
     if (!pp_program) {
@@ -1997,7 +1996,24 @@ void VulkanDrawExecutor::DrawPostProcess(
         vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pp_pipeline);
     }
 
-    // 构建额外纹理绑定列表 {set2_binding, texture_handle}
+    // 构建额外纹理绑定列表 {set2_binding, texture_handle}（表驱动）
+    struct ExtraTexSlot { uint32_t binding; int findtex_slot; };
+    static const std::unordered_map<std::string, std::vector<ExtraTexSlot>> kExtraTexTable = {
+        {"tonemapping",       {{2, 2}, {5, 5}}},
+        {"ssao_apply",        {{2, 2}, {3, 3}, {5, 5}}},
+        {"lum_adapt",         {{2, 2}}},
+        {"color_grading",     {{5, 5}}},
+        {"taa_resolve",       {{2, 2}, {5, 5}}},
+        {"dof",               {{2, 2}}},
+        {"motion_blur",       {{2, 2}}},
+        {"ssr",               {{2, 2}}},
+        {"deferred_lighting", {{2, 2}, {3, 3}}},
+        {"volumetric_fog",    {{2, 2}}},
+        {"decal",             {{2, 2}, {3, 3}}},
+        {"wboit_composite",   {{2, 2}}},
+        {"water",             {{2, 2}}},
+        {"light_shaft",       {{2, 2}}},
+    };
     std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
     if (effect_name == "bloom_composite") {
         const CompositeParamsView composite(params);
@@ -2008,34 +2024,12 @@ void VulkanDrawExecutor::DrawPostProcess(
             {5, composite.Texture(CompositeParamsView::kLutTex)},
             {6, composite.Texture(CompositeParamsView::kContactShadowTex)}
         };
-    } else if (effect_name == "tonemapping") {
-        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "ssao_apply") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "lum_adapt") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "color_grading") {
-        extra_bindings = {{5, request.FindTex(5)}};
-    } else if (effect_name == "taa_resolve") {
-        extra_bindings = {{2, request.FindTex(2)}, {5, request.FindTex(5)}};
-    } else if (effect_name == "dof") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "motion_blur") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "ssr") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "deferred_lighting") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
-    } else if (effect_name == "volumetric_fog") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "decal") {
-        extra_bindings = {{2, request.FindTex(2)}, {3, request.FindTex(3)}};
-    } else if (effect_name == "wboit_composite") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "water") {
-        extra_bindings = {{2, request.FindTex(2)}};
-    } else if (effect_name == "light_shaft") {
-        extra_bindings = {{2, request.FindTex(2)}};
+    } else {
+        auto tex_it = kExtraTexTable.find(effect_name);
+        if (tex_it != kExtraTexTable.end()) {
+            for (const auto& s : tex_it->second)
+                extra_bindings.push_back({s.binding, request.FindTex(s.findtex_slot)});
+        }
     }
 
     // 分配并绑定后处理 DescriptorSet
@@ -2300,14 +2294,231 @@ void VulkanDrawExecutor::DrawHairStrands(
     VulkanShaderManager& shader_mgr) {
 
     if (items.empty()) return;
-    (void)cmd_buf; (void)view; (void)projection;
-    (void)pipeline_mgr; (void)shader_mgr;
 
-    static bool warned = false;
-    if (!warned) {
-        DEBUG_LOG_WARN("[VulkanDrawExecutor] DrawHairStrands not yet implemented for Vulkan backend. "
-                       "Hair will not render when using Vulkan.");
-        warned = true;
+    // 懒初始化 hair shader program（GLSL 450 运行时编译）
+    if (hair_shader_handle_ == 0) {
+        using namespace dse::render::generated_shaders;
+        hair_shader_handle_ = shader_mgr.CreateProgram(khair_vert_glsl450, khair_frag_glsl450);
+        if (hair_shader_handle_ == 0) {
+            DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to compile hair shader for Vulkan");
+            return;
+        }
+    }
+
+    const VulkanShaderProgram* hair_program = shader_mgr.GetProgram(hair_shader_handle_);
+    if (!hair_program) return;
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    // 懒创建 LINE_STRIP + alpha blend + depth readonly pipeline
+    if (hair_pipeline_ == VK_NULL_HANDLE || hair_pipeline_rp_ != active_rp) {
+        // 销毁旧管线
+        if (hair_pipeline_ != VK_NULL_HANDLE) {
+            vkDestroyPipeline(context_->device(), hair_pipeline_, nullptr);
+            hair_pipeline_ = VK_NULL_HANDLE;
+        }
+
+        VkPipelineShaderStageCreateInfo stages[2]{};
+        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        stages[0].module = hair_program->vert_module;
+        stages[0].pName = "main";
+        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        stages[1].module = hair_program->frag_module;
+        stages[1].pName = "main";
+
+        VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+        input_assembly.primitiveRestartEnable = VK_FALSE;
+
+        VkExtent2D extent = context_->swapchain_extent();
+        VkViewport viewport{0.f, 0.f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.f, 1.f};
+        VkRect2D scissor{{0,0}, extent};
+        VkPipelineViewportStateCreateInfo viewport_state{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+        viewport_state.viewportCount = 1; viewport_state.pViewports = &viewport;
+        viewport_state.scissorCount = 1; viewport_state.pScissors = &scissor;
+
+        VkPipelineRasterizationStateCreateInfo rasterizer{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.cullMode = VK_CULL_MODE_NONE;
+        rasterizer.frontFace = VulkanPipelineStateManager::ToVkFrontFace();
+        rasterizer.lineWidth = 1.0f;
+
+        VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+        multisample.rasterizationSamples = current_msaa_samples_;
+
+        VkPipelineDepthStencilStateCreateInfo depth_stencil{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+        depth_stencil.depthTestEnable = VK_TRUE;
+        depth_stencil.depthWriteEnable = VK_FALSE; // depth readonly
+        depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+        VkPipelineColorBlendAttachmentState blend_att{};
+        blend_att.colorWriteMask = 0xF;
+        blend_att.blendEnable = VK_TRUE;
+        blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_att.colorBlendOp = VK_BLEND_OP_ADD;
+        blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
+
+        VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+        blend.attachmentCount = 1; blend.pAttachments = &blend_att;
+
+        VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkPipelineDynamicStateCreateInfo dynamic_state{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+        dynamic_state.dynamicStateCount = 2; dynamic_state.pDynamicStates = dyn_states;
+
+        VkGraphicsPipelineCreateInfo ci{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+        ci.stageCount = 2; ci.pStages = stages;
+        ci.pVertexInputState = &vertex_input;
+        ci.pInputAssemblyState = &input_assembly;
+        ci.pViewportState = &viewport_state;
+        ci.pRasterizationState = &rasterizer;
+        ci.pMultisampleState = &multisample;
+        ci.pDepthStencilState = &depth_stencil;
+        ci.pColorBlendState = &blend;
+        ci.pDynamicState = &dynamic_state;
+        ci.layout = hair_program->pipeline_layout;
+        ci.renderPass = active_rp;
+        ci.subpass = 0;
+
+        VkResult result = vkCreateGraphicsPipelines(context_->device(), VK_NULL_HANDLE, 1, &ci, nullptr, &hair_pipeline_);
+        if (result != VK_SUCCESS) {
+            DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to create hair pipeline: {}", static_cast<int>(result));
+            hair_pipeline_ = VK_NULL_HANDLE;
+            return;
+        }
+        hair_pipeline_rp_ = active_rp;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, hair_pipeline_);
+
+    // HairUBO 布局 (std140, 10 x vec4/mat4 = 256B)
+    struct HairUBO {
+        glm::mat4 model;           // 0
+        glm::mat4 view;            // 64
+        glm::mat4 projection;      // 128
+        glm::vec4 camera_pos;      // 192
+        glm::vec4 light_dir_int;   // 208
+        glm::vec4 light_color_amb; // 224
+        glm::vec4 root_color;      // 240
+        glm::vec4 tip_color;       // 256
+        glm::vec4 spec_params;     // 272
+        glm::vec4 spec_color_opa;  // 288
+    }; // = 304 bytes
+
+    glm::mat4 inv_view = glm::inverse(view);
+    glm::vec3 cam_pos(inv_view[3]);
+
+    for (const auto& item : items) {
+        if (item.strand_count == 0 || item.total_vertex_count == 0) continue;
+        if (!item.strand_firsts || !item.strand_counts) continue;
+
+        HairUBO ubo{};
+        ubo.model = item.world_transform;
+        ubo.view = view;
+        ubo.projection = projection;
+        ubo.camera_pos = glm::vec4(cam_pos, 0.0f);
+        ubo.light_dir_int = glm::vec4(item.light_direction, item.light_intensity);
+        ubo.light_color_amb = glm::vec4(item.light_color, item.ambient_intensity);
+        ubo.root_color = item.root_color;
+        ubo.tip_color = item.tip_color;
+        ubo.spec_params = glm::vec4(item.specular_primary, item.specular_secondary,
+                                     item.specular_strength_primary, item.specular_strength_secondary);
+        ubo.spec_color_opa = glm::vec4(item.specular_color, item.opacity);
+
+        // 写入 per-frame UBO slot（复用 VulkanDrawExecutor 的 per_frame_ubo_）
+        uint32_t fi = context_->current_frame();
+        VkDeviceSize slot_offset = per_frame_ubo_offset_;
+        VkDeviceSize aligned_size = (sizeof(HairUBO) + kUboSlotAlignment - 1) & ~(kUboSlotAlignment - 1);
+
+        void* mapped = nullptr;
+        vkMapMemory(context_->device(), per_frame_ubo_mem_[fi], slot_offset, sizeof(HairUBO), 0, &mapped);
+        memcpy(mapped, &ubo, sizeof(HairUBO));
+        vkUnmapMemory(context_->device(), per_frame_ubo_mem_[fi]);
+        per_frame_ubo_offset_ += aligned_size;
+
+        // 分配 descriptor set (set 0 = UBO, set 1 = 2 SSBO)
+        std::vector<VkDescriptorSet> sets;
+
+        // Set 0: HairUBO
+        {
+            VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            alloc_info.descriptorPool = resource_mgr_->descriptor_pool();
+            alloc_info.descriptorSetCount = 1;
+            alloc_info.pSetLayouts = &hair_program->descriptor_set_layouts[0];
+            VkDescriptorSet ds;
+            if (vkAllocateDescriptorSets(context_->device(), &alloc_info, &ds) != VK_SUCCESS) continue;
+
+            VkDescriptorBufferInfo buf_info{};
+            buf_info.buffer = per_frame_ubo_[fi];
+            buf_info.offset = slot_offset;
+            buf_info.range = sizeof(HairUBO);
+
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            write.dstSet = ds;
+            write.dstBinding = 0;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            write.pBufferInfo = &buf_info;
+            vkUpdateDescriptorSets(context_->device(), 1, &write, 0, nullptr);
+            sets.push_back(ds);
+        }
+
+        // Set 1: Position SSBO (binding 0) + Tangent SSBO (binding 1)
+        if (hair_program->descriptor_set_layouts.size() > 1) {
+            VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            alloc_info.descriptorPool = resource_mgr_->descriptor_pool();
+            alloc_info.descriptorSetCount = 1;
+            alloc_info.pSetLayouts = &hair_program->descriptor_set_layouts[1];
+            VkDescriptorSet ds;
+            if (vkAllocateDescriptorSets(context_->device(), &alloc_info, &ds) != VK_SUCCESS) continue;
+
+            const VulkanBuffer* pos_buf = resource_mgr_->GetSSBO(item.position_ssbo.raw());
+            const VulkanBuffer* tan_buf = resource_mgr_->GetSSBO(item.tangent_ssbo.raw());
+            if (!pos_buf || !tan_buf || !pos_buf->buffer || !tan_buf->buffer) continue;
+
+            VkDescriptorBufferInfo ssbo_infos[2]{};
+            ssbo_infos[0].buffer = pos_buf->buffer;
+            ssbo_infos[0].offset = 0;
+            ssbo_infos[0].range = VK_WHOLE_SIZE;
+            ssbo_infos[1].buffer = tan_buf->buffer;
+            ssbo_infos[1].offset = 0;
+            ssbo_infos[1].range = VK_WHOLE_SIZE;
+
+            VkWriteDescriptorSet writes[2]{};
+            for (int i = 0; i < 2; ++i) {
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i].dstSet = ds;
+                writes[i].dstBinding = static_cast<uint32_t>(i);
+                writes[i].descriptorCount = 1;
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                writes[i].pBufferInfo = &ssbo_infos[i];
+            }
+            vkUpdateDescriptorSets(context_->device(), 2, writes, 0, nullptr);
+            sets.push_back(ds);
+        }
+
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                hair_program->pipeline_layout,
+                                0, static_cast<uint32_t>(sets.size()), sets.data(),
+                                0, nullptr);
+
+        // 逐 strand 绘制（每个 strand 是一个 LINE_STRIP）
+        for (uint32_t s = 0; s < item.strand_count; ++s) {
+            int first = item.strand_firsts[s];
+            int count = item.strand_counts[s];
+            if (count <= 0) continue;
+            vkCmdDraw(cmd_buf, static_cast<uint32_t>(count), 1,
+                      static_cast<uint32_t>(first), 0);
+        }
+
+        global_state_.current_frame_stats.draw_calls += 1;
     }
 }
 
@@ -2433,6 +2644,122 @@ void VulkanDrawExecutor::DispatchBloomCompute(
         0, 0, nullptr, 0, nullptr, 1, &to_readonly);
 
     global_state_.current_frame_stats.draw_calls++;
+}
+
+// ============================================================
+// GPU-Driven PBR 渲染设置
+// ============================================================
+
+void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+                                            const glm::mat4& view, const glm::mat4& proj,
+                                            const glm::vec3& camera_pos,
+                                            const glm::vec3& light_dir, const glm::vec3& light_color,
+                                            float light_intensity, float ambient_intensity,
+                                            VulkanPipelineStateManager& pipeline_mgr,
+                                            VulkanShaderManager& shader_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !context_) return;
+
+    const unsigned int shader_handle = shader_mgr.pbr_shader_handle();
+    const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_handle);
+    if (!pbr_program) return;
+
+    // 获取当前 render pass（可能是离屏 RT 的 render pass）
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    // BatchVertex 顶点格式（与 DrawMeshBatch 一致）
+    std::vector<VkVertexInputBindingDescription> mesh_bindings = {
+        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
+        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 12},   // aColor
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, 28},          // aTexCoord
+        {3, 0, VK_FORMAT_R32G32B32_SFLOAT, 36},       // aNormal
+        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
+        {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
+        {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
+    };
+
+    VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(),
+        pbr_program, active_rp, mesh_bindings, mesh_attrs,
+        context_->swapchain_extent(), current_msaa_samples_,
+        current_color_attachment_count_);
+    if (vk_pipeline == VK_NULL_HANDLE) return;
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    gpu_driven_pipeline_layout_ = pbr_program->pipeline_layout;
+
+    // PerFrame UBO
+    VulkanPerFrameUBO frame_ubo{};
+    frame_ubo.vp = proj * view;
+    frame_ubo.view = view;
+    frame_ubo.camera_pos = glm::vec4(camera_pos, 0.0f);
+    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    per_frame_ubo_offset_ += kUboSlotAlignment;
+
+    // PerScene UBO
+    VulkanPerSceneUBO scene_ubo{};
+    scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    scene_ubo.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
+    scene_ubo.light_params            = glm::vec4(light_intensity, 0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        scene_ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    }
+    WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
+                  per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
+    per_scene_ubo_offset_ += kUboSlotAlignment;
+}
+
+// ============================================================
+// GPU-Driven Shadow 渲染设置
+// ============================================================
+
+void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+                                                const glm::mat4& light_view, const glm::mat4& light_proj,
+                                                VulkanPipelineStateManager& pipeline_mgr,
+                                                VulkanShaderManager& shader_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !context_) return;
+
+    const unsigned int shader_handle = shader_mgr.shadow_shader_handle();
+    const VulkanShaderProgram* shadow_program = shader_mgr.GetProgram(shader_handle);
+    if (!shadow_program) return;
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    std::vector<VkVertexInputBindingDescription> mesh_bindings = {
+        {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
+        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 12},   // aColor
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, 28},          // aTexCoord
+        {3, 0, VK_FORMAT_R32G32B32_SFLOAT, 36},       // aNormal
+        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
+        {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
+        {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
+    };
+
+    VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(),
+        shadow_program, active_rp, mesh_bindings, mesh_attrs,
+        context_->swapchain_extent(), current_msaa_samples_,
+        current_color_attachment_count_);
+    if (vk_pipeline == VK_NULL_HANDLE) return;
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    gpu_driven_pipeline_layout_ = shadow_program->pipeline_layout;
+
+    VulkanPerFrameUBO frame_ubo{};
+    frame_ubo.vp = light_proj * light_view;
+    frame_ubo.view = light_view;
+    frame_ubo.camera_pos = glm::vec4(0.0f);
+    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    per_frame_ubo_offset_ += kUboSlotAlignment;
 }
 
 } // namespace render

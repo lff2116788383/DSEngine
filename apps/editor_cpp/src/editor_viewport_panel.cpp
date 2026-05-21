@@ -16,6 +16,13 @@
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_preferences_panel.h"
+#include "editor_selection_outline.h"
+#include "editor_physics_debug.h"
+#include "editor_lighting_gizmos.h"
+#include "editor_navmesh_panel.h"
+#include "editor_scene_view_mode.h"
+#include "editor_multi_viewport.h"
+#include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
 #include <algorithm>
@@ -514,9 +521,74 @@ void DrawSceneGizmo(ImDrawList* draw_list,
 
 } // namespace
 
+// 多视口 FBO 隔离：为每个子视口维护独立纹理拷贝
+static unsigned int s_mvp_textures[4] = {};
+static unsigned int s_mvp_fbos[2] = {}; // read / draw
+static int s_mvp_tex_w = 0, s_mvp_tex_h = 0;
+
+static unsigned int CopySceneTextureForViewport(int index, unsigned int src_tex) {
+    if (src_tex == 0 || index < 0 || index >= 4) return src_tex;
+    // 查询源纹理尺寸
+    int tw = 0, th = 0;
+    glBindTexture(GL_TEXTURE_2D, src_tex);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (tw <= 0 || th <= 0) return src_tex;
+
+    // 如尺寸变化，重建所有子视口纹理
+    if (tw != s_mvp_tex_w || th != s_mvp_tex_h) {
+        for (int i = 0; i < 4; ++i) {
+            if (s_mvp_textures[i]) glDeleteTextures(1, &s_mvp_textures[i]);
+            s_mvp_textures[i] = 0;
+        }
+        s_mvp_tex_w = tw;
+        s_mvp_tex_h = th;
+    }
+    // 确保目标纹理存在
+    if (s_mvp_textures[index] == 0) {
+        glGenTextures(1, &s_mvp_textures[index]);
+        glBindTexture(GL_TEXTURE_2D, s_mvp_textures[index]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, tw, th, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    // 确保 FBO 存在
+    if (s_mvp_fbos[0] == 0) glGenFramebuffers(2, s_mvp_fbos);
+
+    // Blit: src → dst
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, s_mvp_fbos[0]);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src_tex, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, s_mvp_fbos[1]);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_mvp_textures[index], 0);
+    glBlitFramebuffer(0, 0, tw, th, 0, 0, tw, th, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    return s_mvp_textures[index];
+}
+
+// 多视口辅助：绘制单个子视口（带标签和边框）
+static void DrawSubViewport(ImDrawList* dl, ImVec2 origin, ImVec2 size,
+                            unsigned int texture_id, const char* label, bool is_active) {
+    if (texture_id != 0) {
+        ImGui::SetCursorScreenPos(origin);
+        ImGui::Image((ImTextureID)(intptr_t)texture_id, size, ImVec2(0, 1), ImVec2(1, 0));
+    } else {
+        dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(30, 30, 30, 255));
+    }
+    // 标签
+    dl->AddText(ImVec2(origin.x + 4, origin.y + 4),
+        is_active ? IM_COL32(100, 255, 100, 255) : IM_COL32(180, 180, 180, 200), label);
+    // 边框
+    ImU32 border_col = is_active ? IM_COL32(100, 255, 100, 180) : IM_COL32(80, 80, 80, 180);
+    dl->AddRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), border_col, 0.0f, 0, 1.5f);
+}
+
 void DrawSceneViewportPanel(EditorContext& ctx,
                             unsigned int scene_texture_id,
-                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&)) {
+                            bool (*build_active_camera_matrices)(entt::registry&, float, glm::mat4&, glm::mat4&),
+                            FramePipeline* pipeline) {
     // 兼容旧引用名
     auto& context = ctx;
     int& current_gizmo_operation = ctx.current_gizmo_operation;
@@ -635,8 +707,106 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     // Process editor camera input while Scene window is active
     ProcessEditorCameraInput(GetEditorCamera());
 
+    // ═══ Multi-Viewport 分支 ═══
+    auto& mvs = GetMultiViewportState();
+    if (mvs.enabled && pipeline) {
+        int cam_count = 1;
+        if (mvs.layout == 1 || mvs.layout == 2) cam_count = 2;
+        else if (mvs.layout == 3) cam_count = 4;
+
+        ImDrawList* mv_dl = ImGui::GetWindowDrawList();
+        ImVec2 cursor_base = ImGui::GetCursorScreenPos();
+        const float gap = 2.0f;
+
+        for (int vi = 0; vi < cam_count; ++vi) {
+            ImVec2 sub_origin, sub_size;
+            if (mvs.layout == 1) { // Side-by-Side
+                float half_w = (scene_panel_size.x - gap) * 0.5f;
+                sub_origin = ImVec2(cursor_base.x + vi * (half_w + gap), cursor_base.y);
+                sub_size = ImVec2(half_w, scene_panel_size.y);
+            } else if (mvs.layout == 2) { // Top-Bottom
+                float half_h = (scene_panel_size.y - gap) * 0.5f;
+                sub_origin = ImVec2(cursor_base.x, cursor_base.y + vi * (half_h + gap));
+                sub_size = ImVec2(scene_panel_size.x, half_h);
+            } else if (mvs.layout == 3) { // Quad
+                float half_w = (scene_panel_size.x - gap) * 0.5f;
+                float half_h = (scene_panel_size.y - gap) * 0.5f;
+                int col = vi % 2, row = vi / 2;
+                sub_origin = ImVec2(cursor_base.x + col * (half_w + gap),
+                                    cursor_base.y + row * (half_h + gap));
+                sub_size = ImVec2(half_w, half_h);
+            } else { // Single
+                sub_origin = cursor_base;
+                sub_size = scene_panel_size;
+            }
+            if (sub_size.x < 1.0f || sub_size.y < 1.0f) continue;
+
+            float aspect = sub_size.x / sub_size.y;
+            glm::mat4 vp_view, vp_proj;
+            GetViewportCameraMatrices(vi, aspect, vp_view, vp_proj);
+
+            // 每个子视口独立的 render_mode
+            int saved_view_mode = static_cast<int>(GetCurrentSceneViewMode());
+            pipeline->SetSceneViewMode(mvs.cameras[vi].render_mode);
+
+            // 用该相机重新渲染场景，并拷贝到独立纹理
+            unsigned int scene_tex = pipeline->RenderSceneWithCamera(vp_view, vp_proj);
+
+            // 恢复全局 scene view mode
+            pipeline->SetSceneViewMode(saved_view_mode);
+            unsigned int tex = CopySceneTextureForViewport(vi, scene_tex);
+            bool is_active = (vi == mvs.active_camera);
+            DrawSubViewport(mv_dl, sub_origin, sub_size, tex,
+                            mvs.cameras[vi].name.c_str(), is_active);
+
+            // 点击子视口切换活跃相机
+            ImVec2 sub_max = ImVec2(sub_origin.x + sub_size.x, sub_origin.y + sub_size.y);
+            ImVec2 mpos = ImGui::GetMousePos();
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                && mpos.x >= sub_origin.x && mpos.x <= sub_max.x
+                && mpos.y >= sub_origin.y && mpos.y <= sub_max.y) {
+                mvs.active_camera = vi;
+            }
+        }
+
+        // Scene view mode overlay
+        DrawSceneViewModeOverlay(scene_texture_id, 0, 0, 0);
+
+        ImGui::End();
+        ImGui::PopStyleVar();
+        return;
+    }
+
     if (scene_texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
+
+        // Overlay toggle toolbar (top-right of viewport)
+        {
+            ImDrawList* ov_dl = ImGui::GetWindowDrawList();
+            float btn_x = window_pos.x + scene_panel_size.x - 260.0f;
+            float btn_y = window_pos.y + 4.0f;
+            ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+
+            DrawSceneViewModeSelector();
+            ImGui::SameLine();
+
+            bool& phys_dbg = GetPhysicsDebugEnabled();
+            if (phys_dbg) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 0.8f));
+            if (ImGui::SmallButton("Phys")) phys_dbg = !phys_dbg;
+            if (phys_dbg) ImGui::PopStyleColor();
+            ImGui::SameLine();
+
+            bool& light_giz = GetLightingGizmosEnabled();
+            if (light_giz) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.4f, 0.0f, 0.8f));
+            if (ImGui::SmallButton("Light")) light_giz = !light_giz;
+            if (light_giz) ImGui::PopStyleColor();
+
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+        }
 
         // Tilemap grid overlay + Terrain brush overlay
         {
@@ -678,6 +848,30 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 ov_view, ov_proj);
             DrawProbeOverlays(
                 context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Selection outline highlights
+            DrawSelectionOutlines(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Physics debug wireframes (toggled via Window menu)
+            DrawPhysicsDebugOverlay(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // Lighting gizmos (light probes, reflection probes, light sources)
+            DrawLightingGizmos(context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+
+            // NavMesh overlay
+            DrawNavMeshOverlay(context,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);

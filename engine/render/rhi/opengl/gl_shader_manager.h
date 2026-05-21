@@ -50,6 +50,16 @@ struct PBRShaderLocations {
     int splat_enabled = -1;
     int splat_tiling = -1;
 
+    // --- DDGI uniform location ---
+    int ddgi_enabled = -1;
+    int ddgi_grid_origin = -1;
+    int ddgi_grid_spacing = -1;
+    int ddgi_grid_resolution = -1;
+    int ddgi_irradiance_texels = -1;
+    int ddgi_gi_intensity = -1;
+    int ddgi_normal_bias = -1;
+    int ddgi_irradiance_atlas = -1;
+
     // --- 逐对象 uniform（从 push constants 展平） ---
     int model = -1;
     int skinned = -1;
@@ -127,6 +137,10 @@ public:
     int gpu_driven_pbr_skinned_loc() const { return gpu_driven_pbr_skinned_loc_; }
     int gpu_driven_pbr_morph_loc()    const { return gpu_driven_pbr_morph_loc_; }
 
+    /// GPU-Driven Shadow 着色器句柄（depth-only, SSBO model fetch）
+    unsigned int gpu_driven_shadow_shader_handle() const { return gpu_driven_shadow_shader_handle_; }
+    int gpu_driven_shadow_skinned_loc() const { return gpu_driven_shadow_skinned_loc_; }
+
     // --- 天空盒着色器 ---
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
     void InitSkyboxShader();
@@ -147,11 +161,6 @@ public:
     void InitGBufferShader();
 
     // --- 后处理着色器缓存 ---
-    unsigned int GetOrCreatePostProcessShader(const std::string& effect_name,
-                                               const char* vs_src,
-                                               const std::string& fs_src);
-    bool HasPostProcessShader(const std::string& effect_name) const;
-
     /// gen.h 统一后处理着色器：使用 GLSL 430 预编译源（VS + FS 均来自 gen.h）
     unsigned int GetOrCreateGenPPShader(const std::string& effect_name);
 
@@ -163,6 +172,9 @@ private:
 
     /// 编译 GPU-Driven PBR 着色器变体（运行时字符串补丁）
     void InitGPUDrivenPBRShader();
+
+    /// 编译 GPU-Driven Shadow 着色器变体（运行时字符串补丁）
+    void InitGPUDrivenShadowShader();
 
     PBRShaderLocations pbr_locations_;
     PBRTextureSlots pbr_texture_slots_;
@@ -180,6 +192,9 @@ private:
     unsigned int gpu_driven_pbr_shader_handle_ = 0;
     int gpu_driven_pbr_skinned_loc_ = -1;
     int gpu_driven_pbr_morph_loc_   = -1;
+
+    unsigned int gpu_driven_shadow_shader_handle_ = 0;
+    int gpu_driven_shadow_skinned_loc_ = -1;
 };
 
 } // namespace render

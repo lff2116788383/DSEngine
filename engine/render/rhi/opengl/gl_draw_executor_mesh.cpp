@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <limits>
 #include <sstream>
 
@@ -220,6 +221,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
     per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
     per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first_item.wboit_mode));
+
+    // 编辑器 Unlit 模式: 禁用光照，仅显示 albedo
+    if (global_state_.force_unlit) {
+        per_scene.light_dir_and_enabled.w = 0.0f;
+    }
     for (int i = 0; i < 3; ++i) {
         per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
@@ -275,20 +281,20 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     glUniform1i(glGetUniformLocation(active_shader, "u_texture"), slots.albedo);
     const int gbuffer_model_loc = gbuffer_mode ? glGetUniformLocation(active_shader, "u_model") : -1;
 
-    // DDGI uniforms（全局，每 batch 一次）设置
+    // DDGI uniforms（全局，每 batch 一次）— 使用缓存的 location
     if (!gbuffer_mode && global_state_.ddgi_enabled && global_state_.ddgi_irradiance_atlas != 0) {
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 1.0f);
-        glUniform3fv(glGetUniformLocation(active_shader, "u_ddgi_grid_origin"), 1, &global_state_.ddgi_grid_origin.x);
-        glUniform3fv(glGetUniformLocation(active_shader, "u_ddgi_grid_spacing"), 1, &global_state_.ddgi_grid_spacing.x);
-        glUniform3iv(glGetUniformLocation(active_shader, "u_ddgi_grid_resolution"), 1, &global_state_.ddgi_grid_resolution.x);
-        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_texels"), global_state_.ddgi_irradiance_texels);
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_gi_intensity"), global_state_.ddgi_gi_intensity);
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_normal_bias"), global_state_.ddgi_normal_bias);
+        glUniform1f(loc.ddgi_enabled, 1.0f);
+        glUniform3fv(loc.ddgi_grid_origin, 1, &global_state_.ddgi_grid_origin.x);
+        glUniform3fv(loc.ddgi_grid_spacing, 1, &global_state_.ddgi_grid_spacing.x);
+        glUniform3iv(loc.ddgi_grid_resolution, 1, &global_state_.ddgi_grid_resolution.x);
+        glUniform1i(loc.ddgi_irradiance_texels, global_state_.ddgi_irradiance_texels);
+        glUniform1f(loc.ddgi_gi_intensity, global_state_.ddgi_gi_intensity);
+        glUniform1f(loc.ddgi_normal_bias, global_state_.ddgi_normal_bias);
         glActiveTexture(GL_TEXTURE0 + slots.ddgi_atlas);
         glBindTexture(GL_TEXTURE_2D, global_state_.ddgi_irradiance_atlas);
-        glUniform1i(glGetUniformLocation(active_shader, "u_ddgi_irradiance_atlas"), slots.ddgi_atlas);
+        glUniform1i(loc.ddgi_irradiance_atlas, slots.ddgi_atlas);
     } else if (!gbuffer_mode) {
-        glUniform1f(glGetUniformLocation(active_shader, "u_ddgi_enabled"), 0.0f);
+        glUniform1f(loc.ddgi_enabled, 0.0f);
     }
 
     unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();
@@ -456,6 +462,14 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
         PerMaterialUBO per_mat;
+        if (global_state_.overdraw_mode) {
+            // Overdraw 可视化：每个 fragment 输出固定低亮度颜色，
+            // 通过 additive blend 叠加后高亮区域表示过度绘制
+            per_mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+            per_mat.roughness_ao = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+            per_mat.emissive = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+            per_mat.flags = glm::vec4(0.0f);
+        } else {
         per_mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
         per_mat.roughness_ao = glm::vec4(item.material_roughness, item.material_ao, item.material_normal_strength, item.material_alpha_cutoff);
         per_mat.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
@@ -465,6 +479,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             item.emissive_map_handle != 0 ? 1.0f : 0.0f,
             item.occlusion_map_handle != 0 ? 1.0f : 0.0f
         );
+        }
         per_mat.extra_params = glm::vec4(
             item.material_sss_strength,
             item.material_clear_coat,

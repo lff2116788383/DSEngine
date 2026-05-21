@@ -24,6 +24,7 @@
 #include "engine/render/rhi/rhi_storage_buffer.h"
 #include "engine/render/rhi/rhi_gpu_driven.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/rhi/draw_executor_common.h"
 
 namespace dse {
 namespace render {
@@ -148,6 +149,12 @@ public:
         BindSSBO(handle.raw(), binding_point);
     }
 
+    /// 绑定 GPU Buffer 到指定绑定点（writable=true 时 DX11 绑定为 UAV，GL/VK 忽略此参数）
+    virtual void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) {
+        (void)writable;
+        BindGpuBuffer(handle, binding_point);
+    }
+
     virtual void ReadGpuBuffer(BufferHandle handle, size_t offset, size_t size, void* dst) {
         ReadSSBO(handle.raw(), offset, size, dst);
     }
@@ -185,33 +192,33 @@ public:
     /// 在 EndFrame 之后补写 GPU Driven 剔除统计（因 readback 在 EndFrame 后发生）
     virtual void PatchLastFrameGPUCulledCount(int culled) { (void)culled; }
 
-    // --- 阴影/光源全局状态接口（所有后端统一） ---
-    virtual void SetGlobalShadowMap(unsigned int index, unsigned int handle) = 0;
-    void SetGlobalSpotShadowMap(unsigned int handle) { SetGlobalSpotShadowMap(0, handle); }
-    virtual void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) = 0;
-    virtual void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) = 0;
-    virtual void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
-    virtual void SetGlobalCascadeSplit(unsigned int index, float split) = 0;
-    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { SetGlobalSpotLightSpaceMatrix(0, mat); }
-    virtual void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) = 0;
-    virtual void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) = 0;
+    // --- 阴影/光源全局状态接口（所有后端统一，直接操作共享 DrawExecutorGlobalState） ---
+    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetShadowMap(index, handle); }
+    void SetGlobalSpotShadowMap(unsigned int handle) { global_render_state_.SetSpotShadowMap(0, handle); }
+    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetSpotShadowMap(index, handle); }
+    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetPointShadowMap(index, handle); }
+    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetLightSpaceMatrix(index, mat); }
+    void SetGlobalCascadeSplit(unsigned int index, float split) { global_render_state_.SetCascadeSplit(index, split); }
+    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(0, mat); }
+    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(index, mat); }
+    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_render_state_.SetLightProbeSH(sh, enabled); }
 
     // --- DDGI 全局状态 ---
-    virtual void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
-                                const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
-                                const glm::ivec3& grid_resolution, int irradiance_texels,
-                                float gi_intensity, float normal_bias) {
-        (void)enabled; (void)irradiance_atlas;
-        (void)grid_origin; (void)grid_spacing;
-        (void)grid_resolution; (void)irradiance_texels;
-        (void)gi_intensity; (void)normal_bias;
+    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
+                       const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
+                       const glm::ivec3& grid_resolution, int irradiance_texels,
+                       float gi_intensity, float normal_bias) {
+        global_render_state_.SetDDGI(enabled, irradiance_atlas, grid_origin, grid_spacing,
+                                     grid_resolution, irradiance_texels, gi_intensity, normal_bias);
     }
 
     // --- GBuffer / Deferred 管线状态 ---
-    virtual void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
-        (void)index; (void)texture_handle;
-    }
-    virtual void SetGBufferRenderingMode(bool enabled) { (void)enabled; }
+    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) { global_render_state_.SetGBufferTexture(index, texture_handle); }
+    void SetGBufferRenderingMode(bool enabled) { global_render_state_.gbuffer_rendering_mode = enabled; }
+
+    /// 全局渲染状态访问器（供 DrawExecutor 等内部组件使用）
+    DrawExecutorGlobalState& GetGlobalRenderState() { return global_render_state_; }
+    const DrawExecutorGlobalState& GetGlobalRenderState() const { return global_render_state_; }
 
     /// OpenGL textures need Y-flip on load (bottom-left origin); D3D11/Vulkan don't
     virtual bool NeedsTextureYFlip() const { return true; }
@@ -228,6 +235,11 @@ public:
     /// OpenGL: identity (same).  Vulkan: Y-flip only.  DX11: identity.
     virtual glm::mat4 GetShadowSampleCorrection() const { return glm::mat4(1.0f); }
 
+    /// 编辑器场景视图模式: 线框/Unlit/Overdraw 等渲染状态控制
+    virtual void SetWireframeMode(bool enable) { (void)enable; }
+    virtual void SetForceUnlit(bool enable) { (void)enable; }
+    virtual void SetOverdrawMode(bool enable) { (void)enable; }
+
     // --- 扩展能力查询（委托到继承的接口，此处仅保留 PatchLastFrameGPUCulledCount）---
 
 protected:
@@ -240,6 +252,9 @@ protected:
     }
 
     std::unordered_map<unsigned int, GpuBufferUsage> gpu_buffer_usage_map_;
+
+    /// 共享全局渲染状态（阴影/光源/GBuffer/DDGI/LightProbe），三端通过引用访问
+    DrawExecutorGlobalState global_render_state_;
 };
 
 } // namespace render

@@ -33,11 +33,8 @@ namespace render {
  */
 class DX11RhiDevice final : public RhiDevice {
 public:
-    using RhiDevice::SetGlobalSpotShadowMap;
-    using RhiDevice::SetGlobalSpotLightSpaceMatrix;
-
-    DX11RhiDevice() = default;
-    ~DX11RhiDevice() = default;
+    DX11RhiDevice();
+    ~DX11RhiDevice();
 
     // --- RhiDevice 接口 ---
     bool InitDevice(void* window_handle, int width, int height) override;
@@ -69,17 +66,6 @@ public:
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
 
-    // --- 阴影/光源全局状态 ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) override;
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
-    void SetGlobalCascadeSplit(unsigned int index, float split) override;
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) override;
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) override;
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) override;
-    void SetGBufferRenderingMode(bool enabled) override;
-
     // --- SSBO（Clustered Forward+ 所需） ---
 #pragma warning(push)
 #pragma warning(disable: 4996)
@@ -87,6 +73,7 @@ public:
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
     void DeleteSSBO(unsigned int handle) override;
+    void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) override;
 
     // --- Compute Shader ---
     unsigned int CreateComputeShader(const std::string& source) override;
@@ -97,7 +84,12 @@ public:
     void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                    int mip_level, bool read_only, bool r32f = false) override;
     void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
-    bool SupportsCompute() const override { return true; }
+    bool SupportsCompute() const override {
+        return context_.feature_level() >= D3D_FEATURE_LEVEL_11_0;
+    }
+    bool SupportsSSBOCompute() const override {
+        return context_.feature_level() >= D3D_FEATURE_LEVEL_11_0;
+    }
 
     // --- Hi-Z Occlusion Culling ---
     unsigned int CreateHiZTexture(int width, int height) override;
@@ -135,6 +127,38 @@ public:
 #pragma warning(pop)
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
 
+    // --- Mega Buffer (GPU Driven) ---
+    VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                               BufferHandle& out_vbo, BufferHandle& out_ibo) override;
+    void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) override;
+    void BindMegaVAO(VertexArrayHandle vao) override;
+    void UnbindVAO() override;
+
+    // --- Static Mesh VAO ---
+    VertexArrayHandle CreateStaticMeshVAO(
+        const void* vertex_data, size_t vertex_bytes,
+        const std::vector<const void*>& ebo_datas,
+        const std::vector<size_t>& ebo_sizes,
+        BufferHandle& out_vbo,
+        std::vector<BufferHandle>& out_ebos) override;
+    void DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                              const std::vector<BufferHandle>& ebos) override;
+    void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
+
+    // --- GPU-Driven PBR ---
+    void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                  const glm::vec3& camera_pos,
+                                  const glm::vec3& light_dir, const glm::vec3& light_color,
+                                  float light_intensity, float ambient_intensity,
+                                  float shadow_strength = 0.0f) override;
+    void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
+    void CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) override;
+    void PatchLastFrameGPUCulledCount(int culled) override {
+        last_frame_stats_.gpu_culled_count = culled;
+    }
+
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
@@ -154,6 +178,10 @@ public:
         return glm::mat4(1.0f);
     }
 
+    void SetWireframeMode(bool enable) override;
+    void SetForceUnlit(bool enable) override;
+    void SetOverdrawMode(bool enable) override;
+
     /// 初始化 D3D11 上下文
     bool InitD3D11(void* window_handle, int width, int height, bool enable_debug = false, bool force_sdr = false);
 
@@ -170,16 +198,22 @@ private:
     DX11ResourceManager resource_mgr_;
     DX11ShaderManager shader_mgr_;
     DX11PipelineStateManager state_mgr_;
-    DX11DrawExecutor draw_executor_;
+    DX11DrawExecutor draw_executor_{global_render_state_};
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;
 
-    /// Compute Shader 绑定的 SSBO 追踪（binding_point → handle）
-    std::unordered_map<unsigned int, unsigned int> bound_ssbos_;
+    /// Compute Shader 绑定的 SSBO 追踪（binding_point → {handle, writable}）
+    struct BoundSSBO { unsigned int handle = 0; bool writable = false; };
+    std::unordered_map<unsigned int, BoundSSBO> bound_ssbos_;
 
     RenderStats last_frame_stats_;
     RenderStats current_frame_stats_;
+
+    // GPU-Driven: CPU 侧实例数据缓存（per-draw model 更新用）
+    const void* cached_gpu_models_ = nullptr;   // GPUInstanceData 数组
+    const void* cached_gpu_cmds_   = nullptr;   // DrawElementsIndirectCommand 数组
+    int         cached_gpu_count_  = 0;
 
     /// Compute Shader uniform scratch cbuffer（顺序追加后一次性上传到 b0）
     std::vector<uint8_t>           compute_params_staging_;
@@ -187,6 +221,18 @@ private:
     size_t                         compute_params_cb_capacity_ = 0;
 
     bool initialized_ = false;
+
+    /// Mega/Static VAO 追踪（VAO handle → {vbo_handle, ibo_handle}）
+    struct VAOBinding {
+        unsigned int vbo_handle = 0;
+        unsigned int ibo_handle = 0;
+    };
+    std::unordered_map<unsigned int, VAOBinding> vao_bindings_;
+    unsigned int next_vao_id_ = 900000;
+
+    // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
+    struct HiZImpl;
+    std::unique_ptr<HiZImpl> hiz_impl_;
 };
 
 } // namespace render

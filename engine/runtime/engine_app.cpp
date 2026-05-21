@@ -326,7 +326,17 @@ bool EngineInstance::Init() {
     std::cout << "Business mode: " << (config_.business_mode == BusinessMode::Lua ? "lua" : "cpp") << std::endl;
 
     if (platform_) platform_->PollEvents();
-    
+
+    // Phase 2: 注入渲染线程 context 管理回调
+    if (platform_) {
+        auto* p = platform_.get();
+        pipeline_->SetRenderContextCallbacks(
+            [p]() { p->MakeContextCurrent(); },
+            [p]() { p->ReleaseContext(); },
+            [p]() { p->SwapBuffers(); }
+        );
+    }
+
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
         CleanupOnInitFailure();
@@ -451,7 +461,8 @@ int EngineInstance::Run() {
         Tick();
 
         // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 SwapBuffers
-        if (platform_->HasGLContext()) {
+        // Phase 2: 渲染线程活跃时由渲染线程负责 SwapBuffers
+        if (platform_->HasGLContext() && !pipeline_->IsRenderThreadActive()) {
             platform_->SwapBuffers();
         }
         if (target_fps_ > 0.0f) {

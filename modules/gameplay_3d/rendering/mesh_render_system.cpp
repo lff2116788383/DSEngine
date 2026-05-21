@@ -19,6 +19,7 @@
 #include <rapidjson/document.h>
 
 #include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/render/skinning/gpu_skinning.h"
 
 namespace dse {
 namespace gameplay3d {
@@ -669,6 +670,18 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         if (!mesh_renderer.visible) continue;
         if (mesh_renderer.is_static && static_batches_built_) continue;
 
+        // GPU Driven: 跳过已被 PrepareGPUScene 处理的不透明非蒙皮 mesh，避免双重绘制
+        if (gpu_driven_active_ && mesh_renderer.local_bounds_valid
+            && !mesh_renderer.temp_vertices.empty()
+            && mesh_renderer.color.a >= 0.999f) {
+            bool is_skinned = false;
+            if (world.registry().all_of<Animator3DComponent>(entity)) {
+                const auto& anim = world.registry().get<Animator3DComponent>(entity);
+                if (anim.enabled && !anim.final_bone_matrices.empty()) is_skinned = true;
+            }
+            if (!is_skinned) continue;
+        }
+
         // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
         if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
             const bool is_dmesh_lb = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
@@ -790,18 +803,29 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.shading_mode = 5;  // Watercolor stylization
         }
         
+        // P4: GPU 蒙皮 readback 优先于 VS 骨骼蒙皮
+        const dse::render::SkinnedOutput* gpu_skinned_output = nullptr;
         if (world.registry().all_of<Animator3DComponent>(entity)) {
             const auto& animator = world.registry().get<Animator3DComponent>(entity);
             if (animator.enabled && !animator.final_bone_matrices.empty()) {
-                item.skinned = true;
-                item.bone_matrices = animator.final_bone_matrices;
-                for (auto& mat : item.bone_matrices) {
-                    mat = mesh_model * mat;
+                // 检查是否有上一帧 GPU 蒙皮结果可用
+                if (gpu_skinning_ && gpu_skinning_->HasSkinnedOutput(static_cast<uint32_t>(entity))) {
+                    gpu_skinned_output = gpu_skinning_->GetSkinnedOutput(static_cast<uint32_t>(entity));
+                    // GPU 蒙皮输出已是 world-space，不需要 VS 做骨骼变换
+                    item.skinned = false;
+                } else {
+                    // 回退到 VS 骨骼蒙皮
+                    item.skinned = true;
+                    item.bone_matrices = animator.final_bone_matrices;
+                    for (auto& mat : item.bone_matrices) {
+                        mat = mesh_model * mat;
+                    }
                 }
             }
         }
         
-        if (world.registry().all_of<MorphComponent>(entity)) {
+        // GPU 蒙皮已在 compute shader 中处理 morph blending，不需要 VS 再做
+        if (!gpu_skinned_output && world.registry().all_of<MorphComponent>(entity)) {
             const auto& morph = world.registry().get<MorphComponent>(entity);
             if (morph.enabled && !morph.targets.empty()) {
                 item.morph_enabled = true;
@@ -888,8 +912,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.material_emissive += skylight_ambient * 0.05f;
         }
 
-        // GPU Instancing: 非蒙皮非变形 + 有 mesh_path → 检查合批（静态物体走 StaticBatch）
+        // GPU Instancing: 非蒙皮非变形非GPU蒙皮 + 有 mesh_path → 检查合批（静态物体走 StaticBatch）
         const bool can_instance = !item.skinned && !item.morph_enabled
+            && !gpu_skinned_output  // P4: GPU 蒙皮实体不可实例化（每帧顶点唯一）
             && !mesh_renderer.is_static
             && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
             && !mesh_renderer.mesh_path.empty()
@@ -1069,8 +1094,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     1.0f
                 );
                 const glm::vec3 world_pos3(world_pos);
-                world_min = glm::min(world_min, world_pos3);
-                world_max = glm::max(world_max, world_pos3);
+                // P4: GPU 蒙皮时跳过 bind-pose bounds（由 skinned readback 覆盖块设置精确 bounds）
+                if (!gpu_skinned_output) {
+                    world_min = glm::min(world_min, world_pos3);
+                    world_max = glm::max(world_max, world_pos3);
+                }
                 bv.pos = (item.skinned || can_instance) ? local_positions[i] : world_pos3;
                 bv.color = item.color;
                 
@@ -1132,6 +1160,16 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 }
                 const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(mesh_model));
                 bv.normal = (item.skinned || can_instance) ? normal : glm::normalize(normal_matrix * normal);
+
+                // P4: GPU 蒙皮 readback 覆盖 pos/normal/tangent（已是 world-space）
+                if (gpu_skinned_output && i < gpu_skinned_output->vertex_count) {
+                    bv.pos = gpu_skinned_output->positions[i];
+                    bv.normal = gpu_skinned_output->normals[i];
+                    bv.tangent = gpu_skinned_output->tangents[i];
+                    world_min = glm::min(world_min, bv.pos);
+                    world_max = glm::max(world_max, bv.pos);
+                }
+
                 item.vertices.push_back(bv);
             }
             item.indices = mesh_renderer.temp_indices;
@@ -1269,6 +1307,12 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
 
         if (!mesh_renderer.visible) continue;
+
+        // LOD 切换后 temp_vertices 被清空：立即加载新 LOD mesh 数据，消除 1 帧 GPU Driven 空洞
+        if ((mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty())
+            && !mesh_renderer.mesh_path.empty() && asset_manager_) {
+            EnsureMeshPathDataLoaded(*asset_manager_, world, entity, mesh_renderer);
+        }
         if (mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty()) continue;
         if (!mesh_renderer.local_bounds_valid) continue;
 
@@ -1462,8 +1506,109 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     ctx.gpu_indirect_draw_count = cmd_index;
     ctx.gpu_total_instances = cmd_index;
     ctx.hiz_object_count = cmd_index;
+    gpu_driven_active_ = (cmd_index > 0);
+
+    // DX11/Vulkan per-draw model 更新：缓存 CPU 侧实例数据指针
+    rhi->CacheGPUDrivenInstanceData(
+        gpu_instances_.empty() ? nullptr : gpu_instances_.data(),
+        gpu_draw_cmds_.empty() ? nullptr : gpu_draw_cmds_.data(),
+        cmd_index);
 
     return cmd_index;
+}
+
+void MeshRenderSystem::SubmitSkinningRequests(World& world, dse::render::GPUSkinningSystem& skinning_system) {
+    using namespace dse::render;
+
+    auto view = world.registry().view<MeshRendererComponent, TransformComponent>();
+    for (auto entity : view) {
+        // 仅处理有动画的蒙皮实体
+        if (!world.registry().all_of<Animator3DComponent>(entity)) continue;
+        const auto& animator = world.registry().get<Animator3DComponent>(entity);
+        if (!animator.enabled || animator.final_bone_matrices.empty()) continue;
+
+        const auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
+        if (mesh_renderer.temp_vertices.empty()) continue;
+
+        const auto& transform = view.get<TransformComponent>(entity);
+        const glm::mat4 mesh_model = transform.local_to_world;
+
+        // 检查是否是 dmesh 格式（stride >= 16 表示有 bone data）
+        const size_t stride = mesh_renderer.dmesh_vertex_stride > 0
+            ? static_cast<size_t>(mesh_renderer.dmesh_vertex_stride)
+            : 3u;
+        if (stride < 16) continue;  // 非 dmesh 格式，无骨骼数据
+
+        const size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
+        if (vertex_count == 0) continue;
+
+        // 打包源顶点为 SrcVertex 格式 (4 × vec4 = 64 bytes per vertex)
+        // SrcVertex: pos_bw0(xyz=pos, w=weight0), norm_bw1(xyz=normal, w=weight1),
+        //            tan_bw2(xyz=tangent, w=weight2), joints_bw3(xyzw=bone_indices as float)
+        std::vector<float> packed(vertex_count * 16);  // 16 floats per SrcVertex
+        for (size_t i = 0; i < vertex_count; ++i) {
+            const float* v = &mesh_renderer.temp_vertices[i * stride];
+            float* dst = &packed[i * 16];
+
+            // pos_bw0: xyz=position, w=bone_weight[0]
+            dst[0] = v[0]; dst[1] = v[1]; dst[2] = v[2];
+            dst[3] = v[8];  // weight0
+
+            // norm_bw1: xyz=normal, w=bone_weight[1]
+            dst[4] = v[3]; dst[5] = v[4]; dst[6] = v[5];
+            dst[7] = v[9];  // weight1
+
+            // tan_bw2: xyz=tangent, w=bone_weight[2]
+            if (stride >= 20) {
+                dst[8] = v[16]; dst[9] = v[17]; dst[10] = v[18];
+            } else {
+                dst[8] = 1.0f; dst[9] = 0.0f; dst[10] = 0.0f;
+            }
+            dst[11] = v[10]; // weight2
+
+            // joints_bw3: xyzw=bone_indices (stored as int-in-float in dmesh)
+            int j0, j1, j2, j3;
+            std::memcpy(&j0, &v[12], sizeof(float));
+            std::memcpy(&j1, &v[13], sizeof(float));
+            std::memcpy(&j2, &v[14], sizeof(float));
+            std::memcpy(&j3, &v[15], sizeof(float));
+            dst[12] = static_cast<float>(j0);
+            dst[13] = static_cast<float>(j1);
+            dst[14] = static_cast<float>(j2);
+            dst[15] = static_cast<float>(j3);
+        }
+
+        // 构建 SkinningRequest
+        SkinningRequest request;
+        request.entity_id = static_cast<uint32_t>(entity);
+        request.vertex_count = static_cast<uint32_t>(vertex_count);
+        request.src_vertex_data = std::move(packed);
+
+        // 骨骼矩阵（预乘 model 矩阵）
+        request.bone_matrices = animator.final_bone_matrices;
+        for (auto& mat : request.bone_matrices) {
+            mat = mesh_model * mat;
+        }
+
+        // Morph targets
+        if (world.registry().all_of<MorphComponent>(entity)) {
+            const auto& morph = world.registry().get<MorphComponent>(entity);
+            if (morph.enabled && !morph.targets.empty()) {
+                request.morph_target_count = static_cast<uint32_t>(
+                    (std::min)(morph.targets.size(), static_cast<size_t>(4)));
+                for (const auto& target : morph.targets) {
+                    request.morph_weights.push_back(target.weight);
+                }
+                // 传递 per-vertex morph delta 数据（若 mesh loader 已填充）
+                if (!morph.morph_delta_vertices.empty()
+                    && morph.morph_vertex_count == static_cast<uint32_t>(vertex_count)) {
+                    request.morph_deltas = morph.morph_delta_vertices;
+                }
+            }
+        }
+
+        skinning_system.Submit(std::move(request));
+    }
 }
 
 void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {

@@ -1,4 +1,5 @@
 #include "editor_prefab.h"
+#include "editor_prefab_marker.h"
 
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
@@ -19,10 +20,6 @@
 namespace dse::editor {
 
 namespace {
-
-struct PrefabMarkerComponent {
-    std::string source_path;
-};
 
 void WriteVec3(rapidjson::PrettyWriter<rapidjson::StringBuffer>& w, const char* key, const glm::vec3& v) {
     w.Key(key);

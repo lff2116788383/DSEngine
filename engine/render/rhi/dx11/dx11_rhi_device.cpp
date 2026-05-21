@@ -10,6 +10,7 @@
  */
 
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
 
 #include <cstdlib>
@@ -96,6 +97,23 @@ void DX11CommandBuffer::Reset() {
 // DX11RhiDevice 实现
 // ============================================================
 
+struct DX11RhiDevice::HiZImpl {
+    struct HiZTextureInfo {
+        ComPtr<ID3D11Texture2D> texture;
+        std::vector<ComPtr<ID3D11ShaderResourceView>> mip_srvs;
+        std::vector<ComPtr<ID3D11UnorderedAccessView>> mip_uavs;
+        ComPtr<ID3D11ShaderResourceView> full_srv; // 全 mip chain SRV
+        int width = 0;
+        int height = 0;
+        int mip_count = 0;
+    };
+    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    unsigned int next_handle = 850000;
+};
+
+DX11RhiDevice::DX11RhiDevice() = default;
+DX11RhiDevice::~DX11RhiDevice() = default;
+
 bool DX11RhiDevice::InitDevice(void* window_handle, int width, int height) {
     const char* sdr_env = std::getenv("DSE_FORCE_SDR");
     bool force_sdr = sdr_env && (sdr_env[0] == '1' || sdr_env[0] == 'y' || sdr_env[0] == 'Y');
@@ -144,6 +162,11 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
 
 void DX11RhiDevice::Shutdown() {
     if (!initialized_) return;
+
+    // 清理 Hi-Z 资源（在 device 销毁前释放 COM 引用）
+    if (hiz_impl_) {
+        hiz_impl_->textures.clear();
+    }
 
     draw_executor_.Shutdown();
     state_mgr_.Shutdown();
@@ -327,44 +350,6 @@ const RenderStats& DX11RhiDevice::LastFrameStats() const {
     return last_frame_stats_;
 }
 
-// --- 阴影/光源全局状态（委托给 DrawExecutor） ---
-
-void DX11RhiDevice::SetGlobalShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalSpotShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalPointShadowMap(unsigned int index, unsigned int handle) {
-    draw_executor_.SetGlobalPointShadowMap(index, handle);
-}
-
-void DX11RhiDevice::SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-    draw_executor_.SetGlobalLightSpaceMatrix(index, mat);
-}
-
-void DX11RhiDevice::SetGlobalCascadeSplit(unsigned int index, float split) {
-    draw_executor_.SetGlobalCascadeSplit(index, split);
-}
-
-void DX11RhiDevice::SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
-    draw_executor_.SetGlobalSpotLightSpaceMatrix(index, mat);
-}
-
-void DX11RhiDevice::SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) {
-    draw_executor_.SetGlobalLightProbeSH(sh, enabled);
-}
-
-void DX11RhiDevice::SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) {
-    draw_executor_.SetGlobalGBufferTexture(index, texture_handle);
-}
-
-void DX11RhiDevice::SetGBufferRenderingMode(bool enabled) {
-    draw_executor_.SetGBufferRenderingMode(enabled);
-}
-
 // --- SSBO ---
 
 unsigned int DX11RhiDevice::CreateSSBO(size_t size, const void* data) {
@@ -377,7 +362,12 @@ void DX11RhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, 
 
 void DX11RhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
     resource_mgr_.BindSSBO(handle, binding_point);
-    bound_ssbos_[binding_point] = handle;
+    bound_ssbos_[binding_point] = {handle, false};
+}
+
+void DX11RhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) {
+    // 延迟绑定：仅记录状态，实际 CS 绑定在 DispatchCompute 中执行
+    bound_ssbos_[binding_point] = {handle.raw(), writable};
 }
 
 void DX11RhiDevice::DeleteSSBO(unsigned int handle) {
@@ -410,20 +400,34 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
     // 将 uniform staging 内容上传到 scratch cbuffer，绑定到 b0
     FlushComputeParamsCB();
 
-    // SSBO 绑定（SRV slot 16+ 与 PS 保持一致）
-    for (auto& [binding_point, ssbo_handle] : bound_ssbos_) {
-        const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
+    // SSBO 绑定: readonly → CS SRV (t16+), writable → CS UAV (u0+)
+    for (auto& [binding_point, info] : bound_ssbos_) {
+        const auto* ssbo = resource_mgr_.GetSSBO(info.handle);
         if (!ssbo) continue;
-        ID3D11ShaderResourceView* srv = ssbo->srv.Get();
-        if (srv) dc->CSSetShaderResources(16 + binding_point, 1, &srv);
+        if (info.writable) {
+            ID3D11UnorderedAccessView* uav = ssbo->uav.Get();
+            if (uav) {
+                UINT init_count = static_cast<UINT>(-1);
+                dc->CSSetUnorderedAccessViews(binding_point, 1, &uav, &init_count);
+            }
+        } else {
+            ID3D11ShaderResourceView* srv = ssbo->srv.Get();
+            if (srv) dc->CSSetShaderResources(16 + binding_point, 1, &srv);
+        }
     }
 
     dc->Dispatch(groups_x, groups_y, groups_z);
 
     // 解绑 CS 资源
-    for (auto& [binding_point, _] : bound_ssbos_) {
-        ID3D11ShaderResourceView* null_srv = nullptr;
-        dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
+    for (auto& [binding_point, info] : bound_ssbos_) {
+        if (info.writable) {
+            ID3D11UnorderedAccessView* null_uav = nullptr;
+            UINT init_count = static_cast<UINT>(-1);
+            dc->CSSetUnorderedAccessViews(binding_point, 1, &null_uav, &init_count);
+        } else {
+            ID3D11ShaderResourceView* null_srv = nullptr;
+            dc->CSSetShaderResources(16 + binding_point, 1, &null_srv);
+        }
     }
     { ID3D11Buffer* null_cb = nullptr; dc->CSSetConstantBuffers(0, 1, &null_cb); }
     dc->CSSetShader(nullptr, nullptr, 0);
@@ -452,13 +456,15 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
         const auto* tex = resource_mgr_.GetTexture(texture_handle);
         if (tex && tex->uav) {
             ID3D11UnorderedAccessView* uav = tex->uav.Get();
-            dc->CSSetUnorderedAccessViews(binding, 1, &uav, nullptr);
+            UINT ic = static_cast<UINT>(-1);
+            dc->CSSetUnorderedAccessViews(binding, 1, &uav, &ic);
         } else {
             // 备用：尝试按 render target 的 UAV
             const auto* rt = resource_mgr_.GetRenderTarget(texture_handle);
             if (rt && rt->color_uav) {
                 ID3D11UnorderedAccessView* uav = rt->color_uav.Get();
-                dc->CSSetUnorderedAccessViews(binding, 1, &uav, nullptr);
+                UINT ic = static_cast<UINT>(-1);
+                dc->CSSetUnorderedAccessViews(binding, 1, &uav, &ic);
             }
         }
     }
@@ -466,14 +472,62 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
 
 void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                                int mip_level, bool read_only, bool r32f) {
-    // TODO: DX11 Hi-Z — 创建 per-mip UAV/SRV 并绑定到 CS
-    (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
+    if (!initialized_) return;
+    ID3D11DeviceContext* dc = context_.device_context();
+    ID3D11Device* dev = context_.device();
+    if (!dc || !dev) return;
+
+    // 优先检查 Hi-Z 纹理
+    if (hiz_impl_) {
+        auto it = hiz_impl_->textures.find(texture_handle);
+        if (it != hiz_impl_->textures.end()) {
+            auto& info = it->second;
+            if (mip_level < 0 || mip_level >= info.mip_count) return;
+            if (read_only) {
+                ID3D11ShaderResourceView* srv = info.mip_srvs[mip_level].Get();
+                dc->CSSetShaderResources(binding, 1, &srv);
+            } else {
+                ID3D11UnorderedAccessView* uav = info.mip_uavs[mip_level].Get();
+                UINT initial_count = static_cast<UINT>(-1);
+                dc->CSSetUnorderedAccessViews(binding, 1, &uav, &initial_count);
+            }
+            return;
+        }
+    }
+
+    // 普通纹理回退：创建临时 per-mip view（只对 Hi-Z 适用的简化路径）
+    const auto* tex = resource_mgr_.GetTexture(texture_handle);
+    if (!tex) return;
+
+    if (read_only) {
+        if (tex->srv) {
+            dc->CSSetShaderResources(binding, 1, tex->srv.GetAddressOf());
+        }
+    } else {
+        if (tex->uav) {
+            ID3D11UnorderedAccessView* uav = tex->uav.Get();
+            UINT ic = static_cast<UINT>(-1);
+            dc->CSSetUnorderedAccessViews(binding, 1, &uav, &ic);
+        }
+    }
+    (void)r32f;
 }
 
 void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
     if (!initialized_) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
+
+    // 检查 Hi-Z 纹理
+    if (hiz_impl_) {
+        auto it = hiz_impl_->textures.find(texture_handle);
+        if (it != hiz_impl_->textures.end() && it->second.full_srv) {
+            ID3D11ShaderResourceView* srv = it->second.full_srv.Get();
+            dc->CSSetShaderResources(unit, 1, &srv);
+            return;
+        }
+    }
+
     const auto* tex = resource_mgr_.GetTexture(texture_handle);
     if (tex && tex->srv) {
         ID3D11ShaderResourceView* srv = tex->srv.Get();
@@ -486,23 +540,103 @@ void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int tex
 }
 
 unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
-    // TODO: DX11 Hi-Z — 创建 DXGI_FORMAT_R32_FLOAT 纹理，完整 mip chain + UAV per mip
-    (void)width; (void)height;
-    return 0;
+    if (!initialized_ || width <= 0 || height <= 0) return 0;
+    if (!hiz_impl_) hiz_impl_ = std::make_unique<HiZImpl>();
+
+    ID3D11Device* dev = context_.device();
+    if (!dev) return 0;
+
+    int mip_count = 1;
+    {
+        int w = width, h = height;
+        while (w > 1 || h > 1) {
+            w = (std::max)(1, w / 2);
+            h = (std::max)(1, h / 2);
+            ++mip_count;
+        }
+    }
+
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(width);
+    desc.Height = static_cast<UINT>(height);
+    desc.MipLevels = static_cast<UINT>(mip_count);
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R32_FLOAT;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+    HiZImpl::HiZTextureInfo info{};
+    info.width = width;
+    info.height = height;
+    info.mip_count = mip_count;
+
+    HRESULT hr = dev->CreateTexture2D(&desc, nullptr, info.texture.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[DX11] Failed to create Hi-Z texture: hr=0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    // 全 mip SRV
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MostDetailedMip = 0;
+    srv_desc.Texture2D.MipLevels = static_cast<UINT>(mip_count);
+    hr = dev->CreateShaderResourceView(info.texture.Get(), &srv_desc, info.full_srv.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[DX11] Hi-Z full SRV creation failed: hr=0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    // Per-mip SRV + UAV
+    info.mip_srvs.resize(mip_count);
+    info.mip_uavs.resize(mip_count);
+    for (int i = 0; i < mip_count; ++i) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC mip_srv{};
+        mip_srv.Format = DXGI_FORMAT_R32_FLOAT;
+        mip_srv.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        mip_srv.Texture2D.MostDetailedMip = static_cast<UINT>(i);
+        mip_srv.Texture2D.MipLevels = 1;
+        hr = dev->CreateShaderResourceView(info.texture.Get(), &mip_srv, info.mip_srvs[i].GetAddressOf());
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[DX11] Hi-Z mip {} SRV failed: hr=0x{:08X}", i, static_cast<unsigned>(hr));
+            return 0;
+        }
+
+        D3D11_UNORDERED_ACCESS_VIEW_DESC mip_uav{};
+        mip_uav.Format = DXGI_FORMAT_R32_FLOAT;
+        mip_uav.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+        mip_uav.Texture2D.MipSlice = static_cast<UINT>(i);
+        hr = dev->CreateUnorderedAccessView(info.texture.Get(), &mip_uav, info.mip_uavs[i].GetAddressOf());
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[DX11] Hi-Z mip {} UAV failed: hr=0x{:08X}", i, static_cast<unsigned>(hr));
+            return 0;
+        }
+    }
+
+    unsigned int handle = hiz_impl_->next_handle++;
+    hiz_impl_->textures[handle] = std::move(info);
+
+    DEBUG_LOG_INFO("[DX11] Hi-Z texture created: handle={} {}x{} mips={}", handle, width, height, mip_count);
+    return handle;
 }
 
 void DX11RhiDevice::DeleteHiZTexture(unsigned int handle) {
-    (void)handle;
+    if (!hiz_impl_) return;
+    hiz_impl_->textures.erase(handle);
 }
 
 int DX11RhiDevice::GetHiZMipCount(unsigned int handle) const {
-    (void)handle;
-    return 0;
+    if (!hiz_impl_) return 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
 unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
-    (void)handle;
-    return 0;
+    if (!hiz_impl_) return 0;
+    auto it = hiz_impl_->textures.find(handle);
+    return it != hiz_impl_->textures.end() ? handle : 0;
 }
 
 void DX11RhiDevice::AppendComputeParam(const void* data, size_t bytes) {
@@ -564,7 +698,39 @@ void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name,
     (void)shader; (void)name; AppendComputeParam(data, 64);
 }
 void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
-    (void)handle; (void)offset; (void)size; (void)dst;
+    if (!initialized_ || !dst || size == 0) return;
+
+    const auto* ssbo = resource_mgr_.GetSSBO(handle);
+    if (!ssbo || !ssbo->buffer) return;
+
+    ID3D11Device* dev = context_.device();
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dev || !dc) return;
+
+    // 创建 staging buffer 用于 GPU→CPU 读回
+    D3D11_BUFFER_DESC staging_desc{};
+    staging_desc.ByteWidth = static_cast<UINT>(size);
+    staging_desc.Usage = D3D11_USAGE_STAGING;
+    staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+    ComPtr<ID3D11Buffer> staging;
+    HRESULT hr = dev->CreateBuffer(&staging_desc, nullptr, staging.GetAddressOf());
+    if (FAILED(hr)) return;
+
+    D3D11_BOX box{};
+    box.left = static_cast<UINT>(offset);
+    box.right = static_cast<UINT>(offset + size);
+    box.top = 0; box.bottom = 1;
+    box.front = 0; box.back = 1;
+    dc->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+                               ssbo->buffer.Get(), 0, &box);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = dc->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (SUCCEEDED(hr)) {
+        memcpy(dst, mapped.pData, size);
+        dc->Unmap(staging.Get(), 0);
+    }
 }
 
 unsigned int DX11RhiDevice::CreateComputeShaderEx(
@@ -602,10 +768,239 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
     if (!buf || !buf->buffer || draw_count <= 0) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
+
+    // GPU-Driven per-draw model 更新：缓存存在时，逐 draw 设置 per_object_cb_.model
+    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
+
     for (int i = 0; i < draw_count; ++i) {
+        if (inst_data && i < cached_gpu_count_) {
+            DX11PerObjectCB obj{};
+            obj.model = inst_data[i].model;
+            obj.skinned = 0;
+            obj.morph_enabled = 0;
+            obj.use_instancing = 0;
+            draw_executor_.UpdatePerObjectCB(obj);
+        }
         const UINT byte_offset = static_cast<UINT>(i * stride);
         dc->DrawIndexedInstancedIndirect(buf->buffer.Get(), byte_offset);
     }
+}
+
+// ============================================================
+// Mega Buffer (GPU Driven)
+// ============================================================
+
+VertexArrayHandle DX11RhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                                BufferHandle& out_vbo, BufferHandle& out_ibo) {
+    unsigned int vbo_h = resource_mgr_.CreateBuffer(vbo_size_bytes, nullptr, true, false);
+    unsigned int ibo_h = resource_mgr_.CreateBuffer(ibo_size_bytes, nullptr, true, true);
+    if (vbo_h == 0 || ibo_h == 0) {
+        if (vbo_h) resource_mgr_.DeleteBuffer(vbo_h);
+        if (ibo_h) resource_mgr_.DeleteBuffer(ibo_h);
+        out_vbo = {}; out_ibo = {};
+        return {};
+    }
+    unsigned int vao_id = next_vao_id_++;
+    vao_bindings_[vao_id] = {vbo_h, ibo_h};
+    out_vbo = BufferHandle{vbo_h};
+    out_ibo = BufferHandle{ibo_h};
+    return VertexArrayHandle{vao_id};
+}
+
+void DX11RhiDevice::UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) {
+    if (!vbo || size == 0 || !data) return;
+    resource_mgr_.UpdateBuffer(vbo.raw(), offset, size, data, false);
+}
+
+void DX11RhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) {
+    if (!ibo || size == 0 || !data) return;
+    resource_mgr_.UpdateBuffer(ibo.raw(), offset, size, data, true);
+}
+
+void DX11RhiDevice::DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
+    if (vbo) resource_mgr_.DeleteBuffer(vbo.raw());
+    if (ibo) resource_mgr_.DeleteBuffer(ibo.raw());
+    vao_bindings_.erase(vao.raw());
+}
+
+void DX11RhiDevice::BindMegaVAO(VertexArrayHandle vao) {
+    auto it = vao_bindings_.find(vao.raw());
+    if (it == vao_bindings_.end()) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    const DX11Buffer* vbo_buf = resource_mgr_.GetBuffer(it->second.vbo_handle);
+    const DX11Buffer* ibo_buf = resource_mgr_.GetBuffer(it->second.ibo_handle);
+    if (vbo_buf && vbo_buf->buffer) {
+        UINT stride = sizeof(BatchVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vb = vbo_buf->buffer.Get();
+        dc->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    }
+    if (ibo_buf && ibo_buf->buffer) {
+        dc->IASetIndexBuffer(ibo_buf->buffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    }
+}
+
+void DX11RhiDevice::UnbindVAO() {
+    // DX11 无需显式解绑
+}
+
+// ============================================================
+// Static Mesh VAO
+// ============================================================
+
+VertexArrayHandle DX11RhiDevice::CreateStaticMeshVAO(
+    const void* vertex_data, size_t vertex_bytes,
+    const std::vector<const void*>& ebo_datas,
+    const std::vector<size_t>& ebo_sizes,
+    BufferHandle& out_vbo,
+    std::vector<BufferHandle>& out_ebos)
+{
+    if (!vertex_data || vertex_bytes == 0) { out_vbo = {}; out_ebos.clear(); return {}; }
+    if (ebo_datas.size() != ebo_sizes.size()) { out_vbo = {}; out_ebos.clear(); return {}; }
+
+    unsigned int vbo_h = resource_mgr_.CreateBuffer(vertex_bytes, vertex_data, false, false);
+    if (vbo_h == 0) { out_vbo = {}; out_ebos.clear(); return {}; }
+
+    out_ebos.resize(ebo_datas.size());
+    unsigned int first_ebo = 0;
+    for (size_t i = 0; i < ebo_datas.size(); ++i) {
+        unsigned int ebo_h = resource_mgr_.CreateBuffer(ebo_sizes[i], ebo_datas[i], false, true);
+        out_ebos[i] = BufferHandle{ebo_h};
+        if (i == 0) first_ebo = ebo_h;
+    }
+
+    unsigned int vao_id = next_vao_id_++;
+    vao_bindings_[vao_id] = {vbo_h, first_ebo};
+    out_vbo = BufferHandle{vbo_h};
+    return VertexArrayHandle{vao_id};
+}
+
+void DX11RhiDevice::DeleteStaticMeshVAO(VertexArrayHandle vao, BufferHandle vbo,
+                                          const std::vector<BufferHandle>& ebos) {
+    for (auto& ebo : ebos) {
+        if (ebo) resource_mgr_.DeleteBuffer(ebo.raw());
+    }
+    if (vbo) resource_mgr_.DeleteBuffer(vbo.raw());
+    vao_bindings_.erase(vao.raw());
+}
+
+void DX11RhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
+    auto it = vao_bindings_.find(vao.raw());
+    if (it == vao_bindings_.end()) return;
+
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    const DX11Buffer* vbo_buf = resource_mgr_.GetBuffer(it->second.vbo_handle);
+    if (vbo_buf && vbo_buf->buffer) {
+        UINT stride = sizeof(BatchVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vb = vbo_buf->buffer.Get();
+        dc->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    }
+    const DX11Buffer* ebo_buf = resource_mgr_.GetBuffer(ebo.raw());
+    if (ebo_buf && ebo_buf->buffer) {
+        dc->IASetIndexBuffer(ebo_buf->buffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    }
+}
+
+// ============================================================
+// GPU-Driven PBR Shader Setup
+// ============================================================
+
+void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                              const glm::vec3& camera_pos,
+                                              const glm::vec3& light_dir, const glm::vec3& light_color,
+                                              float light_intensity, float ambient_intensity,
+                                              float shadow_strength) {
+    (void)shadow_strength; // TODO: 传递给 draw_executor_ 的 PBR cbuffer
+    draw_executor_.SetupGPUDrivenPBR(view, proj, camera_pos,
+                                      light_dir, light_color,
+                                      light_intensity, ambient_intensity,
+                                      state_mgr_, shader_mgr_);
+}
+
+void DX11RhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+    draw_executor_.SetupGPUDrivenShadow(light_view, light_proj, state_mgr_, shader_mgr_);
+}
+
+void DX11RhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
+    cached_gpu_models_ = models;
+    cached_gpu_cmds_   = cmds;
+    cached_gpu_count_  = count;
+}
+
+// --- 编辑器场景视图模式 ---
+
+void DX11RhiDevice::SetWireframeMode(bool enable) {
+    auto* ctx = context_.device_context();
+    if (!ctx) return;
+    D3D11_RASTERIZER_DESC rd = {};
+    rd.FillMode = enable ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_BACK;
+    rd.FrontCounterClockwise = TRUE;
+    rd.DepthClipEnable = TRUE;
+    ID3D11RasterizerState* rs = nullptr;
+    auto* dev = context_.device();
+    if (dev && SUCCEEDED(dev->CreateRasterizerState(&rd, &rs))) {
+        ctx->RSSetState(rs);
+        rs->Release();
+    }
+}
+
+void DX11RhiDevice::SetForceUnlit(bool enable) {
+    global_render_state_.force_unlit = enable;
+}
+
+void DX11RhiDevice::SetOverdrawMode(bool enable) {
+    auto* ctx = context_.device_context();
+    if (!ctx) return;
+    if (enable) {
+        // Additive blend
+        D3D11_BLEND_DESC bd = {};
+        bd.RenderTarget[0].BlendEnable = TRUE;
+        bd.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+        bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        ID3D11BlendState* bs = nullptr;
+        auto* dev = context_.device();
+        if (dev && SUCCEEDED(dev->CreateBlendState(&bd, &bs))) {
+            float factor[4] = {0, 0, 0, 0};
+            ctx->OMSetBlendState(bs, factor, 0xFFFFFFFF);
+            bs->Release();
+        }
+        // Disable depth write
+        D3D11_DEPTH_STENCIL_DESC dsd = {};
+        dsd.DepthEnable = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+        ID3D11DepthStencilState* dss = nullptr;
+        if (dev && SUCCEEDED(dev->CreateDepthStencilState(&dsd, &dss))) {
+            ctx->OMSetDepthStencilState(dss, 0);
+            dss->Release();
+        }
+    } else {
+        ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+        // Restore default depth stencil
+        D3D11_DEPTH_STENCIL_DESC dsd = {};
+        dsd.DepthEnable = TRUE;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+        ID3D11DepthStencilState* dss = nullptr;
+        auto* dev = context_.device();
+        if (dev && SUCCEEDED(dev->CreateDepthStencilState(&dsd, &dss))) {
+            ctx->OMSetDepthStencilState(dss, 0);
+            dss->Release();
+        }
+    }
+    global_render_state_.overdraw_mode = enable;
 }
 
 } // namespace render

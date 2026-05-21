@@ -4,7 +4,9 @@
 #include "engine/ecs/components_2d.h"
 #include "imgui.h"
 #include "editor_icons.h"
+#include "editor_undo.h"
 #include "editor_shortcuts.h"
+#include "editor_scene_tabs.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -68,34 +70,82 @@ void DrawAudioSection(entt::registry& registry, entt::entity selected_entity) {
             }
             ImGui::NextColumn();
 
-            AUDIO_PROPERTY("Play On Awake", ImGui::Checkbox("##play_on_awake", &audio.play_on_awake));
-            AUDIO_PROPERTY("Loop", ImGui::Checkbox("##audio_loop", &audio.loop));
-            AUDIO_PROPERTY("Volume", ImGui::SliderFloat("##audio_volume", &audio.volume, 0.0f, 1.0f, "%.2f"));
-            AUDIO_PROPERTY("Pitch", ImGui::DragFloat("##audio_pitch", &audio.pitch, 0.01f, 0.1f, 3.0f, "%.2f"));
+            auto& undo_mgr = GetUndoRedoManager();
+            auto& tab_mgr = SceneTabManager::Get();
+            auto entity = selected_entity;
+            auto* reg = &registry;
+
+            auto UndoAudioFloat = [&](const char* desc, float& field, float old_val) {
+                float new_val = field;
+                undo_mgr.Execute(std::make_unique<PropertyChangeCommand<float>>(
+                    desc, old_val, new_val,
+                    [reg, entity, offset = (size_t)((char*)&field - (char*)&audio)](const float& v) {
+                        if (reg->valid(entity) && reg->all_of<AudioSourceComponent>(entity))
+                            *reinterpret_cast<float*>(reinterpret_cast<char*>(&reg->get<AudioSourceComponent>(entity)) + offset) = v;
+                    }
+                ), true);
+                tab_mgr.MarkDirty();
+            };
+            auto UndoAudioBool = [&](const char* desc, bool& field, bool old_val) {
+                bool new_val = field;
+                undo_mgr.Execute(std::make_unique<PropertyChangeCommand<bool>>(
+                    desc, old_val, new_val,
+                    [reg, entity, offset = (size_t)((char*)&field - (char*)&audio)](const bool& v) {
+                        if (reg->valid(entity) && reg->all_of<AudioSourceComponent>(entity))
+                            *reinterpret_cast<bool*>(reinterpret_cast<char*>(&reg->get<AudioSourceComponent>(entity)) + offset) = v;
+                    }
+                ), false);
+                tab_mgr.MarkDirty();
+            };
+
+            { bool old_v = audio.play_on_awake;
+            AUDIO_PROPERTY("Play On Awake", if (ImGui::Checkbox("##play_on_awake", &audio.play_on_awake)) UndoAudioBool("Audio Play On Awake", audio.play_on_awake, old_v)); }
+            { bool old_v = audio.loop;
+            AUDIO_PROPERTY("Loop", if (ImGui::Checkbox("##audio_loop", &audio.loop)) UndoAudioBool("Audio Loop", audio.loop, old_v)); }
+            { float old_v = audio.volume;
+            AUDIO_PROPERTY("Volume", if (ImGui::SliderFloat("##audio_volume", &audio.volume, 0.0f, 1.0f, "%.2f")) UndoAudioFloat("Audio Volume", audio.volume, old_v)); }
+            { float old_v = audio.pitch;
+            AUDIO_PROPERTY("Pitch", if (ImGui::DragFloat("##audio_pitch", &audio.pitch, 0.01f, 0.1f, 3.0f, "%.2f")) UndoAudioFloat("Audio Pitch", audio.pitch, old_v)); }
 
             ImGui::Separator();
             ImGui::Text("3D Spatial Audio");
             ImGui::NextColumn(); ImGui::NextColumn();
 
-            AUDIO_PROPERTY("Spatial", ImGui::Checkbox("##spatial_enabled", &audio.spatial_enabled));
+            { bool old_v = audio.spatial_enabled;
+            AUDIO_PROPERTY("Spatial", if (ImGui::Checkbox("##spatial_enabled", &audio.spatial_enabled)) UndoAudioBool("Audio Spatial", audio.spatial_enabled, old_v)); }
 
             if (audio.spatial_enabled) {
-                AUDIO_PROPERTY("Min Distance", ImGui::DragFloat("##audio_min_dist", &audio.min_distance, 0.1f, 0.0f, audio.max_distance, "%.1f"));
-                AUDIO_PROPERTY("Max Distance", ImGui::DragFloat("##audio_max_dist", &audio.max_distance, 0.5f, audio.min_distance, 1000.0f, "%.1f"));
-                AUDIO_PROPERTY("Rolloff", ImGui::DragFloat("##audio_rolloff", &audio.rolloff, 0.05f, 0.0f, 10.0f, "%.2f"));
+                { float old_v = audio.min_distance;
+                AUDIO_PROPERTY("Min Distance", if (ImGui::DragFloat("##audio_min_dist", &audio.min_distance, 0.1f, 0.0f, audio.max_distance, "%.1f")) UndoAudioFloat("Audio Min Distance", audio.min_distance, old_v)); }
+                { float old_v = audio.max_distance;
+                AUDIO_PROPERTY("Max Distance", if (ImGui::DragFloat("##audio_max_dist", &audio.max_distance, 0.5f, audio.min_distance, 1000.0f, "%.1f")) UndoAudioFloat("Audio Max Distance", audio.max_distance, old_v)); }
+                { float old_v = audio.rolloff;
+                AUDIO_PROPERTY("Rolloff", if (ImGui::DragFloat("##audio_rolloff", &audio.rolloff, 0.05f, 0.0f, 10.0f, "%.2f")) UndoAudioFloat("Audio Rolloff", audio.rolloff, old_v)); }
 
                 const char* attenuation_types[] = { "Inverse", "Linear", "Exponential" };
                 int current_atten = static_cast<int>(audio.attenuation_model);
                 AUDIO_PROPERTY("Attenuation", if (ImGui::Combo("##audio_atten", &current_atten, attenuation_types, IM_ARRAYSIZE(attenuation_types))) {
+                    int old_atten = static_cast<int>(audio.attenuation_model);
                     audio.attenuation_model = static_cast<AudioAttenuationModel>(current_atten);
+                    int new_atten = current_atten;
+                    undo_mgr.Execute(std::make_unique<PropertyChangeCommand<int>>(
+                        "Audio Attenuation", old_atten, new_atten,
+                        [reg, entity](const int& v) {
+                            if (reg->valid(entity) && reg->all_of<AudioSourceComponent>(entity))
+                                reg->get<AudioSourceComponent>(entity).attenuation_model = static_cast<AudioAttenuationModel>(v);
+                        }
+                    ), false);
+                    tab_mgr.MarkDirty();
                 });
 
                 ImGui::Separator();
                 ImGui::Text("Occlusion");
                 ImGui::NextColumn(); ImGui::NextColumn();
-                AUDIO_PROPERTY("Occlusion", ImGui::Checkbox("##audio_occlusion", &audio.occlusion_enabled));
+                { bool old_v = audio.occlusion_enabled;
+                AUDIO_PROPERTY("Occlusion", if (ImGui::Checkbox("##audio_occlusion", &audio.occlusion_enabled)) UndoAudioBool("Audio Occlusion", audio.occlusion_enabled, old_v)); }
                 if (audio.occlusion_enabled) {
-                    AUDIO_PROPERTY("Occ Factor", ImGui::SliderFloat("##audio_occ_factor", &audio.occlusion_factor, 0.0f, 1.0f, "%.2f"));
+                    { float old_v = audio.occlusion_factor;
+                    AUDIO_PROPERTY("Occ Factor", if (ImGui::SliderFloat("##audio_occ_factor", &audio.occlusion_factor, 0.0f, 1.0f, "%.2f")) UndoAudioFloat("Audio Occlusion Factor", audio.occlusion_factor, old_v)); }
                 }
             }
 

@@ -376,34 +376,36 @@ TEST(VulkanShaderManagerTest, GetProgram无效句柄返回nullptr) {
 }
 
 TEST(VulkanDrawExecutorTest, 全局状态接口边界检查) {
-    VulkanDrawExecutor exec;
+    DrawExecutorGlobalState state;
     // index < 3 / < 4 的有效索引
-    exec.SetGlobalShadowMap(0, 100);
-    exec.SetGlobalShadowMap(2, 200);
-    exec.SetGlobalSpotShadowMap(3, 300);
-    exec.SetGlobalPointShadowMap(3, 400);
-    exec.SetGlobalLightSpaceMatrix(2, glm::mat4(1.0f));
-    exec.SetGlobalCascadeSplit(2, 0.5f);
-    exec.SetGlobalSpotLightSpaceMatrix(3, glm::mat4(1.0f));
+    state.SetShadowMap(0, 100);
+    state.SetShadowMap(2, 200);
+    state.SetSpotShadowMap(3, 300);
+    state.SetPointShadowMap(3, 400);
+    state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
+    state.SetCascadeSplit(2, 0.5f);
+    state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
 
     // 越界索引应静默忽略
-    exec.SetGlobalShadowMap(3, 999);          // 越界
-    exec.SetGlobalSpotShadowMap(4, 999);      // 越界
-    exec.SetGlobalPointShadowMap(4, 999);     // 越界
-    exec.SetGlobalLightSpaceMatrix(3, glm::mat4(1.0f)); // 越界
-    exec.SetGlobalCascadeSplit(3, 1.0f);      // 越界
-    exec.SetGlobalSpotLightSpaceMatrix(4, glm::mat4(1.0f)); // 越界
+    state.SetShadowMap(3, 999);          // 越界
+    state.SetSpotShadowMap(4, 999);      // 越界
+    state.SetPointShadowMap(4, 999);     // 越界
+    state.SetLightSpaceMatrix(3, glm::mat4(1.0f)); // 越界
+    state.SetCascadeSplit(3, 1.0f);      // 越界
+    state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f)); // 越界
 }
 
 TEST(VulkanDrawExecutorTest, 未初始化时current_frame_stats默认为零) {
     // BeginFrame/EndFrame 需要 context_ 非空，此处仅验证 stats 默认值
-    VulkanDrawExecutor exec;
+    DrawExecutorGlobalState state;
+    VulkanDrawExecutor exec(state);
     const auto& stats = exec.current_frame_stats();
     EXPECT_EQ(stats.draw_calls, 0);
 }
 
 TEST(VulkanDrawExecutorTest, 默认stats为零) {
-    VulkanDrawExecutor exec;
+    DrawExecutorGlobalState state;
+    VulkanDrawExecutor exec(state);
     const auto& stats = exec.current_frame_stats();
     EXPECT_EQ(stats.draw_calls, 0);
     EXPECT_EQ(stats.sprite_count, 0);

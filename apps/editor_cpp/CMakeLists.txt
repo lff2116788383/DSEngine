@@ -51,6 +51,19 @@ add_executable(dse_editor_cpp WIN32
     src/editor_asset_importer.cpp
     src/editor_test_harness.cpp
     src/editor_snapshot.cpp
+    src/editor_selection_outline.cpp
+    src/editor_physics_debug.cpp
+    src/editor_asset_browser.cpp
+    src/editor_prefab_override.cpp
+    src/editor_animation_timeline.cpp
+    src/editor_navmesh_panel.cpp
+    src/editor_lighting_gizmos.cpp
+    src/editor_git_panel.cpp
+    src/editor_shader_graph.cpp
+    src/editor_multi_viewport.cpp
+    src/editor_scene_view_mode.cpp
+    src/editor_layout_manager.cpp
+    src/editor_anim_state_machine.cpp
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp

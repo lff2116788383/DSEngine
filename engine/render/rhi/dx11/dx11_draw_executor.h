@@ -132,7 +132,8 @@ static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
  */
 class DX11DrawExecutor {
 public:
-    DX11DrawExecutor() = default;
+    explicit DX11DrawExecutor(DrawExecutorGlobalState& shared_state)
+        : global_state_(shared_state) {}
     ~DX11DrawExecutor() = default;
 
     /// 初始化常量缓冲和几何缓冲
@@ -190,16 +191,21 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
-    // --- 全局阴影/光源矩阵（委托给共享状态） ---
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_state_.SetSpotShadowMap(index, handle); }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_state_.SetPointShadowMap(index, handle); }
-    void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetLightSpaceMatrix(index, mat); }
-    void SetGlobalCascadeSplit(unsigned int index, float split) { global_state_.SetCascadeSplit(index, split); }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_state_.SetSpotLightSpaceMatrix(index, mat); }
-    void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_state_.SetLightProbeSH(sh, enabled); }
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int handle) { global_state_.SetGBufferTexture(index, handle); }
-    void SetGBufferRenderingMode(bool enabled) { global_state_.gbuffer_rendering_mode = enabled; }
+    // --- GPU-Driven PBR 渲染设置 ---
+    void SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4& proj,
+                            const glm::vec3& camera_pos,
+                            const glm::vec3& light_dir, const glm::vec3& light_color,
+                            float light_intensity, float ambient_intensity,
+                            DX11PipelineStateManager& pipeline_mgr,
+                            DX11ShaderManager& shader_mgr);
+
+    // --- GPU-Driven Shadow 渲染设置 ---
+    void SetupGPUDrivenShadow(const glm::mat4& light_view, const glm::mat4& light_proj,
+                               DX11PipelineStateManager& pipeline_mgr,
+                               DX11ShaderManager& shader_mgr);
+
+    /// 更新 per-object 常量缓冲（GPU-Driven per-draw model 更新用）
+    void UpdatePerObjectCB(const DX11PerObjectCB& data);
 
     // --- 渲染统计 ---
     void BeginFrame();
@@ -229,8 +235,8 @@ private:
     ComPtr<ID3D11Buffer> per_scene_cb_;
     ComPtr<ID3D11Buffer> per_material_cb_;
 
-    // 全局渲染状态（共享结构体，消除三端重复）
-    DrawExecutorGlobalState global_state_;
+    // 全局渲染状态（引用 RhiDevice::global_render_state_）
+    DrawExecutorGlobalState& global_state_;
 
     // --- 几何缓冲 ---
     // 精灵四边形（动态 VBO，静态 IBO）
@@ -294,6 +300,38 @@ private:
     // Light Probe SH 常量缓冲（b9, 160B）
     ComPtr<ID3D11Buffer> light_probe_data_cb_;
 
+    // --- Hair rendering ---
+    struct HairVSCB {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 projection;
+        glm::vec3 camera_pos;
+        float _pad0;
+    };
+    static_assert(sizeof(HairVSCB) == 208, "HairVSCB must be 208 bytes");
+
+    struct HairPSCB {
+        glm::vec3 light_dir;
+        float light_intensity;
+        glm::vec3 light_color;
+        float ambient_intensity;
+        glm::vec4 root_color;
+        glm::vec4 tip_color;
+        float opacity;
+        float spec_primary;
+        float spec_secondary;
+        float spec_strength1;
+        float spec_strength2;
+        glm::vec3 spec_color;
+    };
+    static_assert(sizeof(HairPSCB) % 16 == 0, "HairPSCB must be 16B aligned");
+
+    unsigned int hair_shader_handle_ = 0;
+    ComPtr<ID3D11Buffer> hair_vs_cb_;
+    ComPtr<ID3D11Buffer> hair_ps_cb_;
+    ComPtr<ID3D11BlendState> hair_blend_state_;
+    ComPtr<ID3D11DepthStencilState> hair_depth_state_;
+    ComPtr<ID3D11RasterizerState> hair_raster_state_;
 
     bool initialized_ = false;
 };

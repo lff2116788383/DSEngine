@@ -78,3 +78,18 @@
 #define MDI_ICON_IMAGE_MULTIPLE         "\xef\x8c\x82" // U+F302 fa-images
 #define MDI_ICON_HUMAN                  "\xef\x80\x87" // U+F007 fa-user
 #define MDI_ICON_MUSIC_NOTE             "\xef\x80\x81" // U+F001 fa-music
+
+// Additional icons for new panels
+#define MDI_ICON_VOLUME_HIGH            "\xef\x80\xa8" // U+F028 fa-volume-high
+#define MDI_ICON_BONE                   "\xef\x97\x97" // U+F5D7 fa-bone
+#define MDI_ICON_CONTENT_COPY           "\xef\x83\x85" // U+F0C5 fa-copy
+#define MDI_ICON_ZIP_BOX                "\xef\x86\x86" // U+F186 fa-file-zipper (approx)
+#define MDI_ICON_VIEW_MODULE            "\xef\x80\x9a" // U+F00A fa-table-cells
+#define MDI_ICON_HOME                   "\xef\x80\x95" // U+F015 fa-house
+#define MDI_ICON_HELP                   "\xef\x81\x99" // U+F059 fa-circle-question
+#define MDI_ICON_DELETE                 "\xef\x87\xb8" // U+F1F8 fa-trash-can
+#define MDI_ICON_SOURCE_BRANCH          "\xef\x84\xa6" // U+F126 fa-code-branch
+#define MDI_ICON_MAP_MARKER_PATH        "\xef\x97\xa6" // U+F5E6 fa-route
+#define MDI_ICON_SPOTLIGHT_BEAM         "\xef\x83\xab" // U+F0EB fa-lightbulb (reuse)
+#define MDI_ICON_WHITE_BALANCE_SUNNY    "\xef\x86\x85" // U+F185 fa-sun
+#define MDI_ICON_SKIP_PREVIOUS          "\xef\x81\x88" // U+F048 fa-backward-step

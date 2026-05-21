@@ -237,8 +237,6 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
-
-    // 鍒濆鍖栧唴缃?PBR 鐫€鑹插櫒
     shader_mgr_.InitBuiltinPBRShader();
     resource_mgr_.ledger().shader_programs_created += 1;
 
@@ -336,7 +334,15 @@ unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool i
 void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
     unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
     glBindBuffer(target, handle);
-    glBufferSubData(target, offset, size, data);
+    if (offset == 0) {
+        // Buffer orphaning: 用 glBufferData 替换 glBufferSubData，
+        // 驱动可立即分配新 storage 而无需等待 GPU 释放旧数据。
+        // GL_STREAM_DRAW 提示驱动：数据每帧写入一次、绘制少量次后丢弃。
+        glBufferData(target, static_cast<GLsizeiptr>(size), data, GL_STREAM_DRAW);
+    } else {
+        glBufferSubData(target, static_cast<GLintptr>(offset),
+                        static_cast<GLsizeiptr>(size), data);
+    }
 }
 
 void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
@@ -1323,6 +1329,45 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
     if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
     const int loc_morph = shader_mgr_.gpu_driven_pbr_morph_loc();
     if (loc_morph >= 0) glUniform1i(loc_morph, 0);
+}
+
+void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
+    const unsigned int prog = shader_mgr_.gpu_driven_shadow_shader_handle();
+    if (prog == 0) return;
+
+    glUseProgram(prog);
+
+    PerFrameUBO per_frame{};
+    per_frame.vp = light_proj * light_view;
+    per_frame.view = light_view;
+    per_frame.camera_pos = glm::vec4(0.0f);
+    ubo_mgr_.UploadPerFrame(per_frame);
+    ubo_mgr_.BindAll();
+
+    const int loc_skinned = shader_mgr_.gpu_driven_shadow_skinned_loc();
+    if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
+}
+
+// --- 编辑器场景视图模式 ---
+
+void OpenGLRhiDevice::SetWireframeMode(bool enable) {
+    glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
+}
+
+void OpenGLRhiDevice::SetForceUnlit(bool enable) {
+    global_render_state_.force_unlit = enable;
+}
+
+void OpenGLRhiDevice::SetOverdrawMode(bool enable) {
+    if (enable) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
+        glDepthMask(GL_FALSE);
+    } else {
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+    }
+    global_render_state_.overdraw_mode = enable;
 }
 
 void OpenGLRhiDevice::LogResourceLedger() const {
