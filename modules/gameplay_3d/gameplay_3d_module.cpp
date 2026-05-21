@@ -1,11 +1,7 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/core/service_locator.h"
 #include <limits>
-#if defined(DSE_ENABLE_JOLT)
-#include "engine/physics/physics3d/physics3d_system_jolt.h"
-#elif defined(DSE_ENABLE_PHYSX)
-#include "engine/physics/physics3d/physics3d_system.h"
-#endif
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/ecs/components_3d_fluid.h"
 
 namespace dse::gameplay3d {
@@ -37,7 +33,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     softbody_system_.SetAssetManager(asset_manager);
 #if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     fracture_system_.SetAssetManager(asset_manager);
-    auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::Physics3DSystem>();
+    auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>();
     fracture_system_.SetPhysics3D(physics3d);
     ragdoll_system_.SetAssetManager(asset_manager);
     ragdoll_system_.SetPhysics3D(physics3d);

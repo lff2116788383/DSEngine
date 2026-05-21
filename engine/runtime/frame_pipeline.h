@@ -19,12 +19,8 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/scene/transform_system.h"
 #include "engine/physics/physics2d/physics2d_system.h"
-#if defined(DSE_ENABLE_3D)
-  #if defined(DSE_ENABLE_JOLT)
-    #include "engine/physics/physics3d/physics3d_system_jolt.h"
-  #elif defined(DSE_ENABLE_PHYSX)
-    #include "engine/physics/physics3d/physics3d_system.h"
-  #endif
+#ifdef DSE_ENABLE_3D
+  #include "engine/physics/physics3d/i_physics3d_system.h"
 #endif
 #ifdef DSE_ENABLE_NAVMESH
 #include "engine/navigation/nav_mesh_system.h"
@@ -296,9 +292,8 @@ private:
     
     std::unique_ptr<IBuiltinModules> modules_impl_;
     int gpu_culled_last_frame_ = 0;  ///< GPU Driven: 上一帧被剔除的 draw command 数
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    dse::physics3d::Physics3DSystem physics3d_system_;
-    bool physics3d_system_initialized_ = false;
+#ifdef DSE_ENABLE_3D
+    std::shared_ptr<dse::physics3d::IPhysics3DSystem> physics3d_system_;
 #endif
 #ifdef DSE_ENABLE_NAVMESH
     dse::navigation::NavMeshSystem nav_mesh_system_;

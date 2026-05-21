@@ -1,11 +1,7 @@
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/transform.h"
-#if defined(DSE_ENABLE_JOLT)
-#include "engine/physics/physics3d/physics3d_system_jolt.h"
-#elif defined(DSE_ENABLE_PHYSX)
-#include "engine/physics/physics3d/physics3d_system.h"
-#endif
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/base/debug.h"
 #include <glm/gtx/quaternion.hpp>
 #include <cmath>
@@ -16,7 +12,7 @@ namespace { constexpr float kDeg2Rad = 3.14159265358979323846f / 180.0f; }
 namespace dse {
 namespace gameplay3d {
 
-void VehicleSystem::SetPhysics3D(physics3d::Physics3DSystem* physics3d) { physics3d_ = physics3d; }
+void VehicleSystem::SetPhysics3D(physics3d::IPhysics3DSystem* physics3d) { physics3d_ = physics3d; }
 
 void VehicleSystem::FixedUpdate(World& world, float dt) {
     auto view = world.registry().view<VehicleComponent, RigidBody3DComponent, TransformComponent>();

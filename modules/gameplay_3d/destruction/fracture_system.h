@@ -12,7 +12,7 @@ namespace dse {
 struct FractureAsset;
 
 namespace physics3d {
-class Physics3DSystem;
+class IPhysics3DSystem;
 }
 } // namespace dse
 
@@ -40,7 +40,7 @@ public:
     ~FractureSystem() = default;
 
     void SetAssetManager(AssetManager* asset_manager);
-    void SetPhysics3D(physics3d::Physics3DSystem* physics3d);
+    void SetPhysics3D(physics3d::IPhysics3DSystem* physics3d);
 
     /// 每帧更新：检查触发条件 + 管理碎片生命周期
     void Update(World& world, float delta_time);
@@ -59,7 +59,7 @@ public:
 
 private:
     AssetManager* asset_manager_ = nullptr;
-    physics3d::Physics3DSystem* physics3d_ = nullptr;
+    physics3d::IPhysics3DSystem* physics3d_ = nullptr;
 
     /// 加载或获取缓存的破碎资产（从 JSON 描述文件）
     std::shared_ptr<FractureAsset> LoadFractureAsset(const std::string& path);

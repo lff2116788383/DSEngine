@@ -2,11 +2,7 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/transform.h"
-#if defined(DSE_ENABLE_JOLT)
-#include "engine/physics/physics3d/physics3d_system_jolt.h"
-#elif defined(DSE_ENABLE_PHYSX)
-#include "engine/physics/physics3d/physics3d_system.h"
-#endif
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/base/debug.h"
 #include <cmath>
 #include <algorithm>
@@ -14,7 +10,7 @@
 namespace dse {
 namespace gameplay3d {
 
-void BuoyancySystem::SetPhysics3D(physics3d::Physics3DSystem* physics3d) { physics3d_ = physics3d; }
+void BuoyancySystem::SetPhysics3D(physics3d::IPhysics3DSystem* physics3d) { physics3d_ = physics3d; }
 
 void BuoyancySystem::FixedUpdate(World& world, float dt) {
     if (!physics3d_ || dt <= 0.0f) return;

@@ -11,16 +11,14 @@
 #include <cmath>
 #include <algorithm>
 
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #ifdef DSE_ENABLE_PHYSX
 #include <PxPhysicsAPI.h>
-#include "engine/physics/physics3d/physics3d_system.h"
 #define DSE_HAS_PHYSX_EXTENSIONS 1
 #ifdef DSE_HAS_PHYSX_EXTENSIONS
 #include <extensions/PxD6Joint.h>
 #endif
 using namespace physx;
-#elif defined(DSE_ENABLE_JOLT)
-#include "engine/physics/physics3d/physics3d_system_jolt.h"
 #endif
 
 namespace { constexpr float kPi = 3.14159265358979323846f; }
@@ -29,7 +27,7 @@ namespace dse {
 namespace gameplay3d {
 
 void RagdollSystem::SetAssetManager(AssetManager* asset_manager) { asset_manager_ = asset_manager; }
-void RagdollSystem::SetPhysics3D(physics3d::Physics3DSystem* physics3d) { physics3d_ = physics3d; }
+void RagdollSystem::SetPhysics3D(physics3d::IPhysics3DSystem* physics3d) { physics3d_ = physics3d; }
 
 void RagdollSystem::FixedUpdate(World& world, float dt) {
     (void)dt;

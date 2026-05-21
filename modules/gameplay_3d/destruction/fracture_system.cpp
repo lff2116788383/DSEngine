@@ -5,11 +5,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
-#if defined(DSE_ENABLE_JOLT)
-#include "engine/physics/physics3d/physics3d_system_jolt.h"
-#elif defined(DSE_ENABLE_PHYSX)
-#include "engine/physics/physics3d/physics3d_system.h"
-#endif
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #include <glm/gtc/quaternion.hpp>
 #include <fstream>
 #include <sstream>
@@ -87,7 +83,7 @@ void FractureSystem::SetAssetManager(AssetManager* asset_manager) {
     asset_manager_ = asset_manager;
 }
 
-void FractureSystem::SetPhysics3D(physics3d::Physics3DSystem* physics3d) {
+void FractureSystem::SetPhysics3D(physics3d::IPhysics3DSystem* physics3d) {
     physics3d_ = physics3d;
 }
 

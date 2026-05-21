@@ -44,6 +44,23 @@ FramePipeline::~FramePipeline() = default;
 #include <sstream>
 #include <cstring>
 
+#ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_JOLT)
+#include "engine/physics/physics3d/physics3d_system_jolt.h"
+#elif defined(DSE_ENABLE_PHYSX)
+#include "engine/physics/physics3d/physics3d_system.h"
+#endif
+namespace dse::physics3d {
+std::shared_ptr<IPhysics3DSystem> CreatePhysics3DSystem() {
+#if defined(DSE_ENABLE_JOLT) || defined(DSE_ENABLE_PHYSX)
+    return std::make_shared<Physics3DSystem>();
+#else
+    return nullptr;
+#endif
+}
+} // namespace dse::physics3d
+#endif // DSE_ENABLE_3D
+
 namespace dse::render {
     extern const char* kHiZCopyShaderSource;
     extern const char* kHiZDownsampleShaderSource;
@@ -613,17 +630,17 @@ bool FramePipeline::Init() {
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    // 3D 物理必须在鐗╃悊蹇呴』鍦?Gameplay3D 妯″潡涔嬪墠鍒濆鍖栧苟娉ㄥ唽鍒?ServiceLocator锛?
-    // 鍚﹀垯 FractureSystem::SetPhysics3D() 浼氭嬁鍒?nullptr锛屽鑷寸鐗囧悓鏃跺惎鐢?
-    // CPU fallback 鐗╃悊鍜?PhysX 鐗╃悊锛屼袱濂楃墿鐞嗕氦鏇胯鍐?transform 鈫?闂儊銆?
-    if (physics3d_system_.Init(*runtime_context_.world)) {
-        dse::core::ServiceLocator::Instance().Register<dse::physics3d::Physics3DSystem, dse::physics3d::Physics3DSystem>(
-            std::shared_ptr<dse::physics3d::Physics3DSystem>(&physics3d_system_, [](auto*) {}));
-        physics3d_system_initialized_ = true;
-        DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem initialized and registered");
-    } else {
-        DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
+#ifdef DSE_ENABLE_3D
+    {
+        auto sys = dse::physics3d::CreatePhysics3DSystem();
+        if (sys && sys->Init(*runtime_context_.world)) {
+            physics3d_system_ = std::move(sys);
+            dse::core::ServiceLocator::Instance().Register<dse::physics3d::IPhysics3DSystem,
+                dse::physics3d::IPhysics3DSystem>(physics3d_system_);
+            DEBUG_LOG_INFO("FramePipeline init: Physics3DSystem initialized and registered");
+        } else {
+            DEBUG_LOG_WARN("FramePipeline init: Physics3DSystem init failed, 3D physics will be unavailable");
+        }
     }
 #endif
 
@@ -768,11 +785,11 @@ void FramePipeline::Shutdown() {
     modules_.clear();
 
     modules_impl_->ShutdownMeshSystem();
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    if (physics3d_system_initialized_) {
-        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
-        physics3d_system_.Shutdown();
-        physics3d_system_initialized_ = false;
+#ifdef DSE_ENABLE_3D
+    if (physics3d_system_) {
+        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::IPhysics3DSystem>();
+        physics3d_system_->Shutdown();
+        physics3d_system_.reset();
     }
 #endif
 #ifdef DSE_ENABLE_NAVMESH
@@ -859,9 +876,9 @@ void FramePipeline::Update(float delta_time) {
 }
 
 void FramePipeline::FlushPhysicsEvents() {
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    if (physics3d_system_initialized_) {
-        physics3d_system_.FlushEvents();
+#ifdef DSE_ENABLE_3D
+    if (physics3d_system_) {
+        physics3d_system_->FlushEvents();
     }
 #endif
 }
@@ -1488,11 +1505,11 @@ void FramePipeline::EnableEditorMode(bool enable) {
 }
 
 void FramePipeline::ResetPhysics3D() {
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-    if (physics3d_system_initialized_) {
-        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::Physics3DSystem>();
-        physics3d_system_.Shutdown();
-        physics3d_system_initialized_ = false;
+#ifdef DSE_ENABLE_3D
+    if (physics3d_system_) {
+        dse::core::ServiceLocator::Instance().Reset<dse::physics3d::IPhysics3DSystem>();
+        physics3d_system_->Shutdown();
+        physics3d_system_.reset();
     }
 #endif
 }

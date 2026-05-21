@@ -8,7 +8,7 @@ class AssetManager;
 namespace dse {
 struct RagdollComponent;
 
-namespace physics3d { class Physics3DSystem; }
+namespace physics3d { class IPhysics3DSystem; }
 
 namespace gameplay3d {
 
@@ -28,7 +28,7 @@ public:
     ~RagdollSystem() = default;
 
     void SetAssetManager(AssetManager* asset_manager);
-    void SetPhysics3D(physics3d::Physics3DSystem* physics3d);
+    void SetPhysics3D(physics3d::IPhysics3DSystem* physics3d);
 
     void FixedUpdate(World& world, float dt);
 
@@ -42,7 +42,7 @@ public:
 
 private:
     AssetManager* asset_manager_ = nullptr;
-    physics3d::Physics3DSystem* physics3d_ = nullptr;
+    physics3d::IPhysics3DSystem* physics3d_ = nullptr;
 
     void AutoSetupBones(World& world, entt::entity entity, RagdollComponent& ragdoll);
     void CreatePhysicsBodies(World& world, entt::entity entity, RagdollComponent& ragdoll);

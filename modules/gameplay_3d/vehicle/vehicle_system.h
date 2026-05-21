@@ -6,7 +6,7 @@
 namespace dse {
 struct VehicleComponent;
 
-namespace physics3d { class Physics3DSystem; }
+namespace physics3d { class IPhysics3DSystem; }
 
 namespace gameplay3d {
 
@@ -27,12 +27,12 @@ public:
     VehicleSystem() = default;
     ~VehicleSystem() = default;
 
-    void SetPhysics3D(physics3d::Physics3DSystem* physics3d);
+    void SetPhysics3D(physics3d::IPhysics3DSystem* physics3d);
 
     void FixedUpdate(World& world, float dt);
 
 private:
-    physics3d::Physics3DSystem* physics3d_ = nullptr;
+    physics3d::IPhysics3DSystem* physics3d_ = nullptr;
 
     void InitializeVehicle(World& world, entt::entity entity, VehicleComponent& vehicle);
     void SimulateVehicle(World& world, entt::entity entity, VehicleComponent& vehicle, float dt);

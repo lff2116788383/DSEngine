@@ -6,7 +6,7 @@
 namespace dse {
 struct BuoyancyComponent;
 
-namespace physics3d { class Physics3DSystem; }
+namespace physics3d { class IPhysics3DSystem; }
 
 namespace gameplay3d {
 
@@ -26,12 +26,12 @@ public:
     BuoyancySystem() = default;
     ~BuoyancySystem() = default;
 
-    void SetPhysics3D(physics3d::Physics3DSystem* physics3d);
+    void SetPhysics3D(physics3d::IPhysics3DSystem* physics3d);
 
     void FixedUpdate(World& world, float dt);
 
 private:
-    physics3d::Physics3DSystem* physics3d_ = nullptr;
+    physics3d::IPhysics3DSystem* physics3d_ = nullptr;
 
     float GetWaterLevel(World& world, const glm::vec3& pos, const BuoyancyComponent& buoyancy) const;
 };
