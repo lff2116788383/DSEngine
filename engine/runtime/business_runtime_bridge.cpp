@@ -37,6 +37,7 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
 void TickBusinessRuntime(RuntimeContext& context, float delta_time) {
     if (context.business_mode == BusinessMode::Lua) {
 #ifdef DSE_ENABLE_LUA
+        PumpLuaScriptHotReloads();
         TickLuaRuntime(delta_time);
 #endif
         return;

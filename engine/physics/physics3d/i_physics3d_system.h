@@ -75,9 +75,12 @@ public:
 
     // 刚体动力学
     virtual void AddForce(entt::entity entity, const glm::vec3& force) = 0;
+    virtual void AddTorque(entt::entity entity, const glm::vec3& torque) = 0;
     virtual void AddImpulse(entt::entity entity, const glm::vec3& impulse) = 0;
     virtual void SetVelocity(entt::entity entity, const glm::vec3& velocity) = 0;
+    virtual void SetAngularVelocity(entt::entity entity, const glm::vec3& angular_velocity) = 0;
     virtual glm::vec3 GetVelocity(entt::entity entity) const = 0;
+    virtual glm::vec3 GetAngularVelocity(entt::entity entity) const = 0;
     virtual void SetGravityEnabled(entt::entity entity, bool enabled) = 0;
     virtual bool IsGravityEnabled(entt::entity entity) const = 0;
     virtual void RemoveActor(entt::entity entity) = 0;

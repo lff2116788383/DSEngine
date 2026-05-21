@@ -72,10 +72,11 @@ void BuoyancySystem::FixedUpdate(World& world, float dt) {
             glm::vec3 drag_force = -velocity * drag_factor;
             physics3d_->AddForce(entity, drag_force);
 
-            // 角阻力（简化：通过减速线性速度的侧向分量）
-            // 完整实现需要 AddTorque 接口，这里用线性阻力近似
+            // 角阻力
+            glm::vec3 angular_vel = physics3d_->GetAngularVelocity(entity);
             float angular_drag = buoyancy.water_angular_drag * buoyancy.submerge_ratio;
-            (void)angular_drag; // TODO: 需要 Physics3DSystem::AddTorque 接口
+            glm::vec3 angular_drag_torque = -angular_vel * angular_drag;
+            physics3d_->AddTorque(entity, angular_drag_torque);
         }
     }
 }

@@ -283,6 +283,7 @@ bool FramePipeline::Init() {
         }
     }
     DEBUG_LOG_INFO("Runtime data root: {}", asset_manager.GetDataRoot());
+    asset_manager.StartFileWatcher();
     if (Screen::width() <= 0 || Screen::height() <= 0) {
         Screen::set_width_height(1280, 720);
     }
@@ -857,6 +858,7 @@ void FramePipeline::Shutdown() {
         runtime_context_.rhi_device->Shutdown();
         runtime_context_.rhi_device.reset();
     }
+    asset_manager.StopFileWatcher();
     asset_manager.SetRhiDevice(nullptr);
     render_resources_.Reset();
     update_time_accumulator_ms_ = 0.0f;

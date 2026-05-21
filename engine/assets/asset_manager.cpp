@@ -2107,6 +2107,44 @@ std::size_t AssetManager::PumpHotReloads() {
             continue;
         }
 
+        // Danim 热重载
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            auto it = danims_.find(cache_key);
+            if (it != danims_.end()) {
+                danims_.erase(it);
+                RemoveLru(cache_key);
+                did_reload = true;
+            }
+        }
+        if (did_reload) {
+            auto reloaded_asset = LoadDanim(relative_path);
+            if (reloaded_asset) {
+                DEBUG_LOG_INFO("HotReload: reloaded danim {}", relative_path);
+                ++reloaded;
+            }
+            continue;
+        }
+
+        // Dskel 热重载
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            auto it = dskels_.find(cache_key);
+            if (it != dskels_.end()) {
+                dskels_.erase(it);
+                RemoveLru(cache_key);
+                did_reload = true;
+            }
+        }
+        if (did_reload) {
+            auto reloaded_asset = LoadDskel(relative_path);
+            if (reloaded_asset) {
+                DEBUG_LOG_INFO("HotReload: reloaded dskel {}", relative_path);
+                ++reloaded;
+            }
+            continue;
+        }
+
         // AudioClip 热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);

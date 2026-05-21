@@ -44,9 +44,12 @@ public:
 
     // 刚体动力学 API
     void AddForce(entt::entity entity, const glm::vec3& force) override;
+    void AddTorque(entt::entity entity, const glm::vec3& torque) override;
     void AddImpulse(entt::entity entity, const glm::vec3& impulse) override;
     void SetVelocity(entt::entity entity, const glm::vec3& velocity) override;
+    void SetAngularVelocity(entt::entity entity, const glm::vec3& angular_velocity) override;
     glm::vec3 GetVelocity(entt::entity entity) const override;
+    glm::vec3 GetAngularVelocity(entt::entity entity) const override;
     void SetGravityEnabled(entt::entity entity, bool enabled) override;
     bool IsGravityEnabled(entt::entity entity) const override;
     void RemoveActor(entt::entity entity) override;

@@ -167,15 +167,9 @@ void VehicleSystem::SimulateVehicle(World& world, entt::entity entity, VehicleCo
     }
     if (steer_count > 0 && std::abs(vehicle.current_speed) > 0.1f) {
         float avg_steer = total_steer / static_cast<float>(steer_count);
-        float steer_torque = avg_steer * vehicle.current_speed * 50.0f; // 转向力矩系数
-        // 施加绕 Y 轴的扭矩
+        float steer_torque = avg_steer * vehicle.current_speed * 50.0f;
         glm::vec3 yaw_torque = up * steer_torque;
-        // AddForce 不直接支持扭矩，使用 SetAngularVelocity 替代
-        glm::vec3 angular_vel(0.0f, steer_torque * dt * 0.1f, 0.0f);
-        // 通过在偏移位置施力来模拟扭矩
-        glm::vec3 front_point = transform.position + forward * 1.5f;
-        glm::vec3 lateral_force = right * steer_torque;
-        physics3d_->AddForce(entity, lateral_force * 0.01f);
+        physics3d_->AddTorque(entity, yaw_torque);
     }
 }
 

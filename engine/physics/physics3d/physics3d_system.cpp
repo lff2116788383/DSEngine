@@ -784,6 +784,21 @@ void Physics3DSystem::AddForce(entt::entity entity, const glm::vec3& force) {
     }
 }
 
+void Physics3DSystem::AddTorque(entt::entity entity, const glm::vec3& torque) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->addTorque(PxVec3(torque.x, torque.y, torque.z), PxForceMode::eFORCE);
+    }
+}
+
 void Physics3DSystem::AddImpulse(entt::entity entity, const glm::vec3& impulse) {
     if (!scene_) return;
     auto view = world_cache_->registry().view<RigidBody3DComponent>();
@@ -814,6 +829,21 @@ void Physics3DSystem::SetVelocity(entt::entity entity, const glm::vec3& velocity
     }
 }
 
+void Physics3DSystem::SetAngularVelocity(entt::entity entity, const glm::vec3& angular_velocity) {
+    if (!scene_) return;
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return;
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return;
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        dynamic->setAngularVelocity(PxVec3(angular_velocity.x, angular_velocity.y, angular_velocity.z));
+    }
+}
+
 glm::vec3 Physics3DSystem::GetVelocity(entt::entity entity) const {
     if (!scene_) return glm::vec3(0.0f);
     auto view = world_cache_->registry().view<RigidBody3DComponent>();
@@ -826,6 +856,23 @@ glm::vec3 Physics3DSystem::GetVelocity(entt::entity entity) const {
     PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
     if (dynamic) {
         PxVec3 vel = dynamic->getLinearVelocity();
+        return glm::vec3(vel.x, vel.y, vel.z);
+    }
+    return glm::vec3(0.0f);
+}
+
+glm::vec3 Physics3DSystem::GetAngularVelocity(entt::entity entity) const {
+    if (!scene_) return glm::vec3(0.0f);
+    auto view = world_cache_->registry().view<RigidBody3DComponent>();
+    auto it = view.find(entity);
+    if (it == view.end()) return glm::vec3(0.0f);
+
+    auto& rb = view.get<RigidBody3DComponent>(*it);
+    if (rb.type != RigidBody3DType::Dynamic || !rb.runtime_body) return glm::vec3(0.0f);
+
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb.runtime_body)->is<PxRigidDynamic>();
+    if (dynamic) {
+        PxVec3 vel = dynamic->getAngularVelocity();
         return glm::vec3(vel.x, vel.y, vel.z);
     }
     return glm::vec3(0.0f);

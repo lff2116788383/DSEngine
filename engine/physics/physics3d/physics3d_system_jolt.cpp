@@ -702,6 +702,14 @@ void Physics3DSystem::AddForce(entt::entity entity, const glm::vec3& force) {
     impl_->physics_system->GetBodyInterface().AddForce(it->second, ToJolt(force));
 }
 
+void Physics3DSystem::AddTorque(entt::entity entity, const glm::vec3& torque) {
+    if (!impl_) return;
+    uint32_t eid = static_cast<uint32_t>(entity);
+    auto it = impl_->entity_to_body.find(eid);
+    if (it == impl_->entity_to_body.end()) return;
+    impl_->physics_system->GetBodyInterface().AddTorque(it->second, ToJolt(torque));
+}
+
 void Physics3DSystem::AddImpulse(entt::entity entity, const glm::vec3& impulse) {
     if (!impl_) return;
     uint32_t eid = static_cast<uint32_t>(entity);
@@ -718,12 +726,28 @@ void Physics3DSystem::SetVelocity(entt::entity entity, const glm::vec3& velocity
     impl_->physics_system->GetBodyInterface().SetLinearVelocity(it->second, ToJolt(velocity));
 }
 
+void Physics3DSystem::SetAngularVelocity(entt::entity entity, const glm::vec3& angular_velocity) {
+    if (!impl_) return;
+    uint32_t eid = static_cast<uint32_t>(entity);
+    auto it = impl_->entity_to_body.find(eid);
+    if (it == impl_->entity_to_body.end()) return;
+    impl_->physics_system->GetBodyInterface().SetAngularVelocity(it->second, ToJolt(angular_velocity));
+}
+
 glm::vec3 Physics3DSystem::GetVelocity(entt::entity entity) const {
     if (!impl_) return glm::vec3(0.0f);
     uint32_t eid = static_cast<uint32_t>(entity);
     auto it = impl_->entity_to_body.find(eid);
     if (it == impl_->entity_to_body.end()) return glm::vec3(0.0f);
     return ToGlm(impl_->physics_system->GetBodyInterface().GetLinearVelocity(it->second));
+}
+
+glm::vec3 Physics3DSystem::GetAngularVelocity(entt::entity entity) const {
+    if (!impl_) return glm::vec3(0.0f);
+    uint32_t eid = static_cast<uint32_t>(entity);
+    auto it = impl_->entity_to_body.find(eid);
+    if (it == impl_->entity_to_body.end()) return glm::vec3(0.0f);
+    return ToGlm(impl_->physics_system->GetBodyInterface().GetAngularVelocity(it->second));
 }
 
 void Physics3DSystem::SetGravityEnabled(entt::entity entity, bool enabled) {

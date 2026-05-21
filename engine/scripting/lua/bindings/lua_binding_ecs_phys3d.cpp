@@ -90,6 +90,57 @@ int L_EcsRigidBody3DAddImpulse(lua_State* L) {
     return 0;
 }
 
+/// 对 3D 刚体施加扭矩
+int L_EcsRigidBody3DAddTorque(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float tx = helper::CheckFloat(L, 2);
+    float ty = helper::CheckFloat(L, 3);
+    float tz = helper::CheckFloat(L, 4);
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->AddTorque(e, glm::vec3(tx, ty, tz));
+    }
+#endif
+    return 0;
+}
+
+/// 设置 3D 刚体角速度
+int L_EcsRigidBody3DSetAngularVelocity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float ax = helper::CheckFloat(L, 2);
+    float ay = helper::CheckFloat(L, 3);
+    float az = helper::CheckFloat(L, 4);
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->SetAngularVelocity(e, glm::vec3(ax, ay, az));
+    }
+#endif
+    return 0;
+}
+
+/// 获取 3D 刚体角速度，返回 ax,ay,az
+int L_EcsRigidBody3DGetAngularVelocity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+        return 3;
+    }
+    Entity e = helper::CheckEntity(L, 1);
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        glm::vec3 vel = physics->GetAngularVelocity(e);
+        helper::PushVec3(L, vel);
+        return 3;
+    }
+#endif
+    lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+    return 3;
+}
+
 /// 设置 3D 刚体线速度（需 PhysX 后端）
 int L_EcsRigidBody3DSetVelocity(lua_State* L) {
     World* world = GetWorld();
@@ -914,11 +965,14 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"add_rigidbody_3d",          L_EcsAddRigidBody3D},
         {"add_box_collider_3d",       L_EcsAddBoxCollider3D},
         {"add_sphere_collider_3d",    L_EcsAddSphereCollider3D},
-        {"rigidbody_3d_add_force",    L_EcsRigidBody3DAddForce},
-        {"rigidbody_3d_add_impulse",  L_EcsRigidBody3DAddImpulse},
-        {"rigidbody_3d_set_velocity", L_EcsRigidBody3DSetVelocity},
-        {"rigidbody_3d_get_velocity", L_EcsRigidBody3DGetVelocity},
-        {"rigidbody_3d_set_gravity",  L_EcsRigidBody3DSetGravity},
+        {"rigidbody_3d_add_force",            L_EcsRigidBody3DAddForce},
+        {"rigidbody_3d_add_torque",           L_EcsRigidBody3DAddTorque},
+        {"rigidbody_3d_add_impulse",          L_EcsRigidBody3DAddImpulse},
+        {"rigidbody_3d_set_velocity",         L_EcsRigidBody3DSetVelocity},
+        {"rigidbody_3d_get_velocity",         L_EcsRigidBody3DGetVelocity},
+        {"rigidbody_3d_set_angular_velocity", L_EcsRigidBody3DSetAngularVelocity},
+        {"rigidbody_3d_get_angular_velocity", L_EcsRigidBody3DGetAngularVelocity},
+        {"rigidbody_3d_set_gravity",          L_EcsRigidBody3DSetGravity},
         {"physics_3d_raycast",        L_Physics3DRaycast},
         {"add_character_controller_3d",          L_EcsAddCharacterController3D},
         {"character_controller_3d_move",         L_EcsCharacterController3DMove},
