@@ -94,16 +94,8 @@ void AIConfigManager::Load(const std::string& path) {
     // Load global settings
     if (doc.HasMember("current_provider_index") && doc["current_provider_index"].IsInt())
         config_.current_provider_index = doc["current_provider_index"].GetInt();
-    if (doc.HasMember("enable_streaming") && doc["enable_streaming"].IsBool())
-        config_.enable_streaming = doc["enable_streaming"].GetBool();
-    if (doc.HasMember("enable_images") && doc["enable_images"].IsBool())
-        config_.enable_images = doc["enable_images"].GetBool();
     if (doc.HasMember("default_agent") && doc["default_agent"].IsString())
         config_.default_agent = doc["default_agent"].GetString();
-    if (doc.HasMember("debug_mode") && doc["debug_mode"].IsBool())
-        config_.debug_mode = doc["debug_mode"].GetBool();
-    if (doc.HasMember("log_raw_protocol") && doc["log_raw_protocol"].IsBool())
-        config_.log_raw_protocol = doc["log_raw_protocol"].GetBool();
 }
 
 void AIConfigManager::Save(const std::string& path) {
@@ -129,11 +121,7 @@ void AIConfigManager::Save(const std::string& path) {
 
     // Save global settings
     doc.AddMember("current_provider_index", config_.current_provider_index, alloc);
-    doc.AddMember("enable_streaming", config_.enable_streaming, alloc);
-    doc.AddMember("enable_images", config_.enable_images, alloc);
     doc.AddMember("default_agent", rapidjson::Value(config_.default_agent.c_str(), alloc), alloc);
-    doc.AddMember("debug_mode", config_.debug_mode, alloc);
-    doc.AddMember("log_raw_protocol", config_.log_raw_protocol, alloc);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -284,14 +272,6 @@ void AIConfigManager::DrawConfigWindow() {
         
         ImGui::Separator();
         
-        // Global settings
-        ImGui::Checkbox("Enable Streaming", &config_.enable_streaming);
-        ImGui::Checkbox("Enable Images", &config_.enable_images);
-        ImGui::Checkbox("Debug Mode", &config_.debug_mode);
-        ImGui::Checkbox("Log Raw Protocol", &config_.log_raw_protocol);
-        
-        ImGui::Separator();
-        
         // Default Agent
         char agent_buf[64];
         SAFE_STRCPY(agent_buf, config_.default_agent);
@@ -304,8 +284,16 @@ void AIConfigManager::DrawConfigWindow() {
         ImGui::Separator();
         
         // Buttons
+        static float save_notice_timer = 0.0f;
         if (ImGui::Button("Save")) {
             Save("bin/editor_ai_config.json");
+            save_notice_timer = 4.0f;  // 显示 4 秒
+        }
+        if (save_notice_timer > 0.0f) {
+            save_notice_timer -= ImGui::GetIO().DeltaTime;
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, save_notice_timer < 1.0f ? save_notice_timer : 1.0f),
+                               "Saved. Reconnect bridge to apply.");
         }
         ImGui::SameLine();
         if (ImGui::Button("Add Provider")) {

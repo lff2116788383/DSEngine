@@ -20,11 +20,7 @@ struct AIProviderConfig {
 struct AIConfig {
     std::vector<AIProviderConfig> providers;
     int current_provider_index = 0;
-    bool enable_streaming = true;
-    bool enable_images = true;
     std::string default_agent = "general";
-    bool debug_mode = false;
-    bool log_raw_protocol = false;
 };
 
 class AIConfigManager {

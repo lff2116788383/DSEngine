@@ -175,190 +175,169 @@ _openai_client = None       # 复用 client，避免每条消息重建
 _conversation_history = []  # 多轮对话历史，跨消息保持
 
 def _get_openai_client():
-    """获取或创建 OpenAI client（按当前环境变量）。"""
+    """获取或创建 OpenAI client（按当前环境变量，含 timeout）。"""
     global _openai_client
-    api_key  = os.environ.get("OPENAI_API_KEY", "")
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    # 若 key/url 改变则重建
+    api_key    = os.environ.get("OPENAI_API_KEY", "")
+    base_url   = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    timeout_ms = int(os.environ.get("OPENAI_TIMEOUT_MS", "30000"))
+    timeout_s  = timeout_ms / 1000.0
+    # 若 key/url/timeout 改变则重建
     if (_openai_client is None
             or getattr(_openai_client, "_api_key_snapshot", "") != api_key
-            or getattr(_openai_client, "_base_url_snapshot", "") != base_url):
-        _openai_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+            or getattr(_openai_client, "_base_url_snapshot", "") != base_url
+            or getattr(_openai_client, "_timeout_snapshot", 0) != timeout_s):
+        _openai_client = openai.AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout_s)
         _openai_client._api_key_snapshot  = api_key
         _openai_client._base_url_snapshot = base_url
+        _openai_client._timeout_snapshot  = timeout_s
     return _openai_client
 
 # ─── Async Main ─────────────────────────────────────────────────────────
 
 async def handle_message(msg, current_task_ref, stdin_queue):
-    """Handle a single message from stdin."""
+    """Handle a user_message: call OpenAI API with streaming and tool call loop."""
     global mcp_client, _conversation_history
 
-    msg_type = msg.get("type", "")
-
-    if msg_type == "cancel":
-        if current_task_ref[0] and not current_task_ref[0].done():
-            current_task_ref[0].cancel()
-            emit({"type": "status", "message": "Generation cancelled."})
+    # main() 已过滤 cancel/clear_history/tool_result，此处只处理 user_message
+    if msg.get("type") != "user_message":
         return
 
-    if msg_type == "clear_history":
-        _conversation_history.clear()
+    content  = msg.get("content", "")
+    agent_id = msg.get("agent_id", "general")
+
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        emit({"type": "error", "message": "OPENAI_API_KEY not set."})
         return
 
-    if msg_type == "tool_result":
-        # tool_result 由 handle_tool_round 通过 stdin_queue 消费，不在此处理
-        return
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0.7"))
+    max_tokens  = int(os.environ.get("OPENAI_MAX_TOKENS", "4096"))
 
-    if msg_type == "user_message":
-        content  = msg.get("content", "")
-        agent_id = msg.get("agent_id", "general")
+    instructions = AGENT_INSTRUCTIONS.get(agent_id, AGENT_INSTRUCTIONS["general"])
+    if mcp_client and mcp_client.tools:
+        tool_list     = ", ".join(mcp_client.tools.keys())
+        instructions += f"\n\nAvailable tools: {tool_list}"
+    system_message = {"role": "system", "content": instructions}
 
-        api_key = os.environ.get("OPENAI_API_KEY", "")
-        if not api_key:
-            emit({"type": "error", "message": "OPENAI_API_KEY not set."})
-            return
+    _conversation_history.append({"role": "user", "content": content})
+    messages = [system_message] + _conversation_history
 
-        model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-        temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0.7"))
-        max_tokens  = int(os.environ.get("OPENAI_MAX_TOKENS", "4096"))
+    tool_schemas = mcp_client.get_tool_schemas() if mcp_client else []
+    tools = tool_schemas if tool_schemas else None
 
-        # 构建 system 消息（含 agent 指令 + 可用工具列表）
-        instructions = AGENT_INSTRUCTIONS.get(agent_id, AGENT_INSTRUCTIONS["general"])
-        if mcp_client and mcp_client.tools:
-            tool_list     = ", ".join(mcp_client.tools.keys())
-            instructions += f"\n\nAvailable tools: {tool_list}"
-        system_message = {"role": "system", "content": instructions}
+    client    = _get_openai_client()
+    chunk_id  = 0
+    total_in  = 0
+    total_out = 0
 
-        # 追加用户消息到历史
-        _conversation_history.append({"role": "user", "content": content})
+    emit({"type": "stream_start"})
 
-        # 完整 messages = system + 历史（含本条）
-        messages = [system_message] + _conversation_history
+    try:
+        while True:
+            full_content  = ""
+            tc_acc: dict[int, dict] = {}
+            finish_reason = None
 
-        tool_schemas = mcp_client.get_tool_schemas() if mcp_client else []
-        tools = tool_schemas if tool_schemas else None
+            stream = await create_completion_with_retry(
+                client,
+                model=model,
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
 
-        client     = _get_openai_client()
-        emit({"type": "stream_start"})
-        chunk_id   = 0
-        total_in   = 0
-        total_out  = 0
+            async for chunk in stream:
+                if chunk.usage:
+                    total_in  += getattr(chunk.usage, "prompt_tokens", 0)
+                    total_out += getattr(chunk.usage, "completion_tokens", 0)
 
-        try:
-            # 真正的流式循环：每轮可能产生 tool_calls，直到 finish_reason=stop
-            while True:
-                full_content = ""
-                # tool_calls 以 index 为 key 累积 delta
-                tc_acc: dict[int, dict] = {}
-                finish_reason = None
-
-                stream = await create_completion_with_retry(
-                    client,
-                    model=model,
-                    messages=messages,
-                    tools=tools,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    stream=True,
-                    stream_options={"include_usage": True},
-                )
-
-                async for chunk in stream:
-                    # usage 在最后一个 chunk 返回
-                    if chunk.usage:
-                        total_in  += getattr(chunk.usage, "prompt_tokens", 0)
-                        total_out += getattr(chunk.usage, "completion_tokens", 0)
-
-                    if not chunk.choices:
-                        continue
-
-                    choice = chunk.choices[0]
-                    if choice.finish_reason:
-                        finish_reason = choice.finish_reason
-
-                    delta = choice.delta
-
-                    # 文本 delta：直接转发给 C++ 端
-                    if delta.content:
-                        full_content += delta.content
-                        emit_stream_chunk(delta.content, chunk_id, False)
-                        chunk_id += 1
-
-                    # tool_call delta：按 index 累积
-                    if delta.tool_calls:
-                        for tc_delta in delta.tool_calls:
-                            idx = tc_delta.index
-                            if idx not in tc_acc:
-                                tc_acc[idx] = {"id": "", "name": "", "args": ""}
-                            if tc_delta.id:
-                                tc_acc[idx]["id"] += tc_delta.id
-                            if tc_delta.function and tc_delta.function.name:
-                                tc_acc[idx]["name"] += tc_delta.function.name
-                            if tc_delta.function and tc_delta.function.arguments:
-                                tc_acc[idx]["args"] += tc_delta.function.arguments
-
-                if finish_reason == "tool_calls":
-                    # 将 assistant 轮次（含 tool_calls）追加到 messages
-                    openai_tcs = [
-                        {"id": tc_acc[i]["id"], "type": "function",
-                         "function": {"name": tc_acc[i]["name"], "arguments": tc_acc[i]["args"]}}
-                        for i in sorted(tc_acc)
-                    ]
-                    messages.append({
-                        "role": "assistant",
-                        "content": full_content or None,
-                        "tool_calls": openai_tcs,
-                    })
-
-                    for tc in openai_tcs:
-                        emit({
-                            "type": "tool_call",
-                            "name": tc["function"]["name"],
-                            "arguments": tc["function"]["arguments"],
-                            "call_id": tc["id"],
-                        })
-
-                        # 等待 C++ 通过 stdin_queue 返回 tool_result
-                        tool_result = "{}"
-                        try:
-                            while True:
-                                result_line = await asyncio.wait_for(
-                                    stdin_queue.get(), timeout=30.0)
-                                result_msg = json.loads(result_line.strip())
-                                if (result_msg.get("type") == "tool_result" and
-                                        result_msg.get("call_id") == tc["id"]):
-                                    tool_result = result_msg.get("result", "{}")
-                                    break
-                        except (asyncio.TimeoutError, json.JSONDecodeError):
-                            pass
-
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": tool_result,
-                        })
-                    # 继续下一轮流式请求
+                if not chunk.choices:
                     continue
 
-                # finish_reason == "stop"（或其他），结束循环
-                _conversation_history.append({"role": "assistant", "content": full_content})
-                break
+                choice = chunk.choices[0]
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
 
-            # 发送累计 token 统计
-            if total_in or total_out:
-                emit({"type": "token_usage",
-                      "input_tokens": total_in,
-                      "output_tokens": total_out,
-                      "model": model})
+                delta = choice.delta
 
-            emit_stream_chunk("", chunk_id, True)
-            emit({"type": "stream_end", "chunk_id": chunk_id})
+                if delta.content:
+                    full_content += delta.content
+                    emit_stream_chunk(delta.content, chunk_id, False)
+                    chunk_id += 1
 
-        except asyncio.CancelledError:
-            emit({"type": "status", "message": "Generation cancelled."})
-        except Exception as e:
-            emit({"type": "error", "message": str(e)})
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tc_acc:
+                            tc_acc[idx] = {"id": "", "name": "", "args": ""}
+                        if tc_delta.id:
+                            tc_acc[idx]["id"] += tc_delta.id
+                        if tc_delta.function and tc_delta.function.name:
+                            tc_acc[idx]["name"] += tc_delta.function.name
+                        if tc_delta.function and tc_delta.function.arguments:
+                            tc_acc[idx]["args"] += tc_delta.function.arguments
+
+            if finish_reason == "tool_calls":
+                openai_tcs = [
+                    {"id": tc_acc[i]["id"], "type": "function",
+                     "function": {"name": tc_acc[i]["name"], "arguments": tc_acc[i]["args"]}}
+                    for i in sorted(tc_acc)
+                ]
+                messages.append({
+                    "role": "assistant",
+                    "content": full_content or None,
+                    "tool_calls": openai_tcs,
+                })
+
+                for tc in openai_tcs:
+                    emit({
+                        "type": "tool_call",
+                        "name": tc["function"]["name"],
+                        "arguments": tc["function"]["arguments"],
+                        "call_id": tc["id"],
+                    })
+
+                    tool_result = "{}"
+                    try:
+                        while True:
+                            result_line = await asyncio.wait_for(
+                                stdin_queue.get(), timeout=30.0)
+                            result_msg = json.loads(result_line.strip())
+                            if (result_msg.get("type") == "tool_result" and
+                                    result_msg.get("call_id") == tc["id"]):
+                                tool_result = result_msg.get("result", "{}")
+                                break
+                    except (asyncio.TimeoutError, json.JSONDecodeError):
+                        pass
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": tool_result,
+                    })
+                continue  # 继续下一轮流式请求
+
+            _conversation_history.append({"role": "assistant", "content": full_content})
+            break
+
+        if total_in or total_out:
+            emit({"type": "token_usage",
+                  "input_tokens": total_in,
+                  "output_tokens": total_out,
+                  "model": model})
+
+        emit_stream_chunk("", chunk_id, True)
+        emit({"type": "stream_end", "chunk_id": chunk_id})
+
+    except asyncio.CancelledError:
+        raise  # 让 main() 的 active_task.cancel() 正常传播
+    except Exception as e:
+        emit({"type": "error", "message": str(e)})
 
 async def main():
     global mcp_client
@@ -407,9 +386,21 @@ async def main():
 
     try:
         # Main message loop
+        # 核心设计：user_message 启动 task 后，主循环继续监听 stdin_queue
+        # 这样 cancel 在流式输出期间也能被即时处理
+        active_task = None
+
         while True:
             try:
-                line = await stdin_queue.get()
+                # 若有活跃 task，以短超时轮询 queue；否则阻塞等待下条消息
+                if active_task and not active_task.done():
+                    try:
+                        line = await asyncio.wait_for(stdin_queue.get(), timeout=0.05)
+                    except asyncio.TimeoutError:
+                        continue
+                else:
+                    line = await stdin_queue.get()
+
                 if not line:
                     break
 
@@ -418,17 +409,39 @@ async def main():
                 except json.JSONDecodeError:
                     continue
 
-                # tool_result 消息由 handle_message 内部通过 stdin_queue 消费
-                # 这里只为顶层消息创建 task
-                if msg.get("type") == "tool_result":
-                    # 重新入队，让等待中的 handle_message 消费
+                msg_type = msg.get("type", "")
+
+                # cancel: 立即取消当前 task（流式期间同样有效）
+                if msg_type == "cancel":
+                    if active_task and not active_task.done():
+                        active_task.cancel()
+                        try:
+                            await active_task
+                        except asyncio.CancelledError:
+                            pass
+                        emit({"type": "status", "message": "Generation cancelled."})
+                    active_task = None
+                    continue
+
+                # clear_history: 直接在主循环处理，无需建 task
+                if msg_type == "clear_history":
+                    _conversation_history.clear()
+                    continue
+
+                # tool_result: 重新入队，让等待中的 handle_message 消费
+                if msg_type == "tool_result":
                     await stdin_queue.put(line)
                     continue
 
-                current_task_ref[0] = asyncio.create_task(
-                    handle_message(msg, current_task_ref, stdin_queue)
-                )
-                await current_task_ref[0]
+                # user_message: 启动新 task（前一个正常应已完成，防御性等待）
+                if msg_type == "user_message":
+                    if active_task and not active_task.done():
+                        await active_task  # 正常不应发生，UI 层已阻止夹发
+                    active_task = asyncio.create_task(
+                        handle_message(msg, current_task_ref, stdin_queue)
+                    )
+                    current_task_ref[0] = active_task
+                    continue
 
             except Exception as e:
                 emit({"type": "error", "message": str(e)})

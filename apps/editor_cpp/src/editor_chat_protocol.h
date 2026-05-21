@@ -10,23 +10,14 @@ namespace dse::editor {
 // ─── Bridge 协议消息类型 ────────────────────────────────────────────────────
 
 enum class BridgeMessageType {
-    // 原有
     AssistantMessage,
     ToolCall,
     Error,
     Status,
-    // 新增：流式输出
     StreamStart,
     StreamChunk,
     StreamEnd,
-    // 新增：Agent 切换
-    AgentSwitch,
-    // 新增：图片
-    ImageGenerated,
-    ImageAnalyzed,
-    // 新增：Token 统计
     TokenUsage,
-    // 新增：取消
     CancelAck,
     Unknown
 };
@@ -39,10 +30,6 @@ struct BridgeMessage {
     std::string call_id;      // tool_call
     std::string raw;          // 原始文本（解析失败时使用）
     bool valid = false;       // JSON 解析是否成功
-    
-    // 新增字段
-    std::string agent_id;     // Agent 切换
-    std::string image_base64; // 图片数据
     int chunk_id = 0;         // 流式片段 ID
     bool is_last = false;     // 是否为最后一个流式片段
     int input_tokens = 0;     // Token 统计
@@ -110,25 +97,6 @@ inline BridgeMessage ParseBridgeMessage(const std::string& line) {
         msg.type = BridgeMessageType::StreamEnd;
         if (doc.HasMember("chunk_id") && doc["chunk_id"].IsInt())
             msg.chunk_id = doc["chunk_id"].GetInt();
-    }
-    else if (type_str == "agent_switch") {
-        msg.type = BridgeMessageType::AgentSwitch;
-        if (doc.HasMember("from") && doc["from"].IsString())
-            msg.agent_id = doc["from"].GetString();
-        if (doc.HasMember("to") && doc["to"].IsString())
-            msg.content = doc["to"].GetString();
-    }
-    else if (type_str == "image_generated") {
-        msg.type = BridgeMessageType::ImageGenerated;
-        if (doc.HasMember("image") && doc["image"].IsString())
-            msg.image_base64 = doc["image"].GetString();
-        if (doc.HasMember("prompt") && doc["prompt"].IsString())
-            msg.content = doc["prompt"].GetString();
-    }
-    else if (type_str == "image_analyzed") {
-        msg.type = BridgeMessageType::ImageAnalyzed;
-        if (doc.HasMember("content") && doc["content"].IsString())
-            msg.content = doc["content"].GetString();
     }
     else if (type_str == "token_usage") {
         msg.type = BridgeMessageType::TokenUsage;

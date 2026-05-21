@@ -125,6 +125,10 @@ void ChatPanel::StartBridge() {
                 std::to_string(p.temperature).c_str());
             SetEnvironmentVariableA("OPENAI_MAX_TOKENS",
                 std::to_string(p.max_tokens).c_str());
+            SetEnvironmentVariableA("OPENAI_TIMEOUT_MS",
+                std::to_string(p.timeout_ms).c_str());
+            if (!p.image_model.empty())
+                SetEnvironmentVariableA("OPENAI_IMAGE_MODEL", p.image_model.c_str());
         }
         // 使用配置的 default_agent 初始化（Fix G）
         if (!cfg.default_agent.empty())
