@@ -375,6 +375,44 @@ TEST(VulkanPipelineStateManagerTest, set_active_pipeline_state可读写) {
     EXPECT_EQ(mgr.active_pipeline_state(), 42u);
 }
 
+TEST(VulkanPipelineStateManagerTest, Wireframe默认关闭) {
+    VulkanPipelineStateManager mgr;
+    EXPECT_FALSE(mgr.wireframe_mode());
+}
+
+TEST(VulkanPipelineStateManagerTest, Overdraw默认关闭) {
+    VulkanPipelineStateManager mgr;
+    EXPECT_FALSE(mgr.overdraw_mode());
+}
+
+TEST(VulkanPipelineStateManagerTest, SetWireframeMode可读写) {
+    VulkanPipelineStateManager mgr;
+    mgr.SetWireframeMode(true);
+    EXPECT_TRUE(mgr.wireframe_mode());
+    mgr.SetWireframeMode(false);
+    EXPECT_FALSE(mgr.wireframe_mode());
+}
+
+TEST(VulkanPipelineStateManagerTest, SetOverdrawMode可读写) {
+    VulkanPipelineStateManager mgr;
+    mgr.SetOverdrawMode(true);
+    EXPECT_TRUE(mgr.overdraw_mode());
+    mgr.SetOverdrawMode(false);
+    EXPECT_FALSE(mgr.overdraw_mode());
+}
+
+TEST(VulkanPipelineStateManagerTest, WireframeOverdraw相互独立) {
+    VulkanPipelineStateManager mgr;
+    mgr.SetWireframeMode(true);
+    mgr.SetOverdrawMode(false);
+    EXPECT_TRUE(mgr.wireframe_mode());
+    EXPECT_FALSE(mgr.overdraw_mode());
+    mgr.SetWireframeMode(false);
+    mgr.SetOverdrawMode(true);
+    EXPECT_FALSE(mgr.wireframe_mode());
+    EXPECT_TRUE(mgr.overdraw_mode());
+}
+
 TEST(VulkanContextTest, 默认成员状态) {
     VulkanContext ctx;
     EXPECT_EQ(ctx.instance(), VK_NULL_HANDLE);

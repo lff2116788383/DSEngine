@@ -124,9 +124,8 @@ struct DrawExecutorGlobalState {
 inline PerSceneUBO PreparePerSceneUBO(const MeshDrawItem& item,
                                        const DrawExecutorGlobalState& state) {
     PerSceneUBO scene{};
-    scene.light_dir_and_enabled = glm::vec4(
-        item.light_direction,
-        item.lighting_enabled ? 1.0f : 0.0f);
+    const float light_w = (item.lighting_enabled && !state.force_unlit) ? 1.0f : 0.0f;
+    scene.light_dir_and_enabled = glm::vec4(item.light_direction, light_w);
     scene.light_color_and_ambient = glm::vec4(
         item.light_color,
         item.ambient_intensity);
@@ -146,9 +145,14 @@ inline PerSceneUBO PreparePerSceneUBO(const MeshDrawItem& item,
 }
 
 /// 从 MeshDrawItem 中提取 PerMaterial UBO 数据
-inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item) {
+inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item,
+                                            const DrawExecutorGlobalState& state) {
     PerMaterialUBO mat{};
-    mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+    if (state.overdraw_mode) {
+        mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+    } else {
+        mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+    }
     mat.roughness_ao = glm::vec4(
         item.material_roughness,
         item.material_ao,

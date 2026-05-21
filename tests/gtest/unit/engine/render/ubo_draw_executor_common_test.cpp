@@ -84,6 +84,8 @@ TEST(DrawExecutorGlobalStateTest, 默认值) {
     }
     EXPECT_FALSE(s.light_probe_enabled);
     EXPECT_FALSE(s.gbuffer_rendering_mode);
+    EXPECT_FALSE(s.force_unlit);
+    EXPECT_FALSE(s.overdraw_mode);
 }
 
 TEST(DrawExecutorGlobalStateTest, SetShadowMap) {
@@ -197,12 +199,97 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO) {
     item.normal_map_handle = 5;
     item.emissive_map_handle = 0;
 
-    PerMaterialUBO ubo = PreparePerMaterialUBO(item);
+    DrawExecutorGlobalState state;
+    PerMaterialUBO ubo = PreparePerMaterialUBO(item, state);
     EXPECT_FLOAT_EQ(ubo.albedo.x, 0.9f);
     EXPECT_FLOAT_EQ(ubo.albedo.w, 0.8f); // metallic
     EXPECT_FLOAT_EQ(ubo.roughness_ao.x, 0.4f);
     EXPECT_FLOAT_EQ(ubo.flags.x, 1.0f); // has_normal_map
     EXPECT_FLOAT_EQ(ubo.flags.z, 0.0f); // no emissive_map
+}
+
+// ============================================================
+// Scene View Mode 行为验证
+// ============================================================
+
+TEST(DrawExecutorGlobalStateTest, ForceUnlit默认关闭) {
+    DrawExecutorGlobalState s;
+    EXPECT_FALSE(s.force_unlit);
+}
+
+TEST(DrawExecutorGlobalStateTest, OverdrawMode默认关闭) {
+    DrawExecutorGlobalState s;
+    EXPECT_FALSE(s.overdraw_mode);
+}
+
+TEST(DrawExecutorGlobalStateTest, ForceUnlit可读写) {
+    DrawExecutorGlobalState s;
+    s.force_unlit = true;
+    EXPECT_TRUE(s.force_unlit);
+    s.force_unlit = false;
+    EXPECT_FALSE(s.force_unlit);
+}
+
+TEST(DrawExecutorGlobalStateTest, OverdrawMode可读写) {
+    DrawExecutorGlobalState s;
+    s.overdraw_mode = true;
+    EXPECT_TRUE(s.overdraw_mode);
+    s.overdraw_mode = false;
+    EXPECT_FALSE(s.overdraw_mode);
+}
+
+TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit强制关灯) {
+    MeshDrawItem item;
+    item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    item.lighting_enabled = true;
+
+    DrawExecutorGlobalState state;
+    state.force_unlit = true;
+
+    PerSceneUBO ubo = PreparePerSceneUBO(item, state);
+    EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
+}
+
+TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit不影响关灯的实体) {
+    MeshDrawItem item;
+    item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    item.lighting_enabled = false;
+
+    DrawExecutorGlobalState state;
+    state.force_unlit = false;
+
+    PerSceneUBO ubo = PreparePerSceneUBO(item, state);
+    EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
+}
+
+TEST(PrepareUBOTest, PreparePerMaterialUBO_Overdraw固定色) {
+    MeshDrawItem item;
+    item.material_albedo = glm::vec3(1.0f, 0.0f, 0.0f);
+    item.material_metallic = 1.0f;
+
+    DrawExecutorGlobalState state;
+    state.overdraw_mode = true;
+
+    PerMaterialUBO ubo = PreparePerMaterialUBO(item, state);
+    EXPECT_FLOAT_EQ(ubo.albedo.x, 0.1f);
+    EXPECT_FLOAT_EQ(ubo.albedo.y, 0.04f);
+    EXPECT_FLOAT_EQ(ubo.albedo.z, 0.02f);
+    EXPECT_FLOAT_EQ(ubo.albedo.w, 0.0f);
+}
+
+TEST(PrepareUBOTest, PreparePerMaterialUBO_正常模式保留原色) {
+    MeshDrawItem item;
+    item.material_albedo = glm::vec3(0.5f, 0.6f, 0.7f);
+    item.material_metallic = 0.3f;
+
+    DrawExecutorGlobalState state;
+    state.overdraw_mode = false;
+
+    PerMaterialUBO ubo = PreparePerMaterialUBO(item, state);
+    EXPECT_FLOAT_EQ(ubo.albedo.x, 0.5f);
+    EXPECT_FLOAT_EQ(ubo.albedo.y, 0.6f);
+    EXPECT_FLOAT_EQ(ubo.albedo.z, 0.7f);
+    EXPECT_FLOAT_EQ(ubo.albedo.w, 0.3f);
 }
 
 // ============================================================
