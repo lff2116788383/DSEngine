@@ -1345,7 +1345,7 @@ void VulkanRhiDevice::CacheGPUDrivenInstanceData(const void* models, const void*
 // --- 编辑器场景视图模式 ---
 
 void VulkanRhiDevice::SetWireframeMode(bool enable) {
-    (void)enable;
+    state_mgr_.SetWireframeMode(enable);
 }
 
 void VulkanRhiDevice::SetForceUnlit(bool enable) {
@@ -1354,6 +1354,7 @@ void VulkanRhiDevice::SetForceUnlit(bool enable) {
 
 void VulkanRhiDevice::SetOverdrawMode(bool enable) {
     global_render_state_.overdraw_mode = enable;
+    state_mgr_.SetOverdrawMode(enable);
 }
 
 } // namespace render

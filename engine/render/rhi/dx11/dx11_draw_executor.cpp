@@ -510,8 +510,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 更新 PerScene CB
     const auto& first = items[0];
     DX11PerSceneCB scene_data{};
-    scene_data.light_dir_and_enabled = glm::vec4(
-        first.light_direction, first.lighting_enabled ? 1.0f : 0.0f);
+    const float dx11_light_enabled = (first.lighting_enabled && !global_state_.force_unlit) ? 1.0f : 0.0f;
+    scene_data.light_dir_and_enabled = glm::vec4(first.light_direction, dx11_light_enabled);
     scene_data.light_color_and_ambient = glm::vec4(
         first.light_color, first.ambient_intensity);
     scene_data.light_params = glm::vec4(
@@ -696,7 +696,11 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // PerMaterial
         DX11PerMaterialCB mat_data{};
-        mat_data.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+        if (global_state_.overdraw_mode) {
+            mat_data.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+        } else {
+            mat_data.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+        }
         mat_data.roughness_ao = glm::vec4(item.material_roughness, item.material_ao,
                                            item.material_normal_strength, item.material_alpha_cutoff);
         mat_data.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
@@ -1852,7 +1856,8 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
 
     // PerScene CB
     DX11PerSceneCB scene_data{};
-    scene_data.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    const float dx11_gpu_driven_light = global_state_.force_unlit ? 0.0f : 1.0f;
+    scene_data.light_dir_and_enabled   = glm::vec4(light_dir, dx11_gpu_driven_light);
     scene_data.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
     const float receive_shadow = (shadow_strength > 0.0f) ? 1.0f : 0.0f;
     scene_data.light_params            = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);

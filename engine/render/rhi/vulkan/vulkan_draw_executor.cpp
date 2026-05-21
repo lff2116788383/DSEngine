@@ -342,7 +342,8 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
 
 void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
     VulkanPerSceneUBO ubo{};
-    ubo.light_dir_and_enabled = glm::vec4(item.light_direction, item.lighting_enabled ? 1.0f : 0.0f);
+    const float light_enabled = (item.lighting_enabled && !global_state_.force_unlit) ? 1.0f : 0.0f;
+    ubo.light_dir_and_enabled = glm::vec4(item.light_direction, light_enabled);
     ubo.light_color_and_ambient = glm::vec4(item.light_color, item.ambient_intensity);
     ubo.light_params = glm::vec4(item.light_intensity, item.shadow_strength,
                                   item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(item.shading_mode));
@@ -358,7 +359,11 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
 
 void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
     VulkanPerMaterialUBO ubo{};
-    ubo.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+    if (global_state_.overdraw_mode) {
+        ubo.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+    } else {
+        ubo.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+    }
     ubo.roughness_ao = glm::vec4(item.material_roughness, item.material_ao,
                                   item.material_normal_strength, item.material_alpha_cutoff);
     ubo.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
@@ -2703,7 +2708,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
 
     // PerScene UBO
     VulkanPerSceneUBO scene_ubo{};
-    scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    const float gpu_driven_light = global_state_.force_unlit ? 0.0f : 1.0f;
+    scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, gpu_driven_light);
     scene_ubo.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
     const float receive_shadow = (shadow_strength > 0.0f) ? 1.0f : 0.0f;
     scene_ubo.light_params            = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);

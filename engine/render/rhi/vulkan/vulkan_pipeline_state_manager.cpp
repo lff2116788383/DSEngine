@@ -137,8 +137,8 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
 
     auto& state = it->second;
 
-    // 复合键查找缓存：同一 handle 在不同 renderPass/samples 下各自有独立的 VkPipeline
-    PipelineCacheKey cache_key{ handle, render_pass, samples };
+    // 复合键查找缓存：同一 handle 在不同 renderPass/samples/wireframe/overdraw 下各自有独立的 VkPipeline
+    PipelineCacheKey cache_key{ handle, render_pass, samples, wireframe_mode_, overdraw_mode_ };
     auto cache_it = pipeline_cache_.find(cache_key);
     if (cache_it != pipeline_cache_.end()) {
         return cache_it->second;
@@ -188,7 +188,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = wireframe_mode_ ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rasterizer.cullMode = state.desc.culling_enabled
                              ? ToVkCullMode(state.desc.cull_face)
                              : VK_CULL_MODE_NONE;
@@ -206,7 +206,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     VkPipelineDepthStencilStateCreateInfo depth_stencil{};
     depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_stencil.depthTestEnable = state.desc.depth_test_enabled ? VK_TRUE : VK_FALSE;
-    depth_stencil.depthWriteEnable = state.desc.depth_write_enabled ? VK_TRUE : VK_FALSE;
+    depth_stencil.depthWriteEnable = (state.desc.depth_write_enabled && !overdraw_mode_) ? VK_TRUE : VK_FALSE;
     depth_stencil.depthCompareOp = ToVkCompareOp(state.desc.depth_func);
     depth_stencil.depthBoundsTestEnable = VK_FALSE;
     depth_stencil.stencilTestEnable = VK_FALSE;
@@ -215,14 +215,24 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     VkPipelineColorBlendAttachmentState blend_attachment{};
     blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                       VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    blend_attachment.blendEnable = state.desc.blend_enabled ? VK_TRUE : VK_FALSE;
-    if (state.desc.blend_enabled) {
-        blend_attachment.srcColorBlendFactor = ToVkBlendFactor(state.desc.blend_src);
-        blend_attachment.dstColorBlendFactor = ToVkBlendFactor(state.desc.blend_dst);
+    if (overdraw_mode_) {
+        blend_attachment.blendEnable = VK_TRUE;
+        blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
         blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-        blend_attachment.srcAlphaBlendFactor = ToVkBlendFactor(state.desc.alpha_blend_src);
-        blend_attachment.dstAlphaBlendFactor = ToVkBlendFactor(state.desc.alpha_blend_dst);
+        blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else {
+        blend_attachment.blendEnable = state.desc.blend_enabled ? VK_TRUE : VK_FALSE;
+        if (state.desc.blend_enabled) {
+            blend_attachment.srcColorBlendFactor = ToVkBlendFactor(state.desc.blend_src);
+            blend_attachment.dstColorBlendFactor = ToVkBlendFactor(state.desc.blend_dst);
+            blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+            blend_attachment.srcAlphaBlendFactor = ToVkBlendFactor(state.desc.alpha_blend_src);
+            blend_attachment.dstAlphaBlendFactor = ToVkBlendFactor(state.desc.alpha_blend_dst);
+            blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        }
     }
 
     VkPipelineColorBlendStateCreateInfo blend{};

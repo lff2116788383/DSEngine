@@ -100,6 +100,12 @@ public:
     void set_active_pipeline_state(unsigned int handle) { active_pipeline_state_ = handle; }
     unsigned int active_pipeline_state() const { return active_pipeline_state_; }
 
+    /// 编辑器场景视图模式标志（影响下一次 GetOrCreateVkPipeline 的 rasterizer/blend 参数）
+    void SetWireframeMode(bool enable) { wireframe_mode_ = enable; }
+    void SetOverdrawMode(bool enable) { overdraw_mode_ = enable; }
+    bool wireframe_mode() const { return wireframe_mode_; }
+    bool overdraw_mode() const { return overdraw_mode_; }
+
     /// 当前管线状态数量
     std::size_t pipeline_state_count() const { return pipeline_states_.size(); }
 
@@ -111,13 +117,19 @@ private:
     unsigned int next_handle_ = 530000;
     unsigned int active_pipeline_state_ = 0;
 
-    /// Pipeline 复合缓存键：(handle, renderPass, samples)
+    bool wireframe_mode_ = false;
+    bool overdraw_mode_  = false;
+
+    /// Pipeline 复合缓存键：(handle, renderPass, samples, wireframe, overdraw)
     struct PipelineCacheKey {
         unsigned int handle;
         VkRenderPass render_pass;
         VkSampleCountFlagBits samples;
+        bool wireframe = false;
+        bool overdraw  = false;
         bool operator==(const PipelineCacheKey& o) const {
-            return handle == o.handle && render_pass == o.render_pass && samples == o.samples;
+            return handle == o.handle && render_pass == o.render_pass &&
+                   samples == o.samples && wireframe == o.wireframe && overdraw == o.overdraw;
         }
     };
     struct PipelineCacheKeyHash {
@@ -125,6 +137,8 @@ private:
             size_t h = std::hash<unsigned int>()(k.handle);
             h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.render_pass)) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<int>()(static_cast<int>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<bool>()(k.wireframe) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<bool>()(k.overdraw)  + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;
         }
     };
