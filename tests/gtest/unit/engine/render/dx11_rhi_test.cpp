@@ -92,7 +92,9 @@ TEST(DX11RhiDeviceTest, 未初始化时CreateTexture2D返回零) {
 }
 
 TEST(DX11RhiDeviceTest, 未初始化时CreateBuffer安全) {
-    GTEST_SKIP() << "DX11 CreateBuffer with null device_ currently crashes (needs null guard in implementation)";
+    DX11RhiDevice device;
+    unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
+    EXPECT_EQ(handle, 0u);
 }
 
 TEST(DX11RhiDeviceTest, 未初始化时CreateShaderProgram返回零) {

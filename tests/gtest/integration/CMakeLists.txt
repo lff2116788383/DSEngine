@@ -37,6 +37,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/runtime/runtime_subsystem_integration_test.cpp
     # engine/audio
     engine/audio/audio_asset_integration_test.cpp
+    # engine/navigation
+    engine/navigation/nav_mesh_integration_test.cpp
     # modules
     modules/module_lifecycle_integration_test.cpp
     # editor (headless functional tests)

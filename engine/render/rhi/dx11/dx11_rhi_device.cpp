@@ -296,6 +296,9 @@ unsigned int DX11RhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
 }
 
 unsigned int DX11RhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    if (!initialized_) {
+        return 0u;
+    }
     return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
 }
 

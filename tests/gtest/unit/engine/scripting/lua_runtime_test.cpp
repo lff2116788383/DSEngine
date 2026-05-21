@@ -5,8 +5,24 @@
 
 #include "gtest/gtest.h"
 #include "engine/scripting/lua/lua_runtime.h"
+#include "engine/ecs/world.h"
 
 using namespace dse::runtime;
+using namespace dse;
+
+// ============================================================
+// 辅助函数
+// ============================================================
+
+/// 创建最小 World 并初始化 Lua 运行时
+static bool InitLuaWithWorld() {
+    static World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+    SetStartupLuaScriptPath("");  // 无入口脚本
+    return BootstrapLuaRuntime();
+}
 
 // ============================================================
 // 基础生命周期测试
@@ -32,11 +48,7 @@ TEST(LuaRuntimeTest, BootstrapLuaRuntime返回值) {
 }
 
 TEST(LuaRuntimeTest, ShutdownLuaRuntime不崩溃) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (BootstrapLuaRuntime()) {
+    if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
         SUCCEED();
     } else {
@@ -47,11 +59,7 @@ TEST(LuaRuntimeTest, ShutdownLuaRuntime不崩溃) {
 }
 
 TEST(LuaRuntimeTest, 重复Shutdown不崩溃) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (BootstrapLuaRuntime()) {
+    if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
         ShutdownLuaRuntime();  // 重复调用应安全
         SUCCEED();
@@ -70,12 +78,8 @@ TEST(LuaRuntimeTest, ExecuteLuaString未初始化返回false) {
 }
 
 TEST(LuaRuntimeTest, ExecuteLuaString简单算术) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     std::string result;
@@ -89,12 +93,8 @@ TEST(LuaRuntimeTest, ExecuteLuaString简单算术) {
 }
 
 TEST(LuaRuntimeTest, ExecuteLuaString语法错误) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     std::string result;
@@ -108,12 +108,8 @@ TEST(LuaRuntimeTest, ExecuteLuaString语法错误) {
 }
 
 TEST(LuaRuntimeTest, ExecuteLuaString空代码返回true) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     bool success = ExecuteLuaString("", nullptr);
@@ -134,12 +130,8 @@ TEST(LuaRuntimeTest, TickLuaRuntime未初始化不崩溃) {
 }
 
 TEST(LuaRuntimeTest, TickLuaRuntime正常调用不崩溃) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     TickLuaRuntime(0.016f);
@@ -159,12 +151,8 @@ TEST(LuaRuntimeTest, GetLuaMemoryUsage未初始化返回零) {
 }
 
 TEST(LuaRuntimeTest, GetLuaMemoryUsage初始化后大于零) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     size_t usage = GetLuaMemoryUsage();
@@ -184,12 +172,8 @@ TEST(LuaRuntimeTest, PumpLuaScriptHotReloads未初始化返回零) {
 }
 
 TEST(LuaRuntimeTest, PumpLuaScriptHotReloads正常调用不崩溃) {
-    LuaApiContext ctx;
-    ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");
-
-    if (!BootstrapLuaRuntime()) {
-        GTEST_SKIP() << "BootstrapLuaRuntime 失败，跳过测试";
+    if (!InitLuaWithWorld()) {
+        GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
 
     int count = PumpLuaScriptHotReloads();
