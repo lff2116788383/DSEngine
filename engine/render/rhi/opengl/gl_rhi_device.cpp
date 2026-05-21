@@ -14,7 +14,6 @@
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"
 #include "engine/render/rhi/opengl/gl_loader.h"
-#include "embed/skinning_comp.gen.h"
 
 // GL 4.3 SSBO / Compute 甯搁噺 鈥?glad/gl.h 浠呭寘鍚?GL 3.3 瀹氫箟
 #ifndef GL_SHADER_STORAGE_BUFFER
@@ -850,39 +849,6 @@ void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
     glUseProgram(shader_handle);
     if (pfn_glDispatchCompute) pfn_glDispatchCompute(groups_x, groups_y, groups_z);
     glUseProgram(0);
-}
-
-unsigned int OpenGLRhiDevice::CreateComputeSkinningShader() {
-    using namespace dse::render::generated_shaders;
-    return CreateComputeShader(kskinning_comp_glsl330);
-}
-
-void OpenGLRhiDevice::DispatchComputeSkinning(
-        unsigned int shader_handle,
-        BufferHandle in_verts_ssbo,
-        BufferHandle out_verts_ssbo,
-        unsigned int bone_ubo,
-        unsigned int vertex_count) {
-    if (!supports_ssbo_ || shader_handle == 0 || vertex_count == 0) return;
-    InitComputeProcAddresses();
-
-    glUseProgram(shader_handle);
-
-    // binding=0: 蒙皮前顶点，binding=1: 蒙皮后顶点，binding=2: BoneMatricesUBO
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, in_verts_ssbo.raw());
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, out_verts_ssbo.raw());
-    glBindBufferBase(GL_UNIFORM_BUFFER, 2, bone_ubo);
-
-    // FlattenPushConstantsInGLSL 展平后 uniform 名为 vertex_count
-    const int loc_count = glGetUniformLocation(shader_handle, "vertex_count");
-    if (loc_count >= 0) glUniform1ui(loc_count, vertex_count);
-
-    const unsigned int groups = (vertex_count + 63u) / 64u;
-    if (pfn_glDispatchCompute) pfn_glDispatchCompute(groups, 1, 1);
-
-    glUseProgram(0);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
 }
 
 void OpenGLRhiDevice::ComputeMemoryBarrier() {
