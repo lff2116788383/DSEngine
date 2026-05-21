@@ -431,6 +431,141 @@ void ChatPanel::LoadHistory(const std::string& path) {
     scroll_to_bottom_ = true;
 }
 
+// ─── Markdown Renderer ───────────────────────────────────────────────────────
+
+// Render a single line that may contain inline **bold** and `code` spans.
+static void RenderInline(const std::string& line, const ImVec4& base_color) {
+    const ImVec4 code_color  = ImVec4(1.0f, 0.7f, 0.3f, 1.0f);
+    const ImVec4 bold_color  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    size_t pos = 0;
+    bool first = true;
+    while (pos < line.size()) {
+        // Try to match `code`
+        if (line[pos] == '`') {
+            size_t end = line.find('`', pos + 1);
+            if (end != std::string::npos) {
+                if (!first) ImGui::SameLine(0, 0);
+                ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+                // print preceding is handled via slices
+                ImGui::PopStyleColor();
+                if (!first) ImGui::SameLine(0, 0);
+                ImGui::PushStyleColor(ImGuiCol_Text, code_color);
+                ImGui::TextUnformatted(line.substr(pos + 1, end - pos - 1).c_str());
+                ImGui::PopStyleColor();
+                first = false;
+                pos = end + 1;
+                continue;
+            }
+        }
+        // Try to match **bold**
+        if (pos + 1 < line.size() && line[pos] == '*' && line[pos+1] == '*') {
+            size_t end = line.find("**", pos + 2);
+            if (end != std::string::npos) {
+                if (!first) ImGui::SameLine(0, 0);
+                ImGui::PushStyleColor(ImGuiCol_Text, bold_color);
+                ImGui::TextUnformatted(line.substr(pos + 2, end - pos - 2).c_str());
+                ImGui::PopStyleColor();
+                first = false;
+                pos = end + 2;
+                continue;
+            }
+        }
+        // Accumulate plain text up to next special char
+        size_t next = line.find_first_of("`*", pos);
+        std::string chunk = line.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+        if (!chunk.empty()) {
+            if (!first) ImGui::SameLine(0, 0);
+            ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+            ImGui::TextUnformatted(chunk.c_str());
+            ImGui::PopStyleColor();
+            first = false;
+        }
+        if (next == std::string::npos) break;
+        pos = next;
+        // If we get here the special char didn't form a valid span — emit it literally
+        if (!first) ImGui::SameLine(0, 0);
+        ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+        ImGui::TextUnformatted(line.substr(pos, 1).c_str());
+        ImGui::PopStyleColor();
+        first = false;
+        ++pos;
+    }
+    if (first) {
+        ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+        ImGui::TextUnformatted("");
+        ImGui::PopStyleColor();
+    }
+}
+
+// Render markdown text block. base_color applies to non-special text.
+static void RenderMarkdown(const std::string& text, const ImVec4& base_color) {
+    std::istringstream stream(text);
+    std::string line;
+    bool in_code_block = false;
+
+    while (std::getline(stream, line)) {
+        // Code fence
+        if (line.rfind("```", 0) == 0) {
+            if (!in_code_block) {
+                in_code_block = true;
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+                ImGui::BeginChild(("##cb" + std::to_string(ImGui::GetCursorScreenPos().y)).c_str(),
+                                  ImVec2(ImGui::GetContentRegionAvail().x, 0.0f),
+                                  true, ImGuiWindowFlags_NoScrollbar);
+            } else {
+                in_code_block = false;
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+            }
+            continue;
+        }
+
+        if (in_code_block) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.8f, 0.6f, 1.0f));
+            ImGui::TextUnformatted(line.c_str());
+            ImGui::PopStyleColor();
+            continue;
+        }
+
+        // H1 ## H2 ### H3
+        if (line.rfind("### ", 0) == 0) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.9f, 1.0f, 1.0f));
+            ImGui::TextUnformatted(line.substr(4).c_str());
+            ImGui::PopStyleColor();
+        } else if (line.rfind("## ", 0) == 0) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.95f, 1.0f, 1.0f));
+            ImGui::Separator();
+            ImGui::TextUnformatted(line.substr(3).c_str());
+            ImGui::PopStyleColor();
+        } else if (line.rfind("# ", 0) == 0) {
+            ImGui::Separator();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::TextUnformatted(line.substr(2).c_str());
+            ImGui::PopStyleColor();
+            ImGui::Separator();
+        } else if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+            // Bullet list item
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+            ImGui::TextUnformatted("\xE2\x80\xA2 "); // • UTF-8
+            ImGui::PopStyleColor();
+            ImGui::SameLine(0, 0);
+            RenderInline(line.substr(2), base_color);
+        } else if (line.empty()) {
+            ImGui::Spacing();
+        } else {
+            RenderInline(line, base_color);
+        }
+    }
+
+    // Unterminated code block cleanup
+    if (in_code_block) {
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+    }
+}
+
 // ─── ImGui Draw ─────────────────────────────────────────────────────────────
 
 void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine) {
@@ -546,9 +681,21 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 prefix = "";
                 break;
         }
+        // Prefix label
         ImGui::PushStyleColor(ImGuiCol_Text, color);
-        ImGui::TextWrapped("%s%s", prefix, msg.content.c_str());
+        ImGui::TextUnformatted(prefix);
         ImGui::PopStyleColor();
+        if (prefix[0] != '\0') ImGui::SameLine(0, 0);
+
+        // Render content: Markdown for Assistant, plain wrapped for User/System/Tool
+        if (msg.role == ChatRole::Assistant) {
+            RenderMarkdown(msg.content, color);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::TextWrapped("%s", msg.content.c_str());
+            ImGui::PopStyleColor();
+        }
+        ImGui::Spacing();
     }
 
     if (waiting_for_response_) {
