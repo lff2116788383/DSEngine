@@ -3,10 +3,12 @@
 #include <string>
 #include <vector>
 #include <deque>
-#include <thread>
 #include <mutex>
+#include <thread>
 #include <atomic>
 #include <chrono>
+#include <functional>
+#include <sstream>
 
 namespace dse::runtime {
 class EngineInstance;
@@ -54,6 +56,10 @@ public:
     /// 设置当前 Agent ID
     void SetCurrentAgent(const std::string& agent_id);
     
+    /// 设置 @mention 上下文解析器
+    /// resolver(mention_token) 返回对应的上下文字符串，空串表示不处理
+    void SetMentionResolver(std::function<std::string(const std::string&)> resolver);
+    
     /// 清空对话历史
     void ClearHistory();
     
@@ -83,6 +89,7 @@ private:
     bool waiting_for_response_ = false;
     bool bridge_crashed_ = false;       // bridge 意外退出
     std::string history_path_;          // 自动保存路径
+    std::function<std::string(const std::string&)> mention_resolver_; // @mention 解析器
 
     // Python 子进程
     std::string bridge_path_;

@@ -43,6 +43,36 @@ void ChatPanel::SetBridgePath(const std::string& path) {
     bridge_path_ = path;
 }
 
+void ChatPanel::SetMentionResolver(std::function<std::string(const std::string&)> resolver) {
+    mention_resolver_ = std::move(resolver);
+}
+
+// ─── @mention 解析：提取 @token 并拼接上下文前缀 ────────────────────────────
+static std::string ResolveMentions(const std::string& text,
+                                    const std::function<std::string(const std::string&)>& resolver) {
+    if (!resolver) return {};
+
+    // 扫描所有 @word 和 @word:arg 格式的 token
+    std::string context_block;
+    size_t pos = 0;
+    while ((pos = text.find('@', pos)) != std::string::npos) {
+        ++pos;
+        size_t end = pos;
+        while (end < text.size() && (std::isalnum((unsigned char)text[end]) || text[end] == '_' || text[end] == ':' || text[end] == '/'))
+            ++end;
+        if (end > pos) {
+            std::string token = text.substr(pos - 1, end - pos + 1); // include '@'
+            std::string resolved = resolver(token);
+            if (!resolved.empty()) {
+                context_block += resolved;
+                if (context_block.back() != '\n') context_block += '\n';
+            }
+        }
+        pos = end;
+    }
+    return context_block;
+}
+
 void ChatPanel::SetCurrentAgent(const std::string& agent_id) {
     current_agent_id_ = agent_id;
 }
@@ -583,8 +613,12 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
         if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
             std::string text(input_buf_);
             if (!text.empty()) {
+                // Resolve @mentions and prepend context
+                std::string context = ResolveMentions(text, mention_resolver_);
+                std::string send_text = context.empty() ? text : context + "\n用户问题：" + text;
+
                 messages_.push_back({ChatRole::User, text, current_agent_id_});
-                SendToBridge(text);
+                SendToBridge(send_text);
                 input_buf_[0] = '\0';
                 scroll_to_bottom_ = true;
                 // Auto-save history after each user message

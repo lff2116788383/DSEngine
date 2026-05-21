@@ -30,6 +30,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/transform.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -406,6 +407,65 @@ bool EditorApp::Init(int argc, char* argv[]) {
     chat_panel_.SetBridgePath(
         (GetProjectRootPath() / "tools" / "ai_chat_bridge.py").string());
     chat_panel_.LoadHistory("bin/ai_chat_history.json");
+
+    // 注册 @mention 上下文解析器
+    chat_panel_.SetMentionResolver([this](const std::string& token) -> std::string {
+        if (!engine_instance_ || !engine_instance_->pipeline()) return {};
+        entt::registry& registry = engine_instance_->pipeline()->world().registry();
+
+        // @scene — 当前场景基本信息
+        if (token == "@scene") {
+            const std::string scene_name = dse::editor::SceneTabManager::Get().GetActiveDisplayName();
+            int entity_count = 0;
+            for (auto e : registry.storage<entt::entity>())
+                if (registry.valid(e)) ++entity_count;
+            return "[场景上下文]\n场景名: " + scene_name + "\n实体数量: " + std::to_string(entity_count) + "\n";
+        }
+
+        // @entity / @selection — 当前选中实体详情
+        if (token == "@entity" || token == "@selection") {
+            if (selected_entity_ == entt::null || !registry.valid(selected_entity_))
+                return "[选中实体]\n（无选中实体）\n";
+
+            std::string name = "Entity " + std::to_string(static_cast<uint32_t>(selected_entity_));
+            if (registry.all_of<dse::editor::EditorNameComponent>(selected_entity_))
+                name = registry.get<dse::editor::EditorNameComponent>(selected_entity_).name;
+
+            std::string info = "[选中实体]\n名称: " + name + "\n组件:\n";
+            if (registry.all_of<TransformComponent>(selected_entity_)) {
+                const auto& t = registry.get<TransformComponent>(selected_entity_);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf), "  Transform: pos=(%.2f,%.2f,%.2f) scale=(%.2f,%.2f,%.2f)\n",
+                    t.position.x, t.position.y, t.position.z, t.scale.x, t.scale.y, t.scale.z);
+                info += buf;
+            }
+            if (registry.all_of<dse::MeshRendererComponent>(selected_entity_)) {
+                const auto& m = registry.get<dse::MeshRendererComponent>(selected_entity_);
+                info += "  MeshRenderer: mesh=" + m.mesh_path + "\n";
+            }
+            if (registry.all_of<dse::DirectionalLight3DComponent>(selected_entity_)) info += "  DirectionalLight3D\n";
+            if (registry.all_of<dse::PointLightComponent>(selected_entity_))         info += "  PointLight\n";
+            if (registry.all_of<dse::SpotLightComponent>(selected_entity_))          info += "  SpotLight\n";
+            if (registry.all_of<dse::Camera3DComponent>(selected_entity_))           info += "  Camera3D\n";
+            return info;
+        }
+
+        // @script:relative/path — 脚本文件内容（最多 200 行）
+        if (token.rfind("@script:", 0) == 0) {
+            std::string rel_path = token.substr(8);
+            std::filesystem::path full = GetProjectRootPath() / rel_path;
+            if (!std::filesystem::exists(full))
+                full = GetProjectRootPath() / "samples" / "lua" / rel_path;
+            std::ifstream f(full);
+            if (!f) return "[脚本: " + rel_path + "]\n（文件不存在）\n";
+            std::string content, line;
+            int lines = 0;
+            while (std::getline(f, line) && lines < 200) { content += line + "\n"; ++lines; }
+            return "[脚本: " + rel_path + "]\n```lua\n" + content + "```\n";
+        }
+
+        return {}; // 未识别的 token
+    });
 
     // 扫描插件目录
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
