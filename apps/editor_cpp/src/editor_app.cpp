@@ -94,6 +94,7 @@
 #include "editor_multi_viewport.h"
 #include "editor_scene_view_mode.h"
 #include "editor_anim_state_machine.h"
+#include "editor_ai_config.h"
 
 
 
@@ -351,6 +352,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
     current_gizmo_operation_ = editor_settings.default_gizmo_operation;
     current_gizmo_mode_ = editor_settings.default_gizmo_mode;
     dse::editor::SetEditorLocale(editor_settings.editor_ui_locale);
+
+    // Load AI configuration
+    dse::editor::AIConfigManager::Instance().Load("bin/editor_ai_config.json");
 
     // 尝试自动打开上次项目
     if (!editor_settings.last_project_path.empty()) {
@@ -794,6 +798,9 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawPreferencesPanel(&show_preferences_);
     dse::editor::DrawUndoHistoryPanel(&show_undo_history_);
+    
+    // AI Configuration window
+    dse::editor::AIConfigManager::Instance().DrawConfigWindow();
 
     // New panels
     if (show_asset_browser_)        dse::editor::DrawAssetBrowserPanel();

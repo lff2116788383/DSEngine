@@ -10,21 +10,44 @@ namespace dse::editor {
 // ─── Bridge 协议消息类型 ────────────────────────────────────────────────────
 
 enum class BridgeMessageType {
+    // 原有
     AssistantMessage,
     ToolCall,
     Error,
     Status,
+    // 新增：流式输出
+    StreamStart,
+    StreamChunk,
+    StreamEnd,
+    // 新增：Agent 切换
+    AgentSwitch,
+    // 新增：图片
+    ImageGenerated,
+    ImageAnalyzed,
+    // 新增：Token 统计
+    TokenUsage,
+    // 新增：取消
+    CancelAck,
     Unknown
 };
 
 struct BridgeMessage {
     BridgeMessageType type = BridgeMessageType::Unknown;
-    std::string content;      // assistant_message / error / status
+    std::string content;      // assistant_message / error / status / stream_chunk
     std::string tool_name;    // tool_call
     std::string tool_args;    // tool_call
     std::string call_id;      // tool_call
     std::string raw;          // 原始文本（解析失败时使用）
     bool valid = false;       // JSON 解析是否成功
+    
+    // 新增字段
+    std::string agent_id;     // Agent 切换
+    std::string image_base64; // 图片数据
+    int chunk_id = 0;         // 流式片段 ID
+    bool is_last = false;     // 是否为最后一个流式片段
+    int input_tokens = 0;     // Token 统计
+    int output_tokens = 0;    // Token 统计
+    std::string model;        // Token 统计
 };
 
 // ─── 纯函数：解析 bridge stdout 的 JSON-line ───────────────────────────────
@@ -71,6 +94,54 @@ inline BridgeMessage ParseBridgeMessage(const std::string& line) {
         if (doc.HasMember("message") && doc["message"].IsString())
             msg.content = doc["message"].GetString();
     }
+    else if (type_str == "stream_start") {
+        msg.type = BridgeMessageType::StreamStart;
+    }
+    else if (type_str == "stream_chunk") {
+        msg.type = BridgeMessageType::StreamChunk;
+        if (doc.HasMember("content") && doc["content"].IsString())
+            msg.content = doc["content"].GetString();
+        if (doc.HasMember("chunk_id") && doc["chunk_id"].IsInt())
+            msg.chunk_id = doc["chunk_id"].GetInt();
+        if (doc.HasMember("is_last") && doc["is_last"].IsBool())
+            msg.is_last = doc["is_last"].GetBool();
+    }
+    else if (type_str == "stream_end") {
+        msg.type = BridgeMessageType::StreamEnd;
+        if (doc.HasMember("chunk_id") && doc["chunk_id"].IsInt())
+            msg.chunk_id = doc["chunk_id"].GetInt();
+    }
+    else if (type_str == "agent_switch") {
+        msg.type = BridgeMessageType::AgentSwitch;
+        if (doc.HasMember("from") && doc["from"].IsString())
+            msg.agent_id = doc["from"].GetString();
+        if (doc.HasMember("to") && doc["to"].IsString())
+            msg.content = doc["to"].GetString();
+    }
+    else if (type_str == "image_generated") {
+        msg.type = BridgeMessageType::ImageGenerated;
+        if (doc.HasMember("image") && doc["image"].IsString())
+            msg.image_base64 = doc["image"].GetString();
+        if (doc.HasMember("prompt") && doc["prompt"].IsString())
+            msg.content = doc["prompt"].GetString();
+    }
+    else if (type_str == "image_analyzed") {
+        msg.type = BridgeMessageType::ImageAnalyzed;
+        if (doc.HasMember("content") && doc["content"].IsString())
+            msg.content = doc["content"].GetString();
+    }
+    else if (type_str == "token_usage") {
+        msg.type = BridgeMessageType::TokenUsage;
+        if (doc.HasMember("input_tokens") && doc["input_tokens"].IsInt())
+            msg.input_tokens = doc["input_tokens"].GetInt();
+        if (doc.HasMember("output_tokens") && doc["output_tokens"].IsInt())
+            msg.output_tokens = doc["output_tokens"].GetInt();
+        if (doc.HasMember("model") && doc["model"].IsString())
+            msg.model = doc["model"].GetString();
+    }
+    else if (type_str == "cancel_ack") {
+        msg.type = BridgeMessageType::CancelAck;
+    }
     else {
         msg.type = BridgeMessageType::Unknown;
     }
@@ -80,11 +151,13 @@ inline BridgeMessage ParseBridgeMessage(const std::string& line) {
 
 // ─── 纯函数：构建发送给 bridge 的 user_message JSON-line ───────────────────
 
-inline std::string BuildUserMessage(const std::string& content) {
+inline std::string BuildUserMessage(const std::string& content, const std::string& agent_id = "") {
     rapidjson::Document doc(rapidjson::kObjectType);
     auto& alloc = doc.GetAllocator();
     doc.AddMember("type", "user_message", alloc);
     doc.AddMember("content", rapidjson::Value(content.c_str(), alloc), alloc);
+    if (!agent_id.empty())
+        doc.AddMember("agent_id", rapidjson::Value(agent_id.c_str(), alloc), alloc);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -101,6 +174,40 @@ inline std::string BuildToolResult(const std::string& call_id,
     doc.AddMember("type", "tool_result", alloc);
     doc.AddMember("call_id", rapidjson::Value(call_id.c_str(), alloc), alloc);
     doc.AddMember("result", rapidjson::Value(result_json.c_str(), alloc), alloc);
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return std::string(buf.GetString()) + "\n";
+}
+
+// ─── 纯函数：构建取消消息 JSON-line ────────────────────────────────────────
+
+inline std::string BuildCancelMessage() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    doc.AddMember("type", "cancel", doc.GetAllocator());
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return std::string(buf.GetString()) + "\n";
+}
+
+// ─── 纯函数：构建带图片的 user_message JSON-line ───────────────────────────
+
+inline std::string BuildUserMessageWithImage(const std::string& content,
+                                             const std::string& image_base64,
+                                             const std::string& agent_id = "") {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    auto& alloc = doc.GetAllocator();
+    doc.AddMember("type", "user_message", alloc);
+    doc.AddMember("content", rapidjson::Value(content.c_str(), alloc), alloc);
+    if (!agent_id.empty())
+        doc.AddMember("agent_id", rapidjson::Value(agent_id.c_str(), alloc), alloc);
+    
+    rapidjson::Value images_array(rapidjson::kArrayType);
+    images_array.PushBack(rapidjson::Value(image_base64.c_str(), alloc), alloc);
+    doc.AddMember("images", images_array, alloc);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);

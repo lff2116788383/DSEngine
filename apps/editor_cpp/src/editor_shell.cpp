@@ -19,6 +19,7 @@
 #include "editor_preferences_panel.h"
 #include "editor_autosave.h"
 #include "editor_layout_manager.h"
+#include "editor_ai_config.h"
 #include "engine/dse_version.h"
 #include "editor_locale.h"
 
@@ -125,6 +126,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     bool has_sel     = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
     bool editable    = !ctx.read_only;
     bool has_project = proj_mgr.HasOpenProject();
+    
+    auto& ai_config = AIConfigManager::Instance();
 
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("File"))) {
@@ -403,9 +406,6 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
         }
         ImGui::Separator();
-        if (show_chat && ImGui::MenuItem("AI Chat")) {
-            *show_chat = true;
-        }
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
             *show_plugins = true;
         }
@@ -417,7 +417,19 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndMenu();
     }
 
-    // ─── Build ───────────────────────────────────────────────────────────────
+    // ─── AI ────────────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("AI")) {
+        if (show_chat && ImGui::MenuItem("AI Chat Panel")) {
+            *show_chat = true;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("AI Configuration...")) {
+            ai_config.ShowConfigWindow(true);
+        }
+        ImGui::EndMenu();
+    }
+
+    // ─── Build ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Build")) {
         if (ImGui::MenuItem(MDI_ICON_EXPORT "  Export Windows Build...", "Ctrl+B")) {
             dse::editor::OpenBuildGameDialog();

@@ -2,6 +2,7 @@
 #include "editor_chat_protocol.h"
 #include "editor_control_server.h"
 #include "editor_console_panel.h"
+#include "editor_ai_config.h"
 
 #include <iostream>
 #include <sstream>
@@ -42,6 +43,16 @@ void ChatPanel::SetBridgePath(const std::string& path) {
     bridge_path_ = path;
 }
 
+void ChatPanel::SetCurrentAgent(const std::string& agent_id) {
+    current_agent_id_ = agent_id;
+}
+
+void ChatPanel::ClearHistory() {
+    messages_.clear();
+    messages_.push_back({ChatRole::System,
+        "Conversation cleared."});
+}
+
 // ─── Bridge subprocess management ───────────────────────────────────────────
 
 void ChatPanel::StartBridge() {
@@ -51,6 +62,23 @@ void ChatPanel::StartBridge() {
         messages_.push_back({ChatRole::System,
             "Error: ai_chat_bridge.py not found. Expected at: " + bridge_path_});
         return;
+    }
+
+    // Apply AIConfigManager settings as environment variables
+    {
+        auto& cfg = AIConfigManager::Instance().GetConfig();
+        if (!cfg.providers.empty()) {
+            const auto& p = cfg.providers[
+                std::clamp(cfg.current_provider_index, 0, (int)cfg.providers.size() - 1)];
+            if (!p.api_key.empty())
+                SetEnvironmentVariableA("OPENAI_API_KEY", p.api_key.c_str());
+            if (!p.base_url.empty())
+                SetEnvironmentVariableA("OPENAI_BASE_URL", p.base_url.c_str());
+            if (!p.model.empty())
+                SetEnvironmentVariableA("OPENAI_MODEL", p.model.c_str());
+            if (!p.proxy_url.empty())
+                SetEnvironmentVariableA("HTTP_PROXY", p.proxy_url.c_str());
+        }
     }
 
 #ifdef _WIN32
@@ -207,18 +235,8 @@ void ChatPanel::SendToBridge(const std::string& text) {
         if (!bridge_running_) return;
     }
 
-    // Protocol: send JSON line to subprocess stdin
-    // {"type": "user_message", "content": "..."}
-    rapidjson::Document doc(rapidjson::kObjectType);
-    auto& alloc = doc.GetAllocator();
-    doc.AddMember("type", "user_message", alloc);
-    doc.AddMember("content", rapidjson::Value(text.c_str(), alloc), alloc);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    doc.Accept(writer);
-
-    std::string line = std::string(buf.GetString()) + "\n";
+    // Use the protocol helper with agent_id
+    std::string line = BuildUserMessage(text, current_agent_id_);
 
 #ifdef _WIN32
     DWORD written;
@@ -228,6 +246,19 @@ void ChatPanel::SendToBridge(const std::string& text) {
 #endif
 
     waiting_for_response_ = true;
+}
+
+void ChatPanel::CancelGeneration() {
+    if (!bridge_running_ || !waiting_for_response_) return;
+
+    std::string line = BuildCancelMessage();
+
+#ifdef _WIN32
+    DWORD written;
+    WriteFile(stdin_write_, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
+#else
+    write(stdin_fd_, line.c_str(), line.size());
+#endif
 }
 
 // ─── Execute tool call locally ──────────────────────────────────────────────
@@ -301,7 +332,11 @@ void ChatPanel::ExecuteToolCall(const std::string& tool_name, const std::string&
 // ─── ImGui Draw ─────────────────────────────────────────────────────────────
 
 void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine) {
-    // Process pending output from bridge
+    // Tool calls collected from bridge output, executed after releasing the mutex
+    struct ToolCallEntry { std::string name, args, call_id; };
+    std::vector<ToolCallEntry> pending_tool_calls;
+
+    // Process pending output from bridge (hold mutex only while draining queue)
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
         while (!pending_output_.empty()) {
@@ -317,14 +352,38 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
 
             switch (bmsg.type) {
             case BridgeMessageType::AssistantMessage:
-                messages_.push_back({ChatRole::Assistant, bmsg.content});
+                messages_.push_back({ChatRole::Assistant, bmsg.content, current_agent_id_});
+                messages_.back().start_time = std::chrono::steady_clock::now();
+                messages_.back().end_time = std::chrono::steady_clock::now();
                 waiting_for_response_ = false;
                 scroll_to_bottom_ = true;
+                break;
+            case BridgeMessageType::StreamStart:
+                if (messages_.empty() || messages_.back().role != ChatRole::Assistant) {
+                    messages_.push_back({ChatRole::Assistant, "", current_agent_id_});
+                    messages_.back().start_time = std::chrono::steady_clock::now();
+                    messages_.back().last_update = std::chrono::steady_clock::now();
+                }
+                messages_.back().is_streaming = true;
+                break;
+            case BridgeMessageType::StreamChunk:
+                if (!messages_.empty() && messages_.back().role == ChatRole::Assistant) {
+                    messages_.back().content += bmsg.content;
+                    messages_.back().last_update = std::chrono::steady_clock::now();
+                }
+                scroll_to_bottom_ = true;
+                break;
+            case BridgeMessageType::StreamEnd:
+                if (!messages_.empty()) {
+                    messages_.back().is_streaming = false;
+                    messages_.back().end_time = std::chrono::steady_clock::now();
+                }
+                waiting_for_response_ = false;
                 break;
             case BridgeMessageType::ToolCall:
                 messages_.push_back({ChatRole::System, "Calling: " + bmsg.tool_name});
                 scroll_to_bottom_ = true;
-                ExecuteToolCall(bmsg.tool_name, bmsg.tool_args, bmsg.call_id, server, engine);
+                pending_tool_calls.push_back({bmsg.tool_name, bmsg.tool_args, bmsg.call_id});
                 break;
             case BridgeMessageType::Error:
                 messages_.push_back({ChatRole::System, "Error: " + bmsg.content});
@@ -335,12 +394,29 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 messages_.push_back({ChatRole::System, bmsg.content});
                 scroll_to_bottom_ = true;
                 break;
+            case BridgeMessageType::TokenUsage:
+                {
+                    std::string token_info = "Tokens: " + std::to_string(bmsg.input_tokens) +
+                                           " in, " + std::to_string(bmsg.output_tokens) + " out";
+                    messages_.push_back({ChatRole::System, token_info});
+                    scroll_to_bottom_ = true;
+                }
+                break;
+            case BridgeMessageType::CancelAck:
+                waiting_for_response_ = false;
+                if (!messages_.empty() && messages_.back().is_streaming)
+                    messages_.back().is_streaming = false;
+                break;
             default:
                 messages_.push_back({ChatRole::System, "[bridge] " + line});
                 break;
             }
         }
-    }
+    } // mutex released here
+
+    // Execute tool calls outside the mutex so reader thread isn't blocked
+    for (const auto& tc : pending_tool_calls)
+        ExecuteToolCall(tc.name, tc.args, tc.call_id, server, engine);
 
     // ─── Messages area ──────────────────────────────────────────────────────
     float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
@@ -387,8 +463,28 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     // ─── Input area ─────────────────────────────────────────────────────────
     ImGui::Separator();
 
+    // Agent selector
+    ImGui::SetNextItemWidth(150);
+    if (ImGui::BeginCombo("Agent", current_agent_id_.c_str())) {
+        if (ImGui::Selectable("general", current_agent_id_ == "general")) {
+            SetCurrentAgent("general");
+        }
+        if (ImGui::Selectable("scene_architect", current_agent_id_ == "scene_architect")) {
+            SetCurrentAgent("scene_architect");
+        }
+        if (ImGui::Selectable("script_writer", current_agent_id_ == "script_writer")) {
+            SetCurrentAgent("script_writer");
+        }
+        if (ImGui::Selectable("asset_manager", current_agent_id_ == "asset_manager")) {
+            SetCurrentAgent("asset_manager");
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::SameLine();
+
     bool send = false;
-    ImGui::PushItemWidth(-60);
+    ImGui::PushItemWidth(-100);
     if (ImGui::InputText("##chat_input", input_buf_, sizeof(input_buf_),
                          ImGuiInputTextFlags_EnterReturnsTrue)) {
         send = true;
@@ -396,14 +492,28 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     ImGui::PopItemWidth();
 
     ImGui::SameLine();
-    if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
-        std::string text(input_buf_);
-        if (!text.empty() && !waiting_for_response_) {
-            messages_.push_back({ChatRole::User, text});
-            SendToBridge(text);
-            input_buf_[0] = '\0';
-            scroll_to_bottom_ = true;
+    
+    if (waiting_for_response_) {
+        // Show Stop button during generation
+        if (ImGui::Button("Stop", ImVec2(50, 0))) {
+            CancelGeneration();
         }
+    } else {
+        // Show Send button when idle
+        if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
+            std::string text(input_buf_);
+            if (!text.empty()) {
+                messages_.push_back({ChatRole::User, text, current_agent_id_});
+                SendToBridge(text);
+                input_buf_[0] = '\0';
+                scroll_to_bottom_ = true;
+            }
+        }
+    }
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Clear")) {
+        ClearHistory();
     }
 }
 

@@ -17,6 +17,7 @@ add_executable(dse_editor_cpp WIN32
     src/editor_control_tools.cpp
     src/editor_plugin_manager.cpp
     src/editor_chat_panel.cpp
+    src/editor_ai_config.cpp
     src/editor_aux_panels.cpp
     src/editor_console_panel.cpp
     src/editor_file_dialog.cpp
@@ -98,7 +99,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends
 )
 
-target_link_libraries(dse_editor_cpp PRIVATE dse_engine ixwebsocket opengl32 comdlg32)
+target_link_libraries(dse_editor_cpp PRIVATE dse_engine ixwebsocket opengl32 comdlg32 crypt32)
 
 # 将编译产物放到 bin 目录下
 set_target_properties(dse_editor_cpp PROPERTIES 

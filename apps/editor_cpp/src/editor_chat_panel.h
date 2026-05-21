@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <chrono>
 
 namespace dse::runtime {
 class EngineInstance;
@@ -22,7 +23,16 @@ enum class ChatRole { User, Assistant, System, ToolResult };
 struct ChatMessage {
     ChatRole role;
     std::string content;
-    bool is_streaming = false;  // 正在流式接收中
+    std::string agent_id;
+    bool is_streaming = false;
+    std::chrono::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point end_time;
+    std::chrono::steady_clock::time_point last_update;
+    
+    float response_time_ms() const {
+        auto end = end_time.time_since_epoch().count() ? end_time : std::chrono::steady_clock::now();
+        return std::chrono::duration<float, std::milli>(end - start_time).count();
+    }
 };
 
 // ─── ChatPanel ──────────────────────────────────────────────────────────────
@@ -40,12 +50,19 @@ public:
 
     /// 设置 Python bridge 脚本路径
     void SetBridgePath(const std::string& path);
+    
+    /// 设置当前 Agent ID
+    void SetCurrentAgent(const std::string& agent_id);
+    
+    /// 清空对话历史
+    void ClearHistory();
 
     /// 每帧调用：绘制 ImGui UI + 处理子进程 I/O
     void Draw(ControlServer& server, dse::runtime::EngineInstance& engine);
 
 private:
     void SendToBridge(const std::string& text);
+    void CancelGeneration();
     void StartBridge();
     void StopBridge();
     void ExecuteToolCall(const std::string& tool_name, const std::string& args_json,
@@ -55,6 +72,7 @@ private:
     // UI 状态
     char input_buf_[1024] = {};
     std::vector<ChatMessage> messages_;
+    std::string current_agent_id_ = "general";
     bool scroll_to_bottom_ = false;
     bool waiting_for_response_ = false;
 
