@@ -359,9 +359,14 @@ struct RenderStats {
 /// 渲染资源状态枚举
 enum class ResourceState : uint8_t {
     Undefined,          ///< 未知/初始状态
-    RenderTarget,       ///< 作为渲染目标写入
+    RenderTarget,       ///< 作为颜色渲染目标写入
+    DepthWrite,         ///< 作为深度/模板渲染目标写入
+    DepthRead,          ///< 作为只读深度附件（深度测试但不写入）
     ShaderRead,         ///< 作为纹理/UBO 被着色器读取
-    UnorderedAccess     ///< 作为 UAV/SSBO 被 Compute Shader 读写
+    UnorderedAccess,    ///< 作为 UAV/SSBO 被 Compute Shader 读写
+    CopySource,         ///< 作为拷贝/Blit 源
+    CopyDest,           ///< 作为拷贝/Blit 目标
+    Present             ///< 用于呈现到屏幕
 };
 
 /// 生成 MeshDrawItem 的 64 位排序键，用于 std::sort 减少 GPU 状态切换

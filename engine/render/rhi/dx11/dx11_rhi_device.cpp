@@ -221,6 +221,10 @@ unsigned int DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         desc.color_attachment_count);
 }
 
+void DX11RhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
+    resource_mgr_.DeleteRenderTarget(render_target_handle);
+}
+
 unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     return resource_mgr_.GetRenderTargetColorTextureHandle(render_target_handle);
 }
@@ -432,6 +436,27 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
     { ID3D11Buffer* null_cb = nullptr; dc->CSSetConstantBuffers(0, 1, &null_cb); }
     dc->CSSetShader(nullptr, nullptr, 0);
     ClearComputeParams();
+}
+
+// ============================================================
+// RenderGraph 自动屏障（D3D11: 驱动隐式管理，从 UAV 离开时解绑）
+// ============================================================
+
+void DX11RhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+                                            ResourceState from, ResourceState to) {
+    (void)rt_handle;
+    if (from == to) return;
+
+    // D3D11 runtime 自动追踪 resource hazard，不需要显式 barrier。
+    // 唯一需要处理的是：从 UAV 状态离开时，解绑 UAV 以避免
+    // D3D11 WARNING: Resource still bound as UAV 的调试警告。
+    if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
+        ID3D11DeviceContext* dc = context_.device_context();
+        if (dc) {
+            ID3D11UnorderedAccessView* null_uav = nullptr;
+            dc->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+        }
+    }
 }
 
 void DX11RhiDevice::ComputeMemoryBarrier() {

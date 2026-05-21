@@ -589,8 +589,18 @@ size_t RenderGraph::culled_pass_count() const {
 }
 
 void RenderGraph::Reset() {
-    // Transient RT 由图管理，但释放需要 RHI，此处仅清空记录。
-    // 实际 GPU 资源由 RhiDevice 在 Shutdown 时统一回收。
+    // 释放 Transient 类型资源的物理 RT
+    if (rhi_device_) {
+        // 收集去重的 transient RT handle（alias 复用时多个资源共享同一 handle）
+        std::unordered_set<unsigned int> freed;
+        for (const auto& res : resources_) {
+            if (res.type == ResourceType::Transient && res.rt_handle != 0) {
+                if (freed.insert(res.rt_handle).second) {
+                    rhi_device_->DeleteRenderTarget(res.rt_handle);
+                }
+            }
+        }
+    }
     passes_.clear();
     resources_.clear();
     resource_by_name_.clear();

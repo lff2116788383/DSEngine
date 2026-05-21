@@ -41,6 +41,7 @@ public:
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
+    void DeleteRenderTarget(unsigned int render_target_handle) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
@@ -65,6 +66,11 @@ public:
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
+
+    // --- RenderGraph 自动屏障（GL: glTextureBarrier / glMemoryBarrier）---
+    void TransitionRenderTarget(unsigned int rt_handle,
+                                 ResourceState from, ResourceState to) override;
+
     void PatchLastFrameGPUCulledCount(int culled) override {
         draw_executor_.MutableLastFrameStats().gpu_culled_count = culled;
     }

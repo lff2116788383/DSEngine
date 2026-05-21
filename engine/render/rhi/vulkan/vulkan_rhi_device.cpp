@@ -240,6 +240,10 @@ unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
                                              desc.color_attachment_count);
 }
 
+void VulkanRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
+    resource_mgr_.DeleteRenderTarget(render_target_handle);
+}
+
 unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     // Vulkan 中纹理句柄概念不同，返回 RenderTarget handle 作为代理
     return render_target_handle;
@@ -709,6 +713,115 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                              VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                              0, 1, &barrier, 0, nullptr, 0, nullptr);
         resource_mgr_.EndSingleTimeCommands(cmd);
+    }
+}
+
+// ============================================================
+// RenderGraph 自动屏障：精确 VkImageMemoryBarrier
+// ============================================================
+
+namespace {
+
+struct VkBarrierMapping {
+    VkImageLayout layout;
+    VkAccessFlags access;
+    VkPipelineStageFlags stage;
+};
+
+VkBarrierMapping MapResourceState(ResourceState state) {
+    switch (state) {
+    case ResourceState::RenderTarget:
+        return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    case ResourceState::DepthWrite:
+        return { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT };
+    case ResourceState::DepthRead:
+        return { VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT };
+    case ResourceState::ShaderRead:
+        return { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                 VK_ACCESS_SHADER_READ_BIT,
+                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT };
+    case ResourceState::UnorderedAccess:
+        return { VK_IMAGE_LAYOUT_GENERAL,
+                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
+    case ResourceState::CopySource:
+        return { VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 VK_ACCESS_TRANSFER_READ_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT };
+    case ResourceState::CopyDest:
+        return { VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 VK_ACCESS_TRANSFER_WRITE_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT };
+    case ResourceState::Present:
+        return { VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                 0,
+                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT };
+    case ResourceState::Undefined:
+    default:
+        return { VK_IMAGE_LAYOUT_UNDEFINED,
+                 0,
+                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
+    }
+}
+
+} // anonymous namespace
+
+void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+                                              ResourceState from, ResourceState to) {
+    if (from == to) return;
+
+    const auto* rt = resource_mgr_.GetRenderTarget(rt_handle);
+    if (!rt) return;
+
+    // 确定要转换的 VkImage 和 aspect mask
+    VkImage image = VK_NULL_HANDLE;
+    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    bool is_depth_transition = (from == ResourceState::DepthWrite || from == ResourceState::DepthRead ||
+                                to == ResourceState::DepthWrite || to == ResourceState::DepthRead);
+    if (is_depth_transition && rt->has_depth && rt->depth_texture.image != VK_NULL_HANDLE) {
+        image = rt->depth_texture.image;
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else if (rt->has_color && rt->color_texture.image != VK_NULL_HANDLE) {
+        image = rt->color_texture.image;
+    } else {
+        return;
+    }
+
+    auto src = MapResourceState(from);
+    auto dst = MapResourceState(to);
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = src.layout;
+    barrier.newLayout = dst.layout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = aspect;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    barrier.srcAccessMask = src.access;
+    barrier.dstAccessMask = dst.access;
+
+    // 优先使用活跃渲染命令缓冲；不可用时走 single-time 命令
+    VkCommandBuffer cmd = active_render_cmd_;
+    if (cmd != VK_NULL_HANDLE) {
+        vkCmdPipelineBarrier(cmd, src.stage, dst.stage,
+                             0, 0, nullptr, 0, nullptr, 1, &barrier);
+    } else {
+        VkCommandBuffer one_shot = resource_mgr_.BeginSingleTimeCommands();
+        vkCmdPipelineBarrier(one_shot, src.stage, dst.stage,
+                             0, 0, nullptr, 0, nullptr, 1, &barrier);
+        resource_mgr_.EndSingleTimeCommands(one_shot);
     }
 }
 

@@ -451,3 +451,219 @@ TEST_F(RenderGraphIntegrationTest, WAW冲突编译失败) {
     graph.MarkOutput(res);
     EXPECT_FALSE(graph.Compile());
 }
+
+// ============================================================
+// Phase RG — 自动 Barrier 生成
+// ============================================================
+
+TEST_F(RenderGraphIntegrationTest, 自动Barrier_RenderTarget到ShaderRead) {
+    auto res = graph.DeclareResource("rt_color");
+    auto output = graph.DeclareResource("final");
+
+    auto write_pass = graph.AddPass("WritePass");
+    graph.PassWriteWithState(write_pass, res, ResourceState::RenderTarget);
+    graph.PassSetExecute(write_pass, [&](CommandBuffer&) { log.Record("WritePass"); });
+
+    auto read_pass = graph.AddPass("ReadPass");
+    graph.PassReadWithState(read_pass, res, ResourceState::ShaderRead);
+    graph.PassWrite(read_pass, output);
+    graph.PassSetExecute(read_pass, [&](CommandBuffer&) { log.Record("ReadPass"); });
+
+    graph.MarkOutput(output);
+
+    ASSERT_TRUE(graph.Compile());
+
+    // 验证 ReadPass 的 pre_barriers 包含 RenderTarget→ShaderRead 转换
+    bool found_barrier = false;
+    for (uint32_t pass_id : graph.compiled_order()) {
+        // 找到 ReadPass
+        for (const auto& p : graph.passes()) {
+            if (p.id == pass_id && p.name == "ReadPass") {
+                ASSERT_FALSE(p.pre_barriers.empty());
+                EXPECT_EQ(p.pre_barriers[0].from, ResourceState::RenderTarget);
+                EXPECT_EQ(p.pre_barriers[0].to, ResourceState::ShaderRead);
+                found_barrier = true;
+            }
+        }
+    }
+    EXPECT_TRUE(found_barrier);
+}
+
+TEST_F(RenderGraphIntegrationTest, 自动Barrier_UAV到ShaderRead) {
+    auto res = graph.DeclareResource("compute_out");
+    auto output = graph.DeclareResource("final");
+
+    auto compute_pass = graph.AddPass("ComputePass");
+    graph.PassWriteWithState(compute_pass, res, ResourceState::UnorderedAccess);
+    graph.PassSetExecute(compute_pass, [&](CommandBuffer&) { log.Record("ComputePass"); });
+
+    auto sample_pass = graph.AddPass("SamplePass");
+    graph.PassReadWithState(sample_pass, res, ResourceState::ShaderRead);
+    graph.PassWrite(sample_pass, output);
+    graph.PassSetExecute(sample_pass, [&](CommandBuffer&) { log.Record("SamplePass"); });
+
+    graph.MarkOutput(output);
+
+    ASSERT_TRUE(graph.Compile());
+
+    bool found_barrier = false;
+    for (const auto& p : graph.passes()) {
+        if (p.name == "SamplePass") {
+            ASSERT_FALSE(p.pre_barriers.empty());
+            EXPECT_EQ(p.pre_barriers[0].from, ResourceState::UnorderedAccess);
+            EXPECT_EQ(p.pre_barriers[0].to, ResourceState::ShaderRead);
+            found_barrier = true;
+        }
+    }
+    EXPECT_TRUE(found_barrier);
+}
+
+TEST_F(RenderGraphIntegrationTest, 自动Barrier_DepthWrite到ShaderRead) {
+    auto depth = graph.DeclareResource("depth");
+    auto color = graph.DeclareResource("color");
+
+    auto depth_pass = graph.AddPass("DepthPass");
+    graph.PassWriteWithState(depth_pass, depth, ResourceState::DepthWrite);
+    graph.PassSetExecute(depth_pass, [&](CommandBuffer&) { log.Record("DepthPass"); });
+
+    auto lighting_pass = graph.AddPass("LightingPass");
+    graph.PassReadWithState(lighting_pass, depth, ResourceState::ShaderRead);
+    graph.PassWrite(lighting_pass, color);
+    graph.PassSetExecute(lighting_pass, [&](CommandBuffer&) { log.Record("LightingPass"); });
+
+    graph.MarkOutput(color);
+    ASSERT_TRUE(graph.Compile());
+
+    bool found = false;
+    for (const auto& p : graph.passes()) {
+        if (p.name == "LightingPass") {
+            ASSERT_FALSE(p.pre_barriers.empty());
+            EXPECT_EQ(p.pre_barriers[0].from, ResourceState::DepthWrite);
+            EXPECT_EQ(p.pre_barriers[0].to, ResourceState::ShaderRead);
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found);
+}
+
+TEST_F(RenderGraphIntegrationTest, 无状态变化不生成Barrier) {
+    auto res = graph.DeclareResource("rt_color");
+
+    auto pass1 = graph.AddPass("Pass1");
+    graph.PassWriteWithState(pass1, res, ResourceState::ShaderRead);
+    graph.PassSetExecute(pass1, [&](CommandBuffer&) { log.Record("Pass1"); });
+
+    // pass2 也读 ShaderRead — 状态没变，不应产生 barrier
+    auto pass2 = graph.AddPass("Pass2");
+    graph.PassReadWithState(pass2, res, ResourceState::ShaderRead);
+    graph.PassSetExecute(pass2, [&](CommandBuffer&) { log.Record("Pass2"); });
+
+    graph.MarkOutput(res);
+    ASSERT_TRUE(graph.Compile());
+
+    for (const auto& p : graph.passes()) {
+        if (p.name == "Pass2") {
+            EXPECT_TRUE(p.pre_barriers.empty());
+        }
+    }
+}
+
+// ============================================================
+// Phase RG — Transient RT 生命周期 & Alias 复用
+// ============================================================
+
+class TransientRTStub : public StubRhiDevice {
+    unsigned int next_handle_ = 100;
+public:
+    std::vector<unsigned int> created_handles;
+    std::vector<unsigned int> deleted_handles;
+
+    unsigned int CreateRenderTarget(const RenderTargetDesc&) override {
+        unsigned int h = next_handle_++;
+        created_handles.push_back(h);
+        return h;
+    }
+
+    void DeleteRenderTarget(unsigned int handle) override {
+        deleted_handles.push_back(handle);
+    }
+};
+
+TEST_F(RenderGraphIntegrationTest, TransientRT_编译分配并Reset释放) {
+    TransientRTStub stub;
+    graph.SetRhiDevice(&stub);
+
+    RenderTargetDesc desc{};
+    desc.width = 256;
+    desc.height = 256;
+    desc.has_color = true;
+    desc.has_depth = false;
+
+    auto t1 = graph.DeclareTransient("temp1", desc);
+    auto output = graph.DeclareResource("final");
+
+    auto pass1 = graph.AddPass("FillTemp");
+    graph.PassWrite(pass1, t1);
+    graph.PassSetExecute(pass1, [&](CommandBuffer&) { log.Record("FillTemp"); });
+
+    auto pass2 = graph.AddPass("UseTemp");
+    graph.PassRead(pass2, t1);
+    graph.PassWrite(pass2, output);
+    graph.PassSetExecute(pass2, [&](CommandBuffer&) { log.Record("UseTemp"); });
+
+    graph.MarkOutput(output);
+    ASSERT_TRUE(graph.Compile());
+
+    // Transient 应被分配了物理 RT
+    EXPECT_EQ(stub.created_handles.size(), 1u);
+    EXPECT_NE(graph.GetResourceRT(t1), 0u);
+
+    // Reset 应释放
+    graph.Reset();
+    EXPECT_EQ(stub.deleted_handles.size(), 1u);
+    EXPECT_EQ(stub.deleted_handles[0], stub.created_handles[0]);
+    graph.SetRhiDevice(nullptr);
+}
+
+TEST_F(RenderGraphIntegrationTest, TransientRT_不重叠的资源Alias复用) {
+    TransientRTStub stub;
+    graph.SetRhiDevice(&stub);
+
+    RenderTargetDesc desc{};
+    desc.width = 512;
+    desc.height = 512;
+    desc.has_color = true;
+    desc.has_depth = false;
+
+    auto t1 = graph.DeclareTransient("temp1", desc);
+    auto t2 = graph.DeclareTransient("temp2", desc);
+    auto output = graph.DeclareResource("final");
+
+    // Pass1 写 t1
+    auto p1 = graph.AddPass("P1");
+    graph.PassWrite(p1, t1);
+    graph.PassSetExecute(p1, [&](CommandBuffer&) { log.Record("P1"); });
+
+    // Pass2 读 t1、写 output（t1 最后使用在此）
+    auto p2 = graph.AddPass("P2");
+    graph.PassRead(p2, t1);
+    graph.PassWrite(p2, output);
+    graph.PassSetExecute(p2, [&](CommandBuffer&) { log.Record("P2"); });
+
+    // Pass3 写 t2（t1 已不再使用，t2 可复用 t1 的物理 RT）
+    auto p3 = graph.AddPass("P3");
+    graph.PassRead(p3, output);
+    graph.PassWrite(p3, t2);
+    graph.PassSetExecute(p3, [&](CommandBuffer&) { log.Record("P3"); });
+
+    graph.MarkOutput(t2);
+    ASSERT_TRUE(graph.Compile());
+
+    // t1 和 t2 应共享同一个物理 RT（alias 复用）
+    EXPECT_EQ(stub.created_handles.size(), 1u);
+    EXPECT_EQ(graph.GetResourceRT(t1), graph.GetResourceRT(t2));
+
+    // 手动 Reset 避免 TearDown 时 stub 已析构
+    graph.Reset();
+    graph.SetRhiDevice(nullptr);
+}

@@ -49,6 +49,12 @@
 #ifndef GL_COMMAND_BARRIER_BIT
 #define GL_COMMAND_BARRIER_BIT 0x00000040
 #endif
+#ifndef GL_FRAMEBUFFER_BARRIER_BIT
+#define GL_FRAMEBUFFER_BARRIER_BIT 0x00000400
+#endif
+#ifndef GL_TEXTURE_UPDATE_BARRIER_BIT
+#define GL_TEXTURE_UPDATE_BARRIER_BIT 0x00000100
+#endif
 
 // GL 4.2+/4.3 鍑芥暟鎸囬拡锛坓lad 浠呭姞杞?GL 3.3 core锛岄渶鎵嬪姩瑙ｆ瀽锛?
 #if defined(_WIN32)
@@ -617,6 +623,23 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return handle;
 }
 
+void OpenGLRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+    if (!rt) return;
+
+    if (rt->fbo_handle != 0) {
+        GLuint fbo = rt->fbo_handle;
+        glDeleteFramebuffers(1, &fbo);
+    }
+    for (unsigned int ch : rt->color_texture_handles) {
+        if (ch != 0) glDeleteTextures(1, &ch);
+    }
+    if (rt->depth_texture_handle != 0) {
+        glDeleteTextures(1, &rt->depth_texture_handle);
+    }
+    resource_mgr_.RemoveRenderTarget(render_target_handle);
+}
+
 unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
     auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
     return rt ? rt->color_texture_handle : 0;
@@ -849,6 +872,47 @@ void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
     glUseProgram(shader_handle);
     if (pfn_glDispatchCompute) pfn_glDispatchCompute(groups_x, groups_y, groups_z);
     glUseProgram(0);
+}
+
+// ============================================================
+// RenderGraph 自动屏障（GL: glMemoryBarrier / glTextureBarrier）
+// ============================================================
+
+void OpenGLRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+                                              ResourceState from, ResourceState to) {
+    (void)rt_handle;
+    if (from == to) return;
+
+    InitComputeProcAddresses();
+
+    // UAV (compute storage) → 任何其他状态：需要全量 memory barrier
+    if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
+        if (pfn_glMemoryBarrier) {
+            pfn_glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
+                                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+                                GL_TEXTURE_FETCH_BARRIER_BIT |
+                                GL_FRAMEBUFFER_BARRIER_BIT);
+        }
+        return;
+    }
+
+    // RenderTarget/DepthWrite → ShaderRead：需要 framebuffer barrier
+    // 确保 FBO 写入完成后才能被后续着色器采样
+    if ((from == ResourceState::RenderTarget || from == ResourceState::DepthWrite) &&
+        to == ResourceState::ShaderRead) {
+        if (pfn_glMemoryBarrier) {
+            pfn_glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
+        }
+        return;
+    }
+
+    // CopyDest → ShaderRead：确保像素传输完成
+    if (from == ResourceState::CopyDest && to == ResourceState::ShaderRead) {
+        if (pfn_glMemoryBarrier) {
+            pfn_glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        }
+        return;
+    }
 }
 
 void OpenGLRhiDevice::ComputeMemoryBarrier() {

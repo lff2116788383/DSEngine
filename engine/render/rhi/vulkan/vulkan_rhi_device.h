@@ -42,6 +42,7 @@ public:
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
+    void DeleteRenderTarget(unsigned int render_target_handle) override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
@@ -66,6 +67,10 @@ public:
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
+
+    // --- RenderGraph 自动屏障（Vulkan 精确 VkImageMemoryBarrier）---
+    void TransitionRenderTarget(unsigned int rt_handle,
+                                 ResourceState from, ResourceState to) override;
 
     /// 初始化 Vulkan 上下文（替代 OpenGL 的 glad 初始化）
     /// @param window_handle Win32 HWND

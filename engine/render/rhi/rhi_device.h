@@ -76,6 +76,7 @@ public:
     virtual void Shutdown() = 0;
     virtual void BeginFrame() = 0;
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
+    virtual void DeleteRenderTarget(unsigned int render_target_handle) { (void)render_target_handle; }
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
     virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
         (void)index; return GetRenderTargetColorTexture(render_target_handle);

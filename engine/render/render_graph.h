@@ -179,6 +179,35 @@ public:
     /// 检查是否已编译
     bool is_compiled() const { return is_compiled_; }
 
+    /// 编译阶段生成的屏障描述
+    struct BarrierEntry {
+        unsigned int rt_handle;
+        ResourceState from;
+        ResourceState to;
+    };
+
+    /// Pass 节点（公开供调试/测试访问 pre_barriers 等编译输出）
+    struct PassNode {
+        uint32_t id = 0;
+        std::string name;
+        std::vector<RenderResourceHandle> reads;
+        std::vector<RenderResourceHandle> writes;
+        std::function<void(CommandBuffer&)> execute;
+        bool is_culled = false;  ///< 编译后标记是否被剔除
+        /// 状态感知：resource_id → 该 Pass 对此资源要求的状态
+        std::unordered_map<uint32_t, ResourceState> resource_states;
+        /// Compile 输出：执行前需插入的屏障
+        std::vector<BarrierEntry> pre_barriers;
+        /// Compile 输出：自动绑定的 RT（0 = 不自动绑定）
+        unsigned int auto_bind_rt = 0;
+    };
+
+    /// 获取编译后的执行顺序（只读）
+    const std::vector<uint32_t>& compiled_order() const { return compiled_order_; }
+
+    /// 获取所有 Pass 节点（只读，供调试/测试）
+    const std::vector<PassNode>& passes() const { return passes_; }
+
 private:
     /// 资源类型
     enum class ResourceType : uint8_t {
@@ -201,29 +230,6 @@ private:
         std::vector<RenderPassHandle> writers;
         /// 读取此资源的 Pass 列表
         std::vector<RenderPassHandle> readers;
-    };
-
-    /// 编译阶段生成的屏障描述
-    struct BarrierEntry {
-        unsigned int rt_handle;
-        ResourceState from;
-        ResourceState to;
-    };
-
-    /// 内部 Pass 节点
-    struct PassNode {
-        uint32_t id = 0;
-        std::string name;
-        std::vector<RenderResourceHandle> reads;
-        std::vector<RenderResourceHandle> writes;
-        std::function<void(CommandBuffer&)> execute;
-        bool is_culled = false;  ///< 编译后标记是否被剔除
-        /// 状态感知：resource_id → 该 Pass 对此资源要求的状态
-        std::unordered_map<uint32_t, ResourceState> resource_states;
-        /// Compile 输出：执行前需插入的屏障
-        std::vector<BarrierEntry> pre_barriers;
-        /// Compile 输出：自动绑定的 RT（0 = 不自动绑定）
-        unsigned int auto_bind_rt = 0;
     };
 
     /// 递归标记可达 Pass（从外部输出反向追踪）
