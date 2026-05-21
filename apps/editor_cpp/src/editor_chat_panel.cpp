@@ -585,6 +585,15 @@ static void RenderMarkdown(const std::string& text, const ImVec4& base_color) {
 // ─── ImGui Draw ─────────────────────────────────────────────────────────────
 
 void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine) {
+    // Fix J: 限制历史条数，超出时从头部丢弃（保留首条 System 欢迎语）
+    static constexpr int kMaxMessages = 500;
+    if (static_cast<int>(messages_.size()) > kMaxMessages) {
+        auto first_non_system = std::find_if(messages_.begin() + 1, messages_.end(),
+            [](const ChatMessage& m){ return m.role != ChatRole::System; });
+        if (first_non_system != messages_.end())
+            messages_.erase(first_non_system);
+    }
+
     // Tool calls collected from bridge output, executed after releasing the mutex
     struct ToolCallEntry { std::string name, args, call_id; };
     std::vector<ToolCallEntry> pending_tool_calls;

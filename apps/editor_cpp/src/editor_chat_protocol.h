@@ -205,26 +205,4 @@ inline std::string BuildClearHistoryMessage() {
     return std::string(buf.GetString()) + "\n";
 }
 
-// ─── 纯函数：构建带图片的 user_message JSON-line ───────────────────────────
-
-inline std::string BuildUserMessageWithImage(const std::string& content,
-                                             const std::string& image_base64,
-                                             const std::string& agent_id = "") {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    auto& alloc = doc.GetAllocator();
-    doc.AddMember("type", "user_message", alloc);
-    doc.AddMember("content", rapidjson::Value(content.c_str(), alloc), alloc);
-    if (!agent_id.empty())
-        doc.AddMember("agent_id", rapidjson::Value(agent_id.c_str(), alloc), alloc);
-    
-    rapidjson::Value images_array(rapidjson::kArrayType);
-    images_array.PushBack(rapidjson::Value(image_base64.c_str(), alloc), alloc);
-    doc.AddMember("images", images_array, alloc);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    doc.Accept(writer);
-    return std::string(buf.GetString()) + "\n";
-}
-
 } // namespace dse::editor

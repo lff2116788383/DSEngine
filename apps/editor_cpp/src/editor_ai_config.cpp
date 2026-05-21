@@ -59,6 +59,8 @@ void AIConfigManager::Load(const std::string& path) {
     rapidjson::Document doc;
     doc.Parse(content.c_str());
     if (doc.HasParseError()) {
+        config_ = AIConfig{};                        // 重置为默认值，避免半初始化
+        config_.providers.push_back({"OpenAI"});
         return;
     }
 

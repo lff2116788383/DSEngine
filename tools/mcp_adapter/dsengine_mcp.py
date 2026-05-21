@@ -456,7 +456,11 @@ def read_message():
     line = sys.stdin.readline()
     if not line:
         return None
-    return json.loads(line.strip())
+    try:
+        return json.loads(line.strip())
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"[MCP] JSON decode error: {e} | line={line!r}\n")
+        return None
 
 
 def write_message(msg):
@@ -755,7 +759,9 @@ def main():
         while True:
             msg = read_message()
             if msg is None:
-                break  # stdin closed
+                if sys.stdin.closed:
+                    break  # stdin closed
+                continue  # JSON 解析失败，跳过该行
 
             method = msg.get("method", "")
 
