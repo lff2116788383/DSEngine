@@ -17,8 +17,8 @@ layout(location = 1) out vec3 v_tangent;
 layout(location = 2) out float v_t; // 0=root, 1=tip
 
 void main() {
-    vec4 pos = positions[gl_VertexID];
-    vec4 tan = tangents[gl_VertexID];
+    vec4 pos = positions[gl_VertexIndex];
+    vec4 tan = tangents[gl_VertexIndex];
 
     vec4 world_pos = u_model * vec4(pos.xyz, 1.0);
     v_world_pos = world_pos.xyz;
