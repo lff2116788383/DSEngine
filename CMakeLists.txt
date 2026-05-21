@@ -237,7 +237,7 @@ include_directories(
 )
 set(BOX2D_ROOT "${CMAKE_SOURCE_DIR}/depends/box2d-2.4.1")
 
-file(GLOB_RECURSE engine_cpp
+file(GLOB_RECURSE engine_cpp CONFIGURE_DEPENDS
     "engine/*.cpp"
     "modules/gameplay_2d/*.cpp"
     "modules/runtime_bridge/*.cpp"
@@ -306,7 +306,7 @@ endif()
 if(DSE_ENABLE_3D)
     # Gameplay3D 全部编入 dse_engine，避免跨 DLL EnTT 模板实例化导致的内存损坏。
     # 不再构建 DSE_Gameplay3D.dll。
-    file(GLOB_RECURSE gameplay_3d_cpp "modules/gameplay_3d/*.cpp")
+    file(GLOB_RECURSE gameplay_3d_cpp CONFIGURE_DEPENDS "modules/gameplay_3d/*.cpp")
     list(APPEND engine_cpp ${gameplay_3d_cpp})
 endif()
 

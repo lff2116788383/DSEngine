@@ -10,60 +10,14 @@ if(NOT EXISTS ${DSE_GLAD_SOURCE})
     set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glad/src/glad.c)
 endif()
 
+# 编辑器源文件（src/ 目录内新增面板无需修改此文件）
+file(GLOB_RECURSE editor_srcs CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+)
+
 add_executable(dse_editor_cpp WIN32
-    src/main.cpp
-    src/editor_app.cpp
-    src/editor_control_server.cpp
-    src/editor_control_tools.cpp
-    src/editor_plugin_manager.cpp
-    src/editor_chat_panel.cpp
-    src/editor_aux_panels.cpp
-    src/editor_console_panel.cpp
-    src/editor_file_dialog.cpp
-    src/editor_hierarchy_panel.cpp
-    src/editor_scene_camera.cpp
-    src/editor_inspector_panel.cpp
-    src/editor_profiler_panel.cpp
-    src/editor_asset_db.cpp
-    src/editor_autosave.cpp
-    src/editor_scene_io.cpp
-    src/editor_locale.cpp
-    src/editor_settings.cpp
-    src/editor_shortcuts.cpp
-    src/editor_shell.cpp
-    src/editor_status_bar.cpp
-    src/editor_theme.cpp
-    src/editor_toolbar.cpp
-    src/editor_viewport_panel.cpp
-    src/editor_tilemap_panel.cpp
-    src/editor_terrain_panel.cpp
-    src/editor_material_panel.cpp
-    src/editor_prefab.cpp
-    src/editor_preferences_panel.cpp
-    src/editor_audio_panel.cpp
-    src/editor_particle_panel.cpp
-    src/editor_lua_console.cpp
-    src/editor_undo_panel.cpp
-    src/editor_build_game.cpp
-    src/editor_project.cpp
-    src/editor_project_hub.cpp
-    src/editor_scene_tabs.cpp
-    src/editor_asset_importer.cpp
-    src/editor_test_harness.cpp
-    src/editor_snapshot.cpp
-    src/editor_selection_outline.cpp
-    src/editor_physics_debug.cpp
-    src/editor_asset_browser.cpp
-    src/editor_prefab_override.cpp
-    src/editor_animation_timeline.cpp
-    src/editor_navmesh_panel.cpp
-    src/editor_lighting_gizmos.cpp
-    src/editor_git_panel.cpp
-    src/editor_shader_graph.cpp
-    src/editor_multi_viewport.cpp
-    src/editor_scene_view_mode.cpp
-    src/editor_layout_manager.cpp
-    src/editor_anim_state_machine.cpp
+    ${editor_srcs}
+    # 以下为 src/ 目录外的第三方源文件，保留显式引用
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_draw.cpp
