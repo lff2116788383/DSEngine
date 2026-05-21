@@ -3,6 +3,7 @@
 
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/ecs/components_3d.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -159,6 +160,202 @@ inline bool EvaluateClip(
         }
     }
     return true;
+}
+
+// Compute world-space transforms for all bones from pose_buffer.
+// This is a shared utility for IK systems.
+inline void ComputeBoneGlobals(
+    const Animator3DComponent::PoseBuffer& pb,
+    const Animator3DComponent::SkeletalCache& cache,
+    std::vector<glm::mat4>& out_globals)
+{
+    const uint32_t bone_count = cache.bone_count;
+    out_globals.resize(bone_count);
+
+    // Build local matrices
+    std::vector<glm::mat4> locals(bone_count);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        if (pb.touched[i]) {
+            locals[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
+                * glm::mat4_cast(pb.rotations[i])
+                * glm::scale(glm::mat4(1.0f), pb.scales[i]);
+        } else {
+            locals[i] = cache.local_bind_poses[i];
+        }
+    }
+
+    // Propagate globals (iterative for arbitrary order)
+    std::vector<bool> computed(bone_count, false);
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        int pi = cache.parent_indices[i];
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            out_globals[i] = locals[i];
+            computed[i] = true;
+        }
+    }
+    for (uint32_t pass = 0; pass < bone_count; ++pass) {
+        bool all_done = true;
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            if (computed[i]) continue;
+            int pi = cache.parent_indices[i];
+            if (computed[pi]) {
+                out_globals[i] = out_globals[pi] * locals[i];
+                computed[i] = true;
+            } else {
+                all_done = false;
+            }
+        }
+        if (all_done) break;
+    }
+}
+
+// Compute world-space positions for a chain of bones.
+inline void ComputeChainPositions(
+    const std::vector<int>& chain_indices,
+    const Animator3DComponent::PoseBuffer& pb,
+    const Animator3DComponent::SkeletalCache& cache,
+    std::vector<glm::vec3>& out_positions,
+    std::vector<glm::mat4>& out_globals)
+{
+    ComputeBoneGlobals(pb, cache, out_globals);
+
+    out_positions.resize(chain_indices.size());
+    for (size_t i = 0; i < chain_indices.size(); ++i) {
+        out_positions[i] = glm::vec3(out_globals[chain_indices[i]][3]);
+    }
+}
+
+// FABRIK forward-backward reaching IK.
+// Operates entirely on the provided positions[] array (caller's coordinate space).
+// pole_vector: optional bend-direction hint (pass glm::vec3(0) to ignore).
+inline void SolveFABRIK(
+    std::vector<glm::vec3>& positions,
+    const glm::vec3& target,
+    const glm::vec3& pole_vector,
+    int max_iterations,
+    float tolerance)
+{
+    const size_t n = positions.size();
+    if (n < 2) return;
+
+    std::vector<float> lengths(n - 1);
+    float total_length = 0.0f;
+    for (size_t i = 0; i < n - 1; ++i) {
+        lengths[i] = glm::distance(positions[i], positions[i + 1]);
+        total_length += lengths[i];
+    }
+
+    const glm::vec3 root_pos = positions[0];
+
+    // Unreachable: stretch toward target
+    if (glm::distance(root_pos, target) >= total_length) {
+        glm::vec3 dir = glm::normalize(target - root_pos);
+        for (size_t i = 1; i < n; ++i)
+            positions[i] = positions[i - 1] + dir * lengths[i - 1];
+        return;
+    }
+
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        if (glm::distance(positions[n - 1], target) < tolerance) break;
+
+        // Forward pass: tip → root
+        positions[n - 1] = target;
+        for (int i = static_cast<int>(n) - 2; i >= 0; --i) {
+            glm::vec3 d = positions[i] - positions[i + 1];
+            float len = glm::length(d);
+            positions[i] = positions[i + 1] + (len > 1e-6f ? d / len : glm::vec3(0, 1, 0)) * lengths[i];
+        }
+
+        // Backward pass: root → tip
+        positions[0] = root_pos;
+        for (size_t i = 0; i < n - 1; ++i) {
+            glm::vec3 d = positions[i + 1] - positions[i];
+            float len = glm::length(d);
+            positions[i + 1] = positions[i] + (len > 1e-6f ? d / len : glm::vec3(0, 1, 0)) * lengths[i];
+        }
+
+        // Pole vector constraint: nudge middle joints toward bend direction
+        if (n > 2 && glm::length(pole_vector) > 1e-6f) {
+            for (size_t i = 1; i < n - 1; ++i) {
+                glm::vec3 line = positions[n - 1] - positions[0];
+                float line_len = glm::length(line);
+                if (line_len < 1e-6f) continue;
+                glm::vec3 line_dir = line / line_len;
+                float t = glm::dot(positions[i] - positions[0], line_dir);
+                glm::vec3 projected = positions[0] + line_dir * t;
+                if (glm::length(positions[i] - projected) < lengths[i - 1] * 0.01f) {
+                    glm::vec3 pole_perp = pole_vector - glm::dot(pole_vector, line_dir) * line_dir;
+                    float pole_len = glm::length(pole_perp);
+                    if (pole_len > 1e-6f) {
+                        positions[i] = projected + (pole_perp / pole_len) * lengths[i - 1] * 0.1f;
+                        glm::vec3 d = positions[i] - positions[i - 1];
+                        float l = glm::length(d);
+                        if (l > 1e-6f) positions[i] = positions[i - 1] + (d / l) * lengths[i - 1];
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Write FABRIK result positions back to pose_buffer as blended local rotations.
+// globals_before: full per-bone global transforms before IK was applied.
+// Updates all chain bones (root to tip-1) and propagates incrementally.
+inline void WriteBackFABRIKResult(
+    const std::vector<int>& chain_indices,
+    const std::vector<glm::vec3>& ik_positions,
+    const std::vector<glm::mat4>& globals_before,
+    Animator3DComponent::PoseBuffer& pb,
+    const Animator3DComponent::SkeletalCache& cache,
+    float weight)
+{
+    if (chain_indices.size() < 2) return;
+
+    std::vector<glm::mat4> updated_globals = globals_before;
+    const size_t n = chain_indices.size();
+
+    for (size_t ci = 0; ci < n - 1; ++ci) {
+        int bone_idx  = chain_indices[ci];
+        int child_idx = chain_indices[ci + 1];
+
+        glm::vec3 cur_dir = glm::vec3(updated_globals[child_idx][3]) - glm::vec3(updated_globals[bone_idx][3]);
+        float cur_len = glm::length(cur_dir);
+        if (cur_len < 1e-6f) continue;
+        cur_dir /= cur_len;
+
+        glm::vec3 ik_dir = ik_positions[ci + 1] - ik_positions[ci];
+        float ik_len = glm::length(ik_dir);
+        if (ik_len < 1e-6f) continue;
+        ik_dir /= ik_len;
+
+        glm::quat delta_world    = glm::rotation(cur_dir, ik_dir);
+        glm::quat bone_world_rot = glm::normalize(glm::quat_cast(glm::mat3(updated_globals[bone_idx])));
+        glm::quat new_world_rot  = delta_world * bone_world_rot;
+
+        int parent_idx = cache.parent_indices[bone_idx];
+        glm::quat parent_world_rot = (parent_idx >= 0 && parent_idx < static_cast<int>(cache.bone_count))
+            ? glm::normalize(glm::quat_cast(glm::mat3(updated_globals[parent_idx])))
+            : glm::quat(1, 0, 0, 0);
+
+        glm::quat new_local = glm::inverse(parent_world_rot) * new_world_rot;
+        pb.rotations[bone_idx] = glm::normalize(glm::slerp(pb.rotations[bone_idx], new_local, weight));
+        pb.touched[bone_idx] = true;
+
+        // Propagate updated global for this bone and its child
+        glm::mat4 parent_global = (parent_idx >= 0 && parent_idx < static_cast<int>(cache.bone_count))
+            ? updated_globals[parent_idx] : glm::mat4(1.0f);
+        glm::mat4 new_local_mat = glm::translate(glm::mat4(1.0f), pb.positions[bone_idx])
+            * glm::mat4_cast(pb.rotations[bone_idx])
+            * glm::scale(glm::mat4(1.0f), pb.scales[bone_idx]);
+        updated_globals[bone_idx] = parent_global * new_local_mat;
+
+        glm::mat4 child_local = pb.touched[child_idx]
+            ? glm::translate(glm::mat4(1.0f), pb.positions[child_idx])
+              * glm::mat4_cast(pb.rotations[child_idx])
+              * glm::scale(glm::mat4(1.0f), pb.scales[child_idx])
+            : cache.local_bind_poses[child_idx];
+        updated_globals[child_idx] = updated_globals[bone_idx] * child_local;
+    }
 }
 
 } // namespace anim_util

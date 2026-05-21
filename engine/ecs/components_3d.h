@@ -276,14 +276,29 @@ struct SkyLightComponent {
 #define MAX_BONE_INFLUENCE 4
 #define MAX_BONES 100
 
+struct FootIKConfig {
+    std::string name;
+    std::string foot_bone;
+    std::string hip_bone;
+    float foot_height = 0.1f;
+    float max_ground_distance = 0.5f;
+    float blend_speed = 10.0f;
+    float weight = 1.0f;
+    int foot_bone_index = -1;
+    int hip_bone_index = -1;
+    std::vector<int> chain_indices;  // From hip to foot
+    bool indices_dirty = true;
+};
+
 struct AnimBlendNode {
     std::string name;
     std::string danim_path;
     float current_time = 0.0f;
     float speed = 1.0f;
     bool loop = true;
-    float weight = 1.0f; // For blend tree
-    float threshold = 0.0f;
+    float x = 0.0f;
+    float threshold = 0.0f;  // 1D Blend threshold
+    float weight = 1.0f;     // Blend weight
 };
 
 struct AnimBlendNode2D {
@@ -344,6 +359,8 @@ struct AnimLayerComponent {
 enum class IKChainType : uint8_t {
     FABRIK = 0,
     LookAt = 1,
+    CCD = 2,
+    Jacobian = 3,
 };
 
 struct IKChainConfig {
@@ -370,6 +387,13 @@ struct IKChainConfig {
 struct IKChain3DComponent {
     bool enabled = true;
     std::vector<IKChainConfig> chains;
+};
+
+struct FootIK3DComponent {
+    bool enabled = true;
+    std::vector<FootIKConfig> feet;  // 左右脚配置
+    float pelvis_weight = 0.5f;       // 骨盆调整权重
+    float max_pelvis_offset = 0.3f;   // 骨盆最大偏移量
 };
 
 struct MorphTarget {

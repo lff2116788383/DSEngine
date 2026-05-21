@@ -297,6 +297,7 @@ if(NOT DSE_ENABLE_3D)
         "modules/gameplay_3d/animation/animator_system.cpp"
         "modules/gameplay_3d/animation/anim_layer_blend_system.cpp"
         "modules/gameplay_3d/animation/ik_solver_system.cpp"
+        "modules/gameplay_3d/animation/foot_ik_system.cpp"
         "modules/gameplay_3d/particles/particle3d_system.cpp"
         "modules/gameplay_3d/ai/steering_system.cpp"
     )

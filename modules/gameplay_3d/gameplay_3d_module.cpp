@@ -44,10 +44,11 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 
 void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     free_camera_controller_system_.Update(world, delta_time);
-    // Animation pipeline: EvaluateBaseAnim → LayerBlend → IK → ComputeFinalMatrices
+    // Animation pipeline: EvaluateBaseAnim → LayerBlend → IK → FootIK → ComputeFinalMatrices
     animator_system_.EvaluateBaseAnim(world, delta_time);
     anim_layer_blend_system_.Update(world, delta_time);
     ik_solver_system_.Update(world, delta_time);
+    foot_ik_system_.Update(world, delta_time);
     animator_system_.ComputeFinalMatrices(world);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
