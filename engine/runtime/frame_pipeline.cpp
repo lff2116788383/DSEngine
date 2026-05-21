@@ -50,15 +50,15 @@ FramePipeline::~FramePipeline() = default;
 #elif defined(DSE_ENABLE_PHYSX)
 #include "engine/physics/physics3d/physics3d_system.h"
 #endif
-namespace dse::physics3d {
-std::shared_ptr<IPhysics3DSystem> CreatePhysics3DSystem() {
+namespace {
+std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 #if defined(DSE_ENABLE_JOLT) || defined(DSE_ENABLE_PHYSX)
-    return std::make_shared<Physics3DSystem>();
+    return std::make_shared<dse::physics3d::Physics3DSystem>();
 #else
     return nullptr;
 #endif
 }
-} // namespace dse::physics3d
+} // anonymous namespace
 #endif // DSE_ENABLE_3D
 
 namespace dse::render {

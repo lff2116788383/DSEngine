@@ -12,6 +12,7 @@
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/physics/physics3d/i_physics3d_system.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -19,7 +20,7 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // FractureComponent 绑定
 // ============================================================
@@ -97,7 +98,7 @@ int L_EcsFractureIsFractured(lua_State* L) {
     return 1;
 }
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // ClothComponent 绑定
@@ -267,7 +268,7 @@ int L_EcsGetFluidParticleCount(lua_State* L) {
     return 1;
 }
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // RagdollComponent 绑定（Phase 2 — Task 1）
 // ============================================================
@@ -331,7 +332,7 @@ int L_EcsSetRagdollCollisionLayer(lua_State* L) {
     return 0;
 }
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // SoftBodyComponent 绑定（Phase 2 — Task 2）
@@ -386,7 +387,7 @@ int L_EcsSoftBodyGetParticleCount(lua_State* L) {
     return 1;
 }
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // VehicleComponent 绑定（Phase 2 — Task 3）
 // ============================================================
@@ -458,7 +459,7 @@ int L_EcsVehicleGetWheelCount(lua_State* L) {
     return 1;
 }
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // RopeComponent 绑定（Phase 2 — Task 4）
@@ -531,7 +532,7 @@ int L_EcsRopeSetGravity(lua_State* L) {
     return 0;
 }
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // BuoyancyComponent 绑定（Phase 2 — Task 5）
 // ============================================================
@@ -599,14 +600,14 @@ int L_EcsBuoyancySetUseFluid(lua_State* L) {
     return 0;
 }
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+#endif // DSE_HAS_PHYSICS3D
 
 } // namespace
 
 void RegisterEcsGameplay3DBindings(lua_State* L) {
     using namespace helper;
     RegisterBindings(L, {
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
         // 破碎
         {"add_fracture",              L_EcsAddFracture},
         {"set_fracture_params",       L_EcsSetFractureParams},
@@ -627,7 +628,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"set_fluid_emit_direction",  L_EcsSetFluidEmitDirection},
         {"set_fluid_floor",           L_EcsSetFluidFloor},
         {"get_fluid_particle_count",  L_EcsGetFluidParticleCount},
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
         // 布娃娃（Phase 2）
         {"add_ragdoll",               L_EcsAddRagdoll},
         {"ragdoll_activate",          L_EcsRagdollActivate},
@@ -640,7 +641,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"softbody_set_gravity",      L_EcsSoftBodySetGravity},
         {"softbody_pin_vertex",       L_EcsSoftBodyPinVertex},
         {"softbody_get_particle_count", L_EcsSoftBodyGetParticleCount},
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
         // 车辆（Phase 2）
         {"add_vehicle",               L_EcsAddVehicle},
         {"vehicle_add_wheel",         L_EcsVehicleAddWheel},
@@ -653,7 +654,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"rope_set_anchors",          L_EcsRopeSetAnchors},
         {"rope_get_positions",        L_EcsRopeGetPositions},
         {"rope_set_gravity",          L_EcsRopeSetGravity},
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
         // 浮力（Phase 2）
         {"add_buoyancy",              L_EcsAddBuoyancy},
         {"buoyancy_add_sample_point", L_EcsBuoyancyAddSamplePoint},

@@ -103,10 +103,5 @@ public:
     virtual void* GetPxCooking() const = 0;
 };
 
-// ---------------------------------------------------------------------------
-// 工厂函数声明（定义在 frame_pipeline.cpp 内联，或外部编译单元）
-// ---------------------------------------------------------------------------
-std::shared_ptr<IPhysics3DSystem> CreatePhysics3DSystem();
-
 } // namespace physics3d
 } // namespace dse

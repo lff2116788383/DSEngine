@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/core/module.h"
+#include "engine/physics/physics3d/i_physics3d_system.h"
 
 // 3D Systems
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
@@ -19,7 +20,7 @@
 #ifdef DSE_ENABLE_NAVMESH
 #include "modules/gameplay_3d/ai/nav_agent_system.h"
 #endif
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
 #include "modules/gameplay_3d/destruction/fracture_system.h"
 #include "modules/gameplay_3d/ragdoll/ragdoll_system.h"
 #include "modules/gameplay_3d/vehicle/vehicle_system.h"
@@ -65,7 +66,7 @@ private:
 #ifdef DSE_ENABLE_NAVMESH
     NavAgentSystem nav_agent_system_;
 #endif
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
     FractureSystem fracture_system_;
     RagdollSystem ragdoll_system_;
     VehicleSystem vehicle_system_;

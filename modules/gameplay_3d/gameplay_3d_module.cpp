@@ -1,7 +1,6 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/core/service_locator.h"
 #include <limits>
-#include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/ecs/components_3d_fluid.h"
 
 namespace dse::gameplay3d {
@@ -31,7 +30,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     cloth_system_.SetAssetManager(asset_manager);
     fluid_system_.Init(world, rhi_device);
     softbody_system_.SetAssetManager(asset_manager);
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
     fracture_system_.SetAssetManager(asset_manager);
     auto* physics3d = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>();
     fracture_system_.SetPhysics3D(physics3d);
@@ -55,7 +54,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 #ifdef DSE_ENABLE_NAVMESH
     nav_agent_system_.Update(world, delta_time);
 #endif
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
     fracture_system_.Update(world, delta_time);
 #endif
     fluid_system_.Update(world, delta_time);
@@ -83,7 +82,7 @@ void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     cloth_system_.FixedUpdate(world, fixed_delta_time);
     softbody_system_.FixedUpdate(world, fixed_delta_time);
     rope_system_.FixedUpdate(world, fixed_delta_time);
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
     ragdoll_system_.FixedUpdate(world, fixed_delta_time);
     vehicle_system_.FixedUpdate(world, fixed_delta_time);
     buoyancy_system_.FixedUpdate(world, fixed_delta_time);
@@ -191,7 +190,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     cloth_system_.SetAssetManager(nullptr);
     fluid_system_.Shutdown(world);
     softbody_system_.SetAssetManager(nullptr);
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+#ifdef DSE_HAS_PHYSICS3D
     fracture_system_.SetAssetManager(nullptr);
     fracture_system_.SetPhysics3D(nullptr);
     ragdoll_system_.SetAssetManager(nullptr);
