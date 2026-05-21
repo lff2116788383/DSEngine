@@ -1,7 +1,7 @@
 # DSEngine GPU Driven 突破方案与引擎定位分析
 
 > 初始日期：2026-05-19
-> 最后修订：2026-05-21（更新 GPU Driven 已完成状态、修正事实错误、移除未经验证的性能数据）
+> 最后修订：2026-05-21（更新 GPU Skinning + Morph Target 已完成、GPU Driven 已完成状态）
 > 基于完整代码审查与分析
 
 ---
@@ -139,7 +139,7 @@ Godot 4             ───  200-500 万      ★★★
 | **GPU Driven Indirect** | ✅ | ✅ | ✅ | ✅ |
 | **GPU Frustum + Hi-Z** | ✅ | ✅ | ✅ 突破后有 | ✅ |
 | **Mega Buffer** | ✅ | ✅ | ✅ 突破后有 | ✅ |
-| **GPU Skinning** | ✅ | ✅ | ❌ CPU 蒙皮 | ⚠️ 待实现 |
+| **GPU Skinning** | ✅ | ✅ | ✅ **GPU Compute Skinning + Morph Target** | ✅ |
 | **VSM (虚拟阴影)** | ✅ 必备 | ⚠️ 可选 | ❌ CSM+PCSS | ❌ 仍缺 |
 | **后处理丰富度** | ✅ 标配 | ✅ 丰富 | ✅ **31 Pass** 🏆 | ✅ 不变 |
 | **NPR 开箱即用** | ❌ 需配置 | ❌ 需 UTS | ✅ **9 种** 🏆 | ✅ 不变 |
@@ -169,7 +169,7 @@ Godot 4             ───  200-500 万      ★★★
 |:-----|:-----|:------:|
 | UE5 | GPU Skinning | ~3ms |
 | Unity 6 | GPU Skinning | ~5ms |
-| **DSE** | **CPU 蒙皮（当前）** | **~15ms** ❌ |
+| **DSE** | **GPU Compute Skinning** | **待实测** ✅ |
 
 ---
 
@@ -191,7 +191,7 @@ Godot 4             ───  200-500 万      ★★★
 | 3 | **硬件光追 (HWRT)** | DDGI 仅一次反弹，无镜面反射 | 2-4 个月 |
 | 4 | **体积云 (Volumetric Cloud)** | 现有 Skybox 是静态 cubemap | 1-2 个月 |
 | 5 | **虚拟纹理 (Virtual Texture)** | StreamingManager 不做纹理 tile 级 | 3-4 个月 |
-| 6 | **GPU Skinning** | CPU 蒙皮，角色密集场景瓶颈 | 1-2 个月 |
+| 6 | ~~GPU Skinning~~ | ✅ 已完成（GPU Compute Skinning + Morph Target，三后端） | — |
 
 ### 🟡 P2：有了更好，没有也能做
 
@@ -215,6 +215,7 @@ Godot 4             ───  200-500 万      ★★★
 | **性能剖析 Profiler** | [editor_profiler_panel.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/apps/editor_cpp/src/editor_profiler_panel.cpp) — CPU/Memory/Render 三引擎 + CSV/JSON 导出 |
 | **运行时 UI 系统** | UIRendererComponent / UILabel / UIAnchor / UIGridLayout / UIAnimation / UIRichText |
 | **GPU Driven ✅** | [rhi_gpu_driven.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/rhi_gpu_driven.h) — 三端实现并集成，默认启用，含 Hi-Z Culling + Compute Cull |
+| **GPU Skinning + Morph Target ✅** | [gpu_skinning.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/skinning/gpu_skinning.h) — GPU Compute Skinning 三后端 + Morph Target 完整管线 + 双缓冲 Readback |
 | **C# 绑定** | [Native.gen.cs](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/GameScripts/DSEngine/Native.gen.cs) — 自动生成 |
 | **物理 PhysX + Box2D** | 3D: PhysX (Static/Dynamic/Kinematic), 2D: Box2D |
 
@@ -256,7 +257,8 @@ Acid Engine     ★★★    Vulkan 原生跨平台，渲染丰富度不足
 - 缺少大规模场景实测数据
 - 编辑器工具链不成熟（对比 UE/Unity/Godot）
 - 跨平台仅 Windows（Android 基础设施已就绪但未端到端验证）
-- 无 GPU Skinning、无硬件光追、无体积云
+- ~~无 GPU Skinning~~ ✅ 已完成
+- 无硬件光追、无体积云
 
 ---
 
@@ -304,7 +306,7 @@ Acid Engine     ★★★    Vulkan 原生跨平台，渲染丰富度不足
 
 - ~~GPU Driven 突破~~ ✅ 已完成
 - 完整 Nanite 虚拟几何体（12-18 个月）→ 追平 UE5 面数
-- HWRT + 体积云 + 虚拟纹理 + LWC + GPU Skinning
+- HWRT + 体积云 + 虚拟纹理 + LWC
 - **单人全做约 24-30 个月，不推荐单人一步到位**
 
 ---
@@ -465,3 +467,5 @@ UE5 的解决方案：双路径——静态环境走 Nanite（受限材质），
 | [platform_app.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/platform/platform_app.h) | 平台抽象接口（跨平台扩展入口） |
 | [components_3d.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/ecs/components_3d.h) | 3D 组件定义（Terrain/LODGroup 等） |
 | [builtin_passes.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) | 31 个后处理 Pass 实现 |
+| [gpu_skinning.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/skinning/gpu_skinning.h) | GPU Compute Skinning + Morph Target 系统 |
+| [skinning.comp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/shaders/src/skinning.comp) | 蒙皮 Compute Shader（GLSL 450，含 morph blending） |
