@@ -2339,7 +2339,7 @@ void HiZCullPass::Setup(RenderGraph& graph) {
     auto hiz_visibility = graph.DeclareResource("hiz_visibility");
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, hiz_mip);
-    graph.PassWrite(pass, hiz_visibility);
+    graph.PassWriteWithState(pass, hiz_visibility, ResourceState::UnorderedAccess);
     graph.MarkOutput(hiz_visibility);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
@@ -2518,7 +2518,7 @@ void GPUCullPass::Setup(RenderGraph& graph) {
 
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, hiz_mips);
-    graph.PassWrite(pass, gpu_draw_cmds);
+    graph.PassWriteWithState(pass, gpu_draw_cmds, ResourceState::UnorderedAccess);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -2646,7 +2646,7 @@ void DDGIUpdatePass::Setup(RenderGraph& graph) {
     auto ddgi_atlas = graph.DeclareResource("ddgi_irradiance_atlas");
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, rsm_data);
-    graph.PassWrite(pass, ddgi_atlas);
+    graph.PassWriteWithState(pass, ddgi_atlas, ResourceState::UnorderedAccess);
     graph.MarkOutput(ddgi_atlas);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }

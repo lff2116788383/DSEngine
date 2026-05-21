@@ -121,6 +121,7 @@ void RenderGraph::PassRead(RenderPassHandle pass, RenderResourceHandle resource)
                 if (r.id == resource.id) return;
             }
             p.reads.push_back(resource);
+            p.resource_states[resource.id] = ResourceState::ShaderRead;
             break;
         }
     }
@@ -151,6 +152,7 @@ void RenderGraph::PassWrite(RenderPassHandle pass, RenderResourceHandle resource
                 if (w.id == resource.id) return;
             }
             p.writes.push_back(resource);
+            p.resource_states[resource.id] = ResourceState::RenderTarget;
             break;
         }
     }
