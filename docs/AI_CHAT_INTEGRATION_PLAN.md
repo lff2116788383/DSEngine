@@ -1078,15 +1078,15 @@ void ChatPanel::DrawCodeBlock(const std::string& code, const std::string& langua
 - [x] Agent 选择 UI — ImGui Combo 下拉选择
 - [x] Agent 切换协议支持 — `agent_id` 随每条消息传递
 
-**Phase 5: 对话管理** ⏳ 待完成
-- [ ] 对话历史持久化 (`ConversationManager`)
+**Phase 5: 对话管理** ✅ 已完成 (2026-05-21)
+- [x] 对话历史持久化 (`SaveHistory`/`LoadHistory`，JSON 格式，启动自动加载)
 - [ ] 对话导出/导入
 - [ ] 对话列表 UI
 
-**Phase 6: 错误处理** ⏳ 待完成
-- [ ] 网络重连机制
-- [ ] 子进程崩溃恢复
-- [ ] API 限流处理
+**Phase 6: 错误处理** ✅ 已完成 (2026-05-21)
+- [x] 网络重连机制（bridge 崩溃检测 + 橙色 Reconnect 按钮）
+- [x] 子进程崩溃恢复（reader thread 设置 bridge_crashed_ 标志）
+- [x] API 限流处理（指数退避重试，区分 RateLimit/Connection/Auth/ServerError）
 
 ### Bug 修复记录（2026-05-21 审查）
 
@@ -1100,17 +1100,18 @@ void ChatPanel::DrawCodeBlock(const std::string& code, const std::string& langua
 | 4 | `editor_shell.cpp` | Window 菜单重复 "AI Chat" 条目 | 从 Window 菜单移除，统一到 AI 菜单 |
 | 5 | `editor_chat_panel.cpp` | `ExecuteToolCall` 在持有 `output_mutex_` 时执行阻塞 reader 线程 | tool calls 存入局部向量，锁释放后执行 |
 
-### V1.0 完整版本
+### V1.0 完整版本 (2026-05-21 部分完成)
 
-- [ ] Token 使用统计和成本显示
-- [ ] 响应时间显示
+- [x] Token 使用统计显示（底部右对齐 `in:N out:N`，累计跨轮次）
+- [x] 响应时间显示（每条 Assistant 消息旁显示耗时 ms）
 - [ ] 代码块语法高亮
 - [ ] 代码一键应用
 - [ ] 图片上传和渲染 UI
 - [ ] 敏感信息过滤
 - [ ] 工具权限控制
-- [ ] @mention 上下文注入
-- [ ] Markdown 渲染
+- [x] @mention 上下文注入（`@scene` / `@entity` / `@selection` / `@script:path`）
+- [x] Markdown 渲染（标题/列表/代码块/粗体/内联代码）
+- [x] 消息编辑/重发（hover 显示 Edit + Resend 按钮）
 
 ### V2.0 高级版本
 
