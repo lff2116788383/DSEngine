@@ -575,6 +575,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "motion_blur")           fs = kmotion_blur_frag_glsl330;
     else if (effect_name == "ssr")                   fs = kssr_frag_glsl330;
     else if (effect_name == "taa_resolve")           fs = ktaa_resolve_frag_glsl330;
+    else if (effect_name == "ui_overlay")             fs = kpostprocess_passthrough_frag_glsl330;
     else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl330;
     else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl330;
     else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl330;

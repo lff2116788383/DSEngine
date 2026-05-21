@@ -385,6 +385,7 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         {"decal",            {kDecalBindings, (int)std::size(kDecalBindings), 24, BindDecalExtra, true}},
         {"water",            {kWaterBindings, (int)std::size(kWaterBindings), 39, BindWaterExtra, true}},
         // --- 无参数效果 ---
+        {"ui_overlay",               {nullptr, 0, 0, nullptr, true}},
         {"postprocess_passthrough", {nullptr, 0, 0, nullptr, false}},
         {"ssao_blur",               {nullptr, 0, 0, nullptr, false}},
         {"lum_compute",             {nullptr, 0, 0, nullptr, false}},
