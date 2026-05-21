@@ -215,6 +215,7 @@ if(DSE_HAS_ASSIMP)
         ${CMAKE_C_STANDARD_INCLUDE_DIRECTORIES}
         ${CMAKE_SOURCE_DIR}/depends/lua
     )
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/depends/assimp/generated")
     add_subdirectory(depends/assimp)
     # 强制 assimp 使用 DLL CRT，与 dse_engine 的 /MDd 一致
     if(MSVC)

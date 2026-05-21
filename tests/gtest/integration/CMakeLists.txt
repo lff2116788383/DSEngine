@@ -12,13 +12,11 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     # engine/ecs
     engine/ecs/ecs_physics2d_integration_test.cpp
     engine/ecs/ecs_transform_integration_test.cpp
-    engine/ecs/gameplay3d_ecs_integration_test.cpp
     # engine/physics
     engine/physics/physics2d_collision_event_integration_test.cpp
     engine/physics/physics2d_joint_integration_test.cpp
     engine/physics/physics2d_circle_collider_integration_test.cpp
     engine/physics/physics2d_polygon_collider_integration_test.cpp
-    engine/physics/physics3d_ecs_integration_test.cpp
     # engine/profiler
     engine/profiler/profiler_jobsystem_integration_test.cpp
     # engine/render
@@ -30,10 +28,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/scripting/lua_runtime_integration_test.cpp
     engine/scripting/lua_eventbus_integration_test.cpp
     engine/scripting/lua_ecs_integration_test.cpp
-    engine/scripting/lua_binding_3d_integration_test.cpp
     engine/scripting/lua_binding_audio_integration_test.cpp
     engine/scripting/lua_binding_physics2d_integration_test.cpp
-    engine/scripting/lua_binding_animation_integration_test.cpp
     engine/scripting/lua_binding_dssl_integration_test.cpp
     engine/scripting/lua_binding_ui_integration_test.cpp
     engine/scripting/lua_binding_particles_integration_test.cpp
@@ -43,9 +39,6 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     engine/audio/audio_asset_integration_test.cpp
     # modules
     modules/module_lifecycle_integration_test.cpp
-    modules/fracture_system_integration_test.cpp
-    modules/cloth_system_integration_test.cpp
-    modules/fluid_system_integration_test.cpp
     # editor (headless functional tests)
     editor/editor_functional_test.cpp
     editor/editor_selection_integration_test.cpp
@@ -98,6 +91,19 @@ target_link_libraries(${DSE_GTEST_INTEGRATION_TARGET}
         dse_engine
         ixwebsocket
 )
+
+# 3D 模块测试（依赖 gameplay_3d，仅当 DSE_ENABLE_3D=ON 时加入）
+if(DSE_ENABLE_3D)
+    target_sources(${DSE_GTEST_INTEGRATION_TARGET} PRIVATE
+        engine/ecs/gameplay3d_ecs_integration_test.cpp
+        engine/physics/physics3d_ecs_integration_test.cpp
+        engine/scripting/lua_binding_3d_integration_test.cpp
+        engine/scripting/lua_binding_animation_integration_test.cpp
+        modules/fracture_system_integration_test.cpp
+        modules/cloth_system_integration_test.cpp
+        modules/fluid_system_integration_test.cpp
+    )
+endif()
 
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
