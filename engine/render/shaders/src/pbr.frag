@@ -362,7 +362,10 @@ float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightD
     if (projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-    float lit = PCSS_Shadow(u_shadow_maps[idx], projCoords, bias);
+    float lit;
+    if (idx == 0)      lit = PCSS_Shadow(u_shadow_maps[0], projCoords, bias);
+    else if (idx == 1) lit = PCSS_Shadow(u_shadow_maps[1], projCoords, bias);
+    else               lit = PCSS_Shadow(u_shadow_maps[2], projCoords, bias);
     return clamp((1.0 - lit) * u_shadow_strength, 0.0, 1.0);
 }
 
@@ -402,10 +405,18 @@ float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal
     float currentDepth = projCoords.z;
     float bias = max(0.003 * (1.0 - dot(normal, lightDir)), 0.0005);
     float shadow = 0.0;
-    vec2 texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[shadowIndex], 0));
+    vec2 texelSize;
+    if (shadowIndex == 0)      texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[0], 0));
+    else if (shadowIndex == 1) texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[1], 0));
+    else if (shadowIndex == 2) texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[2], 0));
+    else                       texelSize = 1.0 / vec2(textureSize(u_spot_shadow_maps[3], 0));
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
-            float pcfDepth = texture(u_spot_shadow_maps[shadowIndex], projCoords.xy + vec2(x, y) * texelSize).r;
+            float pcfDepth;
+            if (shadowIndex == 0)      pcfDepth = texture(u_spot_shadow_maps[0], projCoords.xy + vec2(x, y) * texelSize).r;
+            else if (shadowIndex == 1) pcfDepth = texture(u_spot_shadow_maps[1], projCoords.xy + vec2(x, y) * texelSize).r;
+            else if (shadowIndex == 2) pcfDepth = texture(u_spot_shadow_maps[2], projCoords.xy + vec2(x, y) * texelSize).r;
+            else                       pcfDepth = texture(u_spot_shadow_maps[3], projCoords.xy + vec2(x, y) * texelSize).r;
             shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
         }
     }
@@ -418,7 +429,11 @@ float PointShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 light
     vec3 fragToLight = fragPosWorldSpace - lightPos;
     float currentDepth = length(fragToLight);
     if (currentDepth >= lightRadius) return 0.0;
-    float closestDepth = texture(u_point_shadow_maps[shadowIndex], fragToLight).r * lightRadius;
+    float closestDepth;
+    if (shadowIndex == 0)      closestDepth = texture(u_point_shadow_maps[0], fragToLight).r * lightRadius;
+    else if (shadowIndex == 1) closestDepth = texture(u_point_shadow_maps[1], fragToLight).r * lightRadius;
+    else if (shadowIndex == 2) closestDepth = texture(u_point_shadow_maps[2], fragToLight).r * lightRadius;
+    else                       closestDepth = texture(u_point_shadow_maps[3], fragToLight).r * lightRadius;
     float bias = 0.05;
     return (currentDepth - bias) > closestDepth ? u_shadow_strength : 0.0;
 }

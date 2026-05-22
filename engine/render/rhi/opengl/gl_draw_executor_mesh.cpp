@@ -634,6 +634,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindVertexArray(0);
         } else if (is_instanced) {
             // --- GPU Instancing path ---
+            glBindVertexArray(mesh_vao_handle_.raw());
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
             if (update_buffer_fn_) {
                 update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
                 update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
@@ -662,8 +664,6 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_handle_);
             glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(inst_data_size), item.instance_transforms.data());
 
-            glBindVertexArray(mesh_vao_handle_.raw());
-
             // 配置 instance attributes (location 7-10, 每列 vec4)
             const GLsizei mat4_stride = static_cast<GLsizei>(sizeof(glm::mat4));
             for (int col = 0; col < 4; ++col) {
@@ -688,12 +688,12 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             global_state_.current_frame_stats.instanced_draw_calls += 1;
             global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
         } else {
+            glBindVertexArray(mesh_vao_handle_.raw());
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
             if (update_buffer_fn_) {
                 update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
                 update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
             }
-
-            glBindVertexArray(mesh_vao_handle_.raw());
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_SHORT, nullptr);
             glBindVertexArray(0);
         }

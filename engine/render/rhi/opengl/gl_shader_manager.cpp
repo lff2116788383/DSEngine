@@ -586,6 +586,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "lum_adapt")             fs = klum_adapt_frag_glsl330;
     else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl330;
     else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl330;
+    else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl330;
     else return 0;
 
     unsigned int shader = CompileProgram(kpostprocess_vert_glsl330, fs);

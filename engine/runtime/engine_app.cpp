@@ -96,10 +96,19 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
         readback = pipeline.ReadBloomMip0Rgba8WithSize();
     else if (target == "bloom_extract")
         readback = pipeline.ReadBloomExtractRgba8WithSize();
-    else
+    else {
         readback = pipeline.ReadSceneColorRgba8WithSize();
+        if (readback.pixels.empty()) {
+            readback = pipeline.ReadMainColorRgba8WithSize();
+        }
+    }
     if (readback.pixels.empty() || readback.width <= 0 || readback.height <= 0) {
-        std::cerr << "Failed to capture screenshot pixels\n";
+        std::cerr << "Failed to capture screenshot pixels"
+                  << " w=" << readback.width << " h=" << readback.height
+                  << " pixels=" << readback.pixels.size()
+                  << " target=" << (target.empty() ? "scene" : target)
+                  << " screen=" << Screen::width() << "x" << Screen::height() << "\n";
+        // 回退到默认帧缓冲回读
         return false;
     }
 

@@ -199,6 +199,11 @@ ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
         return nullptr;
     }
 
+    if (error_blob) {
+        DEBUG_LOG_WARN("[D3D11] Shader compile warnings: {}",
+                       static_cast<const char*>(error_blob->GetBufferPointer()));
+    }
+
     // 写入磁盘缓存
     try {
         std::filesystem::create_directories(kShaderCacheDir);

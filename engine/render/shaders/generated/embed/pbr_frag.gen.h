@@ -4552,7 +4552,10 @@ float ShadowForCascade(int idx, float3 fragPosWorldSpace, float3 normal, float3 
     float bias = max(0.004999999888241291046142578125f * (1.0f - dot(normal, lightDir)), 0.0005000000237487256526947021484375f);
     float3 param = projCoords;
     float param_1 = bias;
-    float lit = PCSS_Shadow(u_shadow_maps[idx], _u_shadow_maps_sampler[idx], param, param_1);
+    float lit;
+    if (idx == 0)      lit = PCSS_Shadow(u_shadow_maps[0], _u_shadow_maps_sampler[0], param, param_1);
+    else if (idx == 1) lit = PCSS_Shadow(u_shadow_maps[1], _u_shadow_maps_sampler[1], param, param_1);
+    else               lit = PCSS_Shadow(u_shadow_maps[2], _u_shadow_maps_sampler[2], param, param_1);
     return clamp((1.0f - lit) * _834_light_params.y, 0.0f, 1.0f);
 }
 
@@ -4668,7 +4671,11 @@ float PointShadowCalculation(int shadowIndex, float3 fragPosWorldSpace, float3 l
     {
         return 0.0f;
     }
-    float closestDepth = u_point_shadow_maps[shadowIndex].Sample(_u_point_shadow_maps_sampler[shadowIndex], fragToLight).x * lightRadius;
+    float closestDepth;
+    if (shadowIndex == 0)      closestDepth = u_point_shadow_maps[0].Sample(_u_point_shadow_maps_sampler[0], fragToLight).x * lightRadius;
+    else if (shadowIndex == 1) closestDepth = u_point_shadow_maps[1].Sample(_u_point_shadow_maps_sampler[1], fragToLight).x * lightRadius;
+    else if (shadowIndex == 2) closestDepth = u_point_shadow_maps[2].Sample(_u_point_shadow_maps_sampler[2], fragToLight).x * lightRadius;
+    else                       closestDepth = u_point_shadow_maps[3].Sample(_u_point_shadow_maps_sampler[3], fragToLight).x * lightRadius;
     float bias = 0.0500000007450580596923828125f;
     float _1194;
     if ((currentDepth - bias) > closestDepth)
@@ -4732,12 +4739,20 @@ R"(float SpotShadowCalculation(int shadowIndex, float3 fragPosWorldSpace, float3
     float bias = max(0.0030000000260770320892333984375f * (1.0f - dot(normal, lightDir)), 0.0005000000237487256526947021484375f);
     float shadow = 0.0f;
     uint _1095_dummy_parameter;
-    float2 texelSize = 1.0f.xx / float2(int2(spvTextureSize(u_spot_shadow_maps[shadowIndex], uint(0), _1095_dummy_parameter)));
+    float2 texelSize;
+    if (shadowIndex == 0)      texelSize = 1.0f.xx / float2(int2(spvTextureSize(u_spot_shadow_maps[0], uint(0), _1095_dummy_parameter)));
+    else if (shadowIndex == 1) texelSize = 1.0f.xx / float2(int2(spvTextureSize(u_spot_shadow_maps[1], uint(0), _1095_dummy_parameter)));
+    else if (shadowIndex == 2) texelSize = 1.0f.xx / float2(int2(spvTextureSize(u_spot_shadow_maps[2], uint(0), _1095_dummy_parameter)));
+    else                       texelSize = 1.0f.xx / float2(int2(spvTextureSize(u_spot_shadow_maps[3], uint(0), _1095_dummy_parameter)));
     for (int x = -1; x <= 1; x++)
     {
         for (int y = -1; y <= 1; y++)
         {
-            float pcfDepth = u_spot_shadow_maps[shadowIndex].Sample(_u_spot_shadow_maps_sampler[shadowIndex], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
+            float pcfDepth;
+            if (shadowIndex == 0)      pcfDepth = u_spot_shadow_maps[0].Sample(_u_spot_shadow_maps_sampler[0], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
+            else if (shadowIndex == 1) pcfDepth = u_spot_shadow_maps[1].Sample(_u_spot_shadow_maps_sampler[1], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
+            else if (shadowIndex == 2) pcfDepth = u_spot_shadow_maps[2].Sample(_u_spot_shadow_maps_sampler[2], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
+            else                       pcfDepth = u_spot_shadow_maps[3].Sample(_u_spot_shadow_maps_sampler[3], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
             shadow += float((currentDepth - bias) > pcfDepth);
         }
     }

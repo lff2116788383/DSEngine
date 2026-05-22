@@ -248,14 +248,15 @@ void OpenGLRhiDevice::EnsureInitialized() {
     // 鍒濆鍖?UBO 绠＄悊鍣?
     ubo_mgr_.Init();
 
+    // CreateBuffer / UpdateBuffer 内部检查 initialized_，必须在 InitGeometryBuffers 之前置 true
+    initialized_ = true;
+
     // 初始化几何缓冲区：2D 精灵 + 3D 网格 + 白色纹理
     draw_executor_.InitGeometryBuffers(
         [this]() -> VertexArrayHandle { return CreateVertexArray(); },
         [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index); },
         [this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { UpdateBuffer(handle, offset, size, data, is_index); }
     );
-
-    initialized_ = true;
 }
 
 void OpenGLRhiDevice::Shutdown() {
@@ -339,17 +340,16 @@ unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool i
 
 void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
     if (!initialized_) return;
-    unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
-    glBindBuffer(target, handle);
+    // 使用 GL_COPY_WRITE_BUFFER 避免修改当前 VAO 的 EBO 绑定状态
+    glBindBuffer(GL_COPY_WRITE_BUFFER, handle);
     if (offset == 0) {
-        // Buffer orphaning: 用 glBufferData 替换 glBufferSubData，
-        // 驱动可立即分配新 storage 而无需等待 GPU 释放旧数据。
-        // GL_STREAM_DRAW 提示驱动：数据每帧写入一次、绘制少量次后丢弃。
-        glBufferData(target, static_cast<GLsizeiptr>(size), data, GL_STREAM_DRAW);
+        // Buffer orphaning: 驱动可立即分配新 storage 而无需等待 GPU 释放旧数据
+        glBufferData(GL_COPY_WRITE_BUFFER, static_cast<GLsizeiptr>(size), data, GL_STREAM_DRAW);
     } else {
-        glBufferSubData(target, static_cast<GLintptr>(offset),
+        glBufferSubData(GL_COPY_WRITE_BUFFER, static_cast<GLintptr>(offset),
                         static_cast<GLsizeiptr>(size), data);
     }
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 }
 
 void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
@@ -375,7 +375,7 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 // --- 纹理 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
-    if (!initialized_) return 0u;
+    EnsureInitialized();
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
@@ -481,7 +481,7 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
 // --- 渲染目标 ---
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    if (!initialized_) return 0u;
+    EnsureInitialized();
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
     unsigned int depth_texture_handle = 0;
     unsigned int fbo_handle = 0;
