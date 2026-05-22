@@ -4350,17 +4350,15 @@ SamplerComparisonState _u_shadow_maps_sampler[3] : register(s5);
 Texture2D<float4> u_spot_shadow_maps[4] : register(t8);
 SamplerState _u_spot_shadow_maps_sampler[4] : register(s8);
 TextureCube<float4> u_point_shadow_maps[4] : register(t19);
-SamplerState _u_point_shadow_maps_sampler[4] : register(s19);
+// point shadow maps reuse spot shadow sampler slots to stay within 16-sampler limit
 Texture2D<float4> u_splat_weight_map : register(t14);
 SamplerState _u_splat_weight_map_sampler : register(s14);
 Texture2D<float4> u_splat_layer0 : register(t15);
 SamplerState _u_splat_layer0_sampler : register(s15);
 Texture2D<float4> u_splat_layer1 : register(t16);
-SamplerState _u_splat_layer1_sampler : register(s16);
+// splat layers 1-3 reuse layer0 sampler to stay within 16-sampler limit
 Texture2D<float4> u_splat_layer2 : register(t17);
-SamplerState _u_splat_layer2_sampler : register(s17);
 Texture2D<float4> u_splat_layer3 : register(t18);
-SamplerState _u_splat_layer3_sampler : register(s18);
 Texture2D<float4> u_texture : register(t0);
 SamplerState _u_texture_sampler : register(s0);
 Texture2D<float4> u_emissive_map : register(t3);
@@ -4409,7 +4407,7 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS, float height_scale)
     float2 P = (viewDirTS.xy / max(viewDirTS.z, 0.001000000047497451305389404296875f).xx) * height_scale;
     float2 deltaUV = P / 16.0f.xx;
     float2 curUV = uv;
-    float curDepth = 1.0f - u_normal_map.Sample(_u_normal_map_sampler, curUV).w;
+    float curDepth = 1.0f - u_normal_map.SampleLevel(_u_normal_map_sampler, curUV, 0.0f).w;
     for (int i = 0; i < 16; i++)
     {
         if (currentLayerDepth >= curDepth)
@@ -4417,12 +4415,12 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS, float height_scale)
             break;
         }
         curUV -= deltaUV;
-        curDepth = 1.0f - u_normal_map.Sample(_u_normal_map_sampler, curUV).w;
+        curDepth = 1.0f - u_normal_map.SampleLevel(_u_normal_map_sampler, curUV, 0.0f).w;
         currentLayerDepth += layerDepth;
     }
     float2 prevUV = curUV + deltaUV;
     float afterDepth = curDepth - currentLayerDepth;
-    float beforeDepth = ((1.0f - u_normal_map.Sample(_u_normal_map_sampler, prevUV).w) - currentLayerDepth) + layerDepth;
+    float beforeDepth = ((1.0f - u_normal_map.SampleLevel(_u_normal_map_sampler, prevUV, 0.0f).w) - currentLayerDepth) + layerDepth;
     float w = afterDepth / ((afterDepth - beforeDepth) + 9.9999997473787516355514526367188e-05f);
     return lerp(curUV, prevUV, w.xx);
 }
@@ -4454,7 +4452,7 @@ float FindBlockerDepth(Texture2D<float4> shadowMap, SamplerComparisonState _shad
     {
         float2 sampleUV = uv + (_676[i] * searchRadius);
         float3 _691 = float3(sampleUV, receiverDepth);
-        float vis = shadowMap.SampleCmp(_shadowMap_sampler, _691.xy, _691.z);
+        float vis = shadowMap.SampleCmpLevelZero(_shadowMap_sampler, _691.xy, _691.z);
         if (vis < 0.5f)
         {
             float lo = 0.0f;
@@ -4463,7 +4461,7 @@ float FindBlockerDepth(Texture2D<float4> shadowMap, SamplerComparisonState _shad
             {
                 float mid = (lo + hi) * 0.5f;
                 float3 _719 = float3(sampleUV, mid);
-                if (shadowMap.SampleCmp(_shadowMap_sampler, _719.xy, _719.z) < 0.5f)
+                if (shadowMap.SampleCmpLevelZero(_shadowMap_sampler, _719.xy, _719.z) < 0.5f)
                 {
                     hi = mid;
                 }
@@ -4503,7 +4501,7 @@ float PCSS_Shadow(Texture2D<float4> shadowMap, SamplerComparisonState _shadowMap
     {
         float2 offset = _676[i] * filterRadius;
         float3 _817 = float3(projCoords.xy + offset, receiverDepth);
-        shadow += shadowMap.SampleCmp(_shadowMap_sampler, _817.xy, _817.z);
+        shadow += shadowMap.SampleCmpLevelZero(_shadowMap_sampler, _817.xy, _817.z);
     }
     return shadow / 16.0f;
 }
@@ -4672,10 +4670,10 @@ float PointShadowCalculation(int shadowIndex, float3 fragPosWorldSpace, float3 l
         return 0.0f;
     }
     float closestDepth;
-    if (shadowIndex == 0)      closestDepth = u_point_shadow_maps[0].Sample(_u_point_shadow_maps_sampler[0], fragToLight).x * lightRadius;
-    else if (shadowIndex == 1) closestDepth = u_point_shadow_maps[1].Sample(_u_point_shadow_maps_sampler[1], fragToLight).x * lightRadius;
-    else if (shadowIndex == 2) closestDepth = u_point_shadow_maps[2].Sample(_u_point_shadow_maps_sampler[2], fragToLight).x * lightRadius;
-    else                       closestDepth = u_point_shadow_maps[3].Sample(_u_point_shadow_maps_sampler[3], fragToLight).x * lightRadius;
+    if (shadowIndex == 0)      closestDepth = u_point_shadow_maps[0].SampleLevel(_u_spot_shadow_maps_sampler[0], fragToLight, 0.0f).x * lightRadius;
+    else if (shadowIndex == 1) closestDepth = u_point_shadow_maps[1].SampleLevel(_u_spot_shadow_maps_sampler[1], fragToLight, 0.0f).x * lightRadius;
+    else if (shadowIndex == 2) closestDepth = u_point_shadow_maps[2].SampleLevel(_u_spot_shadow_maps_sampler[2], fragToLight, 0.0f).x * lightRadius;
+    else                       closestDepth = u_point_shadow_maps[3].SampleLevel(_u_spot_shadow_maps_sampler[3], fragToLight, 0.0f).x * lightRadius;
     float bias = 0.0500000007450580596923828125f;
     float _1194;
     if ((currentDepth - bias) > closestDepth)
@@ -4749,10 +4747,10 @@ R"(float SpotShadowCalculation(int shadowIndex, float3 fragPosWorldSpace, float3
         for (int y = -1; y <= 1; y++)
         {
             float pcfDepth;
-            if (shadowIndex == 0)      pcfDepth = u_spot_shadow_maps[0].Sample(_u_spot_shadow_maps_sampler[0], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
-            else if (shadowIndex == 1) pcfDepth = u_spot_shadow_maps[1].Sample(_u_spot_shadow_maps_sampler[1], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
-            else if (shadowIndex == 2) pcfDepth = u_spot_shadow_maps[2].Sample(_u_spot_shadow_maps_sampler[2], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
-            else                       pcfDepth = u_spot_shadow_maps[3].Sample(_u_spot_shadow_maps_sampler[3], projCoords.xy + (float2(float(x), float(y)) * texelSize)).x;
+            if (shadowIndex == 0)      pcfDepth = u_spot_shadow_maps[0].SampleLevel(_u_spot_shadow_maps_sampler[0], projCoords.xy + (float2(float(x), float(y)) * texelSize), 0.0f).x;
+            else if (shadowIndex == 1) pcfDepth = u_spot_shadow_maps[1].SampleLevel(_u_spot_shadow_maps_sampler[1], projCoords.xy + (float2(float(x), float(y)) * texelSize), 0.0f).x;
+            else if (shadowIndex == 2) pcfDepth = u_spot_shadow_maps[2].SampleLevel(_u_spot_shadow_maps_sampler[2], projCoords.xy + (float2(float(x), float(y)) * texelSize), 0.0f).x;
+            else                       pcfDepth = u_spot_shadow_maps[3].SampleLevel(_u_spot_shadow_maps_sampler[3], projCoords.xy + (float2(float(x), float(y)) * texelSize), 0.0f).x;
             shadow += float((currentDepth - bias) > pcfDepth);
         }
     }
@@ -4816,9 +4814,9 @@ void frag_main()
             w /= w_sum.xxxx;
         }
         float3 c0 = u_splat_layer0.Sample(_u_splat_layer0_sampler, finalUV * _1300_u_splat_tiling.x).xyz;
-        float3 c1 = u_splat_layer1.Sample(_u_splat_layer1_sampler, finalUV * _1300_u_splat_tiling.y).xyz;
-        float3 c2 = u_splat_layer2.Sample(_u_splat_layer2_sampler, finalUV * _1300_u_splat_tiling.z).xyz;
-        float3 c3 = u_splat_layer3.Sample(_u_splat_layer3_sampler, finalUV * _1300_u_splat_tiling.w).xyz;
+        float3 c1 = u_splat_layer1.Sample(_u_splat_layer0_sampler, finalUV * _1300_u_splat_tiling.y).xyz;
+        float3 c2 = u_splat_layer2.Sample(_u_splat_layer0_sampler, finalUV * _1300_u_splat_tiling.z).xyz;
+        float3 c3 = u_splat_layer3.Sample(_u_splat_layer0_sampler, finalUV * _1300_u_splat_tiling.w).xyz;
         texColor = float4((((c0 * w.x) + (c1 * w.y)) + (c2 * w.z)) + (c3 * w.w), 1.0f) * vColor;
     }
     else

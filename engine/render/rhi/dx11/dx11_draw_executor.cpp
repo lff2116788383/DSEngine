@@ -539,12 +539,13 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     if (layout) dc->IASetInputLayout(layout);
     dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // 绑定常量缓冲
-    ID3D11Buffer* vs_cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get()};
+    // 绑定常量缓冲（gen.h VS: b0=PushConstants/PerObject, b1=PerFrame）
+    ID3D11Buffer* vs_cbs[] = {per_object_cb_.Get(), per_frame_cb_.Get()};
     dc->VSSetConstantBuffers(0, 2, vs_cbs);
     const auto& slots = shader_mgr.pbr_texture_slots();
     if (!is_depth_only_pass_ && !gbuffer_mode) {
-        ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), nullptr, per_scene_cb_.Get(), per_material_cb_.Get()};
+        // gen.h register 布局: b0=PerFrame, b1=PerScene, b2=LightProbeData, b3=PerMaterial
+        ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), per_scene_cb_.Get(), nullptr, per_material_cb_.Get()};
         dc->PSSetConstantBuffers(0, 4, ps_cbs);
 
         // CSM 阴影贴图
@@ -554,9 +555,10 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 if (sm) dc->PSSetShaderResources(slots.shadow_base + i, 1, sm->srv.GetAddressOf());
             }
         }
-        // 阴影采样器
+        // 阴影采样器（gen.h: SamplerComparisonState at s5-s7）
         if (shadow_sampler_) {
-            dc->PSSetSamplers(1, 1, shadow_sampler_.GetAddressOf());
+            ID3D11SamplerState* shadow_samplers[3] = {shadow_sampler_.Get(), shadow_sampler_.Get(), shadow_sampler_.Get()};
+            dc->PSSetSamplers(5, 3, shadow_samplers);
         }
 
         // 点光源/聚光灯数据已由 LightBuffer SSBO 提供
@@ -569,22 +571,22 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 填充聊光灯光源空间矩阵 CB（b6）并绑定
+        // 填充聚光灯光源空间矩阵 CB（gen.h: b4 SpotLightData）并绑定
         {
             DX11SpotMatricesCB sm_cb{};
             for (int i = 0; i < 4; ++i)
                 sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
             UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
-            dc->PSSetConstantBuffers(6, 1, per_spot_matrices_cb_.GetAddressOf());
+            dc->PSSetConstantBuffers(4, 1, per_spot_matrices_cb_.GetAddressOf());
         }
 
-        // 填充 LightProbeData CB（b9）并绑定
+        // 填充 LightProbeData CB（gen.h: b2 LightProbeData）并绑定
         if (light_probe_data_cb_) {
             DX11LightProbeDataCB lp_cb{};
             for (int i = 0; i < 9; ++i) lp_cb.sh_coefficients[i] = global_state_.light_probe_sh[i];
             lp_cb.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
             UpdateConstantBuffer(light_probe_data_cb_.Get(), &lp_cb, sizeof(lp_cb));
-            dc->PSSetConstantBuffers(9, 1, light_probe_data_cb_.GetAddressOf());
+            dc->PSSetConstantBuffers(2, 1, light_probe_data_cb_.GetAddressOf());
         }
 
         // 聚光灯阴影贴图
@@ -1868,10 +1870,12 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
         scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
-    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get(),
-                           per_scene_cb_.Get(), per_material_cb_.Get()};
-    dc->VSSetConstantBuffers(0, 4, cbs);
-    dc->PSSetConstantBuffers(0, 4, cbs);
+    // gen.h VS: b0=PushConstants/PerObject, b1=PerFrame
+    ID3D11Buffer* vs_cbs[] = {per_object_cb_.Get(), per_frame_cb_.Get()};
+    dc->VSSetConstantBuffers(0, 2, vs_cbs);
+    // gen.h PS: b0=PerFrame, b1=PerScene, b2=LightProbeData, b3=PerMaterial
+    ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), per_scene_cb_.Get(), nullptr, per_material_cb_.Get()};
+    dc->PSSetConstantBuffers(0, 4, ps_cbs);
 }
 
 // ============================================================
