@@ -60,9 +60,9 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
 
     auto dock_id_main = dockspace_id;
     auto dock_id_top    = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up,    0.05f, nullptr, &dock_id_main);
-    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down,  0.24f, nullptr, &dock_id_main);
+    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down,  0.15f, nullptr, &dock_id_main);
     auto dock_id_left   = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left,  0.18f, nullptr, &dock_id_main);
-    auto dock_id_right  = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.24f, nullptr, &dock_id_main);
+    auto dock_id_right  = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.20f, nullptr, &dock_id_main);
 
     ImGui::DockBuilderDockWindow("Toolbar",              dock_id_top);
     ImGui::DockBuilderDockWindow("Hierarchy",             dock_id_left);

@@ -10,6 +10,7 @@
 #include "editor_profiler_panel.h"
 #include "editor_scene_io.h"
 #include "editor_scene_tabs.h"
+#include "editor_scene_camera.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
@@ -154,6 +155,50 @@ void DrawEditorToolbar(EditorContext& ctx) {
     if (was2D) {
         ImGui::PopStyleColor();
     }
+
+    // Vertical separator between tool group and utility tools
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    // 对齐工具
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_left", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Left"));
+    ImGui::SameLine();
+
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_center", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Center"));
+    ImGui::SameLine();
+
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_right", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Right"));
+    ImGui::SameLine();
+
+    // 网格吸附
+    static bool grid_snap = false;
+    if (grid_snap) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    if (ImGui::Button(MDI_ICON_VIEW_GRID "##grid_snap", ImVec2(32, 24))) {
+        grid_snap = !grid_snap;
+    }
+    if (grid_snap) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Grid Snap"));
+    ImGui::SameLine();
+
+    // 视图重置
+    if (ImGui::Button(MDI_ICON_CAMERA "##view_reset", ImVec2(32, 24))) {
+        EditorCamera& cam = GetEditorCamera();
+        cam.focal_point = glm::vec3(0.0f);
+        cam.distance = 10.0f;
+        cam.yaw = 0.0f;
+        cam.pitch = 0.3f;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Reset View"));
 
     // Vertical separator between tool group and play controls
     ImGui::SameLine();

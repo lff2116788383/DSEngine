@@ -233,6 +233,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     if (headless) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    } else {
+        glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
@@ -273,7 +275,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Layout version check: if the stored version doesn't match, delete the old ini
     // so BuildDefaultDockLayout rebuilds from scratch on next launch.
     {
-        static constexpr int kLayoutVersion = 3;
+        static constexpr int kLayoutVersion = 4;
         const auto ini_path = GetEditorBinPath() / "editor_layout.ini";
         const auto ver_path = GetEditorBinPath() / "editor_layout.ver";
         bool needs_reset = true;
@@ -321,8 +323,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     // Initialize DSEngine
     dse::runtime::EngineRunConfig engine_config;
-    engine_config.window_width = 1280;
-    engine_config.window_height = 720;
+    int fb_w = 1280, fb_h = 720;
+    glfwGetFramebufferSize(window_, &fb_w, &fb_h);
+    engine_config.window_width = fb_w;
+    engine_config.window_height = fb_h;
     engine_config.window_title = "DSEngine Editor";
     engine_config.business_mode = BusinessMode::Lua;
     engine_config.enable_editor = true;
