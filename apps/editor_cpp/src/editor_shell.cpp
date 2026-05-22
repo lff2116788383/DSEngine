@@ -327,6 +327,17 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::BeginMenu(MDI_ICON_LIGHTBULB "  Light", editable)) {
             if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
             if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
+            if (ImGui::MenuItem("Spot Light"))        CreateEntity3DSpotLight(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_CUBE_OUTLINE "  Physics", editable)) {
+            if (ImGui::MenuItem("Physics Box"))    CreateEntity3DPhysicsBox(ctx);
+            if (ImGui::MenuItem("Physics Sphere")) CreateEntity3DPhysicsSphere(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_VOLUME_HIGH "  Audio", editable)) {
+            if (ImGui::MenuItem("Audio Source"))   CreateEntity3DAudioSource(ctx);
+            if (ImGui::MenuItem("Audio Listener")) CreateEntity3DAudioListener(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::MenuItem(MDI_ICON_CAMERA "  Camera", nullptr, false, editable)) {
@@ -355,9 +366,20 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::Separator();
         ImGui::TextDisabled("Snap Settings");
-        ImGui::Text("  Translate: %.1f", GetSnapTranslate());
-        ImGui::Text("  Rotate:    %.0f" "\xc2\xb0", GetSnapRotate());
-        ImGui::Text("  Scale:     %.2f", GetSnapScale());
+        {
+            float snap_t = GetSnapTranslate();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Translate", &snap_t, 0.05f, 0.01f, 100.0f, "%.2f"))
+                SetSnapTranslate(snap_t);
+            float snap_r = GetSnapRotate();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Rotate", &snap_r, 1.0f, 1.0f, 180.0f, "%.0f\xc2\xb0"))
+                SetSnapRotate(snap_r);
+            float snap_s = GetSnapScale();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Scale", &snap_s, 0.01f, 0.01f, 10.0f, "%.2f"))
+                SetSnapScale(snap_s);
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Gizmo: Translate", "W")) ctx.current_gizmo_operation = 0;
         if (ImGui::MenuItem("Gizmo: Rotate",    "E")) ctx.current_gizmo_operation = 1;
@@ -429,14 +451,6 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndMenu();
     }
 
-    // ─── Build ────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Build")) {
-        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Export Windows Build...", "Ctrl+B")) {
-            dse::editor::OpenBuildGameDialog();
-        }
-        ImGui::EndMenu();
-    }
-
     // ─── Help ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Help"))) {
         if (ImGui::MenuItem("About DSEngine")) {
@@ -473,7 +487,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Text("Version %d.%d.%d", DSE_VERSION_MAJOR, DSE_VERSION_MINOR, DSE_VERSION_PATCH);
         ImGui::Spacing();
         ImGui::Text("Rendering: OpenGL / Vulkan / Direct3D 11");
-        ImGui::Text("ECS: entt  |  UI: Dear ImGui  |  Physics: PhysX 4.1");
+        ImGui::Text("ECS: entt  |  UI: Dear ImGui  |  Physics: Jolt Physics");
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(c) 2024-2026 DSEngine Contributors");
         ImGui::Separator();

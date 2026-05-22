@@ -1108,7 +1108,9 @@ void DrawSceneViewportPanel(EditorContext& ctx,
         for (float i = 0; i < scene_panel_size.y; i += 50) {
             draw_list->AddLine(ImVec2(p_min.x, p_min.y + i), ImVec2(p_max.x, p_min.y + i), IM_COL32(60, 60, 60, 255));
         }
-        draw_list->AddText(ImVec2(p_min.x + scene_panel_size.x / 2 - 50, p_min.y + scene_panel_size.y / 2), IM_COL32(200, 200, 200, 255), "Scene View");
+        const char* scene_label = "Scene View";
+        ImVec2 scene_text_size = ImGui::CalcTextSize(scene_label);
+        draw_list->AddText(ImVec2(p_min.x + (scene_panel_size.x - scene_text_size.x) * 0.5f, p_min.y + (scene_panel_size.y - scene_text_size.y) * 0.5f), IM_COL32(200, 200, 200, 255), scene_label);
     }
 
     // ─── Drag & Drop from Project panel ─────────────────────────────────────────

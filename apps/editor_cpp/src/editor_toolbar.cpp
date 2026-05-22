@@ -145,7 +145,6 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    ImGui::SetCursorPosX(10 + 4 * 36 + 20);
     const bool was_2d = ctx.is_2d;
     if (was_2d) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
@@ -244,7 +243,11 @@ void DrawEditorToolbar(EditorContext& ctx) {
     }
 
     ImGui::SameLine();
-    ImGui::SetCursorPosX(avail_width - 360);
+    float right_section_width = 32 + 8 + 110 + 8 + 60 + 8 + 60 + 10;
+    float right_x = avail_width - right_section_width;
+    float play_end = (avail_width / 2.0f) + 60;
+    if (right_x < play_end + 16) right_x = play_end + 16;
+    ImGui::SetCursorPosX(right_x);
 
     // ─── Theme toggle ───────────────────────────────────────────────────────
     {
@@ -276,8 +279,8 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::SameLine();
     ImGui::Button("Layers", ImVec2(60, 24));
 
-    ImGui::End();
     ImGui::PopStyleVar();
+    ImGui::End();
 }
 
 } // namespace dse::editor
