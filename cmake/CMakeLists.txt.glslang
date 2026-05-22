@@ -1,20 +1,16 @@
 # ============================================================================
-# glslang 源码集成 — Vulkan RHI 后端 GLSL→SPIR-V 运行时编译
+# glslang 源码集成 — Shader 离线编译工具链 (GLSL 450 → SPIR-V)
 # ============================================================================
 #
-# 条件：仅在 DSE_ENABLE_VULKAN=ON 时激活
+# 条件：始终启用（shader compiler 为三后端生成 gen.h，不依赖 Vulkan 运行时）
 # 源码位置：depends/glslang/
-# 产出：glslang, SPIRV 静态库 → 链接进 dse_engine
+# 产出：glslang, SPIRV 静态库 → 链接进 dse_shader_compiler (+ Vulkan RHI)
 #
 # glslang 的 add_subdirectory 方式集成，自动产生以下 target：
 #   glslang       : 核心编译器库
 #   SPIRV         : SPIR-V 生成器
 #   glslang-standalone : 独立编译器（不需要，禁用测试避免构建）
 # ============================================================================
-
-if(NOT DSE_ENABLE_VULKAN)
-    return()
-endif()
 
 set(GLSLANG_DIR "${CMAKE_SOURCE_DIR}/depends/glslang")
 

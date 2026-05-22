@@ -81,11 +81,13 @@ if(DSE_ENABLE_3D)
     add_definitions(-D DSE_ENABLE_3D)
 endif()
 
-# Vulkan + glslang 源码集成（仅在 Vulkan 启用时加载）
+# Vulkan 源码集成
 if(DSE_ENABLE_VULKAN)
     include(cmake/CMakeLists.txt.vulkan)
-    include(cmake/CMakeLists.txt.glslang)
 endif()
+
+# glslang 源码集成（shader 离线编译工具链）
+include(cmake/CMakeLists.txt.glslang)
 
 # SPIRV-Cross 源码集成（shader 交叉编译工具）
 include(cmake/CMakeLists.txt.spirv_cross)
