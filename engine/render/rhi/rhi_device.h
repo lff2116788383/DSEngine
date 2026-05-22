@@ -51,6 +51,9 @@ public:
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
+    /// 诊断用：直接 blit RT 到 swapchain，绕过 shader pipeline
+    virtual void BlitToScreen(unsigned int source_rt) { (void)source_rt; }
+
     /// 阴影贴图绑定命令（Pass 中调用，直接委托到 RhiDevice）
     virtual void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
     virtual void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;

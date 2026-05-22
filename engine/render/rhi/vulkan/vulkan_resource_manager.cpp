@@ -86,14 +86,27 @@ void VulkanResourceManager::Shutdown() {
     for (auto& [handle, rt] : render_targets_) {
         if (rt.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device_, rt.framebuffer, nullptr);
         if (rt.render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(device_, rt.render_pass, nullptr);
+        if (rt.render_pass_load != VK_NULL_HANDLE) vkDestroyRenderPass(device_, rt.render_pass_load, nullptr);
         if (rt.is_msaa) {
             if (rt.msaa_color_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.msaa_color_texture.image_view, nullptr);
             if (rt.msaa_color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.msaa_color_texture.image, nullptr);
             if (rt.msaa_color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.msaa_color_texture.memory, nullptr);
         }
-        if (rt.color_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.color_texture.image_view, nullptr);
-        if (rt.color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.color_texture.image, nullptr);
-        if (rt.color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.color_texture.memory, nullptr);
+        // MRT: color_textures[0..N] 也被注册到 textures_ 中，从 textures_ 移除以避免 double-free
+        if (rt.color_attachment_count > 1) {
+            for (auto tex_h : rt.mrt_texture_handles) {
+                textures_.erase(tex_h);
+            }
+            for (auto& ct : rt.color_textures) {
+                if (ct.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, ct.image_view, nullptr);
+                if (ct.image != VK_NULL_HANDLE) vkDestroyImage(device_, ct.image, nullptr);
+                if (ct.memory != VK_NULL_HANDLE) vkFreeMemory(device_, ct.memory, nullptr);
+            }
+        } else {
+            if (rt.color_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.color_texture.image_view, nullptr);
+            if (rt.color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.color_texture.image, nullptr);
+            if (rt.color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.color_texture.memory, nullptr);
+        }
         if (rt.depth_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.depth_texture.image_view, nullptr);
         if (rt.depth_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.depth_texture.image, nullptr);
         if (rt.depth_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.depth_texture.memory, nullptr);
@@ -1014,7 +1027,8 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     if (has_color) {
         VkImageUsageFlags color_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                       | VK_IMAGE_USAGE_SAMPLED_BIT
-                                      | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                                      | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                      | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         if (allow_uav)        color_usage |= VK_IMAGE_USAGE_STORAGE_BIT;
         if (generate_mipmaps) color_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
@@ -1148,19 +1162,33 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     subpass.pDepthStencilAttachment = has_depth ? &depth_ref : nullptr;
     subpass.pResolveAttachments     = resolve_refs.empty() ? nullptr : resolve_refs.data();
 
-    VkSubpassDependency dep{};
-    dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
-    dep.dstSubpass    = 0;
-    dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                      | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                      | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-                      | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    dep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                      | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                      | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-                      | VK_ACCESS_SHADER_READ_BIT;
+    // 入口依赖：确保前一个 pass 的写入对本 pass 可见
+    VkSubpassDependency dep_begin{};
+    dep_begin.srcSubpass    = VK_SUBPASS_EXTERNAL;
+    dep_begin.dstSubpass    = 0;
+    dep_begin.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                            | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dep_begin.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                            | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                            | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep_begin.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                            | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep_begin.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                            | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                            | VK_ACCESS_SHADER_READ_BIT;
+
+    // 出口依赖：确保本 pass 的写入对后续 pass 的 shader 读取可见
+    VkSubpassDependency dep_end{};
+    dep_end.srcSubpass    = 0;
+    dep_end.dstSubpass    = VK_SUBPASS_EXTERNAL;
+    dep_end.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                          | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dep_end.dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep_end.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep_end.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    VkSubpassDependency deps[] = { dep_begin, dep_end };
 
     VkRenderPassCreateInfo rp_info{};
     rp_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1168,12 +1196,37 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     rp_info.pAttachments    = attachments.data();
     rp_info.subpassCount    = 1;
     rp_info.pSubpasses      = &subpass;
-    rp_info.dependencyCount = 1;
-    rp_info.pDependencies   = &dep;
+    rp_info.dependencyCount = 2;
+    rp_info.pDependencies   = deps;
 
     if (vkCreateRenderPass(device_, &rp_info, nullptr, &rt.render_pass) != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create render pass for render target");
         return 0;
+    }
+
+    // ---- RenderPass (LOAD 变体：保留已有内容) ----
+    // 将所有颜色/深度附件的 loadOp 改为 LOAD，initialLayout 改为对应 finalLayout
+    {
+        std::vector<VkAttachmentDescription> load_atts = attachments;
+        for (auto& att : load_atts) {
+            const bool is_depth = (att.format == VK_FORMAT_D24_UNORM_S8_UINT ||
+                                   att.format == VK_FORMAT_D32_SFLOAT ||
+                                   att.format == VK_FORMAT_D16_UNORM ||
+                                   att.format == VK_FORMAT_D32_SFLOAT_S8_UINT);
+            if (att.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+                att.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                att.initialLayout = att.finalLayout;
+            }
+            if (is_depth && att.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+                att.initialLayout = att.finalLayout;
+            }
+        }
+        VkRenderPassCreateInfo load_rp_info = rp_info;
+        load_rp_info.pAttachments = load_atts.data();
+        if (vkCreateRenderPass(device_, &load_rp_info, nullptr, &rt.render_pass_load) != VK_SUCCESS) {
+            DEBUG_LOG_WARN("[Vulkan] Failed to create LOAD render pass variant, falling back to CLEAR-only");
+            rt.render_pass_load = VK_NULL_HANDLE;
+        }
     }
 
     // ---- Framebuffer ----
@@ -1216,10 +1269,14 @@ void VulkanResourceManager::DeleteRenderTarget(unsigned int handle) {
     auto& rt = it->second;
     if (rt.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device_, rt.framebuffer, nullptr);
     if (rt.render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(device_, rt.render_pass, nullptr);
+    if (rt.render_pass_load != VK_NULL_HANDLE) vkDestroyRenderPass(device_, rt.render_pass_load, nullptr);
     if (rt.is_msaa) {
         if (rt.msaa_color_texture.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, rt.msaa_color_texture.image_view, nullptr);
         if (rt.msaa_color_texture.image != VK_NULL_HANDLE) vkDestroyImage(device_, rt.msaa_color_texture.image, nullptr);
         if (rt.msaa_color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.msaa_color_texture.memory, nullptr);
+    }
+    for (auto tex_h : rt.mrt_texture_handles) {
+        textures_.erase(tex_h);
     }
     for (auto& ct : rt.color_textures) {
         if (ct.image_view != VK_NULL_HANDLE) vkDestroyImageView(device_, ct.image_view, nullptr);

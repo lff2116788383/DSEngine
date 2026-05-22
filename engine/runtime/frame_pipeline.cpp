@@ -158,6 +158,7 @@ void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
 }
 
 void LogDefaultFramebufferStats() {
+    if (!glGetIntegerv) return;  // 非 OpenGL 后端无 GL 函数
     const int width = Screen::width();
     const int height = Screen::height();
     if (width <= 0 || height <= 0) {

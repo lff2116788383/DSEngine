@@ -36,6 +36,7 @@ public:
     void DrawPostProcess(PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
+    void BlitToScreen(unsigned int source_rt) override;
 
     /// 获取底层 VkCommandBuffer
     VkCommandBuffer GetVkCommandBuffer() const { return vk_command_buffer_; }

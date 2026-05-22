@@ -85,6 +85,12 @@ void VulkanCommandBuffer::DrawPostProcess(PostProcessRequest request) {
         device_->state_mgr(), device_->shader_mgr());
 }
 
+void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
+    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->draw_executor().BlitRenderTargetToSwapchain(
+        vk_command_buffer_, source_rt, device_->resource_mgr());
+}
+
 void VulkanCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DrawParticles3D(
@@ -1181,6 +1187,13 @@ void VulkanRhiDevice::EndFrame() {
         context_.PresentFrame(pending_command_buffers_);
         DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame OK");
         pending_command_buffers_.clear();
+    } else {
+        // 无命令提交时仍需 signal fence，否则下次 AcquireNextImage 的
+        // vkWaitForFences 会永远阻塞（fence 已被 reset 但未 signal）
+        VkSubmitInfo empty_submit{};
+        empty_submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        vkQueueSubmit(context_.graphics_queue(), 1, &empty_submit,
+                      context_.in_flight_fence());
     }
 
     context_.AdvanceFrame();

@@ -58,7 +58,8 @@ struct VulkanRenderTarget {
     int color_attachment_count = 1;  ///< MRT 颜色附件数量
 
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
-    VkRenderPass render_pass = VK_NULL_HANDLE;       ///< RenderTarget 关联的 RenderPass
+    VkRenderPass render_pass = VK_NULL_HANDLE;       ///< RenderTarget 关联的 RenderPass（loadOp=CLEAR）
+    VkRenderPass render_pass_load = VK_NULL_HANDLE;  ///< loadOp=LOAD 变体，用于后续不清除的渲染
     VulkanTexture color_texture;       ///< 1x SRV（MSAA 时为 resolve 目标），兼容 = color_textures[0]
     VulkanTexture msaa_color_texture;  ///< MSAA 颜色附件（仅 is_msaa=true 时有效）
     VulkanTexture depth_texture;

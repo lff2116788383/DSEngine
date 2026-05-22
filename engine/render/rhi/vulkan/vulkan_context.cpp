@@ -690,13 +690,16 @@ bool VulkanContext::CreateSwapchainFramebuffers() {
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_ref;
 
-    // Subpass dependency：确保 swapchain image 可用后再写入
-    VkSubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    // 入口依赖：确保前一个 pass 的写入（颜色+着色器）对本 pass 可见
+    VkSubpassDependency dep_begin{};
+    dep_begin.srcSubpass    = VK_SUBPASS_EXTERNAL;
+    dep_begin.dstSubpass    = 0;
+    dep_begin.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep_begin.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                            | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep_begin.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dep_begin.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                            | VK_ACCESS_SHADER_READ_BIT;
 
     VkRenderPassCreateInfo rp_ci{};
     rp_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -705,7 +708,7 @@ bool VulkanContext::CreateSwapchainFramebuffers() {
     rp_ci.subpassCount = 1;
     rp_ci.pSubpasses = &subpass;
     rp_ci.dependencyCount = 1;
-    rp_ci.pDependencies = &dependency;
+    rp_ci.pDependencies = &dep_begin;
 
     if (vkCreateRenderPass(device_, &rp_ci, nullptr, &swapchain_render_pass_) != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create swapchain render pass");

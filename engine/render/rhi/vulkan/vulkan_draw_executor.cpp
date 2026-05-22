@@ -93,7 +93,11 @@ bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
 void WriteToBuffer(VkDevice device, VkDeviceMemory memory,
                    VkDeviceSize offset, VkDeviceSize size, const void* data) {
     void* mapped = nullptr;
-    if (vkMapMemory(device, memory, offset, size, 0, &mapped) != VK_SUCCESS) return;
+    VkResult r = vkMapMemory(device, memory, offset, size, 0, &mapped);
+    if (r != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] WriteToBuffer: vkMapMemory FAILED offset={} size={} result={}", offset, size, (int)r);
+        return;
+    }
     memcpy(mapped, data, static_cast<size_t>(size));
     vkUnmapMemory(device, memory);
 }
@@ -141,6 +145,8 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     // 多 pass 每帧累积写入，需要足够大的缓冲区
     const VkDeviceSize mesh_vbo_size = 64 * 1024 * 1024;  // 64 MB
     const VkDeviceSize mesh_ibo_size = 8 * 1024 * 1024;   //  8 MB
+    mesh_vbo_capacity_ = mesh_vbo_size;
+    mesh_ibo_capacity_ = mesh_ibo_size;
 
     CreateVulkanBuffer(device, physical_device, mesh_vbo_size,
                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -207,11 +213,14 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     WriteToBuffer(device, particle_vbo_mem_, 0, sizeof(particle_vertices), particle_vertices);
 
     // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盖） ---
-    // per_frame: 16 batches/frame × 256B = 4KB
+    // per_frame: 128 batches/frame × 256B = 32KB（含 shadow passes + GPU Driven setup）
     // per_scene/material/lights: 512 items/frame × 256B = 128KB
-    constexpr size_t kPerFrameSlots  = 16;
+    constexpr size_t kPerFrameSlots  = 128;
     constexpr size_t kPerItemSlots   = 512;
     constexpr size_t kSlotAlign      = kUboSlotAlignment;
+    per_frame_ubo_capacity_ = kPerFrameSlots * kSlotAlign;
+    per_scene_ubo_capacity_ = kPerItemSlots * kSlotAlign;
+    per_material_ubo_capacity_ = kPerItemSlots * kSlotAlign;
     for (int i = 0; i < MAX_FRAMES; ++i) {
         CreateUBOBufferInternal(device, physical_device, kPerFrameSlots * kSlotAlign,
                                 per_frame_ubo_[i], per_frame_ubo_mem_[i]);
@@ -336,6 +345,10 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
     glm::mat4 inv_view = glm::inverse(view);
     ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
 
+    if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
+        return;
+    }
     WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
                   per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &ubo);
 }
@@ -353,6 +366,10 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
         ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
 
+    if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
+        return;
+    }
     WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
                   per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &ubo);
 }
@@ -395,6 +412,10 @@ void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
             item.toon_specular_strength, item.toon_rim_strength);
     }
 
+    if (per_material_ubo_offset_ + sizeof(VulkanPerMaterialUBO) > per_material_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] PER_MATERIAL_UBO OVERFLOW: offset={} capacity={}", per_material_ubo_offset_, per_material_ubo_capacity_);
+        return;
+    }
     WriteToBuffer(context_->device(), per_material_ubo_mem_[current_frame_index_],
                   per_material_ubo_offset_, sizeof(VulkanPerMaterialUBO), &ubo);
 }
@@ -1221,19 +1242,35 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
     src_img.imageView   = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
     src_img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    if (source_texture != 0) {
-        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(source_texture);
-        if (rt && rt->color_texture.image_view != VK_NULL_HANDLE) {
-            src_img.imageView = rt->color_texture.image_view;
-            DEBUG_LOG_TRACE("[Vulkan] PostProcess src: RT handle={} imageView={}", source_texture, (void*)rt->color_texture.image_view);
-        } else {
-            const VulkanTexture* tex = resource_mgr.GetTexture(source_texture);
-            if (tex) {
-                src_img.imageView = tex->image_view;
-                DEBUG_LOG_TRACE("[Vulkan] PostProcess src: Texture handle={} imageView={}", source_texture, (void*)tex->image_view);
-            } else {
-                DEBUG_LOG_WARN("[Vulkan] PostProcess src: handle={} NOT FOUND as RT or Texture, using dummy", source_texture);
+    auto resolve_image_info = [&](unsigned int handle, VkDescriptorImageInfo fallback) {
+        VkDescriptorImageInfo info = fallback;
+        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(handle);
+        if (rt) {
+            if (rt->color_texture.image_view != VK_NULL_HANDLE) {
+                info.imageView = rt->color_texture.image_view;
+                info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                return info;
             }
+            if (rt->depth_texture.image_view != VK_NULL_HANDLE) {
+                info.imageView = rt->depth_texture.image_view;
+                info.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                return info;
+            }
+        }
+        const VulkanTexture* tex = resource_mgr.GetTexture(handle);
+        if (tex) {
+            info.imageView = tex->image_view;
+            if (tex->sampler != VK_NULL_HANDLE) info.sampler = tex->sampler;
+        }
+        return info;
+    };
+
+    if (source_texture != 0) {
+        VkImageView before = src_img.imageView;
+        src_img = resolve_image_info(source_texture, src_img);
+        if (src_img.imageView == before && !resource_mgr.GetRenderTarget(source_texture)
+            && !resource_mgr.GetTexture(source_texture)) {
+            DEBUG_LOG_WARN("[Vulkan] PostProcess src: handle={} NOT FOUND as RT or Texture, using dummy", source_texture);
         }
     }
 
@@ -1265,16 +1302,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
             ei.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             if (tex_handle != 0) {
-                const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(tex_handle);
-                if (rt && rt->color_texture.image_view != VK_NULL_HANDLE) {
-                    ei.imageView = rt->color_texture.image_view;
-                } else {
-                    const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
-                    if (tex) {
-                        ei.imageView = tex->image_view;
-                        if (tex->sampler != VK_NULL_HANDLE) ei.sampler = tex->sampler;
-                    }
-                }
+                ei = resolve_image_info(tex_handle, ei);
             }
 
             VkWriteDescriptorSet ew{};
@@ -1317,12 +1345,22 @@ void VulkanDrawExecutor::BeginRenderPass(
         const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (rt) {
             framebuffer = rt->framebuffer;
-            vk_render_pass = rt->render_pass;
+            // 根据是否需要清除选择 render pass 变体
+            if (!render_pass.clear_color_enabled && rt->render_pass_load != VK_NULL_HANDLE) {
+                vk_render_pass = rt->render_pass_load;
+            } else {
+                vk_render_pass = rt->render_pass;
+            }
         }
     } else {
         // 渲染到屏幕：使用当前 swapchain framebuffer
         framebuffer = context_->current_swapchain_framebuffer();
         vk_render_pass = context_->swapchain_render_pass();
+
+        DEBUG_LOG_INFO("[Vulkan] BeginRenderPass SWAPCHAIN: fb={} rp={} imgIdx={}",
+                       (uint64_t)(uintptr_t)framebuffer,
+                       (uint64_t)(uintptr_t)vk_render_pass,
+                       context_->current_image_index());
     }
 
     if (framebuffer == VK_NULL_HANDLE) {
@@ -1445,20 +1483,168 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
     DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: rt={}", current_rt_handle_);
     vkCmdEndRenderPass(cmd_buf);
 
-    // barrier：确保 color/depth writes 在后续 shader reads 可见
-    VkMemoryBarrier mem_barrier{};
-    mem_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    mem_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                              | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    mem_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-                              | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    vkCmdPipelineBarrier(cmd_buf,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0, 1, &mem_barrier, 0, nullptr, 0, nullptr);
+    // 对 offscreen RT 的颜色附件插入显式 image barrier，确保 layout 转换和内存可见性
+    if (current_rt_handle_ != 0 && resource_mgr_) {
+        const VulkanRenderTarget* rt = resource_mgr_->GetRenderTarget(current_rt_handle_);
+        if (rt && rt->has_color && rt->color_texture.image != VK_NULL_HANDLE) {
+            VkImageMemoryBarrier img_barrier{};
+            img_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            img_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            img_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            img_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            img_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            img_barrier.image = rt->color_texture.image;
+            img_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            img_barrier.subresourceRange.baseMipLevel = 0;
+            img_barrier.subresourceRange.levelCount = 1;
+            img_barrier.subresourceRange.baseArrayLayer = 0;
+            img_barrier.subresourceRange.layerCount = 1;
+            img_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            img_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(cmd_buf,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &img_barrier);
+
+            // MSAA resolve target 也需要 barrier
+            if (rt->is_msaa && rt->msaa_color_texture.image != VK_NULL_HANDLE) {
+                VkImageMemoryBarrier msaa_barrier = img_barrier;
+                msaa_barrier.image = rt->msaa_color_texture.image;
+                msaa_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                msaa_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                vkCmdPipelineBarrier(cmd_buf,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &msaa_barrier);
+            }
+        }
+        // 深度附件 barrier
+        if (rt && rt->has_depth && rt->depth_texture.image != VK_NULL_HANDLE) {
+            VkImageMemoryBarrier depth_barrier{};
+            depth_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            depth_barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            depth_barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            depth_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depth_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depth_barrier.image = rt->depth_texture.image;
+            depth_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            depth_barrier.subresourceRange.baseMipLevel = 0;
+            depth_barrier.subresourceRange.levelCount = 1;
+            depth_barrier.subresourceRange.baseArrayLayer = 0;
+            depth_barrier.subresourceRange.layerCount = 1;
+            depth_barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            depth_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(cmd_buf,
+                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &depth_barrier);
+        }
+    } else {
+        // swapchain 或未知 RT，使用全局 memory barrier
+        VkMemoryBarrier mem_barrier{};
+        mem_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        mem_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                  | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        mem_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+                                  | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 1, &mem_barrier, 0, nullptr, 0, nullptr);
+    }
 
     current_render_pass_ = VK_NULL_HANDLE;
     current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+}
+
+// ============================================================================
+// BlitRenderTargetToSwapchain — 诊断：直接 blit RT→swapchain，绕过 shader
+// ============================================================================
+
+void VulkanDrawExecutor::BlitRenderTargetToSwapchain(
+    VkCommandBuffer cmd_buf,
+    unsigned int source_rt,
+    VulkanResourceManager& resource_mgr) {
+
+    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(source_rt);
+    if (!rt || !rt->has_color || rt->color_texture.image == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("[Vulkan] BlitToSwapchain: invalid source RT {}", source_rt);
+        return;
+    }
+
+    VkImage src_image = rt->color_texture.image;
+    VkImage dst_image = context_->swapchain_images()[context_->current_image_index()];
+    VkExtent2D extent = context_->swapchain_extent();
+
+    // 1. RT color → TRANSFER_SRC
+    VkImageMemoryBarrier src_barrier{};
+    src_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    src_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    src_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    src_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    src_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    src_barrier.image = src_image;
+    src_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    src_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                              | VK_ACCESS_SHADER_READ_BIT
+                              | VK_ACCESS_TRANSFER_WRITE_BIT;
+    src_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    // 2. Swapchain → TRANSFER_DST
+    VkImageMemoryBarrier dst_barrier{};
+    dst_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    dst_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    dst_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    dst_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    dst_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    dst_barrier.image = dst_image;
+    dst_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    dst_barrier.srcAccessMask = 0;
+    dst_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+    VkImageMemoryBarrier barriers[] = {src_barrier, dst_barrier};
+    vkCmdPipelineBarrier(cmd_buf,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+        | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+        | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers);
+
+    // 3. Blit
+    VkImageBlit blit_region{};
+    blit_region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    blit_region.srcOffsets[0] = {0, 0, 0};
+    blit_region.srcOffsets[1] = {static_cast<int32_t>(rt->width),
+                                 static_cast<int32_t>(rt->height), 1};
+    blit_region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    blit_region.dstOffsets[0] = {0, 0, 0};
+    blit_region.dstOffsets[1] = {static_cast<int32_t>(extent.width),
+                                 static_cast<int32_t>(extent.height), 1};
+
+    vkCmdBlitImage(cmd_buf,
+        src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &blit_region, VK_FILTER_LINEAR);
+
+    // 4. RT → SHADER_READ_ONLY, Swapchain → PRESENT_SRC
+    src_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    src_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    src_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    src_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    dst_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    dst_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    dst_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    dst_barrier.dstAccessMask = 0;
+
+    VkImageMemoryBarrier barriers2[] = {src_barrier, dst_barrier};
+    vkCmdPipelineBarrier(cmd_buf,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers2);
+
+    DEBUG_LOG_INFO("[Vulkan] BlitToSwapchain: rt={} ({}x{}) → swapchain ({}x{})",
+                   source_rt, rt->width, rt->height, extent.width, extent.height);
 }
 
 // ============================================================================
@@ -1734,7 +1920,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
         VkDeviceSize cur_vbo_offset = mesh_vbo_offset_;
         if (!item.vertices.empty()) {
             size_t vdata_size = item.vertices.size() * sizeof(item.vertices[0]);
-            WriteToBuffer(context_->device(), mesh_vbo_mem_, mesh_vbo_offset_, vdata_size, item.vertices.data());
+            if (mesh_vbo_offset_ + vdata_size > mesh_vbo_capacity_) {
+                DEBUG_LOG_ERROR("[Vulkan] VBO OVERFLOW: offset={} + size={} > capacity={}", mesh_vbo_offset_, vdata_size, mesh_vbo_capacity_);
+            } else {
+                WriteToBuffer(context_->device(), mesh_vbo_mem_, mesh_vbo_offset_, vdata_size, item.vertices.data());
+            }
             mesh_vbo_offset_ += vdata_size;
         }
 
@@ -1742,7 +1932,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
         VkDeviceSize cur_ibo_offset = mesh_ibo_offset_;
         if (!item.indices.empty()) {
             size_t idata_size = item.indices.size() * sizeof(item.indices[0]);
-            WriteToBuffer(context_->device(), mesh_ibo_mem_, mesh_ibo_offset_, idata_size, item.indices.data());
+            if (mesh_ibo_offset_ + idata_size > mesh_ibo_capacity_) {
+                DEBUG_LOG_ERROR("[Vulkan] IBO OVERFLOW: offset={} + size={} > capacity={}", mesh_ibo_offset_, idata_size, mesh_ibo_capacity_);
+            } else {
+                WriteToBuffer(context_->device(), mesh_ibo_mem_, mesh_ibo_offset_, idata_size, item.indices.data());
+            }
             mesh_ibo_offset_ += idata_size;
         }
 
@@ -2705,8 +2899,12 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     frame_ubo.vp = proj * view;
     frame_ubo.view = view;
     frame_ubo.camera_pos = glm::vec4(camera_pos, 0.0f);
-    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
-                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
+    } else {
+        WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                      per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    }
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
     // PerScene UBO
@@ -2720,8 +2918,12 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     for (int i = 0; i < 3; ++i) {
         scene_ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
-    WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
-                  per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
+    if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
+    } else {
+        WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
+                      per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
+    }
     per_scene_ubo_offset_ += kUboSlotAlignment;
 
     if (resource_mgr_) {
@@ -2787,8 +2989,12 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
     frame_ubo.vp = light_proj * light_view;
     frame_ubo.view = light_view;
     frame_ubo.camera_pos = glm::vec4(0.0f);
-    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
-                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
+        DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN_SHADOW PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
+    } else {
+        WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                      per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    }
     per_frame_ubo_offset_ += kUboSlotAlignment;
 }
 

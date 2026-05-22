@@ -122,6 +122,11 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr);
     void EndRenderPass(VkCommandBuffer cmd_buf);
 
+    /// 诊断用：vkCmdBlitImage 直接从 RT 拷贝到 swapchain，绕过 shader
+    void BlitRenderTargetToSwapchain(VkCommandBuffer cmd_buf,
+                                      unsigned int source_rt,
+                                      VulkanResourceManager& resource_mgr);
+
     // --- 绘制命令（录制到 VkCommandBuffer） ---
     void DrawSpriteBatch(VkCommandBuffer cmd_buf,
                           const std::vector<SpriteDrawItem>& items,
@@ -336,6 +341,11 @@ private:
     VkDeviceSize per_frame_ubo_offset_ = 0;   ///< 当前帧 per-frame UBO 写入偏移（每个 batch 一个 slot）
     VkDeviceSize per_scene_ubo_offset_ = 0;   ///< 当前帧 per-scene UBO 写入偏移（每个 item 一个 slot）
     VkDeviceSize per_material_ubo_offset_ = 0; ///< 当前帧 per-material UBO 写入偏移
+    VkDeviceSize per_frame_ubo_capacity_ = 0;
+    VkDeviceSize per_scene_ubo_capacity_ = 0;
+    VkDeviceSize per_material_ubo_capacity_ = 0;
+    VkDeviceSize mesh_vbo_capacity_ = 0;
+    VkDeviceSize mesh_ibo_capacity_ = 0;
     VkDeviceSize per_point_lights_ubo_offset_ = 0;
     VkDeviceSize per_spot_lights_ubo_offset_ = 0;
     static constexpr VkDeviceSize kUboSlotAlignment = 256; ///< UBO offset 对齐（覆盖大多数 GPU 的 minUniformBufferOffsetAlignment）
