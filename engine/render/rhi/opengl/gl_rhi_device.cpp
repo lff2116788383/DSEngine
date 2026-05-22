@@ -1,12 +1,12 @@
 ﻿/**
  * @file rhi_device.cpp
- * @brief 娓叉煋纭欢鎺ュ彛(RHI)鎶借薄灞?- OpenGLRhiDevice 鍗忚皟鍣ㄥ疄鐜?
+ * @brief 渲染硬件接口(RHI)抽象层 - OpenGLRhiDevice 协调器实现
  *
- * OpenGLRhiDevice 浣滀负鍗忚皟鍣ㄦ寔鏈夊洓涓瓙绯荤粺骞跺鎵樿皟鐢細
- * - GLResourceManager锛欸PU 璧勬簮鍒涘缓/閿€姣?鏌ヨ
- * - GLPipelineStateManager锛氭覆鏌撶姸鎬佺紦瀛樹笌搴旂敤
- * - GLShaderManager锛氱潃鑹插櫒缂栬瘧/閾炬帴/Uniform 缂撳瓨
- * - GLDrawExecutor锛氱粯鍒跺懡浠ゆ墽琛?
+ * OpenGLRhiDevice 作为协调器持有四个子系统并委托调用：
+ * - GLResourceManager：GPU 资源创建/销毁/查询
+ * - GLPipelineStateManager：渲染状态缓存与应用
+ * - GLShaderManager：着色器编译/链接/Uniform 缓存
+ * - GLDrawExecutor：绘制命令执行器
  */
 
 #include "engine/render/rhi/opengl/gl_rhi_device.h"
@@ -15,7 +15,7 @@
 #include "engine/platform/screen.h"
 #include "engine/render/rhi/opengl/gl_loader.h"
 
-// GL 4.3 SSBO / Compute 甯搁噺 鈥?glad/gl.h 浠呭寘鍚?GL 3.3 瀹氫箟
+// GL 4.3 SSBO / Compute 常量 — glad/gl.h 仅包含 GL 3.3 定义
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
 #endif
@@ -56,7 +56,7 @@
 #define GL_TEXTURE_UPDATE_BARRIER_BIT 0x00000100
 #endif
 
-// GL 4.2+/4.3 鍑芥暟鎸囬拡锛坓lad 浠呭姞杞?GL 3.3 core锛岄渶鎵嬪姩瑙ｆ瀽锛?
+// GL 4.2+/4.3 函数指针（glad 仅加载 GL 3.3 core，需手动解析）
 #if defined(_WIN32)
 extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
 #endif
@@ -83,7 +83,7 @@ static void InitComputeProcAddresses() {
 #endif
 }
 
-// BCn / S3TC / BPTC 鍘嬬缉绾圭悊鏍煎紡甯搁噺
+// BCn / S3TC / BPTC 压缩纹理格式常量
 #ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT            0x83F0
 #endif
@@ -123,7 +123,7 @@ namespace dse {
 namespace render {
 
 // ============================================================
-// HiZImpl 鈥?pimpl 瀹炵幇锛岄伩鍏?unordered_map<uint, HiZTextureInfo> 妯℃澘绗﹀彿娉勬紡
+// HiZImpl -- pimpl 实现，避免 unordered_map<uint, HiZTextureInfo> 模板符号泄漏
 // ============================================================
 
 struct OpenGLRhiDevice::HiZImpl {
@@ -141,7 +141,7 @@ OpenGLRhiDevice::OpenGLRhiDevice() : hiz_impl_(std::make_unique<HiZImpl>()) {}
 OpenGLRhiDevice::~OpenGLRhiDevice() = default;
 
 // ============================================================
-// OpenGLCommandBuffer 鈥?绔嬪嵆杞彂鍒?OpenGLRhiDevice
+// OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice
 // ============================================================
 
 void OpenGLCommandBuffer::SetDevice(OpenGLRhiDevice* device) {
@@ -205,7 +205,7 @@ void OpenGLCommandBuffer::Reset() {
 }
 
 // ============================================================
-// OpenGLRhiDevice 鈥?鍗忚皟鍣紝濮旀墭鍒板瓙绯荤粺
+// OpenGLRhiDevice — 协调器，委托到子系统
 // ============================================================
 
 void OpenGLRhiDevice::EnsureInitialized() {
@@ -213,7 +213,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
         return;
     }
 
-    // 娉ㄥ叆鍑芥暟鎸囬拡鍒?DrawExecutor锛堢敤浜庣紦鍐插尯鎿嶄綔鍥炶皟锛?
+    // 注入函数指针到 DrawExecutor（用于缓冲区操作回调）
     draw_executor_.set_create_vao_fn([this]() -> VertexArrayHandle {
         return CreateVertexArray();
     });
@@ -236,7 +236,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
         return CreateTexture2D(w, h, data, linear);
     });
 
-    // 妫€娴?SSBO 鏀寔锛堥渶瑕?GL 4.3+锛?
+    // 检测 SSBO 支持（需要 GL 4.3+）
     GLint gl_major = 0, gl_minor = 0;
     glGetIntegerv(GL_MAJOR_VERSION, &gl_major);
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
@@ -248,7 +248,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     // 鍒濆鍖?UBO 绠＄悊鍣?
     ubo_mgr_.Init();
 
-    // 鍒濆鍖栧嚑浣曠紦鍐插尯锛?D 绮剧伒 + 3D 缃戞牸 + 鐧借壊绾圭悊锛?
+    // 初始化几何缓冲区：2D 精灵 + 3D 网格 + 白色纹理
     draw_executor_.InitGeometryBuffers(
         [this]() -> VertexArrayHandle { return CreateVertexArray(); },
         [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index); },
@@ -261,15 +261,15 @@ void OpenGLRhiDevice::EnsureInitialized() {
 void OpenGLRhiDevice::Shutdown() {
     if (!initialized_) return;
 
-    // 娓呯悊娓叉煋鐩爣锛堢敱 ResourceManager 绠＄悊 GL 瀵硅薄鐢熷懡鍛ㄦ湡锛?
+    // 清理渲染目标（由 ResourceManager 管理 GL 对象生命周期）
     resource_mgr_.DestroyAllRenderTargets();
 
-    // 娓呯悊澶栭儴鍒涘缓鐨勭潃鑹插櫒绋嬪簭锛堥€氳繃 CreateShaderProgram 鍒涘缓銆佺敱 AssetManager 鎸佹湁锛?
-    // 鍩轰簬 ledger 宸€兼竻鐞嗭細濡傛灉 created > destroyed锛岃鏄庢湁澶栭儴 shader 鏈鍒犻櫎
+    // 清理外部创建的着色器程序（通过 CreateShaderProgram 创建、由 AssetManager 持有）
+    // 基于 ledger 差值清理：如果 created > destroyed，说明有外部 shader 未被删除
     {
         const std::size_t live_external = resource_mgr_.ledger().shader_programs_created
                                         - resource_mgr_.ledger().shader_programs_destroyed;
-        // shader_mgr_ 绠＄悊鐨勭潃鑹插櫒鐢?Shutdown 鑷閿€姣侊紝杩欓噷鍙鐞?external 閮ㄥ垎
+        // shader_mgr_ 管理的着色器由 Shutdown 自行销毁，这里只处理 external 部分
         if (live_external > 0 && !external_shader_programs_.empty()) {
             for (auto handle : external_shader_programs_) {
                 glDeleteProgram(handle);
@@ -277,31 +277,31 @@ void OpenGLRhiDevice::Shutdown() {
             }
             external_shader_programs_.clear();
         } else if (live_external > 0) {
-            // external_shader_programs_ 涓虹┖浣?ledger 涓嶅钩琛♀€斺€斿彲鑳?AssetManager 宸叉彁鍓嶉噴鏀?
-            // 姝ゆ椂 GL program 宸茬敱 AssetManager::ReleaseGpuResources 閫氳繃 glDeleteProgram 閲婃斁锛?
-            // 浣?ledger 璁℃暟鏈洿鏂帮紙AssetManager 璋冪敤 DeleteShaderProgram 鏃?rhi_device 鍙兘宸蹭笉鍙敤锛?
-            // 鐩存帴琛ラ綈璐︽湰宸€?
+            // external_shader_programs_ 为空但 ledger 不平衡——可能 AssetManager 已提前释放
+            // 此时 GL program 已由 AssetManager::ReleaseGpuResources 通过 glDeleteProgram 释放
+            // 但 ledger 计数未更新（AssetManager 调用 DeleteShaderProgram 时 rhi_device 可能已不可用）
+            // 直接补齐账本差值
             resource_mgr_.ledger().shader_programs_destroyed += live_external;
         }
     }
 
-    // 娓呯悊 compute shader programs
+    // 清理 compute shader programs
     for (auto handle : compute_programs_) {
         glDeleteProgram(handle);
     }
     compute_programs_.clear();
 
-    // 娓呯悊 indirect draw buffers
+    // 清理 indirect draw buffers
     for (auto& [rhi_handle, gl_buf] : indirect_buffers_) {
         glDeleteBuffers(1, &gl_buf);
     }
     indirect_buffers_.clear();
 
-    // 娓呯悊瀛愮郴缁燂紙閫嗗簭锛?
+    // 清理子系统（逆序）
     draw_executor_.ShutdownGeometryBuffers();
     ubo_mgr_.Shutdown();
     shader_mgr_.Shutdown();
-    // Pipeline state 鏃?GL 璧勬簮锛屼粎鏇存柊璐︽湰
+    // Pipeline state 无 GL 资源，仅更新账本
     resource_mgr_.ledger().pipeline_states_destroyed += state_mgr_.pipeline_state_count();
     state_mgr_.Shutdown();
 
@@ -309,7 +309,7 @@ void OpenGLRhiDevice::Shutdown() {
     initialized_ = false;
 }
 
-// --- 甯х敓鍛藉懆鏈?---
+// --- 帧生命周期 ---
 
 void OpenGLRhiDevice::BeginFrame() {
     EnsureInitialized();
@@ -324,7 +324,7 @@ const RenderStats& OpenGLRhiDevice::LastFrameStats() const {
     return draw_executor_.last_frame_stats();
 }
 
-// --- 缂撳啿鍖?---
+// --- 缓冲区 ---
 
 unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
     if (!initialized_) return 0u;
@@ -357,7 +357,7 @@ void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
     resource_mgr_.ledger().buffers_destroyed += 1;
 }
 
-// --- 椤剁偣鏁扮粍 ---
+// --- 顶点数组 ---
 
 VertexArrayHandle OpenGLRhiDevice::CreateVertexArray() {
     unsigned int handle = 0;
@@ -372,7 +372,7 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
     resource_mgr_.ledger().vertex_arrays_destroyed += 1;
 }
 
-// --- 绾圭悊 ---
+// --- 纹理 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
     if (!initialized_) return 0u;
@@ -478,7 +478,7 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
     resource_mgr_.ledger().textures_destroyed += 1;
 }
 
-// --- 娓叉煋鐩爣 ---
+// --- 渲染目标 ---
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     if (!initialized_) return 0u;
@@ -687,7 +687,7 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     return readback;
 }
 
-// --- 鐫€鑹插櫒 ---
+// --- 着色器 ---
 
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int shader_program = GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
@@ -702,7 +702,7 @@ void OpenGLRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
     external_shader_programs_.erase(program_handle);
 }
 
-// --- 绠＄嚎鐘舵€?---
+// --- 管线状态 ---
 
 unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
     unsigned int handle = state_mgr_.CreatePipelineState(desc);
@@ -710,7 +710,7 @@ unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc)
     return handle;
 }
 
-// --- 鍛戒护缂撳啿 ---
+// --- 命令缓冲 ---
 
 std::shared_ptr<CommandBuffer> OpenGLRhiDevice::CreateCommandBuffer() {
     auto* raw = new OpenGLCommandBuffer();
@@ -719,10 +719,10 @@ std::shared_ptr<CommandBuffer> OpenGLRhiDevice::CreateCommandBuffer() {
 }
 
 void OpenGLRhiDevice::Submit(std::shared_ptr<CommandBuffer> /*cmd_buffer*/) {
-    // 绔嬪嵆杞彂妯″紡涓嬶紝鍛戒护宸插湪褰曞埗鏃舵墽琛岋紝Submit 浠呬綔涓哄抚缁撴潫鏍囪
+    // 立即转发模式下，命令已在录制时执行，Submit 仅作为帧结束标记
 }
 
-// --- Real* 鏂规硶锛堢敱 OpenGLCommandBuffer 鐩存帴璋冪敤锛屽鎵樺埌瀛愮郴缁燂級 ---
+// --- Real* 方法（由 OpenGLCommandBuffer 直接调用，委托到子系统） ---
 
 void OpenGLRhiDevice::RealClearColor(const glm::vec4& color) {
     draw_executor_.ClearColor(color);
@@ -798,7 +798,7 @@ void OpenGLRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size
 
 void OpenGLRhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
     if (!supports_ssbo_) {
-        // UBO fallback 鏄犲皠锛歋SBO 缁戝畾鐐?1鈫?锛圥ointLights锛夛紝2鈫?锛圫potLights锛夛紝3/4锛坈luster grid锛塶o-op
+        // UBO fallback 映射：SSBO 绑定点 1→3（PointLights），2→4（SpotLights），3/4（cluster grid）no-op
         if (binding_point == 1u) {
             glBindBufferBase(GL_UNIFORM_BUFFER, 3u, handle);
         } else if (binding_point == 2u) {
@@ -986,7 +986,7 @@ unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
     if (tex == 0) return 0;
 
     glBindTexture(GL_TEXTURE_2D, tex);
-    // 鍒嗛厤鎵€鏈?mip level 鐨勫瓨鍌?
+    // 分配所有 mip level 的存储
     for (int i = 0; i < mip_count; ++i) {
         int mip_w = std::max(1, width >> i);
         int mip_h = std::max(1, height >> i);
@@ -1136,7 +1136,7 @@ void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
         return;
     }
 
-    // 浼樺厛鏌ユ壘 indirect buffer map锛涙壘涓嶅埌鍒欏綋浣?raw GL buffer handle锛堝 SSBO锛?
+    // 优先查找 indirect buffer map；找不到则当作 raw GL buffer handle（如 SSBO）
     unsigned int gl_buf = indirect_buffer;
     auto it = indirect_buffers_.find(indirect_buffer);
     if (it != indirect_buffers_.end()) {
@@ -1180,7 +1180,7 @@ VertexArrayHandle OpenGLRhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t i
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(ibo_size_bytes), nullptr, GL_DYNAMIC_DRAW);
 
-    // BatchVertex 甯冨眬: stride = 92 bytes (23 floats)
+    // BatchVertex 布局: stride = 92 bytes (23 floats)
     const GLsizei stride = 92;
     // pos: location 0, vec3, offset 0
     glEnableVertexAttribArray(0);
@@ -1240,7 +1240,7 @@ void OpenGLRhiDevice::UnbindVAO() {
     glBindVertexArray(0);
 }
 
-// --- 璧勬簮璐︽湰 ---
+// --- 资源账本 ---
 
 // --- Static Mesh VAO ---
 
@@ -1269,7 +1269,7 @@ VertexArrayHandle OpenGLRhiDevice::CreateStaticMeshVAO(
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertex_bytes), vertex_data, GL_STATIC_DRAW);
 
-    // BatchVertex 灞炴€у竷灞€ (stride = 92)
+    // BatchVertex 属性布局 (stride = 92)
     const GLsizei stride = static_cast<GLsizei>(sizeof(BatchVertex));
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, pos)));
@@ -1286,7 +1286,7 @@ VertexArrayHandle OpenGLRhiDevice::CreateStaticMeshVAO(
     glEnableVertexAttribArray(6);
     glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(BatchVertex, joints)));
 
-    // 鍒涘缓澶氫釜 EBO锛堜竴涓?per LOD level锛?
+    // 创建多个 EBO（一个 per LOD level）
     out_ebos.resize(ebo_datas.size());
     if (!ebo_datas.empty()) {
         std::vector<unsigned int> raw_ebos(ebo_datas.size(), 0);
@@ -1408,7 +1408,7 @@ void OpenGLRhiDevice::SetOverdrawMode(bool enable) {
 
 void OpenGLRhiDevice::LogResourceLedger() const {
     resource_mgr_.LogResourceLedger();
-    // 鍚堝苟鐫€鑹插櫒绠＄悊鍣ㄧ殑璁℃暟
+    // 合并着色器管理器的计数
     const auto& shader_ledger = resource_mgr_.ledger();
     const std::size_t live_programs = (shader_ledger.shader_programs_created + shader_mgr_.programs_created())
                                      - (shader_ledger.shader_programs_destroyed + shader_mgr_.programs_destroyed());

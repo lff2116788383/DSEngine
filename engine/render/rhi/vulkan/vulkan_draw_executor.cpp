@@ -206,7 +206,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        particle_vbo_, particle_vbo_mem_);
     WriteToBuffer(device, particle_vbo_mem_, 0, sizeof(particle_vertices), particle_vertices);
 
-    // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盙） ---
+    // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盖） ---
     // per_frame: 16 batches/frame × 256B = 4KB
     // per_scene/material/lights: 512 items/frame × 256B = 128KB
     constexpr size_t kPerFrameSlots  = 16;
