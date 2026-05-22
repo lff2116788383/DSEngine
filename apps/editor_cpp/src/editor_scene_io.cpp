@@ -15,6 +15,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/audio.h"
 #include "engine/ecs/transform.h"
 
 #include "editor_shared_components.h"
@@ -83,7 +84,7 @@ void ReadVec4(const rapidjson::Value& parent, const char* name, glm::vec4& out) 
 // ============================================================
 
 static constexpr uint32_t kSceneBinMagic   = 0x42435344u; // 'DSCB'
-static constexpr uint32_t kSceneBinVersion = 3u;
+static constexpr uint32_t kSceneBinVersion = 4u;
 
 enum CompFlags : uint64_t {
     CF_NAME             = 1ull << 0,
@@ -108,6 +109,12 @@ enum CompFlags : uint64_t {
     CF_ANIMATOR3D       = 1ull << 19,
     CF_TERRAIN          = 1ull << 20,
     CF_RIGIDBODY3D      = 1ull << 21,
+    CF_BOX_COLLIDER3D   = 1ull << 22,
+    CF_SPHERE_COLLIDER3D= 1ull << 23,
+    CF_CAPSULE_COLLIDER3D=1ull << 24,
+    CF_MESH_COLLIDER3D  = 1ull << 25,
+    CF_AUDIO_SOURCE     = 1ull << 26,
+    CF_AUDIO_LISTENER   = 1ull << 27,
 };
 
 template<typename T>
@@ -177,6 +184,12 @@ static void SaveSceneBinary(entt::registry& registry,
         if (registry.all_of<dse::Animator3DComponent>(entity))                  flags |= CF_ANIMATOR3D;
         if (registry.all_of<dse::TerrainComponent>(entity))                     flags |= CF_TERRAIN;
         if (registry.all_of<dse::RigidBody3DComponent>(entity))                 flags |= CF_RIGIDBODY3D;
+        if (registry.all_of<dse::BoxCollider3DComponent>(entity))              flags |= CF_BOX_COLLIDER3D;
+        if (registry.all_of<dse::SphereCollider3DComponent>(entity))           flags |= CF_SPHERE_COLLIDER3D;
+        if (registry.all_of<dse::CapsuleCollider3DComponent>(entity))          flags |= CF_CAPSULE_COLLIDER3D;
+        if (registry.all_of<dse::MeshCollider3DComponent>(entity))             flags |= CF_MESH_COLLIDER3D;
+        if (registry.all_of<AudioSourceComponent>(entity))                     flags |= CF_AUDIO_SOURCE;
+        if (registry.all_of<AudioListenerComponent>(entity))                   flags |= CF_AUDIO_LISTENER;
         WPod(f, static_cast<uint32_t>(entity));
         WPod(f, flags);
         if (flags & CF_NAME)             WStr(f, registry.get<dse::editor::EditorNameComponent>(entity).name);
@@ -329,6 +342,39 @@ static void SaveSceneBinary(entt::registry& registry,
             WPod(f, static_cast<int>(rb.type)); WPod(f, rb.mass);
             WPod(f, rb.drag); WPod(f, rb.angular_drag); WPod(f, rb.gravity_scale);
             WPod(f, rb.use_gravity); WPod(f, rb.is_kinematic);
+        }
+        if (flags & CF_BOX_COLLIDER3D) {
+            auto& c = registry.get<dse::BoxCollider3DComponent>(entity);
+            WPod(f, c.size); WPod(f, c.center); WPod(f, c.is_trigger);
+            WPod(f, c.bounciness); WPod(f, c.friction);
+        }
+        if (flags & CF_SPHERE_COLLIDER3D) {
+            auto& c = registry.get<dse::SphereCollider3DComponent>(entity);
+            WPod(f, c.radius); WPod(f, c.center); WPod(f, c.is_trigger);
+            WPod(f, c.bounciness); WPod(f, c.friction);
+        }
+        if (flags & CF_CAPSULE_COLLIDER3D) {
+            auto& c = registry.get<dse::CapsuleCollider3DComponent>(entity);
+            WPod(f, c.radius); WPod(f, c.height); WPod(f, c.center);
+            WPod(f, c.direction); WPod(f, c.is_trigger);
+            WPod(f, c.bounciness); WPod(f, c.friction);
+        }
+        if (flags & CF_MESH_COLLIDER3D) {
+            auto& c = registry.get<dse::MeshCollider3DComponent>(entity);
+            WPod(f, c.convex); WPod(f, c.is_trigger);
+            WPod(f, c.bounciness); WPod(f, c.friction);
+        }
+        if (flags & CF_AUDIO_SOURCE) {
+            auto& a = registry.get<AudioSourceComponent>(entity);
+            WPod(f, a.play_on_awake); WPod(f, a.loop); WPod(f, a.volume);
+            WPod(f, a.pitch); WPod(f, a.spatial_enabled);
+            WPod(f, a.min_distance); WPod(f, a.max_distance); WPod(f, a.rolloff);
+            WPod(f, static_cast<int>(a.attenuation_model));
+            WPod(f, a.occlusion_enabled); WPod(f, a.occlusion_factor);
+        }
+        if (flags & CF_AUDIO_LISTENER) {
+            auto& a = registry.get<AudioListenerComponent>(entity);
+            WPod(f, a.enabled); WPod(f, a.listener_index);
         }
     }
 }
@@ -521,6 +567,45 @@ static bool LoadSceneBinary(entt::registry& registry,
             if (!RPod(f, rb.gravity_scale)||!RPod(f, rb.use_gravity)||!RPod(f, rb.is_kinematic)) return false;
             rb.runtime_body = nullptr;
         }
+        if (flags & CF_BOX_COLLIDER3D) {
+            auto& c = registry.emplace<dse::BoxCollider3DComponent>(entity);
+            if (!RPod(f, c.size)||!RPod(f, c.center)||!RPod(f, c.is_trigger)) return false;
+            if (!RPod(f, c.bounciness)||!RPod(f, c.friction)) return false;
+            c.runtime_shape = nullptr;
+        }
+        if (flags & CF_SPHERE_COLLIDER3D) {
+            auto& c = registry.emplace<dse::SphereCollider3DComponent>(entity);
+            if (!RPod(f, c.radius)||!RPod(f, c.center)||!RPod(f, c.is_trigger)) return false;
+            if (!RPod(f, c.bounciness)||!RPod(f, c.friction)) return false;
+            c.runtime_shape = nullptr;
+        }
+        if (flags & CF_CAPSULE_COLLIDER3D) {
+            auto& c = registry.emplace<dse::CapsuleCollider3DComponent>(entity);
+            if (!RPod(f, c.radius)||!RPod(f, c.height)||!RPod(f, c.center)) return false;
+            if (!RPod(f, c.direction)||!RPod(f, c.is_trigger)) return false;
+            if (!RPod(f, c.bounciness)||!RPod(f, c.friction)) return false;
+            c.runtime_shape = nullptr;
+        }
+        if (flags & CF_MESH_COLLIDER3D) {
+            auto& c = registry.emplace<dse::MeshCollider3DComponent>(entity);
+            if (!RPod(f, c.convex)||!RPod(f, c.is_trigger)) return false;
+            if (!RPod(f, c.bounciness)||!RPod(f, c.friction)) return false;
+            c.runtime_shape = nullptr;
+        }
+        if (flags & CF_AUDIO_SOURCE) {
+            auto& a = registry.emplace<AudioSourceComponent>(entity);
+            if (!RPod(f, a.play_on_awake)||!RPod(f, a.loop)||!RPod(f, a.volume)) return false;
+            if (!RPod(f, a.pitch)||!RPod(f, a.spatial_enabled)) return false;
+            if (!RPod(f, a.min_distance)||!RPod(f, a.max_distance)||!RPod(f, a.rolloff)) return false;
+            int am = 0; if (!RPod(f, am)) return false;
+            a.attenuation_model = static_cast<AudioAttenuationModel>(am);
+            if (!RPod(f, a.occlusion_enabled)||!RPod(f, a.occlusion_factor)) return false;
+            a.runtime_handle = 0;
+        }
+        if (flags & CF_AUDIO_LISTENER) {
+            auto& a = registry.emplace<AudioListenerComponent>(entity);
+            if (!RPod(f, a.enabled)||!RPod(f, a.listener_index)) return false;
+        }
     }
     return true;
 }
@@ -667,6 +752,12 @@ const std::vector<ComponentCopyEntry>& GetComponentCopyRegistry() {
         {&CopyAnimator3DComponent, true},
         {&CopyTerrainComponent, true},
         {&CopyRigidBody3DComponent, true},
+        {&CopyPlainComponent<dse::BoxCollider3DComponent>, true},
+        {&CopyPlainComponent<dse::SphereCollider3DComponent>, true},
+        {&CopyPlainComponent<dse::CapsuleCollider3DComponent>, true},
+        {&CopyPlainComponent<dse::MeshCollider3DComponent>, true},
+        {&CopyPlainComponent<AudioSourceComponent>, true},
+        {&CopyPlainComponent<AudioListenerComponent>, true},
         {&CopyPlainComponent<dse::SubSceneComponent>, true},
         {&CopyPlainComponent<ParentComponent>, false},
     };
@@ -1659,6 +1750,182 @@ static void LoadRigidBody3DJsonComponent(
     if (rb_obj.HasMember("is_kinematic") && rb_obj["is_kinematic"].IsBool()) rb.is_kinematic = rb_obj["is_kinematic"].GetBool();
 }
 
+// ─── BoxCollider3D ──────────────────────────────────────────────────────────
+
+static void SaveBoxCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<dse::BoxCollider3DComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    WriteVec3(obj, "size", c.size, allocator);
+    WriteVec3(obj, "center", c.center, allocator);
+    obj.AddMember("is_trigger", c.is_trigger, allocator);
+    obj.AddMember("bounciness", c.bounciness, allocator);
+    obj.AddMember("friction", c.friction, allocator);
+    ent_obj.AddMember("box_collider3d", obj, allocator);
+}
+
+static void LoadBoxCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("box_collider3d") || !v["box_collider3d"].IsObject()) return;
+    auto& o = v["box_collider3d"];
+    auto& c = registry.emplace<dse::BoxCollider3DComponent>(entity);
+    ReadVec3(o, "size", c.size);
+    ReadVec3(o, "center", c.center);
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+    if (o.HasMember("bounciness") && o["bounciness"].IsNumber()) c.bounciness = o["bounciness"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+}
+
+// ─── SphereCollider3D ───────────────────────────────────────────────────────
+
+static void SaveSphereCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<dse::SphereCollider3DComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("radius", c.radius, allocator);
+    WriteVec3(obj, "center", c.center, allocator);
+    obj.AddMember("is_trigger", c.is_trigger, allocator);
+    obj.AddMember("bounciness", c.bounciness, allocator);
+    obj.AddMember("friction", c.friction, allocator);
+    ent_obj.AddMember("sphere_collider3d", obj, allocator);
+}
+
+static void LoadSphereCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("sphere_collider3d") || !v["sphere_collider3d"].IsObject()) return;
+    auto& o = v["sphere_collider3d"];
+    auto& c = registry.emplace<dse::SphereCollider3DComponent>(entity);
+    if (o.HasMember("radius") && o["radius"].IsNumber()) c.radius = o["radius"].GetFloat();
+    ReadVec3(o, "center", c.center);
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+    if (o.HasMember("bounciness") && o["bounciness"].IsNumber()) c.bounciness = o["bounciness"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+}
+
+// ─── CapsuleCollider3D ──────────────────────────────────────────────────────
+
+static void SaveCapsuleCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<dse::CapsuleCollider3DComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("radius", c.radius, allocator);
+    obj.AddMember("height", c.height, allocator);
+    WriteVec3(obj, "center", c.center, allocator);
+    obj.AddMember("direction", c.direction, allocator);
+    obj.AddMember("is_trigger", c.is_trigger, allocator);
+    obj.AddMember("bounciness", c.bounciness, allocator);
+    obj.AddMember("friction", c.friction, allocator);
+    ent_obj.AddMember("capsule_collider3d", obj, allocator);
+}
+
+static void LoadCapsuleCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("capsule_collider3d") || !v["capsule_collider3d"].IsObject()) return;
+    auto& o = v["capsule_collider3d"];
+    auto& c = registry.emplace<dse::CapsuleCollider3DComponent>(entity);
+    if (o.HasMember("radius") && o["radius"].IsNumber()) c.radius = o["radius"].GetFloat();
+    if (o.HasMember("height") && o["height"].IsNumber()) c.height = o["height"].GetFloat();
+    ReadVec3(o, "center", c.center);
+    if (o.HasMember("direction") && o["direction"].IsInt()) c.direction = o["direction"].GetInt();
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+    if (o.HasMember("bounciness") && o["bounciness"].IsNumber()) c.bounciness = o["bounciness"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+}
+
+// ─── MeshCollider3D ─────────────────────────────────────────────────────────
+
+static void SaveMeshCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<dse::MeshCollider3DComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("convex", c.convex, allocator);
+    obj.AddMember("is_trigger", c.is_trigger, allocator);
+    obj.AddMember("bounciness", c.bounciness, allocator);
+    obj.AddMember("friction", c.friction, allocator);
+    ent_obj.AddMember("mesh_collider3d", obj, allocator);
+}
+
+static void LoadMeshCollider3DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("mesh_collider3d") || !v["mesh_collider3d"].IsObject()) return;
+    auto& o = v["mesh_collider3d"];
+    auto& c = registry.emplace<dse::MeshCollider3DComponent>(entity);
+    if (o.HasMember("convex") && o["convex"].IsBool()) c.convex = o["convex"].GetBool();
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+    if (o.HasMember("bounciness") && o["bounciness"].IsNumber()) c.bounciness = o["bounciness"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+}
+
+// ─── AudioSource ────────────────────────────────────────────────────────────
+
+static void SaveAudioSourceJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& a = registry.get<AudioSourceComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("play_on_awake", a.play_on_awake, allocator);
+    obj.AddMember("loop", a.loop, allocator);
+    obj.AddMember("volume", a.volume, allocator);
+    obj.AddMember("pitch", a.pitch, allocator);
+    obj.AddMember("spatial_enabled", a.spatial_enabled, allocator);
+    obj.AddMember("min_distance", a.min_distance, allocator);
+    obj.AddMember("max_distance", a.max_distance, allocator);
+    obj.AddMember("rolloff", a.rolloff, allocator);
+    obj.AddMember("attenuation_model", static_cast<int>(a.attenuation_model), allocator);
+    obj.AddMember("occlusion_enabled", a.occlusion_enabled, allocator);
+    obj.AddMember("occlusion_factor", a.occlusion_factor, allocator);
+    ent_obj.AddMember("audio_source", obj, allocator);
+}
+
+static void LoadAudioSourceJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("audio_source") || !v["audio_source"].IsObject()) return;
+    auto& o = v["audio_source"];
+    auto& a = registry.emplace<AudioSourceComponent>(entity);
+    if (o.HasMember("play_on_awake") && o["play_on_awake"].IsBool()) a.play_on_awake = o["play_on_awake"].GetBool();
+    if (o.HasMember("loop") && o["loop"].IsBool()) a.loop = o["loop"].GetBool();
+    if (o.HasMember("volume") && o["volume"].IsNumber()) a.volume = o["volume"].GetFloat();
+    if (o.HasMember("pitch") && o["pitch"].IsNumber()) a.pitch = o["pitch"].GetFloat();
+    if (o.HasMember("spatial_enabled") && o["spatial_enabled"].IsBool()) a.spatial_enabled = o["spatial_enabled"].GetBool();
+    if (o.HasMember("min_distance") && o["min_distance"].IsNumber()) a.min_distance = o["min_distance"].GetFloat();
+    if (o.HasMember("max_distance") && o["max_distance"].IsNumber()) a.max_distance = o["max_distance"].GetFloat();
+    if (o.HasMember("rolloff") && o["rolloff"].IsNumber()) a.rolloff = o["rolloff"].GetFloat();
+    if (o.HasMember("attenuation_model") && o["attenuation_model"].IsInt()) a.attenuation_model = static_cast<AudioAttenuationModel>(o["attenuation_model"].GetInt());
+    if (o.HasMember("occlusion_enabled") && o["occlusion_enabled"].IsBool()) a.occlusion_enabled = o["occlusion_enabled"].GetBool();
+    if (o.HasMember("occlusion_factor") && o["occlusion_factor"].IsNumber()) a.occlusion_factor = o["occlusion_factor"].GetFloat();
+}
+
+// ─── AudioListener ──────────────────────────────────────────────────────────
+
+static void SaveAudioListenerJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& a = registry.get<AudioListenerComponent>(entity);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("enabled", a.enabled, allocator);
+    obj.AddMember("listener_index", a.listener_index, allocator);
+    ent_obj.AddMember("audio_listener", obj, allocator);
+}
+
+static void LoadAudioListenerJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("audio_listener") || !v["audio_listener"].IsObject()) return;
+    auto& o = v["audio_listener"];
+    auto& a = registry.emplace<AudioListenerComponent>(entity);
+    if (o.HasMember("enabled") && o["enabled"].IsBool()) a.enabled = o["enabled"].GetBool();
+    if (o.HasMember("listener_index") && o["listener_index"].IsUint()) a.listener_index = o["listener_index"].GetUint();
+}
+
 const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
     static const std::vector<ComponentJsonIOEntry> entries = {
         {&SaveEditorNameJsonComponent, &LoadEditorNameJsonComponent,
@@ -1707,6 +1974,18 @@ const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
          [](auto& r, auto e) { return r.all_of<dse::TerrainComponent>(e); }},
         {&SaveRigidBody3DJsonComponent, &LoadRigidBody3DJsonComponent,
          [](auto& r, auto e) { return r.all_of<dse::RigidBody3DComponent>(e); }},
+        {&SaveBoxCollider3DJsonComponent, &LoadBoxCollider3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::BoxCollider3DComponent>(e); }},
+        {&SaveSphereCollider3DJsonComponent, &LoadSphereCollider3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::SphereCollider3DComponent>(e); }},
+        {&SaveCapsuleCollider3DJsonComponent, &LoadCapsuleCollider3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::CapsuleCollider3DComponent>(e); }},
+        {&SaveMeshCollider3DJsonComponent, &LoadMeshCollider3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::MeshCollider3DComponent>(e); }},
+        {&SaveAudioSourceJsonComponent, &LoadAudioSourceJsonComponent,
+         [](auto& r, auto e) { return r.all_of<AudioSourceComponent>(e); }},
+        {&SaveAudioListenerJsonComponent, &LoadAudioListenerJsonComponent,
+         [](auto& r, auto e) { return r.all_of<AudioListenerComponent>(e); }},
     };
     return entries;
 }

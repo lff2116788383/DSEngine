@@ -146,13 +146,12 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::SameLine();
 
     ImGui::SetCursorPosX(10 + 4 * 36 + 20);
-    static bool is2D = false;
-    const bool was2D = is2D;
-    if (was2D) {
+    const bool was_2d = ctx.is_2d;
+    if (was_2d) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
     }
-    if (ImGui::Button("2D", ImVec2(32, 24))) { is2D = !is2D; }
-    if (was2D) {
+    if (ImGui::Button("2D", ImVec2(32, 24))) { ctx.is_2d = !ctx.is_2d; }
+    if (was_2d) {
         ImGui::PopStyleColor();
     }
 

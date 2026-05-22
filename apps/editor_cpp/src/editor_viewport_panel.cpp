@@ -1322,10 +1322,12 @@ void DrawGameViewportPanel(unsigned int texture_id) {
         ImVec2 p_min = ImGui::GetCursorScreenPos();
         ImVec2 p_max = ImVec2(p_min.x + game_panel_size.x, p_min.y + game_panel_size.y);
         draw_list->AddRectFilled(p_min, p_max, IM_COL32(20, 20, 20, 255));
-        draw_list->AddText(ImVec2(p_min.x + game_panel_size.x / 2 - 40, p_min.y + game_panel_size.y / 2), IM_COL32(150, 150, 150, 255), "Game View");
+        const char* label = "Game View";
+        ImVec2 text_size = ImGui::CalcTextSize(label);
+        draw_list->AddText(ImVec2(p_min.x + (game_panel_size.x - text_size.x) * 0.5f, p_min.y + (game_panel_size.y - text_size.y) * 0.5f), IM_COL32(150, 150, 150, 255), label);
     }
-    ImGui::End();
     ImGui::PopStyleVar();
+    ImGui::End();
 }
 
 

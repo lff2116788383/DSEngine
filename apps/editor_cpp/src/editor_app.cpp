@@ -790,12 +790,41 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     // 无项目打开时显示 Project Hub
     if (!dse::editor::ProjectManager::Get().HasOpenProject()) {
         dse::editor::DrawProjectHub();
-        // Hub 中可能刚打开了项目，此时同步 data root
+        // Hub 中可能刚打开了项目，此时同步 data root 并加载默认场景
         if (dse::editor::ProjectManager::Get().HasOpenProject()) {
-            dse::editor::ProjectManager::Get().ApplyDataRoot();
+            auto& mgr = dse::editor::ProjectManager::Get();
+            mgr.ApplyDataRoot();
             engine_instance_->asset_manager()->ConfigureDataRoot(
-                dse::editor::ProjectManager::Get().GetAssetDir().string());
+                mgr.GetAssetDir().string());
             dse::editor::AssetDatabase::Get().Refresh();
+
+            // 加载项目默认场景
+            World& world = engine_instance_->pipeline()->world();
+            auto& registry = world.registry();
+            registry.clear();
+            selected_entity_ = entt::null;
+
+            std::string default_scene;
+            const auto& desc = mgr.GetDescriptor();
+            if (!desc.default_scene.empty()) {
+                std::filesystem::path scene_file = mgr.GetProjectRoot() / desc.default_scene;
+                if (std::filesystem::exists(scene_file))
+                    default_scene = scene_file.string();
+            }
+            if (default_scene.empty()) {
+                std::filesystem::path fallback = mgr.GetSceneDir() / "main.json";
+                if (std::filesystem::exists(fallback))
+                    default_scene = fallback.string();
+            }
+
+            if (!default_scene.empty()) {
+                LoadScene(registry, default_scene);
+                dse::editor::SetCurrentScenePath(default_scene);
+                dse::editor::SceneTabManager::Get().Init(default_scene);
+            } else {
+                dse::editor::SetCurrentScenePath("");
+                dse::editor::SceneTabManager::Get().Init("Untitled");
+            }
         }
         return;
     }
