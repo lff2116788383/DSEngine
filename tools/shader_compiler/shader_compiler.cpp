@@ -139,7 +139,7 @@ static bool CompileToSpirv(const std::string& source, EShLanguage stage,
 }
 
 // ============================================================================
-// spirv-cross: SPIR-V → GLSL 430 (variable names kept as 'glsl330' for compat)
+// spirv-cross: SPIR-V → GLSL 430
 // ============================================================================
 
 // 后处理: 将 GLSL 430 中的 "struct PushConstants {...}; uniform PushConstants pc;"
@@ -217,7 +217,7 @@ static std::string FlattenPushConstantsInGLSL(const std::string& src) {
     return result;
 }
 
-static std::string CrossCompileToGLSL330(const std::vector<uint32_t>& spirv,
+static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
                                           EShLanguage stage) {
     try {
         spirv_cross::CompilerGLSL compiler(spirv);
@@ -277,6 +277,139 @@ static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
         std::cerr << "[ERROR] spirv-cross ESSL310: " << e.what() << "\n";
         return "";
     }
+}
+
+// ============================================================================
+// HLSL 后处理: 合并超限 sampler (SM5.0 最多 16 个 s0-s15)
+// ============================================================================
+
+static std::string ConsolidateHLSLSamplers(const std::string& hlsl) {
+    // 阶段 1: 按行扫描，收集所有 sampler 声明
+    struct SamplerInfo {
+        std::string type;  // "SamplerState" or "SamplerComparisonState"
+        std::string name;
+        int reg;
+    };
+    std::vector<SamplerInfo> all_samplers;
+    std::vector<std::string> lines;
+
+    std::istringstream stream(hlsl);
+    std::string line;
+    while (std::getline(stream, line)) {
+        lines.push_back(line);
+        std::string sampler_type;
+        size_t type_pos;
+        if ((type_pos = line.find("SamplerComparisonState ")) != std::string::npos) {
+            sampler_type = "SamplerComparisonState";
+        } else if ((type_pos = line.find("SamplerState ")) != std::string::npos) {
+            sampler_type = "SamplerState";
+        } else {
+            continue;
+        }
+        size_t name_start = type_pos + sampler_type.size() + 1;
+        size_t name_end = line.find(' ', name_start);
+        if (name_end == std::string::npos) continue;
+        std::string name = line.substr(name_start, name_end - name_start);
+        // 去除数组后缀 [N]，只保留基名用于引用替换
+        auto bracket = name.find('[');
+        if (bracket != std::string::npos) name = name.substr(0, bracket);
+        size_t reg_pos = line.find("register(s", name_end);
+        if (reg_pos == std::string::npos) continue;
+        int reg = std::atoi(line.c_str() + reg_pos + 10);
+        all_samplers.push_back({sampler_type, name, reg});
+    }
+
+    // 检查是否有超限
+    bool has_overflow = false;
+    for (auto& s : all_samplers) {
+        if (s.reg >= 16) { has_overflow = true; break; }
+    }
+    if (!has_overflow) return hlsl;
+
+    // 找同类型低位 sampler 作为合并目标
+    std::string target_sampler, target_cmp_sampler;
+    for (auto& s : all_samplers) {
+        if (s.reg < 16) {
+            if (s.type == "SamplerState" && target_sampler.empty())
+                target_sampler = s.name;
+            else if (s.type == "SamplerComparisonState" && target_cmp_sampler.empty())
+                target_cmp_sampler = s.name;
+        }
+    }
+
+    // 建立 name → target 映射（仅超限的），同时记录源是否为数组
+    struct RemapEntry {
+        std::string from;
+        std::string to;
+        bool source_is_array;
+    };
+    std::vector<RemapEntry> remap;
+    std::vector<std::string> remove_names; // 需要删除声明的 sampler 名
+    for (auto& s : all_samplers) {
+        if (s.reg < 16) continue;
+        std::string target = (s.type == "SamplerComparisonState") ? target_cmp_sampler : target_sampler;
+        if (target.empty()) continue;
+        // 检查原始声明是否为数组
+        bool is_array = false;
+        for (auto& ln : lines) {
+            if (ln.find(s.name) != std::string::npos &&
+                (ln.find("SamplerState ") != std::string::npos || ln.find("SamplerComparisonState ") != std::string::npos) &&
+                ln.find("register(s") != std::string::npos) {
+                is_array = (ln.find(s.name + "[") != std::string::npos);
+                break;
+            }
+        }
+        remap.push_back({s.name, target, is_array});
+        remove_names.push_back(s.name);
+    }
+    // 按名称长度降序排列，避免短名替换到长名内部
+    std::sort(remap.begin(), remap.end(),
+        [](const auto& a, const auto& b) { return a.from.size() > b.from.size(); });
+
+    // 阶段 2: 按行重建，跳过超限 sampler 声明行，并做名称替换
+    auto is_removed_decl = [&](const std::string& ln) {
+        for (auto& n : remove_names) {
+            if (ln.find(n) != std::string::npos &&
+                (ln.find("SamplerState ") != std::string::npos ||
+                 ln.find("SamplerComparisonState ") != std::string::npos) &&
+                ln.find("register(s") != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto replace_names = [&](std::string& ln) {
+        for (auto& entry : remap) {
+            size_t p = 0;
+            while ((p = ln.find(entry.from, p)) != std::string::npos) {
+                bool before_ok = (p == 0) || (!isalnum((unsigned char)ln[p-1]) && ln[p-1] != '_');
+                size_t ep = p + entry.from.size();
+                bool after_ok = (ep >= ln.size()) || (!isalnum((unsigned char)ln[ep]) && ln[ep] != '_');
+                if (before_ok && after_ok) {
+                    // 数组 sampler → 标量目标：同时移除紧随的 [index]
+                    size_t replace_len = entry.from.size();
+                    if (entry.source_is_array && ep < ln.size() && ln[ep] == '[') {
+                        auto close = ln.find(']', ep);
+                        if (close != std::string::npos)
+                            replace_len = close + 1 - p;
+                    }
+                    ln.replace(p, replace_len, entry.to);
+                    p += entry.to.size();
+                } else {
+                    p += entry.from.size();
+                }
+            }
+        }
+    };
+
+    std::ostringstream out;
+    for (auto& ln : lines) {
+        if (is_removed_decl(ln)) continue; // 跳过超限声明
+        replace_names(ln);
+        out << ln << "\n";
+    }
+    return out.str();
 }
 
 // ============================================================================
@@ -392,7 +525,10 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
             }
         }
 
-        return compiler.compile();
+        std::string hlsl_out = compiler.compile();
+        // SM5.0 sampler 限制后处理：合并 s16+ 的 sampler 到低位同类型 sampler
+        hlsl_out = ConsolidateHLSLSamplers(hlsl_out);
+        return hlsl_out;
     } catch (const spirv_cross::CompilerError& e) {
         std::cerr << "[ERROR] spirv-cross HLSL: " << e.what() << "\n";
         return "";
@@ -782,7 +918,7 @@ static void EmitStringConstant(std::ostringstream& ss,
 static std::string GenerateEmbedHeader(const std::string& shader_name,
                                         const std::string& stage_suffix,
                                         const std::vector<uint32_t>& spirv,
-                                        const std::string& glsl330,
+                                        const std::string& glsl430,
                                         const std::string& essl310,
                                         const std::string& hlsl,
                                         const std::vector<uint8_t>& dxbc = {}) {
@@ -813,7 +949,7 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
 
     // GLSL 430 (OpenGL desktop) — split into chunks to avoid MSVC C2026
     ss << "// OpenGL GLSL 430\n";
-    EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_glsl330", glsl330);
+    EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_glsl430", glsl430);
 
     // ESSL 310 (OpenGL ES 3.1 / Android)
     ss << "// OpenGL ES ESSL 310\n";
@@ -851,7 +987,7 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
 struct Options {
     fs::path input_dir;
     fs::path output_dir;
-    std::string target = "all";  // all, spv, glsl330, hlsl
+    std::string target = "all";  // all, spv, glsl430, hlsl
     bool embed = false;
 };
 
@@ -867,7 +1003,7 @@ static Options ParseArgs(int argc, char* argv[]) {
             std::cout << "Usage: dse_shader_compiler [options]\n"
                       << "  --input-dir <path>   GLSL 450 source directory\n"
                       << "  --output-dir <path>  Output directory\n"
-                      << "  --target <all|spv|glsl330|hlsl>\n"
+                      << "  --target <all|spv|glsl430|hlsl>\n"
                       << "  --embed              Generate C++ embed headers\n";
             exit(0);
         }
@@ -931,7 +1067,7 @@ int main(int argc, char* argv[]) {
 
         // Write SPIR-V
         bool do_spv = (opts.target == "all" || opts.target == "spv");
-        bool do_glsl = (opts.target == "all" || opts.target == "glsl330");
+        bool do_glsl = (opts.target == "all" || opts.target == "glsl430");
         bool do_hlsl = (opts.target == "all" || opts.target == "hlsl");
 
         if (do_spv) {
@@ -939,18 +1075,18 @@ int main(int argc, char* argv[]) {
             WriteBinary(spv_path, spirv);
         }
 
-        // Cross-compile to GLSL 330
-        std::string glsl330;
+        // Cross-compile to GLSL 430
+        std::string glsl430;
         if (do_glsl) {
-            glsl330 = CrossCompileToGLSL330(spirv, stage);
-            if (glsl330.empty()) {
-                std::cerr << "FAILED (glsl330)\n";
+            glsl430 = CrossCompileToGLSL430(spirv, stage);
+            if (glsl430.empty()) {
+                std::cerr << "FAILED (glsl430)\n";
                 error_count++;
                 continue;
             }
             if (!opts.embed) {
-                fs::path glsl_path = opts.output_dir / "glsl330" / (shader_name + "." + stage_suffix + ".glsl");
-                WriteFile(glsl_path, glsl330);
+                fs::path glsl_path = opts.output_dir / "glsl430" / (shader_name + "." + stage_suffix + ".glsl");
+                WriteFile(glsl_path, glsl430);
             }
         }
 
@@ -972,7 +1108,7 @@ int main(int argc, char* argv[]) {
         // Generate embed header
         std::string essl310;
         if (opts.embed) {
-            if (glsl330.empty()) glsl330 = CrossCompileToGLSL330(spirv, stage);
+            if (glsl430.empty()) glsl430 = CrossCompileToGLSL430(spirv, stage);
             essl310 = CrossCompileToESSL310(spirv, stage);
             if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage);
 
@@ -992,7 +1128,7 @@ int main(int argc, char* argv[]) {
             }
 #endif
 
-            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl330, essl310, hlsl, dxbc);
+            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl430, essl310, hlsl, dxbc);
             fs::path header_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + ".gen.h");
             WriteFile(header_path, header);
 
@@ -1004,7 +1140,7 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "OK (spv:" << spirv.size() * 4 << "B";
-        if (!glsl330.empty()) std::cout << " glsl:" << glsl330.size() << "B";
+        if (!glsl430.empty()) std::cout << " glsl:" << glsl430.size() << "B";
         if (!essl310.empty() && opts.embed) std::cout << " essl310:" << essl310.size() << "B";
         if (!hlsl.empty()) std::cout << " hlsl:" << hlsl.size() << "B";
         std::cout << ")\n";
@@ -1047,7 +1183,7 @@ int main(int argc, char* argv[]) {
                     }
 
                     bool v_do_spv  = (opts.target == "all" || opts.target == "spv");
-                    bool v_do_glsl = (opts.target == "all" || opts.target == "glsl330");
+                    bool v_do_glsl = (opts.target == "all" || opts.target == "glsl430");
                     bool v_do_hlsl = (opts.target == "all" || opts.target == "hlsl");
 
                     if (v_do_spv) {
@@ -1056,18 +1192,18 @@ int main(int argc, char* argv[]) {
                         WriteBinary(spv_path, v_spirv);
                     }
 
-                    std::string v_glsl330;
+                    std::string v_glsl430;
                     if (v_do_glsl) {
-                        v_glsl330 = CrossCompileToGLSL330(v_spirv, stage);
-                        if (v_glsl330.empty()) {
-                            std::cerr << "FAILED (glsl330)\n";
+                        v_glsl430 = CrossCompileToGLSL430(v_spirv, stage);
+                        if (v_glsl430.empty()) {
+                            std::cerr << "FAILED (glsl430)\n";
                             error_count++;
                             continue;
                         }
                         if (!opts.embed) {
-                            fs::path glsl_path = opts.output_dir / "glsl330" /
+                            fs::path glsl_path = opts.output_dir / "glsl430" /
                                 (variant_name + "." + stage_suffix + ".glsl");
-                            WriteFile(glsl_path, v_glsl330);
+                            WriteFile(glsl_path, v_glsl430);
                         }
                     }
 
@@ -1087,7 +1223,7 @@ int main(int argc, char* argv[]) {
                     }
 
                     if (opts.embed) {
-                        if (v_glsl330.empty()) v_glsl330 = CrossCompileToGLSL330(v_spirv, stage);
+                        if (v_glsl430.empty()) v_glsl430 = CrossCompileToGLSL430(v_spirv, stage);
                         std::string v_essl310 = CrossCompileToESSL310(v_spirv, stage);
                         if (v_hlsl.empty()) v_hlsl = CrossCompileToHLSL(v_spirv, stage);
 
@@ -1105,7 +1241,7 @@ int main(int argc, char* argv[]) {
 #endif
                         std::string v_header = GenerateEmbedHeader(
                             variant_name, stage_suffix, v_spirv,
-                            v_glsl330, v_essl310, v_hlsl, v_dxbc);
+                            v_glsl430, v_essl310, v_hlsl, v_dxbc);
                         fs::path v_hdr_path = opts.output_dir / "embed" /
                             (variant_name + "_" + stage_suffix + ".gen.h");
                         WriteFile(v_hdr_path, v_header);
@@ -1119,7 +1255,7 @@ int main(int argc, char* argv[]) {
                     }
 
                     std::cout << "OK (spv:" << v_spirv.size() * 4 << "B";
-                    if (!v_glsl330.empty()) std::cout << " glsl:" << v_glsl330.size() << "B";
+                    if (!v_glsl430.empty()) std::cout << " glsl:" << v_glsl430.size() << "B";
                     std::cout << ")\n";
                     success_count++;
                 }

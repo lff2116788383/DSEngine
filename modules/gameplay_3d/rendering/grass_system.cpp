@@ -21,11 +21,11 @@ struct GrassInstance {
     vec4 wh_phase_fade;
 };
 
-layout(std430, binding = 11) readonly buffer InputBuffer {
+layout(std430, binding = 0) readonly buffer InputBuffer {
     GrassInstance instances[];
 };
 
-layout(std430, binding = 12) buffer OutputBuffer {
+layout(std430, binding = 1) buffer OutputBuffer {
     mat4 matrices[];
 };
 
@@ -74,6 +74,138 @@ void main() {
     m[1] = vec4(r01 * hf, r11 * hf, r21 * hf, 0.0);
     m[2] = vec4(r02 * w, r12 * w, r22 * w, 0.0);
     m[3] = vec4(pos, 1.0);
+
+    matrices[idx] = m;
+}
+)";
+
+static const char* kGrassWindComputeSourceVK = R"(
+#version 450
+layout(local_size_x = 64) in;
+
+struct GrassInstance {
+    vec4 pos_yaw;
+    vec4 wh_phase_fade;
+};
+
+layout(set=0, binding=0, std430) readonly buffer InputBuffer {
+    GrassInstance instances[];
+};
+
+layout(set=0, binding=1, std430) buffer OutputBuffer {
+    mat4 matrices[];
+};
+
+layout(push_constant) uniform PC {
+    vec2 u_wind_dir;
+    float u_wind_speed;
+    float u_wind_strength;
+    float u_wind_turbulence;
+    float u_time;
+    int u_instance_count;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_instance_count) return;
+
+    GrassInstance inst = instances[idx];
+    vec3 pos = inst.pos_yaw.xyz;
+    float yaw = inst.pos_yaw.w;
+    float w = inst.wh_phase_fade.x;
+    float h = inst.wh_phase_fade.y;
+    float wind_phase = inst.wh_phase_fade.z;
+    float fade = inst.wh_phase_fade.w;
+
+    float phase = wind_phase + pc.u_time * pc.u_wind_speed;
+    float bend = sin(phase) * pc.u_wind_strength;
+    float turb = sin(phase * 3.7 + wind_phase * 2.3) * pc.u_wind_turbulence;
+    float total_bend = clamp(bend + turb, -0.436, 0.436);
+
+    float rx = -total_bend * pc.u_wind_dir.y;
+    float rz =  total_bend * pc.u_wind_dir.x;
+
+    float cx = cos(rx), sx = sin(rx);
+    float cz = cos(rz), sz = sin(rz);
+    float cy = cos(yaw), sy = sin(yaw);
+
+    float a00 = cz * cy;   float a01 = -sz;  float a02 = cz * sy;
+    float a10 = sz * cy;   float a11 = cz;   float a12 = sz * sy;
+    float a20 = -sy;       float a21 = 0.0;  float a22 = cy;
+
+    float r00 = a00;                     float r01 = a01;                    float r02 = a02;
+    float r10 = cx * a10 - sx * a20;     float r11 = cx * a11 - sx * a21;   float r12 = cx * a12 - sx * a22;
+    float r20 = sx * a10 + cx * a20;     float r21 = sx * a11 + cx * a21;   float r22 = sx * a12 + cx * a22;
+
+    float hf = h * fade;
+    mat4 m;
+    m[0] = vec4(r00 * w, r10 * w, r20 * w, 0.0);
+    m[1] = vec4(r01 * hf, r11 * hf, r21 * hf, 0.0);
+    m[2] = vec4(r02 * w, r12 * w, r22 * w, 0.0);
+    m[3] = vec4(pos, 1.0);
+
+    matrices[idx] = m;
+}
+)";
+
+static const char* kGrassWindComputeSourceHLSL = R"(
+struct GrassInstance {
+    float4 pos_yaw;
+    float4 wh_phase_fade;
+};
+
+cbuffer Params : register(b0) {
+    float2 u_wind_dir;
+    float u_wind_speed;
+    float u_wind_strength;
+    float u_wind_turbulence;
+    float u_time;
+    int u_instance_count;
+    int _pad0;
+};
+
+StructuredBuffer<GrassInstance> instances : register(t16);
+RWStructuredBuffer<float4x4> matrices : register(u1);
+
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    uint idx = id.x;
+    if ((int)idx >= u_instance_count) return;
+
+    GrassInstance inst = instances[idx];
+    float3 pos = inst.pos_yaw.xyz;
+    float yaw = inst.pos_yaw.w;
+    float w = inst.wh_phase_fade.x;
+    float h = inst.wh_phase_fade.y;
+    float wind_phase = inst.wh_phase_fade.z;
+    float fade = inst.wh_phase_fade.w;
+
+    float phase = wind_phase + u_time * u_wind_speed;
+    float bend = sin(phase) * u_wind_strength;
+    float turb = sin(phase * 3.7 + wind_phase * 2.3) * u_wind_turbulence;
+    float total_bend = clamp(bend + turb, -0.436, 0.436);
+
+    float rx = -total_bend * u_wind_dir.y;
+    float rz =  total_bend * u_wind_dir.x;
+
+    float cx = cos(rx), sx = sin(rx);
+    float cz = cos(rz), sz = sin(rz);
+    float cy = cos(yaw), sy = sin(yaw);
+
+    float a00 = cz * cy;   float a01 = -sz;  float a02 = cz * sy;
+    float a10 = sz * cy;   float a11 = cz;   float a12 = sz * sy;
+    float a20 = -sy;       float a21 = 0.0;  float a22 = cy;
+
+    float r00 = a00;                     float r01 = a01;                    float r02 = a02;
+    float r10 = cx * a10 - sx * a20;     float r11 = cx * a11 - sx * a21;   float r12 = cx * a12 - sx * a22;
+    float r20 = sx * a10 + cx * a20;     float r21 = sx * a11 + cx * a21;   float r22 = sx * a12 + cx * a22;
+
+    float hf = h * fade;
+    float4x4 m;
+    m[0] = float4(r00 * w, r10 * w, r20 * w, 0.0);
+    m[1] = float4(r01 * hf, r11 * hf, r21 * hf, 0.0);
+    m[2] = float4(r02 * w, r12 * w, r22 * w, 0.0);
+    m[3] = float4(pos, 1.0);
 
     matrices[idx] = m;
 }
@@ -195,7 +327,11 @@ void GrassSystem::InitComputeShader() {
         gpu_compute_enabled_ = false;
         return;
     }
-    wind_compute_shader_ = rhi_->CreateComputeShader(kGrassWindComputeSource);
+    wind_compute_shader_ = rhi_->CreateComputeShaderEx(
+        kGrassWindComputeSource,
+        kGrassWindComputeSourceVK,
+        kGrassWindComputeSourceHLSL,
+        2, 0, 0, 28);
     gpu_compute_enabled_ = (wind_compute_shader_ != 0);
     if (gpu_compute_enabled_) {
         DEBUG_LOG_INFO("[GrassSystem] GPU wind compute shader created: {}", wind_compute_shader_);
@@ -688,8 +824,8 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
                     lod0_count * sizeof(GrassGPUInstance),
                     lod1_gpu.size() * sizeof(GrassGPUInstance), lod1_gpu.data());
             }
-            rhi_->BindGpuBuffer(input_ssbo_, 11);
-            rhi_->BindGpuBuffer(output_ssbo_, 12);
+            rhi_->BindGpuBuffer(input_ssbo_, 0, false);
+            rhi_->BindGpuBuffer(output_ssbo_, 1, true);
 
             rhi_->SetComputeUniformVec2f(wind_compute_shader_, "u_wind_dir", wind_norm.x, wind_norm.y);
             rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_speed", grass.wind_speed);

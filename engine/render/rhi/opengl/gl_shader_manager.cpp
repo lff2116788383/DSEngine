@@ -246,7 +246,7 @@ static bool ReplaceSpotLoopHeader(std::string& src, const std::string& spot_inst
 
 std::string GLShaderManager::GenerateUBOGLSL() {
     using namespace dse::render::generated_shaders;
-    std::string src = kpbr_frag_glsl330;
+    std::string src = kpbr_frag_glsl430;
 
     // 1. 保持 #version 430 不降级。NVIDIA 在 GL 3.3 context 中也接受 #version 430
     //    （gbuffer shader 已验证）；降到 330 会导致 layout(binding) 编译失败。
@@ -304,9 +304,9 @@ void GLShaderManager::InitBuiltinPBRShader() {
     using namespace dse::render::generated_shaders;
     if (!supports_ssbo_) {
         static std::string ubo_frag_src = GenerateUBOGLSL();
-        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl330, ubo_frag_src.c_str());
+        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl430, ubo_frag_src.c_str());
     } else {
-        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kpbr_frag_glsl330);
+        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl430, kpbr_frag_glsl430);
     }
     programs_created_ += 1;
     CachePBRLocations();
@@ -460,7 +460,7 @@ void GLShaderManager::CachePBRLocations() {
 void GLShaderManager::InitSkyboxShader() {
     if (skybox_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    skybox_shader_handle_ = CompileProgram(kskybox_vert_glsl330, kskybox_frag_glsl330);
+    skybox_shader_handle_ = CompileProgram(kskybox_vert_glsl430, kskybox_frag_glsl430);
     programs_created_ += 1;
 
     skybox_locations_.vp = glGetUniformLocation(skybox_shader_handle_, "u_vp");
@@ -474,7 +474,7 @@ void GLShaderManager::InitSkyboxShader() {
 void GLShaderManager::InitParticleShader() {
     if (particle_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    particle_shader_handle_ = CompileProgram(kparticle_vert_glsl330, kparticle_frag_glsl330);
+    particle_shader_handle_ = CompileProgram(kparticle_vert_glsl430, kparticle_frag_glsl430);
     programs_created_ += 1;
 
     // Particle shader uses PerFrame UBO for vp/view matrices
@@ -495,7 +495,7 @@ void GLShaderManager::InitGBufferShader() {
     if (gbuffer_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
 
-    gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl330, kgbuffer_frag_glsl330);
+    gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl430, kgbuffer_frag_glsl430);
     programs_created_ += 1;
 
     // GBuffer UBO 缁戝畾锛坮eflection 椹卞嫊锛?
@@ -521,7 +521,7 @@ void GLShaderManager::InitGBufferShader() {
 void GLShaderManager::InitSpriteShader() {
     if (sprite_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    sprite_shader_handle_ = CompileProgram(ksprite_vert_glsl330, ksprite_frag_glsl330);
+    sprite_shader_handle_ = CompileProgram(ksprite_vert_glsl430, ksprite_frag_glsl430);
     programs_created_ += 1;
 
     // Sprite UBO 缁戝畾锛坮eflection 椹卞姩锛?
@@ -537,7 +537,7 @@ void GLShaderManager::InitSpriteShader() {
 void GLShaderManager::InitShadowShader() {
     if (shadow_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    shadow_shader_handle_ = CompileProgram(kshadow_vert_glsl330, kshadow_frag_glsl330);
+    shadow_shader_handle_ = CompileProgram(kshadow_vert_glsl430, kshadow_frag_glsl430);
     programs_created_ += 1;
 
     // Shadow UBO 缁戝畾锛坮eflection 椹卞姩锛?
@@ -557,39 +557,39 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
 
     using namespace dse::render::generated_shaders;
     const char* fs = nullptr;
-    if      (effect_name == "fxaa")             fs = kfxaa_frag_glsl330;
-    else if (effect_name == "bloom_extract")     fs = kbloom_extract_frag_glsl330;
-    else if (effect_name == "bloom_downsample")  fs = kbloom_downsample_frag_glsl330;
-    else if (effect_name == "bloom_upsample")    fs = kbloom_upsample_frag_glsl330;
-    else if (effect_name == "tonemapping")         fs = ktonemapping_frag_glsl330;
-    else if (effect_name == "color_grading")       fs = kcolor_grading_frag_glsl330;
-    else if (effect_name == "edge_detect")          fs = kedge_detect_frag_glsl330;
-    else if (effect_name == "postprocess_passthrough") fs = kpostprocess_passthrough_frag_glsl330;
-    else if (effect_name == "bloom_composite")     fs = kbloom_composite_ssao_ae_frag_glsl330;
-    else if (effect_name == "ssao_apply")           fs = kssao_apply_frag_glsl330;
-    else if (effect_name == "ssao")                 fs = kssao_frag_glsl330;
-    else if (effect_name == "ssao_blur")             fs = kssao_blur_frag_glsl330;
-    else if (effect_name == "contact_shadow")        fs = kcontact_shadow_frag_glsl330;
-    else if (effect_name == "dof")                   fs = kdof_frag_glsl330;
-    else if (effect_name == "motion_vector")         fs = kmotion_vector_frag_glsl330;
-    else if (effect_name == "motion_blur")           fs = kmotion_blur_frag_glsl330;
-    else if (effect_name == "ssr")                   fs = kssr_frag_glsl330;
-    else if (effect_name == "taa_resolve")           fs = ktaa_resolve_frag_glsl330;
-    else if (effect_name == "ui_overlay")             fs = kpostprocess_passthrough_frag_glsl330;
-    else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl330;
-    else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl330;
-    else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl330;
-    else if (effect_name == "decal")                 fs = kdecal_frag_glsl330;
-    else if (effect_name == "water")                 fs = kwater_frag_glsl330;
-    else if (effect_name == "wboit_composite")       fs = kwboit_composite_frag_glsl330;
-    else if (effect_name == "lum_compute")           fs = klum_compute_frag_glsl330;
-    else if (effect_name == "lum_adapt")             fs = klum_adapt_frag_glsl330;
-    else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl330;
-    else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl330;
-    else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl330;
+    if      (effect_name == "fxaa")             fs = kfxaa_frag_glsl430;
+    else if (effect_name == "bloom_extract")     fs = kbloom_extract_frag_glsl430;
+    else if (effect_name == "bloom_downsample")  fs = kbloom_downsample_frag_glsl430;
+    else if (effect_name == "bloom_upsample")    fs = kbloom_upsample_frag_glsl430;
+    else if (effect_name == "tonemapping")         fs = ktonemapping_frag_glsl430;
+    else if (effect_name == "color_grading")       fs = kcolor_grading_frag_glsl430;
+    else if (effect_name == "edge_detect")          fs = kedge_detect_frag_glsl430;
+    else if (effect_name == "postprocess_passthrough") fs = kpostprocess_passthrough_frag_glsl430;
+    else if (effect_name == "bloom_composite")     fs = kbloom_composite_ssao_ae_frag_glsl430;
+    else if (effect_name == "ssao_apply")           fs = kssao_apply_frag_glsl430;
+    else if (effect_name == "ssao")                 fs = kssao_frag_glsl430;
+    else if (effect_name == "ssao_blur")             fs = kssao_blur_frag_glsl430;
+    else if (effect_name == "contact_shadow")        fs = kcontact_shadow_frag_glsl430;
+    else if (effect_name == "dof")                   fs = kdof_frag_glsl430;
+    else if (effect_name == "motion_vector")         fs = kmotion_vector_frag_glsl430;
+    else if (effect_name == "motion_blur")           fs = kmotion_blur_frag_glsl430;
+    else if (effect_name == "ssr")                   fs = kssr_frag_glsl430;
+    else if (effect_name == "taa_resolve")           fs = ktaa_resolve_frag_glsl430;
+    else if (effect_name == "ui_overlay")             fs = kpostprocess_passthrough_frag_glsl430;
+    else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl430;
+    else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl430;
+    else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl430;
+    else if (effect_name == "decal")                 fs = kdecal_frag_glsl430;
+    else if (effect_name == "water")                 fs = kwater_frag_glsl430;
+    else if (effect_name == "wboit_composite")       fs = kwboit_composite_frag_glsl430;
+    else if (effect_name == "lum_compute")           fs = klum_compute_frag_glsl430;
+    else if (effect_name == "lum_adapt")             fs = klum_adapt_frag_glsl430;
+    else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl430;
+    else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl430;
+    else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl430;
     else return 0;
 
-    unsigned int shader = CompileProgram(kpostprocess_vert_glsl330, fs);
+    unsigned int shader = CompileProgram(kpostprocess_vert_glsl430, fs);
     if (shader == 0) {
         DEBUG_LOG_ERROR("Failed to compile gen.h PP shader: {}", effect_name);
         return 0;
@@ -609,7 +609,7 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
 
     // 直接使用离线预编译的 GPU_DRIVEN 变体（pbr_gpu_driven_vert.gen.h）
     // 不再需要任何运行时 string patch
-    gpu_driven_pbr_shader_handle_ = CompileProgram(kpbr_gpu_driven_vert_glsl330, kpbr_frag_glsl330);
+    gpu_driven_pbr_shader_handle_ = CompileProgram(kpbr_gpu_driven_vert_glsl430, kpbr_frag_glsl430);
     if (gpu_driven_pbr_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven PBR shader compilation failed\n");
         return;
@@ -645,7 +645,7 @@ void GLShaderManager::InitGPUDrivenShadowShader() {
     using namespace dse::render::generated_shaders;
     using namespace dse::render::generated_shaders::reflect;
 
-    std::string vert_src = kshadow_vert_glsl330;
+    std::string vert_src = kshadow_vert_glsl430;
 
     // 1. 升级到 #version 460：gl_BaseInstance 在 GLSL 4.6 起成为核心内置变量
     const std::string version_tag = "#version 430";
@@ -678,7 +678,7 @@ void GLShaderManager::InitGPUDrivenShadowShader() {
     replace_all("u_model * localPos",      "dse_inst[gl_BaseInstance].model * localPos");
     replace_all("u_model * boneTransform", "dse_inst[gl_BaseInstance].model * boneTransform");
 
-    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), kshadow_frag_glsl330);
+    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), kshadow_frag_glsl430);
     if (gpu_driven_shadow_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven Shadow shader compilation failed\n");
         return;

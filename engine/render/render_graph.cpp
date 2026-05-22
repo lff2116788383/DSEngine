@@ -298,9 +298,9 @@ bool RenderGraph::Compile() {
         }
     }
 
-    while (!queue.empty()) {
-        uint32_t idx = queue.back();
-        queue.pop_back();
+    size_t queue_head = 0;
+    while (queue_head < queue.size()) {
+        uint32_t idx = queue[queue_head++];
         topo_order.push_back(passes_[idx].id);
 
         for (uint32_t succ : adj[idx]) {

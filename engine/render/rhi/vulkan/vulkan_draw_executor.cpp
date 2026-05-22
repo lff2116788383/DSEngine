@@ -2300,10 +2300,12 @@ void VulkanDrawExecutor::DrawHairStrands(
 
     if (items.empty()) return;
 
-    // 懒初始化 hair shader program（GLSL 450 运行时编译）
+    // 懒初始化 hair shader program（预编译 SPIR-V）
     if (hair_shader_handle_ == 0) {
         using namespace dse::render::generated_shaders;
-        hair_shader_handle_ = shader_mgr.CreateProgram(khair_vert_glsl450, khair_frag_glsl450);
+        hair_shader_handle_ = shader_mgr.CreateProgramFromSpirv(
+            khair_vert_spv, khair_vert_spv_size,
+            khair_frag_spv, khair_frag_spv_size);
         if (hair_shader_handle_ == 0) {
             DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to compile hair shader for Vulkan");
             return;
@@ -2698,6 +2700,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     gpu_driven_pipeline_layout_ = pbr_program->pipeline_layout;
 
     // PerFrame UBO
+    VkDeviceSize cur_per_frame_offset = per_frame_ubo_offset_;
     VulkanPerFrameUBO frame_ubo{};
     frame_ubo.vp = proj * view;
     frame_ubo.view = view;
@@ -2707,6 +2710,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
     // PerScene UBO
+    VkDeviceSize cur_per_scene_offset = per_scene_ubo_offset_;
     VulkanPerSceneUBO scene_ubo{};
     const float gpu_driven_light = global_state_.force_unlit ? 0.0f : 1.0f;
     scene_ubo.light_dir_and_enabled   = glm::vec4(light_dir, gpu_driven_light);
@@ -2719,6 +2723,24 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
                   per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
     per_scene_ubo_offset_ += kUboSlotAlignment;
+
+    if (resource_mgr_) {
+        MeshDrawItem default_item;
+        default_item.lighting_enabled = true;
+        default_item.light_direction = light_dir;
+        default_item.light_color = light_color;
+        default_item.light_intensity = light_intensity;
+        default_item.ambient_intensity = ambient_intensity;
+        default_item.shadow_strength = shadow_strength;
+        default_item.receive_shadow = (shadow_strength > 0.0f);
+
+        VkDeviceSize cur_material_offset = per_material_ubo_offset_;
+        UpdatePerMaterialUBO(default_item);
+        per_material_ubo_offset_ += kUboSlotAlignment;
+
+        AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, default_item, *resource_mgr_,
+            0, cur_per_frame_offset, cur_per_scene_offset, cur_material_offset, 0, 0, false);
+    }
 }
 
 // ============================================================

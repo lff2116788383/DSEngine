@@ -2399,6 +2399,7 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
 const char* kGPUCullShaderSource = R"(
 #version 430 core
+#extension GL_ARB_shading_language_420pack : enable
 layout(local_size_x = 64) in;
 
 struct AABB {
@@ -2418,11 +2419,11 @@ layout(std430, binding = 0) readonly buffer AABBBuffer {
     AABB aabbs[];
 };
 
-layout(std430, binding = 6) buffer DrawCommandBuffer {
+layout(std430, binding = 1) buffer DrawCommandBuffer {
     DrawCommand draw_cmds[];
 };
 
-uniform sampler2D u_hiz_texture;
+layout(binding = 0) uniform sampler2D u_hiz_texture;
 uniform mat4 u_view_projection;
 uniform vec4 u_frustum_planes[6];
 uniform vec2 u_screen_size;
@@ -2512,6 +2513,213 @@ void main() {
 }
 )";
 
+const char* kGPUCullShaderSourceVK = R"(
+#version 450
+layout(local_size_x = 64) in;
+
+struct AABB {
+    vec4 min_point;
+    vec4 max_point;
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+layout(set=0, binding=0, std430) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(set=0, binding=1, std430) buffer DrawCommandBuffer {
+    DrawCommand draw_cmds[];
+};
+
+layout(set=0, binding=2) uniform sampler2D u_hiz_texture;
+
+layout(push_constant) uniform PC {
+    mat4 u_view_projection;
+    vec2 u_screen_size;
+    int u_mip_count;
+    int u_object_count;
+    vec4 u_frustum_planes[6];
+} pc;
+
+bool FrustumTestAABB(vec3 aabb_min, vec3 aabb_max) {
+    for (int i = 0; i < 6; ++i) {
+        vec3 positive_vertex = vec3(
+            (pc.u_frustum_planes[i].x >= 0.0) ? aabb_max.x : aabb_min.x,
+            (pc.u_frustum_planes[i].y >= 0.0) ? aabb_max.y : aabb_min.y,
+            (pc.u_frustum_planes[i].z >= 0.0) ? aabb_max.z : aabb_min.z
+        );
+        float d = dot(pc.u_frustum_planes[i].xyz, positive_vertex) + pc.u_frustum_planes[i].w;
+        if (d < 0.0) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    if (!FrustumTestAABB(aabb_min, aabb_max)) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = pc.u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            draw_cmds[idx].instance_count = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    vec2 uv_min = clamp(ndc_min * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+    vec2 uv_max = clamp(ndc_max * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    vec2 size_pixels = (uv_max - uv_min) * pc.u_screen_size;
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5 + 0.5;
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_c  = textureLod(u_hiz_texture, uv_center, mip_level).r;
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_c, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    draw_cmds[idx].instance_count = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
+const char* kGPUCullShaderSourceHLSL = R"(
+struct AABB {
+    float4 min_point;
+    float4 max_point;
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+cbuffer Params : register(b0) {
+    float4x4 u_view_projection;
+    float2 u_screen_size;
+    int u_mip_count;
+    int u_object_count;
+    float4 u_frustum_planes[6];
+};
+
+StructuredBuffer<AABB> aabbs : register(t16);
+RWStructuredBuffer<DrawCommand> draw_cmds : register(u1);
+Texture2D<float> u_hiz_texture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+bool FrustumTestAABB(float3 aabb_min, float3 aabb_max) {
+    for (int i = 0; i < 6; ++i) {
+        float3 positive_vertex = float3(
+            (u_frustum_planes[i].x >= 0.0f) ? aabb_max.x : aabb_min.x,
+            (u_frustum_planes[i].y >= 0.0f) ? aabb_max.y : aabb_min.y,
+            (u_frustum_planes[i].z >= 0.0f) ? aabb_max.z : aabb_min.z
+        );
+        float d = dot(u_frustum_planes[i].xyz, positive_vertex) + u_frustum_planes[i].w;
+        if (d < 0.0f) return false;
+    }
+    return true;
+}
+
+[numthreads(64, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+    uint idx = id.x;
+    if ((int)idx >= u_object_count) return;
+
+    float3 aabb_min = aabbs[idx].min_point.xyz;
+    float3 aabb_max = aabbs[idx].max_point.xyz;
+
+    if (!FrustumTestAABB(aabb_min, aabb_max)) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    float2 ndc_min = float2(1.0f, 1.0f);
+    float2 ndc_max = float2(-1.0f, -1.0f);
+    float nearest_z = 1.0f;
+
+    for (int i = 0; i < 8; ++i) {
+        float3 corner = float3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        float4 clip = mul(u_view_projection, float4(corner, 1.0f));
+        if (clip.w <= 0.0f) {
+            draw_cmds[idx].instance_count = 1u;
+            return;
+        }
+        float3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    float2 uv_min = clamp(ndc_min * 0.5f + 0.5f, float2(0.0f, 0.0f), float2(1.0f, 1.0f));
+    float2 uv_max = clamp(ndc_max * 0.5f + 0.5f, float2(0.0f, 0.0f), float2(1.0f, 1.0f));
+
+    if (uv_max.x <= 0.0f || uv_min.x >= 1.0f || uv_max.y <= 0.0f || uv_min.y >= 1.0f) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    float2 size_pixels = (uv_max - uv_min) * u_screen_size;
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0f ? ceil(log2(max_dim)) : 0.0f;
+    mip_level = clamp(mip_level, 0.0f, (float)(u_mip_count - 1));
+
+    float test_depth = nearest_z * 0.5f + 0.5f;
+    float2 uv_center = (uv_min + uv_max) * 0.5f;
+    float hiz_c  = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
+    float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);
+    float hiz_br = u_hiz_texture.SampleLevel(LinearSampler, uv_max, mip_level);
+    float hiz_tr = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_max.x, uv_min.y), mip_level);
+    float hiz_bl = u_hiz_texture.SampleLevel(LinearSampler, float2(uv_min.x, uv_max.y), mip_level);
+    float max_hiz = max(max(hiz_c, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    draw_cmds[idx].instance_count = (test_depth > max_hiz) ? 0u : 1u;
+}
+)";
+
 void GPUCullPass::Setup(RenderGraph& graph) {
     auto hiz_mips = graph.DeclareResource("hiz_mips");
     auto gpu_draw_cmds = graph.DeclareResource("gpu_draw_commands");
@@ -2538,8 +2746,8 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
     // Bind SSBOs
-    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0);        // AABB input
-    rhi->BindGpuBuffer(ctx_.gpu_draw_cmd_ssbo, 6);    // DrawCommands (read/write)
+    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0, false);
+    rhi->BindGpuBuffer(ctx_.gpu_draw_cmd_ssbo, 1, true);
 
     // Bind Hi-Z texture
     rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
@@ -2575,7 +2783,6 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     // Set uniforms
     unsigned int shader = ctx_.gpu_cull_shader;
-    rhi->SetComputeUniformInt(shader, "u_hiz_texture", 0);
     rhi->SetComputeUniformMat4(shader, "u_view_projection", &view_projection[0][0]);
     rhi->SetComputeUniformVec2f(shader, "u_screen_size",
                                 static_cast<float>(Screen::width()),

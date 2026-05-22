@@ -34,44 +34,44 @@ TEST(RhiFactoryVulkanTest, CreateRhiDevice_Vulkan返回非空) {
 // VulkanRhiDevice 无 GPU 测试
 // ============================================================
 
-TEST(VulkanRhiDeviceTest, 构造析构不崩溃) {
+TEST(VkRhiDeviceBasicTest, 构造析构不崩溃) {
     VulkanRhiDevice device;
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时Shutdown安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时Shutdown安全) {
     VulkanRhiDevice device;
     device.Shutdown();
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时BeginFrame安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时BeginFrame安全) {
     VulkanRhiDevice device;
     device.BeginFrame();
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时EndFrame安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时EndFrame安全) {
     VulkanRhiDevice device;
     device.EndFrame();
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时Submit安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时Submit安全) {
     VulkanRhiDevice device;
     auto cmd = std::make_shared<VulkanCommandBuffer>();
     device.Submit(cmd);
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时CreateBuffer返回零) {
+TEST(VkRhiDeviceBasicTest, 未初始化时CreateBuffer返回零) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时CreateTexture2D返回零) {
+TEST(VkRhiDeviceBasicTest, 未初始化时CreateTexture2D返回零) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
+TEST(VkRhiDeviceBasicTest, 未初始化时CreateRenderTarget返回零) {
     VulkanRhiDevice device;
     RenderTargetDesc desc{};
     desc.width = 256;
@@ -81,19 +81,13 @@ TEST(VulkanRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时UpdateBuffer安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时UpdateBuffer安全) {
     VulkanRhiDevice device;
     float data[] = {0.5f};
     device.UpdateBuffer(999, 0, sizeof(data), data, false);
 }
 
-TEST(VulkanRhiDeviceTest, 未初始化时Submit安全) {
-    VulkanRhiDevice device;
-    auto cmd = std::make_shared<VulkanCommandBuffer>();
-    device.Submit(cmd);
-}
-
-TEST(VulkanRhiDeviceTest, 未初始化时删除操作安全) {
+TEST(VkRhiDeviceBasicTest, 未初始化时删除操作安全) {
     VulkanRhiDevice device;
     device.DeleteRenderTarget(999);
     device.DeleteTexture(999);
@@ -101,7 +95,7 @@ TEST(VulkanRhiDeviceTest, 未初始化时删除操作安全) {
     device.DeleteBuffer(999);
 }
 
-TEST(VulkanRhiDeviceTest, LastFrameStats默认值为零) {
+TEST(VkRhiDeviceBasicTest, LastFrameStats默认值为零) {
     VulkanRhiDevice device;
     const auto& stats = device.LastFrameStats();
     EXPECT_EQ(stats.draw_calls, 0);
@@ -109,7 +103,7 @@ TEST(VulkanRhiDeviceTest, LastFrameStats默认值为零) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
-TEST(VulkanRhiDeviceTest, 子系统访问器可调用) {
+TEST(VkRhiDeviceBasicTest, 子系统访问器可调用) {
     VulkanRhiDevice device;
     auto& res    = device.resource_mgr();
     auto& state  = device.state_mgr();

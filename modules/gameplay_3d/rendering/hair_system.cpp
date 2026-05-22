@@ -233,10 +233,18 @@ void HairSystem::InitComputeShaders() {
         gpu_compute_enabled_ = false;
         return;
     }
-    cs_integrate_      = rhi_->CreateComputeShader(render::kHairIntegrateSource);
-    cs_length_         = rhi_->CreateComputeShader(render::kHairLengthConstraintSource);
-    cs_local_shape_    = rhi_->CreateComputeShader(render::kHairLocalShapeSource);
-    cs_update_tangent_ = rhi_->CreateComputeShader(render::kHairUpdateTangentSource);
+    cs_integrate_ = rhi_->CreateComputeShaderEx(
+        render::kHairIntegrateSource, render::kHairIntegrateSourceVK, render::kHairIntegrateSourceHLSL,
+        4, 0, 0, 48);
+    cs_length_ = rhi_->CreateComputeShaderEx(
+        render::kHairLengthConstraintSource, render::kHairLengthConstraintSourceVK, render::kHairLengthConstraintSourceHLSL,
+        3, 0, 0, 4);
+    cs_local_shape_ = rhi_->CreateComputeShaderEx(
+        render::kHairLocalShapeSource, render::kHairLocalShapeSourceVK, render::kHairLocalShapeSourceHLSL,
+        3, 0, 0, 12);
+    cs_update_tangent_ = rhi_->CreateComputeShaderEx(
+        render::kHairUpdateTangentSource, render::kHairUpdateTangentSourceVK, render::kHairUpdateTangentSourceHLSL,
+        3, 0, 0, 12);
 
     gpu_compute_enabled_ = (cs_integrate_ != 0 && cs_length_ != 0 &&
                             cs_local_shape_ != 0 && cs_update_tangent_ != 0);
@@ -279,21 +287,22 @@ void HairSystem::SimulateCompute(float dt) {
         const uint32_t num_strands = inst.active_strand_count;
         const auto& sim = inst.sim_params;
 
-        // 绑定 SSBO
+        // --- Pass 1: Integration ---
         rhi_->BindGpuBuffer(inst.position_ssbo,      0);
         rhi_->BindGpuBuffer(inst.position_prev_ssbo, 1);
         rhi_->BindGpuBuffer(inst.position_rest_ssbo, 2);
-        rhi_->BindGpuBuffer(inst.tangent_ssbo,       3);
-        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   4);
-
-        // --- Pass 1: Integration ---
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   3);
         rhi_->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", static_cast<int>(num_verts));
         rhi_->SetComputeUniformFloat(cs_integrate_, "u_dt",           dt);
         rhi_->SetComputeUniformFloat(cs_integrate_, "u_damping",      sim.damping);
-        rhi_->SetComputeUniformVec4(cs_integrate_,  "u_gravity",
-            sim.gravity_dir.x, sim.gravity_dir.y, sim.gravity_dir.z, sim.gravity_magnitude);
-        rhi_->SetComputeUniformVec4(cs_integrate_,  "u_wind",
-            sim.wind.x, sim.wind.y, sim.wind.z, sim.wind_turbulence);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_gx",           sim.gravity_dir.x);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_gy",           sim.gravity_dir.y);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_gz",           sim.gravity_dir.z);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_gw",           sim.gravity_magnitude);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_wx",           sim.wind.x);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_wy",           sim.wind.y);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_wz",           sim.wind.z);
+        rhi_->SetComputeUniformFloat(cs_integrate_, "u_ww",           sim.wind_turbulence);
         rhi_->SetComputeUniformFloat(cs_integrate_, "u_time", sim_time);
 
         unsigned int groups_v = (num_verts + 63) / 64;
@@ -303,6 +312,9 @@ void HairSystem::SimulateCompute(float dt) {
         unsigned int groups_s = (num_strands + 63) / 64;
 
         // --- Pass 2 & 3: Constraints (iterated) ---
+        rhi_->BindGpuBuffer(inst.position_ssbo,      0);
+        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 1);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   2);
         for (int iter = 0; iter < sim.local_constraint_iterations; ++iter) {
             // Local shape
             rhi_->SetComputeUniformInt(cs_local_shape_,   "u_num_strands",     static_cast<int>(num_strands));
@@ -320,6 +332,9 @@ void HairSystem::SimulateCompute(float dt) {
         }
 
         // --- Pass 4: Update tangents ---
+        rhi_->BindGpuBuffer(inst.position_ssbo,  0);
+        rhi_->BindGpuBuffer(inst.tangent_ssbo,   1);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo, 2);
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_num_vertices", static_cast<int>(num_verts));
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_num_strands",  static_cast<int>(num_strands));
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_verts_per_strand",

@@ -606,7 +606,7 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
             --output-dir "${SHADER_GEN_DIR}"
             --target all --embed
         DEPENDS dse_shader_compiler ${SHADER_SOURCE_FILES}
-        COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 330 / HLSL)"
+        COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 430 / HLSL)"
         VERBATIM
     )
 

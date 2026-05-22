@@ -1012,7 +1012,9 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
 
     // ---- 颜色附件 ----
     if (has_color) {
-        VkImageUsageFlags color_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        VkImageUsageFlags color_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                      | VK_IMAGE_USAGE_SAMPLED_BIT
+                                      | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         if (allow_uav)        color_usage |= VK_IMAGE_USAGE_STORAGE_BIT;
         if (generate_mipmaps) color_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 

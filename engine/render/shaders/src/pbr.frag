@@ -231,16 +231,16 @@ vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirTS, float height_scale) {
     vec2 P = viewDirTS.xy / max(viewDirTS.z, 0.001) * height_scale;
     vec2 deltaUV = P / float(numLayers);
     vec2 curUV = uv;
-    float curDepth = 1.0 - texture(u_normal_map, curUV).a;
+    float curDepth = 1.0 - textureLod(u_normal_map, curUV, 0.0).a;
     for (int i = 0; i < numLayers; ++i) {
         if (currentLayerDepth >= curDepth) break;
         curUV -= deltaUV;
-        curDepth = 1.0 - texture(u_normal_map, curUV).a;
+        curDepth = 1.0 - textureLod(u_normal_map, curUV, 0.0).a;
         currentLayerDepth += layerDepth;
     }
     vec2 prevUV = curUV + deltaUV;
     float afterDepth = curDepth - currentLayerDepth;
-    float beforeDepth = (1.0 - texture(u_normal_map, prevUV).a) - currentLayerDepth + layerDepth;
+    float beforeDepth = (1.0 - textureLod(u_normal_map, prevUV, 0.0).a) - currentLayerDepth + layerDepth;
     float w = afterDepth / (afterDepth - beforeDepth + 0.0001);
     return mix(curUV, prevUV, w);
 }
@@ -283,8 +283,8 @@ float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
     vec2 texel_size = 1.0 / vec2(textureSize(shadowMap, 0));
     for (int x = -1; x <= 1; ++x)
         for (int y = -1; y <= 1; ++y)
-            shadow += texture(shadowMap, vec3(proj_coords.xy
-                      + vec2(x, y) * texel_size, proj_coords.z - bias));
+            shadow += textureLod(shadowMap, vec3(proj_coords.xy
+                      + vec2(x, y) * texel_size, proj_coords.z - bias), 0.0);
     return shadow / 9.0;
 }
 
@@ -314,12 +314,12 @@ float FindBlockerDepth(sampler2DShadow shadowMap, vec2 uv, float receiverDepth,
     int   blockerCount = 0;
     for (int i = 0; i < 16; ++i) {
         vec2 sampleUV = uv + kPoissonDisk[i] * searchRadius;
-        float vis = texture(shadowMap, vec3(sampleUV, receiverDepth));
+        float vis = textureLod(shadowMap, vec3(sampleUV, receiverDepth), 0.0);
         if (vis < 0.5) {
             float lo = 0.0, hi = receiverDepth;
             for (int b = 0; b < PCSS_BLOCKER_SEARCH_STEPS; ++b) {
                 float mid = (lo + hi) * 0.5;
-                if (texture(shadowMap, vec3(sampleUV, mid)) < 0.5)
+                if (textureLod(shadowMap, vec3(sampleUV, mid), 0.0) < 0.5)
                     hi = mid;
                 else
                     lo = mid;
@@ -350,7 +350,7 @@ float PCSS_Shadow(sampler2DShadow shadowMap, vec3 projCoords, float bias) {
     float shadow = 0.0;
     for (int i = 0; i < 16; ++i) {
         vec2 offset = kPoissonDisk[i] * filterRadius;
-        shadow += texture(shadowMap, vec3(projCoords.xy + offset, receiverDepth));
+        shadow += textureLod(shadowMap, vec3(projCoords.xy + offset, receiverDepth), 0.0);
     }
     return shadow / 16.0;
 }
@@ -413,10 +413,10 @@ float SpotShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 normal
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
             float pcfDepth;
-            if (shadowIndex == 0)      pcfDepth = texture(u_spot_shadow_maps[0], projCoords.xy + vec2(x, y) * texelSize).r;
-            else if (shadowIndex == 1) pcfDepth = texture(u_spot_shadow_maps[1], projCoords.xy + vec2(x, y) * texelSize).r;
-            else if (shadowIndex == 2) pcfDepth = texture(u_spot_shadow_maps[2], projCoords.xy + vec2(x, y) * texelSize).r;
-            else                       pcfDepth = texture(u_spot_shadow_maps[3], projCoords.xy + vec2(x, y) * texelSize).r;
+            if (shadowIndex == 0)      pcfDepth = textureLod(u_spot_shadow_maps[0], projCoords.xy + vec2(x, y) * texelSize, 0.0).r;
+            else if (shadowIndex == 1) pcfDepth = textureLod(u_spot_shadow_maps[1], projCoords.xy + vec2(x, y) * texelSize, 0.0).r;
+            else if (shadowIndex == 2) pcfDepth = textureLod(u_spot_shadow_maps[2], projCoords.xy + vec2(x, y) * texelSize, 0.0).r;
+            else                       pcfDepth = textureLod(u_spot_shadow_maps[3], projCoords.xy + vec2(x, y) * texelSize, 0.0).r;
             shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
         }
     }
@@ -430,10 +430,10 @@ float PointShadowCalculation(int shadowIndex, vec3 fragPosWorldSpace, vec3 light
     float currentDepth = length(fragToLight);
     if (currentDepth >= lightRadius) return 0.0;
     float closestDepth;
-    if (shadowIndex == 0)      closestDepth = texture(u_point_shadow_maps[0], fragToLight).r * lightRadius;
-    else if (shadowIndex == 1) closestDepth = texture(u_point_shadow_maps[1], fragToLight).r * lightRadius;
-    else if (shadowIndex == 2) closestDepth = texture(u_point_shadow_maps[2], fragToLight).r * lightRadius;
-    else                       closestDepth = texture(u_point_shadow_maps[3], fragToLight).r * lightRadius;
+    if (shadowIndex == 0)      closestDepth = textureLod(u_point_shadow_maps[0], fragToLight, 0.0).r * lightRadius;
+    else if (shadowIndex == 1) closestDepth = textureLod(u_point_shadow_maps[1], fragToLight, 0.0).r * lightRadius;
+    else if (shadowIndex == 2) closestDepth = textureLod(u_point_shadow_maps[2], fragToLight, 0.0).r * lightRadius;
+    else                       closestDepth = textureLod(u_point_shadow_maps[3], fragToLight, 0.0).r * lightRadius;
     float bias = 0.05;
     return (currentDepth - bias) > closestDepth ? u_shadow_strength : 0.0;
 }

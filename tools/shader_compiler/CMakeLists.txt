@@ -2,12 +2,12 @@
 # dse_shader_compiler — 离线 shader 交叉编译工具
 # ============================================================================
 #
-# 功能：GLSL 450 → SPIR-V → GLSL 330 / HLSL SM5
+# 功能：GLSL 450 → SPIR-V → GLSL 430 / HLSL SM5
 # 依赖：glslang (SPIR-V 生成), spirv-cross (交叉编译)
 #
 # 用法:
 #   dse_shader_compiler --input-dir <path> --output-dir <path>
-#                       [--target all|spv|glsl330|hlsl] [--embed]
+#                       [--target all|spv|glsl430|hlsl] [--embed]
 # ============================================================================
 
 cmake_minimum_required(VERSION 3.16)

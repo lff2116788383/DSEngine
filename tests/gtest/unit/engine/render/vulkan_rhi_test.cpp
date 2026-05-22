@@ -124,16 +124,16 @@ TEST(VulkanRhiDeviceTest, 未初始化时Submit安全) {
 
 TEST(VulkanRhiDeviceTest, CreateVertexArray返回递增句柄) {
     VulkanRhiDevice device;
-    unsigned int h1 = device.CreateVertexArray();
-    unsigned int h2 = device.CreateVertexArray();
+    auto h1 = device.CreateVertexArray();
+    auto h2 = device.CreateVertexArray();
     EXPECT_NE(h1, h2);
-    EXPECT_GT(h2, h1);
+    EXPECT_GT(h2.raw(), h1.raw());
 }
 
 TEST(VulkanRhiDeviceTest, DeleteVertexArray_NoOp不崩溃) {
     VulkanRhiDevice device;
-    device.DeleteVertexArray(12345); // no-op
-    device.DeleteVertexArray(0);     // no-op
+    device.DeleteVertexArray(VertexArrayHandle::from_raw(12345)); // no-op
+    device.DeleteVertexArray(VertexArrayHandle{});                // no-op
 }
 
 TEST(VulkanRhiDeviceTest, LastFrameStats默认值为零) {
@@ -707,13 +707,13 @@ TEST(VulkanGLSLShaderTest, K_SpotLightsSSBO声明存在) {
 }
 
 TEST(VulkanGLSLShaderTest, K_点光源立方体阴影采样器声明存在) {
-    std::string src(dse::render::generated_shaders::kpbr_frag_glsl330);
+    std::string src(dse::render::generated_shaders::kpbr_frag_glsl430);
     EXPECT_NE(src.find("u_point_shadow_maps"), std::string::npos)
         << "kPbrFragment should declare u_point_shadow_maps samplerCube";
 }
 
 TEST(VulkanGLSLShaderTest, K_SpotLight使用float_pad非vec2_pad) {
-    std::string src(dse::render::generated_shaders::kpbr_frag_glsl330);
+    std::string src(dse::render::generated_shaders::kpbr_frag_glsl430);
     // SpotLight 含有 outer_cone 字段；在 outer_cone 之后到下一个 "};" 之间
     // 必须是 float _pad 而非 vec2 _pad（vec2 对齐会使 stride 从 64B 变成 80B）
     auto outer_pos = src.find("float outer_cone;");
@@ -747,7 +747,7 @@ TEST(VulkanProjectionCorrectionTest, YFlip行列值正确) {
 }
 
 TEST(VulkanSkyboxShaderTest, 采样方向使用aPos) {
-    std::string src(dse::render::generated_shaders::kskybox_vert_glsl330);
+    std::string src(dse::render::generated_shaders::kskybox_vert_glsl430);
     EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
         << "Skybox VS should use raw vertex position as cubemap sampling direction";
 }

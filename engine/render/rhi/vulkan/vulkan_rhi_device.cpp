@@ -224,6 +224,8 @@ void VulkanRhiDevice::Shutdown() {
 }
 
 void VulkanRhiDevice::BeginFrame() {
+    if (!initialized_) return;
+
     current_frame_stats_ = RenderStats{};
     pending_command_buffers_.clear();
     draw_executor_.BeginFrame();
@@ -594,6 +596,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
 
             // SSBO 绑定（binding 0..ssbo_binding_count-1）
             for (auto& [binding, ssbo_handle] : bound_ssbos_) {
+                if (binding >= prog->ssbo_binding_count) continue;
                 const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
                 if (!ssbo) continue;
                 VkDescriptorBufferInfo buf_info{};

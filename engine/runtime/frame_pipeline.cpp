@@ -72,6 +72,8 @@ namespace dse::render {
     extern const char* kHiZDownsampleShaderSourceHLSL;
     extern const char* kHiZCullShaderSourceHLSL;
     extern const char* kGPUCullShaderSource;
+    extern const char* kGPUCullShaderSourceVK;
+    extern const char* kGPUCullShaderSourceHLSL;
 }
 
 namespace {
@@ -504,8 +506,12 @@ bool FramePipeline::Init() {
         runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
         runtime_context_.rhi_device->SupportsSSBO()) {
-        render_resources_.gpu_driven_supported = true;
-        render_resources_.gpu_cull_shader = runtime_context_.rhi_device->CreateComputeShader(dse::render::kGPUCullShaderSource);
+        render_resources_.gpu_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+            dse::render::kGPUCullShaderSource,
+            dse::render::kGPUCullShaderSourceVK,
+            dse::render::kGPUCullShaderSourceHLSL,
+            2, 0, 1, 176);
+        render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
         DEBUG_LOG_INFO("GPU Driven Rendering: supported, cull_shader={}", render_resources_.gpu_cull_shader);
     } else if (gpu_driven_disabled) {
         render_resources_.gpu_driven_supported = false;
@@ -1464,8 +1470,10 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
 
 void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
     static int diag_pass_frame = 0;
+    const char* pass_diag = std::getenv("DSE_PASS_DIAG");
+    const bool pass_diag_enabled = pass_diag && pass_diag[0] != '\0' && pass_diag[0] != '0';
     const unsigned int scene_rt = render_resources_.scene_render_target;
-    if (diag_pass_frame < 4 && scene_rt != 0 && runtime_context_.rhi_device) {
+    if (pass_diag_enabled && diag_pass_frame < 4 && scene_rt != 0 && runtime_context_.rhi_device) {
         dse::render::RhiDevice* rhi = runtime_context_.rhi_device.get();
         render_graph_dag_.ExecuteWithCallback(cmd_buffer, [&](const std::string& pass_name) {
             auto rb = rhi->ReadRenderTargetColorRgba8WithSize(scene_rt);

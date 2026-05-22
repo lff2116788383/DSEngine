@@ -777,6 +777,7 @@ unsigned int VulkanShaderManager::CreateComputeProgramSSBO(
     if (prog.comp_module == VK_NULL_HANDLE) return 0;
     prog.uses_ssbo_bindings = true;
     prog.push_constant_size = push_constant_bytes;
+    prog.ssbo_binding_count = ssbo_binding_count;
 
     // Descriptor set layout: N SSBO bindings (binding 0..N-1)
     std::vector<VkDescriptorSetLayoutBinding> bindings(ssbo_binding_count);
