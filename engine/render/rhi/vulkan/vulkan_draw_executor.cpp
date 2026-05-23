@@ -288,6 +288,63 @@ void VulkanDrawExecutor::InitGeometryBuffers(
         WriteToBuffer(device, dummy_ssbo_buffer_mem_, 0, sizeof(zeros), zeros);
     }
 
+    // --- Dummy 3D 纹理（1x1x1，用于 sampler3D 占位，如后处理 LUT）---
+    {
+        VkImageCreateInfo img_ci{};
+        img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        img_ci.imageType = VK_IMAGE_TYPE_3D;
+        img_ci.format = VK_FORMAT_R8G8B8A8_UNORM;
+        img_ci.extent = {1, 1, 1};
+        img_ci.mipLevels = 1;
+        img_ci.arrayLayers = 1;
+        img_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+        img_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+        img_ci.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        img_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        if (vkCreateImage(device, &img_ci, nullptr, &dummy_3d_image_) == VK_SUCCESS) {
+            VkMemoryRequirements mem_req;
+            vkGetImageMemoryRequirements(device, dummy_3d_image_, &mem_req);
+            VkMemoryAllocateInfo alloc_info{};
+            alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            alloc_info.allocationSize = mem_req.size;
+            VkPhysicalDeviceMemoryProperties mem_props;
+            vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+            for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+                if ((mem_req.memoryTypeBits & (1u << i)) &&
+                    (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+                    alloc_info.memoryTypeIndex = i;
+                    break;
+                }
+            }
+            if (vkAllocateMemory(device, &alloc_info, nullptr, &dummy_3d_image_mem_) == VK_SUCCESS) {
+                vkBindImageMemory(device, dummy_3d_image_, dummy_3d_image_mem_, 0);
+                // 转换到 SHADER_READ_ONLY_OPTIMAL
+                VkCommandBuffer cmd = resource_mgr->BeginSingleTimeCommands();
+                VkImageMemoryBarrier barrier{};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = dummy_3d_image_;
+                barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+                resource_mgr->EndSingleTimeCommands(cmd);
+                // 创建 3D image view
+                VkImageViewCreateInfo view_ci{};
+                view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                view_ci.image = dummy_3d_image_;
+                view_ci.viewType = VK_IMAGE_VIEW_TYPE_3D;
+                view_ci.format = VK_FORMAT_R8G8B8A8_UNORM;
+                view_ci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                vkCreateImageView(device, &view_ci, nullptr, &dummy_3d_image_view_);
+            }
+        }
+    }
+
     DEBUG_LOG_INFO("VulkanDrawExecutor geometry buffers + UBO buffers initialized");
 }
 
@@ -327,6 +384,19 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     for (int i = 0; i < MAX_FRAMES; ++i)
         destroy_buffer(light_probe_ubo_[i], light_probe_ubo_mem_[i]);
     destroy_buffer(dummy_ssbo_buffer_, dummy_ssbo_buffer_mem_);
+
+    if (dummy_3d_image_view_ != VK_NULL_HANDLE) {
+        vkDestroyImageView(device, dummy_3d_image_view_, nullptr);
+        dummy_3d_image_view_ = VK_NULL_HANDLE;
+    }
+    if (dummy_3d_image_ != VK_NULL_HANDLE) {
+        vkDestroyImage(device, dummy_3d_image_, nullptr);
+        dummy_3d_image_ = VK_NULL_HANDLE;
+    }
+    if (dummy_3d_image_mem_ != VK_NULL_HANDLE) {
+        vkFreeMemory(device, dummy_3d_image_mem_, nullptr);
+        dummy_3d_image_mem_ = VK_NULL_HANDLE;
+    }
 
     if (white_texture_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_texture_handle_);
@@ -1327,7 +1397,12 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
             if (!binding_exists) continue;
             VkDescriptorImageInfo& ei = extra_imgs[i];
             ei.sampler     = resource_mgr.default_sampler();
-            ei.imageView   = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
+            // binding 5 在后处理 shader 中是 sampler3D (u_lut)，需要 3D image view
+            if (binding == 5 && dummy_3d_image_view_ != VK_NULL_HANDLE) {
+                ei.imageView = dummy_3d_image_view_;
+            } else {
+                ei.imageView = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
+            }
             ei.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             if (tex_handle != 0) {

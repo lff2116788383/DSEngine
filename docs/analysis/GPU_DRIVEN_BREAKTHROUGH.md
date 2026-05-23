@@ -500,23 +500,21 @@ UE5 的解决方案：双路径——静态环境走 Nanite（受限材质），
 | **当前影响** | 已通过 `modules.empty()` 条件规避 |
 | **建议修复** | 实现 per-draw material UBO offset（类似 per-item 路径的 `cur_material_offset` 累积机制） |
 
-#### 遗留 3：Vulkan LUT sampler3D 绑定 2D image view
+#### ~~遗留 3：Vulkan LUT sampler3D 绑定 2D image view~~ ✅ 已修复 (2026-05-23)
 
 | 维度 | 说明 |
 |:-----|:-----|
 | **位置** | tonemapping / bloom_composite / color_grading shader 的 `set=2, binding=5` |
-| **问题** | shader 声明 `uniform sampler3D u_lut`，但 descriptor 绑定的是 `VK_IMAGE_VIEW_TYPE_2D`。验证层每帧报警：`VkImageViewType is VK_IMAGE_VIEW_TYPE_2D but the OpTypeImage has (Dim = 3D)` |
-| **当前影响** | `u_lut_enabled=0` 时 LUT 采样被跳过，不影响渲染正确性。但如果启用 LUT 色彩分级，会采样到垃圾数据 |
-| **建议修复** | 创建 3D image view 绑定到 `u_lut`，或在无 LUT 纹理时创建 1x1x1 的 dummy 3D texture |
+| **问题** | shader 声明 `uniform sampler3D u_lut`，但 descriptor 绑定的是 `VK_IMAGE_VIEW_TYPE_2D`。验证层每帧报警 |
+| **修复** | 创建 1x1x1 dummy 3D texture (`VK_IMAGE_VIEW_TYPE_3D`)，后处理 binding 5 使用 3D image view 占位 |
 
-#### 遗留 4：`vkResetDescriptorPool` 同步警告
+#### ~~遗留 4：`vkResetDescriptorPool` 同步警告~~ ✅ 已修复 (2026-05-23)
 
 | 维度 | 说明 |
 |:-----|:-----|
-| **位置** | `vulkan_draw_executor.cpp` 帧间 descriptor pool reset |
-| **问题** | `vkResetDescriptorPool()` 在前一帧的 command buffer 仍在 GPU 执行时被调用。验证层报警：`descriptorPool can't be called on VkDescriptorPool that is currently in use by VkCommandBuffer` |
-| **当前影响** | 多数情况下因双缓冲不影响正确性，但在极端情况下可能导致 descriptor 数据竞争 |
-| **建议修复** | 为每个 in-flight 帧维护独立的 descriptor pool，在帧同步栅栏（fence）等待完成后再 reset |
+| **位置** | `vulkan_resource_manager.cpp` descriptor pool 管理 |
+| **问题** | 单一 descriptor pool 在帧间 reset 时，另一帧的 command buffer 可能仍在 GPU 执行 |
+| **修复** | 改为 per-frame descriptor pool（`kMaxFramesInFlight=2`），fence 等待后仅 reset 当前帧的 pool |
 
 ### 9.3 架构设计备忘
 

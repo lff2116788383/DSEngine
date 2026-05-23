@@ -237,8 +237,8 @@ void VulkanRhiDevice::BeginFrame() {
     draw_executor_.BeginFrame();
     // 获取下一帧 swapchain image（内部等待 fence，确保 GPU 完成上一帧）
     context_.AcquireNextImage();
-    // fence 已完成后，安全重置 descriptor pool
-    resource_mgr_.ResetDescriptorPool();
+    // fence 已完成后，仅重置当前帧槽位的 descriptor pool（另一帧可能仍在 GPU 执行）
+    resource_mgr_.ResetDescriptorPool(context_.current_frame());
 }
 
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {

@@ -152,9 +152,11 @@ void VulkanResourceManager::Shutdown() {
         command_pool_ = VK_NULL_HANDLE;
     }
 
-    if (descriptor_pool_ != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
-        descriptor_pool_ = VK_NULL_HANDLE;
+    for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+        if (descriptor_pools_[i] != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(device_, descriptor_pools_[i], nullptr);
+            descriptor_pools_[i] = VK_NULL_HANDLE;
+        }
     }
 
     initialized_ = false;
@@ -1572,40 +1574,42 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 // ============================================================
 
 bool VulkanResourceManager::CreateDescriptorPool() {
-    // 池大小：覆盖所有描述符类型，每帧最大用量估算
     std::vector<VkDescriptorPoolSize> pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},  // PerFrame/PerScene/PerMaterial UBO
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192}, // 纹理采样器
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2048}, // PointLight/SpotLight SSBO
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},   // Bloom Compute UAV
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2048},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},
     };
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 4096;  // 每帧最多 4096 个 DescriptorSet
+    pool_info.maxSets = 4096;
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
 
-    if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &descriptor_pool_) != VK_SUCCESS) {
-        DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool");
-        return false;
+    for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+        if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &descriptor_pools_[i]) != VK_SUCCESS) {
+            DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool for frame {}", i);
+            return false;
+        }
     }
 
-    DEBUG_LOG_INFO("[Vulkan] Descriptor pool created (maxSets=4096)");
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=4096 each)", kMaxFramesInFlight);
     return true;
 }
 
-void VulkanResourceManager::ResetDescriptorPool() {
-    if (descriptor_pool_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
-        vkResetDescriptorPool(device_, descriptor_pool_, 0);
+void VulkanResourceManager::ResetDescriptorPool(uint32_t frame_index) {
+    current_pool_index_ = frame_index % kMaxFramesInFlight;
+    if (descriptor_pools_[current_pool_index_] != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
+        vkResetDescriptorPool(device_, descriptor_pools_[current_pool_index_], 0);
     }
 }
 
 VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayout layout) {
     VkDescriptorSetAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = descriptor_pool_;
+    alloc_info.descriptorPool = descriptor_pools_[current_pool_index_];
     alloc_info.descriptorSetCount = 1;
     alloc_info.pSetLayouts = &layout;
 

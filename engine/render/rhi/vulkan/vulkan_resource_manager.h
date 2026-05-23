@@ -146,15 +146,15 @@ public:
     VkSampler shadow_comparison_sampler() const { return shadow_comparison_sampler_; }
 
     // --- Descriptor Pool & Set ---
-    VkDescriptorPool descriptor_pool() const { return descriptor_pool_; }
+    VkDescriptorPool descriptor_pool() const { return descriptor_pools_[current_pool_index_]; }
 
-    /// 从全局 DescriptorPool 分配 DescriptorSet
+    /// 从当前帧的 DescriptorPool 分配 DescriptorSet
     /// @param layout 需要匹配的 VkDescriptorSetLayout
     /// @return 新分配的 VkDescriptorSet（VK_NULL_HANDLE 表示失败）
     VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout layout);
 
-    /// 重置 DescriptorPool（每帧开始时调用，释放所有已分配的 DescriptorSet）
-    void ResetDescriptorPool();
+    /// 重置指定帧的 DescriptorPool（fence 等待后调用，仅释放该帧的 DescriptorSet）
+    void ResetDescriptorPool(uint32_t frame_index);
 
     /// 创建 DescriptorPool（在 Init 中自动调用）
     bool CreateDescriptorPool();
@@ -192,8 +192,10 @@ private:
     // 阴影比较采样器（compareEnable=VK_TRUE，compareOp=LESS_OR_EQUAL，供 sampler2DShadow PCF）
     VkSampler shadow_comparison_sampler_ = VK_NULL_HANDLE;
 
-    // Descriptor Pool
-    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
+    // Descriptor Pool（per-frame，避免帧间同步冲突）
+    static constexpr uint32_t kMaxFramesInFlight = 2;
+    VkDescriptorPool descriptor_pools_[kMaxFramesInFlight] = {};
+    uint32_t current_pool_index_ = 0;
 
     // 资源存储
     std::unordered_map<unsigned int, VulkanTexture> textures_;

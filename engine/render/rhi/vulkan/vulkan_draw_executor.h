@@ -332,6 +332,11 @@ private:
     VkBuffer       dummy_ssbo_buffer_ = VK_NULL_HANDLE;
     VkDeviceMemory dummy_ssbo_buffer_mem_ = VK_NULL_HANDLE;
 
+    // Dummy 3D 纹理（1x1x1，用于 sampler3D 占位，如 LUT）
+    VkImage        dummy_3d_image_ = VK_NULL_HANDLE;
+    VkDeviceMemory dummy_3d_image_mem_ = VK_NULL_HANDLE;
+    VkImageView    dummy_3d_image_view_ = VK_NULL_HANDLE;
+
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;
 
