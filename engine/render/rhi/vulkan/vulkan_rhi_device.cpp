@@ -133,7 +133,11 @@ VulkanRhiDevice::VulkanRhiDevice() = default;
 VulkanRhiDevice::~VulkanRhiDevice() = default;
 
 bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
-    return InitVulkan(window_handle, width, height, true); // TODO: validation ON for debugging
+#ifdef NDEBUG
+    return InitVulkan(window_handle, width, height, false);
+#else
+    return InitVulkan(window_handle, width, height, true);
+#endif
 }
 
 void VulkanRhiDevice::EnsureInitialized() {

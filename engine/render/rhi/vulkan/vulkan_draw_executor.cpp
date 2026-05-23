@@ -145,7 +145,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     // --- 3D 网格 VBO/IBO ---
     // 多 pass 每帧累积写入，需要足够大的缓冲区
     const VkDeviceSize mesh_vbo_size = 64 * 1024 * 1024;  // 64 MB
-    const VkDeviceSize mesh_ibo_size = 8 * 1024 * 1024;   //  8 MB
+    const VkDeviceSize mesh_ibo_size = 16 * 1024 * 1024;  // 16 MB
     mesh_vbo_capacity_ = mesh_vbo_size;
     mesh_ibo_capacity_ = mesh_ibo_size;
 
@@ -1366,24 +1366,38 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         fixups.push_back({writes.size() - 1, base});
     };
 
+    // 反射辅助: 检查 (set, binding) 是否存在于着色器中
+    auto has_binding = [&](uint32_t s, uint32_t b) -> bool {
+        for (const auto& rb : program->reflection.bindings)
+            if (rb.set == s && rb.binding == b) return true;
+        return false;
+    };
+
     // Set 0: binding 0 (PerFrame UBO)
-    if (set_count > 0) push_ubo(0, 0);
+    if (set_count > 0 && has_binding(0, 0)) push_ubo(0, 0);
 
     // Set 1: binding 0 (PerScene UBO), 1-2 (Point/SpotLightSSBO), 3-4 (ClusterInfo/LightIndex SSBO), 5 (LightProbeData UBO)
-    if (set_count > 1) { push_ubo(1, 0); push_ssbo2(1, 1); push_ssbo2(1, 2); push_ssbo2(1, 3); push_ssbo2(1, 4); push_ubo(1, 5); }
+    if (set_count > 1) {
+        if (has_binding(1, 0)) push_ubo(1, 0);
+        if (has_binding(1, 1)) push_ssbo2(1, 1);
+        if (has_binding(1, 2)) push_ssbo2(1, 2);
+        if (has_binding(1, 3)) push_ssbo2(1, 3);
+        if (has_binding(1, 4)) push_ssbo2(1, 4);
+        if (has_binding(1, 5)) push_ubo(1, 5);
+    }
 
     // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-9 (bones/morph UBO)
     if (set_count > 2) {
-        push_ubo(2, 0);
-        for (uint32_t b = 1; b <= 5; ++b) push_img(2, b, 1);
-        push_img(2, 6, 3);
-        push_img(2, 7, 4);
-        push_ubo(2, 8);
-        push_ubo(2, 9);
+        if (has_binding(2, 0)) push_ubo(2, 0);
+        for (uint32_t b = 1; b <= 5; ++b) { if (has_binding(2, b)) push_img(2, b, 1); }
+        if (has_binding(2, 6)) push_img(2, 6, 3);
+        if (has_binding(2, 7)) push_img(2, 7, 4);
+        if (has_binding(2, 8)) push_ubo(2, 8);
+        if (has_binding(2, 9)) push_ubo(2, 9);
     }
 
     // Set 3: binding 0 (point_shadow_maps[4])
-    if (set_count > 3) push_img(3, 0, 4);
+    if (set_count > 3 && has_binding(3, 0)) push_img(3, 0, 4);
 
     // 修正 image 指针
     for (auto& [wi, base] : fixups) writes[wi].pImageInfo = &img_pool[base];
