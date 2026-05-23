@@ -9,6 +9,8 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/audio.h"
+#include "engine/ecs/script.h"
 #include "editor_scene_io.h"
 #include "editor_shared_components.h"
 #include "editor_toolbar.h"
@@ -89,10 +91,13 @@ void DuplicateSelectedEntity(EditorContext& context) {
     copy_component(dse::Camera3DComponent{});
     copy_component(dse::DirectionalLight3DComponent{});
     copy_component(dse::PointLightComponent{});
+    copy_component(dse::SpotLightComponent{});
     copy_component(dse::MeshRendererComponent{});
     copy_component(dse::Animator3DComponent{});
     copy_component(dse::FreeCameraControllerComponent{});
     copy_component(dse::TerrainComponent{});
+    copy_component(ScriptComponent{});
+    copy_component(dse::SubSceneComponent{});
     copy_runtime_reset_component(dse::RigidBody3DComponent{}, [](dse::RigidBody3DComponent& rigidbody) {
         rigidbody.runtime_body = nullptr;
     });
@@ -102,6 +107,18 @@ void DuplicateSelectedEntity(EditorContext& context) {
     copy_runtime_reset_component(dse::SphereCollider3DComponent{}, [](dse::SphereCollider3DComponent& collider) {
         collider.runtime_shape = nullptr;
     });
+    copy_runtime_reset_component(dse::CapsuleCollider3DComponent{}, [](dse::CapsuleCollider3DComponent& collider) {
+        collider.runtime_shape = nullptr;
+    });
+    copy_runtime_reset_component(dse::MeshCollider3DComponent{}, [](dse::MeshCollider3DComponent& collider) {
+        collider.runtime_shape = nullptr;
+    });
+    copy_runtime_reset_component(AudioSourceComponent{}, [](AudioSourceComponent& audio) {
+        audio.runtime_handle = 0;
+        audio.is_playing = false;
+        audio.restart_requested = false;
+    });
+    copy_component(AudioListenerComponent{});
     copy_runtime_reset_component(dse::ParticleSystem3DComponent{}, [](dse::ParticleSystem3DComponent& ps) {
         ps.particles.clear();
         ps.emission_accumulator = 0.0f;
@@ -370,6 +387,67 @@ void CreateEntity3DPointLight(EditorContext& ctx) {
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Point Light entity");
+}
+
+void CreateEntity3DSpotLight(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Spot Light");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.position = glm::vec3(0.0f, 3.0f, 0.0f);
+    ctx.registry.emplace<dse::SpotLightComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Spot Light entity");
+}
+
+void CreateEntity3DAudioSource(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Audio Source");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<AudioSourceComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Audio Source entity");
+}
+
+void CreateEntity3DAudioListener(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Audio Listener");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<AudioListenerComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Audio Listener entity");
+}
+
+void CreateEntity3DPhysicsBox(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Physics Box");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.position = glm::vec3(0.0f, 5.0f, 0.0f);
+    auto& mr = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
+    mr.mesh_path = "builtin:cube";
+    mr.shader_variant = "MESH_LIT";
+    ctx.registry.emplace<dse::RigidBody3DComponent>(ent);
+    ctx.registry.emplace<dse::BoxCollider3DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Physics Box entity");
+}
+
+void CreateEntity3DPhysicsSphere(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Physics Sphere");
+    auto& transform = ctx.registry.emplace<TransformComponent>(ent);
+    transform.position = glm::vec3(0.0f, 5.0f, 0.0f);
+    auto& mr = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
+    mr.mesh_path = "builtin:sphere";
+    mr.shader_variant = "MESH_LIT";
+    ctx.registry.emplace<dse::RigidBody3DComponent>(ent);
+    ctx.registry.emplace<dse::SphereCollider3DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Physics Sphere entity");
 }
 
 void CreateEntity2DSprite(EditorContext& ctx) {

@@ -1,0 +1,12 @@
+# DSEngine AI Chat Dependencies
+# Install with: pip install -r requirements_ai.txt
+
+# OpenAI API client
+openai>=1.0.0
+
+# MCP SDK for tool integration
+mcp>=0.1.0
+
+# Async HTTP client (for proxy support)
+httpx>=0.25.0
+

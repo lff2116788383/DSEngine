@@ -1970,7 +1970,8 @@ void VulkanDrawExecutor::DrawSpriteBatch(
         },
         context_->swapchain_extent(),
         current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        false);  // wireframe not applicable for sprites
 
     if (sprite_pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor: failed to create sprite pipeline");
@@ -2113,7 +2114,8 @@ void VulkanDrawExecutor::DrawMeshBatch(
         pipeline_mgr.active_pipeline_state(),
         pbr_program, active_rp, mesh_bindings, mesh_attrs,
         context_->swapchain_extent(), current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        global_state_.wireframe_mode);
 
     // 双面材质需要无剔除管线（与 OpenGL 的 material_double_sided 行为对齐）
     if (nocull_pipeline_state_ == 0) {
@@ -2129,7 +2131,8 @@ void VulkanDrawExecutor::DrawMeshBatch(
         nocull_pipeline_state_,
         pbr_program, active_rp, mesh_bindings, mesh_attrs,
         context_->swapchain_extent(), current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        global_state_.wireframe_mode);
 
     if (vk_pipeline_cull == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor: failed to get/create VkPipeline for mesh draw");
@@ -2321,7 +2324,8 @@ void VulkanDrawExecutor::DrawSkybox(
         { {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0} },
         context_->swapchain_extent(),
         current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        false);  // wireframe not applicable for skybox
 
     if (skybox_pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor: failed to create skybox pipeline");
@@ -2459,7 +2463,8 @@ void VulkanDrawExecutor::DrawPostProcess(
             },
             context_->swapchain_extent(),
             current_msaa_samples_,
-            current_color_attachment_count_);
+            current_color_attachment_count_,
+            false);  // wireframe not applicable for postprocess
     }
 
     if (pp_pipeline != VK_NULL_HANDLE) {
@@ -2721,7 +2726,8 @@ void VulkanDrawExecutor::DrawParticles3D(
         },
         context_->swapchain_extent(),
         current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        false);  // wireframe not applicable for particles
 
     if (particle_pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor: failed to create particle pipeline");
@@ -3165,7 +3171,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
         pipeline_mgr.active_pipeline_state(),
         pbr_program, active_rp, mesh_bindings, mesh_attrs,
         context_->swapchain_extent(), current_msaa_samples_,
-        current_color_attachment_count_);
+        current_color_attachment_count_,
+        global_state_.wireframe_mode);
     if (vk_pipeline == VK_NULL_HANDLE) return;
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);

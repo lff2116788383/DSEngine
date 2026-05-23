@@ -30,6 +30,7 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/transform.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -90,11 +91,11 @@
 #include "editor_animation_timeline.h"
 #include "editor_navmesh_panel.h"
 #include "editor_lighting_gizmos.h"
-#include "editor_git_panel.h"
 #include "editor_shader_graph.h"
 #include "editor_multi_viewport.h"
 #include "editor_scene_view_mode.h"
 #include "editor_anim_state_machine.h"
+#include "editor_ai_config.h"
 
 
 
@@ -232,6 +233,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     if (headless) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    } else {
+        glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
@@ -272,7 +275,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Layout version check: if the stored version doesn't match, delete the old ini
     // so BuildDefaultDockLayout rebuilds from scratch on next launch.
     {
-        static constexpr int kLayoutVersion = 3;
+        static constexpr int kLayoutVersion = 4;
         const auto ini_path = GetEditorBinPath() / "editor_layout.ini";
         const auto ver_path = GetEditorBinPath() / "editor_layout.ver";
         bool needs_reset = true;
@@ -295,8 +298,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // NOTE: Multi-viewport disabled due to CRT heap assertions on Windows.
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     static std::string imgui_ini_path = (GetEditorBinPath() / "editor_layout.ini").string();
     io.IniFilename = imgui_ini_path.c_str();
@@ -321,8 +323,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     // Initialize DSEngine
     dse::runtime::EngineRunConfig engine_config;
-    engine_config.window_width = 1280;
-    engine_config.window_height = 720;
+    int fb_w = 1280, fb_h = 720;
+    glfwGetFramebufferSize(window_, &fb_w, &fb_h);
+    engine_config.window_width = fb_w;
+    engine_config.window_height = fb_h;
     engine_config.window_title = "DSEngine Editor";
     engine_config.business_mode = BusinessMode::Lua;
     engine_config.enable_editor = true;
@@ -353,6 +357,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
     current_gizmo_operation_ = editor_settings.default_gizmo_operation;
     current_gizmo_mode_ = editor_settings.default_gizmo_mode;
     dse::editor::SetEditorLocale(editor_settings.editor_ui_locale);
+
+    // Load AI configuration
+    dse::editor::AIConfigManager::Instance().Load("bin/editor_ai_config.json");
 
     // 尝试自动打开上次项目
     if (!editor_settings.last_project_path.empty()) {
@@ -400,9 +407,78 @@ bool EditorApp::Init(int argc, char* argv[]) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
 
-    // 初始化 AI Chat Panel bridge 路径
+    // 初始化 AI Chat Panel bridge 路径 + 历史记录路径
     chat_panel_.SetBridgePath(
         (GetProjectRootPath() / "tools" / "ai_chat_bridge.py").string());
+    chat_panel_.LoadHistory("bin/ai_chat_history.json");
+
+    // 注册 @mention 上下文解析器
+    chat_panel_.SetMentionResolver([this](const std::string& token) -> std::string {
+        if (!engine_instance_ || !engine_instance_->pipeline()) return {};
+        entt::registry& registry = engine_instance_->pipeline()->world().registry();
+
+        // @scene — 当前场景基本信息
+        if (token == "@scene") {
+            const std::string scene_name = dse::editor::SceneTabManager::Get().GetActiveDisplayName();
+            int entity_count = 0;
+            for (auto e : registry.storage<entt::entity>())
+                if (registry.valid(e)) ++entity_count;
+            return "[场景上下文]\n场景名: " + scene_name + "\n实体数量: " + std::to_string(entity_count) + "\n";
+        }
+
+        // @entity / @selection — 当前选中实体详情
+        if (token == "@entity" || token == "@selection") {
+            if (selected_entity_ == entt::null || !registry.valid(selected_entity_))
+                return "[选中实体]\n（无选中实体）\n";
+
+            std::string name = "Entity " + std::to_string(static_cast<uint32_t>(selected_entity_));
+            if (registry.all_of<dse::editor::EditorNameComponent>(selected_entity_))
+                name = registry.get<dse::editor::EditorNameComponent>(selected_entity_).name;
+
+            std::string info = "[选中实体]\n名称: " + name + "\n组件:\n";
+            if (registry.all_of<TransformComponent>(selected_entity_)) {
+                const auto& t = registry.get<TransformComponent>(selected_entity_);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf), "  Transform: pos=(%.2f,%.2f,%.2f) scale=(%.2f,%.2f,%.2f)\n",
+                    t.position.x, t.position.y, t.position.z, t.scale.x, t.scale.y, t.scale.z);
+                info += buf;
+            }
+            if (registry.all_of<dse::MeshRendererComponent>(selected_entity_)) {
+                const auto& m = registry.get<dse::MeshRendererComponent>(selected_entity_);
+                info += "  MeshRenderer: mesh=" + m.mesh_path + "\n";
+            }
+            if (registry.all_of<dse::DirectionalLight3DComponent>(selected_entity_)) info += "  DirectionalLight3D\n";
+            if (registry.all_of<dse::PointLightComponent>(selected_entity_))         info += "  PointLight\n";
+            if (registry.all_of<dse::SpotLightComponent>(selected_entity_))          info += "  SpotLight\n";
+            if (registry.all_of<dse::Camera3DComponent>(selected_entity_))           info += "  Camera3D\n";
+            return info;
+        }
+
+        // @script:relative/path — 脚本文件内容（最多 200 行）
+        if (token.rfind("@script:", 0) == 0) {
+            std::string rel_path = token.substr(8);
+            std::filesystem::path project_root = GetProjectRootPath();
+            std::filesystem::path full = project_root / rel_path;
+            if (!std::filesystem::exists(full))
+                full = project_root / "samples" / "lua" / rel_path;
+            // Fix E: 路径穿越防护 — canonical 路径必须以 project_root 开头
+            std::error_code ec;
+            auto canonical = std::filesystem::weakly_canonical(full, ec);
+            auto root_canonical = std::filesystem::weakly_canonical(project_root, ec);
+            auto canonical_str = canonical.string();
+            auto root_str = root_canonical.string();
+            if (canonical_str.rfind(root_str, 0) != 0)
+                return "[脚本: " + rel_path + "]\n（路径不在项目目录内）\n";
+            std::ifstream f(canonical);
+            if (!f) return "[脚本: " + rel_path + "]\n（文件不存在）\n";
+            std::string content, line;
+            int lines = 0;
+            while (std::getline(f, line) && lines < 200) { content += line + "\n"; ++lines; }
+            return "[脚本: " + rel_path + "]\n```lua\n" + content + "```\n";
+        }
+
+        return {}; // 未识别的 token
+    });
 
     // 扫描插件目录
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
@@ -714,12 +790,41 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     // 无项目打开时显示 Project Hub
     if (!dse::editor::ProjectManager::Get().HasOpenProject()) {
         dse::editor::DrawProjectHub();
-        // Hub 中可能刚打开了项目，此时同步 data root
+        // Hub 中可能刚打开了项目，此时同步 data root 并加载默认场景
         if (dse::editor::ProjectManager::Get().HasOpenProject()) {
-            dse::editor::ProjectManager::Get().ApplyDataRoot();
+            auto& mgr = dse::editor::ProjectManager::Get();
+            mgr.ApplyDataRoot();
             engine_instance_->asset_manager()->ConfigureDataRoot(
-                dse::editor::ProjectManager::Get().GetAssetDir().string());
+                mgr.GetAssetDir().string());
             dse::editor::AssetDatabase::Get().Refresh();
+
+            // 加载项目默认场景
+            World& world = engine_instance_->pipeline()->world();
+            auto& registry = world.registry();
+            registry.clear();
+            selected_entity_ = entt::null;
+
+            std::string default_scene;
+            const auto& desc = mgr.GetDescriptor();
+            if (!desc.default_scene.empty()) {
+                std::filesystem::path scene_file = mgr.GetProjectRoot() / desc.default_scene;
+                if (std::filesystem::exists(scene_file))
+                    default_scene = scene_file.string();
+            }
+            if (default_scene.empty()) {
+                std::filesystem::path fallback = mgr.GetSceneDir() / "main.json";
+                if (std::filesystem::exists(fallback))
+                    default_scene = fallback.string();
+            }
+
+            if (!default_scene.empty()) {
+                LoadScene(registry, default_scene);
+                dse::editor::SetCurrentScenePath(default_scene);
+                dse::editor::SceneTabManager::Get().Init(default_scene);
+            } else {
+                dse::editor::SetCurrentScenePath("");
+                dse::editor::SceneTabManager::Get().Init("Untitled");
+            }
         }
         return;
     }
@@ -796,13 +901,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawPreferencesPanel(&show_preferences_);
     dse::editor::DrawUndoHistoryPanel(&show_undo_history_);
+    
+    // AI Configuration window
+    dse::editor::AIConfigManager::Instance().DrawConfigWindow();
 
     // New panels
     if (show_asset_browser_)        dse::editor::DrawAssetBrowserPanel();
     if (show_animation_timeline_)   dse::editor::DrawAnimationTimelinePanel(ctx);
     if (show_navmesh_)              dse::editor::DrawNavMeshPanel(ctx);
-    if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel();
-    if (show_git_)                  dse::editor::DrawGitPanel();
+    if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel(ctx);
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
 

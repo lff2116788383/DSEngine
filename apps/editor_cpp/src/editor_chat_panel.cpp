@@ -2,6 +2,7 @@
 #include "editor_chat_protocol.h"
 #include "editor_control_server.h"
 #include "editor_console_panel.h"
+#include "editor_ai_config.h"
 
 #include <iostream>
 #include <sstream>
@@ -42,6 +43,58 @@ void ChatPanel::SetBridgePath(const std::string& path) {
     bridge_path_ = path;
 }
 
+void ChatPanel::SetMentionResolver(std::function<std::string(const std::string&)> resolver) {
+    mention_resolver_ = std::move(resolver);
+}
+
+// ─── @mention 解析：提取 @token 并拼接上下文前缀 ────────────────────────────
+static std::string ResolveMentions(const std::string& text,
+                                    const std::function<std::string(const std::string&)>& resolver) {
+    if (!resolver) return {};
+
+    std::string context_block;
+    std::unordered_set<std::string> seen; // 去重：同一 token 只注入一次
+    size_t pos = 0;
+    while ((pos = text.find('@', pos)) != std::string::npos) {
+        ++pos;
+        size_t end = pos;
+        while (end < text.size() && (std::isalnum((unsigned char)text[end]) || text[end] == '_' || text[end] == ':' || text[end] == '/'))
+            ++end;
+        if (end > pos) {
+            std::string token = text.substr(pos - 1, end - pos + 1); // include '@'
+            if (seen.insert(token).second) { // only resolve each token once
+                std::string resolved = resolver(token);
+                if (!resolved.empty()) {
+                    context_block += resolved;
+                    if (context_block.back() != '\n') context_block += '\n';
+                }
+            }
+        }
+        pos = end;
+    }
+    return context_block;
+}
+
+void ChatPanel::SetCurrentAgent(const std::string& agent_id) {
+    current_agent_id_ = agent_id;
+}
+
+void ChatPanel::ClearHistory() {
+    messages_.clear();
+    messages_.push_back({ChatRole::System,
+        "Conversation cleared."});
+    // 同步通知 bridge 清除其 _conversation_history
+    if (bridge_running_) {
+        std::string line = BuildClearHistoryMessage();
+#ifdef _WIN32
+        DWORD written;
+        WriteFile(stdin_write_, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
+#else
+        write(stdin_fd_, line.c_str(), line.size());
+#endif
+    }
+}
+
 // ─── Bridge subprocess management ───────────────────────────────────────────
 
 void ChatPanel::StartBridge() {
@@ -51,6 +104,35 @@ void ChatPanel::StartBridge() {
         messages_.push_back({ChatRole::System,
             "Error: ai_chat_bridge.py not found. Expected at: " + bridge_path_});
         return;
+    }
+
+    // Apply AIConfigManager settings as environment variables
+    {
+        auto& cfg = AIConfigManager::Instance().GetConfig();
+        if (!cfg.providers.empty()) {
+            const auto& p = cfg.providers[
+                std::clamp(cfg.current_provider_index, 0, (int)cfg.providers.size() - 1)];
+            if (!p.api_key.empty())
+                SetEnvironmentVariableA("OPENAI_API_KEY", p.api_key.c_str());
+            if (!p.base_url.empty())
+                SetEnvironmentVariableA("OPENAI_BASE_URL", p.base_url.c_str());
+            if (!p.model.empty())
+                SetEnvironmentVariableA("OPENAI_MODEL", p.model.c_str());
+            if (!p.proxy_url.empty())
+                SetEnvironmentVariableA("HTTP_PROXY", p.proxy_url.c_str());
+            // temperature / max_tokens 传给 bridge（Fix F）
+            SetEnvironmentVariableA("OPENAI_TEMPERATURE",
+                std::to_string(p.temperature).c_str());
+            SetEnvironmentVariableA("OPENAI_MAX_TOKENS",
+                std::to_string(p.max_tokens).c_str());
+            SetEnvironmentVariableA("OPENAI_TIMEOUT_MS",
+                std::to_string(p.timeout_ms).c_str());
+            if (!p.image_model.empty())
+                SetEnvironmentVariableA("OPENAI_IMAGE_MODEL", p.image_model.c_str());
+        }
+        // 使用配置的 default_agent 初始化（Fix G）
+        if (!cfg.default_agent.empty())
+            current_agent_id_ = cfg.default_agent;
     }
 
 #ifdef _WIN32
@@ -132,6 +214,7 @@ void ChatPanel::StartBridge() {
 #endif
 
     bridge_running_ = true;
+    bridge_crashed_ = false;
 
     // Reader thread: reads lines from subprocess stdout
     reader_thread_ = std::thread([this]() {
@@ -142,6 +225,13 @@ void ChatPanel::StartBridge() {
             DWORD bytes_read = 0;
             BOOL ok = ReadFile(stdout_read_, &ch, 1, &bytes_read, nullptr);
             if (!ok || bytes_read == 0) {
+                if (bridge_running_) {
+                    // Unexpected exit: flag crash so UI can show reconnect prompt
+                    bridge_crashed_ = true;
+                    std::lock_guard<std::mutex> lock(output_mutex_);
+                    pending_output_.push_back(
+                        R"({"type":"status","message":"[Bridge] 进程意外退出，请点击重连。"})");
+                }
                 bridge_running_ = false;
                 break;
             }
@@ -151,6 +241,12 @@ void ChatPanel::StartBridge() {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
+                }
+                if (bridge_running_) {
+                    bridge_crashed_ = true;
+                    std::lock_guard<std::mutex> lock(output_mutex_);
+                    pending_output_.push_back(
+                        R"({"type":"status","message":"[Bridge] 进程意外退出，请点击重连。"})");
                 }
                 bridge_running_ = false;
                 break;
@@ -207,18 +303,8 @@ void ChatPanel::SendToBridge(const std::string& text) {
         if (!bridge_running_) return;
     }
 
-    // Protocol: send JSON line to subprocess stdin
-    // {"type": "user_message", "content": "..."}
-    rapidjson::Document doc(rapidjson::kObjectType);
-    auto& alloc = doc.GetAllocator();
-    doc.AddMember("type", "user_message", alloc);
-    doc.AddMember("content", rapidjson::Value(text.c_str(), alloc), alloc);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    doc.Accept(writer);
-
-    std::string line = std::string(buf.GetString()) + "\n";
+    // Use the protocol helper with agent_id
+    std::string line = BuildUserMessage(text, current_agent_id_);
 
 #ifdef _WIN32
     DWORD written;
@@ -228,6 +314,19 @@ void ChatPanel::SendToBridge(const std::string& text) {
 #endif
 
     waiting_for_response_ = true;
+}
+
+void ChatPanel::CancelGeneration() {
+    if (!bridge_running_ || !waiting_for_response_) return;
+
+    std::string line = BuildCancelMessage();
+
+#ifdef _WIN32
+    DWORD written;
+    WriteFile(stdin_write_, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
+#else
+    write(stdin_fd_, line.c_str(), line.size());
+#endif
 }
 
 // ─── Execute tool call locally ──────────────────────────────────────────────
@@ -298,10 +397,212 @@ void ChatPanel::ExecuteToolCall(const std::string& tool_name, const std::string&
 #endif
 }
 
+// ─── History Persistence ─────────────────────────────────────────────────────
+
+void ChatPanel::SaveHistory(const std::string& path) {
+    if (path.empty() || messages_.empty()) return;
+
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+
+    rapidjson::Document doc(rapidjson::kArrayType);
+    auto& alloc = doc.GetAllocator();
+
+    for (const auto& msg : messages_) {
+        if (msg.role == ChatRole::ToolResult) continue; // skip tool echoes
+        rapidjson::Value obj(rapidjson::kObjectType);
+        const char* role_str =
+            msg.role == ChatRole::User      ? "user"      :
+            msg.role == ChatRole::Assistant ? "assistant" : "system";
+        obj.AddMember("role",     rapidjson::Value(role_str, alloc), alloc);
+        obj.AddMember("content",  rapidjson::Value(msg.content.c_str(), alloc), alloc);
+        obj.AddMember("agent_id", rapidjson::Value(msg.agent_id.c_str(), alloc), alloc);
+        doc.PushBack(obj, alloc);
+    }
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+
+    std::ofstream f(path);
+    if (f) f << buf.GetString();
+}
+
+void ChatPanel::LoadHistory(const std::string& path) {
+    history_path_ = path;
+    if (path.empty() || !std::filesystem::exists(path)) return;
+
+    std::ifstream f(path);
+    if (!f) return;
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+    rapidjson::Document doc;
+    doc.Parse(content.c_str());
+    if (doc.HasParseError() || !doc.IsArray()) return;
+
+    messages_.clear();
+    for (const auto& obj : doc.GetArray()) {
+        if (!obj.IsObject()) continue;
+        std::string role_str  = obj.HasMember("role")     && obj["role"].IsString()     ? obj["role"].GetString()     : "system";
+        std::string content_s = obj.HasMember("content")  && obj["content"].IsString()  ? obj["content"].GetString()  : "";
+        std::string agent_id  = obj.HasMember("agent_id") && obj["agent_id"].IsString() ? obj["agent_id"].GetString() : "";
+
+        ChatRole role = ChatRole::System;
+        if (role_str == "user")      role = ChatRole::User;
+        else if (role_str == "assistant") role = ChatRole::Assistant;
+
+        messages_.push_back({role, content_s, agent_id});
+    }
+    scroll_to_bottom_ = true;
+}
+
+// ─── Markdown Renderer ───────────────────────────────────────────────────────
+
+// Render a single line that may contain inline **bold** and `code` spans.
+static void RenderInline(const std::string& line, const ImVec4& base_color) {
+    const ImVec4 code_color  = ImVec4(1.0f, 0.7f, 0.3f, 1.0f);
+    const ImVec4 bold_color  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    size_t pos = 0;
+    bool first = true;
+    while (pos < line.size()) {
+        // Try to match `code`
+        if (line[pos] == '`') {
+            size_t end = line.find('`', pos + 1);
+            if (end != std::string::npos) {
+                if (!first) ImGui::SameLine(0, 0);
+                ImGui::PushStyleColor(ImGuiCol_Text, code_color);
+                ImGui::TextUnformatted(line.substr(pos + 1, end - pos - 1).c_str());
+                ImGui::PopStyleColor();
+                first = false;
+                pos = end + 1;
+                continue;
+            }
+        }
+        // Try to match **bold**
+        if (pos + 1 < line.size() && line[pos] == '*' && line[pos+1] == '*') {
+            size_t end = line.find("**", pos + 2);
+            if (end != std::string::npos) {
+                if (!first) ImGui::SameLine(0, 0);
+                ImGui::PushStyleColor(ImGuiCol_Text, bold_color);
+                ImGui::TextUnformatted(line.substr(pos + 2, end - pos - 2).c_str());
+                ImGui::PopStyleColor();
+                first = false;
+                pos = end + 2;
+                continue;
+            }
+        }
+        // Accumulate plain text up to next special char
+        size_t next = line.find_first_of("`*", pos);
+        std::string chunk = line.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+        if (!chunk.empty()) {
+            if (!first) ImGui::SameLine(0, 0);
+            ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+            ImGui::TextUnformatted(chunk.c_str());
+            ImGui::PopStyleColor();
+            first = false;
+        }
+        if (next == std::string::npos) break;
+        pos = next;
+        // If we get here the special char didn't form a valid span — emit it literally
+        if (!first) ImGui::SameLine(0, 0);
+        ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+        ImGui::TextUnformatted(line.substr(pos, 1).c_str());
+        ImGui::PopStyleColor();
+        first = false;
+        ++pos;
+    }
+    if (first) {
+        ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+        ImGui::TextUnformatted("");
+        ImGui::PopStyleColor();
+    }
+}
+
+// Render markdown text block. base_color applies to non-special text.
+static void RenderMarkdown(const std::string& text, const ImVec4& base_color) {
+    std::istringstream stream(text);
+    std::string line;
+    bool in_code_block = false;
+
+    while (std::getline(stream, line)) {
+        // Code fence
+        if (line.rfind("```", 0) == 0) {
+            if (!in_code_block) {
+                in_code_block = true;
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+                ImGui::BeginChild(("##cb" + std::to_string(ImGui::GetCursorScreenPos().y)).c_str(),
+                                  ImVec2(ImGui::GetContentRegionAvail().x, 0.0f),
+                                  true, ImGuiWindowFlags_NoScrollbar);
+            } else {
+                in_code_block = false;
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+            }
+            continue;
+        }
+
+        if (in_code_block) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.8f, 0.6f, 1.0f));
+            ImGui::TextUnformatted(line.c_str());
+            ImGui::PopStyleColor();
+            continue;
+        }
+
+        // H1 ## H2 ### H3
+        if (line.rfind("### ", 0) == 0) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.9f, 1.0f, 1.0f));
+            ImGui::TextUnformatted(line.substr(4).c_str());
+            ImGui::PopStyleColor();
+        } else if (line.rfind("## ", 0) == 0) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.95f, 1.0f, 1.0f));
+            ImGui::Separator();
+            ImGui::TextUnformatted(line.substr(3).c_str());
+            ImGui::PopStyleColor();
+        } else if (line.rfind("# ", 0) == 0) {
+            ImGui::Separator();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::TextUnformatted(line.substr(2).c_str());
+            ImGui::PopStyleColor();
+            ImGui::Separator();
+        } else if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+            // Bullet list item
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text, base_color);
+            ImGui::TextUnformatted("\xE2\x80\xA2 "); // • UTF-8
+            ImGui::PopStyleColor();
+            ImGui::SameLine(0, 0);
+            RenderInline(line.substr(2), base_color);
+        } else if (line.empty()) {
+            ImGui::Spacing();
+        } else {
+            RenderInline(line, base_color);
+        }
+    }
+
+    // Unterminated code block cleanup
+    if (in_code_block) {
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+    }
+}
+
 // ─── ImGui Draw ─────────────────────────────────────────────────────────────
 
 void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine) {
-    // Process pending output from bridge
+    // Fix J: 限制历史条数，超出时从头部丢弃（保留首条 System 欢迎语）
+    static constexpr int kMaxMessages = 500;
+    if (static_cast<int>(messages_.size()) > kMaxMessages) {
+        auto first_non_system = std::find_if(messages_.begin() + 1, messages_.end(),
+            [](const ChatMessage& m){ return m.role != ChatRole::System; });
+        if (first_non_system != messages_.end())
+            messages_.erase(first_non_system);
+    }
+
+    // Tool calls collected from bridge output, executed after releasing the mutex
+    struct ToolCallEntry { std::string name, args, call_id; };
+    std::vector<ToolCallEntry> pending_tool_calls;
+
+    // Process pending output from bridge (hold mutex only while draining queue)
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
         while (!pending_output_.empty()) {
@@ -317,14 +618,38 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
 
             switch (bmsg.type) {
             case BridgeMessageType::AssistantMessage:
-                messages_.push_back({ChatRole::Assistant, bmsg.content});
+                messages_.push_back({ChatRole::Assistant, bmsg.content, current_agent_id_});
+                messages_.back().start_time = std::chrono::steady_clock::now();
+                messages_.back().end_time = std::chrono::steady_clock::now();
                 waiting_for_response_ = false;
                 scroll_to_bottom_ = true;
+                break;
+            case BridgeMessageType::StreamStart:
+                if (messages_.empty() || messages_.back().role != ChatRole::Assistant) {
+                    messages_.push_back({ChatRole::Assistant, "", current_agent_id_});
+                    messages_.back().start_time = std::chrono::steady_clock::now();
+                    messages_.back().last_update = std::chrono::steady_clock::now();
+                }
+                messages_.back().is_streaming = true;
+                break;
+            case BridgeMessageType::StreamChunk:
+                if (!messages_.empty() && messages_.back().role == ChatRole::Assistant) {
+                    messages_.back().content += bmsg.content;
+                    messages_.back().last_update = std::chrono::steady_clock::now();
+                }
+                scroll_to_bottom_ = true;
+                break;
+            case BridgeMessageType::StreamEnd:
+                if (!messages_.empty()) {
+                    messages_.back().is_streaming = false;
+                    messages_.back().end_time = std::chrono::steady_clock::now();
+                }
+                waiting_for_response_ = false;
                 break;
             case BridgeMessageType::ToolCall:
                 messages_.push_back({ChatRole::System, "Calling: " + bmsg.tool_name});
                 scroll_to_bottom_ = true;
-                ExecuteToolCall(bmsg.tool_name, bmsg.tool_args, bmsg.call_id, server, engine);
+                pending_tool_calls.push_back({bmsg.tool_name, bmsg.tool_args, bmsg.call_id});
                 break;
             case BridgeMessageType::Error:
                 messages_.push_back({ChatRole::System, "Error: " + bmsg.content});
@@ -335,19 +660,36 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 messages_.push_back({ChatRole::System, bmsg.content});
                 scroll_to_bottom_ = true;
                 break;
+            case BridgeMessageType::TokenUsage:
+                total_input_tokens_  += bmsg.input_tokens;
+                total_output_tokens_ += bmsg.output_tokens;
+                break;
+            case BridgeMessageType::CancelAck:
+                waiting_for_response_ = false;
+                if (!messages_.empty() && messages_.back().is_streaming)
+                    messages_.back().is_streaming = false;
+                break;
             default:
                 messages_.push_back({ChatRole::System, "[bridge] " + line});
                 break;
             }
         }
-    }
+    } // mutex released here
+
+    // Execute tool calls outside the mutex so reader thread isn't blocked
+    for (const auto& tc : pending_tool_calls)
+        ExecuteToolCall(tc.name, tc.args, tc.call_id, server, engine);
 
     // ─── Messages area ──────────────────────────────────────────────────────
     float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
     ImGui::BeginChild("ChatMessages", ImVec2(0, -footer_height), true,
                       ImGuiWindowFlags_HorizontalScrollbar);
 
-    for (const auto& msg : messages_) {
+    int resend_idx = -1;   // index of message to resend (set during iteration, acted after)
+    int edit_click_idx = -1;
+
+    for (int mi = 0; mi < static_cast<int>(messages_.size()); ++mi) {
+        const auto& msg = messages_[mi];
         ImVec4 color;
         const char* prefix;
         switch (msg.role) {
@@ -368,9 +710,68 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
                 prefix = "";
                 break;
         }
+
+        // Prefix label
         ImGui::PushStyleColor(ImGuiCol_Text, color);
-        ImGui::TextWrapped("%s%s", prefix, msg.content.c_str());
+        ImGui::TextUnformatted(prefix);
         ImGui::PopStyleColor();
+        if (prefix[0] != '\0') ImGui::SameLine(0, 0);
+
+        // Render content
+        if (msg.role == ChatRole::Assistant) {
+            RenderMarkdown(msg.content, color);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::TextWrapped("%s", msg.content.c_str());
+            ImGui::PopStyleColor();
+        }
+
+        // Hover actions for User messages (not while streaming)
+        if (msg.role == ChatRole::User && !waiting_for_response_ && ImGui::IsItemHovered()) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.6f, 0.6f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 1));
+            ImGui::PushID(mi * 100 + 1);
+            if (ImGui::SmallButton("Resend")) resend_idx = mi;
+            ImGui::PopID();
+            ImGui::SameLine(0, 4);
+            ImGui::PushID(mi * 100 + 2);
+            if (ImGui::SmallButton("Edit")) edit_click_idx = mi;
+            ImGui::PopID();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+        }
+
+        // Response time for completed assistant messages
+        if (msg.role == ChatRole::Assistant && !msg.is_streaming &&
+            msg.start_time.time_since_epoch().count()) {
+            float ms = msg.response_time_ms();
+            ImGui::SameLine();
+            ImGui::TextDisabled("  %.0fms", ms);
+        }
+
+        ImGui::Spacing();
+    }
+
+    // Act on resend / edit clicks after iteration (avoids invalidating the loop)
+    if (resend_idx >= 0 && resend_idx < static_cast<int>(messages_.size())) {
+        std::string original_text = messages_[resend_idx].content;
+        messages_.erase(messages_.begin() + resend_idx, messages_.end());
+        messages_.push_back({ChatRole::User, original_text, current_agent_id_});
+        std::string context = ResolveMentions(original_text, mention_resolver_);
+        std::string send_text = context.empty() ? original_text : context + "\n用户问题：" + original_text;
+        SendToBridge(send_text);
+        scroll_to_bottom_ = true;
+        if (!history_path_.empty()) SaveHistory(history_path_);
+    }
+    if (edit_click_idx >= 0 && edit_click_idx < static_cast<int>(messages_.size())) {
+        const std::string& original = messages_[edit_click_idx].content;
+        std::strncpy(input_buf_, original.c_str(), sizeof(input_buf_) - 1);
+        input_buf_[sizeof(input_buf_) - 1] = '\0';
+        edit_msg_idx_ = edit_click_idx;
+        // focus_input_next_frame_ is set; SetKeyboardFocusHere must be called
+        // *before* InputText on the next frame — handled via the flag below
+        focus_input_next_frame_ = true;
     }
 
     if (waiting_for_response_) {
@@ -387,8 +788,32 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     // ─── Input area ─────────────────────────────────────────────────────────
     ImGui::Separator();
 
+    // Agent selector
+    ImGui::SetNextItemWidth(150);
+    if (ImGui::BeginCombo("Agent", current_agent_id_.c_str())) {
+        if (ImGui::Selectable("general", current_agent_id_ == "general")) {
+            SetCurrentAgent("general");
+        }
+        if (ImGui::Selectable("scene_architect", current_agent_id_ == "scene_architect")) {
+            SetCurrentAgent("scene_architect");
+        }
+        if (ImGui::Selectable("script_writer", current_agent_id_ == "script_writer")) {
+            SetCurrentAgent("script_writer");
+        }
+        if (ImGui::Selectable("asset_manager", current_agent_id_ == "asset_manager")) {
+            SetCurrentAgent("asset_manager");
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::SameLine();
+
     bool send = false;
-    ImGui::PushItemWidth(-60);
+    ImGui::PushItemWidth(-100);
+    if (focus_input_next_frame_) {
+        ImGui::SetKeyboardFocusHere();
+        focus_input_next_frame_ = false;
+    }
     if (ImGui::InputText("##chat_input", input_buf_, sizeof(input_buf_),
                          ImGuiInputTextFlags_EnterReturnsTrue)) {
         send = true;
@@ -396,14 +821,63 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     ImGui::PopItemWidth();
 
     ImGui::SameLine();
-    if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
-        std::string text(input_buf_);
-        if (!text.empty() && !waiting_for_response_) {
-            messages_.push_back({ChatRole::User, text});
-            SendToBridge(text);
-            input_buf_[0] = '\0';
-            scroll_to_bottom_ = true;
+    
+    if (waiting_for_response_) {
+        // Show Stop button during generation
+        if (ImGui::Button("Stop", ImVec2(50, 0))) {
+            CancelGeneration();
         }
+    } else if (bridge_crashed_) {
+        // Bridge crashed: show reconnect button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
+        if (ImGui::Button("Reconnect", ImVec2(90, 0))) {
+            bridge_crashed_ = false;
+            StartBridge();
+        }
+        ImGui::PopStyleColor();
+    } else {
+        // Normal: Send button
+        if (ImGui::Button("Send", ImVec2(50, 0)) || send) {
+            std::string text(input_buf_);
+            if (!text.empty()) {
+                // If editing an existing message, truncate from that index
+                if (edit_msg_idx_ >= 0 && edit_msg_idx_ < static_cast<int>(messages_.size())) {
+                    messages_.erase(messages_.begin() + edit_msg_idx_, messages_.end());
+                }
+                edit_msg_idx_ = -1; // always clear, even if text was empty path above
+
+                // Resolve @mentions and prepend context
+                std::string context = ResolveMentions(text, mention_resolver_);
+                std::string send_text = context.empty() ? text : context + "\n用户问题：" + text;
+
+                messages_.push_back({ChatRole::User, text, current_agent_id_});
+                SendToBridge(send_text);
+                input_buf_[0] = '\0';
+                scroll_to_bottom_ = true;
+                if (!history_path_.empty())
+                    SaveHistory(history_path_);
+            }
+        }
+    }
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Clear")) {
+        ClearHistory();
+        total_input_tokens_  = 0;
+        total_output_tokens_ = 0;
+        edit_msg_idx_ = -1;
+    }
+
+    // Token statistics (right-aligned)
+    if (total_input_tokens_ > 0 || total_output_tokens_ > 0) {
+        char token_buf[64];
+        std::snprintf(token_buf, sizeof(token_buf), "in:%d out:%d",
+                      total_input_tokens_, total_output_tokens_);
+        float text_w = ImGui::CalcTextSize(token_buf).x;
+        float avail   = ImGui::GetContentRegionAvail().x;
+        if (avail > text_w + 8.0f)
+            ImGui::SameLine(ImGui::GetCursorPosX() + avail - text_w);
+        ImGui::TextDisabled("%s", token_buf);
     }
 }
 

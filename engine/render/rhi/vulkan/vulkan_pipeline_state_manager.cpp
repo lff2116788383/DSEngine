@@ -130,7 +130,8 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
     VkExtent2D extent,
     VkSampleCountFlagBits samples,
-    uint32_t color_attachment_count) {
+    uint32_t color_attachment_count,
+    bool wireframe) {
 
     auto it = pipeline_states_.find(handle);
     if (it == pipeline_states_.end()) return VK_NULL_HANDLE;

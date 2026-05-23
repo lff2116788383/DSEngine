@@ -49,8 +49,11 @@ void SetShowGrid(bool v) { s_show_grid = v; s_dirty = true; }
 float GetGridSize() { return s_grid_size; }
 int GetGridLines() { return s_grid_lines; }
 float GetSnapTranslate() { return s_snap_translate; }
+void  SetSnapTranslate(float v) { s_snap_translate = v; s_dirty = true; }
 float GetSnapRotate() { return s_snap_rotate; }
+void  SetSnapRotate(float v) { s_snap_rotate = v; s_dirty = true; }
 float GetSnapScale() { return s_snap_scale; }
+void  SetSnapScale(float v) { s_snap_scale = v; s_dirty = true; }
 
 void InitPreferencesFromSettings() {
     if (s_initialized) return;

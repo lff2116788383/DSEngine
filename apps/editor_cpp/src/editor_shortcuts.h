@@ -29,6 +29,11 @@ void CreateEntity3DPlane(EditorContext& ctx);
 void CreateEntity3DCamera(EditorContext& ctx);
 void CreateEntity3DDirectionalLight(EditorContext& ctx);
 void CreateEntity3DPointLight(EditorContext& ctx);
+void CreateEntity3DSpotLight(EditorContext& ctx);
+void CreateEntity3DAudioSource(EditorContext& ctx);
+void CreateEntity3DAudioListener(EditorContext& ctx);
+void CreateEntity3DPhysicsBox(EditorContext& ctx);
+void CreateEntity3DPhysicsSphere(EditorContext& ctx);
 void CreateEntity2DSprite(EditorContext& ctx);
 
 } // namespace dse::editor

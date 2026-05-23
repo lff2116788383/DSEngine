@@ -1,7 +1,12 @@
 #include "editor_shader_graph.h"
 #include "editor_icons.h"
 #include "editor_console_panel.h"
+#include "editor_context.h"
 
+#include "engine/assets/asset_manager.h"
+#include "engine/core/service_locator.h"
+#include "engine/base/debug.h"
+#include "engine/ecs/components_3d.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -12,6 +17,8 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <chrono>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
@@ -26,6 +33,20 @@
 namespace dse::editor {
 
 namespace {
+
+// ─── 唯一着色器名称生成器 ─────────────────────────────────────────────────────
+
+std::string GenerateUniqueShaderName() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<> dis(1000, 9999);
+    
+    auto now = std::chrono::system_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    int random = dis(gen);
+    
+    return "ShaderGraph_" + std::to_string(timestamp) + "_" + std::to_string(random);
+}
 
 // ─── Node graph data model ───────────────────────────────────────────────────
 
@@ -654,7 +675,7 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
 
 } // namespace
 
-void DrawShaderGraphPanel() {
+void DrawShaderGraphPanel(EditorContext& ctx) {
     ImGui::Begin("Shader Graph");
 
     auto& state = GetState();
@@ -663,7 +684,7 @@ void DrawShaderGraphPanel() {
     // Toolbar
     {
         ImGui::Text(MDI_ICON_PALETTE " Shader Graph");
-        ImGui::SameLine(ImGui::GetWindowWidth() - 200);
+        ImGui::SameLine(ImGui::GetWindowWidth() - 280);
         if (ImGui::Button("Compile")) {
             std::string glsl = CompileGraphToGLSL(state);
             // 输出到文件
@@ -671,6 +692,34 @@ void DrawShaderGraphPanel() {
             if (out.is_open()) { out << glsl; out.close(); }
             // 也输出到控制台日志
             EditorLog(LogLevel::Info, "[ShaderGraph] Compiled GLSL (" + std::to_string(glsl.size()) + " chars) -> shader_graph_output.frag");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Apply to Material")) {
+            std::string glsl = CompileGraphToGLSL(state);
+            
+            // 创建自定义着色器
+            auto* asset_mgr = dse::core::ServiceLocator::Instance().Get<AssetManager>();
+            if (asset_mgr) {
+                std::string shader_name = GenerateUniqueShaderName();
+                auto shader = asset_mgr->LoadShader(shader_name, "", glsl);  // 顶点着色器为空，使用默认
+                
+                if (shader) {
+                    EditorLog(LogLevel::Info, "[ShaderGraph] Created custom shader '" + shader_name + "' (handle=" + std::to_string(shader->GetHandle()) + ")");
+                    
+                    // 应用到当前选中的实体（如果有材质组件）
+                    if (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity)) {
+                        if (ctx.registry.all_of<dse::MeshRendererComponent>(ctx.selected_entity)) {
+                            auto& mesh = ctx.registry.get<dse::MeshRendererComponent>(ctx.selected_entity);
+                            mesh.shader_variant = shader_name;
+                            EditorLog(LogLevel::Info, "[ShaderGraph] Applied shader '" + shader_name + "' to selected entity");
+                        }
+                    }
+                } else {
+                    EditorLog(LogLevel::Error, "[ShaderGraph] Failed to create custom shader");
+                }
+            } else {
+                EditorLog(LogLevel::Error, "[ShaderGraph] AssetManager not available");
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Save")) {

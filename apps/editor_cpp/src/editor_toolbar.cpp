@@ -10,6 +10,7 @@
 #include "editor_profiler_panel.h"
 #include "editor_scene_io.h"
 #include "editor_scene_tabs.h"
+#include "editor_scene_camera.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
@@ -144,16 +145,58 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    ImGui::SetCursorPosX(10 + 4 * 36 + 20);
-    static bool is2D = false;
-    const bool was2D = is2D;
-    if (was2D) {
+    const bool was_2d = ctx.is_2d;
+    if (was_2d) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
     }
-    if (ImGui::Button("2D", ImVec2(32, 24))) { is2D = !is2D; }
-    if (was2D) {
+    if (ImGui::Button("2D", ImVec2(32, 24))) { ctx.is_2d = !ctx.is_2d; }
+    if (was_2d) {
         ImGui::PopStyleColor();
     }
+
+    // Vertical separator between tool group and utility tools
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    // 对齐工具
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_left", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Left"));
+    ImGui::SameLine();
+
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_center", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Center"));
+    ImGui::SameLine();
+
+    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_right", ImVec2(32, 24))) {
+        // TODO: 实现对齐功能
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Right"));
+    ImGui::SameLine();
+
+    // 网格吸附
+    static bool grid_snap = false;
+    if (grid_snap) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    if (ImGui::Button(MDI_ICON_VIEW_GRID "##grid_snap", ImVec2(32, 24))) {
+        grid_snap = !grid_snap;
+    }
+    if (grid_snap) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Grid Snap"));
+    ImGui::SameLine();
+
+    // 视图重置
+    if (ImGui::Button(MDI_ICON_CAMERA "##view_reset", ImVec2(32, 24))) {
+        EditorCamera& cam = GetEditorCamera();
+        cam.focal_point = glm::vec3(0.0f);
+        cam.distance = 10.0f;
+        cam.yaw = 0.0f;
+        cam.pitch = 0.3f;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Reset View"));
 
     // Vertical separator between tool group and play controls
     ImGui::SameLine();
@@ -200,7 +243,11 @@ void DrawEditorToolbar(EditorContext& ctx) {
     }
 
     ImGui::SameLine();
-    ImGui::SetCursorPosX(avail_width - 360);
+    float right_section_width = 32 + 8 + 110 + 8 + 60 + 8 + 60 + 10;
+    float right_x = avail_width - right_section_width;
+    float play_end = (avail_width / 2.0f) + 60;
+    if (right_x < play_end + 16) right_x = play_end + 16;
+    ImGui::SetCursorPosX(right_x);
 
     // ─── Theme toggle ───────────────────────────────────────────────────────
     {
@@ -232,8 +279,8 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::SameLine();
     ImGui::Button("Layers", ImVec2(60, 24));
 
-    ImGui::End();
     ImGui::PopStyleVar();
+    ImGui::End();
 }
 
 } // namespace dse::editor

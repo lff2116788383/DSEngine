@@ -456,7 +456,11 @@ def read_message():
     line = sys.stdin.readline()
     if not line:
         return None
-    return json.loads(line.strip())
+    try:
+        return json.loads(line.strip())
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"[MCP] JSON decode error: {e} | line={line!r}\n")
+        return None
 
 
 def write_message(msg):
@@ -528,6 +532,10 @@ def _generate_texture_dalle(arguments, bridge):
     if not api_key:
         return {"error": "OPENAI_API_KEY environment variable not set"}
 
+    image_model = os.environ.get("OPENAI_IMAGE_MODEL", "dall-e-3")
+    base_url    = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    timeout_s   = int(os.environ.get("OPENAI_TIMEOUT_MS", "120000")) / 1000.0
+
     prompt = arguments.get("prompt", "")
     save_path = arguments.get("save_path", "textures/generated.png")
     size = arguments.get("size", "1024x1024")
@@ -537,14 +545,14 @@ def _generate_texture_dalle(arguments, bridge):
     abs_path = _resolve_data_path(save_path, bridge)
     _ensure_parent_dir(abs_path)
 
-    sys.stderr.write(f"[MCP] Generating texture: {prompt} -> {abs_path}\n")
+    sys.stderr.write(f"[MCP] Generating texture ({image_model}): {prompt} -> {abs_path}\n")
 
     try:
         resp = requests.post(
-            "https://api.openai.com/v1/images/generations",
+            f"{base_url}/images/generations",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": "dall-e-3",
+                "model": image_model,
                 "prompt": prompt,
                 "n": 1,
                 "size": size,
@@ -552,7 +560,7 @@ def _generate_texture_dalle(arguments, bridge):
                 "style": style,
                 "response_format": "url"
             },
-            timeout=120
+            timeout=timeout_s
         )
         resp.raise_for_status()
         image_url = resp.json()["data"][0]["url"]
@@ -755,7 +763,9 @@ def main():
         while True:
             msg = read_message()
             if msg is None:
-                break  # stdin closed
+                if sys.stdin.closed:
+                    break  # stdin closed
+                continue  # JSON 解析失败，跳过该行
 
             method = msg.get("method", "")
 

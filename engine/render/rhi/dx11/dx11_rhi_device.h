@@ -187,6 +187,7 @@ public:
         return glm::mat4(1.0f);
     }
 
+    // --- 编辑器场景视图模式 ---
     void SetWireframeMode(bool enable) override;
     void SetForceUnlit(bool enable) override;
     void SetOverdrawMode(bool enable) override;
@@ -208,6 +209,10 @@ private:
     DX11ShaderManager shader_mgr_;
     DX11PipelineStateManager state_mgr_;
     DX11DrawExecutor draw_executor_{global_render_state_};
+
+    // --- Wireframe rasterizer state cache ---
+    ID3D11RasterizerState* wireframe_rasterizer_state_ = nullptr;
+    ID3D11RasterizerState* solid_rasterizer_state_ = nullptr;
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;

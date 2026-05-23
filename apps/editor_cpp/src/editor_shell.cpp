@@ -19,6 +19,7 @@
 #include "editor_preferences_panel.h"
 #include "editor_autosave.h"
 #include "editor_layout_manager.h"
+#include "editor_ai_config.h"
 #include "engine/dse_version.h"
 #include "editor_locale.h"
 
@@ -59,9 +60,9 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
 
     auto dock_id_main = dockspace_id;
     auto dock_id_top    = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up,    0.05f, nullptr, &dock_id_main);
-    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down,  0.24f, nullptr, &dock_id_main);
+    auto dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down,  0.15f, nullptr, &dock_id_main);
     auto dock_id_left   = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left,  0.18f, nullptr, &dock_id_main);
-    auto dock_id_right  = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.24f, nullptr, &dock_id_main);
+    auto dock_id_right  = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.20f, nullptr, &dock_id_main);
 
     ImGui::DockBuilderDockWindow("Toolbar",              dock_id_top);
     ImGui::DockBuilderDockWindow("Hierarchy",             dock_id_left);
@@ -125,6 +126,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     bool has_sel     = (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity));
     bool editable    = !ctx.read_only;
     bool has_project = proj_mgr.HasOpenProject();
+    
+    auto& ai_config = AIConfigManager::Instance();
 
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("File"))) {
@@ -324,6 +327,17 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::BeginMenu(MDI_ICON_LIGHTBULB "  Light", editable)) {
             if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
             if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
+            if (ImGui::MenuItem("Spot Light"))        CreateEntity3DSpotLight(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_CUBE_OUTLINE "  Physics", editable)) {
+            if (ImGui::MenuItem("Physics Box"))    CreateEntity3DPhysicsBox(ctx);
+            if (ImGui::MenuItem("Physics Sphere")) CreateEntity3DPhysicsSphere(ctx);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(MDI_ICON_VOLUME_HIGH "  Audio", editable)) {
+            if (ImGui::MenuItem("Audio Source"))   CreateEntity3DAudioSource(ctx);
+            if (ImGui::MenuItem("Audio Listener")) CreateEntity3DAudioListener(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::MenuItem(MDI_ICON_CAMERA "  Camera", nullptr, false, editable)) {
@@ -352,9 +366,20 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::Separator();
         ImGui::TextDisabled("Snap Settings");
-        ImGui::Text("  Translate: %.1f", GetSnapTranslate());
-        ImGui::Text("  Rotate:    %.0f" "\xc2\xb0", GetSnapRotate());
-        ImGui::Text("  Scale:     %.2f", GetSnapScale());
+        {
+            float snap_t = GetSnapTranslate();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Translate", &snap_t, 0.05f, 0.01f, 100.0f, "%.2f"))
+                SetSnapTranslate(snap_t);
+            float snap_r = GetSnapRotate();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Rotate", &snap_r, 1.0f, 1.0f, 180.0f, "%.0f\xc2\xb0"))
+                SetSnapRotate(snap_r);
+            float snap_s = GetSnapScale();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::DragFloat("Scale", &snap_s, 0.01f, 0.01f, 10.0f, "%.2f"))
+                SetSnapScale(snap_s);
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Gizmo: Translate", "W")) ctx.current_gizmo_operation = 0;
         if (ImGui::MenuItem("Gizmo: Rotate",    "E")) ctx.current_gizmo_operation = 1;
@@ -403,9 +428,6 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
         }
         ImGui::Separator();
-        if (show_chat && ImGui::MenuItem("AI Chat")) {
-            *show_chat = true;
-        }
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
             *show_plugins = true;
         }
@@ -417,10 +439,14 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::EndMenu();
     }
 
-    // ─── Build ───────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("Build")) {
-        if (ImGui::MenuItem(MDI_ICON_EXPORT "  Export Windows Build...", "Ctrl+B")) {
-            dse::editor::OpenBuildGameDialog();
+    // ─── AI ────────────────────────────────────────────────────────────────────
+    if (ImGui::BeginMenu("AI")) {
+        if (show_chat && ImGui::MenuItem("AI Chat Panel")) {
+            *show_chat = true;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("AI Configuration...")) {
+            ai_config.ShowConfigWindow(true);
         }
         ImGui::EndMenu();
     }
@@ -461,7 +487,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Text("Version %d.%d.%d", DSE_VERSION_MAJOR, DSE_VERSION_MINOR, DSE_VERSION_PATCH);
         ImGui::Spacing();
         ImGui::Text("Rendering: OpenGL / Vulkan / Direct3D 11");
-        ImGui::Text("ECS: entt  |  UI: Dear ImGui  |  Physics: PhysX 4.1");
+        ImGui::Text("ECS: entt  |  UI: Dear ImGui  |  Physics: Jolt Physics");
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(c) 2024-2026 DSEngine Contributors");
         ImGui::Separator();

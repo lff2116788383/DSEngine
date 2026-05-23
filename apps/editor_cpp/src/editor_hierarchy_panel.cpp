@@ -5,6 +5,8 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/audio.h"
+#include "engine/ecs/script.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
@@ -460,31 +462,21 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.selected_entity = new_ent;
         }
         if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
-            if (ImGui::MenuItem("Camera 3D", nullptr, false, !context.read_only)) {
-                auto new_ent = context.world.CreateEntity();
-                context.registry.emplace<EditorNameComponent>(new_ent, "Camera 3D");
-                context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 0, 5));
-                context.registry.emplace<dse::Camera3DComponent>(new_ent);
-                context.selected_entity = new_ent;
-            }
-            if (ImGui::MenuItem("Directional Light", nullptr, false, !context.read_only)) {
-                auto new_ent = context.world.CreateEntity();
-                context.registry.emplace<EditorNameComponent>(new_ent, "Directional Light");
-                auto& t = context.registry.emplace<TransformComponent>(new_ent, glm::vec3(0, 5, 0));
-                t.rotation = glm::quat(glm::vec3(glm::radians(-45.0f), glm::radians(-30.0f), 0.0f));
-                context.registry.emplace<dse::DirectionalLight3DComponent>(new_ent);
-                context.selected_entity = new_ent;
-            }
-            if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only)) {
-                CreateEntity3DCube(context);
-            }
-            if (ImGui::MenuItem("Physics Box", nullptr, false, !context.read_only)) {
-                CreateEntity3DCube(context);
-                context.registry.get<EditorNameComponent>(context.selected_entity).name = "Physics Box";
-                context.registry.get<TransformComponent>(context.selected_entity).position = glm::vec3(0, 5, 0);
-                context.registry.emplace<dse::RigidBody3DComponent>(context.selected_entity);
-                context.registry.emplace<dse::BoxCollider3DComponent>(context.selected_entity);
-            }
+            if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only))  CreateEntity3DCube(context);
+            if (ImGui::MenuItem("Sphere", nullptr, false, !context.read_only)) CreateEntity3DSphere(context);
+            if (ImGui::MenuItem("Plane", nullptr, false, !context.read_only))  CreateEntity3DPlane(context);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Camera 3D", nullptr, false, !context.read_only)) CreateEntity3DCamera(context);
+            if (ImGui::MenuItem("Directional Light", nullptr, false, !context.read_only)) CreateEntity3DDirectionalLight(context);
+            if (ImGui::MenuItem("Point Light", nullptr, false, !context.read_only))       CreateEntity3DPointLight(context);
+            if (ImGui::MenuItem("Spot Light", nullptr, false, !context.read_only))        CreateEntity3DSpotLight(context);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Physics Box", nullptr, false, !context.read_only))    CreateEntity3DPhysicsBox(context);
+            if (ImGui::MenuItem("Physics Sphere", nullptr, false, !context.read_only)) CreateEntity3DPhysicsSphere(context);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Audio Source", nullptr, false, !context.read_only))   CreateEntity3DAudioSource(context);
+            if (ImGui::MenuItem("Audio Listener", nullptr, false, !context.read_only)) CreateEntity3DAudioListener(context);
+            ImGui::Separator();
             if (ImGui::MenuItem("Particle System 3D", nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Particle 3D");
@@ -586,10 +578,13 @@ void DrawHierarchyPanel(EditorContext& context) {
             copy_component(dse::Camera3DComponent{});
             copy_component(dse::DirectionalLight3DComponent{});
             copy_component(dse::PointLightComponent{});
+            copy_component(dse::SpotLightComponent{});
             copy_component(dse::MeshRendererComponent{});
             copy_component(dse::Animator3DComponent{});
             copy_component(dse::FreeCameraControllerComponent{});
             copy_component(dse::TerrainComponent{});
+            copy_component(ScriptComponent{});
+            copy_component(dse::SubSceneComponent{});
             copy_runtime_reset_component(dse::RigidBody3DComponent{}, [](dse::RigidBody3DComponent& rigidbody) {
                 rigidbody.runtime_body = nullptr;
             });
@@ -599,6 +594,18 @@ void DrawHierarchyPanel(EditorContext& context) {
             copy_runtime_reset_component(dse::SphereCollider3DComponent{}, [](dse::SphereCollider3DComponent& collider) {
                 collider.runtime_shape = nullptr;
             });
+            copy_runtime_reset_component(dse::CapsuleCollider3DComponent{}, [](dse::CapsuleCollider3DComponent& collider) {
+                collider.runtime_shape = nullptr;
+            });
+            copy_runtime_reset_component(dse::MeshCollider3DComponent{}, [](dse::MeshCollider3DComponent& collider) {
+                collider.runtime_shape = nullptr;
+            });
+            copy_runtime_reset_component(AudioSourceComponent{}, [](AudioSourceComponent& audio) {
+                audio.runtime_handle = 0;
+                audio.is_playing = false;
+                audio.restart_requested = false;
+            });
+            copy_component(AudioListenerComponent{});
             copy_runtime_reset_component(dse::ParticleSystem3DComponent{}, [](dse::ParticleSystem3DComponent& particle_system) {
                 particle_system.particles.clear();
                 particle_system.emission_accumulator = 0.0f;

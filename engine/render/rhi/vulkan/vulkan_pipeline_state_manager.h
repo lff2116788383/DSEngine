@@ -61,6 +61,7 @@ public:
     /// @param vertex_bindings 顶点绑定描述
     /// @param vertex_attributes 顶点属性描述
     /// @param extent 渲染区域大小
+    /// @param wireframe 是否使用线框模式
     VkPipeline GetOrCreateVkPipeline(
         unsigned int handle,
         const struct VulkanShaderProgram* shader_program,
@@ -69,7 +70,8 @@ public:
         const std::vector<VkVertexInputAttributeDescription>& vertex_attributes,
         VkExtent2D extent,
         VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
-        uint32_t color_attachment_count = 1);
+        uint32_t color_attachment_count = 1,
+        bool wireframe = false);
 
     /// 查询管线状态
     const PipelineStateDesc* GetPipelineState(unsigned int handle) const;

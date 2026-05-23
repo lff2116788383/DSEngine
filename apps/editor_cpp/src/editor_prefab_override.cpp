@@ -124,6 +124,37 @@ void CompareMeshRenderer(entt::registry& reg, entt::entity entity,
                     mesh.visible ? "true" : "false"});
             }
         }
+        if (m.HasMember("color") && m["color"].IsArray()) {
+            glm::vec4 orig = glm::vec4(m["color"][0].GetFloat(), m["color"][1].GetFloat(),
+                                      m["color"][2].GetFloat(), m["color"][3].GetFloat());
+            if (!Vec3Equal(glm::vec3(orig), glm::vec3(mesh.color)) ||
+                std::abs(orig.a - mesh.color.a) > 0.001f) {
+                overrides.push_back({"MeshRenderer", "Color",
+                    Vec3ToString(glm::vec3(orig)) + "," + FloatToString(orig.a),
+                    Vec3ToString(glm::vec3(mesh.color)) + "," + FloatToString(mesh.color.a)});
+            }
+        }
+        if (m.HasMember("metallic") && m["metallic"].IsNumber()) {
+            if (std::abs(mesh.metallic - m["metallic"].GetFloat()) > 0.001f) {
+                overrides.push_back({"MeshRenderer", "Metallic",
+                    FloatToString(m["metallic"].GetFloat()),
+                    FloatToString(mesh.metallic)});
+            }
+        }
+        if (m.HasMember("roughness") && m["roughness"].IsNumber()) {
+            if (std::abs(mesh.roughness - m["roughness"].GetFloat()) > 0.001f) {
+                overrides.push_back({"MeshRenderer", "Roughness",
+                    FloatToString(m["roughness"].GetFloat()),
+                    FloatToString(mesh.roughness)});
+            }
+        }
+        if (m.HasMember("emissive") && m["emissive"].IsArray()) {
+            glm::vec3 orig = ReadVec3(m["emissive"]);
+            if (!Vec3Equal(mesh.emissive, orig)) {
+                overrides.push_back({"MeshRenderer", "Emissive",
+                    Vec3ToString(orig), Vec3ToString(mesh.emissive)});
+            }
+        }
     }
 }
 
@@ -192,6 +223,29 @@ bool RevertPrefabOverride(entt::registry& registry, entt::entity entity,
             } else if (override_info.property_name == "Scale" && t.HasMember("scale")) {
                 tf.scale = ReadVec3(t["scale"]);
                 tf.dirty = true;
+            }
+        }
+        return true;
+    }
+
+    // Revert MeshRenderer properties
+    if (override_info.component_name == "MeshRenderer" && registry.all_of<dse::MeshRendererComponent>(entity)) {
+        auto& mesh = registry.get<dse::MeshRendererComponent>(entity);
+        if (doc.HasMember("mesh_renderer") && doc["mesh_renderer"].IsObject()) {
+            auto& m = doc["mesh_renderer"];
+            if (override_info.property_name == "MeshPath" && m.HasMember("mesh_path")) {
+                mesh.mesh_path = m["mesh_path"].GetString();
+            } else if (override_info.property_name == "Visible" && m.HasMember("visible")) {
+                mesh.visible = m["visible"].GetBool();
+            } else if (override_info.property_name == "Color" && m.HasMember("color")) {
+                mesh.color = glm::vec4(m["color"][0].GetFloat(), m["color"][1].GetFloat(),
+                                       m["color"][2].GetFloat(), m["color"][3].GetFloat());
+            } else if (override_info.property_name == "Metallic" && m.HasMember("metallic")) {
+                mesh.metallic = m["metallic"].GetFloat();
+            } else if (override_info.property_name == "Roughness" && m.HasMember("roughness")) {
+                mesh.roughness = m["roughness"].GetFloat();
+            } else if (override_info.property_name == "Emissive" && m.HasMember("emissive")) {
+                mesh.emissive = ReadVec3(m["emissive"]);
             }
         }
         return true;

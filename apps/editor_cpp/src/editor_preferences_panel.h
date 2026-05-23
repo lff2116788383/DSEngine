@@ -17,7 +17,10 @@ void SetShowGrid(bool v);
 float GetGridSize();
 int GetGridLines();
 float GetSnapTranslate();
+void  SetSnapTranslate(float v);
 float GetSnapRotate();
+void  SetSnapRotate(float v);
 float GetSnapScale();
+void  SetSnapScale(float v);
 
 } // namespace dse::editor

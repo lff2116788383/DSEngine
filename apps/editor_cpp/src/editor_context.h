@@ -22,7 +22,7 @@ struct EditorContext {
     entt::entity& selected_entity;
 
     bool read_only = false;   // Play 模式下为 true
-    bool is_2d = false;
+    bool& is_2d;
 
     // Profiler（非所有面板都需要，但放在统一 context 避免额外构造）
     dse::profiler::CPUProfiler& cpu_profiler;
