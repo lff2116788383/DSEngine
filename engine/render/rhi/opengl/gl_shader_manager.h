@@ -132,13 +132,11 @@ public:
     const PBRShaderLocations& pbr_locations() const { return pbr_locations_; }
     const PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
-    /// GPU-Driven PBR 着色器句柄（SSBO model fetch via gl_BaseInstance）
-    unsigned int gpu_driven_pbr_shader_handle() const { return gpu_driven_pbr_shader_handle_; }
+    /// GPU-Driven PBR uniform locations (GL only)
     int gpu_driven_pbr_skinned_loc() const { return gpu_driven_pbr_skinned_loc_; }
     int gpu_driven_pbr_morph_loc()    const { return gpu_driven_pbr_morph_loc_; }
 
-    /// GPU-Driven Shadow 着色器句柄（depth-only, SSBO model fetch）
-    unsigned int gpu_driven_shadow_shader_handle() const { return gpu_driven_shadow_shader_handle_; }
+    /// GPU-Driven Shadow uniform locations (GL only)
     int gpu_driven_shadow_skinned_loc() const { return gpu_driven_shadow_skinned_loc_; }
 
     // --- 天空盒着色器 ---
@@ -189,11 +187,8 @@ private:
 
     bool supports_ssbo_ = true;
 
-    unsigned int gpu_driven_pbr_shader_handle_ = 0;
     int gpu_driven_pbr_skinned_loc_ = -1;
     int gpu_driven_pbr_morph_loc_   = -1;
-
-    unsigned int gpu_driven_shadow_shader_handle_ = 0;
     int gpu_driven_shadow_skinned_loc_ = -1;
 };
 

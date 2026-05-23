@@ -53,7 +53,8 @@ public:
 
     /// 场景切换时调用：清空 mega buffer 注册表，下帧重建
     void InvalidateMegaBuffer() {
-        mesh_registry_.clear();
+        file_mesh_registry_.clear();
+        inline_mesh_registry_.clear();
         mega_vbo_data_.clear();
         mega_ibo_data_.clear();
         mega_vbo_vertex_count_ = 0;
@@ -98,6 +99,10 @@ public:
         }
     }
 
+    /// GPU Driven: 判断实体是否走 GPU-driven 路径（不透明、非蒙皮、有 bounds）
+    static bool IsGPUDrivenEligible(World& world, entt::entity entity,
+                                     const MeshRendererComponent& mr);
+
 private:
     AssetManager* asset_manager_ = nullptr;
     dse::render::GPUSkinningSystem* gpu_skinning_ = nullptr;  ///< P4: GPU skinning readback
@@ -120,11 +125,17 @@ private:
     std::vector<DrawElementsIndirectCommand> gpu_draw_cmds_;
     std::vector<dse::render::GPUInstanceData> gpu_instances_;
     std::vector<HiZAABB> gpu_aabbs_;
+    std::vector<dse::render::GPUMaterialData> gpu_materials_;
+    std::unordered_map<uint64_t, uint32_t> material_dedup_;
+    std::vector<dse::render::GPUDrawTextures> gpu_tex_keys_;
+    std::vector<dse::render::TextureBucket> gpu_texture_buckets_;
     size_t gpu_draw_cmd_capacity_ = 0;
     size_t gpu_instance_capacity_ = 0;
+    size_t gpu_material_capacity_ = 0;
 
-    /// Mega buffer registry: mesh_path → 在 mega buffer 中的位置
-    std::unordered_map<std::string, dse::render::MeshBatchEntry> mesh_registry_;
+    /// Mega buffer registry: file mesh 用 mesh_path 做 key（去重）；inline mesh 用 entity id 做 key（独立）
+    std::unordered_map<std::string, dse::render::MeshBatchEntry> file_mesh_registry_;
+    std::unordered_map<uint32_t, dse::render::MeshBatchEntry> inline_mesh_registry_;
     std::vector<float> mega_vbo_data_;       ///< 累积的顶点数据
     std::vector<uint32_t> mega_ibo_data_;    ///< 累积的索引数据（32-bit）
     uint32_t mega_vbo_vertex_count_ = 0;     ///< mega VBO 中已有的顶点总数

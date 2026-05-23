@@ -149,6 +149,8 @@ void VulkanRhiDevice::EnsureInitialized() {
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitShadowShader();
+    shader_mgr_.InitGPUDrivenPBRShader();
+    shader_mgr_.InitGPUDrivenShadowShader();
     shader_mgr_.InitPostProcessShader();
     shader_mgr_.InitBloomComputeShaders();
 
@@ -186,6 +188,8 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitShadowShader();
+    shader_mgr_.InitGPUDrivenPBRShader();
+    shader_mgr_.InitGPUDrivenShadowShader();
     KeepAlive();
     shader_mgr_.InitPostProcessShader();
     shader_mgr_.InitBloomComputeShaders();
@@ -514,39 +518,20 @@ void VulkanRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
     resource_mgr_.DeleteIndirectBuffer(handle);
 }
 
-void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
+void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
     if (draw_count <= 0 || indirect_buffer == 0) return;
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
 
-    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
-    const auto* cmd_data  = static_cast<const DrawElementsIndirectCommand*>(cached_gpu_cmds_);
-    const VkPipelineLayout layout = draw_executor_.gpu_driven_pipeline_layout();
-
-    // GPU-Driven per-draw push constants: 缓存存在时逐 draw 推送 model 矩阵
-    if (inst_data && cmd_data && layout != VK_NULL_HANDLE && cached_gpu_count_ > 0) {
-        struct { glm::mat4 model; int skinned; int morph_enabled; int use_instancing; } pc{};
-        pc.skinned = 0;
-        pc.morph_enabled = 0;
-        pc.use_instancing = 0;
-        for (int i = 0; i < draw_count && i < cached_gpu_count_; ++i) {
-            pc.model = inst_data[i].model;
-            vkCmdPushConstants(active_render_cmd_, layout,
-                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-            vkCmdDrawIndexed(active_render_cmd_,
-                             cmd_data[i].count,
-                             1,
-                             cmd_data[i].first_index,
-                             cmd_data[i].base_vertex,
-                             0);
-        }
-        return;
-    }
-
-    // 无缓存：fallback 到单次 indirect draw
+    // 查找 VkBuffer：先查 indirect buffer map，再查 SSBO map（draw cmd SSBO 有 INDIRECT_BUFFER_BIT）
     const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    if (!buf || buf->buffer == VK_NULL_HANDLE) {
+        buf = resource_mgr_.GetSSBO(indirect_buffer);
+    }
     if (!buf || buf->buffer == VK_NULL_HANDLE) return;
-    vkCmdDrawIndexedIndirect(active_render_cmd_, buf->buffer, 0, static_cast<uint32_t>(draw_count),
-                             static_cast<uint32_t>(stride));
+    draw_executor_.SetBoundSSBOs(bound_ssbos_);
+    draw_executor_.BindGPUDrivenInstanceSet(active_render_cmd_, resource_mgr_);
+    vkCmdDrawIndexedIndirect(active_render_cmd_, buf->buffer, static_cast<VkDeviceSize>(byte_offset),
+                             static_cast<uint32_t>(draw_count), static_cast<uint32_t>(stride));
 }
 
 // --- Compute Shader ---
@@ -1351,6 +1336,7 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                                 float light_intensity, float ambient_intensity,
                                                 float shadow_strength) {
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
+    draw_executor_.SetBoundSSBOs(bound_ssbos_);
     draw_executor_.SetupGPUDrivenPBR(active_render_cmd_, view, proj, camera_pos,
                                       light_dir, light_color,
                                       light_intensity, ambient_intensity,
@@ -1364,10 +1350,26 @@ void VulkanRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, co
                                          state_mgr_, shader_mgr_);
 }
 
+void VulkanRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                              unsigned int metallic_roughness,
+                                              unsigned int emissive, unsigned int occlusion) {
+    if (active_render_cmd_ == VK_NULL_HANDLE) return;
+    // 同步 bound_ssbos_ 到 draw executor（GPU-driven 路径不走 DrawMeshBatch，需手动同步）
+    draw_executor_.SetBoundSSBOs(bound_ssbos_);
+    draw_executor_.BindGPUDrivenTextures(active_render_cmd_, albedo, normal,
+                                          metallic_roughness, emissive, occlusion,
+                                          resource_mgr_);
+}
+
 void VulkanRhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
     cached_gpu_models_ = models;
     cached_gpu_cmds_   = cmds;
     cached_gpu_count_  = count;
+}
+
+void VulkanRhiDevice::UpdateGPUDrivenMaterial(const void* mat_data) {
+    if (!mat_data) return;
+    draw_executor_.UpdateGPUDrivenMaterial(mat_data);
 }
 
 // --- 编辑器场景视图模式 ---

@@ -19,6 +19,7 @@
 #include "engine/render/rhi/vulkan/vulkan_pipeline_state_manager.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include "engine/render/rhi/postprocess_common.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
 #include "engine/render/shaders/generated/embed/hair_vert.gen.h"
 #include "engine/render/shaders/generated/embed/hair_frag.gen.h"
@@ -221,6 +222,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     per_frame_ubo_capacity_ = kPerFrameSlots * kSlotAlign;
     per_scene_ubo_capacity_ = kPerItemSlots * kSlotAlign;
     per_material_ubo_capacity_ = kPerItemSlots * kSlotAlign;
+    terrain_params_ubo_capacity_ = kPerItemSlots * kSlotAlign;
     for (int i = 0; i < MAX_FRAMES; ++i) {
         CreateUBOBufferInternal(device, physical_device, kPerFrameSlots * kSlotAlign,
                                 per_frame_ubo_[i], per_frame_ubo_mem_[i]);
@@ -228,6 +230,8 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                                 per_scene_ubo_[i], per_scene_ubo_mem_[i]);
         CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
                                 per_material_ubo_[i], per_material_ubo_mem_[i]);
+        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+                                terrain_params_ubo_[i], terrain_params_ubo_mem_[i]);
         CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
                                 per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
         CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
@@ -275,6 +279,17 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     // --- 白色纹理 ---
     unsigned char white_pixel[4] = {255, 255, 255, 255};
     white_texture_handle_ = resource_mgr->CreateTexture2D(1, 1, white_pixel, true);
+    const unsigned char* white_faces[6] = {
+        white_pixel, white_pixel, white_pixel, white_pixel, white_pixel, white_pixel
+    };
+    white_cubemap_handle_ = resource_mgr->CreateTextureCube(1, 1, white_faces, true);
+
+    CreateUBOBufferInternal(device, physical_device, 256,
+                            dummy_ubo_buffer_, dummy_ubo_buffer_mem_);
+    {
+        uint8_t zeros[256] = {};
+        WriteToBuffer(device, dummy_ubo_buffer_mem_, 0, sizeof(zeros), zeros);
+    }
 
     // --- Dummy SSBO 占位 buffer ---
     // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO descriptor 写入要求
@@ -376,6 +391,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
         destroy_buffer(per_frame_ubo_[i], per_frame_ubo_mem_[i]);
         destroy_buffer(per_scene_ubo_[i], per_scene_ubo_mem_[i]);
         destroy_buffer(per_material_ubo_[i], per_material_ubo_mem_[i]);
+        destroy_buffer(terrain_params_ubo_[i], terrain_params_ubo_mem_[i]);
         destroy_buffer(per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
         destroy_buffer(per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
@@ -383,6 +399,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     destroy_buffer(morph_weights_ubo_, morph_weights_ubo_mem_);
     for (int i = 0; i < MAX_FRAMES; ++i)
         destroy_buffer(light_probe_ubo_[i], light_probe_ubo_mem_[i]);
+    destroy_buffer(dummy_ubo_buffer_, dummy_ubo_buffer_mem_);
     destroy_buffer(dummy_ssbo_buffer_, dummy_ssbo_buffer_mem_);
 
     if (dummy_3d_image_view_ != VK_NULL_HANDLE) {
@@ -401,6 +418,10 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     if (white_texture_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_texture_handle_);
         white_texture_handle_ = 0;
+    }
+    if (white_cubemap_handle_ != 0) {
+        resource_mgr_->DeleteTexture(white_cubemap_handle_);
+        white_cubemap_handle_ = 0;
     }
 
     if (hair_pipeline_ != VK_NULL_HANDLE) {
@@ -580,6 +601,14 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         }
     }
 
+    // 反射检查：仅写入 shader 实际声明的 descriptor bindings
+    auto has_binding = [&](uint32_t set, uint32_t binding, VkDescriptorType type) -> bool {
+        for (const auto& b : program->reflection.bindings) {
+            if (b.set == set && b.binding == binding && b.type == type) return true;
+        }
+        return false;
+    };
+
     // --- Set 0: PerFrame UBO ---
     {
         VkDescriptorBufferInfo buf_info{};
@@ -599,7 +628,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     }
 
     // --- Set 1: PerScene UBO (binding 0) ---
-    {
+    if (has_binding(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
         VkDescriptorBufferInfo buf_info{};
         buf_info.buffer = per_scene_ubo_[fi];
         buf_info.offset = per_scene_offset;
@@ -619,7 +648,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     if (!gbuffer_mode) {
 
     // --- Set 1 binding 1: PointLights SSBO ---
-    {
+    if (has_binding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
         VkDescriptorBufferInfo pl_buf{};
         auto pl_it = bound_ssbos_.find(1); // binding 1 = PointLightSSBO
         const VulkanBuffer* pl_ssbo = (pl_it != bound_ssbos_.end())
@@ -647,7 +676,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     }
 
     // --- Set 1 binding 2: SpotLights SSBO ---
-    {
+    if (has_binding(1, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
         VkDescriptorBufferInfo sl_buf{};
         auto sl_it = bound_ssbos_.find(2); // binding 2 = SpotLightSSBO
         const VulkanBuffer* sl_ssbo = (sl_it != bound_ssbos_.end())
@@ -674,7 +703,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     }
 
     // --- Set 1 binding 3: ClusterInfo SSBO ---
-    {
+    if (has_binding(1, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
         VkDescriptorBufferInfo ci_buf{};
         auto ci_it = bound_ssbos_.find(3); // binding 3 = ClusterInfoSSBO
         const VulkanBuffer* ci_ssbo = (ci_it != bound_ssbos_.end())
@@ -701,7 +730,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     }
 
     // --- Set 1 binding 4: LightIndex SSBO ---
-    {
+    if (has_binding(1, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
         VkDescriptorBufferInfo li_buf{};
         auto li_it = bound_ssbos_.find(4); // binding 4 = LightIndexSSBO
         const VulkanBuffer* li_ssbo = (li_it != bound_ssbos_.end())
@@ -728,7 +757,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     }
 
     // --- Set 1 binding 5: LightProbeData UBO ---
-    {
+    if (has_binding(1, 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
         // 写入 SH 数据到当前帧的 UBO
         struct LightProbeGPU {
             glm::vec4 sh[9];
@@ -762,7 +791,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (tex_handle == 0) tex_handle = white_texture_handle_;
         const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
         if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
-        if (tex) {
+        if (tex && has_binding(2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             VkDescriptorImageInfo img_info{};
             img_info.sampler = resource_mgr.default_sampler();
             img_info.imageView = tex->image_view;
@@ -781,18 +810,19 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     } else {
         // PerMaterial UBO (binding 0)
         VkDescriptorBufferInfo mat_buf_info{};
-        mat_buf_info.buffer = per_material_ubo_[fi];
-        mat_buf_info.offset = per_material_offset;
-        mat_buf_info.range = sizeof(VulkanPerMaterialUBO);
-
         VkWriteDescriptorSet mat_write{};
-        mat_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        mat_write.dstSet = sets[2];
-        mat_write.dstBinding = 0;
-        mat_write.dstArrayElement = 0;
-        mat_write.descriptorCount = 1;
-        mat_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        mat_write.pBufferInfo = &mat_buf_info;
+        if (has_binding(2, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+            mat_buf_info.buffer = per_material_ubo_[fi];
+            mat_buf_info.offset = per_material_offset;
+            mat_buf_info.range = sizeof(VulkanPerMaterialUBO);
+            mat_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            mat_write.dstSet = sets[2];
+            mat_write.dstBinding = 0;
+            mat_write.dstArrayElement = 0;
+            mat_write.descriptorCount = 1;
+            mat_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            mat_write.pBufferInfo = &mat_buf_info;
+        }
 
         // 纹理采样器 (binding 1-5)
         struct TexBinding {
@@ -812,6 +842,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
 
         int write_count = 1; // mat_write 算第 0 个
         for (int i = 0; i < 5; ++i) {
+            if (!has_binding(2, tex_bindings[i].binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) continue;
             unsigned int tex_handle = tex_bindings[i].handle;
             if (tex_handle == 0) tex_handle = white_texture_handle_;
 
@@ -836,7 +867,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         // 绑定 CSM 阴影贴图到 binding 6（sampler2DShadow，使用比较采样器）
         VkDescriptorImageInfo shadow_image_infos[3] = {};
         VkWriteDescriptorSet shadow_write{};
-        {
+        if (has_binding(2, 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             VkSampler cmp_sampler = resource_mgr.shadow_comparison_sampler();
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 3; ++i) {
@@ -866,7 +897,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         // 绑定 Spot 阴影贴图到 binding 7
         VkDescriptorImageInfo spot_shadow_image_infos[4] = {};
         VkWriteDescriptorSet spot_shadow_write{};
-        {
+        if (has_binding(2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 4; ++i) {
                 unsigned int ss_handle = global_state_.spot_shadow_map[i];
@@ -894,54 +925,167 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
 
         // BoneMatrices UBO (binding 8) — 使用累积偏移避免 GPU 延迟执行覆盖
         VkDescriptorBufferInfo bone_buf_info{};
-        bone_buf_info.buffer = bone_matrices_ubo_;
-        bone_buf_info.offset = bone_offset;
-        bone_buf_info.range  = 255 * sizeof(glm::mat4);
-
         VkWriteDescriptorSet bone_write{};
-        bone_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        bone_write.dstSet          = sets[2];
-        bone_write.dstBinding      = 8;
-        bone_write.descriptorCount = 1;
-        bone_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        bone_write.pBufferInfo     = &bone_buf_info;
+        if (has_binding(2, 8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+            bone_buf_info.buffer = bone_matrices_ubo_;
+            bone_buf_info.offset = bone_offset;
+            bone_buf_info.range  = 255 * sizeof(glm::mat4);
+            bone_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            bone_write.dstSet          = sets[2];
+            bone_write.dstBinding      = 8;
+            bone_write.descriptorCount = 1;
+            bone_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            bone_write.pBufferInfo     = &bone_buf_info;
+        }
 
         // MorphWeights UBO (binding 9)
         VkDescriptorBufferInfo morph_buf_info{};
-        morph_buf_info.buffer = morph_weights_ubo_;
-        morph_buf_info.offset = 0;
-        morph_buf_info.range  = 16;
-
         VkWriteDescriptorSet morph_write{};
-        morph_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        morph_write.dstSet          = sets[2];
-        morph_write.dstBinding      = 9;
-        morph_write.descriptorCount = 1;
-        morph_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        morph_write.pBufferInfo     = &morph_buf_info;
+        if (has_binding(2, 9, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+            morph_buf_info.buffer = morph_weights_ubo_;
+            morph_buf_info.offset = 0;
+            morph_buf_info.range  = 16;
+            morph_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            morph_write.dstSet          = sets[2];
+            morph_write.dstBinding      = 9;
+            morph_write.descriptorCount = 1;
+            morph_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            morph_write.pBufferInfo     = &morph_buf_info;
+        }
 
-        // 合并写入
+        auto has_set2_binding = [&](uint32_t binding, VkDescriptorType type) {
+            return has_binding(2, binding, type);
+        };
+
+        SpotLightDataUBO spot_data = PrepareSpotLightDataUBO(global_state_);
+        WriteToBuffer(device, per_spot_lights_ubo_mem_[fi], 0, sizeof(spot_data), &spot_data);
+        VkDescriptorBufferInfo spot_data_buf{};
+        spot_data_buf.buffer = per_spot_lights_ubo_[fi];
+        spot_data_buf.offset = 0;
+        spot_data_buf.range = sizeof(SpotLightDataUBO);
+        VkWriteDescriptorSet spot_data_write{};
+        if (has_set2_binding(10, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+            spot_data_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            spot_data_write.dstSet = sets[2];
+            spot_data_write.dstBinding = 10;
+            spot_data_write.descriptorCount = 1;
+            spot_data_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            spot_data_write.pBufferInfo = &spot_data_buf;
+        }
+
+        struct TerrainParamsUBO {
+            glm::vec4 flags;
+            glm::vec4 tiling;
+        } terrain_params{};
+        terrain_params.flags.x = item.splat_enabled ? 1.0f : 0.0f;
+        terrain_params.tiling = item.splat_tiling;
+        VkDescriptorBufferInfo terrain_buf{};
+        if (terrain_params_ubo_offset_ + sizeof(TerrainParamsUBO) <= terrain_params_ubo_capacity_) {
+            WriteToBuffer(device, terrain_params_ubo_mem_[fi], terrain_params_ubo_offset_,
+                          sizeof(terrain_params), &terrain_params);
+            terrain_buf.buffer = terrain_params_ubo_[fi];
+            terrain_buf.offset = terrain_params_ubo_offset_;
+            terrain_buf.range = sizeof(TerrainParamsUBO);
+            terrain_params_ubo_offset_ += kUboSlotAlignment;
+        } else {
+            terrain_buf.buffer = dummy_ubo_buffer_;
+            terrain_buf.offset = 0;
+            terrain_buf.range = sizeof(TerrainParamsUBO);
+        }
+        VkWriteDescriptorSet terrain_write{};
+        if (has_set2_binding(16, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+            terrain_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            terrain_write.dstSet = sets[2];
+            terrain_write.dstBinding = 16;
+            terrain_write.descriptorCount = 1;
+            terrain_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            terrain_write.pBufferInfo = &terrain_buf;
+        }
+
+        VkDescriptorImageInfo splat_infos[5] = {};
+        VkWriteDescriptorSet splat_writes[5] = {};
+        unsigned int splat_handles[5] = {
+            item.splat_weight_map_handle,
+            item.splat_layer_handles[0],
+            item.splat_layer_handles[1],
+            item.splat_layer_handles[2],
+            item.splat_layer_handles[3],
+        };
+        for (int i = 0; i < 5; ++i) {
+            const uint32_t binding = static_cast<uint32_t>(11 + i);
+            if (!has_set2_binding(binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) continue;
+            unsigned int tex_handle = splat_handles[i] != 0 ? splat_handles[i] : white_texture_handle_;
+            const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
+            if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
+            if (!tex) continue;
+            splat_infos[i].sampler = resource_mgr.default_sampler();
+            splat_infos[i].imageView = tex->image_view;
+            splat_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            splat_writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            splat_writes[i].dstSet = sets[2];
+            splat_writes[i].dstBinding = binding;
+            splat_writes[i].descriptorCount = 1;
+            splat_writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            splat_writes[i].pImageInfo = &splat_infos[i];
+        }
+
+        VkDescriptorImageInfo ibl_infos[2] = {};
+        VkWriteDescriptorSet ibl_writes[2] = {};
+        const VulkanTexture* white_cube = resource_mgr.GetTexture(white_cubemap_handle_);
+        const VulkanTexture* white_2d = resource_mgr.GetTexture(white_texture_handle_);
+        if (has_set2_binding(17, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) && white_cube) {
+            ibl_infos[0].sampler = resource_mgr.default_sampler();
+            ibl_infos[0].imageView = white_cube->image_view;
+            ibl_infos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            ibl_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            ibl_writes[0].dstSet = sets[2];
+            ibl_writes[0].dstBinding = 17;
+            ibl_writes[0].descriptorCount = 1;
+            ibl_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            ibl_writes[0].pImageInfo = &ibl_infos[0];
+        }
+        if (has_set2_binding(18, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) && white_2d) {
+            ibl_infos[1].sampler = resource_mgr.default_sampler();
+            ibl_infos[1].imageView = white_2d->image_view;
+            ibl_infos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            ibl_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            ibl_writes[1].dstSet = sets[2];
+            ibl_writes[1].dstBinding = 18;
+            ibl_writes[1].descriptorCount = 1;
+            ibl_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            ibl_writes[1].pImageInfo = &ibl_infos[1];
+        }
+
         std::vector<VkWriteDescriptorSet> all_writes;
-        all_writes.push_back(mat_write);
+        if (mat_write.sType != 0) all_writes.push_back(mat_write);
         for (int i = 0; i < 5; ++i) {
             if (tex_writes[i].sType != 0) {
                 all_writes.push_back(tex_writes[i]);
             }
         }
-        all_writes.push_back(shadow_write);
-        all_writes.push_back(spot_shadow_write);
-        all_writes.push_back(bone_write);
-        all_writes.push_back(morph_write);
+        if (shadow_write.sType != 0) all_writes.push_back(shadow_write);
+        if (spot_shadow_write.sType != 0) all_writes.push_back(spot_shadow_write);
+        if (bone_write.sType != 0) all_writes.push_back(bone_write);
+        if (morph_write.sType != 0) all_writes.push_back(morph_write);
+        if (spot_data_write.sType != 0) all_writes.push_back(spot_data_write);
+        if (terrain_write.sType != 0) all_writes.push_back(terrain_write);
+        for (int i = 0; i < 5; ++i) {
+            if (splat_writes[i].sType != 0) all_writes.push_back(splat_writes[i]);
+        }
+        for (int i = 0; i < 2; ++i) {
+            if (ibl_writes[i].sType != 0) all_writes.push_back(ibl_writes[i]);
+        }
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
     } // else (PBR mode Set 2)
 
     // --- Set 3 binding 0: 点光源立方体阴影贴图 (u_point_shadow_maps[4]) ---
-    if (!gbuffer_mode && set_count >= 4 && sets[3] != VK_NULL_HANDLE) {
+    if (!gbuffer_mode && set_count >= 4 && sets[3] != VK_NULL_HANDLE
+        && has_binding(3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
         VkDescriptorImageInfo point_shadow_infos[4] = {};
         VkWriteDescriptorSet  point_shadow_write{};
         {
             VkSampler lin_sampler = resource_mgr.default_sampler();
-            const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
+            const VulkanTexture* white_tex = resource_mgr.GetTexture(white_cubemap_handle_);
             for (int i = 0; i < 4; ++i) {
                 unsigned int ps_handle = global_state_.point_shadow_map[i];
                 const VulkanTexture* ps_tex = (ps_handle != 0)
@@ -2865,6 +3009,7 @@ void VulkanDrawExecutor::BeginFrame() {
     per_frame_ubo_offset_ = 0;
     per_scene_ubo_offset_ = 0;
     per_material_ubo_offset_ = 0;
+    terrain_params_ubo_offset_ = 0;
     per_point_lights_ubo_offset_ = 0;
     per_spot_lights_ubo_offset_ = 0;
     const char* env = std::getenv("DSE_VULKAN_MAX_PASSES");
@@ -2988,9 +3133,15 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                                             VulkanShaderManager& shader_mgr) {
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
-    const unsigned int shader_handle = shader_mgr.pbr_shader_handle();
+    // 优先使用 GPU-driven shader（VS 从 SSBO 读 model, FS 从 Material SSBO 读材质）
+    unsigned int shader_handle = shader_mgr.gpu_driven_pbr_shader_handle();
     const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_handle);
-    if (!pbr_program) return;
+    if (!pbr_program) {
+        // 回退到标准 PBR（不支持 glslang 时）
+        shader_handle = shader_mgr.pbr_shader_handle();
+        pbr_program = shader_mgr.GetProgram(shader_handle);
+        if (!pbr_program) return;
+    }
 
     // 获取当前 render pass（可能是离屏 RT 的 render pass）
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
@@ -3054,21 +3205,121 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     per_scene_ubo_offset_ += kUboSlotAlignment;
 
     if (resource_mgr_) {
-        MeshDrawItem default_item;
-        default_item.lighting_enabled = true;
-        default_item.light_direction = light_dir;
-        default_item.light_color = light_color;
-        default_item.light_intensity = light_intensity;
-        default_item.ambient_intensity = ambient_intensity;
-        default_item.shadow_strength = shadow_strength;
-        default_item.receive_shadow = (shadow_strength > 0.0f);
+        cached_gpu_driven_program_ = pbr_program;
+        gpu_driven_instance_set_bound_ = false;
 
-        VkDeviceSize cur_material_offset = per_material_ubo_offset_;
-        UpdatePerMaterialUBO(default_item);
-        per_material_ubo_offset_ += kUboSlotAlignment;
+        if (pbr_program->descriptor_set_layouts.size() < 4) {
+            DEBUG_LOG_WARN("GPU-driven PBR program has insufficient descriptor set layouts ({})",
+                           pbr_program->descriptor_set_layouts.size());
+            return;
+        }
 
-        AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, default_item, *resource_mgr_,
-            0, cur_per_frame_offset, cur_per_scene_offset, cur_material_offset, 0, 0, false);
+        auto device = context_->device();
+        VkDescriptorSet set0 = resource_mgr_->AllocateDescriptorSet(pbr_program->descriptor_set_layouts[0]);
+        VkDescriptorSet set1 = resource_mgr_->AllocateDescriptorSet(pbr_program->descriptor_set_layouts[1]);
+        VkDescriptorSet set3 = resource_mgr_->AllocateDescriptorSet(pbr_program->descriptor_set_layouts[3]);
+        if (set0 == VK_NULL_HANDLE || set1 == VK_NULL_HANDLE || set3 == VK_NULL_HANDLE) return;
+
+        VkDescriptorBufferInfo frame_buf{};
+        frame_buf.buffer = per_frame_ubo_[current_frame_index_];
+        frame_buf.offset = cur_per_frame_offset;
+        frame_buf.range = sizeof(VulkanPerFrameUBO);
+        VkWriteDescriptorSet frame_write{};
+        frame_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        frame_write.dstSet = set0;
+        frame_write.dstBinding = 0;
+        frame_write.descriptorCount = 1;
+        frame_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        frame_write.pBufferInfo = &frame_buf;
+        vkUpdateDescriptorSets(device, 1, &frame_write, 0, nullptr);
+
+        VkDescriptorBufferInfo scene_buf{};
+        scene_buf.buffer = per_scene_ubo_[current_frame_index_];
+        scene_buf.offset = cur_per_scene_offset;
+        scene_buf.range = sizeof(VulkanPerSceneUBO);
+        VkWriteDescriptorSet scene_write{};
+        scene_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        scene_write.dstSet = set1;
+        scene_write.dstBinding = 0;
+        scene_write.descriptorCount = 1;
+        scene_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        scene_write.pBufferInfo = &scene_buf;
+        vkUpdateDescriptorSets(device, 1, &scene_write, 0, nullptr);
+
+        auto write_set1_ssbo = [&](uint32_t binding) {
+            VkDescriptorBufferInfo ssbo_buf{};
+            auto it = bound_ssbos_.find(binding);
+            const VulkanBuffer* ssbo = (it != bound_ssbos_.end()) ? resource_mgr_->GetSSBO(it->second) : nullptr;
+            if (ssbo && ssbo->buffer != VK_NULL_HANDLE) {
+                ssbo_buf.buffer = ssbo->buffer;
+                ssbo_buf.offset = 0;
+                ssbo_buf.range = ssbo->size;
+            } else {
+                ssbo_buf.buffer = dummy_ssbo_buffer_;
+                ssbo_buf.offset = 0;
+                ssbo_buf.range = VK_WHOLE_SIZE;
+            }
+            VkWriteDescriptorSet write{};
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet = set1;
+            write.dstBinding = binding;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            write.pBufferInfo = &ssbo_buf;
+            vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+        };
+        write_set1_ssbo(1);
+        write_set1_ssbo(2);
+        write_set1_ssbo(3);
+        write_set1_ssbo(4);
+
+        struct LightProbeGPU {
+            glm::vec4 sh[9];
+            glm::vec4 params;
+        } lp_data{};
+        for (int i = 0; i < 9; ++i) lp_data.sh[i] = global_state_.light_probe_sh[i];
+        lp_data.params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+        WriteToBuffer(device, light_probe_ubo_mem_[current_frame_index_], 0, sizeof(lp_data), &lp_data);
+        VkDescriptorBufferInfo lp_buf{};
+        lp_buf.buffer = light_probe_ubo_[current_frame_index_];
+        lp_buf.offset = 0;
+        lp_buf.range = sizeof(lp_data);
+        VkWriteDescriptorSet lp_write{};
+        lp_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        lp_write.dstSet = set1;
+        lp_write.dstBinding = 5;
+        lp_write.descriptorCount = 1;
+        lp_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        lp_write.pBufferInfo = &lp_buf;
+        vkUpdateDescriptorSets(device, 1, &lp_write, 0, nullptr);
+
+        VkDescriptorImageInfo point_shadow_infos[4] = {};
+        const VulkanTexture* white_tex = resource_mgr_->GetTexture(white_cubemap_handle_);
+        for (int i = 0; i < 4; ++i) {
+            unsigned int ps_handle = global_state_.point_shadow_map[i];
+            const VulkanTexture* ps_tex = (ps_handle != 0) ? resource_mgr_->GetTexture(ps_handle) : nullptr;
+            const VulkanTexture* tex = ps_tex ? ps_tex : white_tex;
+            if (tex) {
+                point_shadow_infos[i].sampler = resource_mgr_->default_sampler();
+                point_shadow_infos[i].imageView = tex->image_view;
+                point_shadow_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+        }
+        VkWriteDescriptorSet point_shadow_write{};
+        point_shadow_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        point_shadow_write.dstSet = set3;
+        point_shadow_write.dstBinding = 0;
+        point_shadow_write.descriptorCount = 4;
+        point_shadow_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        point_shadow_write.pImageInfo = point_shadow_infos;
+        vkUpdateDescriptorSets(device, 1, &point_shadow_write, 0, nullptr);
+
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pbr_program->pipeline_layout, 0, 1, &set0, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pbr_program->pipeline_layout, 1, 1, &set1, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pbr_program->pipeline_layout, 3, 1, &set3, 0, nullptr);
     }
 }
 
@@ -3082,9 +3333,14 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
                                                 VulkanShaderManager& shader_mgr) {
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
-    const unsigned int shader_handle = shader_mgr.shadow_shader_handle();
+    // 优先使用 GPU-driven shadow shader（VS 从 SSBO 读 model）
+    unsigned int shader_handle = shader_mgr.gpu_driven_shadow_shader_handle();
     const VulkanShaderProgram* shadow_program = shader_mgr.GetProgram(shader_handle);
-    if (!shadow_program) return;
+    if (!shadow_program) {
+        shader_handle = shader_mgr.shadow_shader_handle();
+        shadow_program = shader_mgr.GetProgram(shader_handle);
+        if (!shadow_program) return;
+    }
 
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
@@ -3111,7 +3367,10 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
     gpu_driven_pipeline_layout_ = shadow_program->pipeline_layout;
+    cached_gpu_driven_program_ = shadow_program;
+    gpu_driven_instance_set_bound_ = false;
 
+    VkDeviceSize cur_per_frame_offset = per_frame_ubo_offset_;
     VulkanPerFrameUBO frame_ubo{};
     frame_ubo.vp = light_proj * light_view;
     frame_ubo.view = light_view;
@@ -3123,6 +3382,211 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
                       per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
     }
     per_frame_ubo_offset_ += kUboSlotAlignment;
+
+    if (resource_mgr_ && !shadow_program->descriptor_set_layouts.empty()) {
+        VkDescriptorSet set0 = resource_mgr_->AllocateDescriptorSet(shadow_program->descriptor_set_layouts[0]);
+        if (set0 != VK_NULL_HANDLE) {
+            VkDescriptorBufferInfo frame_buf{};
+            frame_buf.buffer = per_frame_ubo_[current_frame_index_];
+            frame_buf.offset = cur_per_frame_offset;
+            frame_buf.range = sizeof(VulkanPerFrameUBO);
+            VkWriteDescriptorSet frame_write{};
+            frame_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            frame_write.dstSet = set0;
+            frame_write.dstBinding = 0;
+            frame_write.descriptorCount = 1;
+            frame_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            frame_write.pBufferInfo = &frame_buf;
+            vkUpdateDescriptorSets(context_->device(), 1, &frame_write, 0, nullptr);
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    shadow_program->pipeline_layout, 0, 1, &set0, 0, nullptr);
+        }
+    }
+}
+
+// ============================================================
+// GPU-Driven: 按纹理桶重新绑定 Set 2
+// ============================================================
+
+void VulkanDrawExecutor::UpdateGPUDrivenMaterial(const void* mat_data) {
+    // VK GPU-driven FS 从 MaterialSSBO 逐 instance 读材质（v_material_id 索引），
+    // 不再需要 per-bucket UBO 更新。保留接口供 DX11 使用。
+    (void)mat_data;
+}
+
+void VulkanDrawExecutor::BindGPUDrivenInstanceSet(VkCommandBuffer cmd_buf,
+                                                   VulkanResourceManager& resource_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !cached_gpu_driven_program_) return;
+    if (gpu_driven_pipeline_layout_ == VK_NULL_HANDLE) return;
+    if (gpu_driven_instance_set_bound_) return;
+    if (cached_gpu_driven_program_->descriptor_set_layouts.size() <= 4) return;
+
+    auto inst_it = bound_ssbos_.find(gpu_driven::kSSBOBindingInstances);
+    if (inst_it == bound_ssbos_.end()) return;
+    const VulkanBuffer* inst_ssbo = resource_mgr.GetSSBO(inst_it->second);
+    if (!inst_ssbo || inst_ssbo->buffer == VK_NULL_HANDLE) return;
+
+    VkDescriptorSet set4 = resource_mgr.AllocateDescriptorSet(
+        cached_gpu_driven_program_->descriptor_set_layouts[4]);
+    if (set4 == VK_NULL_HANDLE) return;
+
+    VkDescriptorBufferInfo inst_buf{};
+    inst_buf.buffer = inst_ssbo->buffer;
+    inst_buf.offset = 0;
+    inst_buf.range  = inst_ssbo->size;
+    VkWriteDescriptorSet inst_write{};
+    inst_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    inst_write.dstSet          = set4;
+    inst_write.dstBinding      = 0;
+    inst_write.descriptorCount = 1;
+    inst_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    inst_write.pBufferInfo     = &inst_buf;
+    vkUpdateDescriptorSets(context_->device(), 1, &inst_write, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            gpu_driven_pipeline_layout_, 4, 1, &set4, 0, nullptr);
+    gpu_driven_instance_set_bound_ = true;
+}
+
+void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
+                                                unsigned int albedo, unsigned int normal,
+                                                unsigned int metallic_roughness,
+                                                unsigned int emissive, unsigned int occlusion,
+                                                VulkanResourceManager& resource_mgr) {
+    if (cmd_buf == VK_NULL_HANDLE || !cached_gpu_driven_program_) return;
+    if (cached_gpu_driven_program_->descriptor_set_layouts.size() < 3) return;
+
+    auto device = context_->device();
+    VkDescriptorSet set2 = resource_mgr.AllocateDescriptorSet(
+        cached_gpu_driven_program_->descriptor_set_layouts[2]);
+    if (set2 == VK_NULL_HANDLE) return;
+
+    auto has_binding = [&](uint32_t binding, VkDescriptorType type) {
+        for (const auto& b : cached_gpu_driven_program_->reflection.bindings) {
+            if (b.set == 2 && b.binding == binding && b.type == type) return true;
+        }
+        return false;
+    };
+
+    const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
+    const VulkanTexture* white_cube = resource_mgr.GetTexture(white_cubemap_handle_);
+    VkWriteDescriptorSet writes[24] = {};
+    VkDescriptorImageInfo image_infos[24] = {};
+    VkDescriptorBufferInfo buffer_infos[8] = {};
+    int wc = 0;
+    int ic = 0;
+    int bc = 0;
+
+    auto push_image = [&](uint32_t binding, const VulkanTexture* tex, VkSampler sampler,
+                          VkImageLayout layout, uint32_t count = 1) {
+        if (!has_binding(binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) || !tex) return;
+        image_infos[ic].sampler = sampler;
+        image_infos[ic].imageView = tex->image_view;
+        image_infos[ic].imageLayout = layout;
+        writes[wc].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[wc].dstSet = set2;
+        writes[wc].dstBinding = binding;
+        writes[wc].descriptorCount = count;
+        writes[wc].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[wc].pImageInfo = &image_infos[ic];
+        ++wc;
+        ic += static_cast<int>(count);
+    };
+    auto push_buffer = [&](uint32_t binding, VkDescriptorType type,
+                           VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range) {
+        if (!has_binding(binding, type) || buffer == VK_NULL_HANDLE) return;
+        buffer_infos[bc].buffer = buffer;
+        buffer_infos[bc].offset = offset;
+        buffer_infos[bc].range = range;
+        writes[wc].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[wc].dstSet = set2;
+        writes[wc].dstBinding = binding;
+        writes[wc].descriptorCount = 1;
+        writes[wc].descriptorType = type;
+        writes[wc].pBufferInfo = &buffer_infos[bc];
+        ++wc;
+        ++bc;
+    };
+
+    struct TexBinding { unsigned int handle; uint32_t binding; };
+    TexBinding tex_bindings[] = {
+        {albedo, 1}, {normal, 2}, {metallic_roughness, 3},
+        {emissive, 4}, {occlusion, 5},
+    };
+    for (const auto& tb : tex_bindings) {
+        unsigned int h = tb.handle != 0 ? tb.handle : white_texture_handle_;
+        const VulkanTexture* tex = resource_mgr.GetTexture(h);
+        push_image(tb.binding, tex ? tex : white_tex, resource_mgr.default_sampler(),
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+
+    VkDescriptorImageInfo csm_infos[3] = {};
+    if (has_binding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
+        for (int i = 0; i < 3; ++i) {
+            unsigned int sm_handle = global_state_.shadow_map[i];
+            VkImageView depth_view = sm_handle != 0 ? resource_mgr.GetRenderTargetDepthImageView(sm_handle) : VK_NULL_HANDLE;
+            csm_infos[i].sampler = depth_view != VK_NULL_HANDLE ? resource_mgr.shadow_comparison_sampler() : resource_mgr.default_sampler();
+            csm_infos[i].imageView = depth_view != VK_NULL_HANDLE ? depth_view : (white_tex ? white_tex->image_view : VK_NULL_HANDLE);
+            csm_infos[i].imageLayout = depth_view != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+        writes[wc].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[wc].dstSet = set2;
+        writes[wc].dstBinding = 6;
+        writes[wc].descriptorCount = 3;
+        writes[wc].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[wc].pImageInfo = csm_infos;
+        ++wc;
+    }
+
+    VkDescriptorImageInfo spot_infos[4] = {};
+    if (has_binding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
+        for (int i = 0; i < 4; ++i) {
+            unsigned int ss_handle = global_state_.spot_shadow_map[i];
+            VkImageView depth_view = ss_handle != 0 ? resource_mgr.GetRenderTargetDepthImageView(ss_handle) : VK_NULL_HANDLE;
+            spot_infos[i].sampler = depth_view != VK_NULL_HANDLE ? resource_mgr.shadow_comparison_sampler() : resource_mgr.default_sampler();
+            spot_infos[i].imageView = depth_view != VK_NULL_HANDLE ? depth_view : (white_tex ? white_tex->image_view : VK_NULL_HANDLE);
+            spot_infos[i].imageLayout = depth_view != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+        writes[wc].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[wc].dstSet = set2;
+        writes[wc].dstBinding = 7;
+        writes[wc].descriptorCount = 4;
+        writes[wc].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[wc].pImageInfo = spot_infos;
+        ++wc;
+    }
+
+    push_buffer(8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, bone_matrices_ubo_, 0, 255 * sizeof(glm::mat4));
+
+    VkBuffer mat_buffer = dummy_ssbo_buffer_;
+    VkDeviceSize mat_range = VK_WHOLE_SIZE;
+    auto mat_it = bound_ssbos_.find(gpu_driven::kSSBOBindingMaterials);
+    if (mat_it != bound_ssbos_.end()) {
+        const VulkanBuffer* mat_ssbo = resource_mgr.GetSSBO(mat_it->second);
+        if (mat_ssbo && mat_ssbo->buffer != VK_NULL_HANDLE) {
+            mat_buffer = mat_ssbo->buffer;
+            mat_range = mat_ssbo->size;
+        }
+    }
+    push_buffer(9, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, mat_buffer, 0, mat_range);
+
+    SpotLightDataUBO spot_data = PrepareSpotLightDataUBO(global_state_);
+    WriteToBuffer(device, per_spot_lights_ubo_mem_[current_frame_index_], 0, sizeof(spot_data), &spot_data);
+    push_buffer(10, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, per_spot_lights_ubo_[current_frame_index_],
+                0, sizeof(SpotLightDataUBO));
+
+    for (uint32_t binding = 11; binding <= 15; ++binding) {
+        push_image(binding, white_tex, resource_mgr.default_sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+    push_buffer(16, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, dummy_ubo_buffer_, 0, 32);
+    push_image(17, white_cube, resource_mgr.default_sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    push_image(18, white_tex, resource_mgr.default_sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (wc > 0) {
+        vkUpdateDescriptorSets(device, static_cast<uint32_t>(wc), writes, 0, nullptr);
+    }
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                             gpu_driven_pipeline_layout_, 2, 1, &set2, 0, nullptr);
+    BindGPUDrivenInstanceSet(cmd_buf, resource_mgr);
 }
 
 } // namespace render

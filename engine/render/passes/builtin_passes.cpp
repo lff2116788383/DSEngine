@@ -123,6 +123,22 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetCamera(snap.camera_3d.view, projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.prez);
 
+        // GPU-driven PreZ: eligible 实体 depth-only indirect draw
+        const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+            && ctx_.gpu_mega_vao && ctx_.gpu_draw_cmd_ssbo
+            && ctx_.gpu_indirect_draw_count > 0;
+        if (use_gpu_indirect) {
+            auto* rhi = ctx_.rhi_device;
+            rhi->SetupGPUDrivenShadowShader(snap.camera_3d.view, projection);
+            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                          ctx_.gpu_indirect_draw_count,
+                                          sizeof(DrawElementsIndirectCommand));
+            rhi->UnbindVAO();
+        }
+
+        // Module per-item PreZ (non-eligible 实体)
         for (auto& mod : ctx_.modules) {
             if (mod.instance) {
                 mod.instance->OnRenderPreZ(*ctx_.world, cmd_buffer);
@@ -153,7 +169,6 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     glm::vec3 shadow_center = FindShadowCenter(snap);
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
-        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -228,7 +243,6 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
     spot_light_space_matrices.reserve(4);
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
-        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -285,7 +299,6 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
-        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -553,10 +566,9 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
         // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
-        // 有 module 时跳过：module 通过 OnRenderScene 走 per-item DrawMeshBatch，
-        // 与 GPU-driven 双重渲染会因深度相等导致 per-item 被拒而使用 mega buffer 的错误顶点颜色
+        // eligible 实体走 GPU indirect；non-eligible 实体由 OnRenderScene per-item 渲染
+        // Render() 中 IsGPUDrivenEligible 跳过 eligible 实体，保证无双重绘制
         const bool use_gpu_indirect = ctx_.gpu_driven_enabled
-            && ctx_.modules.empty()
             && ctx_.gpu_mega_vao
             && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
@@ -583,19 +595,43 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
             // 绑定 instance SSBO 供 vertex shader 读取 model matrix
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+            // 绑定 material SSBO 供 fragment shader 读取 per-instance 材质
+            if (ctx_.gpu_material_ssbo) {
+                rhi->BindGpuBuffer(ctx_.gpu_material_ssbo, dse::render::gpu_driven::kSSBOBindingMaterials);
+            }
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
-                                          ctx_.gpu_indirect_draw_count,
-                                          sizeof(DrawElementsIndirectCommand));
+
+            // Phase 5: 按纹理桶绘制 — 每桶绑定纹理后 indirect draw
+            if (ctx_.gpu_texture_buckets && ctx_.gpu_texture_bucket_count > 0) {
+                const size_t stride = sizeof(DrawElementsIndirectCommand);
+                for (int bi = 0; bi < ctx_.gpu_texture_bucket_count; ++bi) {
+                    const auto& bucket = ctx_.gpu_texture_buckets[bi];
+                    // per-bucket PerMaterial 更新（DX11/VK: 更新 cbuffer/UBO; GL: no-op, 用 MaterialSSBO）
+                    if (ctx_.gpu_materials && bucket.material_id < static_cast<uint32_t>(ctx_.gpu_material_count)) {
+                        rhi->UpdateGPUDrivenMaterial(&ctx_.gpu_materials[bucket.material_id]);
+                    }
+                    rhi->BindGPUDrivenTextures(bucket.textures.albedo,
+                                                bucket.textures.normal,
+                                                bucket.textures.metallic_roughness,
+                                                bucket.textures.emissive,
+                                                bucket.textures.occlusion);
+                    rhi->MultiDrawIndexedIndirect(
+                        ctx_.gpu_draw_cmd_ssbo.raw(),
+                        static_cast<int>(bucket.cmd_count),
+                        stride,
+                        bucket.cmd_offset * stride);
+                }
+            } else {
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+            }
             rhi->UnbindVAO();
         }
 
-        // CPU 路径：仅在无 module 时走 render_meshes fallback；
-        // 有 module 时由 OnRenderScene 负责 mesh 渲染（避免双重绘制）
-        if (!use_gpu_indirect) {
-            if (ctx_.modules.empty() && ctx_.render_meshes) {
-                ctx_.render_meshes(*ctx_.world, cmd_buffer);
-            }
+        // CPU 路径：无 module 时走 render_meshes fallback（渲染 non-eligible 实体）
+        if (!use_gpu_indirect && ctx_.modules.empty() && ctx_.render_meshes) {
+            ctx_.render_meshes(*ctx_.world, cmd_buffer);
         }
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         for (auto& mod : ctx_.modules) {
@@ -618,10 +654,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->UnbindVAO();
             }
             // CPU 路径
-            if (!use_gpu_indirect) {
-                if (ctx_.modules.empty() && ctx_.render_meshes) {
-                    ctx_.render_meshes(*ctx_.world, cmd_buffer);
-                }
+            if (!use_gpu_indirect && ctx_.modules.empty() && ctx_.render_meshes) {
+                ctx_.render_meshes(*ctx_.world, cmd_buffer);
             }
             for (auto& mod : ctx_.modules) {
                 if (mod.instance) {

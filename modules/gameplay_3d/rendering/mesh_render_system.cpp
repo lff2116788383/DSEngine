@@ -12,6 +12,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -671,16 +672,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         if (mesh_renderer.is_static && static_batches_built_) continue;
 
         // GPU Driven: 跳过已被 PrepareGPUScene 处理的不透明非蒙皮 mesh，避免双重绘制
-        if (gpu_driven_active_ && mesh_renderer.local_bounds_valid
-            && !mesh_renderer.temp_vertices.empty()
-            && mesh_renderer.color.a >= 0.999f) {
-            bool is_skinned = false;
-            if (world.registry().all_of<Animator3DComponent>(entity)) {
-                const auto& anim = world.registry().get<Animator3DComponent>(entity);
-                if (anim.enabled && !anim.final_bone_matrices.empty()) is_skinned = true;
-            }
-            if (!is_skinned) continue;
-        }
+        if (gpu_driven_active_ && IsGPUDrivenEligible(world, entity, mesh_renderer)) continue;
 
         // Hi-Z: 计算并缓存 local bounds（仅首次加载后计算一次）
         if (!mesh_renderer.local_bounds_valid && !mesh_renderer.temp_vertices.empty()) {
@@ -1259,7 +1251,8 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     }
 
     // 静态合批结果：已按 MakeSortKey 排序，直接提交（零拷贝引用），刷新本帧光照
-    if (!static_batch_items_.empty()) {
+    // GPU-driven 活跃时跳过静态合批（eligible 静态实体已由 GPU indirect 绘制）
+    if (!static_batch_items_.empty() && !gpu_driven_active_) {
         for (auto& sb_item : static_batch_items_) {
             sb_item.point_lights = point_lights;
             sb_item.spot_lights = spot_lights;
@@ -1298,6 +1291,10 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     gpu_draw_cmds_.clear();
     gpu_instances_.clear();
     gpu_aabbs_.clear();
+    gpu_materials_.clear();
+    material_dedup_.clear();
+    gpu_tex_keys_.clear();
+    gpu_texture_buckets_.clear();
 
     int cmd_index = 0;
     bool new_mesh_added = false;
@@ -1306,22 +1303,12 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         auto& transform = view.get<TransformComponent>(entity);
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
 
-        if (!mesh_renderer.visible) continue;
-
         // LOD 切换后 temp_vertices 被清空：立即加载新 LOD mesh 数据，消除 1 帧 GPU Driven 空洞
         if ((mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty())
             && !mesh_renderer.mesh_path.empty() && asset_manager_) {
             EnsureMeshPathDataLoaded(*asset_manager_, world, entity, mesh_renderer);
         }
-        if (mesh_renderer.temp_vertices.empty() || mesh_renderer.temp_indices.empty()) continue;
-        if (!mesh_renderer.local_bounds_valid) continue;
-
-        // 排除蒙皮和透明
-        if (world.registry().all_of<Animator3DComponent>(entity)) {
-            const auto& animator = world.registry().get<Animator3DComponent>(entity);
-            if (animator.enabled && !animator.final_bone_matrices.empty()) continue;
-        }
-        if (mesh_renderer.color.a < 0.999f) continue;
+        if (!IsGPUDrivenEligible(world, entity, mesh_renderer)) continue;
 
         const glm::mat4 model = transform.local_to_world;
 
@@ -1340,10 +1327,20 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         }
         gpu_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
 
-        // 注册 mesh 到 mega buffer（去重：相同 mesh_path 只注册一次）
-        const std::string& mesh_key = mesh_renderer.mesh_path;
-        auto reg_it = mesh_registry_.find(mesh_key);
-        if (reg_it == mesh_registry_.end()) {
+        // 注册 mesh 到 mega buffer
+        // file mesh: mesh_path 做 key（去重，相同 path 共享顶点数据）
+        // inline mesh: entity id 做 key（独立条目，避免空 mesh_path 碰撞）
+        const bool is_file_mesh = !mesh_renderer.mesh_path.empty();
+        dse::render::MeshBatchEntry* found_entry = nullptr;
+        if (is_file_mesh) {
+            auto it = file_mesh_registry_.find(mesh_renderer.mesh_path);
+            if (it != file_mesh_registry_.end()) found_entry = &it->second;
+        } else {
+            auto eid = static_cast<uint32_t>(entity);
+            auto it = inline_mesh_registry_.find(eid);
+            if (it != inline_mesh_registry_.end()) found_entry = &it->second;
+        }
+        if (!found_entry) {
             // 新 mesh：转换为 BatchVertex 格式追加到 mega buffer
             const bool is_dmesh = mesh_renderer.mesh_path.find(".dmesh") != std::string::npos;
             const int stride = is_dmesh ? mesh_renderer.dmesh_vertex_stride : 3;
@@ -1387,7 +1384,9 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
                 }
 
                 // pos(3) + color(4) + uv(2) + normal(3) + tangent(3) + weights(4) + joints(4)
-                glm::vec4 color = mesh_renderer.color;
+                // file mesh 烘白色 → 实际颜色走 material SSBO（避免共享 path 不同 color 的实体颜色污染）
+                // inline mesh 烘实际颜色 → material albedo 设白色
+                glm::vec4 color = is_file_mesh ? glm::vec4(1.0f) : mesh_renderer.color;
                 mega_vbo_data_.push_back(pos.x); mega_vbo_data_.push_back(pos.y); mega_vbo_data_.push_back(pos.z);
                 mega_vbo_data_.push_back(color.r); mega_vbo_data_.push_back(color.g);
                 mega_vbo_data_.push_back(color.b); mega_vbo_data_.push_back(color.a);
@@ -1407,12 +1406,18 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
 
             mega_vbo_vertex_count_ += entry.vertex_count;
             mega_ibo_index_count_ += entry.index_count;
-            mesh_registry_[mesh_key] = entry;
-            reg_it = mesh_registry_.find(mesh_key);
+            if (is_file_mesh) {
+                file_mesh_registry_[mesh_renderer.mesh_path] = entry;
+                found_entry = &file_mesh_registry_[mesh_renderer.mesh_path];
+            } else {
+                auto eid = static_cast<uint32_t>(entity);
+                inline_mesh_registry_[eid] = entry;
+                found_entry = &inline_mesh_registry_[eid];
+            }
             new_mesh_added = true;
         }
 
-        const auto& entry = reg_it->second;
+        const auto& entry = *found_entry;
 
         // DrawElementsIndirectCommand — instance_count=1 初始（GPU cull 会写 0 表示剔除）
         DrawElementsIndirectCommand cmd{};
@@ -1423,16 +1428,110 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         cmd.base_instance = static_cast<uint32_t>(cmd_index);
         gpu_draw_cmds_.push_back(cmd);
 
+        // 材质提取 → GPUMaterialData（与 PerMaterial UBO 布局一致）
+        // file mesh: 颜色走 material（VBO 已烘白色）
+        // inline mesh: 颜色已在 VBO，material albedo 设白色避免双重应用
+        dse::render::GPUMaterialData mat{};
+        mat.albedo = is_file_mesh
+            ? glm::vec4(glm::vec3(mesh_renderer.color), mesh_renderer.metallic)
+            : glm::vec4(1.0f, 1.0f, 1.0f, mesh_renderer.metallic);
+        mat.roughness_ao = glm::vec4(mesh_renderer.roughness, mesh_renderer.ao,
+                                     mesh_renderer.normal_strength, mesh_renderer.material_alpha_cutoff);
+        mat.emissive = glm::vec4(mesh_renderer.emissive, mesh_renderer.material_alpha_test ? 1.0f : 0.0f);
+        mat.flags = glm::vec4(
+            mesh_renderer.normal_texture_handle != 0 ? 1.0f : 0.0f,
+            mesh_renderer.metallic_roughness_texture_handle != 0 ? 1.0f : 0.0f,
+            mesh_renderer.emissive_texture_handle != 0 ? 1.0f : 0.0f,
+            mesh_renderer.occlusion_texture_handle != 0 ? 1.0f : 0.0f);
+        mat.extra_params = glm::vec4(mesh_renderer.sss_strength, mesh_renderer.clear_coat,
+                                     mesh_renderer.clear_coat_roughness, mesh_renderer.anisotropy);
+        mat.extra_params2 = glm::vec4(mesh_renderer.pom_height_scale,
+                                      mesh_renderer.sss_tint.x, mesh_renderer.sss_tint.y, mesh_renderer.sss_tint.z);
+        mat.toon_shadow_color = glm::vec4(mesh_renderer.toon_shadow_color, mesh_renderer.toon_shadow_threshold);
+        mat.toon_params = glm::vec4(mesh_renderer.toon_shadow_softness, mesh_renderer.toon_specular_size,
+                                    mesh_renderer.toon_specular_strength, mesh_renderer.toon_rim_strength);
+
+        // 材质去重（128B hash）
+        uint64_t mat_hash = 0;
+        {
+            const auto* p = reinterpret_cast<const uint64_t*>(&mat);
+            for (int qi = 0; qi < 16; ++qi) mat_hash ^= p[qi] * (uint64_t(qi) * 2654435761ULL + 1);
+        }
+        uint32_t mat_id = 0;
+        auto dedup_it = material_dedup_.find(mat_hash);
+        if (dedup_it != material_dedup_.end()) {
+            mat_id = dedup_it->second;
+        } else {
+            mat_id = static_cast<uint32_t>(gpu_materials_.size());
+            gpu_materials_.push_back(mat);
+            material_dedup_[mat_hash] = mat_id;
+        }
+
         // GPUInstanceData
         dse::render::GPUInstanceData inst{};
         inst.model = model;
-        inst.material_id = 0;
+        inst.material_id = mat_id;
         inst.draw_cmd_id = static_cast<uint32_t>(cmd_index);
         inst.pad[0] = 0;
         inst.pad[1] = 0;
         gpu_instances_.push_back(inst);
 
+        dse::render::GPUDrawTextures tex_key{};
+        tex_key.albedo = mesh_renderer.albedo_texture_handle;
+        tex_key.normal = mesh_renderer.normal_texture_handle;
+        tex_key.metallic_roughness = mesh_renderer.metallic_roughness_texture_handle;
+        tex_key.emissive = mesh_renderer.emissive_texture_handle;
+        tex_key.occlusion = mesh_renderer.occlusion_texture_handle;
+        gpu_tex_keys_.push_back(tex_key);
+
         ++cmd_index;
+    }
+
+    // 按 (纹理, material_id) 排序 draw commands（保证同 bucket 同 material）
+    if (cmd_index > 1) {
+        std::vector<uint32_t> perm(static_cast<size_t>(cmd_index));
+        std::iota(perm.begin(), perm.end(), 0u);
+        std::sort(perm.begin(), perm.end(), [&](uint32_t a, uint32_t b) {
+            if (gpu_tex_keys_[a] != gpu_tex_keys_[b]) return gpu_tex_keys_[a] < gpu_tex_keys_[b];
+            return gpu_instances_[a].material_id < gpu_instances_[b].material_id;
+        });
+        // in-place cycle-based permutation apply — O(N) time, O(1) extra space
+        auto apply_perm = [&](auto& vec) {
+            const size_t n = perm.size();
+            for (size_t i = 0; i < n; ++i) {
+                size_t j = perm[i];
+                while (j < i) j = perm[j];
+                if (j != i) std::swap(vec[i], vec[j]);
+            }
+        };
+        apply_perm(gpu_draw_cmds_);
+        apply_perm(gpu_instances_);
+        apply_perm(gpu_aabbs_);
+        apply_perm(gpu_tex_keys_);
+        for (int i = 0; i < cmd_index; ++i) {
+            gpu_draw_cmds_[i].base_instance = static_cast<uint32_t>(i);
+            gpu_instances_[i].draw_cmd_id = static_cast<uint32_t>(i);
+        }
+    }
+
+    // 构建纹理桶
+    if (cmd_index > 0) {
+        dse::render::TextureBucket bucket{};
+        bucket.cmd_offset = 0;
+        bucket.material_id = gpu_instances_[0].material_id;
+        bucket.textures = gpu_tex_keys_[0];
+        for (int i = 1; i < cmd_index; ++i) {
+            if (gpu_tex_keys_[i] != gpu_tex_keys_[i - 1]
+                || gpu_instances_[i].material_id != gpu_instances_[i - 1].material_id) {
+                bucket.cmd_count = static_cast<uint32_t>(i) - bucket.cmd_offset;
+                gpu_texture_buckets_.push_back(bucket);
+                bucket.cmd_offset = static_cast<uint32_t>(i);
+                bucket.material_id = gpu_instances_[i].material_id;
+                bucket.textures = gpu_tex_keys_[i];
+            }
+        }
+        bucket.cmd_count = static_cast<uint32_t>(cmd_index) - bucket.cmd_offset;
+        gpu_texture_buckets_.push_back(bucket);
     }
 
     // 上传/更新 Mega VBO/IBO
@@ -1503,9 +1602,30 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         rhi->UpdateGpuBuffer(ctx.gpu_instance_ssbo, 0, inst_size, gpu_instances_.data());
     }
 
+    // 上传 GPUMaterialData SSBO（binding 9）
+    if (!gpu_materials_.empty()) {
+        const size_t mat_count = gpu_materials_.size();
+        const size_t mat_size = mat_count * sizeof(dse::render::GPUMaterialData);
+        if (ctx.gpu_material_ssbo && mat_count > gpu_material_capacity_) {
+            rhi->DeleteGpuBuffer(ctx.gpu_material_ssbo);
+            ctx.gpu_material_ssbo = {};
+        }
+        if (!ctx.gpu_material_ssbo) {
+            const size_t alloc_count = std::max(mat_count, static_cast<size_t>(64));
+            dse::render::GpuBufferDesc desc{alloc_count * sizeof(dse::render::GPUMaterialData), dse::render::GpuBufferUsage::kStorage, true, "gpu_material"};
+            ctx.gpu_material_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
+            gpu_material_capacity_ = alloc_count;
+        }
+        rhi->UpdateGpuBuffer(ctx.gpu_material_ssbo, 0, mat_size, gpu_materials_.data());
+    }
+
     ctx.gpu_indirect_draw_count = cmd_index;
     ctx.gpu_total_instances = cmd_index;
     ctx.hiz_object_count = cmd_index;
+    ctx.gpu_texture_buckets = gpu_texture_buckets_.empty() ? nullptr : gpu_texture_buckets_.data();
+    ctx.gpu_texture_bucket_count = static_cast<int>(gpu_texture_buckets_.size());
+    ctx.gpu_materials = gpu_materials_.empty() ? nullptr : gpu_materials_.data();
+    ctx.gpu_material_count = static_cast<int>(gpu_materials_.size());
     gpu_driven_active_ = (cmd_index > 0);
 
     // DX11/Vulkan per-draw model 更新：缓存 CPU 侧实例数据指针
@@ -1515,6 +1635,19 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         cmd_index);
 
     return cmd_index;
+}
+
+bool MeshRenderSystem::IsGPUDrivenEligible(World& world, entt::entity entity,
+                                            const MeshRendererComponent& mr) {
+    if (!mr.visible) return false;
+    if (mr.temp_vertices.empty() || mr.temp_indices.empty()) return false;
+    if (!mr.local_bounds_valid) return false;
+    if (mr.color.a < 0.999f) return false;
+    if (world.registry().all_of<Animator3DComponent>(entity)) {
+        const auto& a = world.registry().get<Animator3DComponent>(entity);
+        if (a.enabled && !a.final_bone_matrices.empty()) return false;
+    }
+    return true;
 }
 
 void MeshRenderSystem::SubmitSkinningRequests(World& world, dse::render::GPUSkinningSystem& skinning_system) {
@@ -1623,9 +1756,11 @@ void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {
     mega_ibo_data_.clear();
     mega_vbo_vertex_count_ = 0;
     mega_ibo_index_count_ = 0;
-    mesh_registry_.clear();
+    file_mesh_registry_.clear();
+    inline_mesh_registry_.clear();
     gpu_draw_cmd_capacity_ = 0;
     gpu_instance_capacity_ = 0;
+    gpu_material_capacity_ = 0;
 }
 
 } // namespace gameplay3d

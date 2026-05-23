@@ -104,6 +104,12 @@ public:
     /// 初始化内置着色器
     void InitBuiltinShaders(std::function<void()> keep_alive = nullptr);
 
+    /// 初始化 GPU-Driven PBR 着色器（VS 从 ByteAddressBuffer 读 model, PS 从 ByteAddressBuffer 读材质）
+    void InitGPUDrivenPBRShader();
+
+    /// 初始化 GPU-Driven Shadow 着色器（depth-only, VS 从 ByteAddressBuffer 读 model）
+    void InitGPUDrivenShadowShader();
+
     /// 获取着色器对应的 InputLayout（由 InitBuiltinShaders 创建）
     ID3D11InputLayout* GetInputLayout(unsigned int shader_handle) const;
 

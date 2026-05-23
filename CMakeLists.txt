@@ -428,6 +428,13 @@ if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)
         message(WARNING "DSE_ENABLE_VULKAN=ON but glslang not available. "
                         "Vulkan shader compilation will be disabled at runtime.")
     endif()
+    # SPIRV-Cross 运行时反射（GPU-driven shader 自动发现 descriptor bindings）
+    # 注意：不链接 spirv-cross 库以避免 WINDOWS_EXPORT_ALL_SYMBOLS 符号数超限（LNK1189）。
+    # 改为在 spirv_cross_embedded.cpp 中直接 include 需要的 spirv-cross 源文件。
+    if(DSE_HAS_SPIRV_CROSS)
+        target_compile_definitions(dse_engine PRIVATE DSE_HAS_SPIRV_CROSS)
+        target_include_directories(dse_engine PRIVATE ${DSE_SPIRV_CROSS_INCLUDE_DIR})
+    endif()
 elseif(DSE_ENABLE_VULKAN AND NOT DSE_HAS_VULKAN)
     message(WARNING "DSE_ENABLE_VULKAN=ON but Vulkan headers/loader not available. "
                     "Vulkan RHI backend will be disabled.")

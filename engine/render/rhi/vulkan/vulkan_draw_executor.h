@@ -211,6 +211,18 @@ public:
     /// 获取最近 GPU-Driven 设置绑定的 pipeline layout（per-draw push constants 用）
     VkPipelineLayout gpu_driven_pipeline_layout() const { return gpu_driven_pipeline_layout_; }
 
+    /// GPU-Driven: 更新 PerMaterial UBO 内容（per-bucket 调用）
+    void UpdateGPUDrivenMaterial(const void* mat_data);
+
+    /// GPU-Driven: 按纹理桶重新分配并绑定 Set 2（纹理 descriptor set）
+    void BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
+                                unsigned int albedo, unsigned int normal,
+                                unsigned int metallic_roughness,
+                                unsigned int emissive, unsigned int occlusion,
+                                VulkanResourceManager& resource_mgr);
+
+    void BindGPUDrivenInstanceSet(VkCommandBuffer cmd_buf, VulkanResourceManager& resource_mgr);
+
 private:
     /// 创建单个 UBO 缓冲区（host-visible + coherent）
     bool CreateUBOBuffer(VkDeviceSize size, VkBuffer& out_buf, VkDeviceMemory& out_mem);
@@ -307,6 +319,7 @@ private:
 
     // 白色纹理
     unsigned int white_texture_handle_ = 0;
+    unsigned int white_cubemap_handle_ = 0;
 
     // UBO 缓冲区（双缓冲，按 swapchain image）
     static constexpr int MAX_FRAMES = 2;
@@ -326,6 +339,11 @@ private:
     VkDeviceMemory morph_weights_ubo_mem_ = VK_NULL_HANDLE;
     VkBuffer       light_probe_ubo_[MAX_FRAMES] = {};
     VkDeviceMemory light_probe_ubo_mem_[MAX_FRAMES] = {};
+    VkBuffer       terrain_params_ubo_[MAX_FRAMES] = {};
+    VkDeviceMemory terrain_params_ubo_mem_[MAX_FRAMES] = {};
+
+    VkBuffer       dummy_ubo_buffer_ = VK_NULL_HANDLE;
+    VkDeviceMemory dummy_ubo_buffer_mem_ = VK_NULL_HANDLE;
 
     // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer
     // 必须使用 STORAGE_BUFFER usage（不能复用 UBO）。仅用于填充未绑定的 SSBO 描述符槽位。
@@ -351,9 +369,11 @@ private:
     VkDeviceSize per_frame_ubo_offset_ = 0;   ///< 当前帧 per-frame UBO 写入偏移（每个 batch 一个 slot）
     VkDeviceSize per_scene_ubo_offset_ = 0;   ///< 当前帧 per-scene UBO 写入偏移（每个 item 一个 slot）
     VkDeviceSize per_material_ubo_offset_ = 0; ///< 当前帧 per-material UBO 写入偏移
+    VkDeviceSize terrain_params_ubo_offset_ = 0;
     VkDeviceSize per_frame_ubo_capacity_ = 0;
     VkDeviceSize per_scene_ubo_capacity_ = 0;
     VkDeviceSize per_material_ubo_capacity_ = 0;
+    VkDeviceSize terrain_params_ubo_capacity_ = 0;
     VkDeviceSize mesh_vbo_capacity_ = 0;
     VkDeviceSize mesh_ibo_capacity_ = 0;
     VkDeviceSize per_point_lights_ubo_offset_ = 0;
@@ -378,6 +398,10 @@ private:
 
     // GPU-Driven: 最后一次 SetupGPUDriven* 绑定的 pipeline layout（per-draw push constants 用）
     VkPipelineLayout gpu_driven_pipeline_layout_ = VK_NULL_HANDLE;
+
+    // GPU-Driven: 缓存当前 GPU-driven shader program（供 Set2/Set4 descriptor 绑定重用）
+    const VulkanShaderProgram* cached_gpu_driven_program_ = nullptr;
+    bool gpu_driven_instance_set_bound_ = false; ///< Set 4 (instance SSBO) 是否已绑定
 
     // Hair rendering 缓存
     unsigned int hair_shader_handle_ = 0;

@@ -10,6 +10,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/render_snapshot.h"
 
 class World;
@@ -109,6 +110,10 @@ struct RenderPassContext {
     unsigned int gpu_cull_shader = 0;             ///< GPU Driven culling compute shader
     int gpu_indirect_draw_count = 0;              ///< indirect draw command 条数
     int gpu_total_instances = 0;                  ///< 本帧总 instance 数
+    const TextureBucket* gpu_texture_buckets = nullptr; ///< Phase 5: 纹理分桶数组
+    int gpu_texture_bucket_count = 0;             ///< 纹理桶数量
+    const GPUMaterialData* gpu_materials = nullptr; ///< CPU 侧 GPUMaterialData 数组（per-bucket PerMaterial 更新用）
+    int gpu_material_count = 0;                   ///< GPUMaterialData 元素数
 
     /// 帧级缓存标志（由各 Pass 写入，后续 Pass 读取，避免重复 ECS 查询）
     bool fxaa_active = false;

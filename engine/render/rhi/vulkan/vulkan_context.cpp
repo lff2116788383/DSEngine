@@ -475,6 +475,13 @@ bool VulkanContext::CreateLogicalDevice() {
     device_features.fillModeNonSolid = VK_TRUE; // wireframe
     device_features.wideLines = VK_TRUE;
 
+    // GPU-Driven: drawCount > 1 需要 multiDrawIndirect 特性
+    VkPhysicalDeviceFeatures supported_features{};
+    vkGetPhysicalDeviceFeatures(physical_device_, &supported_features);
+    if (supported_features.multiDrawIndirect) {
+        device_features.multiDrawIndirect = VK_TRUE;
+    }
+
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());

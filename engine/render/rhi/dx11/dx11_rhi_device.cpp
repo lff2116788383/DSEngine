@@ -152,6 +152,8 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
     KeepAlive();
     // 初始化内置着色器（传入 keep-alive 回调防止编译期间窗口"未响应"）
     shader_mgr_.InitBuiltinShaders(init_keep_alive_);
+    shader_mgr_.InitGPUDrivenPBRShader();
+    shader_mgr_.InitGPUDrivenShadowShader();
     resource_mgr_.set_ssbo_register_base(
         static_cast<unsigned int>(shader_mgr_.pbr_texture_slots().ssbo_base));
 
@@ -788,26 +790,56 @@ void DX11RhiDevice::DeleteIndirectBuffer(unsigned int handle) {
 }
 
 void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
-                                              int draw_count, size_t stride) {
-    const DX11IndirectBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
-    if (!buf || !buf->buffer || draw_count <= 0) return;
+                                              int draw_count, size_t stride, size_t byte_offset) {
+    if (draw_count <= 0 || indirect_buffer == 0) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
 
-    // GPU-Driven per-draw model 更新：缓存存在时，逐 draw 设置 per_object_cb_.model
-    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
+    // 查找 ID3D11Buffer*：先查 indirect buffer map，再查 SSBO map（draw cmd SSBO）
+    ID3D11Buffer* d3d_buf = nullptr;
+    const DX11IndirectBuffer* ibuf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    if (ibuf && ibuf->buffer) {
+        d3d_buf = ibuf->buffer.Get();
+    } else {
+        const DX11SSBO* sbuf = resource_mgr_.GetSSBO(indirect_buffer);
+        if (sbuf && sbuf->buffer) d3d_buf = sbuf->buffer.Get();
+    }
+    if (!d3d_buf) return;
 
-    for (int i = 0; i < draw_count; ++i) {
-        if (inst_data && i < cached_gpu_count_) {
-            DX11PerObjectCB obj{};
-            obj.model = inst_data[i].model;
-            obj.skinned = 0;
-            obj.morph_enabled = 0;
-            obj.use_instancing = 0;
-            draw_executor_.UpdatePerObjectCB(obj);
+    // GPU-Driven per-draw：更新 draw_id（VS 从 ByteAddressBuffer t21 读 model）
+    // 同时保留 PerObjectCB 回退（gpu_driven shader 不可用时）
+    const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
+    const bool use_gpu_driven = (shader_mgr_.gpu_driven_pbr_shader_handle() != 0);
+
+    // 绑定 instance SSBO 到 VS t21（GPU-driven VS 从 ByteAddressBuffer 读 model）
+    if (use_gpu_driven) {
+        auto it = bound_ssbos_.find(gpu_driven::kSSBOBindingInstances);
+        if (it != bound_ssbos_.end()) {
+            const DX11SSBO* inst_ssbo = resource_mgr_.GetSSBO(it->second.handle);
+            if (inst_ssbo && inst_ssbo->srv) {
+                ID3D11ShaderResourceView* vs_srv = inst_ssbo->srv.Get();
+                dc->VSSetShaderResources(21, 1, &vs_srv);
+            }
         }
-        const UINT byte_offset = static_cast<UINT>(i * stride);
-        dc->DrawIndexedInstancedIndirect(buf->buffer.Get(), byte_offset);
+    }
+
+    const int base_index = static_cast<int>(byte_offset / stride);
+    for (int i = 0; i < draw_count; ++i) {
+        const int global_idx = base_index + i;
+        if (inst_data && global_idx < cached_gpu_count_) {
+            if (use_gpu_driven) {
+                draw_executor_.UpdateDrawId(static_cast<uint32_t>(global_idx));
+            } else {
+                DX11PerObjectCB obj{};
+                obj.model = inst_data[global_idx].model;
+                obj.skinned = 0;
+                obj.morph_enabled = 0;
+                obj.use_instancing = 0;
+                draw_executor_.UpdatePerObjectCB(obj);
+            }
+        }
+        const UINT draw_byte_offset = static_cast<UINT>(byte_offset + i * stride);
+        dc->DrawIndexedInstancedIndirect(d3d_buf, draw_byte_offset);
     }
 }
 
@@ -952,10 +984,46 @@ void DX11RhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, cons
     draw_executor_.SetupGPUDrivenShadow(light_view, light_proj, state_mgr_, shader_mgr_);
 }
 
+void DX11RhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                            unsigned int metallic_roughness,
+                                            unsigned int emissive, unsigned int occlusion) {
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    const auto& slots = shader_mgr_.pbr_texture_slots();
+    ID3D11ShaderResourceView* white_srv = draw_executor_.white_srv();
+    ID3D11SamplerState* white_sam = draw_executor_.white_sampler();
+
+    auto bind_slot = [&](int slot, unsigned int handle) {
+        if (handle != 0) {
+            const auto* tex = resource_mgr_.GetTexture(handle);
+            if (tex && tex->srv) {
+                dc->PSSetShaderResources(static_cast<UINT>(slot), 1, tex->srv.GetAddressOf());
+                if (tex->sampler)
+                    dc->PSSetSamplers(static_cast<UINT>(slot), 1, tex->sampler.GetAddressOf());
+                return;
+            }
+        }
+        if (white_srv) dc->PSSetShaderResources(static_cast<UINT>(slot), 1, &white_srv);
+        if (white_sam) dc->PSSetSamplers(static_cast<UINT>(slot), 1, &white_sam);
+    };
+
+    bind_slot(slots.albedo, albedo);
+    bind_slot(slots.normal, normal);
+    bind_slot(slots.metallic_roughness, metallic_roughness);
+    bind_slot(slots.emissive, emissive);
+    bind_slot(slots.occlusion, occlusion);
+}
+
 void DX11RhiDevice::CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) {
     cached_gpu_models_ = models;
     cached_gpu_cmds_   = cmds;
     cached_gpu_count_  = count;
+}
+
+void DX11RhiDevice::UpdateGPUDrivenMaterial(const void* mat_data) {
+    if (!mat_data) return;
+    draw_executor_.UpdateGPUDrivenMaterial(mat_data);
 }
 
 // --- 编辑器场景视图模式 ---

@@ -208,6 +208,16 @@ public:
     /// 更新 per-object 常量缓冲（GPU-Driven per-draw model 更新用）
     void UpdatePerObjectCB(const DX11PerObjectCB& data);
 
+    /// 更新 GPU-driven draw index（cbuffer b7）
+    void UpdateDrawId(uint32_t draw_id);
+
+    /// 更新 GPU-driven per-bucket PerMaterial cbuffer (b3)
+    void UpdateGPUDrivenMaterial(const void* mat_data);
+
+    /// GPU-Driven 纹理 fallback
+    ID3D11ShaderResourceView* white_srv() const { return white_texture_srv_.Get(); }
+    ID3D11SamplerState* white_sampler() const { return white_texture_sampler_.Get(); }
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
@@ -235,6 +245,7 @@ private:
     ComPtr<ID3D11Buffer> per_object_cb_;
     ComPtr<ID3D11Buffer> per_scene_cb_;
     ComPtr<ID3D11Buffer> per_material_cb_;
+    ComPtr<ID3D11Buffer> draw_id_cb_;       ///< GPU-driven draw index (register b7)
 
     // 全局渲染状态（引用 RhiDevice::global_render_state_）
     DrawExecutorGlobalState& global_state_;

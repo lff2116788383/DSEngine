@@ -450,7 +450,8 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
     desc.CPUAccessFlags = 0;
-    desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS
+                   | D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
 
     D3D11_SUBRESOURCE_DATA init_data{};
     init_data.pSysMem = data;

@@ -27,15 +27,17 @@ static_assert(sizeof(GPUInstanceData) == 80, "GPUInstanceData must be 80 bytes f
 
 /// GPU 侧材质参数（std430, 128 bytes = 8 × vec4）
 /// SSBO binding 9
+/// 字段名与布局与 PerMaterial UBO 完全一致，
+/// GPU-driven FS 可通过 #define 重定向所有字段访问。
 struct GPUMaterialData {
-    glm::vec4 albedo_alpha;      ///< rgb + alpha
-    glm::vec4 params0;           ///< metallic, roughness, ao, normal_strength
-    glm::vec4 params1;           ///< alpha_cutoff, sss_strength, clear_coat, anisotropy
-    glm::vec4 emissive_shading;  ///< emissive.rgb + shading_mode
-    glm::vec4 toon_shadow;       ///< shadow_color.rgb + threshold
+    glm::vec4 albedo;            ///< rgb + metallic
+    glm::vec4 roughness_ao;      ///< roughness, ao, normal_strength, alpha_cutoff
+    glm::vec4 emissive;          ///< emissive.rgb + alpha_test (0/1)
+    glm::vec4 flags;             ///< has_normal_map, has_mr_map, has_emissive_map, has_occlusion_map
+    glm::vec4 extra_params;      ///< sss_strength, clear_coat, cc_roughness, anisotropy
+    glm::vec4 extra_params2;     ///< pom_height, sss_tint.xyz
+    glm::vec4 toon_shadow_color; ///< shadow_color.rgb + threshold
     glm::vec4 toon_params;       ///< softness, spec_size, spec_strength, rim
-    glm::vec4 extra0;            ///< pom_height, cc_roughness, watercolor_paper, watercolor_edge
-    glm::vec4 extra1;            ///< watercolor_bleed, watercolor_density, flags (packed), unused
 };
 static_assert(sizeof(GPUMaterialData) == 128, "GPUMaterialData must be 128 bytes for std430");
 
@@ -49,6 +51,37 @@ namespace gpu_driven {
     constexpr unsigned int kSSBOBindingAtomicCounter  = 8;  ///< atomic draw count（用于 compacted draw）
     constexpr unsigned int kSSBOBindingMaterials      = 9;  ///< GPUMaterialData[]
 }
+
+/// GPU-Driven 每个 draw 的纹理句柄组合（用于分桶排序）
+struct GPUDrawTextures {
+    unsigned int albedo = 0;
+    unsigned int normal = 0;
+    unsigned int metallic_roughness = 0;
+    unsigned int emissive = 0;
+    unsigned int occlusion = 0;
+
+    bool operator<(const GPUDrawTextures& o) const {
+        if (albedo != o.albedo) return albedo < o.albedo;
+        if (normal != o.normal) return normal < o.normal;
+        if (metallic_roughness != o.metallic_roughness) return metallic_roughness < o.metallic_roughness;
+        if (emissive != o.emissive) return emissive < o.emissive;
+        return occlusion < o.occlusion;
+    }
+    bool operator==(const GPUDrawTextures& o) const {
+        return albedo == o.albedo && normal == o.normal
+            && metallic_roughness == o.metallic_roughness
+            && emissive == o.emissive && occlusion == o.occlusion;
+    }
+    bool operator!=(const GPUDrawTextures& o) const { return !(*this == o); }
+};
+
+/// GPU-Driven 纹理分桶：连续纹理相同的 draw commands 组成一个桶
+struct TextureBucket {
+    uint32_t cmd_offset;     ///< draw commands 数组中的起始偏移
+    uint32_t cmd_count;      ///< 本桶 draw command 数量
+    uint32_t material_id;    ///< GPUMaterialData 索引（per-bucket PerMaterial 更新用）
+    GPUDrawTextures textures;
+};
 
 /// Mega Buffer 中每个唯一 mesh 的注册信息
 struct MeshBatchEntry {

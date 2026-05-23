@@ -49,8 +49,9 @@ public:
     virtual void DeleteIndirectBuffer(unsigned int handle) { (void)handle; }
 
     /// 绑定 indirect buffer 并发起 Multi-Draw Indexed Indirect
-    virtual void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
-        (void)indirect_buffer; (void)draw_count; (void)stride;
+    /// @param byte_offset  indirect buffer 内的字节偏移（用于纹理桶分段绘制）
+    virtual void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) {
+        (void)indirect_buffer; (void)draw_count; (void)stride; (void)byte_offset;
     }
 
     // --- Hi-Z Occlusion Culling ---
@@ -123,6 +124,16 @@ public:
     }
 
 
+    // --- GPU-Driven 纹理绑定（Phase 5: 每桶绑定纹理） ---
+
+    /// 绑定 GPU-Driven 路径的 PBR 纹理（albedo/normal/MR/emissive/occlusion）
+    /// handle=0 时绑定默认白色/平坦纹理。ForwardScenePass 每桶调用一次。
+    virtual void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                        unsigned int metallic_roughness,
+                                        unsigned int emissive, unsigned int occlusion) {
+        (void)albedo; (void)normal; (void)metallic_roughness; (void)emissive; (void)occlusion;
+    }
+
     // --- GPU-Driven PBR Shader Setup ---
 
     /// 激活 GPU-Driven PBR 着色器并上传 PerFrame/PerScene UBO（indirect draw 前调用）
@@ -143,6 +154,12 @@ public:
     virtual void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
         (void)light_view; (void)light_proj;
     }
+
+    // --- GPU-Driven Per-Bucket Material 更新 ---
+
+    /// 更新 GPU-Driven PerMaterial cbuffer/UBO（per-bucket 调用，DX11/Vulkan 用）
+    /// @param mat_data  GPUMaterialData 结构指针（128 bytes，与 PerMaterial cbuffer layout 一致）
+    virtual void UpdateGPUDrivenMaterial(const void* mat_data) { (void)mat_data; }
 
     // --- GPU-Driven 实例数据缓存（DX11/Vulkan per-draw model 更新用） ---
 

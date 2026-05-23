@@ -130,7 +130,7 @@ public:
     void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void DeleteIndirectBuffer(unsigned int handle) override;
 #pragma warning(pop)
-    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) override;
 
     // --- Mega Buffer (GPU Driven) ---
     VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
@@ -159,7 +159,11 @@ public:
                                   float light_intensity, float ambient_intensity,
                                   float shadow_strength = 0.0f) override;
     void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
+    void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                unsigned int metallic_roughness,
+                                unsigned int emissive, unsigned int occlusion) override;
     void CacheGPUDrivenInstanceData(const void* models, const void* cmds, int count) override;
+    void UpdateGPUDrivenMaterial(const void* mat_data) override;
     void PatchLastFrameGPUCulledCount(int culled) override {
         last_frame_stats_.gpu_culled_count = culled;
     }

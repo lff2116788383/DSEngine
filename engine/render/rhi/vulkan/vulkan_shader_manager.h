@@ -120,6 +120,12 @@ public:
     /// 初始化阴影深度着色器
     void InitShadowShader();
 
+    /// 初始化 GPU-Driven PBR 着色器（VS 从 SSBO 读 model, FS 从 Material SSBO 读材质）
+    void InitGPUDrivenPBRShader();
+
+    /// 初始化 GPU-Driven Shadow 着色器（depth-only, VS 从 SSBO 读 model）
+    void InitGPUDrivenShadowShader();
+
     /// 初始化后处理着色器（直通/全屏四边形）
     void InitPostProcessShader();
 

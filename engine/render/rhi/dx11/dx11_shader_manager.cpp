@@ -45,6 +45,7 @@
 #include "engine/render/shaders/generated/embed/wboit_composite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/water_frag.gen.h"
 #include "engine/render/shaders/generated/embed/light_shaft_frag.gen.h"
+#include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
 
 // Reflection metadata for automated InputLayout creation
 #include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
@@ -544,6 +545,105 @@ unsigned int DX11ShaderManager::CreateComputeProgram(const std::string& cs_src, 
 const DX11ComputeProgram* DX11ShaderManager::GetComputeProgram(unsigned int handle) const {
     auto it = compute_programs_.find(handle);
     return it != compute_programs_.end() ? &it->second : nullptr;
+}
+
+// ============================================================================
+// GPU-Driven PBR Shader
+// ============================================================================
+
+void DX11ShaderManager::InitGPUDrivenPBRShader() {
+    using namespace dse::render::generated_shaders;
+
+    auto replace_all = [](std::string& s, const std::string& from, const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+    };
+    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
+        auto p = s.find(from);
+        if (p != std::string::npos) s.replace(p, from.size(), to);
+    };
+
+    // --- VS patch: 添加 DrawIdCB (b7), 用 g_draw_id 替换 SV_InstanceID ---
+    std::string vert_src = kpbr_gpu_driven_vert_hlsl;
+
+    // 在 ByteAddressBuffer 声明后注入 DrawIdCB
+    replace_first(vert_src,
+        "ByteAddressBuffer _33 : register(t21);",
+        "ByteAddressBuffer _33 : register(t21);\n"
+        "cbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n");
+
+    // 替换 SV_InstanceID 输入为不使用（用 g_draw_id 替代）
+    // 在 SPIRV_Cross_Input 中保留 SV_InstanceID 声明（InputLayout 需要），
+    // 但在 main() 中改用 g_draw_id
+    replace_all(vert_src,
+        "gl_InstanceIndex = int(stage_input.gl_InstanceIndex);",
+        "gl_InstanceIndex = int(g_draw_id);");
+
+    // --- PS: 使用标准 PBR PS（material 通过 CPU per-draw 更新 PerMaterial cbuffer b3）---
+    std::string frag_src(kpbr_frag_hlsl);
+
+    gpu_driven_pbr_shader_handle_ = CreateProgram(vert_src, frag_src, "main", "main");
+    if (gpu_driven_pbr_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[DX11] GPU-driven PBR shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("[DX11] GPU-driven PBR shader created: handle={}", gpu_driven_pbr_shader_handle_);
+        // 使用与 PBR 相同的 InputLayout
+        auto* pbr_layout = GetInputLayout(pbr_shader_handle_);
+        if (pbr_layout) {
+            input_layouts_[gpu_driven_pbr_shader_handle_] = pbr_layout;
+        }
+    }
+}
+
+// ============================================================================
+// GPU-Driven Shadow Shader
+// ============================================================================
+
+void DX11ShaderManager::InitGPUDrivenShadowShader() {
+    using namespace dse::render::generated_shaders;
+
+    auto replace_all = [](std::string& s, const std::string& from, const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+    };
+    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
+        auto p = s.find(from);
+        if (p != std::string::npos) s.replace(p, from.size(), to);
+    };
+
+    // Shadow VS: 从标准 shadow vert HLSL patch，替换 PushConstants u_model → ByteAddressBuffer fetch
+    std::string vert_src(kshadow_vert_hlsl);
+
+    // 注入 instance buffer 和 DrawIdCB
+    replace_first(vert_src,
+        "cbuffer PushConstants",
+        "ByteAddressBuffer _33 : register(t21);\n"
+        "cbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n\n"
+        "cbuffer PushConstants");
+
+    // 替换 pc_u_model → instance buffer 读取
+    // pc_u_model 是 row_major float4x4，对应 ByteAddressBuffer 偏移 g_draw_id * 80
+    replace_all(vert_src, "mul(localPos, pc_u_model)",
+        "mul(localPos, asfloat(uint4x4(_33.Load4(g_draw_id * 80 + 0), _33.Load4(g_draw_id * 80 + 16), _33.Load4(g_draw_id * 80 + 32), _33.Load4(g_draw_id * 80 + 48))))");
+    replace_all(vert_src, "mul(boneTransform, pc_u_model)",
+        "mul(boneTransform, asfloat(uint4x4(_33.Load4(g_draw_id * 80 + 0), _33.Load4(g_draw_id * 80 + 16), _33.Load4(g_draw_id * 80 + 32), _33.Load4(g_draw_id * 80 + 48))))");
+
+    gpu_driven_shadow_shader_handle_ = CreateProgram(vert_src, std::string(kshadow_frag_hlsl), "main", "main");
+    if (gpu_driven_shadow_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[DX11] GPU-driven Shadow shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("[DX11] GPU-driven Shadow shader created: handle={}", gpu_driven_shadow_shader_handle_);
+        auto* shadow_layout = GetInputLayout(shadow_shader_handle_);
+        if (shadow_layout) {
+            input_layouts_[gpu_driven_shadow_shader_handle_] = shadow_layout;
+        }
+    }
 }
 
 } // namespace render

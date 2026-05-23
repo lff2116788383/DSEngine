@@ -32,6 +32,7 @@
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 #include <Jolt/Geometry/IndexedTriangle.h>
+#include <mutex>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -104,6 +105,7 @@ public:
         bool is_sensor = false;
     };
     std::unordered_map<uint64_t, ContactPairInfo> active_contacts_;
+    mutable std::mutex contact_mutex_;
 
     static uint64_t MakeContactKey(const SubShapeIDPair& pair) {
         uint64_t a = pair.GetBody1ID().GetIndexAndSequenceNumber();
@@ -132,10 +134,11 @@ public:
         auto e2 = static_cast<entt::entity>(static_cast<uint32_t>(body2.GetUserData()));
         bool is_sensor = body1.IsSensor() || body2.IsSensor();
 
-        // 记录活跃接触，供 OnContactRemoved 查询
-        // sensor 情况: entity_a = trigger, entity_b = other
         SubShapeIDPair pair(body1.GetID(), manifold.mSubShapeID1, body2.GetID(), manifold.mSubShapeID2);
         uint64_t key = MakeContactKey(pair);
+
+        std::lock_guard<std::mutex> lock(contact_mutex_);
+
         if (is_sensor) {
             entt::entity trigger_e = body1.IsSensor() ? e1 : e2;
             entt::entity other_e   = body1.IsSensor() ? e2 : e1;
@@ -174,6 +177,7 @@ public:
         auto e2 = static_cast<entt::entity>(static_cast<uint32_t>(body2.GetUserData()));
 
         if (!body1.IsSensor() && !body2.IsSensor() && collision_events) {
+            std::lock_guard<std::mutex> lock(contact_mutex_);
             CollisionEvent ce;
             ce.type = CollisionEvent::Type::Stay;
             ce.entity_a = e1;
@@ -188,6 +192,9 @@ public:
 
     void OnContactRemoved(const SubShapeIDPair& shape_pair) override {
         uint64_t key = MakeContactKey(shape_pair);
+
+        std::lock_guard<std::mutex> lock(contact_mutex_);
+
         auto it = active_contacts_.find(key);
         if (it == active_contacts_.end()) return;
 

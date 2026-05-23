@@ -122,7 +122,7 @@ public:
     void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
     void DeleteIndirectBuffer(unsigned int handle) override;
 #pragma warning(pop)
-    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) override;
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) override;
     bool SupportsIndirectDraw() const override { return supports_ssbo_; }
 
     // --- Mega Buffer (GPU Driven) ---
@@ -150,6 +150,9 @@ public:
                                   float light_intensity, float ambient_intensity,
                                   float shadow_strength = 0.0f) override;
     void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
+    void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                unsigned int metallic_roughness,
+                                unsigned int emissive, unsigned int occlusion) override;
 
     // --- 编辑器场景视图模式 ---
     void SetWireframeMode(bool enable) override;

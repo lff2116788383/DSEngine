@@ -855,9 +855,25 @@ void FramePipeline::Shutdown() {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_instance_ssbo);
             render_resources_.gpu_instance_ssbo = {};
         }
+        if (render_resources_.gpu_material_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_material_ssbo);
+            render_resources_.gpu_material_ssbo = {};
+        }
         if (render_resources_.gpu_indirect_buffer) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_indirect_buffer);
             render_resources_.gpu_indirect_buffer = {};
+        }
+        if (render_resources_.gpu_visible_indices_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_visible_indices_ssbo);
+            render_resources_.gpu_visible_indices_ssbo = {};
+        }
+        if (render_resources_.gpu_atomic_counter_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_atomic_counter_ssbo);
+            render_resources_.gpu_atomic_counter_ssbo = {};
+        }
+        if (render_resources_.gpu_cull_shader != 0) {
+            runtime_context_.rhi_device->DeleteComputeShader(render_resources_.gpu_cull_shader);
+            render_resources_.gpu_cull_shader = 0;
         }
     }
 
@@ -1109,6 +1125,7 @@ void FramePipeline::RunRenderInternal() {
         // 同步动态创建的句柄到 render_resources_，确保下帧不被覆盖
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
+        render_resources_.gpu_material_ssbo = render_pass_context_.gpu_material_ssbo;
     }
 
     CaptureThinSnapshot();

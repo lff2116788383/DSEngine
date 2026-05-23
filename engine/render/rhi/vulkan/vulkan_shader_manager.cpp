@@ -55,6 +55,7 @@
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
+#include "embed/pbr_gpu_driven_vert.gen.h"
 
 // Reflection metadata for automated descriptor layout
 #include "embed/pbr_vert_reflect.gen.h"
@@ -69,6 +70,17 @@
 #include <glslang/Public/ResourceLimits.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <SPIRV/spirv.hpp>
+#endif
+
+// spirv-cross 运行时 SPIR-V 反射（实现在 spirv_cross_embedded.cpp）
+#ifdef DSE_HAS_SPIRV_CROSS
+namespace dse { namespace render { namespace spirv_reflect_impl {
+bool ReflectSpirvRuntime(
+    const std::vector<uint32_t>& vert_spirv,
+    const std::vector<uint32_t>& frag_spirv,
+    std::vector<DescriptorBindingInfo>& out_bindings,
+    uint32_t& out_push_constant_size);
+}}} // namespace
 #endif
 
 namespace dse {
@@ -114,10 +126,6 @@ void VulkanShaderManager::Shutdown() {
         if (program.pipeline_layout != VK_NULL_HANDLE) {
             vkDestroyPipelineLayout(device, program.pipeline_layout, nullptr);
         }
-        for (auto layout : program.descriptor_set_layouts) {
-            // 可能被缓存共享，但 Shutdown 时统一销毁更安全
-            vkDestroyDescriptorSetLayout(device, layout, nullptr);
-        }
         if (program.vert_module != VK_NULL_HANDLE) {
             vkDestroyShaderModule(device, program.vert_module, nullptr);
         }
@@ -140,7 +148,10 @@ void VulkanShaderManager::Shutdown() {
     }
     compute_programs_.clear();
 
-    // descriptor layout 缓存中的对象已在 program 销毁时清理
+    for (auto& [key, layout] : descriptor_layout_cache_) {
+        if (layout != VK_NULL_HANDLE)
+            vkDestroyDescriptorSetLayout(device, layout, nullptr);
+    }
     descriptor_layout_cache_.clear();
 
     DEBUG_LOG_INFO("VulkanShaderManager shutdown: {} programs created, {} destroyed",
@@ -233,15 +244,21 @@ bool VulkanShaderManager::ReflectSpirv(
     ShaderReflection& out_reflection) {
     out_reflection = {};
 
-    // 使用离线生成的 reflection 数据构建 descriptor bindings
-    // 合并 vert + frag 的所有资源绑定
+#ifdef DSE_HAS_SPIRV_CROSS
+    // 运行时 SPIR-V 反射：解析实际二进制，自动发现所有 bindings（含 GPU-driven SSBO）
+    uint32_t pc_size = 0;
+    if (!spirv_reflect_impl::ReflectSpirvRuntime(vert_spirv, frag_spirv,
+                                                  out_reflection.bindings, pc_size)) {
+        DEBUG_LOG_ERROR("[Vulkan] SPIR-V runtime reflection failed");
+        return false;
+    }
+#else
+    // 回退：离线 reflection 数据
     using namespace generated_shaders::reflect;
     shader_reflect::ProgramReflection prog_refl =
         dse::render::MakeProgramReflection(kpbr_vert_reflection, kpbr_frag_reflection);
-
     std::vector<vk_reflect::DescriptorBinding> vk_bindings;
     vk_reflect::ExtractDescriptorBindings(prog_refl, vk_bindings);
-
     out_reflection.bindings.clear();
     for (const auto& b : vk_bindings) {
         out_reflection.bindings.push_back({
@@ -251,25 +268,17 @@ bool VulkanShaderManager::ReflectSpirv(
             b.count
         });
     }
+    uint32_t pc_size = 0;
+    { uint32_t f, o; vk_reflect::ExtractPushConstantRange(prog_refl, f, o, pc_size); }
+#endif
 
-    // Push constants
-    uint32_t pc_flags = 0, pc_offset = 0, pc_size = 0;
-    vk_reflect::ExtractPushConstantRange(prog_refl, pc_flags, pc_offset, pc_size);
-    if (pc_size > 0) {
-        out_reflection.has_push_constant = true;
-        // 保留较大的 push constant 范围以兼容后处理着色器
-        out_reflection.push_constant_range = {
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            0,
-            std::max(pc_size, uint32_t(160))  // 最小 160B 保证后处理兼容
-        };
-    } else {
-        out_reflection.has_push_constant = true;
-        out_reflection.push_constant_range = {
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            0, 160
-        };
-    }
+    // Push constants（保留最小 160B 兼容后处理）
+    out_reflection.has_push_constant = true;
+    out_reflection.push_constant_range = {
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        0,
+        std::max(pc_size, uint32_t(160))
+    };
 
     return true;
 }
@@ -298,13 +307,12 @@ VkPipelineLayout VulkanShaderManager::CreatePipelineLayout(const ShaderReflectio
             }
             set_layouts.push_back(layout);
         } else {
-            // 创建空 layout 填充空洞
-            VkDescriptorSetLayoutCreateInfo empty_ci{};
-            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            empty_ci.bindingCount = 0;
-            empty_ci.pBindings = nullptr;
-            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
-            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
+            std::vector<DescriptorBindingInfo> empty_bindings;
+            VkDescriptorSetLayout empty_layout = GetOrCreateDescriptorSetLayout(empty_bindings, s);
+            if (empty_layout == VK_NULL_HANDLE) {
+                DEBUG_LOG_ERROR("Failed to create empty descriptor set layout for set {}", s);
+                return VK_NULL_HANDLE;
+            }
             set_layouts.push_back(empty_layout);
         }
     }
@@ -404,7 +412,11 @@ unsigned int VulkanShaderManager::CreateProgram(
 
     // 4. 反射
     ShaderReflection reflection;
-    ReflectSpirv(vert_spirv, frag_spirv, reflection);
+    if (!ReflectSpirv(vert_spirv, frag_spirv, reflection)) {
+        vkDestroyShaderModule(context_->device(), vert_module, nullptr);
+        vkDestroyShaderModule(context_->device(), frag_module, nullptr);
+        return 0;
+    }
 
     // 5. 创建 PipelineLayout
     VkPipelineLayout pipeline_layout = CreatePipelineLayout(reflection);
@@ -436,13 +448,11 @@ unsigned int VulkanShaderManager::CreateProgram(
                 program.descriptor_set_layouts.push_back(layout);
             }
         } else {
-            VkDescriptorSetLayoutCreateInfo empty_ci{};
-            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            empty_ci.bindingCount = 0;
-            empty_ci.pBindings = nullptr;
-            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
-            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
-            program.descriptor_set_layouts.push_back(empty_layout);
+            std::vector<DescriptorBindingInfo> empty_bindings;
+            VkDescriptorSetLayout empty_layout = GetOrCreateDescriptorSetLayout(empty_bindings, s);
+            if (empty_layout != VK_NULL_HANDLE) {
+                program.descriptor_set_layouts.push_back(empty_layout);
+            }
         }
     }
 
@@ -469,7 +479,11 @@ unsigned int VulkanShaderManager::CreateProgramFromSpirv(
     }
 
     ShaderReflection reflection;
-    ReflectSpirv(vert_spirv, frag_spirv, reflection);
+    if (!ReflectSpirv(vert_spirv, frag_spirv, reflection)) {
+        vkDestroyShaderModule(context_->device(), vert_module, nullptr);
+        vkDestroyShaderModule(context_->device(), frag_module, nullptr);
+        return 0;
+    }
 
     VkPipelineLayout pipeline_layout = CreatePipelineLayout(reflection);
     if (pipeline_layout == VK_NULL_HANDLE) {
@@ -498,13 +512,11 @@ unsigned int VulkanShaderManager::CreateProgramFromSpirv(
                 program.descriptor_set_layouts.push_back(layout);
             }
         } else {
-            VkDescriptorSetLayoutCreateInfo empty_ci{};
-            empty_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            empty_ci.bindingCount = 0;
-            empty_ci.pBindings = nullptr;
-            VkDescriptorSetLayout empty_layout = VK_NULL_HANDLE;
-            vkCreateDescriptorSetLayout(context_->device(), &empty_ci, nullptr, &empty_layout);
-            program.descriptor_set_layouts.push_back(empty_layout);
+            std::vector<DescriptorBindingInfo> empty_bindings;
+            VkDescriptorSetLayout empty_layout = GetOrCreateDescriptorSetLayout(empty_bindings, s);
+            if (empty_layout != VK_NULL_HANDLE) {
+                program.descriptor_set_layouts.push_back(empty_layout);
+            }
         }
     }
 
@@ -1018,6 +1030,183 @@ void VulkanShaderManager::InitBloomComputeShaders() {
     } else {
         DEBUG_LOG_WARN("[Vulkan] Bloom CS initialization failed");
     }
+}
+
+// ============================================================================
+// GPU-Driven PBR Shader
+// ============================================================================
+
+void VulkanShaderManager::InitGPUDrivenPBRShader() {
+#ifndef DSE_HAS_GLSLANG
+    DEBUG_LOG_WARN("[Vulkan] GPU-driven PBR shader requires glslang, skipping");
+    return;
+#else
+    using namespace dse::render::generated_shaders;
+
+    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
+        auto p = s.find(from);
+        if (p != std::string::npos) s.replace(p, from.size(), to);
+        else DEBUG_LOG_WARN("[VK GPU-driven PBR] patch target not found: {}", from.substr(0, 60));
+    };
+    auto replace_all = [](std::string& s, const std::string& from, const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+    };
+
+    // --- VS patch: GLSL 430 → 450, gl_InstanceID+BaseInstance → gl_InstanceIndex, add v_material_id ---
+    std::string vert_src = kpbr_gpu_driven_vert_glsl430;
+    replace_first(vert_src, "#version 430", "#version 450");
+    replace_all(vert_src, "#ifdef GL_ARB_shader_draw_parameters\n#extension GL_ARB_shader_draw_parameters : enable\n#endif\n", "");
+    replace_all(vert_src, "(gl_InstanceID + SPIRV_Cross_BaseInstance)", "gl_InstanceIndex");
+    replace_all(vert_src,
+        "#ifdef GL_ARB_shader_draw_parameters\n#define SPIRV_Cross_BaseInstance gl_BaseInstanceARB\n#else\nuniform int SPIRV_Cross_BaseInstance;\n#endif\n",
+        "");
+    replace_first(vert_src, "layout(binding = 5, std430)", "layout(set = 4, binding = 0, std430)");
+
+    // 声明 flat out v_material_id，传递给 FS
+    replace_first(vert_src,
+        "layout(location = 0) out vec4 vColor;",
+        "flat out uint v_material_id;\nlayout(location = 0) out vec4 vColor;");
+    // 在 vColor 赋值后输出 material_id
+    replace_first(vert_src,
+        "vColor = aColor;\n    vTexCoord = aTexCoord;",
+        "vColor = aColor;\n    v_material_id = dse_inst[gl_InstanceIndex].mat_id;\n    vTexCoord = aTexCoord;");
+
+    // --- FS patch: GLSL 430 → 450, PerMaterial UBO → MaterialSSBO (逐 instance 读材质) ---
+    std::string frag_src(kpbr_frag_glsl430);
+    replace_first(frag_src, "#version 430", "#version 450");
+    replace_first(frag_src, "layout(binding = 5, std140) uniform LightProbeData", "layout(set = 1, binding = 5, std140) uniform LightProbeData");
+    replace_first(frag_src, "layout(binding = 0, std140) uniform PerScene", "layout(set = 1, binding = 0, std140) uniform PerScene");
+    replace_first(frag_src, "layout(binding = 10, std140) uniform SpotLightData", "layout(set = 2, binding = 10, std140) uniform SpotLightData");
+    replace_first(frag_src, "layout(binding = 0, std140) uniform PerFrame", "layout(set = 0, binding = 0, std140) uniform PerFrame");
+    replace_first(frag_src, "layout(binding = 16, std140) uniform TerrainParams", "layout(set = 2, binding = 16, std140) uniform TerrainParams");
+    replace_first(frag_src, "layout(binding = 3, std430) readonly buffer ClusterInfoSSBO", "layout(set = 1, binding = 3, std430) readonly buffer ClusterInfoSSBO");
+    replace_first(frag_src, "layout(binding = 4, std430) readonly buffer LightIndexSSBO", "layout(set = 1, binding = 4, std430) readonly buffer LightIndexSSBO");
+    replace_first(frag_src, "layout(binding = 1, std430) readonly buffer PointLightSSBO", "layout(set = 1, binding = 1, std430) readonly buffer PointLightSSBO");
+    replace_first(frag_src, "layout(binding = 2, std430) readonly buffer SpotLightSSBO", "layout(set = 1, binding = 2, std430) readonly buffer SpotLightSSBO");
+    replace_first(frag_src, "layout(binding = 2) uniform sampler2D u_normal_map;", "layout(set = 2, binding = 2) uniform sampler2D u_normal_map;");
+    replace_first(frag_src, "layout(binding = 17) uniform samplerCube u_reflection_cubemap;", "layout(set = 2, binding = 17) uniform samplerCube u_reflection_cubemap;");
+    replace_first(frag_src, "layout(binding = 18) uniform sampler2D u_brdf_lut;", "layout(set = 2, binding = 18) uniform sampler2D u_brdf_lut;");
+    replace_first(frag_src, "layout(binding = 6) uniform sampler2DShadow u_shadow_maps[3];", "layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_maps[3];");
+    replace_first(frag_src, "layout(binding = 7) uniform sampler2D u_spot_shadow_maps[4];", "layout(set = 2, binding = 7) uniform sampler2D u_spot_shadow_maps[4];");
+    replace_first(frag_src, "layout(binding = 0) uniform samplerCube u_point_shadow_maps[4];", "layout(set = 3, binding = 0) uniform samplerCube u_point_shadow_maps[4];");
+    replace_first(frag_src, "layout(binding = 11) uniform sampler2D u_splat_weight_map;", "layout(set = 2, binding = 11) uniform sampler2D u_splat_weight_map;");
+    replace_first(frag_src, "layout(binding = 12) uniform sampler2D u_splat_layer0;", "layout(set = 2, binding = 12) uniform sampler2D u_splat_layer0;");
+    replace_first(frag_src, "layout(binding = 13) uniform sampler2D u_splat_layer1;", "layout(set = 2, binding = 13) uniform sampler2D u_splat_layer1;");
+    replace_first(frag_src, "layout(binding = 14) uniform sampler2D u_splat_layer2;", "layout(set = 2, binding = 14) uniform sampler2D u_splat_layer2;");
+    replace_first(frag_src, "layout(binding = 15) uniform sampler2D u_splat_layer3;", "layout(set = 2, binding = 15) uniform sampler2D u_splat_layer3;");
+    replace_first(frag_src, "layout(binding = 1) uniform sampler2D u_texture;", "layout(set = 2, binding = 1) uniform sampler2D u_texture;");
+    replace_first(frag_src, "layout(binding = 4) uniform sampler2D u_emissive_map;", "layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;");
+    replace_first(frag_src, "layout(binding = 3) uniform sampler2D u_metallic_roughness_map;", "layout(set = 2, binding = 3) uniform sampler2D u_metallic_roughness_map;");
+    replace_first(frag_src, "layout(binding = 5) uniform sampler2D u_occlusion_map;", "layout(set = 2, binding = 5) uniform sampler2D u_occlusion_map;");
+
+    const std::string per_mat_ubo =
+        "layout(binding = 0, std140) uniform PerMaterial\n"
+        "{\n"
+        "    vec4 albedo;\n"
+        "    vec4 roughness_ao;\n"
+        "    vec4 emissive;\n"
+        "    vec4 flags;\n"
+        "    vec4 extra_params;\n"
+        "    vec4 extra_params2;\n"
+        "    vec4 toon_shadow_color;\n"
+        "    vec4 toon_params;\n"
+        "} _1407;";
+
+    const std::string mat_ssbo_replacement =
+        "struct DSEGPUMat {\n"
+        "    vec4 albedo;\n"
+        "    vec4 roughness_ao;\n"
+        "    vec4 emissive;\n"
+        "    vec4 flags;\n"
+        "    vec4 extra_params;\n"
+        "    vec4 extra_params2;\n"
+        "    vec4 toon_shadow_color;\n"
+        "    vec4 toon_params;\n"
+        "};\n"
+        "layout(set = 2, binding = 9, std430) readonly buffer MaterialSSBO {\n"
+        "    DSEGPUMat gpu_materials[];\n"
+        "};\n"
+        "flat in uint v_material_id;\n"
+        "#define _1407 gpu_materials[v_material_id]";
+
+    replace_first(frag_src, per_mat_ubo, mat_ssbo_replacement);
+
+    gpu_driven_pbr_shader_handle_ = CreateProgram(vert_src, frag_src);
+    if (gpu_driven_pbr_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[Vulkan] GPU-driven PBR shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("[Vulkan] GPU-driven PBR shader created: handle={}", gpu_driven_pbr_shader_handle_);
+    }
+#endif
+}
+
+// ============================================================================
+// GPU-Driven Shadow Shader
+// ============================================================================
+
+void VulkanShaderManager::InitGPUDrivenShadowShader() {
+#ifndef DSE_HAS_GLSLANG
+    DEBUG_LOG_WARN("[Vulkan] GPU-driven Shadow shader requires glslang, skipping");
+    return;
+#else
+    using namespace dse::render::generated_shaders;
+
+    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
+        auto p = s.find(from);
+        if (p != std::string::npos) s.replace(p, from.size(), to);
+        else DEBUG_LOG_WARN("[VK GPU-driven Shadow] patch target not found: {}", from.substr(0, 60));
+    };
+    auto replace_all = [](std::string& s, const std::string& from, const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+    };
+
+    // Shadow VS: 从标准 shadow vert GLSL patch，替换 u_model → SSBO fetch
+    std::string vert_src(kshadow_vert_glsl430);
+    replace_first(vert_src, "#version 430", "#version 450");
+
+    // 注入 instance SSBO 声明（在 PerFrame UBO 前面）
+    const std::string ssbo_decl =
+        "struct DSEGPUInst {\n"
+        "    mat4 model;\n"
+        "    uint mat_id;\n"
+        "    uint cmd_id;\n"
+        "    uint pad0;\n"
+        "    uint pad1;\n"
+        "};\n"
+        "layout(set = 4, binding = 0, std430) readonly buffer DSEInstBuf {\n"
+        "    DSEGPUInst dse_inst[];\n"
+        "};\n\n";
+
+    // 在 PerFrame UBO 声明前插入 SSBO
+    replace_first(vert_src,
+        "layout(binding = 0, std140) uniform PerFrame",
+        ssbo_decl + "layout(binding = 0, std140) uniform PerFrame");
+
+    // 替换 u_model → dse_inst[gl_InstanceIndex].model
+    replace_all(vert_src, "u_model * localPos",      "dse_inst[gl_InstanceIndex].model * localPos");
+    replace_all(vert_src, "u_model * boneTransform", "dse_inst[gl_InstanceIndex].model * boneTransform");
+    // 移除 standalone uniforms（Vulkan GLSL 不支持非 opaque standalone uniform）
+    replace_all(vert_src, "uniform mat4 u_model;\n", "");
+    replace_all(vert_src, "uniform int u_skinned;\n", "const int u_skinned = 0;\n");
+    replace_all(vert_src, "uniform int u_morph_enabled;\n", "const int u_morph_enabled = 0;\n");
+
+    std::string frag_src(kshadow_frag_glsl430);
+    replace_first(frag_src, "#version 430", "#version 450");
+    gpu_driven_shadow_shader_handle_ = CreateProgram(vert_src, frag_src);
+    if (gpu_driven_shadow_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[Vulkan] GPU-driven Shadow shader compilation failed");
+    } else {
+        DEBUG_LOG_INFO("[Vulkan] GPU-driven Shadow shader created: handle={}", gpu_driven_shadow_shader_handle_);
+    }
+#endif
 }
 
 const VulkanComputeProgram* VulkanShaderManager::GetComputeProgram(unsigned int handle) const {

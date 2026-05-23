@@ -1128,7 +1128,7 @@ void OpenGLRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
     indirect_buffers_.erase(it);
 }
 
-void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride) {
+void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
     if (draw_count <= 0 || indirect_buffer == 0) return;
     InitComputeProcAddresses();
     if (!pfn_glMultiDrawElementsIndirect) {
@@ -1148,7 +1148,7 @@ void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
     pfn_glMultiDrawElementsIndirect(
         GL_TRIANGLES,
         GL_UNSIGNED_INT,
-        nullptr,
+        reinterpret_cast<const void*>(byte_offset),
         static_cast<GLsizei>(draw_count),
         static_cast<GLsizei>(stride)
     );
@@ -1228,8 +1228,8 @@ void OpenGLRhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size
 void OpenGLRhiDevice::DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
     unsigned int v = vao.raw(), b = vbo.raw(), i = ibo.raw();
     if (v) glDeleteVertexArrays(1, &v);
-    if (b) glDeleteBuffers(1, &b);
-    if (i) glDeleteBuffers(1, &i);
+    if (b) { glDeleteBuffers(1, &b); resource_mgr_.ledger().buffers_destroyed += 1; }
+    if (i) { glDeleteBuffers(1, &i); resource_mgr_.ledger().buffers_destroyed += 1; }
 }
 
 void OpenGLRhiDevice::BindMegaVAO(VertexArrayHandle vao) {
@@ -1382,6 +1382,28 @@ void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, co
 
     const int loc_skinned = shader_mgr_.gpu_driven_shadow_skinned_loc();
     if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
+}
+
+void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                              unsigned int metallic_roughness,
+                                              unsigned int emissive, unsigned int occlusion) {
+    const auto& slots = shader_mgr_.pbr_texture_slots();
+    const unsigned int white = draw_executor_.white_texture_handle();
+
+    glActiveTexture(GL_TEXTURE0 + slots.albedo);
+    glBindTexture(GL_TEXTURE_2D, albedo != 0 ? albedo : white);
+
+    glActiveTexture(GL_TEXTURE0 + slots.normal);
+    glBindTexture(GL_TEXTURE_2D, normal != 0 ? normal : white);
+
+    glActiveTexture(GL_TEXTURE0 + slots.metallic_roughness);
+    glBindTexture(GL_TEXTURE_2D, metallic_roughness != 0 ? metallic_roughness : white);
+
+    glActiveTexture(GL_TEXTURE0 + slots.emissive);
+    glBindTexture(GL_TEXTURE_2D, emissive != 0 ? emissive : white);
+
+    glActiveTexture(GL_TEXTURE0 + slots.occlusion);
+    glBindTexture(GL_TEXTURE_2D, occlusion != 0 ? occlusion : white);
 }
 
 // --- 编辑器场景视图模式 ---

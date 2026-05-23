@@ -47,7 +47,17 @@ void GLResourceManager::DestroyAllRenderTargets() {
             resource_ledger_.framebuffers_destroyed += 1;
             target.fbo_handle = 0;
         }
-        if (target.color_texture_handle != 0) {
+        if (!target.color_texture_handles.empty()) {
+            for (auto& ch : target.color_texture_handles) {
+                if (ch != 0) {
+                    glDeleteTextures(1, &ch);
+                    resource_ledger_.textures_destroyed += 1;
+                    ch = 0;
+                }
+            }
+            target.color_texture_handles.clear();
+            target.color_texture_handle = 0;
+        } else if (target.color_texture_handle != 0) {
             glDeleteTextures(1, &target.color_texture_handle);
             resource_ledger_.textures_destroyed += 1;
             target.color_texture_handle = 0;
