@@ -1,52 +1,21 @@
 set(DSE_GTEST_INTEGRATION_TARGET dse_gtest_integration_tests)
 
+file(GLOB_RECURSE DSE_GTEST_INTEGRATION_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/editor/*.cpp"
+)
+
+if(NOT DSE_ENABLE_3D)
+    list(FILTER DSE_GTEST_INTEGRATION_SRCS EXCLUDE REGEX ".*/engine/ecs/gameplay3d_ecs_integration_test\\.cpp$")
+    list(FILTER DSE_GTEST_INTEGRATION_SRCS EXCLUDE REGEX ".*/engine/physics/physics3d_ecs_integration_test\\.cpp$")
+    list(FILTER DSE_GTEST_INTEGRATION_SRCS EXCLUDE REGEX ".*/engine/scripting/lua_binding_3d_integration_test\\.cpp$")
+    list(FILTER DSE_GTEST_INTEGRATION_SRCS EXCLUDE REGEX ".*/engine/scripting/lua_binding_animation_integration_test\\.cpp$")
+    list(FILTER DSE_GTEST_INTEGRATION_SRCS EXCLUDE REGEX ".*/modules/(fracture|cloth|fluid)_system_integration_test\\.cpp$")
+endif()
+
 add_executable(${DSE_GTEST_INTEGRATION_TARGET}
-    # engine/assets
-    engine/assets/assetmanager_vfs_integration_test.cpp
-    engine/assets/asset_async_full_chain_integration_test.cpp
-    # engine/core
-    engine/core/eventbus_servicelocator_integration_test.cpp
-    engine/core/jobsystem_eventbus_integration_test.cpp
-    # engine/input
-    engine/input/input_actionmapping_integration_test.cpp
-    # engine/ecs
-    engine/ecs/ecs_physics2d_integration_test.cpp
-    engine/ecs/ecs_transform_integration_test.cpp
-    # engine/physics
-    engine/physics/physics2d_collision_event_integration_test.cpp
-    engine/physics/physics2d_joint_integration_test.cpp
-    engine/physics/physics2d_circle_collider_integration_test.cpp
-    engine/physics/physics2d_polygon_collider_integration_test.cpp
-    # engine/profiler
-    engine/profiler/profiler_jobsystem_integration_test.cpp
-    # engine/render
-    engine/render/rendergraph_integration_test.cpp
-    engine/render/render_scene_integration_test.cpp
-    # engine/scene
-    engine/scene/scene_world_serialization_integration_test.cpp
-    # engine/scripting
-    engine/scripting/lua_runtime_integration_test.cpp
-    engine/scripting/lua_eventbus_integration_test.cpp
-    engine/scripting/lua_ecs_integration_test.cpp
-    engine/scripting/lua_binding_audio_integration_test.cpp
-    engine/scripting/lua_binding_physics2d_integration_test.cpp
-    engine/scripting/lua_binding_dssl_integration_test.cpp
-    engine/scripting/lua_binding_ui_integration_test.cpp
-    engine/scripting/lua_binding_particles_integration_test.cpp
-    # engine/runtime
-    engine/runtime/runtime_subsystem_integration_test.cpp
-    # engine/audio
-    engine/audio/audio_asset_integration_test.cpp
-    # engine/navigation
-    engine/navigation/nav_mesh_integration_test.cpp
-    # modules
-    modules/module_lifecycle_integration_test.cpp
-    # editor (headless functional tests)
-    editor/editor_functional_test.cpp
-    editor/editor_selection_integration_test.cpp
-    editor/editor_control_server_test.cpp
-    editor/editor_plugin_manager_test.cpp
-    editor/editor_test_stubs.cpp
+    ${DSE_GTEST_INTEGRATION_SRCS}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_test_harness.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_snapshot.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_scene_io.cpp
@@ -93,19 +62,6 @@ target_link_libraries(${DSE_GTEST_INTEGRATION_TARGET}
         dse_engine
         ixwebsocket
 )
-
-# 3D 模块测试（依赖 gameplay_3d，仅当 DSE_ENABLE_3D=ON 时加入）
-if(DSE_ENABLE_3D)
-    target_sources(${DSE_GTEST_INTEGRATION_TARGET} PRIVATE
-        engine/ecs/gameplay3d_ecs_integration_test.cpp
-        engine/physics/physics3d_ecs_integration_test.cpp
-        engine/scripting/lua_binding_3d_integration_test.cpp
-        engine/scripting/lua_binding_animation_integration_test.cpp
-        modules/fracture_system_integration_test.cpp
-        modules/cloth_system_integration_test.cpp
-        modules/fluid_system_integration_test.cpp
-    )
-endif()
 
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)

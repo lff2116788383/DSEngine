@@ -11,6 +11,7 @@ endif()
 file(GLOB_RECURSE obj_files "${OBJ_DIR}/*.obj")
 list(FILTER obj_files EXCLUDE REGEX "cmake_pch\\.obj$")
 list(FILTER obj_files EXCLUDE REGEX "spirv_cross_embedded\\.obj$")
+list(FILTER obj_files EXCLUDE REGEX "[/\\\\]glad(_gl)?\\.obj$")
 list(SORT obj_files)
 
 set(content "")
