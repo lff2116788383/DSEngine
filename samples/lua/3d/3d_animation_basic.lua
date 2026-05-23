@@ -2,6 +2,17 @@
 -- 目标：验证 Animator3D/FSM Lua 入口；优先加载 data/animation/minimal_rig 最小真实资源，分段 cube rig 保留为截图兜底。
 local AnimationBasic3D = {}
 
+
+AnimationBasic3D._meta = {
+    name     = "animation basic showcase",
+    category = "animation",
+    config   = { camera_distance=8.5,
+    mesh_path="animation/minimal_rig/two_bone.dmesh",
+    material_path="animation/minimal_rig/two_bone.dmat",
+    danim_path="animation/minimal_rig/two_bone_idle_walk.danim",
+    dskel_path="animation/minimal_rig/two_bone.dskel" },
+}
+
 local state = { camera = nil, actor = nil, skinned_mesh = nil, bones = {}, time = 0.0, current_state = "idle", next_switch = 3.0, logged_state = "", resources = {} }
 
 local function cube_vertices()

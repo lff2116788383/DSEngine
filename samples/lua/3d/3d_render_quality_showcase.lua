@@ -5,6 +5,18 @@
 --            set_mesh_material (emissive 对比), add_point_light_3d
 local RenderQualityShowcase3D = {}
 
+
+RenderQualityShowcase3D._meta = {
+    name     = "Render Quality Showcase",
+    category = "rendering",
+    config   = { camera_distance=11.0,
+    shadow_strength=0.50,
+    bloom_threshold=0.75,
+    bloom_intensity=1.35,
+    exposure=1.0,
+    gamma=2.2 },
+}
+
 local state = {
     camera = nil,
     light = nil,

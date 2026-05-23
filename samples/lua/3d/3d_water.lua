@@ -3,6 +3,13 @@
 -- 场景: 地形岛 + 水面 + 浮在水面的立方体
 local WaterDemo = {}
 
+
+WaterDemo._meta = {
+    name     = "Water 水面渲染 Demo",
+    category = "rendering",
+    config   = { camera_distance=22.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

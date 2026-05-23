@@ -2,6 +2,12 @@
 -- 使用 set_mesh_advanced_material / set_mesh_material_scalar 新接口
 local AdvancedPbrShowcase = {}
 
+
+AdvancedPbrShowcase._meta = {
+    name     = "3D 高级 PBR 材质演示：Clear Coat、Anisotropy、POM、SSS",
+    category = "rendering",
+}
+
 local state = {
     camera = nil,
     light  = nil,

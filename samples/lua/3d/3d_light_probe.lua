@@ -3,6 +3,13 @@
 -- 场景: 彩色房间 + 多个光照探针 + 漫反射物体
 local LightProbeDemo = {}
 
+
+LightProbeDemo._meta = {
+    name     = "Light Probe (SH 间接漫反射) Demo",
+    category = "rendering",
+    config   = { camera_distance=10.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

@@ -3,6 +3,13 @@
 -- 场景: 不透明地面 + alpha_test 镂空墙 + 半透明彩色玻璃板
 local TransparencyDemo = {}
 
+
+TransparencyDemo._meta = {
+    name     = "透明度 / Alpha 排序验证 Demo",
+    category = "rendering",
+    config   = { camera_distance=16.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

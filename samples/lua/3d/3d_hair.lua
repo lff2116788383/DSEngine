@@ -3,6 +3,13 @@
 -- 场景: 多个实体附带不同参数的毛发组件
 local HairDemo = {}
 
+
+HairDemo._meta = {
+    name     = "Hair 毛发渲染 Demo",
+    category = "rendering",
+    config   = { camera_distance=10.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

@@ -7,6 +7,14 @@
 --           get_mouse_swipe_dx/dy, get_screen_width/height
 local InputShowcase3D = {}
 
+
+InputShowcase3D._meta = {
+    name     = "input showcase",
+    category = "ui",
+    config   = { camera_distance=12.0,
+    move_speed=3.5 },
+}
+
 -- 键码常量（与 engine/input/key_code.h 对齐）
 local KEY_W = 87
 local KEY_A = 65

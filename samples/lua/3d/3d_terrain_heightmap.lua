@@ -2,6 +2,20 @@
 -- 目标：验证 Terrain 图片 heightmap 文件采样、terrain texture 与 LOD 参数入口。
 local TerrainHeightmap3D = {}
 
+
+TerrainHeightmap3D._meta = {
+    name     = "terrain heightmap showcase",
+    category = "scene",
+    config   = { camera_distance=14.0,
+    heightmap_path="terrain/heightmap_ridge.bmp",
+    texture_path="terrain/grass_rock.bmp",
+    width=12.0,
+    depth=9.0,
+    max_height=2.8,
+    resolution_x=33,
+    resolution_z=33 },
+}
+
 local state = { camera = nil, terrain = nil, markers = {}, time = 0.0, logged = false }
 
 local function cube_vertices()

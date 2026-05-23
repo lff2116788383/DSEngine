@@ -2,6 +2,19 @@
 -- 目标：展示第三人称跟随相机、真实 Steering 移动与 Animator3D 资源状态；cube character rig 保留为截图 fallback。
 local CharacterThirdPerson3D = {}
 
+
+CharacterThirdPerson3D._meta = {
+    name     = "third-person character showcase",
+    category = "animation",
+    config   = { camera_distance=10.5,
+    mesh_path="animation/minimal_rig/two_bone.dmesh",
+    material_path="animation/minimal_rig/two_bone.dmat",
+    danim_path="animation/minimal_rig/two_bone_idle_walk.danim",
+    dskel_path="animation/minimal_rig/two_bone.dskel",
+    move_speed=2.8,
+    steering_force=10.0 },
+}
+
 local state = { camera = nil, character = nil, skinned_mesh = nil, parts = {}, time = 0.0, mode = "run", logged_mode = "", target = nil, steering_logged = false, animation_logged = false, last_target_mode = "", resources = {} }
 
 local function cube_vertices()

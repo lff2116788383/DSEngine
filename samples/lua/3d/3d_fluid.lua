@@ -2,6 +2,14 @@
 -- 场景：多个流体发射器从不同位置喷射水流，粒子落地反弹
 local FluidDemo = {}
 
+
+FluidDemo._meta = {
+    name     = "流体模拟 Demo —— SPH 粒子喷泉",
+    category = "physics",
+    config   = { camera_distance=18.0,
+    emission_rate=800.0 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local emitters = {}

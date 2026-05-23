@@ -4,6 +4,15 @@
 --            add_mesh_renderer, add_directional_light_3d, add_camera_3d
 local AssetPackShowcase3D = {}
 
+
+AssetPackShowcase3D._meta = {
+    name     = "Asset Pack Showcase",
+    category = "scene",
+    config   = { camera_distance=12.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat" },
+}
+
 local state = {
     camera = nil,
     objects = {},

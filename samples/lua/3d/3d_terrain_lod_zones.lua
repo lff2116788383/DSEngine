@@ -2,6 +2,17 @@
 -- 目标：专项展示 TerrainComponent 程序化 height data 与动态 LOD；tile 分区作为 near/mid/far LOD 可视化标尺。
 local TerrainLodZones3D = {}
 
+
+TerrainLodZones3D._meta = {
+    name     = "terrain LOD zones showcase",
+    category = "rendering",
+    config   = { camera_distance=15.0,
+    heightmap_path="",
+    width=14.0,
+    depth=10.0,
+    max_height=3.0 },
+}
+
 local state = { camera = nil, terrain = nil, tiles = {}, time = 0.0, logged = false, lod_logged = false }
 
 local function cube_vertices()

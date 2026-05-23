@@ -2,6 +2,12 @@
 -- 目标：从 2D 面片进入 3D 体，观察 8 个顶点和 12 个三角形组成的立方体。
 local Cube3D = {}
 
+
+Cube3D._meta = {
+    name     = "3D basic sample: cube",
+    category = "basic",
+}
+
 local state = {
     camera = nil,
     light = nil,

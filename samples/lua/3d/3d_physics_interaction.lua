@@ -4,6 +4,15 @@
 -- 前置：DSE_ENABLE_PHYSX 构建已启用，Lua 物理 API 已暴露。
 local PhysicsInteraction3D = {}
 
+
+PhysicsInteraction3D._meta = {
+    name     = "physics interaction showcase（PhysX 综合交互验证）",
+    category = "physics",
+    config   = { camera_distance=12.0,
+    rows=3,
+    cols=2 },
+}
+
 local state = {
     camera = nil,
     time = 0.0,

@@ -2,6 +2,13 @@
 -- 场景：几个动态方块从空中落入水面，产生浮力效果
 local BuoyancyDemo = {}
 
+
+BuoyancyDemo._meta = {
+    name     = "浮力模拟 Demo —— 水面浮沉效果",
+    category = "physics",
+    config   = { camera_distance=16.0 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local ground = nil

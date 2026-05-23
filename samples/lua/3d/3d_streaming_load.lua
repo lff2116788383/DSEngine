@@ -3,6 +3,13 @@
 -- 场景：3 个区域分布在不同位置，相机靠近时自动加载
 local StreamingDemo = {}
 
+
+StreamingDemo._meta = {
+    name     = "Streaming 异步加载 Demo",
+    category = "scene",
+    config   = { camera_distance=8.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

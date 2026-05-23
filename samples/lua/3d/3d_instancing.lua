@@ -3,6 +3,13 @@
 -- 对比: 关闭 instancing 前后的 draw_calls 与 instanced_draw_calls
 local InstancingDemo = {}
 
+
+InstancingDemo._meta = {
+    name     = "GPU Instancing 验证 Demo",
+    category = "rendering",
+    config   = { camera_distance=28.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

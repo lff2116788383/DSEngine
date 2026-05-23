@@ -2,6 +2,13 @@
 -- 目标：展示 free camera、orbit camera、top camera 的相机切换与观察差异。
 local CameraShowcase3D = {}
 
+
+CameraShowcase3D._meta = {
+    name     = "camera showcase",
+    category = "ui",
+    config   = { camera_distance=7.0 },
+}
+
 local state = {
     cameras = {},
     active_index = 1,

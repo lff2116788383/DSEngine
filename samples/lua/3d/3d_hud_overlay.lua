@@ -4,6 +4,13 @@
 --           add_panel, add_button, set_button_scale, add_joystick, get_joystick_x/y
 local HudOverlay3D = {}
 
+
+HudOverlay3D._meta = {
+    name     = "HUD overlay showcase",
+    category = "ui",
+    config   = { camera_distance=14.0 },
+}
+
 local state = {
     camera = nil,
     player = nil,

@@ -2,6 +2,13 @@
 -- 场景：一个软体网格从空中落下并变形
 local SoftBodyDemo = {}
 
+
+SoftBodyDemo._meta = {
+    name     = "软体模拟 Demo —— PBD 可变形网格",
+    category = "physics",
+    config   = { camera_distance=12.0 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local ground = nil

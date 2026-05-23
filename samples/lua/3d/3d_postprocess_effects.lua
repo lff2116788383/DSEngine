@@ -3,6 +3,13 @@
 -- 与 3d_postprocess_showcase 互补（该 demo 侧重 Bloom + Color Grading）
 local PPEffects = {}
 
+
+PPEffects._meta = {
+    name     = "PostProcess 全效果展示 Demo",
+    category = "rendering",
+    config   = { camera_distance=14.0 },
+}
+
 local state = {
     camera = nil,
     pp     = nil,

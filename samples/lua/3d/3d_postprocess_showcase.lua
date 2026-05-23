@@ -2,6 +2,17 @@
 -- 目标：验证 bloom 后处理参数与 emissive 物体的视觉差异。
 local PostprocessShowcase3D = {}
 
+
+PostprocessShowcase3D._meta = {
+    name     = "postprocess showcase",
+    category = "rendering",
+    config   = { camera_distance=8.5,
+    bloom_threshold=0.8,
+    bloom_intensity=1.25,
+    exposure=1.0,
+    gamma=2.2 },
+}
+
 local state = { camera = nil, post_process = nil, cubes = {}, time = 0.0, logged_state = false }
 
 local function cube_vertices()

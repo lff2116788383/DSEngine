@@ -6,6 +6,13 @@
 -- 本 demo 验证 compute 管线完整性
 local ComputeDemo = {}
 
+
+ComputeDemo._meta = {
+    name     = "Compute Shader 间接验证 Demo（通过 Grass System 展示 GPU Compute 驱动）",
+    category = "compute",
+    config   = { camera_distance=18.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

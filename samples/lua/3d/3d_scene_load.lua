@@ -4,6 +4,14 @@
 -- 覆盖 API: dse.ecs.load_scene, find_entities_by_mesh_path
 local SceneLoad3D = {}
 
+
+SceneLoad3D._meta = {
+    name     = "scene load showcase",
+    category = "scene",
+    config   = { camera_distance=12.0,
+    scene_path="" },
+}
+
 local state = {
     camera = nil,
     scene_loaded = false,

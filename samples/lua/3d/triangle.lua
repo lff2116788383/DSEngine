@@ -2,6 +2,12 @@
 -- 目标：用最少顶点认识 3D Mesh 的三角形面片。
 local Triangle3D = {}
 
+
+Triangle3D._meta = {
+    name     = "3D basic sample: triangle",
+    category = "basic",
+}
+
 local state = {
     camera = nil,
     light = nil,

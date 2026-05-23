@@ -2,6 +2,13 @@
 -- 场景：一辆简易四轮车在平地上行驶，IJKL 控制油门/刹车/转向
 local VehicleDemo = {}
 
+
+VehicleDemo._meta = {
+    name     = "车辆物理 Demo —— Raycast 车辆模型",
+    category = "physics",
+    config   = { camera_distance=18.0 },
+}
+
 local KEY_I = 73  -- 前进
 local KEY_K = 75  -- 刹车/倒车
 local KEY_J = 74  -- 左转

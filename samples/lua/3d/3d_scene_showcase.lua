@@ -2,6 +2,15 @@
 -- 目标：整合资源 cube、手写 cube、多光源、移动物体与 free camera，形成小型综合 3D 场景。
 local SceneShowcase3D = {}
 
+
+SceneShowcase3D._meta = {
+    name     = "scene showcase",
+    category = "scene",
+    config   = { camera_distance=12.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat" },
+}
+
 local state = {
     camera = nil,
     directional = nil,

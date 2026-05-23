@@ -2,6 +2,15 @@
 -- 目标：验证 3D 粒子发射器、Lua 参数 setter 与可视化 emitter marker。
 local ParticlesShowcase3D = {}
 
+
+ParticlesShowcase3D._meta = {
+    name     = "particles showcase",
+    category = "procedural",
+    config   = { camera_distance=8.5,
+    max_particles=420,
+    emission_rate=120.0 },
+}
+
 local state = { camera = nil, emitter = nil, marker = nil, objects = {}, fallback_particles = {}, time = 0.0, runtime_probe_time = 0.0, runtime_probe_count = 0 }
 
 local function cube_vertices()

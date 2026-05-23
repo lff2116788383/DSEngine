@@ -3,6 +3,13 @@
 -- 观察：绕墙观察时 draw_calls 和 gpu_culled_count 会动态变化
 local GPUCullingDemo = {}
 
+
+GPUCullingDemo._meta = {
+    name     = "GPU Culling 验证 Demo（Hi-Z Occlusion Culling + Frustum Cull...",
+    category = "compute",
+    config   = { camera_distance=20.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

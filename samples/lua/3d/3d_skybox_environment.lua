@@ -2,6 +2,15 @@
 -- 目标：验证 SkyLight Lua 绑定，并用环境色变化展示模型暗部受环境光影响。
 local SkyboxEnvironment3D = {}
 
+
+SkyboxEnvironment3D._meta = {
+    name     = "skybox/environment showcase",
+    category = "rendering",
+    config   = { camera_distance=9.0,
+    intensity=1.0,
+    up_color={0.20,0.30,0.50 },
+}
+
 local state = {
     camera = nil,
     sky_light = nil,

@@ -3,6 +3,14 @@
 -- 若 PhysX 未启用，仍显示静态堆叠画面并记录 fallback。
 local PhysicsStack3D = {}
 
+
+PhysicsStack3D._meta = {
+    name     = "physics stack showcase（PhysX 后端验证）",
+    category = "physics",
+    config   = { camera_distance=10.0,
+    rows=5 },
+}
+
 local state = {
     camera = nil,
     cubes = {},

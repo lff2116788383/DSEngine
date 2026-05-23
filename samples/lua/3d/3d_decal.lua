@@ -3,6 +3,13 @@
 -- 场景: 地面 + 墙壁 + 多个彩色贴花
 local DecalDemo = {}
 
+
+DecalDemo._meta = {
+    name     = "Decal 贴花投影 Demo",
+    category = "rendering",
+    config   = { camera_distance=14.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

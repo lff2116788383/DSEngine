@@ -2,6 +2,15 @@
 -- 场景：一块布料顶部固定，在重力和风力下自然下垂飘动
 local ClothDemo = {}
 
+
+ClothDemo._meta = {
+    name     = "布料模拟 Demo —— XPBD 悬挂布料",
+    category = "physics",
+    config   = { camera_distance=14.0,
+    cloth_cols=12,
+    cloth_rows=12 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local cloth_entity = nil

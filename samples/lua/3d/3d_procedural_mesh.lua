@@ -5,6 +5,13 @@
 --           set_mesh_material_scalar, set_mesh_emissive
 local ProceduralMesh3D = {}
 
+
+ProceduralMesh3D._meta = {
+    name     = "procedural mesh showcase",
+    category = "procedural",
+    config   = { camera_distance=12.0 },
+}
+
 local state = {
     camera = nil,
     meshes = {},

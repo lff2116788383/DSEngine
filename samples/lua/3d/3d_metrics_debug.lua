@@ -5,6 +5,15 @@
 --           dse.get_memory_usage_kb, dse.app.get_screen_width/height, time_since_startup
 local MetricsDebug3D = {}
 
+
+MetricsDebug3D._meta = {
+    name     = "metrics debug showcase",
+    category = "ui",
+    config   = { camera_distance=14.0,
+    rows=3,
+    cols=5 },
+}
+
 local state = {
     camera = nil,
     objects = {},

@@ -3,6 +3,13 @@
 -- 注：完整 Ragdoll 需要骨骼动画模型，这里用立方体串联演示接口可用性
 local RagdollDemo = {}
 
+
+RagdollDemo._meta = {
+    name     = "Ragdoll 布娃娃 Demo —— 简易版（无骨骼动画模型）",
+    category = "physics",
+    config   = { camera_distance=12.0 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local ground = nil

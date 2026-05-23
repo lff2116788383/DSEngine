@@ -2,6 +2,15 @@
 -- 目标：专项展示 albedo/normal/emissive/roughness 等 texture slot；Lua 可直接绑定贴图槽并 author UV/normal/tangent。
 local TextureMaterialSlots3D = {}
 
+
+TextureMaterialSlots3D._meta = {
+    name     = "texture/material slots showcase",
+    category = "rendering",
+    config   = { camera_distance=10.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat" },
+}
+
 local state = { camera = nil, samples = {}, time = 0.0, logged = false }
 
 local function cube_vertices()

@@ -3,6 +3,13 @@
 -- 场景: 多行物体从近到远排列，近处高精度远处低精度
 local LODDemo = {}
 
+
+LODDemo._meta = {
+    name     = "LOD (Level of Detail) 验证 Demo",
+    category = "rendering",
+    config   = { camera_distance=10.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

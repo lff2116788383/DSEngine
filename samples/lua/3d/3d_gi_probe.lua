@@ -3,6 +3,13 @@
 -- 场景: Cornell Box 变体，色彩溢出展示间接光照
 local GIProbeDemo = {}
 
+
+GIProbeDemo._meta = {
+    name     = "GI Probe (DDGI) 全局光照探针 Demo",
+    category = "rendering",
+    config   = { camera_distance=8.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

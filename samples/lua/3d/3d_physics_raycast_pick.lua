@@ -2,6 +2,14 @@
 -- 目标：验证 Physics3D raycast/拾取专项入口；当前优先使用真实 PhysX Raycast，未启用 PhysX 时使用 ECS 3D collider 几何 fallback。
 local PhysicsRaycastPick3D = {}
 
+
+PhysicsRaycastPick3D._meta = {
+    name     = "physics raycast pick showcase",
+    category = "physics",
+    config   = { camera_distance=9.5,
+    target_count=5 },
+}
+
 local state = {
     camera = nil,
     time = 0.0,

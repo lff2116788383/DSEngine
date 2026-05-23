@@ -11,6 +11,12 @@
 
 local AnimIKLayers3D = {}
 
+
+AnimIKLayers3D._meta = {
+    name     = "3D sample: IK foot-planting + animation layer blending",
+    category = "animation",
+}
+
 local ecs = dse.ecs
 local state = {
     character = nil,

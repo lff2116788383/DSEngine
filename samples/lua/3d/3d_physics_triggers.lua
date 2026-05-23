@@ -8,6 +8,13 @@
 --           rigidbody_3d_add_impulse, rigidbody_3d_get_velocity (3D)
 local PhysicsTriggers3D = {}
 
+
+PhysicsTriggers3D._meta = {
+    name     = "physics triggers & collision events",
+    category = "physics",
+    config   = { camera_distance=14.0 },
+}
+
 local state = {
     camera = nil,
     time = 0.0,

@@ -2,6 +2,14 @@
 -- 目标：展示方向光 shadow_strength/cast_shadow 路线；若阴影 pass 不可见，用地面暗色投影 marker 作为稳定验收 fallback。
 local ShadowShowcase3D = {}
 
+
+ShadowShowcase3D._meta = {
+    name     = "shadow showcase",
+    category = "rendering",
+    config   = { camera_distance=9.0,
+    shadow_strength=0.45 },
+}
+
 local state = { camera = nil, light = nil, caster = nil, shadow_marker = nil, time = 0.0, logged = false }
 
 local function cube_vertices()

@@ -2,6 +2,12 @@
 -- 目标：用两个三角形拼出一个正方形，理解索引缓冲复用顶点。
 local Square3D = {}
 
+
+Square3D._meta = {
+    name     = "3D basic sample: square",
+    category = "basic",
+}
+
 local state = {
     camera = nil,
     light = nil,

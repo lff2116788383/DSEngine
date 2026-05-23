@@ -2,6 +2,15 @@
 -- 目标：从手写 cube 过渡到 .dmesh/.dmat 资源化 Mesh/Material。
 local StaticModel3D = {}
 
+
+StaticModel3D._meta = {
+    name     = "static model loading",
+    category = "rendering",
+    config   = { camera_distance=8.0,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat" },
+}
+
 local state = {
     camera = nil,
     light = nil,

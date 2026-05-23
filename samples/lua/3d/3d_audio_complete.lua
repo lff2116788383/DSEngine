@@ -8,6 +8,16 @@
 --           set_playing, set_volume, set_pitch, set_loop, restart, get_source_state
 local AudioComplete3D = {}
 
+
+AudioComplete3D._meta = {
+    name     = "audio complete showcase",
+    category = "audio",
+    config   = { camera_distance=12.0,
+    audio_path_a="audio/spatial/spatial_ping.wav",
+    audio_path_b="",
+    audio_path_c="" },
+}
+
 local state = {
     camera = nil,
     listener = nil,

@@ -4,6 +4,13 @@
 -- 场景: 围栏地面 + 障碍物 + 多个 agent 向目标移动
 local NavMeshDemo = {}
 
+
+NavMeshDemo._meta = {
+    name     = "NavMesh 寻路验证 Demo（Recast/Detour）",
+    category = "ai",
+    config   = { camera_distance=22.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

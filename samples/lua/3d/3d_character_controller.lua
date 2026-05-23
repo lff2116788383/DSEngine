@@ -6,6 +6,15 @@
 -- PhysX ENABLED 时使用真实后端，DISABLED 时 Transform fallback 仍可运行
 local CharacterController3D = {}
 
+
+CharacterController3D._meta = {
+    name     = "CharacterController3D showcase + PhysX 专项回归",
+    category = "animation",
+    config   = { camera_distance=8.0,
+    camera_speed=4.0,
+    move_speed=2.5 },
+}
+
 local state = {
     camera = nil,
     character = nil,

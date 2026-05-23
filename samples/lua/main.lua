@@ -16,39 +16,68 @@ local game_entry = (env_demo and env_demo ~= "") and env_demo
     or (type(Config.game_entry) == "string" and Config.game_entry)
     or "phase1_2d_physics_showcase"
 
--- 3D 基础图元：module 名不带 "3d_" 前缀
+-- ============================================================
+-- Demo 注册表：约定式自动发现
+-- 每个 demo 模块通过 _meta 表自描述：
+--   Module._meta = { name = "...", category = "...", config = {...} }
+-- 若 _meta 不存在，按旧约定从 Config 表查找配置。
+-- ============================================================
+
+-- 3D 基础图元（module 路径不带 3d_ 前缀）
 local primitives_3d = {triangle = true, square = true, cube = true}
 
--- 顶层 demo（非 3d/ 子目录，module path 和 config key 不规则）
+-- 顶层 demo（非 3d/ 子目录）
 local toplevel_demos = {
     phase1_2d_showcase         = {module = "phase1_2d_showcase",        cfg = "phase1_2d_showcase"},
     phase1_2d_physics_showcase = {module = "phase1_2d_physics_showcase", cfg = "phase1_2d_physics_showcase"},
 }
 
--- 约定式解析
-local RuntimeEntry = nil
-local runtime_config = nil
-
-local top = toplevel_demos[game_entry]
-if top then
-    RuntimeEntry = require(top.module)
-    runtime_config = Config[top.cfg] or {}
-elseif game_entry:sub(1, 3) == "3d_" then
-    local suffix = game_entry:sub(4) -- "fracture", "triangle", etc.
-    if primitives_3d[suffix] then
-        RuntimeEntry = require("3d." .. suffix)
-        runtime_config = Config.basic_3d or {}
-    else
-        RuntimeEntry = require("3d." .. game_entry)
-        runtime_config = Config["demo_" .. game_entry] or Config.basic_3d or {}
+-- resolve_demo: 根据 game_entry 字符串加载模块并返回 (module, config)
+local function resolve_demo(entry)
+    -- 1) 顶层 demo
+    local top = toplevel_demos[entry]
+    if top then
+        local mod = require(top.module)
+        local cfg = (mod._meta and mod._meta.config) or Config[top.cfg] or {}
+        return mod, cfg
     end
-else
-    print("[main] 未知 demo: " .. game_entry .. ", fallback to phase1_2d_physics_showcase")
-    RuntimeEntry = require("phase1_2d_physics_showcase")
-    runtime_config = Config.phase1_2d_physics_showcase or {}
+
+    -- 2) 3d_ 前缀
+    if entry:sub(1, 3) == "3d_" then
+        local suffix = entry:sub(4)
+        local module_path
+        if primitives_3d[suffix] then
+            module_path = "3d." .. suffix
+        else
+            module_path = "3d." .. entry
+        end
+        local ok, mod = pcall(require, module_path)
+        if ok and type(mod) == "table" then
+            -- 优先使用模块内嵌 _meta.config，其次 Config 表旧约定
+            local cfg
+            if mod._meta and mod._meta.config then
+                cfg = mod._meta.config
+            else
+                cfg = Config["demo_" .. entry] or Config.basic_3d or {}
+            end
+            return mod, cfg
+        end
+        print("[main] require('" .. module_path .. "') failed: " .. tostring(mod))
+    end
+
+    -- 3) fallback
+    print("[main] 未知 demo: " .. entry .. ", fallback to phase1_2d_physics_showcase")
+    local mod = require("phase1_2d_physics_showcase")
+    local cfg = (mod._meta and mod._meta.config) or Config.phase1_2d_physics_showcase or {}
+    return mod, cfg
 end
 
+local RuntimeEntry, runtime_config = resolve_demo(game_entry)
+
 print("[main] 加载 demo: " .. game_entry)
+if RuntimeEntry._meta and RuntimeEntry._meta.name then
+    print("[main] name: " .. RuntimeEntry._meta.name)
+end
 
 function Awake()
     if type(Config.title) == "string" and Config.title ~= "" then

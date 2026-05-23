@@ -3,6 +3,14 @@
 -- 材质：冰块、石头、玻璃、木头、水晶、金属
 local FractureDemo = {}
 
+
+FractureDemo._meta = {
+    name     = "破碎系统 Demo —— 运行时 Voronoi 碎裂展示",
+    category = "physics",
+    config   = { camera_distance=20.0,
+    fragment_count=8 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local destructibles = {}   -- {entity, delay, triggered, name}

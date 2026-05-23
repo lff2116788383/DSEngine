@@ -2,6 +2,13 @@
 -- 目标：同屏展示 DirectionalLight、PointLight、SpotLight 对 lit mesh 的影响。
 local LightingShowcase3D = {}
 
+
+LightingShowcase3D._meta = {
+    name     = "lighting showcase",
+    category = "rendering",
+    config   = { camera_distance=11.0 },
+}
+
 local state = {
     camera = nil,
     directional = nil,

@@ -3,6 +3,13 @@
 -- 场景: 3 个 agent 分别演示不同转向模式
 local SteeringDemo = {}
 
+
+SteeringDemo._meta = {
+    name     = "Steering Behavior 转向行为 Demo",
+    category = "ai",
+    config   = { camera_distance=20.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

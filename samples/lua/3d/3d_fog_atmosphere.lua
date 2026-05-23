@@ -3,6 +3,13 @@
 -- 场景: 多层建筑 + 高度雾 + 太阳光轴
 local FogDemo = {}
 
+
+FogDemo._meta = {
+    name     = "Fog + Light Shaft 雾效与体积光 Demo",
+    category = "rendering",
+    config   = { camera_distance=25.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

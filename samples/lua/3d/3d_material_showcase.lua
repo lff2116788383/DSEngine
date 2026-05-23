@@ -2,6 +2,13 @@
 -- 目标：展示 metallic、roughness、emissive、double-sided 等 MeshRenderer 材质参数差异。
 local MaterialShowcase3D = {}
 
+
+MaterialShowcase3D._meta = {
+    name     = "material showcase",
+    category = "rendering",
+    config   = { camera_distance=10.0 },
+}
+
 local state = {
     camera = nil,
     light = nil,

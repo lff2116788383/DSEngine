@@ -2,6 +2,15 @@
 -- 目标：使用 .dmesh + .dmat 验证 UV/texture/material 链路，并与纯色 cube 对比。
 local TexturedCube3D = {}
 
+
+TexturedCube3D._meta = {
+    name     = "textured cube",
+    category = "rendering",
+    config   = { camera_distance=7.5,
+    mesh_path="models/cube.dmesh",
+    material_path="models/cube.dmat" },
+}
+
 local state = {
     camera = nil,
     light = nil,

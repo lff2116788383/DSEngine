@@ -3,6 +3,12 @@
 --       角色控制器、触发区域(Enter/Exit)、Ragdoll 激活、Raycast
 local JoltVerify = {}
 
+
+JoltVerify._meta = {
+    name     = "Jolt Physics 运行时综合验证 Demo",
+    category = "physics",
+}
+
 local cube_verts = {-0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5,
                     -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5}
 local cube_inds  = {0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4}

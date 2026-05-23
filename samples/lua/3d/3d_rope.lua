@@ -2,6 +2,13 @@
 -- 场景：两个立方体之间悬挂一根绳索，在重力下自然下垂
 local RopeDemo = {}
 
+
+RopeDemo._meta = {
+    name     = "绳索模拟 Demo —— Verlet 积分绳索/链条",
+    category = "physics",
+    config   = { camera_distance=15.0 },
+}
+
 local camera_entity = nil
 local light_entity = nil
 local ground = nil

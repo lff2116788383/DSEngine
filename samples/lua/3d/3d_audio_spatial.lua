@@ -2,6 +2,17 @@
 -- 目标：展示 3D audio source/listener/distance API；音源随 Transform 绕 listener 运动并同步到底层 3D 音频。
 local AudioSpatial3D = {}
 
+
+AudioSpatial3D._meta = {
+    name     = "spatial audio showcase",
+    category = "audio",
+    config   = { camera_distance=9.5,
+    audio_path="audio/spatial/spatial_ping.wav",
+    min_distance=1.0,
+    max_distance=5.5,
+    rolloff=1.1 },
+}
+
 local state = { camera = nil, listener = nil, source = nil, source_marker = nil, rings = {}, time = 0.0, logged = false, api_logged = false, min_distance = 1.0, max_distance = 5.5, rolloff = 1.1, audio_path = "" }
 
 local function cube_vertices()

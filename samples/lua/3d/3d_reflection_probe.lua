@@ -3,6 +3,13 @@
 -- 场景: 高反射金属球 + 反射探针 + 彩色环境物体
 local ReflProbeDemo = {}
 
+
+ReflProbeDemo._meta = {
+    name     = "Reflection Probe 反射探针 Demo",
+    category = "rendering",
+    config   = { camera_distance=16.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,

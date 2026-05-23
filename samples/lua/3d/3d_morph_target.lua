@@ -3,6 +3,13 @@
 -- 场景: 多个实体配置不同 morph target，权重随时间变化
 local MorphDemo = {}
 
+
+MorphDemo._meta = {
+    name     = "Morph Target (Blend Shape) 验证 Demo",
+    category = "rendering",
+    config   = { camera_distance=12.0 },
+}
+
 local state = {
     camera = nil,
     light  = nil,
