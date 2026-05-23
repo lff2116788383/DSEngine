@@ -156,7 +156,7 @@ uint findInstance(uint gid) {
 }
 
 [numthreads(64, 1, 1)]
-void main(uint3 dtid : SV_DispatchThreadID) {
+void CSMain(uint3 dtid : SV_DispatchThreadID) {
     uint gid = dtid.x;
     if (gid >= u_total_vertices) return;
     uint inst_id = findInstance(gid);
@@ -181,10 +181,10 @@ void main(uint3 dtid : SV_DispatchThreadID) {
                 + LoadBoneMatrix(bb+(int)src.joints_bw3.z)*bw2 + LoadBoneMatrix(bb+(int)src.joints_bw3.w)*bw3;
 
     DstVertex d;
-    d.pos = float4(mul(sm, float4(pos,1.0)).xyz, 1.0);
+    d.pos = float4(mul(float4(pos,1.0), sm).xyz, 1.0);
     float3x3 nm_ = (float3x3)sm;
-    d.normal = float4(normalize(mul(nm_, nrm)), 0.0);
-    d.tangent = float4(normalize(mul(nm_, tan_)), 0.0);
+    d.normal = float4(normalize(mul(nrm, nm_)), 0.0);
+    d.tangent = float4(normalize(mul(tan_, nm_)), 0.0);
     StoreDst(gid, d);
 }
 )";
