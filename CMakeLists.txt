@@ -630,6 +630,12 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
     add_custom_target(dse_compile_shaders DEPENDS ${GENERATED_SHADER_HEADERS})
     add_dependencies(dse_engine dse_compile_shaders)
     target_include_directories(dse_engine PRIVATE "${SHADER_GEN_DIR}")
+    # 将生成的 embed 头文件注册为 dse_engine 的源，使 MSVC 能跟踪
+    # #include 依赖——gen.h 变更时自动重编译包含它的 .cpp
+    set_source_files_properties(${GENERATED_SHADER_HEADERS} PROPERTIES
+        GENERATED TRUE
+        HEADER_FILE_ONLY TRUE)
+    target_sources(dse_engine PRIVATE ${GENERATED_SHADER_HEADERS})
 endif()
 
 # 工具链：DSSL Compiler (.dssl → GLSL 450)
