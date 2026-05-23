@@ -235,14 +235,17 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
         }
     }
 
+    // VUID-VkGraphicsPipelineCreateInfo-renderPass-07609: pColorBlendState->attachmentCount
+    // 必须匹配 subpass.colorAttachmentCount。MRT GBuffer 时 >1。
+    // 注：所有 MRT attachment 共用同一个 blend_attachment（GBuffer 都是 opaque write）。
+    const uint32_t blend_count = (color_attachment_count > 0) ? color_attachment_count : 1;
+    std::vector<VkPipelineColorBlendAttachmentState> blend_attachments(blend_count, blend_attachment);
+
     VkPipelineColorBlendStateCreateInfo blend{};
     blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend.logicOpEnable = VK_FALSE;
-    // NOTE: Vulkan spec 要求 attachmentCount 匹配 subpass colorAttachmentCount，
-    // 但某些 NVIDIA 驱动在 attachmentCount=0 时崩溃。暂时始终设为 1，多余的状态会被忽略。
-    (void)color_attachment_count;
-    blend.attachmentCount = 1;
-    blend.pAttachments = &blend_attachment;
+    blend.attachmentCount = blend_count;
+    blend.pAttachments = blend_attachments.data();
 
     // --- Dynamic State ---
     VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };

@@ -1,7 +1,7 @@
 # DSEngine GPU Driven 突破方案与引擎定位分析
 
 > 初始日期：2026-05-19
-> 最后修订：2026-05-21（更新 GPU Skinning + Morph Target 已完成、GPU Driven 已完成状态）
+> 最后修订：2026-05-23（新增第九章：GPU Driven 已知问题与修复记录、遗留问题清单）
 > 基于完整代码审查与分析
 
 ---
@@ -452,6 +452,90 @@ UE5 的解决方案：双路径——静态环境走 Nanite（受限材质），
   → 核心难点是软件光栅化调试和与现有 31 Pass 的兼容集成
   → 建议：除非明确需要亿级面数，否则优先做其他更高 ROI 的工作
 ```
+
+---
+
+## 九、GPU Driven 已知问题与修复记录
+
+> 2026-05-23 更新
+
+### 9.1 已修复的问题
+
+#### Bug 1：Vulkan 花屏（绿色噪点）— MSAA storeOp 配置错误
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **现象** | Vulkan 后端输出纯绿色噪点 |
+| **根因** | MSAA color attachment 的 `storeOp` 设为 `VK_ATTACHMENT_STORE_OP_DONT_CARE`，render pass 结束后 MSAA 数据被丢弃，后续 pass load 到未定义数据 |
+| **修复** | `vulkan_resource_manager.cpp`：改 `storeOp = VK_ATTACHMENT_STORE_OP_STORE` |
+| **影响范围** | 仅 Vulkan 后端 |
+
+#### Bug 2：Vulkan 蓝屏 — GPU-driven 与 Module 双重渲染
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **现象** | Vulkan 后端所有物体渲染为同一颜色（蓝色），首帧可能正常 |
+| **根因** | ForwardScenePass 中 GPU-driven indirect draw 和 module 的 `OnRenderScene`（per-item DrawMeshBatch）**同时执行**。两个子问题叠加：(1) Mega buffer 以 `mesh_path` 做去重 key，所有 inline mesh 的 `mesh_path` 为空字符串，导致只存第一个实体的顶点颜色；(2) GPU-driven 先画占据深度，per-item 因 `depthFunc=LESS` 被拒 |
+| **修复** | `builtin_passes.cpp`：4 处 `use_gpu_indirect` 条件加 `ctx_.modules.empty()`，有 module 时跳过 GPU-driven 路径（module 通过 per-item 路径独占渲染） |
+| **影响范围** | CSMShadowPass、SpotShadowPass、PointShadowPass、ForwardScenePass |
+| **首帧正常的原因** | 帧 0 时 `vkResetDescriptorPool` 在 command buffer 使用中被调用，GPU-driven 的 descriptor sets 失效 → GPU-driven 实际没有正确画出 → per-item 深度测试通过 |
+
+### 9.2 遗留问题（未修复）
+
+#### 遗留 1：Mega Buffer Key 碰撞（inline mesh）
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **位置** | `mesh_render_system.cpp` `PrepareGPUDrivenBatch()` |
+| **问题** | `mesh_registry_` 使用 `mesh_renderer.mesh_path` 做去重 key。Lua demo 创建的 inline mesh（顶点数据直接内联）的 `mesh_path` 为空字符串 `""`，导致所有 inline mesh 共享同一份 mega buffer 几何数据（只存第一个实体的顶点和颜色） |
+| **当前影响** | 已通过 `modules.empty()` 条件规避（有 module 时不走 GPU-driven），但如果未来无 module 场景使用多个不同颜色的 inline mesh，bug 会复现 |
+| **建议修复** | 为 inline mesh 生成唯一 key（如 entity ID 或顶点数据 hash），或在 `mesh_path` 为空时跳过 mega buffer 注册 |
+
+#### 遗留 2：GPU-driven 路径的 per-draw 材质缺失
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **位置** | `vulkan_draw_executor.cpp` `SetupGPUDrivenPBR()` + `MultiDrawIndexedIndirect()` |
+| **问题** | `SetupGPUDrivenPBR` 只创建一个 default material UBO（albedo=白色），`MultiDrawIndexedIndirect` 的每个 draw call 复用同一材质。不同材质的物体无法在 GPU-driven 路径中区分 |
+| **当前影响** | 已通过 `modules.empty()` 条件规避 |
+| **建议修复** | 实现 per-draw material UBO offset（类似 per-item 路径的 `cur_material_offset` 累积机制） |
+
+#### 遗留 3：Vulkan LUT sampler3D 绑定 2D image view
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **位置** | tonemapping / bloom_composite / color_grading shader 的 `set=2, binding=5` |
+| **问题** | shader 声明 `uniform sampler3D u_lut`，但 descriptor 绑定的是 `VK_IMAGE_VIEW_TYPE_2D`。验证层每帧报警：`VkImageViewType is VK_IMAGE_VIEW_TYPE_2D but the OpTypeImage has (Dim = 3D)` |
+| **当前影响** | `u_lut_enabled=0` 时 LUT 采样被跳过，不影响渲染正确性。但如果启用 LUT 色彩分级，会采样到垃圾数据 |
+| **建议修复** | 创建 3D image view 绑定到 `u_lut`，或在无 LUT 纹理时创建 1x1x1 的 dummy 3D texture |
+
+#### 遗留 4：`vkResetDescriptorPool` 同步警告
+
+| 维度 | 说明 |
+|:-----|:-----|
+| **位置** | `vulkan_draw_executor.cpp` 帧间 descriptor pool reset |
+| **问题** | `vkResetDescriptorPool()` 在前一帧的 command buffer 仍在 GPU 执行时被调用。验证层报警：`descriptorPool can't be called on VkDescriptorPool that is currently in use by VkCommandBuffer` |
+| **当前影响** | 多数情况下因双缓冲不影响正确性，但在极端情况下可能导致 descriptor 数据竞争 |
+| **建议修复** | 为每个 in-flight 帧维护独立的 descriptor pool，在帧同步栅栏（fence）等待完成后再 reset |
+
+### 9.3 架构设计备忘
+
+GPU-driven 路径与 module per-item 路径的关系：
+
+```
+有 module 时：
+  module.OnRenderScene() → DrawMeshBatch (per-item, 正确材质)
+  GPU-driven indirect draw → 跳过 (modules.empty() == false)
+
+无 module 时：
+  render_meshes fallback → DrawMeshBatch (per-item)
+  GPU-driven indirect draw → 执行 (适用于同 mesh_path 的批量实例)
+```
+
+如果未来需要让 module 也走 GPU-driven 以提升性能，需解决：
+1. mega buffer key 唯一性（遗留 1）
+2. per-draw material UBO（遗留 2）
+3. module 内部决定走哪条路径，而非两条同时跑
 
 ---
 

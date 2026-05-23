@@ -424,6 +424,7 @@ RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
             memcpy(result.pixels.data(), mapped, data_size);
         }
         vkUnmapMemory(device, readback_memory);
+
     }
 
     // 清理
@@ -622,7 +623,9 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
 
             // Storage image 绑定（layout binding = ssbo_count + user_binding）
             uint32_t img_base = prog->ssbo_binding_count;
+            uint32_t total_bindings = prog->ssbo_binding_count + prog->storage_image_count + prog->sampler_count;
             for (auto& [binding, img_bind] : pending_compute_images_) {
+                if (img_base + binding >= total_bindings) continue;
                 VkImageView view = VK_NULL_HANDLE;
                 // 检查 Hi-Z 纹理
                 if (hiz_impl_) {
@@ -657,6 +660,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
             // Sampler 绑定（layout binding = ssbo_count + storage_image_count + user_unit）
             uint32_t smp_base = prog->ssbo_binding_count + prog->storage_image_count;
             for (auto& [unit, tex_handle] : pending_compute_samplers_) {
+                if (smp_base + unit >= total_bindings) continue;
                 VkImageView view = VK_NULL_HANDLE;
                 VkSampler sampler = VK_NULL_HANDLE;
                 // 检查 Hi-Z 纹理
@@ -707,8 +711,10 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, size,
                            compute_push_constants_.data());
     }
-    // Dispatch 后清空 push constant 缓存，避免跨 dispatch 累积
+    // Dispatch 后清空状态缓存，避免跨 dispatch 累积
     compute_push_constants_.clear();
+    pending_compute_images_.clear();
+    pending_compute_samplers_.clear();
 
     vkCmdDispatch(cmd, groups_x, groups_y, groups_z);
 
@@ -796,7 +802,13 @@ void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
                                 to == ResourceState::DepthWrite || to == ResourceState::DepthRead);
     if (is_depth_transition && rt->has_depth && rt->depth_texture.image != VK_NULL_HANDLE) {
         image = rt->depth_texture.image;
-        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 必须同时声明 DEPTH+STENCIL aspect
+        const VkFormat fmt = rt->depth_texture.format;
+        const bool has_stencil = (fmt == VK_FORMAT_D24_UNORM_S8_UINT ||
+                                  fmt == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+                                  fmt == VK_FORMAT_D16_UNORM_S8_UINT);
+        aspect = has_stencil ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)
+                             : VK_IMAGE_ASPECT_DEPTH_BIT;
     } else if (rt->has_color && rt->color_texture.image != VK_NULL_HANDLE) {
         image = rt->color_texture.image;
     } else {

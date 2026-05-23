@@ -276,6 +276,18 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     unsigned char white_pixel[4] = {255, 255, 255, 255};
     white_texture_handle_ = resource_mgr->CreateTexture2D(1, 1, white_pixel, true);
 
+    // --- Dummy SSBO 占位 buffer ---
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO descriptor 写入要求
+    // 对应 buffer 必须有 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT。不能复用 UBO 占位。
+    CreateVulkanBuffer(device, physical_device, 64,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       dummy_ssbo_buffer_, dummy_ssbo_buffer_mem_);
+    {
+        uint8_t zeros[64] = {};
+        WriteToBuffer(device, dummy_ssbo_buffer_mem_, 0, sizeof(zeros), zeros);
+    }
+
     DEBUG_LOG_INFO("VulkanDrawExecutor geometry buffers + UBO buffers initialized");
 }
 
@@ -314,6 +326,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     destroy_buffer(morph_weights_ubo_, morph_weights_ubo_mem_);
     for (int i = 0; i < MAX_FRAMES; ++i)
         destroy_buffer(light_probe_ubo_[i], light_probe_ubo_mem_[i]);
+    destroy_buffer(dummy_ssbo_buffer_, dummy_ssbo_buffer_mem_);
 
     if (white_texture_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_texture_handle_);
@@ -546,10 +559,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             pl_buf.offset = 0;
             pl_buf.range  = pl_ssbo->size;
         } else {
-            // fallback: 空 SSBO（避免 descriptor 未初始化）
-            pl_buf.buffer = per_point_lights_ubo_[fi];
+            // fallback: SSBO 占位 buffer，必须有 STORAGE_BUFFER usage
+            // VUID-VkWriteDescriptorSet-descriptorType-00331
+            pl_buf.buffer = dummy_ssbo_buffer_;
             pl_buf.offset = 0;
-            pl_buf.range  = 16; // 仅 header (count=0)
+            pl_buf.range  = VK_WHOLE_SIZE;
         }
 
         VkWriteDescriptorSet pl_write{};
@@ -573,9 +587,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             sl_buf.offset = 0;
             sl_buf.range  = sl_ssbo->size;
         } else {
-            sl_buf.buffer = per_spot_lights_ubo_[fi];
+            // VUID-VkWriteDescriptorSet-descriptorType-00331
+            sl_buf.buffer = dummy_ssbo_buffer_;
             sl_buf.offset = 0;
-            sl_buf.range  = 16;
+            sl_buf.range  = VK_WHOLE_SIZE;
         }
 
         VkWriteDescriptorSet sl_write{};
@@ -599,9 +614,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             ci_buf.offset = 0;
             ci_buf.range  = ci_ssbo->size;
         } else {
-            ci_buf.buffer = per_point_lights_ubo_[fi];
+            // VUID-VkWriteDescriptorSet-descriptorType-00331
+            ci_buf.buffer = dummy_ssbo_buffer_;
             ci_buf.offset = 0;
-            ci_buf.range  = 16;
+            ci_buf.range  = VK_WHOLE_SIZE;
         }
 
         VkWriteDescriptorSet ci_write{};
@@ -625,9 +641,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             li_buf.offset = 0;
             li_buf.range  = li_ssbo->size;
         } else {
-            li_buf.buffer = per_point_lights_ubo_[fi];
+            // VUID-VkWriteDescriptorSet-descriptorType-00331
+            li_buf.buffer = dummy_ssbo_buffer_;
             li_buf.offset = 0;
-            li_buf.range  = 16;
+            li_buf.range  = VK_WHOLE_SIZE;
         }
 
         VkWriteDescriptorSet li_write{};
@@ -920,6 +937,12 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     dummy_ubo_info.offset = 0;
     dummy_ubo_info.range = sizeof(VulkanPerFrameUBO);
 
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer 必须有 STORAGE_BUFFER usage
+    VkDescriptorBufferInfo dummy_ssbo_info{};
+    dummy_ssbo_info.buffer = dummy_ssbo_buffer_;
+    dummy_ssbo_info.offset = 0;
+    dummy_ssbo_info.range  = VK_WHOLE_SIZE;
+
     VkDescriptorImageInfo dummy_img_info{};
     dummy_img_info.sampler = default_samp;
     dummy_img_info.imageView = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
@@ -947,7 +970,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         w.dstBinding = binding;
         w.descriptorCount = 1;
         w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        w.pBufferInfo = &dummy_ubo_info;
+        w.pBufferInfo = &dummy_ssbo_info;
         writes.push_back(w);
     };
     auto push_img = [&](VkDescriptorSet dstSet, uint32_t binding, uint32_t count) -> size_t {
@@ -1074,6 +1097,12 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     dummy_ubo.offset = 0;
     dummy_ubo.range  = sizeof(VulkanPerFrameUBO);
 
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer 必须有 STORAGE_BUFFER usage
+    VkDescriptorBufferInfo dummy_ssbo{};
+    dummy_ssbo.buffer = dummy_ssbo_buffer_;
+    dummy_ssbo.offset = 0;
+    dummy_ssbo.range  = VK_WHOLE_SIZE;
+
     VkDescriptorImageInfo dummy_img{};
     dummy_img.sampler     = samp;
     dummy_img.imageView   = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
@@ -1103,7 +1132,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         w.dstBinding = binding;
         w.descriptorCount = 1;
         w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        w.pBufferInfo = &dummy_ubo;
+        w.pBufferInfo = &dummy_ssbo;
         writes.push_back(w);
     };
     auto push_img = [&](uint32_t set_idx, uint32_t binding, uint32_t count) {
@@ -1406,8 +1435,26 @@ void VulkanDrawExecutor::BeginRenderPass(
     begin_info.renderArea.offset = {0, 0};
     begin_info.renderArea.extent = render_extent;
 
-    // MSAA render target 有 3 个 attachments：MSAA color, depth, resolve
+    // 计算实际 attachment 数（兼容 MRT GBuffer 与 MSAA resolve）
     const bool is_msaa_rt = (current_msaa_samples_ != VK_SAMPLE_COUNT_1_BIT);
+    int num_color = 1;
+    bool rt_color_present = true;
+    bool rt_depth_present = false;
+    if (render_pass.render_target != 0) {
+        const VulkanRenderTarget* rt_for_attachments = resource_mgr.GetRenderTarget(render_pass.render_target);
+        if (rt_for_attachments) {
+            rt_color_present = rt_for_attachments->has_color;
+            rt_depth_present = rt_for_attachments->has_depth;
+            // MSAA 路径只用 1 个 color attachment（msaa_color_texture），非 MSAA MRT 才有多个
+            num_color = is_msaa_rt ? 1 : (std::max)(1, rt_for_attachments->color_attachment_count);
+            if (!rt_color_present) num_color = 0;
+        }
+    } else {
+        // swapchain：只有 1 个 color，无 depth
+        num_color = 1;
+        rt_depth_present = false;
+    }
+
     std::vector<VkClearValue> clear_values;
     VkClearValue color_cv{};
     color_cv.color = {{render_pass.clear_color.x,
@@ -1417,11 +1464,13 @@ void VulkanDrawExecutor::BeginRenderPass(
     VkClearValue depth_cv{};
     depth_cv.depthStencil = {1.0f, 0};
 
-    clear_values.push_back(color_cv);       // attachment 0: color (or MSAA color)
-    clear_values.push_back(depth_cv);       // attachment 1: depth
-    if (is_msaa_rt) {
-        clear_values.push_back(color_cv);   // attachment 2: resolve target
-    }
+    // 顺序必须严格匹配 CreateRenderTarget 中 attachments 的 push 顺序：
+    //   [0..num_color-1] color attachments (或 MSAA 时 1 个 MSAA color)
+    //   [num_color]      depth (如果有)
+    //   [num_color+1]    resolve target (仅 MSAA + has_color)
+    for (int i = 0; i < num_color; ++i) clear_values.push_back(color_cv);
+    if (rt_depth_present) clear_values.push_back(depth_cv);
+    if (rt_color_present && is_msaa_rt) clear_values.push_back(color_cv);
 
     begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
     begin_info.pClearValues = clear_values.data();
@@ -1439,24 +1488,19 @@ void VulkanDrawExecutor::BeginRenderPass(
 
     vkCmdBeginRenderPass(cmd_buf, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    {
-        bool rt_has_color = true, rt_has_depth = false;
-        if (render_pass.render_target != 0) {
-            const VulkanRenderTarget* rt_info = resource_mgr.GetRenderTarget(render_pass.render_target);
-            if (rt_info) { rt_has_color = rt_info->has_color; rt_has_depth = rt_info->has_depth; }
-        }
-        current_color_attachment_count_ = rt_has_color ? 1 : 0;
-        global_state_.current_frame_stats.render_passes += 1;
-        if (!rt_has_color && rt_has_depth) {
-            global_state_.current_frame_stats.shadow_passes += 1;
-        }
-        DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color={} depth={} pass#={}",
-                       render_pass.render_target,
-                       render_extent.width, render_extent.height,
-                       static_cast<int>(current_msaa_samples_),
-                       rt_has_color, rt_has_depth,
-                       render_pass_counter_ - 1);
+    // VUID-VkGraphicsPipelineCreateInfo-renderPass-07609: pipeline 的 colorBlend attachment 数
+    // 必须等于 RP subpass 的 color attachment 数。MRT GBuffer 时 num_color>1。
+    current_color_attachment_count_ = num_color;
+    global_state_.current_frame_stats.render_passes += 1;
+    if (!rt_color_present && rt_depth_present) {
+        global_state_.current_frame_stats.shadow_passes += 1;
     }
+    DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color_count={} depth={} pass#={}",
+                   render_pass.render_target,
+                   render_extent.width, render_extent.height,
+                   static_cast<int>(current_msaa_samples_),
+                   num_color, rt_depth_present,
+                   render_pass_counter_ - 1);
 
     // 设置动态 viewport 和 scissor（pipeline 使用 VK_DYNAMIC_STATE_VIEWPORT/SCISSOR）
     VkViewport vp{};
@@ -1527,7 +1571,14 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
             depth_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             depth_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             depth_barrier.image = rt->depth_texture.image;
-            depth_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 必须同时声明 DEPTH+STENCIL aspect
+            const VkFormat dfmt = rt->depth_texture.format;
+            const bool has_stencil = (dfmt == VK_FORMAT_D24_UNORM_S8_UINT ||
+                                      dfmt == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+                                      dfmt == VK_FORMAT_D16_UNORM_S8_UINT);
+            depth_barrier.subresourceRange.aspectMask = has_stencil
+                ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)
+                : VK_IMAGE_ASPECT_DEPTH_BIT;
             depth_barrier.subresourceRange.baseMipLevel = 0;
             depth_barrier.subresourceRange.levelCount = 1;
             depth_barrier.subresourceRange.baseArrayLayer = 0;
@@ -1915,6 +1966,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
         AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
             cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
             cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
+
 
         // 上传顶点数据到 mesh VBO（累积偏移，避免后续 mesh 覆盖前面的数据）
         VkDeviceSize cur_vbo_offset = mesh_vbo_offset_;

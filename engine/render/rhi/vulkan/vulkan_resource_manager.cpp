@@ -1099,7 +1099,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
             msaa_att.format         = color_format;
             msaa_att.samples        = actual_samples;
             msaa_att.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            msaa_att.storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            msaa_att.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             msaa_att.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             msaa_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             msaa_att.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1257,6 +1257,70 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
     }
 
     render_targets_[handle] = rt;
+
+    // VUID-vkCmdDraw-None-09600 修复：shadow map RT 在第一次绘制 shadow pass 之前
+    // 就可能被 PBR pass 当作 sampler 绑定，此时 image 还在 UNDEFINED layout。
+    // 预先 transition depth/color attachment 到 finalLayout 一致的状态，避免首帧 sample mismatch。
+    {
+        VkCommandBuffer init_cmd = BeginSingleTimeCommands();
+        std::vector<VkImageMemoryBarrier> init_barriers;
+
+        auto add_barrier = [&](VkImage img, VkFormat fmt, VkImageLayout target_layout,
+                               VkImageAspectFlags aspect, uint32_t layer_count) {
+            if (img == VK_NULL_HANDLE) return;
+            VkImageMemoryBarrier b{};
+            b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            b.newLayout = target_layout;
+            b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            b.image = img;
+            // 深度+模板格式必须 aspect 同时包含 STENCIL_BIT (VUID-VkImageMemoryBarrier-image-03320)
+            const bool has_stencil = (fmt == VK_FORMAT_D24_UNORM_S8_UINT ||
+                                      fmt == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+                                      fmt == VK_FORMAT_D16_UNORM_S8_UINT);
+            VkImageAspectFlags effective_aspect = aspect;
+            if ((aspect & VK_IMAGE_ASPECT_DEPTH_BIT) && has_stencil) {
+                effective_aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+            b.subresourceRange.aspectMask = effective_aspect;
+            b.subresourceRange.baseMipLevel = 0;
+            b.subresourceRange.levelCount = 1;
+            b.subresourceRange.baseArrayLayer = 0;
+            b.subresourceRange.layerCount = layer_count;
+            b.srcAccessMask = 0;
+            b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            init_barriers.push_back(b);
+        };
+
+        if (rt.has_depth) {
+            add_barrier(rt.depth_texture.image, rt.depth_texture.format,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+        }
+        if (rt.has_color) {
+            // 非 MSAA：每个 color attachment 都置为 SHADER_READ_ONLY
+            // MSAA：仅 resolve target（color_texture）需要预 transition
+            for (auto& ct : rt.color_textures) {
+                add_barrier(ct.image, ct.format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_IMAGE_ASPECT_COLOR_BIT, 1);
+            }
+            if (rt.is_msaa && rt.color_texture.image != VK_NULL_HANDLE) {
+                // color_textures 在 MSAA 路径只 push 了 resolve；msaa_color_texture 是 attachment，
+                // 不会被 sample，无需 pre-transition（首次 RP 直接 UNDEFINED → COLOR_ATTACHMENT）。
+            }
+        }
+
+        if (!init_barriers.empty()) {
+            vkCmdPipelineBarrier(init_cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr,
+                static_cast<uint32_t>(init_barriers.size()), init_barriers.data());
+        }
+        EndSingleTimeCommands(init_cmd);
+    }
+
     DEBUG_LOG_INFO("[Vulkan] RenderTarget created: {}x{} color_count={} msaa={} uav={} handle={}",
                    width, height, num_color, rt.msaa_samples, allow_uav ? 1 : 0, handle);
     return handle;
@@ -1403,10 +1467,31 @@ void VulkanResourceManager::UploadTextureData(VulkanTexture& texture, const void
     vkUnmapMemory(device_, staging_memory);
 
     // 拷贝
+    // VUID-vkCmdDraw-None-09600 修复：在同一 cmd buffer 上录制完整 transition+copy+transition 序列。
+    // 之前的实现使用 TransitionImageLayout（其内部又 BeginSingleTimeCommands+submit+wait），
+    // 导致 cmd 录制顺序与实际执行顺序错位：当 cmd 提交时 image 已经被独立的 transition cmd
+    // 推到 SHADER_READ_ONLY_OPTIMAL，但 cmd 中的 vkCmdCopyBufferToImage 仍期望 TRANSFER_DST_OPTIMAL。
     VkCommandBuffer cmd = BeginSingleTimeCommands();
 
-    TransitionImageLayout(texture.image, texture.format,
-                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    auto record_transition = [&](VkImageLayout old_layout, VkImageLayout new_layout,
+                                 VkAccessFlags src_access, VkAccessFlags dst_access,
+                                 VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage) {
+        VkImageMemoryBarrier b{};
+        b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        b.oldLayout = old_layout;
+        b.newLayout = new_layout;
+        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.image = texture.image;
+        b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        b.srcAccessMask = src_access;
+        b.dstAccessMask = dst_access;
+        vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &b);
+    };
+
+    record_transition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
@@ -1421,8 +1506,9 @@ void VulkanResourceManager::UploadTextureData(VulkanTexture& texture, const void
 
     vkCmdCopyBufferToImage(cmd, staging_buffer, texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    TransitionImageLayout(texture.image, texture.format,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    record_transition(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
     EndSingleTimeCommands(cmd);
 

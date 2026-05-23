@@ -123,10 +123,6 @@ layout(std140, set = 1, binding = 5) uniform LightProbeData {
 #define u_sh_enabled  (probe_params.x > 0.5)
 #define u_ibl_enabled (probe_params.y > 0.5)
 
-// IBL: Reflection Probe (Set 2, binding 8/9)
-layout(set = 2, binding = 8) uniform samplerCube u_reflection_cubemap;
-layout(set = 2, binding = 9) uniform sampler2D   u_brdf_lut;
-
 // Terrain Splatmap (standalone uniforms, binding 11-15)
 layout(set = 2, binding = 11) uniform sampler2D u_splat_weight_map;
 layout(set = 2, binding = 12) uniform sampler2D u_splat_layer0;
@@ -140,6 +136,13 @@ layout(std140, set = 2, binding = 16) uniform TerrainParams {
     float _tp_pad2;
     vec4  u_splat_tiling;   // per-layer UV tiling factor
 };
+
+// IBL: Reflection Probe (Set 2, binding 17/18)
+// 注意：binding 8/9 被 pbr.vert 用于 BoneMatrices / MorphWeights UBO，binding 16 被
+// TerrainParams UBO 占用。同 set/binding 不能跨 stage 复用为不同 descriptor type
+// （VUID-VkGraphicsPipelineCreateInfo-layout-07990），故 IBL sampler 移到 17/18。
+layout(set = 2, binding = 17) uniform samplerCube u_reflection_cubemap;
+layout(set = 2, binding = 18) uniform sampler2D   u_brdf_lut;
 
 const float PI = 3.14159265359;
 

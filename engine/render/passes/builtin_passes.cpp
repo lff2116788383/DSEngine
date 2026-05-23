@@ -153,6 +153,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     glm::vec3 shadow_center = FindShadowCenter(snap);
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -227,6 +228,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
     spot_light_space_matrices.reserve(4);
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -283,6 +285,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
     const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        && ctx_.modules.empty()
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -550,7 +553,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
         // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
+        // 有 module 时跳过：module 通过 OnRenderScene 走 per-item DrawMeshBatch，
+        // 与 GPU-driven 双重渲染会因深度相等导致 per-item 被拒而使用 mega buffer 的错误顶点颜色
         const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+            && ctx_.modules.empty()
             && ctx_.gpu_mega_vao
             && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;

@@ -327,6 +327,11 @@ private:
     VkBuffer       light_probe_ubo_[MAX_FRAMES] = {};
     VkDeviceMemory light_probe_ubo_mem_[MAX_FRAMES] = {};
 
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer
+    // 必须使用 STORAGE_BUFFER usage（不能复用 UBO）。仅用于填充未绑定的 SSBO 描述符槽位。
+    VkBuffer       dummy_ssbo_buffer_ = VK_NULL_HANDLE;
+    VkDeviceMemory dummy_ssbo_buffer_mem_ = VK_NULL_HANDLE;
+
     // 当前帧索引（与 VulkanContext::current_frame() 对齐）
     uint32_t current_frame_index_ = 0;
 
