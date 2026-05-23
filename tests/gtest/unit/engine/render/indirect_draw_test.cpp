@@ -93,12 +93,12 @@ TEST(DX11IndirectDrawTest, CreateUpdate_空设备不崩溃) {
 // ============================================================
 
 #ifdef DSE_ENABLE_VULKAN
-TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_stub返回false) {
+TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_返回true) {
     VulkanRhiDevice device;
-    EXPECT_FALSE(device.SupportsIndirectDraw());
+    EXPECT_TRUE(device.SupportsIndirectDraw());
 }
 
-TEST(VulkanIndirectDrawTest, CreateDelete_stub不崩溃) {
+TEST(VulkanIndirectDrawTest, CreateDelete_未初始化返回零不崩溃) {
     VulkanRhiDevice device;
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
     unsigned int handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);

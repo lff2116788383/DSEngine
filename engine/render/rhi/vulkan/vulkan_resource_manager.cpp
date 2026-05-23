@@ -927,6 +927,7 @@ const VulkanBuffer* VulkanResourceManager::GetSSBO(unsigned int handle) const {
 // ============================================================
 
 unsigned int VulkanResourceManager::CreateIndirectBuffer(size_t size, const void* data) {
+    if (device_ == VK_NULL_HANDLE) return 0;
     unsigned int handle = next_indirect_handle_++;
     VulkanBuffer buf;
     buf.size = size;

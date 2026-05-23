@@ -375,7 +375,7 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 // --- 纹理 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
-    EnsureInitialized();
+    if (!initialized_) return 0u;
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
@@ -481,7 +481,7 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
 // --- 渲染目标 ---
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    EnsureInitialized();
+    if (!initialized_) return 0u;
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
     unsigned int depth_texture_handle = 0;
     unsigned int fbo_handle = 0;
@@ -690,6 +690,7 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
 // --- 着色器 ---
 
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
+    if (!initialized_) return 0u;
     unsigned int shader_program = GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
     resource_mgr_.ledger().shader_programs_created += 1;
     external_shader_programs_.insert(shader_program);
@@ -1409,6 +1410,7 @@ void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
 // --- 编辑器场景视图模式 ---
 
 void OpenGLRhiDevice::SetWireframeMode(bool enable) {
+    if (!initialized_) return;
     glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
 }
 
@@ -1417,6 +1419,10 @@ void OpenGLRhiDevice::SetForceUnlit(bool enable) {
 }
 
 void OpenGLRhiDevice::SetOverdrawMode(bool enable) {
+    if (!initialized_) {
+        global_render_state_.overdraw_mode = enable;
+        return;
+    }
     if (enable) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_ONE, GL_ONE);

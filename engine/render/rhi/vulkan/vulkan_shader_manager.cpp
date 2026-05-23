@@ -387,6 +387,8 @@ VkDescriptorSetLayout VulkanShaderManager::GetOrCreateDescriptorSetLayout(
 unsigned int VulkanShaderManager::CreateProgram(
     const std::string& vert_src, const std::string& frag_src) {
 
+    if (!context_ || context_->device() == VK_NULL_HANDLE) return 0;
+
     // 1. 编译 VS → SPIR-V
     std::vector<uint32_t> vert_spirv;
     if (!CompileGlslToSpirv(vert_src, VK_SHADER_STAGE_VERTEX_BIT, vert_spirv)) {

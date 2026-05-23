@@ -667,3 +667,37 @@ TEST(PipelineStateDescGLTest, 默认值) {
     EXPECT_TRUE(desc.blend_enabled);
     EXPECT_EQ(desc.cull_face, CullFace::Back);
 }
+
+// ============================================================
+// 12. CreateShaderProgram 未初始化安全性
+// ============================================================
+
+TEST(OpenGLRhiDeviceTest, 未初始化时CreateShaderProgram返回零) {
+    OpenGLRhiDevice device;
+    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_EQ(handle, 0u);
+}
+
+// ============================================================
+// 13. 编辑器场景视图模式 (Scene View Mode)
+// ============================================================
+
+TEST(OpenGLRhiDeviceTest, SetWireframeMode不崩溃) {
+    OpenGLRhiDevice device;
+    device.SetWireframeMode(true);
+    device.SetWireframeMode(false);
+}
+
+TEST(OpenGLRhiDeviceTest, SetForceUnlit可读写) {
+    OpenGLRhiDevice device;
+    device.SetForceUnlit(true);
+    EXPECT_TRUE(device.GetGlobalRenderState().force_unlit);
+    device.SetForceUnlit(false);
+    EXPECT_FALSE(device.GetGlobalRenderState().force_unlit);
+}
+
+TEST(OpenGLRhiDeviceTest, SetOverdrawMode不崩溃) {
+    OpenGLRhiDevice device;
+    device.SetOverdrawMode(true);
+    device.SetOverdrawMode(false);
+}

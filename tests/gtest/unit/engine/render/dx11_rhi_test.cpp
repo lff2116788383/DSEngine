@@ -484,4 +484,86 @@ TEST(DX11SkyboxShaderTest, 采样方向使用inputPos) {
         << "Skybox VS should use raw vertex position as cubemap sampling direction";
 }
 
+// ============================================================
+// DX11PipelineStateManager 枚举映射完整性
+// ============================================================
+
+TEST(DX11PipelineStateManagerTest, BlendFactor枚举映射完整) {
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::Zero),             D3D11_BLEND_ZERO);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::One),              D3D11_BLEND_ONE);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::SrcAlpha),         D3D11_BLEND_SRC_ALPHA);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::OneMinusSrcAlpha), D3D11_BLEND_INV_SRC_ALPHA);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::DstAlpha),         D3D11_BLEND_DEST_ALPHA);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::OneMinusDstAlpha), D3D11_BLEND_INV_DEST_ALPHA);
+}
+
+TEST(DX11PipelineStateManagerTest, CompareFunc枚举映射完整) {
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Never),        D3D11_COMPARISON_NEVER);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Less),         D3D11_COMPARISON_LESS);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Equal),        D3D11_COMPARISON_EQUAL);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::LessEqual),    D3D11_COMPARISON_LESS_EQUAL);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Greater),      D3D11_COMPARISON_GREATER);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::NotEqual),     D3D11_COMPARISON_NOT_EQUAL);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::GreaterEqual), D3D11_COMPARISON_GREATER_EQUAL);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Always),       D3D11_COMPARISON_ALWAYS);
+}
+
+TEST(DX11PipelineStateManagerTest, CullFace枚举映射完整) {
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::None),  D3D11_CULL_NONE);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::Front), D3D11_CULL_FRONT);
+    EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::Back),  D3D11_CULL_BACK);
+}
+
+TEST(DX11PipelineStateManagerTest, 未初始化时CreatePipelineState返回零) {
+    DX11PipelineStateManager mgr;
+    PipelineStateDesc desc{};
+    unsigned int handle = mgr.CreatePipelineState(desc);
+    EXPECT_EQ(handle, 0u);
+}
+
+TEST(DX11PipelineStateManagerTest, set_active_pipeline_state可读写) {
+    DX11PipelineStateManager mgr;
+    mgr.set_active_pipeline_state(42);
+    EXPECT_EQ(mgr.active_pipeline_state(), 42u);
+    mgr.set_active_pipeline_state(0);
+    EXPECT_EQ(mgr.active_pipeline_state(), 0u);
+}
+
+// ============================================================
+// DX11 编辑器场景视图模式 (Scene View Mode)
+// ============================================================
+
+TEST(DX11RhiDeviceTest, SetWireframeMode未初始化不崩溃) {
+    DX11RhiDevice device;
+    device.SetWireframeMode(true);
+    device.SetWireframeMode(false);
+}
+
+TEST(DX11RhiDeviceTest, SetForceUnlit可读写) {
+    DX11RhiDevice device;
+    device.SetForceUnlit(true);
+    EXPECT_TRUE(device.GetGlobalRenderState().force_unlit);
+    device.SetForceUnlit(false);
+    EXPECT_FALSE(device.GetGlobalRenderState().force_unlit);
+}
+
+TEST(DX11RhiDeviceTest, SetOverdrawMode未初始化不崩溃) {
+    DX11RhiDevice device;
+    device.SetOverdrawMode(true);
+    device.SetOverdrawMode(false);
+}
+
+// ============================================================
+// DX11ResourceManager 基本句柄分配
+// ============================================================
+
+TEST(DX11RhiDeviceTest, CreateVertexArray返回递增非零句柄) {
+    DX11RhiDevice device;
+    auto h1 = device.CreateVertexArray();
+    auto h2 = device.CreateVertexArray();
+    EXPECT_NE(h1.raw(), 0u);
+    EXPECT_NE(h2.raw(), 0u);
+    EXPECT_NE(h1.raw(), h2.raw());
+}
+
 #endif // DSE_ENABLE_D3D11
