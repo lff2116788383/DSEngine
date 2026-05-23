@@ -375,7 +375,7 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 // --- 纹理 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
-    if (!initialized_) return 0u;
+    EnsureInitialized();
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
@@ -481,7 +481,7 @@ void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
 // --- 渲染目标 ---
 
 unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    if (!initialized_) return 0u;
+    EnsureInitialized();
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
     unsigned int depth_texture_handle = 0;
     unsigned int fbo_handle = 0;

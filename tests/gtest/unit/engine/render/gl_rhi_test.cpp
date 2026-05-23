@@ -102,21 +102,9 @@ TEST(OpenGLRhiDeviceTest, 未初始化时CreateBuffer返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时CreateTexture2D返回零) {
-    OpenGLRhiDevice device;
-    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
-    EXPECT_EQ(handle, 0u);
-}
-
-TEST(OpenGLRhiDeviceTest, 未初始化时CreateRenderTarget返回零) {
-    OpenGLRhiDevice device;
-    RenderTargetDesc desc{};
-    desc.width = 256;
-    desc.height = 256;
-    desc.has_color = true;
-    unsigned int handle = device.CreateRenderTarget(desc);
-    EXPECT_EQ(handle, 0u);
-}
+// CreateTexture2D / CreateRenderTarget 使用 EnsureInitialized() 延迟初始化，
+// 不能在无 GL 上下文的测试环境中调用（会触发真实 GL 调用）。
+// 这两个函数的正确行为是：首次调用时自动初始化设备，而不是静默返回 0。
 
 TEST(OpenGLRhiDeviceTest, 未初始化时UpdateBuffer安全) {
     OpenGLRhiDevice device;
