@@ -32,6 +32,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <string>
+#include "engine/assets/localization_manager.h"
 
 #ifndef STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -189,10 +190,14 @@ void EngineInstance::RegisterRuntimeServices() {
         service_locator().Register<core::JobSystem, core::JobSystem>(job_system_shared);
     }
 
+    localization_manager_ = std::make_shared<dse::assets::LocalizationManager>();
+    service_locator().Register<dse::assets::LocalizationManager, dse::assets::LocalizationManager>(localization_manager_);
+
     service_locator().BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<World>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::JobSystem>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<dse::assets::LocalizationManager>(core::ServiceLocator::Instance());
 }
 
 void EngineInstance::ResetRuntimeServices() {
@@ -200,7 +205,9 @@ void EngineInstance::ResetRuntimeServices() {
     service_locator().Reset<core::EventBus>();
     service_locator().Reset<FramePipeline>();
     service_locator().Reset<World>();
+    service_locator().Reset<dse::assets::LocalizationManager>();
     service_locator().Reset<dse::assets::FileSystem>();
+    localization_manager_.reset();
     event_bus_.reset();
 
     core::ServiceLocator::Instance().Reset<core::JobSystem>();
