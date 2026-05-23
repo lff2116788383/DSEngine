@@ -1,0 +1,130 @@
+/**
+ * @file font_manager_test.cpp
+ * @brief FontManager 单元测试
+ *
+ * 覆盖场景：
+ * - 字体注册 / 查询 / 卸载
+ * - 默认字体设置
+ * - 语言-字体映射
+ * - 字体回退链
+ * - 清空操作
+ */
+
+#include <gtest/gtest.h>
+#include "modules/gameplay_2d/localization/font_manager.h"
+
+using namespace dse::gameplay2d;
+
+class FontManagerTest : public ::testing::Test {
+protected:
+    FontManager mgr;
+};
+
+TEST_F(FontManagerTest, RegisterFont_Success) {
+    EXPECT_TRUE(mgr.RegisterFont("main", "data/fonts/main.ttf", 24));
+    const auto& cmgr = mgr;
+    auto* font = cmgr.GetFont("main");
+    ASSERT_NE(font, nullptr);
+    EXPECT_EQ(font->font_id, "main");
+    EXPECT_EQ(font->font_path, "data/fonts/main.ttf");
+    EXPECT_EQ(font->font_size, 24);
+    EXPECT_FALSE(font->is_loaded);
+}
+
+TEST_F(FontManagerTest, RegisterFont_DuplicateRejected) {
+    EXPECT_TRUE(mgr.RegisterFont("main", "path1.ttf", 16));
+    EXPECT_FALSE(mgr.RegisterFont("main", "path2.ttf", 32));
+    auto* font = mgr.GetFont("main");
+    ASSERT_NE(font, nullptr);
+    EXPECT_EQ(font->font_path, "path1.ttf");
+    EXPECT_EQ(font->font_size, 16);
+}
+
+TEST_F(FontManagerTest, GetFont_NonExistent) {
+    EXPECT_EQ(mgr.GetFont("missing"), nullptr);
+    const auto& cmgr = mgr;
+    EXPECT_EQ(cmgr.GetFont("missing"), nullptr);
+}
+
+TEST_F(FontManagerTest, UnloadFont_AfterLoad) {
+    mgr.RegisterFont("temp", "temp.ttf");
+    mgr.LoadFont("temp");
+    auto* font = mgr.GetFont("temp");
+    ASSERT_NE(font, nullptr);
+    EXPECT_TRUE(font->is_loaded);
+    mgr.UnloadFont("temp");
+    // GetFont auto-loads, so check via const path
+    const auto& cmgr = mgr;
+    auto* cfont = cmgr.GetFont("temp");
+    ASSERT_NE(cfont, nullptr);
+    EXPECT_FALSE(cfont->is_loaded);
+}
+
+TEST_F(FontManagerTest, UnloadFont_NeverLoaded_Noop) {
+    mgr.RegisterFont("temp", "temp.ttf");
+    mgr.UnloadFont("temp"); // is_loaded=false, noop
+    const auto& cmgr = mgr;
+    auto* cfont = cmgr.GetFont("temp");
+    ASSERT_NE(cfont, nullptr);
+    EXPECT_FALSE(cfont->is_loaded);
+}
+
+TEST_F(FontManagerTest, GetFont_AutoLoads) {
+    mgr.RegisterFont("auto", "auto.ttf");
+    auto* font = mgr.GetFont("auto"); // non-const triggers auto-load
+    ASSERT_NE(font, nullptr);
+    EXPECT_TRUE(font->is_loaded);
+}
+
+TEST_F(FontManagerTest, SetDefaultFont) {
+    mgr.RegisterFont("custom", "custom.ttf");
+    EXPECT_TRUE(mgr.SetDefaultFont("custom"));
+    EXPECT_EQ(mgr.GetDefaultFont(), "custom");
+}
+
+TEST_F(FontManagerTest, SetDefaultFont_NonExistent) {
+    EXPECT_FALSE(mgr.SetDefaultFont("nonexistent"));
+}
+
+TEST_F(FontManagerTest, LanguageFontMapping) {
+    mgr.RegisterFont("cn_font", "cn.ttf");
+    EXPECT_TRUE(mgr.SetFontForLanguage("zh", "cn_font"));
+    EXPECT_EQ(mgr.GetFontForLanguage("zh"), "cn_font");
+}
+
+TEST_F(FontManagerTest, GetFontForLanguage_Fallback) {
+    EXPECT_EQ(mgr.GetFontForLanguage("unknown"), mgr.GetDefaultFont());
+}
+
+TEST_F(FontManagerTest, FontFallbackChain) {
+    mgr.RegisterFont("primary", "primary.ttf");
+    mgr.RegisterFont("fallback1", "fb1.ttf");
+    mgr.RegisterFont("fallback2", "fb2.ttf");
+    mgr.AddFontFallback("primary", "fallback1");
+    mgr.AddFontFallback("primary", "fallback2");
+    auto chain = mgr.GetFontFallbacks("primary");
+    EXPECT_EQ(chain.size(), 2u);
+    EXPECT_EQ(chain[0], "fallback1");
+    EXPECT_EQ(chain[1], "fallback2");
+}
+
+TEST_F(FontManagerTest, GetFontFallbacks_Empty) {
+    auto chain = mgr.GetFontFallbacks("nope");
+    EXPECT_TRUE(chain.empty());
+}
+
+TEST_F(FontManagerTest, GetAllFontIds) {
+    mgr.RegisterFont("a", "a.ttf");
+    mgr.RegisterFont("b", "b.ttf");
+    auto ids = mgr.GetAllFontIds();
+    EXPECT_EQ(ids.size(), 2u);
+}
+
+TEST_F(FontManagerTest, Clear) {
+    mgr.RegisterFont("x", "x.ttf");
+    mgr.SetFontForLanguage("en", "x");
+    mgr.AddFontFallback("x", "y");
+    mgr.Clear();
+    EXPECT_EQ(mgr.GetFont("x"), nullptr);
+    EXPECT_TRUE(mgr.GetAllFontIds().empty());
+}
