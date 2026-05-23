@@ -15,6 +15,7 @@
 #include <vector>
 #include <cstdint>
 #include <memory>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace render {
@@ -45,7 +46,7 @@ struct FontAtlasConfig {
  * @class TrueTypeFont
  * @brief 从 TTF 文件生成位图字体图集
  */
-class TrueTypeFont {
+class DSE_EXPORT TrueTypeFont {
 public:
     TrueTypeFont() = default;
     ~TrueTypeFont() = default;

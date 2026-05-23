@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 #include <functional>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace assets {
@@ -26,7 +27,7 @@ namespace assets {
  *   "ui.greeting": "你好, {name}！你有 {count} 条消息。"
  * }
  */
-class LocalizationManager {
+class DSE_EXPORT LocalizationManager {
 public:
     LocalizationManager() = default;
     ~LocalizationManager() = default;

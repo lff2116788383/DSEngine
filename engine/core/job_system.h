@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace core {
@@ -84,7 +85,7 @@ struct JobHandleHash {
 * auto render  = job_sys->SubmitWithDependency(render_task, {physics}, JobPriority::Normal);
 * job_sys->Wait(render);
 */
-class JobSystem {
+class DSE_EXPORT JobSystem {
 public:
     JobSystem() = default;
     ~JobSystem();

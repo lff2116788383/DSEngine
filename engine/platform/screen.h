@@ -10,11 +10,13 @@
 #ifndef UNTITLED_SCREEN_H
 #define UNTITLED_SCREEN_H
 
+#include "engine/core/dse_export.h"
+
 /**
  * @class Screen
  * @brief 屏幕状态管理类，提供全局的屏幕尺寸和宽高比访问
  */
-class Screen {
+class DSE_EXPORT Screen {
 public:
     /**
      * @brief 获取当前窗口宽度

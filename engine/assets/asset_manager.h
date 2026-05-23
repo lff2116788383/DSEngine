@@ -19,6 +19,7 @@
 #include <chrono>
 #include <thread>
 #include <glm/glm.hpp>
+#include "engine/core/dse_export.h"
 namespace dse::render { class RhiDevice; }
 using dse::render::RhiDevice;
 namespace dse::core {
@@ -298,7 +299,7 @@ private:
  * @class AssetManager
  * @brief 资产管理器，负责所有资源（纹理、材质、音频等）的统一加载、缓存和生命周期管理。
  */
-class AssetManager {
+class DSE_EXPORT AssetManager {
 public:
     /**
      * @brief 注入 RhiDevice 实例，用于底层硬件资源的分配

@@ -46,6 +46,7 @@
 #include "engine/render/gi/ddgi_system.h"
 #include "engine/assets/streaming_manager.h"
 #include "engine/runtime/i_builtin_modules.h"
+#include "engine/core/dse_export.h"
 
 class AssetManager;
 
@@ -53,7 +54,7 @@ class AssetManager;
  * @class FramePipeline
  * @brief 引擎的主循环流水线，负责逐帧调度与直接渲染相关初始化，不承接高层启动期副作用流程。
  */
-class FramePipeline {
+class DSE_EXPORT FramePipeline {
 public:
     FramePipeline();
     ~FramePipeline();

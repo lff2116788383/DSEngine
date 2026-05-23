@@ -357,7 +357,7 @@ if(NOT ANDROID)
     list(APPEND imgui_src "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp")
 endif()
 
-option(DSE_BUILD_SHARED "Build dse_engine as shared library (DLL). Set OFF to avoid LNK1189 symbol limit." ON)
+option(DSE_BUILD_SHARED "Build dse_engine as shared library (DLL). Requires DSE_EXPORT on public APIs." OFF)
 set(DSE_ENGINE_ALL_SOURCES
     ${glfw_sources}
     ${freetype_src}
@@ -447,8 +447,10 @@ elseif(DSE_ENABLE_VULKAN AND NOT DSE_HAS_VULKAN)
     set(DSE_ENABLE_VULKAN OFF)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
-if(WIN32 AND DSE_BUILD_SHARED)
-    set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if(DSE_BUILD_SHARED)
+    target_compile_definitions(dse_engine PRIVATE DSE_ENGINE_EXPORTS)
+else()
+    target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
 endif()
 
 if(MSVC)

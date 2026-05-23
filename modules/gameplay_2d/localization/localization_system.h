@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace gameplay2d {
@@ -28,7 +29,7 @@ enum class TextDirection {
  * @class LocalizationSystem
  * @brief 国际化系统，管理多语言文本、语言切换、参数化文本
  */
-class LocalizationSystem {
+class DSE_EXPORT LocalizationSystem {
 public:
     /**
      * @brief 构造函数

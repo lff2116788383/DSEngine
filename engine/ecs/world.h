@@ -20,6 +20,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/core/service_locator.h"
 #include <stdexcept>
+#include "engine/core/dse_export.h"
 
 using Entity = entt::entity;
 
@@ -39,7 +40,7 @@ using Entity = entt::entity;
  * // 旧用法（兼容，需先注册 World 到 ServiceLocator）
  * World::Instance().CreateEntity();
  */
-class World {
+class DSE_EXPORT World {
 public:
     World() = default;
 

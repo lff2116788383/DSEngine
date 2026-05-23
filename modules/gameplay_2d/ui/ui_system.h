@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace gameplay2d {
@@ -18,7 +19,7 @@ namespace gameplay2d {
  * @class UISystem
  * @brief UI 管理系统，负责所有界面元素的层级布局计算和交互事件(如点击、悬停)的分发
  */
-class UISystem {
+class DSE_EXPORT UISystem {
 public:
     UISystem() = default;
     ~UISystem() = default;
@@ -99,6 +100,28 @@ private:
      * @param is_mouse_down 鼠标是否按下
      */
     void HandleEvents(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down);
+
+    /**
+     * @brief 更新滑动条组件的拖拽交互与值映射
+     */
+    void UpdateSliders(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down);
+
+    /**
+     * @brief 更新开关组件的切换状态与过渡动画
+     */
+    void UpdateToggles(entt::registry& registry, float dt);
+
+    /**
+     * @brief 更新滚动视图的拖拽滚动、惯性衰减与弹性回弹
+     */
+    void UpdateScrollViews(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down);
+
+    /**
+     * @brief 更新文本输入框的光标闪烁
+     */
+    void UpdateTextInputs(entt::registry& registry, float dt);
+
+    bool was_mouse_down_ = false;
 };
 
 } // namespace gameplay2d

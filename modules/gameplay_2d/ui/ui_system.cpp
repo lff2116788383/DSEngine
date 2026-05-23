@@ -65,7 +65,12 @@ void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& scree
     SyncLabels(registry);
     UpdateAnimations(registry, dt);
     UpdateLayout(registry, screen_size);
+    UpdateSliders(registry, dt, mouse_pos, is_mouse_down);
+    UpdateToggles(registry, dt);
+    UpdateScrollViews(registry, dt, mouse_pos, is_mouse_down);
+    UpdateTextInputs(registry, dt);
     HandleEvents(registry, dt, mouse_pos, is_mouse_down);
+    was_mouse_down_ = is_mouse_down;
 }
 
 void UISystem::UpdateAnimations(entt::registry& registry, float dt) {
@@ -414,6 +419,25 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
                 ui.is_pressed = false;
                 if (ui.on_click) ui.on_click(entity);
                 if (button && button->on_click) button->on_click(entity);
+                // Toggle 点击切换
+                if (auto* toggle = registry.try_get<UIToggleComponent>(entity)) {
+                    toggle->is_on = !toggle->is_on;
+                    toggle->transition_progress = 0.0f;
+                    if (toggle->on_value_changed) toggle->on_value_changed(entity, toggle->is_on);
+                    // 互斥组：同组其他 toggle 关闭
+                    if (toggle->is_on && toggle->group >= 0) {
+                        auto toggle_view = registry.view<UIToggleComponent>();
+                        for (auto other : toggle_view) {
+                            if (other == entity) continue;
+                            auto& other_toggle = toggle_view.get<UIToggleComponent>(other);
+                            if (other_toggle.group == toggle->group && other_toggle.is_on) {
+                                other_toggle.is_on = false;
+                                other_toggle.transition_progress = 0.0f;
+                                if (other_toggle.on_value_changed) other_toggle.on_value_changed(other, false);
+                            }
+                        }
+                    }
+                }
                 dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
             }
         } else if (!is_mouse_down) {
@@ -534,6 +558,154 @@ bool UISystem::IsBlockedByMask(entt::registry& registry, entt::entity entity, co
         cursor = parent->parent;
     }
     return false;
+}
+
+// ============================================================
+// UISliderComponent 交互
+// ============================================================
+void UISystem::UpdateSliders(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down) {
+    (void)dt;
+    auto view = registry.view<UISliderComponent, UIRendererComponent>();
+    for (auto entity : view) {
+        auto& slider = view.get<UISliderComponent>(entity);
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!ui.visible || !ui.interactable) continue;
+
+        const bool just_pressed = is_mouse_down && !was_mouse_down_;
+        const bool just_released = !is_mouse_down && was_mouse_down_;
+
+        if (just_pressed && IsPointInsideUIRect(registry, entity, mouse_pos)) {
+            slider.is_dragging = true;
+        }
+        if (just_released) {
+            slider.is_dragging = false;
+        }
+
+        if (slider.is_dragging && is_mouse_down) {
+            const glm::vec3 pos(ui.runtime_model[3]);
+            const glm::vec3 scale(glm::length(glm::vec3(ui.runtime_model[0])),
+                                  glm::length(glm::vec3(ui.runtime_model[1])), 1.0f);
+            float t;
+            if (slider.vertical) {
+                t = (scale.y > 0.0f) ? (mouse_pos.y - pos.y) / scale.y : 0.0f;
+            } else {
+                t = (scale.x > 0.0f) ? (mouse_pos.x - pos.x) / scale.x : 0.0f;
+            }
+            t = std::clamp(t, 0.0f, 1.0f);
+
+            float old_value = slider.value;
+            slider.SetFromNormalized(t);
+            if (slider.value != old_value && slider.on_value_changed) {
+                slider.on_value_changed(entity, slider.value);
+            }
+        }
+    }
+}
+
+// ============================================================
+// UIToggleComponent 交互
+// ============================================================
+void UISystem::UpdateToggles(entt::registry& registry, float dt) {
+    auto view = registry.view<UIToggleComponent, UIRendererComponent>();
+    for (auto entity : view) {
+        auto& toggle = view.get<UIToggleComponent>(entity);
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!ui.visible) continue;
+
+        // 过渡动画
+        if (toggle.transition_progress < 1.0f && toggle.transition_duration > 0.0f) {
+            toggle.transition_progress = std::min(1.0f, toggle.transition_progress + dt / toggle.transition_duration);
+            const glm::vec4& from = toggle.is_on ? toggle.off_color : toggle.on_color;
+            const glm::vec4& to = toggle.is_on ? toggle.on_color : toggle.off_color;
+            ui.color = glm::mix(from, to, toggle.transition_progress);
+        }
+    }
+}
+
+// ============================================================
+// UIScrollViewComponent 交互
+// ============================================================
+void UISystem::UpdateScrollViews(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down) {
+    auto view = registry.view<UIScrollViewComponent, UIRendererComponent>();
+    for (auto entity : view) {
+        auto& sv = view.get<UIScrollViewComponent>(entity);
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!ui.visible) continue;
+
+        // viewport_size 为 0 时继承 UIRendererComponent::size
+        glm::vec2 viewport = sv.viewport_size;
+        if (viewport.x <= 0.0f) viewport.x = ui.size.x;
+        if (viewport.y <= 0.0f) viewport.y = ui.size.y;
+        sv.viewport_size = viewport;
+
+        const bool just_pressed = is_mouse_down && !was_mouse_down_;
+        const bool just_released = !is_mouse_down && was_mouse_down_;
+
+        if (just_pressed && IsPointInsideUIRect(registry, entity, mouse_pos)) {
+            sv.is_dragging = true;
+            sv.drag_start_pos = mouse_pos;
+            sv.drag_start_offset = sv.scroll_offset;
+            sv.velocity = glm::vec2(0.0f);
+        }
+
+        if (sv.is_dragging) {
+            if (is_mouse_down) {
+                glm::vec2 delta = mouse_pos - sv.drag_start_pos;
+                if (!sv.horizontal) delta.x = 0.0f;
+                if (!sv.vertical) delta.y = 0.0f;
+                sv.velocity = delta / std::max(dt, 0.001f) * 0.1f;
+                sv.scroll_offset = sv.drag_start_offset - delta;
+            }
+            if (just_released) {
+                sv.is_dragging = false;
+            }
+        }
+
+        // 惯性衰减
+        if (!sv.is_dragging && sv.inertia && glm::length(sv.velocity) > 0.1f) {
+            if (sv.horizontal) sv.scroll_offset.x += sv.velocity.x * dt;
+            if (sv.vertical)   sv.scroll_offset.y += sv.velocity.y * dt;
+            sv.velocity *= (1.0f - sv.deceleration_rate);
+        } else if (!sv.is_dragging) {
+            sv.velocity = glm::vec2(0.0f);
+        }
+
+        // 边界限制 + 弹性回弹
+        glm::vec2 max_offset = glm::max(sv.content_size - viewport, glm::vec2(0.0f));
+        for (int axis = 0; axis < 2; ++axis) {
+            if (sv.scroll_offset[axis] < 0.0f) {
+                if (sv.elastic) {
+                    sv.scroll_offset[axis] = glm::mix(sv.scroll_offset[axis], 0.0f, sv.elasticity);
+                } else {
+                    sv.scroll_offset[axis] = 0.0f;
+                }
+            } else if (sv.scroll_offset[axis] > max_offset[axis]) {
+                if (sv.elastic) {
+                    sv.scroll_offset[axis] = glm::mix(sv.scroll_offset[axis], max_offset[axis], sv.elasticity);
+                } else {
+                    sv.scroll_offset[axis] = max_offset[axis];
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// UITextInputComponent 交互
+// ============================================================
+void UISystem::UpdateTextInputs(entt::registry& registry, float dt) {
+    auto view = registry.view<UITextInputComponent>();
+    for (auto entity : view) {
+        auto& input = view.get<UITextInputComponent>(entity);
+        if (!input.is_focused) continue;
+
+        // 光标闪烁
+        input.cursor_blink_timer += dt;
+        if (input.cursor_blink_timer >= input.cursor_blink_rate) {
+            input.cursor_blink_timer -= input.cursor_blink_rate;
+            input.cursor_visible = !input.cursor_visible;
+        }
+    }
 }
 
 } // namespace gameplay2d

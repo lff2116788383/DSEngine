@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <memory>
 #include <vector>
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace gameplay2d {
@@ -34,7 +35,7 @@ struct FontAsset {
  * @class FontManager
  * @brief 字体管理器，管理字体的加载、缓存、选择
  */
-class FontManager {
+class DSE_EXPORT FontManager {
 public:
     /**
      * @brief 构造函数

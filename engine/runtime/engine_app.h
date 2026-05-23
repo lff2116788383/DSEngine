@@ -17,6 +17,7 @@ namespace dse::assets { class NativeFileSystem; }
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/dse_export.h"
 
 namespace dse::runtime {
 
@@ -39,7 +40,7 @@ struct EngineRunConfig {
  * @class EngineInstance
  * @brief 引擎应用运行实例，负责生命周期、默认服务装配与主循环驱动。
  */
-class EngineInstance {
+class DSE_EXPORT EngineInstance {
 public:
     EngineInstance(const EngineRunConfig& config);
     ~EngineInstance();
@@ -105,7 +106,7 @@ private:
     std::unique_ptr<dse::assets::NativeFileSystem> default_file_system_;
 };
 
-int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility
+DSE_EXPORT int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility
 
 }
 

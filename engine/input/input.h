@@ -13,12 +13,13 @@
 #include <array>
 #include <unordered_map>
 #include "glm/glm.hpp"
+#include "engine/core/dse_export.h"
 
 /**
  * @class Input
  * @brief 全局输入管理类，提供键盘和鼠标的输入状态查询。
  */
-class Input {
+class DSE_EXPORT Input {
 public:
     /**
      * @brief 记录按键事件，键盘按下记录数+1，键盘弹起记录数-1，当记录数为0，说明此时没有按键。

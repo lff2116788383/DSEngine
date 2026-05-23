@@ -168,3 +168,200 @@ TEST(UILayoutSystemTest, 空Registry不崩溃) {
     entt::registry reg;
     layout.Update(reg, glm::vec2(1920, 1080));
 }
+
+// ============================================================
+// 新组件运行时交互测试
+// ============================================================
+
+namespace {
+// 创建一个占满屏幕的 interactable UI 实体（便于 hit test）
+entt::entity MakeFullScreenUI(entt::registry& reg) {
+    auto e = reg.create();
+    auto& ui = reg.emplace<UIRendererComponent>(e);
+    ui.visible = true;
+    ui.interactable = true;
+    ui.position = glm::vec2(0.0f);
+    ui.size = glm::vec2(1920.0f, 1080.0f);
+    ui.anchor_min = glm::vec2(0.0f);
+    ui.anchor_max = glm::vec2(0.0f);
+    ui.pivot = glm::vec2(0.0f);
+    ui.scale = 1.0f;
+    return e;
+}
+}
+
+TEST(UISystemTest, Slider拖拽更新值) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& slider = reg.emplace<UISliderComponent>(e);
+    slider.min_value = 0.0f;
+    slider.max_value = 100.0f;
+    slider.value = 0.0f;
+
+    bool callback_fired = false;
+    float received_value = 0.0f;
+    slider.on_value_changed = [&](entt::entity, float v) {
+        callback_fired = true;
+        received_value = v;
+    };
+
+    const glm::vec2 screen(1920, 1080);
+    // Frame 1: 鼠标按下
+    sys.Update(reg, 0.016f, screen, glm::vec2(960, 540), true);
+    // Frame 2: 保持按下（拖拽中，鼠标在 50% 位置）
+    sys.Update(reg, 0.016f, screen, glm::vec2(960, 540), true);
+
+    EXPECT_TRUE(slider.is_dragging);
+    EXPECT_TRUE(callback_fired);
+    EXPECT_NEAR(received_value, 50.0f, 5.0f);
+}
+
+TEST(UISystemTest, Slider整数步进) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& slider = reg.emplace<UISliderComponent>(e);
+    slider.min_value = 0.0f;
+    slider.max_value = 10.0f;
+    slider.whole_numbers = true;
+
+    const glm::vec2 screen(1920, 1080);
+    sys.Update(reg, 0.016f, screen, glm::vec2(576, 540), true);  // press
+    sys.Update(reg, 0.016f, screen, glm::vec2(576, 540), true);  // drag at ~30%
+
+    EXPECT_FLOAT_EQ(slider.value, std::round(slider.value));
+}
+
+TEST(UISystemTest, Toggle点击切换) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& toggle = reg.emplace<UIToggleComponent>(e);
+    toggle.is_on = false;
+
+    bool callback_fired = false;
+    toggle.on_value_changed = [&](entt::entity, bool v) {
+        callback_fired = true;
+        EXPECT_TRUE(v);
+    };
+
+    const glm::vec2 screen(1920, 1080);
+    const glm::vec2 center(960, 540);
+    // 鼠标按下 → 释放 = 点击
+    sys.Update(reg, 0.016f, screen, center, true);
+    sys.Update(reg, 0.016f, screen, center, false);
+
+    EXPECT_TRUE(toggle.is_on);
+    EXPECT_TRUE(callback_fired);
+}
+
+TEST(UISystemTest, Toggle互斥组) {
+    UISystem sys;
+    entt::registry reg;
+    auto e1 = MakeFullScreenUI(reg);
+    auto& t1 = reg.emplace<UIToggleComponent>(e1);
+    t1.is_on = true;
+    t1.group = 0;
+
+    auto e2 = MakeFullScreenUI(reg);
+    auto& ui2 = reg.get<UIRendererComponent>(e2);
+    ui2.order = 10; // 确保 e2 在 e1 上面
+    auto& t2 = reg.emplace<UIToggleComponent>(e2);
+    t2.is_on = false;
+    t2.group = 0;
+
+    const glm::vec2 screen(1920, 1080);
+    const glm::vec2 center(960, 540);
+    // 点击 e2（order 更高，应被选中）
+    sys.Update(reg, 0.016f, screen, center, true);
+    sys.Update(reg, 0.016f, screen, center, false);
+
+    EXPECT_TRUE(t2.is_on);
+    EXPECT_FALSE(t1.is_on);
+}
+
+TEST(UISystemTest, TextInput光标闪烁) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = reg.create();
+    auto& input = reg.emplace<UITextInputComponent>(e);
+    input.is_focused = true;
+    input.cursor_blink_rate = 0.1f;
+    input.cursor_blink_timer = 0.0f;
+    input.cursor_visible = true;
+
+    const glm::vec2 screen(1920, 1080);
+    // 累积 0.12s > blink_rate, 应翻转一次
+    for (int i = 0; i < 8; ++i) {
+        sys.Update(reg, 0.016f, screen, glm::vec2(0), false);
+    }
+    EXPECT_FALSE(input.cursor_visible);
+}
+
+TEST(UISystemTest, TextInput未聚焦不闪烁) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = reg.create();
+    auto& input = reg.emplace<UITextInputComponent>(e);
+    input.is_focused = false;
+    input.cursor_blink_timer = 0.0f;
+
+    const glm::vec2 screen(1920, 1080);
+    sys.Update(reg, 1.0f, screen, glm::vec2(0), false);
+    EXPECT_FLOAT_EQ(input.cursor_blink_timer, 0.0f);
+}
+
+TEST(UISystemTest, ScrollView拖拽滚动) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& sv = reg.emplace<UIScrollViewComponent>(e);
+    sv.content_size = glm::vec2(1920, 3000);
+    sv.viewport_size = glm::vec2(0.0f); // auto from UIRenderer
+    sv.vertical = true;
+    sv.horizontal = false;
+    sv.inertia = false;
+
+    const glm::vec2 screen(1920, 1080);
+    // 按下
+    sys.Update(reg, 0.016f, screen, glm::vec2(960, 500), true);
+    // 拖拽：y 从 500 移到 300 = 往上拽 200px → offset 增加
+    sys.Update(reg, 0.016f, screen, glm::vec2(960, 300), true);
+
+    EXPECT_TRUE(sv.is_dragging);
+    EXPECT_GT(sv.scroll_offset.y, 100.0f);
+}
+
+TEST(UISystemTest, ScrollView弹性回弹) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& sv = reg.emplace<UIScrollViewComponent>(e);
+    sv.content_size = glm::vec2(1920, 2000);
+    sv.viewport_size = glm::vec2(1920, 1080);
+    sv.elastic = true;
+    sv.elasticity = 0.5f;
+    sv.inertia = false;
+    sv.scroll_offset = glm::vec2(0, -100); // 超出边界
+
+    const glm::vec2 screen(1920, 1080);
+    // 多帧弹性回弹
+    for (int i = 0; i < 20; ++i) {
+        sys.Update(reg, 0.016f, screen, glm::vec2(0), false);
+    }
+    EXPECT_NEAR(sv.scroll_offset.y, 0.0f, 1.0f);
+}
+
+TEST(UISystemTest, ProgressBar组件存在时不崩溃) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& bar = reg.emplace<UIProgressBarComponent>(e);
+    bar.value = 0.5f;
+    bar.max_value = 1.0f;
+
+    const glm::vec2 screen(1920, 1080);
+    sys.Update(reg, 0.016f, screen, glm::vec2(960, 540), false);
+    EXPECT_NEAR(bar.GetFillAmount(), 0.5f, 0.01f);
+}

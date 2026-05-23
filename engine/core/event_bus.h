@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <utility>
 #include "engine/core/service_locator.h"
+#include "engine/core/dse_export.h"
 
 namespace dse {
 namespace core {
@@ -172,7 +173,7 @@ struct SubscriptionHandle {
  * // 旧用法（兼容）
  * EventBus::Instance().Publish<UiClickEvent>(entity_id);
  */
-class EventBus {
+class DSE_EXPORT EventBus {
 public:
     EventBus() = default;
     explicit EventBus(ServiceLocator* owner_locator) : owner_locator_(owner_locator) {}

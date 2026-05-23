@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include "engine/core/dse_export.h"
 
 namespace dse::debug {
 
@@ -25,9 +26,9 @@ enum class LogLevel {
     Off
 };
 
-void LogMessage(LogLevel level, const std::string& message);
-void SetLogLevel(LogLevel level);
-LogLevel GetLogLevel();
+DSE_EXPORT void LogMessage(LogLevel level, const std::string& message);
+DSE_EXPORT void SetLogLevel(LogLevel level);
+DSE_EXPORT LogLevel GetLogLevel();
 
 inline void AppendFormatted(std::ostringstream& oss, const char* format) {
     if (format) {
