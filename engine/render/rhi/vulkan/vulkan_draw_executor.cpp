@@ -1204,31 +1204,34 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     // 记录 <writes_index, img_pool_base> 以便后续修正指针
     std::vector<std::pair<size_t, size_t>> img_fixups;
 
-    // Set 0 (layouts[0]): PerFrame UBO — binding 0（仅当着色器反射包含该绑定时写入）
-    bool set0_has_ubo = false;
-    for (const auto& b : program->reflection.bindings) {
-        if (b.set == 0 && b.binding == 0) { set0_has_ubo = true; break; }
-    }
-    if (set0_has_ubo) {
+    // 反射辅助: 检查 (set, binding) 是否存在于着色器中
+    auto has_binding = [&](uint32_t set_idx, uint32_t bind_idx) -> bool {
+        for (const auto& b : program->reflection.bindings)
+            if (b.set == set_idx && b.binding == bind_idx) return true;
+        return false;
+    };
+
+    // Set 0 (layouts[0]): PerFrame UBO — binding 0
+    if (has_binding(0, 0)) {
         push_ubo(sets[0], 0);
     }
 
     // Set 1 (layouts[1]): PerScene(b0) + PointLightSSBO(b1) + SpotLightSSBO(b2) + ClusterInfo(b3) + LightIndex(b4)
     if (set_count > 1) {
-        push_ubo(sets[1], 0);
-        push_ssbo(sets[1], 1);
-        push_ssbo(sets[1], 2);
-        push_ssbo(sets[1], 3);
-        push_ssbo(sets[1], 4);
+        if (has_binding(1, 0)) push_ubo(sets[1], 0);
+        if (has_binding(1, 1)) push_ssbo(sets[1], 1);
+        if (has_binding(1, 2)) push_ssbo(sets[1], 2);
+        if (has_binding(1, 3)) push_ssbo(sets[1], 3);
+        if (has_binding(1, 4)) push_ssbo(sets[1], 4);
     }
 
     // Set 2 (layouts[2]): PerMaterial(b0) + textures(b1-5) + shadow(b6,b7) + bone(b8,b9)
     if (set_count > 2) {
-        push_ubo(sets[2], 0);
+        if (has_binding(2, 0)) push_ubo(sets[2], 0);
 
         // binding 1: skybox cubemap（实际纹理）
-        const VulkanTexture* cubemap_tex = resource_mgr.GetTexture(cubemap_texture_handle);
-        {
+        if (has_binding(2, 1)) {
+            const VulkanTexture* cubemap_tex = resource_mgr.GetTexture(cubemap_texture_handle);
             size_t base = img_pool.size();
             VkDescriptorImageInfo ci{};
             ci.sampler = default_samp;
@@ -1248,23 +1251,24 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
 
         // binding 2-5: dummy textures
         for (uint32_t b = 2; b <= 5; ++b) {
+            if (!has_binding(2, b)) continue;
             size_t base = push_img(sets[2], b, 1);
             img_fixups.push_back({writes.size() - 1, base});
         }
 
         // binding 6: shadow_map[3]
-        { size_t base = push_img(sets[2], 6, 3); img_fixups.push_back({writes.size()-1, base}); }
+        if (has_binding(2, 6)) { size_t base = push_img(sets[2], 6, 3); img_fixups.push_back({writes.size()-1, base}); }
 
         // binding 7: spot_shadow_map[4]
-        { size_t base = push_img(sets[2], 7, 4); img_fixups.push_back({writes.size()-1, base}); }
+        if (has_binding(2, 7)) { size_t base = push_img(sets[2], 7, 4); img_fixups.push_back({writes.size()-1, base}); }
 
         // binding 8-9: BoneMatrices / MorphWeights UBO
-        push_ubo(sets[2], 8);
-        push_ubo(sets[2], 9);
+        if (has_binding(2, 8)) push_ubo(sets[2], 8);
+        if (has_binding(2, 9)) push_ubo(sets[2], 9);
     }
 
     // Set 3 (layouts[3]): point_shadow_maps[4] — binding 0
-    if (set_count > 3) {
+    if (set_count > 3 && has_binding(3, 0)) {
         size_t base = push_img(sets[3], 0, 4);
         img_fixups.push_back({writes.size() - 1, base});
     }
