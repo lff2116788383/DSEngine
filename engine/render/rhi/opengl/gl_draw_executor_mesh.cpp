@@ -638,7 +638,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
             if (update_buffer_fn_) {
                 update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
-                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
+                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(uint32_t), item.indices.data(), true);
             }
 
             const size_t instance_count = item.instance_transforms.size();
@@ -675,7 +675,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
 
             glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()),
-                                    GL_UNSIGNED_SHORT, nullptr, static_cast<GLsizei>(instance_count));
+                                    GL_UNSIGNED_INT, nullptr, static_cast<GLsizei>(instance_count));
 
             // 清理 instance attribute 状态
             for (int col = 0; col < 4; ++col) {
@@ -692,9 +692,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
             if (update_buffer_fn_) {
                 update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
-                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(unsigned short), item.indices.data(), true);
+                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(uint32_t), item.indices.data(), true);
             }
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_SHORT, nullptr);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
         }
 

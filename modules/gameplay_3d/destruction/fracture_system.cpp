@@ -375,7 +375,7 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
         }
 
         // 找出三个顶点都属于该碎片的三角形
-        std::vector<unsigned short> frag_tri_indices;
+        std::vector<uint32_t> frag_tri_indices;
         for (size_t t = 0; t + 2 < mr.temp_indices.size(); t += 3) {
             uint32_t i0 = mr.temp_indices[t + 0];
             uint32_t i1 = mr.temp_indices[t + 1];
@@ -391,11 +391,11 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
         if (frag_tri_indices.empty()) continue;
 
         // 收集实际用到的顶点，计算质心
-        std::unordered_map<unsigned short, unsigned short> old_to_new;
-        std::vector<unsigned short> used_verts;
+        std::unordered_map<uint32_t, uint32_t> old_to_new;
+        std::vector<uint32_t> used_verts;
         for (auto idx : frag_tri_indices) {
             if (old_to_new.find(idx) == old_to_new.end()) {
-                old_to_new[idx] = static_cast<unsigned short>(used_verts.size());
+                old_to_new[idx] = static_cast<uint32_t>(used_verts.size());
                 used_verts.push_back(idx);
             }
         }
@@ -434,7 +434,7 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
             frag_vertices[vi_idx * stride + 2] -= centroid.z;
         }
 
-        std::vector<unsigned short> frag_remapped_indices;
+        std::vector<uint32_t> frag_remapped_indices;
         frag_remapped_indices.reserve(frag_tri_indices.size());
         for (auto idx : frag_tri_indices) {
             frag_remapped_indices.push_back(old_to_new[idx]);

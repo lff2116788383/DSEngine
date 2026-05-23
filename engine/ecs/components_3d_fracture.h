@@ -16,7 +16,7 @@ struct FragmentDescriptor {
 
     // 运行时 Voronoi 碎片的内存数据（mesh_path 为缓存键时使用）
     std::vector<float> runtime_vertices;          ///< 碎片顶点数据（质心居中）
-    std::vector<unsigned short> runtime_indices;  ///< 碎片三角形索引
+    std::vector<uint32_t> runtime_indices;  ///< 碎片三角形索引
     int runtime_vertex_stride = 0;                ///< 顶点步长（float 个数，0=使用 dmesh 加载）
 };
 

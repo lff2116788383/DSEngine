@@ -89,6 +89,12 @@ bool GlfwApp::Init(const WindowConfig& config) {
         has_gl_context_ = true;
     }
 
+    // 显式设置箭头光标，避免 Windows 在加载期间显示忙碌光标
+    GLFWcursor* arrow = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    if (arrow) {
+        glfwSetCursor(window_, arrow);
+    }
+
     owns_window_ = true;
     initialized_ = true;
     return true;

@@ -98,14 +98,14 @@ static std::string GenerateGL430Source() {
     std::string src = kSkinningComputeVK;
     // #version
     { auto p = src.find("#version 450"); if (p != std::string::npos) src.replace(p, 12, "#version 430"); }
-    // push_constant block → uniform
+    // push_constant block → uniform (用 int 而非 uint，因为 glUniform1i 不适用于 uint 类型)
     {
         auto p = src.find("layout(push_constant)");
         if (p != std::string::npos) {
             auto end = src.find("} params;", p);
             if (end != std::string::npos) {
                 src.replace(p, end + 9 - p,
-                    "uniform uint u_total_vertices;\nuniform uint u_instance_count;");
+                    "uniform int u_total_vertices;\nuniform int u_instance_count;");
             }
         }
     }

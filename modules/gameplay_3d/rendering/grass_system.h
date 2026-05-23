@@ -93,11 +93,11 @@ private:
 
     // 共享草叶 mesh 数据 (LOD 0) — CPU 侧缓存，每帧拷贝到 MeshDrawItem
     std::vector<BatchVertex> blade_vertices_;
-    std::vector<unsigned short> blade_indices_;
+    std::vector<uint32_t> blade_indices_;
 
     // 共享 billboard mesh 数据 (LOD 1)
     std::vector<BatchVertex> billboard_vertices_;
-    std::vector<unsigned short> billboard_indices_;
+    std::vector<uint32_t> billboard_indices_;
 
     // Per-entity chunk 缓存: entity_id → { chunk_key → ChunkData }
     struct EntityCache {

@@ -39,7 +39,7 @@ private:
     void ProjectVolumeConstraint(SoftBodyComponent& sb);
     void ProjectCollisions(World& world, SoftBodyComponent& sb);
     void WriteBackMesh(World& world, entt::entity entity, SoftBodyComponent& sb);
-    float ComputeVolume(const SoftBodyComponent& sb, const std::vector<unsigned short>& indices) const;
+    float ComputeVolume(const SoftBodyComponent& sb, const std::vector<uint32_t>& indices) const;
 };
 
 } // namespace gameplay3d

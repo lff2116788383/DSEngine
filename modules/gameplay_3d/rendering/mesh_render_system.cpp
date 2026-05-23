@@ -39,7 +39,7 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
 
 struct RawMeshData {
     std::vector<float> vertices;
-    std::vector<unsigned short> indices;
+    std::vector<uint32_t> indices;
 };
 
 std::string ToLower(std::string value) {
@@ -94,7 +94,7 @@ int ResolveObjIndex(int value, int count) {
 
 bool ParseObjMesh(const std::string& text, RawMeshData& out_mesh) {
     std::vector<glm::vec3> positions;
-    std::unordered_map<std::string, unsigned short> vertex_map;
+    std::unordered_map<std::string, uint32_t> vertex_map;
     std::istringstream stream(text);
     std::string line;
     while (std::getline(stream, line)) {
@@ -114,7 +114,7 @@ bool ParseObjMesh(const std::string& text, RawMeshData& out_mesh) {
         }
         if (line[0] == 'f' && line.size() > 1 && std::isspace(static_cast<unsigned char>(line[1]))) {
             std::istringstream ls(line.substr(1));
-            std::vector<unsigned short> face;
+            std::vector<uint32_t> face;
             std::string token;
             while (ls >> token) {
                 auto cached = vertex_map.find(token);
@@ -134,11 +134,8 @@ bool ParseObjMesh(const std::string& text, RawMeshData& out_mesh) {
                 if (pos_index < 0 || pos_index >= static_cast<int>(positions.size())) {
                     continue;
                 }
-                if (out_mesh.vertices.size() / 3 >= std::numeric_limits<unsigned short>::max()) {
-                    return false;
-                }
                 const glm::vec3& p = positions[static_cast<std::size_t>(pos_index)];
-                unsigned short new_index = static_cast<unsigned short>(out_mesh.vertices.size() / 3);
+                uint32_t new_index = static_cast<uint32_t>(out_mesh.vertices.size() / 3);
                 out_mesh.vertices.push_back(p.x);
                 out_mesh.vertices.push_back(p.y);
                 out_mesh.vertices.push_back(p.z);
@@ -334,19 +331,13 @@ bool ParseGltfMesh(AssetManager& asset_manager, const std::string& gltf_path, co
             } else {
                 value = idx_buffer[offset];
             }
-            if (value > std::numeric_limits<unsigned short>::max()) {
-                return false;
-            }
-            out_mesh.indices.push_back(static_cast<unsigned short>(value));
+            out_mesh.indices.push_back(static_cast<uint32_t>(value));
         }
     } else {
         std::size_t vertex_count = out_mesh.vertices.size() / 3;
-        if (vertex_count > std::numeric_limits<unsigned short>::max()) {
-            return false;
-        }
         out_mesh.indices.reserve(vertex_count);
         for (std::size_t i = 0; i < vertex_count; ++i) {
-            out_mesh.indices.push_back(static_cast<unsigned short>(i));
+            out_mesh.indices.push_back(static_cast<uint32_t>(i));
         }
     }
     return !out_mesh.vertices.empty() && !out_mesh.indices.empty();
@@ -396,9 +387,6 @@ bool ParseFbxMesh(const std::string& text, RawMeshData& out_mesh) {
         return false;
     }
     std::size_t vertex_count = vertices.size() / 3;
-    if (vertex_count > std::numeric_limits<unsigned short>::max()) {
-        return false;
-    }
     out_mesh.vertices.reserve(vertex_count * 3);
     for (std::size_t i = 0; i + 2 < vertices.size(); i += 3) {
         out_mesh.vertices.push_back(static_cast<float>(vertices[i + 0]));
@@ -406,7 +394,7 @@ bool ParseFbxMesh(const std::string& text, RawMeshData& out_mesh) {
         out_mesh.vertices.push_back(static_cast<float>(vertices[i + 2]));
     }
 
-    std::vector<unsigned short> face;
+    std::vector<uint32_t> face;
     for (double raw : polygon_indices) {
         int idx = static_cast<int>(raw);
         bool end = idx < 0;
@@ -416,7 +404,7 @@ bool ParseFbxMesh(const std::string& text, RawMeshData& out_mesh) {
         if (idx < 0 || idx >= static_cast<int>(vertex_count)) {
             return false;
         }
-        face.push_back(static_cast<unsigned short>(idx));
+        face.push_back(static_cast<uint32_t>(idx));
         if (end) {
             if (face.size() >= 3) {
                 for (std::size_t i = 1; i + 1 < face.size(); ++i) {
@@ -505,25 +493,18 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                     }
 
                     mesh_renderer.temp_indices.reserve(header->index_count);
-                    bool index_overflow = false;
                     for (uint32_t submesh_index = 0; submesh_index < header->submesh_count; ++submesh_index) {
                         const auto& submesh = submeshes[submesh_index];
                         for (uint32_t i = 0; i < submesh.index_count; ++i) {
                             const uint32_t resolved_index = submesh.base_vertex + indices[submesh.index_start + i];
-                            if (resolved_index >= header->vertex_count || resolved_index > std::numeric_limits<unsigned short>::max()) {
-                                index_overflow = true;
-                                break;
+                            if (resolved_index >= header->vertex_count) {
+                                DEBUG_LOG_ERROR("[MeshRenderSystem] dmesh index out of range: resolved_index={} vertex_count={} path={}", resolved_index, header->vertex_count, mesh_renderer.mesh_path);
+                                mesh_renderer.temp_vertices.clear();
+                                mesh_renderer.temp_indices.clear();
+                                return;
                             }
-                            mesh_renderer.temp_indices.push_back(static_cast<unsigned short>(resolved_index));
+                            mesh_renderer.temp_indices.push_back(resolved_index);
                         }
-                        if (index_overflow) {
-                            break;
-                        }
-                    }
-                    if (index_overflow) {
-                        mesh_renderer.temp_vertices.clear();
-                        mesh_renderer.temp_indices.clear();
-                        return;
                     }
                     update_bounding_box(mesh_renderer.temp_vertices, mesh_renderer.dmesh_vertex_stride);
                     return;
@@ -668,6 +649,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
         
         EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
+
         if (!mesh_renderer.visible) continue;
         if (mesh_renderer.is_static && static_batches_built_) continue;
 
@@ -800,12 +782,14 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         if (world.registry().all_of<Animator3DComponent>(entity)) {
             const auto& animator = world.registry().get<Animator3DComponent>(entity);
             if (animator.enabled && !animator.final_bone_matrices.empty()) {
-                // 检查是否有上一帧 GPU 蒙皮结果可用
                 if (gpu_skinning_ && gpu_skinning_->HasSkinnedOutput(static_cast<uint32_t>(entity))) {
-                    gpu_skinned_output = gpu_skinning_->GetSkinnedOutput(static_cast<uint32_t>(entity));
-                    // GPU 蒙皮输出已是 world-space，不需要 VS 做骨骼变换
-                    item.skinned = false;
-                } else {
+                    const auto* candidate = gpu_skinning_->GetSkinnedOutput(static_cast<uint32_t>(entity));
+                    if (candidate && candidate->vertex_count > 0 && !candidate->positions.empty()) {
+                        gpu_skinned_output = candidate;
+                        item.skinned = false;
+                    }
+                }
+                if (!gpu_skinned_output) {
                     // 回退到 VS 骨骼蒙皮
                     item.skinned = true;
                     item.bone_matrices = animator.final_bone_matrices;
@@ -982,9 +966,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             std::vector<glm::vec3> local_normals(vertex_count, glm::vec3(0.0f));
             bool invalid_index = false;
             for (size_t i = 0; i + 2 < mesh_renderer.temp_indices.size(); i += 3) {
-                const unsigned short i0 = mesh_renderer.temp_indices[i + 0];
-                const unsigned short i1 = mesh_renderer.temp_indices[i + 1];
-                const unsigned short i2 = mesh_renderer.temp_indices[i + 2];
+                const uint32_t i0 = mesh_renderer.temp_indices[i + 0];
+                const uint32_t i1 = mesh_renderer.temp_indices[i + 1];
+                const uint32_t i2 = mesh_renderer.temp_indices[i + 2];
                 if (i0 >= vertex_count || i1 >= vertex_count || i2 >= vertex_count) {
                     invalid_index = true;
                     break;
@@ -1400,8 +1384,8 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
             }
 
             // 追加索引数据（转换为 uint32_t）
-            for (unsigned short idx : mesh_renderer.temp_indices) {
-                mega_ibo_data_.push_back(static_cast<uint32_t>(idx));
+            for (uint32_t idx : mesh_renderer.temp_indices) {
+                mega_ibo_data_.push_back(idx);
             }
 
             mega_vbo_vertex_count_ += entry.vertex_count;

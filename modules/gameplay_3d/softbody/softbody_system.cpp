@@ -236,7 +236,7 @@ void SoftBodySystem::WriteBackMesh(World& world, entt::entity entity, SoftBodyCo
     sb.mesh_dirty = false;
 }
 
-float SoftBodySystem::ComputeVolume(const SoftBodyComponent& sb, const std::vector<unsigned short>& indices) const {
+float SoftBodySystem::ComputeVolume(const SoftBodyComponent& sb, const std::vector<uint32_t>& indices) const {
     float volume = 0.0f;
     for (size_t i = 0; i + 2 < indices.size(); i += 3) {
         const glm::vec3& a = sb.positions[indices[i]];

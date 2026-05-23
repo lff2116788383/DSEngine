@@ -184,7 +184,7 @@ struct MeshDrawItem {
     glm::mat4 model = glm::mat4(1.0f);
     glm::vec4 color = glm::vec4(1.0f);
     std::vector<BatchVertex> vertices;
-    std::vector<unsigned short> indices;
+    std::vector<uint32_t> indices;
     int sorting_layer = 0;
     int order_in_layer = 0;
 

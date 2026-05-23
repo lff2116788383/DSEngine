@@ -389,6 +389,27 @@ int L_EcsCharacterController3DMove(lua_State* L) {
 #ifdef DSE_HAS_PHYSICS3D
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
         auto result = physics->MoveCharacter(e, glm::vec3(dx, dy, dz), min_dist, dt);
+        // Jolt CharacterVirtual 不知道 ECS 地形高度图，补上地形贴地检查
+        World* world_phys = GetWorld();
+        if (world_phys) {
+            auto* tf_phys = helper::TryGetComponent<TransformComponent>(*world_phys, e);
+            if (tf_phys) {
+                float terrain_y = -1e10f;
+                auto hm_view = world_phys->registry().view<TerrainHeightmapComponent>();
+                for (auto te : hm_view) {
+                    const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
+                    float h = hm.GetHeight(tf_phys->position.x, tf_phys->position.z);
+                    if (h > terrain_y) terrain_y = h;
+                }
+                if (terrain_y > -1e9f && tf_phys->position.y < terrain_y) {
+                    tf_phys->position.y = terrain_y;
+                    tf_phys->dirty = true;
+                    result.is_grounded = true;
+                    result.collision_flags = static_cast<uint8_t>(result.collision_flags)
+                        | static_cast<uint8_t>(CharacterCollisionFlag::Down);
+                }
+            }
+        }
         lua_pushboolean(L, result.is_grounded ? 1 : 0);
         helper::PushVec3(L, result.velocity);
         lua_pushinteger(L, static_cast<lua_Integer>(result.collision_flags));

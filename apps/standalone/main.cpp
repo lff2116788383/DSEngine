@@ -95,19 +95,21 @@ int main(int argc, char** argv) {
         }
     } catch (...) {}
 
-    // Auto-detect data/ directory next to exe and set as data root
-    try {
-        auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
-        auto data_dir = exe_dir / "data";
-        if (std::filesystem::exists(data_dir) && std::filesystem::is_directory(data_dir)) {
-            std::string data_root = data_dir.string();
+    // Auto-detect data/ directory next to exe and set as data root (only if not already set)
+    if (!std::getenv("DSE_DATA_ROOT")) {
+        try {
+            auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
+            auto data_dir = exe_dir / "data";
+            if (std::filesystem::exists(data_dir) && std::filesystem::is_directory(data_dir)) {
+                std::string data_root = data_dir.string();
 #ifdef _WIN32
-            _putenv_s("DSE_DATA_ROOT", data_root.c_str());
+                _putenv_s("DSE_DATA_ROOT", data_root.c_str());
 #else
-            setenv("DSE_DATA_ROOT", data_root.c_str(), 1);
+                setenv("DSE_DATA_ROOT", data_root.c_str(), 1);
 #endif
-        }
-    } catch (...) {}
+            }
+        } catch (...) {}
+    }
 
     return dse::runtime::RunEngine({
         cfg.width,

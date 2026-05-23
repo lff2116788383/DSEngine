@@ -2264,7 +2264,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
         vkCmdBindVertexBuffers(cmd_buf, 0, 2, vbo_buffers, vbo_offsets);
 
         // 绑定 IBO（使用该 mesh 的偏移）
-        vkCmdBindIndexBuffer(cmd_buf, mesh_ibo_, cur_ibo_offset, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(cmd_buf, mesh_ibo_, cur_ibo_offset, VK_INDEX_TYPE_UINT32);
 
         // 绘制
         vkCmdDrawIndexed(cmd_buf,

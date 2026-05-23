@@ -65,7 +65,7 @@ struct MeshRendererComponent {
     MaterialDataSource material_data_source = MaterialDataSource::ComponentFallback;
     unsigned int mesh_handle_override = 0;  ///< 非零时表示 LODSystem 正在管理此实体的 mesh_path
     std::vector<float> temp_vertices;
-    std::vector<unsigned short> temp_indices;
+    std::vector<uint32_t> temp_indices;
     std::vector<float> temp_uvs;
     std::vector<float> temp_normals;
     std::vector<float> temp_tangents;

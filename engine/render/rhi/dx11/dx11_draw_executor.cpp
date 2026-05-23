@@ -612,7 +612,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 动态 VBO/IBO 容量保证
         size_t vbo_bytes = item.vertices.size() * sizeof(BatchVertex);
-        size_t ibo_bytes = item.indices.size() * sizeof(unsigned short);
+        size_t ibo_bytes = item.indices.size() * sizeof(uint32_t);
         EnsureMeshVBOCapacity(vbo_bytes);
         EnsureMeshIBOCapacity(ibo_bytes);
 
@@ -678,7 +678,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             UINT vb_offset = 0;
             dc->IASetVertexBuffers(0, 1, mesh_dynamic_vbo_.GetAddressOf(), &stride, &vb_offset);
         }
-        dc->IASetIndexBuffer(mesh_dynamic_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
+        dc->IASetIndexBuffer(mesh_dynamic_ibo_.Get(), DXGI_FORMAT_R32_UINT, 0);
 
         // PerObject
         DX11PerObjectCB obj_data{};

@@ -184,9 +184,8 @@ int L_EcsAddMeshRenderer(lua_State* L) {
             lua_rawgeti(L, 7, i);
             const lua_Integer raw_index = luaL_checkinteger(L, -1);
             if (raw_index >= 0 &&
-                static_cast<std::size_t>(raw_index) < vertex_count &&
-                raw_index <= static_cast<lua_Integer>(std::numeric_limits<unsigned short>::max())) {
-                mesh.temp_indices.push_back(static_cast<unsigned short>(raw_index));
+                static_cast<std::size_t>(raw_index) < vertex_count) {
+                mesh.temp_indices.push_back(static_cast<uint32_t>(raw_index));
             }
             lua_pop(L, 1);
         }

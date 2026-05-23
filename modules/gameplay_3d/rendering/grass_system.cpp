@@ -425,10 +425,10 @@ void GrassSystem::BuildBladeMesh() {
 
     blade_indices_.reserve(static_cast<size_t>(segments * 6));
     for (int i = 0; i < segments; ++i) {
-        unsigned short bl = static_cast<unsigned short>(i * 2);
-        unsigned short br = bl + 1;
-        unsigned short tl = bl + 2;
-        unsigned short tr = bl + 3;
+        uint32_t bl = static_cast<uint32_t>(i * 2);
+        uint32_t br = bl + 1;
+        uint32_t tl = bl + 2;
+        uint32_t tr = bl + 3;
         blade_indices_.push_back(bl); blade_indices_.push_back(br); blade_indices_.push_back(tl);
         blade_indices_.push_back(br); blade_indices_.push_back(tr); blade_indices_.push_back(tl);
     }
@@ -899,7 +899,7 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
 
         auto submit_batch = [&](std::vector<glm::mat4>& instances,
                                const std::vector<BatchVertex>& verts,
-                               const std::vector<unsigned short>& idxs) {
+                               const std::vector<uint32_t>& idxs) {
             if (instances.empty() || verts.empty()) return;
             MeshDrawItem item;
             item.vertices = verts;
