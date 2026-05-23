@@ -1071,11 +1071,11 @@ void VulkanShaderManager::InitGPUDrivenPBRShader() {
     // 声明 flat out v_material_id，传递给 FS
     replace_first(vert_src,
         "layout(location = 0) out vec4 vColor;",
-        "flat out uint v_material_id;\nlayout(location = 0) out vec4 vColor;");
+        "layout(location = 8) flat out uint v_material_id;\nlayout(location = 0) out vec4 vColor;");
     // 在 vColor 赋值后输出 material_id
     replace_first(vert_src,
         "vColor = aColor;\n    vTexCoord = aTexCoord;",
-        "vColor = aColor;\n    v_material_id = dse_inst[gl_InstanceIndex].mat_id;\n    vTexCoord = aTexCoord;");
+        "vColor = aColor;\n    v_material_id = _33.dse_inst[gl_InstanceIndex].mat_id;\n    vTexCoord = aTexCoord;");
 
     // --- FS patch: GLSL 430 → 450, PerMaterial UBO → MaterialSSBO (逐 instance 读材质) ---
     std::string frag_src(kpbr_frag_glsl430);
@@ -1132,7 +1132,7 @@ void VulkanShaderManager::InitGPUDrivenPBRShader() {
         "layout(set = 2, binding = 9, std430) readonly buffer MaterialSSBO {\n"
         "    DSEGPUMat gpu_materials[];\n"
         "};\n"
-        "flat in uint v_material_id;\n"
+        "layout(location = 8) flat in uint v_material_id;\n"
         "#define _1407 gpu_materials[v_material_id]";
 
     replace_first(frag_src, per_mat_ubo, mat_ssbo_replacement);
