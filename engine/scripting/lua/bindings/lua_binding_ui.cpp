@@ -630,6 +630,258 @@ int L_UiStopAnimation(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// UITextInputComponent 绑定
+// ============================================================
+
+// ui.add_text_input(entity, placeholder, max_length, is_password)
+int L_UiAddTextInput(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& input = world->registry().emplace_or_replace<UITextInputComponent>(e);
+    input.placeholder = luaL_optstring(L, 2, "");
+    input.max_length = static_cast<int>(luaL_optinteger(L, 3, 0));
+    input.is_password = lua_gettop(L) >= 4 ? lua_toboolean(L, 4) != 0 : false;
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_text_input_text(entity, text)
+int L_UiSetTextInputText(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UITextInputComponent>(e)) return 0;
+    auto& input = world->registry().get<UITextInputComponent>(e);
+    input.text = luaL_checkstring(L, 2);
+    input.cursor_position = static_cast<int>(input.text.size());
+    return 0;
+}
+
+// ui.get_text_input_text(entity)
+int L_UiGetTextInputText(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushstring(L, ""); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UITextInputComponent>(e)) {
+        lua_pushstring(L, world->registry().get<UITextInputComponent>(e).text.c_str());
+    } else {
+        lua_pushstring(L, "");
+    }
+    return 1;
+}
+
+// ui.set_text_input_placeholder(entity, placeholder)
+int L_UiSetTextInputPlaceholder(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UITextInputComponent>(e)) return 0;
+    world->registry().get<UITextInputComponent>(e).placeholder = luaL_checkstring(L, 2);
+    return 0;
+}
+
+// ui.set_text_input_focus(entity, focused)
+int L_UiSetTextInputFocus(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UITextInputComponent>(e)) return 0;
+    world->registry().get<UITextInputComponent>(e).is_focused = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// ============================================================
+// UIScrollViewComponent 绑定
+// ============================================================
+
+// ui.add_scroll_view(entity, content_w, content_h, horizontal, vertical)
+int L_UiAddScrollView(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& sv = world->registry().emplace_or_replace<UIScrollViewComponent>(e);
+    sv.content_size.x = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    sv.content_size.y = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    sv.horizontal = lua_gettop(L) >= 4 ? lua_toboolean(L, 4) != 0 : false;
+    sv.vertical = lua_gettop(L) >= 5 ? lua_toboolean(L, 5) != 0 : true;
+    return 0;
+}
+
+// ui.set_scroll_offset(entity, x, y)
+int L_UiSetScrollOffset(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIScrollViewComponent>(e)) return 0;
+    auto& sv = world->registry().get<UIScrollViewComponent>(e);
+    sv.scroll_offset.x = static_cast<float>(luaL_checknumber(L, 2));
+    sv.scroll_offset.y = static_cast<float>(luaL_checknumber(L, 3));
+    return 0;
+}
+
+// ui.get_scroll_offset(entity) → x, y
+int L_UiGetScrollOffset(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); return 2; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIScrollViewComponent>(e)) {
+        auto& sv = world->registry().get<UIScrollViewComponent>(e);
+        lua_pushnumber(L, sv.scroll_offset.x);
+        lua_pushnumber(L, sv.scroll_offset.y);
+    } else {
+        lua_pushnumber(L, 0);
+        lua_pushnumber(L, 0);
+    }
+    return 2;
+}
+
+// ui.set_scroll_content_size(entity, w, h)
+int L_UiSetScrollContentSize(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIScrollViewComponent>(e)) return 0;
+    auto& sv = world->registry().get<UIScrollViewComponent>(e);
+    sv.content_size.x = static_cast<float>(luaL_checknumber(L, 2));
+    sv.content_size.y = static_cast<float>(luaL_checknumber(L, 3));
+    return 0;
+}
+
+// ============================================================
+// UISliderComponent 绑定
+// ============================================================
+
+// ui.add_slider(entity, min, max, value, whole_numbers)
+int L_UiAddSlider(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& slider = world->registry().emplace_or_replace<UISliderComponent>(e);
+    slider.min_value = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    slider.max_value = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    slider.value = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    slider.whole_numbers = lua_gettop(L) >= 5 ? lua_toboolean(L, 5) != 0 : false;
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_slider_value(entity, value)
+int L_UiSetSliderValue(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UISliderComponent>(e)) return 0;
+    auto& slider = world->registry().get<UISliderComponent>(e);
+    slider.value = static_cast<float>(luaL_checknumber(L, 2));
+    return 0;
+}
+
+// ui.get_slider_value(entity) → value
+int L_UiGetSliderValue(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UISliderComponent>(e)) {
+        lua_pushnumber(L, world->registry().get<UISliderComponent>(e).value);
+    } else {
+        lua_pushnumber(L, 0);
+    }
+    return 1;
+}
+
+// ============================================================
+// UIToggleComponent 绑定
+// ============================================================
+
+// ui.add_toggle(entity, is_on, group)
+int L_UiAddToggle(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& toggle = world->registry().emplace_or_replace<UIToggleComponent>(e);
+    toggle.is_on = lua_gettop(L) >= 2 ? lua_toboolean(L, 2) != 0 : false;
+    toggle.group = static_cast<int>(luaL_optinteger(L, 3, -1));
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_toggle(entity, is_on)
+int L_UiSetToggle(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIToggleComponent>(e)) return 0;
+    world->registry().get<UIToggleComponent>(e).is_on = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// ui.get_toggle(entity) → bool
+int L_UiGetToggle(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIToggleComponent>(e)) {
+        lua_pushboolean(L, world->registry().get<UIToggleComponent>(e).is_on ? 1 : 0);
+    } else {
+        lua_pushboolean(L, 0);
+    }
+    return 1;
+}
+
+// ============================================================
+// UIProgressBarComponent 绑定
+// ============================================================
+
+// ui.add_progress_bar(entity, value, max_value)
+int L_UiAddProgressBar(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& bar = world->registry().emplace_or_replace<UIProgressBarComponent>(e);
+    bar.value = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    bar.max_value = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_progress(entity, value)
+int L_UiSetProgress(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIProgressBarComponent>(e)) return 0;
+    world->registry().get<UIProgressBarComponent>(e).value = static_cast<float>(luaL_checknumber(L, 2));
+    return 0;
+}
+
+// ui.get_progress(entity) → value
+int L_UiGetProgress(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIProgressBarComponent>(e)) {
+        lua_pushnumber(L, world->registry().get<UIProgressBarComponent>(e).value);
+    } else {
+        lua_pushnumber(L, 0);
+    }
+    return 1;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -674,6 +926,29 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("animate_alpha", L_UiAnimateAlpha);
     set_fn("animate_color", L_UiAnimateColor);
     set_fn("stop_ui_animation", L_UiStopAnimation);
+    // UITextInputComponent
+    set_fn("add_text_input", L_UiAddTextInput);
+    set_fn("set_text_input_text", L_UiSetTextInputText);
+    set_fn("get_text_input_text", L_UiGetTextInputText);
+    set_fn("set_text_input_placeholder", L_UiSetTextInputPlaceholder);
+    set_fn("set_text_input_focus", L_UiSetTextInputFocus);
+    // UIScrollViewComponent
+    set_fn("add_scroll_view", L_UiAddScrollView);
+    set_fn("set_scroll_offset", L_UiSetScrollOffset);
+    set_fn("get_scroll_offset", L_UiGetScrollOffset);
+    set_fn("set_scroll_content_size", L_UiSetScrollContentSize);
+    // UISliderComponent
+    set_fn("add_slider", L_UiAddSlider);
+    set_fn("set_slider_value", L_UiSetSliderValue);
+    set_fn("get_slider_value", L_UiGetSliderValue);
+    // UIToggleComponent
+    set_fn("add_toggle", L_UiAddToggle);
+    set_fn("set_toggle", L_UiSetToggle);
+    set_fn("get_toggle", L_UiGetToggle);
+    // UIProgressBarComponent
+    set_fn("add_progress_bar", L_UiAddProgressBar);
+    set_fn("set_progress", L_UiSetProgress);
+    set_fn("get_progress", L_UiGetProgress);
 }
 
 }

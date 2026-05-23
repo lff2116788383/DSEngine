@@ -357,7 +357,8 @@ if(NOT ANDROID)
     list(APPEND imgui_src "${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp")
 endif()
 
-add_library(dse_engine SHARED
+option(DSE_BUILD_SHARED "Build dse_engine as shared library (DLL). Set OFF to avoid LNK1189 symbol limit." ON)
+set(DSE_ENGINE_ALL_SOURCES
     ${glfw_sources}
     ${freetype_src}
     ${easy_profiler_core_source}
@@ -369,6 +370,11 @@ add_library(dse_engine SHARED
     ${imgui_src}
     ${engine_cpp}
 )
+if(DSE_BUILD_SHARED)
+    add_library(dse_engine SHARED ${DSE_ENGINE_ALL_SOURCES})
+else()
+    add_library(dse_engine STATIC ${DSE_ENGINE_ALL_SOURCES})
+endif()
 target_link_libraries(dse_engine PRIVATE box2d)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
@@ -441,7 +447,7 @@ elseif(DSE_ENABLE_VULKAN AND NOT DSE_HAS_VULKAN)
     set(DSE_ENABLE_VULKAN OFF)
 endif()
 set_target_properties(dse_engine PROPERTIES OUTPUT_NAME "DSEngine")
-if(WIN32)
+if(WIN32 AND DSE_BUILD_SHARED)
     set_target_properties(dse_engine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
@@ -654,6 +660,7 @@ target_include_directories(dse_engine PUBLIC
 # ---------------------------------------------------------------------------
 
 # 1. 引擎目标（DLL/LIB）
+if(DSE_BUILD_SHARED)
 install(TARGETS dse_engine
     EXPORT DSEngineTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  COMPONENT sdk
@@ -714,6 +721,7 @@ install(EXPORT DSEngineTargets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/DSEngine
     COMPONENT sdk
 )
+endif() # DSE_BUILD_SHARED
 
 # 6. 生成并安装 Package Config 文件
 configure_package_config_file(

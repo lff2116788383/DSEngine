@@ -7,6 +7,7 @@
 #define DSE_ECS_COMPONENTS_2D_UI_H
 
 #include <glm/glm.hpp>
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <string>
@@ -211,6 +212,163 @@ struct UIAnimationComponent {
     glm::vec2 start_scale = glm::vec2(1.0f);
     float start_alpha = 1.0f;
     glm::vec4 start_color = glm::vec4(1.0f);
+};
+
+// ============================================================
+// P0: 文本输入框
+// ============================================================
+
+/**
+ * @struct UITextInputComponent
+ * @brief 文本输入框组件，支持光标、选区、占位符与 IME 输入
+ */
+struct UITextInputComponent {
+    std::string text;                                    ///< 当前输入的文本
+    std::string placeholder;                             ///< 占位提示文本
+    int cursor_position = 0;                             ///< 光标位置（字符索引）
+    int selection_start = -1;                            ///< 选区起始索引（-1 表示无选区）
+    int selection_end = -1;                              ///< 选区结束索引
+    int max_length = 0;                                  ///< 最大字符数（0 表示不限制）
+    bool is_focused = false;                             ///< 是否获得焦点
+    bool is_password = false;                            ///< 是否密码模式（显示为 '*'）
+    bool multiline = false;                              ///< 是否支持多行输入
+    bool read_only = false;                              ///< 是否只读
+    bool submit_on_enter = true;                         ///< 按回车是否触发提交
+
+    glm::vec4 text_color = glm::vec4(1.0f);              ///< 文本颜色
+    glm::vec4 placeholder_color = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f); ///< 占位符颜色
+    glm::vec4 cursor_color = glm::vec4(1.0f);            ///< 光标颜色
+    glm::vec4 selection_color = glm::vec4(0.3f, 0.5f, 0.8f, 0.5f);   ///< 选区高亮颜色
+    float cursor_blink_rate = 0.53f;                     ///< 光标闪烁间隔（秒）
+
+    unsigned int font_texture_handle = 0;                ///< 字体图集句柄
+
+    // Runtime state
+    float cursor_blink_timer = 0.0f;                     ///< 闪烁计时器
+    bool cursor_visible = true;                          ///< 当前光标是否可见
+    float scroll_offset_x = 0.0f;                        ///< 单行模式下的水平滚动偏移
+
+    // Callbacks
+    std::function<void(Entity, const std::string&)> on_value_changed;  ///< 文本变更回调
+    std::function<void(Entity, const std::string&)> on_submit;         ///< 提交回调（Enter）
+    std::function<void(Entity)> on_focus;                ///< 获得焦点回调
+    std::function<void(Entity)> on_blur;                 ///< 失去焦点回调
+};
+
+// ============================================================
+// P1: 滚动视图
+// ============================================================
+
+/**
+ * @struct UIScrollViewComponent
+ * @brief 滚动容器组件，支持惯性滚动和滚动条
+ */
+struct UIScrollViewComponent {
+    glm::vec2 content_size = glm::vec2(0.0f);            ///< 内容的实际大小
+    glm::vec2 viewport_size = glm::vec2(0.0f);           ///< 可视区域大小（为 0 时自动从 UIRendererComponent::size 继承）
+    glm::vec2 scroll_offset = glm::vec2(0.0f);           ///< 当前滚动偏移
+    bool horizontal = false;                             ///< 是否允许水平滚动
+    bool vertical = true;                                ///< 是否允许垂直滚动
+    bool elastic = true;                                 ///< 是否启用弹性边缘效果
+    float elasticity = 0.1f;                             ///< 弹性回弹系数
+    bool inertia = true;                                 ///< 是否启用惯性滚动
+    float deceleration_rate = 0.135f;                    ///< 惯性减速率
+    bool show_scrollbar = true;                          ///< 是否显示滚动条
+    float scrollbar_width = 6.0f;                        ///< 滚动条宽度（像素）
+    glm::vec4 scrollbar_color = glm::vec4(0.5f, 0.5f, 0.5f, 0.6f); ///< 滚动条颜色
+
+    // Runtime state
+    glm::vec2 velocity = glm::vec2(0.0f);                ///< 当前惯性速度
+    bool is_dragging = false;                            ///< 是否正在拖拽
+    glm::vec2 drag_start_pos = glm::vec2(0.0f);          ///< 拖拽起始位置
+    glm::vec2 drag_start_offset = glm::vec2(0.0f);       ///< 拖拽起始偏移
+
+    /// 获取归一化滚动位置 [0, 1]
+    glm::vec2 GetNormalizedPosition() const {
+        glm::vec2 max_offset = glm::max(content_size - viewport_size, glm::vec2(0.0f));
+        return glm::vec2(
+            max_offset.x > 0.0f ? scroll_offset.x / max_offset.x : 0.0f,
+            max_offset.y > 0.0f ? scroll_offset.y / max_offset.y : 0.0f
+        );
+    }
+};
+
+// ============================================================
+// P2: 滑动条
+// ============================================================
+
+/**
+ * @struct UISliderComponent
+ * @brief 滑动条组件，水平或垂直方向的数值输入
+ */
+struct UISliderComponent {
+    float value = 0.0f;                                  ///< 当前值
+    float min_value = 0.0f;                              ///< 最小值
+    float max_value = 1.0f;                              ///< 最大值
+    bool whole_numbers = false;                          ///< 是否仅允许整数步进
+    bool vertical = false;                               ///< 垂直模式
+    glm::vec4 track_color = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);   ///< 轨道颜色
+    glm::vec4 fill_color = glm::vec4(0.2f, 0.6f, 1.0f, 1.0f);    ///< 已填充区域颜色
+    glm::vec4 handle_color = glm::vec4(1.0f);            ///< 滑块颜色
+    float handle_size = 20.0f;                           ///< 滑块大小（像素）
+
+    // Runtime
+    bool is_dragging = false;                            ///< 是否正在拖拽滑块
+    std::function<void(Entity, float)> on_value_changed; ///< 值变更回调
+
+    /// 获取归一化值 [0, 1]
+    float GetNormalizedValue() const {
+        float range = max_value - min_value;
+        return range > 0.0f ? (value - min_value) / range : 0.0f;
+    }
+
+    /// 从归一化值设置 value
+    void SetFromNormalized(float t) {
+        value = min_value + t * (max_value - min_value);
+        if (whole_numbers) value = std::round(value);
+    }
+};
+
+// ============================================================
+// P2: 开关
+// ============================================================
+
+/**
+ * @struct UIToggleComponent
+ * @brief 开关（复选框）组件
+ */
+struct UIToggleComponent {
+    bool is_on = false;                                  ///< 当前状态
+    int group = -1;                                      ///< 互斥组 ID（-1 表示不属于任何组，>= 0 时同组只能有一个 on）
+    glm::vec4 on_color = glm::vec4(0.2f, 0.7f, 0.3f, 1.0f);  ///< 开启颜色
+    glm::vec4 off_color = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f); ///< 关闭颜色
+    float transition_duration = 0.15f;                   ///< 切换动画时长
+
+    // Runtime
+    float transition_progress = 1.0f;                    ///< 动画进度 [0, 1]
+    std::function<void(Entity, bool)> on_value_changed;  ///< 值变更回调
+};
+
+// ============================================================
+// P2: 进度条
+// ============================================================
+
+/**
+ * @struct UIProgressBarComponent
+ * @brief 进度条组件
+ */
+struct UIProgressBarComponent {
+    float value = 0.0f;                                  ///< 当前值 [0, 1]
+    float max_value = 1.0f;                              ///< 最大值
+    bool right_to_left = false;                          ///< 是否从右往左填充
+    bool vertical = false;                               ///< 垂直进度条
+    glm::vec4 background_color = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f); ///< 背景颜色
+    glm::vec4 fill_color = glm::vec4(0.2f, 0.7f, 0.3f, 1.0f);       ///< 填充颜色
+
+    /// 获取填充比例 [0, 1]
+    float GetFillAmount() const {
+        return max_value > 0.0f ? glm::clamp(value / max_value, 0.0f, 1.0f) : 0.0f;
+    }
 };
 
 #endif // DSE_ECS_COMPONENTS_2D_UI_H
