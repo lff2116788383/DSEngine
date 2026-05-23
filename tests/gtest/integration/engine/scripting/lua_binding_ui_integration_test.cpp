@@ -214,7 +214,7 @@ TEST_F(LuaUIBindingTest, Lua创建Slider并读写值) {
     TempLuaFile script("test_ui_slider.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
-            dse.ui.add_slider(e, 0.5, 0.0, 1.0, false)
+            dse.ui.add_slider(e, 0.0, 1.0, 0.5, false)
             dse.ui.set_slider_value(e, 0.75)
         end
         function Update(dt) end
