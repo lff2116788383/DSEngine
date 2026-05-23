@@ -24,9 +24,12 @@ jobs:
           - config: Debug
             vulkan: OFF
             label: debug-gl-jolt
+          - config: Release
+            vulkan: OFF
+            label: release-gl-jolt
           - config: RelWithDebInfo
             vulkan: ON
-            label: release-vulkan-jolt
+            label: relwithdebinfo-vulkan-jolt
 
     name: ${{ matrix.label }}
 
@@ -63,9 +66,10 @@ jobs:
             ${{ env.BUILD_DIR }}/JoltPhysics
             ${{ env.BUILD_DIR }}/depends
             ${{ env.BUILD_DIR }}/Debug/*.lib
+            ${{ env.BUILD_DIR }}/Release/*.lib
             ${{ env.BUILD_DIR }}/RelWithDebInfo/*.lib
             ${{ env.BUILD_DIR }}/lib
-          key: deps-${{ matrix.label }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          key: deps-${{ matrix.label }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'depends/*/CMakeLists.txt') }}
           restore-keys: |
             deps-${{ matrix.label }}-
 
@@ -98,6 +102,9 @@ jobs:
       - name: Build Lua Runtime
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_example_lua --parallel
 
+      - name: Copy Runtime Assets
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_copy_assets
+
       - name: Run Tests
         working-directory: ${{ env.BUILD_DIR }}
         run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 120 -T Test
@@ -110,3 +117,4 @@ jobs:
           name: test-results-${{ matrix.label }}
           path: ${{ env.BUILD_DIR }}/Testing/**/*.xml
           retention-days: 14
+          if-no-files-found: ignore
