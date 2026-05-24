@@ -1,5 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
+// @VARIANTS: GPU_DRIVEN
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec2 vTexCoord;
@@ -7,6 +8,9 @@ layout(location = 2) in vec3 vFragPos;
 layout(location = 3) in vec3 vNormal;
 layout(location = 4) in mat3 vTBN;
 layout(location = 7) in vec3 vFragPosViewSpace;
+#ifdef GPU_DRIVEN
+layout(location = 8) flat in uint v_material_id;
+#endif
 
 layout(location = 0) out vec4 FragColor;
 
@@ -26,6 +30,23 @@ layout(std140, set = 1, binding = 0) uniform PerScene {
     mat4 light_space_matrices[3];
 };
 
+#ifdef GPU_DRIVEN
+// GPU-Driven 路径：材质数据来自 MaterialSSBO，逐10实例读取
+struct DSEGPUMat {
+    vec4 albedo;
+    vec4 roughness_ao;
+    vec4 emissive;
+    vec4 flags;
+    vec4 extra_params;
+    vec4 extra_params2;
+    vec4 toon_shadow_color;
+    vec4 toon_params;
+};
+layout(std430, set = 2, binding = 9) readonly buffer MaterialSSBO {
+    DSEGPUMat gpu_materials[];
+};
+#define _DSE_MAT gpu_materials[v_material_id]
+#else
 // Set 2: PerMaterial
 layout(std140, set = 2, binding = 0) uniform PerMaterial {
     vec4 albedo;
@@ -37,6 +58,8 @@ layout(std140, set = 2, binding = 0) uniform PerMaterial {
     vec4 toon_shadow_color;
     vec4 toon_params;
 };
+#define _DSE_MAT
+#endif
 
 // 采样器 (Set 2)
 layout(set = 2, binding = 1) uniform sampler2D u_texture;
@@ -157,6 +180,34 @@ const float PI = 3.14159265359;
 #define u_cascade_splits      cascade_splits.xyz
 #define u_wboit_mode          cascade_splits.w
 
+#ifdef GPU_DRIVEN
+#define u_material_albedo           _DSE_MAT.albedo.xyz
+#define u_material_metallic         _DSE_MAT.albedo.w
+#define u_material_roughness        _DSE_MAT.roughness_ao.x
+#define u_material_ao               _DSE_MAT.roughness_ao.y
+#define u_material_normal_strength  _DSE_MAT.roughness_ao.z
+#define u_material_alpha_cutoff     _DSE_MAT.roughness_ao.w
+#define u_material_emissive         _DSE_MAT.emissive.xyz
+#define u_material_alpha_test       (_DSE_MAT.emissive.w != 0.0)
+#define u_has_normal_map            (_DSE_MAT.flags.x != 0.0)
+#define u_has_metallic_roughness_map (_DSE_MAT.flags.y != 0.0)
+#define u_has_emissive_map          (_DSE_MAT.flags.z != 0.0)
+#define u_has_occlusion_map         (_DSE_MAT.flags.w != 0.0)
+#define u_sss_strength              _DSE_MAT.extra_params.x
+#define u_clear_coat                _DSE_MAT.extra_params.y
+#define u_clear_coat_roughness      _DSE_MAT.extra_params.z
+#define u_anisotropy                _DSE_MAT.extra_params.w
+#define u_pom_height_scale          _DSE_MAT.extra_params2.x
+#define u_sss_tint                  _DSE_MAT.extra_params2.yzw
+#define u_toon_shadow_color         _DSE_MAT.toon_shadow_color.xyz
+#define u_toon_shadow_threshold     _DSE_MAT.toon_shadow_color.w
+#define u_toon_shadow_softness      _DSE_MAT.toon_params.x
+#define u_toon_specular_size        _DSE_MAT.toon_params.y
+#define u_toon_specular_strength    _DSE_MAT.toon_params.z
+#define u_toon_rim_strength         _DSE_MAT.toon_params.w
+#define _toon_shadow_color_vec4     _DSE_MAT.toon_shadow_color
+#define _toon_params_vec4           _DSE_MAT.toon_params
+#else
 #define u_material_albedo           albedo.xyz
 #define u_material_metallic         albedo.w
 #define u_material_roughness        roughness_ao.x
@@ -169,7 +220,6 @@ const float PI = 3.14159265359;
 #define u_has_metallic_roughness_map (flags.y != 0.0)
 #define u_has_emissive_map          (flags.z != 0.0)
 #define u_has_occlusion_map         (flags.w != 0.0)
-#define u_camera_pos                camera_pos.xyz
 #define u_sss_strength              extra_params.x
 #define u_clear_coat                extra_params.y
 #define u_clear_coat_roughness      extra_params.z
@@ -182,6 +232,10 @@ const float PI = 3.14159265359;
 #define u_toon_specular_size        toon_params.y
 #define u_toon_specular_strength    toon_params.z
 #define u_toon_rim_strength         toon_params.w
+#define _toon_shadow_color_vec4     toon_shadow_color
+#define _toon_params_vec4           toon_params
+#endif
+#define u_camera_pos                camera_pos.xyz
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness*roughness;
@@ -552,10 +606,10 @@ void main() {
     // Watercolor shading mode (light_params.w == 5.0)
     // UBO packing: toon_shadow_color.x=paper_strength, .y=edge_darkening, .z=color_bleed, .w=pigment_density
     if (light_params.w == 5.0) {
-        float wc_paper    = toon_shadow_color.x;
-        float wc_edge     = toon_shadow_color.y;
-        float wc_bleed    = toon_shadow_color.z;
-        float wc_pigment  = max(toon_shadow_color.w, 0.1);
+        float wc_paper    = _toon_shadow_color_vec4.x;
+        float wc_edge     = _toon_shadow_color_vec4.y;
+        float wc_bleed    = _toon_shadow_color_vec4.z;
+        float wc_pigment  = max(_toon_shadow_color_vec4.w, 0.1);
 
         vec3 L = normalize(-u_light_direction);
         vec3 V_wc = normalize(u_camera_pos - vFragPos);

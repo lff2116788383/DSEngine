@@ -622,6 +622,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                         bucket.cmd_offset * stride);
                 }
             } else {
+                rhi->BindGPUDrivenTextures(0, 0, 0, 0, 0);
                 rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
                                               ctx_.gpu_indirect_draw_count,
                                               sizeof(DrawElementsIndirectCommand));

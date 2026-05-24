@@ -608,6 +608,13 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         }
         return false;
     };
+    // 类型无关版本：只检查 set+binding 是否存在（用于 BoneMatrices/MorphWeights 等可能存在类型微差的绑定）
+    auto has_binding_any = [&](uint32_t set, uint32_t binding) -> bool {
+        for (const auto& b : program->reflection.bindings) {
+            if (b.set == set && b.binding == binding) return true;
+        }
+        return false;
+    };
 
     // --- Set 0: PerFrame UBO ---
     {
@@ -926,7 +933,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         // BoneMatrices UBO (binding 8) — 使用累积偏移避免 GPU 延迟执行覆盖
         VkDescriptorBufferInfo bone_buf_info{};
         VkWriteDescriptorSet bone_write{};
-        if (has_binding(2, 8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+        if (has_binding_any(2, 8)) {
             bone_buf_info.buffer = bone_matrices_ubo_;
             bone_buf_info.offset = bone_offset;
             bone_buf_info.range  = 255 * sizeof(glm::mat4);
@@ -941,7 +948,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         // MorphWeights UBO (binding 9)
         VkDescriptorBufferInfo morph_buf_info{};
         VkWriteDescriptorSet morph_write{};
-        if (has_binding(2, 9, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+        if (has_binding_any(2, 9)) {
             morph_buf_info.buffer = morph_weights_ubo_;
             morph_buf_info.offset = 0;
             morph_buf_info.range  = 16;
@@ -3196,6 +3203,15 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
     gpu_driven_pipeline_layout_ = pbr_program->pipeline_layout;
 
+    // 满足 pipeline layout 中的 push constant range 要求，防止 validation warning
+    if (pbr_program->reflection.has_push_constant) {
+        static const uint8_t kZeroPushConstants[256] = {};
+        uint32_t pc_size = std::min(pbr_program->reflection.push_constant_range.size, uint32_t(256));
+        vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
+                           pbr_program->reflection.push_constant_range.stageFlags,
+                           0, pc_size, kZeroPushConstants);
+    }
+
     // PerFrame UBO
     VkDeviceSize cur_per_frame_offset = per_frame_ubo_offset_;
     VulkanPerFrameUBO frame_ubo{};
@@ -3395,6 +3411,15 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
     cached_gpu_driven_program_ = shadow_program;
     gpu_driven_instance_set_bound_ = false;
 
+    // 满足 pipeline layout 中的 push constant range 要求，防止 validation warning
+    if (shadow_program->reflection.has_push_constant) {
+        static const uint8_t kZeroPushConstants[256] = {};
+        uint32_t pc_size = std::min(shadow_program->reflection.push_constant_range.size, uint32_t(256));
+        vkCmdPushConstants(cmd_buf, shadow_program->pipeline_layout,
+                           shadow_program->reflection.push_constant_range.stageFlags,
+                           0, pc_size, kZeroPushConstants);
+    }
+
     VkDeviceSize cur_per_frame_offset = per_frame_ubo_offset_;
     VulkanPerFrameUBO frame_ubo{};
     frame_ubo.vp = light_proj * light_view;
@@ -3425,6 +3450,20 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
             vkUpdateDescriptorSets(context_->device(), 1, &frame_write, 0, nullptr);
             vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     shadow_program->pipeline_layout, 0, 1, &set0, 0, nullptr);
+        }
+
+        // 为 sets 1-3 绑定持久化空 descriptor sets，防止与前一个 pipeline layout 不兼容导致 TDR
+        for (uint32_t si = 1; si < shadow_program->descriptor_set_layouts.size() && si < 4; ++si) {
+            uint32_t cache_idx = si - 1;
+            if (gpu_driven_shadow_empty_sets_[cache_idx] == VK_NULL_HANDLE) {
+                gpu_driven_shadow_empty_sets_[cache_idx] = resource_mgr_->AllocateDescriptorSet(
+                    shadow_program->descriptor_set_layouts[si]);
+            }
+            if (gpu_driven_shadow_empty_sets_[cache_idx] != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        shadow_program->pipeline_layout, si, 1,
+                                        &gpu_driven_shadow_empty_sets_[cache_idx], 0, nullptr);
+            }
         }
     }
 }

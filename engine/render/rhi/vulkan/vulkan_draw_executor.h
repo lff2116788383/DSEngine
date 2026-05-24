@@ -403,6 +403,9 @@ private:
     const VulkanShaderProgram* cached_gpu_driven_program_ = nullptr;
     bool gpu_driven_instance_set_bound_ = false; ///< Set 4 (instance SSBO) 是否已绑定
 
+    // GPU-Driven Shadow: 预分配持久化空 descriptor sets (sets 1-3)
+    VkDescriptorSet gpu_driven_shadow_empty_sets_[3] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
+
     // Hair rendering 缓存
     unsigned int hair_shader_handle_ = 0;
     VkPipeline hair_pipeline_ = VK_NULL_HANDLE;

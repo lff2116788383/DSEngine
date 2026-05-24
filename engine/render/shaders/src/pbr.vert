@@ -27,9 +27,10 @@ layout(std140, set = 0, binding = 0) uniform PerFrame {
 #ifdef GPU_DRIVEN
 // GPU-Driven 路径：model 矩阵来自 SSBO，compute 着色器已完成蒙皮
 struct DSEGPUInst { mat4 model; uint mat_id; uint cmd_id; uint pad0; uint pad1; };
-layout(std430, set = 0, binding = 5) readonly buffer DSEInstBuf {
+layout(std430, set = 4, binding = 0) readonly buffer DSEInstBuf {
     DSEGPUInst dse_inst[];
 };
+layout(location = 8) flat out uint v_material_id;
 #define MODEL_MATRIX dse_inst[gl_InstanceIndex].model
 #else
 // 标准路径：逐对象 push constant + CPU 蒙皮
@@ -83,6 +84,9 @@ void main() {
     vFragPosViewSpace = (view * worldPos).xyz;
     vColor = aColor;
     vTexCoord = aTexCoord;
+#ifdef GPU_DRIVEN
+    v_material_id = dse_inst[gl_InstanceIndex].mat_id;
+#endif
 
 #ifdef GPU_DRIVEN
     mat3 normalMatrix = transpose(inverse(mat3(MODEL_MATRIX)));

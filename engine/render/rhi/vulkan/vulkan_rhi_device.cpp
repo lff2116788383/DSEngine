@@ -652,26 +652,42 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 if (smp_base + unit >= total_bindings) continue;
                 VkImageView view = VK_NULL_HANDLE;
                 VkSampler sampler = VK_NULL_HANDLE;
-                // 检查 Hi-Z 纹理
+                // 检查 Hi-Z 纹理（storage image 使用后保持 GENERAL layout）
+                bool is_hiz_texture = false;
                 if (hiz_impl_) {
                     auto hit = hiz_impl_->textures.find(tex_handle);
                     if (hit != hiz_impl_->textures.end()) {
                         view = hit->second.full_view;
                         sampler = resource_mgr_.default_sampler();
+                        is_hiz_texture = true;
                     }
                 }
                 // 普通纹理
                 if (view == VK_NULL_HANDLE) {
                     const auto* tex = resource_mgr_.GetTexture(tex_handle);
-                    if (!tex || tex->image_view == VK_NULL_HANDLE) continue;
-                    view = tex->image_view;
-                    sampler = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
+                    if (tex && tex->image_view != VK_NULL_HANDLE) {
+                        view = tex->image_view;
+                        sampler = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
+                    }
+                }
+                // Render target depth attachment（Hi-Z 使用 PreZ depth）
+                bool is_depth_attachment = false;
+                if (view == VK_NULL_HANDLE) {
+                    VkImageView depth_view = resource_mgr_.GetRenderTargetDepthImageView(tex_handle);
+                    if (depth_view != VK_NULL_HANDLE) {
+                        view = depth_view;
+                        sampler = resource_mgr_.default_sampler();
+                        is_depth_attachment = true;
+                    }
                 }
                 if (view == VK_NULL_HANDLE) continue;
                 VkDescriptorImageInfo ii{};
                 ii.sampler     = sampler;
                 ii.imageView   = view;
-                ii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                ii.imageLayout = is_depth_attachment
+                    ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                    : (is_hiz_texture ? VK_IMAGE_LAYOUT_GENERAL
+                                      : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                 image_infos.push_back(ii);
                 VkWriteDescriptorSet w{};
                 w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
