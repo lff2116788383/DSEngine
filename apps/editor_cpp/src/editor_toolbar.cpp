@@ -124,84 +124,7 @@ void DrawEditorToolbar(EditorContext& ctx) {
     ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize);
     float avail_width = ImGui::GetContentRegionAvail().x;
 
-    ImGui::SetCursorPosX(10);
-
-    auto tool_button = [](const char* icon, const char* tooltip, int op_id, int& current_op) {
-        ImGui::PushStyleColor(ImGuiCol_Button, current_op == op_id ? ImGui::GetStyle().Colors[ImGuiCol_ButtonActive] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
-        if (ImGui::Button(icon, ImVec2(32, 24))) { current_op = op_id; }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-    };
-
-    tool_button(MDI_ICON_CURSOR_DEFAULT_OUTLINE, T("Hand Tool (H)"), -1, gizmo_op);
-    tool_button(MDI_ICON_ARROW_ALL, T("Translate Tool (W)"), 0, gizmo_op);
-    tool_button(MDI_ICON_ROTATE_3D_VARIANT, T("Rotate Tool (E)"), 1, gizmo_op);
-    tool_button(MDI_ICON_RESIZE, T("Scale Tool (R)"), 2, gizmo_op);
-
-    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
-    if (ImGui::Button(gizmo_mode == 0 ? T("Local") : T("World"), ImVec2(48, 24))) { gizmo_mode = 1 - gizmo_mode; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Toggle Gizmo Coordinate Space"));
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-
-    const bool was_2d = ctx.is_2d;
-    if (was_2d) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-    }
-    if (ImGui::Button("2D", ImVec2(32, 24))) { ctx.is_2d = !ctx.is_2d; }
-    if (was_2d) {
-        ImGui::PopStyleColor();
-    }
-
-    // Vertical separator between tool group and utility tools
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-
-    // 对齐工具
-    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_left", ImVec2(32, 24))) {
-        // TODO: 实现对齐功能
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Left"));
-    ImGui::SameLine();
-
-    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_center", ImVec2(32, 24))) {
-        // TODO: 实现对齐功能
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Center"));
-    ImGui::SameLine();
-
-    if (ImGui::Button(MDI_ICON_AXIS_ARROW "##align_right", ImVec2(32, 24))) {
-        // TODO: 实现对齐功能
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Align Right"));
-    ImGui::SameLine();
-
-    // 网格吸附
-    static bool grid_snap = false;
-    if (grid_snap) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    if (ImGui::Button(MDI_ICON_VIEW_GRID "##grid_snap", ImVec2(32, 24))) {
-        grid_snap = !grid_snap;
-    }
-    if (grid_snap) ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Grid Snap"));
-    ImGui::SameLine();
-
-    // 视图重置
-    if (ImGui::Button(MDI_ICON_CAMERA "##view_reset", ImVec2(32, 24))) {
-        EditorCamera& cam = GetEditorCamera();
-        cam.focal_point = glm::vec3(0.0f);
-        cam.distance = 10.0f;
-        cam.yaw = 0.0f;
-        cam.pitch = 0.3f;
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Reset View"));
-
-    // Vertical separator between tool group and play controls
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
+    // Play controls centered
     ImGui::SetCursorPosX((avail_width / 2.0f) - 60);
 
     if (s_editor_state == EditorState::Edit) {
@@ -272,6 +195,12 @@ void DrawEditorToolbar(EditorContext& ctx) {
             auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
             localization.SetCurrentLanguage(languages[lang_index]);
             MarkAllUILabelsDirty(registry);
+            // 同步更新编辑器 UI 语言（即时生效，无需重启）
+            const std::string& lang = languages[lang_index];
+            if (lang == "zh" || lang == "zh-CN" || lang == "zh_CN")
+                SetEditorLocale("zh-CN");
+            else
+                SetEditorLocale("en");
         }
         ImGui::SameLine();
     }

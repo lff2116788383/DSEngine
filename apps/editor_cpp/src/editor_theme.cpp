@@ -200,6 +200,11 @@ void SetupEditorStyleLight() {
     c[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.93f, 0.93f, 0.96f, 1.00f);
     c[ImGuiCol_DockingPreview]         = ImVec4(0.16f, 0.47f, 0.88f, 0.70f);
     c[ImGuiCol_DockingEmptyBg]         = ImVec4(0.90f, 0.90f, 0.94f, 1.00f);
+    c[ImGuiCol_TableHeaderBg]          = ImVec4(0.82f, 0.82f, 0.88f, 1.00f);
+    c[ImGuiCol_TableBorderStrong]      = ImVec4(0.74f, 0.74f, 0.78f, 1.00f);
+    c[ImGuiCol_TableBorderLight]       = ImVec4(0.82f, 0.82f, 0.86f, 1.00f);
+    c[ImGuiCol_TableRowBg]             = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    c[ImGuiCol_TableRowBgAlt]          = ImVec4(0.30f, 0.30f, 0.40f, 0.06f);
 
     style.WindowPadding     = ImVec2(8.0f, 8.0f);
     style.FramePadding      = ImVec2(8.0f, 5.0f);

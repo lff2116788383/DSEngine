@@ -347,17 +347,18 @@ void DrawProjectPanel() {
     ImGui::InputTextWithHint("##project_search", MDI_ICON_MAGNIFY " Search...", s_search_filter, sizeof(s_search_filter));
     ImGui::SameLine();
 
-    // List view toggle button
-    if (!s_grid_view) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    // List view toggle button — 用帧开始时的快照做 Push/Pop，避免按钮点击改变状态导致不匹配
+    const bool was_grid = s_grid_view;
+    if (!was_grid) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
     if (ImGui::Button(MDI_ICON_VIEW_LIST "##list_view", ImVec2(26, 0))) s_grid_view = false;
-    if (!s_grid_view) ImGui::PopStyleColor();
+    if (!was_grid) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("List View");
     ImGui::SameLine(0, 2);
 
     // Grid view toggle button
-    if (s_grid_view) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    if (was_grid) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
     if (ImGui::Button(MDI_ICON_VIEW_GRID "##grid_view", ImVec2(26, 0))) s_grid_view = true;
-    if (s_grid_view) ImGui::PopStyleColor();
+    if (was_grid) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Grid View");
 
     // Grid size slider (only in grid view)
@@ -427,6 +428,9 @@ void DrawProjectPanel() {
         try {
             for (const auto& entry : std::filesystem::directory_iterator(current_path)) {
                 const std::string filename = entry.path().filename().string();
+                // 隐藏引擎/编辑器内部生成目录
+                if (entry.is_directory() && (filename == "Cache" || filename == ".cache"
+                    || filename == "__pycache__" || filename == ".import")) continue;
                 if (s_search_filter[0] != '\0') {
                     std::string lower_name = filename;
                     std::string lower_filter = s_search_filter;
@@ -686,8 +690,8 @@ void DrawProjectPanel() {
                     }
                 }
 
-                // Per-item context menu
-                if (ImGui::BeginPopupContextItem()) {
+                // Per-item context menu — 必须传显式 ID，因为上方 TextDisabled 无 item ID
+                if (ImGui::BeginPopupContextItem(("##asset_detail_ctx_" + filename).c_str())) {
                     if (ImGui::MenuItem("Rename")) {
                         s_rename_target = path;
                         std::strncpy(s_rename_buf, filename.c_str(), sizeof(s_rename_buf) - 1);

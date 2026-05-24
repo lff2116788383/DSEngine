@@ -4,6 +4,7 @@
 #include "imgui_internal.h"
 #include "editor_icons.h"
 #include "editor_locale.h"
+#include "editor_preferences_panel.h"
 
 namespace dse::editor {
 
@@ -29,7 +30,11 @@ void DrawStatusBar(EditorContext& context) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 3));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+    // 状态栏背景随主题切换
+    const ImVec4 status_bg = (GetCurrentThemeIndex() == 1)
+        ? ImVec4(0.88f, 0.88f, 0.92f, 1.0f)   // light
+        : ImVec4(0.12f, 0.12f, 0.14f, 1.0f);   // dark
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, status_bg);
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |

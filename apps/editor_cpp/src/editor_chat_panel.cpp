@@ -268,28 +268,31 @@ void ChatPanel::StartBridge() {
 }
 
 void ChatPanel::StopBridge() {
-    if (!bridge_running_) return;
+    const bool was_running = bridge_running_;
     bridge_running_ = false;
 
+    if (was_running) {
 #ifdef _WIN32
-    if (proc_handle_) {
-        TerminateProcess(proc_handle_, 0);
-        WaitForSingleObject(proc_handle_, 2000);
-        CloseHandle(proc_handle_);
-        proc_handle_ = nullptr;
-    }
-    if (stdin_write_) { CloseHandle(stdin_write_); stdin_write_ = nullptr; }
-    if (stdout_read_) { CloseHandle(stdout_read_); stdout_read_ = nullptr; }
+        if (proc_handle_) {
+            TerminateProcess(proc_handle_, 0);
+            WaitForSingleObject(proc_handle_, 2000);
+            CloseHandle(proc_handle_);
+            proc_handle_ = nullptr;
+        }
+        if (stdin_write_) { CloseHandle(stdin_write_); stdin_write_ = nullptr; }
+        if (stdout_read_) { CloseHandle(stdout_read_); stdout_read_ = nullptr; }
 #else
-    if (bridge_pid_ > 0) {
-        kill(bridge_pid_, SIGTERM);
-        waitpid(bridge_pid_, nullptr, 0);
-        bridge_pid_ = 0;
-    }
-    if (stdin_fd_ >= 0) { close(stdin_fd_); stdin_fd_ = -1; }
-    if (stdout_fd_ >= 0) { close(stdout_fd_); stdout_fd_ = -1; }
+        if (bridge_pid_ > 0) {
+            kill(bridge_pid_, SIGTERM);
+            waitpid(bridge_pid_, nullptr, 0);
+            bridge_pid_ = 0;
+        }
+        if (stdin_fd_ >= 0) { close(stdin_fd_); stdin_fd_ = -1; }
+        if (stdout_fd_ >= 0) { close(stdout_fd_); stdout_fd_ = -1; }
 #endif
+    }
 
+    // 无论 bridge 是否仍在运行都要 join，避免析构 joinable 线程导致 std::terminate
     if (reader_thread_.joinable()) {
         reader_thread_.join();
     }
@@ -788,9 +791,9 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
     // ─── Input area ─────────────────────────────────────────────────────────
     ImGui::Separator();
 
-    // Agent selector
-    ImGui::SetNextItemWidth(150);
-    if (ImGui::BeginCombo("Agent", current_agent_id_.c_str())) {
+    // Agent selector + input 分两行：combo 在上，input 在下，避免输入框过窄
+    ImGui::SetNextItemWidth(100);
+    if (ImGui::BeginCombo("##agent_combo", current_agent_id_.c_str())) {
         if (ImGui::Selectable("general", current_agent_id_ == "general")) {
             SetCurrentAgent("general");
         }
@@ -805,11 +808,16 @@ void ChatPanel::Draw(ControlServer& server, dse::runtime::EngineInstance& engine
         }
         ImGui::EndCombo();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Agent");
 
     ImGui::SameLine();
 
+    // 输入框占满剩余宽度（减去 Stop/Clear 按钮约 110px）
     bool send = false;
-    ImGui::PushItemWidth(-100);
+    float btn_reserve = 110.0f;
+    float input_w = ImGui::GetContentRegionAvail().x - btn_reserve;
+    if (input_w < 80.0f) input_w = 80.0f;
+    ImGui::PushItemWidth(input_w);
     if (focus_input_next_frame_) {
         ImGui::SetKeyboardFocusHere();
         focus_input_next_frame_ = false;
