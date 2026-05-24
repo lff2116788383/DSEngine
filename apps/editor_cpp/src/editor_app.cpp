@@ -196,6 +196,11 @@ std::filesystem::path EditorApp::GetProjectRootPath() {
     if (path.empty()) {
         path = std::filesystem::current_path();
     }
+    // 处理多级路径：bin/RelWithDebInfo/、bin/Debug/ 等 CMake 配置子目录
+    const auto leaf = path.filename().string();
+    if (leaf == "Debug" || leaf == "Release" || leaf == "RelWithDebInfo" || leaf == "MinSizeRel") {
+        path = path.parent_path(); // bin/RelWithDebInfo → bin
+    }
     if (path.filename() == "bin" || path.filename() == "build_vs2022") {
         path = path.parent_path();
     }
@@ -520,13 +525,17 @@ void EditorApp::Run() {
 
         // Update editor camera (Edit mode only)
         if (dse::editor::GetEditorState() == dse::editor::EditorState::Edit) {
-            int fb_w, fb_h;
-            glfwGetFramebufferSize(window_, &fb_w, &fb_h);
-            float aspect = (fb_h > 0) ? static_cast<float>(fb_w) / static_cast<float>(fb_h) : 1.7777f;
+            float aspect = dse::editor::GetCachedSceneViewportAspect();
             auto& editor_cam = dse::editor::GetEditorCamera();
             engine_instance_->pipeline()->SetEditorCamera(
                 editor_cam.GetViewMatrix(),
                 editor_cam.GetProjectionMatrix(aspect));
+            // 同步编辑器场景背景色（light / dark 主题）
+            if (dse::editor::GetCurrentThemeIndex() == 1) {
+                engine_instance_->pipeline()->SetEditorBgColor(glm::vec4(0.78f, 0.78f, 0.82f, 1.0f));
+            } else {
+                engine_instance_->pipeline()->SetEditorBgColor(glm::vec4(0.17f, 0.17f, 0.21f, 1.0f));
+            }
         } else {
             engine_instance_->pipeline()->DisableEditorCamera();
         }
@@ -628,7 +637,12 @@ void EditorApp::Run() {
         glfwGetFramebufferSize(window_, &display_w, &display_h);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        // 根据主题设置 GL 清屏色，避免 light 模式下面板缝隙处显示黑色
+        if (dse::editor::GetCurrentThemeIndex() == 1) {
+            glClearColor(0.94f, 0.94f, 0.96f, 1.0f);  // 浅色主题
+        } else {
+            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);  // 深色主题
+        }
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
@@ -952,10 +966,9 @@ void EditorApp::EnsureEditorLocalizationData() {
     const std::filesystem::path dir = GetEditorBinPath() / "editor_localization";
     std::filesystem::create_directories(dir);
 
-    const std::array<std::pair<const char*, const char*>, 3> seeds = {{
+    const std::array<std::pair<const char*, const char*>, 2> seeds = {{
         {"en", R"({"editor":{"preview":{"title":"Editor Preview","status":"Language: {lang}","selection":"Selected: {entity}"}}})"},
-        {"zh", R"({"editor":{"preview":{"title":"\u7f16\u8f91\u5668\u9884\u89c8","status":"\u5f53\u524d\u8bed\u8a00\uff1a{lang}","selection":"\u5f53\u524d\u9009\u4e2d\uff1a{entity}"}}})"},
-        {"ja", R"({"editor":{"preview":{"title":"\u30a8\u30c7\u30a3\u30bf\u30fc\u30d7\u30ec\u30d3\u30e5\u30fc","status":"\u73fe\u5728\u306e\u8a00\u8a9e: {lang}","selection":"\u9078\u629e\u4e2d: {entity}"}}})"}
+        {"zh", R"({"editor":{"preview":{"title":"\u7f16\u8f91\u5668\u9884\u89c8","status":"\u5f53\u524d\u8bed\u8a00\uff1a{lang}","selection":"\u5f53\u524d\u9009\u4e2d\uff1a{entity}"}}})"}
     }};
 
     editor_languages_.clear();
@@ -968,8 +981,22 @@ void EditorApp::EnsureEditorLocalizationData() {
     }
 
     if (!editor_languages_.empty()) {
-        localization.SetCurrentLanguage(editor_languages_.front());
-        editor_language_index_ = 0;
+        // 根据已保存的编辑器 UI 语言设置初始选中项
+        const std::string& saved_locale = dse::editor::GetEditorLocale();
+        int init_idx = 0;
+        for (int i = 0; i < static_cast<int>(editor_languages_.size()); ++i) {
+            const auto& lang = editor_languages_[i];
+            if (lang == "zh" && (saved_locale == "zh-CN" || saved_locale == "zh_CN" || saved_locale == "zh")) {
+                init_idx = i;
+                break;
+            }
+            if (lang == saved_locale) {
+                init_idx = i;
+                break;
+            }
+        }
+        editor_language_index_ = init_idx;
+        localization.SetCurrentLanguage(editor_languages_[init_idx]);
     }
 }
 

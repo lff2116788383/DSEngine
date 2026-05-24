@@ -17,6 +17,10 @@ void DrawSceneViewportPanel(EditorContext& ctx,
 
 void DrawGameViewportPanel(unsigned int texture_id);
 
+/// 缓存 Scene 面板的 aspect ratio（上一帧），供 SetEditorCamera 使用
+float GetCachedSceneViewportAspect();
+void  SetCachedSceneViewportAspect(float aspect);
+
 void DrawPhysicsColliderOverlay(entt::registry& registry,
                                 entt::entity selected,
                                 ImDrawList* dl,

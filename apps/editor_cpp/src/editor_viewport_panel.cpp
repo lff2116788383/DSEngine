@@ -22,6 +22,8 @@
 #include "editor_navmesh_panel.h"
 #include "editor_scene_view_mode.h"
 #include "editor_multi_viewport.h"
+#include "editor_icons.h"
+#include "editor_locale.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/components_3d_physics.h"
 #include <glad/gl.h>
@@ -31,6 +33,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace dse::editor {
+
+static float s_cached_scene_aspect = 16.0f / 9.0f;
+
+float GetCachedSceneViewportAspect() { return s_cached_scene_aspect; }
+void  SetCachedSceneViewportAspect(float aspect) { s_cached_scene_aspect = aspect; }
 
 namespace {
 
@@ -291,7 +298,8 @@ void DrawViewportGrid(ImDrawList* draw_list,
     // Draw minor grid lines (only when close enough)
     bool draw_minor = cam_dist < 50.0f;
     if (draw_minor) {
-        ImU32 minor_color = IM_COL32(60, 60, 60, 80);
+        const bool light_theme = (GetCurrentThemeIndex() == 1);
+        ImU32 minor_color = light_theme ? IM_COL32(180, 180, 190, 60) : IM_COL32(60, 60, 60, 80);
         float minor_min_x = std::floor((cam_pos.x - extent) / minor_step) * minor_step;
         float minor_max_x = std::ceil((cam_pos.x + extent) / minor_step) * minor_step;
         float minor_min_z = std::floor((cam_pos.z - extent) / minor_step) * minor_step;
@@ -313,7 +321,8 @@ void DrawViewportGrid(ImDrawList* draw_list,
     }
 
     // Draw major grid lines
-    ImU32 major_color = IM_COL32(90, 90, 90, 120);
+    const bool light_theme_maj = (GetCurrentThemeIndex() == 1);
+    ImU32 major_color = light_theme_maj ? IM_COL32(160, 160, 170, 90) : IM_COL32(90, 90, 90, 120);
     for (float x = grid_min_x; x <= grid_max_x; x += major_step) {
         if (std::abs(x) < 0.01f) continue; // Skip origin, drawn separately
         draw_line(glm::vec3(x, 0, grid_min_z), glm::vec3(x, 0, grid_max_z), major_color, 1.0f);
@@ -595,8 +604,16 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     int current_gizmo_mode = ctx.current_gizmo_mode;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("Scene");
+    const ImVec2 scene_content_origin = ImGui::GetCursorScreenPos(); // 内容区域起点（tab 栏之下）
     ImVec2 scene_panel_size = ImGui::GetContentRegionAvail();
-    ImVec2 window_pos = ImGui::GetWindowPos();
+    // 所有 overlay / gizmo 必须用 scene_content_origin（内容区域起点），
+    // 不能用 ImGui::GetWindowPos()（含 tab 栏），否则线框相对 FBO 纹理偏移。
+    ImVec2 window_pos = scene_content_origin;
+
+    // 缓存 Scene 面板 aspect ratio，下一帧 SetEditorCamera 使用
+    if (scene_panel_size.x > 1.0f && scene_panel_size.y > 1.0f) {
+        SetCachedSceneViewportAspect(scene_panel_size.x / scene_panel_size.y);
+    }
 
     // Tilemap / Terrain paint handling (must run before entity picking to consume clicks)
     bool paint_consumed = false;
@@ -780,11 +797,50 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     if (scene_texture_id != 0) {
         ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
 
+        // Overlay gizmo toolbar (top-left of viewport)
+        {
+            ImGui::SetCursorScreenPos(ImVec2(scene_content_origin.x + 6.0f, scene_content_origin.y + 4.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+
+            auto& gizmo_op = ctx.current_gizmo_operation;
+            auto& gizmo_mode = ctx.current_gizmo_mode;
+            auto gizmo_btn = [&](const char* icon, const char* id_suffix, const char* tip, int op_id) {
+                bool active = (gizmo_op == op_id);
+                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                else        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.95f, 1.0f));
+                char label[64];
+                snprintf(label, sizeof(label), "%s##vp_%s", icon, id_suffix);
+                if (ImGui::Button(label, ImVec2(28, 22))) gizmo_op = op_id;
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+                ImGui::PopStyleColor(2);
+                ImGui::SameLine();
+            };
+            gizmo_btn(MDI_ICON_CURSOR_DEFAULT_OUTLINE, "hand",  T("Hand (H)"), -1);
+            gizmo_btn(MDI_ICON_ARROW_ALL,              "trans", T("Translate (W)"), 0);
+            gizmo_btn(MDI_ICON_ROTATE_3D_VARIANT,      "rot",   T("Rotate (E)"), 1);
+            gizmo_btn(MDI_ICON_RESIZE,                 "scl",   T("Scale (R)"), 2);
+            // Local/World toggle
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.95f, 1.0f));
+            {
+                char space_label[64];
+                snprintf(space_label, sizeof(space_label), "%s##vp_space",
+                         gizmo_mode == 0 ? T("Local") : T("World"));
+                if (ImGui::Button(space_label, ImVec2(0, 22)))
+                    gizmo_mode = 1 - gizmo_mode;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Toggle Gizmo Coordinate Space"));
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(2);
+        }
+
         // Overlay toggle toolbar (top-right of viewport)
         {
             ImDrawList* ov_dl = ImGui::GetWindowDrawList();
-            float btn_x = window_pos.x + scene_panel_size.x - 260.0f;
-            float btn_y = window_pos.y + 4.0f;
+            float btn_x = scene_content_origin.x + scene_panel_size.x - 260.0f;
+            float btn_y = scene_content_origin.y + 4.0f;
             ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
