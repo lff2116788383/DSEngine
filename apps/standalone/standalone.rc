@@ -1,0 +1,2 @@
+// DSEngine Standalone — Windows application icon resource
+GLFW_ICON ICON "../../data/icon/dse_icon.ico"

@@ -1,0 +1,2 @@
+// DSEngine Editor — Windows application icon resource
+GLFW_ICON ICON "../../data/icon/dse_icon.ico"

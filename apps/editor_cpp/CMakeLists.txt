@@ -17,6 +17,8 @@ file(GLOB_RECURSE editor_srcs CONFIGURE_DEPENDS
 
 add_executable(dse_editor_cpp WIN32
     ${editor_srcs}
+    # Windows 应用程序图标资源
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/editor.rc>
     # 以下为 src/ 目录外的第三方源文件，保留显式引用
     ${DSE_GLAD_SOURCE}
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp

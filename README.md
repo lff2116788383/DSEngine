@@ -1,5 +1,9 @@
 # DSEngine
 
+<p align="center">
+  <img src="data/icon/dse_icon.png" alt="DSEngine Logo" width="128">
+</p>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![CMake](https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg)](https://cmake.org)

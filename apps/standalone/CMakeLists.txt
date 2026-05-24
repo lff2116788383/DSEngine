@@ -1,5 +1,7 @@
 add_executable(dse_standalone
     "main.cpp"
+    # Windows 应用程序图标资源
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/standalone.rc>
 )
 
 target_link_libraries(dse_standalone PRIVATE dse_engine)

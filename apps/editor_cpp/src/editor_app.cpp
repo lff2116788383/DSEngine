@@ -44,6 +44,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -250,6 +251,18 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     std::cout << "Editor window created successfully." << std::endl;
+
+    // 设置窗口图标
+    {
+        std::filesystem::path icon_path = GetProjectRootPath() / "data" / "icon" / "dse_icon.png";
+        int iw, ih, ic;
+        unsigned char* icon_pixels = stbi_load(icon_path.string().c_str(), &iw, &ih, &ic, 4);
+        if (icon_pixels) {
+            GLFWimage icon_image{ iw, ih, icon_pixels };
+            glfwSetWindowIcon(window_, 1, &icon_image);
+            stbi_image_free(icon_pixels);
+        }
+    }
 
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
