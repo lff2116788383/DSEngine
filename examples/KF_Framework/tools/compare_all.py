@@ -71,8 +71,13 @@ REGIONS_720P = {
 
 def find_dse_exe():
     """查找 DSEngine 可执行文件"""
-    for name in ["DSEngine_Game_release.exe", "DSEngine_Game_debug.exe"]:
-        p = ENGINE_ROOT / "bin" / name
+    candidates = [
+        ENGINE_ROOT / "bin" / "RelWithDebInfo" / "DSEngine_Game_relwithdebinfo.exe",
+        ENGINE_ROOT / "bin" / "Release" / "DSEngine_Game_release.exe",
+        ENGINE_ROOT / "bin" / "DSEngine_Game_release.exe",
+        ENGINE_ROOT / "bin" / "DSEngine_Game_debug.exe",
+    ]
+    for p in candidates:
         if p.exists():
             return p
     return None
@@ -102,7 +107,7 @@ def capture_backend(backend_name, out_path, frames=300, timeout=120):
     try:
         proc = subprocess.run(
             [str(exe), f"--script={lua}", f"--rhi={rhi}"],
-            cwd=str(KF_DIR), env=env,
+            cwd=str(ENGINE_ROOT), env=env,
             capture_output=True, text=True, errors="replace", timeout=timeout
         )
         if out_path.exists():
