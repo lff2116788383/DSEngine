@@ -634,9 +634,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
         if (it != textures_.end()) {
-            if (auto shared = it->second.lock()) {
-                return shared;
-            }
+            return it->second;
         }
     }
 
@@ -1267,11 +1265,10 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
         if (it != textures_.end()) {
-            if (auto shared = it->second.lock()) {
-                if (callback) callback(shared);
-                PublishResourceLoaded(GetEventBus(), cache_key, true);
-                return;
-            }
+            auto shared = it->second;
+            if (callback) callback(shared);
+            PublishResourceLoaded(GetEventBus(), cache_key, true);
+            return;
         }
     }
 
@@ -1557,7 +1554,7 @@ std::vector<unsigned int> AssetManager::ListMaterialInstanceIds() {
 void AssetManager::UnloadUnused() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (auto it = textures_.begin(); it != textures_.end(); ) {
-        if (it->second.expired()) {
+        if (it->second.use_count() <= 1) {
             it = textures_.erase(it);
         } else {
             ++it;
@@ -1859,7 +1856,7 @@ std::size_t AssetManager::EvictLRU() {
         // 尝试从各缓存表中驱逐（仅驱逐已无外部引用的条目）
         bool evicted_entry = false;
         auto tex_it = textures_.find(key);
-        if (tex_it != textures_.end() && tex_it->second.expired()) {
+        if (tex_it != textures_.end() && tex_it->second.use_count() <= 1) {
             textures_.erase(tex_it);
             evicted_entry = true;
         }

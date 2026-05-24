@@ -937,7 +937,22 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.instance_transforms.push_back(mesh_model);
         }
 
-        if (!mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
+        // Vertex rebuild cache: reuse for local-space (skinned / instanced) meshes
+        const bool vtx_in_local_space = item.skinned || can_instance;
+        const uint32_t vtx_eid = static_cast<uint32_t>(entity);
+        bool vtx_cache_hit = false;
+        if (vtx_in_local_space && !mesh_renderer.temp_vertices.empty()) {
+            auto vc_it = vertex_cache_.find(vtx_eid);
+            if (vc_it != vertex_cache_.end()
+                && vc_it->second.data_ptr == mesh_renderer.temp_vertices.data()) {
+                item.vertices = vc_it->second.vertices;
+                item.indices = vc_it->second.indices;
+                item.debug_world_bounds_min = vc_it->second.bounds_min;
+                item.debug_world_bounds_max = vc_it->second.bounds_max;
+                vtx_cache_hit = true;
+            }
+        }
+        if (!vtx_cache_hit && !mesh_renderer.temp_vertices.empty() && !mesh_renderer.temp_indices.empty()) {
 #ifdef DSE_VSE_1522_DIAG
             const bool emit_vse1522_depth_diag = ShouldLogVse1522MeshDiagnostics(mesh_renderer);
 #else
@@ -1151,6 +1166,16 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.indices = mesh_renderer.temp_indices;
             item.debug_world_bounds_min = world_min;
             item.debug_world_bounds_max = world_max;
+
+            // Store in vertex cache (local-space meshes only)
+            if (vtx_in_local_space) {
+                auto& ce = vertex_cache_[vtx_eid];
+                ce.vertices = item.vertices;
+                ce.indices = item.indices;
+                ce.bounds_min = world_min;
+                ce.bounds_max = world_max;
+                ce.data_ptr = mesh_renderer.temp_vertices.data();
+            }
 
             if (emit_vse1522_depth_diag) {
 #ifdef DSE_VSE_1522_DIAG

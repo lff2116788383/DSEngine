@@ -553,7 +553,7 @@ public:
 
 private:
     
-    std::unordered_map<std::string, std::weak_ptr<TextureAsset>> textures_;
+    std::unordered_map<std::string, std::shared_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<CubemapAsset>> cubemaps_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
     std::unordered_set<unsigned int> gpu_texture_handles_;
