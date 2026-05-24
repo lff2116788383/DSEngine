@@ -47,6 +47,7 @@ struct RenderPassContext {
     LightBuffer* light_buffer = nullptr;
     ClusterGrid* cluster_grid = nullptr;
     bool editor_mode = false;
+    glm::vec4 editor_bg_color = glm::vec4(0.17f, 0.17f, 0.21f, 1.0f); ///< 编辑器场景清屏色（可由主题切换覆盖）
 
     /// 引擎内置系统的访问（通过 FramePipeline 注入）
     struct PipelineState {

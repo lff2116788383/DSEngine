@@ -64,7 +64,7 @@ bool DX11Context::Resize(int width, int height) {
 
     HRESULT hr = swapchain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     if (FAILED(hr)) {
-        DEBUG_LOG_ERROR("[D3D11] ResizeBuffers failed: 0x{:08X}", static_cast<unsigned>(hr));
+        DEBUG_LOG_ERROR("[D3D11] ResizeBuffers failed: HRESULT=0x{}", static_cast<unsigned>(hr));
         return false;
     }
 
@@ -132,7 +132,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
             &feature_level_, context_.GetAddressOf()
         );
         if (FAILED(hr)) {
-            DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: 0x{:08X}", static_cast<unsigned>(hr));
+            DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: HRESULT=0x{}", static_cast<unsigned>(hr));
             return false;
         }
         hdr_enabled_ = false;

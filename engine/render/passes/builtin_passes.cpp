@@ -489,10 +489,10 @@ void ForwardScenePass::Setup(RenderGraph& graph) {
 }
 
 void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
-    // Editor camera: use a legible dark-slate background (Unity-like) instead of near-black.
+    // Editor camera: use editor_bg_color (theme-aware, set by editor each frame).
     // Game camera: intentional black so the skybox/camera fill is visually dominant.
     const glm::vec4 bg_color = (ctx_.editor_mode && ctx_.use_editor_camera)
-        ? glm::vec4(0.17f, 0.17f, 0.21f, 1.0f)
+        ? ctx_.editor_bg_color
         : glm::vec4(0.02f, 0.02f, 0.02f, 1.0f);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, bg_color, true});
 
