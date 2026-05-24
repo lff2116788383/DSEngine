@@ -56,6 +56,8 @@
 // GPU-Driven PBR 变体（预编译，无运行时 string patch）
 #include "embed/pbr_gpu_driven_vert.gen.h"
 #include "embed/pbr_gpu_driven_vert_reflect.gen.h"
+#include "embed/pbr_gpu_driven_frag.gen.h"
+#include "embed/pbr_gpu_driven_frag_reflect.gen.h"
 
 // Reflection metadata for automated binding
 #include "embed/pbr_vert_reflect.gen.h"
@@ -607,62 +609,11 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
     using namespace dse::render::generated_shaders;
     using namespace dse::render::generated_shaders::reflect;
 
-    // ---------- VS patch: 增加 flat out uint v_material_id ----------
-    std::string vert_src = kpbr_gpu_driven_vert_glsl430;
+    // gen.h 已包含完整 GPU-driven 变体（v_material_id, MaterialSSBO 等），无需 string patch
+    const char* vert_src = kpbr_gpu_driven_vert_glsl430;
+    const char* frag_src = kpbr_gpu_driven_frag_glsl430;
 
-    auto replace_first = [&](std::string& s, const std::string& from, const std::string& to) {
-        auto p = s.find(from);
-        if (p != std::string::npos) s.replace(p, from.size(), to);
-        else fprintf(stderr, "[GLShaderManager] GPU-driven PBR VS patch: '%s' not found\n", from.c_str());
-    };
-
-    // 声明 v_material_id 输出（location 8，在 vFragPosViewSpace=7 之后）
-    replace_first(vert_src,
-        "layout(location = 0) out vec4 vColor;",
-        "flat out uint v_material_id;\nlayout(location = 0) out vec4 vColor;");
-
-    // 在 vColor = aColor; 之后输出 material_id
-    replace_first(vert_src,
-        "vColor = aColor;\n    vTexCoord = aTexCoord;",
-        "vColor = aColor;\n    v_material_id = _33.dse_inst[(gl_InstanceID + SPIRV_Cross_BaseInstance)].mat_id;\n    vTexCoord = aTexCoord;");
-
-    // ---------- FS patch: PerMaterial UBO → Material SSBO ----------
-    std::string frag_src = kpbr_frag_glsl430;
-
-    // 替换 PerMaterial UBO 声明为 Material SSBO + v_material_id + #define
-    const std::string per_mat_ubo =
-        "layout(binding = 0, std140) uniform PerMaterial\n"
-        "{\n"
-        "    vec4 albedo;\n"
-        "    vec4 roughness_ao;\n"
-        "    vec4 emissive;\n"
-        "    vec4 flags;\n"
-        "    vec4 extra_params;\n"
-        "    vec4 extra_params2;\n"
-        "    vec4 toon_shadow_color;\n"
-        "    vec4 toon_params;\n"
-        "} _1407;";
-
-    const std::string mat_ssbo_replacement =
-        "struct DSEGPUMat {\n"
-        "    vec4 albedo;\n"
-        "    vec4 roughness_ao;\n"
-        "    vec4 emissive;\n"
-        "    vec4 flags;\n"
-        "    vec4 extra_params;\n"
-        "    vec4 extra_params2;\n"
-        "    vec4 toon_shadow_color;\n"
-        "    vec4 toon_params;\n"
-        "};\n"
-        "layout(binding = 9, std430) readonly buffer MaterialSSBO {\n"
-        "    DSEGPUMat gpu_materials[];\n"
-        "};\n"
-        "flat in uint v_material_id;\n"
-        "#define _1407 gpu_materials[v_material_id]";
-
-    replace_first(frag_src, per_mat_ubo, mat_ssbo_replacement);
-
-    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_src.c_str(), frag_src.c_str());
+    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_src, frag_src);
     if (gpu_driven_pbr_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven PBR shader compilation failed\n");
         return;
@@ -671,13 +622,13 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
 
     // UBO block 绑定（使用 GPU_DRIVEN 变体的 reflection 数据）
     BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_gpu_driven_vert_reflection);
-    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_frag_reflection);
+    BindUBOsFromReflection(gpu_driven_pbr_shader_handle_, kpbr_gpu_driven_frag_reflection);
 
     // Sampler 一次性绑定
     {
         using namespace dse::render::gl_reflect;
         std::vector<TextureUnitEntry> tex_entries;
-        ComputeFlatTextureUnits(kpbr_frag_reflection, tex_entries);
+        ComputeFlatTextureUnits(kpbr_gpu_driven_frag_reflection, tex_entries);
         glUseProgram(gpu_driven_pbr_shader_handle_);
         BindSamplersOnce(gpu_driven_pbr_shader_handle_, tex_entries, glGetUniformLocation, glUniform1i);
         glUseProgram(0);
