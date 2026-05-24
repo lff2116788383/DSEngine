@@ -327,6 +327,9 @@ void CreateEntity3DCube(EditorContext& ctx) {
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "procedural:cube";
     GenerateCubeGeometry(mesh.temp_vertices, mesh.temp_indices);
+    mesh.local_bounds_min = glm::vec3(-0.5f);
+    mesh.local_bounds_max = glm::vec3( 0.5f);
+    mesh.local_bounds_valid = true;
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Cube entity");
@@ -339,6 +342,9 @@ void CreateEntity3DSphere(EditorContext& ctx) {
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "procedural:sphere";
     GenerateSphereGeometry(mesh.temp_vertices, mesh.temp_indices);
+    mesh.local_bounds_min = glm::vec3(-0.5f);
+    mesh.local_bounds_max = glm::vec3( 0.5f);
+    mesh.local_bounds_valid = true;
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Sphere entity");
@@ -352,6 +358,9 @@ void CreateEntity3DPlane(EditorContext& ctx) {
     auto& mesh = ctx.registry.emplace<dse::MeshRendererComponent>(ent);
     mesh.mesh_path = "procedural:plane";
     GeneratePlaneGeometry(mesh.temp_vertices, mesh.temp_indices);
+    mesh.local_bounds_min = glm::vec3(-0.5f, 0.0f, -0.5f);
+    mesh.local_bounds_max = glm::vec3( 0.5f, 0.0f,  0.5f);
+    mesh.local_bounds_valid = true;
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Plane entity");
