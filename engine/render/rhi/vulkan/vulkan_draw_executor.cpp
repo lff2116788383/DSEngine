@@ -2114,10 +2114,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    // 3D Mesh 顶点格式定义（两种管线共用）
+    // 3D Mesh 顶点格式定义
+    // 注意：标准 PBR 着色器不支持 per-instance vertex attribute（location 7-10），
+    // instancing 通过逐实例更新 push constant 实现，因此 pipeline 只需 binding 0。
     std::vector<VkVertexInputBindingDescription> mesh_bindings = {
         {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
-        {1, sizeof(glm::mat4), VK_VERTEX_INPUT_RATE_INSTANCE},  // GPU Instancing: model matrix per instance
     };
     std::vector<VkVertexInputAttributeDescription> mesh_attrs = {
         {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},       // aPos
@@ -2127,11 +2128,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
         {4, 0, VK_FORMAT_R32G32B32_SFLOAT, 48},       // aTangent
         {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 60},   // aBoneWeights
         {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 76},   // aBoneIndices
-        // GPU Instancing: instance model matrix (4 columns, binding 1)
-        {7,  1, VK_FORMAT_R32G32B32A32_SFLOAT, 0},                       // aInstModelCol0
-        {8,  1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4)},       // aInstModelCol1
-        {9,  1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4) * 2},   // aInstModelCol2
-        {10, 1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::vec4) * 3},   // aInstModelCol3
     };
 
     // 延迟创建 VkPipeline（按需，首次 Draw 时创建）— 有剔除版本
@@ -2240,6 +2236,8 @@ void VulkanDrawExecutor::DrawMeshBatch(
         }
 
         // Push constant: model + skinned + morph_enabled + use_instancing
+        // 注意：标准 PBR SPIR-V 着色器不支持 per-instance vertex attribute，
+        // 因此 instanced 路径采用逐实例更新 push constant 并绘制的方式。
         const bool is_instanced = item.instance_transforms.size() > 1;
         struct {
             glm::mat4 model;
@@ -2250,58 +2248,41 @@ void VulkanDrawExecutor::DrawMeshBatch(
         pc_data.model = item.model;
         pc_data.skinned = item.skinned ? 1 : 0;
         pc_data.morph_enabled = item.morph_enabled ? 1 : 0;
-        pc_data.use_instancing = is_instanced ? 1 : 0;
-        vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
-                           VK_SHADER_STAGE_VERTEX_BIT,
-                           0, sizeof(pc_data), &pc_data);
+        pc_data.use_instancing = 0;
 
-        // GPU Instancing: 上传 instance 数据（在绑定之前处理可能的扩容）
-        uint32_t instance_count = 1;
-        if (is_instanced) {
-            const VkDeviceSize inst_data_size = item.instance_transforms.size() * sizeof(glm::mat4);
-
-            // 动态扩容 instance VBO
-            if (inst_data_size > instance_vbo_capacity_) {
-                auto device = context_->device();
-                if (instance_vbo_ != VK_NULL_HANDLE) {
-                    vkDestroyBuffer(device, instance_vbo_, nullptr);
-                    instance_vbo_ = VK_NULL_HANDLE;
-                }
-                if (instance_vbo_mem_ != VK_NULL_HANDLE) {
-                    vkFreeMemory(device, instance_vbo_mem_, nullptr);
-                    instance_vbo_mem_ = VK_NULL_HANDLE;
-                }
-                instance_vbo_capacity_ = inst_data_size * 2;
-                CreateVulkanBuffer(context_->device(), context_->physical_device(),
-                                   instance_vbo_capacity_,
-                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                   instance_vbo_, instance_vbo_mem_);
-            }
-
-            WriteToBuffer(context_->device(), instance_vbo_mem_, 0, inst_data_size, item.instance_transforms.data());
-            instance_count = static_cast<uint32_t>(item.instance_transforms.size());
-        }
-
-        // 绑定 VBO binding 0 (mesh) + binding 1 (instance)
-        VkBuffer vbo_buffers[] = {mesh_vbo_, instance_vbo_};
-        VkDeviceSize vbo_offsets[] = {cur_vbo_offset, 0};
-        vkCmdBindVertexBuffers(cmd_buf, 0, 2, vbo_buffers, vbo_offsets);
+        // 绑定 VBO binding 0 (mesh only)
+        VkBuffer vbo_buffers[] = {mesh_vbo_};
+        VkDeviceSize vbo_offsets[] = {cur_vbo_offset};
+        vkCmdBindVertexBuffers(cmd_buf, 0, 1, vbo_buffers, vbo_offsets);
 
         // 绑定 IBO（使用该 mesh 的偏移）
         vkCmdBindIndexBuffer(cmd_buf, mesh_ibo_, cur_ibo_offset, VK_INDEX_TYPE_UINT32);
 
         // 绘制
-        vkCmdDrawIndexed(cmd_buf,
-                         static_cast<uint32_t>(item.indices.size()),
-                         instance_count, 0, 0, 0);
-
         if (is_instanced) {
+            // Pseudo-instancing：逐实例更新 push constant 并绘制
+            for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
+                pc_data.model = item.instance_transforms[inst];
+                vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT,
+                                   0, sizeof(pc_data), &pc_data);
+                vkCmdDrawIndexed(cmd_buf,
+                                 static_cast<uint32_t>(item.indices.size()),
+                                 1, 0, 0, 0);
+            }
             global_state_.current_frame_stats.instanced_draw_calls++;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(item.instance_transforms.size());
+            global_state_.current_frame_stats.draw_calls += static_cast<int>(item.instance_transforms.size());
+        } else {
+            vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
+                               VK_SHADER_STAGE_VERTEX_BIT,
+                               0, sizeof(pc_data), &pc_data);
+            vkCmdDrawIndexed(cmd_buf,
+                             static_cast<uint32_t>(item.indices.size()),
+                             1, 0, 0, 0);
+            global_state_.current_frame_stats.draw_calls++;
         }
-        global_state_.current_frame_stats.draw_calls++;
-        global_state_.current_frame_stats.triangle_count += static_cast<int>(item.indices.size() / 3) * static_cast<int>(instance_count);
+        global_state_.current_frame_stats.triangle_count += static_cast<int>(item.indices.size() / 3) * static_cast<int>(is_instanced ? item.instance_transforms.size() : 1);
     }
 }
 

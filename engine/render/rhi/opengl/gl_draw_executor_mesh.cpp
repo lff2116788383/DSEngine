@@ -633,7 +633,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.index_count_override), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
         } else if (is_instanced) {
-            // --- GPU Instancing path ---
+            // --- Pseudo-Instancing path ---
+            // 标准 PBR 着色器只有 uniform u_model，不支持 per-instance vertex attribute。
+            // 因此循环逐实例设置 u_model 并绘制，保证每个实例使用正确的模型矩阵。
             glBindVertexArray(mesh_vao_handle_.raw());
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
             if (update_buffer_fn_) {
@@ -642,46 +644,12 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
 
             const size_t instance_count = item.instance_transforms.size();
-            const size_t inst_data_size = instance_count * sizeof(glm::mat4);
-
-            // 动态扩容 instance VBO
-            if (inst_data_size > instance_vbo_capacity_) {
-                if (instance_vbo_handle_ != 0) {
-                    if (delete_buffer_fn_) { delete_buffer_fn_(instance_vbo_handle_); }
-                    else { glDeleteBuffers(1, &instance_vbo_handle_); }
+            int model_loc = gbuffer_mode ? gbuffer_model_loc : loc.model;
+            for (size_t inst = 0; inst < instance_count; ++inst) {
+                if (model_loc != -1) {
+                    glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.instance_transforms[inst]));
                 }
-                instance_vbo_capacity_ = inst_data_size * 2;
-                if (create_buffer_fn_) {
-                    instance_vbo_handle_ = create_buffer_fn_(instance_vbo_capacity_, nullptr, true, false);
-                } else {
-                    glGenBuffers(1, &instance_vbo_handle_);
-                    glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_handle_);
-                    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(instance_vbo_capacity_), nullptr, GL_DYNAMIC_DRAW);
-                }
-            }
-
-            // 上传 instance model 矩阵
-            glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_handle_);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(inst_data_size), item.instance_transforms.data());
-
-            // 配置 instance attributes (location 7-10, 每列 vec4)
-            const GLsizei mat4_stride = static_cast<GLsizei>(sizeof(glm::mat4));
-            for (int col = 0; col < 4; ++col) {
-                GLuint attr = 7 + static_cast<GLuint>(col);
-                glEnableVertexAttribArray(attr);
-                glVertexAttribPointer(attr, 4, GL_FLOAT, GL_FALSE, mat4_stride,
-                                      reinterpret_cast<const void*>(static_cast<uintptr_t>(col * sizeof(glm::vec4))));
-                glVertexAttribDivisor(attr, 1);
-            }
-
-            glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()),
-                                    GL_UNSIGNED_INT, nullptr, static_cast<GLsizei>(instance_count));
-
-            // 清理 instance attribute 状态
-            for (int col = 0; col < 4; ++col) {
-                GLuint attr = 7 + static_cast<GLuint>(col);
-                glVertexAttribDivisor(attr, 0);
-                glDisableVertexAttribArray(attr);
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_INT, nullptr);
             }
             glBindVertexArray(0);
 
