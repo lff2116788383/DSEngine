@@ -95,7 +95,7 @@ def capture_backend(backend_name, out_path, frames=300, timeout=120):
     env["DSE_SCREENSHOT_PATH"] = str(out_path)
     env["DSE_SCREENSHOT_TARGET"] = "main"
     env["DSE_AUTO_BATTLE"] = "1"
-    env["DSE_DISABLE_GPU_DRIVEN"] = "1"
+    env["DSE_DISABLE_GPU_DRIVEN"] = os.environ.get("DSE_DISABLE_GPU_DRIVEN", "1")
     env["DSE_DISABLE_STARTUP_SCENE_REGRESSION"] = "1"
 
     print(f"  Capturing {backend_name} ({rhi})... ", end="", flush=True)

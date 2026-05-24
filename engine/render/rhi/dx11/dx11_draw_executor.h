@@ -254,6 +254,7 @@ private:
     // 精灵四边形（动态 VBO，静态 IBO）
     ComPtr<ID3D11Buffer> sprite_quad_vbo_;
     ComPtr<ID3D11Buffer> sprite_quad_ibo_;
+    ComPtr<ID3D11Buffer> sprite_push_cb_;   // 128B: [model(64B) | vp(64B)] for sprite.vert
 
     // 网格（动态，按需扩容）
     ComPtr<ID3D11Buffer> mesh_dynamic_vbo_;

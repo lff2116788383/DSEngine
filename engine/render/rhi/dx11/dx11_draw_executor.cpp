@@ -31,6 +31,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_object_cb_ = CreateConstantBuffer(sizeof(DX11PerObjectCB));
     per_scene_cb_ = CreateConstantBuffer(sizeof(DX11PerSceneCB));
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
+    sprite_push_cb_        = CreateConstantBuffer(128); // [model(64B) | vp(64B)] for sprite.vert
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
@@ -109,6 +110,7 @@ void DX11DrawExecutor::Shutdown() {
     per_spot_lights_cb_.Reset();
     per_spot_matrices_cb_.Reset();
 
+    sprite_push_cb_.Reset();
     sprite_quad_vbo_.Reset();
     sprite_quad_ibo_.Reset();
     mesh_dynamic_vbo_.Reset();
@@ -410,16 +412,15 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
     if (items.empty()) return;
     ID3D11DeviceContext* dc = context_->device_context();
 
-    // 更新 PerFrame CB
-    DX11PerFrameCB frame_data;
-    frame_data.vp = projection * view;
-    frame_data.view = view;
-    frame_data.camera_pos = glm::vec4(0.0f);
-    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
-
-    // 绑定常量缓冲
-    ID3D11Buffer* cbs[] = {per_frame_cb_.Get(), per_object_cb_.Get()};
-    dc->VSSetConstantBuffers(0, 2, cbs);
+    // sprite.vert HLSL 的 cbuffer PushConstants 布局:
+    //   pc_u_model : packoffset(c0)  -- 64 bytes
+    //   pc_u_vp    : packoffset(c4)  -- 64 bytes
+    // 因此需要一个合并 CB: [model(64B) | vp(64B)] 绑定到 b0
+    struct SpritePushConstants {
+        glm::mat4 model;
+        glm::mat4 vp;
+    };
+    const glm::mat4 vp = projection * view;
 
     // 绑定 sprite 着色器
     const auto* program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
@@ -466,12 +467,15 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         UINT offset = 0;
         dc->IASetVertexBuffers(0, 1, sprite_quad_vbo_.GetAddressOf(), &stride, &offset);
 
-        // 更新 PerObject CB
-        DX11PerObjectCB obj_data{};
-        obj_data.model = item.model;
-        obj_data.skinned = 0;
-        obj_data.morph_enabled = 0;
-        UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
+        // 更新合并 CB: [model | vp] 匹配 sprite.vert PushConstants 布局
+        SpritePushConstants pc;
+        pc.model = item.model;
+        pc.vp = vp;
+        UpdateConstantBuffer(sprite_push_cb_.Get(), &pc, sizeof(pc));
+
+        // 绑定到 b0（shader 只使用 b0 的 PushConstants）
+        ID3D11Buffer* cb = sprite_push_cb_.Get();
+        dc->VSSetConstantBuffers(0, 1, &cb);
 
         // 绑定纹理（handle=0 时使用白色 fallback，与 OpenGL 一致）
         const auto* tex = (item.texture_handle != 0) ? resource_mgr.GetTexture(item.texture_handle) : nullptr;
