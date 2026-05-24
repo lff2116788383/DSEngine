@@ -187,6 +187,8 @@ public:
      */
     void SetEditorCamera(const glm::mat4& view, const glm::mat4& projection);
 
+    void SetEditorBgColor(const glm::vec4& color);
+
     /**
      * @brief 禁用编辑器相机覆盖，恢复使用游戏相机
      */
@@ -325,6 +327,9 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
+
+    /// Transform 系统：每帧渲染前更新 dirty 的 local_to_world
+    TransformSystem transform_system_;
 
     /// Clustered Forward+ 光源缓冲（SSBO）
     dse::render::LightBuffer light_buffer_;

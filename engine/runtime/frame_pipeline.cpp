@@ -227,7 +227,7 @@ bool FramePipeline::Init() {
         DEBUG_LOG_INFO("[InitTiming] {}: {}ms", label, ms);
         t0 = now;
     };
-    const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
     DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
 
@@ -250,11 +250,22 @@ bool FramePipeline::Init() {
         if (!init_ok) {
             DEBUG_LOG_ERROR("FramePipeline init failed: [{}] InitDevice returned false",
                 dse::render::RhiBackendToString(rhi_backend));
-            return false;
+            // 自动回退到 OpenGL
+            if (rhi_backend != RhiBackend::OpenGL) {
+                DEBUG_LOG_WARN("FramePipeline: {} 后端初始化失败，自动回退到 OpenGL",
+                    dse::render::RhiBackendToString(rhi_backend));
+                rhi_backend = RhiBackend::OpenGL;
+                runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
+                runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
+                DEBUG_LOG_INFO("FramePipeline RHI 后端 (fallback): OpenGL");
+            } else {
+                return false;
+            }
+        } else {
+            // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
+            runtime_context_.rhi_device->BeginFrame();
+            runtime_context_.rhi_device->EndFrame();
         }
-        // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
-        runtime_context_.rhi_device->BeginFrame();
-        runtime_context_.rhi_device->EndFrame();
     }
 
     lap("RHI device init");
@@ -973,6 +984,12 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
 
 void FramePipeline::RunRenderInternal() {
     auto render_begin = std::chrono::high_resolution_clock::now();
+
+    // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
+    if (runtime_context_.world) {
+        transform_system_.Update(*runtime_context_.world);
+    }
+
     dse::runtime::BeginRuntimeRenderFrame(*this);
     
     auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
@@ -1664,6 +1681,10 @@ void FramePipeline::SetEditorCamera(const glm::mat4& view, const glm::mat4& proj
     render_pass_context_.editor_projection = projection;
 }
 
+void FramePipeline::SetEditorBgColor(const glm::vec4& color) {
+    render_pass_context_.editor_bg_color = color;
+}
+
 void FramePipeline::DisableEditorCamera() {
     render_pass_context_.use_editor_camera = false;
 }
@@ -2165,6 +2186,11 @@ void FramePipeline::SignalRenderThread() {
 
 void FramePipeline::PrepareRenderFrame() {
     // ── 主线程：纯 CPU 工作 + ECS 读取 ──
+
+    // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
+    if (runtime_context_.world) {
+        transform_system_.Update(*runtime_context_.world);
+    }
 
     if (runtime_context_.world) {
         // Clustered Forward+: 收集光源（CPU）
