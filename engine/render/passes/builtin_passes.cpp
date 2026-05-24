@@ -222,6 +222,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BindGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
     }
+
 }
 
 // ============================================================

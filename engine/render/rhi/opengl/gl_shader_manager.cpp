@@ -546,6 +546,10 @@ void GLShaderManager::InitShadowShader() {
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_vert_reflection);
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_frag_reflection);
+
+    shadow_locations_.model        = glGetUniformLocation(shadow_shader_handle_, "u_model");
+    shadow_locations_.skinned      = glGetUniformLocation(shadow_shader_handle_, "u_skinned");
+    shadow_locations_.morph_enabled = glGetUniformLocation(shadow_shader_handle_, "u_morph_enabled");
 }
 
 // ============================================================

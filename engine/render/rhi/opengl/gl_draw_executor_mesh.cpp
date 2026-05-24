@@ -569,8 +569,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         // 骨骼动画（push constant → 独立 uniform + BoneMatrices UBO）设置
-        if (loc.skinned != -1) {
-            glUniform1i(loc.skinned, item.skinned ? 1 : 0);
+        {
+            const int skinned_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().skinned : loc.skinned;
+            if (skinned_loc != -1) glUniform1i(skinned_loc, item.skinned ? 1 : 0);
         }
         if (item.skinned && !item.bone_matrices.empty()) {
             BoneMatricesUBO bm_ubo{};
@@ -580,8 +581,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         // 变形目标（push constant → 独立 uniform + MorphWeights UBO）设置
-        if (loc.morph_enabled != -1) {
-            glUniform1i(loc.morph_enabled, item.morph_enabled ? 1 : 0);
+        {
+            const int morph_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().morph_enabled : loc.morph_enabled;
+            if (morph_loc != -1) glUniform1i(morph_loc, item.morph_enabled ? 1 : 0);
         }
         if (item.morph_enabled && !item.morph_weights.empty()) {
             MorphWeightsUBO mw_ubo{};
@@ -602,7 +604,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 模型矩阵设置
         if (!is_instanced) {
-            int model_loc = gbuffer_mode ? gbuffer_model_loc : loc.model;
+            int model_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().model
+                          : (gbuffer_mode ? gbuffer_model_loc : loc.model);
             if (model_loc != -1) {
                 glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.model));
             }
@@ -644,7 +647,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
 
             const size_t instance_count = item.instance_transforms.size();
-            int model_loc = gbuffer_mode ? gbuffer_model_loc : loc.model;
+            int model_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().model
+                          : (gbuffer_mode ? gbuffer_model_loc : loc.model);
             for (size_t inst = 0; inst < instance_count; ++inst) {
                 if (model_loc != -1) {
                     glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.instance_transforms[inst]));

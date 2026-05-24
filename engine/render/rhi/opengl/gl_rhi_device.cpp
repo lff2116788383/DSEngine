@@ -1370,6 +1370,29 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
     if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
     const int loc_morph = shader_mgr_.gpu_driven_pbr_morph_loc();
     if (loc_morph >= 0) glUniform1i(loc_morph, 0);
+
+    // CSM shadow map 纹理绑定（per-item 路径由 DrawMeshBatch 绑定，GPU-driven 需在此补齐）
+    const auto& slots = shader_mgr_.pbr_texture_slots();
+    for (int i = 0; i < 3; ++i) {
+        if (gs.shadow_map[i] != 0) {
+            glActiveTexture(GL_TEXTURE0 + slots.shadow_base + i);
+            glBindTexture(GL_TEXTURE_2D, gs.shadow_map[i]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (gs.spot_shadow_map[i] != 0) {
+            glActiveTexture(GL_TEXTURE0 + slots.spot_shadow_base + i);
+            glBindTexture(GL_TEXTURE_2D, gs.spot_shadow_map[i]);
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (gs.point_shadow_map[i] != 0) {
+            glActiveTexture(GL_TEXTURE0 + slots.point_shadow_base + i);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, gs.point_shadow_map[i]);
+        }
+    }
 }
 
 void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {

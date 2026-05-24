@@ -91,6 +91,13 @@ struct SkyboxShaderLocations {
     int tex = -1;
 };
 
+/// Shadow 着色器 uniform location 缓存
+struct ShadowShaderLocations {
+    int model = -1;
+    int skinned = -1;
+    int morph_enabled = -1;
+};
+
 /// 粒子着色器 uniform location 缓存
 struct ParticleShaderLocations {
     unsigned int per_frame_block_index = 0;  ///< PerFrame UBO
@@ -138,6 +145,9 @@ public:
 
     /// GPU-Driven Shadow uniform locations (GL only)
     int gpu_driven_shadow_skinned_loc() const { return gpu_driven_shadow_skinned_loc_; }
+
+    /// Per-item Shadow shader locations
+    const ShadowShaderLocations& shadow_locations() const { return shadow_locations_; }
 
     // --- 天空盒着色器 ---
     const SkyboxShaderLocations& skybox_locations() const { return skybox_locations_; }
@@ -190,6 +200,7 @@ private:
     int gpu_driven_pbr_skinned_loc_ = -1;
     int gpu_driven_pbr_morph_loc_   = -1;
     int gpu_driven_shadow_skinned_loc_ = -1;
+    ShadowShaderLocations shadow_locations_;
 };
 
 } // namespace render
