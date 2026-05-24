@@ -609,11 +609,22 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
     using namespace dse::render::generated_shaders;
     using namespace dse::render::generated_shaders::reflect;
 
-    // gen.h 已包含完整 GPU-driven 变体（v_material_id, MaterialSSBO 等），无需 string patch
-    const char* vert_src = kpbr_gpu_driven_vert_glsl430;
+    // SPIRV-Cross 为 DSEInstBuf 分配了 binding=0，但 CPU 侧绑定到 kSSBOBindingInstances(=5)
+    // 编译前 patch 源码将 instance SSBO binding 修正为 5
+    std::string vert_patched = kpbr_gpu_driven_vert_glsl430;
+    {
+        const std::string old_binding = "layout(binding = 0, std430) readonly buffer DSEInstBuf";
+        const std::string new_binding = "layout(binding = 5, std430) readonly buffer DSEInstBuf";
+        auto pos = vert_patched.find(old_binding);
+        if (pos != std::string::npos) {
+            vert_patched.replace(pos, old_binding.size(), new_binding);
+        } else {
+            fprintf(stderr, "[GLShaderManager] GPU-driven PBR: DSEInstBuf binding=0 not found for patch\n");
+        }
+    }
     const char* frag_src = kpbr_gpu_driven_frag_glsl430;
 
-    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_src, frag_src);
+    gpu_driven_pbr_shader_handle_ = CompileProgram(vert_patched.c_str(), frag_src);
     if (gpu_driven_pbr_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven PBR shader compilation failed\n");
         return;

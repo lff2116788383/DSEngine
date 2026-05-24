@@ -42,7 +42,7 @@ function Scene.setup()
     ecs.add_mesh_renderer(ground, 1.0, 1.0, 1.0, 1.0)
     ecs.set_mesh_path(ground, "cooked/demoField.dmesh")
     ecs.set_mesh_shader_variant(ground, "MESH_HALFLAMBERT_STATIC")
-    ecs.set_mesh_material(ground, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, true)
+    ecs.set_mesh_material(ground, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, true, false)
     ecs.set_mesh_texture(ground, "albedo", ASSET.ground_tex)
 
     -- 5. 场景装饰物 — 从 DSE 原生 JSON 场景加载 (demo.stage 精确位置)

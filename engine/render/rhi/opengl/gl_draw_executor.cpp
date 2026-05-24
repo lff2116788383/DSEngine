@@ -381,6 +381,8 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
 
     const auto& skybox_loc = shader_mgr.skybox_locations();
     glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
     glUseProgram(shader_mgr.skybox_shader_handle());
     // 合成 VP 矩阵：移除平移分量后乘以投影
     glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
@@ -392,7 +394,10 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_texture_handle);
     glUniform1i(skybox_loc.tex, 0);
     glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     glBindVertexArray(0);
+    glEnable(GL_CULL_FACE);
+    glDepthMask(GL_TRUE);
     glDepthFunc(GL_LESS);
 
     global_state_.current_frame_stats.draw_calls += 1;
