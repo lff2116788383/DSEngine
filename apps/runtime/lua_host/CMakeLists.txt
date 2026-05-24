@@ -1,5 +1,7 @@
 add_executable(dse_example_lua
     "main.cpp"
+    # Windows 应用程序图标资源
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/lua_host.rc>
 )
 
 target_link_libraries(dse_example_lua PRIVATE dse_engine)

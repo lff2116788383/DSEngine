@@ -21,6 +21,9 @@
 
 #include <iostream>
 #include <cstdio>
+#include <filesystem>
+
+#include <stb/stb_image.h>
 
 namespace dse::platform {
 
@@ -87,6 +90,35 @@ bool GlfwApp::Init(const WindowConfig& config) {
         glfwMakeContextCurrent(window_);
         glfwSwapInterval(1);
         has_gl_context_ = true;
+    }
+
+    // 设置窗口图标（从 exe 所在目录向上查找 data/icon/dse_icon.png）
+    {
+        // 尝试常见路径：exe旁 → exe/../data → 工程根/data
+        std::filesystem::path exe_dir;
+#if defined(_WIN32)
+        wchar_t module_buf[MAX_PATH]{};
+        if (GetModuleFileNameW(nullptr, module_buf, MAX_PATH))
+            exe_dir = std::filesystem::path(module_buf).parent_path();
+#endif
+        const char* candidates[] = {
+            "data/icon/dse_icon.png",
+            "../data/icon/dse_icon.png",
+            "../../data/icon/dse_icon.png",
+        };
+        for (auto rel : candidates) {
+            std::filesystem::path icon_path = exe_dir.empty()
+                ? std::filesystem::path(rel)
+                : exe_dir / rel;
+            int iw, ih, ic;
+            unsigned char* px = stbi_load(icon_path.string().c_str(), &iw, &ih, &ic, 4);
+            if (px) {
+                GLFWimage img{ iw, ih, px };
+                glfwSetWindowIcon(window_, 1, &img);
+                stbi_image_free(px);
+                break;
+            }
+        }
     }
 
     // 显式设置箭头光标，避免 Windows 在加载期间显示忙碌光标
