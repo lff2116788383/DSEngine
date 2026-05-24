@@ -1326,6 +1326,10 @@ void OpenGLRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo.raw());
 }
 
+bool OpenGLRhiDevice::HasGPUDrivenPBRShader() const {
+    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+}
+
 void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
                                                const glm::vec3& camera_pos,
                                                const glm::vec3& light_dir, const glm::vec3& light_color,

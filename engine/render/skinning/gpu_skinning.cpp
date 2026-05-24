@@ -156,7 +156,7 @@ uint findInstance(uint gid) {
 }
 
 [numthreads(64, 1, 1)]
-void CSMain(uint3 dtid : SV_DispatchThreadID) {
+void main(uint3 dtid : SV_DispatchThreadID) {
     uint gid = dtid.x;
     if (gid >= u_total_vertices) return;
     uint inst_id = findInstance(gid);

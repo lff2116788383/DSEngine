@@ -153,6 +153,7 @@ public:
     void BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) override;
 
     // --- GPU-Driven PBR ---
+    bool HasGPUDrivenPBRShader() const override;
     void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
                                   const glm::vec3& camera_pos,
                                   const glm::vec3& light_dir, const glm::vec3& light_color,

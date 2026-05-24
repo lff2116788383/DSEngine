@@ -774,7 +774,7 @@ unsigned int DX11RhiDevice::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& hlsl_src,
     uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/,
     uint32_t /*sampler_count*/, uint32_t /*push_constant_bytes*/) {
-    return shader_mgr_.CreateComputeProgram(hlsl_src);
+    return shader_mgr_.CreateComputeProgram(hlsl_src, "main");
 }
 
 unsigned int DX11RhiDevice::CreateComputeWriteTexture2D(int width, int height) {
@@ -977,6 +977,10 @@ void DX11RhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
 // ============================================================
 // GPU-Driven PBR Shader Setup
 // ============================================================
+
+bool DX11RhiDevice::HasGPUDrivenPBRShader() const {
+    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+}
 
 void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
                                               const glm::vec3& camera_pos,

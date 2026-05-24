@@ -524,7 +524,14 @@ bool FramePipeline::Init() {
             dse::render::kGPUCullShaderSourceHLSL,
             2, 0, 1, 176);
         render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
-        DEBUG_LOG_INFO("GPU Driven Rendering: supported, cull_shader={}", render_resources_.gpu_cull_shader);
+        // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
+        if (render_resources_.gpu_driven_supported &&
+            !runtime_context_.rhi_device->HasGPUDrivenPBRShader()) {
+            render_resources_.gpu_driven_supported = false;
+            DEBUG_LOG_WARN("GPU Driven Rendering: disabled — GPU-driven PBR shader unavailable");
+        }
+        DEBUG_LOG_INFO("GPU Driven Rendering: supported={}, cull_shader={}",
+                       render_resources_.gpu_driven_supported, render_resources_.gpu_cull_shader);
     } else if (gpu_driven_disabled) {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: disabled by DSE_DISABLE_GPU_DRIVEN");

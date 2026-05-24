@@ -134,6 +134,11 @@ public:
         (void)albedo; (void)normal; (void)metallic_roughness; (void)emissive; (void)occlusion;
     }
 
+    // --- GPU-Driven Shader 可用性查询 ---
+
+    /// GPU-Driven PBR 着色器是否编译成功（cull shader 通过但 PBR/shadow shader 可能失败）
+    virtual bool HasGPUDrivenPBRShader() const { return false; }
+
     // --- GPU-Driven PBR Shader Setup ---
 
     /// 激活 GPU-Driven PBR 着色器并上传 PerFrame/PerScene UBO（indirect draw 前调用）

@@ -1350,6 +1350,10 @@ void VulkanRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
 // GPU-Driven PBR Shader Setup
 // ============================================================
 
+bool VulkanRhiDevice::HasGPUDrivenPBRShader() const {
+    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+}
+
 void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
                                                 const glm::vec3& camera_pos,
                                                 const glm::vec3& light_dir, const glm::vec3& light_color,

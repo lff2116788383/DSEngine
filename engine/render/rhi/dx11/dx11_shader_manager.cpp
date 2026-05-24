@@ -569,11 +569,17 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
     // --- VS patch: 添加 DrawIdCB (b7), 用 g_draw_id 替换 SV_InstanceID ---
     std::string vert_src = kpbr_gpu_driven_vert_hlsl;
 
-    // 在 ByteAddressBuffer 声明后注入 DrawIdCB
-    replace_first(vert_src,
-        "ByteAddressBuffer _33 : register(t21);",
-        "ByteAddressBuffer _33 : register(t21);\n"
-        "cbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n");
+    // 在 ByteAddressBuffer _33 声明行后注入 DrawIdCB（不硬编码 register slot）
+    {
+        const std::string marker = "ByteAddressBuffer _33 : register(t";
+        auto mpos = vert_src.find(marker);
+        if (mpos != std::string::npos) {
+            auto eol = vert_src.find(';', mpos);
+            if (eol != std::string::npos) {
+                vert_src.insert(eol + 1, "\ncbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n");
+            }
+        }
+    }
 
     // 替换 SV_InstanceID 输入为不使用（用 g_draw_id 替代）
     // 在 SPIRV_Cross_Input 中保留 SV_InstanceID 声明（InputLayout 需要），

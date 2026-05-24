@@ -2702,7 +2702,7 @@ bool FrustumTestAABB(float3 aabb_min, float3 aabb_max) {
 }
 
 [numthreads(64, 1, 1)]
-void CSMain(uint3 id : SV_DispatchThreadID) {
+void main(uint3 id : SV_DispatchThreadID) {
     uint idx = id.x;
     if ((int)idx >= u_object_count) return;
 
