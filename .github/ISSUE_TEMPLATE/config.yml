@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: DSEngine Documentation
+    url: https://github.com/lff2116788383/DSEngine/tree/master/docs
+    about: Start here for architecture notes, API reference, and shader system docs.
+  - name: GitHub Discussions
+    url: https://github.com/lff2116788383/DSEngine/discussions
+    about: Use Discussions for broader design questions and open-ended conversations.

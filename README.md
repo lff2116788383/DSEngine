@@ -1,18 +1,27 @@
 # DSEngine
 
-A lightweight C++20 game engine with an integrated editor, Lua scripting, and a full 2D/3D rendering pipeline.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![CMake](https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg)](https://cmake.org)
+
+A lightweight **C++20 game engine** with an integrated editor, Lua scripting, and a full 2D/3D rendering pipeline.
+
+Multi-backend RHI (OpenGL 4.5 / Vulkan / D3D11) · RenderGraph · DSSL shading language · ECS (EnTT) · Jolt Physics
 
 ## Features
 
 ### Rendering
-- **OpenGL 4.5** core profile (Vulkan RHI backend in progress)
-- **PBR pipeline** — metallic-roughness workflow, image-based lighting
+- **Multi-backend RHI** — OpenGL 4.5, Vulkan 1.3, D3D11 (auto-fallback on failure)
+- **RenderGraph** — DAG-based frame graph with dependency-driven pass scheduling & dead-pass culling
+- **PBR pipeline** — metallic-roughness workflow, image-based lighting, GPU-Driven instancing (SSBO)
 - **Cascaded shadow maps** (directional + spot + point lights)
+- **DSSL** (DS Shading Language) — surface shader abstraction (auto-injects lighting/shadows/GI)
 - **Bloom** post-processing with multi-pass downscale/upscale
 - **Skybox / SkyLight** environment mapping
 - **Sprite batching** for 2D, **3D mesh rendering** with instancing
 - **Particle system** — GPU-friendly emitters with curve editor
 - **Terrain** — heightmap sculpt + splat painting
+- **Clustered Forward+** light culling
 
 ### Editor
 - **Inspector** — 20+ component types with undo/redo
@@ -31,7 +40,7 @@ A lightweight C++20 game engine with an integrated editor, Lua scripting, and a 
 
 ### Runtime
 - **ECS** built on EnTT
-- **Physics** — Box2D (2D), PhysX optional (3D)
+- **Physics** — Box2D (2D), Jolt Physics (3D)
 - **Audio** — positional audio with range visualization
 - **Job system** — multi-threaded task graph
 - **Asset pipeline** — `.dmesh` / `.dmat` / `.danim` / `.dskel` / `.dpak`
@@ -268,11 +277,25 @@ bin\dse_tests_debug.exe
 
 ---
 
-## License
+## Contributing
 
-Proprietary. All rights reserved.
+Contributions are welcome! Please use the [issue templates](.github/ISSUE_TEMPLATE/) when reporting bugs or requesting features.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Open a Pull Request
+
+Please make sure your changes compile on all three RHI backends (OpenGL / Vulkan / D3D11) before submitting.
 
 ---
 
-> For architecture details see [`docs/Architecture-Refactor-Plan.md`](docs/Architecture-Refactor-Plan.md).
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+> For architecture details see [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
+> For the shader system see [`docs/architecture/SHADER_SYSTEM.md`](docs/architecture/SHADER_SYSTEM.md).
 > For the development roadmap see [`docs/NEXT_DIRECTION.md`](docs/NEXT_DIRECTION.md).

@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible engine, editor, rendering, or scripting bug.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        Please include enough detail to reproduce the issue on another machine.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the project is involved?
+      options:
+        - Rendering (OpenGL / Vulkan / D3D11)
+        - Editor (ImGui / viewport / panels)
+        - ECS / Scene
+        - Physics (Box2D / Jolt)
+        - Lua scripting
+        - Asset pipeline
+        - Build system / CMake
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Tag, release, or commit hash where the issue occurs.
+      placeholder: main @ abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS version, compiler/toolchain, GPU driver, and anything else relevant.
+      placeholder: |
+        Windows 11 23H2
+        Visual Studio 2022 (v143)
+        GPU: NVIDIA RTX 3060 / driver 555.xx
+        RHI backend: OpenGL / Vulkan / D3D11
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the shortest reliable reproduction you can.
+      placeholder: |
+        1. Open editor...
+        2. Create entity...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or crash output
+      description: Paste stack traces, console output, screenshots, or attach files if helpful.
+      render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues before opening this report.
+          required: true
+        - label: I can reproduce this issue on the current main branch or a recent release.
+          required: true

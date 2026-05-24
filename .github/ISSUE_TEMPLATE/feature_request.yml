@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a new engine capability, workflow improvement, or documentation addition.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are most useful when they are tied to a concrete workflow problem.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Rendering
+        - Physics
+        - Lua API
+        - Editor
+        - ECS / Scene
+        - Asset pipeline
+        - DSSL (shading language)
+        - Build system
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the workflow limitation or missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or behavior you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Mention current workarounds or alternative approaches if you have them.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Example projects, references, screenshots, API sketches, or implementation constraints.

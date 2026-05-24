@@ -1,0 +1,22 @@
+name: Question
+description: Ask a usage or workflow question about the engine.
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For general design discussion, prefer GitHub Discussions when possible.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do, and where are you getting stuck?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant context
+      description: Include code snippets, project setup, version information, and any docs you already checked.
