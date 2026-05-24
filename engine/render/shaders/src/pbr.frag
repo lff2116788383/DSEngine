@@ -347,7 +347,8 @@ float SampleShadowPCF(sampler2DShadow shadowMap, vec3 proj_coords, float bias) {
 
 // --- PCSS (Percentage Closer Soft Shadows) ---
 
-const vec2 kPoissonDisk[16] = vec2[](
+const int PCSS_NUM_SAMPLES = 32;
+const vec2 kPoissonDisk[32] = vec2[](
     vec2(-0.94201624, -0.39906216),  vec2( 0.94558609, -0.76890725),
     vec2(-0.09418410, -0.92938870),  vec2( 0.34495938,  0.29387760),
     vec2(-0.91588581,  0.45771432),  vec2(-0.81544232, -0.87912464),
@@ -355,7 +356,15 @@ const vec2 kPoissonDisk[16] = vec2[](
     vec2( 0.44323325, -0.97511554),  vec2( 0.53742981, -0.47373420),
     vec2(-0.26496911, -0.41893023),  vec2( 0.79197514,  0.19090188),
     vec2(-0.24188840,  0.99706507),  vec2(-0.81409955,  0.91437590),
-    vec2( 0.19984126,  0.78641367),  vec2( 0.14383161, -0.14100790)
+    vec2( 0.19984126,  0.78641367),  vec2( 0.14383161, -0.14100790),
+    vec2(-0.61712016,  0.26906489),  vec2( 0.67523849, -0.20158166),
+    vec2(-0.34893128,  0.73267590),  vec2( 0.16578432, -0.64535880),
+    vec2( 0.85168291,  0.47469401),  vec2(-0.72731376, -0.44166890),
+    vec2( 0.07624037,  0.44547778),  vec2(-0.47761092, -0.72846854),
+    vec2( 0.61271930,  0.63369298),  vec2(-0.88889541,  0.10980070),
+    vec2( 0.38613200, -0.35800546),  vec2(-0.17724770,  0.13285880),
+    vec2( 0.50873750,  0.03464730),  vec2(-0.55399650, -0.16547160),
+    vec2( 0.29741450,  0.94322680),  vec2(-0.04580817, -0.33139882)
 );
 
 const float PCSS_LIGHT_SIZE    = 0.004;
@@ -369,7 +378,7 @@ float FindBlockerDepth(sampler2DShadow shadowMap, vec2 uv, float receiverDepth,
                        float searchRadius) {
     float blockerSum = 0.0;
     int   blockerCount = 0;
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < PCSS_NUM_SAMPLES; ++i) {
         vec2 sampleUV = uv + kPoissonDisk[i] * searchRadius;
         float vis = textureLod(shadowMap, vec3(sampleUV, receiverDepth), 0.0);
         if (vis < 0.5) {
@@ -405,11 +414,11 @@ float PCSS_Shadow(sampler2DShadow shadowMap, vec3 projCoords, float bias) {
 
     // Step 3: 可变核 Poisson PCF
     float shadow = 0.0;
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < PCSS_NUM_SAMPLES; ++i) {
         vec2 offset = kPoissonDisk[i] * filterRadius;
         shadow += textureLod(shadowMap, vec3(projCoords.xy + offset, receiverDepth), 0.0);
     }
-    return shadow / 16.0;
+    return shadow / float(PCSS_NUM_SAMPLES);
 }
 
 float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightDir) {

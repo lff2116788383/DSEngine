@@ -660,14 +660,14 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         obj_data.use_instancing = is_instanced ? 1 : 0;
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
-        // 骨骼矩阵（b7）— 蒙皮网格需要
+        // 骨骼矩阵（b2, HLSL: cbuffer BoneMatrices : register(b2)）— 蒙皮网格需要
         if (item.skinned && !item.bone_matrices.empty() && bone_matrices_cb_) {
             const size_t count = (std::min)(item.bone_matrices.size(), static_cast<size_t>(100));
             glm::mat4 bone_buf[100];
             memset(bone_buf, 0, sizeof(bone_buf));
             memcpy(bone_buf, item.bone_matrices.data(), count * sizeof(glm::mat4));
             UpdateConstantBuffer(bone_matrices_cb_.Get(), bone_buf, sizeof(bone_buf));
-            dc->VSSetConstantBuffers(7, 1, bone_matrices_cb_.GetAddressOf());
+            dc->VSSetConstantBuffers(2, 1, bone_matrices_cb_.GetAddressOf());
         }
 
         // PerMaterial

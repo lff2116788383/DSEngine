@@ -182,10 +182,16 @@ public:
         );
     }
 
-    /// Shadow sampling: identity (no Z remap).
-    /// Shader will remap Z from [-1,1] to [0,1] uniformly.
+    /// Shadow sampling: flip Y for DX11 texture coord convention (V=0 is top).
+    /// Shader remaps all axes from [-1,1] to [0,1] via (x*0.5+0.5).
+    /// Without Y flip, NDC Y=+1 maps to V=1 (bottom) but was rendered at V=0 (top).
     glm::mat4 GetShadowSampleCorrection() const override {
-        return glm::mat4(1.0f);
+        return glm::mat4(
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f,-1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f
+        );
     }
 
     // --- 编辑器场景视图模式 ---
