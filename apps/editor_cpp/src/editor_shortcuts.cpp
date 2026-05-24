@@ -251,7 +251,7 @@ bool HasEntityClipboard() {
 // ─── Primitive Geometry Generators ──────────────────────────────────────────
 namespace {
 
-void GenerateCubeGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices) {
+void GenerateCubeGeometry(std::vector<float>& verts, std::vector<uint32_t>& indices) {
     // 24 vertices (4 per face, unique normals), stride = 3 (position only)
     const float V = 0.5f;
     const float cube_verts[] = {
@@ -269,7 +269,7 @@ void GenerateCubeGeometry(std::vector<float>& verts, std::vector<unsigned short>
         -V,-V,-V,   V,-V,-V,   V,-V, V,  -V,-V, V,
     };
     verts.assign(std::begin(cube_verts), std::end(cube_verts));
-    const unsigned short cube_idx[] = {
+    const uint32_t cube_idx[] = {
          0, 1, 2,  0, 2, 3,
          4, 5, 6,  4, 6, 7,
          8, 9,10,  8,10,11,
@@ -280,7 +280,7 @@ void GenerateCubeGeometry(std::vector<float>& verts, std::vector<unsigned short>
     indices.assign(std::begin(cube_idx), std::end(cube_idx));
 }
 
-void GenerateSphereGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices,
+void GenerateSphereGeometry(std::vector<float>& verts, std::vector<uint32_t>& indices,
                             int stacks = 16, int slices = 32) {
     const float pi = 3.14159265358979323846f;
     for (int i = 0; i <= stacks; ++i) {
@@ -296,15 +296,15 @@ void GenerateSphereGeometry(std::vector<float>& verts, std::vector<unsigned shor
     }
     for (int i = 0; i < stacks; ++i) {
         for (int j = 0; j < slices; ++j) {
-            unsigned short a = static_cast<unsigned short>(i * (slices + 1) + j);
-            unsigned short b = static_cast<unsigned short>(a + slices + 1);
-            indices.push_back(a); indices.push_back(b); indices.push_back(static_cast<unsigned short>(a + 1));
-            indices.push_back(static_cast<unsigned short>(a + 1)); indices.push_back(b); indices.push_back(static_cast<unsigned short>(b + 1));
+            uint32_t a = static_cast<uint32_t>(i * (slices + 1) + j);
+            uint32_t b = a + static_cast<uint32_t>(slices + 1);
+            indices.push_back(a); indices.push_back(b); indices.push_back(a + 1);
+            indices.push_back(a + 1); indices.push_back(b); indices.push_back(b + 1);
         }
     }
 }
 
-void GeneratePlaneGeometry(std::vector<float>& verts, std::vector<unsigned short>& indices) {
+void GeneratePlaneGeometry(std::vector<float>& verts, std::vector<uint32_t>& indices) {
     const float V = 0.5f;
     const float plane_verts[] = {
         -V, 0.0f, -V,
@@ -313,7 +313,7 @@ void GeneratePlaneGeometry(std::vector<float>& verts, std::vector<unsigned short
         -V, 0.0f,  V,
     };
     verts.assign(std::begin(plane_verts), std::end(plane_verts));
-    const unsigned short plane_idx[] = { 0, 2, 1, 0, 3, 2 };
+    const uint32_t plane_idx[] = { 0, 2, 1, 0, 3, 2 };
     indices.assign(std::begin(plane_idx), std::end(plane_idx));
 }
 
