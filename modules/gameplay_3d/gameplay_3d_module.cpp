@@ -176,6 +176,11 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
     }
 }
 
+void Gameplay3DModule::OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) {
+    (void)clip_correction;
+    mesh_render_system_.RenderTransparent(world, cmd_buffer, wboit_mode);
+}
+
 void Gameplay3DModule::OnShutdown(World& world) {
     gpu_skinning_system_.Shutdown();
     terrain_system_.Shutdown(world);

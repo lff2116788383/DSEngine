@@ -501,6 +501,14 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
                 body_settings.mObjectLayer = Layers::MOVING;
             }
 
+            // 在创建 body 前设置初始速度（pending_impulse）
+            if (rb.has_pending_impulse && motion_type == EMotionType::Dynamic) {
+                glm::vec3 vel = rb.pending_impulse / glm::max(rb.mass, 0.001f);
+                body_settings.mLinearVelocity = Vec3(vel.x, vel.y, vel.z);
+                rb.has_pending_impulse = false;
+                rb.pending_impulse = glm::vec3(0.0f);
+            }
+
             Body* body = bi.CreateBody(body_settings);
             if (body) {
                 EActivation activation = (motion_type == EMotionType::Dynamic || body_settings.mIsSensor)
@@ -561,6 +569,7 @@ void Physics3DSystem::SyncPhysicsToTransforms(World& world) {
         auto& transform = view.get<TransformComponent>(entity);
         transform.position = glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
         transform.rotation = ToGlm(rot);
+        transform.dirty = true;
     }
 }
 

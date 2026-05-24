@@ -196,7 +196,7 @@ function FractureDemo.Setup(config)
     for i, mat in ipairs(materials) do
         local x = (i - 3.5) * 4.5
         local y = 3.0
-        local delay = 1.5 + (i - 1) * 2.0  -- 1.5s, 3.5s, 5.5s, 7.5s, 9.5s, 11.5s
+        local delay = 5.0 + (i - 1) * 2.0  -- 5s, 7s, 9s, 11s, 13s, 15s
         local d = create_destructible(x, y, 0.0, mat, delay)
         table.insert(destructibles, d)
         print(string.format("[破碎Demo] %s: 位置(%.1f, %.1f), %d 碎片, %.0f 爆炸力, 延迟 %.1fs",
