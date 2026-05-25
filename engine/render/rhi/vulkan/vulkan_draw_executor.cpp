@@ -2449,6 +2449,10 @@ void VulkanDrawExecutor::DrawMeshBatch(
             const bool skinned_instanced = item.skinned && (!item.per_instance_bones.empty() || !item.bone_palette.empty());
             const auto& inst_bo = per_inst_bone_offsets[item_idx];
 
+            // PreZ 跳过：蒙皮实例在深度预填充 pass（透视深度）收益极小，直接跳过节省 VS 时间
+            // shadow(ortho depth-only) 仍正常绘制；forward pass 不受影响
+            const bool is_prez = is_depth_only && !is_ortho;
+            if (is_prez && skinned_instanced) continue;
 
             // 蒙皮实例: 硬件实例化（SSBO + skinned=2 + instanceCount>1）
             // 非蒙皮实例: pseudo-instancing（push constant 逐实例更新）

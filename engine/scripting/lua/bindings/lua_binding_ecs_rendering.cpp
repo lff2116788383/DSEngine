@@ -1527,6 +1527,20 @@ int L_EcsLodSetScale(lua_State* L) {
     return 0;
 }
 
+/// lod.set_min_screen_size(entity, min_size)  -- 低于此屏幕占比时隐藏实体（LOD 距离裁剪）
+int L_EcsLodSetMinScreenSize(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float min_size = static_cast<float>(luaL_checknumber(L, 2));
+    if (!world->registry().all_of<LODGroupComponent>(e)) {
+        world->registry().emplace<LODGroupComponent>(e);
+    }
+    auto& lod = world->registry().get<LODGroupComponent>(e);
+    lod.min_screen_size = min_size;
+    return 0;
+}
+
 /// lod.set_enabled(entity, enabled)
 int L_EcsLodSetEnabled(lua_State* L) {
     World* world = GetWorld();
@@ -2005,6 +2019,7 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         // LOD
         {"lod_add_level",             L_EcsLodAddLevel},
         {"lod_set_scale",             L_EcsLodSetScale},
+        {"lod_set_min_screen_size",   L_EcsLodSetMinScreenSize},
         {"lod_set_enabled",           L_EcsLodSetEnabled},
         // Grass
         {"add_grass",                 L_EcsAddGrass},

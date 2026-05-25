@@ -1152,6 +1152,9 @@ void FramePipeline::RunRenderInternal() {
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
         render_resources_.gpu_material_ssbo = render_pass_context_.gpu_material_ssbo;
+        // hiz_aabb_ssbo 可能在 PrepareGPUScene 中因超容扩容，需同步回 render_resources_
+        render_resources_.hiz_aabb_ssbo    = render_pass_context_.hiz_aabb_ssbo;
+        render_resources_.hiz_ssbo_capacity = render_pass_context_.hiz_aabb_capacity;
     }
 
     CaptureThinSnapshot();
@@ -1357,6 +1360,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
     render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
     render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+    render_pass_context_.hiz_aabb_capacity = render_resources_.hiz_ssbo_capacity;
     render_pass_context_.hiz_culling_enabled = false;
     render_pass_context_.hiz_object_count = 0;
     render_pass_context_.hiz_copy_shader = render_resources_.hiz_copy_shader;

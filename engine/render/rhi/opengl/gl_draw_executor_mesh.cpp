@@ -794,6 +794,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         const bool skinned_instanced = item.skinned
             && (!item.per_instance_bones.empty() || !item.bone_palette.empty())
             && item.instance_transforms.size() > 1;
+        // PreZ 跳过：蒙皮实例在深度预填充 pass（透视深度）收益极小，直接跳过节省 VS 时间
+        // shadow(ortho depth-only) 仍正常绘制；forward pass 不受影响
+        if (is_depth_only_pass_ && !is_ortho && skinned_instanced) continue;
         {
             const int skinned_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().skinned : loc.skinned;
             if (skinned_loc != -1) {

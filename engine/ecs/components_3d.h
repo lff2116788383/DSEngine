@@ -90,6 +90,8 @@ struct LODGroupComponent {
     int current_lod = -1;
     float global_scale = 1.0f;
     float hysteresis = 0.05f;            ///< 切换死区：升级需超 threshold*(1+h)，降级需低于 threshold*(1-h)
+    float min_screen_size = 0.0f;        ///< 低于此 screen_size 时隐藏实体（0 = 不裁剪）
+    bool lod_culled = false;             ///< LODSystem 管理的可见性，恢复时重置
     std::string original_mesh_path;      ///< 首次 LOD 切换前的原始 mesh_path，disable 时用于恢复
 };
 

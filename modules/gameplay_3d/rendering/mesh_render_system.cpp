@@ -1637,9 +1637,21 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     }
 
     // 上传 AABB SSBO（复用 Hi-Z AABB binding point 0）
+    // 注意：ctx.hiz_aabb_capacity 来自 hiz_ssbo_capacity（默认 8192），超出时需要扩容
     if (ctx.hiz_aabb_ssbo) {
-        const size_t aabb_size = gpu_aabbs_.size() * sizeof(HiZAABB);
-        rhi->UpdateGpuBuffer(ctx.hiz_aabb_ssbo, 0, aabb_size, gpu_aabbs_.data());
+        const size_t needed = gpu_aabbs_.size();
+        if (ctx.hiz_aabb_capacity > 0 && needed > ctx.hiz_aabb_capacity) {
+            // 原 buffer 太小：删除重建，容量翻倍保证余量
+            rhi->DeleteGpuBuffer(ctx.hiz_aabb_ssbo);
+            const size_t new_cap = needed * 2;
+            dse::render::GpuBufferDesc d{new_cap * sizeof(HiZAABB),
+                dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
+            ctx.hiz_aabb_ssbo    = rhi->CreateGpuBuffer(d, nullptr);
+            ctx.hiz_aabb_capacity = new_cap;
+        }
+        if (ctx.hiz_aabb_ssbo && needed > 0) {
+            rhi->UpdateGpuBuffer(ctx.hiz_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
+        }
     }
 
     const size_t required_count = static_cast<size_t>(cmd_index);

@@ -2,9 +2,11 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/base/debug.h"
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 
 namespace dse {
@@ -38,6 +40,11 @@ void LODSystem::Update(World& world) {
 
     const float proj_scale = 1.0f / std::tan(glm::radians(cam.fov) * 0.5f);
     const float proj_scale_sq = proj_scale * proj_scale;
+    static const bool stats_enabled = std::getenv("DSE_LOD_STATS") != nullptr;
+    int lod_total = 0;
+    int lod_culled = 0;
+    float min_screen_size_seen = std::numeric_limits<float>::max();
+    float max_screen_size_seen = 0.0f;
 
     auto lod_view = world.registry().view<TransformComponent, MeshRendererComponent,
                                           LODGroupComponent>();
@@ -45,21 +52,9 @@ void LODSystem::Update(World& world) {
         auto& transform     = lod_view.get<TransformComponent>(entity);
         auto& mesh_renderer = lod_view.get<MeshRendererComponent>(entity);
         auto& lod_group     = lod_view.get<LODGroupComponent>(entity);
+        ++lod_total;
 
-        // Disabled：恢复原始 mesh_path 并清空缓存，交由 EnsureMeshPathDataLoaded 重载
-        if (!lod_group.enabled || lod_group.levels.empty()) {
-            if (lod_group.current_lod != -1) {
-                if (!lod_group.original_mesh_path.empty()) {
-                    mesh_renderer.mesh_path = lod_group.original_mesh_path;
-                }
-                mesh_renderer.temp_vertices.clear();
-                mesh_renderer.temp_indices.clear();
-                mesh_renderer.mesh_handle_override = 0;
-                lod_group.current_lod = -1;
-            }
-            continue;
-        }
-
+        // --- 计算屏幕占比（距离裁剪和 LOD 选择共用）---
         const glm::vec3 entity_pos = glm::vec3(transform.local_to_world[3]);
 
         float bbox_radius = 1.0f;
@@ -80,6 +75,35 @@ void LODSystem::Update(World& world) {
         // screen_size = (proj_scale² × bbox_radius²) / max(1, dist²) × global_scale
         const float screen_size = (proj_scale_sq * bbox_radius * bbox_radius)
                                   / dist_sq * lod_group.global_scale;
+        min_screen_size_seen = std::min(min_screen_size_seen, screen_size);
+        max_screen_size_seen = std::max(max_screen_size_seen, screen_size);
+
+        // 距离裁剪：screen_size 低于 min_screen_size 时隐藏实体（无需 levels 也生效）
+        if (lod_group.min_screen_size > 0.0f) {
+            const bool should_cull = (screen_size < lod_group.min_screen_size);
+            if (should_cull) {
+                lod_group.lod_culled = true;
+                mesh_renderer.visible = false;
+                ++lod_culled;
+                continue;
+            } else if (lod_group.lod_culled) {
+                lod_group.lod_culled = false;
+            }
+        }
+
+        // Disabled / 无 levels：恢复原始 mesh_path 并跳过 LOD 切换
+        if (!lod_group.enabled || lod_group.levels.empty()) {
+            if (lod_group.current_lod != -1) {
+                if (!lod_group.original_mesh_path.empty()) {
+                    mesh_renderer.mesh_path = lod_group.original_mesh_path;
+                }
+                mesh_renderer.temp_vertices.clear();
+                mesh_renderer.temp_indices.clear();
+                mesh_renderer.mesh_handle_override = 0;
+                lod_group.current_lod = -1;
+            }
+            continue;
+        }
 
         // 选第一个 screen_size > threshold 的级别；无匹配则选最低细节
         int target_lod = static_cast<int>(lod_group.levels.size()) - 1;
@@ -129,6 +153,16 @@ void LODSystem::Update(World& world) {
         mesh_renderer.temp_indices.clear();
         mesh_renderer.mesh_handle_override = level.mesh_handle;
         lod_group.current_lod              = target_lod;
+    }
+
+    if (stats_enabled && lod_total > 0) {
+        static int frame_counter = 0;
+        ++frame_counter;
+        if ((frame_counter % 60) == 0) {
+            DEBUG_LOG_INFO("[LODSystem] total={} culled={} visible={} screen_size_range=[{}, {}]",
+                           lod_total, lod_culled, lod_total - lod_culled,
+                           min_screen_size_seen, max_screen_size_seen);
+        }
     }
 }
 

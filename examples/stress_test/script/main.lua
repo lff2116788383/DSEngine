@@ -16,6 +16,9 @@ local ENTITY_COUNT   = tonumber(os.getenv("DSE_ENTITY_COUNT") or "50")
 local ANIM_ENABLED   = (os.getenv("DSE_ANIM_ENABLED") or "1") ~= "0"
 local PERF_FRAMES    = tonumber(os.getenv("DSE_PERF_FRAMES") or "600")
 local NO_SHADOW      = (os.getenv("DSE_NO_SHADOW") or "0") ~= "0"
+local LOD_ENABLED    = (os.getenv("DSE_LOD_ENABLED") or "0") ~= "0"
+local LOD_MIN_SCREEN_SIZE = tonumber(os.getenv("DSE_LOD_MIN_SCREEN_SIZE") or "0.08")
+local LOD_SCALE      = tonumber(os.getenv("DSE_LOD_SCALE") or "300.0")
 
 -- 资产路径 (复用 KF_Framework 的 cooked 资产)
 local KNIGHT_MESH    = "cooked/paladin_prop_j_nordstrom.dmesh"
@@ -59,6 +62,8 @@ function Awake()
 
     print(string.format("[StressTest] entities=%d anim=%s perf_frames=%d",
         ENTITY_COUNT, tostring(ANIM_ENABLED), PERF_FRAMES))
+    print(string.format("[StressTest] lod=%s lod_min_screen_size=%.6f lod_scale=%.2f",
+        tostring(LOD_ENABLED), LOD_MIN_SCREEN_SIZE, LOD_SCALE))
 
     -- 1. 方向光 + 阴影
     local sun = ecs.create_entity()
@@ -95,7 +100,8 @@ function Awake()
 
     -- 5. 大量骑士实体
     local cols = grid_layout(ENTITY_COUNT)
-    local spacing = 300  -- 3m 间距
+    -- 实体多时缩小间距，保持视觉密度
+    local spacing = math.max(math.floor(300 * math.sqrt(1000 / math.max(ENTITY_COUNT, 1))), 80)
     local anims = { IDLE_ANIM, RUN_ANIM }
 
     for i = 0, ENTITY_COUNT - 1 do
@@ -108,6 +114,14 @@ function Awake()
         ecs.set_mesh_material(e, 0.3, 0.7, 1.0, 0.0, 0.0, 0.0, 1.0, true, false)
         ecs.set_mesh_texture(e, "albedo", KNIGHT_TEX)
         ecs.set_mesh_texture(e, "normal", KNIGHT_NORM)
+
+        -- LOD 距离裁剪：屏幕占比过小时隐藏（阈值可通过环境变量标定）
+        -- screen_size = proj_scale² × bbox_radius² / dist² × global_scale
+        -- DSE_LOD_STATS=1 可查看每帧 culled/total，辅助调整 min_screen_size
+        if LOD_ENABLED then
+            dse.ecs.lod_set_min_screen_size(e, LOD_MIN_SCREEN_SIZE)
+            dse.ecs.lod_set_scale(e, LOD_SCALE)
+        end
 
         if ANIM_ENABLED then
             -- 交替 idle/run 动画
@@ -212,6 +226,8 @@ function print_perf_report()
     print(string.format("  Samples:     %d frames (after %d warmup)", n, warmup_frames))
     print(string.format("  Backend:     %s", os.getenv("DSE_RHI_BACKEND") or "default"))
     print(string.format("  GPU-Driven:  %s", os.getenv("DSE_DISABLE_GPU_DRIVEN") == "1" and "OFF" or "ON"))
+    print(string.format("  LOD:         %s (min_screen_size=%.6f, scale=%.2f)",
+        tostring(LOD_ENABLED), LOD_MIN_SCREEN_SIZE, LOD_SCALE))
     print("----------------------------------------------------------------------")
     print(string.format("  FPS avg:     %.1f", fps_avg))
     print(string.format("  FPS min:     %.1f", fps_min))

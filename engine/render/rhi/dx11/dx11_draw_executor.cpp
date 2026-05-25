@@ -862,6 +862,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             // DX11 clip correction 将 ortho 的 [3][3] 从 1.0 变为 ~0.5
             // 改用 [2][3]==0（透视投影 [2][3]==-1，正交投影 [2][3]==0）
             const bool is_ortho = std::abs(projection[2][3]) < 0.01f;
+            // PreZ 跳过：蒙皮实例在深度预填充 pass（透视深度）收益极小，直接跳过节省 VS 时间
+            if (is_depth_only_pass_ && !is_ortho) continue;
             const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
             float shadow_cull_limit = 0.0f;
             size_t shadow_instance_budget = SIZE_MAX;

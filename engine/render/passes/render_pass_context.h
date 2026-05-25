@@ -93,6 +93,7 @@ struct RenderPassContext {
     /// Hi-Z Occlusion Culling 状态
     BufferHandle hiz_visibility_ssbo;      ///< 可见性 SSBO（每个 mesh 1 uint: 1=visible, 0=occluded）
     BufferHandle hiz_aabb_ssbo;            ///< AABB SSBO（每个 mesh 6 floats: min_xyz, max_xyz）
+    size_t hiz_aabb_capacity = 0;          ///< hiz_aabb_ssbo 分配容量（对象数），0 表示未知
     int hiz_object_count = 0;               ///< 当前帧 mesh 数量
     bool hiz_culling_enabled = false;       ///< Hi-Z 剔除是否激活
     unsigned int hiz_copy_shader = 0;       ///< Compute: depth → Hi-Z mip 0（由 FramePipeline 管理生命周期）
