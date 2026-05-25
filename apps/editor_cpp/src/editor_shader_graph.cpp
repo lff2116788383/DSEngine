@@ -101,6 +101,11 @@ struct ShaderGraphState {
     std::string preview_glsl;
     // Property editor
     bool show_properties = true;
+    // Auto-compile for real-time preview
+    bool auto_compile = true;
+    bool graph_dirty = false;
+    float compile_timer = 0.0f;
+    static constexpr float kCompileDelay = 0.3f; // debounce 300ms
 };
 
 ShaderGraphState& GetState() {
@@ -919,6 +924,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                         lnk.from_pin = state.link_start_pin;
                         lnk.to_pin = pin.id;
                         state.links.push_back(lnk);
+                        state.graph_dirty = true;
                     }
                     state.creating_link = false;
                     state.link_start_pin = -1;
@@ -952,6 +958,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                         lnk.from_pin = pin.id;
                         lnk.to_pin = state.link_start_pin;
                         state.links.push_back(lnk);
+                        state.graph_dirty = true;
                     }
                     state.creating_link = false;
                     state.link_start_pin = -1;
@@ -1016,6 +1023,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                     [&](const Link& l) { return l.id == state.selected_link; }),
                 state.links.end());
             state.selected_link = -1;
+            state.graph_dirty = true;
         } else if (state.selected_node >= 0 && state.selected_node < static_cast<int>(state.nodes.size())) {
             auto& n = state.nodes[state.selected_node];
             state.links.erase(std::remove_if(state.links.begin(), state.links.end(),
@@ -1026,6 +1034,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                 }), state.links.end());
             state.nodes.erase(state.nodes.begin() + state.selected_node);
             state.selected_node = -1;
+            state.graph_dirty = true;
         }
     }
 
@@ -1079,6 +1088,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                 state.nodes.push_back(CreateNode(state, tmpl.name, tmpl.category,
                                                   world_pos, tmpl.color,
                                                   tmpl.inputs, tmpl.outputs));
+                state.graph_dirty = true;
             }
         }
 
@@ -1125,27 +1135,29 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                 ImGui::Text("Inputs:");
                 for (auto& pin : n.inputs) {
                     ImGui::PushID(pin.id);
+                    bool changed = false;
                     switch (pin.type) {
                         case PinType::Float:
                             ImGui::SetNextItemWidth(100);
-                            ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
+                            changed = ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
                             break;
                         case PinType::Vec2:
                             ImGui::SetNextItemWidth(160);
-                            ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
+                            changed = ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
                             break;
                         case PinType::Vec3:
                             ImGui::SetNextItemWidth(200);
-                            ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
+                            changed = ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
                             break;
                         case PinType::Vec4:
                         case PinType::Color:
-                            ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
+                            changed = ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
                             break;
                         default:
                             ImGui::Text("%s", pin.name.c_str());
                             break;
                     }
+                    if (changed) state.graph_dirty = true;
                     ImGui::PopID();
                 }
             }
@@ -1155,26 +1167,28 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                 ImGui::Text("Output Values:");
                 for (auto& pin : n.outputs) {
                     ImGui::PushID(pin.id);
+                    bool changed = false;
                     switch (pin.type) {
                         case PinType::Float:
                             ImGui::SetNextItemWidth(100);
-                            ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
+                            changed = ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
                             break;
                         case PinType::Color:
-                            ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
+                            changed = ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
                             break;
                         case PinType::Vec2:
                             ImGui::SetNextItemWidth(160);
-                            ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
+                            changed = ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
                             break;
                         case PinType::Vec3:
                             ImGui::SetNextItemWidth(200);
-                            ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
+                            changed = ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
                             break;
                         default:
                             ImGui::Text("%s", pin.name.c_str());
                             break;
                     }
+                    if (changed) state.graph_dirty = true;
                     ImGui::PopID();
                 }
             }
@@ -1183,20 +1197,37 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
     }
 
     // ─── GLSL Preview panel ─────────────────────────────────────────────────
+    // Auto-compile with debounce
+    if (state.show_preview && state.auto_compile && state.graph_dirty) {
+        state.compile_timer += ImGui::GetIO().DeltaTime;
+        if (state.compile_timer >= state.kCompileDelay) {
+            state.preview_glsl = CompileGraphToGLSL(state);
+            state.graph_dirty = false;
+            state.compile_timer = 0.0f;
+        }
+    }
+
     if (state.show_preview) {
         ImGui::SetNextWindowSize(ImVec2(450, 400), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("GLSL Preview", &state.show_preview)) {
             if (ImGui::Button("Refresh")) {
                 state.preview_glsl = CompileGraphToGLSL(state);
+                state.graph_dirty = false;
             }
             ImGui::SameLine();
+            ImGui::Checkbox("Auto", &state.auto_compile);
+            ImGui::SameLine();
             ImGui::TextDisabled("%d chars", static_cast<int>(state.preview_glsl.size()));
+            if (state.graph_dirty && state.auto_compile) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "(pending...)");
+            }
             ImGui::Separator();
             ImGui::BeginChild("glsl_code", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
             if (!state.preview_glsl.empty()) {
                 ImGui::TextUnformatted(state.preview_glsl.c_str(), state.preview_glsl.c_str() + state.preview_glsl.size());
             } else {
-                ImGui::TextDisabled("Click 'Refresh' to compile the graph.");
+                ImGui::TextDisabled("Click 'Refresh' or enable 'Auto' to compile the graph.");
             }
             ImGui::EndChild();
         }

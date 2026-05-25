@@ -85,11 +85,23 @@ public:
     /// Get loaded DLL paths
     const std::vector<std::string>& GetLoadedDllPaths() const;
 
+    /// Hot-reload a plugin DLL (unload old, copy to temp, load new)
+    bool ReloadPlugin(const std::string& dll_path);
+
+    /// Check file timestamps and auto-reload modified plugins
+    void CheckHotReload();
+
+    /// Enable/disable auto hot-reload polling
+    bool auto_hot_reload = false;
+
 private:
     EditorPluginManager() = default;
     std::vector<std::shared_ptr<EditorPlugin>> plugins_;
     std::vector<std::string> loaded_dll_paths_;
     std::vector<void*> dll_handles_;  // HMODULE on Windows
+    std::vector<int64_t> dll_timestamps_;  // last write time (file_time_type)
+    float hot_reload_timer_ = 0.0f;
+    static constexpr float kHotReloadInterval = 1.0f; // check every 1s
 };
 
 /// Draw a plugin browser/manager panel (shows loaded plugins, allows load/unload)

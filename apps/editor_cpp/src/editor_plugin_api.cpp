@@ -55,6 +55,15 @@ void EditorPluginManager::ShutdownAll() {
 }
 
 void EditorPluginManager::UpdateAll(EditorContext& ctx, float dt) {
+    // Hot-reload polling
+    if (auto_hot_reload && !loaded_dll_paths_.empty()) {
+        hot_reload_timer_ += dt;
+        if (hot_reload_timer_ >= kHotReloadInterval) {
+            hot_reload_timer_ = 0.0f;
+            CheckHotReload();
+        }
+    }
+
     for (auto& p : plugins_) {
         if (p->on_update) {
             p->on_update(ctx, dt);
@@ -154,6 +163,12 @@ bool EditorPluginManager::LoadPluginFromDll(const std::string& dll_path) {
     if (plugins_.size() > before) {
         dll_handles_.push_back(static_cast<void*>(hmod));
         loaded_dll_paths_.push_back(dll_path);
+        // Record file timestamp for hot-reload
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        auto ftime = fs::last_write_time(dll_path, ec);
+        int64_t ts = ec ? 0 : ftime.time_since_epoch().count();
+        dll_timestamps_.push_back(ts);
         EditorLog(LogLevel::Info, "Loaded plugin DLL: " + dll_path);
         return true;
     } else {
@@ -190,6 +205,106 @@ const std::vector<std::string>& EditorPluginManager::GetLoadedDllPaths() const {
     return loaded_dll_paths_;
 }
 
+bool EditorPluginManager::ReloadPlugin(const std::string& dll_path) {
+#ifdef _WIN32
+    // Find index of this DLL
+    int idx = -1;
+    for (size_t i = 0; i < loaded_dll_paths_.size(); i++) {
+        if (loaded_dll_paths_[i] == dll_path) { idx = static_cast<int>(i); break; }
+    }
+    if (idx < 0) return false;
+
+    // Find and remove the plugin(s) registered by this DLL
+    // We assume DLL at index `idx` registered plugin at index `idx` (1:1 mapping)
+    if (idx < static_cast<int>(plugins_.size())) {
+        auto& p = plugins_[idx];
+        if (p->on_shutdown) p->on_shutdown();
+        plugins_.erase(plugins_.begin() + idx);
+    }
+
+    // Unload old DLL
+    HMODULE old_hmod = static_cast<HMODULE>(dll_handles_[idx]);
+    FreeLibrary(old_hmod);
+
+    // Copy DLL to temp path to allow recompilation of original
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path src(dll_path);
+    fs::path tmp = fs::temp_directory_path(ec) / ("dse_hotreload_" + src.stem().string() + ".dll");
+    fs::copy_file(src, tmp, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        EditorLog(LogLevel::Error, "Hot-reload: failed to copy DLL to temp: " + ec.message());
+        // Cleanup tracking
+        dll_handles_.erase(dll_handles_.begin() + idx);
+        loaded_dll_paths_.erase(loaded_dll_paths_.begin() + idx);
+        dll_timestamps_.erase(dll_timestamps_.begin() + idx);
+        return false;
+    }
+
+    // Load from temp copy
+    HMODULE hmod = LoadLibraryA(tmp.string().c_str());
+    if (!hmod) {
+        EditorLog(LogLevel::Error, "Hot-reload: LoadLibrary failed for temp copy");
+        dll_handles_.erase(dll_handles_.begin() + idx);
+        loaded_dll_paths_.erase(loaded_dll_paths_.begin() + idx);
+        dll_timestamps_.erase(dll_timestamps_.begin() + idx);
+        return false;
+    }
+
+    auto fn = reinterpret_cast<DsePluginRegisterFn>(GetProcAddress(hmod, "dse_plugin_register"));
+    if (!fn) {
+        EditorLog(LogLevel::Error, "Hot-reload: DLL missing entry point");
+        FreeLibrary(hmod);
+        dll_handles_.erase(dll_handles_.begin() + idx);
+        loaded_dll_paths_.erase(loaded_dll_paths_.begin() + idx);
+        dll_timestamps_.erase(dll_timestamps_.begin() + idx);
+        return false;
+    }
+
+    // Re-register
+    size_t before = plugins_.size();
+    fn(this);
+
+    if (plugins_.size() > before) {
+        // Move newly registered plugin to correct index
+        auto new_plugin = plugins_.back();
+        plugins_.pop_back();
+        plugins_.insert(plugins_.begin() + idx, new_plugin);
+        dll_handles_[idx] = static_cast<void*>(hmod);
+        // Update timestamp
+        auto ftime = fs::last_write_time(dll_path, ec);
+        dll_timestamps_[idx] = ec ? 0 : ftime.time_since_epoch().count();
+        EditorLog(LogLevel::Info, "Hot-reloaded plugin: " + dll_path);
+        return true;
+    } else {
+        FreeLibrary(hmod);
+        dll_handles_.erase(dll_handles_.begin() + idx);
+        loaded_dll_paths_.erase(loaded_dll_paths_.begin() + idx);
+        dll_timestamps_.erase(dll_timestamps_.begin() + idx);
+        EditorLog(LogLevel::Warning, "Hot-reload: plugin registered nothing");
+        return false;
+    }
+#else
+    (void)dll_path;
+    return false;
+#endif
+}
+
+void EditorPluginManager::CheckHotReload() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    for (size_t i = 0; i < loaded_dll_paths_.size(); i++) {
+        auto ftime = fs::last_write_time(loaded_dll_paths_[i], ec);
+        if (ec) continue;
+        int64_t ts = ftime.time_since_epoch().count();
+        if (ts != dll_timestamps_[i]) {
+            EditorLog(LogLevel::Info, "Detected change in: " + loaded_dll_paths_[i]);
+            ReloadPlugin(loaded_dll_paths_[i]);
+            break; // Only one per frame to avoid index invalidation
+        }
+    }
+}
+
 // ─── Plugin Browser Panel ────────────────────────────────────────────────────
 
 void DrawPluginBrowserPanel() {
@@ -214,6 +329,13 @@ void DrawPluginBrowserPanel() {
 #endif
     }
     ImGui::SameLine();
+    if (ImGui::Button("Reload All")) {
+        auto paths = mgr.GetLoadedDllPaths(); // copy
+        for (auto& p : paths) mgr.ReloadPlugin(p);
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto Hot-Reload", &mgr.auto_hot_reload);
+
     if (ImGui::Button("Scan plugins/ Dir")) {
         namespace fs = std::filesystem;
         std::string scan_dir = (fs::current_path() / "plugins").string();
