@@ -752,7 +752,7 @@ void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, vo
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dev || !dc) return;
 
-    // 创建 staging buffer 用于 GPU→CPU 读回
+    // 创建 staging buffer 用于 GPU→CPU 读回（同步路径，保留兼容性）
     D3D11_BUFFER_DESC staging_desc{};
     staging_desc.ByteWidth = static_cast<UINT>(size);
     staging_desc.Usage = D3D11_USAGE_STAGING;
@@ -776,6 +776,70 @@ void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, vo
         memcpy(dst, mapped.pData, size);
         dc->Unmap(staging.Get(), 0);
     }
+}
+
+bool DX11RhiDevice::BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) {
+    if (!initialized_ || size == 0) return false;
+
+    const auto* ssbo = resource_mgr_.GetSSBO(handle.raw());
+    if (!ssbo || !ssbo->buffer) return false;
+
+    ID3D11Device* dev = context_.device();
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dev || !dc) return false;
+
+    auto& rb = async_readback_;
+    bool has_result = false;
+
+    // 步骤 1: 读取上一帧的 staging buffer（此时 GPU 拷贝已完成，Map 不阻塞）
+    const int read_idx = 1 - rb.write_idx;
+    if (rb.has_pending && rb.staging[read_idx] && rb.pending_size > 0) {
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        // D3D11_MAP_FLAG_DO_NOT_WAIT: 如果 GPU 尚未完成则返回失败（不阻塞）
+        HRESULT hr = dc->Map(rb.staging[read_idx].Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+        if (hr == DXGI_ERROR_WAS_STILL_DRAWING) {
+            // GPU 还没完成，跳过本帧读取（使用旧数据）
+            has_result = !rb.result.empty();
+        } else if (SUCCEEDED(hr)) {
+            rb.result.resize(rb.pending_size);
+            memcpy(rb.result.data(), mapped.pData, rb.pending_size);
+            dc->Unmap(rb.staging[read_idx].Get(), 0);
+            has_result = true;
+        }
+    }
+
+    // 步骤 2: 发起本帧的 GPU→staging 拷贝（非阻塞）
+    const int cur_write = rb.write_idx;
+    if (size > rb.capacity[cur_write]) {
+        rb.staging[cur_write].Reset();
+        D3D11_BUFFER_DESC staging_desc{};
+        staging_desc.ByteWidth = static_cast<UINT>(size);
+        staging_desc.Usage = D3D11_USAGE_STAGING;
+        staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        dev->CreateBuffer(&staging_desc, nullptr, rb.staging[cur_write].ReleaseAndGetAddressOf());
+        rb.capacity[cur_write] = size;
+    }
+    if (rb.staging[cur_write]) {
+        D3D11_BOX box{};
+        box.left = static_cast<UINT>(offset);
+        box.right = static_cast<UINT>(offset + size);
+        box.top = 0; box.bottom = 1;
+        box.front = 0; box.back = 1;
+        dc->CopySubresourceRegion(rb.staging[cur_write].Get(), 0, 0, 0, 0,
+                                   ssbo->buffer.Get(), 0, &box);
+    }
+
+    // 翻转索引
+    rb.pending_size = size;
+    rb.has_pending = true;
+    rb.write_idx = 1 - cur_write;
+
+    return has_result;
+}
+
+const void* DX11RhiDevice::GetLastReadbackResult(size_t* out_size) const {
+    if (out_size) *out_size = async_readback_.result.size();
+    return async_readback_.result.empty() ? nullptr : async_readback_.result.data();
 }
 
 unsigned int DX11RhiDevice::CreateComputeShaderEx(

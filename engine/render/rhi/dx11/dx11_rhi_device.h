@@ -170,7 +170,9 @@ public:
         last_frame_stats_.gpu_culled_count = culled;
     }
 
-    bool SupportsEfficientReadback() const override { return false; }
+    bool SupportsEfficientReadback() const override { return true; }
+    bool BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) override;
+    const void* GetLastReadbackResult(size_t* out_size = nullptr) const override;
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 
@@ -257,6 +259,17 @@ private:
     // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
     struct HiZImpl;
     std::unique_ptr<HiZImpl> hiz_impl_;
+
+    // 异步 readback 双缓冲（避免同步 GPU pipeline drain）
+    struct AsyncReadback {
+        ComPtr<ID3D11Buffer> staging[2];   // 双缓冲 staging buffer
+        size_t capacity[2] = {0, 0};
+        size_t pending_size = 0;           // 上一帧拷贝的字节数
+        int write_idx = 0;                 // 本帧写入的 staging index
+        bool has_pending = false;          // 是否有待读取的数据
+        std::vector<uint8_t> result;       // 上一帧读回的结果
+    };
+    AsyncReadback async_readback_;
 };
 
 } // namespace render

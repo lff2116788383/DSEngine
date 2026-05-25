@@ -176,6 +176,24 @@ public:
         ReadSSBO(handle.raw(), offset, size, dst);
     }
 
+    /// 异步 readback: 发起 GPU→staging 拷贝（本帧不读取），返回上一帧数据是否可用
+    /// 默认实现: 同步读取并立即返回 true（OpenGL readback 足够快）
+    virtual bool BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) {
+        async_readback_buf_.resize(size);
+        ReadGpuBuffer(handle, offset, size, async_readback_buf_.data());
+        return true;
+    }
+
+    /// 获取上一次 BeginGpuReadback 的结果（仅当 BeginGpuReadback 返回 true 时有效）
+    virtual const void* GetLastReadbackResult(size_t* out_size = nullptr) const {
+        if (out_size) *out_size = async_readback_buf_.size();
+        return async_readback_buf_.data();
+    }
+
+private:
+    std::vector<uint8_t> async_readback_buf_;
+public:
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
