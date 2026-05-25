@@ -850,13 +850,32 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             const size_t instance_count = item.instance_transforms.size();
             const auto& inst_bo = per_inst_bone_offsets[item_idx];
 
+            // --- Shadow instance culling (与 OpenGL 一致) ---
+            constexpr float kShadowCullMargin     = 150.0f;
+            constexpr float kBudgetOrthoThreshold = 2000.0f;
+            constexpr float kBudgetBaseInstances  = 800.0f;
+            constexpr float kBudgetMinInstances   = 64.0f;
+
+            const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
+            const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
+            float shadow_cull_limit = 0.0f;
+            size_t shadow_instance_budget = SIZE_MAX;
+            if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
+                float ortho_size = 1.0f / projection[0][0];
+                shadow_cull_limit = ortho_size + kShadowCullMargin;
+                if (ortho_size > kBudgetOrthoThreshold) {
+                    shadow_instance_budget = static_cast<size_t>(
+                        (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+                }
+            }
+
             struct SkinnedInstGPU { glm::mat4 model; int bone_offset; int _pad[3]; };
-            const size_t inst_bytes = instance_count * sizeof(SkinnedInstGPU);
-            if (inst_bytes > skinned_inst_capacity_ || !skinned_inst_buf_) {
+            const size_t max_inst_bytes = instance_count * sizeof(SkinnedInstGPU);
+            if (max_inst_bytes > skinned_inst_capacity_ || !skinned_inst_buf_) {
                 skinned_inst_buf_.Reset();
                 skinned_inst_srv_.Reset();
                 D3D11_BUFFER_DESC bd{};
-                bd.ByteWidth = static_cast<UINT>(inst_bytes);
+                bd.ByteWidth = static_cast<UINT>(max_inst_bytes);
                 bd.Usage = D3D11_USAGE_DYNAMIC;
                 bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
                 bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -867,30 +886,46 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                     srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
                     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
                     srv_desc.BufferEx.FirstElement = 0;
-                    srv_desc.BufferEx.NumElements = static_cast<UINT>(inst_bytes / 4);
+                    srv_desc.BufferEx.NumElements = static_cast<UINT>(max_inst_bytes / 4);
                     srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
                     context_->device()->CreateShaderResourceView(skinned_inst_buf_.Get(), &srv_desc, skinned_inst_srv_.ReleaseAndGetAddressOf());
                 }
-                skinned_inst_capacity_ = inst_bytes;
+                skinned_inst_capacity_ = max_inst_bytes;
             }
+            size_t visible_count = 0;
             if (skinned_inst_buf_) {
                 D3D11_MAPPED_SUBRESOURCE mapped{};
                 HRESULT hr = dc->Map(skinned_inst_buf_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
                 if (SUCCEEDED(hr)) {
                     auto* dst = static_cast<SkinnedInstGPU*>(mapped.pData);
                     for (size_t i = 0; i < instance_count; ++i) {
-                        dst[i].model = item.instance_transforms[i];
-                        dst[i].bone_offset = (i < inst_bo.size()) ? inst_bo[i] : 0;
-                        dst[i]._pad[0] = dst[i]._pad[1] = dst[i]._pad[2] = 0;
+                        if (shadow_cull_active) {
+                            if (visible_count >= shadow_instance_budget) break;
+                            if (shadow_cull_limit > 0.0f) {
+                                const glm::vec3 wp(item.instance_transforms[i][3]);
+                                const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                                if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                                    continue;
+                            }
+                        }
+                        dst[visible_count].model = item.instance_transforms[i];
+                        dst[visible_count].bone_offset = (i < inst_bo.size()) ? inst_bo[i] : 0;
+                        dst[visible_count]._pad[0] = dst[visible_count]._pad[1] = dst[visible_count]._pad[2] = 0;
+                        ++visible_count;
                     }
                     dc->Unmap(skinned_inst_buf_.Get(), 0);
                 }
                 dc->VSSetShaderResources(26, 1, skinned_inst_srv_.GetAddressOf());
             }
-            dc->DrawIndexedInstanced(static_cast<UINT>(idx_count), static_cast<UINT>(instance_count), 0, 0, 0);
-            global_state_.current_frame_stats.draw_calls += 1;
-            global_state_.current_frame_stats.instanced_draw_calls++;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
+            if (visible_count == 0 && shadow_cull_active) {
+                // 全部被剔除，跳过绘制
+            } else {
+                const UINT draw_count = static_cast<UINT>(shadow_cull_active ? visible_count : instance_count);
+                dc->DrawIndexedInstanced(static_cast<UINT>(idx_count), draw_count, 0, 0, 0);
+                global_state_.current_frame_stats.draw_calls += 1;
+                global_state_.current_frame_stats.instanced_draw_calls++;
+                global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
+            }
         } else if (is_instanced) {
             // Non-skinned pseudo-instancing
             for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
