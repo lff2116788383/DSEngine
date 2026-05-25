@@ -394,6 +394,28 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
     }
 
+    // === Shadow Instance Culling: 提取 shadow frustum 参数 ===
+    // depth-only pass + ortho projection (shadow) 时做实例级 frustum culling
+    // 区分 PreZ (perspective, proj[3][3]==0) 与 shadow (ortho, proj[3][3]==1)
+    constexpr float kShadowCullMargin     = 150.0f;   // 额外裁剪边距，防止边缘 pop-in
+    constexpr float kBudgetOrthoThreshold = 2000.0f;  // ortho_size 超此值启用实例预算
+    constexpr float kBudgetBaseInstances  = 800.0f;   // 预算基准实例数（乘参考尺寸/实际尺寸）
+    constexpr float kBudgetMinInstances   = 64.0f;    // 预算下限
+
+    const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
+    const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
+    float shadow_cull_limit = 0.0f;
+    size_t shadow_instance_budget = SIZE_MAX;
+    if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
+        float ortho_size = 1.0f / projection[0][0];
+        shadow_cull_limit = ortho_size + kShadowCullMargin;
+        // 远 cascade 实例预算: ortho_size 越大 → 分辨率越低 → 限制实例数
+        if (ortho_size > kBudgetOrthoThreshold) {
+            shadow_instance_budget = static_cast<size_t>(
+                std::max(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+        }
+    }
+
     // === Instance SSBO: 全部 skinned instanced item 一次性打包上传 ===
     struct SkinnedInstGPU {
         glm::mat4 model;
@@ -404,6 +426,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 每次 DrawMeshBatch 都要计算 offset（batch cache 保证 items 顺序一致）
     std::vector<GLintptr> inst_ssbo_offsets(items.size(), -1);
     std::vector<GLsizeiptr> inst_ssbo_sizes(items.size(), 0);
+    // shadow pass 实例剔除: 记录每个 item 的可见实例数
+    std::vector<size_t> shadow_inst_counts(items.size(), 0);
     {
         size_t total_inst_bytes = 0;
         for (size_t i = 0; i < items.size(); ++i) {
@@ -418,8 +442,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 total_inst_bytes += ((item_bytes + kSsboAlignment - 1) / kSsboAlignment) * kSsboAlignment;
             }
         }
-        // 仅首 pass 上传，后续 pass 直接 bind range
-        if (total_inst_bytes > 0 && !inst_ssbo_uploaded_this_frame_) {
+        // shadow pass 强制重新上传（每 cascade 实例集不同）；main pass 仅首次上传
+        const bool need_upload = total_inst_bytes > 0
+            && (shadow_cull_active || !inst_ssbo_uploaded_this_frame_);
+        if (need_upload) {
             if (skinned_inst_ssbo_ == 0) {
                 glGenBuffers(1, &skinned_inst_ssbo_);
             }
@@ -438,16 +464,42 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                     const auto& inst_bo = per_inst_bone_offsets[i];
                     auto* dst = reinterpret_cast<SkinnedInstGPU*>(
                         static_cast<char*>(all_ptr) + inst_ssbo_offsets[i]);
+                    size_t visible = 0;
                     for (size_t inst = 0; inst < it.instance_transforms.size(); ++inst) {
-                        dst[inst].model = it.instance_transforms[inst];
-                        dst[inst].bone_offset = (inst < inst_bo.size()) ? inst_bo[inst] : 0;
-                        dst[inst]._pad[0] = dst[inst]._pad[1] = dst[inst]._pad[2] = 0;
+                        if (shadow_cull_active) {
+                            if (visible >= shadow_instance_budget) break;
+                            if (shadow_cull_limit > 0.0f) {
+                                const glm::vec3 wp(it.instance_transforms[inst][3]);
+                                const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                                if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit) {
+                                    continue;
+                                }
+                            }
+                        }
+                        dst[visible].model = it.instance_transforms[inst];
+                        dst[visible].bone_offset = (inst < inst_bo.size()) ? inst_bo[inst] : 0;
+                        dst[visible]._pad[0] = dst[visible]._pad[1] = dst[visible]._pad[2] = 0;
+                        ++visible;
                     }
+                    shadow_inst_counts[i] = visible;
+                    // 更新实际 SSBO range 大小
+                    inst_ssbo_sizes[i] = static_cast<GLsizeiptr>(visible * sizeof(SkinnedInstGPU));
                 }
                 glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
             }
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-            inst_ssbo_uploaded_this_frame_ = true;
+            // shadow pass 不设 flag（每 cascade 需重新上传）；main pass 设 flag 避免重复上传
+            if (!shadow_cull_active) {
+                inst_ssbo_uploaded_this_frame_ = true;
+            } else {
+                // shadow pass 用 INVALIDATE_BUFFER_BIT 覆写了 SSBO，后续 non-shadow pass 必须重新上传完整数据
+                inst_ssbo_uploaded_this_frame_ = false;
+            }
+        } else if (!shadow_cull_active) {
+            // main pass 复用已上传数据时，填充 shadow_inst_counts 为原始实例数
+            for (size_t i = 0; i < items.size(); ++i) {
+                shadow_inst_counts[i] = items[i].instance_transforms.size();
+            }
         }
     }
 
@@ -822,7 +874,18 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glBindVertexArray(0);
         } else if (is_instanced && skinned_instanced) {
             // --- Hardware Instanced Skinned Draw ---
-            const size_t instance_count = item.instance_transforms.size();
+            // shadow pass 使用剔除后实例数，main pass 使用全量
+            const size_t instance_count = shadow_cull_active
+                ? shadow_inst_counts[item_idx] : item.instance_transforms.size();
+            if (instance_count == 0) {
+                // shadow 剔除后无可见实例，跳过绘制但保留 depth state restore
+                if (depth_write_changed) glDepthMask(GL_TRUE);
+                if (depth_test_changed && state_mgr.active_pipeline_state() != 0) {
+                    auto ps = state_mgr.GetPipelineState(state_mgr.active_pipeline_state());
+                    if (ps && ps->depth_test_enabled) { glEnable(GL_DEPTH_TEST); glDepthFunc(ToGLCompareFunc(ps->depth_func)); }
+                }
+                continue;
+            }
 
             // 使用预打包 SSBO 的对应 range（帧内已上传）
             if (inst_ssbo_offsets[item_idx] >= 0 && inst_ssbo_sizes[item_idx] > 0) {
@@ -864,16 +927,27 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             const size_t instance_count = item.instance_transforms.size();
             int model_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().model
                           : (gbuffer_mode ? gbuffer_model_loc : loc.model);
+            size_t drawn = 0;
             for (size_t inst = 0; inst < instance_count; ++inst) {
+                if (shadow_cull_active) {
+                    if (drawn >= shadow_instance_budget) break;
+                    if (shadow_cull_limit > 0.0f) {
+                        const glm::vec3 wp(item.instance_transforms[inst][3]);
+                        const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                        if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                            continue;
+                    }
+                }
                 if (model_loc != -1) {
                     glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.instance_transforms[inst]));
                 }
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(idx_count), GL_UNSIGNED_INT, nullptr);
+                ++drawn;
             }
             glBindVertexArray(0);
 
             global_state_.current_frame_stats.instanced_draw_calls += 1;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(drawn);
         } else {
             if (static_entry) {
                 glBindVertexArray(static_entry->vao);

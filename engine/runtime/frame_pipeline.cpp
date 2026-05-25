@@ -331,8 +331,10 @@ bool FramePipeline::Init() {
     render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
     render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
     
+    // CSM shadow map resolution: near cascade high-res, far cascades progressively lower
+    constexpr int kShadowResolutions[CSM_CASCADES] = {2048, 1024, 512};
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        render_resources_.shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({2048, 2048, false, true}); // Shadow map resolution
+        render_resources_.shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({kShadowResolutions[i], kShadowResolutions[i], false, true});
     }
     for (int i = 0; i < 4; ++i) {
         render_resources_.spot_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true});
@@ -1247,7 +1249,7 @@ void FramePipeline::RunRenderInternal() {
         auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, instanced_meshes={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
                        stats.mesh_count,
@@ -1262,6 +1264,7 @@ void FramePipeline::RunRenderInternal() {
                        avg_update_ms,
                        avg_fixed_ms,
                        avg_render_ms,
+                       stats.instanced_mesh_count,
                        pending_callbacks,
                        pending_callbacks_hwm,
                        callback_budget_per_frame_);

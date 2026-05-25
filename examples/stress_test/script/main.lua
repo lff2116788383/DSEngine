@@ -15,6 +15,7 @@ local metrics = dse.metrics
 local ENTITY_COUNT   = tonumber(os.getenv("DSE_ENTITY_COUNT") or "50")
 local ANIM_ENABLED   = (os.getenv("DSE_ANIM_ENABLED") or "1") ~= "0"
 local PERF_FRAMES    = tonumber(os.getenv("DSE_PERF_FRAMES") or "600")
+local NO_SHADOW      = (os.getenv("DSE_NO_SHADOW") or "0") ~= "0"
 
 -- 资产路径 (复用 KF_Framework 的 cooked 资产)
 local KNIGHT_MESH    = "cooked/paladin_prop_j_nordstrom.dmesh"
@@ -66,7 +67,11 @@ function Awake()
     ecs.add_directional_light_3d(sun,
         -1.0/ld, -4.0/ld, -1.0/ld,
         0.8, 0.8, 0.8, 1.0, 0.50, 1.0)
-    ecs.set_directional_light_shadow(sun, true, 1.0, 800, 4000, 20000)
+    if NO_SHADOW then
+        ecs.set_directional_light_shadow(sun, false, 0, 0, 0, 0)
+    else
+        ecs.set_directional_light_shadow(sun, true, 1.0, 800, 4000, 20000)
+    end
 
     -- 2. Sky light
     local sky = ecs.create_entity()

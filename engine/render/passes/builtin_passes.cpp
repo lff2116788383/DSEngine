@@ -180,7 +180,8 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
 
         float size = dl.cascade_splits[i];
-        constexpr float shadow_map_res = 2048.0f;
+        constexpr float kShadowRes[CSM_CASCADES] = {2048.0f, 1024.0f, 512.0f};
+        const float shadow_map_res = kShadowRes[i];
         auto cam = ComputeDirectionalLightCamera(
             shadow_center, dl.direction, size, clip_correction, shadow_map_res);
 
@@ -194,6 +195,10 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetCamera(cam.view, cam.projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
 
+        // 远 cascade (ortho_size > 10000) 跳过 CPU-path 渲染 — 低分辨率下阴影质量差
+        // shadow map 已 clear 为 depth=1.0 → shader 读到 "无阴影"
+        const bool skip_cpu_shadow = (size > 10000.0f);
+
         if (use_gpu_indirect) {
             auto* rhi = ctx_.rhi_device;
             rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
@@ -205,9 +210,11 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
             rhi->UnbindVAO();
         }
 
-        for (auto& mod : ctx_.modules) {
-            if (mod.instance) {
-                mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, i, cam.view, cam.projection);
+        if (!skip_cpu_shadow) {
+            for (auto& mod : ctx_.modules) {
+                if (mod.instance) {
+                    mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, i, cam.view, cam.projection);
+                }
             }
         }
 
@@ -393,18 +400,9 @@ void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetCamera(snap.camera_3d.view, projection);
     }
 
-    if (render_3d) {
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
-        if (ctx_.modules.empty() && ctx_.render_meshes) {
-            ctx_.render_meshes(*ctx_.world, cmd_buffer);
-        }
-        const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        for (auto& mod : ctx_.modules) {
-            if (mod.instance) {
-                mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
-            }
-        }
-    }
+    // NOTE: GBuffer module rendering 跳过 — DeferredLightingPass 输出未被任何后续 pass 消费。
+    // 保留 RT clear + global texture 注册以维持 API 安全；如未来新增 deferred consumer 需恢复此路径。
+    (void)render_3d;
 
     ctx_.rhi_device->SetGBufferRenderingMode(false);
     cmd_buffer.EndRenderPass();
@@ -433,37 +431,13 @@ void DeferredLightingPass::Setup(RenderGraph& graph) {
 }
 
 void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
+    // NOTE: GBuffer module rendering 已跳过（GBufferPass 仅 clear），且 deferred_lighting 输出
+    // 未被任何后续 pass 消费。跳过此 pass 避免对空 GBuffer 做无用 fullscreen draw。
+    // 如未来新增 deferred consumer，需同步恢复 GBufferPass 渲染与此 pass。
     if (ctx_.render_targets.deferred_lighting == 0 || ctx_.render_targets.gbuffer == 0) return;
 
+    // 仍然 clear RT 以保持 API 安全（全局纹理注册不会读到上帧残留）
     cmd_buffer.BeginRenderPass({ctx_.render_targets.deferred_lighting, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), true});
-
-    unsigned int gbuf_albedo   = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 0);
-    unsigned int gbuf_normal   = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 1);
-    unsigned int gbuf_position = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, 2);
-
-    // 从快照读取主方向光参数
-    const auto& snap = *ctx_.snapshot;
-    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
-    glm::vec3 light_color(1.0f);
-    float light_intensity = 1.0f;
-    float ambient_intensity = 0.1f;
-
-    if (snap.directional_light.valid) {
-        light_dir = glm::normalize(snap.directional_light.direction);
-        light_color = snap.directional_light.color;
-        light_intensity = snap.directional_light.intensity;
-        ambient_intensity = snap.directional_light.ambient_intensity;
-    }
-
-    // params: [light_dir.xyz, light_color.xyz, intensity, ambient]
-    std::vector<float> params;
-    params.push_back(light_dir.x); params.push_back(light_dir.y); params.push_back(light_dir.z);
-    params.push_back(light_color.x); params.push_back(light_color.y); params.push_back(light_color.z);
-    params.push_back(light_intensity);
-    params.push_back(ambient_intensity);
-
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"deferred_lighting", gbuf_albedo, std::move(params)}
-        .Tex(2, gbuf_normal).Tex(3, gbuf_position));
     cmd_buffer.EndRenderPass();
 }
 
