@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <unordered_map>
 
 namespace dse {
 namespace render {
@@ -90,17 +91,36 @@ bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
     return true;
 }
 
-/// 将数据写入 host-visible 缓冲区
+/// 持久映射缓存：避免每次 WriteToBuffer 都 vkMapMemory/vkUnmapMemory
+/// HOST_VISIBLE + HOST_COHERENT 内存可以 map 一次后永久使用
+static std::unordered_map<VkDeviceMemory, void*> g_persistent_map_cache;
+
+/// 将数据写入 host-visible 缓冲区（使用持久映射）
 void WriteToBuffer(VkDevice device, VkDeviceMemory memory,
                    VkDeviceSize offset, VkDeviceSize size, const void* data) {
+    auto it = g_persistent_map_cache.find(memory);
+    if (it != g_persistent_map_cache.end()) {
+        memcpy(static_cast<char*>(it->second) + offset, data, static_cast<size_t>(size));
+        return;
+    }
+    // 首次访问：全量映射并缓存指针
     void* mapped = nullptr;
-    VkResult r = vkMapMemory(device, memory, offset, size, 0, &mapped);
+    VkResult r = vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
     if (r != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] WriteToBuffer: vkMapMemory FAILED offset={} size={} result={}", offset, size, (int)r);
         return;
     }
-    memcpy(mapped, data, static_cast<size_t>(size));
-    vkUnmapMemory(device, memory);
+    g_persistent_map_cache[memory] = mapped;
+    memcpy(static_cast<char*>(mapped) + offset, data, static_cast<size_t>(size));
+}
+
+/// 释放持久映射（buffer 销毁前调用）
+void UnmapPersistentBuffer(VkDevice device, VkDeviceMemory memory) {
+    auto it = g_persistent_map_cache.find(memory);
+    if (it != g_persistent_map_cache.end()) {
+        vkUnmapMemory(device, memory);
+        g_persistent_map_cache.erase(it);
+    }
 }
 
 /// 创建 UBO 缓冲区辅助（UBO 用途 + host-visible + coherent）
@@ -375,6 +395,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
             buf = VK_NULL_HANDLE;
         }
         if (mem != VK_NULL_HANDLE) {
+            UnmapPersistentBuffer(device, mem);
             vkFreeMemory(device, mem, nullptr);
             mem = VK_NULL_HANDLE;
         }
@@ -2416,6 +2437,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
                     VkPhysicalDevice phys = context_->physical_device();
                     if (inst_data_size > skinned_inst_ssbo_capacity_) {
                         if (skinned_inst_ssbo_ != VK_NULL_HANDLE) {
+                            UnmapPersistentBuffer(dev, skinned_inst_ssbo_mem_);
                             vkDestroyBuffer(dev, skinned_inst_ssbo_, nullptr);
                             vkFreeMemory(dev, skinned_inst_ssbo_mem_, nullptr);
                         }
