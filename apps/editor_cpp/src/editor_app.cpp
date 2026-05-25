@@ -100,6 +100,9 @@
 #include "editor_scene_view_mode.h"
 #include "editor_anim_state_machine.h"
 #include "editor_ai_config.h"
+#include "editor_streaming_panel.h"
+#include "editor_curve_editor.h"
+#include "editor_visual_script.h"
 
 
 
@@ -902,7 +905,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
         &show_anim_state_machine_,
-        &show_lua_debugger_
+        &show_lua_debugger_,
+        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -950,6 +954,43 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel(ctx);
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
+
+    // Streaming Zone debug panel
+    if (show_streaming_debug_) {
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Streaming Debug", &show_streaming_debug_)) {
+            dse::editor::DrawStreamingDebugPanel(ctx);
+        }
+        ImGui::End();
+    }
+
+    // Curve Editor panel
+    if (show_curve_editor_) {
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Curve Editor", &show_curve_editor_)) {
+            static dse::editor::CurveEditorState s_curve_state;
+            static bool s_curve_init = false;
+            if (!s_curve_init) {
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
+                s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
+                s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
+                s_curve_init = true;
+            }
+            dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
+        }
+        ImGui::End();
+    }
+
+    // Visual Script editor panel
+    if (show_visual_script_) {
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Visual Script", &show_visual_script_)) {
+            dse::editor::DrawVisualScriptEditor(ctx);
+        }
+        ImGui::End();
+    }
+
     if (show_git_) {
         ImGui::SetNextWindowSize(ImVec2(360, 260), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Git", &show_git_)) {

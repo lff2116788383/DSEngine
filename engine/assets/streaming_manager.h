@@ -138,6 +138,9 @@ public:
     /// 获取已注册 zone 总数
     std::size_t GetZoneCount() const;
 
+    /// 获取所有 zone 的只读快照（编辑器调试用）
+    std::vector<StreamingZone> GetZoneSnapshot() const;
+
 private:
     /// 对单个 zone 发起加载
     void BeginLoadZone(StreamingZone& zone);

@@ -440,6 +440,12 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
             if (panels->lua_debugger)
                 ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, panels->lua_debugger);
+            if (panels->streaming_debug)
+                ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, panels->streaming_debug);
+            if (panels->curve_editor)
+                ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, panels->curve_editor);
+            if (panels->visual_script)
+                ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, panels->visual_script);
         }
         ImGui::Separator();
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {

@@ -21,6 +21,9 @@ struct PanelVisibility {
     bool* multi_viewport = nullptr;
     bool* anim_state_machine = nullptr;
     bool* lua_debugger = nullptr;
+    bool* streaming_debug = nullptr;
+    bool* curve_editor = nullptr;
+    bool* visual_script = nullptr;
 };
 
 void BeginEditorShell();
