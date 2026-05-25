@@ -9,6 +9,7 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
+#include <dxgi1_5.h>
 
 namespace dse {
 namespace render {
@@ -54,7 +55,8 @@ void DX11Context::Shutdown() {
 
 void DX11Context::Present(bool vsync) {
     if (swapchain_) {
-        swapchain_->Present(vsync ? 1 : 0, 0);
+        UINT flags = (!vsync && tearing_supported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+        swapchain_->Present(vsync ? 1 : 0, flags);
     }
 }
 
@@ -63,7 +65,8 @@ bool DX11Context::Resize(int width, int height) {
 
     ReleaseBackbufferViews();
 
-    HRESULT hr = swapchain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    UINT resize_flags = tearing_supported_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+    HRESULT hr = swapchain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, resize_flags);
     if (FAILED(hr)) {
         DEBUG_LOG_ERROR("[D3D11] ResizeBuffers failed: HRESULT=0x{}", static_cast<unsigned>(hr));
         return false;
@@ -145,7 +148,21 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     scd.SampleDesc.Quality = 0;
     scd.Windowed = TRUE;
     scd.SwapEffect = force_sdr ? DXGI_SWAP_EFFECT_DISCARD : DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    scd.Flags = 0;
+
+    // DXGI_PRESENT_ALLOW_TEARING 支持检查（Windows 10 1607+）
+    tearing_supported_ = false;
+    if (!force_sdr) { // FLIP_DISCARD 才能用 ALLOW_TEARING
+        ComPtr<IDXGIFactory5> factory5;
+        if (dxgi_factory && SUCCEEDED(dxgi_factory.As(&factory5))) {
+            BOOL allow_tearing = FALSE;
+            if (SUCCEEDED(factory5->CheckFeatureSupport(
+                    DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allow_tearing, sizeof(allow_tearing)))) {
+                tearing_supported_ = (allow_tearing == TRUE);
+            }
+        }
+    }
+    scd.Flags = tearing_supported_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+    DEBUG_LOG_INFO("[D3D11] Tearing support: {}", tearing_supported_ ? "YES" : "NO");
 
     HRESULT hr = D3D11CreateDeviceAndSwapChain(
         preferred_adapter, driver_type, nullptr,
