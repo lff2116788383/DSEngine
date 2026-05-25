@@ -102,6 +102,7 @@ private:
     bool show_git_ = false;
     bool show_multi_viewport_ = false;
     bool show_anim_state_machine_ = false;
+    bool show_lua_debugger_ = false;
 
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;

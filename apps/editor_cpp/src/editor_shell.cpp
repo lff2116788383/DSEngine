@@ -438,6 +438,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, panels->multi_viewport);
             if (panels->anim_state_machine)
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
+            if (panels->lua_debugger)
+                ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, panels->lua_debugger);
         }
         ImGui::Separator();
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {

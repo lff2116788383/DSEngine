@@ -759,7 +759,7 @@ void DrawHierarchyPanel(EditorContext& context) {
         }
         if (context.read_only) {
             ImGui::Separator();
-            ImGui::TextDisabled("Play 模式下已禁用层级创建、删除、复制操作。");
+            ImGui::TextDisabled("Remote: 可选择实体查看/编辑属性，结构操作已禁用");
         }
         ImGui::EndPopup();
     }

@@ -39,7 +39,14 @@ namespace {
     ImGui::NextColumn();
 
 bool IsInspectorReadOnly(const EditorContext& context) {
-    return IsEditorInPlayMode() && !context.is_2d;
+    // Remote Inspector: Play 模式下允许属性编辑（运行时调试）
+    // 结构性操作（Add/Remove Component）仍然禁止
+    (void)context;
+    return false;
+}
+
+bool IsInspectorStructuralReadOnly() {
+    return IsEditorInPlayMode();
 }
 
 // Undo helper: captures old value on IsItemActivated, pushes PropertyChangeCommand on IsItemDeactivatedAfterEdit.
@@ -129,15 +136,11 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
 }
 
 void BeginInspectorReadOnlyScope(const EditorContext& context) {
-    if (IsInspectorReadOnly(context)) {
-        ImGui::BeginDisabled(true);
-    }
+    (void)context;
 }
 
 void EndInspectorReadOnlyScope(const EditorContext& context) {
-    if (IsInspectorReadOnly(context)) {
-        ImGui::EndDisabled();
-    }
+    (void)context;
 }
 
 void MarkSpriteRendererDirty(SpriteRendererComponent& sprite) {
@@ -2231,7 +2234,7 @@ void InspectorRegistry::DrawAll(EditorContext& context) {
 }
 
 void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
-    const bool read_only = IsEditorInPlayMode() && !context.is_2d;
+    const bool read_only = IsInspectorStructuralReadOnly();
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
@@ -2266,8 +2269,7 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
 }
 
 void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
-    const bool read_only = IsEditorInPlayMode() && !context.is_2d;
-    if (read_only) return;
+    if (IsInspectorStructuralReadOnly()) return;
 
     ImGui::SameLine();
     if (ImGui::Button("Remove Component", ImVec2(120, 30))) {
@@ -2308,6 +2310,17 @@ void DrawInspectorPanel(EditorContext& context) {
     RegisterAllInspectorSections();
 
     ImGui::Begin("Inspector");
+
+    if (IsEditorInPlayMode()) {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.3f, 0.15f, 0.0f, 0.8f));
+        ImGui::BeginChild("##remote_banner", ImVec2(0, 24), false);
+        ImGui::SetCursorPosX(4);
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+            MDI_ICON_ALERT "  Remote Inspector — changes will be lost on Stop");
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+    }
 
     auto& selection = SelectionManager::Get();
     if (selection.IsMultiSelect()) {

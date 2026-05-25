@@ -20,6 +20,7 @@ struct PanelVisibility {
     bool* git = nullptr;
     bool* multi_viewport = nullptr;
     bool* anim_state_machine = nullptr;
+    bool* lua_debugger = nullptr;
 };
 
 void BeginEditorShell();

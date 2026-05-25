@@ -76,6 +76,7 @@
 #include "editor_audio_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
+#include "editor_lua_debugger.h"
 #include "editor_build_game.h"
 #include "editor_project.h"
 #include "editor_project_hub.h"
@@ -899,7 +900,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_undo_history_,
         &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
-        &show_anim_state_machine_
+        &show_anim_state_machine_,
+        &show_lua_debugger_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -930,6 +932,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_tile_palette_)   dse::editor::DrawTilePalettePanel(ctx);
     if (show_terrain_editor_) dse::editor::DrawTerrainEditorPanel(ctx);
     if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
+    if (show_lua_debugger_)   dse::editor::DrawLuaDebuggerPanel(ctx);
     dse::editor::DrawBuildGameDialog();
     dse::editor::DrawAssetImporterDialog(ctx);
 

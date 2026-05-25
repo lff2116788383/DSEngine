@@ -16,6 +16,8 @@
 #define MDI_ICON_STOP                   "\xef\x81\x8d" // U+F04D fa-stop
 #define MDI_ICON_PAUSE                  "\xef\x81\x8c" // U+F04C fa-pause
 #define MDI_ICON_SKIP_NEXT              "\xef\x81\x91" // U+F051 fa-forward-step
+#define MDI_ICON_ARROW_DOWN             "\xef\x81\xa3" // U+F063 fa-arrow-down
+#define MDI_ICON_ARROW_UP               "\xef\x81\xa2" // U+F062 fa-arrow-up
 
 // Hierarchy entity type icons
 #define MDI_ICON_CUBE_OUTLINE           "\xef\x86\xb2" // U+F1B2 fa-cube
