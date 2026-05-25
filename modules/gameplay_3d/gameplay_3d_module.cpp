@@ -41,6 +41,29 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 
 void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     free_camera_controller_system_.Update(world, delta_time);
+
+    // Animation LOD: 根据距摄像机距离设置跳帧率
+    {
+        glm::vec3 cam_pos(0.0f);
+        auto cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : cam_v) {
+            auto& cam = cam_v.get<dse::Camera3DComponent>(e);
+            if (cam.enabled) {
+                cam_pos = cam_v.get<TransformComponent>(e).position;
+                break;
+            }
+        }
+        auto anim_v = world.registry().view<Animator3DComponent, TransformComponent>();
+        for (auto e : anim_v) {
+            auto& animator = anim_v.get<Animator3DComponent>(e);
+            const auto& tf = anim_v.get<TransformComponent>(e);
+            float dist_sq = glm::dot(tf.position - cam_pos, tf.position - cam_pos);
+            if (dist_sq > 2500.0f)       animator.anim_lod_skip_ = 3; // >50m: 每4帧
+            else if (dist_sq > 400.0f)   animator.anim_lod_skip_ = 1; // >20m: 每2帧
+            else                          animator.anim_lod_skip_ = 0; // <=20m: 每帧
+        }
+    }
+
     // Animation pipeline: EvaluateBaseAnim → LayerBlend → IK → FootIK → ComputeFinalMatrices
     animator_system_.EvaluateBaseAnim(world, delta_time);
     anim_layer_blend_system_.Update(world, delta_time);

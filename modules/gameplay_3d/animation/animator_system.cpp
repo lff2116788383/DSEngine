@@ -7,6 +7,31 @@
 #include "engine/assets/compiler/raw_scene_data.h"
 #include <algorithm>
 #include <cstring>
+#include <thread>
+#include <immintrin.h>
+
+// SSE mat4×mat4: 纯 SIMD 矩阵乘法，用于骨骼计算热路径
+namespace {
+inline void Mat4MulSSE(const float* __restrict a, const float* __restrict b, float* __restrict out) {
+    __m128 a0 = _mm_loadu_ps(a);
+    __m128 a1 = _mm_loadu_ps(a + 4);
+    __m128 a2 = _mm_loadu_ps(a + 8);
+    __m128 a3 = _mm_loadu_ps(a + 12);
+    for (int col = 0; col < 4; ++col) {
+        __m128 bc = _mm_loadu_ps(b + col * 4);
+        __m128 r = _mm_mul_ps(_mm_shuffle_ps(bc, bc, 0x00), a0);
+        r = _mm_add_ps(r, _mm_mul_ps(_mm_shuffle_ps(bc, bc, 0x55), a1));
+        r = _mm_add_ps(r, _mm_mul_ps(_mm_shuffle_ps(bc, bc, 0xAA), a2));
+        r = _mm_add_ps(r, _mm_mul_ps(_mm_shuffle_ps(bc, bc, 0xFF), a3));
+        _mm_storeu_ps(out + col * 4, r);
+    }
+}
+inline glm::mat4 Mat4Mul(const glm::mat4& a, const glm::mat4& b) {
+    glm::mat4 result;
+    Mat4MulSSE(&a[0][0], &b[0][0], &result[0][0]);
+    return result;
+}
+} // anonymous namespace
 
 namespace dse {
 namespace gameplay3d {
@@ -144,6 +169,15 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
         if (!animator.enabled || animator.dskel_path.empty()) continue;
+
+        // Animation LOD: 跳帧更新（保留上一帧的 pose_buffer 和 final_bone_matrices）
+        if (animator.anim_lod_skip_ > 0) {
+            animator.anim_lod_counter_++;
+            if (animator.anim_lod_counter_ <= animator.anim_lod_skip_) {
+                continue; // 跳过本帧
+            }
+            animator.anim_lod_counter_ = 0;
+        }
 
         if (!asset_manager_ptr) {
             asset_manager_ptr = &anim_util::RequireAssetManager(asset_manager_);
@@ -421,7 +455,7 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
             std::hash<std::string> str_hasher;
             uint64_t early_key = str_hasher(animator.dskel_path);
             early_key ^= str_hasher(animator.danim_path) * 2654435761ULL;
-            early_key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 30.0f)) * 40503ULL;
+            early_key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 15.0f)) * 40503ULL;
             if (animator.lock_root_motion) early_key ^= 0xDEADBEEFULL;
 
             auto ppc_it = pose_palette_cache.find(early_key);
@@ -514,14 +548,14 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
             uint64_t key = str_hasher(animator.dskel_path);
             if (animator.state_machine) {
                 key ^= str_hasher(animator.current_state_name) * 2654435761ULL;
-                key ^= static_cast<uint64_t>(static_cast<int>(animator.state_time * 30.0f)) * 40503ULL;
+                key ^= static_cast<uint64_t>(static_cast<int>(animator.state_time * 15.0f)) * 40503ULL;
                 if (animator.is_transitioning) {
                     key ^= str_hasher(animator.next_state_name) * 11400714819323198485ULL;
-                    key ^= static_cast<uint64_t>(static_cast<int>(animator.transition_progress * 30.0f)) * 2246822519ULL;
+                    key ^= static_cast<uint64_t>(static_cast<int>(animator.transition_progress * 15.0f)) * 2246822519ULL;
                 }
             } else if (!animator.use_anim_tree) {
                 key ^= str_hasher(animator.danim_path) * 2654435761ULL;
-                key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 30.0f)) * 40503ULL;
+                key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 15.0f)) * 40503ULL;
             } else {
                 key ^= static_cast<uint64_t>(static_cast<int>(animator.blend_parameter_value * 100.0f)) * 40503ULL;
             }
@@ -531,64 +565,100 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
     }
 }
 
+// Per-entity bone matrix computation (standalone, thread-safe, no shared state)
+static void ComputeEntityBones(Animator3DComponent& animator) {
+    const auto& cache = animator.skel_cache;
+    const uint32_t bone_count = cache.bone_count;
+    const auto& pb = animator.pose_buffer;
+
+    glm::mat4 local_transforms[MAX_BONES];
+    glm::mat4 global_transforms[MAX_BONES];
+
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        if (pb.touched[i]) {
+            local_transforms[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
+                * glm::mat4_cast(pb.rotations[i])
+                * glm::scale(glm::mat4(1.0f), pb.scales[i]);
+        } else {
+            local_transforms[i] = cache.local_bind_poses[i];
+        }
+    }
+
+    for (uint32_t idx : cache.topo_order) {
+        int pi = cache.parent_indices[idx];
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            global_transforms[idx] = local_transforms[idx];
+        } else {
+            global_transforms[idx] = Mat4Mul(global_transforms[pi], local_transforms[idx]);
+        }
+    }
+
+    for (uint32_t i = 0; i < bone_count; ++i) {
+        animator.final_bone_matrices[i] = Mat4Mul(global_transforms[i], cache.inv_bind_globals[i]);
+    }
+}
+
 void AnimatorSystem::ComputeFinalMatrices(World& world) {
     auto view = world.registry().view<Animator3DComponent>();
     if (view.empty()) return;
 
-    // Bone palette deduplication: 相同动画状态（clip + quantized_time）只计算一次
-    std::unordered_map<uint64_t, const std::vector<glm::mat4>*> palette_cache;
-
-    // Stack buffers: avoid per-entity heap allocation (MAX_BONES=100)
-    glm::mat4 local_transforms[MAX_BONES];
-    glm::mat4 global_transforms[MAX_BONES];
+    // Phase 1 (serial): palette dedup — identify unique vs duplicate entities
+    std::unordered_map<uint64_t, Animator3DComponent*> palette_owners;
+    std::vector<Animator3DComponent*> unique_work; // 需要独立计算的实体
+    std::vector<std::pair<Animator3DComponent*, Animator3DComponent*>> copy_work; // (dst, src)
 
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
         if (!animator.enabled || !animator.skel_cache.valid) continue;
 
-        // 尝试复用已计算的相同动画状态
         if (animator.bone_palette_key != 0) {
-            auto pc_it = palette_cache.find(animator.bone_palette_key);
-            if (pc_it != palette_cache.end()) {
-                animator.final_bone_matrices = *(pc_it->second);
+            auto [it, inserted] = palette_owners.try_emplace(animator.bone_palette_key, &animator);
+            if (!inserted) {
+                copy_work.emplace_back(&animator, it->second);
                 continue;
             }
         }
+        unique_work.push_back(&animator);
+    }
 
-        const auto& cache = animator.skel_cache;
-        const uint32_t bone_count = cache.bone_count;
-        const auto& pb = animator.pose_buffer;
+    // Phase 2 (parallel): compute bone matrices for unique entities
+    const size_t work_count = unique_work.size();
+    constexpr size_t PARALLEL_THRESHOLD = 32;
 
-        // Build local transforms from pose_buffer SRT (stack buffer, no alloc)
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            if (pb.touched[i]) {
-                local_transforms[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
-                    * glm::mat4_cast(pb.rotations[i])
-                    * glm::scale(glm::mat4(1.0f), pb.scales[i]);
-            } else {
-                local_transforms[i] = cache.local_bind_poses[i];
-            }
+    if (work_count > PARALLEL_THRESHOLD) {
+        const unsigned int thread_count = std::min(
+            static_cast<unsigned int>(std::thread::hardware_concurrency()),
+            static_cast<unsigned int>(work_count));
+        const size_t chunk_size = (work_count + thread_count - 1) / thread_count;
+
+        std::vector<std::thread> threads;
+        threads.reserve(thread_count - 1);
+
+        for (unsigned int t = 1; t < thread_count; ++t) {
+            size_t begin = t * chunk_size;
+            size_t end = std::min(begin + chunk_size, work_count);
+            if (begin >= end) break;
+            threads.emplace_back([&unique_work, begin, end]() {
+                for (size_t i = begin; i < end; ++i) {
+                    ComputeEntityBones(*unique_work[i]);
+                }
+            });
         }
-
-        // Single-pass global propagation using precomputed topological order
-        for (uint32_t idx : cache.topo_order) {
-            int pi = cache.parent_indices[idx];
-            if (pi < 0 || pi >= static_cast<int>(bone_count)) {
-                global_transforms[idx] = local_transforms[idx];
-            } else {
-                global_transforms[idx] = global_transforms[pi] * local_transforms[idx];
-            }
+        // Main thread handles first chunk
+        size_t main_end = std::min(chunk_size, work_count);
+        for (size_t i = 0; i < main_end; ++i) {
+            ComputeEntityBones(*unique_work[i]);
         }
-
-        // final = anim_global * inv(bind_global) [precomputed]
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            animator.final_bone_matrices[i] = global_transforms[i] * cache.inv_bind_globals[i];
+        for (auto& t : threads) t.join();
+    } else {
+        for (auto* anim : unique_work) {
+            ComputeEntityBones(*anim);
         }
+    }
 
-        // 注册到 palette cache 供后续相同动画状态的实体复用
-        if (animator.bone_palette_key != 0) {
-            palette_cache[animator.bone_palette_key] = &animator.final_bone_matrices;
-        }
+    // Phase 3 (serial): copy results to palette duplicates
+    for (auto& [dst, src] : copy_work) {
+        dst->final_bone_matrices = src->final_bone_matrices;
     }
 }
 

@@ -508,6 +508,10 @@ struct Animator3DComponent {
 
     /// 缓存上次评估的动画时长（供 palette 去重路径推进时间）
     float cached_duration_ = 0.0f;
+
+    /// 动画 LOD: 帧计数器，用于跳帧更新
+    uint8_t anim_lod_skip_ = 0;      // 0=每帧, 1=每2帧, 3=每4帧
+    uint8_t anim_lod_counter_ = 0;   // 当前帧计数
 };
 
 struct SkyboxComponent {
