@@ -12,6 +12,7 @@
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
+#include <chrono>
 
 #include <cstdlib>
 

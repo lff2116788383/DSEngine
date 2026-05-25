@@ -180,9 +180,11 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
             DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)");
         }
     } else {
-        // SDR 回退：R8G8B8A8_UNORM + DISCARD
+        // SDR 回退：R8G8B8A8_UNORM + DISCARD（DISCARD 不支持 ALLOW_TEARING）
         scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        scd.Flags = 0;
+        tearing_supported_ = false;
         hr = D3D11CreateDeviceAndSwapChain(
             preferred_adapter, driver_type, nullptr,
             create_flags, feature_levels, num_feature_levels,
