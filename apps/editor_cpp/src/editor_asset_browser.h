@@ -11,4 +11,7 @@ void DrawAssetBrowserPanel();
 /// If non-empty after DrawAssetBrowserPanel(), the host loop should open the scene and clear it.
 std::string& GetPendingAssetOpenPath();
 
+/// Invalidate the texture thumbnail cache (call after hot-reload or project change)
+void InvalidateThumbnailCache();
+
 } // namespace dse::editor

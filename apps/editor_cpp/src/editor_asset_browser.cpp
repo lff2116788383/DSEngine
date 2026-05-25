@@ -3,12 +3,16 @@
 #include "editor_icons.h"
 #include "editor_project.h"
 
+#include "engine/assets/asset_manager.h"
+#include "engine/core/service_locator.h"
+
 #include "imgui.h"
 #include "imgui_internal.h"
 
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <unordered_map>
 
 namespace dse::editor {
 
@@ -27,6 +31,43 @@ struct AssetBrowserState {
     std::string current_dir;     // relative path of current directory (empty = root)
     std::string drag_payload_guid;
 };
+
+// ─── Thumbnail Cache ─────────────────────────────────────────────────────────
+struct ThumbnailEntry {
+    unsigned int texture_id = 0;  // OpenGL texture handle
+    bool loaded = false;
+    bool failed = false;
+};
+
+std::unordered_map<std::string, ThumbnailEntry>& GetThumbnailCache() {
+    static std::unordered_map<std::string, ThumbnailEntry> cache;
+    return cache;
+}
+
+unsigned int GetThumbnailForAsset(const AssetInfo& asset) {
+    if (asset.type != AssetType::Texture) return 0;
+    auto& cache = GetThumbnailCache();
+    auto it = cache.find(asset.relative_path);
+    if (it != cache.end()) {
+        return it->second.failed ? 0 : it->second.texture_id;
+    }
+    // Lazy load
+    ThumbnailEntry entry{};
+    auto* am = dse::core::ServiceLocator::Instance().Get<AssetManager>();
+    if (am) {
+        auto tex = am->LoadTexture(asset.relative_path);
+        if (tex && tex->GetHandle() != 0) {
+            entry.texture_id = tex->GetHandle();
+            entry.loaded = true;
+        } else {
+            entry.failed = true;
+        }
+    } else {
+        entry.failed = true;
+    }
+    cache[asset.relative_path] = entry;
+    return entry.texture_id;
+}
 
 AssetBrowserState& GetState() {
     static AssetBrowserState state;
@@ -128,18 +169,31 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
     ImU32 bg = hovered ? IM_COL32(60, 60, 80, 200) : IM_COL32(40, 40, 50, 180);
     dl->AddRectFilled(cursor, item_max, bg, 4.0f);
 
-    // Type icon (large, centered)
-    ImU32 icon_color = GetAssetTypeColor(asset.type);
-    const char* icon = GetAssetTypeIcon(asset.type);
-    ImVec2 icon_size = ImGui::CalcTextSize(icon);
-    float icon_scale_x = cursor.x + (size - icon_size.x) * 0.5f;
-    float icon_scale_y = cursor.y + (size - icon_size.y) * 0.5f - 4.0f;
-    dl->AddText(ImVec2(icon_scale_x, icon_scale_y), icon_color, icon);
+    // Thumbnail or type icon
+    unsigned int thumb_id = GetThumbnailForAsset(asset);
+    if (thumb_id != 0) {
+        // Render actual texture thumbnail
+        float pad = 4.0f;
+        ImVec2 uv0(0, 0), uv1(1, 1);
+        dl->AddImage((ImTextureID)(intptr_t)(thumb_id),
+                     ImVec2(cursor.x + pad, cursor.y + pad),
+                     ImVec2(cursor.x + size - pad, cursor.y + size - pad),
+                     uv0, uv1);
+    } else {
+        // Fallback: type icon (large, centered)
+        ImU32 icon_color = GetAssetTypeColor(asset.type);
+        const char* icon = GetAssetTypeIcon(asset.type);
+        ImVec2 icon_size = ImGui::CalcTextSize(icon);
+        float icon_scale_x = cursor.x + (size - icon_size.x) * 0.5f;
+        float icon_scale_y = cursor.y + (size - icon_size.y) * 0.5f - 4.0f;
+        dl->AddText(ImVec2(icon_scale_x, icon_scale_y), icon_color, icon);
+    }
 
     // Type badge (small colored strip at bottom of icon area)
+    ImU32 badge_color = GetAssetTypeColor(asset.type);
     ImVec2 badge_min(cursor.x, cursor.y + size - 3.0f);
     ImVec2 badge_max(cursor.x + size, cursor.y + size);
-    dl->AddRectFilled(badge_min, badge_max, icon_color & 0x80FFFFFF, 0.0f);
+    dl->AddRectFilled(badge_min, badge_max, badge_color & 0x80FFFFFF, 0.0f);
 
     // Filename text (truncated)
     ImVec2 text_pos(cursor.x + 2.0f, cursor.y + size + 2.0f);
@@ -181,6 +235,10 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
 }
 
 } // namespace
+
+void InvalidateThumbnailCache() {
+    GetThumbnailCache().clear();
+}
 
 void DrawAssetBrowserPanel() {
     ImGui::Begin("Asset Browser");

@@ -391,6 +391,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
         engine_instance_->asset_manager()->ConfigureDataRoot(
             dse::editor::ProjectManager::Get().GetAssetDir().string());
         dse::editor::AssetDatabase::Get().Refresh();
+        // 启动文件监听，支持资源热重载
+        engine_instance_->asset_manager()->StartFileWatcher();
     }
 
     // Restore scene camera
@@ -564,6 +566,9 @@ void EditorApp::Run() {
             if (editor_state == dse::editor::EditorState::Edit) {
                 Time::Update();
                 dse::runtime::PumpLuaScriptHotReloads();
+                if (engine_instance_->asset_manager()->PumpHotReloads() > 0) {
+                    dse::editor::InvalidateThumbnailCache();
+                }
                 engine_instance_->pipeline()->Render();
                 Input::Update();
             } else if (editor_state == dse::editor::EditorState::Pause) {
@@ -791,6 +796,7 @@ void EditorApp::Shutdown() {
     }
 
     if (engine_instance_) {
+        engine_instance_->asset_manager()->StopFileWatcher();
         engine_instance_->Shutdown();
         delete engine_instance_;
         engine_instance_ = nullptr;
@@ -824,6 +830,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
             engine_instance_->asset_manager()->ConfigureDataRoot(
                 mgr.GetAssetDir().string());
             dse::editor::AssetDatabase::Get().Refresh();
+            engine_instance_->asset_manager()->StartFileWatcher();
 
             // 加载项目默认场景
             World& world = engine_instance_->pipeline()->world();
