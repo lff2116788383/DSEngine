@@ -401,18 +401,30 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     constexpr float kBudgetOrthoThreshold = 2000.0f;  // ortho_size 超此值启用实例预算
     constexpr float kBudgetBaseInstances  = 800.0f;   // 预算基准实例数（乘参考尺寸/实际尺寸）
     constexpr float kBudgetMinInstances   = 64.0f;    // 预算下限
+    // 蒙皮实例更激进的阴影预算（远距离动画阴影几乎不可见）
+    constexpr float kSkinnedShadowSkipOrtho = 1500.0f; // 超此值完全跳过蒙皮实例
+    constexpr float kSkinnedBudgetOrtho     = 400.0f;  // 蒙皮预算启动阈值
+    constexpr float kSkinnedBudgetBase      = 200.0f;
 
     const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
     const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
     float shadow_cull_limit = 0.0f;
+    float shadow_ortho_size = 0.0f;
     size_t shadow_instance_budget = SIZE_MAX;
+    size_t skinned_shadow_budget  = SIZE_MAX;
     if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
-        float ortho_size = 1.0f / projection[0][0];
-        shadow_cull_limit = ortho_size + kShadowCullMargin;
-        // 远 cascade 实例预算: ortho_size 越大 → 分辨率越低 → 限制实例数
-        if (ortho_size > kBudgetOrthoThreshold) {
+        shadow_ortho_size = 1.0f / projection[0][0];
+        shadow_cull_limit = shadow_ortho_size + kShadowCullMargin;
+        if (shadow_ortho_size > kBudgetOrthoThreshold) {
             shadow_instance_budget = static_cast<size_t>(
-                std::max(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+                std::max(kBudgetBaseInstances * kBudgetOrthoThreshold / shadow_ortho_size, kBudgetMinInstances));
+        }
+        // 蒙皮阴影预算：远 cascade 直接跳过
+        if (shadow_ortho_size > kSkinnedShadowSkipOrtho) {
+            skinned_shadow_budget = 0;
+        } else if (shadow_ortho_size > kSkinnedBudgetOrtho) {
+            skinned_shadow_budget = static_cast<size_t>(
+                std::max(kSkinnedBudgetBase * kSkinnedBudgetOrtho / shadow_ortho_size, 0.0f));
         }
     }
 
@@ -465,9 +477,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                     auto* dst = reinterpret_cast<SkinnedInstGPU*>(
                         static_cast<char*>(all_ptr) + inst_ssbo_offsets[i]);
                     size_t visible = 0;
+                    const size_t effective_budget = (skinned_shadow_budget < shadow_instance_budget)
+                        ? skinned_shadow_budget : shadow_instance_budget;
                     for (size_t inst = 0; inst < it.instance_transforms.size(); ++inst) {
                         if (shadow_cull_active) {
-                            if (visible >= shadow_instance_budget) break;
+                            if (visible >= effective_budget) break;
                             if (shadow_cull_limit > 0.0f) {
                                 const glm::vec3 wp(it.instance_transforms[inst][3]);
                                 const glm::vec4 ls = view * glm::vec4(wp, 1.0f);

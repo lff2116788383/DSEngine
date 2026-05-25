@@ -2386,11 +2386,17 @@ void VulkanDrawExecutor::DrawMeshBatch(
             constexpr float kBudgetOrthoThreshold = 2000.0f;
             constexpr float kBudgetBaseInstances  = 800.0f;
             constexpr float kBudgetMinInstances   = 64.0f;
+            constexpr float kSkinnedShadowSkipOrtho = 1500.0f;
+            constexpr float kSkinnedBudgetOrtho     = 400.0f;
+            constexpr float kSkinnedBudgetBase      = 200.0f;
 
-            const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
+            // Vulkan clip correction 将 ortho 的 [3][3] 从 1.0 变为 ~0.5
+            // 改用 [2][3]==0（透视投影 [2][3]==-1，正交投影 [2][3]==0）
+            const bool is_ortho = std::abs(projection[2][3]) < 0.01f;
             const bool shadow_cull_active = is_depth_only && is_ortho;
             float shadow_cull_limit = 0.0f;
             size_t shadow_instance_budget = SIZE_MAX;
+            size_t skinned_shadow_budget  = SIZE_MAX;
             if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
                 float ortho_size = 1.0f / projection[0][0];
                 shadow_cull_limit = ortho_size + kShadowCullMargin;
@@ -2398,10 +2404,17 @@ void VulkanDrawExecutor::DrawMeshBatch(
                     shadow_instance_budget = static_cast<size_t>(
                         (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
                 }
+                if (ortho_size > kSkinnedShadowSkipOrtho) {
+                    skinned_shadow_budget = 0;
+                } else if (ortho_size > kSkinnedBudgetOrtho) {
+                    skinned_shadow_budget = static_cast<size_t>(
+                        (std::max)(kSkinnedBudgetBase * kSkinnedBudgetOrtho / ortho_size, 0.0f));
+                }
             }
 
             const bool skinned_instanced = item.skinned && (!item.per_instance_bones.empty() || !item.bone_palette.empty());
             const auto& inst_bo = per_inst_bone_offsets[item_idx];
+
 
             // 蒙皮实例: 硬件实例化（SSBO + skinned=2 + instanceCount>1）
             // 非蒙皮实例: pseudo-instancing（push constant 逐实例更新）
@@ -2414,9 +2427,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
                 thread_local std::vector<SkinnedInstGPU> visible_instances;
                 visible_instances.clear();
                 visible_instances.reserve(item.instance_transforms.size());
+                const size_t effective_budget = (skinned_shadow_budget < shadow_instance_budget)
+                    ? skinned_shadow_budget : shadow_instance_budget;
                 for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
                     if (shadow_cull_active) {
-                        if (visible_instances.size() >= shadow_instance_budget) break;
+                        if (visible_instances.size() >= effective_budget) break;
                         if (shadow_cull_limit > 0.0f) {
                             const glm::vec3 wp(item.instance_transforms[inst][3]);
                             const glm::vec4 ls = view * glm::vec4(wp, 1.0f);

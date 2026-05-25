@@ -855,8 +855,13 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             constexpr float kBudgetOrthoThreshold = 2000.0f;
             constexpr float kBudgetBaseInstances  = 800.0f;
             constexpr float kBudgetMinInstances   = 64.0f;
+            constexpr float kSkinnedShadowSkipOrtho = 1500.0f;
+            constexpr float kSkinnedBudgetOrtho     = 400.0f;
+            constexpr float kSkinnedBudgetBase      = 200.0f;
 
-            const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
+            // DX11 clip correction 将 ortho 的 [3][3] 从 1.0 变为 ~0.5
+            // 改用 [2][3]==0（透视投影 [2][3]==-1，正交投影 [2][3]==0）
+            const bool is_ortho = std::abs(projection[2][3]) < 0.01f;
             const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
             float shadow_cull_limit = 0.0f;
             size_t shadow_instance_budget = SIZE_MAX;
@@ -866,6 +871,13 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 if (ortho_size > kBudgetOrthoThreshold) {
                     shadow_instance_budget = static_cast<size_t>(
                         (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+                }
+                // 蒙皮实例更激进预算：远 cascade 完全跳过
+                if (ortho_size > kSkinnedShadowSkipOrtho) {
+                    shadow_instance_budget = 0;
+                } else if (ortho_size > kSkinnedBudgetOrtho) {
+                    shadow_instance_budget = static_cast<size_t>(
+                        (std::max)(kSkinnedBudgetBase * kSkinnedBudgetOrtho / ortho_size, 0.0f));
                 }
             }
 
