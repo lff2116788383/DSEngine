@@ -170,6 +170,7 @@ public:
         last_frame_stats_.gpu_culled_count = culled;
     }
 
+    bool SupportsEfficientReadback() const override { return false; }
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
 

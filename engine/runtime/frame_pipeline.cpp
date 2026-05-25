@@ -1163,7 +1163,9 @@ void FramePipeline::RunRenderInternal() {
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
     // Hi-Z / GPU Driven: GPU 执行完毕后，读回可见性供下一帧 MeshRenderSystem 使用
-    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+    // DX11 后端跳过同步 readback（CopySubresourceRegion+Map 会触发 GPU pipeline drain，100-190ms 延迟）
+    const bool can_readback = runtime_context_.rhi_device->SupportsEfficientReadback();
+    if (can_readback && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
         // GPU Driven 路径：从 draw commands SSBO 读回 instance_count 作为可见性
         const int count = render_pass_context_.gpu_indirect_draw_count;
@@ -1180,7 +1182,7 @@ void FramePipeline::RunRenderInternal() {
         modules_impl_->SetHiZVisibility(visibility);
         gpu_culled_last_frame_ = culled;
         runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
+    } else if (can_readback && render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
         // 传统 Hi-Z 路径：从 visibility SSBO 读回
         const int count = render_pass_context_.hiz_object_count;
@@ -2349,7 +2351,9 @@ void FramePipeline::ExecuteRenderFrame() {
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
     // Hi-Z / GPU Driven readback
-    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+    // DX11 跳过（同步 readback 导致 100-190ms pipeline drain）
+    const bool can_rb = runtime_context_.rhi_device->SupportsEfficientReadback();
+    if (can_rb && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
         const int count = render_pass_context_.gpu_indirect_draw_count;
         std::vector<DrawElementsIndirectCommand> cmds(count);
@@ -2365,7 +2369,7 @@ void FramePipeline::ExecuteRenderFrame() {
         modules_impl_->SetHiZVisibility(visibility);
         gpu_culled_last_frame_ = culled;
         runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
+    } else if (can_rb && render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
         const int count = render_pass_context_.hiz_object_count;
         std::vector<uint32_t> visibility(count, 1);

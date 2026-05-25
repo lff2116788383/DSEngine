@@ -212,6 +212,10 @@ public:
         return fs;
     }
 
+    /// GPU→CPU 读回是否低成本（OpenGL: 是; DX11: 否，同步 pipeline flush）
+    /// 返回 false 时跳过 GPU Driven / Hi-Z readback 以避免帧卡顿
+    virtual bool SupportsEfficientReadback() const { return true; }
+
     /// 在 EndFrame 之后补写 GPU Driven 剔除统计（因 readback 在 EndFrame 后发生）
     virtual void PatchLastFrameGPUCulledCount(int culled) { (void)culled; }
 
