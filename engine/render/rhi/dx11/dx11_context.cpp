@@ -8,6 +8,7 @@
 
 #include <d3d11.h>
 #include <dxgi.h>
+#include <dxgi1_2.h>
 
 namespace dse {
 namespace render {
@@ -88,6 +89,47 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     };
     UINT num_feature_levels = ARRAYSIZE(feature_levels);
 
+    // --- 枚举 DXGI 适配器，优先选择独立 GPU（跳过 software/virtual adapter）---
+    ComPtr<IDXGIFactory1> dxgi_factory;
+    IDXGIAdapter1* preferred_adapter = nullptr;
+    SIZE_T best_vram = 0;
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(dxgi_factory.GetAddressOf())))) {
+        ComPtr<IDXGIAdapter1> adapter;
+        for (UINT i = 0; dxgi_factory->EnumAdapters1(i, adapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i) {
+            DXGI_ADAPTER_DESC1 desc{};
+            adapter->GetDesc1(&desc);
+            // 跳过 software adapter (WARP / Basic Render)
+            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+                DEBUG_LOG_INFO("[D3D11] Adapter {}: [SKIP software] {}", i,
+                    std::string(desc.Description, desc.Description + wcslen(desc.Description)));
+                continue;
+            }
+            // 跳过 dedicated VRAM = 0 的虚拟适配器（远程桌面虚拟显卡等）
+            if (desc.DedicatedVideoMemory == 0) {
+                DEBUG_LOG_INFO("[D3D11] Adapter {}: [SKIP no VRAM] {}", i,
+                    std::string(desc.Description, desc.Description + wcslen(desc.Description)));
+                continue;
+            }
+            DEBUG_LOG_INFO("[D3D11] Adapter {}: {} (VRAM={} MB)", i,
+                std::string(desc.Description, desc.Description + wcslen(desc.Description)),
+                desc.DedicatedVideoMemory / (1024 * 1024));
+            if (desc.DedicatedVideoMemory > best_vram) {
+                best_vram = desc.DedicatedVideoMemory;
+                preferred_adapter = adapter.Detach();
+            }
+        }
+    }
+    // 使用显式适配器时 DriverType 必须为 D3D_DRIVER_TYPE_UNKNOWN
+    const D3D_DRIVER_TYPE driver_type = preferred_adapter
+        ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE;
+    if (preferred_adapter) {
+        DXGI_ADAPTER_DESC1 desc{};
+        static_cast<IDXGIAdapter1*>(preferred_adapter)->GetDesc1(&desc);
+        DEBUG_LOG_INFO("[D3D11] Selected adapter: {} (VRAM={} MB)",
+            std::string(desc.Description, desc.Description + wcslen(desc.Description)),
+            desc.DedicatedVideoMemory / (1024 * 1024));
+    }
+
     // HDR 尝试路径：R16G16B16A16_FLOAT + FLIP_DISCARD（Windows 10+）
     // force_sdr=true 时跳过 HDR 尝试，直接走 SDR 回退路径
     DXGI_SWAP_CHAIN_DESC scd{};
@@ -106,7 +148,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     scd.Flags = 0;
 
     HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+        preferred_adapter, driver_type, nullptr,
         create_flags, feature_levels, num_feature_levels,
         D3D11_SDK_VERSION, &scd,
         swapchain_.GetAddressOf(), device_.GetAddressOf(),
@@ -125,7 +167,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         hr = D3D11CreateDeviceAndSwapChain(
-            nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+            preferred_adapter, driver_type, nullptr,
             create_flags, feature_levels, num_feature_levels,
             D3D11_SDK_VERSION, &scd,
             swapchain_.GetAddressOf(), device_.GetAddressOf(),
@@ -133,11 +175,13 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         );
         if (FAILED(hr)) {
             DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: HRESULT=0x{}", static_cast<unsigned>(hr));
+            if (preferred_adapter) preferred_adapter->Release();
             return false;
         }
         hdr_enabled_ = false;
         DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, DISCARD)");
     }
+    if (preferred_adapter) preferred_adapter->Release();
 
     // MSAA 4x 支持查询（在设备创建后）
     UINT quality = 0;
