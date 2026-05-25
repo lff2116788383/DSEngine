@@ -252,7 +252,9 @@ private:
         VkDeviceSize per_material_offset = 0,
         VkDeviceSize per_pl_offset = 0,
         VkDeviceSize per_sl_offset = 0,
-        bool gbuffer_mode = false);
+        bool gbuffer_mode = false,
+        VkBuffer inst_ssbo = VK_NULL_HANDLE,
+        VkDeviceSize inst_ssbo_size = 0);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(
@@ -337,6 +339,9 @@ private:
     VkDeviceMemory bone_matrices_ubo_mem_ = VK_NULL_HANDLE;
     VkBuffer       morph_weights_ubo_ = VK_NULL_HANDLE;
     VkDeviceMemory morph_weights_ubo_mem_ = VK_NULL_HANDLE;
+    VkBuffer       skinned_inst_ssbo_ = VK_NULL_HANDLE;
+    VkDeviceMemory skinned_inst_ssbo_mem_ = VK_NULL_HANDLE;
+    size_t         skinned_inst_ssbo_capacity_ = 0;
     VkBuffer       light_probe_ubo_[MAX_FRAMES] = {};
     VkDeviceMemory light_probe_ubo_mem_[MAX_FRAMES] = {};
     VkBuffer       terrain_params_ubo_[MAX_FRAMES] = {};

@@ -400,6 +400,8 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     }
     destroy_buffer(bone_matrices_ubo_, bone_matrices_ubo_mem_);
     destroy_buffer(morph_weights_ubo_, morph_weights_ubo_mem_);
+    destroy_buffer(skinned_inst_ssbo_, skinned_inst_ssbo_mem_);
+    skinned_inst_ssbo_capacity_ = 0;
     for (int i = 0; i < MAX_FRAMES; ++i)
         destroy_buffer(light_probe_ubo_[i], light_probe_ubo_mem_[i]);
     destroy_buffer(dummy_ubo_buffer_, dummy_ubo_buffer_mem_);
@@ -581,7 +583,9 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     VkDeviceSize per_material_offset,
     VkDeviceSize per_pl_offset,
     VkDeviceSize per_sl_offset,
-    bool gbuffer_mode) {
+    bool gbuffer_mode,
+    VkBuffer inst_ssbo,
+    VkDeviceSize inst_ssbo_size) {
 
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
@@ -1066,6 +1070,22 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             ibl_writes[1].pImageInfo = &ibl_infos[1];
         }
 
+        // SkinnedInstBuf SSBO (set=2, binding=10) — 硬件实例化路径
+        VkDescriptorBufferInfo inst_ssbo_info{};
+        VkWriteDescriptorSet inst_ssbo_write{};
+        if (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0
+            && has_binding(2, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
+            inst_ssbo_info.buffer = inst_ssbo;
+            inst_ssbo_info.offset = 0;
+            inst_ssbo_info.range  = inst_ssbo_size;
+            inst_ssbo_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            inst_ssbo_write.dstSet          = sets[2];
+            inst_ssbo_write.dstBinding      = 10;
+            inst_ssbo_write.descriptorCount = 1;
+            inst_ssbo_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            inst_ssbo_write.pBufferInfo     = &inst_ssbo_info;
+        }
+
         std::vector<VkWriteDescriptorSet> all_writes;
         if (mat_write.sType != 0) all_writes.push_back(mat_write);
         for (int i = 0; i < 5; ++i) {
@@ -1077,7 +1097,9 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (spot_shadow_write.sType != 0) all_writes.push_back(spot_shadow_write);
         if (bone_write.sType != 0) all_writes.push_back(bone_write);
         if (morph_write.sType != 0) all_writes.push_back(morph_write);
-        if (spot_data_write.sType != 0) all_writes.push_back(spot_data_write);
+        if (inst_ssbo_write.sType != 0) all_writes.push_back(inst_ssbo_write);
+        if (spot_data_write.sType != 0 && inst_ssbo_write.sType == 0)
+            all_writes.push_back(spot_data_write);
         if (terrain_write.sType != 0) all_writes.push_back(terrain_write);
         for (int i = 0; i < 5; ++i) {
             if (splat_writes[i].sType != 0) all_writes.push_back(splat_writes[i]);
@@ -2267,12 +2289,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // Bone SSBO: offset=0, range=total（push constant u_bone_offset 控制索引）
         VkDeviceSize cur_bone_offset = 0;
 
-        // 分配并绑定 DescriptorSet（传入各 UBO 的当前偏移）
-        AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
-            cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
-            cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
-
-
         // 解析顶点/索引数据源：优先使用 shared_vertex_ptr
         const BatchVertex* vtx_data = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
         const uint32_t* idx_data = item.shared_index_ptr ? item.shared_index_ptr : item.indices.data();
@@ -2290,7 +2306,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
             cur_vbo_offset = vk_last_shared_vbo_offset_;
             cur_ibo_offset = vk_last_shared_ibo_offset_;
         } else {
-            // 上传顶点数据到 mesh VBO（累积偏移，避免后续 mesh 覆盖前面的数据）
             cur_vbo_offset = mesh_vbo_offset_;
             if (vtx_count > 0) {
                 size_t vdata_size = vtx_count * sizeof(BatchVertex);
@@ -2302,7 +2317,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
                 mesh_vbo_offset_ += vdata_size;
             }
 
-            // 上传索引数据到 mesh IBO（累积偏移）
             cur_ibo_offset = mesh_ibo_offset_;
             if (idx_count > 0) {
                 size_t idata_size = idx_count * sizeof(uint32_t);
@@ -2325,7 +2339,7 @@ void VulkanDrawExecutor::DrawMeshBatch(
             }
         }
 
-        // Push constant: model + skinned + morph_enabled + bone_offset
+        // Push constant 结构
         const bool is_instanced = item.instance_transforms.size() > 1;
         struct {
             glm::mat4 model;
@@ -2333,19 +2347,15 @@ void VulkanDrawExecutor::DrawMeshBatch(
             int morph_enabled;
             int bone_offset;
         } pc_data;
-        // Vulkan: skinned instancing 暂保持 pseudo-instancing（skinned=1 + per-draw bone_offset）
-        // 待 descriptor set 扩展后可升级为 skinned=2 + vkCmdDrawIndexed(instanceCount>1)
         pc_data.model = item.model;
         pc_data.skinned = item.skinned ? 1 : 0;
         pc_data.morph_enabled = item.morph_enabled ? 1 : 0;
         pc_data.bone_offset = item.skinned ? bone_offsets[item_idx] : 0;
 
-        // 绑定 VBO binding 0 (mesh only)
+        // 绑定 VBO binding 0
         VkBuffer vbo_buffers[] = {mesh_vbo_};
         VkDeviceSize vbo_offsets[] = {cur_vbo_offset};
         vkCmdBindVertexBuffers(cmd_buf, 0, 1, vbo_buffers, vbo_offsets);
-
-        // 绑定 IBO（使用该 mesh 的偏移）
         vkCmdBindIndexBuffer(cmd_buf, mesh_ibo_, cur_ibo_offset, VK_INDEX_TYPE_UINT32);
 
         // 绘制
@@ -2369,37 +2379,106 @@ void VulkanDrawExecutor::DrawMeshBatch(
                 }
             }
 
-            // Pseudo-instancing：逐实例更新 push constant 并绘制
             const bool skinned_instanced = item.skinned && (!item.per_instance_bones.empty() || !item.bone_palette.empty());
             const auto& inst_bo = per_inst_bone_offsets[item_idx];
-            size_t visible_count = 0;
-            for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
-                if (shadow_cull_active) {
-                    if (visible_count >= shadow_instance_budget) break;
-                    if (shadow_cull_limit > 0.0f) {
-                        const glm::vec3 wp(item.instance_transforms[inst][3]);
-                        const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
-                        if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
-                            continue;
+
+            // 蒙皮实例: 硬件实例化（SSBO + skinned=2 + instanceCount>1）
+            // 非蒙皮实例: pseudo-instancing（push constant 逐实例更新）
+            if (skinned_instanced) {
+                struct SkinnedInstGPU {
+                    glm::mat4 model;
+                    int bone_offset;
+                    int _pad0, _pad1, _pad2;
+                };
+                thread_local std::vector<SkinnedInstGPU> visible_instances;
+                visible_instances.clear();
+                visible_instances.reserve(item.instance_transforms.size());
+                for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
+                    if (shadow_cull_active) {
+                        if (visible_instances.size() >= shadow_instance_budget) break;
+                        if (shadow_cull_limit > 0.0f) {
+                            const glm::vec3 wp(item.instance_transforms[inst][3]);
+                            const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                            if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                                continue;
+                        }
                     }
+                    SkinnedInstGPU gpu_inst{};
+                    gpu_inst.model = item.instance_transforms[inst];
+                    gpu_inst.bone_offset = (inst < inst_bo.size()) ? inst_bo[inst] : 0;
+                    visible_instances.push_back(gpu_inst);
                 }
-                pc_data.model = item.instance_transforms[inst];
-                if (skinned_instanced && inst < inst_bo.size()) {
-                    pc_data.bone_offset = inst_bo[inst];
+
+                const size_t inst_count = visible_instances.size();
+                if (inst_count > 0) {
+                    const size_t inst_data_size = inst_count * sizeof(SkinnedInstGPU);
+                    VkDevice dev = context_->device();
+                    VkPhysicalDevice phys = context_->physical_device();
+                    if (inst_data_size > skinned_inst_ssbo_capacity_) {
+                        if (skinned_inst_ssbo_ != VK_NULL_HANDLE) {
+                            vkDestroyBuffer(dev, skinned_inst_ssbo_, nullptr);
+                            vkFreeMemory(dev, skinned_inst_ssbo_mem_, nullptr);
+                        }
+                        size_t new_cap = inst_data_size * 2;
+                        CreateVulkanBuffer(dev, phys, new_cap,
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                            skinned_inst_ssbo_, skinned_inst_ssbo_mem_);
+                        skinned_inst_ssbo_capacity_ = new_cap;
+                    }
+                    WriteToBuffer(dev, skinned_inst_ssbo_mem_, 0, inst_data_size, visible_instances.data());
+
+                    AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
+                        cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
+                        cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode,
+                        skinned_inst_ssbo_, static_cast<VkDeviceSize>(inst_data_size));
+
+                    pc_data.skinned = 2;
+                    pc_data.bone_offset = 0;
+                    vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0, sizeof(pc_data), &pc_data);
+                    vkCmdDrawIndexed(cmd_buf,
+                                     static_cast<uint32_t>(idx_count),
+                                     static_cast<uint32_t>(inst_count), 0, 0, 0);
                 }
-                vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
-                                   VK_SHADER_STAGE_VERTEX_BIT,
-                                   0, sizeof(pc_data), &pc_data);
-                vkCmdDrawIndexed(cmd_buf,
-                                 static_cast<uint32_t>(idx_count),
-                                 1, 0, 0, 0);
-                ++visible_count;
+                global_state_.current_frame_stats.instanced_draw_calls++;
+                global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(inst_count);
+                global_state_.current_frame_stats.draw_calls += (inst_count > 0) ? 1 : 0;
+            } else {
+                // 非蒙皮: pseudo-instancing + shadow culling
+                AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
+                    cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
+                    cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
+                size_t visible_count = 0;
+                for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
+                    if (shadow_cull_active) {
+                        if (visible_count >= shadow_instance_budget) break;
+                        if (shadow_cull_limit > 0.0f) {
+                            const glm::vec3 wp(item.instance_transforms[inst][3]);
+                            const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                            if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                                continue;
+                        }
+                    }
+                    pc_data.model = item.instance_transforms[inst];
+                    vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0, sizeof(pc_data), &pc_data);
+                    vkCmdDrawIndexed(cmd_buf, static_cast<uint32_t>(idx_count), 1, 0, 0, 0);
+                    ++visible_count;
+                }
+                const size_t draw_count = shadow_cull_active ? visible_count : item.instance_transforms.size();
+                global_state_.current_frame_stats.instanced_draw_calls++;
+                global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
+                global_state_.current_frame_stats.draw_calls += static_cast<int>(draw_count);
             }
-            const size_t draw_count = shadow_cull_active ? visible_count : item.instance_transforms.size();
-            global_state_.current_frame_stats.instanced_draw_calls++;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
-            global_state_.current_frame_stats.draw_calls += static_cast<int>(draw_count);
         } else {
+            // 非实例化: 单个 descriptor set，不绑定 instance SSBO
+            AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
+                cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
+                cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
+
             vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT,
                                0, sizeof(pc_data), &pc_data);
