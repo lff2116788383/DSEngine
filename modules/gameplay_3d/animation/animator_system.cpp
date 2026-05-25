@@ -65,28 +65,43 @@ bool BuildSkeletalCache(Animator3DComponent& animator, AssetManager& asset_manag
         }
     }
 
-    // Compute bind_globals (iterative, handles arbitrary ordering)
-    std::vector<bool> computed(bone_count, false);
-    for (uint32_t i = 0; i < bone_count; ++i) {
-        int pi = cache.parent_indices[i];
-        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
-            cache.bind_globals[i] = cache.local_bind_poses[i];
-            computed[i] = true;
-        }
-    }
-    for (uint32_t pass = 0; pass < bone_count; ++pass) {
-        bool all_done = true;
+    // Build topological order (BFS from roots) for single-pass global propagation
+    cache.topo_order.clear();
+    cache.topo_order.reserve(bone_count);
+    {
+        std::vector<bool> visited(bone_count, false);
+        // First pass: add all roots
         for (uint32_t i = 0; i < bone_count; ++i) {
-            if (computed[i]) continue;
             int pi = cache.parent_indices[i];
-            if (computed[pi]) {
-                cache.bind_globals[i] = cache.bind_globals[pi] * cache.local_bind_poses[i];
-                computed[i] = true;
-            } else {
-                all_done = false;
+            if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+                cache.topo_order.push_back(i);
+                visited[i] = true;
             }
         }
-        if (all_done) break;
+        // BFS: process queue, adding children when parent is visited
+        for (size_t head = 0; head < cache.topo_order.size(); ++head) {
+            uint32_t parent = cache.topo_order[head];
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (!visited[i] && cache.parent_indices[i] == static_cast<int>(parent)) {
+                    cache.topo_order.push_back(i);
+                    visited[i] = true;
+                }
+            }
+        }
+        // Safety: add any remaining (should not happen with valid skeleton)
+        for (uint32_t i = 0; i < bone_count; ++i) {
+            if (!visited[i]) cache.topo_order.push_back(i);
+        }
+    }
+
+    // Compute bind_globals using topological order (single pass)
+    for (uint32_t idx : cache.topo_order) {
+        int pi = cache.parent_indices[idx];
+        if (pi < 0 || pi >= static_cast<int>(bone_count)) {
+            cache.bind_globals[idx] = cache.local_bind_poses[idx];
+        } else {
+            cache.bind_globals[idx] = cache.bind_globals[pi] * cache.local_bind_poses[idx];
+        }
     }
 
     // Precompute inv_bind_globals (static, avoids per-frame glm::inverse)
@@ -115,6 +130,15 @@ bool BuildSkeletalCache(Animator3DComponent& animator, AssetManager& asset_manag
 void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
     auto view = world.registry().view<Animator3DComponent>();
     if (view.empty()) return;
+
+    // Reusable sample buffers — avoid per-entity heap allocation
+    SampleBuffer reuse_sample_a;
+    SampleBuffer reuse_sample_b;
+    SampleBuffer reuse_blend_accum;
+    SampleBuffer reuse_blend_node;
+
+    // Pose palette cache: skip EvaluateClip for entities sharing (skeleton, clip, quantized_time)
+    std::unordered_map<uint64_t, Animator3DComponent*> pose_palette_cache;
 
     AssetManager* asset_manager_ptr = nullptr;
     for (auto entity : view) {
@@ -186,11 +210,12 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                 evaluated_weights[0] = 1.0f;
             }
 
-            SampleBuffer accumulated(bone_count);
-            std::fill(accumulated.positions.begin(), accumulated.positions.end(), glm::vec3(0.0f));
-            std::fill(accumulated.rotations.begin(), accumulated.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
-            std::fill(accumulated.scales.begin(), accumulated.scales.end(), glm::vec3(0.0f));
-            std::vector<bool> has_anim(bone_count, false);
+            reuse_blend_accum.Reset(bone_count);
+            std::fill(reuse_blend_accum.positions.begin(), reuse_blend_accum.positions.end(), glm::vec3(0.0f));
+            std::fill(reuse_blend_accum.rotations.begin(), reuse_blend_accum.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
+            std::fill(reuse_blend_accum.scales.begin(), reuse_blend_accum.scales.end(), glm::vec3(0.0f));
+            auto& accumulated = reuse_blend_accum;
+            auto& has_anim = reuse_blend_accum.touched;
 
             float total_weight = 0.0f;
             for (size_t node_index = 0; node_index < blend_nodes.size(); ++node_index) {
@@ -212,7 +237,8 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                 node.current_time = AdvanceClipTime(node.current_time, delta_time, node.speed, header->duration, node.loop);
 
                 float clip_duration = 0.0f;
-                SampleBuffer node_sample(bone_count);
+                reuse_blend_node.Reset(bone_count);
+                auto& node_sample = reuse_blend_node;
                 if (!EvaluateClip(node.danim_path, node.current_time, node_sample, clip_duration)) {
                     continue;
                 }
@@ -341,7 +367,8 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
 
                 // 3. Evaluate animation (current state)
                 float current_duration = 1.0f;
-                SampleBuffer current_sample(bone_count);
+                reuse_sample_a.Reset(bone_count);
+                auto& current_sample = reuse_sample_a;
 
                 if (!current_state.is_blend_tree) {
                     if (EvaluateClip(current_state.danim_path, animator.state_time, current_sample, current_duration)) {
@@ -361,7 +388,8 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                         const AnimState& next_state = next_it->second;
 
                         float next_duration = 1.0f;
-                        SampleBuffer next_sample(bone_count);
+                        reuse_sample_b.Reset(bone_count);
+                        auto& next_sample = reuse_sample_b;
 
                         if (!next_state.is_blend_tree) {
                             if (EvaluateClip(next_state.danim_path, animator.next_state_time, next_sample, next_duration)) {
@@ -389,19 +417,45 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
             // --- LEGACY SINGLE ANIMATION PATH ---
             if (animator.danim_path.empty()) continue;
 
-            SampleBuffer sample(bone_count);
+            // Early palette key: skip EvaluateClip if same (skel, clip, quantized_time)
+            std::hash<std::string> str_hasher;
+            uint64_t early_key = str_hasher(animator.dskel_path);
+            early_key ^= str_hasher(animator.danim_path) * 2654435761ULL;
+            early_key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 30.0f)) * 40503ULL;
+            if (animator.lock_root_motion) early_key ^= 0xDEADBEEFULL;
+
+            auto ppc_it = pose_palette_cache.find(early_key);
+            if (ppc_it != pose_palette_cache.end()) {
+                // Reuse pose from already-evaluated entity
+                const auto& src = ppc_it->second->pose_buffer;
+                auto& pb = animator.pose_buffer;
+                for (uint32_t i = 0; i < bone_count; ++i) {
+                    pb.positions[i] = src.positions[i];
+                    pb.rotations[i] = src.rotations[i];
+                    pb.scales[i] = src.scales[i];
+                    pb.touched[i] = src.touched[i];
+                }
+                animator.current_time = AdvanceClipTime(animator.current_time, delta_time, animator.speed,
+                    ppc_it->second->cached_duration_, animator.loop);
+                animator.bone_palette_key = early_key;
+                continue; // skip EvaluateClip, events, root motion
+            }
+
+            reuse_sample_a.Reset(bone_count);
             float duration = 0.0f;
-            if (!EvaluateClip(animator.danim_path, animator.current_time, sample, duration)) {
+            if (!EvaluateClip(animator.danim_path, animator.current_time, reuse_sample_a, duration)) {
                 continue;
             }
 
             animator.current_time = AdvanceClipTime(animator.current_time, delta_time, animator.speed, duration, animator.loop);
-            WriteSampleToPoseBuffer(sample);
+            animator.cached_duration_ = duration;
+            WriteSampleToPoseBuffer(reuse_sample_a);
+            pose_palette_cache[early_key] = &animator;
         } else {
             // --- LEGACY ANIM TREE (1D Blend) PATH ---
-            SampleBuffer sample(bone_count);
-            if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, sample)) {
-                WriteSampleToPoseBuffer(sample);
+            reuse_sample_a.Reset(bone_count);
+            if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, reuse_sample_a)) {
+                WriteSampleToPoseBuffer(reuse_sample_a);
             }
         }
 
@@ -482,8 +536,11 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
     if (view.empty()) return;
 
     // Bone palette deduplication: 相同动画状态（clip + quantized_time）只计算一次
-    // key = bone_palette_key (由 EvaluateBaseAnim 填充)
     std::unordered_map<uint64_t, const std::vector<glm::mat4>*> palette_cache;
+
+    // Stack buffers: avoid per-entity heap allocation (MAX_BONES=100)
+    glm::mat4 local_transforms[MAX_BONES];
+    glm::mat4 global_transforms[MAX_BONES];
 
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
@@ -502,8 +559,7 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
         const uint32_t bone_count = cache.bone_count;
         const auto& pb = animator.pose_buffer;
 
-        // Build local transforms from pose_buffer SRT
-        std::vector<glm::mat4> local_transforms(bone_count);
+        // Build local transforms from pose_buffer SRT (stack buffer, no alloc)
         for (uint32_t i = 0; i < bone_count; ++i) {
             if (pb.touched[i]) {
                 local_transforms[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
@@ -514,29 +570,14 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
             }
         }
 
-        // Calculate global transforms (handles arbitrary bone ordering)
-        std::vector<glm::mat4> global_transforms(bone_count);
-        std::vector<bool> computed(bone_count, false);
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            int pi = cache.parent_indices[i];
+        // Single-pass global propagation using precomputed topological order
+        for (uint32_t idx : cache.topo_order) {
+            int pi = cache.parent_indices[idx];
             if (pi < 0 || pi >= static_cast<int>(bone_count)) {
-                global_transforms[i] = local_transforms[i];
-                computed[i] = true;
+                global_transforms[idx] = local_transforms[idx];
+            } else {
+                global_transforms[idx] = global_transforms[pi] * local_transforms[idx];
             }
-        }
-        for (uint32_t pass = 0; pass < bone_count; ++pass) {
-            bool all_done = true;
-            for (uint32_t i = 0; i < bone_count; ++i) {
-                if (computed[i]) continue;
-                int pi = cache.parent_indices[i];
-                if (computed[pi]) {
-                    global_transforms[i] = global_transforms[pi] * local_transforms[i];
-                    computed[i] = true;
-                } else {
-                    all_done = false;
-                }
-            }
-            if (all_done) break;
         }
 
         // final = anim_global * inv(bind_global) [precomputed]

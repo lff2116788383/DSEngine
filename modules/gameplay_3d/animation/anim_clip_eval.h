@@ -48,6 +48,25 @@ T Interpolate(const std::vector<float>& times, const std::vector<T>& values, flo
     else return glm::mix(values[p0], values[p0 + 1], f);
 }
 
+// Zero-allocation interpolation: operates on raw pointers to avoid heap alloc per channel
+template<typename T>
+T InterpolateRaw(const float* times, const T* values, uint32_t n, float t) {
+    if (n == 0) return T();
+    if (n == 1) return values[0];
+    if (t <= times[0]) return values[0];
+    if (t >= times[n - 1]) return values[n - 1];
+
+    size_t p0 = n - 2;
+    for (size_t i = 0; i + 1 < n; ++i) {
+        if (t < times[i + 1]) { p0 = i; break; }
+    }
+    float dt = times[p0 + 1] - times[p0];
+    if (std::abs(dt) <= 1e-6f) return values[p0];
+    float f = std::clamp((t - times[p0]) / dt, 0.0f, 1.0f);
+    if constexpr (std::is_same_v<T, glm::quat>) return glm::slerp(values[p0], values[p0 + 1], f);
+    else return glm::mix(values[p0], values[p0 + 1], f);
+}
+
 inline float AdvanceClipTime(float current, float delta_time, float speed, float dur, bool loop) {
     current += delta_time * speed;
     if (dur <= 0.0f) return 0.0f;
@@ -65,11 +84,23 @@ struct AnimSampleBuffer {
     std::vector<glm::vec3> scales;
     std::vector<bool> touched;
 
-    explicit AnimSampleBuffer(uint32_t bone_count)
+    explicit AnimSampleBuffer(uint32_t bone_count = 0)
         : positions(bone_count, glm::vec3(0.0f))
         , rotations(bone_count, glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
         , scales(bone_count, glm::vec3(1.0f))
         , touched(bone_count, false) {}
+
+    // Reset without deallocation — reuse existing capacity
+    void Reset(uint32_t bone_count) {
+        positions.resize(bone_count);
+        rotations.resize(bone_count);
+        scales.resize(bone_count);
+        touched.resize(bone_count);
+        std::fill(positions.begin(), positions.end(), glm::vec3(0.0f));
+        std::fill(rotations.begin(), rotations.end(), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+        std::fill(scales.begin(), scales.end(), glm::vec3(1.0f));
+        std::fill(touched.begin(), touched.end(), false);
+    }
 };
 
 inline bool EvaluateClip(
@@ -130,32 +161,22 @@ inline bool EvaluateClip(
         if (ch.rotation_offset + ch.rotation_key_count * sizeof(glm::quat) > data_size) continue;
         if (ch.scale_offset + ch.scale_key_count * sizeof(glm::vec3) > data_size) continue;
 
-        auto BuildKeyTimes = [&](uint32_t key_count) -> std::vector<float> {
-            if (key_count == 0) return {};
-            std::vector<float> r(key_count);
-            std::memcpy(r.data(), data + ch.time_offset, key_count * sizeof(float));
-            return r;
-        };
+        // Zero-allocation: interpret raw animation data directly as typed arrays
+        const float* time_keys = reinterpret_cast<const float*>(data + ch.time_offset);
 
         if (ch.position_key_count > 0) {
-            auto times = BuildKeyTimes(ch.position_key_count);
-            std::vector<glm::vec3> vals(ch.position_key_count);
-            std::memcpy(vals.data(), data + ch.position_offset, ch.position_key_count * sizeof(glm::vec3));
-            sample.positions[target_bone] = Interpolate<glm::vec3>(times, vals, current_time);
+            const auto* vals = reinterpret_cast<const glm::vec3*>(data + ch.position_offset);
+            sample.positions[target_bone] = InterpolateRaw<glm::vec3>(time_keys, vals, ch.position_key_count, current_time);
             sample.touched[target_bone] = true;
         }
         if (ch.rotation_key_count > 0) {
-            auto times = BuildKeyTimes(ch.rotation_key_count);
-            std::vector<glm::quat> vals(ch.rotation_key_count);
-            std::memcpy(vals.data(), data + ch.rotation_offset, ch.rotation_key_count * sizeof(glm::quat));
-            sample.rotations[target_bone] = Interpolate<glm::quat>(times, vals, current_time);
+            const auto* vals = reinterpret_cast<const glm::quat*>(data + ch.rotation_offset);
+            sample.rotations[target_bone] = InterpolateRaw<glm::quat>(time_keys, vals, ch.rotation_key_count, current_time);
             sample.touched[target_bone] = true;
         }
         if (ch.scale_key_count > 0) {
-            auto times = BuildKeyTimes(ch.scale_key_count);
-            std::vector<glm::vec3> vals(ch.scale_key_count);
-            std::memcpy(vals.data(), data + ch.scale_offset, ch.scale_key_count * sizeof(glm::vec3));
-            sample.scales[target_bone] = Interpolate<glm::vec3>(times, vals, current_time);
+            const auto* vals = reinterpret_cast<const glm::vec3*>(data + ch.scale_offset);
+            sample.scales[target_bone] = InterpolateRaw<glm::vec3>(time_keys, vals, ch.scale_key_count, current_time);
             sample.touched[target_bone] = true;
         }
     }
@@ -172,8 +193,8 @@ inline void ComputeBoneGlobals(
     const uint32_t bone_count = cache.bone_count;
     out_globals.resize(bone_count);
 
-    // Build local matrices
-    std::vector<glm::mat4> locals(bone_count);
+    // Build local matrices (stack buffer)
+    glm::mat4 locals[MAX_BONES];
     for (uint32_t i = 0; i < bone_count; ++i) {
         if (pb.touched[i]) {
             locals[i] = glm::translate(glm::mat4(1.0f), pb.positions[i])
@@ -184,28 +205,14 @@ inline void ComputeBoneGlobals(
         }
     }
 
-    // Propagate globals (iterative for arbitrary order)
-    std::vector<bool> computed(bone_count, false);
-    for (uint32_t i = 0; i < bone_count; ++i) {
-        int pi = cache.parent_indices[i];
+    // Single-pass global propagation using topological order
+    for (uint32_t idx : cache.topo_order) {
+        int pi = cache.parent_indices[idx];
         if (pi < 0 || pi >= static_cast<int>(bone_count)) {
-            out_globals[i] = locals[i];
-            computed[i] = true;
+            out_globals[idx] = locals[idx];
+        } else {
+            out_globals[idx] = out_globals[pi] * locals[idx];
         }
-    }
-    for (uint32_t pass = 0; pass < bone_count; ++pass) {
-        bool all_done = true;
-        for (uint32_t i = 0; i < bone_count; ++i) {
-            if (computed[i]) continue;
-            int pi = cache.parent_indices[i];
-            if (computed[pi]) {
-                out_globals[i] = out_globals[pi] * locals[i];
-                computed[i] = true;
-            } else {
-                all_done = false;
-            }
-        }
-        if (all_done) break;
     }
 }
 

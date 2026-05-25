@@ -494,6 +494,7 @@ struct Animator3DComponent {
         std::vector<glm::mat4> inv_bind_globals;
         std::vector<glm::mat4> local_bind_poses;
         std::vector<int> parent_indices;
+        std::vector<uint32_t> topo_order; // 拓扑排序：single-pass global transform propagation
         std::unordered_map<std::string, int> bone_name_to_index;
         bool valid = false;
     };
@@ -504,6 +505,9 @@ struct Animator3DComponent {
     /// Bone palette key: AnimatorSystem 计算的动画状态哈希
     /// 相同 key 的实例共享同一组骨骼矩阵（用于 instancing 去重）
     uint64_t bone_palette_key = 0;
+
+    /// 缓存上次评估的动画时长（供 palette 去重路径推进时间）
+    float cached_duration_ = 0.0f;
 };
 
 struct SkyboxComponent {

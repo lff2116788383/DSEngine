@@ -8,7 +8,6 @@
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "modules/gameplay_3d/rendering/grass_system.h"
 #include "modules/gameplay_3d/rendering/hair_system.h"
-#include "engine/render/skinning/gpu_skinning.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
 #include "modules/gameplay_3d/rendering/lod_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -79,8 +78,6 @@ private:
     FluidSystem fluid_system_;
     SoftBodySystem softbody_system_;
     RopeSystem rope_system_;
-    dse::render::GPUSkinningSystem gpu_skinning_system_;
-    RhiDevice* rhi_device_ = nullptr;  ///< 缓存供 compute skinning 使用
 };
 
 } // namespace gameplay3d
