@@ -2350,10 +2350,39 @@ void VulkanDrawExecutor::DrawMeshBatch(
 
         // 绘制
         if (is_instanced) {
+            // --- Shadow instance culling (与 OpenGL/DX11 一致) ---
+            constexpr float kShadowCullMargin     = 150.0f;
+            constexpr float kBudgetOrthoThreshold = 2000.0f;
+            constexpr float kBudgetBaseInstances  = 800.0f;
+            constexpr float kBudgetMinInstances   = 64.0f;
+
+            const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
+            const bool shadow_cull_active = is_depth_only && is_ortho;
+            float shadow_cull_limit = 0.0f;
+            size_t shadow_instance_budget = SIZE_MAX;
+            if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
+                float ortho_size = 1.0f / projection[0][0];
+                shadow_cull_limit = ortho_size + kShadowCullMargin;
+                if (ortho_size > kBudgetOrthoThreshold) {
+                    shadow_instance_budget = static_cast<size_t>(
+                        (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+                }
+            }
+
             // Pseudo-instancing：逐实例更新 push constant 并绘制
             const bool skinned_instanced = item.skinned && (!item.per_instance_bones.empty() || !item.bone_palette.empty());
             const auto& inst_bo = per_inst_bone_offsets[item_idx];
+            size_t visible_count = 0;
             for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
+                if (shadow_cull_active) {
+                    if (visible_count >= shadow_instance_budget) break;
+                    if (shadow_cull_limit > 0.0f) {
+                        const glm::vec3 wp(item.instance_transforms[inst][3]);
+                        const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                        if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                            continue;
+                    }
+                }
                 pc_data.model = item.instance_transforms[inst];
                 if (skinned_instanced && inst < inst_bo.size()) {
                     pc_data.bone_offset = inst_bo[inst];
@@ -2364,10 +2393,12 @@ void VulkanDrawExecutor::DrawMeshBatch(
                 vkCmdDrawIndexed(cmd_buf,
                                  static_cast<uint32_t>(idx_count),
                                  1, 0, 0, 0);
+                ++visible_count;
             }
+            const size_t draw_count = shadow_cull_active ? visible_count : item.instance_transforms.size();
             global_state_.current_frame_stats.instanced_draw_calls++;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(item.instance_transforms.size());
-            global_state_.current_frame_stats.draw_calls += static_cast<int>(item.instance_transforms.size());
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
+            global_state_.current_frame_stats.draw_calls += static_cast<int>(draw_count);
         } else {
             vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT,
