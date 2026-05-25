@@ -7,9 +7,11 @@
 #include "engine/base/debug.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <set>
+#include <string>
 
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -604,10 +606,31 @@ VkSurfaceFormatKHR VulkanContext::ChooseSwapSurfaceFormat(const std::vector<VkSu
 }
 
 VkPresentModeKHR VulkanContext::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available) {
-    // 优先 Mailbox（三缓冲，低延迟），其次 FIFO（v-sync）
-    for (const auto& mode : available) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+    const char* vsync_env = std::getenv("DSE_VSYNC");
+    const bool vsync_off = vsync_env && std::string(vsync_env) == "0";
+
+    if (vsync_off) {
+        // VSync 关闭: 优先 IMMEDIATE（无帧率上限），其次 MAILBOX，再 FIFO_RELAXED
+        for (const auto& mode : available) {
+            if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+                DEBUG_LOG_INFO("[Vulkan] Present mode: IMMEDIATE (VSync off)");
+                return mode;
+            }
+        }
+        for (const auto& mode : available) {
+            if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+                DEBUG_LOG_INFO("[Vulkan] Present mode: MAILBOX (VSync off, IMMEDIATE unavailable)");
+                return mode;
+            }
+        }
+        for (const auto& mode : available) {
+            if (mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
+                DEBUG_LOG_INFO("[Vulkan] Present mode: FIFO_RELAXED (VSync off fallback)");
+                return mode;
+            }
+        }
     }
+    DEBUG_LOG_INFO("[Vulkan] Present mode: FIFO (VSync on)");
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
