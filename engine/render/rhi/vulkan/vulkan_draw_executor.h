@@ -254,7 +254,8 @@ private:
         VkDeviceSize per_sl_offset = 0,
         bool gbuffer_mode = false,
         VkBuffer inst_ssbo = VK_NULL_HANDLE,
-        VkDeviceSize inst_ssbo_size = 0);
+        VkDeviceSize inst_ssbo_size = 0,
+        VkDeviceSize inst_ssbo_offset = 0);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(

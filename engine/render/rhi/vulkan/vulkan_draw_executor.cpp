@@ -606,7 +606,8 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     VkDeviceSize per_sl_offset,
     bool gbuffer_mode,
     VkBuffer inst_ssbo,
-    VkDeviceSize inst_ssbo_size) {
+    VkDeviceSize inst_ssbo_size,
+    VkDeviceSize inst_ssbo_offset) {
 
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
@@ -1097,7 +1098,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0
             && has_binding(2, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
             inst_ssbo_info.buffer = inst_ssbo;
-            inst_ssbo_info.offset = 0;
+            inst_ssbo_info.offset = inst_ssbo_offset;
             inst_ssbo_info.range  = inst_ssbo_size;
             inst_ssbo_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             inst_ssbo_write.dstSet          = sets[2];
@@ -2280,6 +2281,39 @@ void VulkanDrawExecutor::DrawMeshBatch(
         }
     }
 
+    // --- 预计算蒙皮实例 SSBO 总需求，一次性分配避免逐 item 重分配 ---
+    // 同时修复原来每个 item 都写 offset=0 导致互相覆盖的隐藏 bug
+    {
+        constexpr VkDeviceSize kSkinSSBOAlign = 256; // VK minStorageBufferOffsetAlignment 上限
+        struct SkinnedInstGPUSz { glm::mat4 m; int b; int p[3]; };
+        VkDeviceSize total_needed = 0;
+        for (const auto& it : items) {
+            const bool si = it.instance_transforms.size() > 1 && it.skinned &&
+                            (!it.per_instance_bones.empty() || !it.bone_palette.empty());
+            if (si) {
+                VkDeviceSize sz = it.instance_transforms.size() * sizeof(SkinnedInstGPUSz);
+                total_needed += (sz + kSkinSSBOAlign - 1) & ~(kSkinSSBOAlign - 1);
+            }
+        }
+        if (total_needed > skinned_inst_ssbo_capacity_) {
+            VkDevice dev2 = context_->device();
+            VkPhysicalDevice phys2 = context_->physical_device();
+            if (skinned_inst_ssbo_ != VK_NULL_HANDLE) {
+                UnmapPersistentBuffer(dev2, skinned_inst_ssbo_mem_);
+                vkDestroyBuffer(dev2, skinned_inst_ssbo_, nullptr);
+                vkFreeMemory(dev2, skinned_inst_ssbo_mem_, nullptr);
+                skinned_inst_ssbo_ = VK_NULL_HANDLE;
+            }
+            size_t new_cap = static_cast<size_t>(total_needed) * 2;
+            CreateVulkanBuffer(dev2, phys2, new_cap,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                skinned_inst_ssbo_, skinned_inst_ssbo_mem_);
+            skinned_inst_ssbo_capacity_ = new_cap;
+        }
+    }
+    VkDeviceSize skinned_ssbo_write_offset = 0; // 当前帧在共享 SSBO 中的写入游标
+
     // 逐 mesh 绘制
     unsigned int last_material_tex = (std::numeric_limits<unsigned int>::max)();
     for (size_t item_idx = 0; item_idx < items.size(); ++item_idx) {
@@ -2447,28 +2481,17 @@ void VulkanDrawExecutor::DrawMeshBatch(
 
                 const size_t inst_count = visible_instances.size();
                 if (inst_count > 0) {
+                    constexpr VkDeviceSize kSkinSSBOAlign = 256;
                     const size_t inst_data_size = inst_count * sizeof(SkinnedInstGPU);
-                    VkDevice dev = context_->device();
-                    VkPhysicalDevice phys = context_->physical_device();
-                    if (inst_data_size > skinned_inst_ssbo_capacity_) {
-                        if (skinned_inst_ssbo_ != VK_NULL_HANDLE) {
-                            UnmapPersistentBuffer(dev, skinned_inst_ssbo_mem_);
-                            vkDestroyBuffer(dev, skinned_inst_ssbo_, nullptr);
-                            vkFreeMemory(dev, skinned_inst_ssbo_mem_, nullptr);
-                        }
-                        size_t new_cap = inst_data_size * 2;
-                        CreateVulkanBuffer(dev, phys, new_cap,
-                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                            skinned_inst_ssbo_, skinned_inst_ssbo_mem_);
-                        skinned_inst_ssbo_capacity_ = new_cap;
-                    }
-                    WriteToBuffer(dev, skinned_inst_ssbo_mem_, 0, inst_data_size, visible_instances.data());
+                    const VkDeviceSize item_ssbo_offset = skinned_ssbo_write_offset;
+                    WriteToBuffer(context_->device(), skinned_inst_ssbo_mem_,
+                        item_ssbo_offset, inst_data_size, visible_instances.data());
+                    skinned_ssbo_write_offset += (inst_data_size + kSkinSSBOAlign - 1) & ~(kSkinSSBOAlign - 1);
 
                     AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
                         cur_bone_offset, cur_per_frame_offset, cur_scene_offset,
                         cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode,
-                        skinned_inst_ssbo_, static_cast<VkDeviceSize>(inst_data_size));
+                        skinned_inst_ssbo_, static_cast<VkDeviceSize>(inst_data_size), item_ssbo_offset);
 
                     pc_data.skinned = 2;
                     pc_data.bone_offset = 0;
