@@ -81,6 +81,7 @@
 #include "editor_project_hub.h"
 #include "editor_undo_panel.h"
 #include "editor_asset_importer.h"
+#include "editor_os_drop.h"
 #include "editor_asset_db.h"
 #include "editor_autosave.h"
 #include "editor_locale.h"
@@ -269,20 +270,16 @@ bool EditorApp::Init(int argc, char* argv[]) {
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
 
-    // Drag & Drop: accept file drops from OS — opens Asset Importer with the first importable file
-    glfwSetDropCallback(window_, [](GLFWwindow*, int count, const char** paths) {
+    // Drag & Drop: accept file drops from OS — dispatch to panels via OsDropEvent
+    glfwSetDropCallback(window_, [](GLFWwindow* win, int count, const char** paths) {
+        double mx, my;
+        glfwGetCursorPos(win, &mx, &my);
+        std::vector<std::string> file_paths;
+        file_paths.reserve(count);
         for (int i = 0; i < count; ++i) {
-            std::filesystem::path p(paths[i]);
-            std::string ext = p.extension().string();
-            for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            if (ext == ".gltf" || ext == ".glb" || ext == ".fbx" ||
-                ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".tga" || ext == ".bmp" ||
-                ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
-                dse::editor::OpenAssetImporter();
-                dse::editor::SetAssetImporterSourcePath(paths[i]);
-                break;
-            }
+            file_paths.emplace_back(paths[i]);
         }
+        dse::editor::PushOsDropEvent(file_paths, static_cast<float>(mx), static_cast<float>(my));
     });
 
     if (!gladLoadGL(glfwGetProcAddress)) {
@@ -982,6 +979,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);
 
     dse::editor::DrawStatusBar(ctx);
+
+    // Fallback: if OS drop wasn't consumed by any panel, open Asset Importer
+    {
+        dse::editor::OsDropEvent unclaimed;
+        if (dse::editor::ConsumeOsDropEvent(unclaimed) && !unclaimed.paths.empty()) {
+            dse::editor::OpenAssetImporter();
+            dse::editor::SetAssetImporterSourcePath(unclaimed.paths[0].c_str());
+        }
+    }
 
     dse::editor::EndEditorShell();
 }
