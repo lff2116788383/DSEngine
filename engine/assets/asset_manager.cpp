@@ -714,6 +714,16 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     return tex;
 }
 
+std::string AssetManager::FindTexturePathByHandle(unsigned int handle) const {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    for (const auto& [key, tex] : textures_) {
+        if (tex && tex->GetHandle() == handle) {
+            return tex->GetPath();
+        }
+    }
+    return {};
+}
+
 std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::string& directory_path) {
     const std::string logical_path = NormalizeAssetPath(directory_path);
     const std::string resolved_path = ResolveAssetPath(directory_path);

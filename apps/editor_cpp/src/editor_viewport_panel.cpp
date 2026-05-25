@@ -965,9 +965,18 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             glm::mat4 centroid_matrix = glm::translate(glm::mat4(1.0f), centroid);
 
             ImGuizmo::OPERATION gizmo_op = ImGuizmo::TRANSLATE;
-            if (current_gizmo_operation == 0) gizmo_op = ImGuizmo::TRANSLATE;
-            else if (current_gizmo_operation == 1) gizmo_op = ImGuizmo::TRANSLATE; // multi-select only supports translate
-            else if (current_gizmo_operation == 2) gizmo_op = ImGuizmo::TRANSLATE;
+            if (current_gizmo_operation != 0 && current_gizmo_operation != -1) {
+                // Multi-select only supports translate; show overlay hint
+                ImDrawList* hint_dl = ImGui::GetWindowDrawList();
+                const char* hint_text = T("Multi-select: Translate only");
+                ImVec2 hint_size = ImGui::CalcTextSize(hint_text);
+                float hint_x = window_pos.x + scene_panel_size.x * 0.5f - hint_size.x * 0.5f;
+                float hint_y = window_pos.y + scene_panel_size.y - 30.0f;
+                hint_dl->AddRectFilled(ImVec2(hint_x - 4, hint_y - 2),
+                    ImVec2(hint_x + hint_size.x + 4, hint_y + hint_size.y + 2),
+                    IM_COL32(40, 40, 40, 200), 3.0f);
+                hint_dl->AddText(ImVec2(hint_x, hint_y), IM_COL32(255, 200, 80, 255), hint_text);
+            }
 
             ImGuizmo::MODE gizmo_mode = ImGuizmo::WORLD;
 
@@ -1384,8 +1393,8 @@ void DrawGameViewportPanel(unsigned int texture_id) {
         ImVec2 text_size = ImGui::CalcTextSize(label);
         draw_list->AddText(ImVec2(p_min.x + (game_panel_size.x - text_size.x) * 0.5f, p_min.y + (game_panel_size.y - text_size.y) * 0.5f), IM_COL32(150, 150, 150, 255), label);
     }
-    ImGui::PopStyleVar();
     ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 

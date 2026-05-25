@@ -16,7 +16,7 @@ struct ViewportCameraConfig {
     bool active = false;
     bool ortho = false;
     float ortho_size = 10.0f;
-    int render_mode = 0; // 0=Shaded, 1=Wireframe, 2=Unlit
+    int render_mode = 0; // matches SceneViewMode enum: 0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit
 };
 
 /// Global state for multi-viewport management

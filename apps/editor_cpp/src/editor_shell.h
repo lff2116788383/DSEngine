@@ -36,4 +36,8 @@ void SetCurrentScenePath(const std::string& path);
 /// Force rebuild of dock layout on the next frame (clears first_time guard).
 void ResetEditorLayout();
 
+/// Request graceful editor exit (checked by main loop)
+void RequestExit();
+bool IsExitRequested();
+
 } // namespace dse::editor

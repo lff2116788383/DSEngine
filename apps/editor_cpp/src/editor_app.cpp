@@ -222,9 +222,11 @@ bool EditorApp::Init(int argc, char* argv[]) {
     frames_remaining_ = headless ? test_config_.max_frames : -1;
 
 #if defined(_WIN32)
-    AllocConsole();
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
+    if (headless) {
+        AllocConsole();
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+    }
 #endif
 
     std::cerr << "[Editor] Starting..." << (headless ? " (headless)" : "") << std::endl;
@@ -515,11 +517,12 @@ void EditorApp::Run() {
     dse::editor::AutoSaveManager::Get().CheckRecovery();
 
     if (!test_config_.replay_path.empty()) {
-        std::cout << "[EditorApp][Replay] WARNING: --replay is not yet implemented, path ignored: "
-                  << test_config_.replay_path << std::endl;
+        dse::editor::EditorLog(dse::editor::LogLevel::Warning,
+            "--replay is not yet implemented, path ignored: " + test_config_.replay_path);
+        test_config_.replay_path.clear();
     }
 
-    while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
+    while (!glfwWindowShouldClose(window_) && !dse::editor::IsExitRequested() && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
         cpu_profiler_.BeginFrame();
@@ -939,6 +942,19 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel(ctx);
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
+    if (show_git_) {
+        ImGui::SetNextWindowSize(ImVec2(360, 260), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Git", &show_git_)) {
+            ImGui::TextDisabled("Git integration is not yet available.");
+            ImGui::Spacing();
+            ImGui::Text("Planned features:");
+            ImGui::BulletText("Repository status");
+            ImGui::BulletText("Commit / push / pull");
+            ImGui::BulletText("Branch management");
+            ImGui::BulletText("Diff viewer");
+        }
+        ImGui::End();
+    }
 
     // Plugin Manager 面板
     if (show_plugins_panel_) {

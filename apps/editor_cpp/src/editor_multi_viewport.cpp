@@ -89,7 +89,7 @@ void DrawMultiViewportConfigPanel() {
             ImGui::DragFloat3("Position", &cam.position.x, 0.1f);
             ImGui::DragFloat3("Target", &cam.target.x, 0.1f);
 
-            const char* modes[] = { "Shaded", "Wireframe", "Unlit" };
+            const char* modes[] = { "Shaded", "Wireframe", "Shaded+Wire", "Unlit" };
             ImGui::Combo("Render Mode", &cam.render_mode, modes, IM_ARRAYSIZE(modes));
 
             // Preset buttons

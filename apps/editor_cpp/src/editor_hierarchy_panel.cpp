@@ -21,10 +21,11 @@
 #include <glm/geometric.hpp>
 #include <string>
 #include <algorithm>
-#include "imgui_internal.h"
 #include <cctype>
 #include <cstring>
 #include <vector>
+#include <optional>
+#include <memory>
 #include <filesystem>
 
 namespace dse::editor {
@@ -88,6 +89,18 @@ std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity par
     return children;
 }
 
+bool HasMatchingDescendant(entt::registry& registry, entt::entity entity) {
+    auto children = GetChildren(registry, entity);
+    for (auto child : children) {
+        std::string name = "Entity";
+        if (registry.all_of<EditorNameComponent>(child))
+            name = registry.get<EditorNameComponent>(child).name;
+        if (MatchesSearchFilter(name)) return true;
+        if (HasMatchingDescendant(registry, child)) return true;
+    }
+    return false;
+}
+
 void DrawEntityNode(EditorContext& context, entt::entity entity) {
     if (!context.registry.valid(entity)) return;
 
@@ -96,7 +109,10 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
         entity_name = context.registry.get<EditorNameComponent>(entity).name;
     }
 
-    if (!MatchesSearchFilter(entity_name)) return;
+    const bool is_searching = (s_search_filter[0] != '\0');
+    if (!MatchesSearchFilter(entity_name)) {
+        if (!is_searching || !HasMatchingDescendant(context.registry, entity)) return;
+    }
 
     // Prefab instance suffix
     bool is_prefab = IsPrefabInstance(context.registry, entity);
@@ -445,13 +461,24 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.selected_entity = new_ent;
             EditorLog(LogLevel::Info, "Created entity: New Entity");
             auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
             auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Create Empty Entity",
-                []{},
-                [&world_ref, &sel_ref, new_ent]() {
-                    world_ref.DestroyEntity(new_ent);
-                    if (sel_ref == new_ent) sel_ref = entt::null;
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    auto ent = world_ref.CreateEntity();
+                    reg_ref.emplace<EditorNameComponent>(ent, "New Entity");
+                    reg_ref.emplace<TransformComponent>(ent);
+                    sel_ref = ent;
+                    *tracked = ent;
+                },
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
                 }), false);
         }
         if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
@@ -460,6 +487,28 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.registry.emplace<TransformComponent>(new_ent);
             context.registry.emplace<UIRendererComponent>(new_ent);
             context.selected_entity = new_ent;
+            EditorLog(LogLevel::Info, "Created entity: New UI Element");
+            auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
+            auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                "Create UI Entity",
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    auto ent = world_ref.CreateEntity();
+                    reg_ref.emplace<EditorNameComponent>(ent, "New UI Element");
+                    reg_ref.emplace<TransformComponent>(ent);
+                    reg_ref.emplace<UIRendererComponent>(ent);
+                    sel_ref = ent;
+                    *tracked = ent;
+                },
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
+                }), false);
         }
         if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
             if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only))  CreateEntity3DCube(context);
@@ -510,20 +559,48 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (context.registry.all_of<TransformComponent>(to_delete)) {
                 deleted_transform = context.registry.get<TransformComponent>(to_delete);
             }
+            // Capture optional components for better undo restoration
+            std::optional<SpriteRendererComponent> deleted_sprite;
+            if (context.registry.all_of<SpriteRendererComponent>(to_delete))
+                deleted_sprite = context.registry.get<SpriteRendererComponent>(to_delete);
+            std::optional<dse::MeshRendererComponent> deleted_mesh;
+            if (context.registry.all_of<dse::MeshRendererComponent>(to_delete))
+                deleted_mesh = context.registry.get<dse::MeshRendererComponent>(to_delete);
+            std::optional<ScriptComponent> deleted_script;
+            if (context.registry.all_of<ScriptComponent>(to_delete))
+                deleted_script = context.registry.get<ScriptComponent>(to_delete);
+            std::optional<UIRendererComponent> deleted_ui;
+            if (context.registry.all_of<UIRendererComponent>(to_delete))
+                deleted_ui = context.registry.get<UIRendererComponent>(to_delete);
+
             context.world.DestroyEntity(to_delete);
             context.selected_entity = entt::null;
             EditorLog(LogLevel::Info, "Deleted entity: " + deleted_name);
             auto& world_ref = context.world;
             auto& reg_ref = context.registry;
             auto& sel_ref = context.selected_entity;
+            // tracked holds the current entity handle (null when deleted, valid when restored)
+            auto tracked = std::make_shared<entt::entity>(entt::null);
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Delete Entity: " + deleted_name,
-                []{},
-                [&world_ref, &reg_ref, &sel_ref, deleted_name, deleted_transform]() {
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null && reg_ref.valid(*tracked)) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
+                },
+                [&world_ref, &reg_ref, &sel_ref, tracked, deleted_name, deleted_transform,
+                 deleted_sprite, deleted_mesh, deleted_script, deleted_ui]() {
                     auto restored = world_ref.CreateEntity();
                     reg_ref.emplace<EditorNameComponent>(restored, deleted_name);
                     reg_ref.emplace<TransformComponent>(restored, deleted_transform);
+                    if (deleted_sprite) reg_ref.emplace<SpriteRendererComponent>(restored, *deleted_sprite);
+                    if (deleted_mesh) reg_ref.emplace<dse::MeshRendererComponent>(restored, *deleted_mesh);
+                    if (deleted_script) reg_ref.emplace<ScriptComponent>(restored, *deleted_script);
+                    if (deleted_ui) reg_ref.emplace<UIRendererComponent>(restored, *deleted_ui);
                     sel_ref = restored;
+                    *tracked = restored;
                 }), false);
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
@@ -623,12 +700,18 @@ void DrawHierarchyPanel(EditorContext& context) {
             EditorLog(LogLevel::Info, "Duplicated entity");
             auto& world_ref = context.world;
             auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
+            // NOTE: Redo for Duplicate is not implemented (source entity state may have changed).
+            // Undo reliably destroys the duplicate via tracked handle.
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Duplicate Entity",
                 []{},
-                [&world_ref, &sel_ref, new_ent]() {
-                    world_ref.DestroyEntity(new_ent);
-                    if (sel_ref == new_ent) sel_ref = entt::null;
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
                 }), false);
         }
         if (context.read_only) {

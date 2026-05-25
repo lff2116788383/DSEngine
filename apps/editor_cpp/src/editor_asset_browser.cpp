@@ -12,6 +12,11 @@
 
 namespace dse::editor {
 
+std::string& GetPendingAssetOpenPath() {
+    static std::string s_path;
+    return s_path;
+}
+
 namespace {
 
 struct AssetBrowserState {
@@ -150,8 +155,8 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
 
     // Drag source
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-        ImGui::SetDragDropPayload("ASSET_GUID", asset.guid.c_str(),
-                                   asset.guid.size() + 1);
+        ImGui::SetDragDropPayload("ASSET_PATH", asset.relative_path.c_str(),
+                                   asset.relative_path.size() + 1);
         ImGui::Text("%s %s", GetAssetTypeIcon(asset.type), asset.display_name.c_str());
         ImGui::EndDragDropSource();
     }
@@ -167,11 +172,10 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
         ImGui::EndTooltip();
     }
 
-    // Double click to open (scenes)
+    // Double click to open (scenes) — copies path; host loop handles actual open
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
         if (asset.type == AssetType::Scene) {
-            // Could emit an event; for now just copy path to clipboard
-            ImGui::SetClipboardText(asset.absolute_path.c_str());
+            GetPendingAssetOpenPath() = asset.absolute_path;
         }
     }
 }
@@ -329,7 +333,7 @@ void DrawAssetBrowserPanel() {
 
             // Drag source in list view
             if (ImGui::IsItemHovered() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                ImGui::SetDragDropPayload("ASSET_GUID", asset.guid.c_str(), asset.guid.size() + 1);
+                ImGui::SetDragDropPayload("ASSET_PATH", asset.relative_path.c_str(), asset.relative_path.size() + 1);
                 ImGui::Text("%s %s", GetAssetTypeIcon(asset.type), asset.display_name.c_str());
                 ImGui::EndDragDropSource();
             }

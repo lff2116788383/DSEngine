@@ -38,12 +38,12 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
 
     switch (mode) {
         case SceneViewMode::Wireframe:
-            // Full viewport tinted overlay to indicate wireframe mode
-            dl->AddRectFilled(win_pos,
-                ImVec2(win_pos.x + panel_size.x, win_pos.y + panel_size.y),
-                IM_COL32(0, 0, 0, 200));
-            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
-                IM_COL32(0, 255, 0, 255), "Wireframe (GPU: glPolygonMode)");
+            // GPU-side wireframe is active via SetSceneViewMode; just show a label
+            dl->AddRectFilled(ImVec2(win_pos.x + 4, win_pos.y + 4),
+                ImVec2(win_pos.x + 130, win_pos.y + 22),
+                IM_COL32(0, 0, 0, 140), 3.0f);
+            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 6),
+                IM_COL32(0, 255, 0, 255), "Wireframe");
             break;
 
         case SceneViewMode::ShadedWireframe:
@@ -53,11 +53,11 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
             break;
 
         case SceneViewMode::Unlit: {
-            // Desaturate overlay to hint unlit
-            dl->AddRectFilled(win_pos,
-                ImVec2(win_pos.x + panel_size.x, win_pos.y + panel_size.y),
-                IM_COL32(50, 50, 50, 80));
-            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
+            // GPU-side unlit is active via SetSceneViewMode; just show a label
+            dl->AddRectFilled(ImVec2(win_pos.x + 4, win_pos.y + 4),
+                ImVec2(win_pos.x + 150, win_pos.y + 22),
+                IM_COL32(0, 0, 0, 140), 3.0f);
+            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 6),
                 IM_COL32(255, 220, 100, 255), "Unlit (Albedo Only)");
             break;
         }
@@ -90,7 +90,10 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
             break;
 
         case SceneViewMode::Overdraw:
-            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
+            dl->AddRectFilled(ImVec2(win_pos.x + 4, win_pos.y + 4),
+                ImVec2(win_pos.x + 200, win_pos.y + 22),
+                IM_COL32(0, 0, 0, 140), 3.0f);
+            dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 6),
                 IM_COL32(255, 100, 100, 255), "Overdraw (Additive Heatmap)");
             break;
 

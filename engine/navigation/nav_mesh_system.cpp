@@ -92,6 +92,18 @@ bool NavMeshSystem::IsReady() const {
     return initialized_ && nav_mesh_ != nullptr && nav_query_ != nullptr;
 }
 
+int NavMeshSystem::GetPolyCount() const {
+    if (!nav_mesh_) return 0;
+    const dtNavMesh* mesh = nav_mesh_;
+    int total = 0;
+    for (int i = 0; i < mesh->getMaxTiles(); ++i) {
+        const dtMeshTile* tile = mesh->getTile(i);
+        if (tile && tile->header)
+            total += tile->header->polyCount;
+    }
+    return total;
+}
+
 // ============================================================
 // 构建
 // ============================================================
