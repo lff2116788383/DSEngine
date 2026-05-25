@@ -539,6 +539,7 @@ struct InstancingKeyData {
     float emissive[3];
     unsigned int blend_mode;
     int shading_mode, sorting_layer, order_in_layer, flags;
+    int skinned;  // 蒙皮标志: 避免 skinned/non-skinned 混合合批
 };
 
 struct InstancingKey {
@@ -564,6 +565,17 @@ struct InstancingKeyHash {
 }
 
 void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+    // Per-frame cache: 后续 pass 直接复用首次构建的 batch_items
+    if (!batch_cache_dirty_) {
+        if (!cached_opaque_items_.empty()) {
+            cmd_buffer.DrawMeshBatch(cached_opaque_items_);
+        }
+        if (!static_batch_items_.empty() && !gpu_driven_active_) {
+            cmd_buffer.DrawMeshBatch(static_batch_items_);
+        }
+        return;
+    }
+
     auto& asset_manager = RequireAssetManager(asset_manager_);
     auto view = world.registry().view<TransformComponent, MeshRendererComponent>();
     auto light_view = world.registry().view<DirectionalLight3DComponent>();
@@ -643,6 +655,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
     // GPU Instancing: 相同 mesh_path + 材质的非蛮皮实体合批（零堆分配 key）
     std::unordered_map<InstancingKey, size_t, InstancingKeyHash> instancing_map;
+    // Bone palette key → palette index (per batch item)
+    // key: (batch_item_index << 32) | bone_palette_key_low32
+    std::unordered_map<uint64_t, int> bone_palette_key_map;
 
     for (auto entity : view) {
         auto& transform = view.get<TransformComponent>(entity);
@@ -762,7 +777,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 #ifdef DSE_VSE_1522_DIAG
         item.debug_label = ClassifyVse1522MeshForDiagnostics(mesh_renderer);
 #endif // DSE_VSE_1522_DIAG
-        item.model = glm::mat4(1.0f);
+        item.model = mesh_model;
         item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
         item.order_in_layer = mesh_renderer.order_in_layer;
@@ -777,26 +792,17 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.shading_mode = 5;  // Watercolor stylization
         }
         
-        // P4: GPU 蒙皮 readback 优先于 VS 骨骼蒙皮
+        // VS 骨骼蒙皮（统一路径）：local-space 顶点 + bone matrices uniform
+        // GPU skinning readback 不再用于渲染路径（readback→CPU rebuild→re-upload 比 VS 蒙皮更慢）
+        // 注意：骨骼矩阵不预乘 mesh_model，shader 通过 MODEL_MATRIX 单独应用
         const dse::render::SkinnedOutput* gpu_skinned_output = nullptr;
+        uint64_t entity_bone_palette_key = 0;
         if (world.registry().all_of<Animator3DComponent>(entity)) {
             const auto& animator = world.registry().get<Animator3DComponent>(entity);
             if (animator.enabled && !animator.final_bone_matrices.empty()) {
-                if (gpu_skinning_ && gpu_skinning_->HasSkinnedOutput(static_cast<uint32_t>(entity))) {
-                    const auto* candidate = gpu_skinning_->GetSkinnedOutput(static_cast<uint32_t>(entity));
-                    if (candidate && candidate->vertex_count > 0 && !candidate->positions.empty()) {
-                        gpu_skinned_output = candidate;
-                        item.skinned = false;
-                    }
-                }
-                if (!gpu_skinned_output) {
-                    // 回退到 VS 骨骼蒙皮
-                    item.skinned = true;
-                    item.bone_matrices = animator.final_bone_matrices;
-                    for (auto& mat : item.bone_matrices) {
-                        mat = mesh_model * mat;
-                    }
-                }
+                item.skinned = true;
+                item.bone_matrices = animator.final_bone_matrices;
+                entity_bone_palette_key = animator.bone_palette_key;
             }
         }
         
@@ -888,9 +894,10 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.material_emissive += skylight_ambient * 0.05f;
         }
 
-        // GPU Instancing: 非蒙皮非变形非GPU蒙皮 + 有 mesh_path → 检查合批（静态物体走 StaticBatch）
-        const bool can_instance = !item.skinned && !item.morph_enabled
-            && !gpu_skinned_output  // P4: GPU 蒙皮实体不可实例化（每帧顶点唯一）
+        // GPU Instancing: 有 mesh_path + opaque → 检查合批（静态物体走 StaticBatch）
+        // Skinned mesh 也可合批（bone SSBO + per-instance bone_offset）
+        const bool can_instance = !item.morph_enabled
+            && !gpu_skinned_output
             && !mesh_renderer.is_static
             && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
             && !mesh_renderer.mesh_path.empty()
@@ -926,22 +933,72 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                      | (item.depth_test_enabled ? 8 : 0)
                      | (item.depth_write_enabled ? 16 : 0)
                      | (item.lighting_enabled ? 32 : 0);
+            kd.skinned = item.skinned ? 1 : 0;
 
             auto map_it = instancing_map.find(inst_key);
             if (map_it != instancing_map.end()) {
-                batch_items[map_it->second].instance_transforms.push_back(mesh_model);
+                const size_t batch_idx = map_it->second;
+                auto& existing = batch_items[batch_idx];
+                existing.instance_transforms.push_back(mesh_model);
+                if (item.skinned && !item.bone_matrices.empty()) {
+                    // Bone palette dedup: 用 bone_palette_key O(1) 查重
+                    int pal_idx = -1;
+                    if (entity_bone_palette_key != 0) {
+                        uint64_t compound_key = (static_cast<uint64_t>(batch_idx) << 32)
+                            | static_cast<uint32_t>(entity_bone_palette_key);
+                        auto pk_it = bone_palette_key_map.find(compound_key);
+                        if (pk_it != bone_palette_key_map.end()) {
+                            pal_idx = pk_it->second;
+                        }
+                    }
+                    if (pal_idx < 0) {
+                        pal_idx = static_cast<int>(existing.bone_palette.size());
+                        existing.bone_palette.push_back(std::move(item.bone_matrices));
+                        if (entity_bone_palette_key != 0) {
+                            uint64_t compound_key = (static_cast<uint64_t>(batch_idx) << 32)
+                                | static_cast<uint32_t>(entity_bone_palette_key);
+                            bone_palette_key_map[compound_key] = pal_idx;
+                        }
+                    }
+                    existing.instance_bone_palette_idx.push_back(pal_idx);
+                }
                 continue;
             }
 
-            item.model = mesh_model;
             item.instance_transforms.push_back(mesh_model);
+            if (item.skinned && !item.bone_matrices.empty()) {
+                item.bone_palette.push_back(item.bone_matrices);
+                item.instance_bone_palette_idx.push_back(0);
+                if (entity_bone_palette_key != 0) {
+                    uint64_t compound_key = (static_cast<uint64_t>(batch_items.size()) << 32)
+                        | static_cast<uint32_t>(entity_bone_palette_key);
+                    bone_palette_key_map[compound_key] = 0;
+                }
+            }
         }
 
-        // Vertex rebuild cache: reuse for local-space (skinned / instanced) meshes
+        // Mesh path template: 蒙皮 mesh 按 mesh_path 共享 local-space BatchVertex
+        // 同 mesh 的所有实例指向同一份数据，执行器检测重复指针跳过 VBO 上传
         const bool vtx_in_local_space = item.skinned || can_instance;
         const uint32_t vtx_eid = static_cast<uint32_t>(entity);
         bool vtx_cache_hit = false;
-        if (vtx_in_local_space && !mesh_renderer.temp_vertices.empty()) {
+        if (vtx_in_local_space && item.skinned && !mesh_renderer.mesh_path.empty()
+            && !mesh_renderer.temp_vertices.empty()) {
+            auto tpl_it = mesh_path_templates_.find(mesh_renderer.mesh_path);
+            if (tpl_it != mesh_path_templates_.end()) {
+                // mesh_path key 匹配即可（同 mesh 所有实例共享同一份数据）
+                // 模板失效由 InvalidateMegaBuffer/InvalidateStaticBatches 统一清理
+                item.shared_vertex_ptr = tpl_it->second.vertices.data();
+                item.shared_index_ptr = tpl_it->second.indices.data();
+                item.shared_vertex_count = static_cast<uint32_t>(tpl_it->second.vertices.size());
+                item.shared_index_count = static_cast<uint32_t>(tpl_it->second.indices.size());
+                item.debug_world_bounds_min = tpl_it->second.bounds_min;
+                item.debug_world_bounds_max = tpl_it->second.bounds_max;
+                vtx_cache_hit = true;
+            }
+        }
+        // Per-entity vertex cache: non-skinned instanced meshes
+        if (!vtx_cache_hit && vtx_in_local_space && !mesh_renderer.temp_vertices.empty()) {
             auto vc_it = vertex_cache_.find(vtx_eid);
             if (vc_it != vertex_cache_.end()
                 && vc_it->second.data_ptr == mesh_renderer.temp_vertices.data()) {
@@ -1167,14 +1224,32 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             item.debug_world_bounds_min = world_min;
             item.debug_world_bounds_max = world_max;
 
-            // Store in vertex cache (local-space meshes only)
+            // Store in cache (local-space meshes only)
             if (vtx_in_local_space) {
-                auto& ce = vertex_cache_[vtx_eid];
-                ce.vertices = item.vertices;
-                ce.indices = item.indices;
-                ce.bounds_min = world_min;
-                ce.bounds_max = world_max;
-                ce.data_ptr = mesh_renderer.temp_vertices.data();
+                if (item.skinned && !mesh_renderer.mesh_path.empty()) {
+                    // 蒙皮 mesh: 存入 mesh_path 模板（同 mesh 共享）
+                    auto& tpl = mesh_path_templates_[mesh_renderer.mesh_path];
+                    tpl.vertices = item.vertices;
+                    tpl.indices = item.indices;
+                    tpl.bounds_min = world_min;
+                    tpl.bounds_max = world_max;
+                    tpl.data_ptr = mesh_renderer.temp_vertices.data();
+                    // 立即切换到 shared ptr 模式，当前 item 也用共享数据
+                    item.shared_vertex_ptr = tpl.vertices.data();
+                    item.shared_index_ptr = tpl.indices.data();
+                    item.shared_vertex_count = static_cast<uint32_t>(tpl.vertices.size());
+                    item.shared_index_count = static_cast<uint32_t>(tpl.indices.size());
+                    item.vertices.clear();
+                    item.indices.clear();
+                } else {
+                    // 非蒙皮 instanced: 存入 per-entity 缓存
+                    auto& ce = vertex_cache_[vtx_eid];
+                    ce.vertices = item.vertices;
+                    ce.indices = item.indices;
+                    ce.bounds_min = world_min;
+                    ce.bounds_max = world_max;
+                    ce.data_ptr = mesh_renderer.temp_vertices.data();
+                }
             }
 
             if (emit_vse1522_depth_diag) {
@@ -1212,7 +1287,9 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             }
         }
 
-        if (!item.vertices.empty() && !item.indices.empty()) {
+        const bool has_vertex_data = (!item.vertices.empty() && !item.indices.empty())
+            || (item.shared_vertex_ptr && item.shared_index_ptr);
+        if (has_vertex_data) {
             if (mesh_renderer.is_static && !static_batches_built_) {
                 static_batch_builder_.Add(item);
             } else {
@@ -1278,6 +1355,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
         cmd_buffer.DrawMeshBatch(static_batch_items_);
     }
+
+    // 缓存本帧结果供后续 pass 复用
+    cached_opaque_items_ = std::move(opaque_items);
+    cached_transparent_items_ = transparent_items_;
+    batch_cache_dirty_ = false;
 }
 
 void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode) {

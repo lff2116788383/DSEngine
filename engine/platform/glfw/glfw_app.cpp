@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 
 #include <stb/stb_image.h>
@@ -88,7 +89,9 @@ bool GlfwApp::Init(const WindowConfig& config) {
 
     if (needs_gl) {
         glfwMakeContextCurrent(window_);
-        glfwSwapInterval(1);
+        const char* vsync_env = std::getenv("DSE_VSYNC");
+        int swap_interval = (vsync_env && std::string(vsync_env) == "0") ? 0 : 1;
+        glfwSwapInterval(swap_interval);
         has_gl_context_ = true;
     }
 

@@ -27,13 +27,20 @@ layout(std430, set = 4, binding = 0) readonly buffer DSEInstBuf {
 // Push Constant: 逐对象数据
 layout(push_constant) uniform PushConstants {
     mat4 u_model;
-    int u_skinned;
+    int u_skinned;       // 0=no skin, 1=single draw, 2=hardware instanced
     int u_morph_enabled;
+    int u_bone_offset;
 } pc;
 
-const int MAX_BONES = 255;
-layout(std140, set = 2, binding = 8) uniform BoneMatrices {
-    mat4 u_bone_matrices[MAX_BONES];
+// Hardware Instancing SSBO: per-instance model + bone_offset (skinned=2 时使用)
+struct DSESkinnedInst { mat4 model; int bone_offset; int _pad0; int _pad1; int _pad2; };
+layout(std430, set = 2, binding = 10) readonly buffer SkinnedInstBuf {
+    DSESkinnedInst skinned_instances[];
+};
+
+// Bone SSBO: 所有实例的骨骼矩阵紧密排列
+layout(std430, set = 2, binding = 8) readonly buffer BoneMatricesSSBO {
+    mat4 u_bone_matrices[];
 };
 #endif
 
@@ -44,14 +51,19 @@ void main() {
 #else
     mat4 boneTransform = mat4(1.0);
     if (pc.u_skinned != 0) {
-        boneTransform = u_bone_matrices[int(aBoneIndices[0])] * aBoneWeights[0] +
-                        u_bone_matrices[int(aBoneIndices[1])] * aBoneWeights[1] +
-                        u_bone_matrices[int(aBoneIndices[2])] * aBoneWeights[2] +
-                        u_bone_matrices[int(aBoneIndices[3])] * aBoneWeights[3];
+        int bo = (pc.u_skinned == 2)
+            ? skinned_instances[gl_InstanceIndex].bone_offset
+            : pc.u_bone_offset;
+        boneTransform = u_bone_matrices[bo + int(aBoneIndices[0])] * aBoneWeights[0] +
+                        u_bone_matrices[bo + int(aBoneIndices[1])] * aBoneWeights[1] +
+                        u_bone_matrices[bo + int(aBoneIndices[2])] * aBoneWeights[2] +
+                        u_bone_matrices[bo + int(aBoneIndices[3])] * aBoneWeights[3];
     }
 
     vec4 localPos = boneTransform * vec4(aPos, 1.0);
-    vec4 worldPos = pc.u_model * localPos;
+    mat4 inst_model = (pc.u_skinned == 2)
+        ? skinned_instances[gl_InstanceIndex].model : pc.u_model;
+    vec4 worldPos = inst_model * localPos;
 #endif
     gl_Position = vp * worldPos;
 }

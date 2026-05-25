@@ -500,6 +500,10 @@ struct Animator3DComponent {
     SkeletalCache skel_cache;
 
     std::vector<glm::mat4> final_bone_matrices; // Palette uploaded to GPU
+
+    /// Bone palette key: AnimatorSystem 计算的动画状态哈希
+    /// 相同 key 的实例共享同一组骨骼矩阵（用于 instancing 去重）
+    uint64_t bone_palette_key = 0;
 };
 
 struct SkyboxComponent {

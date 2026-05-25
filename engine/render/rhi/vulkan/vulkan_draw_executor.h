@@ -365,6 +365,11 @@ private:
     uint32_t current_color_attachment_count_ = 1;
     VkDeviceSize mesh_vbo_offset_ = 0;   ///< 当前帧 mesh VBO 写入偏移
     VkDeviceSize mesh_ibo_offset_ = 0;   ///< 当前帧 mesh IBO 写入偏移
+    // Shared mesh template: 同 pass 内复用已上传的 VBO/IBO 偏移
+    const void* vk_last_shared_vtx_ptr_ = nullptr;
+    size_t vk_last_shared_vtx_count_ = 0;
+    VkDeviceSize vk_last_shared_vbo_offset_ = 0;
+    VkDeviceSize vk_last_shared_ibo_offset_ = 0;
     VkDeviceSize bone_matrices_offset_ = 0; ///< 当前帧 bone matrices UBO 写入偏移
     VkDeviceSize per_frame_ubo_offset_ = 0;   ///< 当前帧 per-frame UBO 写入偏移（每个 batch 一个 slot）
     VkDeviceSize per_scene_ubo_offset_ = 0;   ///< 当前帧 per-scene UBO 写入偏移（每个 item 一个 slot）

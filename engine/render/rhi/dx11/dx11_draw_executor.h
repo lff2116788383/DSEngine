@@ -47,7 +47,7 @@ struct DX11PerObjectCB {
     glm::mat4 model;
     int skinned;
     int morph_enabled;
-    int use_instancing;
+    int bone_offset;
     int _pad1;
 };
 
@@ -307,8 +307,18 @@ private:
     ComPtr<ID3D11Buffer> per_spot_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_matrices_cb_;
 
-    // 骨骼矩阵常量缓冲（b7, MAX_BONES=100, 6400B）
+    // 骨骼矩阵常量缓冲（旧，保留兼容）
     ComPtr<ID3D11Buffer> bone_matrices_cb_;
+
+    // Bone SSBO: ByteAddressBuffer for all instances' bone matrices (t24)
+    ComPtr<ID3D11Buffer> bone_ssbo_buf_;
+    ComPtr<ID3D11ShaderResourceView> bone_ssbo_srv_;
+    size_t bone_ssbo_capacity_ = 0;
+
+    // Skinned Instance SSBO: ByteAddressBuffer per-instance model+bone_offset (t25)
+    ComPtr<ID3D11Buffer> skinned_inst_buf_;
+    ComPtr<ID3D11ShaderResourceView> skinned_inst_srv_;
+    size_t skinned_inst_capacity_ = 0;
 
     // Light Probe SH 常量缓冲（b9, 160B）
     ComPtr<ID3D11Buffer> light_probe_data_cb_;

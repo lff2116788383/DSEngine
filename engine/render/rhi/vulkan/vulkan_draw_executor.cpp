@@ -238,11 +238,14 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                                 per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
 
-    // --- BoneMatrices / MorphWeights UBO（多 mesh 累积偏移，避免 GPU 延迟执行覆盖） ---
+    // --- BoneMatrices SSBO / MorphWeights UBO ---
     constexpr size_t kBoneMatricesSize = 64 * 255 * sizeof(glm::mat4); // 64 meshes * 16320 bytes = ~1020KB
     constexpr size_t kMorphWeightsSize = 16; // 4 floats
-    CreateUBOBufferInternal(device, physical_device, kBoneMatricesSize,
-                            bone_matrices_ubo_, bone_matrices_ubo_mem_);
+    // BoneMatrices 使用 STORAGE_BUFFER（SSBO）+ UNIFORM_BUFFER 双用途
+    CreateVulkanBuffer(device, physical_device, kBoneMatricesSize,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       bone_matrices_ubo_, bone_matrices_ubo_mem_);
     CreateUBOBufferInternal(device, physical_device, kMorphWeightsSize,
                             morph_weights_ubo_, morph_weights_ubo_mem_);
     // 初始化 BoneMatrices 为单位矩阵
@@ -930,18 +933,18 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             spot_shadow_write.pImageInfo      = spot_shadow_image_infos;
         }
 
-        // BoneMatrices UBO (binding 8) — 使用累积偏移避免 GPU 延迟执行覆盖
+        // BoneMatrices SSBO (binding 8) — 整个 buffer 绑定，push constant 控制 offset
         VkDescriptorBufferInfo bone_buf_info{};
         VkWriteDescriptorSet bone_write{};
         if (has_binding_any(2, 8)) {
             bone_buf_info.buffer = bone_matrices_ubo_;
             bone_buf_info.offset = bone_offset;
-            bone_buf_info.range  = 255 * sizeof(glm::mat4);
+            bone_buf_info.range  = VK_WHOLE_SIZE;
             bone_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             bone_write.dstSet          = sets[2];
             bone_write.dstBinding      = 8;
             bone_write.descriptorCount = 1;
-            bone_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            bone_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             bone_write.pBufferInfo     = &bone_buf_info;
         }
 
@@ -1269,8 +1272,8 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         // binding 7: spot_shadow_map[4]
         if (has_binding(2, 7)) { size_t base = push_img(sets[2], 7, 4); img_fixups.push_back({writes.size()-1, base}); }
 
-        // binding 8-9: BoneMatrices / MorphWeights UBO
-        if (has_binding(2, 8)) push_ubo(sets[2], 8);
+        // binding 8: BoneMatrices SSBO, binding 9: MorphWeights UBO
+        if (has_binding(2, 8)) push_ssbo(sets[2], 8);
         if (has_binding(2, 9)) push_ubo(sets[2], 9);
     }
 
@@ -1399,7 +1402,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         for (uint32_t b = 1; b <= 5; ++b) { if (has_binding(2, b)) push_img(2, b, 1); }
         if (has_binding(2, 6)) push_img(2, 6, 3);
         if (has_binding(2, 7)) push_img(2, 7, 4);
-        if (has_binding(2, 8)) push_ubo(2, 8);
+        if (has_binding(2, 8)) push_ssbo2(2, 8);
         if (has_binding(2, 9)) push_ubo(2, 9);
     }
 
@@ -2092,6 +2095,9 @@ void VulkanDrawExecutor::DrawMeshBatch(
 
     if (items.empty()) return;
     if (skip_current_pass_) return;
+    // 每次 pass 重置共享模板跟踪（避免跨 pass 误判）
+    vk_last_shared_vtx_ptr_ = nullptr;
+    vk_last_shared_vtx_count_ = 0;
 
     global_state_.current_frame_stats.mesh_count += static_cast<int>(items.size());
     dse::render::UpdateSortBatchStats(global_state_.current_frame_stats, items);
@@ -2168,9 +2174,73 @@ void VulkanDrawExecutor::DrawMeshBatch(
     UpdatePerFrameUBO(view, projection, {});
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
+    // === Bone SSBO: 收集所有蒙皮实例骨骼矩阵，一次写入 ===
+    // 优先使用 bone_palette（去重后数据量极小），fallback 到 per_instance_bones
+    std::vector<int> bone_offsets(items.size(), 0);
+    std::vector<std::vector<int>> per_inst_bone_offsets(items.size());
+    std::vector<std::vector<int>> palette_base_offsets(items.size());
+    VkDeviceSize vk_bone_ssbo_total_bytes = 0;
+    {
+        size_t total_bones = 0;
+        for (size_t i = 0; i < items.size(); ++i) {
+            const auto& it = items[i];
+            if (it.skinned && !it.bone_palette.empty()) {
+                auto& pbo = palette_base_offsets[i];
+                pbo.resize(it.bone_palette.size());
+                for (size_t p = 0; p < it.bone_palette.size(); ++p) {
+                    pbo[p] = static_cast<int>(total_bones);
+                    total_bones += (std::min)(it.bone_palette[p].size(), static_cast<size_t>(255));
+                }
+                auto& offsets = per_inst_bone_offsets[i];
+                offsets.resize(it.instance_bone_palette_idx.size());
+                for (size_t j = 0; j < it.instance_bone_palette_idx.size(); ++j) {
+                    int pidx = it.instance_bone_palette_idx[j];
+                    offsets[j] = (pidx >= 0 && pidx < static_cast<int>(pbo.size())) ? pbo[pidx] : 0;
+                }
+            } else if (it.skinned && !it.per_instance_bones.empty()) {
+                auto& offsets = per_inst_bone_offsets[i];
+                offsets.resize(it.per_instance_bones.size());
+                for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
+                    offsets[j] = static_cast<int>(total_bones);
+                    total_bones += (std::min)(it.per_instance_bones[j].size(), static_cast<size_t>(255));
+                }
+            } else if (it.skinned && !it.bone_matrices.empty()) {
+                bone_offsets[i] = static_cast<int>(total_bones);
+                total_bones += (std::min)(it.bone_matrices.size(), static_cast<size_t>(255));
+            }
+        }
+        if (total_bones > 0) {
+            vk_bone_ssbo_total_bytes = total_bones * sizeof(glm::mat4);
+            for (size_t i = 0; i < items.size(); ++i) {
+                const auto& it = items[i];
+                if (it.skinned && !it.bone_palette.empty()) {
+                    for (size_t p = 0; p < it.bone_palette.size(); ++p) {
+                        size_t count = (std::min)(it.bone_palette[p].size(), static_cast<size_t>(255));
+                        VkDeviceSize offset = palette_base_offsets[i][p] * sizeof(glm::mat4);
+                        WriteToBuffer(context_->device(), bone_matrices_ubo_mem_, offset,
+                                      count * sizeof(glm::mat4), it.bone_palette[p].data());
+                    }
+                } else if (it.skinned && !it.per_instance_bones.empty()) {
+                    for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
+                        size_t count = (std::min)(it.per_instance_bones[j].size(), static_cast<size_t>(255));
+                        VkDeviceSize offset = per_inst_bone_offsets[i][j] * sizeof(glm::mat4);
+                        WriteToBuffer(context_->device(), bone_matrices_ubo_mem_, offset,
+                                      count * sizeof(glm::mat4), it.per_instance_bones[j].data());
+                    }
+                } else if (it.skinned && !it.bone_matrices.empty()) {
+                    size_t count = (std::min)(it.bone_matrices.size(), static_cast<size_t>(255));
+                    VkDeviceSize offset = bone_offsets[i] * sizeof(glm::mat4);
+                    WriteToBuffer(context_->device(), bone_matrices_ubo_mem_, offset,
+                                  count * sizeof(glm::mat4), it.bone_matrices.data());
+                }
+            }
+        }
+    }
+
     // 逐 mesh 绘制
     unsigned int last_material_tex = (std::numeric_limits<unsigned int>::max)();
-    for (const auto& item : items) {
+    for (size_t item_idx = 0; item_idx < items.size(); ++item_idx) {
+        const auto& item = items[item_idx];
         if (item.texture_handle != last_material_tex) {
             if (last_material_tex != (std::numeric_limits<unsigned int>::max)())
                 global_state_.current_frame_stats.material_switches++;
@@ -2187,23 +2257,15 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 更新 per-item UBO 数据（每个 item 独立 slot，避免 GPU 延迟执行覆盖）
         VkDeviceSize cur_scene_offset    = per_scene_ubo_offset_;
         VkDeviceSize cur_material_offset = per_material_ubo_offset_;
-        VkDeviceSize cur_pl_offset       = 0; // 光源数据由 SSBO 提供，不再 per-draw UBO
+        VkDeviceSize cur_pl_offset       = 0;
         VkDeviceSize cur_sl_offset       = 0;
         UpdatePerSceneUBO(item);
         UpdatePerMaterialUBO(item);
-        // 光源数据由 LightBuffer SSBO 提供，跳过 per-draw UBO 上传
         per_scene_ubo_offset_        += kUboSlotAlignment;
         per_material_ubo_offset_     += kUboSlotAlignment;
 
-        // 上传骨骼矩阵到 UBO（累积偏移，避免 GPU 延迟执行时覆盖前面 mesh 的数据）
-        VkDeviceSize cur_bone_offset = bone_matrices_offset_;
-        if (item.skinned && !item.bone_matrices.empty()) {
-            size_t count = (std::min)(item.bone_matrices.size(), static_cast<size_t>(255));
-            size_t bone_data_size = count * sizeof(glm::mat4);
-            WriteToBuffer(context_->device(), bone_matrices_ubo_mem_, bone_matrices_offset_,
-                          bone_data_size, item.bone_matrices.data());
-            bone_matrices_offset_ += 255 * sizeof(glm::mat4); // 固定步长，保持对齐
-        }
+        // Bone SSBO: offset=0, range=total（push constant u_bone_offset 控制索引）
+        VkDeviceSize cur_bone_offset = 0;
 
         // 分配并绑定 DescriptorSet（传入各 UBO 的当前偏移）
         AllocateAndUpdateMeshDescriptorSets(cmd_buf, pbr_program, item, resource_mgr,
@@ -2211,44 +2273,72 @@ void VulkanDrawExecutor::DrawMeshBatch(
             cur_material_offset, cur_pl_offset, cur_sl_offset, gbuffer_mode);
 
 
-        // 上传顶点数据到 mesh VBO（累积偏移，避免后续 mesh 覆盖前面的数据）
-        VkDeviceSize cur_vbo_offset = mesh_vbo_offset_;
-        if (!item.vertices.empty()) {
-            size_t vdata_size = item.vertices.size() * sizeof(item.vertices[0]);
-            if (mesh_vbo_offset_ + vdata_size > mesh_vbo_capacity_) {
-                DEBUG_LOG_ERROR("[Vulkan] VBO OVERFLOW: offset={} + size={} > capacity={}", mesh_vbo_offset_, vdata_size, mesh_vbo_capacity_);
-            } else {
-                WriteToBuffer(context_->device(), mesh_vbo_mem_, mesh_vbo_offset_, vdata_size, item.vertices.data());
+        // 解析顶点/索引数据源：优先使用 shared_vertex_ptr
+        const BatchVertex* vtx_data = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+        const uint32_t* idx_data = item.shared_index_ptr ? item.shared_index_ptr : item.indices.data();
+        const size_t vtx_count = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
+        const size_t idx_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
+
+        // 同 pass 内连续相同 shared_vertex_ptr → 复用已上传的 VBO/IBO 偏移
+        const bool reuse_upload = item.shared_vertex_ptr
+            && item.shared_vertex_ptr == vk_last_shared_vtx_ptr_
+            && vtx_count == vk_last_shared_vtx_count_;
+
+        VkDeviceSize cur_vbo_offset;
+        VkDeviceSize cur_ibo_offset;
+        if (reuse_upload) {
+            cur_vbo_offset = vk_last_shared_vbo_offset_;
+            cur_ibo_offset = vk_last_shared_ibo_offset_;
+        } else {
+            // 上传顶点数据到 mesh VBO（累积偏移，避免后续 mesh 覆盖前面的数据）
+            cur_vbo_offset = mesh_vbo_offset_;
+            if (vtx_count > 0) {
+                size_t vdata_size = vtx_count * sizeof(BatchVertex);
+                if (mesh_vbo_offset_ + vdata_size > mesh_vbo_capacity_) {
+                    DEBUG_LOG_ERROR("[Vulkan] VBO OVERFLOW: offset={} + size={} > capacity={}", mesh_vbo_offset_, vdata_size, mesh_vbo_capacity_);
+                } else {
+                    WriteToBuffer(context_->device(), mesh_vbo_mem_, mesh_vbo_offset_, vdata_size, vtx_data);
+                }
+                mesh_vbo_offset_ += vdata_size;
             }
-            mesh_vbo_offset_ += vdata_size;
+
+            // 上传索引数据到 mesh IBO（累积偏移）
+            cur_ibo_offset = mesh_ibo_offset_;
+            if (idx_count > 0) {
+                size_t idata_size = idx_count * sizeof(uint32_t);
+                if (mesh_ibo_offset_ + idata_size > mesh_ibo_capacity_) {
+                    DEBUG_LOG_ERROR("[Vulkan] IBO OVERFLOW: offset={} + size={} > capacity={}", mesh_ibo_offset_, idata_size, mesh_ibo_capacity_);
+                } else {
+                    WriteToBuffer(context_->device(), mesh_ibo_mem_, mesh_ibo_offset_, idata_size, idx_data);
+                }
+                mesh_ibo_offset_ += idata_size;
+            }
+
+            if (item.shared_vertex_ptr) {
+                vk_last_shared_vtx_ptr_ = item.shared_vertex_ptr;
+                vk_last_shared_vtx_count_ = vtx_count;
+                vk_last_shared_vbo_offset_ = cur_vbo_offset;
+                vk_last_shared_ibo_offset_ = cur_ibo_offset;
+            } else {
+                vk_last_shared_vtx_ptr_ = nullptr;
+                vk_last_shared_vtx_count_ = 0;
+            }
         }
 
-        // 上传索引数据到 mesh IBO（累积偏移）
-        VkDeviceSize cur_ibo_offset = mesh_ibo_offset_;
-        if (!item.indices.empty()) {
-            size_t idata_size = item.indices.size() * sizeof(item.indices[0]);
-            if (mesh_ibo_offset_ + idata_size > mesh_ibo_capacity_) {
-                DEBUG_LOG_ERROR("[Vulkan] IBO OVERFLOW: offset={} + size={} > capacity={}", mesh_ibo_offset_, idata_size, mesh_ibo_capacity_);
-            } else {
-                WriteToBuffer(context_->device(), mesh_ibo_mem_, mesh_ibo_offset_, idata_size, item.indices.data());
-            }
-            mesh_ibo_offset_ += idata_size;
-        }
-
-        // Push constant: model + skinned + morph_enabled + use_instancing
-        // 注意：标准 PBR SPIR-V 着色器不支持 per-instance vertex attribute，
-        // 因此 instanced 路径采用逐实例更新 push constant 并绘制的方式。
+        // Push constant: model + skinned + morph_enabled + bone_offset
         const bool is_instanced = item.instance_transforms.size() > 1;
         struct {
             glm::mat4 model;
             int skinned;
             int morph_enabled;
-            int use_instancing;
+            int bone_offset;
         } pc_data;
+        // Vulkan: skinned instancing 暂保持 pseudo-instancing（skinned=1 + per-draw bone_offset）
+        // 待 descriptor set 扩展后可升级为 skinned=2 + vkCmdDrawIndexed(instanceCount>1)
         pc_data.model = item.model;
         pc_data.skinned = item.skinned ? 1 : 0;
         pc_data.morph_enabled = item.morph_enabled ? 1 : 0;
-        pc_data.use_instancing = 0;
+        pc_data.bone_offset = item.skinned ? bone_offsets[item_idx] : 0;
 
         // 绑定 VBO binding 0 (mesh only)
         VkBuffer vbo_buffers[] = {mesh_vbo_};
@@ -2261,13 +2351,18 @@ void VulkanDrawExecutor::DrawMeshBatch(
         // 绘制
         if (is_instanced) {
             // Pseudo-instancing：逐实例更新 push constant 并绘制
+            const bool skinned_instanced = item.skinned && (!item.per_instance_bones.empty() || !item.bone_palette.empty());
+            const auto& inst_bo = per_inst_bone_offsets[item_idx];
             for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
                 pc_data.model = item.instance_transforms[inst];
+                if (skinned_instanced && inst < inst_bo.size()) {
+                    pc_data.bone_offset = inst_bo[inst];
+                }
                 vkCmdPushConstants(cmd_buf, pbr_program->pipeline_layout,
                                    VK_SHADER_STAGE_VERTEX_BIT,
                                    0, sizeof(pc_data), &pc_data);
                 vkCmdDrawIndexed(cmd_buf,
-                                 static_cast<uint32_t>(item.indices.size()),
+                                 static_cast<uint32_t>(idx_count),
                                  1, 0, 0, 0);
             }
             global_state_.current_frame_stats.instanced_draw_calls++;
@@ -2278,11 +2373,11 @@ void VulkanDrawExecutor::DrawMeshBatch(
                                VK_SHADER_STAGE_VERTEX_BIT,
                                0, sizeof(pc_data), &pc_data);
             vkCmdDrawIndexed(cmd_buf,
-                             static_cast<uint32_t>(item.indices.size()),
+                             static_cast<uint32_t>(idx_count),
                              1, 0, 0, 0);
             global_state_.current_frame_stats.draw_calls++;
         }
-        global_state_.current_frame_stats.triangle_count += static_cast<int>(item.indices.size() / 3) * static_cast<int>(is_instanced ? item.instance_transforms.size() : 1);
+        global_state_.current_frame_stats.triangle_count += static_cast<int>(idx_count / 3) * static_cast<int>(is_instanced ? item.instance_transforms.size() : 1);
     }
 }
 
@@ -3600,7 +3695,7 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
         ++wc;
     }
 
-    push_buffer(8, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, bone_matrices_ubo_, 0, 255 * sizeof(glm::mat4));
+    push_buffer(8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, bone_matrices_ubo_, 0, VK_WHOLE_SIZE);
 
     VkBuffer mat_buffer = dummy_ssbo_buffer_;
     VkDeviceSize mat_range = VK_WHOLE_SIZE;

@@ -158,6 +158,32 @@ private:
     size_t instance_vbo_capacity_ = 0;  ///< 当前 instance VBO 容量（字节）
     unsigned int white_texture_handle_ = 0;
 
+    // Shared mesh template: 同 pass 内跳过重复 VBO 上传
+    const BatchVertex* last_shared_vtx_ptr_ = nullptr;
+    size_t last_shared_vtx_count_ = 0;
+
+    // Static Mesh VBO 缓存：shared_vertex_ptr → 持久化 VAO/VBO/IBO
+    struct StaticMeshEntry {
+        unsigned int vao = 0;
+        unsigned int vbo = 0;
+        unsigned int ibo = 0;
+        size_t vtx_count = 0;
+        size_t idx_count = 0;
+    };
+    std::unordered_map<const void*, StaticMeshEntry> static_mesh_cache_;
+    StaticMeshEntry CreateStaticMeshVAO(const BatchVertex* vtx_data, size_t vtx_count,
+                                         const uint32_t* idx_data, size_t idx_count);
+
+    // Bone SSBO: 所有蒙皮实例的骨骼矩阵打包为一个 SSBO
+    unsigned int bone_ssbo_ = 0;
+    size_t bone_ssbo_capacity_ = 0;  ///< 当前 SSBO 容量（字节）
+    bool bone_ssbo_uploaded_this_frame_ = false;
+
+    // Skinned Instance SSBO (binding 10): per-instance model + bone_offset
+    unsigned int skinned_inst_ssbo_ = 0;
+    size_t skinned_inst_ssbo_capacity_ = 0;
+    bool inst_ssbo_uploaded_this_frame_ = false;
+
     // 天空盒几何
     VertexArrayHandle skybox_vao_handle_;
     unsigned int skybox_vbo_handle_ = 0;

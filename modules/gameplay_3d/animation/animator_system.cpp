@@ -452,6 +452,28 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                 }
             }
         }
+
+        // Bone palette key: 根据动画状态生成哈希，用于 ComputeFinalMatrices 去重
+        // 相同 (skeleton, clip, quantized_time) 的实体共享同一组骨骼矩阵
+        {
+            std::hash<std::string> str_hasher;
+            uint64_t key = str_hasher(animator.dskel_path);
+            if (animator.state_machine) {
+                key ^= str_hasher(animator.current_state_name) * 2654435761ULL;
+                key ^= static_cast<uint64_t>(static_cast<int>(animator.state_time * 30.0f)) * 40503ULL;
+                if (animator.is_transitioning) {
+                    key ^= str_hasher(animator.next_state_name) * 11400714819323198485ULL;
+                    key ^= static_cast<uint64_t>(static_cast<int>(animator.transition_progress * 30.0f)) * 2246822519ULL;
+                }
+            } else if (!animator.use_anim_tree) {
+                key ^= str_hasher(animator.danim_path) * 2654435761ULL;
+                key ^= static_cast<uint64_t>(static_cast<int>(animator.current_time * 30.0f)) * 40503ULL;
+            } else {
+                key ^= static_cast<uint64_t>(static_cast<int>(animator.blend_parameter_value * 100.0f)) * 40503ULL;
+            }
+            if (animator.lock_root_motion) key ^= 0xDEADBEEFULL;
+            animator.bone_palette_key = key;
+        }
     }
 }
 
@@ -459,9 +481,22 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
     auto view = world.registry().view<Animator3DComponent>();
     if (view.empty()) return;
 
+    // Bone palette deduplication: 相同动画状态（clip + quantized_time）只计算一次
+    // key = bone_palette_key (由 EvaluateBaseAnim 填充)
+    std::unordered_map<uint64_t, const std::vector<glm::mat4>*> palette_cache;
+
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
         if (!animator.enabled || !animator.skel_cache.valid) continue;
+
+        // 尝试复用已计算的相同动画状态
+        if (animator.bone_palette_key != 0) {
+            auto pc_it = palette_cache.find(animator.bone_palette_key);
+            if (pc_it != palette_cache.end()) {
+                animator.final_bone_matrices = *(pc_it->second);
+                continue;
+            }
+        }
 
         const auto& cache = animator.skel_cache;
         const uint32_t bone_count = cache.bone_count;
@@ -507,6 +542,11 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
         // final = anim_global * inv(bind_global) [precomputed]
         for (uint32_t i = 0; i < bone_count; ++i) {
             animator.final_bone_matrices[i] = global_transforms[i] * cache.inv_bind_globals[i];
+        }
+
+        // 注册到 palette cache 供后续相同动画状态的实体复用
+        if (animator.bone_palette_key != 0) {
+            palette_cache[animator.bone_palette_key] = &animator.final_bone_matrices;
         }
     }
 }

@@ -29,8 +29,9 @@ local SKYBOX_TEX     = "assets/textures/skybox000.jpg"
 -- 性能统计
 local frame_times    = {}
 local frame_idx      = 0
-local warmup_frames  = 60     -- 跳过前 60 帧的初始化开销
+local warmup_frames  = 30     -- 跳过前 30 帧的初始化开销
 local stats_printed  = false
+local last_clock     = nil
 
 --------------------------------------------------------------------------------
 -- 辅助: NxN 网格排列
@@ -142,7 +143,14 @@ function Update(dt)
 
     local sample_idx = frame_idx - warmup_frames
     if sample_idx <= PERF_FRAMES then
-        frame_times[sample_idx] = dt * 1000.0  -- ms
+        -- 使用 unclamped wall-clock 差值（engine dt 被 clamp 到 100ms）
+        local now = os.clock() * 1000.0  -- ms
+        if last_clock then
+            frame_times[sample_idx] = now - last_clock
+        else
+            frame_times[sample_idx] = dt * 1000.0
+        end
+        last_clock = now
     end
 
     -- 每 100 帧输出一次实时 FPS
@@ -153,10 +161,11 @@ function Update(dt)
             frame_idx, fps, dc, dt * 1000.0))
     end
 
-    -- 统计完成, 输出报告
+    -- 统计完成, 输出报告并自动退出
     if sample_idx == PERF_FRAMES and not stats_printed then
         stats_printed = true
         print_perf_report()
+        app.quit()
     end
 end
 

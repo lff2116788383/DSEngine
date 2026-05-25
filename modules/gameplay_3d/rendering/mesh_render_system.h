@@ -61,6 +61,9 @@ public:
         mega_ibo_index_count_ = 0;
         mega_buffer_dirty_ = true;
         vertex_cache_.clear();
+        mesh_path_templates_.clear();
+        batch_cache_dirty_ = true;
+        cached_opaque_items_.clear();
     }
 
     /// 场景切换或静态物体变化时调用：下帧重建静态合批
@@ -68,6 +71,9 @@ public:
         static_batches_built_ = false;
         static_batch_items_.clear();
         vertex_cache_.clear();
+        mesh_path_templates_.clear();
+        batch_cache_dirty_ = true;
+        cached_opaque_items_.clear();
     }
 
     /// 静态合批统计：上帧合并后的批次数
@@ -89,6 +95,9 @@ public:
 
     /// Vertex Cache: 场景切换时清除顶点缓存
     void InvalidateVertexCache() { vertex_cache_.clear(); }
+
+    /// 每帧 Update 后标记 batch_items 需要重建（下一次 Render() 首调构建，后续 pass 复用）
+    void MarkBatchDirty() { batch_cache_dirty_ = true; }
 
     /// Hi-Z Occlusion Culling: 获取上一帧收集的 AABB 列表
     const std::vector<HiZAABB>& cached_aabbs() const { return cached_aabbs_; }
@@ -126,7 +135,7 @@ private:
     /// GPU Driven: 本帧 GPU Driven 路径是否已处理不透明 mesh（避免 Render 中双重绘制）
     bool gpu_driven_active_ = false;
 
-    /// Vertex rebuild cache: 避免每帧/每 pass 重复构建 BatchVertex
+    /// Vertex rebuild cache: 避免每帧/每 pass 重复构建 BatchVertex（per-entity）
     struct VertexCacheEntry {
         std::vector<BatchVertex> vertices;
         std::vector<uint32_t> indices;
@@ -135,6 +144,22 @@ private:
         const float* data_ptr = nullptr;  ///< temp_vertices.data() 指针，用于失效检测
     };
     std::unordered_map<uint32_t, VertexCacheEntry> vertex_cache_;
+
+    /// Mesh path template: 按 mesh_path 缓存 local-space BatchVertex，
+    /// 同 mesh 的所有蒙皮实例共享同一份数据，执行器跳过重复 VBO 上传。
+    struct MeshPathTemplate {
+        std::vector<BatchVertex> vertices;
+        std::vector<uint32_t> indices;
+        glm::vec3 bounds_min{0.0f};
+        glm::vec3 bounds_max{0.0f};
+        const float* data_ptr = nullptr;  ///< 失效检测
+    };
+    std::unordered_map<std::string, MeshPathTemplate> mesh_path_templates_;
+
+    /// Per-frame batch_items cache: Render() 首次调用构建，后续 pass 直接复用
+    std::vector<MeshDrawItem> cached_opaque_items_;
+    std::vector<MeshDrawItem> cached_transparent_items_;
+    bool batch_cache_dirty_ = true;  ///< OnUpdate() 设 true，首次 Render() 消费后 false
 
     /// GPU Driven: 每帧缓存
     std::vector<DrawElementsIndirectCommand> gpu_draw_cmds_;

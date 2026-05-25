@@ -133,6 +133,13 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteTextures(1, &white_texture_handle_); }
         white_texture_handle_ = 0;
     }
+    // Static Mesh VBO 缓存清理
+    for (auto& [key, entry] : static_mesh_cache_) {
+        if (entry.vao) { glDeleteVertexArrays(1, &entry.vao); }
+        if (entry.vbo) { glDeleteBuffers(1, &entry.vbo); }
+        if (entry.ibo) { glDeleteBuffers(1, &entry.ibo); }
+    }
+    static_mesh_cache_.clear();
     // GPU Instancing VBO
     if (instance_vbo_handle_ != 0) {
         if (delete_buffer_fn_) { delete_buffer_fn_(instance_vbo_handle_); }
@@ -155,6 +162,16 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         if (delete_buffer_fn_) { delete_buffer_fn_(mesh_ibo_handle_); }
         else { glDeleteBuffers(1, &mesh_ibo_handle_); }
         mesh_ibo_handle_ = 0;
+    }
+    if (bone_ssbo_ != 0) {
+        glDeleteBuffers(1, &bone_ssbo_);
+        bone_ssbo_ = 0;
+        bone_ssbo_capacity_ = 0;
+    }
+    if (skinned_inst_ssbo_ != 0) {
+        glDeleteBuffers(1, &skinned_inst_ssbo_);
+        skinned_inst_ssbo_ = 0;
+        skinned_inst_ssbo_capacity_ = 0;
     }
     // 2D 精灵缓冲
     if (vao_handle_) {
@@ -229,6 +246,60 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
     }
 
     active_render_target_ = 0;
+}
+
+// ============================================================
+// Static Mesh VBO 缓存
+// ============================================================
+
+GLDrawExecutor::StaticMeshEntry GLDrawExecutor::CreateStaticMeshVAO(
+    const BatchVertex* vtx_data, size_t vtx_count,
+    const uint32_t* idx_data, size_t idx_count) {
+    StaticMeshEntry entry;
+    entry.vtx_count = vtx_count;
+    entry.idx_count = idx_count;
+
+    glGenVertexArrays(1, &entry.vao);
+    glGenBuffers(1, &entry.vbo);
+    glGenBuffers(1, &entry.ibo);
+
+    glBindVertexArray(entry.vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(vtx_count * sizeof(BatchVertex)),
+                 vtx_data, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry.ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(idx_count * sizeof(uint32_t)),
+                 idx_data, GL_STATIC_DRAW);
+
+    // 属性布局与 InitGeometryBuffers 中 mesh_vao_handle_ 完全一致
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, pos)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, color)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, uv)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, normal)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, tangent)));
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, weights)));
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(BatchVertex),
+                          reinterpret_cast<const void*>(offsetof(BatchVertex, joints)));
+
+    glBindVertexArray(0);
+    return entry;
 }
 
 // ============================================================
@@ -566,6 +637,8 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
 
 void GLDrawExecutor::BeginFrame() {
     global_state_.current_frame_stats = {};
+    bone_ssbo_uploaded_this_frame_ = false;
+    inst_ssbo_uploaded_this_frame_ = false;
 }
 
 void GLDrawExecutor::EndFrame() {

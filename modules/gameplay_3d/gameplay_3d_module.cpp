@@ -19,9 +19,10 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     terrain_system_.Init(rhi_device);
     grass_system_.Init(rhi_device);
     hair_system_.Init(rhi_device);
-    gpu_skinning_system_.Init(rhi_device);
+    // GPU Compute Skinning 已由 VS bone SSBO 路径替代，跳过 Init 避免分配闲置 GPU 资源。
+    // gpu_skinning_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
-    mesh_render_system_.SetGPUSkinningSystem(&gpu_skinning_system_);
+    // mesh_render_system_.SetGPUSkinningSystem(&gpu_skinning_system_);
     lod_system_.SetAssetManager(asset_manager);
     animator_system_.SetAssetManager(asset_manager);
     anim_layer_blend_system_.SetAssetManager(asset_manager);
@@ -77,6 +78,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 
     frustum_culling_system_.Update(world);
     lod_system_.Update(world);
+    mesh_render_system_.MarkBatchDirty();
 }
 
 void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
@@ -106,12 +108,13 @@ void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
 }
 
 void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
-    // GPU Compute Skinning: dispatch 在渲染前执行
-    if (gpu_skinning_system_.IsAvailable()) {
-        gpu_skinning_system_.BeginFrame();
-        mesh_render_system_.SubmitSkinningRequests(world, gpu_skinning_system_);
-        gpu_skinning_system_.Dispatch();
-    }
+    // GPU Compute Skinning: 已由 VS bone SSBO 路径替代，readback 不再用于渲染路径。
+    // 跳过 compute dispatch 以避免 ~35ms/call 的冗余开销。
+    // if (gpu_skinning_system_.IsAvailable()) {
+    //     gpu_skinning_system_.BeginFrame();
+    //     mesh_render_system_.SubmitSkinningRequests(world, gpu_skinning_system_);
+    //     gpu_skinning_system_.Dispatch();
+    // }
 
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);

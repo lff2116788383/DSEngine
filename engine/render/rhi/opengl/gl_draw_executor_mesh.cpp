@@ -14,6 +14,17 @@
 #include "engine/base/debug.h"
 #include "engine/render/rhi/opengl/gl_loader.h"
 
+// GL 4.3 SSBO 常量 — glad/gl.h 仅包含 GL 3.3 定义
+#ifndef GL_SHADER_STORAGE_BUFFER
+#define GL_SHADER_STORAGE_BUFFER 0x90D2
+#endif
+#ifndef GL_MAP_WRITE_BIT
+#define GL_MAP_WRITE_BIT 0x0002
+#endif
+#ifndef GL_MAP_INVALIDATE_BUFFER_BIT
+#define GL_MAP_INVALIDATE_BUFFER_BIT 0x0008
+#endif
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
@@ -110,6 +121,10 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                                      GLResourceManager& resource_mgr,
                                      UBOManager& ubo_mgr) {
     if (items.empty()) return;
+
+    // 每次 pass 重置共享模板跟踪（避免跨 pass 误判）
+    last_shared_vtx_ptr_ = nullptr;
+    last_shared_vtx_count_ = 0;
     // [BlackRectDiag] GL state at DrawMeshBatch entry (scene RT only)
     {
         static int scene_call = 0;
@@ -297,6 +312,145 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         glUniform1f(loc.ddgi_enabled, 0.0f);
     }
 
+    // === Bone SSBO: 收集所有蒙皮实例骨骼矩阵，一次上传 ===
+    // bone_offsets[i]: 非 instanced item 的单一 bone offset
+    // per_inst_bone_offsets[i]: instanced skinned item 的每实例 bone offset
+    // 优先使用 bone_palette（去重后数据量极小），fallback 到 per_instance_bones
+    std::vector<int> bone_offsets(items.size(), 0);
+    std::vector<std::vector<int>> per_inst_bone_offsets(items.size());
+    // palette_base_offsets[i]: bone_palette 模式下，palette 条目 j 的 SSBO 起始偏移
+    std::vector<std::vector<int>> palette_base_offsets(items.size());
+    {
+        size_t total_bones = 0;
+        for (size_t i = 0; i < items.size(); ++i) {
+            const auto& it = items[i];
+            if (it.skinned && !it.bone_palette.empty()) {
+                // Palette 模式：只上传 palette 条目（去重后通常 2-60 条）
+                auto& pbo = palette_base_offsets[i];
+                pbo.resize(it.bone_palette.size());
+                for (size_t p = 0; p < it.bone_palette.size(); ++p) {
+                    pbo[p] = static_cast<int>(total_bones);
+                    total_bones += std::min(it.bone_palette[p].size(), static_cast<size_t>(kMaxBones));
+                }
+                // 构建 per-instance offsets 从 palette index 映射
+                auto& offsets = per_inst_bone_offsets[i];
+                offsets.resize(it.instance_bone_palette_idx.size());
+                for (size_t j = 0; j < it.instance_bone_palette_idx.size(); ++j) {
+                    int pidx = it.instance_bone_palette_idx[j];
+                    offsets[j] = (pidx >= 0 && pidx < static_cast<int>(pbo.size())) ? pbo[pidx] : 0;
+                }
+            } else if (it.skinned && !it.per_instance_bones.empty()) {
+                auto& offsets = per_inst_bone_offsets[i];
+                offsets.resize(it.per_instance_bones.size());
+                for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
+                    offsets[j] = static_cast<int>(total_bones);
+                    total_bones += std::min(it.per_instance_bones[j].size(), static_cast<size_t>(kMaxBones));
+                }
+            } else if (it.skinned && !it.bone_matrices.empty()) {
+                bone_offsets[i] = static_cast<int>(total_bones);
+                total_bones += std::min(it.bone_matrices.size(), static_cast<size_t>(kMaxBones));
+            }
+        }
+        if (total_bones > 0) {
+            if (!bone_ssbo_uploaded_this_frame_) {
+                const size_t ssbo_bytes = total_bones * sizeof(glm::mat4);
+                if (bone_ssbo_ == 0) {
+                    glGenBuffers(1, &bone_ssbo_);
+                }
+                glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo_);
+                if (ssbo_bytes > bone_ssbo_capacity_) {
+                    bone_ssbo_capacity_ = ssbo_bytes;
+                }
+                // orphan: 帧内首次上传，让驱动分配新内存避免 GPU stall
+                glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<GLsizeiptr>(bone_ssbo_capacity_), nullptr, GL_STREAM_DRAW);
+                void* ptr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, static_cast<GLsizeiptr>(ssbo_bytes),
+                    GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+                if (ptr) {
+                    auto* dst = static_cast<glm::mat4*>(ptr);
+                    for (size_t i = 0; i < items.size(); ++i) {
+                        const auto& it = items[i];
+                        if (it.skinned && !it.bone_palette.empty()) {
+                            for (size_t p = 0; p < it.bone_palette.size(); ++p) {
+                                size_t count = std::min(it.bone_palette[p].size(), static_cast<size_t>(kMaxBones));
+                                std::memcpy(dst + palette_base_offsets[i][p],
+                                           it.bone_palette[p].data(), count * sizeof(glm::mat4));
+                            }
+                        } else if (it.skinned && !it.per_instance_bones.empty()) {
+                            for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
+                                size_t count = std::min(it.per_instance_bones[j].size(), static_cast<size_t>(kMaxBones));
+                                std::memcpy(dst + per_inst_bone_offsets[i][j],
+                                           it.per_instance_bones[j].data(), count * sizeof(glm::mat4));
+                            }
+                        } else if (it.skinned && !it.bone_matrices.empty()) {
+                            size_t count = std::min(it.bone_matrices.size(), static_cast<size_t>(kMaxBones));
+                            std::memcpy(dst + bone_offsets[i], it.bone_matrices.data(), count * sizeof(glm::mat4));
+                        }
+                    }
+                    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                }
+                bone_ssbo_uploaded_this_frame_ = true;
+            }
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, bone_ssbo_);
+        }
+    }
+
+    // === Instance SSBO: 全部 skinned instanced item 一次性打包上传 ===
+    struct SkinnedInstGPU {
+        glm::mat4 model;
+        int bone_offset;
+        int _pad[3];
+    };
+    constexpr GLint kSsboAlignment = 256;
+    // 每次 DrawMeshBatch 都要计算 offset（batch cache 保证 items 顺序一致）
+    std::vector<GLintptr> inst_ssbo_offsets(items.size(), -1);
+    std::vector<GLsizeiptr> inst_ssbo_sizes(items.size(), 0);
+    {
+        size_t total_inst_bytes = 0;
+        for (size_t i = 0; i < items.size(); ++i) {
+            const auto& it = items[i];
+            const bool si = it.skinned
+                && (!it.per_instance_bones.empty() || !it.bone_palette.empty())
+                && it.instance_transforms.size() > 1;
+            if (si) {
+                inst_ssbo_offsets[i] = static_cast<GLintptr>(total_inst_bytes);
+                size_t item_bytes = it.instance_transforms.size() * sizeof(SkinnedInstGPU);
+                inst_ssbo_sizes[i] = static_cast<GLsizeiptr>(item_bytes);
+                total_inst_bytes += ((item_bytes + kSsboAlignment - 1) / kSsboAlignment) * kSsboAlignment;
+            }
+        }
+        // 仅首 pass 上传，后续 pass 直接 bind range
+        if (total_inst_bytes > 0 && !inst_ssbo_uploaded_this_frame_) {
+            if (skinned_inst_ssbo_ == 0) {
+                glGenBuffers(1, &skinned_inst_ssbo_);
+            }
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, skinned_inst_ssbo_);
+            if (total_inst_bytes > skinned_inst_ssbo_capacity_) {
+                skinned_inst_ssbo_capacity_ = total_inst_bytes;
+            }
+            glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<GLsizeiptr>(skinned_inst_ssbo_capacity_), nullptr, GL_STREAM_DRAW);
+            void* all_ptr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0,
+                static_cast<GLsizeiptr>(total_inst_bytes),
+                GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+            if (all_ptr) {
+                for (size_t i = 0; i < items.size(); ++i) {
+                    if (inst_ssbo_offsets[i] < 0) continue;
+                    const auto& it = items[i];
+                    const auto& inst_bo = per_inst_bone_offsets[i];
+                    auto* dst = reinterpret_cast<SkinnedInstGPU*>(
+                        static_cast<char*>(all_ptr) + inst_ssbo_offsets[i]);
+                    for (size_t inst = 0; inst < it.instance_transforms.size(); ++inst) {
+                        dst[inst].model = it.instance_transforms[inst];
+                        dst[inst].bone_offset = (inst < inst_bo.size()) ? inst_bo[inst] : 0;
+                        dst[inst]._pad[0] = dst[inst]._pad[1] = dst[inst]._pad[2] = 0;
+                    }
+                }
+                glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+            }
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            inst_ssbo_uploaded_this_frame_ = true;
+        }
+    }
+
     unsigned int last_texture_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_normal_map_handle = std::numeric_limits<unsigned int>::max();
     unsigned int last_metallic_roughness_map_handle = std::numeric_limits<unsigned int>::max();
@@ -305,8 +459,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     unsigned int last_blend_mode = std::numeric_limits<unsigned int>::max();
     int last_shading_mode = items[0].shading_mode;
 
-    for (const auto& item : items) {
-        if (item.vertices.empty() || item.indices.empty()) continue;
+    for (size_t item_idx = 0; item_idx < items.size(); ++item_idx) {
+        const auto& item = items[item_idx];
+        if ((item.vertices.empty() && !item.shared_vertex_ptr) || (item.indices.empty() && !item.shared_index_ptr)) continue;
 
         if (emit_vse1522_depth_diag && !item.debug_label.empty()) {
 #ifdef DSE_VSE_1522_DIAG
@@ -568,16 +723,22 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             glCullFace(GL_BACK);
         }
 
-        // 骨骼动画（push constant → 独立 uniform + BoneMatrices UBO）设置
+        // 骨骼动画: u_skinned + u_bone_offset（bone SSBO 已在 draw loop 前一次上传）
+        // skinned==2 表示 hardware instanced skinned（由 instanced path 设置）
+        const bool skinned_instanced = item.skinned
+            && (!item.per_instance_bones.empty() || !item.bone_palette.empty())
+            && item.instance_transforms.size() > 1;
         {
             const int skinned_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().skinned : loc.skinned;
-            if (skinned_loc != -1) glUniform1i(skinned_loc, item.skinned ? 1 : 0);
+            if (skinned_loc != -1) {
+                glUniform1i(skinned_loc, skinned_instanced ? 2 : (item.skinned ? 1 : 0));
+            }
         }
-        if (item.skinned && !item.bone_matrices.empty()) {
-            BoneMatricesUBO bm_ubo{};
-            size_t count = std::min(item.bone_matrices.size(), static_cast<size_t>(kMaxBones));
-            std::memcpy(bm_ubo.u_bone_matrices, item.bone_matrices.data(), count * sizeof(glm::mat4));
-            ubo_mgr.UploadBoneMatrices(bm_ubo);
+        {
+            const int bo_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().bone_offset : loc.bone_offset;
+            if (bo_loc != -1 && !skinned_instanced) {
+                glUniform1i(bo_loc, item.skinned ? bone_offsets[item_idx] : 0);
+            }
         }
 
         // 变形目标（push constant → 独立 uniform + MorphWeights UBO）设置
@@ -627,6 +788,30 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             continue;
         }
 
+        // 解析顶点/索引数据源：优先使用 shared_vertex_ptr（零拷贝共享模板）
+        const BatchVertex* vtx_data = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+        const uint32_t* idx_data = item.shared_index_ptr ? item.shared_index_ptr : reinterpret_cast<const uint32_t*>(item.indices.data());
+        const size_t vtx_count = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
+        const size_t idx_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
+
+        // === Static Mesh VBO 缓存查找 ===
+        // 如果 shared_vertex_ptr 可用，尝试使用持久化 VAO（零上传）
+        const StaticMeshEntry* static_entry = nullptr;
+        if (vtx_data && idx_data && vtx_count > 0 && idx_count > 0) {
+            const void* cache_key = item.shared_vertex_ptr ? static_cast<const void*>(item.shared_vertex_ptr)
+                                                           : static_cast<const void*>(item.vertices.data());
+            if (cache_key) {
+                auto cache_it = static_mesh_cache_.find(cache_key);
+                if (cache_it != static_mesh_cache_.end()) {
+                    static_entry = &cache_it->second;
+                } else {
+                    auto entry = CreateStaticMeshVAO(vtx_data, vtx_count, idx_data, idx_count);
+                    auto [it, _] = static_mesh_cache_.emplace(cache_key, entry);
+                    static_entry = &it->second;
+                }
+            }
+        }
+
         // 绘制
         if (item.vao_override) {
             glBindVertexArray(item.vao_override.raw());
@@ -635,15 +820,45 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.index_count_override), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
+        } else if (is_instanced && skinned_instanced) {
+            // --- Hardware Instanced Skinned Draw ---
+            const size_t instance_count = item.instance_transforms.size();
+
+            // 使用预打包 SSBO 的对应 range（帧内已上传）
+            if (inst_ssbo_offsets[item_idx] >= 0 && inst_ssbo_sizes[item_idx] > 0) {
+                glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 10, skinned_inst_ssbo_,
+                    inst_ssbo_offsets[item_idx], inst_ssbo_sizes[item_idx]);
+            }
+
+            if (static_entry) {
+                glBindVertexArray(static_entry->vao);
+            } else {
+                glBindVertexArray(mesh_vao_handle_.raw());
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
+                if (update_buffer_fn_) {
+                    update_buffer_fn_(mesh_vbo_handle_, 0, vtx_count * sizeof(BatchVertex), vtx_data, false);
+                    update_buffer_fn_(mesh_ibo_handle_, 0, idx_count * sizeof(uint32_t), idx_data, true);
+                }
+            }
+            glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(idx_count),
+                                     GL_UNSIGNED_INT, nullptr,
+                                     static_cast<GLsizei>(instance_count));
+            glBindVertexArray(0);
+
+            global_state_.current_frame_stats.draw_calls += 1;
+            global_state_.current_frame_stats.instanced_draw_calls += 1;
+            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
         } else if (is_instanced) {
-            // --- Pseudo-Instancing path ---
-            // 标准 PBR 着色器只有 uniform u_model，不支持 per-instance vertex attribute。
-            // 因此循环逐实例设置 u_model 并绘制，保证每个实例使用正确的模型矩阵。
-            glBindVertexArray(mesh_vao_handle_.raw());
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
-            if (update_buffer_fn_) {
-                update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
-                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(uint32_t), item.indices.data(), true);
+            // --- Non-skinned Pseudo-Instancing path ---
+            if (static_entry) {
+                glBindVertexArray(static_entry->vao);
+            } else {
+                glBindVertexArray(mesh_vao_handle_.raw());
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
+                if (update_buffer_fn_) {
+                    update_buffer_fn_(mesh_vbo_handle_, 0, vtx_count * sizeof(BatchVertex), vtx_data, false);
+                    update_buffer_fn_(mesh_ibo_handle_, 0, idx_count * sizeof(uint32_t), idx_data, true);
+                }
             }
 
             const size_t instance_count = item.instance_transforms.size();
@@ -653,20 +868,24 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 if (model_loc != -1) {
                     glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(item.instance_transforms[inst]));
                 }
-                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_INT, nullptr);
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(idx_count), GL_UNSIGNED_INT, nullptr);
             }
             glBindVertexArray(0);
 
             global_state_.current_frame_stats.instanced_draw_calls += 1;
             global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(instance_count);
         } else {
-            glBindVertexArray(mesh_vao_handle_.raw());
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
-            if (update_buffer_fn_) {
-                update_buffer_fn_(mesh_vbo_handle_, 0, item.vertices.size() * sizeof(BatchVertex), item.vertices.data(), false);
-                update_buffer_fn_(mesh_ibo_handle_, 0, item.indices.size() * sizeof(uint32_t), item.indices.data(), true);
+            if (static_entry) {
+                glBindVertexArray(static_entry->vao);
+            } else {
+                glBindVertexArray(mesh_vao_handle_.raw());
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo_handle_);
+                if (update_buffer_fn_) {
+                    update_buffer_fn_(mesh_vbo_handle_, 0, vtx_count * sizeof(BatchVertex), vtx_data, false);
+                    update_buffer_fn_(mesh_ibo_handle_, 0, idx_count * sizeof(uint32_t), idx_data, true);
+                }
             }
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(item.indices.size()), GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(idx_count), GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
         }
 

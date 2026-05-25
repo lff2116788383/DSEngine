@@ -844,7 +844,7 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
                 obj.model = inst_data[global_idx].model;
                 obj.skinned = 0;
                 obj.morph_enabled = 0;
-                obj.use_instancing = 0;
+                obj.bone_offset = 0;
                 draw_executor_.UpdatePerObjectCB(obj);
             }
         }

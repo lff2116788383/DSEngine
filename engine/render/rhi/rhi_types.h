@@ -271,6 +271,24 @@ struct MeshDrawItem {
 
     /// GPU Instancing: 逐实例模型矩阵（非空时触发 instanced draw）
     std::vector<glm::mat4> instance_transforms;
+
+    /// Skinned Instancing: 逐实例骨骼矩阵（与 instance_transforms 平行）
+    /// 非空时 draw executor 会为每个实例计算独立的 bone_offset
+    std::vector<std::vector<glm::mat4>> per_instance_bones;
+
+    /// Bone Palette Instancing (优先于 per_instance_bones):
+    /// bone_palette 存储唯一的骨骼矩阵集（去重后通常只有 2-60 个），
+    /// instance_bone_palette_idx 存储每实例引用的 palette 索引。
+    /// 10000 实例 × 2 动画 → bone_palette 仅 2 条目 vs per_instance_bones 10000 条目。
+    std::vector<std::vector<glm::mat4>> bone_palette;
+    std::vector<int> instance_bone_palette_idx;
+
+    /// Shared mesh template: 当非 null 时，执行器优先使用此数据替代 vertices/indices，
+    /// 并在同 pass 内检测连续相同指针以跳过重复 VBO 上传。
+    const BatchVertex* shared_vertex_ptr = nullptr;
+    const uint32_t* shared_index_ptr = nullptr;
+    uint32_t shared_vertex_count = 0;
+    uint32_t shared_index_count = 0;
 };
 
 /// 3D 粒子绘制项

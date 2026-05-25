@@ -33,17 +33,25 @@ layout(std430, set = 4, binding = 0) readonly buffer DSEInstBuf {
 layout(location = 8) flat out uint v_material_id;
 #define MODEL_MATRIX dse_inst[gl_InstanceIndex].model
 #else
-// 标准路径：逐对象 push constant + CPU 蒙皮
+// 标准路径：逐对象 push constant + VS 蒙皮
 layout(push_constant) uniform PushConstants {
     mat4 u_model;
-    int u_skinned;
+    int u_skinned;       // 0=no skin, 1=single draw, 2=hardware instanced
     int u_morph_enabled;
+    int u_bone_offset;   // 该实例在 bone SSBO 中的起始偏移 (skinned=1 时使用)
 } pc;
-#define MODEL_MATRIX pc.u_model
 
-const int MAX_BONES = 255;
-layout(std140, set = 2, binding = 8) uniform BoneMatrices {
-    mat4 u_bone_matrices[MAX_BONES];
+// Hardware Instancing SSBO: per-instance model + bone_offset (skinned=2 时使用)
+struct DSESkinnedInst { mat4 model; int bone_offset; int _pad0; int _pad1; int _pad2; };
+layout(std430, set = 2, binding = 10) readonly buffer SkinnedInstBuf {
+    DSESkinnedInst skinned_instances[];
+};
+
+#define MODEL_MATRIX ((pc.u_skinned == 2) ? skinned_instances[gl_InstanceIndex].model : pc.u_model)
+
+// Bone SSBO: 所有实例的骨骼矩阵紧密排列，per-draw 通过 u_bone_offset 索引
+layout(std430, set = 2, binding = 8) readonly buffer BoneMatricesSSBO {
+    mat4 u_bone_matrices[];
 };
 
 const int MAX_MORPH_TARGETS = 4;
@@ -61,10 +69,13 @@ void main() {
 #else
     mat4 boneTransform = mat4(1.0);
     if (pc.u_skinned != 0) {
-        boneTransform = u_bone_matrices[int(aBoneIndices[0])] * aBoneWeights[0] +
-                        u_bone_matrices[int(aBoneIndices[1])] * aBoneWeights[1] +
-                        u_bone_matrices[int(aBoneIndices[2])] * aBoneWeights[2] +
-                        u_bone_matrices[int(aBoneIndices[3])] * aBoneWeights[3];
+        int bo = (pc.u_skinned == 2)
+            ? skinned_instances[gl_InstanceIndex].bone_offset
+            : pc.u_bone_offset;
+        boneTransform = u_bone_matrices[bo + int(aBoneIndices[0])] * aBoneWeights[0] +
+                        u_bone_matrices[bo + int(aBoneIndices[1])] * aBoneWeights[1] +
+                        u_bone_matrices[bo + int(aBoneIndices[2])] * aBoneWeights[2] +
+                        u_bone_matrices[bo + int(aBoneIndices[3])] * aBoneWeights[3];
     }
 
     vec3 morphedPos = aPos;
@@ -91,7 +102,11 @@ void main() {
 #ifdef GPU_DRIVEN
     mat3 normalMatrix = transpose(inverse(mat3(MODEL_MATRIX)));
 #else
-    mat3 normalMatrix = transpose(inverse(mat3(MODEL_MATRIX * boneTransform)));
+    // 蒙皮: bone 矩阵通常为 rotation+translation (正交), inverse ≈ transpose,
+    // 下游 normalize() 修正均匀缩放, 避免昂贵的 per-vertex inverse()
+    mat3 normalMatrix = (pc.u_skinned != 0)
+        ? mat3(MODEL_MATRIX * boneTransform)
+        : transpose(inverse(mat3(MODEL_MATRIX)));
 #endif
     vec3 T = normalize(normalMatrix * finalTangent);
     vec3 N = normalize(normalMatrix * finalNormal);
