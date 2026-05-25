@@ -94,6 +94,13 @@ struct ShaderGraphState {
     // Context menu
     bool show_create_menu = false;
     ImVec2 create_menu_pos;
+    // Selected link for deletion
+    int selected_link = -1;
+    // GLSL preview
+    bool show_preview = false;
+    std::string preview_glsl;
+    // Property editor
+    bool show_properties = true;
 };
 
 ShaderGraphState& GetState() {
@@ -826,7 +833,10 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         p1.x += offset.x; p1.y += offset.y;
         p2.x += offset.x; p2.y += offset.y;
 
-        DrawBezierLink(dl, p1, p2, PinColor(from->type), 2.0f);
+        bool is_selected_link = (link.id == state.selected_link);
+        ImU32 link_color = is_selected_link ? IM_COL32(255, 200, 50, 255) : PinColor(from->type);
+        float link_thick = is_selected_link ? 3.5f : 2.0f;
+        DrawBezierLink(dl, p1, p2, link_color, link_thick);
     }
 
     // Draw link being created
@@ -986,6 +996,65 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         state.scroll_offset.y += delta.y;
     }
 
+    // Zoom with scroll wheel
+    if (canvas_hovered && std::abs(ImGui::GetIO().MouseWheel) > 0.01f) {
+        float old_zoom = state.zoom;
+        state.zoom += ImGui::GetIO().MouseWheel * 0.1f;
+        state.zoom = std::max(0.3f, std::min(state.zoom, 3.0f));
+        // Adjust scroll to zoom toward mouse
+        float factor = state.zoom / old_zoom;
+        ImVec2 mp = ImGui::GetMousePos();
+        state.scroll_offset.x = mp.x - canvas_pos.x - (mp.x - canvas_pos.x - state.scroll_offset.x) * factor;
+        state.scroll_offset.y = mp.y - canvas_pos.y - (mp.y - canvas_pos.y - state.scroll_offset.y) * factor;
+    }
+
+    // Delete key: delete selected node or link
+    if (canvas_hovered && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if (state.selected_link >= 0) {
+            state.links.erase(
+                std::remove_if(state.links.begin(), state.links.end(),
+                    [&](const Link& l) { return l.id == state.selected_link; }),
+                state.links.end());
+            state.selected_link = -1;
+        } else if (state.selected_node >= 0 && state.selected_node < static_cast<int>(state.nodes.size())) {
+            auto& n = state.nodes[state.selected_node];
+            state.links.erase(std::remove_if(state.links.begin(), state.links.end(),
+                [&](const Link& l) {
+                    for (auto& p : n.inputs) if (p.id == l.to_pin || p.id == l.from_pin) return true;
+                    for (auto& p : n.outputs) if (p.id == l.to_pin || p.id == l.from_pin) return true;
+                    return false;
+                }), state.links.end());
+            state.nodes.erase(state.nodes.begin() + state.selected_node);
+            state.selected_node = -1;
+        }
+    }
+
+    // Link selection (click near bezier)
+    if (canvas_hovered && ImGui::IsMouseClicked(0) && state.dragging_node < 0 && !state.creating_link) {
+        ImVec2 mp = ImGui::GetMousePos();
+        state.selected_link = -1;
+        for (auto& link : state.links) {
+            Pin* from = FindPin(state, link.from_pin);
+            Pin* to = FindPin(state, link.to_pin);
+            if (!from || !to) continue;
+            Node* fn = FindPinOwner(state, link.from_pin);
+            Node* tn = FindPinOwner(state, link.to_pin);
+            if (!fn || !tn) continue;
+            ImVec2 p1 = GetPinPos(*fn, *from, true);
+            ImVec2 p2 = GetPinPos(*tn, *to, false);
+            p1.x += offset.x; p1.y += offset.y;
+            p2.x += offset.x; p2.y += offset.y;
+            // Simple proximity test at midpoint
+            ImVec2 mid((p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f);
+            float dist = std::sqrt((mp.x - mid.x) * (mp.x - mid.x) + (mp.y - mid.y) * (mp.y - mid.y));
+            if (dist < 12.0f) {
+                state.selected_link = link.id;
+                state.selected_node = -1;
+                break;
+            }
+        }
+    }
+
     // Right-click context menu: add node
     if (canvas_hovered && ImGui::IsMouseClicked(1)) {
         state.show_create_menu = true;
@@ -1014,8 +1083,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         }
 
         ImGui::Separator();
-        if (ImGui::MenuItem("Delete Selected") && state.selected_node >= 0) {
-            // Remove links connected to this node
+        if (ImGui::MenuItem("Delete Selected Node") && state.selected_node >= 0) {
             auto& n = state.nodes[state.selected_node];
             state.links.erase(std::remove_if(state.links.begin(), state.links.end(),
                 [&](const Link& l) {
@@ -1026,8 +1094,121 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             state.nodes.erase(state.nodes.begin() + state.selected_node);
             state.selected_node = -1;
         }
+        if (ImGui::MenuItem("Delete Selected Link") && state.selected_link >= 0) {
+            state.links.erase(
+                std::remove_if(state.links.begin(), state.links.end(),
+                    [&](const Link& l) { return l.id == state.selected_link; }),
+                state.links.end());
+            state.selected_link = -1;
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("Show Properties", nullptr, &state.show_properties);
+        ImGui::MenuItem("Show GLSL Preview", nullptr, &state.show_preview);
 
         ImGui::EndPopup();
+    }
+
+    // ─── Properties sidebar ─────────────────────────────────────────────────
+    if (state.show_properties && state.selected_node >= 0 &&
+        state.selected_node < static_cast<int>(state.nodes.size())) {
+        ImGui::SetNextWindowSize(ImVec2(250, 300), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Node Properties", &state.show_properties)) {
+            auto& n = state.nodes[state.selected_node];
+            ImGui::Text("Node: %s", n.name.c_str());
+            ImGui::TextDisabled("Category: %s", n.category.c_str());
+            ImGui::Separator();
+
+            ImGui::Text("Position: %.0f, %.0f", n.position.x, n.position.y);
+
+            // Editable default values for inputs
+            if (!n.inputs.empty()) {
+                ImGui::Text("Inputs:");
+                for (auto& pin : n.inputs) {
+                    ImGui::PushID(pin.id);
+                    switch (pin.type) {
+                        case PinType::Float:
+                            ImGui::SetNextItemWidth(100);
+                            ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
+                            break;
+                        case PinType::Vec2:
+                            ImGui::SetNextItemWidth(160);
+                            ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
+                            break;
+                        case PinType::Vec3:
+                            ImGui::SetNextItemWidth(200);
+                            ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
+                            break;
+                        case PinType::Vec4:
+                        case PinType::Color:
+                            ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
+                            break;
+                        default:
+                            ImGui::Text("%s", pin.name.c_str());
+                            break;
+                    }
+                    ImGui::PopID();
+                }
+            }
+
+            // Editable default values for outputs (constants)
+            if (!n.outputs.empty() && n.inputs.empty()) {
+                ImGui::Text("Output Values:");
+                for (auto& pin : n.outputs) {
+                    ImGui::PushID(pin.id);
+                    switch (pin.type) {
+                        case PinType::Float:
+                            ImGui::SetNextItemWidth(100);
+                            ImGui::DragFloat(pin.name.c_str(), &pin.default_value[0], 0.01f);
+                            break;
+                        case PinType::Color:
+                            ImGui::ColorEdit4(pin.name.c_str(), pin.default_value);
+                            break;
+                        case PinType::Vec2:
+                            ImGui::SetNextItemWidth(160);
+                            ImGui::DragFloat2(pin.name.c_str(), pin.default_value, 0.01f);
+                            break;
+                        case PinType::Vec3:
+                            ImGui::SetNextItemWidth(200);
+                            ImGui::DragFloat3(pin.name.c_str(), pin.default_value, 0.01f);
+                            break;
+                        default:
+                            ImGui::Text("%s", pin.name.c_str());
+                            break;
+                    }
+                    ImGui::PopID();
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    // ─── GLSL Preview panel ─────────────────────────────────────────────────
+    if (state.show_preview) {
+        ImGui::SetNextWindowSize(ImVec2(450, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("GLSL Preview", &state.show_preview)) {
+            if (ImGui::Button("Refresh")) {
+                state.preview_glsl = CompileGraphToGLSL(state);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("%d chars", static_cast<int>(state.preview_glsl.size()));
+            ImGui::Separator();
+            ImGui::BeginChild("glsl_code", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+            if (!state.preview_glsl.empty()) {
+                ImGui::TextUnformatted(state.preview_glsl.c_str(), state.preview_glsl.c_str() + state.preview_glsl.size());
+            } else {
+                ImGui::TextDisabled("Click 'Refresh' to compile the graph.");
+            }
+            ImGui::EndChild();
+        }
+        ImGui::End();
+    }
+
+    // Zoom indicator
+    {
+        char zoom_txt[32];
+        snprintf(zoom_txt, sizeof(zoom_txt), "Zoom: %.0f%%", state.zoom * 100.0f);
+        dl->AddText(ImVec2(canvas_pos.x + 8, canvas_pos.y + canvas_size.y - 18),
+                    IM_COL32(150, 150, 150, 200), zoom_txt);
     }
 
     ImGui::End();

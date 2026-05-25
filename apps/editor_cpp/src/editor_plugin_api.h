@@ -5,6 +5,12 @@
 #include <functional>
 #include <memory>
 
+#ifdef _WIN32
+#define DSE_PLUGIN_EXPORT extern "C" __declspec(dllexport)
+#else
+#define DSE_PLUGIN_EXPORT extern "C"
+#endif
+
 namespace dse::editor {
 
 struct EditorContext;
@@ -70,9 +76,27 @@ public:
     /// Toggle a plugin panel's visibility
     void TogglePanelVisibility(const std::string& plugin_name, const std::string& panel_name);
 
+    /// Load a plugin from a DLL/SO file. Returns true on success.
+    bool LoadPluginFromDll(const std::string& dll_path);
+
+    /// Scan a directory for plugin DLLs and load them
+    int LoadPluginsFromDirectory(const std::string& dir_path);
+
+    /// Get loaded DLL paths
+    const std::vector<std::string>& GetLoadedDllPaths() const;
+
 private:
     EditorPluginManager() = default;
     std::vector<std::shared_ptr<EditorPlugin>> plugins_;
+    std::vector<std::string> loaded_dll_paths_;
+    std::vector<void*> dll_handles_;  // HMODULE on Windows
 };
+
+/// Draw a plugin browser/manager panel (shows loaded plugins, allows load/unload)
+void DrawPluginBrowserPanel();
+
+// Plugin DLL entry point signature:
+// DSE_PLUGIN_EXPORT void dse_plugin_register(dse::editor::EditorPluginManager* mgr);
+typedef void (*DsePluginRegisterFn)(EditorPluginManager*);
 
 } // namespace dse::editor
