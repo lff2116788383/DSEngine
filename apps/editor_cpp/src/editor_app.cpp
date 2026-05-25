@@ -85,6 +85,7 @@
 #include "editor_os_drop.h"
 #include "editor_asset_db.h"
 #include "editor_autosave.h"
+#include "editor_plugin_api.h"
 #include "editor_locale.h"
 #include "editor_snapshot.h"
 #include "editor_selection_outline.h"
@@ -971,6 +972,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         }
         ImGui::End();
     }
+
+    // Plugin API: update and draw custom panels
+    dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
+    dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
 
     // AI Chat 面板
     if (show_chat_panel_) {

@@ -11,7 +11,15 @@ namespace dse::editor {
 enum class TilemapBrushTool {
     Paint,
     Erase,
-    FloodFill
+    FloodFill,
+    Line,
+    Rectangle
+};
+
+struct AutoTileRule {
+    int base_tile_id = 1;        // the tile set that forms the terrain
+    int variant_tiles[16] = {};  // 4-bit neighbour bitmask → tile id (U/R/D/L)
+    bool enabled = false;
 };
 
 struct TilemapEditorState {
@@ -24,6 +32,15 @@ struct TilemapEditorState {
     // Undo state: tracked during a paint stroke
     bool painting = false;
     std::vector<int> tiles_snapshot;
+
+    // Line / Rectangle drag state
+    bool drag_started = false;
+    int drag_start_cx = 0;
+    int drag_start_cy = 0;
+
+    // Auto-tile
+    AutoTileRule auto_tile_rule;
+    bool show_auto_tile_config = false;
 };
 
 TilemapEditorState& GetTilemapEditorState();
