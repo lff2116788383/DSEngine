@@ -2377,11 +2377,6 @@ void FramePipeline::ExecuteRenderFrame() {
 
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
 
-    // Present (SwapBuffers)
-    if (runtime_context_.present_frame) {
-        runtime_context_.present_frame();
-    }
-
     // Render diagnostics
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
         if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
@@ -2398,4 +2393,9 @@ void FramePipeline::ExecuteRenderFrame() {
     auto render_end = std::chrono::high_resolution_clock::now();
     render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
     render_samples_ += 1;
+
+    // Present (SwapBuffers) — 在 render 计时之外，避免 Present 延迟污染 avg_render_ms
+    if (runtime_context_.present_frame) {
+        runtime_context_.present_frame();
+    }
 }

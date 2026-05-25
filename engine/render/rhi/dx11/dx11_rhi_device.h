@@ -65,6 +65,7 @@ public:
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
+    void PresentFrame() override;
     const RenderStats& LastFrameStats() const override;
 
     // --- RenderGraph 自动屏障（D3D11: 驱动隐式管理，仅处理 UAV 解绑）---
@@ -242,6 +243,7 @@ private:
     size_t                         compute_params_cb_capacity_ = 0;
 
     bool initialized_ = false;
+    bool vsync_enabled_ = true;   ///< 受 DSE_VSYNC 环境变量控制
 
     /// Mega/Static VAO 追踪（VAO handle → {vbo_handle, ibo_handle}）
     struct VAOBinding {

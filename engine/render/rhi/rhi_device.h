@@ -184,6 +184,12 @@ public:
     virtual std::shared_ptr<CommandBuffer> CreateCommandBuffer() = 0;
     virtual void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) = 0;
     virtual void EndFrame() = 0;
+
+    /// 将当前帧提交到显示器（交换链 Present）
+    /// 在 EndFrame 之后、主循环 render 计时之外调用，避免 Present 延迟污染 avg_render_ms
+    /// 默认空实现（OpenGL 由 GLFW SwapBuffers 处理）
+    virtual void PresentFrame() {}
+
     virtual const RenderStats& LastFrameStats() const = 0;
 
     /// 编辑器用帧统计概要，从 LastFrameStats() 派生

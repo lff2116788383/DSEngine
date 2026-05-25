@@ -129,6 +129,12 @@ public:
      */
     int LastDrawCalls() const;
 
+    /// 将当前帧提交到显示器（DX11/Vulkan 交换链 Present）
+    /// 在 Tick() 之后、render 计时之外调用
+    void PresentFrame() {
+        if (runtime_context_.rhi_device) runtime_context_.rhi_device->PresentFrame();
+    }
+
     /**
      * @brief 获取上一帧的 RHI 帧统计概要（供编辑器 Profiler 使用）
      */

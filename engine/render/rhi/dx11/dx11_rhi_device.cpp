@@ -117,6 +117,9 @@ DX11RhiDevice::~DX11RhiDevice() = default;
 bool DX11RhiDevice::InitDevice(void* window_handle, int width, int height) {
     const char* sdr_env = std::getenv("DSE_FORCE_SDR");
     bool force_sdr = sdr_env && (sdr_env[0] == '1' || sdr_env[0] == 'y' || sdr_env[0] == 'Y');
+    const char* vsync_env = std::getenv("DSE_VSYNC");
+    vsync_enabled_ = !(vsync_env && vsync_env[0] == '0');
+    DEBUG_LOG_INFO("[D3D11] VSync: {}", vsync_enabled_ ? "ON" : "OFF");
     return InitD3D11(window_handle, width, height, false, force_sdr);
 }
 
@@ -358,8 +361,13 @@ void DX11RhiDevice::EndFrame() {
     draw_executor_.EndFrame();
     last_frame_stats_ = current_frame_stats_;
 
-    // Present 交换链
-    context_.Present(true);
+    // Present 由 PresentFrame() 单独调用，不在 EndFrame 内执行
+    // 这使 render 计时不包含 Present 延迟，与 OpenGL 行为一致
+}
+
+void DX11RhiDevice::PresentFrame() {
+    if (!initialized_) return;
+    context_.Present(vsync_enabled_);
 }
 
 const RenderStats& DX11RhiDevice::LastFrameStats() const {

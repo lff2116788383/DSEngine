@@ -476,10 +476,13 @@ int EngineInstance::Run() {
 
         Tick();
 
-        // D3D11/Vulkan 后端由 RhiDevice::EndFrame 内部 Present，不需要 SwapBuffers
+        // Present / SwapBuffers 在 render 计时之外执行
         // Phase 2: 渲染线程活跃时由渲染线程负责 SwapBuffers
         if (platform_->HasGLContext() && !pipeline_->IsRenderThreadActive()) {
             platform_->SwapBuffers();
+        } else {
+            // DX11/Vulkan: Present 交换链（EndFrame 不再包含 Present）
+            pipeline_->PresentFrame();
         }
         if (target_fps_ > 0.0f) {
             const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
