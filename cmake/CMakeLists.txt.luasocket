@@ -9,6 +9,7 @@ if (MSVC)
             depends/luasocket-3.0.0/src/inet.c
             depends/luasocket-3.0.0/src/io.c
             depends/luasocket-3.0.0/src/luasocket.c
+            depends/luasocket-3.0.0/src/mime.c
             depends/luasocket-3.0.0/src/options.c
             depends/luasocket-3.0.0/src/select.c
             depends/luasocket-3.0.0/src/tcp.c
@@ -25,6 +26,7 @@ else()
             depends/luasocket-3.0.0/src/inet.c
             depends/luasocket-3.0.0/src/io.c
             depends/luasocket-3.0.0/src/luasocket.c
+            depends/luasocket-3.0.0/src/mime.c
             depends/luasocket-3.0.0/src/options.c
             depends/luasocket-3.0.0/src/select.c
             depends/luasocket-3.0.0/src/tcp.c
