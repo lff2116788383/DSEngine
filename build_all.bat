@@ -309,6 +309,10 @@ if exist ".\bin\dse_shader_compiler.exe" (
         exit /b !ERRORLEVEL!
     )
     echo [OK] Shaders regenerated.
+    if exist ".\bin\data\shader_cache" (
+        rd /s /q ".\bin\data\shader_cache"
+        echo [OK] Runtime shader cache cleared.
+    )
 ) else (
     echo [WARN] dse_shader_compiler.exe not found in .\bin, skipping shader regeneration.
 )

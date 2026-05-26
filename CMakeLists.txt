@@ -622,8 +622,9 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
             --input-dir "${SHADER_SRC_DIR}"
             --output-dir "${SHADER_GEN_DIR}"
             --target all --embed
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/bin/data/shader_cache"
         DEPENDS dse_shader_compiler ${SHADER_SOURCE_FILES}
-        COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 430 / HLSL)"
+        COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 430 / HLSL) and clearing runtime shader cache"
         VERBATIM
     )
 
