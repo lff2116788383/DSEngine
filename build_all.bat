@@ -168,7 +168,7 @@ set "VERIFY_EDITOR_EXE=0"
 if "%BUILD_EDITOR%"=="1" if "%VERIFY_EXECUTABLES%"=="1" set "VERIFY_EDITOR_EXE=1"
 
 :: 0. Environment Check
-echo [0/4] Checking build environment...
+echo [0/5] Checking build environment...
 
 :: Check CMake
 where cmake >nul 2>&1
@@ -266,7 +266,7 @@ del "!NPM_CACHE!\_dse_write_test.tmp" >nul 2>&1
 set NPM_CONFIG_CACHE=!NPM_CACHE!
 
 :: 1. Checking build cache
-echo [1/4] Checking build cache...
+echo [1/5] Checking build cache...
 if "%CLEAN_BUILD%"=="1" (
     if exist %BUILD_DIR%\CMakeCache.txt (
         echo [INFO] --clean: removing CMakeCache.txt for fresh configure...
@@ -280,7 +280,7 @@ if "%CLEAN_BUILD%"=="1" (
 
 :: 2. Configure CMake project
 echo.
-echo [2/4] Configuring CMake project...
+echo [2/5] Configuring CMake project...
 cmake -Wno-dev -Wno-deprecated -S . -B %BUILD_DIR% -G %GENERATOR% -A %ARCH% %CMAKE_EDITOR_OPTION% %CMAKE_LAUNCHER_OPTION% %CMAKE_ENGINE_TEST_OPTION% %CMAKE_SPINE_OPTION% %CMAKE_BOX2D_LINKAGE_OPTION% %CMAKE_MSVC_RUNTIME_OPTION%
 
 if %ERRORLEVEL% neq 0 (
@@ -290,9 +290,32 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-:: 3. Build all targets
+:: 3. Compile shaders → regenerate gen.h embed headers
 echo.
-echo [3/4] Building all targets (%BUILD_CONFIG%)...
+echo [3/5] Compiling shaders (dse_shader_compiler)...
+cmake --build %BUILD_DIR% --config %BUILD_CONFIG% --target dse_shader_compiler
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] dse_shader_compiler build failed!
+    popd
+    pause
+    exit /b %ERRORLEVEL%
+)
+if exist ".\bin\dse_shader_compiler.exe" (
+    .\bin\dse_shader_compiler.exe --input-dir engine\render\shaders\src --output-dir engine\render\shaders\generated --target all --embed
+    if !ERRORLEVEL! neq 0 (
+        echo [ERROR] Shader compilation failed! Check shader source errors above.
+        popd
+        pause
+        exit /b !ERRORLEVEL!
+    )
+    echo [OK] Shaders regenerated.
+) else (
+    echo [WARN] dse_shader_compiler.exe not found in .\bin, skipping shader regeneration.
+)
+
+:: 4. Build all targets
+echo.
+echo [4/5] Building all targets (%BUILD_CONFIG%)...
 cmake --build %BUILD_DIR% --config %BUILD_CONFIG% --parallel
 if %ERRORLEVEL% neq 0 (
     echo.
