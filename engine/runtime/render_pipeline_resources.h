@@ -34,7 +34,7 @@ struct RenderPipelineResources {
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
 
-    static constexpr size_t kHiZMaxObjects = 8192;
+    static constexpr size_t kHiZMaxObjects = 65536;
     unsigned int hiz_texture = 0;        // Hi-Z depth mipmap (R32F, RHI handle)
     dse::render::BufferHandle hiz_visibility_ssbo; // Visibility SSBO for Hi-Z culling
     dse::render::BufferHandle hiz_aabb_ssbo;         // AABB SSBO for Hi-Z culling

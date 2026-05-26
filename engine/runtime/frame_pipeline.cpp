@@ -1139,7 +1139,26 @@ void FramePipeline::RunRenderInternal() {
     if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
         const auto& aabbs = modules_impl_->CachedAABBs();
         const int count = modules_impl_->CachedAABBCount();
-        if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
+        if (count > 0) {
+            // 动态扩容：对象数超出当前 SSBO 容量时重建
+            if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
+                const size_t new_cap = static_cast<size_t>(count) * 2;
+                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
+                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
+                {
+                    dse::render::GpuBufferDesc d{new_cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
+                    render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+                }
+                {
+                    dse::render::GpuBufferDesc d{new_cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
+                    render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+                }
+                render_resources_.hiz_ssbo_capacity = new_cap;
+                render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+                render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
+                render_pass_context_.hiz_aabb_capacity = new_cap;
+                DEBUG_LOG_INFO("[Hi-Z] SSBO resized: new_capacity={}", new_cap);
+            }
             runtime_context_.rhi_device->UpdateGpuBuffer(
                 render_resources_.hiz_aabb_ssbo, 0,
                 count * sizeof(dse::gameplay3d::HiZAABB),
@@ -2367,7 +2386,25 @@ void FramePipeline::ExecuteRenderFrame() {
     if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
         const auto& aabbs = modules_impl_->CachedAABBs();
         const int count = modules_impl_->CachedAABBCount();
-        if (count > 0 && static_cast<size_t>(count) <= render_resources_.hiz_ssbo_capacity) {
+        if (count > 0) {
+            if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
+                const size_t new_cap = static_cast<size_t>(count) * 2;
+                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
+                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
+                {
+                    dse::render::GpuBufferDesc d{new_cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
+                    render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+                }
+                {
+                    dse::render::GpuBufferDesc d{new_cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
+                    render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
+                }
+                render_resources_.hiz_ssbo_capacity = new_cap;
+                render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+                render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
+                render_pass_context_.hiz_aabb_capacity = new_cap;
+                DEBUG_LOG_INFO("[Hi-Z] SSBO resized (render thread): new_capacity={}", new_cap);
+            }
             runtime_context_.rhi_device->UpdateGpuBuffer(
                 render_resources_.hiz_aabb_ssbo, 0,
                 count * sizeof(dse::gameplay3d::HiZAABB),

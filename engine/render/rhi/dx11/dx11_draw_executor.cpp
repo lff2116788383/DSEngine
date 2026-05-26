@@ -796,11 +796,9 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     const bool dx11_is_ortho = std::abs(projection[2][3]) < 0.01f;
     const bool dx11_shadow_cull_active = is_depth_only_pass_ && dx11_is_ortho;
-    static const bool dx11_skip_skinned_prez_env = []() {
-        const char* value = std::getenv("DSE_DX11_SKIP_SKINNED_PREZ");
-        return value && value[0] != '\0' && value[0] != '0';
-    }();
-    const bool dx11_prez_skip_skinned  = is_depth_only_pass_ && !dx11_is_ortho && dx11_skip_skinned_prez_env;
+    // 与 GL 保持一致：PreZ (perspective depth-only) 无条件跳过 skinned instanced
+    // 蒙皮实例 VS 骨骼计算开销极大，PreZ 收益远不抵成本
+    const bool dx11_prez_skip_skinned  = is_depth_only_pass_ && !dx11_is_ortho;
     float dx11_shadow_cull_limit = 0.0f;
     size_t dx11_shadow_inst_budget = SIZE_MAX;
     if (dx11_shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
@@ -818,22 +816,21 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
     }
 
-    // 计算每个 skinned instanced item 的 byte offset 和总字节数
+    // 计算每个 instanced item 的 byte offset 和总字节数（含 skinned 和 non-skinned）
     std::vector<size_t> inst_byte_offsets(items.size(), SIZE_MAX);
     std::vector<size_t> inst_visible_counts(items.size(), 0);
     size_t total_inst_bytes = 0;
     for (size_t i = 0; i < items.size(); ++i) {
         const auto& it = items[i];
+        if (it.instance_transforms.size() <= 1) continue;
         const bool si = it.skinned
-            && (!it.per_instance_bones.empty() || !it.bone_palette.empty())
-            && it.instance_transforms.size() > 1;
-        if (si && !dx11_prez_skip_skinned) {
-            inst_byte_offsets[i] = total_inst_bytes;
-            total_inst_bytes += it.instance_transforms.size() * kInstGPUSize;
-        }
+            && (!it.per_instance_bones.empty() || !it.bone_palette.empty());
+        if (si && dx11_prez_skip_skinned) continue;
+        inst_byte_offsets[i] = total_inst_bytes;
+        total_inst_bytes += it.instance_transforms.size() * kInstGPUSize;
     }
 
-    // 单次 Map 打包所有 skinned instanced item
+    // 单次 Map 打包所有 instanced item（skinned + non-skinned）
     const bool need_inst_upload = total_inst_bytes > 0
         && (dx11_shadow_cull_active || !inst_ssbo_uploaded_this_frame_);
     if (need_inst_upload) {
@@ -1046,7 +1043,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         // PerObject (PushConstants cbuffer: model, skinned, morph_enabled, bone_offset)
         DX11PerObjectCB obj_data{};
         obj_data.model = item.model;
-        obj_data.skinned = use_dx11_preskinned_vertices ? 3 : (skinned_instanced ? 2 : (item.skinned ? 1 : 0));
+        const bool nonskinned_instanced = is_instanced && !skinned_instanced;
+        obj_data.skinned = use_dx11_preskinned_vertices ? 3 : (skinned_instanced ? 2 : (nonskinned_instanced ? 3 : (item.skinned ? 1 : 0)));
         obj_data.morph_enabled = item.morph_enabled ? 1 : 0;
         obj_data.bone_offset = skinned_instanced
             ? ((inst_byte_offsets[item_idx] != SIZE_MAX) ? static_cast<int>(inst_byte_offsets[item_idx] / kInstGPUSize) : 0)
@@ -1144,15 +1142,16 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
             }
         } else if (is_instanced) {
-            // Non-skinned pseudo-instancing
-            for (size_t inst = 0; inst < item.instance_transforms.size(); ++inst) {
-                obj_data.model = item.instance_transforms[inst];
-                UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
-                dc->DrawIndexed(static_cast<UINT>(idx_count), 0, 0);
+            // Non-skinned hardware instancing (model matrix from instance VBO attributes, skinned=3)
+            if (inst_byte_offsets[item_idx] == SIZE_MAX || inst_visible_counts[item_idx] == 0) {
+                // 全部被阴影剔除
+            } else {
+                const UINT draw_count = static_cast<UINT>(inst_visible_counts[item_idx]);
+                dc->DrawIndexedInstanced(static_cast<UINT>(idx_count), draw_count, 0, 0, 0);
+                global_state_.current_frame_stats.draw_calls += 1;
+                global_state_.current_frame_stats.instanced_draw_calls++;
+                global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(draw_count);
             }
-            global_state_.current_frame_stats.draw_calls += static_cast<int>(item.instance_transforms.size());
-            global_state_.current_frame_stats.instanced_draw_calls++;
-            global_state_.current_frame_stats.instanced_mesh_count += static_cast<int>(item.instance_transforms.size());
         } else {
             dc->DrawIndexed(static_cast<UINT>(idx_count), 0, 0);
             global_state_.current_frame_stats.draw_calls++;
