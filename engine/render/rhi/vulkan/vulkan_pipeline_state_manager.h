@@ -126,19 +126,30 @@ private:
     struct PipelineCacheKey {
         unsigned int handle;
         VkRenderPass render_pass;
+        VkShaderModule vert_module;
+        VkShaderModule frag_module;
+        VkPipelineLayout pipeline_layout;
         VkSampleCountFlagBits samples;
+        uint32_t color_attachment_count;
         bool wireframe = false;
         bool overdraw  = false;
         bool operator==(const PipelineCacheKey& o) const {
             return handle == o.handle && render_pass == o.render_pass &&
-                   samples == o.samples && wireframe == o.wireframe && overdraw == o.overdraw;
+                   vert_module == o.vert_module && frag_module == o.frag_module &&
+                   pipeline_layout == o.pipeline_layout && samples == o.samples &&
+                   color_attachment_count == o.color_attachment_count &&
+                   wireframe == o.wireframe && overdraw == o.overdraw;
         }
     };
     struct PipelineCacheKeyHash {
         size_t operator()(const PipelineCacheKey& k) const {
             size_t h = std::hash<unsigned int>()(k.handle);
             h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.render_pass)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.vert_module)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.frag_module)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint64_t>()(reinterpret_cast<uint64_t>(k.pipeline_layout)) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<int>()(static_cast<int>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint32_t>()(k.color_attachment_count) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<bool>()(k.wireframe) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<bool>()(k.overdraw)  + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;

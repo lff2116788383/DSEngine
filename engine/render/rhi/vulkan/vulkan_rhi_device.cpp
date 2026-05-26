@@ -210,7 +210,7 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
 void VulkanRhiDevice::Shutdown() {
     if (!initialized_) return;
 
-    context_.WaitIdle();
+    WaitIdle();
 
     // 清理 Hi-Z 资源（必须在 VkDevice 销毁前）
     if (hiz_impl_) {
@@ -235,6 +235,17 @@ void VulkanRhiDevice::Shutdown() {
     external_shader_programs_.clear();
     initialized_ = false;
     DEBUG_LOG_INFO("[Vulkan] RhiDevice shutdown");
+}
+
+void VulkanRhiDevice::WaitIdle() {
+    if (!initialized_) return;
+    context_.WaitIdle();
+    resource_mgr_.ResetCommandPool();
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; ++i) {
+        resource_mgr_.ResetDescriptorPool(i);
+    }
+    pending_command_buffers_.clear();
+    active_render_cmd_ = VK_NULL_HANDLE;
 }
 
 void VulkanRhiDevice::BeginFrame() {
@@ -1205,12 +1216,16 @@ void VulkanRhiDevice::EndFrame() {
         DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame OK");
         pending_command_buffers_.clear();
     } else {
-        // 无命令提交时仍需 signal fence，否则下次 AcquireNextImage 的
-        // vkWaitForFences 会永远阻塞（fence 已被 reset 但未 signal）
-        VkSubmitInfo empty_submit{};
-        empty_submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        vkQueueSubmit(context_.graphics_queue(), 1, &empty_submit,
-                      context_.in_flight_fence());
+        auto clear_cmd = CreateCommandBuffer();
+        if (clear_cmd) {
+            clear_cmd->BeginRenderPass(RenderPassDesc{0, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), true});
+            clear_cmd->EndRenderPass();
+            Submit(clear_cmd);
+        }
+        if (!pending_command_buffers_.empty()) {
+            context_.PresentFrame(pending_command_buffers_);
+            pending_command_buffers_.clear();
+        }
     }
 
     context_.AdvanceFrame();

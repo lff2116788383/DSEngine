@@ -3,6 +3,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_scene.h"
 #include "engine/base/debug.h"
 #include "engine/platform/screen.h"
 #include <stdexcept>
@@ -610,13 +611,18 @@ struct InstancingKeyHash {
 }
 
 void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+    dse::render::RenderScene scene;
+    BuildRenderQueues(world, scene);
+    scene.DrawOpaqueCpu(cmd_buffer);
+}
+
+void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
     // Per-frame cache: 后续 pass 直接复用首次构建的 batch_items
     if (!batch_cache_dirty_) {
-        if (!cached_opaque_items_.empty()) {
-            cmd_buffer.DrawMeshBatch(cached_opaque_items_);
-        }
+        scene.cpu_meshes.opaque.insert(scene.cpu_meshes.opaque.end(), cached_opaque_items_.begin(), cached_opaque_items_.end());
+        scene.cpu_meshes.transparent.insert(scene.cpu_meshes.transparent.end(), cached_transparent_items_.begin(), cached_transparent_items_.end());
         if (!static_batch_items_.empty() && !gpu_driven_active_) {
-            cmd_buffer.DrawMeshBatch(static_batch_items_);
+            scene.cpu_meshes.static_cpu_fallback.insert(scene.cpu_meshes.static_cpu_fallback.end(), static_batch_items_.begin(), static_batch_items_.end());
         }
         return;
     }
@@ -1406,7 +1412,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             }
             return MakeSortKey(a) < MakeSortKey(b);
         });
-        cmd_buffer.DrawMeshBatch(opaque_items);
+        scene.cpu_meshes.opaque.insert(scene.cpu_meshes.opaque.end(), opaque_items.begin(), opaque_items.end());
     }
 
     // 静态合批结果：已按 MakeSortKey 排序，直接提交（零拷贝引用），刷新本帧光照
@@ -1426,12 +1432,13 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 sb_item.ambient_intensity = skylight_intensity;
             }
         }
-        cmd_buffer.DrawMeshBatch(static_batch_items_);
+        scene.cpu_meshes.static_cpu_fallback.insert(scene.cpu_meshes.static_cpu_fallback.end(), static_batch_items_.begin(), static_batch_items_.end());
     }
 
     // 缓存本帧结果供后续 pass 复用
     cached_opaque_items_ = std::move(opaque_items);
     cached_transparent_items_ = transparent_items_;
+    scene.cpu_meshes.transparent.insert(scene.cpu_meshes.transparent.end(), cached_transparent_items_.begin(), cached_transparent_items_.end());
     batch_cache_dirty_ = false;
 }
 
@@ -1445,7 +1452,8 @@ void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer
 }
 
 int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {
-    if (!ctx.gpu_driven_enabled) return 0;
+    ResetGPUDrivenState();
+    if (!ctx.gpu_driven_requested || !ctx.gpu_driven_supported) return 0;
 
     auto* rhi = ctx.rhi_device;
     if (!rhi) return 0;
@@ -1723,6 +1731,8 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     if (cmd_index == 0) {
         ctx.gpu_indirect_draw_count = 0;
         ctx.gpu_total_instances = 0;
+        ctx.gpu_driven_scene_prepared = false;
+        ctx.gpu_driven_active_this_frame = false;
         return 0;
     }
 
@@ -1803,6 +1813,9 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     ctx.gpu_materials = gpu_materials_.empty() ? nullptr : gpu_materials_.data();
     ctx.gpu_material_count = static_cast<int>(gpu_materials_.size());
     gpu_driven_active_ = (cmd_index > 0);
+    ctx.gpu_driven_scene_prepared = gpu_driven_active_;
+    ctx.gpu_driven_active_this_frame = gpu_driven_active_;
+    batch_cache_dirty_ = true;
 
     // DX11/Vulkan per-draw model 更新：缓存 CPU 侧实例数据指针
     rhi->CacheGPUDrivenInstanceData(
@@ -1811,6 +1824,13 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         cmd_index);
 
     return cmd_index;
+}
+
+void MeshRenderSystem::ResetGPUDrivenState() {
+    if (gpu_driven_active_) {
+        batch_cache_dirty_ = true;
+    }
+    gpu_driven_active_ = false;
 }
 
 bool MeshRenderSystem::IsGPUDrivenEligible(World& world, entt::entity entity,

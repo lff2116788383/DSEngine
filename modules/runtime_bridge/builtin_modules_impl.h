@@ -43,7 +43,9 @@ public:
     void ShutdownMeshSystem() override;
     void RenderMeshes(World& world, CommandBuffer& cmd) override;
     void RenderTransparentMeshes(World& world, CommandBuffer& cmd, int wboit_mode) override;
+    void BuildRenderQueues(World& world, dse::render::RenderScene& scene) override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
+    void ResetGPUSceneState() override;
     const std::vector<dse::gameplay3d::HiZAABB>& CachedAABBs() const override;
     int  CachedAABBCount() const override;
     void SetHiZVisibility(const std::vector<uint32_t>& visibility) override;

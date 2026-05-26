@@ -81,7 +81,8 @@ bool ReflectSpirvRuntime(
     const std::vector<uint32_t>& vert_spirv,
     const std::vector<uint32_t>& frag_spirv,
     std::vector<DescriptorBindingInfo>& out_bindings,
-    uint32_t& out_push_constant_size);
+    uint32_t& out_push_constant_size,
+    VkShaderStageFlags& out_push_constant_stages);
 }}} // namespace
 #endif
 
@@ -249,8 +250,9 @@ bool VulkanShaderManager::ReflectSpirv(
 #ifdef DSE_HAS_SPIRV_CROSS
     // 运行时 SPIR-V 反射：解析实际二进制，自动发现所有 bindings（含 GPU-driven SSBO）
     uint32_t pc_size = 0;
+    VkShaderStageFlags pc_stages = 0;
     if (!spirv_reflect_impl::ReflectSpirvRuntime(vert_spirv, frag_spirv,
-                                                  out_reflection.bindings, pc_size)) {
+                                                  out_reflection.bindings, pc_size, pc_stages)) {
         DEBUG_LOG_ERROR("[Vulkan] SPIR-V runtime reflection failed");
         return false;
     }
@@ -271,16 +273,18 @@ bool VulkanShaderManager::ReflectSpirv(
         });
     }
     uint32_t pc_size = 0;
-    { uint32_t f, o; vk_reflect::ExtractPushConstantRange(prog_refl, f, o, pc_size); }
+    VkShaderStageFlags pc_stages = 0;
+    { uint32_t f, o; vk_reflect::ExtractPushConstantRange(prog_refl, f, o, pc_size); pc_stages = static_cast<VkShaderStageFlags>(f); }
 #endif
 
-    // Push constants（保留最小 160B 兼容后处理）
-    out_reflection.has_push_constant = true;
-    out_reflection.push_constant_range = {
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        0,
-        std::max(pc_size, uint32_t(160))
-    };
+    if (pc_size > 0 && pc_stages != 0) {
+        out_reflection.has_push_constant = true;
+        out_reflection.push_constant_range = {
+            pc_stages,
+            0,
+            std::max(pc_size, uint32_t(160))
+        };
+    }
 
     return true;
 }
@@ -575,8 +579,8 @@ void VulkanShaderManager::InitBuiltinPBRShader() {
         const auto* prog = GetProgram(pbr_shader_handle_);
         if (prog) {
             for (const auto& b : prog->reflection.bindings) {
-                if (b.set == 2 && b.binding == 8 && b.type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
-                    DEBUG_LOG_WARN("[VK PBR Reflection] BoneMatrices (set=2,binding=8) type={} expected UNIFORM_BUFFER(6)",
+                if (b.set == 2 && b.binding == 8 && b.type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+                    DEBUG_LOG_WARN("[VK PBR Reflection] BoneMatrices (set=2,binding=8) type={} expected STORAGE_BUFFER(7)",
                                    static_cast<int>(b.type));
                 }
                 if (b.set == 2 && b.binding == 9 && b.type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {

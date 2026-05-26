@@ -50,9 +50,9 @@ function Awake()
     app.set_window_title("Cube Stress — " .. ENTITY_COUNT .. " entities")
     app.set_data_root("examples/KF_Framework")
 
-    print(string.format("[CubeStress] entities=%d perf_frames=%d no_shadow=%s gpu_driven=%s uniform_mat=%s",
+    print(string.format("[CubeStress] entities=%d perf_frames=%d no_shadow=%s gpu_driven_policy=%s uniform_mat=%s",
         ENTITY_COUNT, PERF_FRAMES, tostring(NO_SHADOW),
-        os.getenv("DSE_DISABLE_GPU_DRIVEN") == "1" and "OFF" or "ON",
+        os.getenv("DSE_GPU_DRIVEN_POLICY") or (os.getenv("DSE_DISABLE_GPU_DRIVEN") == "1" and "off" or "auto"),
         tostring(UNIFORM_MAT)))
 
     -- 1. 方向光
@@ -193,7 +193,10 @@ function print_perf_report()
     print(string.format("  Shadow:      %s", NO_SHADOW and "OFF" or "ON"))
     print(string.format("  Samples:     %d frames (after %d warmup)", n, warmup_frames))
     print(string.format("  Backend:     %s", os.getenv("DSE_RHI_BACKEND") or "default"))
-    print(string.format("  GPU-Driven:  %s", os.getenv("DSE_DISABLE_GPU_DRIVEN") == "1" and "OFF" or "ON"))
+    local gpu_active = metrics.get_gpu_driven_active and metrics.get_gpu_driven_active() or false
+    local gpu_draws = metrics.get_gpu_indirect_draw_count and metrics.get_gpu_indirect_draw_count() or 0
+    local gpu_instances = metrics.get_gpu_total_instances and metrics.get_gpu_total_instances() or 0
+    print(string.format("  GPU-Driven:  %s (draws=%d, instances=%d)", gpu_active and "ACTIVE" or "INACTIVE", gpu_draws, gpu_instances))
     print(string.format("  Uniform Mat: %s", tostring(UNIFORM_MAT)))
     print("----------------------------------------------------------------------")
     print(string.format("  FPS avg:     %.1f", fps_avg))
@@ -207,7 +210,7 @@ function print_perf_report()
     print(string.format("  Frame Time p95:  %.2f ms", p95))
     print(string.format("  Frame Time p99:  %.2f ms", p99))
     print("======================================================================")
-    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f shadow=%s uniform_mat=%s draw_calls=%d",
+    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f shadow=%s uniform_mat=%s draw_calls=%d gpu_driven_active=%s gpu_indirect_draws=%d gpu_instances=%d",
         ENTITY_COUNT, fps_avg, fps_min, avg, p99, NO_SHADOW and "OFF" or "ON",
-        tostring(UNIFORM_MAT), metrics.get_draw_calls()))
+        tostring(UNIFORM_MAT), metrics.get_draw_calls(), tostring(gpu_active), gpu_draws, gpu_instances))
 end

@@ -40,6 +40,7 @@ public:
     // --- RhiDevice 接口 ---
     bool InitDevice(void* window_handle, int width, int height) override;
     void Shutdown() override;
+    void WaitIdle() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     void DeleteRenderTarget(unsigned int render_target_handle) override;

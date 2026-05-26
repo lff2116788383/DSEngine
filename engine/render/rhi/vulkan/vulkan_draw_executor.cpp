@@ -1000,10 +1000,10 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         spot_data_buf.offset = 0;
         spot_data_buf.range = sizeof(SpotLightDataUBO);
         VkWriteDescriptorSet spot_data_write{};
-        if (has_set2_binding(10, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
+        if (has_set2_binding(19, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
             spot_data_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             spot_data_write.dstSet = sets[2];
-            spot_data_write.dstBinding = 10;
+            spot_data_write.dstBinding = 19;
             spot_data_write.descriptorCount = 1;
             spot_data_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             spot_data_write.pBufferInfo = &spot_data_buf;
@@ -1095,11 +1095,13 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         // SkinnedInstBuf SSBO (set=2, binding=10) — 硬件实例化路径
         VkDescriptorBufferInfo inst_ssbo_info{};
         VkWriteDescriptorSet inst_ssbo_write{};
-        if (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0
-            && has_binding(2, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
-            inst_ssbo_info.buffer = inst_ssbo;
-            inst_ssbo_info.offset = inst_ssbo_offset;
-            inst_ssbo_info.range  = inst_ssbo_size;
+        if (has_binding(2, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
+            inst_ssbo_info.buffer = (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0)
+                ? inst_ssbo : dummy_ssbo_buffer_;
+            inst_ssbo_info.offset = (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0)
+                ? inst_ssbo_offset : 0;
+            inst_ssbo_info.range = (inst_ssbo != VK_NULL_HANDLE && inst_ssbo_size > 0)
+                ? inst_ssbo_size : VK_WHOLE_SIZE;
             inst_ssbo_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             inst_ssbo_write.dstSet          = sets[2];
             inst_ssbo_write.dstBinding      = 10;
@@ -1120,8 +1122,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (bone_write.sType != 0) all_writes.push_back(bone_write);
         if (morph_write.sType != 0) all_writes.push_back(morph_write);
         if (inst_ssbo_write.sType != 0) all_writes.push_back(inst_ssbo_write);
-        if (spot_data_write.sType != 0 && inst_ssbo_write.sType == 0)
-            all_writes.push_back(spot_data_write);
+        if (spot_data_write.sType != 0) all_writes.push_back(spot_data_write);
         if (terrain_write.sType != 0) all_writes.push_back(terrain_write);
         for (int i = 0; i < 5; ++i) {
             if (splat_writes[i].sType != 0) all_writes.push_back(splat_writes[i]);
@@ -1440,7 +1441,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         if (has_binding(1, 5)) push_ubo(1, 5);
     }
 
-    // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-9 (bones/morph UBO)
+    // Set 2: binding 0 (PerMaterial UBO), 1-5 (textures), 6 (shadow[3]), 7 (spot_shadow[4]), 8-10 (bones/morph/instancing)
     if (set_count > 2) {
         if (has_binding(2, 0)) push_ubo(2, 0);
         for (uint32_t b = 1; b <= 5; ++b) { if (has_binding(2, b)) push_img(2, b, 1); }
@@ -1448,6 +1449,8 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         if (has_binding(2, 7)) push_img(2, 7, 4);
         if (has_binding(2, 8)) push_ssbo2(2, 8);
         if (has_binding(2, 9)) push_ubo(2, 9);
+        if (has_binding(2, 10)) push_ssbo2(2, 10);
+        if (has_binding(2, 19)) push_ubo(2, 19);
     }
 
     // Set 3: binding 0 (point_shadow_maps[4])
@@ -3724,17 +3727,14 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
                                     shadow_program->pipeline_layout, 0, 1, &set0, 0, nullptr);
         }
 
-        // 为 sets 1-3 绑定持久化空 descriptor sets，防止与前一个 pipeline layout 不兼容导致 TDR
+        // 为 sets 1-3 绑定当前帧空 descriptor sets，防止与前一个 pipeline layout 不兼容导致 TDR
         for (uint32_t si = 1; si < shadow_program->descriptor_set_layouts.size() && si < 4; ++si) {
-            uint32_t cache_idx = si - 1;
-            if (gpu_driven_shadow_empty_sets_[cache_idx] == VK_NULL_HANDLE) {
-                gpu_driven_shadow_empty_sets_[cache_idx] = resource_mgr_->AllocateDescriptorSet(
-                    shadow_program->descriptor_set_layouts[si]);
-            }
-            if (gpu_driven_shadow_empty_sets_[cache_idx] != VK_NULL_HANDLE) {
+            VkDescriptorSet empty_set = resource_mgr_->AllocateDescriptorSet(
+                shadow_program->descriptor_set_layouts[si]);
+            if (empty_set != VK_NULL_HANDLE) {
                 vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                         shadow_program->pipeline_layout, si, 1,
-                                        &gpu_driven_shadow_empty_sets_[cache_idx], 0, nullptr);
+                                        &empty_set, 0, nullptr);
             }
         }
     }
@@ -3907,7 +3907,7 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
 
     SpotLightDataUBO spot_data = PrepareSpotLightDataUBO(global_state_);
     WriteToBuffer(device, per_spot_lights_ubo_mem_[current_frame_index_], 0, sizeof(spot_data), &spot_data);
-    push_buffer(10, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, per_spot_lights_ubo_[current_frame_index_],
+    push_buffer(19, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, per_spot_lights_ubo_[current_frame_index_],
                 0, sizeof(SpotLightDataUBO));
 
     for (uint32_t binding = 11; binding <= 15; ++binding) {

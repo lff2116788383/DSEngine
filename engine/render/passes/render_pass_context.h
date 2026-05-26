@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
 #include "engine/render/rhi/gpu_scene_types.h"
+#include "engine/render/render_scene.h"
 #include "engine/render/render_snapshot.h"
 
 class World;
@@ -44,6 +45,7 @@ struct RenderPassContext {
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
+    RenderScene* render_scene = nullptr;
     LightBuffer* light_buffer = nullptr;
     ClusterGrid* cluster_grid = nullptr;
     bool editor_mode = false;
@@ -101,7 +103,11 @@ struct RenderPassContext {
     unsigned int hiz_cull_shader = 0;       ///< Compute: AABB 遮挡剔除
 
     /// GPU Driven 渲染状态
-    bool gpu_driven_enabled = false;              ///< 本帧是否激活 GPU Driven 路径
+    bool gpu_driven_enabled = false;              ///< 兼容字段：后端能力支持，勿作为本帧激活判定
+    bool gpu_driven_supported = false;            ///< RHI 能力与 shader 均支持 GPU Driven
+    bool gpu_driven_requested = false;            ///< 配置/策略请求启用 GPU Driven
+    bool gpu_driven_scene_prepared = false;       ///< 本帧是否成功准备 GPU Scene
+    bool gpu_driven_active_this_frame = false;    ///< 本帧是否存在可绘制 GPU Driven draw command
     BufferHandle gpu_indirect_buffer;            ///< indirect draw argument buffer
     BufferHandle gpu_instance_ssbo;              ///< GPUInstanceData[] SSBO
     BufferHandle gpu_material_ssbo;              ///< GPUMaterialData[] SSBO

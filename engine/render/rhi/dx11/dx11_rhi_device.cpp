@@ -891,19 +891,19 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
     }
     if (!d3d_buf) return;
 
-    // GPU-Driven per-draw：更新 draw_id（VS 从 ByteAddressBuffer t21 读 model）
+    // GPU-Driven per-draw：更新 draw_id（VS 从 ByteAddressBuffer t16 读 model）
     // 同时保留 PerObjectCB 回退（gpu_driven shader 不可用时）
     const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
     const bool use_gpu_driven = (shader_mgr_.gpu_driven_pbr_shader_handle() != 0);
 
-    // 绑定 instance SSBO 到 VS t21（GPU-driven VS 从 ByteAddressBuffer 读 model）
+    // 绑定 instance SSBO 到 VS t16（GPU-driven VS 从 ByteAddressBuffer 读 model）
     if (use_gpu_driven) {
         auto it = bound_ssbos_.find(gpu_driven::kSSBOBindingInstances);
         if (it != bound_ssbos_.end()) {
             const DX11SSBO* inst_ssbo = resource_mgr_.GetSSBO(it->second.handle);
             if (inst_ssbo && inst_ssbo->srv) {
                 ID3D11ShaderResourceView* vs_srv = inst_ssbo->srv.Get();
-                dc->VSSetShaderResources(21, 1, &vs_srv);
+                dc->VSSetShaderResources(16, 1, &vs_srv);
             }
         }
     }

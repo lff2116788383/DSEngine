@@ -1,4 +1,5 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
+#include "engine/render/render_scene.h"
 #include "engine/core/service_locator.h"
 #include <limits>
 #include "engine/ecs/components_3d_fluid.h"
@@ -193,6 +194,57 @@ void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
 void Gameplay3DModule::OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) {
     (void)clip_correction;
     mesh_render_system_.RenderTransparent(world, cmd_buffer, wboit_mode);
+}
+
+void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
+    mesh_render_system_.BuildRenderQueues(world, scene);
+    World* world_ptr = &world;
+
+    scene.prez_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext&) {
+        terrain_system_.Render(*world_ptr, cmd);
+        grass_system_.Render(*world_ptr, cmd);
+    });
+    scene.shadow_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext&) {
+        terrain_system_.Render(*world_ptr, cmd);
+        grass_system_.RenderShadow(*world_ptr, cmd);
+    });
+    scene.opaque_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+        World& callback_world = *world_ptr;
+        terrain_system_.Render(callback_world, cmd);
+        grass_system_.Render(callback_world, cmd);
+
+        auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
+        std::vector<Particle3DDrawItem> p_items;
+        for (auto entity : p_view) {
+            const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
+            if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo != 0) {
+                Particle3DDrawItem item;
+                item.texture_handle = ps.texture_handle;
+                item.particle_count = ps.active_particle_count;
+                item.instance_vbo = ps.instance_vbo;
+                p_items.push_back(item);
+            }
+        }
+
+        auto f_view = callback_world.registry().view<dse::FluidEmitterComponent>();
+        for (auto entity : f_view) {
+            const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
+            if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
+                Particle3DDrawItem item;
+                item.texture_handle = 0;
+                item.particle_count = static_cast<int>(fluid.active_count);
+                item.instance_vbo = fluid.instance_vbo;
+                p_items.push_back(item);
+            }
+        }
+
+        const glm::mat4 view = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
+        const glm::mat4 projection = pass_ctx.projection ? *pass_ctx.projection : glm::mat4(1.0f);
+        if (!p_items.empty()) {
+            cmd.DrawParticles3D(p_items, view, projection);
+        }
+        hair_system_.Render(callback_world, cmd, view, projection);
+    });
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {

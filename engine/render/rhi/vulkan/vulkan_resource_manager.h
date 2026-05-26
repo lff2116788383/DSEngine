@@ -95,6 +95,7 @@ public:
     /// 分配一次性命令缓冲（用于临时拷贝等）
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer command_buffer);
+    void ResetCommandPool();
 
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);

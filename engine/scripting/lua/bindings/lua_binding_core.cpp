@@ -238,6 +238,24 @@ int L_MetricsGetSpriteCount(lua_State* L) {
     lua_pushinteger(L, fn ? fn() : 0);
     return 1;
 }
+
+int L_MetricsGetGpuDrivenActive(lua_State* L) {
+    const auto& fn = GetBindingContext().get_gpu_driven_active;
+    lua_pushboolean(L, fn ? (fn() != 0) : false);
+    return 1;
+}
+
+int L_MetricsGetGpuIndirectDrawCount(lua_State* L) {
+    const auto& fn = GetBindingContext().get_gpu_indirect_draw_count;
+    lua_pushinteger(L, fn ? fn() : 0);
+    return 1;
+}
+
+int L_MetricsGetGpuTotalInstances(lua_State* L) {
+    const auto& fn = GetBindingContext().get_gpu_total_instances;
+    lua_pushinteger(L, fn ? fn() : 0);
+    return 1;
+}
 }
 
 void RegisterAssetsBindings(lua_State* L) {
@@ -294,6 +312,9 @@ void RegisterMetricsBindings(lua_State* L) {
     set_fn("get_draw_calls", L_MetricsGetDrawCalls);
     set_fn("get_max_batch_sprites", L_MetricsGetMaxBatchSprites);
     set_fn("get_sprite_count", L_MetricsGetSpriteCount);
+    set_fn("get_gpu_driven_active", L_MetricsGetGpuDrivenActive);
+    set_fn("get_gpu_indirect_draw_count", L_MetricsGetGpuIndirectDrawCount);
+    set_fn("get_gpu_total_instances", L_MetricsGetGpuTotalInstances);
     set_fn("get_fps", L_MetricsGetFps);
     set_fn("get_frame_time_ms", L_MetricsGetFrameTimeMs);
 }

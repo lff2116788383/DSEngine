@@ -32,6 +32,9 @@
 #include "modules/gameplay_3d/rope/rope_system.h"
 
 namespace dse {
+namespace render {
+struct RenderScene;
+} // namespace render
 namespace gameplay3d {
 
 /**
@@ -50,6 +53,7 @@ public:
     void OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f)) override;
     void OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) override;
     void OnShutdown(World& world) override;
+    void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
 
     MeshRenderSystem& mesh_render_system() { return mesh_render_system_; }
     const MeshRenderSystem& mesh_render_system() const { return mesh_render_system_; }

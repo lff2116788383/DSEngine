@@ -225,7 +225,10 @@ function print_perf_report()
     print(string.format("  Animation:   %s", tostring(ANIM_ENABLED)))
     print(string.format("  Samples:     %d frames (after %d warmup)", n, warmup_frames))
     print(string.format("  Backend:     %s", os.getenv("DSE_RHI_BACKEND") or "default"))
-    print(string.format("  GPU-Driven:  %s", os.getenv("DSE_DISABLE_GPU_DRIVEN") == "1" and "OFF" or "ON"))
+    local gpu_active = metrics.get_gpu_driven_active and metrics.get_gpu_driven_active() or false
+    local gpu_draws = metrics.get_gpu_indirect_draw_count and metrics.get_gpu_indirect_draw_count() or 0
+    local gpu_instances = metrics.get_gpu_total_instances and metrics.get_gpu_total_instances() or 0
+    print(string.format("  GPU-Driven:  %s (draws=%d, instances=%d)", gpu_active and "ACTIVE" or "INACTIVE", gpu_draws, gpu_instances))
     print(string.format("  LOD:         %s (min_screen_size=%.6f, scale=%.2f)",
         tostring(LOD_ENABLED), LOD_MIN_SCREEN_SIZE, LOD_SCALE))
     print("----------------------------------------------------------------------")
@@ -240,6 +243,6 @@ function print_perf_report()
     print(string.format("  Frame Time p95:  %.2f ms", p95))
     print(string.format("  Frame Time p99:  %.2f ms", p99))
     print("======================================================================")
-    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f",
-        ENTITY_COUNT, fps_avg, fps_min, avg, p99))
+    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f gpu_driven_active=%s gpu_indirect_draws=%d gpu_instances=%d",
+        ENTITY_COUNT, fps_avg, fps_min, avg, p99, tostring(gpu_active), gpu_draws, gpu_instances))
 end

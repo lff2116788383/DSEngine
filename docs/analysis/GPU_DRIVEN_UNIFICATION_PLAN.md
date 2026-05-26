@@ -679,5 +679,13 @@ GL 3.3 (无 SSBO/Compute) 下 GPU-driven 整体不可用——由 `gpu_driven_en
 - [ ] **[C2]** SSAO / SSR / DOF 开启时：GPU-driven 实体深度正确（无黑色/缺失区域）
 - [ ] **[C3]** 两个实体共享 mesh_path 但 color 不同：各自颜色正确
 - [x] **[C4]** Vulkan PreZ/shadow pass 无 descriptor write 崩溃
-- [ ] **[M1]** Vulkan validation layer 零 error（已修复 descriptor write，残余 GPU-driven 路径 warning 待后续）
+- [x] **[M1]** Vulkan validation layer 零 error（2026-05-26 `vulkan_visual_final.log` 无 `WARN/ERROR/Validation`，无 `Invalid VkDescriptorSet` / semaphore / layout warning）
 - [ ] **[M2]** DX11 RenderDoc 截帧：t21/t22 slot 有正确数据
+
+### 2026-05-26 GPU Driven 三后端收口记录
+
+- [x] Vulkan：`tmp/gpu_driven_refactor/vulkan_visual_final.log`，`exit code 0`，`gpu_driven_active=true`，截图 `main1000_vulkan_visual_final.png` 正常。
+- [x] OpenGL：`tmp/gpu_driven_refactor/opengl_visual_final.log`，`exit code 0`，`gpu_driven_active=true`，截图 `main1000_opengl_visual_final.png` 正常。
+- [x] DX11：`tmp/gpu_driven_refactor/dx11_visual_final.log`，`exit code 0`，`gpu_driven_active=true`，截图 `main1000_dx11_visual_final.png` 正常。
+- [x] DX11 已按生成 HLSL register 同步绑定 `TerrainParams=b4` 与 `SpotLightData=b5`。
+- [ ] DX11 RenderDoc slot 级检查仍可作为后续专项验证，不阻塞当前三端视觉收口。

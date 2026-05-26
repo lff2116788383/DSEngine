@@ -77,6 +77,7 @@ public:
     virtual bool InitDevice(void* window_handle, int width, int height) { (void)window_handle; (void)width; (void)height; return true; }
 
     virtual void Shutdown() = 0;
+    virtual void WaitIdle() {}
     virtual void BeginFrame() = 0;
     virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual void DeleteRenderTarget(unsigned int render_target_handle) { (void)render_target_handle; }

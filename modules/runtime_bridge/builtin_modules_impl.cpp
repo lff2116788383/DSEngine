@@ -63,12 +63,27 @@ void BuiltinModulesImpl::RenderTransparentMeshes(World& world, CommandBuffer& cm
     mesh_render_system_.RenderTransparent(world, cmd, wboit_mode);
 }
 
+void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
+#ifdef DSE_ENABLE_3D
+    gameplay3d_module_.BuildRenderQueues(world, scene);
+#else
+    mesh_render_system_.BuildRenderQueues(world, scene);
+#endif
+}
+
 int BuiltinModulesImpl::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {
 #ifdef DSE_ENABLE_3D
     return gameplay3d_module_.mesh_render_system().PrepareGPUScene(world, ctx);
 #else
     return mesh_render_system_.PrepareGPUScene(world, ctx);
 #endif
+}
+
+void BuiltinModulesImpl::ResetGPUSceneState() {
+#ifdef DSE_ENABLE_3D
+    gameplay3d_module_.mesh_render_system().ResetGPUDrivenState();
+#endif
+    mesh_render_system_.ResetGPUDrivenState();
 }
 
 const std::vector<dse::gameplay3d::HiZAABB>& BuiltinModulesImpl::CachedAABBs() const {

@@ -138,14 +138,24 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
 
     auto& state = it->second;
 
-    // 复合键查找缓存：同一 handle 在不同 renderPass/samples/wireframe/overdraw 下各自有独立的 VkPipeline
-    PipelineCacheKey cache_key{ handle, render_pass, samples, wireframe_mode_, overdraw_mode_ };
+    if (!shader_program) return VK_NULL_HANDLE;
+
+    // 复合键查找缓存：Vulkan pipeline 绑定 shader module、layout、renderPass、vertex input 和状态
+    PipelineCacheKey cache_key{
+        handle,
+        render_pass,
+        shader_program->vert_module,
+        shader_program->frag_module,
+        shader_program->pipeline_layout,
+        samples,
+        color_attachment_count,
+        wireframe_mode_,
+        overdraw_mode_
+    };
     auto cache_it = pipeline_cache_.find(cache_key);
     if (cache_it != pipeline_cache_.end()) {
         return cache_it->second;
     }
-
-    if (!shader_program) return VK_NULL_HANDLE;
 
     auto device = context_->device();
 
@@ -287,6 +297,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     state.render_pass = render_pass;
     state.pipeline_layout = shader_program->pipeline_layout;
     state.samples = samples;
+    state.shader_program_handle = 0;
 
     DEBUG_LOG_TRACE("[Vulkan] Created VkPipeline for state handle {}", handle);
     return pipeline;

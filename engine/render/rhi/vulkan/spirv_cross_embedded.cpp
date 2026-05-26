@@ -27,10 +27,12 @@ bool ReflectSpirvRuntime(
     const std::vector<uint32_t>& vert_spirv,
     const std::vector<uint32_t>& frag_spirv,
     std::vector<DescriptorBindingInfo>& out_bindings,
-    uint32_t& out_push_constant_size) {
+    uint32_t& out_push_constant_size,
+    VkShaderStageFlags& out_push_constant_stages) {
 
     out_bindings.clear();
     out_push_constant_size = 0;
+    out_push_constant_stages = 0;
 
     std::map<uint64_t, DescriptorBindingInfo> binding_map;
 
@@ -72,6 +74,7 @@ bool ReflectSpirvRuntime(
                 auto& type = compiler.get_type(pc.base_type_id);
                 out_push_constant_size = std::max(out_push_constant_size,
                     static_cast<uint32_t>(compiler.get_declared_struct_size(type)));
+                out_push_constant_stages |= stage;
             }
             return true;
         } catch (const spirv_cross::CompilerError& e) {

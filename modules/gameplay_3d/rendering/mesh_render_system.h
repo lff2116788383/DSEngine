@@ -15,7 +15,7 @@
 class AssetManager;
 
 
-namespace dse { namespace render { struct RenderPassContext; } }
+namespace dse { namespace render { struct RenderPassContext; struct RenderScene; } }
 
 namespace dse {
 namespace gameplay3d {
@@ -35,6 +35,7 @@ public:
      * @param cmd_buffer 渲染命令缓冲
      */
     void Render(World& world, CommandBuffer& cmd_buffer);
+    void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
 
     /**
      * @brief 渲染透明物体 (WBOIT)
@@ -115,6 +116,8 @@ public:
     /// GPU Driven: 判断实体是否走 GPU-driven 路径（不透明、非蒙皮、有 bounds）
     static bool IsGPUDrivenEligible(World& world, entt::entity entity,
                                      const MeshRendererComponent& mr);
+
+    void ResetGPUDrivenState();
 
 private:
     AssetManager* asset_manager_ = nullptr;

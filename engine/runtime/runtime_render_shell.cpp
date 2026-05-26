@@ -33,6 +33,9 @@ void FinalizeRuntimeRenderFrame(::FramePipeline& pipeline) {
     pipeline.last_material_switches_ = static_cast<int>(frame_stats.material_switches);
     pipeline.last_max_batch_sprites_ = static_cast<int>(frame_stats.max_batch_sprites);
     pipeline.last_sprite_count_ = static_cast<int>(frame_stats.sprite_count);
+    pipeline.last_gpu_driven_active_ = pipeline.render_pass_context_.gpu_driven_active_this_frame ? 1 : 0;
+    pipeline.last_gpu_indirect_draw_count_ = pipeline.render_pass_context_.gpu_indirect_draw_count;
+    pipeline.last_gpu_total_instances_ = pipeline.render_pass_context_.gpu_total_instances;
 }
 
 } // namespace dse::runtime

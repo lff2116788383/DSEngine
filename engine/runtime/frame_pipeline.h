@@ -56,6 +56,13 @@ class AssetManager;
  */
 class DSE_EXPORT FramePipeline {
 public:
+    enum class GpuDrivenPolicy {
+        Auto,
+        Off,
+        Force,
+        WithModules,
+    };
+
     FramePipeline();
     ~FramePipeline();
 
@@ -128,6 +135,9 @@ public:
      * @return DrawCall 总数
      */
     int LastDrawCalls() const;
+    int LastGpuDrivenActive() const;
+    int LastGpuIndirectDrawCount() const;
+    int LastGpuTotalInstances() const;
 
     /// 将当前帧提交到显示器（DX11/Vulkan 交换链 Present）
     /// 在 Tick() 之后、render 计时之外调用
@@ -280,6 +290,7 @@ private:
     void RunRenderInternal();
     void BuildRenderGraphInternal();
     void ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer);
+    void BuildRenderSceneQueues();
 
     /// Phase 2: 渲染线程分离
     void PrepareRenderFrame();           ///< 主线程：收集光源/构建 cluster/捕获快照 (纯 CPU)
@@ -301,6 +312,12 @@ private:
     
     std::unique_ptr<IBuiltinModules> modules_impl_;
     int gpu_culled_last_frame_ = 0;  ///< GPU Driven: 上一帧被剔除的 draw command 数
+    GpuDrivenPolicy gpu_driven_policy_ = GpuDrivenPolicy::Auto;
+    bool gpu_driven_requested_ = true;
+    bool gpu_driven_diag_ = false;
+    int last_gpu_driven_active_ = 0;
+    int last_gpu_indirect_draw_count_ = 0;
+    int last_gpu_total_instances_ = 0;
 #ifdef DSE_ENABLE_3D
     std::shared_ptr<dse::physics3d::IPhysics3DSystem> physics3d_system_;
 #endif
@@ -333,6 +350,7 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
+    dse::render::RenderScene render_scene_;
 
     /// Transform 系统：每帧渲染前更新 dirty 的 local_to_world
     TransformSystem transform_system_;

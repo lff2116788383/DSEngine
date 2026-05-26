@@ -199,6 +199,11 @@ void VulkanResourceManager::EndSingleTimeCommands(VkCommandBuffer command_buffer
     vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
 }
 
+void VulkanResourceManager::ResetCommandPool() {
+    if (device_ == VK_NULL_HANDLE || command_pool_ == VK_NULL_HANDLE) return;
+    vkResetCommandPool(device_, command_pool_, 0);
+}
+
 // ============================================================
 // 纹理
 // ============================================================

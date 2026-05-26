@@ -82,7 +82,7 @@ struct DX11PointLightEntry {
 static_assert(sizeof(DX11PointLightEntry) % 16 == 0,
               "DX11PointLightEntry must be 16B aligned");
 
-/// PointLights 常量缓冲（register b4，总大小 208B）
+/// PointLights 常量缓冲
 struct DX11PointLightsCB {
     int count;
     int _p0, _p1, _p2;
@@ -91,7 +91,7 @@ struct DX11PointLightsCB {
 static_assert(sizeof(DX11PointLightsCB) % 16 == 0,
               "DX11PointLightsCB must be 16B aligned");
 
-/// SpotLight 单条目（每条 64B，4 × 16B，与 kPbrPS b5 对齐）
+/// SpotLight 单条目（每条 64B，4 × 16B）
 struct DX11SpotLightEntry {
     glm::vec3 color;       float intensity;
     glm::vec3 position;    float radius;
@@ -102,7 +102,7 @@ struct DX11SpotLightEntry {
 static_assert(sizeof(DX11SpotLightEntry) % 16 == 0,
               "DX11SpotLightEntry must be 16B aligned");
 
-/// SpotLights 常量缓冲（register b5，总大小 272B）
+/// SpotLights 常量缓冲
 struct DX11SpotLightsCB {
     int count;
     int _p0, _p1, _p2;
@@ -111,20 +111,27 @@ struct DX11SpotLightsCB {
 static_assert(sizeof(DX11SpotLightsCB) % 16 == 0,
               "DX11SpotLightsCB must be 16B aligned");
 
-/// 聚光灯光源空间矩阵（register b6，4×64B = 256B）
+/// 聚光灯光源空间矩阵（4×64B = 256B）
 struct DX11SpotMatricesCB {
     glm::mat4 spot_light_space_matrices[4];
 };
 static_assert(sizeof(DX11SpotMatricesCB) % 16 == 0,
               "DX11SpotMatricesCB must be 16B aligned");
 
-/// LightProbeData 常量缓冲（register b9，160B）
+/// LightProbeData 常量缓冲（160B）
 struct DX11LightProbeDataCB {
     glm::vec4 sh_coefficients[9];
     glm::vec4 probe_params;
 };
 static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
               "DX11LightProbeDataCB must be 16B aligned");
+
+struct DX11TerrainParamsCB {
+    glm::vec4 flags;
+    glm::vec4 tiling;
+};
+static_assert(sizeof(DX11TerrainParamsCB) % 16 == 0,
+              "DX11TerrainParamsCB must be 16B aligned");
 
 /**
  * @class DX11DrawExecutor
@@ -306,10 +313,11 @@ private:
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;
 
-    // 点光源 / 聚光灯常量缓冲（b4 / b5 / b6）
+    // 点光源 / 聚光灯常量缓冲
     ComPtr<ID3D11Buffer> per_point_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_matrices_cb_;
+    ComPtr<ID3D11Buffer> terrain_params_cb_;
 
     // 骨骼矩阵常量缓冲（旧，保留兼容）
     ComPtr<ID3D11Buffer> bone_matrices_cb_;

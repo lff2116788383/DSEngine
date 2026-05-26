@@ -209,6 +209,20 @@ std::vector<std::string> ResolveRuntimeModules() {
     }
     return {};
 }
+
+FramePipeline::GpuDrivenPolicy ResolveGpuDrivenPolicy() {
+    if (const char* legacy_disable = std::getenv("DSE_DISABLE_GPU_DRIVEN")) {
+        if (legacy_disable[0] != '\0' && legacy_disable[0] != '0') {
+            return FramePipeline::GpuDrivenPolicy::Off;
+        }
+    }
+    if (const char* policy = std::getenv("DSE_GPU_DRIVEN_POLICY")) {
+        if (std::strcmp(policy, "off") == 0) return FramePipeline::GpuDrivenPolicy::Off;
+        if (std::strcmp(policy, "force") == 0) return FramePipeline::GpuDrivenPolicy::Force;
+        if (std::strcmp(policy, "with_modules") == 0) return FramePipeline::GpuDrivenPolicy::WithModules;
+    }
+    return FramePipeline::GpuDrivenPolicy::Auto;
+}
 }
 
 bool FramePipeline::Init() {
@@ -513,10 +527,15 @@ bool FramePipeline::Init() {
         }
     }
 
+    gpu_driven_policy_ = ResolveGpuDrivenPolicy();
+    gpu_driven_requested_ = (gpu_driven_policy_ != GpuDrivenPolicy::Off);
+    gpu_driven_diag_ = [] {
+        const char* diag = std::getenv("DSE_GPU_DRIVEN_DIAG");
+        return diag && diag[0] != '\0' && diag[0] != '0';
+    }();
+
     // GPU Driven Rendering 能力检测
-    const char* disable_gpu_driven_env = std::getenv("DSE_DISABLE_GPU_DRIVEN");
-    const bool gpu_driven_disabled = disable_gpu_driven_env && disable_gpu_driven_env[0] != '\0' && disable_gpu_driven_env[0] != '0';
-    if (!gpu_driven_disabled &&
+    if (gpu_driven_requested_ &&
         runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
         runtime_context_.rhi_device->SupportsSSBO()) {
@@ -534,9 +553,9 @@ bool FramePipeline::Init() {
         }
         DEBUG_LOG_INFO("GPU Driven Rendering: supported={}, cull_shader={}",
                        render_resources_.gpu_driven_supported, render_resources_.gpu_cull_shader);
-    } else if (gpu_driven_disabled) {
+    } else if (!gpu_driven_requested_) {
         render_resources_.gpu_driven_supported = false;
-        DEBUG_LOG_INFO("GPU Driven Rendering: disabled by DSE_DISABLE_GPU_DRIVEN");
+        DEBUG_LOG_INFO("GPU Driven Rendering: requested=false (policy=off)");
     } else {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: not supported, using CPU path");
@@ -707,7 +726,10 @@ bool FramePipeline::Init() {
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },
         [this]() { return LastMaxBatchSprites(); },
-        [this]() { return LastSpriteCount(); }
+        [this]() { return LastSpriteCount(); },
+        [this]() { return LastGpuDrivenActive(); },
+        [this]() { return LastGpuIndirectDrawCount(); },
+        [this]() { return LastGpuTotalInstances(); }
     });
     DEBUG_LOG_INFO("{} business mode bootstrap: {}",
                    runtime_context_.business_mode == BusinessMode::Lua ? "Lua" : "Cpp",
@@ -811,6 +833,10 @@ void FramePipeline::Shutdown() {
     }
 
     modules_.clear();
+
+    if (runtime_context_.rhi_device) {
+        runtime_context_.rhi_device->WaitIdle();
+    }
 
     modules_impl_->ShutdownMeshSystem();
 #ifdef DSE_ENABLE_3D
@@ -1169,20 +1195,41 @@ void FramePipeline::RunRenderInternal() {
         }
     }
 
-    // GPU Driven: 准备 GPU 场景数据（AABB + DrawCommands + Instance 数据）
-    // 仅在无 module 时启用：有 module 时 per-item 路径独占渲染，
-    // 避免 GPU-driven 路径与 module 路径冲突（DX11 indirect draw 不正确渲染静态 mesh）
-    const bool gpu_driven_no_module = render_resources_.gpu_driven_supported
-        && modules_.empty() && !builtin_gameplay3d_enabled_;
-    if (gpu_driven_no_module) {
-        modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
-        // 同步动态创建的句柄到 render_resources_，确保下帧不被覆盖
+    render_pass_context_.gpu_driven_scene_prepared = false;
+    render_pass_context_.gpu_driven_active_this_frame = false;
+    modules_impl_->ResetGPUSceneState();
+
+    const bool allow_external_modules =
+        gpu_driven_policy_ == GpuDrivenPolicy::WithModules ||
+        gpu_driven_policy_ == GpuDrivenPolicy::Force;
+    const bool gpu_scene_provider_available = modules_.empty() || allow_external_modules;
+    const bool can_prepare_gpu_scene = render_resources_.gpu_driven_supported
+        && gpu_driven_requested_ && gpu_scene_provider_available;
+    if (can_prepare_gpu_scene) {
+        const int prepared = modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
+        render_pass_context_.gpu_driven_scene_prepared = prepared > 0;
+        render_pass_context_.gpu_driven_active_this_frame =
+            prepared > 0 && render_pass_context_.gpu_mega_vao && render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
         render_resources_.gpu_material_ssbo = render_pass_context_.gpu_material_ssbo;
         render_resources_.gpu_aabb_ssbo = render_pass_context_.gpu_aabb_ssbo;
         render_resources_.gpu_aabb_capacity = render_pass_context_.gpu_aabb_capacity;
     }
+    if (gpu_driven_diag_) {
+        DEBUG_LOG_INFO("[GpuDriven] requested={} supported={} provider={} prepared={} active={} draws={} instances={} modules={} builtin_gameplay3d={}",
+                       render_pass_context_.gpu_driven_requested,
+                       render_pass_context_.gpu_driven_supported,
+                       gpu_scene_provider_available,
+                       render_pass_context_.gpu_driven_scene_prepared,
+                       render_pass_context_.gpu_driven_active_this_frame,
+                       render_pass_context_.gpu_indirect_draw_count,
+                       render_pass_context_.gpu_total_instances,
+                       modules_.size(),
+                       builtin_gameplay3d_enabled_);
+    }
+
+    BuildRenderSceneQueues();
 
     CaptureThinSnapshot();
     FlipSnapshotIndex();
@@ -1220,7 +1267,7 @@ void FramePipeline::RunRenderInternal() {
             }
         }
     } else if (!render_pass_context_.hiz_culling_enabled
-        && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+        && render_pass_context_.gpu_driven_active_this_frame && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
         // GPU-driven readback 仅在 Hi-Z culling 未激活时执行，
         // 避免与 Hi-Z readback 共用 async_readback_ 单槽位导致 staging 数据污染
@@ -1303,7 +1350,7 @@ void FramePipeline::RunRenderInternal() {
         auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, instanced_meshes={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
+        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, instanced_meshes={}, gpu_driven_requested={}, gpu_driven_supported={}, gpu_driven_prepared={}, gpu_driven_active={}, gpu_indirect_draws={}, gpu_instances={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
                        entity_count,
                        stats.sprite_count,
                        stats.mesh_count,
@@ -1319,6 +1366,12 @@ void FramePipeline::RunRenderInternal() {
                        avg_fixed_ms,
                        avg_render_ms,
                        stats.instanced_mesh_count,
+                       render_pass_context_.gpu_driven_requested,
+                       render_pass_context_.gpu_driven_supported,
+                       render_pass_context_.gpu_driven_scene_prepared,
+                       render_pass_context_.gpu_driven_active_this_frame,
+                       render_pass_context_.gpu_indirect_draw_count,
+                       render_pass_context_.gpu_total_instances,
                        pending_callbacks,
                        pending_callbacks_hwm,
                        callback_budget_per_frame_);
@@ -1335,6 +1388,47 @@ void FramePipeline::BuildRenderGraph() {
     dse::runtime::BuildFrameRenderGraph(*this);
 }
 
+void FramePipeline::BuildRenderSceneQueues() {
+    render_scene_.Clear();
+    render_pass_context_.render_scene = &render_scene_;
+    if (!runtime_context_.world) return;
+
+    World* world = runtime_context_.world;
+
+#ifdef DSE_ENABLE_3D
+    if (builtin_gameplay3d_enabled_) {
+        modules_impl_->BuildRenderQueues(*world, render_scene_);
+    }
+#else
+    modules_impl_->BuildRenderQueues(*world, render_scene_);
+#endif
+
+    for (auto& mod : render_pass_context_.modules) {
+        auto* instance = mod.instance;
+        if (!instance) continue;
+        render_scene_.prez_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
+            if (pass_world) instance->OnRenderPreZ(*pass_world, cmd);
+        });
+        render_scene_.shadow_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
+            const glm::mat4 view = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
+            const glm::mat4 projection = pass_ctx.projection ? *pass_ctx.projection : glm::mat4(1.0f);
+            if (pass_world) instance->OnRenderShadow(*pass_world, cmd, pass_ctx.cascade_index, view, projection);
+        });
+        render_scene_.opaque_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
+            const glm::mat4 clip = pass_ctx.clip_correction ? *pass_ctx.clip_correction : glm::mat4(1.0f);
+            if (pass_world) instance->OnRenderScene(*pass_world, cmd, clip);
+        });
+        render_scene_.transparent_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
+            const glm::mat4 clip = pass_ctx.clip_correction ? *pass_ctx.clip_correction : glm::mat4(1.0f);
+            if (pass_world) instance->OnRenderTransparent(*pass_world, cmd, clip, pass_ctx.wboit_mode);
+        });
+    }
+}
+
 void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.Reset();
     registered_passes_.clear();
@@ -1343,6 +1437,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.world = runtime_context_.world;
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
+    render_pass_context_.render_scene = &render_scene_;
     render_pass_context_.light_buffer = &light_buffer_;
     render_pass_context_.cluster_grid = &cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
@@ -1406,6 +1501,10 @@ void FramePipeline::BuildRenderGraphInternal() {
 
     // GPU Driven 鐘舵€?
     render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
+    render_pass_context_.gpu_driven_supported = render_resources_.gpu_driven_supported;
+    render_pass_context_.gpu_driven_requested = gpu_driven_requested_;
+    render_pass_context_.gpu_driven_scene_prepared = false;
+    render_pass_context_.gpu_driven_active_this_frame = false;
     render_pass_context_.gpu_indirect_buffer = render_resources_.gpu_indirect_buffer;
     render_pass_context_.gpu_instance_ssbo = render_resources_.gpu_instance_ssbo;
     render_pass_context_.gpu_material_ssbo = render_resources_.gpu_material_ssbo;
@@ -1425,12 +1524,6 @@ void FramePipeline::BuildRenderGraphInternal() {
             render_pass_context_.modules.push_back({mod.instance});
         }
     }
-#ifdef DSE_ENABLE_3D
-    if (builtin_gameplay3d_enabled_) {
-        render_pass_context_.modules.push_back({modules_impl_->GetGameplay3DModule()});
-    }
-#endif
-
     render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
         modules_impl_->RenderScene2D(world, cmd);
     };
@@ -1644,6 +1737,18 @@ World& FramePipeline::world() {
 
 int FramePipeline::LastDrawCalls() const {
     return last_draw_calls_;
+}
+
+int FramePipeline::LastGpuDrivenActive() const {
+    return last_gpu_driven_active_;
+}
+
+int FramePipeline::LastGpuIndirectDrawCount() const {
+    return last_gpu_indirect_draw_count_;
+}
+
+int FramePipeline::LastGpuTotalInstances() const {
+    return last_gpu_total_instances_;
 }
 
 dse::render::RhiDevice::RhiFrameStats FramePipeline::GetRhiFrameStats() const {
@@ -2415,8 +2520,7 @@ void FramePipeline::ExecuteRenderFrame() {
         }
     }
 
-    // GPU Driven: 线程模式下跳过（需要 ECS + GPU 混合访问，Phase 3 再支持）
-    // 非线程模式在 RunRenderInternal 中处理
+    BuildRenderSceneQueues();
 
     // ── 执行渲染图 ──
     ExecuteRenderGraph(*cmd_buffer);
@@ -2440,7 +2544,7 @@ void FramePipeline::ExecuteRenderFrame() {
             }
         }
     } else if (!render_pass_context_.hiz_culling_enabled
-        && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+        && render_pass_context_.gpu_driven_active_this_frame && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
         const int count = render_pass_context_.gpu_indirect_draw_count;
         const size_t read_size = count * sizeof(DrawElementsIndirectCommand);

@@ -28,6 +28,7 @@ class CommandBuffer;
 class RenderGraph;
 class IRenderPass;
 struct RenderPassContext;
+struct RenderScene;
 } // namespace render
 } // namespace dse
 
@@ -57,7 +58,9 @@ public:
     virtual void ShutdownMeshSystem() = 0;
     virtual void RenderMeshes(World& world, CommandBuffer& cmd) = 0;
     virtual void RenderTransparentMeshes(World& world, CommandBuffer& cmd, int wboit_mode) = 0;
+    virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene) = 0;
     virtual int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) = 0;
+    virtual void ResetGPUSceneState() = 0;
     virtual const std::vector<dse::gameplay3d::HiZAABB>& CachedAABBs() const = 0;
     virtual int  CachedAABBCount() const = 0;
     virtual void SetHiZVisibility(const std::vector<uint32_t>& visibility) = 0;

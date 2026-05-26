@@ -12,6 +12,9 @@ struct RuntimeStatsBindings {
     std::function<int()> get_draw_calls;
     std::function<int()> get_max_batch_sprites;
     std::function<int()> get_sprite_count;
+    std::function<int()> get_gpu_driven_active;
+    std::function<int()> get_gpu_indirect_draw_count;
+    std::function<int()> get_gpu_total_instances;
 };
 
 bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBindings& stats_bindings);

@@ -134,7 +134,7 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     submit_info.pWaitSemaphores = wait_semaphores;
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
-    submit_info.pCommandBuffers = command_buffers.data();
+    submit_info.pCommandBuffers = command_buffers.empty() ? nullptr : command_buffers.data();
 
     VkSemaphore signal_semaphores[] = { render_finished_semaphores_[current_frame_] };
     submit_info.signalSemaphoreCount = 1;
@@ -491,12 +491,6 @@ bool VulkanContext::CreateLogicalDevice() {
     create_info.pEnabledFeatures = &device_features;
     create_info.enabledExtensionCount = static_cast<uint32_t>(kDeviceExtensions.size());
     create_info.ppEnabledExtensionNames = kDeviceExtensions.data();
-
-    // 为兼容旧版驱动，同时设置 instance 和 device 层
-    if (enable_validation_) {
-        create_info.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
-        create_info.ppEnabledLayerNames = kValidationLayers.data();
-    }
 
     VkResult result = vkCreateDevice(physical_device_, &create_info, nullptr, &device_);
     if (result != VK_SUCCESS) {

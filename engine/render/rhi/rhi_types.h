@@ -362,6 +362,12 @@ struct RenderStats {
     int instanced_mesh_count = 0;  ///< GPU Instancing 合批的实体总数
     int indirect_draw_calls = 0;   ///< GPU Driven indirect draw call 数
     int gpu_culled_count = 0;      ///< GPU 剔除的对象数
+    bool gpu_driven_supported = false;            ///< 本帧 RHI 能力是否支持 GPU Driven
+    bool gpu_driven_requested = false;            ///< 本帧策略是否请求 GPU Driven
+    bool gpu_driven_scene_prepared = false;       ///< 本帧 GPU Scene 是否已准备
+    bool gpu_driven_active_this_frame = false;    ///< 本帧 GPU Driven 是否真实参与渲染
+    int gpu_indirect_draw_count = 0;              ///< 本帧 GPU Driven draw command 数
+    int gpu_total_instances = 0;                  ///< 本帧 GPU Driven instance 数
     int sorted_draw_calls = 0;     ///< 排序后提交给后端的实际 DrawCall 数
     int material_batch_count = 0;  ///< 排序后相邻同材质批次组数（越少表示合批率越高）
 };

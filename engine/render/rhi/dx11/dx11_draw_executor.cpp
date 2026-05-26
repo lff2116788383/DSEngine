@@ -73,6 +73,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
+    terrain_params_cb_     = CreateConstantBuffer(sizeof(DX11TerrainParamsCB));
     bone_matrices_cb_      = CreateConstantBuffer(100 * sizeof(glm::mat4)); // MAX_BONES=100, 6400B
     light_probe_data_cb_   = CreateConstantBuffer(sizeof(DX11LightProbeDataCB));
     draw_id_cb_            = CreateConstantBuffer(16); // GPU-driven draw_id (uint, padded to 16B)
@@ -157,6 +158,7 @@ void DX11DrawExecutor::Shutdown() {
     per_point_lights_cb_.Reset();
     per_spot_lights_cb_.Reset();
     per_spot_matrices_cb_.Reset();
+    terrain_params_cb_.Reset();
 
     sprite_push_cb_.Reset();
     sprite_quad_vbo_.Reset();
@@ -661,13 +663,13 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
-        // 填充聚光灯光源空间矩阵 CB（gen.h: b4 SpotLightData）并绑定
+        // 填充聚光灯光源空间矩阵 CB（gen.h: b5 SpotLightData）并绑定
         {
             DX11SpotMatricesCB sm_cb{};
             for (int i = 0; i < 4; ++i)
                 sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
             UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
-            dc->PSSetConstantBuffers(4, 1, per_spot_matrices_cb_.GetAddressOf());
+            dc->PSSetConstantBuffers(5, 1, per_spot_matrices_cb_.GetAddressOf());
         }
 
         // 填充 LightProbeData CB（gen.h: b2 LightProbeData）并绑定
@@ -1091,6 +1093,14 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (static_cast<float>(item.shading_mode) != scene_data.light_params.w) {
             scene_data.light_params.w = static_cast<float>(item.shading_mode);
             UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
+        }
+
+        if (!is_depth_only_pass_ && !gbuffer_mode && terrain_params_cb_) {
+            DX11TerrainParamsCB terrain_params{};
+            terrain_params.flags.x = item.splat_enabled ? 1.0f : 0.0f;
+            terrain_params.tiling = item.splat_tiling;
+            UpdateConstantBuffer(terrain_params_cb_.Get(), &terrain_params, sizeof(terrain_params));
+            dc->PSSetConstantBuffers(4, 1, terrain_params_cb_.GetAddressOf());
         }
 
         // PBR 纹理绑定（slot 编号由 reflection 驱动）
@@ -2246,7 +2256,7 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     ID3D11DeviceContext* dc = context_->device_context();
     if (!dc) return;
 
-    // 优先使用 GPU-driven shader（VS 从 ByteAddressBuffer t21 读 model via draw_id）
+    // 优先使用 GPU-driven shader（VS 从 ByteAddressBuffer t16 读 model via draw_id）
     unsigned int prog = shader_mgr.gpu_driven_pbr_shader_handle();
     const auto* program = shader_mgr.GetProgram(prog);
     if (!program) {
@@ -2288,9 +2298,25 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     vs_cbs[7] = draw_id_cb_.Get();     // b7 = DrawIdCB
     dc->VSSetConstantBuffers(0, 8, vs_cbs);
 
-    // PS: b0=PerFrame, b1=PerScene, b2=LightProbeData, b3=PerMaterial
-    ID3D11Buffer* ps_cbs[] = {per_frame_cb_.Get(), per_scene_cb_.Get(), nullptr, per_material_cb_.Get()};
-    dc->PSSetConstantBuffers(0, 4, ps_cbs);
+    DX11SpotMatricesCB sm_cb{};
+    for (int i = 0; i < 4; ++i)
+        sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
+    UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
+
+    DX11TerrainParamsCB terrain_params{};
+    terrain_params.flags.x = 0.0f;
+    terrain_params.tiling = glm::vec4(10.0f);
+    UpdateConstantBuffer(terrain_params_cb_.Get(), &terrain_params, sizeof(terrain_params));
+
+    ID3D11Buffer* ps_cbs[] = {
+        per_frame_cb_.Get(),
+        per_scene_cb_.Get(),
+        nullptr,
+        per_material_cb_.Get(),
+        terrain_params_cb_.Get(),
+        per_spot_matrices_cb_.Get()
+    };
+    dc->PSSetConstantBuffers(0, 6, ps_cbs);
 }
 
 // ============================================================
@@ -2303,7 +2329,7 @@ void DX11DrawExecutor::SetupGPUDrivenShadow(const glm::mat4& light_view, const g
     ID3D11DeviceContext* dc = context_->device_context();
     if (!dc) return;
 
-    // 优先使用 GPU-driven shadow shader（VS 从 ByteAddressBuffer t21 读 model via draw_id）
+    // 优先使用 GPU-driven shadow shader（VS 从 ByteAddressBuffer t16 读 model via draw_id）
     unsigned int prog = shader_mgr.gpu_driven_shadow_shader_handle();
     const auto* program = shader_mgr.GetProgram(prog);
     if (!program) {

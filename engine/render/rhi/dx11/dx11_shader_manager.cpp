@@ -641,7 +641,7 @@ void DX11ShaderManager::InitGPUDrivenShadowShader() {
     // 注入 instance buffer 和 DrawIdCB
     replace_first(vert_src,
         "cbuffer PushConstants",
-        "ByteAddressBuffer _33 : register(t21);\n"
+        "ByteAddressBuffer _33 : register(t16);\n"
         "cbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n\n"
         "cbuffer PushConstants");
 

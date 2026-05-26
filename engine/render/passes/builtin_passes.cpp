@@ -101,6 +101,14 @@ DirectionalLightCamera ComputeDirectionalLightCamera(
 
 } // anonymous namespace
 
+void ExecuteRenderSceneCallbacks(const RenderScene* scene,
+                                 const std::vector<RenderQueueCallback>& callbacks,
+                                 CommandBuffer& cmd_buffer,
+                                 const RenderScenePassContext& pass_ctx) {
+    if (!scene) return;
+    scene->ExecuteCallbacks(callbacks, cmd_buffer, pass_ctx);
+}
+
 // ============================================================
 // PreZPass
 // ============================================================
@@ -124,7 +132,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.prez);
 
         // GPU-driven PreZ: eligible 实体 depth-only indirect draw
-        const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
             && ctx_.gpu_mega_vao && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
         if (use_gpu_indirect) {
@@ -138,12 +146,14 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             rhi->UnbindVAO();
         }
 
-        // Module per-item PreZ (non-eligible 实体)
-        for (auto& mod : ctx_.modules) {
-            if (mod.instance) {
-                mod.instance->OnRenderPreZ(*ctx_.world, cmd_buffer);
-            }
+        if (ctx_.render_scene) {
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
         }
+        RenderScenePassContext pass_ctx;
+        pass_ctx.world = ctx_.world;
+        pass_ctx.view = &snap.camera_3d.view;
+        pass_ctx.projection = &projection;
+        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->prez_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
     }
     cmd_buffer.EndRenderPass();
 }
@@ -168,7 +178,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     glm::vec3 shadow_center = FindShadowCenter(snap);
 
-    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+    const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -211,11 +221,15 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         if (!skip_cpu_shadow) {
-            for (auto& mod : ctx_.modules) {
-                if (mod.instance) {
-                    mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, i, cam.view, cam.projection);
-                }
+            if (ctx_.render_scene) {
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
             }
+            RenderScenePassContext pass_ctx;
+            pass_ctx.world = ctx_.world;
+            pass_ctx.view = &cam.view;
+            pass_ctx.projection = &cam.projection;
+            pass_ctx.cascade_index = i;
+            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         }
 
         cmd_buffer.EndRenderPass();
@@ -250,7 +264,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
     std::vector<glm::mat4> spot_light_space_matrices;
     spot_light_space_matrices.reserve(4);
 
-    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+    const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -276,11 +290,15 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
             rhi->UnbindVAO();
         }
 
-        for (auto& mod : ctx_.modules) {
-            if (mod.instance) {
-                mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES, light_view_mat, light_proj);
-            }
+        if (ctx_.render_scene) {
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
         }
+        RenderScenePassContext pass_ctx;
+        pass_ctx.world = ctx_.world;
+        pass_ctx.view = &light_view_mat;
+        pass_ctx.projection = &light_proj;
+        pass_ctx.cascade_index = CSM_CASCADES;
+        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         cmd_buffer.EndRenderPass();
         const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         spot_light_space_matrices.push_back(sample_proj * light_view_mat);
@@ -306,7 +324,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
-    const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+    const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
         && ctx_.gpu_mega_vao
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
@@ -349,11 +367,15 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->UnbindVAO();
             }
 
-            for (auto& mod : ctx_.modules) {
-                if (mod.instance) {
-                    mod.instance->OnRenderShadow(*ctx_.world, cmd_buffer, CSM_CASCADES + 1 + face, light_view_mat, light_proj);
-                }
+            if (ctx_.render_scene) {
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
             }
+            RenderScenePassContext pass_ctx;
+            pass_ctx.world = ctx_.world;
+            pass_ctx.view = &light_view_mat;
+            pass_ctx.projection = &light_proj;
+            pass_ctx.cascade_index = CSM_CASCADES + 1 + face;
+            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
             cmd_buffer.EndRenderPass();
         }
 
@@ -543,7 +565,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
         // eligible 实体走 GPU indirect；non-eligible 实体由 OnRenderScene per-item 渲染
         // Render() 中 IsGPUDrivenEligible 跳过 eligible 实体，保证无双重绘制
-        const bool use_gpu_indirect = ctx_.gpu_driven_enabled
+        const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
             && ctx_.gpu_mega_vao
             && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
@@ -605,16 +627,16 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             rhi->UnbindVAO();
         }
 
-        // CPU 路径：无 module 时走 render_meshes fallback（渲染 non-eligible 实体）
-        if (!use_gpu_indirect && ctx_.modules.empty() && ctx_.render_meshes) {
-            ctx_.render_meshes(*ctx_.world, cmd_buffer);
-        }
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        for (auto& mod : ctx_.modules) {
-            if (mod.instance) {
-                mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
-            }
+        RenderScenePassContext scene_pass_ctx;
+        scene_pass_ctx.world = ctx_.world;
+        scene_pass_ctx.view = &gpu_view;
+        scene_pass_ctx.projection = &gpu_proj;
+        scene_pass_ctx.clip_correction = &scene_clip_correction;
+        if (ctx_.render_scene) {
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
         }
+        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
 
         // ShadedWireframe: 正常渲染已完成，叠加一遍线框
         if (view_mode == 2) {
@@ -629,15 +651,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                                               sizeof(DrawElementsIndirectCommand));
                 rhi->UnbindVAO();
             }
-            // CPU 路径
-            if (!use_gpu_indirect && ctx_.modules.empty() && ctx_.render_meshes) {
-                ctx_.render_meshes(*ctx_.world, cmd_buffer);
+            if (ctx_.render_scene) {
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
             }
-            for (auto& mod : ctx_.modules) {
-                if (mod.instance) {
-                    mod.instance->OnRenderScene(*ctx_.world, cmd_buffer, scene_clip_correction);
-                }
-            }
+            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
             ctx_.rhi_device->SetWireframeMode(false);
         }
 
@@ -1655,28 +1672,28 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_accum);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_accum, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
 
-    if (ctx_.render_transparent_meshes) {
-        ctx_.render_transparent_meshes(*ctx_.world, cmd_buffer, 1);
+    RenderScenePassContext accum_ctx;
+    accum_ctx.world = ctx_.world;
+    accum_ctx.clip_correction = &scene_clip_correction;
+    accum_ctx.wboit_mode = 1;
+    if (ctx_.render_scene) {
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 1);
     }
-    for (auto& mod : ctx_.modules) {
-        if (mod.instance) {
-            mod.instance->OnRenderTransparent(*ctx_.world, cmd_buffer, scene_clip_correction, 1);
-        }
-    }
+    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->transparent_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, accum_ctx);
     cmd_buffer.EndRenderPass();
 
     // --- Pass 2: Revealage (blend ZERO, ONE_MINUS_SRC_ALPHA) ---
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_reveal);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_reveal, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true});
 
-    if (ctx_.render_transparent_meshes) {
-        ctx_.render_transparent_meshes(*ctx_.world, cmd_buffer, 2);
+    RenderScenePassContext reveal_ctx;
+    reveal_ctx.world = ctx_.world;
+    reveal_ctx.clip_correction = &scene_clip_correction;
+    reveal_ctx.wboit_mode = 2;
+    if (ctx_.render_scene) {
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 2);
     }
-    for (auto& mod : ctx_.modules) {
-        if (mod.instance) {
-            mod.instance->OnRenderTransparent(*ctx_.world, cmd_buffer, scene_clip_correction, 2);
-        }
-    }
+    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->transparent_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, reveal_ctx);
     cmd_buffer.EndRenderPass();
 
     // --- Pass 3: Composite WBOIT onto scene RT ---
@@ -2747,7 +2764,7 @@ void GPUCullPass::Setup(RenderGraph& graph) {
 }
 
 void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
-    if (!ctx_.gpu_driven_enabled) return;
+    if (!ctx_.gpu_driven_active_this_frame) return;
     if (ctx_.gpu_cull_shader == 0) return;
     if (ctx_.render_targets.hiz_texture == 0) return;
     if (!ctx_.gpu_draw_cmd_ssbo) return;
@@ -2851,11 +2868,14 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetCamera(cam.view, cam.projection);
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
 
-    for (auto& mod : ctx_.modules) {
-        if (mod.instance) {
-            mod.instance->OnRenderScene(*ctx_.world, cmd_buffer);
-        }
+    RenderScenePassContext pass_ctx;
+    pass_ctx.world = ctx_.world;
+    pass_ctx.view = &cam.view;
+    pass_ctx.projection = &cam.projection;
+    if (ctx_.render_scene) {
+        ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
     }
+    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
 
     ctx_.rhi_device->SetGBufferRenderingMode(false);
     cmd_buffer.EndRenderPass();

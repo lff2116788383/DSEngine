@@ -72,7 +72,7 @@ layout(set = 2, binding = 5) uniform sampler2D u_occlusion_map;
 layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_maps[CSM_CASCADES];
 layout(set = 2, binding = 7) uniform sampler2D u_spot_shadow_maps[4];
 
-layout(std140, set = 2, binding = 10) uniform SpotLightData {
+layout(std140, set = 2, binding = 19) uniform SpotLightData {
     mat4 u_spot_light_space_matrices[4];
 };
 
