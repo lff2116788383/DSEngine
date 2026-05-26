@@ -313,6 +313,14 @@ if exist ".\bin\dse_shader_compiler.exe" (
         rd /s /q ".\bin\data\shader_cache"
         echo [OK] Runtime shader cache cleared.
     )
+    if exist ".\data\shader_cache" (
+        rd /s /q ".\data\shader_cache"
+        echo [OK] Root shader cache cleared.
+    )
+    if exist ".\examples\KF_Framework\data\shader_cache" (
+        rd /s /q ".\examples\KF_Framework\data\shader_cache"
+        echo [OK] KF shader cache cleared.
+    )
 ) else (
     echo [WARN] dse_shader_compiler.exe not found in .\bin, skipping shader regeneration.
 )

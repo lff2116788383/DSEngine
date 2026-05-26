@@ -2153,7 +2153,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
     mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
 
-    float test_depth = nearest_z * 0.5 + 0.5;
+    float test_depth = nearest_z;
     float2 uv_center = (uv_min + uv_max) * 0.5;
     float hiz_depth = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
     float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);

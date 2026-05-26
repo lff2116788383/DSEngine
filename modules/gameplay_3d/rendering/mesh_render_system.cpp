@@ -10,6 +10,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -727,6 +728,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     cached_aabbs_.clear();
     cached_aabbs_.reserve(view.size_hint());
     int hiz_mesh_index = 0;
+    static const bool disable_hiz_visibility = std::getenv("DSE_DISABLE_HIZ") != nullptr;
 
     // GPU Instancing: 相同 mesh_path + 材质的非蛮皮实体合批（零堆分配 key）
     std::unordered_map<InstancingKey, size_t, InstancingKeyHash> instancing_map;
@@ -737,7 +739,6 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     for (auto entity : view) {
         auto& transform = view.get<TransformComponent>(entity);
         auto& mesh_renderer = view.get<MeshRendererComponent>(entity);
-        
         EnsureMeshPathDataLoaded(asset_manager, world, entity, mesh_renderer);
 
         if (!mesh_renderer.visible) continue;
@@ -797,7 +798,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             cached_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
 
             // 检查上一帧的可见性
-            if (hiz_mesh_index < static_cast<int>(hiz_visibility_.size())) {
+            if (!disable_hiz_visibility && hiz_mesh_index < static_cast<int>(hiz_visibility_.size())) {
                 if (hiz_visibility_[hiz_mesh_index] == 0) {
                     ++hiz_mesh_index;
                     continue;  // 被遮挡，跳过后续全部顶点处理
