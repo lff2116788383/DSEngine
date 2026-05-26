@@ -2127,7 +2127,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
             ((i & 4) != 0) ? aabb_max.z : aabb_min.z
         );
-        float4 clip = mul(u_view_projection, float4(corner, 1.0));
+        float4 clip = mul(float4(corner, 1.0), u_view_projection);
         if (clip.w <= 0.0) {
             visibility[idx] = 1u;
             return;
@@ -2751,6 +2751,7 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     if (ctx_.gpu_cull_shader == 0) return;
     if (ctx_.render_targets.hiz_texture == 0) return;
     if (!ctx_.gpu_draw_cmd_ssbo) return;
+    if (!ctx_.gpu_aabb_ssbo) return;
     if (ctx_.gpu_indirect_draw_count <= 0) return;
 
     auto* rhi = ctx_.rhi_device;
@@ -2762,7 +2763,7 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
     // Bind SSBOs
-    rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0, false);
+    rhi->BindGpuBuffer(ctx_.gpu_aabb_ssbo, 0, false);
     rhi->BindGpuBuffer(ctx_.gpu_draw_cmd_ssbo, 1, true);
 
     // Bind Hi-Z texture

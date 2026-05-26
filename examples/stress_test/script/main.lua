@@ -163,7 +163,7 @@ function Update(dt)
     local sample_idx = frame_idx - warmup_frames
     if sample_idx <= PERF_FRAMES then
         -- 使用 unclamped wall-clock 差值（engine dt 被 clamp 到 100ms）
-        local now = os.clock() * 1000.0  -- ms
+        local now = app.time_since_startup() * 1000.0  -- ms
         if last_clock then
             frame_times[sample_idx] = now - last_clock
         else

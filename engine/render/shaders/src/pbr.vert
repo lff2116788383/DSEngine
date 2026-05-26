@@ -47,7 +47,7 @@ layout(std430, set = 2, binding = 10) readonly buffer SkinnedInstBuf {
     DSESkinnedInst skinned_instances[];
 };
 
-#define MODEL_MATRIX ((pc.u_skinned == 2) ? skinned_instances[gl_InstanceIndex].model : pc.u_model)
+#define MODEL_MATRIX (((pc.u_skinned == 2) || (pc.u_skinned == 3)) ? skinned_instances[gl_InstanceIndex].model : pc.u_model)
 
 // Bone SSBO: 所有实例的骨骼矩阵紧密排列，per-draw 通过 u_bone_offset 索引
 layout(std430, set = 2, binding = 8) readonly buffer BoneMatricesSSBO {
@@ -68,7 +68,7 @@ void main() {
     vec3 finalTangent = aTangent;
 #else
     mat4 boneTransform = mat4(1.0);
-    if (pc.u_skinned != 0) {
+    if ((pc.u_skinned == 1) || (pc.u_skinned == 2)) {
         int bo = (pc.u_skinned == 2)
             ? skinned_instances[gl_InstanceIndex].bone_offset
             : pc.u_bone_offset;
@@ -88,7 +88,8 @@ void main() {
     vec4 localPos = boneTransform * vec4(morphedPos, 1.0);
 #endif
 
-    vec4 worldPos = MODEL_MATRIX * localPos;
+    mat4 finalModel = MODEL_MATRIX;
+    vec4 worldPos = finalModel * localPos;
     gl_Position = vp * worldPos;
 
     vFragPos = worldPos.xyz;
@@ -100,13 +101,13 @@ void main() {
 #endif
 
 #ifdef GPU_DRIVEN
-    mat3 normalMatrix = transpose(inverse(mat3(MODEL_MATRIX)));
+    mat3 normalMatrix = transpose(inverse(mat3(finalModel)));
 #else
     // 蒙皮: bone 矩阵通常为 rotation+translation (正交), inverse ≈ transpose,
     // 下游 normalize() 修正均匀缩放, 避免昂贵的 per-vertex inverse()
-    mat3 normalMatrix = (pc.u_skinned != 0)
-        ? mat3(MODEL_MATRIX * boneTransform)
-        : transpose(inverse(mat3(MODEL_MATRIX)));
+    mat3 normalMatrix = ((pc.u_skinned == 1) || (pc.u_skinned == 2))
+        ? mat3(finalModel * boneTransform)
+        : ((pc.u_skinned == 3) ? mat3(finalModel) : transpose(inverse(mat3(finalModel))));
 #endif
     vec3 T = normalize(normalMatrix * finalTangent);
     vec3 N = normalize(normalMatrix * finalNormal);

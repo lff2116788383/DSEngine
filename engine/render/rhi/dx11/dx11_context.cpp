@@ -10,6 +10,8 @@
 #include <dxgi.h>
 #include <dxgi1_2.h>
 #include <dxgi1_5.h>
+#include <chrono>
+#include <cstdlib>
 
 namespace dse {
 namespace render {
@@ -56,7 +58,22 @@ void DX11Context::Shutdown() {
 void DX11Context::Present(bool vsync) {
     if (swapchain_) {
         UINT flags = (!vsync && tearing_supported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+        const bool diag = []() {
+            const char* env = std::getenv("DSE_DX11_PRESENT_DIAG");
+            return env && env[0] != '\0' && env[0] != '0';
+        }();
+        auto begin = std::chrono::high_resolution_clock::now();
         swapchain_->Present(vsync ? 1 : 0, flags);
+        if (diag) {
+            static int frame = 0;
+            auto end = std::chrono::high_resolution_clock::now();
+            const float ms = std::chrono::duration<float, std::milli>(end - begin).count();
+            if (frame < 20 || (frame % 60) == 0) {
+                DEBUG_LOG_INFO("[D3D11] Present frame={} ms={} vsync={} flags={}",
+                    frame, ms, vsync ? 1 : 0, flags);
+            }
+            ++frame;
+        }
     }
 }
 

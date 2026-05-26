@@ -51,6 +51,7 @@
 #include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_frag_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert_reflect.gen.h"
@@ -101,6 +102,13 @@ static void CreateInputLayoutFromReflection(
             byte_offset += input.byte_size;
         }
     }
+}
+
+static void AppendInstanceModelInputLayout(std::vector<D3D11_INPUT_ELEMENT_DESC>& out_layout) {
+    out_layout.push_back({"TEXCOORD", 8,  DXGI_FORMAT_R32G32B32A32_FLOAT, 1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1});
+    out_layout.push_back({"TEXCOORD", 9,  DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D11_INPUT_PER_INSTANCE_DATA, 1});
+    out_layout.push_back({"TEXCOORD", 10, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D11_INPUT_PER_INSTANCE_DATA, 1});
+    out_layout.push_back({"TEXCOORD", 11, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 48, D3D11_INPUT_PER_INSTANCE_DATA, 1});
 }
 
 static constexpr const char* kShaderCacheDir = "data/shader_cache";
@@ -343,6 +351,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         using namespace generated_shaders::reflect;
         std::vector<D3D11_INPUT_ELEMENT_DESC> pbr_layout;
         CreateInputLayoutFromReflection(kpbr_vert_reflection, pbr_layout);
+        AppendInstanceModelInputLayout(pbr_layout);
         CreateInputLayoutForShader(pbr_shader_handle_, pbr_layout.data(),
                                    static_cast<int>(pbr_layout.size()));
 
@@ -430,6 +439,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         using namespace generated_shaders::reflect;
         std::vector<D3D11_INPUT_ELEMENT_DESC> shadow_layout;
         CreateInputLayoutFromReflection(kshadow_vert_reflection, shadow_layout);
+        AppendInstanceModelInputLayout(shadow_layout);
         CreateInputLayoutForShader(shadow_shader_handle_, shadow_layout.data(),
                                    static_cast<int>(shadow_layout.size()));
     }
@@ -499,6 +509,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         using namespace generated_shaders::reflect;
         std::vector<D3D11_INPUT_ELEMENT_DESC> gb_layout;
         CreateInputLayoutFromReflection(kpbr_vert_reflection, gb_layout);
+        AppendInstanceModelInputLayout(gb_layout);
         CreateInputLayoutForShader(gbuffer_shader_handle_, gb_layout.data(),
                                    static_cast<int>(gb_layout.size()));
     }
@@ -571,7 +582,7 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
 
     // 在 ByteAddressBuffer _33 声明行后注入 DrawIdCB（不硬编码 register slot）
     {
-        const std::string marker = "ByteAddressBuffer _33 : register(t";
+        const std::string marker = "ByteAddressBuffer ";
         auto mpos = vert_src.find(marker);
         if (mpos != std::string::npos) {
             auto eol = vert_src.find(';', mpos);
@@ -587,6 +598,7 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
     replace_all(vert_src,
         "gl_InstanceIndex = int(stage_input.gl_InstanceIndex);",
         "gl_InstanceIndex = int(g_draw_id);");
+    replace_all(vert_src, "gl_InstanceIndex * 80", "g_draw_id * 80");
 
     // --- PS: 使用标准 PBR PS（material 通过 CPU per-draw 更新 PerMaterial cbuffer b3）---
     std::string frag_src(kpbr_frag_hlsl);
@@ -596,11 +608,11 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
         DEBUG_LOG_ERROR("[DX11] GPU-driven PBR shader compilation failed");
     } else {
         DEBUG_LOG_INFO("[DX11] GPU-driven PBR shader created: handle={}", gpu_driven_pbr_shader_handle_);
-        // 使用与 PBR 相同的 InputLayout
-        auto* pbr_layout = GetInputLayout(pbr_shader_handle_);
-        if (pbr_layout) {
-            input_layouts_[gpu_driven_pbr_shader_handle_] = pbr_layout;
-        }
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> gpu_pbr_layout;
+        CreateInputLayoutFromReflection(kpbr_gpu_driven_vert_reflection, gpu_pbr_layout);
+        CreateInputLayoutForShader(gpu_driven_pbr_shader_handle_, gpu_pbr_layout.data(),
+                                   static_cast<int>(gpu_pbr_layout.size()));
     }
 }
 

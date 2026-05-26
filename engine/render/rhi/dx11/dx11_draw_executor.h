@@ -236,6 +236,7 @@ private:
     /// 动态 VBO/IBO 容量保证
     void EnsureMeshVBOCapacity(size_t needed_bytes);
     void EnsureMeshIBOCapacity(size_t needed_bytes);
+    void EnsureInstanceVBOCapacity(size_t needed_bytes);
 
     DX11Context* context_ = nullptr;
     DX11ResourceManager* resource_mgr_ = nullptr;
@@ -302,6 +303,9 @@ private:
     // 天空盒深度状态（LEQUAL + no depth write）
     ComPtr<ID3D11DepthStencilState> skybox_dss_;
 
+    // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
+    ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;
+
     // 点光源 / 聚光灯常量缓冲（b4 / b5 / b6）
     ComPtr<ID3D11Buffer> per_point_lights_cb_;
     ComPtr<ID3D11Buffer> per_spot_lights_cb_;
@@ -314,11 +318,22 @@ private:
     ComPtr<ID3D11Buffer> bone_ssbo_buf_;
     ComPtr<ID3D11ShaderResourceView> bone_ssbo_srv_;
     size_t bone_ssbo_capacity_ = 0;
+    bool bone_ssbo_uploaded_this_frame_ = false;
 
-    // Skinned Instance SSBO: ByteAddressBuffer per-instance model+bone_offset (t25)
+    // Skinned Instance SSBO: pre-packed ByteAddressBuffer for all skinned instanced items (t26)
     ComPtr<ID3D11Buffer> skinned_inst_buf_;
-    ComPtr<ID3D11ShaderResourceView> skinned_inst_srv_;
+    ComPtr<ID3D11ShaderResourceView> skinned_inst_srv_;  // whole-buffer SRV (kept for fallback)
     size_t skinned_inst_capacity_ = 0;
+    bool inst_ssbo_uploaded_this_frame_ = false;
+
+    // Static mesh VBO/IBO cache: persistent IMMUTABLE buffers keyed by shared_vertex_ptr
+    struct DX11StaticMeshEntry {
+        ComPtr<ID3D11Buffer> vbo;
+        ComPtr<ID3D11Buffer> ibo;
+        size_t vtx_count;
+        size_t idx_count;
+    };
+    std::unordered_map<const void*, DX11StaticMeshEntry> static_mesh_cache_;
 
     // Light Probe SH 常量缓冲（b9, 160B）
     ComPtr<ID3D11Buffer> light_probe_data_cb_;

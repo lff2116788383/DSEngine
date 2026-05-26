@@ -792,16 +792,18 @@ bool DX11RhiDevice::BeginGpuReadback(BufferHandle handle, size_t offset, size_t 
     auto& rb = async_readback_;
     bool has_result = false;
 
-    // 步骤 1: 读取上一帧的 staging buffer（此时 GPU 拷贝已完成，Map 不阻塞）
+    // 步骤 1: 读取上一帧的 staging buffer
+    // 使用阻塞 Map（flags=0）而非 D3D11_MAP_FLAG_DO_NOT_WAIT。原因：
+    // GPU 满载时（帧时间 ≈ GPU 渲染时间），非阻塞 Map 永远返回 STILL_DRAWING，
+    // 因为 CopySubresourceRegion 在 GPU 命令流末尾，下一帧 Map 时 GPU 可能还在处理
+    // 当前帧的渲染命令。双缓冲 staging 只有 2 个槽位，到第三帧时数据已被覆盖。
+    // 阻塞 Map 的实际 stall 接近 0：copy 在上一帧末尾提交，此帧开头 Map 时
+    // GPU 已有整帧时间（>100ms）来完成一个微秒级的 20KB buffer copy。
     const int read_idx = 1 - rb.write_idx;
     if (rb.has_pending && rb.staging[read_idx] && rb.pending_size > 0) {
         D3D11_MAPPED_SUBRESOURCE mapped{};
-        // D3D11_MAP_FLAG_DO_NOT_WAIT: 如果 GPU 尚未完成则返回失败（不阻塞）
-        HRESULT hr = dc->Map(rb.staging[read_idx].Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
-        if (hr == DXGI_ERROR_WAS_STILL_DRAWING) {
-            // GPU 还没完成，跳过本帧读取（使用旧数据）
-            has_result = !rb.result.empty();
-        } else if (SUCCEEDED(hr)) {
+        HRESULT hr = dc->Map(rb.staging[read_idx].Get(), 0, D3D11_MAP_READ, 0, &mapped);
+        if (SUCCEEDED(hr)) {
             rb.result.resize(rb.pending_size);
             memcpy(rb.result.data(), mapped.pData, rb.pending_size);
             dc->Unmap(rb.staging[read_idx].Get(), 0);

@@ -50,7 +50,7 @@ void main() {
     vec4 worldPos = dse_inst[gl_InstanceIndex].model * localPos;
 #else
     mat4 boneTransform = mat4(1.0);
-    if (pc.u_skinned != 0) {
+    if ((pc.u_skinned == 1) || (pc.u_skinned == 2)) {
         int bo = (pc.u_skinned == 2)
             ? skinned_instances[gl_InstanceIndex].bone_offset
             : pc.u_bone_offset;
@@ -61,7 +61,7 @@ void main() {
     }
 
     vec4 localPos = boneTransform * vec4(aPos, 1.0);
-    mat4 inst_model = (pc.u_skinned == 2)
+    mat4 inst_model = ((pc.u_skinned == 2) || (pc.u_skinned == 3))
         ? skinned_instances[gl_InstanceIndex].model : pc.u_model;
     vec4 worldPos = inst_model * localPos;
 #endif

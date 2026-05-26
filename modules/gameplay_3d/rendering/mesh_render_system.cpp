@@ -4,9 +4,12 @@
 #include "engine/assets/asset_manager.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/base/debug.h"
+#include "engine/platform/screen.h"
 #include <stdexcept>
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -40,6 +43,47 @@ struct RawMeshData {
     std::vector<float> vertices;
     std::vector<uint32_t> indices;
 };
+
+struct MeshFrustumPlane {
+    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    float distance = 0.0f;
+};
+
+std::array<MeshFrustumPlane, 6> ExtractMeshFrustumPlanes(const glm::mat4& vp) {
+    std::array<MeshFrustumPlane, 6> planes;
+    auto extract = [&](int idx, float sx, float sy, float sz, float sw) {
+        const float len = std::sqrt(sx * sx + sy * sy + sz * sz);
+        if (len <= 1e-6f) {
+            planes[idx].normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            planes[idx].distance = 0.0f;
+            return;
+        }
+        planes[idx].normal = glm::vec3(sx, sy, sz) / len;
+        planes[idx].distance = sw / len;
+    };
+    extract(0, vp[0][3] + vp[0][0], vp[1][3] + vp[1][0], vp[2][3] + vp[2][0], vp[3][3] + vp[3][0]);
+    extract(1, vp[0][3] - vp[0][0], vp[1][3] - vp[1][0], vp[2][3] - vp[2][0], vp[3][3] - vp[3][0]);
+    extract(2, vp[0][3] + vp[0][1], vp[1][3] + vp[1][1], vp[2][3] + vp[2][1], vp[3][3] + vp[3][1]);
+    extract(3, vp[0][3] - vp[0][1], vp[1][3] - vp[1][1], vp[2][3] - vp[2][1], vp[3][3] - vp[3][1]);
+    extract(4, vp[0][3] + vp[0][2], vp[1][3] + vp[1][2], vp[2][3] + vp[2][2], vp[3][3] + vp[3][2]);
+    extract(5, vp[0][3] - vp[0][2], vp[1][3] - vp[1][2], vp[2][3] - vp[2][2], vp[3][3] - vp[3][2]);
+    return planes;
+}
+
+bool IsMeshAABBInFrustum(const std::array<MeshFrustumPlane, 6>& planes,
+                         const glm::vec3& center,
+                         const glm::vec3& extents) {
+    for (const auto& plane : planes) {
+        const float radius = extents.x * std::abs(plane.normal.x)
+                           + extents.y * std::abs(plane.normal.y)
+                           + extents.z * std::abs(plane.normal.z);
+        const float distance = glm::dot(plane.normal, center) + plane.distance;
+        if (distance < -radius) {
+            return false;
+        }
+    }
+    return true;
+}
 
 std::string ToLower(std::string value) {
     for (char& ch : value) {
@@ -539,6 +583,7 @@ struct InstancingKeyData {
     unsigned int blend_mode;
     int shading_mode, sorting_layer, order_in_layer, flags;
     int skinned;  // 蒙皮标志: 避免 skinned/non-skinned 混合合批
+    uint64_t bone_palette_key;
 };
 
 struct InstancingKey {
@@ -647,6 +692,37 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     std::vector<MeshDrawItem> batch_items;
     batch_items.reserve(view.size_hint());
 
+    bool has_camera_frustum = false;
+    std::array<MeshFrustumPlane, 6> camera_frustum_planes{};
+    {
+        auto camera_view = world.registry().view<Camera3DComponent>();
+        entt::entity main_camera = entt::null;
+        int max_priority = std::numeric_limits<int>::min();
+        for (auto camera_entity : camera_view) {
+            const auto& cam = camera_view.get<Camera3DComponent>(camera_entity);
+            if (cam.enabled && cam.priority > max_priority) {
+                max_priority = cam.priority;
+                main_camera = camera_entity;
+            }
+        }
+        if (main_camera != entt::null && world.registry().all_of<TransformComponent>(main_camera)) {
+            const auto& cam = camera_view.get<Camera3DComponent>(main_camera);
+            const auto& camera_transform = world.registry().get<TransformComponent>(main_camera);
+            const glm::vec3 front = camera_transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            const glm::vec3 up = camera_transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+            const glm::mat4 camera_view_matrix = glm::lookAt(camera_transform.position,
+                camera_transform.position + front, up);
+            float aspect = cam.aspect_ratio;
+            if (aspect <= 0.0f) {
+                aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+            }
+            const glm::mat4 projection = glm::perspective(glm::radians(cam.fov), aspect,
+                cam.near_clip, cam.far_clip);
+            camera_frustum_planes = ExtractMeshFrustumPlanes(projection * camera_view_matrix);
+            has_camera_frustum = true;
+        }
+    }
+
     // Hi-Z: 准备收集本帧 AABB
     cached_aabbs_.clear();
     cached_aabbs_.reserve(view.size_hint());
@@ -687,6 +763,11 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
             mesh_renderer.local_bounds_min = lb_min;
             mesh_renderer.local_bounds_max = lb_max;
             mesh_renderer.local_bounds_valid = true;
+            if (!world.registry().all_of<BoundingBoxComponent>(entity)) {
+                auto& bbox = world.registry().emplace<BoundingBoxComponent>(entity);
+                bbox.min_extents = lb_min;
+                bbox.max_extents = lb_max;
+            }
         }
 
         // Hi-Z: 早期遮挡剔除 — 用 local bounds + transform 快速计算保守世界 AABB
@@ -705,6 +786,13 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                     (ci & 4) ? bmax.z : bmin.z, 1.0f));
                 w_min = glm::min(w_min, corner);
                 w_max = glm::max(w_max, corner);
+            }
+            if (has_camera_frustum) {
+                const glm::vec3 center = (w_min + w_max) * 0.5f;
+                const glm::vec3 extents = (w_max - w_min) * 0.5f;
+                if (!IsMeshAABBInFrustum(camera_frustum_planes, center, extents)) {
+                    continue;
+                }
             }
             cached_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
 
@@ -928,6 +1016,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                      | (item.depth_write_enabled ? 16 : 0)
                      | (item.lighting_enabled ? 32 : 0);
             kd.skinned = item.skinned ? 1 : 0;
+            kd.bone_palette_key = item.skinned ? entity_bone_palette_key : 0;
 
             auto map_it = instancing_map.find(inst_key);
             if (map_it != instancing_map.end()) {
@@ -1636,21 +1725,22 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         return 0;
     }
 
-    // 上传 AABB SSBO（复用 Hi-Z AABB binding point 0）
-    // 注意：ctx.hiz_aabb_capacity 来自 hiz_ssbo_capacity（默认 8192），超出时需要扩容
-    if (ctx.hiz_aabb_ssbo) {
+    if (ctx.gpu_aabb_ssbo || !gpu_aabbs_.empty()) {
         const size_t needed = gpu_aabbs_.size();
-        if (ctx.hiz_aabb_capacity > 0 && needed > ctx.hiz_aabb_capacity) {
-            // 原 buffer 太小：删除重建，容量翻倍保证余量
-            rhi->DeleteGpuBuffer(ctx.hiz_aabb_ssbo);
+        if (ctx.gpu_aabb_ssbo && ctx.gpu_aabb_capacity > 0 && needed > ctx.gpu_aabb_capacity) {
+            rhi->DeleteGpuBuffer(ctx.gpu_aabb_ssbo);
+            ctx.gpu_aabb_ssbo = {};
+            ctx.gpu_aabb_capacity = 0;
+        }
+        if (!ctx.gpu_aabb_ssbo && needed > 0) {
             const size_t new_cap = needed * 2;
             dse::render::GpuBufferDesc d{new_cap * sizeof(HiZAABB),
-                dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
-            ctx.hiz_aabb_ssbo    = rhi->CreateGpuBuffer(d, nullptr);
-            ctx.hiz_aabb_capacity = new_cap;
+                dse::render::GpuBufferUsage::kStorage, true, "gpu_aabb"};
+            ctx.gpu_aabb_ssbo = rhi->CreateGpuBuffer(d, nullptr);
+            ctx.gpu_aabb_capacity = new_cap;
         }
-        if (ctx.hiz_aabb_ssbo && needed > 0) {
-            rhi->UpdateGpuBuffer(ctx.hiz_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
+        if (ctx.gpu_aabb_ssbo && needed > 0) {
+            rhi->UpdateGpuBuffer(ctx.gpu_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
         }
     }
 
@@ -1707,7 +1797,6 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
 
     ctx.gpu_indirect_draw_count = cmd_index;
     ctx.gpu_total_instances = cmd_index;
-    ctx.hiz_object_count = cmd_index;
     ctx.gpu_texture_buckets = gpu_texture_buckets_.empty() ? nullptr : gpu_texture_buckets_.data();
     ctx.gpu_texture_bucket_count = static_cast<int>(gpu_texture_buckets_.size());
     ctx.gpu_materials = gpu_materials_.empty() ? nullptr : gpu_materials_.data();

@@ -64,23 +64,43 @@ void BuiltinModulesImpl::RenderTransparentMeshes(World& world, CommandBuffer& cm
 }
 
 int BuiltinModulesImpl::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {
+#ifdef DSE_ENABLE_3D
+    return gameplay3d_module_.mesh_render_system().PrepareGPUScene(world, ctx);
+#else
     return mesh_render_system_.PrepareGPUScene(world, ctx);
+#endif
 }
 
 const std::vector<dse::gameplay3d::HiZAABB>& BuiltinModulesImpl::CachedAABBs() const {
+#ifdef DSE_ENABLE_3D
+    return gameplay3d_module_.mesh_render_system().cached_aabbs();
+#else
     return mesh_render_system_.cached_aabbs();
+#endif
 }
 
 int BuiltinModulesImpl::CachedAABBCount() const {
+#ifdef DSE_ENABLE_3D
+    return gameplay3d_module_.mesh_render_system().cached_aabb_count();
+#else
     return mesh_render_system_.cached_aabb_count();
+#endif
 }
 
 void BuiltinModulesImpl::SetHiZVisibility(const std::vector<uint32_t>& visibility) {
+#ifdef DSE_ENABLE_3D
+    gameplay3d_module_.mesh_render_system().SetHiZVisibility(visibility);
+#else
     mesh_render_system_.SetHiZVisibility(visibility);
+#endif
 }
 
 void BuiltinModulesImpl::CleanupGPUResources(RhiDevice* rhi) {
+#ifdef DSE_ENABLE_3D
+    gameplay3d_module_.mesh_render_system().CleanupGPUResources(rhi);
+#else
     mesh_render_system_.CleanupGPUResources(rhi);
+#endif
 }
 
 // ============================================================

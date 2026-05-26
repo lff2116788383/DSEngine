@@ -68,7 +68,7 @@ TEST(DX11PerObjectCBTest, 默认值) {
     DX11PerObjectCB cb{};
     EXPECT_EQ(cb.skinned, 0);
     EXPECT_EQ(cb.morph_enabled, 0);
-    EXPECT_EQ(cb.use_instancing, 0);
+    EXPECT_EQ(cb.bone_offset, 0);
 }
 
 #endif // DSE_ENABLE_D3D11

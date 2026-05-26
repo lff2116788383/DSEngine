@@ -871,6 +871,11 @@ void FramePipeline::Shutdown() {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_draw_cmd_ssbo);
             render_resources_.gpu_draw_cmd_ssbo = {};
         }
+        if (render_resources_.gpu_aabb_ssbo) {
+            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_aabb_ssbo);
+            render_resources_.gpu_aabb_ssbo = {};
+            render_resources_.gpu_aabb_capacity = 0;
+        }
         if (render_resources_.gpu_instance_ssbo) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_instance_ssbo);
             render_resources_.gpu_instance_ssbo = {};
@@ -1146,15 +1151,18 @@ void FramePipeline::RunRenderInternal() {
     }
 
     // GPU Driven: 准备 GPU 场景数据（AABB + DrawCommands + Instance 数据）
-    if (render_resources_.gpu_driven_supported) {
+    // 仅在无 module 时启用：有 module 时 per-item 路径独占渲染，
+    // 避免 GPU-driven 路径与 module 路径冲突（DX11 indirect draw 不正确渲染静态 mesh）
+    const bool gpu_driven_no_module = render_resources_.gpu_driven_supported
+        && modules_.empty() && !builtin_gameplay3d_enabled_;
+    if (gpu_driven_no_module) {
         modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
         // 同步动态创建的句柄到 render_resources_，确保下帧不被覆盖
         render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
         render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
         render_resources_.gpu_material_ssbo = render_pass_context_.gpu_material_ssbo;
-        // hiz_aabb_ssbo 可能在 PrepareGPUScene 中因超容扩容，需同步回 render_resources_
-        render_resources_.hiz_aabb_ssbo    = render_pass_context_.hiz_aabb_ssbo;
-        render_resources_.hiz_ssbo_capacity = render_pass_context_.hiz_aabb_capacity;
+        render_resources_.gpu_aabb_ssbo = render_pass_context_.gpu_aabb_ssbo;
+        render_resources_.gpu_aabb_capacity = render_pass_context_.gpu_aabb_capacity;
     }
 
     CaptureThinSnapshot();
@@ -1162,14 +1170,41 @@ void FramePipeline::RunRenderInternal() {
     render_pass_context_.snapshot = &read_snapshot();
 
     ExecuteRenderGraph(*cmd_buffer);
-    
+
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
     // Hi-Z / GPU Driven: 异步读回可见性供下一帧 MeshRenderSystem 使用
     // 使用 BeginGpuReadback（双缓冲 staging），数据延迟 1 帧但不阻塞 GPU pipeline
-    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+    if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
+        && render_pass_context_.hiz_culling_enabled) {
+        // 传统 Hi-Z 路径：异步读回 visibility SSBO
+        const int count = render_pass_context_.hiz_object_count;
+        const size_t read_size = count * sizeof(uint32_t);
+        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
+            render_resources_.hiz_visibility_ssbo, 0, read_size);
+        if (has_data) {
+            size_t result_size = 0;
+            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
+            if (raw && result_size >= read_size) {
+                const auto* vis = static_cast<const uint32_t*>(raw);
+                std::vector<uint32_t> visibility(vis, vis + count);
+                static const bool hiz_diag = std::getenv("DSE_HIZ_DIAG") && std::getenv("DSE_HIZ_DIAG")[0] != '0';
+                if (hiz_diag) {
+                    int culled = 0;
+                    for (int i = 0; i < count; ++i) { if (visibility[i] == 0) ++culled; }
+                    static int hiz_diag_counter = 0;
+                    if (hiz_diag_counter < 10 || (hiz_diag_counter % 30) == 0)
+                        DEBUG_LOG_INFO("[HiZDiag] path=main count={} visible={} culled={}", count, count - culled, culled);
+                    ++hiz_diag_counter;
+                }
+                modules_impl_->SetHiZVisibility(visibility);
+            }
+        }
+    } else if (!render_pass_context_.hiz_culling_enabled
+        && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
-        // GPU Driven 路径：异步读回 draw commands SSBO
+        // GPU-driven readback 仅在 Hi-Z culling 未激活时执行，
+        // 避免与 Hi-Z readback 共用 async_readback_ 单槽位导致 staging 数据污染
         const int count = render_pass_context_.gpu_indirect_draw_count;
         const size_t read_size = count * sizeof(DrawElementsIndirectCommand);
         bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
@@ -1185,25 +1220,8 @@ void FramePipeline::RunRenderInternal() {
                     visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
                     if (visibility[i] == 0) ++culled;
                 }
-                modules_impl_->SetHiZVisibility(visibility);
                 gpu_culled_last_frame_ = culled;
                 runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-            }
-        }
-    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
-        && render_pass_context_.hiz_culling_enabled) {
-        // 传统 Hi-Z 路径：异步读回 visibility SSBO
-        const int count = render_pass_context_.hiz_object_count;
-        const size_t read_size = count * sizeof(uint32_t);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_resources_.hiz_visibility_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* vis = static_cast<const uint32_t*>(raw);
-                std::vector<uint32_t> visibility(vis, vis + count);
-                modules_impl_->SetHiZVisibility(visibility);
             }
         }
     }
@@ -1373,6 +1391,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.gpu_instance_ssbo = render_resources_.gpu_instance_ssbo;
     render_pass_context_.gpu_material_ssbo = render_resources_.gpu_material_ssbo;
     render_pass_context_.gpu_draw_cmd_ssbo = render_resources_.gpu_draw_cmd_ssbo;
+    render_pass_context_.gpu_aabb_ssbo = render_resources_.gpu_aabb_ssbo;
+    render_pass_context_.gpu_aabb_capacity = render_resources_.gpu_aabb_capacity;
     render_pass_context_.gpu_visible_indices_ssbo = render_resources_.gpu_visible_indices_ssbo;
     render_pass_context_.gpu_atomic_counter_ssbo = render_resources_.gpu_atomic_counter_ssbo;
     render_pass_context_.gpu_mega_vao = render_resources_.gpu_mega_vao;
@@ -2367,7 +2387,23 @@ void FramePipeline::ExecuteRenderFrame() {
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
     // Hi-Z / GPU Driven: 异步读回（双缓冲 staging，延迟 1 帧）
-    if (render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
+    if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
+        && render_pass_context_.hiz_culling_enabled) {
+        const int count = render_pass_context_.hiz_object_count;
+        const size_t read_size = count * sizeof(uint32_t);
+        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
+            render_resources_.hiz_visibility_ssbo, 0, read_size);
+        if (has_data) {
+            size_t result_size = 0;
+            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
+            if (raw && result_size >= read_size) {
+                const auto* vis = static_cast<const uint32_t*>(raw);
+                std::vector<uint32_t> visibility(vis, vis + count);
+                modules_impl_->SetHiZVisibility(visibility);
+            }
+        }
+    } else if (!render_pass_context_.hiz_culling_enabled
+        && render_pass_context_.gpu_driven_enabled && render_pass_context_.gpu_indirect_draw_count > 0
         && render_pass_context_.gpu_draw_cmd_ssbo) {
         const int count = render_pass_context_.gpu_indirect_draw_count;
         const size_t read_size = count * sizeof(DrawElementsIndirectCommand);
@@ -2384,24 +2420,8 @@ void FramePipeline::ExecuteRenderFrame() {
                     visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
                     if (visibility[i] == 0) ++culled;
                 }
-                modules_impl_->SetHiZVisibility(visibility);
                 gpu_culled_last_frame_ = culled;
                 runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-            }
-        }
-    } else if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
-        && render_pass_context_.hiz_culling_enabled) {
-        const int count = render_pass_context_.hiz_object_count;
-        const size_t read_size = count * sizeof(uint32_t);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_resources_.hiz_visibility_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* vis = static_cast<const uint32_t*>(raw);
-                std::vector<uint32_t> visibility(vis, vis + count);
-                modules_impl_->SetHiZVisibility(visibility);
             }
         }
     }

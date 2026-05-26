@@ -51,6 +51,9 @@ public:
     void OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) override;
     void OnShutdown(World& world) override;
 
+    MeshRenderSystem& mesh_render_system() { return mesh_render_system_; }
+    const MeshRenderSystem& mesh_render_system() const { return mesh_render_system_; }
+
 private:
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;

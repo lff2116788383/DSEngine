@@ -27,6 +27,8 @@
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
+#include <utility>
 
 #ifdef DSE_HAS_D3DCOMPILE
 #ifndef NOMINMAX
@@ -412,6 +414,223 @@ static std::string ConsolidateHLSLSamplers(const std::string& hlsl) {
     return out.str();
 }
 
+static std::string FindByteAddressBufferName(const std::string& hlsl, int reg) {
+    const std::string reg_token = "register(t" + std::to_string(reg) + ")";
+    size_t pos = 0;
+    while ((pos = hlsl.find("ByteAddressBuffer ", pos)) != std::string::npos) {
+        size_t name_start = pos + strlen("ByteAddressBuffer ");
+        size_t name_end = hlsl.find(" : ", name_start);
+        if (name_end == std::string::npos) break;
+        size_t line_end = hlsl.find('\n', name_end);
+        if (line_end == std::string::npos) line_end = hlsl.size();
+        if (hlsl.substr(pos, line_end - pos).find(reg_token) != std::string::npos)
+            return hlsl.substr(name_start, name_end - name_start);
+        pos = line_end;
+    }
+    return {};
+}
+
+static void ReplaceBufferDecl(std::string& hlsl, const std::string& name,
+                               int reg, const char* type_str) {
+    const std::string reg_token = "register(t" + std::to_string(reg) + ")";
+    size_t pos = 0;
+    while ((pos = hlsl.find("ByteAddressBuffer ", pos)) != std::string::npos) {
+        size_t line_end = hlsl.find('\n', pos);
+        if (line_end == std::string::npos) line_end = hlsl.size();
+        std::string line = hlsl.substr(pos, line_end - pos);
+        if (line.find(reg_token) != std::string::npos && line.find(name) != std::string::npos) {
+            std::string repl = std::string(type_str) + " " + name + " : " + reg_token + ";";
+            hlsl.replace(pos, line_end - pos, repl);
+            return;
+        }
+        pos = line_end;
+    }
+}
+
+static std::string ExtractBalancedExpr(const std::string& s, size_t start, size_t& close) {
+    int depth = 1;
+    close = start;
+    for (; close < s.size() && depth > 0; ++close) {
+        if (s[close] == '(') ++depth;
+        else if (s[close] == ')') --depth;
+    }
+    --close;
+    return s.substr(start, close - start);
+}
+
+static bool ParseByteOffset(const std::string& expr, int stride,
+                              std::string& base, int& offset) {
+    const std::string tok = " * " + std::to_string(stride) + " + ";
+    size_t pos = expr.rfind(tok);
+    if (pos != std::string::npos) {
+        base = expr.substr(0, pos);
+        const char* p = expr.c_str() + pos + tok.size();
+        while (*p == ' ') ++p;
+        char* end = nullptr;
+        offset = static_cast<int>(strtol(p, &end, 10));
+        return end && end != p;
+    }
+    const std::string tok2 = " * " + std::to_string(stride);
+    if (expr.size() >= tok2.size() && expr.compare(expr.size() - tok2.size(), tok2.size(), tok2) == 0) {
+        base = expr.substr(0, expr.size() - tok2.size());
+        offset = 0;
+        return true;
+    }
+    return false;
+}
+
+static void ReplaceLoad4Calls(std::string& hlsl, const std::string& buf,
+                                int stride, const char* member) {
+    const std::string needle = buf + ".Load4(";
+    size_t pos = 0;
+    while ((pos = hlsl.find(needle, pos)) != std::string::npos) {
+        size_t close;
+        std::string byte_expr = ExtractBalancedExpr(hlsl, pos + needle.size(), close);
+        std::string base; int off;
+        if (ParseByteOffset(byte_expr, stride, base, off) && off % 16 == 0 && off < stride) {
+            std::string repl = "asuint(" + buf + "[" + base + "]" + member + "[" + std::to_string(off / 16) + "])";
+            hlsl.replace(pos, close + 1 - pos, repl);
+            pos += repl.size();
+        } else {
+            pos = close + 1;
+        }
+    }
+}
+
+static void ReplaceInstScalarLoad(std::string& hlsl, const std::string& buf) {
+    const std::string needle = buf + ".Load(";
+    size_t pos = 0;
+    while ((pos = hlsl.find(needle, pos)) != std::string::npos) {
+        size_t close;
+        std::string byte_expr = ExtractBalancedExpr(hlsl, pos + needle.size(), close);
+        std::string base; int off;
+        if (ParseByteOffset(byte_expr, 80, base, off) && off == 64) {
+            std::string repl = "uint(" + buf + "[" + base + "].bone_offset)";
+            hlsl.replace(pos, close + 1 - pos, repl);
+            pos += repl.size();
+        } else {
+            pos = close + 1;
+        }
+    }
+}
+
+static void CollapseMatrixReads(std::string& hlsl, const std::string& buf, const char* member) {
+    const std::string head = "asfloat(uint4x4(asuint(" + buf + "[";
+    size_t pos = 0;
+    while ((pos = hlsl.find(head, pos)) != std::string::npos) {
+        size_t expr_start = pos + head.size();
+        int depth = 1;
+        size_t i = expr_start;
+        for (; i < hlsl.size() && depth > 0; ++i) {
+            if (hlsl[i] == '[') ++depth;
+            else if (hlsl[i] == ']') --depth;
+        }
+        std::string expr = hlsl.substr(expr_start, i - 1 - expr_start);
+        std::string m(member);
+        std::string expected = "asfloat(uint4x4("
+            "asuint(" + buf + "[" + expr + "]" + m + "[0]), "
+            "asuint(" + buf + "[" + expr + "]" + m + "[1]), "
+            "asuint(" + buf + "[" + expr + "]" + m + "[2]), "
+            "asuint(" + buf + "[" + expr + "]" + m + "[3])))";
+        if (pos + expected.size() <= hlsl.size() &&
+            hlsl.compare(pos, expected.size(), expected) == 0) {
+            std::string repl = buf + "[" + expr + "]" + m;
+            hlsl.replace(pos, expected.size(), repl);
+            pos += repl.size();
+        } else {
+            pos += head.size();
+        }
+    }
+}
+
+static void ApplyInstancedBufferBaseIndex(std::string& hlsl, const std::string& buf) {
+    const std::string needle = buf + "[gl_InstanceIndex]";
+    const std::string repl = buf + "[(pc_u_bone_offset + gl_InstanceIndex)]";
+    size_t pos = 0;
+    while ((pos = hlsl.find(needle, pos)) != std::string::npos) {
+        hlsl.replace(pos, needle.size(), repl);
+        pos += repl.size();
+    }
+}
+
+static void ReplaceAll(std::string& text, const std::string& needle, const std::string& repl) {
+    size_t pos = 0;
+    while ((pos = text.find(needle, pos)) != std::string::npos) {
+        text.replace(pos, needle.size(), repl);
+        pos += repl.size();
+    }
+}
+
+static void InjectPreskinnedInstanceModelInput(std::string& hlsl, const std::string& buf) {
+    if (hlsl.find("DSEGetInstanceModel") != std::string::npos)
+        return;
+
+    ReplaceAll(hlsl, buf + "[(pc_u_bone_offset + gl_InstanceIndex)].model", "DSEGetInstanceModel()");
+
+    const std::string global_anchor = "static int gl_InstanceIndex;\n";
+    size_t global_pos = hlsl.find(global_anchor);
+    if (global_pos != std::string::npos) {
+        global_pos += global_anchor.size();
+        hlsl.insert(global_pos,
+            "static float4 aInstModel0;\n"
+            "static float4 aInstModel1;\n"
+            "static float4 aInstModel2;\n"
+            "static float4 aInstModel3;\n"
+            "\n"
+            "float4x4 DSEGetInstanceModel()\n"
+            "{\n"
+            "    if (pc_u_skinned == 3)\n"
+            "    {\n"
+            "        return float4x4(aInstModel0, aInstModel1, aInstModel2, aInstModel3);\n"
+            "    }\n"
+            "    return " + buf + "[(pc_u_bone_offset + gl_InstanceIndex)].model;\n"
+            "}\n"
+            "\n");
+    }
+
+    const std::string input_anchor = "    uint gl_InstanceIndex : SV_InstanceID;\n";
+    size_t input_pos = hlsl.find(input_anchor);
+    if (input_pos != std::string::npos) {
+        input_pos += input_anchor.size();
+        hlsl.insert(input_pos,
+            "    float4 aInstModel0 : TEXCOORD8;\n"
+            "    float4 aInstModel1 : TEXCOORD9;\n"
+            "    float4 aInstModel2 : TEXCOORD10;\n"
+            "    float4 aInstModel3 : TEXCOORD11;\n");
+    }
+
+    const std::string assign_anchor = "    gl_InstanceIndex = int(stage_input.gl_InstanceIndex);\n";
+    size_t assign_pos = hlsl.find(assign_anchor);
+    if (assign_pos != std::string::npos) {
+        assign_pos += assign_anchor.size();
+        hlsl.insert(assign_pos,
+            "    aInstModel0 = stage_input.aInstModel0;\n"
+            "    aInstModel1 = stage_input.aInstModel1;\n"
+            "    aInstModel2 = stage_input.aInstModel2;\n"
+            "    aInstModel3 = stage_input.aInstModel3;\n");
+    }
+}
+
+static std::string OptimizeSkinnedVertexHLSLStorageBuffers(std::string hlsl, EShLanguage stage) {
+    if (stage != EShLangVertex || hlsl.find("struct DSESkinnedInst") == std::string::npos)
+        return hlsl;
+    std::string inst_buf = FindByteAddressBufferName(hlsl, 26);
+    std::string bone_buf = FindByteAddressBufferName(hlsl, 24);
+    if (inst_buf.empty() && bone_buf.empty()) return hlsl;
+    if (!bone_buf.empty())
+        ReplaceBufferDecl(hlsl, bone_buf, 24, "struct DSEBoneMatrix { row_major float4x4 value; };\nStructuredBuffer<DSEBoneMatrix>");
+    if (!inst_buf.empty())
+        ReplaceBufferDecl(hlsl, inst_buf, 26, "StructuredBuffer<DSESkinnedInst>");
+    if (!bone_buf.empty())  ReplaceLoad4Calls(hlsl, bone_buf, 64, ".value");
+    if (!inst_buf.empty())  ReplaceLoad4Calls(hlsl, inst_buf, 80, ".model");
+    if (!inst_buf.empty())  ReplaceInstScalarLoad(hlsl, inst_buf);
+    if (!bone_buf.empty())  CollapseMatrixReads(hlsl, bone_buf, ".value");
+    if (!inst_buf.empty())  CollapseMatrixReads(hlsl, inst_buf, ".model");
+    if (!inst_buf.empty())  ApplyInstancedBufferBaseIndex(hlsl, inst_buf);
+    if (!inst_buf.empty())  InjectPreskinnedInstanceModelInput(hlsl, inst_buf);
+    return hlsl;
+}
+
 // ============================================================================
 // spirv-cross: SPIR-V → HLSL SM5.0
 // ============================================================================
@@ -526,6 +745,7 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
         }
 
         std::string hlsl_out = compiler.compile();
+        hlsl_out = OptimizeSkinnedVertexHLSLStorageBuffers(std::move(hlsl_out), stage);
         // SM5.0 sampler 限制后处理：合并 s16+ 的 sampler 到低位同类型 sampler
         hlsl_out = ConsolidateHLSLSamplers(hlsl_out);
         return hlsl_out;

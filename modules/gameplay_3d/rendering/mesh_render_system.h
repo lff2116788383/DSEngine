@@ -100,9 +100,16 @@ public:
     void SetHiZVisibility(const std::vector<uint32_t>& visibility) {
         if (visibility.size() != cached_aabbs_.size()) {
             hiz_visibility_.clear();
-        } else {
-            hiz_visibility_ = visibility;
+            return;
         }
+        // 防止死循环：全部 occluded → 清空 visibility（保守策略，下帧全部可见）
+        bool any_visible = false;
+        for (auto v : visibility) { if (v != 0) { any_visible = true; break; } }
+        if (!any_visible) {
+            hiz_visibility_.clear();
+            return;
+        }
+        hiz_visibility_ = visibility;
     }
 
     /// GPU Driven: 判断实体是否走 GPU-driven 路径（不透明、非蒙皮、有 bounds）

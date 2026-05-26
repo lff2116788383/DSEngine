@@ -15,11 +15,49 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <cstdlib>
 
 namespace dse {
 namespace render {
 namespace {
+
+static glm::vec3 NormalizeOrFallback(const glm::vec3& value, const glm::vec3& fallback) {
+    const float len2 = glm::dot(value, value);
+    return (len2 > 1e-12f) ? value * (1.0f / std::sqrt(len2)) : fallback;
+}
+
+static bool BuildPreskinnedVertices(const BatchVertex* src, size_t count,
+                                    const std::vector<glm::mat4>& palette,
+                                    std::vector<BatchVertex>& dst) {
+    if (!src || count == 0 || palette.empty()) return false;
+    dst.resize(count);
+    for (size_t i = 0; i < count; ++i) {
+        const BatchVertex& in = src[i];
+        BatchVertex out = in;
+        glm::mat4 skin(0.0f);
+        float total_weight = 0.0f;
+        for (int j = 0; j < 4; ++j) {
+            const float weight = in.weights[j];
+            const int bone_index = static_cast<int>(in.joints[j]);
+            if (weight != 0.0f && bone_index >= 0 && bone_index < static_cast<int>(palette.size())) {
+                skin += palette[bone_index] * weight;
+                total_weight += weight;
+            }
+        }
+        if (total_weight > 0.0f) {
+            out.pos = glm::vec3(skin * glm::vec4(in.pos, 1.0f));
+            const glm::mat3 skin3(skin);
+            out.normal = NormalizeOrFallback(skin3 * in.normal, in.normal);
+            out.tangent = NormalizeOrFallback(skin3 * in.tangent, in.tangent);
+            out.weights = glm::vec4(0.0f);
+            out.joints = glm::vec4(0.0f);
+        }
+        dst[i] = out;
+    }
+    return true;
+}
 
 } // namespace
 
@@ -65,6 +103,16 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
         dsd.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
         dsd.StencilEnable  = FALSE;
         context_->device()->CreateDepthStencilState(&dsd, skybox_dss_.GetAddressOf());
+    }
+
+    // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
+    {
+        D3D11_RASTERIZER_DESC rd{};
+        rd.FillMode = D3D11_FILL_SOLID;
+        rd.CullMode = D3D11_CULL_NONE;
+        rd.FrontCounterClockwise = TRUE;
+        rd.DepthClipEnable = TRUE;
+        context_->device()->CreateRasterizerState(&rd, no_cull_rasterizer_state_.GetAddressOf());
     }
 
     // 1×1 白色 fallback 纹理（与 OpenGL white_texture 对齐，texture_handle=0 时使用）
@@ -126,12 +174,17 @@ void DX11DrawExecutor::Shutdown() {
     particle_quad_ibo_.Reset();
     shadow_sampler_.Reset();
     skybox_dss_.Reset();
+    no_cull_rasterizer_state_.Reset();
     white_texture_srv_.Reset();
     white_texture_sampler_.Reset();
     bone_matrices_cb_.Reset();
     bone_ssbo_buf_.Reset();
     bone_ssbo_srv_.Reset();
     bone_ssbo_capacity_ = 0;
+    skinned_inst_buf_.Reset();
+    skinned_inst_srv_.Reset();
+    skinned_inst_capacity_ = 0;
+    static_mesh_cache_.clear();
     light_probe_data_cb_.Reset();
 
     initialized_ = false;
@@ -252,6 +305,17 @@ void DX11DrawExecutor::InitGeometryBuffers() {
         device->CreateBuffer(&bd, &init, particle_quad_ibo_.GetAddressOf());
     }
 
+    EnsureInstanceVBOCapacity(80);
+    if (instance_vbo_) {
+        struct DefaultInstanceData { glm::mat4 model; int bone_offset; int pad[3]; };
+        DefaultInstanceData data{glm::mat4(1.0f), 0, {0, 0, 0}};
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (SUCCEEDED(context_->device_context()->Map(instance_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+            memcpy(mapped.pData, &data, sizeof(data));
+            context_->device_context()->Unmap(instance_vbo_.Get(), 0);
+        }
+    }
+
     DEBUG_LOG_INFO("[D3D11] DrawExecutor geometry buffers initialized");
 }
 
@@ -283,6 +347,21 @@ void DX11DrawExecutor::EnsureMeshIBOCapacity(size_t needed_bytes) {
     mesh_dynamic_ibo_.Reset();
     HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, mesh_dynamic_ibo_.GetAddressOf());
     if (SUCCEEDED(hr)) mesh_ibo_capacity_ = new_cap;
+}
+
+void DX11DrawExecutor::EnsureInstanceVBOCapacity(size_t needed_bytes) {
+    if (instance_vbo_capacity_ >= needed_bytes) return;
+    size_t new_cap = (std::max)(needed_bytes, (std::max)(instance_vbo_capacity_ * 2, (size_t)80));
+
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth = static_cast<UINT>(new_cap);
+    bd.Usage = D3D11_USAGE_DYNAMIC;
+    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    instance_vbo_.Reset();
+    HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, instance_vbo_.GetAddressOf());
+    if (SUCCEEDED(hr)) instance_vbo_capacity_ = new_cap;
 }
 
 ComPtr<ID3D11Buffer> DX11DrawExecutor::CreateConstantBuffer(UINT size) {
@@ -317,6 +396,8 @@ void DX11DrawExecutor::UpdateConstantBuffer(ID3D11Buffer* buffer, const void* da
 
 void DX11DrawExecutor::BeginFrame() {
     global_state_.current_frame_stats = RenderStats{};
+    bone_ssbo_uploaded_this_frame_ = false;
+    inst_ssbo_uploaded_this_frame_ = false;
 }
 
 void DX11DrawExecutor::EndFrame() {
@@ -642,63 +723,208 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
         if (total_bones > 0) {
-            const size_t ssbo_bytes = total_bones * sizeof(glm::mat4);
-            if (ssbo_bytes > bone_ssbo_capacity_ || !bone_ssbo_buf_) {
-                bone_ssbo_buf_.Reset();
-                bone_ssbo_srv_.Reset();
-                D3D11_BUFFER_DESC bd{};
-                bd.ByteWidth = static_cast<UINT>(ssbo_bytes);
-                bd.Usage = D3D11_USAGE_DYNAMIC;
-                bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-                bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-                bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-                bd.StructureByteStride = 0;
-                HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, bone_ssbo_buf_.ReleaseAndGetAddressOf());
-                if (SUCCEEDED(hr)) {
-                    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                    srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-                    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-                    srv_desc.BufferEx.FirstElement = 0;
-                    srv_desc.BufferEx.NumElements = static_cast<UINT>(ssbo_bytes / 4);
-                    srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-                    context_->device()->CreateShaderResourceView(bone_ssbo_buf_.Get(), &srv_desc, bone_ssbo_srv_.ReleaseAndGetAddressOf());
-                }
-                bone_ssbo_capacity_ = ssbo_bytes;
-            }
-            if (bone_ssbo_buf_) {
-                D3D11_MAPPED_SUBRESOURCE mapped{};
-                HRESULT hr = dc->Map(bone_ssbo_buf_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-                if (SUCCEEDED(hr)) {
-                    auto* dst = static_cast<glm::mat4*>(mapped.pData);
-                    for (size_t i = 0; i < items.size(); ++i) {
-                        const auto& it = items[i];
-                        if (it.skinned && !it.bone_palette.empty()) {
-                            for (size_t p = 0; p < it.bone_palette.size(); ++p) {
-                                size_t count = (std::min)(it.bone_palette[p].size(), static_cast<size_t>(255));
-                                memcpy(dst + palette_base_offsets[i][p],
-                                       it.bone_palette[p].data(), count * sizeof(glm::mat4));
-                            }
-                        } else if (it.skinned && !it.per_instance_bones.empty()) {
-                            for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
-                                size_t count = (std::min)(it.per_instance_bones[j].size(), static_cast<size_t>(255));
-                                memcpy(dst + per_inst_bone_offsets[i][j],
-                                       it.per_instance_bones[j].data(), count * sizeof(glm::mat4));
-                            }
-                        } else if (it.skinned && !it.bone_matrices.empty()) {
-                            size_t count = (std::min)(it.bone_matrices.size(), static_cast<size_t>(255));
-                            memcpy(dst + bone_offsets[i], it.bone_matrices.data(), count * sizeof(glm::mat4));
-                        }
+            if (!bone_ssbo_uploaded_this_frame_) {
+                const size_t ssbo_bytes = total_bones * sizeof(glm::mat4);
+                if (ssbo_bytes > bone_ssbo_capacity_ || !bone_ssbo_buf_) {
+                    bone_ssbo_buf_.Reset();
+                    bone_ssbo_srv_.Reset();
+                    D3D11_BUFFER_DESC bd{};
+                    bd.ByteWidth = static_cast<UINT>(ssbo_bytes);
+                    bd.Usage = D3D11_USAGE_DYNAMIC;
+                    bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                    bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+                    bd.StructureByteStride = 64;
+                    HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, bone_ssbo_buf_.ReleaseAndGetAddressOf());
+                    if (SUCCEEDED(hr)) {
+                        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+                        srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+                        srv_desc.Buffer.FirstElement = 0;
+                        srv_desc.Buffer.NumElements = static_cast<UINT>(ssbo_bytes / 64);
+                        context_->device()->CreateShaderResourceView(bone_ssbo_buf_.Get(), &srv_desc, bone_ssbo_srv_.ReleaseAndGetAddressOf());
                     }
-                    dc->Unmap(bone_ssbo_buf_.Get(), 0);
+                    bone_ssbo_capacity_ = ssbo_bytes;
                 }
+                if (bone_ssbo_buf_) {
+                    D3D11_MAPPED_SUBRESOURCE mapped{};
+                    HRESULT hr = dc->Map(bone_ssbo_buf_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+                    if (SUCCEEDED(hr)) {
+                        auto* dst = static_cast<glm::mat4*>(mapped.pData);
+                        for (size_t i = 0; i < items.size(); ++i) {
+                            const auto& it = items[i];
+                            if (it.skinned && !it.bone_palette.empty()) {
+                                for (size_t p = 0; p < it.bone_palette.size(); ++p) {
+                                    size_t count = (std::min)(it.bone_palette[p].size(), static_cast<size_t>(255));
+                                    memcpy(dst + palette_base_offsets[i][p],
+                                           it.bone_palette[p].data(), count * sizeof(glm::mat4));
+                                }
+                            } else if (it.skinned && !it.per_instance_bones.empty()) {
+                                for (size_t j = 0; j < it.per_instance_bones.size(); ++j) {
+                                    size_t count = (std::min)(it.per_instance_bones[j].size(), static_cast<size_t>(255));
+                                    memcpy(dst + per_inst_bone_offsets[i][j],
+                                           it.per_instance_bones[j].data(), count * sizeof(glm::mat4));
+                                }
+                            } else if (it.skinned && !it.bone_matrices.empty()) {
+                                size_t count = (std::min)(it.bone_matrices.size(), static_cast<size_t>(255));
+                                memcpy(dst + bone_offsets[i], it.bone_matrices.data(), count * sizeof(glm::mat4));
+                            }
+                        }
+                        dc->Unmap(bone_ssbo_buf_.Get(), 0);
+                    }
+                    bone_ssbo_uploaded_this_frame_ = true;
+                }
+            }
+            if (bone_ssbo_srv_) {
                 dc->VSSetShaderResources(24, 1, bone_ssbo_srv_.GetAddressOf());
             }
         }
     }
 
+    // === Skinned inst SSBO pre-pack: 一次 Map 打包所有蒙皮实例数据 ===
+    struct SkinnedInstGPU { glm::mat4 model; int bone_offset; int _pad[3]; };
+    constexpr size_t kInstGPUSize = sizeof(SkinnedInstGPU); // 80 bytes
+
+    // Shadow culling 参数（所有 item 共享，提前计算一次）
+    constexpr float kShadowCullMargin     = 150.0f;
+    constexpr float kBudgetOrthoThreshold = 2000.0f;
+    constexpr float kBudgetBaseInstances  = 800.0f;
+    constexpr float kBudgetMinInstances   = 64.0f;
+    constexpr float kSkinnedShadowSkipOrtho = 1500.0f;
+    constexpr float kSkinnedBudgetOrtho     = 400.0f;
+    constexpr float kSkinnedBudgetBase      = 200.0f;
+
+    const bool dx11_is_ortho = std::abs(projection[2][3]) < 0.01f;
+    const bool dx11_shadow_cull_active = is_depth_only_pass_ && dx11_is_ortho;
+    static const bool dx11_skip_skinned_prez_env = []() {
+        const char* value = std::getenv("DSE_DX11_SKIP_SKINNED_PREZ");
+        return value && value[0] != '\0' && value[0] != '0';
+    }();
+    const bool dx11_prez_skip_skinned  = is_depth_only_pass_ && !dx11_is_ortho && dx11_skip_skinned_prez_env;
+    float dx11_shadow_cull_limit = 0.0f;
+    size_t dx11_shadow_inst_budget = SIZE_MAX;
+    if (dx11_shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
+        float ortho_size = 1.0f / projection[0][0];
+        dx11_shadow_cull_limit = ortho_size + kShadowCullMargin;
+        if (ortho_size > kBudgetOrthoThreshold) {
+            dx11_shadow_inst_budget = static_cast<size_t>(
+                (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+        }
+        if (ortho_size > kSkinnedShadowSkipOrtho) {
+            dx11_shadow_inst_budget = 0;
+        } else if (ortho_size > kSkinnedBudgetOrtho) {
+            dx11_shadow_inst_budget = static_cast<size_t>(
+                (std::max)(kSkinnedBudgetBase * kSkinnedBudgetOrtho / ortho_size, 0.0f));
+        }
+    }
+
+    // 计算每个 skinned instanced item 的 byte offset 和总字节数
+    std::vector<size_t> inst_byte_offsets(items.size(), SIZE_MAX);
+    std::vector<size_t> inst_visible_counts(items.size(), 0);
+    size_t total_inst_bytes = 0;
+    for (size_t i = 0; i < items.size(); ++i) {
+        const auto& it = items[i];
+        const bool si = it.skinned
+            && (!it.per_instance_bones.empty() || !it.bone_palette.empty())
+            && it.instance_transforms.size() > 1;
+        if (si && !dx11_prez_skip_skinned) {
+            inst_byte_offsets[i] = total_inst_bytes;
+            total_inst_bytes += it.instance_transforms.size() * kInstGPUSize;
+        }
+    }
+
+    // 单次 Map 打包所有 skinned instanced item
+    const bool need_inst_upload = total_inst_bytes > 0
+        && (dx11_shadow_cull_active || !inst_ssbo_uploaded_this_frame_);
+    if (need_inst_upload) {
+        if (total_inst_bytes > skinned_inst_capacity_ || !skinned_inst_buf_) {
+            skinned_inst_buf_.Reset();
+            skinned_inst_srv_.Reset();
+            D3D11_BUFFER_DESC bd{};
+            bd.ByteWidth = static_cast<UINT>(total_inst_bytes);
+            bd.Usage = D3D11_USAGE_DYNAMIC;
+            bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            bd.StructureByteStride = 80;
+            HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, skinned_inst_buf_.ReleaseAndGetAddressOf());
+            if (SUCCEEDED(hr)) {
+                D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+                srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+                srv_desc.Buffer.FirstElement = 0;
+                srv_desc.Buffer.NumElements = static_cast<UINT>(total_inst_bytes / kInstGPUSize);
+                context_->device()->CreateShaderResourceView(skinned_inst_buf_.Get(), &srv_desc, skinned_inst_srv_.ReleaseAndGetAddressOf());
+            }
+            skinned_inst_capacity_ = total_inst_bytes;
+        }
+        if (skinned_inst_buf_) {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            HRESULT hr = dc->Map(skinned_inst_buf_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            if (SUCCEEDED(hr)) {
+                auto pack_instances = [&](void* base, bool update_visible_counts) {
+                    for (size_t i = 0; i < items.size(); ++i) {
+                        if (inst_byte_offsets[i] == SIZE_MAX) continue;
+                        const auto& it = items[i];
+                        const auto& inst_bo = per_inst_bone_offsets[i];
+                        auto* dst = reinterpret_cast<SkinnedInstGPU*>(
+                            static_cast<char*>(base) + inst_byte_offsets[i]);
+                        size_t visible = 0;
+                        for (size_t j = 0; j < it.instance_transforms.size(); ++j) {
+                            if (dx11_shadow_cull_active) {
+                                if (visible >= dx11_shadow_inst_budget) break;
+                                if (dx11_shadow_cull_limit > 0.0f) {
+                                    const glm::vec3 wp(it.instance_transforms[j][3]);
+                                    const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                                    if (std::abs(ls.x) > dx11_shadow_cull_limit || std::abs(ls.y) > dx11_shadow_cull_limit)
+                                        continue;
+                                }
+                            }
+                            dst[visible].model = it.instance_transforms[j];
+                            dst[visible].bone_offset = (j < inst_bo.size()) ? inst_bo[j] : 0;
+                            dst[visible]._pad[0] = dst[visible]._pad[1] = dst[visible]._pad[2] = 0;
+                            ++visible;
+                        }
+                        if (update_visible_counts)
+                            inst_visible_counts[i] = visible;
+                    }
+                };
+                pack_instances(mapped.pData, true);
+                dc->Unmap(skinned_inst_buf_.Get(), 0);
+                if (total_inst_bytes > 0) {
+                    EnsureInstanceVBOCapacity(total_inst_bytes);
+                    if (instance_vbo_) {
+                        D3D11_MAPPED_SUBRESOURCE inst_mapped{};
+                        if (SUCCEEDED(dc->Map(instance_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &inst_mapped))) {
+                            pack_instances(inst_mapped.pData, false);
+                            dc->Unmap(instance_vbo_.Get(), 0);
+                        }
+                    }
+                }
+            }
+        }
+        if (!dx11_shadow_cull_active) {
+            inst_ssbo_uploaded_this_frame_ = true;
+        } else {
+            inst_ssbo_uploaded_this_frame_ = false;
+        }
+    } else if (!dx11_shadow_cull_active) {
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (inst_byte_offsets[i] != SIZE_MAX)
+                inst_visible_counts[i] = items[i].instance_transforms.size();
+        }
+    }
+
+    static const bool dx11_skin_diag_enabled = std::getenv("DSE_DX11_SKIN_DIAG") != nullptr;
+    size_t dx11_diag_skinned_items = 0;
+    size_t dx11_diag_preskinned_items = 0;
+    size_t dx11_diag_srv_items = 0;
+    size_t dx11_diag_preskinned_instances = 0;
+    size_t dx11_diag_srv_instances = 0;
+    size_t dx11_diag_single_palette_items = 0;
+    size_t dx11_diag_multi_palette_items = 0;
+
     unsigned int last_material_tex = (std::numeric_limits<unsigned int>::max)();
-    const BatchVertex* dx11_last_shared_vtx = nullptr;
-    size_t dx11_last_shared_vtx_count = 0;
     for (size_t item_idx = 0; item_idx < items.size(); ++item_idx) {
         const auto& item = items[item_idx];
         // 解析顶点/索引数据源：优先使用 shared_vertex_ptr
@@ -707,6 +933,39 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         const size_t vtx_count = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
         const size_t idx_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
         if (vtx_count == 0 || idx_count == 0) continue;
+        const bool is_instanced = item.instance_transforms.size() > 1;
+        const bool skinned_instanced = item.skinned
+            && (!item.per_instance_bones.empty() || !item.bone_palette.empty())
+            && item.instance_transforms.size() > 1;
+        const bool dx11_preskinned_instanced = skinned_instanced
+            && !dx11_prez_skip_skinned
+            && item.bone_palette.size() == 1
+            && !item.bone_palette[0].empty();
+        thread_local std::vector<BatchVertex> dx11_preskinned_vertices;
+        bool use_dx11_preskinned_vertices = false;
+        if (dx11_preskinned_instanced &&
+            BuildPreskinnedVertices(vtx_data, vtx_count, item.bone_palette[0], dx11_preskinned_vertices)) {
+            vtx_data = dx11_preskinned_vertices.data();
+            use_dx11_preskinned_vertices = true;
+        }
+        if (dx11_skin_diag_enabled && skinned_instanced) {
+            const size_t draw_count = (inst_byte_offsets[item_idx] != SIZE_MAX)
+                ? inst_visible_counts[item_idx]
+                : item.instance_transforms.size();
+            ++dx11_diag_skinned_items;
+            if (item.bone_palette.size() == 1) {
+                ++dx11_diag_single_palette_items;
+            } else if (item.bone_palette.size() > 1) {
+                ++dx11_diag_multi_palette_items;
+            }
+            if (use_dx11_preskinned_vertices) {
+                ++dx11_diag_preskinned_items;
+                dx11_diag_preskinned_instances += draw_count;
+            } else {
+                ++dx11_diag_srv_items;
+                dx11_diag_srv_instances += draw_count;
+            }
+        }
 
         if (item.texture_handle != last_material_tex) {
             if (last_material_tex != (std::numeric_limits<unsigned int>::max)())
@@ -714,18 +973,43 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             last_material_tex = item.texture_handle;
         }
 
-        // 同 pass 内连续相同 shared_vertex_ptr → 跳过 VBO/IBO 重复上传
-        const bool skip_upload = item.shared_vertex_ptr
-            && item.shared_vertex_ptr == dx11_last_shared_vtx
-            && vtx_count == dx11_last_shared_vtx_count;
-
-        if (!skip_upload) {
+        // === VBO/IBO: 共享 mesh 使用 IMMUTABLE 缓存，非共享走 dynamic 上传 ===
+        ID3D11Buffer* bound_vbo = nullptr;
+        ID3D11Buffer* bound_ibo = nullptr;
+        if (item.shared_vertex_ptr && !use_dx11_preskinned_vertices) {
+            auto cache_it = static_mesh_cache_.find(item.shared_vertex_ptr);
+            if (cache_it == static_mesh_cache_.end() || cache_it->second.vtx_count != vtx_count) {
+                DX11StaticMeshEntry entry;
+                entry.vtx_count = vtx_count;
+                entry.idx_count = idx_count;
+                {
+                    D3D11_BUFFER_DESC bd{};
+                    bd.ByteWidth = static_cast<UINT>(vtx_count * sizeof(BatchVertex));
+                    bd.Usage = D3D11_USAGE_IMMUTABLE;
+                    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+                    D3D11_SUBRESOURCE_DATA init{};
+                    init.pSysMem = vtx_data;
+                    context_->device()->CreateBuffer(&bd, &init, entry.vbo.GetAddressOf());
+                }
+                {
+                    D3D11_BUFFER_DESC bd{};
+                    bd.ByteWidth = static_cast<UINT>(idx_count * sizeof(uint32_t));
+                    bd.Usage = D3D11_USAGE_IMMUTABLE;
+                    bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+                    D3D11_SUBRESOURCE_DATA init{};
+                    init.pSysMem = idx_data;
+                    context_->device()->CreateBuffer(&bd, &init, entry.ibo.GetAddressOf());
+                }
+                static_mesh_cache_[item.shared_vertex_ptr] = std::move(entry);
+                cache_it = static_mesh_cache_.find(item.shared_vertex_ptr);
+            }
+            bound_vbo = cache_it->second.vbo.Get();
+            bound_ibo = cache_it->second.ibo.Get();
+        } else {
             size_t vbo_bytes = vtx_count * sizeof(BatchVertex);
             size_t ibo_bytes = idx_count * sizeof(uint32_t);
             EnsureMeshVBOCapacity(vbo_bytes);
             EnsureMeshIBOCapacity(ibo_bytes);
-
-            // 上传顶点数据
             {
                 D3D11_MAPPED_SUBRESOURCE mapped{};
                 HRESULT hr = dc->Map(mesh_dynamic_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -734,8 +1018,6 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                     dc->Unmap(mesh_dynamic_vbo_.Get(), 0);
                 }
             }
-
-            // 上传索引数据
             {
                 D3D11_MAPPED_SUBRESOURCE mapped{};
                 HRESULT hr = dc->Map(mesh_dynamic_ibo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -744,37 +1026,31 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                     dc->Unmap(mesh_dynamic_ibo_.Get(), 0);
                 }
             }
-
-            if (item.shared_vertex_ptr) {
-                dx11_last_shared_vtx = item.shared_vertex_ptr;
-                dx11_last_shared_vtx_count = vtx_count;
-            } else {
-                dx11_last_shared_vtx = nullptr;
-                dx11_last_shared_vtx_count = 0;
-            }
+            bound_vbo = mesh_dynamic_vbo_.Get();
+            bound_ibo = mesh_dynamic_ibo_.Get();
         }
-
-        // GPU Instancing 判定
-        // 注意：标准 PBR HLSL 着色器不支持 per-instance vertex attribute，
-        // 因此 instanced 路径采用逐实例更新 PerObjectCB 并绘制的方式。
-        const bool is_instanced = item.instance_transforms.size() > 1;
 
         {
             UINT stride = sizeof(BatchVertex);
             UINT vb_offset = 0;
-            dc->IASetVertexBuffers(0, 1, mesh_dynamic_vbo_.GetAddressOf(), &stride, &vb_offset);
+            dc->IASetVertexBuffers(0, 1, &bound_vbo, &stride, &vb_offset);
+            ID3D11Buffer* inst_vbo = instance_vbo_.Get();
+            UINT inst_stride = static_cast<UINT>(kInstGPUSize);
+            UINT inst_offset = (inst_byte_offsets[item_idx] != SIZE_MAX)
+                ? static_cast<UINT>(inst_byte_offsets[item_idx])
+                : 0;
+            dc->IASetVertexBuffers(1, 1, &inst_vbo, &inst_stride, &inst_offset);
         }
-        dc->IASetIndexBuffer(mesh_dynamic_ibo_.Get(), DXGI_FORMAT_R32_UINT, 0);
+        dc->IASetIndexBuffer(bound_ibo, DXGI_FORMAT_R32_UINT, 0);
 
         // PerObject (PushConstants cbuffer: model, skinned, morph_enabled, bone_offset)
-        const bool skinned_instanced = item.skinned
-            && (!item.per_instance_bones.empty() || !item.bone_palette.empty())
-            && item.instance_transforms.size() > 1;
         DX11PerObjectCB obj_data{};
         obj_data.model = item.model;
-        obj_data.skinned = skinned_instanced ? 2 : (item.skinned ? 1 : 0);
+        obj_data.skinned = use_dx11_preskinned_vertices ? 3 : (skinned_instanced ? 2 : (item.skinned ? 1 : 0));
         obj_data.morph_enabled = item.morph_enabled ? 1 : 0;
-        obj_data.bone_offset = (!skinned_instanced && item.skinned) ? bone_offsets[item_idx] : 0;
+        obj_data.bone_offset = skinned_instanced
+            ? ((inst_byte_offsets[item_idx] != SIZE_MAX) ? static_cast<int>(inst_byte_offsets[item_idx] / kInstGPUSize) : 0)
+            : (item.skinned ? bone_offsets[item_idx] : 0);
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
         // PerMaterial
@@ -814,7 +1090,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         UpdateConstantBuffer(per_material_cb_.Get(), &mat_data, sizeof(mat_data));
 
         // Re-upload PerScene CB when shading mode changes per item
-        if (item.shading_mode != static_cast<int>(scene_data.light_params.w)) {
+        if (static_cast<float>(item.shading_mode) != scene_data.light_params.w) {
             scene_data.light_params.w = static_cast<float>(item.shading_mode);
             UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
         }
@@ -845,96 +1121,23 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             if (oc) dc->PSSetShaderResources(slots.occlusion, 1, oc->srv.GetAddressOf());
         }
 
+        // 双面材质面剔除切换（与 OpenGL/Vulkan 的 material_double_sided 对齐）
+        ComPtr<ID3D11RasterizerState> prev_rasterizer_state;
+        bool rasterizer_switched = false;
+        if (item.material_double_sided && no_cull_rasterizer_state_) {
+            dc->RSGetState(prev_rasterizer_state.GetAddressOf());
+            dc->RSSetState(no_cull_rasterizer_state_.Get());
+            rasterizer_switched = true;
+        }
+
         if (is_instanced && skinned_instanced) {
-            // Hardware instanced skinned draw: upload instance SSBO + DrawIndexedInstanced
-            const size_t instance_count = item.instance_transforms.size();
-            const auto& inst_bo = per_inst_bone_offsets[item_idx];
-
-            // --- Shadow instance culling (与 OpenGL 一致) ---
-            constexpr float kShadowCullMargin     = 150.0f;
-            constexpr float kBudgetOrthoThreshold = 2000.0f;
-            constexpr float kBudgetBaseInstances  = 800.0f;
-            constexpr float kBudgetMinInstances   = 64.0f;
-            constexpr float kSkinnedShadowSkipOrtho = 1500.0f;
-            constexpr float kSkinnedBudgetOrtho     = 400.0f;
-            constexpr float kSkinnedBudgetBase      = 200.0f;
-
-            // DX11 clip correction 将 ortho 的 [3][3] 从 1.0 变为 ~0.5
-            // 改用 [2][3]==0（透视投影 [2][3]==-1，正交投影 [2][3]==0）
-            const bool is_ortho = std::abs(projection[2][3]) < 0.01f;
-            // PreZ 跳过：蒙皮实例在深度预填充 pass（透视深度）收益极小，直接跳过节省 VS 时间
-            if (is_depth_only_pass_ && !is_ortho) continue;
-            const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
-            float shadow_cull_limit = 0.0f;
-            size_t shadow_instance_budget = SIZE_MAX;
-            if (shadow_cull_active && std::abs(projection[0][0]) > 1e-6f) {
-                float ortho_size = 1.0f / projection[0][0];
-                shadow_cull_limit = ortho_size + kShadowCullMargin;
-                if (ortho_size > kBudgetOrthoThreshold) {
-                    shadow_instance_budget = static_cast<size_t>(
-                        (std::max)(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
-                }
-                // 蒙皮实例更激进预算：远 cascade 完全跳过
-                if (ortho_size > kSkinnedShadowSkipOrtho) {
-                    shadow_instance_budget = 0;
-                } else if (ortho_size > kSkinnedBudgetOrtho) {
-                    shadow_instance_budget = static_cast<size_t>(
-                        (std::max)(kSkinnedBudgetBase * kSkinnedBudgetOrtho / ortho_size, 0.0f));
-                }
-            }
-
-            struct SkinnedInstGPU { glm::mat4 model; int bone_offset; int _pad[3]; };
-            const size_t max_inst_bytes = instance_count * sizeof(SkinnedInstGPU);
-            if (max_inst_bytes > skinned_inst_capacity_ || !skinned_inst_buf_) {
-                skinned_inst_buf_.Reset();
-                skinned_inst_srv_.Reset();
-                D3D11_BUFFER_DESC bd{};
-                bd.ByteWidth = static_cast<UINT>(max_inst_bytes);
-                bd.Usage = D3D11_USAGE_DYNAMIC;
-                bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-                bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-                bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-                HRESULT hr = context_->device()->CreateBuffer(&bd, nullptr, skinned_inst_buf_.ReleaseAndGetAddressOf());
-                if (SUCCEEDED(hr)) {
-                    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                    srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-                    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-                    srv_desc.BufferEx.FirstElement = 0;
-                    srv_desc.BufferEx.NumElements = static_cast<UINT>(max_inst_bytes / 4);
-                    srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-                    context_->device()->CreateShaderResourceView(skinned_inst_buf_.Get(), &srv_desc, skinned_inst_srv_.ReleaseAndGetAddressOf());
-                }
-                skinned_inst_capacity_ = max_inst_bytes;
-            }
-            size_t visible_count = 0;
-            if (skinned_inst_buf_) {
-                D3D11_MAPPED_SUBRESOURCE mapped{};
-                HRESULT hr = dc->Map(skinned_inst_buf_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-                if (SUCCEEDED(hr)) {
-                    auto* dst = static_cast<SkinnedInstGPU*>(mapped.pData);
-                    for (size_t i = 0; i < instance_count; ++i) {
-                        if (shadow_cull_active) {
-                            if (visible_count >= shadow_instance_budget) break;
-                            if (shadow_cull_limit > 0.0f) {
-                                const glm::vec3 wp(item.instance_transforms[i][3]);
-                                const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
-                                if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
-                                    continue;
-                            }
-                        }
-                        dst[visible_count].model = item.instance_transforms[i];
-                        dst[visible_count].bone_offset = (i < inst_bo.size()) ? inst_bo[i] : 0;
-                        dst[visible_count]._pad[0] = dst[visible_count]._pad[1] = dst[visible_count]._pad[2] = 0;
-                        ++visible_count;
-                    }
-                    dc->Unmap(skinned_inst_buf_.Get(), 0);
-                }
+            // 使用预打包的 skinned inst SSBO 数据（pre-pack 阶段已完成 Map/Unmap）
+            if (inst_byte_offsets[item_idx] == SIZE_MAX || inst_visible_counts[item_idx] == 0) {
+                // PreZ 跳过或全部被阴影剔除
+            } else if (skinned_inst_srv_) {
                 dc->VSSetShaderResources(26, 1, skinned_inst_srv_.GetAddressOf());
-            }
-            if (visible_count == 0 && shadow_cull_active) {
-                // 全部被剔除，跳过绘制
-            } else {
-                const UINT draw_count = static_cast<UINT>(shadow_cull_active ? visible_count : instance_count);
+
+                const UINT draw_count = static_cast<UINT>(inst_visible_counts[item_idx]);
                 dc->DrawIndexedInstanced(static_cast<UINT>(idx_count), draw_count, 0, 0, 0);
                 global_state_.current_frame_stats.draw_calls += 1;
                 global_state_.current_frame_stats.instanced_draw_calls++;
@@ -955,6 +1158,29 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             global_state_.current_frame_stats.draw_calls++;
         }
         global_state_.current_frame_stats.triangle_count += static_cast<int>(idx_count / 3) * static_cast<int>(is_instanced ? item.instance_transforms.size() : 1);
+
+        // 恢复光栅化状态
+        if (rasterizer_switched) {
+            dc->RSSetState(prev_rasterizer_state.Get());
+        }
+    }
+    if (dx11_skin_diag_enabled && dx11_diag_skinned_items > 0) {
+        static int dx11_skin_diag_logs = 0;
+        if (dx11_skin_diag_logs < 24 || (dx11_skin_diag_logs % 60) == 0) {
+            DEBUG_LOG_INFO("[DX11][SkinDiag] pass={} ortho={} items={} single_palette={} multi_palette={} preskinned_items={} preskinned_instances={} srv_items={} srv_instances={} inst_upload={} total_inst_bytes={}",
+                           is_depth_only_pass_ ? "depth" : (gbuffer_mode ? "gbuffer" : "forward"),
+                           dx11_is_ortho ? 1 : 0,
+                           dx11_diag_skinned_items,
+                           dx11_diag_single_palette_items,
+                           dx11_diag_multi_palette_items,
+                           dx11_diag_preskinned_items,
+                           dx11_diag_preskinned_instances,
+                           dx11_diag_srv_items,
+                           dx11_diag_srv_instances,
+                           need_inst_upload ? 1 : 0,
+                           total_inst_bytes);
+        }
+        ++dx11_skin_diag_logs;
     }
 }
 
