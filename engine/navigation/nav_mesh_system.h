@@ -64,6 +64,9 @@ public:
     /// 是否已构建可用的 navmesh
     bool IsReady() const;
 
+    /// 获取已构建 navmesh 的多边形数量（未构建返回 0）
+    int GetPolyCount() const;
+
     // ---- 构建 ----
 
     /**

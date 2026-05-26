@@ -27,11 +27,18 @@ namespace dse::editor {
 
 namespace {
 
+enum class BuildPlatform { Windows, Linux, Web };
+enum class BuildConfig { Release, Debug };
+
 struct BuildState {
     char output_dir[512] = {};
     char game_title[128] = "My Game";
     bool pack_all_data = true;         // true = pack entire data/, false = scene-referenced only
     bool include_scene = true;
+    BuildPlatform platform = BuildPlatform::Windows;
+    BuildConfig config = BuildConfig::Release;
+    bool compress_pak = true;
+    char icon_path[512] = {};
 
     // Build progress
     std::atomic<bool> building{false};
@@ -292,9 +299,39 @@ void DrawBuildGameDialog() {
             }
         }
 
+        // Platform
+        ImGui::Text("Platform:  ");
+        ImGui::SameLine();
+        const char* platform_names[] = {"Windows", "Linux", "Web (Emscripten)"};
+        int plat_idx = static_cast<int>(state.platform);
+        ImGui::SetNextItemWidth(160);
+        if (ImGui::Combo("##platform", &plat_idx, platform_names, 3)) {
+            state.platform = static_cast<BuildPlatform>(plat_idx);
+        }
+
+        // Config
+        ImGui::Text("Config:    ");
+        ImGui::SameLine();
+        const char* config_names[] = {"Release", "Debug"};
+        int cfg_idx = static_cast<int>(state.config);
+        ImGui::SetNextItemWidth(100);
+        if (ImGui::Combo("##config", &cfg_idx, config_names, 2)) {
+            state.config = static_cast<BuildConfig>(cfg_idx);
+        }
+
         ImGui::Checkbox("Pack all data/", &state.pack_all_data);
         ImGui::SameLine();
-        ImGui::TextDisabled("(uncheck = scene-referenced only)");
+        ImGui::Checkbox("Compress", &state.compress_pak);
+
+        // Icon (Windows only)
+        if (state.platform == BuildPlatform::Windows) {
+            ImGui::Text("Icon (.ico):");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(340);
+            ImGui::InputText("##icon", state.icon_path, sizeof(state.icon_path));
+            ImGui::SameLine();
+            ImGui::TextDisabled("(optional)");
+        }
 
         ImGui::EndDisabled();
 

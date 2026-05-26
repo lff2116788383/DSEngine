@@ -1,4 +1,5 @@
 #include "editor_hierarchy_panel.h"
+#include "editor_entity_snapshot.h"
 
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
@@ -21,10 +22,12 @@
 #include <glm/geometric.hpp>
 #include <string>
 #include <algorithm>
-#include "imgui_internal.h"
 #include <cctype>
 #include <cstring>
 #include <vector>
+#include <optional>
+#include <memory>
+#include <unordered_set>
 #include <filesystem>
 
 namespace dse::editor {
@@ -88,6 +91,51 @@ std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity par
     return children;
 }
 
+// Pre-computed set of entities visible under current search filter (includes ancestors of matches)
+static std::unordered_set<entt::entity> s_visible_entities;
+static std::string s_last_computed_filter;
+static size_t s_last_computed_entity_count = 0;
+
+void ComputeVisibleEntities(entt::registry& registry) {
+    std::string current_filter = s_search_filter;
+    size_t entity_count = registry.storage<entt::entity>().size();
+    if (current_filter == s_last_computed_filter && entity_count == s_last_computed_entity_count)
+        return; // No change
+    s_last_computed_filter = current_filter;
+    s_last_computed_entity_count = entity_count;
+    s_visible_entities.clear();
+    if (current_filter.empty()) return; // All visible when no filter
+
+    // First pass: find all directly matching entities
+    std::vector<entt::entity> matching;
+    for (auto entity : registry.storage<entt::entity>()) {
+        if (!registry.valid(entity)) continue;
+        std::string name = "Entity";
+        if (registry.all_of<EditorNameComponent>(entity))
+            name = registry.get<EditorNameComponent>(entity).name;
+        if (MatchesSearchFilter(name)) {
+            matching.push_back(entity);
+            s_visible_entities.insert(entity);
+        }
+    }
+    // Second pass: propagate visibility to ancestors
+    for (auto entity : matching) {
+        entt::entity current = entity;
+        while (registry.all_of<ParentComponent>(current)) {
+            entt::entity parent = registry.get<ParentComponent>(current).parent;
+            if (parent == entt::null || !registry.valid(parent)) break;
+            if (s_visible_entities.count(parent)) break; // Already processed
+            s_visible_entities.insert(parent);
+            current = parent;
+        }
+    }
+}
+
+bool IsEntityVisibleInSearch(entt::entity entity) {
+    if (s_search_filter[0] == '\0') return true;
+    return s_visible_entities.count(entity) > 0;
+}
+
 void DrawEntityNode(EditorContext& context, entt::entity entity) {
     if (!context.registry.valid(entity)) return;
 
@@ -96,7 +144,7 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
         entity_name = context.registry.get<EditorNameComponent>(entity).name;
     }
 
-    if (!MatchesSearchFilter(entity_name)) return;
+    if (!IsEntityVisibleInSearch(entity)) return;
 
     // Prefab instance suffix
     bool is_prefab = IsPrefabInstance(context.registry, entity);
@@ -227,11 +275,19 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
                     } else {
                         context.registry.emplace<ParentComponent>(dragged, entity);
                     }
-                    // Undo support
+                    // Undo/Redo support
                     auto& reg = context.registry;
+                    entt::entity new_parent = entity;
                     GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                         "Reparent Entity",
-                        []{},
+                        [&reg, dragged, new_parent]() {
+                            if (!reg.valid(dragged)) return;
+                            if (reg.all_of<ParentComponent>(dragged)) {
+                                reg.get<ParentComponent>(dragged).parent = new_parent;
+                            } else {
+                                reg.emplace<ParentComponent>(dragged, new_parent);
+                            }
+                        },
                         [&reg, dragged, old_parent, old_sibling]() {
                             if (!reg.valid(dragged)) return;
                             if (old_parent == entt::null) {
@@ -313,7 +369,23 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
                         auto& reg = context.registry;
                         GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                             "Reorder Entity",
-                            []{},
+                            [&reg, dragged, target_parent, target_sibling]() {
+                                if (!reg.valid(dragged)) return;
+                                if (target_parent != entt::null) {
+                                    if (reg.all_of<ParentComponent>(dragged)) {
+                                        reg.get<ParentComponent>(dragged).parent = target_parent;
+                                    } else {
+                                        reg.emplace<ParentComponent>(dragged, target_parent);
+                                    }
+                                } else {
+                                    if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
+                                }
+                                if (reg.all_of<SiblingIndexComponent>(dragged)) {
+                                    reg.get<SiblingIndexComponent>(dragged).index = target_sibling;
+                                } else {
+                                    reg.emplace<SiblingIndexComponent>(dragged, target_sibling);
+                                }
+                            },
                             [&reg, dragged, old_parent, old_sibling]() {
                                 if (!reg.valid(dragged)) return;
                                 if (old_parent == entt::null) {
@@ -353,6 +425,9 @@ void DrawHierarchyPanel(EditorContext& context) {
     // Search bar
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##hierarchy_search", MDI_ICON_MAGNIFY "  Search entities...", s_search_filter, sizeof(s_search_filter));
+
+    // Pre-compute visible entity set for search (O(N) once per frame)
+    ComputeVisibleEntities(context.registry);
 
     ImGui::Separator();
 
@@ -445,13 +520,24 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.selected_entity = new_ent;
             EditorLog(LogLevel::Info, "Created entity: New Entity");
             auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
             auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Create Empty Entity",
-                []{},
-                [&world_ref, &sel_ref, new_ent]() {
-                    world_ref.DestroyEntity(new_ent);
-                    if (sel_ref == new_ent) sel_ref = entt::null;
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    auto ent = world_ref.CreateEntity();
+                    reg_ref.emplace<EditorNameComponent>(ent, "New Entity");
+                    reg_ref.emplace<TransformComponent>(ent);
+                    sel_ref = ent;
+                    *tracked = ent;
+                },
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
                 }), false);
         }
         if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
@@ -460,6 +546,28 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.registry.emplace<TransformComponent>(new_ent);
             context.registry.emplace<UIRendererComponent>(new_ent);
             context.selected_entity = new_ent;
+            EditorLog(LogLevel::Info, "Created entity: New UI Element");
+            auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
+            auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                "Create UI Entity",
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    auto ent = world_ref.CreateEntity();
+                    reg_ref.emplace<EditorNameComponent>(ent, "New UI Element");
+                    reg_ref.emplace<TransformComponent>(ent);
+                    reg_ref.emplace<UIRendererComponent>(ent);
+                    sel_ref = ent;
+                    *tracked = ent;
+                },
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
+                }), false);
         }
         if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
             if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only))  CreateEntity3DCube(context);
@@ -506,24 +614,30 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (context.registry.all_of<EditorNameComponent>(to_delete)) {
                 deleted_name = context.registry.get<EditorNameComponent>(to_delete).name;
             }
-            TransformComponent deleted_transform{};
-            if (context.registry.all_of<TransformComponent>(to_delete)) {
-                deleted_transform = context.registry.get<TransformComponent>(to_delete);
-            }
+            // Full component snapshot for complete Undo restoration
+            auto snapshot = std::make_shared<EntitySnapshot>(
+                EntitySnapshot::Capture(context.registry, to_delete));
+
             context.world.DestroyEntity(to_delete);
             context.selected_entity = entt::null;
             EditorLog(LogLevel::Info, "Deleted entity: " + deleted_name);
             auto& world_ref = context.world;
             auto& reg_ref = context.registry;
             auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(entt::null);
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Delete Entity: " + deleted_name,
-                []{},
-                [&world_ref, &reg_ref, &sel_ref, deleted_name, deleted_transform]() {
-                    auto restored = world_ref.CreateEntity();
-                    reg_ref.emplace<EditorNameComponent>(restored, deleted_name);
-                    reg_ref.emplace<TransformComponent>(restored, deleted_transform);
+                [&world_ref, &reg_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null && reg_ref.valid(*tracked)) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
+                },
+                [&world_ref, &reg_ref, &sel_ref, tracked, snapshot]() {
+                    auto restored = snapshot->Restore(world_ref, reg_ref);
                     sel_ref = restored;
+                    *tracked = restored;
                 }), false);
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
@@ -621,19 +735,31 @@ void DrawHierarchyPanel(EditorContext& context) {
             }
             context.selected_entity = new_ent;
             EditorLog(LogLevel::Info, "Duplicated entity");
+            // Capture snapshot of the duplicate for reliable Redo
+            auto dup_snapshot = std::make_shared<EntitySnapshot>(
+                EntitySnapshot::Capture(context.registry, new_ent));
             auto& world_ref = context.world;
+            auto& reg_ref = context.registry;
             auto& sel_ref = context.selected_entity;
+            auto tracked = std::make_shared<entt::entity>(new_ent);
             GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
                 "Duplicate Entity",
-                []{},
-                [&world_ref, &sel_ref, new_ent]() {
-                    world_ref.DestroyEntity(new_ent);
-                    if (sel_ref == new_ent) sel_ref = entt::null;
+                [&world_ref, &reg_ref, &sel_ref, tracked, dup_snapshot]() {
+                    auto ent = dup_snapshot->Restore(world_ref, reg_ref);
+                    sel_ref = ent;
+                    *tracked = ent;
+                },
+                [&world_ref, &sel_ref, tracked]() {
+                    if (*tracked != entt::null) {
+                        world_ref.DestroyEntity(*tracked);
+                        if (sel_ref == *tracked) sel_ref = entt::null;
+                        *tracked = entt::null;
+                    }
                 }), false);
         }
         if (context.read_only) {
             ImGui::Separator();
-            ImGui::TextDisabled("Play 模式下已禁用层级创建、删除、复制操作。");
+            ImGui::TextDisabled("Remote: 可选择实体查看/编辑属性，结构操作已禁用");
         }
         ImGui::EndPopup();
     }

@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <queue>
+#include <cstdlib>
 
 namespace dse::editor {
 
@@ -97,6 +98,63 @@ static void FloodFillTiles(TilemapComponent& tm, int cx, int cy, int fill_id) {
     }
 }
 
+// Auto-tile: resolve a cell's tile id based on 4-neighbour bitmask
+static void AutoTileResolve(TilemapComponent& tm, int cx, int cy, const AutoTileRule& rule) {
+    if (!rule.enabled) return;
+    int idx = cy * tm.width + cx;
+    // Only resolve tiles belonging to the auto-tile set
+    if (tm.tiles[idx] == 0) return;
+    int base = rule.base_tile_id;
+    bool belongs = false;
+    for (int m = 0; m < 16; m++) {
+        if (tm.tiles[idx] == rule.variant_tiles[m] || tm.tiles[idx] == base) { belongs = true; break; }
+    }
+    if (!belongs) return;
+
+    auto is_same = [&](int x, int y) -> bool {
+        if (x < 0 || x >= tm.width || y < 0 || y >= tm.height) return false;
+        int tid = tm.tiles[y * tm.width + x];
+        if (tid == base) return true;
+        for (int m = 0; m < 16; m++) { if (tid == rule.variant_tiles[m]) return true; }
+        return false;
+    };
+    int mask = 0;
+    if (is_same(cx, cy - 1)) mask |= 1; // Up
+    if (is_same(cx + 1, cy)) mask |= 2; // Right
+    if (is_same(cx, cy + 1)) mask |= 4; // Down
+    if (is_same(cx - 1, cy)) mask |= 8; // Left
+    int resolved = rule.variant_tiles[mask];
+    if (resolved > 0) tm.tiles[idx] = resolved;
+}
+
+static void AutoTileResolveNeighbours(TilemapComponent& tm, int cx, int cy, const AutoTileRule& rule) {
+    if (!rule.enabled) return;
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            int nx = cx + dx, ny = cy + dy;
+            if (nx >= 0 && nx < tm.width && ny >= 0 && ny < tm.height) {
+                AutoTileResolve(tm, nx, ny, rule);
+            }
+        }
+    }
+}
+
+// Bresenham line
+static std::vector<std::pair<int,int>> BresenhamLine(int x0, int y0, int x1, int y1) {
+    std::vector<std::pair<int,int>> pts;
+    int dx = std::abs(x1 - x0), dy = std::abs(y1 - y0);
+    int sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1;
+    int err = dx - dy;
+    while (true) {
+        pts.push_back({x0, y0});
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 <  dx) { err += dx; y0 += sy; }
+    }
+    return pts;
+}
+
 // ---------------------------------------------------------------------------
 // Panel drawing
 // ---------------------------------------------------------------------------
@@ -132,26 +190,44 @@ void DrawTilemapEditorPanel(entt::registry& registry, entt::entity selected_enti
         ImGui::Separator();
 
         // --- Brush tools ---
-        const bool is_paint = state.active_tool == TilemapBrushTool::Paint;
-        const bool is_erase = state.active_tool == TilemapBrushTool::Erase;
-        const bool is_fill  = state.active_tool == TilemapBrushTool::FloodFill;
-
-        if (is_paint) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.55f, 0.8f, 1.0f));
-        if (ImGui::Button("Paint", ImVec2(70, 24))) state.active_tool = TilemapBrushTool::Paint;
-        if (is_paint) ImGui::PopStyleColor();
-
-        ImGui::SameLine();
-        if (is_erase) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-        if (ImGui::Button("Erase", ImVec2(70, 24))) state.active_tool = TilemapBrushTool::Erase;
-        if (is_erase) ImGui::PopStyleColor();
-
-        ImGui::SameLine();
-        if (is_fill) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.7f, 0.4f, 1.0f));
-        if (ImGui::Button("Fill", ImVec2(70, 24))) state.active_tool = TilemapBrushTool::FloodFill;
-        if (is_fill) ImGui::PopStyleColor();
+        auto ToolButton = [&](const char* label, TilemapBrushTool tool, ImVec4 color) {
+            bool active = (state.active_tool == tool);
+            if (active) ImGui::PushStyleColor(ImGuiCol_Button, color);
+            if (ImGui::Button(label, ImVec2(55, 24))) state.active_tool = tool;
+            if (active) ImGui::PopStyleColor();
+            ImGui::SameLine();
+        };
+        ToolButton("Paint", TilemapBrushTool::Paint, ImVec4(0.3f, 0.55f, 0.8f, 1));
+        ToolButton("Erase", TilemapBrushTool::Erase, ImVec4(0.8f, 0.3f, 0.3f, 1));
+        ToolButton("Fill",  TilemapBrushTool::FloodFill, ImVec4(0.3f, 0.7f, 0.4f, 1));
+        ToolButton("Line",  TilemapBrushTool::Line, ImVec4(0.6f, 0.5f, 0.2f, 1));
+        ToolButton("Rect",  TilemapBrushTool::Rectangle, ImVec4(0.5f, 0.3f, 0.7f, 1));
+        ImGui::NewLine();
 
         ImGui::SetNextItemWidth(120);
         ImGui::SliderInt("Brush Size", &state.brush_size, 1, 5);
+
+        // Auto-tile toggle
+        ImGui::Checkbox("Auto Tile", &state.auto_tile_rule.enabled);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Config##at")) {
+            state.show_auto_tile_config = !state.show_auto_tile_config;
+        }
+        if (state.show_auto_tile_config) {
+            ImGui::Indent();
+            ImGui::SetNextItemWidth(80);
+            ImGui::InputInt("Base ID", &state.auto_tile_rule.base_tile_id);
+            ImGui::Text("4-bit mask: U=1 R=2 D=4 L=8");
+            for (int m = 0; m < 16; m++) {
+                ImGui::PushID(m);
+                ImGui::SetNextItemWidth(50);
+                char mlabel[16]; snprintf(mlabel, sizeof(mlabel), "%X", m);
+                ImGui::InputInt(mlabel, &state.auto_tile_rule.variant_tiles[m], 0);
+                if ((m & 3) != 3) ImGui::SameLine();
+                ImGui::PopID();
+            }
+            ImGui::Unindent();
+        }
 
         ImGui::Separator();
 
@@ -160,7 +236,6 @@ void DrawTilemapEditorPanel(entt::registry& registry, entt::entity selected_enti
 
         const int palette_cols = tm.tileset_cols > 0 ? tm.tileset_cols : 8;
         const int palette_rows = tm.tileset_rows > 0 ? tm.tileset_rows : 8;
-        const int total_tiles = palette_cols * palette_rows;
         const float cell_size = 28.0f;
         const float spacing = 2.0f;
 
@@ -234,6 +309,16 @@ void DrawTilemapEditorPanel(entt::registry& registry, entt::entity selected_enti
         }
         if (ImGui::Button("Clear All Tiles")) {
             std::fill(tm.tiles.begin(), tm.tiles.end(), 0);
+            tm.dirty = true;
+        }
+
+        // Random scatter button
+        ImGui::SameLine();
+        if (ImGui::Button("Random Scatter")) {
+            for (auto& t : tm.tiles) {
+                if (t == 0) continue; // skip empty
+                t = 1 + (std::rand() % (tm.tileset_cols * tm.tileset_rows));
+            }
             tm.dirty = true;
         }
 
@@ -398,8 +483,58 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
     int half_brush = state.brush_size / 2;
     bool changed = false;
 
+    bool is_line = (state.active_tool == TilemapBrushTool::Line);
+    bool is_rect = (state.active_tool == TilemapBrushTool::Rectangle);
+
+    if (is_line || is_rect) {
+        // Drag-based tools: record start on click, apply on release
+        if (mouse_clicked) {
+            state.drag_started = true;
+            state.drag_start_cx = cx;
+            state.drag_start_cy = cy;
+        }
+        if (state.drag_started && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            state.drag_started = false;
+            int paint_id = state.selected_tile_id;
+            if (is_line) {
+                auto pts = BresenhamLine(state.drag_start_cx, state.drag_start_cy, cx, cy);
+                for (auto& [lx, ly] : pts) {
+                    if (lx >= 0 && lx < tm.width && ly >= 0 && ly < tm.height) {
+                        tm.tiles[ly * tm.width + lx] = paint_id;
+                        AutoTileResolveNeighbours(tm, lx, ly, state.auto_tile_rule);
+                        changed = true;
+                    }
+                }
+            } else { // Rectangle
+                int x0 = (std::min)(state.drag_start_cx, cx);
+                int x1 = (std::max)(state.drag_start_cx, cx);
+                int y0 = (std::min)(state.drag_start_cy, cy);
+                int y1 = (std::max)(state.drag_start_cy, cy);
+                for (int ry = y0; ry <= y1; ry++) {
+                    for (int rx = x0; rx <= x1; rx++) {
+                        if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
+                            tm.tiles[ry * tm.width + rx] = paint_id;
+                            changed = true;
+                        }
+                    }
+                }
+                // Auto-tile resolve for entire rect + border
+                if (state.auto_tile_rule.enabled) {
+                    for (int ry = y0 - 1; ry <= y1 + 1; ry++) {
+                        for (int rx = x0 - 1; rx <= x1 + 1; rx++) {
+                            if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
+                                AutoTileResolve(tm, rx, ry, state.auto_tile_rule);
+                            }
+                        }
+                    }
+                }
+            }
+            if (changed) tm.dirty = true;
+        }
+        return true;
+    }
+
     if (state.active_tool == TilemapBrushTool::FloodFill) {
-        // Only on click, not drag
         if (!mouse_clicked) return true;
         FloodFillTiles(tm, cx, cy, state.selected_tile_id);
         if (state.tiles_snapshot != tm.tiles) {
@@ -420,7 +555,10 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
                 }
             }
         }
-        if (changed) tm.dirty = true;
+        if (changed) {
+            tm.dirty = true;
+            AutoTileResolveNeighbours(tm, cx, cy, state.auto_tile_rule);
+        }
     }
 
     return true;

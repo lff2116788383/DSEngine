@@ -1,7 +1,5 @@
 #include "editor_shell.h"
 
-#include <cstdlib>
-
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -22,6 +20,8 @@
 #include "editor_ai_config.h"
 #include "engine/dse_version.h"
 #include "editor_locale.h"
+#include "editor_scene_camera.h"
+#include "engine/ecs/transform.h"
 
 #include <filesystem>
 
@@ -47,6 +47,7 @@ void SetCurrentScenePath(const std::string& path) {
 namespace {
 
 static bool s_layout_dirty = true;
+static bool s_exit_requested = false;
 
 void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
     if (!s_layout_dirty) {
@@ -87,6 +88,14 @@ void ResetEditorLayout() {
     s_layout_dirty = true;
 }
 
+void RequestExit() {
+    s_exit_requested = true;
+}
+
+bool IsExitRequested() {
+    return s_exit_requested;
+}
+
 void BeginEditorShell() {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -99,7 +108,7 @@ void BeginEditorShell() {
     window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("DockSpace Demo", nullptr, window_flags);
+    ImGui::Begin("DSEngineRoot", nullptr, window_flags);
     ImGui::PopStyleVar();
     ImGui::PopStyleVar(2);
 
@@ -182,7 +191,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 EditorLog(LogLevel::Info, "Scene saved: " + current_path);
             }
         }
-        if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, editable)) {
+        if (ImGui::MenuItem(T("Save Scene As..."), "Ctrl+Shift+S", false, editable)) {
             std::string path = SaveSceneFileDialog();
             if (!path.empty()) {
                 SaveScene(ctx.registry, path);
@@ -255,7 +264,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {
-            std::exit(0);
+            RequestExit();
         }
         ImGui::EndMenu();
     }
@@ -273,31 +282,31 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             undo_mgr.Redo();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Cut", "Ctrl+X", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Cut"), "Ctrl+X", false, has_sel && editable)) {
             CutSelectedEntity(ctx);
         }
-        if (ImGui::MenuItem("Copy", "Ctrl+C", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Copy"), "Ctrl+C", false, has_sel && editable)) {
             CopySelectedEntity(ctx);
         }
-        if (ImGui::MenuItem("Paste", "Ctrl+V", false, HasEntityClipboard() && editable)) {
+        if (ImGui::MenuItem(T("Paste"), "Ctrl+V", false, HasEntityClipboard() && editable)) {
             PasteEntity(ctx);
         }
-        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Duplicate"), "Ctrl+D", false, has_sel && editable)) {
             DuplicateSelectedEntity(ctx);
         }
-        if (ImGui::MenuItem("Delete", "Del", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Delete"), "Del", false, has_sel && editable)) {
             DeleteSelectedEntity(ctx);
             SelectionManager::Get().Clear();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Select All", "Ctrl+A", false, editable)) {
+        if (ImGui::MenuItem(T("Select All"), "Ctrl+A", false, editable)) {
             auto& sel = SelectionManager::Get();
             sel.Clear();
             auto view = ctx.registry.view<EditorNameComponent>();
             for (auto e : view) sel.Add(e);
             if (!sel.IsEmpty()) ctx.selected_entity = sel.GetPrimary();
         }
-        if (ImGui::MenuItem("Deselect All", nullptr, false, editable)) {
+        if (ImGui::MenuItem(T("Deselect All"), nullptr, false, editable)) {
             SelectionManager::Get().Clear();
             ctx.selected_entity = entt::null;
         }
@@ -344,16 +353,19 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             CreateEntity3DCamera(ctx);
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Duplicate"), "Ctrl+D", false, has_sel && editable)) {
             DuplicateSelectedEntity(ctx);
         }
-        if (ImGui::MenuItem("Delete", "Del", false, has_sel && editable)) {
+        if (ImGui::MenuItem(T("Delete"), "Del", false, has_sel && editable)) {
             DeleteSelectedEntity(ctx);
             SelectionManager::Get().Clear();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Focus Selected", "F", false, has_sel)) {
-            // Handled via ProcessShortcuts
+        if (ImGui::MenuItem(T("Focus Selected"), "F", false, has_sel)) {
+            if (ctx.registry.all_of<TransformComponent>(ctx.selected_entity)) {
+                auto& tf = ctx.registry.get<TransformComponent>(ctx.selected_entity);
+                FocusEditorCamera(GetEditorCamera(), tf.position);
+            }
         }
         ImGui::EndMenu();
     }
@@ -361,11 +373,11 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     // ─── View ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("View"))) {
         bool grid_on = GetShowGrid();
-        if (ImGui::MenuItem("Show Grid", nullptr, grid_on)) {
+        if (ImGui::MenuItem(T("Show Grid"), nullptr, grid_on)) {
             SetShowGrid(!grid_on);
         }
         ImGui::Separator();
-        ImGui::TextDisabled("Snap Settings");
+        ImGui::TextDisabled(T("Snap Settings"));
         {
             float snap_t = GetSnapTranslate();
             ImGui::SetNextItemWidth(100);
@@ -426,6 +438,14 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, panels->multi_viewport);
             if (panels->anim_state_machine)
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
+            if (panels->lua_debugger)
+                ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, panels->lua_debugger);
+            if (panels->streaming_debug)
+                ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, panels->streaming_debug);
+            if (panels->curve_editor)
+                ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, panels->curve_editor);
+            if (panels->visual_script)
+                ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, panels->visual_script);
         }
         ImGui::Separator();
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {

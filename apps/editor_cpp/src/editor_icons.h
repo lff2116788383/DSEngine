@@ -16,6 +16,8 @@
 #define MDI_ICON_STOP                   "\xef\x81\x8d" // U+F04D fa-stop
 #define MDI_ICON_PAUSE                  "\xef\x81\x8c" // U+F04C fa-pause
 #define MDI_ICON_SKIP_NEXT              "\xef\x81\x91" // U+F051 fa-forward-step
+#define MDI_ICON_ARROW_DOWN             "\xef\x81\xa3" // U+F063 fa-arrow-down
+#define MDI_ICON_ARROW_UP               "\xef\x81\xa2" // U+F062 fa-arrow-up
 
 // Hierarchy entity type icons
 #define MDI_ICON_CUBE_OUTLINE           "\xef\x86\xb2" // U+F1B2 fa-cube
@@ -93,3 +95,6 @@
 #define MDI_ICON_SPOTLIGHT_BEAM         "\xef\x83\xab" // U+F0EB fa-lightbulb (reuse)
 #define MDI_ICON_WHITE_BALANCE_SUNNY    "\xef\x86\x85" // U+F185 fa-sun
 #define MDI_ICON_SKIP_PREVIOUS          "\xef\x81\x88" // U+F048 fa-backward-step
+#define MDI_ICON_CLOUD_DOWNLOAD         "\xef\x83\xad" // U+F0ED fa-cloud-arrow-down
+#define MDI_ICON_CHART_LINE             "\xef\x88\x81" // U+F201 fa-chart-line
+#define MDI_ICON_SITEMAP                "\xef\x83\xa8" // U+F0E8 fa-sitemap

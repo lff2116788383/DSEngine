@@ -153,6 +153,12 @@ void DrawMaterialPanel(EditorContext& ctx) {
         char buf[128];
         if (texture_handle != 0) {
             auto it = s_handle_names.find(texture_handle);
+            if (it == s_handle_names.end() && asset_mgr) {
+                std::string path = asset_mgr->FindTexturePathByHandle(texture_handle);
+                if (!path.empty())
+                    s_handle_names[texture_handle] = std::filesystem::path(path).filename().string();
+                it = s_handle_names.find(texture_handle);
+            }
             if (it != s_handle_names.end()) {
                 snprintf(buf, sizeof(buf), "%s", it->second.c_str());
             } else {
@@ -180,9 +186,19 @@ void DrawMaterialPanel(EditorContext& ctx) {
                 if (is_image && asset_mgr) {
                     auto tex = asset_mgr->LoadTexture(rel_path);
                     if (tex) {
-                        texture_handle = tex->GetHandle();
-                        s_handle_names[texture_handle] =
+                        unsigned int old_handle = texture_handle;
+                        unsigned int new_handle = tex->GetHandle();
+                        texture_handle = new_handle;
+                        s_handle_names[new_handle] =
                             std::filesystem::path(rel_path).filename().string();
+                        auto* reg = &registry;
+                        size_t offset = (size_t)((char*)&texture_handle - (char*)&mesh);
+                        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<unsigned int>>(
+                            "Material Texture", old_handle, new_handle,
+                            [reg, entity, offset](const unsigned int& v) {
+                                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                                    *reinterpret_cast<unsigned int*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                            }), false);
                         tab_mgr.MarkDirty();
                     }
                 }
@@ -193,8 +209,17 @@ void DrawMaterialPanel(EditorContext& ctx) {
         ImGui::SameLine();
         if (texture_handle != 0) {
             if (ImGui::SmallButton("X")) {
+                unsigned int old_handle = texture_handle;
                 s_handle_names.erase(texture_handle);
                 texture_handle = 0;
+                auto* reg = &registry;
+                size_t offset = (size_t)((char*)&texture_handle - (char*)&mesh);
+                undo_mgr.Execute(std::make_unique<PropertyChangeCommand<unsigned int>>(
+                    "Clear Material Texture", old_handle, 0u,
+                    [reg, entity, offset](const unsigned int& v) {
+                        if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                            *reinterpret_cast<unsigned int*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                    }), false);
                 tab_mgr.MarkDirty();
             }
         } else {
@@ -220,19 +245,47 @@ void DrawMaterialPanel(EditorContext& ctx) {
     if (mesh.shader_variant == "MESH_LIT") current_variant = 1;
     else if (mesh.shader_variant == "MESH_PBR") current_variant = 2;
     if (ImGui::Combo("Shader", &current_variant, shader_variants, 3)) {
+        std::string old_variant = mesh.shader_variant;
         mesh.shader_variant = shader_variants[current_variant];
+        std::string new_variant = mesh.shader_variant;
+        auto* reg = &registry;
+        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<std::string>>(
+            "Material Shader", old_variant, new_variant,
+            [reg, entity](const std::string& v) {
+                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                    reg->get<dse::MeshRendererComponent>(entity).shader_variant = v;
+            }), false);
         tab_mgr.MarkDirty();
     }
 
-    if (ImGui::Checkbox("Alpha Test", &mesh.material_alpha_test)) tab_mgr.MarkDirty();
+    auto UndoBool = [&](const char* desc, bool& field, bool old_val) {
+        bool new_val = field;
+        auto* reg = &registry;
+        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<bool>>(
+            desc, old_val, new_val,
+            [reg, entity, offset = (size_t)((char*)&field - (char*)&mesh)](const bool& v) {
+                if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
+                    *reinterpret_cast<bool*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+            }), false);
+        tab_mgr.MarkDirty();
+    };
+
+    { bool old_v = mesh.material_alpha_test;
+    if (ImGui::Checkbox("Alpha Test", &mesh.material_alpha_test)) UndoBool("Material Alpha Test", mesh.material_alpha_test, old_v); }
     if (mesh.material_alpha_test) {
-        if (ImGui::SliderFloat("Alpha Cutoff", &mesh.material_alpha_cutoff, 0.0f, 1.0f)) tab_mgr.MarkDirty();
+        { float old_v = mesh.material_alpha_cutoff;
+        if (ImGui::SliderFloat("Alpha Cutoff", &mesh.material_alpha_cutoff, 0.0f, 1.0f)) UndoFloat("Material Alpha Cutoff", mesh.material_alpha_cutoff, old_v); }
     }
-    if (ImGui::Checkbox("Double Sided", &mesh.material_double_sided)) tab_mgr.MarkDirty();
-    if (ImGui::Checkbox("Receive Shadow", &mesh.receive_shadow)) tab_mgr.MarkDirty();
-    if (ImGui::Checkbox("Depth Test", &mesh.depth_test_enabled)) tab_mgr.MarkDirty();
-    if (ImGui::Checkbox("Depth Write", &mesh.depth_write_enabled)) tab_mgr.MarkDirty();
-    if (ImGui::Checkbox("Visible", &mesh.visible)) tab_mgr.MarkDirty();
+    { bool old_v = mesh.material_double_sided;
+    if (ImGui::Checkbox("Double Sided", &mesh.material_double_sided)) UndoBool("Material Double Sided", mesh.material_double_sided, old_v); }
+    { bool old_v = mesh.receive_shadow;
+    if (ImGui::Checkbox("Receive Shadow", &mesh.receive_shadow)) UndoBool("Material Receive Shadow", mesh.receive_shadow, old_v); }
+    { bool old_v = mesh.depth_test_enabled;
+    if (ImGui::Checkbox("Depth Test", &mesh.depth_test_enabled)) UndoBool("Material Depth Test", mesh.depth_test_enabled, old_v); }
+    { bool old_v = mesh.depth_write_enabled;
+    if (ImGui::Checkbox("Depth Write", &mesh.depth_write_enabled)) UndoBool("Material Depth Write", mesh.depth_write_enabled, old_v); }
+    { bool old_v = mesh.visible;
+    if (ImGui::Checkbox("Visible", &mesh.visible)) UndoBool("Material Visible", mesh.visible, old_v); }
 
     ImGui::End();
 }

@@ -269,7 +269,9 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
     } else if (state.type == ImportType::Texture) {
         ImGui::Text("Texture Import Options:");
         ImGui::Checkbox("Generate Mipmaps", &state.generate_mipmaps);
+        ImGui::BeginDisabled();
         ImGui::Checkbox("Compress (BCn)", &state.compress_texture);
+        ImGui::EndDisabled();
         ImGui::TextDisabled("Note: Compression is not yet implemented.");
     } else if (state.type == ImportType::Audio) {
         ImGui::Text("Audio Import Options:");

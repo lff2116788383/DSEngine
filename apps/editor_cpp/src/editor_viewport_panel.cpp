@@ -12,6 +12,8 @@
 #include "editor_shared_components.h"
 #include "editor_console_panel.h"
 #include "editor_asset_db.h"
+#include "editor_os_drop.h"
+#include "editor_asset_importer.h"
 #include "editor_tilemap_panel.h"
 #include "editor_terrain_panel.h"
 #include "editor_audio_panel.h"
@@ -25,7 +27,17 @@
 #include "editor_icons.h"
 #include "editor_locale.h"
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_3d_physics.h"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 #include <glad/gl.h>
 #include <algorithm>
 #include <cmath>
@@ -965,9 +977,18 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             glm::mat4 centroid_matrix = glm::translate(glm::mat4(1.0f), centroid);
 
             ImGuizmo::OPERATION gizmo_op = ImGuizmo::TRANSLATE;
-            if (current_gizmo_operation == 0) gizmo_op = ImGuizmo::TRANSLATE;
-            else if (current_gizmo_operation == 1) gizmo_op = ImGuizmo::TRANSLATE; // multi-select only supports translate
-            else if (current_gizmo_operation == 2) gizmo_op = ImGuizmo::TRANSLATE;
+            if (current_gizmo_operation != 0 && current_gizmo_operation != -1) {
+                // Multi-select only supports translate; show overlay hint
+                ImDrawList* hint_dl = ImGui::GetWindowDrawList();
+                const char* hint_text = T("Multi-select: Translate only");
+                ImVec2 hint_size = ImGui::CalcTextSize(hint_text);
+                float hint_x = window_pos.x + scene_panel_size.x * 0.5f - hint_size.x * 0.5f;
+                float hint_y = window_pos.y + scene_panel_size.y - 30.0f;
+                hint_dl->AddRectFilled(ImVec2(hint_x - 4, hint_y - 2),
+                    ImVec2(hint_x + hint_size.x + 4, hint_y + hint_size.y + 2),
+                    IM_COL32(40, 40, 40, 200), 3.0f);
+                hint_dl->AddText(ImVec2(hint_x, hint_y), IM_COL32(255, 200, 80, 255), hint_text);
+            }
 
             ImGuizmo::MODE gizmo_mode = ImGuizmo::WORLD;
 
@@ -1234,6 +1255,81 @@ void DrawSceneViewportPanel(EditorContext& ctx,
         ImGui::EndDragDropTarget();
     }
 
+    // ─── OS file drop: auto-import external assets and create entities ────────
+    if (!ctx.read_only && HasPendingOsDrop()) {
+        ImVec2 wp = ImGui::GetWindowPos();
+        ImVec2 ws = ImGui::GetWindowSize();
+        OsDropEvent drop_evt;
+        // Peek at mouse position from ImGui (OS drop already set it)
+        ImVec2 mpos = ImGui::GetIO().MousePos;
+        if (mpos.x >= wp.x && mpos.x <= wp.x + ws.x &&
+            mpos.y >= wp.y && mpos.y <= wp.y + ws.y) {
+            if (ConsumeOsDropEvent(drop_evt)) {
+                for (const auto& file_path : drop_evt.paths) {
+                    namespace fs = std::filesystem;
+                    fs::path src(file_path);
+                    std::string ext = src.extension().string();
+                    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+                    bool is_importable_mesh = (ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".obj");
+                    if (is_importable_mesh) {
+                        // Auto-import: run AssetBuilder to produce .dmesh
+                        AssetManager* am = ctx.engine.asset_manager();
+                        std::string asset_dir = am ? am->GetDataRoot() : "data";
+                        fs::path out_dir = fs::path(asset_dir) / "models";
+                        fs::create_directories(out_dir);
+
+                        SetAssetImporterSourcePath(file_path.c_str());
+                        // Synchronous import via AssetBuilder
+                        std::string builder_path = "AssetBuilder";
+#ifdef _WIN32
+                        {
+                            char module_path[MAX_PATH];
+                            if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
+                                fs::path exe_dir = fs::path(module_path).parent_path();
+                                fs::path candidate = exe_dir / "AssetBuilder.exe";
+                                if (fs::exists(candidate)) builder_path = candidate.string();
+                            }
+                        }
+#endif
+                        std::string cmd = "\"" + builder_path + "\" \"" + file_path + "\" --out-dir \"" + out_dir.string() + "\"";
+                        int ret = std::system(cmd.c_str());
+                        if (ret == 0) {
+                            std::string base_name = src.stem().string();
+                            fs::path dmesh_path = out_dir / (base_name + ".dmesh");
+                            if (fs::exists(dmesh_path)) {
+                                // Compute relative asset path
+                                std::string rel = fs::relative(dmesh_path, fs::current_path()).string();
+                                std::replace(rel.begin(), rel.end(), '\\', '/');
+                                // Create entity at camera focal point
+                                auto ent = ctx.world.CreateEntity();
+                                ctx.registry.emplace<EditorNameComponent>(ent, base_name);
+                                auto& tf = ctx.registry.emplace<TransformComponent>(ent);
+                                tf.position = GetEditorCamera().focal_point;
+                                tf.dirty = true;
+                                auto& mesh = ctx.registry.emplace<MeshRendererComponent>(ent);
+                                mesh.mesh_path = rel;
+                                mesh.shader_variant = "MESH_LIT";
+                                SelectionManager::Get().SetSingle(ent);
+                                ctx.selected_entity = ent;
+                                EditorLog(LogLevel::Info, "Imported & created: " + rel);
+                            }
+                        } else {
+                            EditorLog(LogLevel::Error, "AssetBuilder failed for: " + file_path);
+                            OpenAssetImporter();
+                            SetAssetImporterSourcePath(file_path.c_str());
+                        }
+                    } else {
+                        // Non-mesh: open importer dialog
+                        OpenAssetImporter();
+                        SetAssetImporterSourcePath(file_path.c_str());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     ImGui::End();
     ImGui::PopStyleVar();
 }
@@ -1384,8 +1480,8 @@ void DrawGameViewportPanel(unsigned int texture_id) {
         ImVec2 text_size = ImGui::CalcTextSize(label);
         draw_list->AddText(ImVec2(p_min.x + (game_panel_size.x - text_size.x) * 0.5f, p_min.y + (game_panel_size.y - text_size.y) * 0.5f), IM_COL32(150, 150, 150, 255), label);
     }
-    ImGui::PopStyleVar();
     ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 

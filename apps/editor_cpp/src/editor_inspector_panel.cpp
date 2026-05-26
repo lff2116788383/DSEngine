@@ -39,7 +39,14 @@ namespace {
     ImGui::NextColumn();
 
 bool IsInspectorReadOnly(const EditorContext& context) {
-    return IsEditorInPlayMode() && !context.is_2d;
+    // Remote Inspector: Play 模式下允许属性编辑（运行时调试）
+    // 结构性操作（Add/Remove Component）仍然禁止
+    (void)context;
+    return false;
+}
+
+bool IsInspectorStructuralReadOnly() {
+    return IsEditorInPlayMode();
 }
 
 // Undo helper: captures old value on IsItemActivated, pushes PropertyChangeCommand on IsItemDeactivatedAfterEdit.
@@ -129,15 +136,11 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
 }
 
 void BeginInspectorReadOnlyScope(const EditorContext& context) {
-    if (IsInspectorReadOnly(context)) {
-        ImGui::BeginDisabled(true);
-    }
+    (void)context;
 }
 
 void EndInspectorReadOnlyScope(const EditorContext& context) {
-    if (IsInspectorReadOnly(context)) {
-        ImGui::EndDisabled();
-    }
+    (void)context;
 }
 
 void MarkSpriteRendererDirty(SpriteRendererComponent& sprite) {
@@ -166,6 +169,9 @@ void DrawInspectorHeader(EditorContext& context) {
         std::strncpy(name_buf, "Entity", sizeof(name_buf) - 1);
     }
 
+    static std::string s_name_before_edit;
+    static entt::entity s_name_edit_entity = entt::null;
+
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - 70);
     if (ImGui::InputText("##Name", name_buf, sizeof(name_buf))) {
         if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
@@ -173,6 +179,22 @@ void DrawInspectorHeader(EditorContext& context) {
         } else {
             context.registry.emplace<EditorNameComponent>(context.selected_entity, name_buf);
         }
+    }
+    if (ImGui::IsItemActivated()) {
+        s_name_before_edit = name_buf;
+        s_name_edit_entity = context.selected_entity;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && s_name_edit_entity == context.selected_entity) {
+        std::string old_name = s_name_before_edit;
+        std::string new_name = name_buf;
+        entt::entity ent = context.selected_entity;
+        auto& reg = context.registry;
+        GetUndoRedoManager().Execute(std::make_unique<PropertyChangeCommand<std::string>>(
+            "Rename Entity", old_name, new_name,
+            [&reg, ent](const std::string& v) {
+                if (reg.valid(ent) && reg.all_of<EditorNameComponent>(ent))
+                    reg.get<EditorNameComponent>(ent).name = v;
+            }), true);
     }
     ImGui::PopItemWidth();
 
@@ -202,9 +224,6 @@ void DrawTransformSection(EditorContext& context) {
     // Position with colored X/Y/Z
     ImGui::Text("Position");
     float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
-    if (ImGui::IsItemActive() == false && ImGui::IsMouseClicked(0)) {
-        // Will be captured below per-widget
-    }
     ImGui::PushID("##pos_undo");
     if (DrawVec3WithColorLabels("##pos", pos)) {
         transform.position = glm::vec3(pos[0], pos[1], pos[2]);
@@ -238,14 +257,14 @@ void DrawTransformSection(EditorContext& context) {
     if (context.is_2d) {
         ImGui::Text("Rotation");
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::IsItemActivated()) {
-            s_edit_start_rot = euler;
-            s_edit_entity = current_entity;
-        }
         if (ImGui::DragFloat("##rotZ", &rot[2], 0.1f)) {
             euler.z = rot[2];
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
+        }
+        if (ImGui::IsItemActivated()) {
+            s_edit_start_rot = euler;
+            s_edit_entity = current_entity;
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
             glm::vec3 old_euler = s_edit_start_rot;
@@ -336,7 +355,7 @@ void DrawSpriteRendererSection(EditorContext& context) {
     }
 
     ImGui::Columns(2, "spriterenderer_cols", false);
-    ImGui::SetColumnWidth(0, 80.0f);
+    ImGui::SetColumnWidth(0, 110.0f);
 
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Shader");
@@ -376,7 +395,7 @@ void DrawRigidBody2DSection(EditorContext& context) {
     }
 
     ImGui::Columns(2, "rb2d_cols", false);
-    ImGui::SetColumnWidth(0, 80.0f);
+    ImGui::SetColumnWidth(0, 110.0f);
 
     const char* body_types[] = { "Static", "Kinematic", "Dynamic" };
     int current_type = static_cast<int>(rb2d.type);
@@ -672,12 +691,12 @@ void DrawSubSceneSection(EditorContext& context) {
         }
         ImGui::EndDragDropTarget();
     }
+    EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 
     if (!sub.scene_path.empty()) {
         ImGui::TextDisabled("Drag to re-order or reassign scene path.");
     }
-    EndInspectorReadOnlyScope(context);
 }
 
 REGISTER_INSPECTOR_CUSTOM(
@@ -2215,7 +2234,7 @@ void InspectorRegistry::DrawAll(EditorContext& context) {
 }
 
 void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
-    const bool read_only = IsEditorInPlayMode() && !context.is_2d;
+    const bool read_only = IsInspectorStructuralReadOnly();
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
@@ -2250,8 +2269,7 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
 }
 
 void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
-    const bool read_only = IsEditorInPlayMode() && !context.is_2d;
-    if (read_only) return;
+    if (IsInspectorStructuralReadOnly()) return;
 
     ImGui::SameLine();
     if (ImGui::Button("Remove Component", ImVec2(120, 30))) {
@@ -2292,6 +2310,17 @@ void DrawInspectorPanel(EditorContext& context) {
     RegisterAllInspectorSections();
 
     ImGui::Begin("Inspector");
+
+    if (IsEditorInPlayMode()) {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.3f, 0.15f, 0.0f, 0.8f));
+        ImGui::BeginChild("##remote_banner", ImVec2(0, 24), false);
+        ImGui::SetCursorPosX(4);
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+            MDI_ICON_ALERT "  Remote Inspector — changes will be lost on Stop");
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+    }
 
     auto& selection = SelectionManager::Get();
     if (selection.IsMultiSelect()) {

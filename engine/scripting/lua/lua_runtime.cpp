@@ -4,6 +4,7 @@
  */
 
 #include "engine/scripting/lua/lua_runtime.h"
+#include "engine/scripting/lua/lua_debugger.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
 #include "engine/ecs/script.h"
@@ -396,6 +397,7 @@ void ShutdownLuaRuntime() {
     state.awake_called = false;
     state.startup_script_path.clear();
     state.shutting_down = false;
+    dse::scripting::LuaDebugger::Instance().Detach();
     DEBUG_LOG_INFO("[LuaRuntime] Shutdown end");
 }
 
@@ -472,6 +474,7 @@ bool BootstrapLuaRuntime() {
         lua_pop(state.state, 1);
     }
     DEBUG_LOG_INFO("Lua startup script loaded: {}", state.startup_script_path);
+    dse::scripting::LuaDebugger::Instance().Attach(state.state);
     return true;
 }
 

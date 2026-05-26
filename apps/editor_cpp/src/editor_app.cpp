@@ -76,13 +76,16 @@
 #include "editor_audio_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
+#include "editor_lua_debugger.h"
 #include "editor_build_game.h"
 #include "editor_project.h"
 #include "editor_project_hub.h"
 #include "editor_undo_panel.h"
 #include "editor_asset_importer.h"
+#include "editor_os_drop.h"
 #include "editor_asset_db.h"
 #include "editor_autosave.h"
+#include "editor_plugin_api.h"
 #include "editor_locale.h"
 #include "editor_snapshot.h"
 #include "editor_selection_outline.h"
@@ -97,6 +100,9 @@
 #include "editor_scene_view_mode.h"
 #include "editor_anim_state_machine.h"
 #include "editor_ai_config.h"
+#include "editor_streaming_panel.h"
+#include "editor_curve_editor.h"
+#include "editor_visual_script.h"
 
 
 
@@ -222,9 +228,11 @@ bool EditorApp::Init(int argc, char* argv[]) {
     frames_remaining_ = headless ? test_config_.max_frames : -1;
 
 #if defined(_WIN32)
-    AllocConsole();
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
+    if (headless) {
+        AllocConsole();
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+    }
 #endif
 
     std::cerr << "[Editor] Starting..." << (headless ? " (headless)" : "") << std::endl;
@@ -267,20 +275,16 @@ bool EditorApp::Init(int argc, char* argv[]) {
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
 
-    // Drag & Drop: accept file drops from OS — opens Asset Importer with the first importable file
-    glfwSetDropCallback(window_, [](GLFWwindow*, int count, const char** paths) {
+    // Drag & Drop: accept file drops from OS — dispatch to panels via OsDropEvent
+    glfwSetDropCallback(window_, [](GLFWwindow* win, int count, const char** paths) {
+        double mx, my;
+        glfwGetCursorPos(win, &mx, &my);
+        std::vector<std::string> file_paths;
+        file_paths.reserve(count);
         for (int i = 0; i < count; ++i) {
-            std::filesystem::path p(paths[i]);
-            std::string ext = p.extension().string();
-            for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            if (ext == ".gltf" || ext == ".glb" || ext == ".fbx" ||
-                ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".tga" || ext == ".bmp" ||
-                ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
-                dse::editor::OpenAssetImporter();
-                dse::editor::SetAssetImporterSourcePath(paths[i]);
-                break;
-            }
+            file_paths.emplace_back(paths[i]);
         }
+        dse::editor::PushOsDropEvent(file_paths, static_cast<float>(mx), static_cast<float>(my));
     });
 
     if (!gladLoadGL(glfwGetProcAddress)) {
@@ -392,6 +396,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
         engine_instance_->asset_manager()->ConfigureDataRoot(
             dse::editor::ProjectManager::Get().GetAssetDir().string());
         dse::editor::AssetDatabase::Get().Refresh();
+        // 启动文件监听，支持资源热重载
+        engine_instance_->asset_manager()->StartFileWatcher();
     }
 
     // Restore scene camera
@@ -515,11 +521,12 @@ void EditorApp::Run() {
     dse::editor::AutoSaveManager::Get().CheckRecovery();
 
     if (!test_config_.replay_path.empty()) {
-        std::cout << "[EditorApp][Replay] WARNING: --replay is not yet implemented, path ignored: "
-                  << test_config_.replay_path << std::endl;
+        dse::editor::EditorLog(dse::editor::LogLevel::Warning,
+            "--replay is not yet implemented, path ignored: " + test_config_.replay_path);
+        test_config_.replay_path.clear();
     }
 
-    while (!glfwWindowShouldClose(window_) && frames_remaining_ != 0) {
+    while (!glfwWindowShouldClose(window_) && !dse::editor::IsExitRequested() && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
         cpu_profiler_.BeginFrame();
@@ -564,6 +571,9 @@ void EditorApp::Run() {
             if (editor_state == dse::editor::EditorState::Edit) {
                 Time::Update();
                 dse::runtime::PumpLuaScriptHotReloads();
+                if (engine_instance_->asset_manager()->PumpHotReloads() > 0) {
+                    dse::editor::InvalidateThumbnailCache();
+                }
                 engine_instance_->pipeline()->Render();
                 Input::Update();
             } else if (editor_state == dse::editor::EditorState::Pause) {
@@ -791,6 +801,7 @@ void EditorApp::Shutdown() {
     }
 
     if (engine_instance_) {
+        engine_instance_->asset_manager()->StopFileWatcher();
         engine_instance_->Shutdown();
         delete engine_instance_;
         engine_instance_ = nullptr;
@@ -824,6 +835,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
             engine_instance_->asset_manager()->ConfigureDataRoot(
                 mgr.GetAssetDir().string());
             dse::editor::AssetDatabase::Get().Refresh();
+            engine_instance_->asset_manager()->StartFileWatcher();
 
             // 加载项目默认场景
             World& world = engine_instance_->pipeline()->world();
@@ -892,7 +904,9 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_undo_history_,
         &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
-        &show_anim_state_machine_
+        &show_anim_state_machine_,
+        &show_lua_debugger_,
+        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -923,6 +937,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_tile_palette_)   dse::editor::DrawTilePalettePanel(ctx);
     if (show_terrain_editor_) dse::editor::DrawTerrainEditorPanel(ctx);
     if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
+    if (show_lua_debugger_)   dse::editor::DrawLuaDebuggerPanel(ctx);
     dse::editor::DrawBuildGameDialog();
     dse::editor::DrawAssetImporterDialog(ctx);
 
@@ -940,6 +955,56 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
 
+    // Streaming Zone debug panel
+    if (show_streaming_debug_) {
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Streaming Debug", &show_streaming_debug_)) {
+            dse::editor::DrawStreamingDebugPanel(ctx);
+        }
+        ImGui::End();
+    }
+
+    // Curve Editor panel
+    if (show_curve_editor_) {
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Curve Editor", &show_curve_editor_)) {
+            static dse::editor::CurveEditorState s_curve_state;
+            static bool s_curve_init = false;
+            if (!s_curve_init) {
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
+                s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
+                s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
+                s_curve_init = true;
+            }
+            dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
+        }
+        ImGui::End();
+    }
+
+    // Visual Script editor panel
+    if (show_visual_script_) {
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Visual Script", &show_visual_script_)) {
+            dse::editor::DrawVisualScriptEditor(ctx);
+        }
+        ImGui::End();
+    }
+
+    if (show_git_) {
+        ImGui::SetNextWindowSize(ImVec2(360, 260), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Git", &show_git_)) {
+            ImGui::TextDisabled("Git integration is not yet available.");
+            ImGui::Spacing();
+            ImGui::Text("Planned features:");
+            ImGui::BulletText("Repository status");
+            ImGui::BulletText("Commit / push / pull");
+            ImGui::BulletText("Branch management");
+            ImGui::BulletText("Diff viewer");
+        }
+        ImGui::End();
+    }
+
     // Plugin Manager 面板
     if (show_plugins_panel_) {
         ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
@@ -948,6 +1013,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         }
         ImGui::End();
     }
+
+    // Plugin API: update and draw custom panels
+    dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
+    dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
 
     // AI Chat 面板
     if (show_chat_panel_) {
@@ -966,6 +1035,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);
 
     dse::editor::DrawStatusBar(ctx);
+
+    // Fallback: if OS drop wasn't consumed by any panel, open Asset Importer
+    {
+        dse::editor::OsDropEvent unclaimed;
+        if (dse::editor::ConsumeOsDropEvent(unclaimed) && !unclaimed.paths.empty()) {
+            dse::editor::OpenAssetImporter();
+            dse::editor::SetAssetImporterSourcePath(unclaimed.paths[0].c_str());
+        }
+    }
 
     dse::editor::EndEditorShell();
 }

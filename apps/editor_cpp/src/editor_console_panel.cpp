@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "editor_icons.h"
+#include "editor_locale.h"
 
 #include <deque>
 #include <mutex>
@@ -222,7 +223,7 @@ void DrawConsolePanelImpl() {
     ImGui::Begin("Console");
 
     // Toolbar row: Clear, filter toggles, search
-    if (ImGui::Button("Clear")) {
+    if (ImGui::Button(T("Clear"))) {
         std::lock_guard<std::mutex> lock(GetLogMutex());
         GetLogBuffer().clear();
     }
@@ -272,9 +273,9 @@ void DrawConsolePanelImpl() {
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(200.0f);
-    ImGui::InputTextWithHint("##filter", "Filter...", GetFilterBuf(), 128);
+    ImGui::InputTextWithHint("##filter", T("Filter..."), GetFilterBuf(), 128);
     ImGui::SameLine();
-    ImGui::Checkbox("Auto-scroll", &GetAutoScroll());
+    ImGui::Checkbox(T("Auto-scroll"), &GetAutoScroll());
 
     ImGui::Separator();
 
@@ -323,7 +324,7 @@ void DrawConsolePanelImpl() {
 
     // Right-click context menu
     if (ImGui::BeginPopupContextWindow("ConsoleContextMenu")) {
-        if (ImGui::MenuItem("Copy All")) {
+        if (ImGui::MenuItem(T("Copy All"))) {
             std::lock_guard<std::mutex> lock(GetLogMutex());
             std::string all_text;
             for (const auto& entry : GetLogBuffer()) {
@@ -331,7 +332,7 @@ void DrawConsolePanelImpl() {
             }
             ImGui::SetClipboardText(all_text.c_str());
         }
-        if (ImGui::MenuItem("Clear")) {
+        if (ImGui::MenuItem(T("Clear"))) {
             std::lock_guard<std::mutex> lock(GetLogMutex());
             GetLogBuffer().clear();
         }

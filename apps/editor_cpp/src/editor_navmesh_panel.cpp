@@ -148,7 +148,7 @@ void SimulateBake(NavMeshEditorState& state, entt::registry& reg) {
     state.baked_data.valid = true;
     state.baked_data.vertex_count = static_cast<int>(verts.size() / 3);
     state.baked_data.triangle_count = static_cast<int>(tris.size() / 3);
-    state.baked_data.poly_count = 0; // TODO: Get poly count from nav mesh
+    state.baked_data.poly_count = nav_sys->GetPolyCount();
 
     // Calculate bounds
     if (!verts.empty()) {

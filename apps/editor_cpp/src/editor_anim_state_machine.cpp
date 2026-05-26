@@ -332,12 +332,39 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
     }
 
     ImGui::Separator();
+    // Add parameter
+    {
+        static char s_new_param_name[128] = "";
+        static int s_new_param_type = 0;
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputText("##pname", s_new_param_name, sizeof(s_new_param_name));
+        ImGui::SameLine();
+        const char* type_names[] = {"Float", "Int", "Bool", "Trigger"};
+        ImGui::SetNextItemWidth(70);
+        ImGui::Combo("##ptype", &s_new_param_type, type_names, 4);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("+##addp") && s_new_param_name[0] != '\0') {
+            auto pt = static_cast<dse::gameplay3d::AnimParamType>(s_new_param_type);
+            switch (pt) {
+                case dse::gameplay3d::AnimParamType::Float:   asm_ref.AddParameter(s_new_param_name, pt, 0.0f); break;
+                case dse::gameplay3d::AnimParamType::Int:     asm_ref.AddParameter(s_new_param_name, pt, 0); break;
+                case dse::gameplay3d::AnimParamType::Bool:    asm_ref.AddParameter(s_new_param_name, pt, false); break;
+                case dse::gameplay3d::AnimParamType::Trigger: asm_ref.AddTrigger(s_new_param_name); break;
+            }
+            s_new_param_name[0] = '\0';
+        }
+    }
+
+    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "States: %d", (int)states.size());
     for (std::unordered_map<std::string, dse::gameplay3d::AnimState>::const_iterator sit2 = states.begin(); sit2 != states.end(); ++sit2) {
         bool is_default = (sit2->first == default_state);
-        if (is_default) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.8f, 0.2f, 1));
-        ImGui::BulletText("%s%s", sit2->first.c_str(), is_default ? " (default)" : "");
-        if (is_default) ImGui::PopStyleColor();
+        bool is_active = (sit2->first == animator.current_state_name);
+        if (is_active) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1, 0.3f, 1));
+        else if (is_default) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.8f, 0.2f, 1));
+        const char* suffix = is_active ? " *" : (is_default ? " (default)" : "");
+        ImGui::BulletText("%s%s", sit2->first.c_str(), suffix);
+        if (is_active || is_default) ImGui::PopStyleColor();
     }
 
     ImGui::EndChild();
@@ -448,11 +475,15 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
         bool is_default = (sname == default_state);
         bool is_selected = (es.selected_state == sname);
         bool is_blend_tree = cur_state.is_blend_tree;
+        bool is_active = (sname == animator.current_state_name);
 
-        ImU32 node_bg = is_default ? IM_COL32(60, 80, 40, 230)
+        ImU32 node_bg = is_active ? IM_COL32(30, 90, 30, 240)
+                      : is_default ? IM_COL32(60, 80, 40, 230)
                       : is_blend_tree ? IM_COL32(60, 50, 80, 230)
                       : IM_COL32(50, 55, 65, 230);
-        ImU32 node_border = is_selected ? IM_COL32(255, 200, 50, 255) : IM_COL32(120, 120, 140, 255);
+        ImU32 node_border = is_selected ? IM_COL32(255, 200, 50, 255)
+                          : is_active  ? IM_COL32(50, 255, 50, 255)
+                          : IM_COL32(120, 120, 140, 255);
 
         dl->AddRectFilled(node_min, node_max, node_bg, 6.0f);
         dl->AddRect(node_min, node_max, node_border, 6.0f, 0, is_selected ? 2.5f : 1.0f);
@@ -483,6 +514,19 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
         if (is_default) {
             dl->AddText(ImVec2(node_max.x - 50, node_min.y + 6),
                 IM_COL32(255, 220, 50, 255), "Entry");
+        }
+        // Active badge + progress
+        if (is_active) {
+            dl->AddText(ImVec2(node_max.x - 18, node_max.y - 14),
+                IM_COL32(50, 255, 50, 255), "*");
+            // Progress bar
+            float progress = animator.normalized_time;
+            float bar_y = node_max.y - 3.0f;
+            dl->AddRectFilled(ImVec2(node_min.x, bar_y), ImVec2(node_max.x, bar_y + 3.0f),
+                IM_COL32(30, 30, 30, 200));
+            dl->AddRectFilled(ImVec2(node_min.x, bar_y),
+                ImVec2(node_min.x + vis.size.x * progress, bar_y + 3.0f),
+                IM_COL32(50, 255, 50, 220));
         }
 
         // Interaction

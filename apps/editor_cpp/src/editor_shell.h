@@ -20,6 +20,10 @@ struct PanelVisibility {
     bool* git = nullptr;
     bool* multi_viewport = nullptr;
     bool* anim_state_machine = nullptr;
+    bool* lua_debugger = nullptr;
+    bool* streaming_debug = nullptr;
+    bool* curve_editor = nullptr;
+    bool* visual_script = nullptr;
 };
 
 void BeginEditorShell();
@@ -35,5 +39,9 @@ void SetCurrentScenePath(const std::string& path);
 
 /// Force rebuild of dock layout on the next frame (clears first_time guard).
 void ResetEditorLayout();
+
+/// Request graceful editor exit (checked by main loop)
+void RequestExit();
+bool IsExitRequested();
 
 } // namespace dse::editor

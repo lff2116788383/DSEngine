@@ -166,7 +166,7 @@ void DrawEditorToolbar(EditorContext& ctx) {
     }
 
     ImGui::SameLine();
-    float right_section_width = 32 + 8 + 110 + 8 + 60 + 8 + 60 + 10;
+    float right_section_width = 32 + 8 + 110 + 10;
     float right_x = avail_width - right_section_width;
     float play_end = (avail_width / 2.0f) + 60;
     if (right_x < play_end + 16) right_x = play_end + 16;
@@ -202,11 +202,7 @@ void DrawEditorToolbar(EditorContext& ctx) {
             else
                 SetEditorLocale("en");
         }
-        ImGui::SameLine();
     }
-    ImGui::Button("Collab", ImVec2(60, 24));
-    ImGui::SameLine();
-    ImGui::Button("Layers", ImVec2(60, 24));
 
     ImGui::PopStyleVar();
     ImGui::End();

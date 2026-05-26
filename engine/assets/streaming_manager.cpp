@@ -233,6 +233,16 @@ std::size_t StreamingManager::GetZoneCount() const {
     return zones_.size();
 }
 
+std::vector<StreamingZone> StreamingManager::GetZoneSnapshot() const {
+    std::lock_guard<std::mutex> lock(zones_mutex_);
+    std::vector<StreamingZone> result;
+    result.reserve(zones_.size());
+    for (auto& [id, zone] : zones_) {
+        result.push_back(zone);
+    }
+    return result;
+}
+
 // ============================================================
 // 内部：加载/卸载
 // ============================================================
