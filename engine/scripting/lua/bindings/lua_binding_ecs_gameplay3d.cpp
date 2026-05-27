@@ -668,20 +668,20 @@ int L_EcsAddSnowCover(lua_State* L) {
     return 0;
 }
 
-/// set_snow_cover(entity, coverage, accumulation_rate, melt_rate)
+/// set_snow_cover(entity, target_coverage, accumulation_rate, melt_rate)
 int L_EcsSetSnowCover(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
     if (!sc) return 0;
-    sc->coverage          = helper::OptFloat(L, 2, sc->coverage);
+    sc->target_coverage   = helper::OptFloat(L, 2, sc->target_coverage);
     sc->accumulation_rate = helper::OptFloat(L, 3, sc->accumulation_rate);
     sc->melt_rate         = helper::OptFloat(L, 4, sc->melt_rate);
     return 0;
 }
 
-/// set_snow_appearance(entity, albedo_r, albedo_g, albedo_b, roughness, threshold, sharpness)
+/// set_snow_appearance(entity, albedo_r, albedo_g, albedo_b, roughness, metallic, threshold, sharpness)
 int L_EcsSetSnowAppearance(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -692,8 +692,73 @@ int L_EcsSetSnowAppearance(lua_State* L) {
     sc->snow_albedo.g    = helper::OptFloat(L, 3, sc->snow_albedo.g);
     sc->snow_albedo.b    = helper::OptFloat(L, 4, sc->snow_albedo.b);
     sc->snow_roughness   = helper::OptFloat(L, 5, sc->snow_roughness);
-    sc->normal_threshold = helper::OptFloat(L, 6, sc->normal_threshold);
-    sc->edge_sharpness   = helper::OptFloat(L, 7, sc->edge_sharpness);
+    sc->snow_metallic    = helper::OptFloat(L, 6, sc->snow_metallic);
+    sc->normal_threshold = helper::OptFloat(L, 7, sc->normal_threshold);
+    sc->edge_sharpness   = helper::OptFloat(L, 8, sc->edge_sharpness);
+    return 0;
+}
+
+/// get_snow_cover(entity) -> coverage, target_coverage, enabled
+int L_EcsGetSnowCover(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushboolean(L, 0); return 3; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* sc = helper::TryGetComponentConst<SnowCoverComponent>(*world, e);
+    if (!sc) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushboolean(L, 0); return 3; }
+    lua_pushnumber(L, static_cast<lua_Number>(sc->coverage));
+    lua_pushnumber(L, static_cast<lua_Number>(sc->target_coverage));
+    lua_pushboolean(L, sc->enabled ? 1 : 0);
+    return 3;
+}
+
+/// set_snow_cover_enabled(entity, enabled)
+int L_EcsSetSnowCoverEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
+    if (!sc) return 0;
+    sc->enabled = helper::CheckBool(L, 2);
+    return 0;
+}
+
+/// set_snow_texture(entity, texture_path, [tiling])
+int L_EcsSetSnowTexture(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
+    if (!sc) return 0;
+    const char* path = helper::OptString(L, 2, nullptr);
+    if (path) {
+        sc->snow_texture_path = path;
+        sc->snow_texture_handle = 0; // 触发重新加载
+    }
+    sc->snow_tiling = helper::OptFloat(L, 3, sc->snow_tiling);
+    return 0;
+}
+
+/// set_snow_displacement(entity, displacement_height, [deformation_strength])
+int L_EcsSetSnowDisplacement(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
+    if (!sc) return 0;
+    sc->displacement_height  = helper::OptFloat(L, 2, sc->displacement_height);
+    sc->deformation_strength = helper::OptFloat(L, 3, sc->deformation_strength);
+    return 0;
+}
+
+/// remove_snow_cover(entity)
+int L_EcsRemoveSnowCover(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& reg = world->registry();
+    if (reg.all_of<SnowCoverComponent>(e)) {
+        reg.remove<SnowCoverComponent>(e);
+    }
     return 0;
 }
 
@@ -990,6 +1055,11 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"add_snow_cover",             L_EcsAddSnowCover},
         {"set_snow_cover",             L_EcsSetSnowCover},
         {"set_snow_appearance",        L_EcsSetSnowAppearance},
+        {"get_snow_cover",             L_EcsGetSnowCover},
+        {"set_snow_cover_enabled",     L_EcsSetSnowCoverEnabled},
+        {"set_snow_texture",           L_EcsSetSnowTexture},
+        {"set_snow_displacement",      L_EcsSetSnowDisplacement},
+        {"remove_snow_cover",          L_EcsRemoveSnowCover},
     });
 }
 

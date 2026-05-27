@@ -772,8 +772,14 @@ static std::vector<uint8_t> CompileHLSLToDXBC(const std::string& hlsl,
                              &blob, &error_blob);
     if (FAILED(hr)) {
         if (error_blob) {
-            std::cerr << "[WARN] D3DCompile (" << target << "): "
-                      << static_cast<const char*>(error_blob->GetBufferPointer()) << "\n";
+            // Reformat error blob to avoid MSBuild regex matching "file(line): error ..."
+            // which would cause MSBuild to report a false build failure (MSB8066).
+            std::string msg(static_cast<const char*>(error_blob->GetBufferPointer()),
+                            error_blob->GetBufferSize());
+            // Neutralize MSBuild error patterns: replace ": error " with ": err "
+            for (size_t p = 0; (p = msg.find(": error ", p)) != std::string::npos; )
+                msg.replace(p, 8, ": err_ ", 7), p += 7;
+            std::cerr << "[WARN] D3DCompile (" << target << "): " << msg << "\n";
             error_blob->Release();
         }
         return {};
