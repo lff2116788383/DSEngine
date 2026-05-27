@@ -250,9 +250,26 @@ ma_attenuation_model MapAttenuationModel(AudioAttenuationModel model) {
 } // anonymous namespace
 
 void AudioSystem::Update(entt::registry& registry, float dt) {
-    (void)dt;
     if (!is_initialized || !engine_handle_ || !engine_handle_->get()) {
         return;
+    }
+
+    // --- Crossfade 插值 ---
+    if (crossfading_ && crossfade_duration_ > 0.0f) {
+        crossfade_elapsed_ += dt;
+        float t = std::clamp(crossfade_elapsed_ / crossfade_duration_, 0.0f, 1.0f);
+        // 旧 BGM 淡出
+        if (prev_bgm_sound_ && prev_bgm_sound_->get()) {
+            ma_sound_set_volume(prev_bgm_sound_->get(), (1.0f - t) * bgm_volume_);
+        }
+        // 新 BGM 淡入
+        if (bgm_sound_ && bgm_sound_->get()) {
+            ma_sound_set_volume(bgm_sound_->get(), t * crossfade_target_volume_ * bgm_volume_);
+        }
+        if (t >= 1.0f) {
+            prev_bgm_sound_.reset();
+            crossfading_ = false;
+        }
     }
 
     for (auto it = entity_sounds_.begin(); it != entity_sounds_.end();) {
@@ -320,11 +337,18 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
 
         if (!sound && audio.clip && (audio.play_on_awake || audio.is_playing)) {
             auto new_sound = std::make_unique<SoundHandle>();
+            ma_sound* route_group = nullptr;
+            if (!audio.bus_name.empty()) {
+                route_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle(audio.bus_name));
+            }
+            if (!route_group) {
+                route_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle("sfx"));
+            }
             const ma_result result = ma_sound_init_from_file(
                 engine_handle_->get(),
                 audio.clip->GetPath().c_str(),
                 0,
-                nullptr,
+                route_group,
                 nullptr,
                 &new_sound->value);
             if (result == MA_SUCCESS) {
@@ -444,6 +468,9 @@ void AudioSystem::Shutdown() {
     active_sfx_per_clip_.clear();
     sfx_clip_lookup_.clear();
     sfx_last_trigger_ms_.clear();
+    preload_cache_.clear();
+    prev_bgm_sound_.reset();
+    crossfading_ = false;
     bus_manager_.Shutdown();
     resource_manager_handle_.reset();
     engine_handle_.reset();
@@ -499,6 +526,57 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
     sfx_last_trigger_ms_[filepath] = now_ms;
 }
 
+void AudioSystem::PlaySfxRandomized(const std::string& filepath, float volume,
+                                     float pitch_min, float pitch_max) {
+    if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
+        return;
+    }
+    if (pitch_min > pitch_max) std::swap(pitch_min, pitch_max);
+    pitch_min = (std::max)(pitch_min, 0.01f);
+
+    // 冷却 + 并发检查（复用 PlaySfx 的逻辑）
+    const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+    auto last_it = sfx_last_trigger_ms_.find(filepath);
+    if (last_it != sfx_last_trigger_ms_.end()) {
+        std::uint64_t elapsed = now_ms >= last_it->second ? now_ms - last_it->second : 0;
+        if (elapsed < sfx_trigger_cooldown_ms_) return;
+    }
+    auto active_it = active_sfx_per_clip_.find(filepath);
+    if (active_it != active_sfx_per_clip_.end() && active_it->second >= max_concurrent_sfx_per_clip_) return;
+
+    auto new_sound = std::make_unique<SoundHandle>();
+    ma_sound* sfx_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle("sfx"));
+    const ma_result result = ma_sound_init_from_file(
+        engine_handle_->get(), filepath.c_str(), 0, sfx_group, nullptr, &new_sound->value);
+    if (result != MA_SUCCESS) return;
+
+    new_sound->initialized = true;
+    ma_sound_set_looping(&new_sound->value, MA_FALSE);
+    ma_sound_set_volume(&new_sound->value, volume * sfx_volume_);
+
+    // 随机 pitch
+    std::uniform_real_distribution<float> dist(pitch_min, pitch_max);
+    ma_sound_set_pitch(&new_sound->value, dist(rng_));
+
+    ma_sound_start(&new_sound->value);
+
+    const SoundHandle* sk = new_sound.get();
+    active_sfx_.push_back(std::move(new_sound));
+    active_sfx_per_clip_[filepath] += 1;
+    sfx_clip_lookup_[sk] = filepath;
+    sfx_last_trigger_ms_[filepath] = now_ms;
+}
+
+bool AudioSystem::PreloadAudio(const std::string& filepath) {
+    if (!asset_manager_ || filepath.empty()) return false;
+    if (preload_cache_.count(filepath)) return true;
+    std::vector<uint8_t> data;
+    if (!asset_manager_->LoadFileToMemory(filepath, data)) return false;
+    preload_cache_[filepath] = std::move(data);
+    return true;
+}
+
 bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) {
     if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
         return false;
@@ -541,7 +619,47 @@ void AudioSystem::ResumeBgm() {
 }
 
 void AudioSystem::StopBgm() {
+    prev_bgm_sound_.reset();
+    crossfading_ = false;
     bgm_sound_.reset();
+}
+
+bool AudioSystem::CrossfadeBgm(const std::string& filepath, float fade_sec, float volume, bool loop) {
+    if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
+        return false;
+    }
+
+    // 将当前 BGM 移到 prev 用于淡出
+    prev_bgm_sound_ = std::move(bgm_sound_);
+
+    // 启动新 BGM（音量从 0 开始）
+    auto new_sound = std::make_unique<SoundHandle>();
+    ma_sound* music_group = static_cast<ma_sound*>(bus_manager_.GetGroupHandle("music"));
+    const ma_result result = ma_sound_init_from_file(
+        engine_handle_->get(),
+        filepath.c_str(),
+        MA_SOUND_FLAG_STREAM,
+        music_group,
+        nullptr,
+        &new_sound->value);
+    if (result != MA_SUCCESS) {
+        // 回滚
+        bgm_sound_ = std::move(prev_bgm_sound_);
+        crossfading_ = false;
+        return false;
+    }
+
+    new_sound->initialized = true;
+    ma_sound_set_looping(&new_sound->value, loop ? MA_TRUE : MA_FALSE);
+    ma_sound_set_volume(&new_sound->value, 0.0f);
+    ma_sound_start(&new_sound->value);
+    bgm_sound_ = std::move(new_sound);
+
+    crossfade_elapsed_ = 0.0f;
+    crossfade_duration_ = (std::max)(fade_sec, 0.01f);
+    crossfade_target_volume_ = volume;
+    crossfading_ = true;
+    return true;
 }
 
 void AudioSystem::StopAllSfx() {

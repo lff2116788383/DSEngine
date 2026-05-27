@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <string>
 
 class AudioClipAsset;
 
@@ -42,6 +43,8 @@ struct AudioSourceComponent {
 
     bool occlusion_enabled = false;                      ///< 是否启用遮挡检测（需 Physics3D raycast）
     float occlusion_factor = 0.2f;                       ///< 遮挡时音量乘数 (0.0=静音, 1.0=无衰减)
+
+    std::string bus_name;                                ///< 总线路由（空=默认 sfx 总线）
     
     // Internal handle to audio engine (e.g., miniaudio)
     unsigned int runtime_handle = 0;                     ///< 引擎底层的音频句柄

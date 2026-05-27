@@ -206,6 +206,8 @@ int L_BusAddEffect(lua_State* L) {
     p.delay_time_ms = static_cast<float>(luaL_optnumber(L, 5, 250.0));
     p.feedback = static_cast<float>(luaL_optnumber(L, 6, 0.3));
     p.wet_mix = static_cast<float>(luaL_optnumber(L, 7, 0.5));
+    p.room_size = static_cast<float>(luaL_optnumber(L, 8, 0.5));
+    p.damping = static_cast<float>(luaL_optnumber(L, 9, 0.5));
     bool ok = sys->GetBusManager().AddEffect(bus_name, p);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
@@ -269,6 +271,114 @@ int L_AudioPlaySfx(lua_State* L) {
     return 0;
 }
 
+// audio.crossfade_bgm(filepath, fade_sec, [volume, loop])
+int L_AudioCrossfadeBgm(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* path = luaL_checkstring(L, 1);
+    float fade = static_cast<float>(luaL_checknumber(L, 2));
+    float vol = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    bool loop = lua_isnoneornil(L, 4) ? true : (lua_toboolean(L, 4) != 0);
+    bool ok = sys->CrossfadeBgm(path, fade, vol, loop);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// audio.play_sfx_random(filepath, [volume, pitch_min, pitch_max])
+int L_AudioPlaySfxRandom(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) return 0;
+    const char* path = luaL_checkstring(L, 1);
+    float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    float pmin = static_cast<float>(luaL_optnumber(L, 3, 0.9));
+    float pmax = static_cast<float>(luaL_optnumber(L, 4, 1.1));
+    sys->PlaySfxRandomized(path, vol, pmin, pmax);
+    return 0;
+}
+
+// audio.preload(filepath)
+int L_AudioPreload(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* path = luaL_checkstring(L, 1);
+    bool ok = sys->PreloadAudio(path);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// audio.stop_all_sfx()
+int L_AudioStopAllSfx(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->StopAllSfx();
+    return 0;
+}
+
+// audio.set_master_volume(volume)
+int L_AudioSetMasterVolume(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->SetMasterVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
+// audio.set_bgm_volume(volume)
+int L_AudioSetBgmVolume(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->SetBgmVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
+// audio.set_sfx_volume(volume)
+int L_AudioSetSfxVolume(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->SetSfxVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
+// audio.set_source_bus(entity, bus_name)
+int L_AudioSetSourceBus(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* bus = luaL_checkstring(L, 2);
+    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
+        world->registry().get<AudioSourceComponent>(e).bus_name = bus;
+    }
+    return 0;
+}
+
+// audio.snapshot_save(name)
+int L_AudioSnapshotSave(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    bool ok = sys->GetBusManager().SaveSnapshot(name);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// audio.snapshot_load(name)
+int L_AudioSnapshotLoad(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* name = luaL_checkstring(L, 1);
+    bool ok = sys->GetBusManager().LoadSnapshot(name);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// audio.snapshot_list() -> table
+int L_AudioSnapshotList(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_newtable(L); return 1; }
+    auto names = sys->GetBusManager().GetSnapshotNames();
+    lua_createtable(L, static_cast<int>(names.size()), 0);
+    for (size_t i = 0; i < names.size(); ++i) {
+        lua_pushstring(L, names[i].c_str());
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
 int L_BusGetNames(lua_State* L) {
     auto* sys = GetAudioSys();
     if (!sys) { lua_newtable(L); return 1; }
@@ -305,7 +415,24 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("pause_bgm", L_AudioPauseBgm);
     set_fn("resume_bgm", L_AudioResumeBgm);
     set_fn("stop_bgm", L_AudioStopBgm);
+    set_fn("crossfade_bgm", L_AudioCrossfadeBgm);
     set_fn("play_sfx", L_AudioPlaySfx);
+    set_fn("play_sfx_random", L_AudioPlaySfxRandom);
+    set_fn("stop_all_sfx", L_AudioStopAllSfx);
+    set_fn("preload", L_AudioPreload);
+
+    // 音量控制
+    set_fn("set_master_volume", L_AudioSetMasterVolume);
+    set_fn("set_bgm_volume", L_AudioSetBgmVolume);
+    set_fn("set_sfx_volume", L_AudioSetSfxVolume);
+
+    // AudioSource 总线路由
+    set_fn("set_source_bus", L_AudioSetSourceBus);
+
+    // 快照系统
+    set_fn("snapshot_save", L_AudioSnapshotSave);
+    set_fn("snapshot_load", L_AudioSnapshotLoad);
+    set_fn("snapshot_list", L_AudioSnapshotList);
 
     // 混音总线 + DSP 效果链
     set_fn("bus_set_volume", L_BusSetVolume);

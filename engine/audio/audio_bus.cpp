@@ -62,6 +62,12 @@ static void DestroyDspNode(DspNodeHandle& handle) {
             delete n;
             break;
         }
+        case DspEffectType::Reverb: {
+            auto* n = static_cast<ma_delay_node*>(handle.node_ptr);
+            ma_delay_node_uninit(n, nullptr);
+            delete n;
+            break;
+        }
         default: break;
     }
     handle.node_ptr = nullptr;
@@ -326,6 +332,24 @@ void AudioBusManager::RebuildEffectChain(AudioBus& bus) {
                 if (node) handle.node_ptr = node;
                 break;
             }
+            case DspEffectType::Reverb: {
+                // Reverb 近似：长延迟 + 高反馈 + 可调 wet/dry
+                // room_size [0,1] → 延迟 30~200ms, damping [0,1] → feedback 0.8~0.2
+                float delay_ms = 30.0f + effect.room_size * 170.0f;
+                float fb = 0.8f - effect.damping * 0.6f;
+                auto* node = new ma_delay_node();
+                ma_uint32 delay_frames = static_cast<ma_uint32>(delay_ms * static_cast<float>(sample_rate) / 1000.0f);
+                if (delay_frames < 1) delay_frames = 1;
+                auto config = ma_delay_node_config_init(channels, sample_rate, delay_frames, fb);
+                if (ma_delay_node_init(node_graph, &config, nullptr, node) == MA_SUCCESS) {
+                    ma_delay_node_set_wet(node, effect.wet_mix);
+                    ma_delay_node_set_dry(node, 1.0f - effect.wet_mix);
+                    handle.node_ptr = node;
+                } else {
+                    delete node;
+                }
+                break;
+            }
             default: break;
         }
 
@@ -351,6 +375,47 @@ void AudioBusManager::RebuildEffectChain(AudioBus& bus) {
     ma_node_attach_output_bus(
         static_cast<ma_node*>(bus.active_nodes.back().node_ptr), 0,
         target, 0);
+}
+
+bool AudioBusManager::SaveSnapshot(const std::string& name) {
+    if (name.empty() || !initialized_) return false;
+    AudioSnapshot snap;
+    for (const auto& [bus_name, bus] : buses_) {
+        if (!bus) continue;
+        BusSnapshot bs;
+        bs.volume = bus->volume;
+        bs.muted = bus->muted;
+        bs.effects = bus->effects;
+        snap.buses[bus_name] = std::move(bs);
+    }
+    snapshots_[name] = std::move(snap);
+    return true;
+}
+
+bool AudioBusManager::LoadSnapshot(const std::string& name) {
+    if (!initialized_) return false;
+    auto it = snapshots_.find(name);
+    if (it == snapshots_.end()) return false;
+    const auto& snap = it->second;
+    for (const auto& [bus_name, bs] : snap.buses) {
+        auto* bus = GetBus(bus_name);
+        if (!bus) continue;
+        bus->volume = bs.volume;
+        bus->muted = bs.muted;
+        bus->effects = bs.effects;
+        ApplyBusVolume(*bus);
+        RebuildEffectChain(*bus);
+    }
+    return true;
+}
+
+std::vector<std::string> AudioBusManager::GetSnapshotNames() const {
+    std::vector<std::string> names;
+    names.reserve(snapshots_.size());
+    for (const auto& [name, _] : snapshots_) {
+        names.push_back(name);
+    }
+    return names;
 }
 
 } // namespace gameplay2d

@@ -14,6 +14,7 @@
 #include <deque>
 #include <memory>
 #include <functional>
+#include <random>
 #include <glm/glm.hpp>
 #include "audio_bus.h"
 
@@ -84,6 +85,23 @@ public:
     void PlaySfx(const std::string& filepath, float volume = 1.0f, bool loop = false);
 
     /**
+     * @brief 播放随机化音效（pitch 随机抖动）
+     * @param filepath 音效文件路径
+     * @param volume 音量
+     * @param pitch_min 最小 pitch 倍率
+     * @param pitch_max 最大 pitch 倍率
+     */
+    void PlaySfxRandomized(const std::string& filepath, float volume = 1.0f,
+                           float pitch_min = 0.9f, float pitch_max = 1.1f);
+
+    /**
+     * @brief 预加载音频文件到内存缓存（避免首次播放延迟）
+     * @param filepath 音频文件路径
+     * @return 成功返回 true
+     */
+    bool PreloadAudio(const std::string& filepath);
+
+    /**
      * @brief 播放背景音乐 (BGM)，会替换当前正在播放的 BGM
      * @param filepath 音乐文件路径
      * @param volume 音量大小 (0.0 - 1.0)，将乘以全局 bgm_volume_
@@ -108,6 +126,17 @@ public:
      * @brief 停止并销毁当前的背景音乐
      */
     void StopBgm();
+
+    /**
+     * @brief 带淡入淡出的 BGM 切换
+     * @param filepath 新 BGM 文件路径
+     * @param fade_sec 淡入淡出时长（秒）
+     * @param volume 目标音量
+     * @param loop 是否循环
+     * @return 成功返回 true
+     */
+    bool CrossfadeBgm(const std::string& filepath, float fade_sec = 1.0f,
+                      float volume = 1.0f, bool loop = true);
 
     /**
      * @brief 停止所有正在播放的短音效
@@ -194,6 +223,19 @@ private:
     AssetManager* asset_manager_ = nullptr;
     AudioRaycastFunc raycast_func_;
     AudioBusManager bus_manager_;
+
+    // Crossfade 状态
+    std::unique_ptr<SoundHandle> prev_bgm_sound_;
+    float crossfade_elapsed_ = 0.0f;
+    float crossfade_duration_ = 0.0f;
+    float crossfade_target_volume_ = 1.0f;
+    bool crossfading_ = false;
+
+    // 音频随机化
+    std::mt19937 rng_{std::random_device{}()};
+
+    // 预加载缓存
+    std::unordered_map<std::string, std::vector<uint8_t>> preload_cache_;
 };
 
 } // namespace gameplay2d

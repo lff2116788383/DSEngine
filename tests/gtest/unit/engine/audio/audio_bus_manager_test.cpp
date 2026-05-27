@@ -34,6 +34,8 @@ TEST(DspEffectParamsTest, 默认值) {
     EXPECT_FLOAT_EQ(p.delay_time_ms, 250.0f);
     EXPECT_FLOAT_EQ(p.feedback, 0.3f);
     EXPECT_FLOAT_EQ(p.wet_mix, 0.5f);
+    EXPECT_FLOAT_EQ(p.room_size, 0.5f);
+    EXPECT_FLOAT_EQ(p.damping, 0.5f);
     EXPECT_TRUE(p.enabled);
 }
 
@@ -42,7 +44,8 @@ TEST(DspEffectParamsTest, 枚举值连续且Count正确) {
     EXPECT_EQ(static_cast<int>(DspEffectType::HighPass), 1);
     EXPECT_EQ(static_cast<int>(DspEffectType::BandPass), 2);
     EXPECT_EQ(static_cast<int>(DspEffectType::Delay),    3);
-    EXPECT_EQ(static_cast<int>(DspEffectType::Count),    4);
+    EXPECT_EQ(static_cast<int>(DspEffectType::Reverb),   4);
+    EXPECT_EQ(static_cast<int>(DspEffectType::Count),    5);
 }
 
 TEST(DspEffectParamsTest, 所有字段可修改) {

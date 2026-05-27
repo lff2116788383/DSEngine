@@ -26,6 +26,7 @@ enum class DspEffectType : uint8_t {
     HighPass,
     BandPass,
     Delay,
+    Reverb,
     Count
 };
 
@@ -34,9 +35,11 @@ struct DspEffectParams {
     DspEffectType type = DspEffectType::LowPass;
     float cutoff_hz = 1000.0f;       ///< 截止频率（LowPass/HighPass/BandPass）
     float q = 0.707f;                ///< 品质因数 Q
-    float delay_time_ms = 250.0f;    ///< 延迟时间（Delay）
-    float feedback = 0.3f;           ///< 延迟反馈量（Delay）
+    float delay_time_ms = 250.0f;    ///< 延迟时间（Delay / Reverb 前反射）
+    float feedback = 0.3f;           ///< 延迟反馈量（Delay / Reverb 衰减）
     float wet_mix = 0.5f;            ///< 湿信号混合比
+    float room_size = 0.5f;          ///< Reverb 房间大小 [0,1]（映射到延迟长度）
+    float damping = 0.5f;            ///< Reverb 高频衰减 [0,1]
     bool enabled = true;
 };
 
@@ -110,6 +113,15 @@ public:
     /// 获取所有总线名称
     std::vector<std::string> GetBusNames() const;
 
+    /// 保存当前所有总线状态为快照
+    bool SaveSnapshot(const std::string& name);
+
+    /// 加载快照（立即应用）
+    bool LoadSnapshot(const std::string& name);
+
+    /// 获取所有快照名称
+    std::vector<std::string> GetSnapshotNames() const;
+
 private:
     void ApplyBusVolume(AudioBus& bus);
     void RebuildEffectChain(AudioBus& bus);
@@ -117,6 +129,17 @@ private:
     ma_engine* engine_ = nullptr;
     std::unordered_map<std::string, std::unique_ptr<AudioBus>> buses_;
     bool initialized_ = false;
+
+    /// 音频快照存储
+    struct BusSnapshot {
+        float volume = 1.0f;
+        bool muted = false;
+        std::vector<DspEffectParams> effects;
+    };
+    struct AudioSnapshot {
+        std::unordered_map<std::string, BusSnapshot> buses;
+    };
+    std::unordered_map<std::string, AudioSnapshot> snapshots_;
 };
 
 } // namespace gameplay2d
