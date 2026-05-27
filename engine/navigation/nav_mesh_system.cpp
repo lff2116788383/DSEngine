@@ -285,9 +285,12 @@ bool NavMeshSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
     path.clear();
     if (!IsReady()) return false;
 
+    // Floating Origin: 输入坐标加 offset 转回 navmesh 空间
+    const glm::vec3 s_nav = start + accumulated_offset_;
+    const glm::vec3 e_nav = end + accumulated_offset_;
     const float ext[3] = { 2.0f, 4.0f, 2.0f };
-    const float s[3] = { start.x, start.y, start.z };
-    const float e[3] = { end.x,   end.y,   end.z   };
+    const float s[3] = { s_nav.x, s_nav.y, s_nav.z };
+    const float e[3] = { e_nav.x, e_nav.y, e_nav.z };
 
     dtPolyRef start_ref = 0, end_ref = 0;
     float start_pt[3], end_pt[3];
@@ -310,7 +313,10 @@ bool NavMeshSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
 
     path.reserve(straight_count);
     for (int i = 0; i < straight_count; ++i) {
-        path.emplace_back(straight[i*3+0], straight[i*3+1], straight[i*3+2]);
+        // Floating Origin: 输出坐标减 offset 转回当前坐标系
+        path.emplace_back(straight[i*3+0] - accumulated_offset_.x,
+                          straight[i*3+1] - accumulated_offset_.y,
+                          straight[i*3+2] - accumulated_offset_.z);
     }
     return true;
 }
@@ -318,13 +324,16 @@ bool NavMeshSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
 bool NavMeshSystem::FindNearestPoint(const glm::vec3& pos, glm::vec3& nearest) const {
     nearest = pos;
     if (!IsReady()) return false;
+    // Floating Origin: 输入坐标加 offset 转回 navmesh 空间
+    const glm::vec3 p_nav = pos + accumulated_offset_;
     const float ext[3] = { 2.0f, 4.0f, 2.0f };
-    const float p[3] = { pos.x, pos.y, pos.z };
+    const float p[3] = { p_nav.x, p_nav.y, p_nav.z };
     dtPolyRef ref = 0;
     float pt[3];
     dtStatus st = nav_query_->findNearestPoly(p, ext, filter_, &ref, pt);
     if (dtStatusFailed(st) || !ref) return false;
-    nearest = glm::vec3(pt[0], pt[1], pt[2]);
+    // Floating Origin: 输出坐标减 offset 转回当前坐标系
+    nearest = glm::vec3(pt[0], pt[1], pt[2]) - accumulated_offset_;
     return true;
 }
 
@@ -333,9 +342,12 @@ bool NavMeshSystem::Raycast(const glm::vec3& start, const glm::vec3& end,
     hit_pos = end;
     if (!IsReady()) return false;
 
+    // Floating Origin: 输入坐标加 offset 转回 navmesh 空间
+    const glm::vec3 s_nav = start + accumulated_offset_;
+    const glm::vec3 e_nav = end + accumulated_offset_;
     const float ext[3] = { 2.0f, 4.0f, 2.0f };
-    const float s[3] = { start.x, start.y, start.z };
-    const float e[3] = { end.x,   end.y,   end.z   };
+    const float s[3] = { s_nav.x, s_nav.y, s_nav.z };
+    const float e[3] = { e_nav.x, e_nav.y, e_nav.z };
 
     dtPolyRef start_ref = 0;
     float start_pt[3];
@@ -445,6 +457,13 @@ bool NavMeshSystem::LoadNavMesh(const std::string& path) {
     }
     DEBUG_LOG_INFO("[NavMesh] loaded {} ({} bytes)", path, hdr.data_size);
     return true;
+}
+
+// ============================================================
+// Floating Origin
+// ============================================================
+void NavMeshSystem::RebaseOrigin(const glm::vec3& offset) {
+    accumulated_offset_ += offset;
 }
 
 } // namespace dse::navigation

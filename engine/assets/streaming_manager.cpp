@@ -375,4 +375,14 @@ void StreamingManager::OnAssetLoadedWithResource(uint32_t zone_id, const std::st
     }
 }
 
+// ============================================================
+// Floating Origin
+// ============================================================
+void StreamingManager::RebaseOrigin(const glm::vec3& offset) {
+    std::lock_guard<std::mutex> lock(zones_mutex_);
+    for (auto& [id, zone] : zones_) {
+        zone.center -= offset;
+    }
+}
+
 } // namespace dse::streaming

@@ -1405,7 +1405,8 @@ void Physics3DSystem::CheckBrokenJoints(World& /*world*/) {}
 // ---------------------------------------------------------------------------
 void Physics3DSystem::RebaseOrigin(const glm::vec3& offset) {
     if (!scene_) return;
-    scene_->shiftOrigin(PxVec3(-offset.x, -offset.y, -offset.z));
+    // PhysX shiftOrigin 内部对所有 body 执行 position -= shift，直接传 offset 即可
+    scene_->shiftOrigin(PxVec3(offset.x, offset.y, offset.z));
 }
 
 } // namespace physics3d

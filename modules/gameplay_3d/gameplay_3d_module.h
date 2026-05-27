@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/core/module.h"
+#include "engine/core/event_bus.h"
 #include "engine/physics/physics3d/i_physics3d_system.h"
 
 // 3D Systems
@@ -85,6 +86,9 @@ private:
     FluidSystem fluid_system_;
     SoftBodySystem softbody_system_;
     RopeSystem rope_system_;
+
+    World* world_cache_ = nullptr;
+    dse::core::SubscriptionHandle origin_rebase_handle_;
 };
 
 } // namespace gameplay3d

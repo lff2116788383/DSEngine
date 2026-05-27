@@ -3,7 +3,9 @@
 #include "engine/core/service_locator.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
+#include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_physics.h"
 
 namespace dse::gameplay3d {
 
@@ -38,6 +40,52 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     vehicle_system_.SetPhysics3D(physics3d);
     buoyancy_system_.SetPhysics3D(physics3d);
 #endif
+
+    // Floating Origin: 订阅 rebase 事件，偏移各子系统持有的世界空间坐标
+    world_cache_ = &world;
+    auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
+    if (event_bus) {
+        origin_rebase_handle_ = event_bus->Subscribe<dse::core::OriginRebasedEvent>(
+            [this](const dse::core::OriginRebasedEvent& evt) {
+                if (!world_cache_) return;
+                auto& reg = world_cache_->registry();
+
+                // Particle3D
+                for (auto [e, ps] : reg.view<dse::ParticleSystem3DComponent>().each()) {
+                    for (int i = 0; i < ps.active_particle_count; ++i) {
+                        ps.particles[i].position -= evt.offset;
+                    }
+                }
+
+                // Cloth
+                for (auto [e, cloth] : reg.view<dse::ClothComponent>().each()) {
+                    if (!cloth.initialized) continue;
+                    for (auto& p : cloth.positions)      p -= evt.offset;
+                    for (auto& p : cloth.prev_positions)  p -= evt.offset;
+                }
+
+                // Fluid
+                for (auto [e, fluid] : reg.view<dse::FluidEmitterComponent>().each()) {
+                    for (uint32_t i = 0; i < fluid.active_count; ++i) {
+                        fluid.particles[i].position -= evt.offset;
+                    }
+                }
+
+                // SoftBody
+                for (auto [e, sb] : reg.view<dse::SoftBodyComponent>().each()) {
+                    for (auto& p : sb.positions)      p -= evt.offset;
+                    for (auto& p : sb.prev_positions)  p -= evt.offset;
+                }
+
+                // Rope
+                for (auto [e, rope] : reg.view<dse::RopeComponent>().each()) {
+                    if (!rope.initialized) continue;
+                    for (auto& p : rope.positions)      p -= evt.offset;
+                    for (auto& p : rope.prev_positions)  p -= evt.offset;
+                }
+            });
+    }
+
     return true;
 }
 
@@ -251,6 +299,14 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {
+    // Floating Origin: 取消订阅
+    if (origin_rebase_handle_.valid) {
+        auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
+        if (event_bus) event_bus->Unsubscribe(origin_rebase_handle_);
+        origin_rebase_handle_ = {};
+    }
+    world_cache_ = nullptr;
+
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
     hair_system_.Shutdown(world);

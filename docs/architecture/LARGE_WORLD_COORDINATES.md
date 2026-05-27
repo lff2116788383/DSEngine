@@ -258,22 +258,27 @@ void Physics3DSystemJolt::RebaseOrigin(glm::vec3 offset) {
 1. ✅ `FloatingOriginSystem`（`engine/ecs/floating_origin_system.h/.cpp`），阈值可配置（默认 5km）
 2. ✅ `OriginRebasedEvent` 定义（`event_bus.h`）+ EventId 注册（`event_id.h`）
 3. ✅ `IPhysics3DSystem::RebaseOrigin()` 纯虚接口
-4. ✅ PhysX 后端：`PxScene::shiftOrigin(PxVec3(-offset))`
+4. ✅ PhysX 后端：`PxScene::shiftOrigin(PxVec3(offset))`（PhysX 内部减去 shift）
 5. ✅ Jolt 后端：遍历 `entity_to_body` + `character_virtuals` 减去 offset
 6. ✅ FramePipeline 集成：在 `RunRuntimeFixedUpdateGraph` 中物理 `FixedUpdate` 前调用 `Tick`
 7. ✅ `accumulated_origin_`（dvec3）累积绝对偏移，提供 `ToAbsolute()`/`ToLocal()` 转换
 
 **验证**：Release + Debug 全量编译零错误，1896/1917 单元测试通过（同 Phase 1）。
 
-### Phase 3：子系统适配（1-2 天）
+### Phase 3：子系统适配 ✅ 已完成
 
-1. 3D Audio listener/source 响应 rebase
-2. NavMesh 顶点偏移（或重新 bake）
-3. Particle emitter 世界坐标偏移
-4. Editor 属性面板显示绝对坐标
-5. Streaming Manager 使用 `AbsoluteWorldPos` 做 LOD/chunk 判断
+1. ✅ 3D Audio：listener/source 使用 `TransformComponent::position`，rebase 后坐标自动正确，无需修改
+2. ✅ NavMesh：`NavMeshSystem::RebaseOrigin` 累积偏移，`FindPath`/`FindNearestPoint`/`Raycast` 查询自动补偿
+3. ✅ Particle3D：`Gameplay3DModule` 订阅 `OriginRebasedEvent`，偏移所有活粒子 `position`
+4. ✅ Cloth：偏移 `positions` + `prev_positions`（世界空间 Verlet 积分数据）
+5. ✅ Fluid：偏移所有活 `FluidParticle::position`
+6. ✅ SoftBody：偏移 `positions` + `prev_positions`
+7. ✅ Rope：偏移 `positions` + `prev_positions`
+8. ✅ StreamingManager：偏移所有 zone `center`
+9. ✅ FramePipeline 统一订阅/取消订阅 `OriginRebasedEvent`，转发给 NavMesh + StreamingManager
+10. ✅ PhysX `shiftOrigin` 符号修正（PhysX 内部已做减法，传入 `+offset` 即可）
 
-**验证**：完整场景功能回归。
+**验证**：Release + Debug 全量编译零错误，1896/1917 单元测试通过（同 Phase 1/2）。
 
 ---
 

@@ -120,6 +120,10 @@ public:
     /// 从文件加载 navmesh 二进制数据
     bool LoadNavMesh(const std::string& path);
 
+    /// Floating Origin: 累积偏移，查询时自动补偿
+    void RebaseOrigin(const glm::vec3& offset);
+    const glm::vec3& accumulated_offset() const { return accumulated_offset_; }
+
 private:
     void ReleaseNavMesh();
 
@@ -127,6 +131,7 @@ private:
     dtNavMeshQuery* nav_query_ = nullptr;
     dtQueryFilter*  filter_    = nullptr;
     bool initialized_ = false;
+    glm::vec3 accumulated_offset_{0.0f};
 };
 
 } // namespace dse::navigation

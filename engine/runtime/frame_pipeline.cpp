@@ -753,6 +753,22 @@ bool FramePipeline::Init() {
     }
 #endif
 
+    // Floating Origin: 订阅 rebase 事件，转发给 NavMesh / StreamingManager
+    {
+        auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
+        if (event_bus) {
+            origin_rebase_handle_ = event_bus->Subscribe<dse::core::OriginRebasedEvent>(
+                [this](const dse::core::OriginRebasedEvent& evt) {
+#ifdef DSE_ENABLE_NAVMESH
+                    if (nav_mesh_system_initialized_) {
+                        nav_mesh_system_.RebaseOrigin(evt.offset);
+                    }
+#endif
+                    streaming_manager_.RebaseOrigin(evt.offset);
+                });
+        }
+    }
+
     lap("systems init");
     KeepAlive();
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
@@ -872,6 +888,13 @@ void FramePipeline::Shutdown() {
 
     if (runtime_context_.rhi_device) {
         runtime_context_.rhi_device->WaitIdle();
+    }
+
+    // Floating Origin: 取消订阅
+    if (origin_rebase_handle_.valid) {
+        auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
+        if (event_bus) event_bus->Unsubscribe(origin_rebase_handle_);
+        origin_rebase_handle_ = {};
     }
 
     modules_impl_->ShutdownMeshSystem();

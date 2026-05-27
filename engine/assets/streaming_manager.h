@@ -111,6 +111,11 @@ public:
     /// 强制卸载 zone
     void ForceUnloadZone(uint32_t zone_id);
 
+    // ========== Floating Origin ==========
+
+    /// Floating Origin: 整体偏移所有 zone center
+    void RebaseOrigin(const glm::vec3& offset);
+
     // ========== 每帧更新 ==========
 
     /// 每帧调用：根据摄像机位置评估所有 zone，发起加载/卸载
