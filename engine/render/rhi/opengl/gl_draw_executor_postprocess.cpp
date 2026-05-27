@@ -170,6 +170,23 @@ static constexpr PPUniformEntry kVolumetricFogBindings[] = {
     {"_20.u_fwd_z",       UType::Float, 26}, {"_20.u_tan_fov_y",   UType::Float, 27},
     {"_20.u_aspect",      UType::Float, 28},
 };
+static constexpr PPUniformEntry kVolumetricCloudBindings[] = {
+    {"_286.u_cloud_bottom",     UType::Float, 0},  {"_286.u_cloud_top",       UType::Float, 1},
+    {"_286.u_coverage",         UType::Float, 2},  {"_286.u_density",         UType::Float, 3},
+    {"_286.u_shape_scale",      UType::Float, 4},  {"_286.u_detail_scale",    UType::Float, 5},
+    {"_286.u_detail_strength",  UType::Float, 6},  {"_286.u_erosion",         UType::Float, 7},
+    {"_286.u_wind_offset_x",    UType::Float, 8},  {"_286.u_wind_offset_z",   UType::Float, 9},
+    {"_286.u_silver_intensity", UType::Float, 10}, {"_286.u_powder_strength", UType::Float, 11},
+    {"_286.u_ambient_strength", UType::Float, 12}, {"_286.u_sun_dir_x",      UType::Float, 13},
+    {"_286.u_sun_dir_y",        UType::Float, 14}, {"_286.u_sun_dir_z",      UType::Float, 15},
+    {"_286.u_cam_pos_x",        UType::Float, 16}, {"_286.u_cam_pos_y",      UType::Float, 17},
+    {"_286.u_cam_pos_z",        UType::Float, 18}, {"_286.u_near",           UType::Float, 19},
+    {"_286.u_far",              UType::Float, 20}, {"_286.u_right_x",        UType::Float, 21},
+    {"_286.u_right_y",          UType::Float, 22}, {"_286.u_right_z",        UType::Float, 23},
+    {"_286.u_up_x",             UType::Float, 24}, {"_286.u_up_y",           UType::Float, 25},
+    {"_286.u_up_z",             UType::Float, 26}, {"_286.u_fwd_x",          UType::Float, 27},
+    {"_286.u_fwd_y",            UType::Float, 28}, {"_286.u_fwd_z",          UType::Float, 29},
+};
 static constexpr PPUniformEntry kAtmTransmittanceLutBindings[] = {
     {"_17.u_planet_radius",     UType::Float, 0},
     {"_17.u_atmosphere_height", UType::Float, 1},
@@ -351,6 +368,13 @@ static void BindVolumetricFogExtra(unsigned int prog,
     glUniform1f(glGetUniformLocation(prog, "_20.u_depth_handle"), static_cast<float>(req.FindTex(2)));
 }
 
+static void BindVolumetricCloudExtra(unsigned int prog,
+                                      const PostProcessRequest& req,
+                                      const std::vector<float>& /*params*/,
+                                      unsigned int& /*ubo*/) {
+    glUniform1f(glGetUniformLocation(prog, "_286.u_depth_handle"), static_cast<float>(req.FindTex(2)));
+}
+
 static void BindWboitComposite(unsigned int prog,
                                 const PostProcessRequest& req,
                                 const std::vector<float>& /*params*/,
@@ -411,6 +435,7 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         // --- 带额外纹理绑定的效果 ---
         {"light_shaft",      {kLightShaftBindings, (int)std::size(kLightShaftBindings), 11, BindLightShaftExtra, false}},
         {"volumetric_fog",   {kVolumetricFogBindings, (int)std::size(kVolumetricFogBindings), 29, BindVolumetricFogExtra, false}},
+        {"volumetric_cloud", {kVolumetricCloudBindings, (int)std::size(kVolumetricCloudBindings), 30, BindVolumetricCloudExtra, false}},
         {"wboit_composite",  {nullptr, 0, 0, BindWboitComposite, true}},
         {"decal",            {kDecalBindings, (int)std::size(kDecalBindings), 24, BindDecalExtra, true}},
         {"water",            {kWaterBindings, (int)std::size(kWaterBindings), 39, BindWaterExtra, true}},

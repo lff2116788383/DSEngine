@@ -5,7 +5,22 @@
       "Bash(# Check shader files location find /c/Users/wenbilin/Desktop/Engine/DSEngine/data -type f \\\\\\( -name \"\"*.glsl\"\" -o -name \"\"*.vert\"\" -o -name \"\"*.frag\"\" -o -name \"\"*.dssl\"\" -o -name \"\"*.hlsl\"\" -o -name \"\"*.shader\"\" -o -name \"\"*.fx\"\" \\\\\\))",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(cmake --build build_vs2022 --config Debug --target dse_example_lua --parallel)",
+      "Bash(./bin/dse_shader_compiler.exe --input-dir \"engine/render/shaders/src\" --output-dir \"engine/render/shaders/generated\" --target all --embed)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(cmake -S . -B build_vs2022 -G \"Visual Studio 17 2022\" -A x64)",
+      "Bash(cmake --build build_vs2022 --config Debug --target dse_compile_shaders --parallel)",
+      "Bash(touch engine/render/shaders/src/atmosphere_sky.frag)",
+      "Bash(cmake --build build_vs2022 --config Debug --target dse_compile_shaders)",
+      "Bash(cmake -E rm -rf \"C:/Users/Administrator/Desktop/Engine/DSEngine/bin/data/shader_cache\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(cmake -E rm -rf \"C:/Users/Administrator/Desktop/Engine/DSEngine/data/shader_cache\")",
+      "Bash(cmake -E rm -rf \"C:/Users/Administrator/Desktop/Engine/DSEngine/examples/KF_Framework/data/shader_cache\")",
+      "Read(//tmp/**)",
+      "Bash(cmake --build build_vs2022 --config Debug --target dse_shader_compiler --parallel)",
+      "Bash(python3 *)",
+      "Bash(python *)"
     ]
   }
 }

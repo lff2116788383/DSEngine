@@ -57,6 +57,7 @@ public:
     unsigned int deferred_lighting_shader_handle() const { return deferred_lighting_shader_handle_; }
     unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
     unsigned int volumetric_fog_shader_handle() const { return volumetric_fog_shader_handle_; }
+    unsigned int volumetric_cloud_shader_handle() const { return volumetric_cloud_shader_handle_; }
     unsigned int decal_shader_handle() const { return decal_shader_handle_; }
     unsigned int wboit_composite_shader_handle() const { return wboit_composite_shader_handle_; }
     unsigned int water_shader_handle() const { return water_shader_handle_; }
@@ -107,6 +108,7 @@ protected:
     unsigned int deferred_lighting_shader_handle_ = 0;
     unsigned int edge_detect_shader_handle_ = 0;
     unsigned int volumetric_fog_shader_handle_ = 0;
+    unsigned int volumetric_cloud_shader_handle_ = 0;
     unsigned int decal_shader_handle_ = 0;
     unsigned int wboit_composite_shader_handle_ = 0;
     unsigned int water_shader_handle_ = 0;

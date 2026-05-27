@@ -302,6 +302,7 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<OutlinePass>(r, {"outline"});
         RegisterBuiltin<LightShaftPass>(r, {"light_shaft"});
         RegisterBuiltin<VolumetricFogPass>(r, {"volumetric_fog"});
+        RegisterBuiltin<VolumetricCloudPass>(r, {"volumetric_cloud"});
         RegisterBuiltin<DecalPass>(r, {"decal"});
         RegisterBuiltin<UIPass>(r, {"ui", true});
         RegisterBuiltin<CompositePass>(r, {"composite", true});

@@ -250,6 +250,25 @@ struct RenderThinSnapshot {
         glm::vec4 coefficients[9] = {};
     } light_probe_sh;
 
+    // ── 体积云（VolumetricCloudComponent）──
+    struct VolumetricCloud {
+        bool valid = false;
+        bool half_resolution = true;
+        float cloud_bottom = 1500.0f;
+        float cloud_top    = 4000.0f;
+        float coverage     = 0.5f;
+        float density      = 0.04f;
+        float shape_scale  = 0.0003f;
+        float detail_scale = 0.0015f;
+        float detail_strength = 0.35f;
+        float erosion      = 0.4f;
+        float wind_offset_x = 0.0f;
+        float wind_offset_z = 0.0f;
+        float silver_intensity = 0.7f;
+        float powder_strength  = 2.0f;
+        float ambient_strength = 0.3f;
+    } volumetric_cloud;
+
     // ── DDGI 运行时配置（从 GIProbeVolumeComponent 读取）──
     struct DDGIConfig {
         bool enabled = false;
@@ -280,6 +299,7 @@ struct RenderThinSnapshot {
         water_count = 0;
         decal_count = 0;
         light_probe_sh = LightProbeSH{};
+        volumetric_cloud = VolumetricCloud{};
         ddgi_config = DDGIConfig{};
     }
 };

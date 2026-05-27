@@ -913,6 +913,8 @@ void FramePipeline::InitResolutionDependentRTs() {
         render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.pp_fog_rt == 0)
         render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_cloud_rt == 0)
+        render_resources_.pp_cloud_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
     if (render_resources_.wboit_accum_rt == 0)
         render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.wboit_reveal_rt == 0)
@@ -960,6 +962,7 @@ void FramePipeline::FreeResolutionDependentRTs() {
     del(render_resources_.pp_motion_vector_rt);
     del(render_resources_.pp_outline_rt);
     del(render_resources_.pp_fog_rt);
+    del(render_resources_.pp_cloud_rt);
     del(render_resources_.wboit_accum_rt);
     del(render_resources_.wboit_reveal_rt);
     del(render_resources_.gbuffer_rt);
@@ -1535,6 +1538,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
     render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
     render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
+    render_pass_context_.render_targets.cloud  = render_resources_.pp_cloud_rt;
     render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
@@ -2244,6 +2248,32 @@ void FramePipeline::CaptureThinSnapshot() {
             s.fog_end = pp.fog_end;
             s.fog_steps = pp.fog_steps;
             s.fog_sun_scatter = pp.fog_sun_scatter;
+            break;
+        }
+    }
+
+    // ── 7b. Volumetric Cloud ──
+    {
+        auto view = reg.view<dse::VolumetricCloudComponent>();
+        for (auto e : view) {
+            auto& cloud = view.get<dse::VolumetricCloudComponent>(e);
+            if (!cloud.enabled) continue;
+            auto& vc = snap.volumetric_cloud;
+            vc.valid = true;
+            vc.half_resolution = cloud.half_resolution;
+            vc.cloud_bottom = cloud.cloud_bottom;
+            vc.cloud_top = cloud.cloud_top;
+            vc.coverage = cloud.coverage;
+            vc.density = cloud.density;
+            vc.shape_scale = cloud.shape_scale;
+            vc.detail_scale = cloud.detail_scale;
+            vc.detail_strength = cloud.detail_strength;
+            vc.erosion = cloud.erosion;
+            vc.wind_offset_x = cloud.wind_direction.x * cloud.wind_speed * Time::TimeSinceStartup();
+            vc.wind_offset_z = cloud.wind_direction.y * cloud.wind_speed * Time::TimeSinceStartup();
+            vc.silver_intensity = cloud.silver_intensity;
+            vc.powder_strength = cloud.powder_strength;
+            vc.ambient_strength = cloud.ambient_strength;
             break;
         }
     }

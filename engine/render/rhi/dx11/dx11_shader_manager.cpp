@@ -41,6 +41,7 @@
 #include "engine/render/shaders/generated/embed/deferred_lighting_frag.gen.h"
 #include "engine/render/shaders/generated/embed/edge_detect_frag.gen.h"
 #include "engine/render/shaders/generated/embed/volumetric_fog_frag.gen.h"
+#include "engine/render/shaders/generated/embed/volumetric_cloud_frag.gen.h"
 #include "engine/render/shaders/generated/embed/decal_frag.gen.h"
 #include "engine/render/shaders/generated/embed/wboit_composite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/water_frag.gen.h"
@@ -163,6 +164,7 @@ void DX11ShaderManager::Shutdown() {
     deferred_lighting_shader_handle_ = 0;
     edge_detect_shader_handle_ = 0;
     volumetric_fog_shader_handle_ = 0;
+    volumetric_cloud_shader_handle_ = 0;
     decal_shader_handle_ = 0;
     DEBUG_LOG_INFO("[D3D11] ShaderManager shutdown");
 }
@@ -507,6 +509,9 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     deferred_lighting_shader_handle_ = create_pp_dxbc(kdeferred_lighting_frag_dxbc, kdeferred_lighting_frag_dxbc_size, "deferred_lighting");
     edge_detect_shader_handle_ = create_pp_dxbc(kedge_detect_frag_dxbc, kedge_detect_frag_dxbc_size, "edge_detect");
     volumetric_fog_shader_handle_ = create_pp_dxbc(kvolumetric_fog_frag_dxbc, kvolumetric_fog_frag_dxbc_size, "volumetric_fog");
+    volumetric_cloud_shader_handle_ = (kvolumetric_cloud_frag_dxbc_size > 0)
+        ? create_pp_dxbc(kvolumetric_cloud_frag_dxbc, kvolumetric_cloud_frag_dxbc_size, "volumetric_cloud")
+        : create_pp_hlsl(kvolumetric_cloud_frag_hlsl, "volumetric_cloud");
     decal_shader_handle_ = create_pp_dxbc(kdecal_frag_dxbc, kdecal_frag_dxbc_size, "decal");
     wboit_composite_shader_handle_ = create_pp_dxbc(kwboit_composite_frag_dxbc, kwboit_composite_frag_dxbc_size, "wboit_composite");
     water_shader_handle_ = create_pp_dxbc(kwater_frag_dxbc, kwater_frag_dxbc_size, "water");

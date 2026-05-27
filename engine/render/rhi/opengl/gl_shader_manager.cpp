@@ -42,6 +42,7 @@
 #include "embed/deferred_lighting_frag.gen.h"
 #include "embed/light_shaft_frag.gen.h"
 #include "embed/volumetric_fog_frag.gen.h"
+#include "embed/volumetric_cloud_frag.gen.h"
 #include "embed/decal_frag.gen.h"
 #include "embed/water_frag.gen.h"
 #include "embed/wboit_composite_frag.gen.h"
@@ -599,6 +600,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl430;
     else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl430;
     else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl430;
+    else if (effect_name == "volumetric_cloud")     fs = kvolumetric_cloud_frag_glsl430;
     else if (effect_name == "decal")                 fs = kdecal_frag_glsl430;
     else if (effect_name == "water")                 fs = kwater_frag_glsl430;
     else if (effect_name == "wboit_composite")       fs = kwboit_composite_frag_glsl430;

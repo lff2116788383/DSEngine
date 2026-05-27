@@ -25,6 +25,7 @@ struct RenderPipelineResources {
     unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
     unsigned int pp_outline_rt = 0;       // Outline / Edge Detection
     unsigned int pp_fog_rt = 0;           // Volumetric Fog
+    unsigned int pp_cloud_rt = 0;         // Volumetric Cloud
     unsigned int wboit_accum_rt = 0;      // WBOIT accumulation (RGBA16F)
     unsigned int wboit_reveal_rt = 0;     // WBOIT revealage (RGBA16F)
 
@@ -99,6 +100,7 @@ struct RenderPipelineResources {
         pp_motion_vector_rt = 0;
         pp_outline_rt = 0;
         pp_fog_rt = 0;
+        pp_cloud_rt = 0;
         wboit_accum_rt = 0;
         wboit_reveal_rt = 0;
         gbuffer_rt = 0;

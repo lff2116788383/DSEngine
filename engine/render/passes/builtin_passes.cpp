@@ -1669,6 +1669,89 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
+// VolumetricCloudPass — Guerrilla-style raymarching volumetric clouds
+// ============================================================
+
+void VolumetricCloudPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto cloud_color = graph.DeclareResource("cloud_color");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassWrite(pass, cloud_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
+    const auto& snap = *ctx_.snapshot;
+    const auto& vc = snap.volumetric_cloud;
+    if (!vc.valid || ctx_.render_targets.cloud == 0) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+
+    float near_p = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float far_p  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    float fov_y  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
+    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+    glm::vec3 cam_pos   = glm::vec3(0.0f); // Camera-Relative: cam at origin
+    glm::vec3 cam_right = snap.camera_3d.right;
+    glm::vec3 cam_up    = snap.camera_3d.up;
+    glm::vec3 cam_fwd   = snap.camera_3d.forward;
+    const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
+
+    // Pre-scale right/up by tan_fov for ray reconstruction in shader
+    glm::vec3 right_scaled = cam_right * tan_fov_y * aspect;
+    glm::vec3 up_scaled    = cam_up * tan_fov_y;
+
+    glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
+    if (snap.directional_light.valid) {
+        sun_dir = glm::normalize(snap.directional_light.direction);
+    }
+
+    // Cloud bottom/top in camera-relative space
+    float cloud_bottom_rel = vc.cloud_bottom - ctx_.camera_offset.y;
+    float cloud_top_rel    = vc.cloud_top    - ctx_.camera_offset.y;
+
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    // half_resolution: render to dedicated cloud RT then upscale-copy back
+    // full resolution: render directly into scene RT (in-place, no copy needed)
+    const bool use_half_res = vc.half_resolution && (ctx_.render_targets.cloud != 0);
+    const unsigned int target_rt = use_half_res ? ctx_.render_targets.cloud : ctx_.render_targets.scene;
+
+    // params 布局（30 个 float，三后端通用）：
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), use_half_res});
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"volumetric_cloud", scene_tex, {
+        cloud_bottom_rel, cloud_top_rel,
+        vc.coverage, vc.density,
+        vc.shape_scale, vc.detail_scale, vc.detail_strength, vc.erosion,
+        vc.wind_offset_x, vc.wind_offset_z,
+        vc.silver_intensity, vc.powder_strength, vc.ambient_strength,
+        sun_dir.x, sun_dir.y, sun_dir.z,
+        cam_pos.x, cam_pos.y, cam_pos.z,
+        near_p, far_p,
+        right_scaled.x, right_scaled.y, right_scaled.z,
+        up_scaled.x, up_scaled.y, up_scaled.z,
+        cam_fwd.x, cam_fwd.y, cam_fwd.z
+    }}.Tex(2, depth_tex));
+    cmd_buffer.EndRenderPass();
+
+    // Half-res: upscale-copy cloud result back to scene RT
+    if (use_half_res) {
+        const unsigned int cloud_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.cloud);
+        if (cloud_tex != 0) {
+            cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+            cmd_buffer.DrawPostProcess({"copy", cloud_tex});
+            cmd_buffer.EndRenderPass();
+        }
+    }
+}
+
+// ============================================================
 // WBOITPass — Weighted Blended Order-Independent Transparency
 // ============================================================
 

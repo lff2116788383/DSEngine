@@ -275,6 +275,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Volumetric Cloud Pass ----
+class VolumetricCloudPass : public IRenderPass {
+public:
+    explicit VolumetricCloudPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "volumetric_cloud_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 // ---- WBOIT (Weighted Blended OIT) Pass ----
 class WBOITPass : public IRenderPass {
 public:

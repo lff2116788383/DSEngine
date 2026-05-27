@@ -2733,6 +2733,7 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"deferred_lighting", &ShaderManagerBase::deferred_lighting_shader_handle},
         {"edge_detect",       &ShaderManagerBase::edge_detect_shader_handle},
         {"volumetric_fog",    &ShaderManagerBase::volumetric_fog_shader_handle},
+        {"volumetric_cloud",  &ShaderManagerBase::volumetric_cloud_shader_handle},
         {"decal",             &ShaderManagerBase::decal_shader_handle},
         {"wboit_composite",   &ShaderManagerBase::wboit_composite_shader_handle},
         {"water",             &ShaderManagerBase::water_shader_handle},
@@ -2791,6 +2792,7 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"ssr",               {{2, 2}}},
         {"deferred_lighting", {{2, 2}, {3, 3}}},
         {"volumetric_fog",    {{2, 2}}},
+        {"volumetric_cloud",  {{2, 2}}},
         {"decal",             {{2, 2}, {3, 3}}},
         {"wboit_composite",   {{2, 2}}},
         {"water",             {{2, 2}}},
@@ -2960,6 +2962,12 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc[30];
             pc[0] = static_cast<float>(request.FindTex(2));
             for (int i = 0; i < 29; ++i) pc[i + 1] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "volumetric_cloud" && params.size() >= 30) {
+            float pc[31];
+            pc[0] = static_cast<float>(request.FindTex(2));
+            for (int i = 0; i < 30; ++i) pc[i + 1] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         } else if (effect_name == "decal" && params.size() >= 24) {

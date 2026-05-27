@@ -84,6 +84,7 @@ struct RenderPassContext {
         unsigned int motion_vector = 0;     // Motion Vector RT (RG16F)
         unsigned int outline = 0;            // Outline / Edge Detection RT
         unsigned int fog = 0;               // Volumetric Fog RT
+        unsigned int cloud = 0;             // Volumetric Cloud RT
         unsigned int wboit_accum = 0;        // WBOIT accumulation RT (RGBA16F)
         unsigned int wboit_reveal = 0;       // WBOIT revealage RT (RGBA16F)
         unsigned int gbuffer = 0;           // GBuffer MRT (3 color + depth)

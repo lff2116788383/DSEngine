@@ -48,6 +48,7 @@
 #include "embed/deferred_lighting_frag.gen.h"
 #include "embed/edge_detect_frag.gen.h"
 #include "embed/volumetric_fog_frag.gen.h"
+#include "embed/volumetric_cloud_frag.gen.h"
 #include "embed/decal_frag.gen.h"
 #include "embed/wboit_composite_frag.gen.h"
 #include "embed/water_frag.gen.h"
@@ -715,6 +716,7 @@ void VulkanShaderManager::InitPostProcessShader() {
     deferred_lighting_shader_handle_ = create_pp_spv(generated_shaders::kdeferred_lighting_frag_spv, generated_shaders::kdeferred_lighting_frag_spv_size, "Deferred Lighting");
     edge_detect_shader_handle_ = create_pp_spv(generated_shaders::kedge_detect_frag_spv, generated_shaders::kedge_detect_frag_spv_size, "Edge Detect");
     volumetric_fog_shader_handle_ = create_pp_spv(generated_shaders::kvolumetric_fog_frag_spv, generated_shaders::kvolumetric_fog_frag_spv_size, "Volumetric Fog");
+    volumetric_cloud_shader_handle_ = create_pp_spv(generated_shaders::kvolumetric_cloud_frag_spv, generated_shaders::kvolumetric_cloud_frag_spv_size, "Volumetric Cloud");
     decal_shader_handle_ = create_pp_spv(generated_shaders::kdecal_frag_spv, generated_shaders::kdecal_frag_spv_size, "Decal");
     wboit_composite_shader_handle_ = create_pp_spv(generated_shaders::kwboit_composite_frag_spv, generated_shaders::kwboit_composite_frag_spv_size, "WBOIT Composite");
     water_shader_handle_ = create_pp_spv(generated_shaders::kwater_frag_spv, generated_shaders::kwater_frag_spv_size, "Water");
