@@ -45,6 +45,8 @@
 #include "embed/decal_frag.gen.h"
 #include "embed/water_frag.gen.h"
 #include "embed/wboit_composite_frag.gen.h"
+#include "embed/atmosphere_transmittance_lut_frag.gen.h"
+#include "embed/atmosphere_sky_frag.gen.h"
 #include "embed/lum_compute_frag.gen.h"
 #include "embed/lum_adapt_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
@@ -599,6 +601,8 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl430;
     else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl430;
     else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl430;
+    else if (effect_name == "atmosphere_transmittance_lut") fs = katmosphere_transmittance_lut_frag_glsl430;
+    else if (effect_name == "atmosphere_sky")        fs = katmosphere_sky_frag_glsl430;
     else return 0;
 
     unsigned int shader = CompileProgram(kpostprocess_vert_glsl430, fs);

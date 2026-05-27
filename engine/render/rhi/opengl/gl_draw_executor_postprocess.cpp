@@ -170,6 +170,36 @@ static constexpr PPUniformEntry kVolumetricFogBindings[] = {
     {"_20.u_fwd_z",       UType::Float, 26}, {"_20.u_tan_fov_y",   UType::Float, 27},
     {"_20.u_aspect",      UType::Float, 28},
 };
+static constexpr PPUniformEntry kAtmTransmittanceLutBindings[] = {
+    {"_17.u_planet_radius",     UType::Float, 0},
+    {"_17.u_atmosphere_height", UType::Float, 1},
+    {"_17.u_rayleigh_r",        UType::Float, 2},
+    {"_17.u_rayleigh_g",        UType::Float, 3},
+    {"_17.u_rayleigh_b",        UType::Float, 4},
+    {"_17.u_rayleigh_scale_h",  UType::Float, 5},
+    {"_17.u_mie_coeff",         UType::Float, 6},
+    {"_17.u_mie_scale_h",       UType::Float, 7},
+};
+static constexpr PPUniformEntry kAtmSkyBindings[] = {
+    {"_74.u_sun_dir_x",      UType::Float, 0},  {"_74.u_sun_dir_y",      UType::Float, 1},
+    {"_74.u_sun_dir_z",      UType::Float, 2},  {"_74.u_rayleigh_r",     UType::Float, 3},
+    {"_74.u_rayleigh_g",     UType::Float, 4},  {"_74.u_rayleigh_b",     UType::Float, 5},
+    {"_74.u_rayleigh_scale_h", UType::Float, 6}, {"_74.u_mie_coeff",     UType::Float, 7},
+    {"_74.u_mie_scale_h",    UType::Float, 8},  {"_74.u_mie_g",          UType::Float, 9},
+    {"_74.u_planet_radius",  UType::Float, 10}, {"_74.u_atmosphere_height", UType::Float, 11},
+    {"_74.u_sun_intensity_r", UType::Float, 12}, {"_74.u_sun_intensity_g", UType::Float, 13},
+    {"_74.u_sun_intensity_b", UType::Float, 14}, {"_74.u_sun_disk_angle", UType::Float, 15},
+    {"_74.u_near",           UType::Float, 16}, {"_74.u_far",            UType::Float, 17},
+    {"_74.u_tan_fov_y",      UType::Float, 18}, {"_74.u_aspect",         UType::Float, 19},
+    {"_74.u_right_x",        UType::Float, 20}, {"_74.u_right_y",        UType::Float, 21},
+    {"_74.u_right_z",        UType::Float, 22}, {"_74.u_up_x",           UType::Float, 23},
+    {"_74.u_up_y",           UType::Float, 24}, {"_74.u_up_z",           UType::Float, 25},
+    {"_74.u_fwd_x",          UType::Float, 26}, {"_74.u_fwd_y",          UType::Float, 27},
+    {"_74.u_fwd_z",          UType::Float, 28}, {"_74.u_ozone_r",        UType::Float, 29},
+    {"_74.u_ozone_g",        UType::Float, 30}, {"_74.u_ozone_b",        UType::Float, 31},
+    {"_74.u_ozone_center_h", UType::Float, 32}, {"_74.u_ozone_width",    UType::Float, 33},
+    {"_74.u_sky_view_steps", UType::Float, 34}, {"_74.u_reserved",       UType::Float, 35},
+};
 static constexpr PPUniformEntry kLumAdaptBindings[] = {
     {"_34.u_dt",             UType::Float, 0},
     {"_34.u_speed_up",       UType::Float, 1},
@@ -391,6 +421,9 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         {"lum_compute",             {nullptr, 0, 0, nullptr, false}},
         {"bloom_blur_h",            {nullptr, 0, 0, nullptr, false}},
         {"bloom_blur_v",            {nullptr, 0, 0, nullptr, false}},
+        // --- 大气天空 ---
+        {"atmosphere_transmittance_lut", {kAtmTransmittanceLutBindings, (int)std::size(kAtmTransmittanceLutBindings), 8, nullptr, false}},
+        {"atmosphere_sky",   {kAtmSkyBindings, (int)std::size(kAtmSkyBindings), 36, nullptr, false}},
     };
     return table;
 }

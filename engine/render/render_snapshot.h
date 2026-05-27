@@ -48,6 +48,28 @@ struct RenderThinSnapshot {
         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     } skybox;
 
+    // ── 大气散射天空 ──
+    struct AtmosphereSky {
+        bool valid = false;
+        float planet_radius     = 6371000.0f;
+        float atmosphere_height = 100000.0f;
+        glm::vec3 rayleigh_coeff{5.8e-6f, 13.5e-6f, 33.1e-6f};
+        float rayleigh_scale_height = 8500.0f;
+        float mie_coeff        = 21e-6f;
+        float mie_scale_height = 1200.0f;
+        float mie_g            = 0.76f;
+        glm::vec3 mie_albedo{0.9f};
+        glm::vec3 ozone_coeff{0.65e-6f, 1.88e-6f, 0.085e-6f};
+        float ozone_center_h   = 25000.0f;
+        float ozone_width      = 15000.0f;
+        glm::vec3 sun_intensity{20.0f};
+        float sun_disk_angle   = 0.53f;
+        glm::vec3 sun_direction{0.0f, -1.0f, 0.0f};
+        int transmittance_lut_width  = 256;
+        int transmittance_lut_height = 64;
+        int sky_view_steps = 32;
+    } atmosphere_sky;
+
     // ── 方向光（CSMShadow / DeferredLighting / ForwardScene / ContactShadow / LightShaft / Fog / Water / RSM / DDGI）──
     struct DirectionalLight {
         bool valid = false;
@@ -250,6 +272,7 @@ struct RenderThinSnapshot {
         camera_offset = glm::vec3(0.0f);
         camera_2d = Camera2D{};
         skybox = Skybox{};
+        atmosphere_sky = AtmosphereSky{};
         directional_light = DirectionalLight{};
         spot_shadow_count = 0;
         point_shadow_count = 0;

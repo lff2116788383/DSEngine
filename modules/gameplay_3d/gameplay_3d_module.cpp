@@ -114,6 +114,9 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
         }
     }
 
+    // 昼夜循环（驱动太阳方向 → DirectionalLight）
+    day_night_cycle_system_.Update(world, delta_time);
+
     // Animation pipeline: EvaluateBaseAnim → LayerBlend → IK → FootIK → ComputeFinalMatrices
     animator_system_.EvaluateBaseAnim(world, delta_time);
     anim_layer_blend_system_.Update(world, delta_time);

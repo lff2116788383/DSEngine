@@ -2732,6 +2732,8 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"wboit_composite",   &ShaderManagerBase::wboit_composite_shader_handle},
         {"water",             &ShaderManagerBase::water_shader_handle},
         {"light_shaft",       &ShaderManagerBase::light_shaft_shader_handle},
+        {"atmosphere_transmittance_lut", &ShaderManagerBase::atmosphere_transmittance_lut_shader_handle},
+        {"atmosphere_sky",    &ShaderManagerBase::atmosphere_sky_shader_handle},
     };
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
     {
@@ -2787,6 +2789,7 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"decal",             {{2, 2}, {3, 3}}},
         {"wboit_composite",   {{2, 2}}},
         {"water",             {{2, 2}}},
+        {"atmosphere_sky",    {{2, 2}, {3, 3}}},
         {"light_shaft",       {{2, 2}}},
     };
     std::vector<std::pair<uint32_t, unsigned int>> extra_bindings;
@@ -2975,6 +2978,16 @@ void VulkanDrawExecutor::DrawPostProcess(
             float pc[16] = {};
             pc[0] = static_cast<float>(request.FindTex(2));
             for (int i = 0; i < 11; ++i) pc[i + 1] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "atmosphere_transmittance_lut" && params.size() >= 8) {
+            float pc[8];
+            for (int i = 0; i < 8; ++i) pc[i] = params[i];
+            vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+        } else if (effect_name == "atmosphere_sky" && params.size() >= 36) {
+            float pc[36];
+            for (int i = 0; i < 36; ++i) pc[i] = params[i];
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         }

@@ -1,5 +1,6 @@
 #include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/passes/builtin_passes.h"
+#include "engine/render/passes/atmosphere_sky_pass.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -59,6 +60,7 @@ std::vector<RenderPipelinePassConfig> DefaultPassList() {
         Pass("gbuffer"),
         Pass("deferred_lighting"),
         Pass("forward_scene"),
+        Pass("atmosphere_sky"),
         Pass("wboit"),
         Pass("water"),
         Pass("bloom"),
@@ -287,6 +289,7 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<DDGIUpdatePass>(r, {"ddgi_update"});
         RegisterBuiltin<GBufferPass>(r, {"gbuffer"});
         RegisterBuiltin<DeferredLightingPass>(r, {"deferred_lighting"});
+        RegisterBuiltin<AtmosphereSkyPass>(r, {"atmosphere_sky"});
         RegisterBuiltin<ForwardScenePass>(r, {"forward_scene", true});
         RegisterBuiltin<WBOITPass>(r, {"wboit"});
         RegisterBuiltin<WaterPass>(r, {"water"});

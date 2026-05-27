@@ -52,6 +52,8 @@
 #include "embed/wboit_composite_frag.gen.h"
 #include "embed/water_frag.gen.h"
 #include "embed/light_shaft_frag.gen.h"
+#include "embed/atmosphere_transmittance_lut_frag.gen.h"
+#include "embed/atmosphere_sky_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
@@ -717,6 +719,8 @@ void VulkanShaderManager::InitPostProcessShader() {
     wboit_composite_shader_handle_ = create_pp_spv(generated_shaders::kwboit_composite_frag_spv, generated_shaders::kwboit_composite_frag_spv_size, "WBOIT Composite");
     water_shader_handle_ = create_pp_spv(generated_shaders::kwater_frag_spv, generated_shaders::kwater_frag_spv_size, "Water");
     light_shaft_shader_handle_ = create_pp_spv(generated_shaders::klight_shaft_frag_spv, generated_shaders::klight_shaft_frag_spv_size, "Light Shaft");
+    atmosphere_transmittance_lut_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_transmittance_lut_frag_spv, generated_shaders::katmosphere_transmittance_lut_frag_spv_size, "Atmosphere Transmittance LUT");
+    atmosphere_sky_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_sky_frag_spv, generated_shaders::katmosphere_sky_frag_spv_size, "Atmosphere Sky");
 }
 
 // ============================================================================

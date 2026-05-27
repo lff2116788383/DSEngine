@@ -602,6 +602,212 @@ int L_EcsBuoyancySetUseFluid(lua_State* L) {
 
 #endif // DSE_HAS_PHYSICS3D
 
+// ============================================================
+// AtmosphereComponent 绑定
+// ============================================================
+
+/// add_atmosphere(entity)
+int L_EcsAddAtmosphere(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<AtmosphereComponent>(e);
+    return 0;
+}
+
+/// set_atmosphere_params(entity, planet_radius, atmosphere_height, sun_disk_angle)
+int L_EcsSetAtmosphereParams(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
+    if (!atm) return 0;
+    atm->planet_radius     = helper::OptFloat(L, 2, atm->planet_radius);
+    atm->atmosphere_height = helper::OptFloat(L, 3, atm->atmosphere_height);
+    atm->sun_disk_angle    = helper::OptFloat(L, 4, atm->sun_disk_angle);
+    return 0;
+}
+
+/// set_atmosphere_rayleigh(entity, coeff_r, coeff_g, coeff_b, scale_height)
+int L_EcsSetAtmosphereRayleigh(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
+    if (!atm) return 0;
+    atm->rayleigh_coeff = glm::vec3(
+        helper::OptFloat(L, 2, atm->rayleigh_coeff.x),
+        helper::OptFloat(L, 3, atm->rayleigh_coeff.y),
+        helper::OptFloat(L, 4, atm->rayleigh_coeff.z));
+    atm->rayleigh_scale_height = helper::OptFloat(L, 5, atm->rayleigh_scale_height);
+    return 0;
+}
+
+/// set_atmosphere_mie(entity, coeff, scale_height, g)
+int L_EcsSetAtmosphereMie(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
+    if (!atm) return 0;
+    atm->mie_coeff        = helper::OptFloat(L, 2, atm->mie_coeff);
+    atm->mie_scale_height = helper::OptFloat(L, 3, atm->mie_scale_height);
+    atm->mie_g            = helper::OptFloat(L, 4, atm->mie_g);
+    return 0;
+}
+
+/// set_atmosphere_sun_intensity(entity, r, g, b)
+int L_EcsSetAtmosphereSunIntensity(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
+    if (!atm) return 0;
+    atm->sun_intensity = glm::vec3(
+        helper::OptFloat(L, 2, atm->sun_intensity.x),
+        helper::OptFloat(L, 3, atm->sun_intensity.y),
+        helper::OptFloat(L, 4, atm->sun_intensity.z));
+    return 0;
+}
+
+// ============================================================
+// DayNightCycleComponent 绑定
+// ============================================================
+
+/// add_day_night_cycle(entity, [time_of_day, auto_advance, time_speed])
+int L_EcsAddDayNightCycle(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& dnc = world->registry().emplace_or_replace<DayNightCycleComponent>(e);
+    dnc.time_of_day  = helper::OptFloat(L, 2, 12.0f);
+    dnc.auto_advance = helper::OptBool(L, 3, false);
+    dnc.time_speed   = helper::OptFloat(L, 4, 1.0f);
+    return 0;
+}
+
+/// set_day_night_time(entity, time_of_day)
+int L_EcsSetDayNightTime(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
+    if (!dnc) return 0;
+    dnc->time_of_day = helper::CheckFloat(L, 2);
+    return 0;
+}
+
+/// get_day_night_time(entity) -> time_of_day
+int L_EcsGetDayNightTime(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
+    if (!dnc) { lua_pushnumber(L, 0); return 1; }
+    lua_pushnumber(L, dnc->time_of_day);
+    return 1;
+}
+
+/// set_day_night_speed(entity, speed)
+int L_EcsSetDayNightSpeed(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
+    if (!dnc) return 0;
+    dnc->time_speed = helper::CheckFloat(L, 2);
+    return 0;
+}
+
+/// set_day_night_auto_advance(entity, enabled)
+int L_EcsSetDayNightAutoAdvance(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
+    if (!dnc) return 0;
+    dnc->auto_advance = helper::CheckBool(L, 2);
+    return 0;
+}
+
+/// set_day_night_location(entity, latitude, longitude, day_of_year)
+int L_EcsSetDayNightLocation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
+    if (!dnc) return 0;
+    dnc->latitude    = helper::OptFloat(L, 2, dnc->latitude);
+    dnc->longitude   = helper::OptFloat(L, 3, dnc->longitude);
+    dnc->day_of_year = helper::OptInt(L, 4, dnc->day_of_year);
+    return 0;
+}
+
+/// get_sun_elevation(entity) -> degrees
+int L_EcsGetSunElevation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
+    if (!dnc) { lua_pushnumber(L, 0); return 1; }
+    lua_pushnumber(L, dnc->sun_elevation_);
+    return 1;
+}
+
+/// get_sun_direction(entity) -> x, y, z
+int L_EcsGetSunDirection(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
+    if (!dnc) { lua_pushnumber(L, 0); lua_pushnumber(L, -1); lua_pushnumber(L, 0); return 3; }
+    lua_pushnumber(L, dnc->sun_direction_.x);
+    lua_pushnumber(L, dnc->sun_direction_.y);
+    lua_pushnumber(L, dnc->sun_direction_.z);
+    return 3;
+}
+
+// ============================================================
+// VolumetricCloudComponent 绑定
+// ============================================================
+
+/// add_volumetric_cloud(entity)
+int L_EcsAddVolumetricCloud(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<VolumetricCloudComponent>(e);
+    return 0;
+}
+
+/// set_cloud_layer(entity, bottom, top, coverage, density)
+int L_EcsSetCloudLayer(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* vc = helper::TryGetComponent<VolumetricCloudComponent>(*world, e);
+    if (!vc) return 0;
+    vc->cloud_bottom = helper::OptFloat(L, 2, vc->cloud_bottom);
+    vc->cloud_top    = helper::OptFloat(L, 3, vc->cloud_top);
+    vc->coverage     = helper::OptFloat(L, 4, vc->coverage);
+    vc->density      = helper::OptFloat(L, 5, vc->density);
+    return 0;
+}
+
+/// set_cloud_wind(entity, dir_x, dir_y, speed)
+int L_EcsSetCloudWind(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* vc = helper::TryGetComponent<VolumetricCloudComponent>(*world, e);
+    if (!vc) return 0;
+    vc->wind_direction = glm::vec2(
+        helper::OptFloat(L, 2, vc->wind_direction.x),
+        helper::OptFloat(L, 3, vc->wind_direction.y));
+    vc->wind_speed = helper::OptFloat(L, 4, vc->wind_speed);
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsGameplay3DBindings(lua_State* L) {
@@ -662,6 +868,25 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"buoyancy_get_submerge_ratio", L_EcsBuoyancyGetSubmergeRatio},
         {"buoyancy_set_use_fluid",    L_EcsBuoyancySetUseFluid},
 #endif
+        // 大气天空
+        {"add_atmosphere",             L_EcsAddAtmosphere},
+        {"set_atmosphere_params",      L_EcsSetAtmosphereParams},
+        {"set_atmosphere_rayleigh",    L_EcsSetAtmosphereRayleigh},
+        {"set_atmosphere_mie",         L_EcsSetAtmosphereMie},
+        {"set_atmosphere_sun_intensity", L_EcsSetAtmosphereSunIntensity},
+        // 昼夜循环
+        {"add_day_night_cycle",        L_EcsAddDayNightCycle},
+        {"set_day_night_time",         L_EcsSetDayNightTime},
+        {"get_day_night_time",         L_EcsGetDayNightTime},
+        {"set_day_night_speed",        L_EcsSetDayNightSpeed},
+        {"set_day_night_auto_advance", L_EcsSetDayNightAutoAdvance},
+        {"set_day_night_location",     L_EcsSetDayNightLocation},
+        {"get_sun_elevation",          L_EcsGetSunElevation},
+        {"get_sun_direction",          L_EcsGetSunDirection},
+        // 体积云（占位，VolumetricCloudPass 后续实现）
+        {"add_volumetric_cloud",       L_EcsAddVolumetricCloud},
+        {"set_cloud_layer",            L_EcsSetCloudLayer},
+        {"set_cloud_wind",             L_EcsSetCloudWind},
     });
 }
 

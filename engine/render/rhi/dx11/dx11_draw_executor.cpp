@@ -1960,6 +1960,50 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
         return;
     }
 
+    // Atmosphere Transmittance LUT 专用路径（8 float，无额外纹理）
+    if (effect_name == "atmosphere_transmittance_lut" && shader_mgr.atmosphere_transmittance_lut_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 8) {
+            float raw[8] = {};
+            for (int i = 0; i < 8; ++i) raw[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, raw, sizeof(raw));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.atmosphere_transmittance_lut_shader_handle());
+        return;
+    }
+
+    // Atmosphere Sky 专用路径（36 float + depth texture slot 2 + transmittance LUT slot 3）
+    if (effect_name == "atmosphere_sky" && shader_mgr.atmosphere_sky_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 36) {
+            float raw[36] = {};
+            for (int i = 0; i < 36; ++i) raw[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, raw, sizeof(raw));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+            const auto* lut_tex = resource_mgr.GetTexture(request.FindTex(3));
+            if (lut_tex) dc->PSSetShaderResources(2, 1, lut_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.atmosphere_sky_shader_handle());
+        {
+            ID3D11ShaderResourceView* null_srvs[2] = { nullptr, nullptr };
+            dc->PSSetShaderResources(1, 2, null_srvs);
+        }
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

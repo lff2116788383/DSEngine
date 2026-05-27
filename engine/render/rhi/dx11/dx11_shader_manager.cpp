@@ -45,6 +45,8 @@
 #include "engine/render/shaders/generated/embed/wboit_composite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/water_frag.gen.h"
 #include "engine/render/shaders/generated/embed/light_shaft_frag.gen.h"
+#include "engine/render/shaders/generated/embed/atmosphere_transmittance_lut_frag.gen.h"
+#include "engine/render/shaders/generated/embed/atmosphere_sky_frag.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
 
 // Reflection metadata for automated InputLayout creation
@@ -468,6 +470,18 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         }
         return h;
     };
+    auto create_pp_hlsl = [&](const char* ps_hlsl, const char* name) -> unsigned int {
+        unsigned int h = CreateProgram(kpostprocess_vert_hlsl, ps_hlsl, "main", "main");
+        if (h) {
+            DEBUG_LOG_INFO("[D3D11] Builtin {} shader created (HLSL): {}", name, h);
+            using namespace generated_shaders::reflect;
+            std::vector<D3D11_INPUT_ELEMENT_DESC> pp_layout;
+            CreateInputLayoutFromReflection(kpostprocess_vert_reflection, pp_layout);
+            CreateInputLayoutForShader(h, pp_layout.data(),
+                                       static_cast<int>(pp_layout.size()));
+        }
+        return h;
+    };
 
     pulse();
     bloom_composite_shader_handle_ = create_pp_dxbc(kbloom_composite_frag_dxbc, kbloom_composite_frag_dxbc_size, "bloom_composite");
@@ -497,6 +511,8 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     wboit_composite_shader_handle_ = create_pp_dxbc(kwboit_composite_frag_dxbc, kwboit_composite_frag_dxbc_size, "wboit_composite");
     water_shader_handle_ = create_pp_dxbc(kwater_frag_dxbc, kwater_frag_dxbc_size, "water");
     light_shaft_shader_handle_ = create_pp_dxbc(klight_shaft_frag_dxbc, klight_shaft_frag_dxbc_size, "light_shaft");
+    atmosphere_transmittance_lut_shader_handle_ = create_pp_dxbc(katmosphere_transmittance_lut_frag_dxbc, katmosphere_transmittance_lut_frag_dxbc_size, "atmosphere_transmittance_lut");
+    atmosphere_sky_shader_handle_ = create_pp_hlsl(katmosphere_sky_frag_hlsl, "atmosphere_sky");
 
     pulse();
     // ---- GBuffer 着色器（复用 PBR VS DXBC + GBuffer PS DXBC）----

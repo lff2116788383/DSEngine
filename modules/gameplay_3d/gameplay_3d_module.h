@@ -32,6 +32,7 @@
 #include "modules/gameplay_3d/fluid/fluid_system.h"
 #include "modules/gameplay_3d/softbody/softbody_system.h"
 #include "modules/gameplay_3d/rope/rope_system.h"
+#include "modules/gameplay_3d/sky/day_night_cycle_system.h"
 
 namespace dse {
 namespace render {
@@ -87,6 +88,7 @@ private:
     FluidSystem fluid_system_;
     SoftBodySystem softbody_system_;
     RopeSystem rope_system_;
+    DayNightCycleSystem day_night_cycle_system_;
 
     World* world_cache_ = nullptr;
     dse::core::SubscriptionHandle origin_rebase_handle_;

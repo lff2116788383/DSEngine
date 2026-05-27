@@ -2090,6 +2090,34 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
+    // ── 3b. Atmosphere Sky（程序化大气散射天空，优先于 cubemap skybox）──
+    {
+        auto view = reg.view<dse::AtmosphereComponent>();
+        for (auto e : view) {
+            auto& atm = view.get<dse::AtmosphereComponent>(e);
+            if (!atm.enabled) continue;
+            auto& s = snap.atmosphere_sky;
+            s.valid = true;
+            s.planet_radius     = atm.planet_radius;
+            s.atmosphere_height = atm.atmosphere_height;
+            s.rayleigh_coeff    = atm.rayleigh_coeff;
+            s.rayleigh_scale_height = atm.rayleigh_scale_height;
+            s.mie_coeff         = atm.mie_coeff;
+            s.mie_scale_height  = atm.mie_scale_height;
+            s.mie_g             = atm.mie_g;
+            s.mie_albedo        = atm.mie_albedo;
+            s.ozone_coeff       = atm.ozone_coeff;
+            s.ozone_center_h    = atm.ozone_center_h;
+            s.ozone_width       = atm.ozone_width;
+            s.sun_intensity     = atm.sun_intensity;
+            s.sun_disk_angle    = atm.sun_disk_angle;
+            s.transmittance_lut_width  = atm.transmittance_lut_width;
+            s.transmittance_lut_height = atm.transmittance_lut_height;
+            s.sky_view_steps    = atm.sky_view_steps;
+            break;
+        }
+    }
+
     // ── 4. Directional Light ──
     {
         auto view = reg.view<dse::DirectionalLight3DComponent>();
@@ -2107,6 +2135,14 @@ void FramePipeline::CaptureThinSnapshot() {
             for (int i = 0; i < CSM_CASCADES; ++i)
                 s.cascade_splits[i] = dl.cascade_splits[i];
             break;
+        }
+    }
+
+    // 大气天空需要太阳方向（从方向光取反）
+    if (snap.atmosphere_sky.valid && snap.directional_light.valid) {
+        const float dir_len2 = glm::dot(snap.directional_light.direction, snap.directional_light.direction);
+        if (dir_len2 > 1e-8f) {
+            snap.atmosphere_sky.sun_direction = -glm::normalize(snap.directional_light.direction);
         }
     }
 
