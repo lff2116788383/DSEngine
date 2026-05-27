@@ -35,6 +35,7 @@
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/business_runtime_bridge.h"
 #include "engine/render/render_graph.h"
+#include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_snapshot.h"
@@ -350,6 +351,7 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
+    dse::render::RenderPipelineProfile render_pipeline_profile_;
     dse::render::RenderScene render_scene_;
 
     /// Transform 系统：每帧渲染前更新 dirty 的 local_to_world

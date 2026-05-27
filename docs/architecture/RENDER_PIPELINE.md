@@ -1,560 +1,881 @@
-# DSEngine 渲染管线优化方案
+# DSEngine 渲染管线现状与可编程化路线
 
-> 基于代码分析生成，不依赖项目文档。分析对象为 `engine/render/` 全部源码。
-> 更新日期: 2026-05-13
-
----
-
-## 一、当前渲染管线现状
-
-### 1.1 管线架构
-
-DSEngine 当前只有**一条固定的 Forward Rendering 管线**，由 RenderGraph DAG 驱动，执行顺序如下：
-
-```
-PreZ → CSM Shadow (×3 cascade) → Spot Shadow (×4) → Point Shadow (×4)
-  → Forward Scene → Bloom → UI → Composite → Present
-```
-
-**代码位置：**
-- 管线定义: `engine/render/passes/builtin_passes.h` — 9 个 Pass 类
-- 管线组装: `engine/runtime/frame_pipeline.h` — FramePipeline 持有 Pass 实例并构建 RenderGraph
-- Pass 共享上下文: `engine/render/passes/render_pass_context.h` — RenderTargets / PipelineStates / 模块回调
-- 渲染图: `engine/render/render_graph.h` — DAG 拓扑排序 + 自动剔除 + 波次并行
-
-### 1.2 着色器
-
-统一 PBR 着色器 `engine/render/shaders/src/pbr.frag`（385 行）支持以下模式：
-- **PBR Cook-Torrance**: GGX NDF + Smith G + Schlick Fresnel（默认）
-- **Half-Lambert**: KF 风格漫反射（`light_params.w == 2.0`）
-- **Half-Lambert Static**: KF 默认像素着色器（`light_params.w == 3.0`）
-- **Unlit**: 无光照直接输出
-
-Shader 构建管线（最新）：GLSL 450 源码 → `tools/shader_compiler/` 编译 → SPIRV-Cross 交叉编译为 HLSL/GLSL 330/SPIR-V。
-
-### 1.3 光照处理方式
-
-```glsl
-// pbr.frag main() — Clustered Forward+ 遍历（已实现）
-Lo += directional_light_contribution;        // 1 盏方向光
-int cl_idx = ComputeClusterId(gl_FragCoord, linearDepth);  // 定位 cluster
-for (ci = 0; ci < cluster_point_count; ci++)  // 当前 cluster 的点光源
-    Lo += point_light_contribution[light_indices[offset + ci]];
-for (si = 0; si < cluster_spot_count; si++)   // 当前 cluster 的聚光灯
-    Lo += spot_light_contribution[light_indices[offset + point_count + si]];
-```
-
-**光源上限**：`kMaxClusteredPointLights = 256`, `kMaxClusteredSpotLights = 256`（SSBO 存储）。
-通过 16×16 tile × 24 Z-slice 的 3D 网格剔除，每个片元只遍历所属 cluster 中的光源。
-
-### 1.4 已有的现代化基础设施
-
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| RenderGraph DAG | ✅ 可用 | 依赖声明、拓扑排序、自动剔除、瞬态资源、波次并行 |
-| Compute Shader | ⚠️ Vulkan + DX11 | Bloom downsample/upsample 使用 CS，OpenGL 用 fragment fallback |
-| 三后端 RHI | ✅ 已稳定 | OpenGL/Vulkan/DX11 视觉对比 RMSE 21-22，亮度一致（2026-05-12 验证） |
-| 统一 Shader 编译 | ✅ 已稳定 | GLSL 450 → SPIRV-Cross → SPIR-V / GLSL 430 / HLSL SM5 |
-| CommandBuffer | ✅ 可用 | 延迟提交、排序、合并绘制调用 |
-| SSBO (三后端) | ✅ 已稳定 | OpenGL `GL_SHADER_STORAGE_BUFFER` / Vulkan `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT` / DX11 `ByteAddressBuffer` |
-| Clustered Forward+ | ✅ 已完成 | `light_buffer.h/cpp` + `cluster_grid.h/cpp`，CPU 端分簇 + SSBO 上传 |
-| SSAO + FXAA | ✅ 已完成 | `SSAOPass` + `FXAAPass`，三后端 shader 实现 |
-| CSM 级联过渡 | ✅ 已完成 | `pbr.frag` smoothstep 混合相邻级联 |
-| Light Probe SH 管线 | ✅ 已完成 | 三后端 UBO 上传 + `EvaluateSH()` shader + `LightProbeSystem` 运行时 bake + 双 probe 距离混合查询 |
-
-### 1.5 已预留但未实现的功能
-
-| 功能 | 代码位置 | 状态 |
-|------|----------|------|
-| SSAO | `SSAOPass` + 三后端 shader | ✅ 已实现，通过 `PostProcessComponent::ssao_enabled` 控制 |
-| FXAA | `FXAAPass` + 三后端 shader | ✅ 已实现，通过 `PostProcessComponent::fxaa_enabled` 控制 |
-| Light Probe (SH L2) | `LightProbeComponent` + `EvaluateSH()` + `LightProbeSystem` | ✅ 已实现，运行时 bake + 最近 probe 查询 + 双 probe 距离混合 |
-| Reflection Probe + IBL | `ReflectionProbeComponent` + `ReflectionProbeSystem` | ✅ 已实现，cubemap bake + CPU 端 BRDF LUT + Split-Sum IBL |
-| Morph Targets | `MorphComponent` | 组件定义完成，GPU buffer 未实现 |
+> 更新日期：2026-05-27
+> 状态：当前架构评估 / 可编程渲染管线实施路线
+> 关联文档：[`GPU_DRIVEN_MODULE_REFACTOR_PLAN.md`](GPU_DRIVEN_MODULE_REFACTOR_PLAN.md)、[`GPU_DRIVEN_UNIFICATION_PLAN.md`](../analysis/GPU_DRIVEN_UNIFICATION_PLAN.md)
 
 ---
 
-## 二、与主流引擎对比
+## 1. 当前结论
 
-### 2.1 管线架构对比
+DSEngine 当前已经不再是单纯固定 Forward 管线的早期状态。经过 RenderGraph、Clustered Forward+、后处理栈、Probe/IBL、RenderScene 队列和 GPU Driven 收口后，当前更准确的描述是：
 
-| 能力维度 | DSEngine | Unity URP | Unity HDRP | Unreal 5 | Godot 4 |
-|----------|----------|-----------|------------|----------|---------|
-| 管线类型 | Forward (固定) | Forward+ (可编程) | Deferred + Forward (可编程) | Deferred + Forward+ 混合 | Clustered Forward |
-| 管线可选/切换 | ❌ | ✅ 3 套可选 | ✅ | 自动混合 | 2 套可选 |
-| Light Culling | ✅ Clustered Forward+ | Clustered | Tiled + Clustered | Tiled/Clustered | Clustered |
-| 光源上限 | 256+256+1 | 数百 | 数千 | 无实际限制 | 数百 |
-| GBuffer | ❌ | ❌ (Forward+无需) | ✅ | ✅ | ✅ (Deferred 可选) |
-| GPU Driven | ❌ | ⚠️ 部分 | ✅ SRP Batcher | ✅ Nanite | ❌ |
-| Compute 管线 | ⚠️ Vulkan + DX11 Bloom | ✅ | ✅ | ✅ 深度依赖 | ✅ |
-
-### 2.2 后处理对比
-
-| 效果 | DSEngine | Unity URP | Unreal 5 | Godot 4 |
-|------|----------|-----------|----------|---------|
-| Bloom | ✅ | ✅ | ✅ | ✅ |
-| Tonemapping | ✅ PBR 内 Reinhard + Bloom ACES Filmic | ✅ ACES/多算法 | ✅ | ✅ |
-| SSAO | ✅ 三后端实现 | ✅ | ✅ GTAO | ✅ |
-| SSR | ❌ | ❌ (HDRP有) | ✅ | ✅ |
-| TAA/FXAA | ✅ FXAA + TAA | ✅ | ✅ TSR | ✅ |
-| DOF | ❌ | ✅ | ✅ | ✅ |
-| Motion Blur | ❌ | ✅ | ✅ | ✅ |
-| Auto Exposure | ✅ | ✅ | ✅ | ✅ |
-| Color Grading | ✅ LUT 三后端 | ✅ LUT | ✅ LUT | ✅ |
-
-### 2.3 阴影对比
-
-| 能力 | DSEngine | 主流引擎 |
-|------|----------|----------|
-| 方向光 | CSM 3 级 + PCSS 软阴影 ✅ | CSM 4-8 级 + PCSS/VSM + Contact Shadow |
-| 点光源 | Cubemap Shadow Map | 同上 + 软阴影 |
-| 聚光灯 | 单张 Shadow Map | 同上 |
-| Virtual Shadow Maps | ❌ | Unreal 5 有 |
-| 级联过渡 | ✅ smoothstep 混合 | ✅ 渐变混合 |
-
-### 2.4 核心差距总结
-
-1. ~~**光源扩展性**~~：✅ 已解决 — Clustered Forward+ 支持 256+256 光源
-2. **屏幕空间效果部分缺失**：✅ SSAO 已实现；❌ SSR/SSGI 未实现
-3. **后处理栈大部分补齐**：✅ Bloom + SSAO + FXAA + TAA + Auto Exposure + Color Grading LUT + Vignette + Film Grain；❌ DOF/Motion Blur
-4. **阴影质量已提升**：✅ PCSS 软阴影 + CSM 级联过渡 + Contact Shadow；后续可继续补更高阶阴影细节
-5. ~~**无间接光照**~~：✅ 已解决 — Light Probe SH L2 运行时 bake + 查询，Reflection Probe cubemap bake + Split-Sum IBL 间接高光
-
----
-
-## 三、前置依赖
-
-> **✅ 前置依赖已满足（2026-05-11）。**
->
-> 三后端统一 Shader 改造已完成并合入 master（commit d142240）。
-> `engine/render/shaders/src/` 下的单份 GLSL 450 源文件通过 `tools/shader_compiler` 离线编译为
-> SPIR-V / GLSL 330 / HLSL SM5，三后端 ShaderManager 均加载生成的头文件。
->
-> **本方案的所有 shader 修改（pbr.frag 光源遍历、新增 SSAO/FXAA shader 等）直接在
-> 统一源码上进行。可立即开始实施。**
-
----
-
-## 四、分阶段优化方案
-
-### Phase 1: Clustered Forward+ (解决光源扩展性 — 最高优先级) — ✅ 已完成
-
-> **实现日期**: 2026-05-11
->
-> 全部 4 个步骤已完成：SSBO 光源缓冲 + ClusterGrid CPU 分簇 + pbr.frag cluster 遍历 + RenderGraph 集成。
-> 光源上限从 4+4 提升到 256+256，三后端均通过视觉回归验证。
->
-> **关键文件**: `light_buffer.h/cpp`, `cluster_grid.h/cpp`, `pbr.frag`, `frame_pipeline.cpp`, `builtin_passes.cpp`
-
-**目标**：突破 4+4 光源硬上限，支持数百动态光源，零 GBuffer 开销。
-
-**为什么选 Clustered Forward+ 而不是 Deferred**：
-- 当前引擎全部基于 Forward 管线，改动最小
-- 不需要 GBuffer（节省带宽，对移动端友好）
-- Unity URP 和 Godot 4 均选择了这条路径
-- 透明物体天然支持，无需额外 Pass
-
-**技术方案**：
-
-```
-┌──────────────────────────────────────────────────────┐
-│                 Clustered Forward+ 架构                │
-├──────────────────────────────────────────────────────┤
-│                                                        │
-│  1. Cluster 划分 (CPU 或 Compute)                      │
-│     ┌─────────────────────────┐                        │
-│     │ 屏幕 X×Y tile + Z 指数深度 │                     │
-│     │ 典型: 16×16 tile, 24 Z切片  │                    │
-│     │ → 总 cluster 数 ≈ 4096      │                    │
-│     └─────────────────────────┘                        │
-│                                                        │
-│  2. Light Assignment (Compute Shader)                  │
-│     ┌─────────────────────────┐                        │
-│     │ 输入: 光源列表 (SSBO)       │                    │
-│     │ 输出: cluster→light 映射    │                    │
-│     │ 每 cluster 存影响它的光源ID  │                    │
-│     └─────────────────────────┘                        │
-│                                                        │
-│  3. PBR Fragment Shader 修改                           │
-│     ┌─────────────────────────┐                        │
-│     │ 用 gl_FragCoord + depth   │                      │
-│     │ 定位所属 cluster           │                     │
-│     │ 只遍历该 cluster 的光源     │                    │
-│     └─────────────────────────┘                        │
-│                                                        │
-└──────────────────────────────────────────────────────┘
+```text
+FramePipeline
+    -> 准备 frame context / render resources / RenderScene / GPU Scene
+RenderGraph
+    -> 根据 pass 读写关系调度
+Builtin Passes
+    -> 消费 RenderScene queues + GPU-driven buffers
+RHI 后端
+    -> OpenGL / Vulkan / D3D11
 ```
 
-**实现步骤**：
+当前已经具备可编程渲染管线的底座：
 
-1. **新增 SSBO 光源缓冲**
-   - 替换 `PerScene` UBO 中的 `MAX_POINT_LIGHTS=4` / `MAX_SPOT_LIGHTS=4`
-   - 改为 SSBO（OpenGL 4.3+ / Vulkan / DX11 StructuredBuffer）
-   - 上限提升到 256+ 光源
+- **RenderGraph**：已有 pass DAG、资源声明、依赖排序、自动剔除、执行调度。
+- **RenderScene**：Gameplay3D 与模块渲染开始从直接被 pass 调用过渡到生成队列供 pass 消费。
+- **GPU Driven**：默认 Gameplay3D 场景下已能真实 active，三后端 fresh 视觉验证通过。
+- **统一 shader 资产链路**：GLSL 450 源码经工具生成 SPIR-V / GLSL / HLSL。
+- **三后端 RHI**：OpenGL / Vulkan / D3D11 主路径均可运行。
 
-2. **新增 ClusterBuildPass (Compute)**
-   - 在 PreZ 之后、Forward Scene 之前插入
-   - 输入：深度缓冲（PreZ 已生成）、光源 SSBO、投影矩阵
-   - 输出：`cluster_light_indices` SSBO + `cluster_light_offsets` SSBO
-   - RenderGraph: `Read(prez_depth)`, `Write(cluster_data)`
+但当前仍不是完整的可编程渲染管线。主要缺口是：
 
-3. **修改 pbr.frag**
-   ```glsl
-   // 替换暴力 for 循环
-   ivec3 cluster_id = ComputeClusterId(gl_FragCoord, linearDepth);
-   uint offset = cluster_light_offsets[cluster_id];
-   uint count  = cluster_light_counts[cluster_id];
-   for (uint i = 0; i < count; ++i) {
-       uint light_idx = cluster_light_indices[offset + i];
-       // ... PBR 计算
-   }
-   ```
-
-4. **RenderGraph 集成**
-   ```
-   PreZ → Shadow → ClusterBuild → Forward Scene (读 cluster data) → Bloom → ...
-   ```
-
-**涉及文件**：
-- `engine/render/passes/` — 新增 `cluster_build_pass.h/cpp`
-- `engine/render/shaders/src/pbr.frag` — 改光源遍历逻辑
-- `engine/render/rhi/rhi_types.h` — 新增 SSBO 资源类型（如尚未支持）
-- `engine/render/passes/render_pass_context.h` — 新增 cluster 相关 RT/Buffer
-- `engine/ecs/components_3d.h` — 移除 `MAX_POINT_LIGHTS` / `MAX_SPOT_LIGHTS` 硬编码
-
-**风险与兼容性**：
-- OpenGL 需要 4.3+（Compute + SSBO），当前引擎已要求 4.x
-- DX11 需 CS 5.0（已有 `StructuredBuffer` 概念）
-- 兼容降级：光源数 ≤8 时可回退旧路径
-
----
-
-### Phase 2: 后处理栈扩充
-
-**目标**：补齐工业级后处理效果链。按投入产出比排序。
-
-#### 2.1 SSAO — Screen Space Ambient Occlusion — ✅ 已完成
-
-> **实现日期**: 2026-05-11
->
-> 三后端 SSAO shader + SSAOPass 已实现。通过 `PostProcessComponent::ssao_enabled` 控制开关。
-> OpenGL / Vulkan / DX11 均验证通过。
-
-**优先级**：最高（字段已预留，视觉效果提升最明显）
-
-**方案**: GTAO (Ground Truth Ambient Occlusion) — Unreal 用的算法，质量/性能比最优。
-
-**新增 Pass**: `SSAOPass`
-- 输入：PreZ 深度纹理 + 法线（从 depth 重建或单独输出）
-- 输出：AO 纹理（单通道 R8）
-- 在 Forward Scene 之后、Composite 之前应用
-
-**实现要点**：
-- 需要从 PreZ 深度重建 View-Space 法线（无需额外 Normal Pass）
-- 半分辨率计算 + 双边模糊上采样 → 性能友好
-- 接入 `PostProcessComponent::ssao_enabled` / `ssao_radius` / `ssao_bias`
-
-**新增文件**：
-- `engine/render/passes/ssao_pass.h/cpp`
-- `engine/render/shaders/src/ssao.frag`
-- `engine/render/shaders/src/ssao_blur.frag`
-
-#### 2.2 FXAA — 抗锯齿 — ✅ 已完成
-
-> **实现日期**: 2026-05-11
->
-> 三后端 FXAA shader + FXAAPass 已实现。在 Composite 之后、Present 之前执行。
-
-**优先级**：高（实现简单，单 Pass fragment shader）
-
-**方案**: FXAA 3.11 (NVIDIA) — 单次全屏 Pass，无需历史帧。
-
-**新增 Pass**: `FXAAPass`（在 Composite 之后、Present 之前）
-
-#### 2.3 TAA — Temporal Anti-Aliasing
-
-**优先级**：中（需要 Motion Vector，依赖更多基础设施）
-
-**前置条件**：
-- 需新增 Motion Vector 输出（在 Forward Pass 中额外写一个 RT）
-- 需要 Jitter（逐帧抖动投影矩阵）
-- 需要历史帧缓冲
-
-**建议在 FXAA 稳定后再替换为 TAA**。
-
-#### 2.4 其他后处理（按优先级递减）
-
-##### 2.4a Auto Exposure — ✅ 已完成
-
-> **实现日期**: 2026-05-12
-
-##### 2.4b Color Grading LUT — ✅ 已完成
-
-> **实现日期**: 2026-05-13
-
-##### 2.4c Vignette / Film Grain — ✅ 已完成
-
-> **实现日期**: 2026-05-13
->
-> 已复用现有 [`bloom_composite`](engine/render/passes/builtin_passes.cpp:615) / final composite 路径，
-> 在 [`PostProcessComponent`](engine/ecs/components_3d.h:76) 中补充最小运行时参数，
-> 并同步更新 OpenGL / Vulkan / D3D11 三后端 composite shader 与执行器参数绑定。
-
-
-| 效果 | 复杂度 | 前置依赖 |
-|------|--------|----------|
-| Auto Exposure | 低 | Compute average luminance |
-| DOF (景深) | 中 | 深度纹理（已有） |
-| Motion Blur | 中 | Motion Vector（TAA 前置） |
-| SSR | 高 | 需要 GBuffer 或 Hi-Z |
-| Color Grading LUT | 低 | 无 |
-| Vignette | 低 | 无 |
-| Chromatic Aberration | 低 | 无 |
-| Film Grain | 低 | 无 |
-
-**建议的后处理管线顺序**：
+```text
+已有：RenderGraph 执行引擎
+缺少：PipelineProfile / PassRegistry / RenderBlackboard / PipelineValidator / 可配置管线资产
 ```
-Forward Scene → SSAO → SSR(未来) → Bloom → DOF(未来) → Motion Blur(未来)
-  → Composite (合并 Scene + UI + AO) → Color Grading → FXAA/TAA → Present
+
+因此推荐目标不是马上重写为 Deferred，也不是直接做 Unity SRP 级别的图形化编辑器，而是先将当前固定 `FramePipeline` 抽象为：
+
+```text
+PipelineProfile + PassRegistry + RenderBlackboard + RenderScene QueueBuilder
 ```
 
 ---
 
-### Phase 3: 间接光照 (Light Probe + Reflection Probe 接入)
+## 2. 当前渲染管线状态
 
-**目标**：利用已定义的 `LightProbeComponent` 和 `ReflectionProbeComponent` 提供间接光照。
+### 2.1 主渲染路径
 
-#### 3.1 Light Probe — 间接漫反射 (SH L2) — ⚠️ 管线已通，Bake 未实现
+当前默认主路径仍是 Forward+：
 
-**当前状态**：
-- ✅ `LightProbeComponent` 已有 `sh_coefficients[9]`（9 个 vec3，L2 球谐）
-- ✅ `pbr.frag` 已实现 `EvaluateSH(N)` 函数 + `u_sh_enabled` 开关
-- ✅ 三后端 UBO 管线已通（OpenGL `UBOManager::UploadLightProbeData`，Vulkan `light_probe_ubo_[]` 双缓冲，DX11 `light_probe_data_cb_` b9 槽位）
-- ✅ `frame_pipeline.cpp` 每帧调用 `SetGlobalLightProbeSH()`，当前硬编码 `enabled=false`
-
-**仍需实现**：
-1. **Bake 系统**：在编辑器中，对每个 probe 位置渲染 6 面 cubemap → 积分为 SH L2
-2. **运行时查询**：从 ECS 收集 `LightProbeComponent`，根据物体位置查找最近 probe，将 SH 系数传入 `SetGlobalLightProbeSH(sh, true)`
-3. **Probe 混合**：根据物体位置找最近的 N 个 probe，按距离加权混合
-
-**涉及修改**：
-- `pbr.frag` — 替换 ambient 计算
-- 新增 `probe_bake_system.cpp` — 编辑器 bake 流程
-- 新增 probe 数据上传到 UBO/SSBO
-
-#### 3.2 Reflection Probe — 间接高光
-
-**当前状态**：`ReflectionProbeComponent` 已有 `cubemap_handle`、`box_size`、`use_box_projection`。
-
-**需要实现**：
-1. **Bake 系统**：渲染 cubemap + 生成预滤波 mipmap（Split-Sum 近似）
-2. **运行时采样**：
-   ```glsl
-   vec3 R = reflect(-V, N);
-   float lod = roughness * max_mip_level;
-   vec3 prefiltered = textureLod(u_reflection_cubemap, R, lod).rgb;
-   vec2 brdf = texture(u_brdf_lut, vec2(NdotV, roughness)).rg;
-   vec3 specular_ibl = prefiltered * (F * brdf.x + brdf.y);
-   ```
-3. **Box Projection 修正**（已有字段）：
-   ```glsl
-   if (use_box_projection) R = BoxProjectedDirection(R, worldPos, probePos, boxMin, boxMax);
-   ```
-
-**新增资源**：
-- BRDF LUT 纹理（2D，预计算，512×512 RG16F）— 构建时一次生成
-- 预滤波 cubemap（Probe Bake 时生成）
-
----
-
-### Phase 4: 阴影质量提升
-
-#### 4.1 CSM 级联过渡 — ✅ 已完成
-
-> **实现日期**: 2026-05-11
->
-> `pbr.frag` 已实现 smoothstep 级联边界混合：在当前级联范围末尾 20% 区域
-> 使用 `smoothstep(blendStart, splitEnd, viewDepth)` 混合到下一级联。
-
-**原问题**：`pbr.frag` 中级联切换是硬切（`if abs(z) < split → cascadeIndex`），边界有明显接缝。
-
-**方案**：在级联边界区域混合两级 shadow 值：
-```glsl
-float blend = smoothstep(split[i] - margin, split[i] + margin, abs(z));
-shadow = mix(shadow_cascade[i], shadow_cascade[i+1], blend);
+```text
+PreZ
+  -> Shadow Passes
+  -> GPU Cull / Hi-Z 相关路径
+  -> Forward Scene
+  -> SSAO / Contact Shadow / Bloom / Composite / FXAA / UI
+  -> Present
 ```
 
-改动量：~20 行 shader 代码。
+Forward Scene 内部已经不只是传统 CPU draw：
 
-#### 4.2 PCSS 软阴影 — ✅ 已完成
-
-> **实现日期**: 2026-05-12
->
-> `pbr.frag` 新增 PCSS 实现：16 点 Poisson disk 采样、`FindBlockerDepth()` 通过
-> `sampler2DShadow` 比较结果 + 3 步二分法近似遮挡体深度、`PCSS_Shadow()` 根据半影宽度
-> 做可变核 Poisson PCF。`ShadowForCascade()` 从 `SampleShadowPCF()` 切换到 `PCSS_Shadow()`。
-> CSM 级联 smoothstep 混合和 `u_shadow_strength` 保持不变。
-> 三后端验证通过：VK 22.2 / GL 22.3 / DX11 22.1 (vs KF RMSE)，无回归。
-
-已实现 PCSS (Percentage Closer Soft Shadows)：
-- Blocker search (二分法近似) → 估算半影宽度 → 可变核 Poisson PCF
-- 阴影远处柔和、近处锐利，更真实
-
-#### 4.3 Contact Shadow — ✅ 已完成
-
-> **实现日期**: 2026-05-13
->
-> 已在 [`ContactShadowPass::Execute()`](engine/render/passes/builtin_passes.cpp:790) 中完成 screen-space ray march 接入，
-> 并在 [`CompositePass::Execute()`](engine/render/passes/builtin_passes.cpp:542) 中与 final composite 合流。
-
-在 Forward Scene 之后做一次 Screen-Space Ray March：
-- 从像素沿光源方向步进深度缓冲
-- 补充近距离微小遮挡细节（CSM 分辨率不足的区域）
-
----
-
-### Phase 5: 可选 Deferred 路径（中长期）
-
-**当 Phase 1-4 完成后**，如果需要支持数千光源或高级屏幕空间效果，可引入 Deferred 路径。
-
-**GBuffer 布局建议**：
-
-| RT | 格式 | 内容 |
-|----|------|------|
-| RT0 | RGBA8 | Albedo.rgb + MaterialID |
-| RT1 | RGB10A2 | Normal.xyz (Octahedron 编码) + Metallic |
-| RT2 | RGBA8 | Roughness + AO + Emissive flag + Spare |
-| Depth | D24S8 | 深度 + Stencil (标记 Deferred/Forward 物体) |
-
-**管线切换**：
-```
-if (render_path == Deferred)
-    PreZ → GBuffer → Shadow → Deferred Lighting → Transparent Forward → PostProcess
-else
-    PreZ → Shadow → ClusterBuild → Forward+ Scene → PostProcess
+```text
+ForwardScenePass
+  |-- eligible opaque mesh       -> GPU Driven indirect draw
+  |-- non-eligible mesh          -> CPU mesh queue
+  |-- terrain / grass / hair     -> 专用 callback/path
+  |-- particles                  -> 专用 path
+  `-- transparent                -> WBOIT / transparent path
 ```
 
-通过 RenderGraph 动态组装，IModule 无需关心具体路径。
+### 2.2 已完成能力
 
----
+| 能力 | 当前状态 | 说明 |
+|---|---|---|
+| RenderGraph | 已可用 | 负责 pass 依赖、资源声明和执行顺序 |
+| Clustered Forward+ | 已完成 | 支持点光/聚光 SSBO 与 cluster 遍历 |
+| GPU Driven | 阶段性完成 | Gameplay3D 默认场景下 active，三后端视觉通过 |
+| PreZ / Shadow GPU indirect | 已接入 | GPU-driven mesh 可参与 depth-only / shadow pass |
+| SSAO / FXAA / TAA | 已接入 | 后处理栈已较完整 |
+| Bloom / Auto Exposure / LUT / Film Grain / Vignette | 已接入 | Composite 路径统一处理 |
+| CSM 级联过渡 / PCSS / Contact Shadow | 已接入 | 阴影质量已明显提升 |
+| Light Probe / Reflection Probe / IBL | 已接入 | 已有运行时 bake / 查询 / Split-Sum IBL |
+| OpenGL / Vulkan / D3D11 | 主路径通过 | GPU Driven 1000 实体视觉验证通过 |
 
-## 五、实施路线图
+### 2.3 GPU Driven 最新验证
 
+2026-05-26 fresh 验证结果：
+
+| 后端 | 日志 | 截图 | 结果 |
+|---|---|---|---|
+| Vulkan | `tmp/gpu_driven_refactor/vulkan_visual_final.log` | `tmp/gpu_driven_refactor/main1000_vulkan_visual_final.png` | `exit code 0`，无 validation warning，`gpu_driven_active=true` |
+| OpenGL | `tmp/gpu_driven_refactor/opengl_visual_final.log` | `tmp/gpu_driven_refactor/main1000_opengl_visual_final.png` | `exit code 0`，`gpu_driven_active=true` |
+| DX11 | `tmp/gpu_driven_refactor/dx11_visual_final.log` | `tmp/gpu_driven_refactor/main1000_dx11_visual_final.png` | `exit code 0`，`gpu_driven_active=true` |
+
+共同指标：
+
+```text
+gpu_indirect_draws=175
+gpu_instances=175
 ```
-阶段        时间估算    核心交付物                      状态
-─────────────────────────────────────────────────────────────
-Phase 1     2-3 周     Clustered Forward+              ✅ 已完成 (2026-05-11)
-Phase 2.1   1 周       SSAO                            ✅ 已完成 (2026-05-11)
-Phase 2.2   2-3 天     FXAA                            ✅ 已完成 (2026-05-11)
-Phase 4.1   2-3 天     CSM 级联过渡                    ✅ 已完成 (2026-05-11)
-Phase 4.2   1 周       PCSS 软阴影                     ✅ 已完成 (2026-05-12)
-Phase 2.4a  1-2 天     Auto Exposure                   ✅ 已完成 (2026-05-12)
-Phase 2.4b  1 天       Color Grading LUT               ✅ 已完成 (2026-05-13)
-Phase 2.4c  0.5 天     Vignette / Film Grain           ✅ 已完成 (2026-05-13)
-Phase 4.3   3 天       Contact Shadow                  ✅ 已完成 (2026-05-13)
-Phase 3.1   1-2 周     Light Probe SH Bake + 运行时     ✅ 已完成 (2026-05-13)
-Phase 3.2   1-2 周     Reflection Probe + IBL          ✅ 已完成 (2026-05-13)
-Phase 2.3   2 周       TAA                             ✅ 已完成 (2026-05-13)
-Phase 5     4-6 周     可选 Deferred 路径               ❌ 未开始
+
+### 2.4 Vulkan validation 状态
+
+近期清理已解决：
+
+- `Invalid VkDescriptorSet`
+- descriptor binding 类型冲突
+- `vkCmdPushConstants` stage flags 不匹配
+- empty frame acquire semaphore 未消费
+- swapchain image layout 未正确推进
+
+当前 Vulkan GPU Driven 主路径 validation clean。
+
+---
+
+## 3. 当前架构主要问题
+
+### 3.1 FramePipeline 仍硬编码管线
+
+虽然底层有 RenderGraph，但 `FramePipeline` 仍负责直接组织 builtin passes、资源和大量上下文状态。当前结构更像：
+
+```text
+固定 C++ pipeline
+    -> RenderGraph 只负责执行和依赖调度
 ```
 
-**下一步建议执行顺序**：
-1. ~~Phase 2.4a-c~~ ✅
-2. ~~Phase 4.3~~ ✅
-3. ~~Phase 3.1~~ ✅
-4. ~~Phase 3.2~~ ✅
-5. ~~Phase 2.3~~ ✅
-6. Phase 5 (Deferred 路径) — 唯一剩余大阶段
+而不是：
+
+```text
+Pipeline Profile / Asset
+    -> PassRegistry 创建 pass
+    -> RenderGraph 编译执行
+```
+
+### 3.2 RenderPassContext 持续膨胀
+
+`RenderPassContext` 承载了 render targets、pipeline states、GPU Driven state、Hi-Z state、module callbacks、editor state、postprocess state 以及 RHI/global state 指针。
+
+长期继续追加字段会导致：
+
+- pass 之间隐式耦合变多。
+- 新 pass 需要改公共 context。
+- 配置化和可编程化困难。
+
+建议逐步拆成：
+
+```text
+RenderBlackboard
+  |-- Resource handles
+  |-- Frame constants
+  |-- Pipeline settings
+  |-- Scene / queue references
+  `-- Debug / editor settings
+```
+
+### 3.3 Pass 对模块仍有残留依赖
+
+当前已开始使用 RenderScene，但部分路径仍依赖 callback 或模块桥接。长期目标应是：
+
+```text
+Gameplay / Module / System
+    -> RenderScene / RenderObjectRegistry
+    -> QueueBuilder
+    -> RenderGraph Pass
+```
+
+而不是：
+
+```text
+RenderPass
+    -> 直接调用 Gameplay module 渲染
+```
+
+### 3.4 Pass 缺少统一 metadata
+
+真正可编程 pipeline 需要每个 pass 声明：
+
+- pass name
+- 输入资源
+- 输出资源
+- 是否允许关闭
+- 执行阶段
+- 依赖的队列
+- 依赖的 feature
+- 参数 schema
+- 后端限制
+
+当前这些信息主要散落在 C++ 实现里。
 
 ---
 
-## 六、每阶段的验证标准
+## 4. 什么是 DSE 需要的可编程渲染管线
 
-### Phase 1 验证
-- [x] KF_Framework demo 场景光源上限从 4+4 提升到 256+256
-- [x] 三后端 SSBO 创建/上传/绑定正常
-- [x] pbr.frag cluster 遍历逻辑正确，视觉回归通过
-- [x] OpenGL/Vulkan/DX11 三后端均通过 (RMSE: VK 21.8, GL 22.3 vs KF)
+### 4.1 不推荐的方向
 
-### Phase 2.1 验证
-- [x] SSAO 开关不影响已有渲染正确性
-- [x] 三后端 SSAO shader 创建成功
-- [x] Vulkan 日志确认 SSAO(540006)/SSAO_blur(540007) 创建
+不建议让脚本或外部配置直接执行底层渲染命令：
 
-### Phase 3 验证
-- [x] Light Probe bake 后，关闭方向光时物体仍有环境光照（LightProbeSystem 运行时查询已实现）
-- [x] Reflection Probe 金属球面可见环境反射（Split-Sum IBL + BRDF LUT 已实现）
-- [x] Probe 之间切换无跳变（双 probe 距离加权混合已实现）
+```text
+Lua 直接创建 Vulkan descriptor set
+Lua 直接绑定 RHI buffer
+Lua 直接 DrawIndexed / Dispatch
+Lua 直接写资源 layout / barrier
+```
 
-### Phase 4.1 验证
-- [x] CSM 级联边界 smoothstep 混合，无硬切接缝
-- [x] 性能影响可忽略
+这会破坏三后端一致性，尤其 Vulkan 会非常容易触发 layout、descriptor、同步错误。
 
----
+### 4.2 推荐定义
 
-## 七、对现有代码的影响评估
+DSE 的可编程渲染管线应定义为：
 
-| 文件/模块 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 |
-|-----------|---------|---------|---------|---------|---------|
-| `pbr.frag` | **大改** (光源遍历) | 小改 (AO 采样) | 中改 (IBL) | 小改 (阴影) | 中改 (GBuffer 输出) |
-| `builtin_passes.h/cpp` | +1 Pass | +2-3 Pass | 无 | 小改 | +3-4 Pass |
-| `render_pass_context.h` | +SSBO handles | +AO RT | +Probe data | 无 | +GBuffer RTs |
-| `render_graph.h` | 无 | 无 | 无 | 无 | 无 |
-| `frame_pipeline.h/cpp` | 小改 | 小改 | 中改 | 无 | 中改 |
-| `rhi_device.h` | +SSBO API | 无 | 无 | 无 | +MRT 支持 |
-| `components_3d.h` | 移除硬编码上限 | 无 | 无 | 无 | 无 |
-| 三后端 RHI 实现 | +SSBO 实现 | 无 | 无 | 无 | +MRT 实现 |
+```text
+用户/项目/模块可以声明 pass 组合、开关、参数和资源依赖；
+C++ 引擎负责验证、编译为 RenderGraph，并通过 RHI 执行。
+```
 
-**核心不变量**：
-- RenderGraph 架构无需改动（新 Pass 通过 `AddPass` + `Read/Write` 自然融入）
-- IModule 接口无需改动（模块通过 `RegisterRenderPasses` 注入自定义 Pass）
-- ECS 组件只增不改（新增 ClusterLightData，不修改已有组件）
+也就是：
 
----
+```text
+Lua / JSON / C++ PipelineProfile
+    -> PipelineLoader
+    -> PipelineValidator
+    -> PassRegistry
+    -> CompiledRenderPipeline
+    -> RenderGraph
+    -> RHI
+```
 
-## 八、技术决策记录
+### 4.3 分级目标
 
-| 决策 | 选择 | 理由 |
-|------|------|------|
-| Forward+ vs Deferred | **Forward+ 优先** | 改动最小、透明物体友好、RenderGraph 已就绪 |
-| SSAO 算法 | **GTAO** | 质量/性能最优平衡（Unreal 同款） |
-| AA 方案 | **FXAA → TAA** | FXAA 零依赖先上线；TAA 等 Motion Vector 就绪后替换 |
-| IBL 方案 | **Split-Sum + BRDF LUT** | 工业标准（Epic Games 论文），与 Cook-Torrance BRDF 完美匹配 |
-| Cluster 划分 | **16×16 tile × 24 Z-slice (指数)** | 与 Doom 2016 / id Tech 方案对齐，Z 用指数划分匹配透视投影 |
-| 软阴影 | **PCSS** | 比 VSM 更直观、无 light bleeding 问题 |
+| 层级 | 能力 | 建议 |
+|---|---|---|
+| Level 1：可配置管线 | 控制 builtin pass 开关、质量参数、profile 选择 | 立即推进 |
+| Level 2：可扩展管线 | 模块/插件注册 C++ pass，由 profile 组合 | 下一阶段推进 |
+| Level 3：可资产化管线 | Lua/JSON/编辑器图形化定义 pass graph | 中长期推进 |
+| Level 4：完全脚本化渲染 | 脚本直接下发渲染命令 | 不推荐 |
 
 ---
 
-## 附录：已知跨后端差异
+## 5. 推荐目标架构
 
-> 更新日期: 2026-05-17
+### 5.1 核心对象
 
-### A.1 PBR 前向着色器输出差异（OpenGL vs DX11/Vulkan）
+```cpp
+struct RenderPipelineProfile {
+    std::string name;
+    std::vector<RenderPipelinePassConfig> passes;
+    std::unordered_map<std::string, PipelineValue> settings;
+};
 
-**现象**：`3d_postprocess_showcase` 跨后端回归测试中 OpenGL 与 DX11/Vulkan 的 RMSE 约 112-114，远高于 DX11 vs Vulkan 的 1.77。
+struct RenderPipelinePassConfig {
+    std::string name;
+    bool enabled = true;
+    std::unordered_map<std::string, PipelineValue> params;
+};
 
-**视觉表现**：
-- OpenGL：地面较亮（中灰）、立方体颜色偏淡/粉彩
-- DX11/Vulkan：地面很暗、立方体颜色饱和度更高
+struct RenderPassMetadata {
+    std::string name;
+    std::vector<std::string> reads;
+    std::vector<std::string> writes;
+    std::vector<std::string> requires;
+    std::vector<std::string> produces;
+    bool optional = true;
+};
+```
 
-**原因分析**：三端 PBR 前向着色器（`pbr.frag` / `dx11_shader_sources.h` / `vulkan_shader_sources.h`）的光照计算路径产生不同的 HDR 输出。差异来自基础 ambient / diffuse / specular 计算，**不是** bloom 或后处理问题。
+### 5.2 关键系统
 
-**已排除**：
-- Bloom extract/composite（三端已统一阈值过滤逻辑）
-- Tone mapping 双重应用（已从 PBR shader 移除内联 TM+gamma，统一由 CompositePass 处理）
+| 系统 | 职责 |
+|---|---|
+| `PassRegistry` | 注册 builtin pass 和插件 pass，按名称创建 pass |
+| `PipelineProfile` | 描述本项目/本相机/本质量档位启用哪些 pass |
+| `PipelineValidator` | 检查 pass 依赖、资源读写、后端限制、必需 pass |
+| `PipelineCompiler` | 将 profile 编译成稳定的 C++ 执行对象 |
+| `RenderBlackboard` | 存储资源句柄、frame constants、settings、debug 信息 |
+| `RenderScene / QueueBuilder` | 统一收集 renderable 并分类为各类队列 |
 
-**待排查方向**：
-- 三端 PBR shader 中 ambient 项的计算差异
-- IBL / 环境光 fallback 路径差异
-- 法线/切线空间变换精度差异
+### 5.3 数据流
 
-### A.2 Bloom 修复记录（2026-05-17）
+```text
+World / Modules / ECS
+    -> Renderable collection
+    -> RenderScene / RenderObjectRegistry
+    -> QueueBuilder
+    -> PipelineProfile selects passes
+    -> PassRegistry creates pass instances
+    -> RenderGraph compiles resource dependencies
+    -> CommandBuffer / RHI executes
+```
 
-**问题**：DX11/Vulkan 的 `bloom_extract` 后处理缺少专用着色器，回退到 passthrough（`copy`），导致全场景像素进入 bloom 流水线，画面严重过曝。
+---
 
-**修复**：
-- 三端 PBR shader 移除内联 Reinhard tone mapping + gamma（由 CompositePass 统一处理 ACES Filmic TM + gamma）
-- DX11/Vulkan 新增 `bloom_extract` 专用 pixel shader，实现与 OpenGL 一致的亮度阈值过滤
-- CompositePass 非 bloom 路径统一走 `tonemapping` 效果（不再回退到 `copy`）
+## 6. Lua 配置 pass 的建议边界
 
-**验证**：DX11 vs Vulkan postprocess_showcase RMSE=1.77（修复前为 passthrough 导致的全场景 bloom）
+Lua 可以用于配置 pass，但必须是声明式配置，不应直接执行底层渲染。
+
+### 6.1 第一阶段 Lua 格式
+
+```lua
+return {
+    name = "ForwardPlusDefault",
+
+    settings = {
+        gpu_driven = true,
+        shadows = true,
+        postprocess = true,
+    },
+
+    passes = {
+        { name = "pre_z", enabled = true },
+        { name = "csm_shadow", enabled = true },
+        { name = "spot_shadow", enabled = false },
+        { name = "point_shadow", enabled = false },
+        { name = "gpu_cull", enabled = true },
+        { name = "forward_scene", enabled = true },
+        { name = "ssao", enabled = true, radius = 1.0 },
+        { name = "bloom", enabled = true, intensity = 0.6 },
+        { name = "composite", enabled = true },
+        { name = "fxaa", enabled = true },
+        { name = "ui", enabled = true },
+        { name = "present", enabled = true },
+    }
+}
+```
+
+### 6.2 Lua 允许做的事
+
+- 选择 pipeline profile。
+- 启用/禁用 builtin pass。
+- 设置 pass 参数。
+- 根据后端、平台、质量等级选择 profile。
+- 配置 debug view / editor view / runtime view。
+
+### 6.3 Lua 禁止做的事
+
+- 直接创建 RHI 资源。
+- 直接访问 Vulkan/DX11/OpenGL 对象。
+- 直接调用 draw/dispatch。
+- 直接设置 descriptor/layout/barrier。
+- 每帧解释 Lua 来构建 pipeline。
+
+### 6.4 安全要求
+
+- Pipeline Lua 使用 sandbox 环境。
+- 禁用 `os.execute`、任意 `io`、`debug`、动态 `loadfile/dofile`。
+- Lua 加载失败时回退 C++ 内置默认 profile。
+- Lua profile 只在启动、热重载或切换 profile 时解析。
+- 每帧执行的是 `CompiledRenderPipeline`，不是 Lua table。
+
+### 6.5 Lua PipelineProfile MVP
+
+第一版 Lua 配置渲染管线的目标不是完整 SRP，也不是自定义渲染命令，而是：
+
+```text
+Lua 配置现有 builtin pass 的开关、顺序、质量参数。
+```
+
+MVP 必需能力：
+
+- `RenderPipelineProfile` 数据结构。
+- builtin pass 名称映射或最小 `PassRegistry`。
+- 最小 `PipelineValidator`。
+- Lua sandbox loader。
+- Lua table -> `RenderPipelineProfile`。
+- `FramePipeline` 根据 profile 构建/启用 pass。
+- 加载失败回退 C++ 内置 `ForwardPlusDefault`。
+- 输出 compiled pipeline dump，便于定位实际执行顺序。
+
+MVP 不包含：
+
+- Lua 自定义 pass 执行函数。
+- Lua 直接 `Draw` / `Dispatch`。
+- Lua 直接创建 RHI resource / descriptor / barrier。
+- Lua 自定义 shader path。
+- Lua 自定义 render target format。
+- 插件 pass 热插拔。
+- 编辑器 UI / 节点图。
+- Deferred / Hybrid pipeline。
+- 完整 `RenderObjectRegistry`。
+- 完整 `RenderBlackboard` 替换。
+
+建议第一版 Lua 格式保持纯 table：
+
+```lua
+return {
+    name = "ForwardPlusLite",
+
+    settings = {
+        gpu_driven = true,
+        shadows = true,
+        shadow_quality = "medium",
+        postprocess_quality = "lite",
+    },
+
+    passes = {
+        { name = "pre_z", enabled = true },
+        { name = "csm_shadow", enabled = true },
+        { name = "spot_shadow", enabled = false },
+        { name = "point_shadow", enabled = false },
+        { name = "gpu_cull", enabled = true },
+        { name = "forward_scene", enabled = true },
+        { name = "ssao", enabled = false },
+        { name = "contact_shadow", enabled = false },
+        { name = "bloom", enabled = true, intensity = 0.5 },
+        { name = "composite", enabled = true },
+        { name = "fxaa", enabled = true },
+        { name = "ui", enabled = true },
+        { name = "present", enabled = true },
+    }
+}
+```
+
+建议通过环境变量或项目配置选择 profile：
+
+```text
+DSE_RENDER_PIPELINE_PROFILE=forward_plus
+DSE_RENDER_PIPELINE_PROFILE=lite
+DSE_RENDER_PIPELINE_PROFILE=debug_depth
+DSE_RENDER_PIPELINE_PROFILE=custom_lite
+```
+
+示例 Lua profile 建议放在 `samples/lua/pipelines/`；运行时短名查找仍兼容 `data/pipelines/`。
+
+MVP 的最小 validator 应检查：
+
+- pass name 是否已注册。
+- required pass 是否缺失。
+- `present` 或等价最终输出是否存在。
+- disabled pass 是否导致后续 pass 读取缺失资源。
+- 当前后端是否支持该 pass。
+- 参数类型是否正确。
+- profile 编译失败时是否能回退默认 profile。
+
+MVP 与阶段关系：
+
+```text
+Lua Pipeline MVP 必需：
+    Phase 1 PipelineProfile
+    Phase 2 PassRegistry / metadata 最小版
+    Phase 5 Lua sandbox loader
+    PipelineValidator 最小版
+
+Lua Pipeline 完整版建议：
+    Phase 3 RenderBlackboard
+    Phase 4 RenderObjectRegistry / QueueBuilder
+```
+
+因此，Lua 配置现有 builtin pass 的 MVP 不需要等待 Deferred、编辑器节点图或完整 RenderObjectRegistry。
+
+---
+
+## 7. 分阶段实施路线
+
+### Phase 1：PipelineProfile 控制 builtin pass
+
+目标：先不允许任意 pass，只把当前固定管线改为可配置 profile。
+
+改动：
+
+- 新增 `RenderPipelineProfile`。
+- 新增内置 `ForwardPlusDefault` profile。
+- `FramePipeline` 根据 profile 决定启用哪些 builtin pass。
+- 支持质量档位参数：shadow、SSAO、Bloom、FXAA/TAA、GPU Driven 等。
+
+预计改动量：中等。
+
+收益：
+
+- 低端/高端/编辑器/调试 profile 可分离。
+- 不再所有场景强制跑同一条重管线。
+- 风险低，适合第一步。
+
+### Phase 2：PassRegistry 与 pass metadata
+
+目标：把 pass 创建从硬编码改为注册表。
+
+改动：
+
+- 每个 builtin pass 注册名称和 metadata。
+- `FramePipeline` 不直接知道所有 pass 类型。
+- `PipelineValidator` 检查 profile 合法性。
+
+预计改动量：中到大。
+
+收益：
+
+- 后续新增 pass 不需要硬改主 pipeline。
+- 模块/插件可以注册 C++ pass。
+- 为 Lua/JSON pipeline asset 打基础。
+
+### Phase 3：RenderBlackboard 替代膨胀 Context
+
+目标：降低 pass 对 `RenderPassContext` 的隐式耦合。
+
+改动：
+
+- 将资源句柄迁移到 blackboard。
+- 将 settings / debug / feature flags 与 resource handles 分离。
+- 保留兼容字段，分批迁移 pass。
+
+预计改动量：中到大。
+
+收益：
+
+- pass 参数和资源依赖更清晰。
+- 自定义 pass 更容易接入。
+- validation 更容易实现。
+
+### Phase 4：RenderScene / QueueBuilder 稳定化
+
+目标：pass 不再直接理解 module。
+
+改动：
+
+- 引入稳定 `RenderObjectId`。
+- 建立 renderable registry。
+- 统一分类：`OpaqueGpuDrivenQueue`、`OpaqueCpuQueue`、`SkinnedQueue`、`TransparentQueue`、`TerrainQueue`、`FoliageQueue`、`HairQueue`、`ParticleQueue`、`DebugQueue`。
+
+预计改动量：大。
+
+收益：
+
+- GPU Driven、CPU fallback、terrain/grass/hair/particle 统一分流。
+- 避免双绘和漏绘。
+- 为 Deferred/Hybrid pipeline 打基础。
+
+### Phase 5：Lua PipelineProfile
+
+目标：允许项目通过 Lua 配置 pipeline profile。
+
+改动：
+
+- 新增 pipeline config sandbox loader。
+- Lua table -> `RenderPipelineProfile`。
+- Validator 输出清晰错误。
+- 失败回退默认 profile。
+
+预计改动量：中。
+
+收益：
+
+- 项目可自定义管线。
+- 调试 pipeline 可快速切换。
+- 后续编辑器可以生成 Lua/JSON profile。
+
+### Phase 6：可选 Deferred / Hybrid Pipeline
+
+目标：在可编程管线底座稳定后，再实现 Deferred 作为一个 profile，而不是替代整个架构。
+
+可能 profile：
+
+```text
+ForwardPlusPipeline
+DeferredPipeline
+HybridPipeline
+MobileForwardPipeline
+EditorPipeline
+DebugPipeline
+```
+
+Deferred 建议作为中长期目标，不应阻塞 PipelineProfile / PassRegistry。
+
+---
+
+## 8. Deferred 是否必须
+
+结论：**不是必须，且不应作为第一优先级。**
+
+当前 DSE 的 Forward+ 仍然适合默认主线：
+
+- 透明路径天然友好。
+- terrain / grass / hair / particle 专用路径更容易保留。
+- 三后端一致性成本较低。
+- GPU Driven 已经在 Forward+ 主路径打通。
+- 大部分现有效果已基于 Forward+ 工作。
+
+Deferred 的收益主要在：
+
+- 大量动态光源。
+- SSR / SSGI / 屏幕空间高级效果。
+- 材质分类与 GBuffer debug。
+
+因此推荐：
+
+```text
+先做可编程 Forward+ pipeline
+再把 Deferred 作为一个可选 PipelineProfile 接入
+```
+
+---
+
+## 9. 风险与防护
+
+| 风险 | 影响 | 防护 |
+|---|---|---|
+| Lua pass 顺序错误 | 黑屏、读未初始化资源、Vulkan layout 错误 | `PipelineValidator` + RenderGraph 依赖声明 |
+| Lua 权限过大 | 安全问题、运行时状态污染 | sandbox，只允许声明 profile |
+| 每帧解析 Lua | GC 抖动、CPU 开销 | 只在加载/热重载时解析，缓存 compiled pipeline |
+| RenderPassContext 继续膨胀 | 可维护性下降 | 引入 `RenderBlackboard` |
+| Pass metadata 不完整 | 依赖错误难定位 | 每个 pass 强制注册 reads/writes/requires |
+| Vulkan barrier/layout 错误 | validation error 或崩溃 | 禁止绕过 RenderGraph 直接操作资源 |
+| 插件 pass 破坏三后端一致性 | 某后端不可用 | metadata 声明 backend support，validator 拒绝不兼容 profile |
+| Deferred 过早引入 | 大范围重构拖慢主线 | 先做 profile/registry，再做 deferred |
+
+---
+
+## 10. 收益评估
+
+### 10.1 架构收益
+
+当前：
+
+```text
+FramePipeline 持有大量 pass 和状态
+```
+
+目标：
+
+```text
+FramePipeline = pipeline runtime
+PipelineProfile = 管线配置
+PassRegistry = pass 创建与能力声明
+RenderGraph = 资源依赖执行
+RenderScene = 渲染对象输入
+```
+
+职责更清晰，后续扩展成本更低。
+
+### 10.2 项目收益
+
+不同项目/平台可选择不同 profile：
+
+```text
+PC 高画质        Forward+ + GPU Driven + SSAO + TAA + Bloom
+低端设备         Forward + FXAA + 无 SSAO/Contact Shadow
+编辑器视图       EditorPipeline + Gizmo + Picking + Outline
+截图回归         DeterministicPipeline
+调试             Depth / Normal / Cluster / Overdraw profile
+```
+
+### 10.3 性能收益
+
+可编程管线本身不直接让 shader 更快，但它允许：
+
+- 不需要的 pass 不创建、不执行。
+- 按相机/视图切换 pipeline。
+- 编辑器与 runtime 使用不同 pass 组合。
+- 后处理按质量档裁剪。
+- GPU Driven / CPU fallback 分流更明确。
+
+### 10.4 维护收益
+
+新增功能从：
+
+```text
+改 FramePipeline
+改 RenderPassContext
+改 builtin_passes
+改多个后端绑定
+改脚本开关
+```
+
+逐步变为：
+
+```text
+注册 pass
+声明 metadata
+配置 profile
+通过 validator
+```
+
+---
+
+## 11. 建议的默认 Pipeline Profiles
+
+### 11.1 ForwardPlusDefault
+
+默认运行时高质量 profile：
+
+```text
+pre_z
+csm_shadow
+spot_shadow
+point_shadow
+gpu_cull
+forward_scene
+ssao
+contact_shadow
+bloom
+composite
+taa_or_fxaa
+ui
+present
+```
+
+### 11.2 ForwardPlusLite
+
+低端或快速启动：
+
+```text
+pre_z
+csm_shadow
+forward_scene
+bloom(optional)
+composite
+fxaa
+ui
+present
+```
+
+### 11.3 EditorPipeline
+
+编辑器视图：
+
+```text
+pre_z
+forward_scene
+outline/picking
+gizmo
+grid
+ui
+present
+```
+
+### 11.4 DebugPipeline
+
+调试视图：
+
+```text
+depth_visualize
+normal_visualize
+cluster_visualize
+overdraw_visualize
+gpu_driven_debug
+present
+```
+
+### 11.5 Future DeferredPipeline
+
+中长期：
+
+```text
+pre_z
+gbuffer
+shadow
+deferred_lighting
+transparent_forward
+ssao/ssr
+bloom
+composite
+ui
+present
+```
+
+---
+
+## 12. 验证标准
+
+### 12.1 PipelineProfile 阶段
+
+- [ ] 默认 profile 与当前固定管线视觉一致。
+- [ ] 禁用 SSAO/Bloom/FXAA 后不创建对应资源和 pass。
+- [ ] 无效 pass 名称给出清晰错误并回退默认 profile。
+- [ ] Vulkan validation clean。
+- [ ] OpenGL / Vulkan / DX11 三后端截图正常。
+
+### 12.2 PassRegistry 阶段
+
+- [ ] 所有 builtin pass 都通过 registry 创建。
+- [ ] pass metadata 覆盖 reads/writes/requires。
+- [ ] validator 能发现缺失依赖。
+- [ ] 插件 pass 可注册但不能绕过 RenderGraph。
+
+### 12.3 Lua profile 阶段
+
+- [ ] Lua sandbox 禁用危险库。
+- [ ] Lua profile 只在加载/热重载时解析。
+- [ ] 配置错误能定位到 pass 和字段。
+- [ ] 失败回退内置 profile。
+- [ ] profile 切换后资源正确重建。
+
+### 12.4 RenderScene / QueueBuilder 阶段
+
+- [ ] GPU-driven eligible mesh 不双绘。
+- [ ] skinned/transparent/terrain/grass/hair/particle 不漏绘。
+- [ ] PreZ / Shadow / Forward 消费队列一致。
+- [ ] Vulkan/OpenGL/DX11 三端视觉一致。
+
+---
+
+## 13. 对现有代码影响
+
+| 模块 | 影响 | 说明 |
+|---|---|---|
+| `engine/runtime/frame_pipeline.*` | 大 | 从硬编码 pass 组装迁移到 profile/registry |
+| `engine/render/passes/*` | 中 | 每个 pass 增加 metadata 和参数 schema |
+| `engine/render/passes/render_pass_context.h` | 中到大 | 逐步拆分为 blackboard/settings/resources |
+| `engine/render/render_graph.*` | 小到中 | 可能补 validation/debug dump，不建议大改 |
+| `engine/render/render_scene.h` | 中到大 | 后续扩展 RenderObjectRegistry / QueueBuilder |
+| `engine/render/rhi/*` | 小 | 第一阶段不应新增大量 RHI API |
+| `engine/scripting/lua/*` | 中 | Lua profile loader 和 sandbox |
+| `apps/editor_cpp` | 中长期 | 后续可增加 pipeline profile 编辑 UI |
+
+---
+
+## 14. 推荐下一步
+
+优先级最高的是：
+
+```text
+Phase 1：PipelineProfile 控制 builtin pass 开关/参数
+```
+
+原因：
+
+- 改动量可控。
+- 不破坏现有三后端稳定性。
+- 立刻带来项目/调试/性能配置收益。
+- 为 PassRegistry 和 Lua profile 打基础。
+
+建议最小交付：
+
+- C++ 内置 `ForwardPlusDefault` profile。
+- 支持 `DSE_RENDER_PIPELINE_PROFILE=default|lite|debug`。
+- 支持开启/关闭 SSAO、Bloom、FXAA、Shadow、GPU Driven。
+- 输出 compiled pipeline dump。
+- 三端 fresh 截图验证。
+
+---
+
+## 15. 最终目标
+
+DSEngine 的最终渲染架构建议收敛为双输入模型：场景侧先稳定产出 render queues，管线侧负责编译 pass graph，二者在 RenderGraph 执行前汇合。
+
+```text
+World / ECS / Modules
+    -> RenderObjectRegistry
+    -> QueueBuilder / RenderQueues
+
+Pipeline Asset / Profile
+    -> PassRegistry + PipelineValidator
+    -> CompiledRenderPipeline
+
+CompiledRenderPipeline + RenderQueues
+    -> RenderGraph
+    -> RHI Backend
+```
+
+注意：`RenderQueues` 是场景数据输入，不是 RenderGraph 之后的阶段；RenderGraph 负责消费 pipeline profile、pass metadata 与 queues，生成最终 pass/resource 依赖并提交到 RHI。
+
+最终应满足：
+
+- 默认 Forward+ GPU Driven profile 稳定。
+- 项目可通过 profile 配置 pass 组合和质量档。
+- 模块/插件可注册 C++ pass。
+- Lua 可声明 pipeline profile，但不直接执行渲染命令。
+- Deferred / Hybrid 作为可选 profile 接入，而不是替代默认架构。
+- Vulkan/OpenGL/DX11 三后端持续通过视觉和 validation 回归。
+
+一句话总结：
+
+**DSE 当前已经具备可编程渲染管线的底座，下一步应先把固定 `FramePipeline` 抽象为 `PipelineProfile + PassRegistry + RenderBlackboard`，再逐步开放 Lua 配置和插件 pass。**
+
+---
+
+## 16. 显式迁移债清单
+
+当前方案没有要求绕过 RenderGraph、没有让 Lua 直接操作 RHI，也没有要求立即重写为 Deferred，因此没有新增明显危险技术债。但 DSE 现有渲染架构仍有以下迁移债，需要随 Phase 1-5 逐步消化：
+
+- [ ] `FramePipeline` 仍承担 pass 组装、资源准备、运行时状态同步等多重职责。
+- [ ] `RenderPassContext` 已膨胀，需要拆分为 `RenderBlackboard`、pipeline settings、frame constants 与 scene refs。
+- [ ] builtin pass 缺少统一 metadata / 参数 schema / backend support 声明。
+- [ ] `PipelineValidator` 尚未实现，Lua/profile 配置错误还不能在执行前完整拦截。
+- [ ] module callback 路径仍有残留，pass 尚未完全只消费 `RenderQueues`。
+- [ ] `RenderScene` 仍是过渡层，尚未升级为稳定的 `RenderObjectRegistry + QueueBuilder`。
+- [ ] shader/material pass 体系还不完整，尚未系统化区分 Forward / DepthOnly / Shadow / GBuffer / MotionVector 等 pass。
+- [ ] Lua pipeline profile 的 sandbox loader 未实现。
+- [ ] Deferred / Hybrid 仍是未来 profile，不应阻塞当前 Forward+ GPU Driven 主线。
+
+这些债务不阻塞当前文档路线，但必须在后续实现中保持显式跟踪，避免误以为 `PipelineProfile` 落地后就等于完整 SRP。

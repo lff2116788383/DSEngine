@@ -129,6 +129,23 @@ struct RenderPassContext {
     bool fxaa_active = false;
     bool taa_active = false;
 
+    struct PipelineFeatures {
+        bool bloom = true;
+        bool ssao = true;
+        bool contact_shadow = true;
+        bool auto_exposure = true;
+        bool fxaa = true;
+        bool taa = true;
+        bool ui = true;
+        bool gpu_cull = true;
+        bool shadows = true;
+    } pipeline_features;
+
+    struct PipelineOverrides {
+        float bloom_intensity = -1.0f;
+        float bloom_threshold = -1.0f;
+    } pipeline_overrides;
+
     /// TAA jitter（每帧由 TAAPass 更新，注入到投影矩阵）
     glm::vec2 taa_jitter = {};
 

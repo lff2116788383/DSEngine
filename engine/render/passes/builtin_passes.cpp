@@ -706,14 +706,17 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
 
-    if (!pp_config.valid || !pp_config.bloom_enabled) {
+    if (!ctx_.pipeline_features.bloom || !pp_config.valid || !pp_config.bloom_enabled) {
         return;
     }
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {pp_config.bloom_threshold}});
+    const float bloom_threshold = ctx_.pipeline_overrides.bloom_threshold >= 0.0f
+        ? ctx_.pipeline_overrides.bloom_threshold
+        : pp_config.bloom_threshold;
+    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {bloom_threshold}});
     cmd_buffer.EndRenderPass();
 
     unsigned int current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
@@ -786,7 +789,9 @@ void CompositePass::Setup(RenderGraph& graph) {
 
 void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    const unsigned int ui_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ui);
+    const unsigned int ui_color_tex = ctx_.pipeline_features.ui
+        ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ui)
+        : 0;
 
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
@@ -794,19 +799,19 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
 
     // 获取 SSAO 纹理（如果启用）
     unsigned int ssao_tex = 0;
-    if (pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur != 0) {
+    if (ctx_.pipeline_features.ssao && pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur != 0) {
         ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
     }
 
     // 获取 Contact Shadow 纹理（如果启用）
     unsigned int contact_shadow_tex = 0;
-    if (pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow != 0) {
+    if (ctx_.pipeline_features.contact_shadow && pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow != 0) {
         contact_shadow_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.contact_shadow);
     }
 
     // 获取 auto exposure 纹理（如果启用）
     unsigned int ae_tex = 0;
-    if (ctx_.auto_exposure_active) {
+    if (ctx_.pipeline_features.auto_exposure && ctx_.auto_exposure_active) {
         // ping-pong 已翻转，当前帧结果在 1 - current_index
         const int result_idx = 1 - ctx_.lum_ping_pong_index;
         ae_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[result_idx]);
@@ -847,15 +852,18 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
-    if (pp_enabled && (pp_config.bloom_enabled || contact_shadow_tex != 0 || pp_config.vignette_enabled || pp_config.film_grain_enabled)) {
-        const unsigned int bloom_tex = (pp_config.bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
+    const bool bloom_enabled = ctx_.pipeline_features.bloom && pp_config.bloom_enabled;
+    if (pp_enabled && (bloom_enabled || contact_shadow_tex != 0 || pp_config.vignette_enabled || pp_config.film_grain_enabled)) {
+        const unsigned int bloom_tex = (bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
             ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
             : 0;
         cmd_buffer.DrawPostProcess({"bloom_composite", scene_color_tex, {
             static_cast<float>(bloom_tex),
             pp_config.exposure,
-            pp_config.bloom_intensity,
-            pp_config.bloom_enabled ? 1.0f : 0.0f,
+            ctx_.pipeline_overrides.bloom_intensity >= 0.0f
+                ? ctx_.pipeline_overrides.bloom_intensity
+                : pp_config.bloom_intensity,
+            bloom_enabled ? 1.0f : 0.0f,
             static_cast<float>(ssao_tex),
             static_cast<float>(ae_tex),
             lut_tex,
@@ -882,7 +890,9 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         }
     }
 
-    cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
+    if (ui_color_tex != 0) {
+        cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
+    }
     cmd_buffer.EndRenderPass();
 }
 
@@ -903,7 +913,7 @@ void AutoExposurePass::Setup(RenderGraph& graph) {
 void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
-    bool ae_enabled = pp_config.valid && pp_config.auto_exposure_enabled;
+    bool ae_enabled = ctx_.pipeline_features.auto_exposure && pp_config.valid && pp_config.auto_exposure_enabled;
 
     ctx_.auto_exposure_active = ae_enabled;
     if (!ae_enabled) return;
@@ -961,7 +971,7 @@ void SSAOPass::Setup(RenderGraph& graph) {
 void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
-    bool ssao_enabled = pp_config.valid && pp_config.ssao_enabled;
+    bool ssao_enabled = ctx_.pipeline_features.ssao && pp_config.valid && pp_config.ssao_enabled;
 
     if (!ssao_enabled || ctx_.render_targets.ssao == 0 || ctx_.render_targets.ssao_blur == 0) {
         return;
@@ -1010,7 +1020,7 @@ void ContactShadowPass::Setup(RenderGraph& graph) {
 void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
-    bool cs_enabled = pp_config.valid && pp_config.contact_shadow_enabled;
+    bool cs_enabled = ctx_.pipeline_features.contact_shadow && pp_config.valid && pp_config.contact_shadow_enabled;
 
     if (!cs_enabled || ctx_.render_targets.contact_shadow == 0) {
         return;
@@ -1058,7 +1068,7 @@ void FXAAPass::Setup(RenderGraph& graph) {
 
 void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
-    bool fxaa_enabled = snap.post_process.valid && snap.post_process.fxaa_enabled;
+    bool fxaa_enabled = ctx_.pipeline_features.fxaa && snap.post_process.valid && snap.post_process.fxaa_enabled;
 
     ctx_.fxaa_active = fxaa_enabled && ctx_.render_targets.fxaa != 0;
     if (!ctx_.fxaa_active) {
@@ -1147,7 +1157,7 @@ void TAAPass::Setup(RenderGraph& graph) {
 
 void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
-    bool taa_enabled = snap.post_process.valid && snap.post_process.taa_enabled;
+    bool taa_enabled = ctx_.pipeline_features.taa && snap.post_process.valid && snap.post_process.taa_enabled;
     float blend_factor = snap.post_process.valid ? snap.post_process.taa_blend_factor : 0.1f;
 
     ctx_.taa_active = taa_enabled && ctx_.render_targets.taa != 0;

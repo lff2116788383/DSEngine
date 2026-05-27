@@ -223,6 +223,18 @@ FramePipeline::GpuDrivenPolicy ResolveGpuDrivenPolicy() {
     }
     return FramePipeline::GpuDrivenPolicy::Auto;
 }
+
+bool IsProfilePassEnabled(const dse::render::RenderPipelineProfile& profile, const std::string& name) {
+    return dse::render::IsRenderPipelinePassEnabled(
+        profile, dse::render::BuiltinRenderPipelineRegistry(), name);
+}
+
+float PipelineValueToFloat(const dse::render::PipelineValue* value, float fallback) {
+    if (!value) return fallback;
+    if (const auto* v = std::get_if<double>(value)) return static_cast<float>(*v);
+    if (const auto* v = std::get_if<int>(value)) return static_cast<float>(*v);
+    return fallback;
+}
 }
 
 bool FramePipeline::Init() {
@@ -304,6 +316,29 @@ bool FramePipeline::Init() {
         }
     }
     asset_manager.ConfigureDataRoot(data_root);
+    {
+        auto profile_result = dse::render::ResolveRenderPipelineProfileFromEnvironment(
+            dse::render::RhiBackendToString(rhi_backend), data_root);
+        render_pipeline_profile_ = std::move(profile_result.profile);
+        dse::render::RenderPipelineValidationContext validation_context{};
+        validation_context.editor_mode = runtime_context_.editor_mode;
+        std::string validation_error;
+        if (!dse::render::ValidateRenderPipelineProfile(
+                render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(),
+                validation_context, validation_error)) {
+            DEBUG_LOG_ERROR("Render pipeline profile '{}' invalid: {}; using ForwardPlusDefault",
+                            render_pipeline_profile_.name, validation_error);
+            render_pipeline_profile_ = dse::render::MakeForwardPlusDefaultProfile();
+            profile_result.used_fallback = true;
+        }
+        if (profile_result.used_fallback) {
+            DEBUG_LOG_WARN("Render pipeline profile: {}", profile_result.message);
+        } else {
+            DEBUG_LOG_INFO("Render pipeline profile: {}", profile_result.message);
+        }
+        DEBUG_LOG_INFO("{}", dse::render::DumpRenderPipelineProfile(
+            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), validation_context));
+    }
     if (const char* env_budget = std::getenv("DSE_ASYNC_UPLOAD_BUDGET")) {
         int budget = std::atoi(env_budget);
         if (budget > 0) {
@@ -528,7 +563,8 @@ bool FramePipeline::Init() {
     }
 
     gpu_driven_policy_ = ResolveGpuDrivenPolicy();
-    gpu_driven_requested_ = (gpu_driven_policy_ != GpuDrivenPolicy::Off);
+    gpu_driven_requested_ = (gpu_driven_policy_ != GpuDrivenPolicy::Off) &&
+        render_pipeline_profile_.settings.gpu_driven;
     gpu_driven_diag_ = [] {
         const char* diag = std::getenv("DSE_GPU_DRIVEN_DIAG");
         return diag && diag[0] != '\0' && diag[0] != '0';
@@ -555,7 +591,7 @@ bool FramePipeline::Init() {
                        render_resources_.gpu_driven_supported, render_resources_.gpu_cull_shader);
     } else if (!gpu_driven_requested_) {
         render_resources_.gpu_driven_supported = false;
-        DEBUG_LOG_INFO("GPU Driven Rendering: requested=false (policy=off)");
+        DEBUG_LOG_INFO("GPU Driven Rendering: requested=false (policy/profile)");
     } else {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: not supported, using CPU path");
@@ -1092,7 +1128,7 @@ void FramePipeline::RunRenderInternal() {
 
     // TAA: 预检测 ECS 组件，提前设置 taa_active，ForwardScenePass 需要在场景渲染前知道是否应用 jitter
     render_pass_context_.taa_active = false;
-    if (taa_pass_ && runtime_context_.world) {
+    if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
         auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
         for (auto entity : pp_view) {
             auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
@@ -1517,6 +1553,37 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.gpu_cull_shader = render_resources_.gpu_cull_shader;
     render_pass_context_.gpu_indirect_draw_count = 0;
     render_pass_context_.gpu_total_instances = 0;
+    render_pass_context_.fxaa_active = false;
+    render_pass_context_.taa_active = false;
+    render_pass_context_.auto_exposure_active = false;
+    render_pass_context_.pipeline_features.bloom =
+        IsProfilePassEnabled(render_pipeline_profile_, "bloom");
+    render_pass_context_.pipeline_features.ssao =
+        IsProfilePassEnabled(render_pipeline_profile_, "ssao");
+    render_pass_context_.pipeline_features.contact_shadow =
+        IsProfilePassEnabled(render_pipeline_profile_, "contact_shadow");
+    render_pass_context_.pipeline_features.auto_exposure =
+        IsProfilePassEnabled(render_pipeline_profile_, "auto_exposure");
+    render_pass_context_.pipeline_features.fxaa =
+        IsProfilePassEnabled(render_pipeline_profile_, "fxaa");
+    render_pass_context_.pipeline_features.taa =
+        IsProfilePassEnabled(render_pipeline_profile_, "taa");
+    render_pass_context_.pipeline_features.ui =
+        IsProfilePassEnabled(render_pipeline_profile_, "ui");
+    render_pass_context_.pipeline_features.gpu_cull =
+        IsProfilePassEnabled(render_pipeline_profile_, "gpu_cull");
+    render_pass_context_.pipeline_features.shadows = render_pipeline_profile_.settings.shadows &&
+        (IsProfilePassEnabled(render_pipeline_profile_, "csm_shadow") ||
+         IsProfilePassEnabled(render_pipeline_profile_, "spot_shadow") ||
+         IsProfilePassEnabled(render_pipeline_profile_, "point_shadow"));
+    render_pass_context_.pipeline_overrides.bloom_intensity = PipelineValueToFloat(
+        dse::render::FindRenderPipelinePassParam(
+            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "intensity"),
+        -1.0f);
+    render_pass_context_.pipeline_overrides.bloom_threshold = PipelineValueToFloat(
+        dse::render::FindRenderPipelinePassParam(
+            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "threshold"),
+        -1.0f);
 
     render_pass_context_.modules.clear();
     for (auto& mod : modules_) {
@@ -1558,54 +1625,32 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.MarkOutput(deferred_lit);
     render_graph_dag_.MarkOutput(outline_color);
 
-    // ---- 娉ㄥ唽鍐呯疆 Pass ----
-    registered_passes_.push_back(std::make_unique<dse::render::PreZPass>(render_pass_context_));
-    // Hi-Z passes 鈥?绱ц窡 PreZ 涔嬪悗锛屽湪 Forward 涔嬪墠
-    if (render_resources_.hiz_texture != 0) {
-        registered_passes_.push_back(std::make_unique<dse::render::HiZBuildPass>(render_pass_context_));
-        registered_passes_.push_back(std::make_unique<dse::render::HiZCullPass>(render_pass_context_));
-    }
-    // Shadow passes 必须在 GPUCullPass 之前执行：
-    // GPUCullPass 会修改 draw commands 的 instance_count（基于主摄像机视锥剔除），
-    // 而阴影 pass 需要从光源视角渲染所有物体（使用未剔除的原始 draw commands）。
-    registered_passes_.push_back(std::make_unique<dse::render::CSMShadowPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::SpotShadowPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::PointShadowPass>(render_pass_context_));
-    // GPU Driven Cull Pass — 视锥 + Hi-Z 剔除，直接写 indirect draw commands
-    if (render_resources_.gpu_driven_supported) {
-        registered_passes_.push_back(std::make_unique<dse::render::GPUCullPass>(render_pass_context_));
-    }
-    // RSM 鈥?浠庢柟鍚戝厜瑙嗚娓叉煋 GBuffer 鍒?RSM MRT锛圖DGI 鐨?VPL 鏁版嵁婧愶級
-    registered_passes_.push_back(std::make_unique<dse::render::RSMRenderPass>(render_pass_context_));
-    // DDGI Probe Update 鈥?RSM 涔嬪悗銆佸厜鐓?Forward pass 涔嬪墠
-    registered_passes_.push_back(std::make_unique<dse::render::DDGIUpdatePass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::GBufferPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::DeferredLightingPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::ForwardScenePass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::WBOITPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::WaterPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::BloomPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::SSAOPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::ContactShadowPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::AutoExposurePass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::MotionVectorPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::SSRPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::OutlinePass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::LightShaftPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::VolumetricFogPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::DecalPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::UIPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::CompositePass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::DOFPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::MotionBlurPass>(render_pass_context_));
-    registered_passes_.push_back(std::make_unique<dse::render::FXAAPass>(render_pass_context_));
-    {
-        auto taa = std::make_unique<dse::render::TAAPass>(render_pass_context_);
-        taa_pass_ = taa.get();
-        registered_passes_.push_back(std::move(taa));
-    }
-    if (!runtime_context_.editor_mode) {
-        registered_passes_.push_back(std::make_unique<dse::render::PresentPass>(render_pass_context_));
+    taa_pass_ = nullptr;
+    const auto& registry = dse::render::BuiltinRenderPipelineRegistry();
+    for (const auto& pass_config : render_pipeline_profile_.passes) {
+        if (!pass_config.enabled) continue;
+        const std::string pass_name = registry.ResolveName(pass_config.name);
+        const dse::render::RenderPassMetadata* metadata = registry.FindMetadata(pass_name);
+        if (!metadata) {
+            DEBUG_LOG_WARN("Render pipeline skipped unknown pass '{}'", pass_config.name);
+            continue;
+        }
+        if (metadata->runtime_only && runtime_context_.editor_mode) continue;
+        if (metadata->requires_hiz && render_resources_.hiz_texture == 0) continue;
+        if (metadata->requires_gpu_driven && !render_resources_.gpu_driven_supported) continue;
+        if (!render_pipeline_profile_.settings.shadows &&
+            (pass_name == "csm_shadow" || pass_name == "spot_shadow" || pass_name == "point_shadow")) {
+            continue;
+        }
+        auto pass = registry.Create(pass_name, render_pass_context_);
+        if (!pass) {
+            DEBUG_LOG_WARN("Render pipeline failed to create pass '{}'", pass_name);
+            continue;
+        }
+        if (pass_name == "taa") {
+            taa_pass_ = static_cast<dse::render::TAAPass*>(pass.get());
+        }
+        registered_passes_.push_back(std::move(pass));
     }
 
     // ---- 妯″潡鍔ㄦ€佹敞鍐岃嚜瀹氫箟 Pass ----
@@ -2400,7 +2445,7 @@ void FramePipeline::PrepareRenderFrame() {
 
     // TAA: 预检测 ECS 组件
     render_pass_context_.taa_active = false;
-    if (taa_pass_ && runtime_context_.world) {
+    if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
         auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
         for (auto entity : pp_view) {
             auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
