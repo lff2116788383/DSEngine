@@ -221,6 +221,54 @@ int L_BusRemoveEffect(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// 全局 BGM / SFX Lua API
+// ============================================================
+
+// audio.play_bgm(filepath, [volume, loop])
+int L_AudioPlayBgm(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) { lua_pushboolean(L, 0); return 1; }
+    const char* path = luaL_checkstring(L, 1);
+    float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    bool loop = lua_isnoneornil(L, 3) ? true : (lua_toboolean(L, 3) != 0);
+    bool ok = sys->PlayBgm(path, vol, loop);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// audio.pause_bgm()
+int L_AudioPauseBgm(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->PauseBgm();
+    return 0;
+}
+
+// audio.resume_bgm()
+int L_AudioResumeBgm(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->ResumeBgm();
+    return 0;
+}
+
+// audio.stop_bgm()
+int L_AudioStopBgm(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (sys) sys->StopBgm();
+    return 0;
+}
+
+// audio.play_sfx(filepath, [volume, loop])
+int L_AudioPlaySfx(lua_State* L) {
+    auto* sys = GetAudioSys();
+    if (!sys) return 0;
+    const char* path = luaL_checkstring(L, 1);
+    float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    bool loop = lua_isnoneornil(L, 3) ? false : (lua_toboolean(L, 3) != 0);
+    sys->PlaySfx(path, vol, loop);
+    return 0;
+}
+
 int L_BusGetNames(lua_State* L) {
     auto* sys = GetAudioSys();
     if (!sys) { lua_newtable(L); return 1; }
@@ -251,6 +299,13 @@ void RegisterAudioBindings(lua_State* L) {
     set_fn("add_listener", L_AudioAddListener);
     set_fn("set_3d_distance", L_AudioSet3DDistance);
     set_fn("get_source_state", L_AudioGetSourceState);
+
+    // 全局 BGM / SFX
+    set_fn("play_bgm", L_AudioPlayBgm);
+    set_fn("pause_bgm", L_AudioPauseBgm);
+    set_fn("resume_bgm", L_AudioResumeBgm);
+    set_fn("stop_bgm", L_AudioStopBgm);
+    set_fn("play_sfx", L_AudioPlaySfx);
 
     // 混音总线 + DSP 效果链
     set_fn("bus_set_volume", L_BusSetVolume);

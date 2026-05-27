@@ -11,6 +11,7 @@
 #include "engine/input/input.h"
 #include "engine/input/key_code.h"
 #include "engine/platform/screen.h"
+#include "engine/ecs/floating_origin_system.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -317,6 +318,90 @@ void RegisterMetricsBindings(lua_State* L) {
     set_fn("get_gpu_total_instances", L_MetricsGetGpuTotalInstances);
     set_fn("get_fps", L_MetricsGetFps);
     set_fn("get_frame_time_ms", L_MetricsGetFrameTimeMs);
+}
+
+// ============================================================
+// Floating Origin Lua API
+// ============================================================
+
+namespace {
+
+static dse::FloatingOriginSystem* GetFloatingOrigin() {
+    return static_cast<dse::FloatingOriginSystem*>(GetBindingContext().floating_origin);
+}
+
+// origin.get_accumulated() -> x, y, z  (double precision returned as number)
+int L_OriginGetAccumulated(lua_State* L) {
+    auto* fo = GetFloatingOrigin();
+    if (!fo) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushnumber(L, 0); return 3; }
+    const auto& acc = fo->accumulated_origin();
+    lua_pushnumber(L, static_cast<lua_Number>(acc.x));
+    lua_pushnumber(L, static_cast<lua_Number>(acc.y));
+    lua_pushnumber(L, static_cast<lua_Number>(acc.z));
+    return 3;
+}
+
+// origin.to_absolute(lx, ly, lz) -> ax, ay, az
+int L_OriginToAbsolute(lua_State* L) {
+    auto* fo = GetFloatingOrigin();
+    float lx = static_cast<float>(luaL_checknumber(L, 1));
+    float ly = static_cast<float>(luaL_checknumber(L, 2));
+    float lz = static_cast<float>(luaL_checknumber(L, 3));
+    if (!fo) { lua_pushnumber(L, lx); lua_pushnumber(L, ly); lua_pushnumber(L, lz); return 3; }
+    glm::dvec3 abs = fo->ToAbsolute(glm::vec3(lx, ly, lz));
+    lua_pushnumber(L, static_cast<lua_Number>(abs.x));
+    lua_pushnumber(L, static_cast<lua_Number>(abs.y));
+    lua_pushnumber(L, static_cast<lua_Number>(abs.z));
+    return 3;
+}
+
+// origin.to_local(ax, ay, az) -> lx, ly, lz
+int L_OriginToLocal(lua_State* L) {
+    auto* fo = GetFloatingOrigin();
+    double ax = luaL_checknumber(L, 1);
+    double ay = luaL_checknumber(L, 2);
+    double az = luaL_checknumber(L, 3);
+    if (!fo) {
+        lua_pushnumber(L, static_cast<lua_Number>(ax));
+        lua_pushnumber(L, static_cast<lua_Number>(ay));
+        lua_pushnumber(L, static_cast<lua_Number>(az));
+        return 3;
+    }
+    glm::vec3 local = fo->ToLocal(glm::dvec3(ax, ay, az));
+    lua_pushnumber(L, static_cast<lua_Number>(local.x));
+    lua_pushnumber(L, static_cast<lua_Number>(local.y));
+    lua_pushnumber(L, static_cast<lua_Number>(local.z));
+    return 3;
+}
+
+// origin.set_rebase_threshold(threshold)
+int L_OriginSetRebaseThreshold(lua_State* L) {
+    auto* fo = GetFloatingOrigin();
+    if (!fo) return 0;
+    fo->set_rebase_threshold(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
+// origin.get_rebase_threshold() -> threshold
+int L_OriginGetRebaseThreshold(lua_State* L) {
+    auto* fo = GetFloatingOrigin();
+    lua_pushnumber(L, fo ? static_cast<lua_Number>(fo->rebase_threshold()) : 5000.0);
+    return 1;
+}
+
+} // namespace
+
+void RegisterFloatingOriginBindings(lua_State* L) {
+    auto set_fn = [L](const char* name, lua_CFunction fn) {
+        lua_pushcfunction(L, fn);
+        lua_setfield(L, -2, name);
+    };
+    lua_newtable(L);
+    set_fn("get_accumulated", L_OriginGetAccumulated);
+    set_fn("to_absolute", L_OriginToAbsolute);
+    set_fn("to_local", L_OriginToLocal);
+    set_fn("set_rebase_threshold", L_OriginSetRebaseThreshold);
+    set_fn("get_rebase_threshold", L_OriginGetRebaseThreshold);
 }
 
 }

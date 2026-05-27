@@ -798,6 +798,64 @@ int L_UiGetSliderValue(lua_State* L) {
     return 1;
 }
 
+// ui.set_slider_colors(entity, track_r,g,b,a, fill_r,g,b,a, handle_r,g,b,a)
+int L_UiSetSliderColors(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UISliderComponent>(e)) return 0;
+    auto& s = world->registry().get<UISliderComponent>(e);
+    s.track_color = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_checknumber(L, 5)));
+    s.fill_color = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 6)),
+        static_cast<float>(luaL_checknumber(L, 7)),
+        static_cast<float>(luaL_checknumber(L, 8)),
+        static_cast<float>(luaL_checknumber(L, 9)));
+    s.handle_color = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 10)),
+        static_cast<float>(luaL_checknumber(L, 11)),
+        static_cast<float>(luaL_checknumber(L, 12)),
+        static_cast<float>(luaL_checknumber(L, 13)));
+    return 0;
+}
+
+// ui.set_slider_handle_size(entity, size)
+int L_UiSetSliderHandleSize(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UISliderComponent>(e)) return 0;
+    world->registry().get<UISliderComponent>(e).handle_size =
+        static_cast<float>(luaL_checknumber(L, 2));
+    return 0;
+}
+
+// ui.set_slider_vertical(entity, vertical)
+int L_UiSetSliderVertical(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UISliderComponent>(e)) return 0;
+    world->registry().get<UISliderComponent>(e).vertical = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// ui.set_slider_range(entity, min, max)
+int L_UiSetSliderRange(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UISliderComponent>(e)) return 0;
+    auto& s = world->registry().get<UISliderComponent>(e);
+    s.min_value = static_cast<float>(luaL_checknumber(L, 2));
+    s.max_value = static_cast<float>(luaL_checknumber(L, 3));
+    return 0;
+}
+
 // ============================================================
 // UIToggleComponent 绑定
 // ============================================================
@@ -941,6 +999,10 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("add_slider", L_UiAddSlider);
     set_fn("set_slider_value", L_UiSetSliderValue);
     set_fn("get_slider_value", L_UiGetSliderValue);
+    set_fn("set_slider_colors", L_UiSetSliderColors);
+    set_fn("set_slider_handle_size", L_UiSetSliderHandleSize);
+    set_fn("set_slider_vertical", L_UiSetSliderVertical);
+    set_fn("set_slider_range", L_UiSetSliderRange);
     // UIToggleComponent
     set_fn("add_toggle", L_UiAddToggle);
     set_fn("set_toggle", L_UiSetToggle);

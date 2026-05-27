@@ -20,6 +20,7 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
             stats_bindings.get_gpu_total_instances,
             context.asset_manager,
             context.audio_system,
+            context.floating_origin,
             context.quit_app,
             context.set_target_fps,
             context.get_target_fps

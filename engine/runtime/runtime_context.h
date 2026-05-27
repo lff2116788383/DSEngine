@@ -28,6 +28,8 @@ struct RuntimeContext {
     void* native_window_handle = nullptr;
     /// 音频系统指针（避免头文件依赖，实际为 dse::gameplay2d::AudioSystem*）
     void* audio_system = nullptr;
+    /// Floating Origin 系统指针（实际为 dse::FloatingOriginSystem*）
+    void* floating_origin = nullptr;
     /// 退出应用回调（由 EngineInstance 注入）
     std::function<void()> quit_app;
     /// 设置/获取目标帧率回调
