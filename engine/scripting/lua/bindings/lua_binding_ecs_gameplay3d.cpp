@@ -656,6 +656,48 @@ int L_EcsSetWeatherSpawn(lua_State* L) {
 }
 
 // ============================================================
+// SnowCoverComponent 绑定
+// ============================================================
+
+/// add_snow_cover(entity)
+int L_EcsAddSnowCover(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<SnowCoverComponent>(e);
+    return 0;
+}
+
+/// set_snow_cover(entity, coverage, accumulation_rate, melt_rate)
+int L_EcsSetSnowCover(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
+    if (!sc) return 0;
+    sc->coverage          = helper::OptFloat(L, 2, sc->coverage);
+    sc->accumulation_rate = helper::OptFloat(L, 3, sc->accumulation_rate);
+    sc->melt_rate         = helper::OptFloat(L, 4, sc->melt_rate);
+    return 0;
+}
+
+/// set_snow_appearance(entity, albedo_r, albedo_g, albedo_b, roughness, threshold, sharpness)
+int L_EcsSetSnowAppearance(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
+    if (!sc) return 0;
+    sc->snow_albedo.r    = helper::OptFloat(L, 2, sc->snow_albedo.r);
+    sc->snow_albedo.g    = helper::OptFloat(L, 3, sc->snow_albedo.g);
+    sc->snow_albedo.b    = helper::OptFloat(L, 4, sc->snow_albedo.b);
+    sc->snow_roughness   = helper::OptFloat(L, 5, sc->snow_roughness);
+    sc->normal_threshold = helper::OptFloat(L, 6, sc->normal_threshold);
+    sc->edge_sharpness   = helper::OptFloat(L, 7, sc->edge_sharpness);
+    return 0;
+}
+
+// ============================================================
 // AtmosphereComponent 绑定
 // ============================================================
 
@@ -944,6 +986,10 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"add_weather",                L_EcsAddWeather},
         {"set_weather",                L_EcsSetWeather},
         {"set_weather_spawn",          L_EcsSetWeatherSpawn},
+        // 雪地系统
+        {"add_snow_cover",             L_EcsAddSnowCover},
+        {"set_snow_cover",             L_EcsSetSnowCover},
+        {"set_snow_appearance",        L_EcsSetSnowAppearance},
     });
 }
 
