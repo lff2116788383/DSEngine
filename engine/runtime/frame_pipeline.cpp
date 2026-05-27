@@ -350,36 +350,45 @@ bool FramePipeline::Init() {
     if (Screen::width() <= 0 || Screen::height() <= 0) {
         Screen::set_width_height(1280, 720);
     }
-    const int render_width = Screen::width();
-    const int render_height = Screen::height();
-    
-    // 始终创建最终合成 RenderTarget：editor 直接展示该纹理，runtime 再 present 到默认 framebuffer。
-    RenderTargetDesc main_rt_desc{};
-    main_rt_desc.width = render_width;
-    main_rt_desc.height = render_height;
-    main_rt_desc.has_color = true;
-    main_rt_desc.has_depth = false;
-    render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget(main_rt_desc);
+    InitResolutionDependentRTs();
 
-
-
-
-
-    
-    // 使用支持 HDR 的浮点纹理作为 Scene Render Target，这是泛光和色调映射的基础
-    // msaa_samples=4：开启 4x MSAA（不支持时 resource_mgr 自动降级为 1x）
-    {
-        RenderTargetDesc scene_desc{};
-        scene_desc.width = render_width;
-        scene_desc.height = render_height;
-        scene_desc.has_color = true;
-        scene_desc.has_depth = true;
-        scene_desc.msaa_samples = 4;
-        render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget(scene_desc);
+    // 固定尺寸 RT（不随窗口缩放，Init 时创建一次）
+    if (render_resources_.pp_lum_temp_rt == 0)
+        render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({64, 64, true, false, false});
+    for (int i = 0; i < 2; ++i) {
+        if (render_resources_.pp_lum_adapted_rt[i] == 0)
+            render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget({1, 1, true, false, false});
     }
-    render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
-    render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true}); // Only depth
-    
+
+    // Hi-Z Occlusion Culling shaders（不依赖分辨率，Init 时创建一次）
+    if (render_resources_.hiz_texture != 0 &&
+        render_resources_.hiz_copy_shader == 0 &&
+        runtime_context_.rhi_device->SupportsCompute()) {
+        render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+            dse::render::kHiZCopyShaderSource,
+            dse::render::kHiZCopyShaderSourceVK,
+            dse::render::kHiZCopyShaderSourceHLSL,
+            0, 1, 1, 8);
+        render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+            dse::render::kHiZDownsampleShaderSource,
+            dse::render::kHiZDownsampleShaderSourceVK,
+            dse::render::kHiZDownsampleShaderSourceHLSL,
+            0, 2, 0, 16);
+        render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+            dse::render::kHiZCullShaderSource,
+            dse::render::kHiZCullShaderSourceVK,
+            dse::render::kHiZCullShaderSourceHLSL,
+            2, 0, 1, 80);
+        DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
+                       render_resources_.hiz_texture,
+                       render_resources_.hiz_visibility_ssbo.raw(),
+                       render_resources_.hiz_aabb_ssbo.raw(),
+                       render_resources_.hiz_ssbo_capacity,
+                       render_resources_.hiz_copy_shader,
+                       render_resources_.hiz_downsample_shader,
+                       render_resources_.hiz_cull_shader);
+    }
+
     // CSM shadow map resolution: near cascade high-res, far cascades progressively lower
     constexpr int kShadowResolutions[CSM_CASCADES] = {2048, 1024, 512};
     for (int i = 0; i < CSM_CASCADES; ++i) {
@@ -399,167 +408,6 @@ bool FramePipeline::Init() {
         rsm_desc.has_depth = true;
         rsm_desc.color_attachment_count = 3;
         render_resources_.rsm_render_target = runtime_context_.rhi_device->CreateRenderTarget(rsm_desc);
-    }
-
-    if (render_resources_.pp_bloom_extract_rt == 0) {
-        render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    }
-    
-    // Create mip chain for Dual Filter Bloom (5 levels)
-    // allow_uav=true：允许 CS 写入，D3D11 Bloom Compute Shader 路径使用
-    if (render_resources_.pp_bloom_mip_rts.empty()) {
-        int mip_width = render_width / 2;
-        int mip_height = render_height / 2;
-        for (int i = 0; i < 5; ++i) {
-            RenderTargetDesc bloom_mip_desc{};
-            bloom_mip_desc.width = mip_width;
-            bloom_mip_desc.height = mip_height;
-            bloom_mip_desc.has_color = true;
-            bloom_mip_desc.has_depth = false;
-            bloom_mip_desc.allow_uav = true;
-            render_resources_.pp_bloom_mip_rts.push_back(
-                runtime_context_.rhi_device->CreateRenderTarget(bloom_mip_desc));
-            mip_width /= 2;
-            mip_height /= 2;
-            if (mip_width < 1) mip_width = 1;
-            if (mip_height < 1) mip_height = 1;
-        }
-    }
-
-    // SSAO: 半分辨率单通道 RT
-    if (render_resources_.pp_ssao_rt == 0) {
-        render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width / 2, render_height / 2, true, false, false});
-    }
-    if (render_resources_.pp_ssao_blur_rt == 0) {
-        render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width / 2, render_height / 2, true, false, false});
-    }
-    // Contact Shadow: 半分辨率单通道 RT
-    if (render_resources_.pp_contact_shadow_rt == 0) {
-        render_resources_.pp_contact_shadow_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width / 2, render_height / 2, true, false, false});
-    }
-    // FXAA: 全分辨率 RT
-    if (render_resources_.pp_fxaa_rt == 0) {
-        render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // TAA: 全分辨率 RT
-    if (render_resources_.pp_taa_rt == 0) {
-        render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // DOF: 全分辨率 RT
-    if (render_resources_.pp_dof_rt == 0) {
-        render_resources_.pp_dof_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // SSR: 半分辨率 RT
-    if (render_resources_.pp_ssr_rt == 0) {
-        render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width / 2, render_height / 2, true, false, false});
-    }
-    // Motion Vector: 全分辨率 RT (RG16F 速度场)
-    if (render_resources_.pp_motion_vector_rt == 0) {
-        render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // Outline / Edge Detection: 全分辨率 RT
-    if (render_resources_.pp_outline_rt == 0) {
-        render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // Volumetric Fog: 全分辨率 RT（存储 scene+fog 合成结果）
-    if (render_resources_.pp_fog_rt == 0) {
-        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-
-    // WBOIT accumulation: 全分辨率 RGBA16F（需要 HDR 精度累积加权颜色）
-    if (render_resources_.wboit_accum_rt == 0) {
-        render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-    // WBOIT revealage: 全分辨率，R 通道存储 prod(1-alpha_i)
-    if (render_resources_.wboit_reveal_rt == 0) {
-        render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-
-    // GBuffer MRT: 3 棰滆壊闄勪欢 (albedo, normal, position) + 娣卞害
-    if (render_resources_.gbuffer_rt == 0) {
-        RenderTargetDesc gbuf_desc;
-        gbuf_desc.width = render_width;
-        gbuf_desc.height = render_height;
-        gbuf_desc.has_color = true;
-        gbuf_desc.has_depth = true;
-        gbuf_desc.generate_mipmaps = false;
-        gbuf_desc.color_attachment_count = 3;
-        render_resources_.gbuffer_rt = runtime_context_.rhi_device->CreateRenderTarget(gbuf_desc);
-    }
-    // Deferred Lighting output: 全分辨率单颜色附件
-    if (render_resources_.deferred_lighting_rt == 0) {
-        render_resources_.deferred_lighting_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {render_width, render_height, true, false, false});
-    }
-
-    // Auto Exposure: 64x64 临时亮度 + 2 个 1x1 ping-pong RT
-    if (render_resources_.pp_lum_temp_rt == 0) {
-        render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget(
-            {64, 64, true, false, false});
-    }
-    for (int i = 0; i < 2; ++i) {
-        if (render_resources_.pp_lum_adapted_rt[i] == 0) {
-            render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget(
-                {1, 1, true, false, false});
-        }
-    }
-
-    // Hi-Z Occlusion Culling: R32F 绾圭悊 + 瀹屾暣 mip chain
-    if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
-        render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
-        if (render_resources_.hiz_texture != 0) {
-            const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
-            {
-                dse::render::GpuBufferDesc d{cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
-                render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-            }
-            {
-                dse::render::GpuBufferDesc d{cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
-                render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-            }
-            render_resources_.hiz_ssbo_capacity = cap;
-
-            // 创建 compute shader（三套源码 + binding 元数据，仅一次，缓存句柄）
-            // HiZ Copy:       ssbo=0, img=1, smp=1, pc=8B  (ivec2 dst_size)
-            // HiZ Downsample: ssbo=0, img=2, smp=0, pc=16B (ivec2 src_size + ivec2 dst_size)
-            // HiZ Cull:       ssbo=2, img=0, smp=1, pc=80B (mat4 vp + vec2 screen + 2*int)
-            render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-                dse::render::kHiZCopyShaderSource,
-                dse::render::kHiZCopyShaderSourceVK,
-                dse::render::kHiZCopyShaderSourceHLSL,
-                0, 1, 1, 8);
-            render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-                dse::render::kHiZDownsampleShaderSource,
-                dse::render::kHiZDownsampleShaderSourceVK,
-                dse::render::kHiZDownsampleShaderSourceHLSL,
-                0, 2, 0, 16);
-            render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-                dse::render::kHiZCullShaderSource,
-                dse::render::kHiZCullShaderSourceVK,
-                dse::render::kHiZCullShaderSourceHLSL,
-                2, 0, 1, 80);
-
-            DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
-                           render_resources_.hiz_texture,
-                           render_resources_.hiz_visibility_ssbo.raw(),
-                           render_resources_.hiz_aabb_ssbo.raw(),
-                           cap,
-                           render_resources_.hiz_copy_shader,
-                           render_resources_.hiz_downsample_shader,
-                           render_resources_.hiz_cull_shader);
-        }
     }
 
     gpu_driven_policy_ = ResolveGpuDrivenPolicy();
@@ -1002,6 +850,144 @@ void FramePipeline::Shutdown() {
     fixed_samples_ = 0;
     render_samples_ = 0;
     initialized_ = false;
+}
+
+void FramePipeline::InitResolutionDependentRTs() {
+    if (!runtime_context_.rhi_device) return;
+    const int render_width  = Screen::width()  > 0 ? Screen::width()  : 1280;
+    const int render_height = Screen::height() > 0 ? Screen::height() : 720;
+
+    if (render_resources_.main_render_target == 0) {
+        RenderTargetDesc main_rt_desc{};
+        main_rt_desc.width = render_width;
+        main_rt_desc.height = render_height;
+        main_rt_desc.has_color = true;
+        main_rt_desc.has_depth = false;
+        render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget(main_rt_desc);
+    }
+    if (render_resources_.scene_render_target == 0) {
+        RenderTargetDesc scene_desc{};
+        scene_desc.width = render_width;
+        scene_desc.height = render_height;
+        scene_desc.has_color = true;
+        scene_desc.has_depth = true;
+        scene_desc.msaa_samples = 4;
+        render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget(scene_desc);
+    }
+    if (render_resources_.ui_render_target == 0) {
+        render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
+    }
+    if (render_resources_.prez_render_target == 0) {
+        render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true});
+    }
+    if (render_resources_.pp_bloom_extract_rt == 0) {
+        render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    }
+    if (render_resources_.pp_bloom_mip_rts.empty()) {
+        int mip_w = render_width / 2, mip_h = render_height / 2;
+        for (int i = 0; i < 5; ++i) {
+            RenderTargetDesc d{}; d.width = mip_w; d.height = mip_h;
+            d.has_color = true; d.allow_uav = true;
+            render_resources_.pp_bloom_mip_rts.push_back(runtime_context_.rhi_device->CreateRenderTarget(d));
+            mip_w = (std::max)(1, mip_w / 2);
+            mip_h = (std::max)(1, mip_h / 2);
+        }
+    }
+    if (render_resources_.pp_ssao_rt == 0)
+        render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
+    if (render_resources_.pp_ssao_blur_rt == 0)
+        render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
+    if (render_resources_.pp_contact_shadow_rt == 0)
+        render_resources_.pp_contact_shadow_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
+    if (render_resources_.pp_fxaa_rt == 0)
+        render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_taa_rt == 0)
+        render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_dof_rt == 0)
+        render_resources_.pp_dof_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_ssr_rt == 0)
+        render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
+    if (render_resources_.pp_motion_vector_rt == 0)
+        render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_outline_rt == 0)
+        render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_fog_rt == 0)
+        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.wboit_accum_rt == 0)
+        render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.wboit_reveal_rt == 0)
+        render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.gbuffer_rt == 0) {
+        RenderTargetDesc gbuf_desc;
+        gbuf_desc.width = render_width; gbuf_desc.height = render_height;
+        gbuf_desc.has_color = true; gbuf_desc.has_depth = true;
+        gbuf_desc.color_attachment_count = 3;
+        render_resources_.gbuffer_rt = runtime_context_.rhi_device->CreateRenderTarget(gbuf_desc);
+    }
+    if (render_resources_.deferred_lighting_rt == 0)
+        render_resources_.deferred_lighting_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
+        render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
+        if (render_resources_.hiz_texture != 0) {
+            const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
+            render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(
+                {cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"}, nullptr);
+            render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(
+                {cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"}, nullptr);
+            render_resources_.hiz_ssbo_capacity = cap;
+        }
+    }
+}
+
+void FramePipeline::FreeResolutionDependentRTs() {
+    if (!runtime_context_.rhi_device) return;
+    auto& d = *runtime_context_.rhi_device;
+    auto del = [&](unsigned int& h) { if (h) { d.DeleteRenderTarget(h); h = 0; } };
+    del(render_resources_.main_render_target);
+    del(render_resources_.scene_render_target);
+    del(render_resources_.ui_render_target);
+    del(render_resources_.prez_render_target);
+    del(render_resources_.pp_bloom_extract_rt);
+    for (auto& h : render_resources_.pp_bloom_mip_rts) d.DeleteRenderTarget(h);
+    render_resources_.pp_bloom_mip_rts.clear();
+    del(render_resources_.pp_ssao_rt);
+    del(render_resources_.pp_ssao_blur_rt);
+    del(render_resources_.pp_contact_shadow_rt);
+    del(render_resources_.pp_fxaa_rt);
+    del(render_resources_.pp_taa_rt);
+    del(render_resources_.pp_dof_rt);
+    del(render_resources_.pp_ssr_rt);
+    del(render_resources_.pp_motion_vector_rt);
+    del(render_resources_.pp_outline_rt);
+    del(render_resources_.pp_fog_rt);
+    del(render_resources_.wboit_accum_rt);
+    del(render_resources_.wboit_reveal_rt);
+    del(render_resources_.gbuffer_rt);
+    del(render_resources_.deferred_lighting_rt);
+    if (render_resources_.hiz_texture) {
+        d.DeleteHiZTexture(render_resources_.hiz_texture);
+        render_resources_.hiz_texture = 0;
+        if (render_resources_.hiz_visibility_ssbo) {
+            d.DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
+            render_resources_.hiz_visibility_ssbo = {};
+        }
+        if (render_resources_.hiz_aabb_ssbo) {
+            d.DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
+            render_resources_.hiz_aabb_ssbo = {};
+        }
+        render_resources_.hiz_ssbo_capacity = 0;
+    }
+}
+
+void FramePipeline::OnWindowResize(int w, int h) {
+    if (!initialized_ || !runtime_context_.rhi_device) return;
+    if (w <= 0 || h <= 0) return;
+    Screen::set_width_height(w, h);
+    runtime_context_.rhi_device->WaitIdle();
+    FreeResolutionDependentRTs();
+    InitResolutionDependentRTs();
+    runtime_context_.rhi_device->OnWindowResized(w, h);
+    DEBUG_LOG_INFO("FramePipeline::OnWindowResize: {}x{}", w, h);
 }
 
 void FramePipeline::Update(float delta_time) {

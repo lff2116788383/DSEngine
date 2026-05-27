@@ -204,6 +204,8 @@ public:
     void SetForceUnlit(bool enable) override;
     void SetOverdrawMode(bool enable) override;
 
+    void OnWindowResized(int width, int height) override;
+
     // --- 子系统访问器 ---
     VulkanContext& context() { return context_; }
     VulkanResourceManager& resource_mgr() { return resource_mgr_; }
@@ -262,6 +264,8 @@ private:
     std::unordered_map<unsigned int, unsigned int> pending_compute_samplers_; ///< unit → tex handle
 
     bool initialized_ = false;
+    bool swapchain_needs_recreate_ = false;
+    bool swapchain_recreated_this_frame_ = false;
 
     /// Mega/Static VAO 追踪（VAO handle → {vbo_handle, ibo_handle}）
     struct VAOBinding {

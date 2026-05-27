@@ -14,6 +14,7 @@
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/base/debug.h"
+#include "engine/platform/screen.h"
 
 #include <algorithm>
 #include <cstring>
@@ -254,9 +255,31 @@ void VulkanRhiDevice::BeginFrame() {
     current_frame_stats_ = RenderStats{};
     pending_command_buffers_.clear();
     draw_executor_.BeginFrame();
-    // 获取下一帧 swapchain image（内部等待 fence，确保 GPU 完成上一帧）
-    context_.AcquireNextImage();
-    // fence 已完成后，仅重置当前帧槽位的 descriptor pool（另一帧可能仍在 GPU 执行）
+
+    if (swapchain_needs_recreate_) {
+        const int w = Screen::width() > 0 ? Screen::width() : 1280;
+        const int h = Screen::height() > 0 ? Screen::height() : 720;
+        context_.RecreateSwapchain(w, h);
+        swapchain_needs_recreate_ = false;
+        swapchain_recreated_this_frame_ = true;
+    } else {
+        swapchain_recreated_this_frame_ = false;
+    }
+
+    VkResult acquire_result = context_.AcquireNextImage();
+    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+        const int w = Screen::width() > 0 ? Screen::width() : 1280;
+        const int h = Screen::height() > 0 ? Screen::height() : 720;
+        context_.RecreateSwapchain(w, h);
+        swapchain_recreated_this_frame_ = true;
+        acquire_result = context_.AcquireNextImage();
+        if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+            DEBUG_LOG_WARN("[Vulkan] BeginFrame: AcquireNextImage failed after swapchain recreate ({}), skipping frame",
+                           static_cast<int>(acquire_result));
+            return;
+        }
+    }
+
     resource_mgr_.ResetDescriptorPool(context_.current_frame());
 }
 
@@ -1210,10 +1233,11 @@ void VulkanRhiDevice::EndFrame() {
     draw_executor_.EndFrame();
 
     // 提交本帧所有录制的命令缓冲 + present
+    VkResult present_result = VK_SUCCESS;
     if (!pending_command_buffers_.empty()) {
         DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", pending_command_buffers_.size());
-        context_.PresentFrame(pending_command_buffers_);
-        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame OK");
+        present_result = context_.PresentFrame(pending_command_buffers_);
+        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame result={}", static_cast<int>(present_result));
         pending_command_buffers_.clear();
     } else {
         auto clear_cmd = CreateCommandBuffer();
@@ -1223,9 +1247,13 @@ void VulkanRhiDevice::EndFrame() {
             Submit(clear_cmd);
         }
         if (!pending_command_buffers_.empty()) {
-            context_.PresentFrame(pending_command_buffers_);
+            present_result = context_.PresentFrame(pending_command_buffers_);
             pending_command_buffers_.clear();
         }
+    }
+    if (present_result == VK_ERROR_OUT_OF_DATE_KHR ||
+        (present_result == VK_SUBOPTIMAL_KHR && !swapchain_recreated_this_frame_)) {
+        swapchain_needs_recreate_ = true;
     }
 
     context_.AdvanceFrame();
@@ -1424,6 +1452,12 @@ void VulkanRhiDevice::SetForceUnlit(bool enable) {
 void VulkanRhiDevice::SetOverdrawMode(bool enable) {
     global_render_state_.overdraw_mode = enable;
     state_mgr_.SetOverdrawMode(enable);
+}
+
+void VulkanRhiDevice::OnWindowResized(int width, int height) {
+    if (!initialized_ || width <= 0 || height <= 0) return;
+    context_.RecreateSwapchain(width, height);
+    swapchain_needs_recreate_ = false;
 }
 
 } // namespace render

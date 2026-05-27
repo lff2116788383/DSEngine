@@ -194,6 +194,13 @@ public:
     void SetInitKeepAlive(std::function<void()> cb);
 
     /**
+     * @brief 窗口缩放时调用：GPU 等待空闲 → 销毁分辨率相关 RT → 按新尺寸重建
+     * @param w 新帧缓冲宽度（像素）
+     * @param h 新帧缓冲高度（像素）
+     */
+    void OnWindowResize(int w, int h);
+
+    /**
      * @brief 注入全局资产管理器实例
      * @param asset_manager 资产管理器指针
      */
@@ -288,6 +295,9 @@ public:
     friend void dse::runtime::FinalizeRuntimeRenderFrame(FramePipeline& pipeline);
 
 private:
+    void InitResolutionDependentRTs();
+    void FreeResolutionDependentRTs();
+
     void RunUpdateInternal(float delta_time);
     void RunFixedUpdateInternal(float fixed_delta_time);
     void RunRenderInternal();

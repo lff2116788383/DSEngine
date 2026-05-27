@@ -465,6 +465,8 @@ int EngineInstance::Run() {
     }
     bool screenshot_taken = false;
     int frame_counter = 0;
+    int prev_fb_width  = Screen::width();
+    int prev_fb_height = Screen::height();
     while (!platform_->ShouldClose()) {
         const double frame_start = platform_->GetTime();
         platform_->PollEvents();
@@ -472,7 +474,13 @@ int EngineInstance::Run() {
         int width = 0;
         int height = 0;
         platform_->GetFramebufferSize(width, height);
-        Screen::set_width_height(width, height);
+
+        if (width > 0 && height > 0 &&
+            (width != prev_fb_width || height != prev_fb_height)) {
+            pipeline_->OnWindowResize(width, height);
+            prev_fb_width  = width;
+            prev_fb_height = height;
+        }
 
         Tick();
 
