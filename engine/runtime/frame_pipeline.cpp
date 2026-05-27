@@ -1072,12 +1072,11 @@ void FramePipeline::RunRenderInternal() {
     
     dse::runtime::BindRuntimeShadowMaps(*this);
 
+    // Camera-Relative: 提前获取相机位置作为 camera_offset（light_buffer / cluster / GPU Driven 共用）
+    glm::vec3 early_camera_offset(0.0f);
+
     // Clustered Forward+: 每帧收集光源 → 构建 Cluster → 上传 SSBO
     if (runtime_context_.world) {
-        light_buffer_.CollectLights(*runtime_context_.world);
-        light_buffer_.Upload();
-
-        // 获取主相机参数用于 cluster 构建
         auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
         entt::entity cam_entity = entt::null;
         int cam_priority = std::numeric_limits<int>::min();
@@ -1088,6 +1087,14 @@ void FramePipeline::RunRenderInternal() {
                 cam_priority = cam.priority;
             }
         }
+        if (cam_entity != entt::null && runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
+            early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
+        }
+
+        light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+        light_buffer_.Upload();
+
+        // 获取主相机参数用于 cluster 构建
         if (cam_entity != entt::null) {
             auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
             const int sw = Screen::width();
@@ -1095,12 +1102,13 @@ void FramePipeline::RunRenderInternal() {
             glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
                 static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
                 cam.near_clip, cam.far_clip);
+            // Camera-Relative: 光源位置已减去 camera_offset，cluster view 也用 camera-at-origin
             glm::mat4 view_mat = glm::mat4(1.0f);
             if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
                 auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
                 glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view_mat = glm::lookAt(tf.position, tf.position + front, up);
+                view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
             }
             cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
                                 light_buffer_.point_lights(), light_buffer_.spot_lights());
@@ -1235,6 +1243,9 @@ void FramePipeline::RunRenderInternal() {
     render_pass_context_.gpu_driven_active_this_frame = false;
     modules_impl_->ResetGPUSceneState();
 
+    // Camera-Relative: GPU Driven 需要 camera_offset，提前从 ECS 获取
+    render_pass_context_.camera_offset = early_camera_offset;
+
     const bool allow_external_modules =
         gpu_driven_policy_ == GpuDrivenPolicy::WithModules ||
         gpu_driven_policy_ == GpuDrivenPolicy::Force;
@@ -1270,6 +1281,10 @@ void FramePipeline::RunRenderInternal() {
     CaptureThinSnapshot();
     FlipSnapshotIndex();
     render_pass_context_.snapshot = &read_snapshot();
+    render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
+
+    // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
+    render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
     ExecuteRenderGraph(*cmd_buffer);
 
@@ -1994,8 +2009,10 @@ void FramePipeline::CaptureThinSnapshot() {
                 c.forward = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 c.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                 c.right = tf.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-                c.view = glm::lookAt(c.position, c.position + c.forward, c.up);
+                // Camera-Relative Rendering: view matrix 以原点为相机位置
+                c.view = glm::lookAt(glm::vec3(0.0f), c.forward, c.up);
                 c.shadow_center = c.position + c.forward * 50.0f;
+                snap.camera_offset = c.position;
             }
         }
     }
@@ -2410,10 +2427,8 @@ void FramePipeline::PrepareRenderFrame() {
     }
 
     if (runtime_context_.world) {
-        // Clustered Forward+: 收集光源（CPU）
-        light_buffer_.CollectLights(*runtime_context_.world);
-
-        // 从 ECS 获取主相机参数构建 cluster（与 RunRenderInternal 一致）
+        // Camera-Relative: 提前获取相机位置作为 camera_offset
+        glm::vec3 early_camera_offset(0.0f);
         auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
         entt::entity cam_entity = entt::null;
         int cam_priority = std::numeric_limits<int>::min();
@@ -2424,6 +2439,14 @@ void FramePipeline::PrepareRenderFrame() {
                 cam_priority = cam.priority;
             }
         }
+        if (cam_entity != entt::null && runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
+            early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
+        }
+
+        // Clustered Forward+: 收集光源（CPU）— 光源位置减去 camera_offset
+        light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+
+        // 获取主相机参数构建 cluster
         if (cam_entity != entt::null) {
             auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
             const int sw = Screen::width();
@@ -2431,12 +2454,13 @@ void FramePipeline::PrepareRenderFrame() {
             glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
                 static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
                 cam.near_clip, cam.far_clip);
+            // Camera-Relative: 光源已减去 camera_offset，cluster view 也用 camera-at-origin
             glm::mat4 view_mat = glm::mat4(1.0f);
             if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
                 auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
                 glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view_mat = glm::lookAt(tf.position, tf.position + front, up);
+                view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
             }
             cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
                                 light_buffer_.point_lights(), light_buffer_.spot_lights());
@@ -2464,6 +2488,7 @@ void FramePipeline::PrepareRenderFrame() {
     CaptureThinSnapshot();
     FlipSnapshotIndex();
     render_pass_context_.snapshot = &read_snapshot();
+    render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
 }
 
 void FramePipeline::ExecuteRenderFrame() {
@@ -2566,6 +2591,9 @@ void FramePipeline::ExecuteRenderFrame() {
     }
 
     BuildRenderSceneQueues();
+
+    // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
+    render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
     // ── 执行渲染图 ──
     ExecuteRenderGraph(*cmd_buffer);

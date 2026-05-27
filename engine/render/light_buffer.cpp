@@ -44,7 +44,7 @@ void LightBuffer::Init(RhiDevice* device) {
     spot_lights_.reserve(initial_spot);
 }
 
-void LightBuffer::CollectLights(World& world) {
+void LightBuffer::CollectLights(World& world, const glm::vec3& camera_offset) {
     point_lights_.clear();
     spot_lights_.clear();
 
@@ -65,7 +65,7 @@ void LightBuffer::CollectLights(World& world) {
         GPUPointLight gpu{};
         gpu.color     = light.color;
         gpu.intensity = light.intensity;
-        gpu.position  = transform.position;
+        gpu.position  = transform.position - camera_offset;
         gpu.radius    = light.radius * std::max(0.1f, light.falloff);
 
         if (light.cast_shadow && next_point_shadow < 4) {
@@ -91,7 +91,7 @@ void LightBuffer::CollectLights(World& world) {
         GPUSpotLight gpu{};
         gpu.color      = light.color;
         gpu.intensity  = light.intensity;
-        gpu.position   = transform.position;
+        gpu.position   = transform.position - camera_offset;
         gpu.radius     = light.radius * std::max(0.1f, light.falloff);
         gpu.direction  = glm::normalize(transform.rotation * light.direction);
         gpu.inner_cone = light.inner_cone_angle;

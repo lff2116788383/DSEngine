@@ -78,7 +78,8 @@ public:
     void Init(RhiDevice* device);
 
     /// 从 ECS World 收集所有光源到 CPU 端缓冲
-    void CollectLights(World& world);
+    /// @param camera_offset Camera-Relative: 光源位置减去此偏移后上传 GPU
+    void CollectLights(World& world, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     /// 将 CPU 端数据上传到 SSBO
     void Upload();

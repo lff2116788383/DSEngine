@@ -26,9 +26,12 @@ struct RenderThinSnapshot {
         glm::vec3 forward{0.0f, 0.0f, -1.0f};
         glm::vec3 up{0.0f, 1.0f, 0.0f};
         glm::vec3 right{1.0f, 0.0f, 0.0f};
-        glm::mat4 view{1.0f};              ///< lookAt(position, position+forward, up)
+        glm::mat4 view{1.0f};              ///< lookAt(vec3(0), forward, up) — camera-relative
         glm::vec3 shadow_center{0.0f};     ///< position + forward * 50 (CSM 用)
     } camera_3d;
+
+    /// Camera-Relative Rendering: 所有 model matrix 提交 GPU 前减去此偏移
+    glm::vec3 camera_offset{0.0f};
 
     // ── 2D 相机 fallback ──
     struct Camera2D {
@@ -244,6 +247,7 @@ struct RenderThinSnapshot {
 
     void Reset() {
         camera_3d = Camera3D{};
+        camera_offset = glm::vec3(0.0f);
         camera_2d = Camera2D{};
         skybox = Skybox{};
         directional_light = DirectionalLight{};

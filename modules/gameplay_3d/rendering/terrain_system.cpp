@@ -216,7 +216,7 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
 // 渲染
 // ============================================================
 
-void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
     auto view = world.registry().view<TerrainComponent, TransformComponent>();
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
 
@@ -264,6 +264,7 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 
         MeshDrawItem item;
         item.model = transform.local_to_world;
+        item.model[3] -= glm::vec4(camera_offset, 0.0f);
         item.vao_override = terrain.vao;
         item.ebo_override = terrain.lod_ebos[static_cast<size_t>(lod)];
         item.index_count_override = terrain.lod_index_counts[static_cast<size_t>(lod)];

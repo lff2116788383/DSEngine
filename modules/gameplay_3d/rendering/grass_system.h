@@ -54,10 +54,10 @@ public:
     void Update(World& world, float delta_time);
 
     /// 主场景渲染
-    void Render(World& world, CommandBuffer& cmd_buffer);
+    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     /// 阴影 pass 渲染（仅近距离 LOD 0）
-    void RenderShadow(World& world, CommandBuffer& cmd_buffer);
+    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
 private:
     /// 程序化生成草叶三角带 mesh (LOD 0)
@@ -87,7 +87,7 @@ private:
 
     /// 内部渲染辅助（场景 pass 和阴影 pass 共用）
     void RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                        bool shadow_pass);
+                        bool shadow_pass, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     RhiDevice* rhi_ = nullptr;
 

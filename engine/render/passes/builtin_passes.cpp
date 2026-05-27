@@ -153,6 +153,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.world = ctx_.world;
         pass_ctx.view = &snap.camera_3d.view;
         pass_ctx.projection = &projection;
+        pass_ctx.camera_offset = ctx_.camera_offset;
         ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->prez_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
     }
     cmd_buffer.EndRenderPass();
@@ -176,7 +177,8 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
-    glm::vec3 shadow_center = FindShadowCenter(snap);
+    // Camera-Relative: shadow_center 转换到相机相对空间
+    glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
 
     const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
         && ctx_.gpu_mega_vao
@@ -228,6 +230,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
             pass_ctx.world = ctx_.world;
             pass_ctx.view = &cam.view;
             pass_ctx.projection = &cam.projection;
+            pass_ctx.camera_offset = ctx_.camera_offset;
             pass_ctx.cascade_index = i;
             ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         }
@@ -273,7 +276,9 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.render_targets.spot_shadow[i] == 0) continue;
         const auto& sl = snap.spot_lights[i];
 
-        const glm::mat4 light_view_mat = glm::lookAt(sl.position, sl.position + sl.forward, sl.up);
+        // Camera-Relative: spot light 位置转换到相机相对空间
+        const glm::vec3 sl_pos_relative = sl.position - ctx_.camera_offset;
+        const glm::mat4 light_view_mat = glm::lookAt(sl_pos_relative, sl_pos_relative + sl.forward, sl.up);
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[i], glm::vec4(1.0f), true});
         cmd_buffer.SetCamera(light_view_mat, light_proj);
@@ -297,6 +302,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.world = ctx_.world;
         pass_ctx.view = &light_view_mat;
         pass_ctx.projection = &light_proj;
+        pass_ctx.camera_offset = ctx_.camera_offset;
         pass_ctx.cascade_index = CSM_CASCADES;
         ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         cmd_buffer.EndRenderPass();
@@ -332,6 +338,8 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     for (int shadow_slot = 0; shadow_slot < snap.point_shadow_count; ++shadow_slot) {
         if (ctx_.render_targets.point_shadow[shadow_slot] == 0) continue;
         const auto& pl = snap.point_lights[shadow_slot];
+        // Camera-Relative: point light 位置转换到相机相对空间
+        const glm::vec3 pl_pos_relative = pl.position - ctx_.camera_offset;
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, pl.radius));
         static const glm::vec3 face_directions[6] = {
             glm::vec3(1.0f, 0.0f, 0.0f),
@@ -351,7 +359,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         };
 
         for (int face = 0; face < 6; ++face) {
-            const glm::mat4 light_view_mat = glm::lookAt(pl.position, pl.position + face_directions[face], face_ups[face]);
+            const glm::mat4 light_view_mat = glm::lookAt(pl_pos_relative, pl_pos_relative + face_directions[face], face_ups[face]);
             cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
             cmd_buffer.SetCamera(light_view_mat, light_proj);
             cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
@@ -374,6 +382,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             pass_ctx.world = ctx_.world;
             pass_ctx.view = &light_view_mat;
             pass_ctx.projection = &light_proj;
+            pass_ctx.camera_offset = ctx_.camera_offset;
             pass_ctx.cascade_index = CSM_CASCADES + 1 + face;
             ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
             cmd_buffer.EndRenderPass();
@@ -503,9 +512,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
         render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        gpu_view       = ctx_.editor_view;
+        // Camera-Relative: 场景已减去 camera_offset，editor view 需配套调整
+        gpu_view       = ctx_.editor_view * glm::translate(glm::mat4(1.0f), ctx_.camera_offset);
         gpu_proj       = clip_correction * ctx_.editor_projection;
-        gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
+        gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
         cmd_buffer.SetCamera(gpu_view, gpu_proj);
 
         if (snap.skybox.valid) {
@@ -524,7 +534,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         gpu_proj = projection;
-        gpu_camera_pos = snap.camera_3d.position;
+        // Camera-Relative: 相机在原点
+        gpu_camera_pos = glm::vec3(0.0f);
         gpu_view = snap.camera_3d.view;
         cmd_buffer.SetCamera(gpu_view, projection);
 
@@ -632,6 +643,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         scene_pass_ctx.world = ctx_.world;
         scene_pass_ctx.view = &gpu_view;
         scene_pass_ctx.projection = &gpu_proj;
+        scene_pass_ctx.camera_offset = ctx_.camera_offset;
         scene_pass_ctx.clip_correction = &scene_clip_correction;
         if (ctx_.render_scene) {
             ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
@@ -1595,7 +1607,8 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     float far_p  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
     float fov_y  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
     float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-    glm::vec3 cam_pos   = snap.camera_3d.position;
+    // Camera-Relative: cam_pos 为 vec3(0)（相机在原点）
+    glm::vec3 cam_pos   = glm::vec3(0.0f);
     glm::vec3 cam_right = snap.camera_3d.right;
     glm::vec3 cam_up    = snap.camera_3d.up;
     glm::vec3 cam_fwd   = snap.camera_3d.forward;
@@ -1632,7 +1645,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
     cmd_buffer.DrawPostProcess(PostProcessRequest{"volumetric_fog", scene_tex, {
         pp->fog_color.r, pp->fog_color.g, pp->fog_color.b,
-        pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset,
+        pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset - ctx_.camera_offset.y,
         pp->fog_start, pp->fog_end,
         static_cast<float>(pp->fog_steps),
         pp->fog_sun_scatter,
@@ -1739,14 +1752,15 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     if (depth_tex == 0) return;
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    glm::vec3 cam_pos = snap.camera_3d.position;
+    // Camera-Relative: cam_pos 在着色器中应为 vec3(0)（相机在原点）
+    glm::vec3 cam_pos = glm::vec3(0.0f);
     float cam_fov  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
     float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
     float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
     glm::vec3 cam_fwd = snap.camera_3d.forward;
 
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]);
+        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
         glm::mat4 inv_view = glm::inverse(ctx_.editor_view);
         cam_fwd = -glm::normalize(glm::vec3(inv_view[2]));
     } else if (!snap.camera_3d.valid) {
@@ -1775,7 +1789,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         glm::vec2 wave_dir = glm::length(wc.wave_direction) > 0.001f
             ? glm::normalize(wc.wave_direction) : glm::vec2(1.0f, 0.0f);
 
-        params[0]  = wc.water_level;
+        params[0]  = wc.water_level - ctx_.camera_offset.y;
         params[1]  = wc.deep_color.r;    params[2]  = wc.deep_color.g;    params[3]  = wc.deep_color.b;
         params[4]  = wc.shallow_color.r;  params[5]  = wc.shallow_color.g;  params[6]  = wc.shallow_color.b;
         params[7]  = wc.max_depth;
@@ -1842,7 +1856,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
     for (int di = 0; di < snap.decal_count; ++di) {
         const auto& dc = snap.decals[di];
 
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), dc.position)
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), dc.position - ctx_.camera_offset)
                         * glm::mat4_cast(dc.rotation)
                         * glm::scale(glm::mat4(1.0f), dc.scale);
         glm::mat4 inv_model_vp = glm::inverse(model) * inv_vp;
@@ -2868,7 +2882,8 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     if (!snap.directional_light.valid) return;
 
-    glm::vec3 shadow_center = FindShadowCenter(snap);
+    // Camera-Relative: shadow_center 转换到相机相对空间
+    glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     auto cam = ComputeDirectionalLightCamera(
         shadow_center, snap.directional_light.direction, snap.directional_light.cascade_splits[0], clip_correction);
@@ -2882,6 +2897,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     pass_ctx.world = ctx_.world;
     pass_ctx.view = &cam.view;
     pass_ctx.projection = &cam.projection;
+    pass_ctx.camera_offset = ctx_.camera_offset;
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
     }

@@ -1,6 +1,7 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
 #include "engine/render/render_scene.h"
 #include "engine/core/service_locator.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 #include "engine/ecs/components_3d_fluid.h"
 
@@ -200,18 +201,18 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
     mesh_render_system_.BuildRenderQueues(world, scene);
     World* world_ptr = &world;
 
-    scene.prez_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext&) {
-        terrain_system_.Render(*world_ptr, cmd);
-        grass_system_.Render(*world_ptr, cmd);
+    scene.prez_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+        terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
+        grass_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
     });
-    scene.shadow_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext&) {
-        terrain_system_.Render(*world_ptr, cmd);
-        grass_system_.RenderShadow(*world_ptr, cmd);
+    scene.shadow_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
+        terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
+        grass_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
     });
     scene.opaque_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
         World& callback_world = *world_ptr;
-        terrain_system_.Render(callback_world, cmd);
-        grass_system_.Render(callback_world, cmd);
+        terrain_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
+        grass_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
 
         auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
         std::vector<Particle3DDrawItem> p_items;
@@ -238,12 +239,14 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
             }
         }
 
-        const glm::mat4 view = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
+        const glm::mat4 view_at_origin = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
         const glm::mat4 projection = pass_ctx.projection ? *pass_ctx.projection : glm::mat4(1.0f);
+        // Camera-Relative: 粒子/毛发数据仍在世界空间，需要用包含 camera_offset 平移的 view
+        const glm::mat4 world_to_view = view_at_origin * glm::translate(glm::mat4(1.0f), -pass_ctx.camera_offset);
         if (!p_items.empty()) {
-            cmd.DrawParticles3D(p_items, view, projection);
+            cmd.DrawParticles3D(p_items, world_to_view, projection);
         }
-        hair_system_.Render(callback_world, cmd, view, projection);
+        hair_system_.Render(callback_world, cmd, world_to_view, projection);
     });
 }
 

@@ -1497,7 +1497,8 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
             w_min = glm::min(w_min, corner);
             w_max = glm::max(w_max, corner);
         }
-        gpu_aabbs_.push_back({glm::vec4(w_min, 0.0f), glm::vec4(w_max, 0.0f)});
+        // Camera-Relative: AABB 也需要减去 camera_offset（与 Hi-Z VP 一致）
+        gpu_aabbs_.push_back({glm::vec4(w_min - ctx.camera_offset, 0.0f), glm::vec4(w_max - ctx.camera_offset, 0.0f)});
 
         // 注册 mesh 到 mega buffer
         // file mesh: mesh_path 做 key（去重，相同 path 共享顶点数据）
@@ -1639,9 +1640,10 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
             material_dedup_[mat_hash] = mat_id;
         }
 
-        // GPUInstanceData
+        // GPUInstanceData — Camera-Relative: model matrix 平移部分减去 camera_offset
         dse::render::GPUInstanceData inst{};
         inst.model = model;
+        inst.model[3] -= glm::vec4(ctx.camera_offset, 0.0f);
         inst.material_id = mat_id;
         inst.draw_cmd_id = static_cast<uint32_t>(cmd_index);
         inst.pad[0] = 0;

@@ -53,6 +53,7 @@ struct RenderScenePassContext {
     const glm::mat4* view = nullptr;
     const glm::mat4* projection = nullptr;
     const glm::mat4* clip_correction = nullptr;
+    glm::vec3 camera_offset{0.0f};  ///< Camera-Relative: model matrix 平移减去此偏移
     int cascade_index = 0;
     int wboit_mode = 0;
 };
@@ -75,6 +76,21 @@ struct RenderScene {
         hair_callbacks.clear();
         particle_callbacks.clear();
         debug_callbacks.clear();
+    }
+
+    /// Camera-Relative Rendering: 将所有 CPU mesh model matrix 的平移部分减去 camera_offset
+    void ApplyCameraOffset(const glm::vec3& camera_offset) {
+        if (camera_offset == glm::vec3(0.0f)) return;
+        glm::vec4 offset4(camera_offset, 0.0f);
+        auto offset_items = [&](std::vector<MeshDrawItem>& items) {
+            for (auto& item : items) {
+                item.model[3] -= offset4;
+            }
+        };
+        offset_items(cpu_meshes.opaque);
+        offset_items(cpu_meshes.skinned);
+        offset_items(cpu_meshes.transparent);
+        offset_items(cpu_meshes.static_cpu_fallback);
     }
 
     void DrawOpaqueCpu(CommandBuffer& cmd) const {

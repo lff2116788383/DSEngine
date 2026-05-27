@@ -12,7 +12,7 @@ class TerrainSystem {
 public:
     void Init(RhiDevice* rhi_device);
     void Shutdown(World& world);
-    void Render(World& world, CommandBuffer& cmd_buffer);
+    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     /// CPU 侧双线性插值高度查询（世界空间 xz → 高度 y）
     static float SampleHeight(const TerrainComponent& terrain,

@@ -42,6 +42,7 @@ class DDGISystem;
  */
 struct RenderPassContext {
     const RenderThinSnapshot* snapshot = nullptr;  ///< 渲染线程只读快照（Phase 1）
+    glm::vec3 camera_offset{0.0f};                ///< Camera-Relative Rendering: model matrix 减去此偏移后传 GPU
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;

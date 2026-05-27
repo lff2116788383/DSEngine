@@ -673,16 +673,16 @@ void GrassSystem::Update(World& world, float delta_time) {
 // 渲染
 // ============================================================
 
-void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer) {
-    RenderInternal(world, cmd_buffer, false);
+void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
+    RenderInternal(world, cmd_buffer, false, camera_offset);
 }
 
-void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer) {
-    RenderInternal(world, cmd_buffer, true);
+void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
+    RenderInternal(world, cmd_buffer, true, camera_offset);
 }
 
 void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                                  bool shadow_pass) {
+                                  bool shadow_pass, const glm::vec3& camera_offset) {
     if (blade_vertices_.empty()) return;
 
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
@@ -901,6 +901,11 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
                                const std::vector<BatchVertex>& verts,
                                const std::vector<uint32_t>& idxs) {
             if (instances.empty() || verts.empty()) return;
+            // Camera-Relative: 每个实例 model matrix 减去 camera_offset
+            glm::vec4 offset4(camera_offset, 0.0f);
+            for (auto& m : instances) {
+                m[3] -= offset4;
+            }
             MeshDrawItem item;
             item.vertices = verts;
             item.indices = idxs;
