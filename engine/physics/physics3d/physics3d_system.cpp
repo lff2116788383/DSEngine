@@ -1400,5 +1400,13 @@ void Physics3DSystem::SyncJoints(World& /*world*/) {}
 void Physics3DSystem::CheckBrokenJoints(World& /*world*/) {}
 #endif // DSE_HAS_PHYSX_EXTENSIONS
 
+// ---------------------------------------------------------------------------
+// Floating Origin: 整体平移物理世界
+// ---------------------------------------------------------------------------
+void Physics3DSystem::RebaseOrigin(const glm::vec3& offset) {
+    if (!scene_) return;
+    scene_->shiftOrigin(PxVec3(-offset.x, -offset.y, -offset.z));
+}
+
 } // namespace physics3d
 } // namespace dse

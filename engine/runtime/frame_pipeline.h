@@ -46,6 +46,7 @@
 #include "engine/render/reflection_probe_system.h"
 #include "engine/render/gi/ddgi_system.h"
 #include "engine/assets/streaming_manager.h"
+#include "engine/ecs/floating_origin_system.h"
 #include "engine/runtime/i_builtin_modules.h"
 #include "engine/core/dse_export.h"
 
@@ -369,6 +370,9 @@ private:
 
     /// DDGI Irradiance Probe 系统
     dse::render::gi::DDGISystem ddgi_system_;
+
+    /// Floating Origin 系统（大世界坐标 Phase 2）
+    dse::FloatingOriginSystem floating_origin_system_;
 
     /// TAA 帧计数器（跨帧 jitter 序列）
     int taa_frame_index_ = 0;

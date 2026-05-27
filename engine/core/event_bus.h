@@ -11,6 +11,7 @@
 #define DSE_CORE_EVENT_BUS_H
 
 #include "engine/core/event_id.h"
+#include <glm/glm.hpp>
 #include <functional>
 #include <unordered_map>
 #include <vector>
@@ -97,6 +98,19 @@ struct SubSceneUnloadedEvent : public Event {
     explicit SubSceneUnloadedEvent(const std::string& scene_path) : path(scene_path) {}
     std::string path;
     static constexpr EventId kEventId = events::kSubSceneUnloaded;
+};
+
+/**
+ * @struct OriginRebasedEvent
+ * @brief Floating Origin 坐标重置事件
+ *
+ * 当相机远离原点超过阈值时触发。所有持有世界空间坐标的子系统
+ * 应订阅此事件并将自身坐标减去 offset。
+ */
+struct OriginRebasedEvent : public Event {
+    explicit OriginRebasedEvent(const glm::vec3& rebase_offset) : offset(rebase_offset) {}
+    glm::vec3 offset{0.0f};
+    static constexpr EventId kEventId = events::kOriginRebased;
 };
 
 /**

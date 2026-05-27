@@ -1,6 +1,8 @@
 #include "engine/runtime/runtime_update_graph.h"
 
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/core/service_locator.h"
+#include "engine/core/event_bus.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 
@@ -44,6 +46,13 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
 #endif
 
 #ifdef DSE_ENABLE_3D
+    // Floating Origin: 物理更新前检查是否需要 rebase
+    {
+        dse::physics3d::IPhysics3DSystem* phys = pipeline.physics3d_system_.get();
+        auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
+        pipeline.floating_origin_system_.Tick(world, phys, event_bus);
+    }
+
     if (pipeline.physics3d_system_) {
         pipeline.physics3d_system_->FixedUpdate(world, fixed_delta_time);
     }

@@ -56,6 +56,9 @@ public:
     // 碰撞层设置 API
     void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) override;
 
+    // Floating Origin
+    void RebaseOrigin(const glm::vec3& offset) override;
+
     // PhysX 局永桥（Jolt 模式返回 nullptr）
     void* GetPxPhysics() const override { return nullptr; }
     void* GetPxScene() const override { return nullptr; }

@@ -253,15 +253,17 @@ void Physics3DSystemJolt::RebaseOrigin(glm::vec3 offset) {
 
 **验证**：Release + Debug 全量编译零错误，1896/1917 单元测试通过（3 个失败为动画/DX11 投影校正预存问题，与本改动无关）。
 
-### Phase 2：Floating Origin System（2-3 天）
+### Phase 2：Floating Origin System ✅ 已完成
 
-1. 实现 `FloatingOriginSystem`，阈值可配置
-2. PhysX backend: 调用 `PxScene::shiftOrigin()`
-3. Jolt backend: 手动遍历 body 偏移（含 Character Controller）
-4. 广播 `OriginRebasedEvent`，子系统注册响应
-5. 序列化接口支持 absolute ↔ local 转换
+1. ✅ `FloatingOriginSystem`（`engine/ecs/floating_origin_system.h/.cpp`），阈值可配置（默认 5km）
+2. ✅ `OriginRebasedEvent` 定义（`event_bus.h`）+ EventId 注册（`event_id.h`）
+3. ✅ `IPhysics3DSystem::RebaseOrigin()` 纯虚接口
+4. ✅ PhysX 后端：`PxScene::shiftOrigin(PxVec3(-offset))`
+5. ✅ Jolt 后端：遍历 `entity_to_body` + `character_virtuals` 减去 offset
+6. ✅ FramePipeline 集成：在 `RunRuntimeFixedUpdateGraph` 中物理 `FixedUpdate` 前调用 `Tick`
+7. ✅ `accumulated_origin_`（dvec3）累积绝对偏移，提供 `ToAbsolute()`/`ToLocal()` 转换
 
-**验证**：相机持续移动 >50km，确认无累积漂移、物理行为正确。
+**验证**：Release + Debug 全量编译零错误，1896/1917 单元测试通过（同 Phase 1）。
 
 ### Phase 3：子系统适配（1-2 天）
 

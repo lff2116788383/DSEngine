@@ -1071,6 +1071,29 @@ JPH::Shape* Physics3DSystem::CreateTriangleMeshShape(const std::vector<glm::vec3
     return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// Floating Origin: 整体平移所有 Jolt body 和角色控制器
+// ---------------------------------------------------------------------------
+void Physics3DSystem::RebaseOrigin(const glm::vec3& offset) {
+    if (!impl_ || !impl_->physics_system) return;
+
+    RVec3 jolt_offset(offset.x, offset.y, offset.z);
+    BodyInterface& bi = impl_->physics_system->GetBodyInterface();
+
+    // 刚体
+    for (auto& [eid, body_id] : impl_->entity_to_body) {
+        RVec3 pos = bi.GetPosition(body_id);
+        bi.SetPosition(body_id, pos - jolt_offset, EActivation::DontActivate);
+    }
+
+    // 角色控制器
+    for (auto& [eid, cv] : impl_->character_virtuals) {
+        if (cv) {
+            cv->SetPosition(cv->GetPosition() - jolt_offset);
+        }
+    }
+}
+
 } // namespace physics3d
 } // namespace dse
 

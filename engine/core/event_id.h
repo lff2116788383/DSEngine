@@ -103,6 +103,9 @@ namespace events {
     // --- 子场景事件 ---
     constexpr EventId kSubSceneLoaded   = MakeEventId("SubSceneLoaded");
     constexpr EventId kSubSceneUnloaded = MakeEventId("SubSceneUnloaded");
+
+    // --- 大世界坐标事件 ---
+    constexpr EventId kOriginRebased    = MakeEventId("OriginRebased");
 } // namespace events
 
 } // namespace core

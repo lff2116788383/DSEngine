@@ -100,6 +100,9 @@ public:
     // 碰撞层
     virtual void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) = 0;
 
+    // Floating Origin: 整体平移所有物理 body 和角色控制器
+    virtual void RebaseOrigin(const glm::vec3& offset) = 0;
+
     // PhysX 原始指针访问（Jolt 后端返回 nullptr，供 ragdoll 等 PhysX 专用逻辑使用）
     virtual void* GetPxPhysics() const = 0;
     virtual void* GetPxScene() const = 0;
