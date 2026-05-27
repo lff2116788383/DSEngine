@@ -50,6 +50,12 @@ struct PBRShaderLocations {
     int splat_enabled = -1;
     int splat_tiling = -1;
 
+    // --- Snow cover ---
+    int snow_coverage = -1;
+    int snow_normal_threshold = -1;
+    int snow_edge_sharpness = -1;
+    int snow_params = -1;
+
     // --- DDGI uniform location ---
     int ddgi_enabled = -1;
     int ddgi_grid_origin = -1;

@@ -1098,7 +1098,11 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         if (!is_depth_only_pass_ && !gbuffer_mode && terrain_params_cb_) {
             DX11TerrainParamsCB terrain_params{};
             terrain_params.flags.x = item.splat_enabled ? 1.0f : 0.0f;
+            terrain_params.flags.y = item.snow_coverage;
+            terrain_params.flags.z = item.snow_normal_threshold;
+            terrain_params.flags.w = item.snow_edge_sharpness;
             terrain_params.tiling = item.splat_tiling;
+            terrain_params.snow_params = glm::vec4(item.snow_albedo, item.snow_roughness);
             UpdateConstantBuffer(terrain_params_cb_.Get(), &terrain_params, sizeof(terrain_params));
             dc->PSSetConstantBuffers(4, 1, terrain_params_cb_.GetAddressOf());
         }

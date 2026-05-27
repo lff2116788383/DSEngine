@@ -1,5 +1,6 @@
 #include "modules/gameplay_3d/rendering/terrain_system.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_snow.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/base/debug.h"
 #include <algorithm>
@@ -275,6 +276,16 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::v
         item.material_metallic = 0.0f;
         item.material_roughness = 0.9f;
         item.receive_shadow = true;
+
+        // Snow cover
+        auto* snow = world.registry().try_get<SnowCoverComponent>(entity);
+        if (snow && snow->enabled && snow->coverage > 0.001f) {
+            item.snow_coverage = snow->coverage;
+            item.snow_albedo = snow->snow_albedo;
+            item.snow_roughness = snow->snow_roughness;
+            item.snow_normal_threshold = snow->normal_threshold;
+            item.snow_edge_sharpness = snow->edge_sharpness;
+        }
 
         // Splatmap
         bool has_any_splat = false;

@@ -12,5 +12,6 @@
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_fracture.h"
 #include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_snow.h"
 
 #endif // DSE_COMPONENTS_3D_H

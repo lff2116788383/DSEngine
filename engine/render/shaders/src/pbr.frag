@@ -154,10 +154,11 @@ layout(set = 2, binding = 14) uniform sampler2D u_splat_layer2;
 layout(set = 2, binding = 15) uniform sampler2D u_splat_layer3;
 layout(std140, set = 2, binding = 16) uniform TerrainParams {
     float u_splat_enabled;  // >0.5 = splatmap mode
-    float _tp_pad0;
-    float _tp_pad1;
-    float _tp_pad2;
+    float u_snow_coverage;  // [0,1] 积雪覆盖率
+    float u_snow_normal_threshold; // N.y 阈值
+    float u_snow_edge_sharpness;   // 边缘锐利度 (pow 指数)
     vec4  u_splat_tiling;   // per-layer UV tiling factor
+    vec4  u_snow_params;    // xyz=snow_albedo, w=snow_roughness
 };
 
 // IBL: Reflection Probe (Set 2, binding 17/18)
@@ -689,6 +690,20 @@ void main() {
     if (u_has_emissive_map) {
         surface_emissive *= texture(u_emissive_map, finalUV).rgb;
     }
+
+    // ── Snow cover blending ──
+    if (u_snow_coverage > 0.001) {
+        float snow_dot = max(N.y, 0.0);
+        float snow_mask = pow(
+            smoothstep(u_snow_normal_threshold, 1.0, snow_dot),
+            u_snow_edge_sharpness);
+        float snow_factor = snow_mask * u_snow_coverage;
+        vec3 snow_albedo_linear = pow(u_snow_params.xyz, vec3(2.2));
+        surface_albedo = mix(surface_albedo, snow_albedo_linear, snow_factor);
+        roughness = mix(roughness, u_snow_params.w, snow_factor);
+        metallic = mix(metallic, 0.0, snow_factor);
+    }
+
     vec3 V = normalize(u_camera_pos - vFragPos);
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, surface_albedo, metallic);

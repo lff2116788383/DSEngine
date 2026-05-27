@@ -944,7 +944,19 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         item.receive_shadow = mesh_renderer.receive_shadow;
         item.depth_test_enabled = mesh_renderer.depth_test_enabled;
         item.depth_write_enabled = mesh_renderer.depth_write_enabled;
-        
+
+        // Snow cover (通用 Mesh 积雪)
+        if (world.registry().all_of<SnowCoverComponent>(entity)) {
+            const auto& sc = world.registry().get<SnowCoverComponent>(entity);
+            if (sc.enabled && sc.coverage > 0.001f) {
+                item.snow_coverage = sc.coverage;
+                item.snow_albedo = sc.snow_albedo;
+                item.snow_roughness = sc.snow_roughness;
+                item.snow_normal_threshold = sc.normal_threshold;
+                item.snow_edge_sharpness = sc.edge_sharpness;
+            }
+        }
+
         item.point_lights.clear();
         for (const auto& pt_data : point_lights) {
             MeshDrawItem::PointLightData pld;

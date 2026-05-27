@@ -440,6 +440,12 @@ void GLShaderManager::CachePBRLocations() {
     loc.splat_enabled = glGetUniformLocation(h, "u_splat_enabled");
     loc.splat_tiling = glGetUniformLocation(h, "u_splat_tiling");
 
+    // --- Snow cover ---
+    loc.snow_coverage = glGetUniformLocation(h, "u_snow_coverage");
+    loc.snow_normal_threshold = glGetUniformLocation(h, "u_snow_normal_threshold");
+    loc.snow_edge_sharpness = glGetUniformLocation(h, "u_snow_edge_sharpness");
+    loc.snow_params = glGetUniformLocation(h, "u_snow_params");
+
     // --- DDGI ---
     loc.ddgi_enabled = glGetUniformLocation(h, "u_ddgi_enabled");
     loc.ddgi_grid_origin = glGetUniformLocation(h, "u_ddgi_grid_origin");

@@ -226,6 +226,13 @@ struct MeshDrawItem {
     unsigned int splat_layer_handles[4] = {0, 0, 0, 0};
     glm::vec4 splat_tiling = glm::vec4(10.0f); ///< per-layer UV tiling
 
+    // Snow cover
+    float snow_coverage = 0.0f;                        ///< 积雪覆盖率 [0,1]
+    glm::vec3 snow_albedo = glm::vec3(0.92f, 0.93f, 0.96f); ///< 雪面反照率
+    float snow_roughness = 0.75f;                      ///< 雪面粗糙度
+    float snow_normal_threshold = 0.4f;                ///< N.y 阈值
+    float snow_edge_sharpness = 3.0f;                  ///< 边缘锐利度
+
     int wboit_mode = 0;  ///< 0=normal, 1=WBOIT accumulation, 2=WBOIT revealage
 
     std::string debug_label;

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l echo \"\" echo \"=== Shader files ===\" find /c/Users/wenbilin/Desktop/Engine/DSEngine/data -type f \\\\\\( -name \"*.glsl\" -o -name \"*.vert\" -o -name \"*.frag\" -o -name \"*.dssl\" -o -name \"*.hlsl\" \\\\\\))",
+      "Bash(# Check shader files location find /c/Users/wenbilin/Desktop/Engine/DSEngine/data -type f \\\\\\( -name \"\"*.glsl\"\" -o -name \"\"*.vert\"\" -o -name \"\"*.frag\"\" -o -name \"\"*.dssl\"\" -o -name \"\"*.hlsl\"\" -o -name \"\"*.shader\"\" -o -name \"\"*.fx\"\" \\\\\\))",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
+    ]
+  }
+}

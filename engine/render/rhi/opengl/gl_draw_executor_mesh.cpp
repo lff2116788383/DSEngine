@@ -680,6 +680,21 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             }
         }
 
+        // Snow cover
+        if (loc.snow_coverage != -1) {
+            glUniform1f(loc.snow_coverage, item.snow_coverage);
+        }
+        if (loc.snow_normal_threshold != -1) {
+            glUniform1f(loc.snow_normal_threshold, item.snow_normal_threshold);
+        }
+        if (loc.snow_edge_sharpness != -1) {
+            glUniform1f(loc.snow_edge_sharpness, item.snow_edge_sharpness);
+        }
+        if (loc.snow_params != -1) {
+            glm::vec4 sp(item.snow_albedo, item.snow_roughness);
+            glUniform4fv(loc.snow_params, 1, &sp.x);
+        }
+
         if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
         PerMaterialUBO per_mat;

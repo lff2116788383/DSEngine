@@ -127,8 +127,9 @@ static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
               "DX11LightProbeDataCB must be 16B aligned");
 
 struct DX11TerrainParamsCB {
-    glm::vec4 flags;
+    glm::vec4 flags;       // x=splat_enabled, y=snow_coverage, z=snow_normal_threshold, w=snow_edge_sharpness
     glm::vec4 tiling;
+    glm::vec4 snow_params; // xyz=snow_albedo, w=snow_roughness
 };
 static_assert(sizeof(DX11TerrainParamsCB) % 16 == 0,
               "DX11TerrainParamsCB must be 16B aligned");

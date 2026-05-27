@@ -1012,9 +1012,14 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         struct TerrainParamsUBO {
             glm::vec4 flags;
             glm::vec4 tiling;
+            glm::vec4 snow_params;
         } terrain_params{};
         terrain_params.flags.x = item.splat_enabled ? 1.0f : 0.0f;
+        terrain_params.flags.y = item.snow_coverage;
+        terrain_params.flags.z = item.snow_normal_threshold;
+        terrain_params.flags.w = item.snow_edge_sharpness;
         terrain_params.tiling = item.splat_tiling;
+        terrain_params.snow_params = glm::vec4(item.snow_albedo, item.snow_roughness);
         VkDescriptorBufferInfo terrain_buf{};
         if (terrain_params_ubo_offset_ + sizeof(TerrainParamsUBO) <= terrain_params_ubo_capacity_) {
             WriteToBuffer(device, terrain_params_ubo_mem_[fi], terrain_params_ubo_offset_,
