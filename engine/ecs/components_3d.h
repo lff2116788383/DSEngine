@@ -810,6 +810,21 @@ struct GIProbeVolumeComponent {
     bool needs_reinit_ = true;
 };
 
+/// 骨骼挂点组件（Paper Doll / Socket）
+/// 将本实体附着到另一个拥有 Animator3DComponent 的实体的指定骨骼上。
+/// BoneAttachmentSystem 每帧从 final_bone_matrices 恢复骨骼全局矩阵并应用偏移。
+struct BoneAttachmentComponent {
+    entt::entity target_entity{entt::null};                   ///< 拥有骨骼动画的目标实体
+    std::string bone_name;                                    ///< 挂载骨骼名称
+    glm::vec3 offset_position = glm::vec3(0.0f);             ///< 相对骨骼的位置偏移
+    glm::quat offset_rotation = glm::quat(1, 0, 0, 0);      ///< 相对骨骼的旋转偏移
+    glm::vec3 offset_scale    = glm::vec3(1.0f);             ///< 相对骨骼的缩放偏移
+
+    // Runtime（BoneAttachmentSystem 管理）
+    int cached_bone_index = -1;
+    bool index_dirty = true;
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_H

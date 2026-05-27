@@ -15,6 +15,7 @@
 #include "modules/gameplay_3d/animation/anim_layer_blend_system.h"
 #include "modules/gameplay_3d/animation/ik_solver_system.h"
 #include "modules/gameplay_3d/animation/foot_ik_system.h"
+#include "modules/gameplay_3d/bone_attachment_system.h"
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "modules/gameplay_3d/camera/free_camera_controller_system.h"
 #include "modules/gameplay_3d/ai/steering_system.h"

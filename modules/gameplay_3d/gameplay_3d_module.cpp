@@ -120,6 +120,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     ik_solver_system_.Update(world, delta_time);
     foot_ik_system_.Update(world, delta_time);
     animator_system_.ComputeFinalMatrices(world);
+    BoneAttachmentSystem::Update(world);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
 #ifdef DSE_ENABLE_NAVMESH

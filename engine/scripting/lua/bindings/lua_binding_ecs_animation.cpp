@@ -597,6 +597,107 @@ int L_EcsGetAnimator3DRootMotionDelta(lua_State* L) {
     return 3;
 }
 
+// ============================================================
+// 骨骼挂点系统 (BoneAttachmentComponent)
+// ============================================================
+
+// ecs.add_bone_attachment(entity, target_entity, bone_name)
+int L_EcsAddBoneAttachment(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    Entity target = helper::CheckEntity(L, 2);
+    const char* bone = luaL_checkstring(L, 3);
+    auto& comp = world->registry().emplace_or_replace<dse::BoneAttachmentComponent>(e);
+    comp.target_entity = target;
+    comp.bone_name = bone;
+    comp.index_dirty = true;
+    comp.cached_bone_index = -1;
+    return 0;
+}
+
+// ecs.set_bone_attachment_offset(entity, px,py,pz, rx,ry,rz,rw, [sx,sy,sz])
+int L_EcsSetBoneAttachmentOffset(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
+    if (!comp) return 0;
+    comp->offset_position = glm::vec3(
+        helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
+    comp->offset_rotation = glm::quat(
+        helper::CheckFloat(L, 8), // w
+        helper::CheckFloat(L, 5), // x
+        helper::CheckFloat(L, 6), // y
+        helper::CheckFloat(L, 7));// z
+    comp->offset_scale = glm::vec3(
+        helper::OptFloat(L, 9, 1.0f), helper::OptFloat(L, 10, 1.0f), helper::OptFloat(L, 11, 1.0f));
+    return 0;
+}
+
+// ecs.set_bone_attachment_bone(entity, bone_name)
+int L_EcsSetBoneAttachmentBone(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
+    if (!comp) return 0;
+    comp->bone_name = luaL_checkstring(L, 2);
+    comp->index_dirty = true;
+    comp->cached_bone_index = -1;
+    return 0;
+}
+
+// ecs.set_bone_attachment_target(entity, target_entity)
+int L_EcsSetBoneAttachmentTarget(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
+    if (!comp) return 0;
+    comp->target_entity = helper::CheckEntity(L, 2);
+    comp->index_dirty = true;
+    comp->cached_bone_index = -1;
+    return 0;
+}
+
+// ecs.get_bone_world_position(target_entity, bone_name) -> x, y, z
+int L_EcsGetBoneWorldPosition(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity target = helper::CheckEntity(L, 1);
+    const char* bone_name = luaL_checkstring(L, 2);
+    auto* anim = world->registry().try_get<Animator3DComponent>(target);
+    auto* xform = world->registry().try_get<TransformComponent>(target);
+    if (!anim || !xform || !anim->skel_cache.valid) {
+        helper::PushVec3(L, glm::vec3(0.0f));
+        return 3;
+    }
+    auto it = anim->skel_cache.bone_name_to_index.find(bone_name);
+    if (it == anim->skel_cache.bone_name_to_index.end() ||
+        it->second >= static_cast<int>(anim->final_bone_matrices.size()) ||
+        it->second >= static_cast<int>(anim->skel_cache.bind_globals.size())) {
+        helper::PushVec3(L, glm::vec3(0.0f));
+        return 3;
+    }
+    int bi = it->second;
+    glm::mat4 bone_model = anim->final_bone_matrices[bi] * anim->skel_cache.bind_globals[bi];
+    glm::vec4 world_pos = xform->local_to_world * bone_model * glm::vec4(0, 0, 0, 1);
+    helper::PushVec3(L, glm::vec3(world_pos));
+    return 3;
+}
+
+// ecs.remove_bone_attachment(entity)
+int L_EcsRemoveBoneAttachment(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    if (world->registry().all_of<dse::BoneAttachmentComponent>(e)) {
+        world->registry().remove<dse::BoneAttachmentComponent>(e);
+    }
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -642,6 +743,13 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"set_ik_pole_vector",               L_EcsSetIKPoleVector},
         {"set_ik_iterations",                L_EcsSetIKIterations},
         {"set_ik_enabled",                   L_EcsSetIKEnabled},
+        // 骨骼挂点系统
+        {"add_bone_attachment",              L_EcsAddBoneAttachment},
+        {"set_bone_attachment_offset",       L_EcsSetBoneAttachmentOffset},
+        {"set_bone_attachment_bone",         L_EcsSetBoneAttachmentBone},
+        {"set_bone_attachment_target",       L_EcsSetBoneAttachmentTarget},
+        {"get_bone_world_position",          L_EcsGetBoneWorldPosition},
+        {"remove_bone_attachment",           L_EcsRemoveBoneAttachment},
     });
 }
 
