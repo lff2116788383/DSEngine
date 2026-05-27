@@ -2,8 +2,10 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/assets/asset_manager.h"
+#include <glm/gtc/constants.hpp>
 #include <random>
 #include <stdexcept>
+#include <cmath>
 
 namespace dse {
 namespace gameplay3d {
@@ -27,7 +29,7 @@ static float RandomFloat(float min, float max) {
 static glm::vec3 RandomDirection() {
     float u = RandomFloat(0.0f, 1.0f);
     float v = RandomFloat(0.0f, 1.0f);
-    float theta = u * 2.0f * 3.14159265358979323846f;
+    float theta = u * glm::two_pi<float>();
     float phi = acos(2.0f * v - 1.0f);
     float r = cbrt(RandomFloat(0.0f, 1.0f));
     float sinTheta = sin(theta);
@@ -84,6 +86,12 @@ void Particle3DSystem::EmitParticle(ParticleSystem3DComponent& ps, const Transfo
 
     auto& p = ps.particles[p_index];
     p.position = transform.position;
+    if (ps.spawn_radius > 0.0f) {
+        float angle = RandomFloat(0.0f, glm::two_pi<float>());
+        float r = ps.spawn_radius * std::sqrt(RandomFloat(0.0f, 1.0f));
+        p.position.x += r * std::cos(angle);
+        p.position.z += r * std::sin(angle);
+    }
     p.color = ps.start_color;
     p.size = RandomFloat(ps.start_size_min, ps.start_size_max);
     p.life = RandomFloat(ps.start_life_min, ps.start_life_max);

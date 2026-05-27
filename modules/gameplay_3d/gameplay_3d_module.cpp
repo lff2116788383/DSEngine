@@ -124,6 +124,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
     foot_ik_system_.Update(world, delta_time);
     animator_system_.ComputeFinalMatrices(world);
     BoneAttachmentSystem::Update(world);
+    weather_system_.Update(world, delta_time);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
 #ifdef DSE_ENABLE_NAVMESH
@@ -314,6 +315,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
     hair_system_.Shutdown(world);
+    weather_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);

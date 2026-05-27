@@ -9,7 +9,9 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_fracture.h"
+#include "engine/ecs/components_3d_weather.h"
 #include "engine/ecs/components_3d_cloth.h"
+#include <cstring>
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/physics/physics3d/i_physics3d_system.h"
@@ -603,6 +605,57 @@ int L_EcsBuoyancySetUseFluid(lua_State* L) {
 #endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
+// WeatherComponent 绑定
+// ============================================================
+
+/// add_weather(entity, type_str, intensity)
+/// type_str: "none" | "rain" | "snow"
+int L_EcsAddWeather(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto& wc = world->registry().emplace_or_replace<WeatherComponent>(e);
+    const char* type_str = luaL_optstring(L, 2, "snow");
+    if (std::strcmp(type_str, "rain") == 0)       wc.type = WeatherType::Rain;
+    else if (std::strcmp(type_str, "snow") == 0)  wc.type = WeatherType::Snow;
+    else                                           wc.type = WeatherType::None;
+    wc.intensity = helper::OptFloat(L, 3, 0.5f);
+    return 0;
+}
+
+/// set_weather(entity, type_str, intensity, wind_x, wind_z)
+int L_EcsSetWeather(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* wc = helper::TryGetComponent<WeatherComponent>(*world, e);
+    if (!wc) return 0;
+    const char* type_str = luaL_optstring(L, 2, nullptr);
+    if (type_str) {
+        if (std::strcmp(type_str, "rain") == 0)       wc->type = WeatherType::Rain;
+        else if (std::strcmp(type_str, "snow") == 0)  wc->type = WeatherType::Snow;
+        else                                           wc->type = WeatherType::None;
+    }
+    wc->intensity   = helper::OptFloat(L, 3, wc->intensity);
+    wc->wind_x      = helper::OptFloat(L, 4, wc->wind_x);
+    wc->wind_z      = helper::OptFloat(L, 5, wc->wind_z);
+    return 0;
+}
+
+/// set_weather_spawn(entity, radius, height, max_particles)
+int L_EcsSetWeatherSpawn(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* wc = helper::TryGetComponent<WeatherComponent>(*world, e);
+    if (!wc) return 0;
+    wc->spawn_radius   = helper::OptFloat(L, 2, wc->spawn_radius);
+    wc->spawn_height   = helper::OptFloat(L, 3, wc->spawn_height);
+    wc->max_particles  = helper::OptInt(L,   4, wc->max_particles);
+    return 0;
+}
+
+// ============================================================
 // AtmosphereComponent 绑定
 // ============================================================
 
@@ -887,6 +940,10 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"add_volumetric_cloud",       L_EcsAddVolumetricCloud},
         {"set_cloud_layer",            L_EcsSetCloudLayer},
         {"set_cloud_wind",             L_EcsSetCloudWind},
+        // 天气系统
+        {"add_weather",                L_EcsAddWeather},
+        {"set_weather",                L_EcsSetWeather},
+        {"set_weather_spawn",          L_EcsSetWeatherSpawn},
     });
 }
 

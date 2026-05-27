@@ -37,6 +37,7 @@ struct ParticleSystem3DComponent {
     
     // Dynamics
     glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+    float spawn_radius = 0.0f;    ///< >0 时在 XZ 圆盘内随机生成（用于天气系统）
     
     // Rendering
     std::string texture_path;
