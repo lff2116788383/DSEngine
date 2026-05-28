@@ -648,12 +648,17 @@ void OpenGLRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
     if (rt->fbo_handle != 0) {
         GLuint fbo = rt->fbo_handle;
         glDeleteFramebuffers(1, &fbo);
+        resource_mgr_.ledger().framebuffers_destroyed += 1;
     }
     for (unsigned int ch : rt->color_texture_handles) {
-        if (ch != 0) glDeleteTextures(1, &ch);
+        if (ch != 0) {
+            glDeleteTextures(1, &ch);
+            resource_mgr_.ledger().textures_destroyed += 1;
+        }
     }
     if (rt->depth_texture_handle != 0) {
         glDeleteTextures(1, &rt->depth_texture_handle);
+        resource_mgr_.ledger().textures_destroyed += 1;
     }
     resource_mgr_.RemoveRenderTarget(render_target_handle);
 }

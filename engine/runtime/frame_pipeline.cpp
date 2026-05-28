@@ -984,6 +984,7 @@ void FramePipeline::FreeResolutionDependentRTs() {
     del(render_resources_.pp_cloud_rt);
     del(render_resources_.wboit_accum_rt);
     del(render_resources_.wboit_reveal_rt);
+    del(render_resources_.pp_sss_temp_rt);
     del(render_resources_.gbuffer_rt);
     del(render_resources_.deferred_lighting_rt);
     if (render_resources_.hiz_texture) {
@@ -1008,8 +1009,38 @@ void FramePipeline::OnWindowResize(int w, int h) {
     runtime_context_.rhi_device->WaitIdle();
     FreeResolutionDependentRTs();
     InitResolutionDependentRTs();
+    SyncRenderPassContextTargets();
     runtime_context_.rhi_device->OnWindowResized(w, h);
     DEBUG_LOG_INFO("FramePipeline::OnWindowResize: {}x{}", w, h);
+}
+
+void FramePipeline::SyncRenderPassContextTargets() {
+    render_pass_context_.render_targets.main     = render_resources_.main_render_target;
+    render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
+    render_pass_context_.render_targets.ui       = render_resources_.ui_render_target;
+    render_pass_context_.render_targets.prez     = render_resources_.prez_render_target;
+    render_pass_context_.render_targets.bloom_extract = render_resources_.pp_bloom_extract_rt;
+    render_pass_context_.render_targets.bloom_mips    = render_resources_.pp_bloom_mip_rts;
+    render_pass_context_.render_targets.ssao      = render_resources_.pp_ssao_rt;
+    render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
+    render_pass_context_.render_targets.contact_shadow = render_resources_.pp_contact_shadow_rt;
+    render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
+    render_pass_context_.render_targets.taa       = render_resources_.pp_taa_rt;
+    render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
+    render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
+    render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
+    render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
+    render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
+    render_pass_context_.render_targets.cloud  = render_resources_.pp_cloud_rt;
+    render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
+    render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
+    render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
+    render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
+    render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
+    render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
+    render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
+    render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+    render_pass_context_.hiz_aabb_capacity = render_resources_.hiz_ssbo_capacity;
 }
 
 void FramePipeline::Update(float delta_time) {

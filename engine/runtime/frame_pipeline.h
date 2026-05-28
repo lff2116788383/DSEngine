@@ -301,6 +301,7 @@ public:
 private:
     void InitResolutionDependentRTs();
     void FreeResolutionDependentRTs();
+    void SyncRenderPassContextTargets();
 
     void RunUpdateInternal(float delta_time);
     void RunFixedUpdateInternal(float fixed_delta_time);

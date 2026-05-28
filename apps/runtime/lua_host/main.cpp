@@ -9,8 +9,8 @@ extern "C" {
 }
 
 int main(int argc, char** argv) {
-    constexpr int window_width = 800;
-    constexpr int window_height = 600;
+    constexpr int window_width = 1280;
+    constexpr int window_height = 720;
     std::string startup_script = "samples/lua/main.lua";
     std::string script_arg;
     for (int i = 1; i < argc; ++i) {
