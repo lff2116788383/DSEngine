@@ -1,6 +1,7 @@
 ﻿#include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_foliage.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_scene.h"
@@ -904,6 +905,13 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
                 for (const auto& target : morph.targets) {
                     item.morph_weights.push_back(target.weight);
                 }
+            }
+        }
+
+        if (world.registry().all_of<dse::FoliageComponent>(entity)) {
+            const auto& fol = world.registry().get<dse::FoliageComponent>(entity);
+            if (fol.enabled) {
+                item.foliage = true;
             }
         }
         
