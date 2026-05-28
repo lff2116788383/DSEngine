@@ -210,6 +210,7 @@ void OpenGLCommandBuffer::ClearDepth(float depth) {
     glDepthMask(GL_TRUE);
     glClearDepth(static_cast<double>(depth));
     glClear(GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_SCISSOR_TEST);
 }
 
 void OpenGLCommandBuffer::Reset() {

@@ -34,9 +34,7 @@ public:
     const char* GetName() const override { return "shadow_pass"; }
 private:
     RenderPassContext& ctx_;
-    uint32_t frame_counter_ = 0;              ///< 用于远 cascade 跳帧更新
     glm::mat4 cached_light_space_[3]{};       ///< 每 cascade 缓存的 light space matrix
-    bool cascade_ever_rendered_[3] = {false, false, false}; ///< 首帧强制渲染标记
 };
 
 // ---- Spot Shadow Pass ----

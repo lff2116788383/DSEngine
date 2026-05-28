@@ -175,8 +175,6 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& dl = snap.directional_light;
     if (!dl.valid || !dl.cast_shadow) return;
 
-    ++frame_counter_;
-
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     // Camera-Relative: shadow_center 转换到相机相对空间
@@ -187,10 +185,6 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
 
-    // 远 cascade 跳帧策略：cascade 1 每 2 帧更新，cascade 2 每 4 帧更新
-    // cascade 0（近处）每帧更新保证近处阴影质量
-    constexpr uint32_t kCascadeUpdateInterval[CSM_CASCADES] = {1, 2, 4};
-
     std::vector<float> cascade_splits(CSM_CASCADES);
 
     // Atlas layout: cascade 0 (2048×2048) at (0,0); cascade 1 (1024×1024) at (2048,0); cascade 2 (512×512) at (3072,0)
@@ -200,24 +194,16 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     constexpr float kAtlasWidth = 4096.0f;
     constexpr float kAtlasHeight = 2048.0f;
 
-    // 判定哪些 cascade 需要更新
-    bool any_update = false;
-    bool cascade_needs_update[CSM_CASCADES] = {};
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cascade_splits[i] = dl.cascade_splits[i];
-        cascade_needs_update[i] = !cascade_ever_rendered_[i]
-            || (frame_counter_ % kCascadeUpdateInterval[i]) == 0;
-        if (cascade_needs_update[i]) any_update = true;
     }
 
-    // 单次 BeginRenderPass 绑定 atlas RT（不全清，逐 cascade viewport 清除）
-    if (any_update) {
-        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), false});
+    // 单次 BeginRenderPass 绑定 atlas RT，全量清除深度
+    {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), true});
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
 
         for (int i = 0; i < CSM_CASCADES; ++i) {
-            if (!cascade_needs_update[i]) continue;
-
             float size = dl.cascade_splits[i];
             auto cam = ComputeDirectionalLightCamera(
                 shadow_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
@@ -227,11 +213,9 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 glm::ortho(-size, size, -size, size, 1.0f, far_dist);
 
             cached_light_space_[i] = sample_proj * cam.view;
-            cascade_ever_rendered_[i] = true;
 
-            // 设置 viewport 到 atlas 内对应区域，仅清除该区域深度
+            // 设置 viewport 到 atlas 内对应区域
             cmd_buffer.SetViewport(kAtlasOffsetX[i], kAtlasOffsetY[i], kShadowRes[i], kShadowRes[i]);
-            cmd_buffer.ClearDepth(1.0f);
             cmd_buffer.SetCamera(cam.view, cam.projection);
 
             const bool skip_cpu_shadow = (size > 10000.0f);

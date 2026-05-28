@@ -352,10 +352,6 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
         }
         glClearDepth(1.0);
         glClear(has_depth ? (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) : GL_COLOR_BUFFER_BIT);
-    } else if (has_depth) {
-        glDepthMask(GL_TRUE);
-        glClearDepth(1.0);
-        glClear(GL_DEPTH_BUFFER_BIT);
     }
 
 #ifdef DSE_VSE_1522_DIAG
