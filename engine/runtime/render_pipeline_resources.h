@@ -68,6 +68,7 @@ struct RenderPipelineResources {
     unsigned int prez_pipeline_state = 0;
     unsigned int composite_pipeline_state = 0;
     unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
+    unsigned int shadow_atlas_render_target = 0;  ///< CSM shadow atlas (4096×2048 depth-only)
     unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int rsm_render_target = 0;    // RSM MRT (position+normal+flux, 3 color + depth)

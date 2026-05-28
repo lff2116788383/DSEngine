@@ -613,6 +613,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first.wboit_mode));
     for (int i = 0; i < 3; ++i)
         scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    for (int i = 0; i < 3; ++i)
+        scene_data.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
     const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
@@ -2361,6 +2363,8 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
         global_state_.cascade_splits[2], 0.0f);
     for (int i = 0; i < 3; ++i)
         scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    for (int i = 0; i < 3; ++i)
+        scene_data.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
     // GPU-driven VS layout: b0=PerFrame, b7=DrawIdCB

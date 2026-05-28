@@ -193,60 +193,72 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
     std::vector<float> cascade_splits(CSM_CASCADES);
 
+    // Atlas layout: cascade 0 (2048×2048) at (0,0); cascade 1 (1024×1024) at (2048,0); cascade 2 (512×512) at (3072,0)
+    constexpr int kAtlasOffsetX[CSM_CASCADES] = {0, 2048, 3072};
+    constexpr int kAtlasOffsetY[CSM_CASCADES] = {0, 0, 0};
+    constexpr int kShadowRes[CSM_CASCADES] = {2048, 1024, 512};
+    constexpr float kAtlasWidth = 4096.0f;
+    constexpr float kAtlasHeight = 2048.0f;
+
+    // 判定哪些 cascade 需要更新
+    bool any_update = false;
+    bool cascade_needs_update[CSM_CASCADES] = {};
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cascade_splits[i] = dl.cascade_splits[i];
-
-        // 跳帧判定：首次必须渲染，之后按间隔跳帧
-        const bool should_update = !cascade_ever_rendered_[i]
+        cascade_needs_update[i] = !cascade_ever_rendered_[i]
             || (frame_counter_ % kCascadeUpdateInterval[i]) == 0;
-        if (!should_update) continue;
+        if (cascade_needs_update[i]) any_update = true;
+    }
 
-        float size = dl.cascade_splits[i];
-        constexpr float kShadowRes[CSM_CASCADES] = {2048.0f, 1024.0f, 512.0f};
-        const float shadow_map_res = kShadowRes[i];
-        auto cam = ComputeDirectionalLightCamera(
-            shadow_center, dl.direction, size, clip_correction, shadow_map_res);
-
-        // Sampling matrix uses shadow_sample_correction (no Z remap)
-        float far_dist = size * 4.0f;
-        glm::mat4 sample_proj = shadow_sample_correction *
-            glm::ortho(-size, size, -size, size, 1.0f, far_dist);
-
-        // 缓存 light space matrix — 采样时使用渲染时的矩阵，避免 shadow swimming
-        cached_light_space_[i] = sample_proj * cam.view;
-        cascade_ever_rendered_[i] = true;
-
-        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
-
-        cmd_buffer.SetCamera(cam.view, cam.projection);
+    // 单次 BeginRenderPass 绑定 atlas RT（不全清，逐 cascade viewport 清除）
+    if (any_update) {
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), false});
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
 
-        // 远 cascade (ortho_size > 10000) 跳过 CPU-path 渲染 — 低分辨率下阴影质量差
-        // shadow map 已 clear 为 depth=1.0 → shader 读到 "无阴影"
-        const bool skip_cpu_shadow = (size > 10000.0f);
+        for (int i = 0; i < CSM_CASCADES; ++i) {
+            if (!cascade_needs_update[i]) continue;
 
-        if (use_gpu_indirect) {
-            auto* rhi = ctx_.rhi_device;
-            rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
-            rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
-            rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
-                                          ctx_.gpu_indirect_draw_count,
-                                          sizeof(DrawElementsIndirectCommand));
-            rhi->UnbindVAO();
-        }
+            float size = dl.cascade_splits[i];
+            auto cam = ComputeDirectionalLightCamera(
+                shadow_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
 
-        if (!skip_cpu_shadow) {
-            if (ctx_.render_scene) {
-                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+            float far_dist = size * 4.0f;
+            glm::mat4 sample_proj = shadow_sample_correction *
+                glm::ortho(-size, size, -size, size, 1.0f, far_dist);
+
+            cached_light_space_[i] = sample_proj * cam.view;
+            cascade_ever_rendered_[i] = true;
+
+            // 设置 viewport 到 atlas 内对应区域，仅清除该区域深度
+            cmd_buffer.SetViewport(kAtlasOffsetX[i], kAtlasOffsetY[i], kShadowRes[i], kShadowRes[i]);
+            cmd_buffer.ClearDepth(1.0f);
+            cmd_buffer.SetCamera(cam.view, cam.projection);
+
+            const bool skip_cpu_shadow = (size > 10000.0f);
+
+            if (use_gpu_indirect) {
+                auto* rhi = ctx_.rhi_device;
+                rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
+                rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
+                rhi->BindMegaVAO(ctx_.gpu_mega_vao);
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                                              ctx_.gpu_indirect_draw_count,
+                                              sizeof(DrawElementsIndirectCommand));
+                rhi->UnbindVAO();
             }
-            RenderScenePassContext pass_ctx;
-            pass_ctx.world = ctx_.world;
-            pass_ctx.view = &cam.view;
-            pass_ctx.projection = &cam.projection;
-            pass_ctx.camera_offset = ctx_.camera_offset;
-            pass_ctx.cascade_index = i;
-            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+
+            if (!skip_cpu_shadow) {
+                if (ctx_.render_scene) {
+                    ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+                }
+                RenderScenePassContext pass_ctx;
+                pass_ctx.world = ctx_.world;
+                pass_ctx.view = &cam.view;
+                pass_ctx.projection = &cam.projection;
+                pass_ctx.camera_offset = ctx_.camera_offset;
+                pass_ctx.cascade_index = i;
+                ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+            }
         }
 
         cmd_buffer.EndRenderPass();
@@ -258,8 +270,20 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         ctx_.rhi_device->SetGlobalCascadeSplit(static_cast<unsigned int>(i), cascade_splits[i]);
     }
 
+    // Atlas region UV: (scale_x, scale_y, offset_x, offset_y) 供 PBR shader 采样
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        cmd_buffer.BindGlobalShadowMap(i, ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow[i]));
+        float scale_x = static_cast<float>(kShadowRes[i]) / kAtlasWidth;
+        float scale_y = static_cast<float>(kShadowRes[i]) / kAtlasHeight;
+        float offset_x = static_cast<float>(kAtlasOffsetX[i]) / kAtlasWidth;
+        float offset_y = static_cast<float>(kAtlasOffsetY[i]) / kAtlasHeight;
+        ctx_.rhi_device->SetGlobalShadowAtlasRegion(static_cast<unsigned int>(i),
+            glm::vec4(scale_x, scale_y, offset_x, offset_y));
+    }
+
+    // 绑定单个 atlas 深度纹理到所有 shadow map slot
+    unsigned int atlas_depth = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow_atlas);
+    for (int i = 0; i < CSM_CASCADES; ++i) {
+        cmd_buffer.BindGlobalShadowMap(i, atlas_depth);
     }
 
 }

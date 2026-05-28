@@ -42,6 +42,12 @@ layout(std430, set = 2, binding = 10) readonly buffer SkinnedInstBuf {
 layout(std430, set = 2, binding = 8) readonly buffer BoneMatricesSSBO {
     mat4 u_bone_matrices[];
 };
+
+// Compute Skinning Output SSBO: 预蒙皮顶点数据
+struct ComputeSkinVertex { vec4 pos; vec4 normal; vec4 tangent; };
+layout(std430, set = 2, binding = 20) readonly buffer ComputeSkinBuf {
+    ComputeSkinVertex compute_skin_verts[];
+};
 #endif
 
 void main() {
@@ -61,6 +67,13 @@ void main() {
     }
 
     vec4 localPos = boneTransform * vec4(aPos, 1.0);
+
+    // Compute pre-skinned path: 读取 compute shader 输出的已蒙皮顶点
+    if (pc.u_skinned == 3) {
+        uint skin_idx = uint(pc.u_bone_offset) + uint(gl_VertexIndex);
+        localPos = compute_skin_verts[skin_idx].pos;
+    }
+
     mat4 inst_model = ((pc.u_skinned == 2) || (pc.u_skinned == 3))
         ? skinned_instances[gl_InstanceIndex].model : pc.u_model;
     vec4 worldPos = inst_model * localPos;

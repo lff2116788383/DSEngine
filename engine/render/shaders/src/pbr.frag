@@ -28,6 +28,7 @@ layout(std140, set = 1, binding = 0) uniform PerScene {
     vec4 light_params;
     vec4 cascade_splits;
     mat4 light_space_matrices[3];
+    vec4 shadow_atlas_regions[3]; // xy = UV scale, zw = UV offset per cascade
 };
 
 #ifdef GPU_DRIVEN
@@ -69,7 +70,7 @@ layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;
 layout(set = 2, binding = 5) uniform sampler2D u_occlusion_map;
 
 #define CSM_CASCADES 3
-layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_maps[CSM_CASCADES];
+layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_atlas;
 layout(set = 2, binding = 7) uniform sampler2D u_spot_shadow_maps[4];
 
 layout(std140, set = 2, binding = 19) uniform SpotLightData {
@@ -428,11 +429,10 @@ float ShadowForCascade(int idx, vec3 fragPosWorldSpace, vec3 normal, vec3 lightD
     projCoords = projCoords * 0.5 + 0.5;
     if (projCoords.z > 1.0) return 0.0;
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+    // Atlas UV transform: map cascade-local [0,1] to atlas sub-region
+    projCoords.xy = projCoords.xy * shadow_atlas_regions[idx].xy + shadow_atlas_regions[idx].zw;
     float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.0005);
-    float lit;
-    if (idx == 0)      lit = PCSS_Shadow(u_shadow_maps[0], projCoords, bias);
-    else if (idx == 1) lit = PCSS_Shadow(u_shadow_maps[1], projCoords, bias);
-    else               lit = PCSS_Shadow(u_shadow_maps[2], projCoords, bias);
+    float lit = PCSS_Shadow(u_shadow_atlas, projCoords, bias);
     return clamp((1.0 - lit) * u_shadow_strength, 0.0, 1.0);
 }
 

@@ -495,6 +495,9 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
     for (int i = 0; i < 3; ++i) {
         ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
+    for (int i = 0; i < 3; ++i) {
+        ubo.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
+    }
 
     if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
@@ -3537,6 +3540,9 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     scene_ubo.light_params            = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);
     for (int i = 0; i < 3; ++i) {
         scene_ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
+    }
+    for (int i = 0; i < 3; ++i) {
+        scene_ubo.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
     }
     if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);

@@ -45,6 +45,7 @@
 #include "engine/render/light_probe_system.h"
 #include "engine/render/reflection_probe_system.h"
 #include "engine/render/gi/ddgi_system.h"
+#include "engine/render/skinning/gpu_skinning.h"
 #include "engine/assets/streaming_manager.h"
 #include "engine/ecs/floating_origin_system.h"
 #include "engine/core/event_bus.h"
@@ -381,6 +382,9 @@ private:
 
     /// DDGI Irradiance Probe 系统
     dse::render::gi::DDGISystem ddgi_system_;
+
+    /// GPU Compute Skinning 系统
+    dse::render::GPUSkinningSystem gpu_skinning_system_;
 
     /// Floating Origin 系统（大世界坐标 Phase 2）
     dse::FloatingOriginSystem floating_origin_system_;

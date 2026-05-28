@@ -58,6 +58,7 @@ struct DX11PerSceneCB {
     glm::vec4 light_params;
     glm::vec4 cascade_splits;
     glm::mat4 light_space_matrices[3];
+    glm::vec4 shadow_atlas_regions[3];  ///< per-cascade atlas region: xy=UV scale, zw=UV offset
 };
 
 /// PerMaterial 常量缓冲数据

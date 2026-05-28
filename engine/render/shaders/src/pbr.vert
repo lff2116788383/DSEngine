@@ -58,6 +58,12 @@ const int MAX_MORPH_TARGETS = 4;
 layout(std140, set = 2, binding = 9) uniform MorphWeights {
     float u_morph_weights[MAX_MORPH_TARGETS];
 };
+
+// Compute Skinning Output SSBO: 预蒙皮顶点数据 (pos.xyzw, normal.xyzw, tangent.xyzw)
+struct ComputeSkinVertex { vec4 pos; vec4 normal; vec4 tangent; };
+layout(std430, set = 2, binding = 20) readonly buffer ComputeSkinBuf {
+    ComputeSkinVertex compute_skin_verts[];
+};
 #endif
 
 void main() {
@@ -86,6 +92,14 @@ void main() {
         finalNormal = aNormal;
     }
     vec4 localPos = boneTransform * vec4(morphedPos, 1.0);
+
+    // Compute pre-skinned path: 读取 compute shader 输出的已蒙皮顶点
+    if (pc.u_skinned == 3) {
+        uint skin_idx = uint(pc.u_bone_offset) + uint(gl_VertexIndex);
+        localPos = compute_skin_verts[skin_idx].pos;
+        finalNormal = compute_skin_verts[skin_idx].normal.xyz;
+        finalTangent = compute_skin_verts[skin_idx].tangent.xyz;
+    }
 #endif
 
     mat4 finalModel = MODEL_MATRIX;

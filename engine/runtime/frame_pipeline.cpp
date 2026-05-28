@@ -389,10 +389,13 @@ bool FramePipeline::Init() {
                        render_resources_.hiz_cull_shader);
     }
 
-    // CSM shadow map resolution: near cascade high-res, far cascades progressively lower
+    // CSM Shadow Atlas: single 4096×2048 depth texture, cascades rendered via viewport
+    // Layout: cascade 0 (2048×2048) at (0,0); cascade 1 (1024×1024) at (2048,0); cascade 2 (512×512) at (3072,0)
+    render_resources_.shadow_atlas_render_target = runtime_context_.rhi_device->CreateRenderTarget({4096, 2048, false, true});
+    // Legacy per-cascade RTs kept for compatibility (spot/point shadow code paths)
     constexpr int kShadowResolutions[CSM_CASCADES] = {2048, 1024, 512};
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        render_resources_.shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({kShadowResolutions[i], kShadowResolutions[i], false, true});
+        render_resources_.shadow_render_target[i] = render_resources_.shadow_atlas_render_target;
     }
     for (int i = 0; i < 4; ++i) {
         render_resources_.spot_shadow_render_target[i] = runtime_context_.rhi_device->CreateRenderTarget({1024, 1024, false, true});
@@ -669,6 +672,13 @@ bool FramePipeline::Init() {
         dse::core::ServiceLocator::Instance().Register<dse::streaming::StreamingManager, dse::streaming::StreamingManager>(streaming_shared);
     }
     lap("StreamingManager");
+
+    // GPU Compute Skinning 初始化（Compute Shader 可用时启用）
+    if (gpu_skinning_system_.Init(runtime_context_.rhi_device.get())) {
+        DEBUG_LOG_INFO("FramePipeline init: GPUSkinningSystem initialized (compute skinning available)");
+    }
+    lap("GPUSkinning");
+
     initialized_ = true;
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
@@ -1289,7 +1299,19 @@ void FramePipeline::RunRenderInternal() {
                        builtin_gameplay3d_enabled_);
     }
 
+    // GPU Compute Skinning: 帧开始（清空上一帧请求，读回上一帧结果）
+    if (gpu_skinning_system_.IsAvailable()) {
+        gpu_skinning_system_.BeginFrame();
+    }
+
     BuildRenderSceneQueues();
+
+    // GPU Compute Skinning: Dispatch 所有蒙皮请求，绑定输出 SSBO
+    if (gpu_skinning_system_.IsAvailable() && gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
+        gpu_skinning_system_.Dispatch();
+        runtime_context_.rhi_device->BindGpuBuffer(
+            gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
+    }
 
     CaptureThinSnapshot();
     FlipSnapshotIndex();
@@ -1522,6 +1544,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     for (int i = 0; i < CSM_CASCADES; ++i) {
         render_pass_context_.render_targets.shadow[i] = render_resources_.shadow_render_target[i];
     }
+    render_pass_context_.render_targets.shadow_atlas = render_resources_.shadow_atlas_render_target;
     for (int i = 0; i < 4; ++i) {
         render_pass_context_.render_targets.spot_shadow[i]  = render_resources_.spot_shadow_render_target[i];
         render_pass_context_.render_targets.point_shadow[i] = render_resources_.point_shadow_render_target[i];

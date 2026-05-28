@@ -49,6 +49,7 @@ struct VulkanPerSceneUBO {
     glm::vec4 light_params;             ///< x=intensity, y=shadow_strength, z=receive_shadow, w=unused
     glm::vec4 cascade_splits;           ///< xyz=cascade_splits, w=unused
     glm::mat4 light_space_matrices[3];
+    glm::vec4 shadow_atlas_regions[3];  ///< per-cascade atlas region: xy=UV scale, zw=UV offset
 };
 
 /// PerMaterial UBO 数据布局（与着色器 set=2, binding=0 对齐）

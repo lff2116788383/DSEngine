@@ -30,6 +30,11 @@ struct DrawExecutorGlobalState {
     glm::mat4 light_space_matrix[3] = {};
     float cascade_splits[3] = {};
     unsigned int shadow_map[3] = {};
+    glm::vec4 shadow_atlas_region[3] = {
+        glm::vec4(1.0f, 1.0f, 0.0f, 0.0f),
+        glm::vec4(1.0f, 1.0f, 0.0f, 0.0f),
+        glm::vec4(1.0f, 1.0f, 0.0f, 0.0f)
+    };
 
     // --- 聚光灯 ---
     glm::mat4 spot_light_space_matrix[4] = {
@@ -84,6 +89,9 @@ struct DrawExecutorGlobalState {
     }
     void SetCascadeSplit(unsigned int index, float split) {
         if (index < 3) cascade_splits[index] = split;
+    }
+    void SetShadowAtlasRegion(unsigned int index, const glm::vec4& region) {
+        if (index < 3) shadow_atlas_region[index] = region;
     }
     void SetSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
         if (index < 4) spot_light_space_matrix[index] = mat;
@@ -142,6 +150,8 @@ inline PerSceneUBO PreparePerSceneUBO(const MeshDrawItem& item,
         0.0f);
     for (int i = 0; i < 3; ++i)
         scene.light_space_matrices[i] = state.light_space_matrix[i];
+    for (int i = 0; i < 3; ++i)
+        scene.shadow_atlas_regions[i] = state.shadow_atlas_region[i];
     return scene;
 }
 

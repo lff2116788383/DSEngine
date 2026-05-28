@@ -90,6 +90,36 @@ void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, 
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
+void DX11CommandBuffer::SetViewport(int x, int y, int width, int height) {
+    if (!device_) return;
+    auto* dc = device_->context().device_context();
+    D3D11_VIEWPORT vp{};
+    vp.TopLeftX = static_cast<FLOAT>(x);
+    vp.TopLeftY = static_cast<FLOAT>(y);
+    vp.Width    = static_cast<FLOAT>(width);
+    vp.Height   = static_cast<FLOAT>(height);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    dc->RSSetViewports(1, &vp);
+    D3D11_RECT scissor{};
+    scissor.left   = static_cast<LONG>(x);
+    scissor.top    = static_cast<LONG>(y);
+    scissor.right  = static_cast<LONG>(x + width);
+    scissor.bottom = static_cast<LONG>(y + height);
+    dc->RSSetScissorRects(1, &scissor);
+}
+
+void DX11CommandBuffer::ClearDepth(float depth) {
+    if (!device_) return;
+    auto* dc = device_->context().device_context();
+    ID3D11DepthStencilView* dsv = nullptr;
+    dc->OMGetRenderTargets(0, nullptr, &dsv);
+    if (dsv) {
+        dc->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH, depth, 0);
+        dsv->Release();
+    }
+}
+
 void DX11CommandBuffer::Reset() {
     ResetBase();
 }

@@ -69,7 +69,8 @@ struct RenderPassContext {
         unsigned int scene = 0;
         unsigned int ui = 0;
         unsigned int prez = 0;
-        unsigned int shadow[3] = {0, 0, 0};     // CSM_CASCADES
+        unsigned int shadow[3] = {0, 0, 0};     // CSM_CASCADES (legacy, kept for spot/point)
+        unsigned int shadow_atlas = 0;           // CSM shadow atlas RT
         unsigned int spot_shadow[4] = {0, 0, 0, 0};
         unsigned int point_shadow[4] = {0, 0, 0, 0};
         unsigned int bloom_extract = 0;

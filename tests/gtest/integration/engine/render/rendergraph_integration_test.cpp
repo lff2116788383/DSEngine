@@ -51,6 +51,7 @@ public:
     MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest request), (override));
     MOCK_METHOD(void, DrawParticles3D, (const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
+    MOCK_METHOD(void, SetViewport, (int, int, int, int), (override));
     MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, unsigned int), (override));
     MOCK_METHOD(void, BindGlobalSpotShadowMap, (unsigned int, unsigned int), (override));
     MOCK_METHOD(void, BindGlobalPointShadowMap, (unsigned int, unsigned int), (override));

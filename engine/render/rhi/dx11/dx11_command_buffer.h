@@ -36,6 +36,8 @@ public:
     void DrawPostProcess(PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
+    void SetViewport(int x, int y, int width, int height) override;
+    void ClearDepth(float depth = 1.0f) override;
 
     /// 重置命令缓冲状态
     void Reset();

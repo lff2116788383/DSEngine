@@ -106,6 +106,35 @@ void VulkanCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items
         device_->state_mgr(), device_->shader_mgr());
 }
 
+void VulkanCommandBuffer::SetViewport(int x, int y, int width, int height) {
+    if (vk_command_buffer_ == VK_NULL_HANDLE) return;
+    VkViewport vp{};
+    vp.x = static_cast<float>(x);
+    vp.y = static_cast<float>(y);
+    vp.width = static_cast<float>(width);
+    vp.height = static_cast<float>(height);
+    vp.minDepth = 0.0f;
+    vp.maxDepth = 1.0f;
+    vkCmdSetViewport(vk_command_buffer_, 0, 1, &vp);
+    VkRect2D scissor{};
+    scissor.offset = {x, y};
+    scissor.extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    vkCmdSetScissor(vk_command_buffer_, 0, 1, &scissor);
+}
+
+void VulkanCommandBuffer::ClearDepth(float depth) {
+    if (vk_command_buffer_ == VK_NULL_HANDLE) return;
+    VkClearAttachment clear_att{};
+    clear_att.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    clear_att.clearValue.depthStencil = {depth, 0};
+    VkClearRect clear_rect{};
+    clear_rect.baseArrayLayer = 0;
+    clear_rect.layerCount = 1;
+    // rect uses current scissor (full render area if not set)
+    clear_rect.rect = {{0, 0}, {16384, 16384}};  // oversized; GPU clamps to attachment
+    vkCmdClearAttachments(vk_command_buffer_, 1, &clear_att, 1, &clear_rect);
+}
+
 void VulkanCommandBuffer::Reset() {
     vk_command_buffer_ = VK_NULL_HANDLE;
     ResetBase();

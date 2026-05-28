@@ -200,6 +200,18 @@ void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items
     device_->RealSubmitDrawHairStrands(items, view, projection);
 }
 
+void OpenGLCommandBuffer::SetViewport(int x, int y, int width, int height) {
+    glViewport(x, y, width, height);
+    glScissor(x, y, width, height);
+}
+
+void OpenGLCommandBuffer::ClearDepth(float depth) {
+    glEnable(GL_SCISSOR_TEST);
+    glDepthMask(GL_TRUE);
+    glClearDepth(static_cast<double>(depth));
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
 void OpenGLCommandBuffer::Reset() {
     ResetBase();
 }

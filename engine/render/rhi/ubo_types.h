@@ -96,8 +96,9 @@ struct PerSceneUBO {
     glm::vec4 light_params;              ///< x = light_intensity, y = shadow_strength, z = receive_shadow (0.0/1.0)
     glm::vec4 cascade_splits;            ///< xyz = CSM 级联分割距离, w 未使用
     glm::mat4 light_space_matrices[3];   ///< CSM 三个级联的光空间矩阵
+    glm::vec4 shadow_atlas_regions[3];   ///< per-cascade atlas region: xy=UV scale, zw=UV offset
 };
-static_assert(sizeof(PerSceneUBO) == 256, "PerSceneUBO must be 256 bytes for std140 layout");
+static_assert(sizeof(PerSceneUBO) == 304, "PerSceneUBO must be 304 bytes for std140 layout");
 
 // ============================================================
 // PerMaterial UBO (binding = 2)

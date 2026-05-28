@@ -34,6 +34,7 @@ public:
     void DrawPostProcess(PostProcessRequest) override {}
     void DrawParticles3D(const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
     void DrawHairStrands(const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
+    void SetViewport(int, int, int, int) override {}
     void BindGlobalShadowMap(unsigned int, unsigned int) override {}
     void BindGlobalSpotShadowMap(unsigned int, unsigned int) override {}
     void BindGlobalPointShadowMap(unsigned int, unsigned int) override {}

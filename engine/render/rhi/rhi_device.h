@@ -51,6 +51,12 @@ public:
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
+    /// 设置视口区域（用于 shadow atlas 等 viewport-based 渲染）
+    virtual void SetViewport(int x, int y, int width, int height) = 0;
+
+    /// 清除当前 viewport/scissor 区域的深度缓冲（用于 atlas 逐区域清除）
+    virtual void ClearDepth(float depth = 1.0f) { (void)depth; }
+
     /// 诊断用：直接 blit RT 到 swapchain，绕过 shader pipeline
     virtual void BlitToScreen(unsigned int source_rt) { (void)source_rt; }
 
@@ -248,6 +254,7 @@ public:
     void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetPointShadowMap(index, handle); }
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetLightSpaceMatrix(index, mat); }
     void SetGlobalCascadeSplit(unsigned int index, float split) { global_render_state_.SetCascadeSplit(index, split); }
+    void SetGlobalShadowAtlasRegion(unsigned int index, const glm::vec4& region) { global_render_state_.SetShadowAtlasRegion(index, region); }
     void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(0, mat); }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(index, mat); }
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_render_state_.SetLightProbeSH(sh, enabled); }

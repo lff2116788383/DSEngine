@@ -25,8 +25,8 @@ TEST(UBOTypesTest, PerFrameUBO大小144) {
     EXPECT_EQ(sizeof(PerFrameUBO), 144u);
 }
 
-TEST(UBOTypesTest, PerSceneUBO大小256) {
-    EXPECT_EQ(sizeof(PerSceneUBO), 256u);
+TEST(UBOTypesTest, PerSceneUBO大小304) {
+    EXPECT_EQ(sizeof(PerSceneUBO), 304u);
 }
 
 TEST(UBOTypesTest, PerMaterialUBO大小128) {
