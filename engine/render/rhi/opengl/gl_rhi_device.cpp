@@ -243,6 +243,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
     shader_mgr_.InitBuiltinPBRShader();
+    shader_mgr_.WarmupAllPostProcessShaders();
     resource_mgr_.ledger().shader_programs_created += 1;
 
     // 鍒濆鍖?UBO 绠＄悊鍣?

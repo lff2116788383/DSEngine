@@ -912,7 +912,7 @@ void FramePipeline::InitResolutionDependentRTs() {
     if (render_resources_.pp_outline_rt == 0)
         render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.pp_fog_rt == 0)
-        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
     if (render_resources_.pp_cloud_rt == 0)
         render_resources_.pp_cloud_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
     if (render_resources_.wboit_accum_rt == 0)

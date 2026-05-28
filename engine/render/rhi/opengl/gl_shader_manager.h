@@ -180,6 +180,9 @@ public:
     /// gen.h 统一后处理着色器：使用 GLSL 430 预编译源（VS + FS 均来自 gen.h）
     unsigned int GetOrCreateGenPPShader(const std::string& effect_name);
 
+    /// 预编译所有后处理着色器，消除首帧 stall
+    void WarmupAllPostProcessShaders();
+
     // 着色器句柄访问器、计数器继承自 ShaderManagerBase
 
 private:

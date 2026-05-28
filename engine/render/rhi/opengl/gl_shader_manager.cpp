@@ -624,6 +624,28 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
 }
 
 // ============================================================
+// Shader Warmup — 预编译所有后处理着色器消除首帧 stall
+// ============================================================
+
+void GLShaderManager::WarmupAllPostProcessShaders() {
+    static const char* kAllPPEffects[] = {
+        "fxaa", "bloom_extract", "bloom_downsample", "bloom_upsample",
+        "tonemapping", "color_grading", "edge_detect", "postprocess_passthrough",
+        "bloom_composite", "ssao_apply", "ssao", "ssao_blur", "contact_shadow",
+        "dof", "motion_vector", "motion_blur", "ssr", "taa_resolve",
+        "ui_overlay", "deferred_lighting", "light_shaft",
+        "volumetric_fog", "volumetric_cloud",
+        "decal", "water", "wboit_composite", "lum_compute", "lum_adapt",
+        "bloom_blur_h", "bloom_blur_v", "copy",
+        "atmosphere_transmittance_lut", "atmosphere_sky",
+    };
+    for (const char* name : kAllPPEffects) {
+        GetOrCreateGenPPShader(name);
+    }
+    DEBUG_LOG_INFO("[GLShaderManager] Warmed up {} post-process shaders", programs_created_);
+}
+
+// ============================================================
 // GPU-Driven PBR Shader Variant
 // ============================================================
 

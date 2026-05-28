@@ -175,6 +175,8 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& dl = snap.directional_light;
     if (!dl.valid || !dl.cast_shadow) return;
 
+    ++frame_counter_;
+
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
     // Camera-Relative: shadow_center 转换到相机相对空间
@@ -185,11 +187,19 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         && ctx_.gpu_draw_cmd_ssbo
         && ctx_.gpu_indirect_draw_count > 0;
 
-    std::vector<glm::mat4> light_space_matrices(CSM_CASCADES);
+    // 远 cascade 跳帧策略：cascade 1 每 2 帧更新，cascade 2 每 4 帧更新
+    // cascade 0（近处）每帧更新保证近处阴影质量
+    constexpr uint32_t kCascadeUpdateInterval[CSM_CASCADES] = {1, 2, 4};
+
     std::vector<float> cascade_splits(CSM_CASCADES);
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
+        cascade_splits[i] = dl.cascade_splits[i];
+
+        // 跳帧判定：首次必须渲染，之后按间隔跳帧
+        const bool should_update = !cascade_ever_rendered_[i]
+            || (frame_counter_ % kCascadeUpdateInterval[i]) == 0;
+        if (!should_update) continue;
 
         float size = dl.cascade_splits[i];
         constexpr float kShadowRes[CSM_CASCADES] = {2048.0f, 1024.0f, 512.0f};
@@ -201,8 +211,12 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         float far_dist = size * 4.0f;
         glm::mat4 sample_proj = shadow_sample_correction *
             glm::ortho(-size, size, -size, size, 1.0f, far_dist);
-        light_space_matrices[i] = sample_proj * cam.view;
-        cascade_splits[i] = dl.cascade_splits[i];
+
+        // 缓存 light space matrix — 采样时使用渲染时的矩阵，避免 shadow swimming
+        cached_light_space_[i] = sample_proj * cam.view;
+        cascade_ever_rendered_[i] = true;
+
+        cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow[i], glm::vec4(1.0f), true});
 
         cmd_buffer.SetCamera(cam.view, cam.projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
@@ -238,8 +252,9 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.EndRenderPass();
     }
 
+    // 使用缓存的 light space matrix（与 shadow map 内容对应的矩阵）
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        ctx_.rhi_device->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), light_space_matrices[i]);
+        ctx_.rhi_device->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), cached_light_space_[i]);
         ctx_.rhi_device->SetGlobalCascadeSplit(static_cast<unsigned int>(i), cascade_splits[i]);
     }
 
