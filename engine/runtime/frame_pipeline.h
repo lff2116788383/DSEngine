@@ -279,6 +279,9 @@ public:
         return runtime_context_.rhi_device ? runtime_context_.rhi_device->NeedsReadbackYFlip() : true;
     }
 
+    /// 获取 RHI 设备（供 FontService 等需要创建 GPU 资源的服务使用）
+    RhiDevice* GetRhiDevice() const { return runtime_context_.rhi_device.get(); }
+
     /// 基于 DAG 的渲染图
     dse::render::RenderGraph render_graph_dag_;
 

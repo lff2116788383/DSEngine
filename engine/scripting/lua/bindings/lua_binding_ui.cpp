@@ -152,6 +152,48 @@ int L_UiSetLabelNumber(lua_State* L) {
     return 0;
 }
 
+// dse.ui.add_ttf_label(entity, text, font_id [, font_size [, r, g, b, a]])
+int L_UiAddTtfLabel(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* text = luaL_checkstring(L, 2);
+    const char* font_id = luaL_checkstring(L, 3);
+    float font_size = static_cast<float>(luaL_optnumber(L, 4, 32.0));
+    float r = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float g = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    float b = static_cast<float>(luaL_optnumber(L, 7, 1.0));
+    float a = static_cast<float>(luaL_optnumber(L, 8, 1.0));
+
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    auto& label = world->registry().emplace_or_replace<UILabelComponent>(e);
+    label.text = text;
+    label.font_id = font_id;
+    label.font_size = font_size;
+    label.use_sdf = true;
+    label.color = glm::vec4(r, g, b, a);
+    label.dirty = true;
+    return 0;
+}
+
+// dse.ui.set_label_font(entity, font_id [, font_size])
+int L_UiSetLabelFont(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    const char* font_id = luaL_checkstring(L, 2);
+    float font_size = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    if (world->registry().valid(e) && world->registry().all_of<UILabelComponent>(e)) {
+        auto& label = world->registry().get<UILabelComponent>(e);
+        label.font_id = font_id;
+        if (font_size > 0.0f) label.font_size = font_size;
+        label.dirty = true;
+    }
+    return 0;
+}
+
 int L_UiSetButtonScale(lua_State* L) {
     World* world = GetWorld();
     if (!world) {
@@ -949,7 +991,9 @@ void RegisterUiBindings(lua_State* L) {
     lua_newtable(L);
     set_fn("add_renderer", L_UiAddRenderer);
     set_fn("add_label", L_UiAddLabel);
+    set_fn("add_ttf_label", L_UiAddTtfLabel);
     set_fn("set_label_text", L_UiSetLabelText);
+    set_fn("set_label_font", L_UiSetLabelFont);
     set_fn("set_label_number", L_UiSetLabelNumber);
     set_fn("add_panel", L_UiAddPanel);
     set_fn("add_button", L_UiAddButton);

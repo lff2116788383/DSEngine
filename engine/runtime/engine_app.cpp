@@ -23,6 +23,7 @@
 #include "engine/core/job_system.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/event_bus.h"
+#include "engine/render/font/font_service.h"
 #include <utility>
 #include "engine/base/time.h"
 #include "engine/platform/screen.h"
@@ -193,11 +194,27 @@ void EngineInstance::RegisterRuntimeServices() {
     localization_manager_ = std::make_shared<dse::assets::LocalizationManager>();
     service_locator().Register<dse::assets::LocalizationManager, dse::assets::LocalizationManager>(localization_manager_);
 
+    font_service_ = std::make_shared<dse::render::FontService>();
+    if (pipeline_) {
+        auto* rhi = pipeline_->GetRhiDevice();
+        if (rhi) {
+            font_service_->SetTextureCallbacks(
+                [rhi](int w, int h, const unsigned char* data, bool linear) {
+                    return rhi->CreateTexture2D(w, h, data, linear);
+                },
+                [rhi](unsigned int handle) {
+                    rhi->DeleteTexture(handle);
+                });
+        }
+    }
+    service_locator().Register<dse::render::FontService, dse::render::FontService>(font_service_);
+
     service_locator().BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<World>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::JobSystem>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<dse::assets::LocalizationManager>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<dse::render::FontService>(core::ServiceLocator::Instance());
 }
 
 void EngineInstance::ResetRuntimeServices() {
@@ -206,7 +223,9 @@ void EngineInstance::ResetRuntimeServices() {
     service_locator().Reset<FramePipeline>();
     service_locator().Reset<World>();
     service_locator().Reset<dse::assets::LocalizationManager>();
+    service_locator().Reset<dse::render::FontService>();
     service_locator().Reset<dse::assets::FileSystem>();
+    if (font_service_) { font_service_->Shutdown(); font_service_.reset(); }
     localization_manager_.reset();
     event_bus_.reset();
 

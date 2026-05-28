@@ -44,6 +44,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterFloatingOriginBindings(L);
     lua_setfield(L, -2, "origin");
 
+    RegisterFontBindings(L);
+    lua_setfield(L, -2, "font");
+
     lua_setglobal(L, "dse");
 
     // DSSL 材质系统 — 独立全局表 "dssl"

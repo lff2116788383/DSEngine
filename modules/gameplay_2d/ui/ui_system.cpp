@@ -7,6 +7,8 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/base/debug.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/service_locator.h"
+#include "engine/render/font/font_service.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -175,6 +177,51 @@ void UISystem::SyncLabels(entt::registry& registry) {
         }
         label.runtime_glyph_entities.clear();
 
+        // --- TTF/SDF 字体路径 ---
+        if (!label.font_id.empty()) {
+            auto* font_service = dse::core::ServiceLocator::Instance().Get<dse::render::FontService>();
+            dse::render::FontInstance* fi = font_service ? font_service->GetFont(label.font_id) : nullptr;
+            if (!fi) fi = font_service ? font_service->GetDefaultFont() : nullptr;
+
+            if (fi && fi->font.IsValid() && fi->gpu_texture_handle != 0) {
+                auto layouts = fi->font.LayoutText(label.text);
+                const float scale = (label.font_size > 0.0f && fi->font.GetFontSize() > 0.0f)
+                    ? label.font_size / fi->font.GetFontSize() : 1.0f;
+
+                for (size_t idx = 0; idx < layouts.size(); ++idx) {
+                    auto& cl = layouts[idx];
+                    const auto* gm = fi->font.GetGlyph(cl.codepoint);
+                    if (!gm || gm->width < 0.01f) continue;
+
+                    const glm::vec2 glyph_pixel_size(gm->width * scale, gm->height * scale);
+                    const glm::vec2 pos = ui.position + label.offset +
+                        glm::vec2(cl.x * scale + gm->bearing_x * scale,
+                                  cl.y * scale + gm->bearing_y * scale);
+                    const int order = ui.order + static_cast<int>(idx) * 2 + 1;
+
+                    const Entity glyph_entity = registry.create();
+                    auto& glyph_ui = registry.emplace<UIRendererComponent>(glyph_entity);
+                    glyph_ui.texture_handle = fi->gpu_texture_handle;
+                    glyph_ui.color = label.color;
+                    glyph_ui.visible = ui.visible;
+                    glyph_ui.interactable = false;
+                    glyph_ui.anchor_min = ui.anchor_min;
+                    glyph_ui.anchor_max = ui.anchor_max;
+                    glyph_ui.pivot = glm::vec2(0.0f, 0.0f);
+                    glyph_ui.size = glyph_pixel_size;
+                    glyph_ui.position = pos;
+                    glyph_ui.order = order;
+                    glyph_ui.uv = gm->uv;
+                    label.runtime_glyph_entities.push_back(glyph_entity);
+                }
+
+                label.dirty = false;
+                if (rich) rich->dirty = false;
+                continue;
+            }
+        }
+
+        // --- 位图字体路径（原逻辑） ---
         std::vector<RichGlyph> glyphs;
         if (rich) {
             glyphs = BuildRichGlyphs(rich->text, rich->default_color);

@@ -10,11 +10,9 @@
 #include <cmath>
 #include <cstring>
 
-#define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
 #include <stb/stb_rect_pack.h>
 
-#define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
 

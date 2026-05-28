@@ -84,7 +84,7 @@ struct UIButtonComponent {
 
 /**
  * @struct UILabelComponent
- * @brief 位图字体标签组件，支持普通字符串和高性能数字模式的渲染
+ * @brief 文本标签组件，支持位图字体和 TTF/SDF 字体两种渲染路径
  */
 struct UILabelComponent {
     std::string text;                                    ///< 显示的文本
@@ -104,6 +104,11 @@ struct UILabelComponent {
     glm::vec4 color = glm::vec4(1.0f);                   ///< 文本染色
     bool dirty = true;                                   ///< 数据是否变更，需重构子实体
     std::vector<Entity> runtime_glyph_entities;          ///< 运行时管理的用于显示单个字符的子实体
+
+    // --- TTF/SDF 字体路径 ---
+    std::string font_id;                                 ///< FontService 中的字体 ID（非空时启用 TTF 路径）
+    float font_size = 32.0f;                             ///< 渲染字号（像素）
+    bool use_sdf = true;                                 ///< 使用 SDF 渲染（抗锯齿+缩放）
 };
 
 /**
