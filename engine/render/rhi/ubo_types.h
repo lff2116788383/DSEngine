@@ -63,9 +63,11 @@ static constexpr int kMaxUBOLights = 64;
 struct PerFrameUBO {
     glm::mat4 vp;          ///< 投影×视图矩阵
     glm::mat4 view;        ///< 视图矩阵
-    glm::vec4 camera_pos;  ///< xyz = 相机世界位置，w 未使用
+    glm::vec4 camera_pos;    ///< xyz = 相机世界位置，w = global_wetness
+    glm::vec4 foliage_wind;  ///< x = time, y = strength, z = wind_dir_x, w = wind_dir_z
+    glm::vec4 foliage_push;  ///< xyz = 角色世界坐标, w = 推力半径 (0=无推力)
 };
-static_assert(sizeof(PerFrameUBO) == 144, "PerFrameUBO must be 144 bytes for std140 layout");
+static_assert(sizeof(PerFrameUBO) == 176, "PerFrameUBO must be 176 bytes for std140 layout");
 
 // ============================================================
 // PerScene UBO (binding = 1)

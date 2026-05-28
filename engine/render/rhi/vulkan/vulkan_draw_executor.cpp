@@ -474,6 +474,8 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
     // 从 view 矩阵的逆矩阵提取相机世界位置（与 OpenGL 一致）
     glm::mat4 inv_view = glm::inverse(view);
     ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
+    ubo.foliage_wind = global_state_.foliage_wind;
+    ubo.foliage_push = global_state_.foliage_push;
 
     if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
@@ -2408,11 +2410,13 @@ void VulkanDrawExecutor::DrawMeshBatch(
             int skinned;
             int morph_enabled;
             int bone_offset;
+            int foliage;
         } pc_data;
         pc_data.model = item.model;
         pc_data.skinned = item.skinned ? 1 : 0;
         pc_data.morph_enabled = item.morph_enabled ? 1 : 0;
         pc_data.bone_offset = item.skinned ? bone_offsets[item_idx] : 0;
+        pc_data.foliage = item.foliage ? 1 : 0;
 
         // 绑定 VBO binding 0
         VkBuffer vbo_buffers[] = {mesh_vbo_};

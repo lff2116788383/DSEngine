@@ -471,6 +471,7 @@ void GLShaderManager::CachePBRLocations() {
     loc.skinned = glGetUniformLocation(h, "u_skinned");
     loc.morph_enabled = glGetUniformLocation(h, "u_morph_enabled");
     loc.bone_offset = glGetUniformLocation(h, "u_bone_offset");
+    loc.foliage = glGetUniformLocation(h, "u_foliage");
     loc.use_instancing = glGetUniformLocation(h, "u_use_instancing");
 }
 
@@ -574,6 +575,7 @@ void GLShaderManager::InitShadowShader() {
     shadow_locations_.skinned      = glGetUniformLocation(shadow_shader_handle_, "u_skinned");
     shadow_locations_.morph_enabled = glGetUniformLocation(shadow_shader_handle_, "u_morph_enabled");
     shadow_locations_.bone_offset   = glGetUniformLocation(shadow_shader_handle_, "u_bone_offset");
+    shadow_locations_.foliage         = glGetUniformLocation(shadow_shader_handle_, "u_foliage");
 }
 
 // ============================================================

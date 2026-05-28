@@ -14,6 +14,8 @@ layout(std140, set = 0, binding = 0) uniform PerFrame {
     mat4 vp;
     mat4 view;
     vec4 camera_pos;
+    vec4 foliage_wind;
+    vec4 foliage_push;
 };
 
 void main() {

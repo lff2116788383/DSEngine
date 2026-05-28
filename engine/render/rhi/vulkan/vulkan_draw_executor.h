@@ -39,7 +39,9 @@ struct VulkanShaderProgram;
 struct VulkanPerFrameUBO {
     glm::mat4 vp;
     glm::mat4 view;
-    glm::vec4 camera_pos;   ///< xyz=position, w=unused
+    glm::vec4 camera_pos;     ///< xyz=position, w=global_wetness
+    glm::vec4 foliage_wind;   ///< x=time, y=strength, z=wind_dir_x, w=wind_dir_z
+    glm::vec4 foliage_push;   ///< xyz=character_pos, w=push_radius
 };
 
 /// PerScene UBO 数据布局（与着色器 set=1, binding=0 对齐）

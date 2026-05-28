@@ -225,6 +225,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     per_frame.vp = vp;
     per_frame.view = view;
     per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
+    per_frame.foliage_wind = global_state_.foliage_wind;
+    per_frame.foliage_push = global_state_.foliage_push;
     ubo_mgr.UploadPerFrame(per_frame);
 
     // PerScene UBO 需要在 for 循环中 shading_mode 变更时引用，声明在此
@@ -823,6 +825,12 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             if (bo_loc != -1 && !skinned_instanced) {
                 glUniform1i(bo_loc, item.skinned ? bone_offsets[item_idx] : 0);
             }
+        }
+
+        // 植被标记
+        {
+            const int foliage_loc = is_depth_only_pass_ ? shader_mgr.shadow_locations().foliage : loc.foliage;
+            if (foliage_loc != -1) glUniform1i(foliage_loc, item.foliage ? 1 : 0);
         }
 
         // 变形目标（push constant → 独立 uniform + MorphWeights UBO）设置

@@ -271,6 +271,10 @@ public:
     // --- 全局湿度 ---
     void SetGlobalWetness(float wetness) { global_render_state_.global_wetness = wetness; }
 
+    // --- 植被风参数 ---
+    void SetGlobalFoliageWind(const glm::vec4& wind) { global_render_state_.foliage_wind = wind; }
+    void SetGlobalFoliagePush(const glm::vec4& push) { global_render_state_.foliage_push = push; }
+
     // --- GBuffer / Deferred 管线状态 ---
     void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) { global_render_state_.SetGBufferTexture(index, texture_handle); }
     void SetGBufferRenderingMode(bool enabled) { global_render_state_.gbuffer_rendering_mode = enabled; }

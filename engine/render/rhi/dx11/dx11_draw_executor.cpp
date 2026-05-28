@@ -597,6 +597,8 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         glm::mat4 inv_view = glm::inverse(view);
         frame_data.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
     }
+    frame_data.foliage_wind = global_state_.foliage_wind;
+    frame_data.foliage_push = global_state_.foliage_push;
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 
     // 更新 PerScene CB
@@ -1053,6 +1055,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         obj_data.bone_offset = skinned_instanced
             ? ((inst_byte_offsets[item_idx] != SIZE_MAX) ? static_cast<int>(inst_byte_offsets[item_idx] / kInstGPUSize) : 0)
             : (item.skinned ? bone_offsets[item_idx] : 0);
+        obj_data.foliage = item.foliage ? 1 : 0;
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
         // PerMaterial

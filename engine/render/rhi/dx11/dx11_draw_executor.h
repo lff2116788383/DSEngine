@@ -39,7 +39,9 @@ class DX11ShaderManager;
 struct DX11PerFrameCB {
     glm::mat4 vp;
     glm::mat4 view;
-    glm::vec4 camera_pos;
+    glm::vec4 camera_pos;     ///< xyz=position, w=global_wetness
+    glm::vec4 foliage_wind;   ///< x=time, y=strength, z=wind_dir_x, w=wind_dir_z
+    glm::vec4 foliage_push;   ///< xyz=character_pos, w=push_radius
 };
 
 /// PerObject 常量缓冲数据
@@ -48,7 +50,7 @@ struct DX11PerObjectCB {
     int skinned;
     int morph_enabled;
     int bone_offset;
-    int _pad1;
+    int foliage;
 };
 
 /// PerScene 常量缓冲数据

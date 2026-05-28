@@ -11,6 +11,8 @@ layout(std140, set = 0, binding = 0) uniform PerFrame {
     mat4 vp;
     mat4 view;
     vec4 camera_pos;
+    vec4 foliage_wind;
+    vec4 foliage_push;
 };
 
 // Set 1: PerScene (占位，保持与 PBR 管线 descriptor layout 兼容)

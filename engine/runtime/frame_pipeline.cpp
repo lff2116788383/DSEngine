@@ -1169,6 +1169,44 @@ void FramePipeline::RunRenderInternal() {
     // 全局湿度同步到 RHI
     runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
 
+    // 植被风参数：从 WeatherComponent 读取风速，合成 foliage_wind
+    {
+        float wind_x = 0.0f, wind_z = 0.0f, wind_strength = 0.0f;
+        if (runtime_context_.world) {
+            auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
+            for (auto e : wv) {
+                auto& wc = wv.get<dse::WeatherComponent>(e);
+                if (wc.enabled) {
+                    wind_x = wc.wind_x;
+                    wind_z = wc.wind_z;
+                    wind_strength = glm::length(glm::vec2(wc.wind_x, wc.wind_z));
+                    break;
+                }
+            }
+        }
+        if (wind_strength < 0.001f) wind_strength = 0.3f;  // 默认微风
+        glm::vec2 wind_dir = wind_strength > 0.001f
+            ? glm::normalize(glm::vec2(wind_x, wind_z))
+            : glm::vec2(1.0f, 0.0f);
+        runtime_context_.rhi_device->SetGlobalFoliageWind(
+            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
+    }
+
+    // 植被推力场：从 global_render_state 的 view 逆矩阵获取相机位置
+    {
+        glm::vec3 push_pos(0.0f);
+        if (runtime_context_.world) {
+            auto cv = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
+            for (auto e : cv) {
+                if (cv.get<dse::Camera3DComponent>(e).enabled) {
+                    push_pos = cv.get<TransformComponent>(e).position;
+                    break;
+                }
+            }
+        }
+        runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
+    }
+
     // TAA: 预检测 ECS 组件，提前设置 taa_active，ForwardScenePass 需要在场景渲染前知道是否应用 jitter
     render_pass_context_.taa_active = false;
     if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
@@ -2640,6 +2678,43 @@ void FramePipeline::PrepareRenderFrame() {
                 break;
             }
         }
+    }
+
+    // 植被风参数（渲染线程路径）
+    {
+        float wind_x = 0.0f, wind_z = 0.0f, wind_strength = 0.0f;
+        if (runtime_context_.world) {
+            auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
+            for (auto e : wv) {
+                auto& wc = wv.get<dse::WeatherComponent>(e);
+                if (wc.enabled) {
+                    wind_x = wc.wind_x;
+                    wind_z = wc.wind_z;
+                    wind_strength = glm::length(glm::vec2(wc.wind_x, wc.wind_z));
+                    break;
+                }
+            }
+        }
+        if (wind_strength < 0.001f) wind_strength = 0.3f;
+        glm::vec2 wind_dir = wind_strength > 0.001f
+            ? glm::normalize(glm::vec2(wind_x, wind_z))
+            : glm::vec2(1.0f, 0.0f);
+        runtime_context_.rhi_device->SetGlobalFoliageWind(
+            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
+    }
+    // 植被推力场
+    {
+        glm::vec3 push_pos(0.0f);
+        if (runtime_context_.world) {
+            auto cv = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
+            for (auto e : cv) {
+                if (cv.get<dse::Camera3DComponent>(e).enabled) {
+                    push_pos = cv.get<TransformComponent>(e).position;
+                    break;
+                }
+            }
+        }
+        runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
     }
 
     // 捕获快照 + 翻转双缓冲

@@ -22,6 +22,8 @@ layout(std140, set = 0, binding = 0) uniform PerFrame {
     mat4 vp;
     mat4 view;
     vec4 camera_pos;
+    vec4 foliage_wind;  // x=time, y=strength, z=wind_dir_x, w=wind_dir_z
+    vec4 foliage_push;  // xyz=character_pos, w=push_radius
 };
 
 #ifdef GPU_DRIVEN
@@ -39,6 +41,7 @@ layout(push_constant) uniform PushConstants {
     int u_skinned;       // 0=no skin, 1=single draw, 2=hardware instanced
     int u_morph_enabled;
     int u_bone_offset;   // 该实例在 bone SSBO 中的起始偏移 (skinned=1 时使用)
+    int u_foliage;       // 0=normal, 1=foliage wind bending
 } pc;
 
 // Hardware Instancing SSBO: per-instance model + bone_offset (skinned=2 时使用)
@@ -104,6 +107,37 @@ void main() {
 
     mat4 finalModel = MODEL_MATRIX;
     vec4 worldPos = finalModel * localPos;
+
+#ifndef GPU_DRIVEN
+    // 植被风弯曲 + 角色推力
+    if (pc.u_foliage != 0 && foliage_wind.y > 0.001) {
+        float height_factor = clamp(localPos.y, 0.0, 1.0);
+        float hf2 = height_factor * height_factor;
+
+        // 全局风弯曲
+        float t = foliage_wind.x;
+        vec2 wind_dir = vec2(foliage_wind.z, foliage_wind.w);
+        float wind_str = foliage_wind.y;
+        float phase = dot(worldPos.xz, vec2(0.3, 0.7));
+        float sway = sin(t * 2.0 + phase) * 0.5 + sin(t * 3.7 + phase * 1.3) * 0.3;
+        worldPos.xz += wind_dir * sway * wind_str * hf2 * 0.15;
+        worldPos.y -= abs(sway) * wind_str * hf2 * 0.02;
+
+        // 角色推力场
+        if (foliage_push.w > 0.001) {
+            vec3 push_delta = worldPos.xyz - foliage_push.xyz;
+            float push_dist = length(push_delta.xz);
+            float push_factor = 1.0 - clamp(push_dist / foliage_push.w, 0.0, 1.0);
+            push_factor = push_factor * push_factor * hf2;
+            if (push_dist > 0.001) {
+                vec2 push_dir = push_delta.xz / push_dist;
+                worldPos.xz += push_dir * push_factor * 0.5;
+                worldPos.y -= push_factor * 0.15;
+            }
+        }
+    }
+#endif
+
     gl_Position = vp * worldPos;
 
     vFragPos = worldPos.xyz;

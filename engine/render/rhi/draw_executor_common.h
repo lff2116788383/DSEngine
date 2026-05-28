@@ -67,6 +67,10 @@ struct DrawExecutorGlobalState {
     // --- 全局湿度（天气系统驱动 PBR 湿表面效果） ---
     float global_wetness = 0.0f;
 
+    // --- 植被风参数 ---
+    glm::vec4 foliage_wind = glm::vec4(0.0f);   ///< x=time, y=strength, z=wind_dir_x, w=wind_dir_z
+    glm::vec4 foliage_push = glm::vec4(0.0f);   ///< xyz=character_pos, w=push_radius
+
     // --- 编辑器场景视图模式 ---
     bool force_unlit = false;     ///< Unlit 模式: shader 跳过光照计算
     bool overdraw_mode = false;   ///< Overdraw 模式: 固定颜色叠加输出

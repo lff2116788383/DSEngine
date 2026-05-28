@@ -276,6 +276,8 @@ struct MeshDrawItem {
     bool morph_enabled = false;
     std::vector<float> morph_weights;
 
+    bool foliage = false;  ///< 植被风弯曲标记
+
     /// GPU Instancing: 逐实例模型矩阵（非空时触发 instanced draw）
     std::vector<glm::mat4> instance_transforms;
 
