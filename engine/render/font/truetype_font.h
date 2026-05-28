@@ -117,6 +117,16 @@ public:
     };
     std::vector<CharLayout> LayoutText(const std::string& text) const;
 
+    /// 直接设置度量（供 FontService SDF 路径使用，避免双重解析）
+    void SetMetrics(float font_size, float ascent, float descent, float line_height,
+                    int atlas_w, int atlas_h);
+
+    /// 插入/更新字形度量
+    void SetGlyph(int codepoint, const GlyphMetrics& gm);
+
+    /// 替换 atlas bitmap（外部生成的 SDF 数据）
+    void SetAtlasBitmap(std::vector<uint8_t>&& bitmap, int width, int height);
+
 private:
     std::vector<uint8_t> atlas_bitmap_;
     int atlas_width_ = 0;

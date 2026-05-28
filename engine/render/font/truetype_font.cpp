@@ -238,5 +238,25 @@ std::vector<TrueTypeFont::CharLayout> TrueTypeFont::LayoutText(const std::string
     return result;
 }
 
+void TrueTypeFont::SetMetrics(float font_size, float ascent, float descent, float line_height,
+                              int atlas_w, int atlas_h) {
+    font_size_ = font_size;
+    ascent_ = ascent;
+    descent_ = descent;
+    line_height_ = line_height;
+    atlas_width_ = atlas_w;
+    atlas_height_ = atlas_h;
+}
+
+void TrueTypeFont::SetGlyph(int codepoint, const GlyphMetrics& gm) {
+    glyphs_[codepoint] = gm;
+}
+
+void TrueTypeFont::SetAtlasBitmap(std::vector<uint8_t>&& bitmap, int width, int height) {
+    atlas_bitmap_ = std::move(bitmap);
+    atlas_width_ = width;
+    atlas_height_ = height;
+}
+
 } // namespace render
 } // namespace dse

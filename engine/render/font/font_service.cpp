@@ -49,16 +49,6 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
         return false;
     }
 
-    // 配置 SDF 图集
-    FontAtlasConfig atlas_config;
-    atlas_config.font_size = config_.default_font_size;
-    atlas_config.atlas_width = config_.default_atlas_width;
-    atlas_config.atlas_height = config_.default_atlas_height;
-    atlas_config.padding = config_.sdf_padding;
-    atlas_config.first_codepoint = config_.first_codepoint;
-    atlas_config.num_codepoints = config_.num_codepoints;
-    atlas_config.extra_codepoints = extra_codepoints;
-
     // 解析字体
     stbtt_fontinfo font_info;
     int font_offset = stbtt_GetFontOffsetForIndex(ttf_data.data(), 0);
@@ -67,18 +57,26 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
         return false;
     }
 
-    float scale = stbtt_ScaleForPixelHeight(&font_info, atlas_config.font_size);
+    const float font_size = config_.default_font_size;
+    float scale = stbtt_ScaleForPixelHeight(&font_info, font_size);
+
+    // 字体度量
+    int ascent_raw, descent_raw, line_gap_raw;
+    stbtt_GetFontVMetrics(&font_info, &ascent_raw, &descent_raw, &line_gap_raw);
+    float ascent = ascent_raw * scale;
+    float descent = descent_raw * scale;
+    float line_height = (ascent_raw - descent_raw + line_gap_raw) * scale;
 
     // 收集码点
     std::vector<int> codepoints;
-    for (int i = 0; i < atlas_config.num_codepoints; ++i) {
-        codepoints.push_back(atlas_config.first_codepoint + i);
+    for (int i = 0; i < config_.num_codepoints; ++i) {
+        codepoints.push_back(config_.first_codepoint + i);
     }
-    for (int cp : atlas_config.extra_codepoints) {
+    for (int cp : extra_codepoints) {
         codepoints.push_back(cp);
     }
 
-    // SDF 光栅化 + rect pack
+    // SDF 光栅化
     struct GlyphSDF {
         int codepoint;
         unsigned char* bitmap;
@@ -106,44 +104,27 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
     }
 
     // Pack
-    const int atlas_w = atlas_config.atlas_width;
-    const int atlas_h = atlas_config.atlas_height;
+    const int atlas_w = config_.default_atlas_width;
+    const int atlas_h = config_.default_atlas_height;
     stbrp_context pack_ctx;
     std::vector<stbrp_node> pack_nodes(atlas_w);
     stbrp_init_target(&pack_ctx, atlas_w, atlas_h, pack_nodes.data(), static_cast<int>(pack_nodes.size()));
     stbrp_pack_rects(&pack_ctx, rects.data(), static_cast<int>(rects.size()));
 
-    // 生成图集 (R8)
+    // 生成 SDF 图集 + 字形度量
     std::vector<uint8_t> atlas(atlas_w * atlas_h, 0);
-    float inv_w = 1.0f / static_cast<float>(atlas_w);
-    float inv_h = 1.0f / static_cast<float>(atlas_h);
+    const float inv_w = 1.0f / static_cast<float>(atlas_w);
+    const float inv_h = 1.0f / static_cast<float>(atlas_h);
 
-    // 创建 TrueTypeFont 实例用于存储度量
     auto instance = std::make_unique<FontInstance>();
     instance->font_id = font_id;
     instance->file_path = ttf_path;
     instance->sdf_mode = true;
 
-    // 获取字体度量
-    int ascent_raw, descent_raw, line_gap_raw;
-    stbtt_GetFontVMetrics(&font_info, &ascent_raw, &descent_raw, &line_gap_raw);
+    // 设置 TrueTypeFont 度量（无需 LoadFromMemory，避免双重解析）
+    instance->font.SetMetrics(font_size, ascent, descent, line_height, atlas_w, atlas_h);
 
-    // 使用底层 font 对象存储度量（通过 LoadFromMemory 方式）
-    // 这里直接生成 SDF 图集，不使用 TrueTypeFont 的 bitmap 路径
-    // 手动设置 font 的内部状态
-    FontAtlasConfig cfg_for_font;
-    cfg_for_font.font_size = atlas_config.font_size;
-    cfg_for_font.atlas_width = atlas_w;
-    cfg_for_font.atlas_height = atlas_h;
-    cfg_for_font.padding = sdf_pad;
-    cfg_for_font.first_codepoint = atlas_config.first_codepoint;
-    cfg_for_font.num_codepoints = atlas_config.num_codepoints;
-    cfg_for_font.extra_codepoints = extra_codepoints;
-
-    // 先加载到 TrueTypeFont 获取度量和布局能力（使用普通 bitmap）
-    instance->font.LoadFromMemory(ttf_data, cfg_for_font);
-
-    // 用 SDF 数据填充图集（覆盖 TrueTypeFont 的 bitmap）
+    int packed_count = 0;
     for (size_t i = 0; i < codepoints.size(); ++i) {
         auto& rect = rects[i];
         auto& gs = glyph_sdfs[i];
@@ -166,17 +147,39 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
             stbtt_FreeSDF(gs.bitmap, nullptr);
         }
 
-        // 更新字形 UV（覆盖 TrueTypeFont 中的值，使用 SDF 尺寸）
-        // 注意：SDF 位图比普通位图大了 sdf_padding*2
+        // 计算 advance 和 bearing
+        int advance_raw, lsb;
+        stbtt_GetCodepointHMetrics(&font_info, gs.codepoint, &advance_raw, &lsb);
+
+        // 注入字形度量到 TrueTypeFont（UV 指向 SDF atlas）
+        GlyphMetrics gm;
+        gm.codepoint = gs.codepoint;
+        gm.advance_x = advance_raw * scale;
+        gm.bearing_x = static_cast<float>(gs.xoff);
+        gm.bearing_y = static_cast<float>(gs.yoff);
+        gm.width = static_cast<float>(gs.w);
+        gm.height = static_cast<float>(gs.h);
+        gm.uv = glm::vec4(
+            dst_x * inv_w,
+            dst_y * inv_h,
+            (dst_x + gs.w) * inv_w,
+            (dst_y + gs.h) * inv_h
+        );
+        instance->font.SetGlyph(gs.codepoint, gm);
+        ++packed_count;
     }
+
+    // 存储 SDF atlas 到 TrueTypeFont（供潜在 CPU 回读）
+    instance->font.SetAtlasBitmap(std::move(atlas), atlas_w, atlas_h);
 
     // 上传 GPU 纹理 (R8 → RGBA8，A 通道存 SDF)
     std::vector<uint8_t> rgba(atlas_w * atlas_h * 4);
+    const auto& atlas_ref = instance->font.GetAtlasBitmap();
     for (int i = 0; i < atlas_w * atlas_h; ++i) {
         rgba[i * 4 + 0] = 255;
         rgba[i * 4 + 1] = 255;
         rgba[i * 4 + 2] = 255;
-        rgba[i * 4 + 3] = atlas[i];
+        rgba[i * 4 + 3] = atlas_ref[i];
     }
 
     if (texture_create_fn_) {
@@ -187,8 +190,9 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
         DEBUG_LOG_WARN("FontService: GPU texture creation failed for '{}'", font_id);
     }
 
-    DEBUG_LOG_INFO("FontService: loaded '{}' (SDF {}x{}, {} glyphs, tex={})",
-                   font_id, atlas_w, atlas_h, codepoints.size(), instance->gpu_texture_handle);
+    DEBUG_LOG_INFO("FontService: loaded '{}' (SDF {}x{}, {}/{} glyphs packed, tex={})",
+                   font_id, atlas_w, atlas_h, packed_count, codepoints.size(),
+                   instance->gpu_texture_handle);
 
     fonts_[font_id] = std::move(instance);
 
