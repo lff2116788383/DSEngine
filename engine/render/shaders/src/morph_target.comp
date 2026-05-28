@@ -1,0 +1,78 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+// Morph Target (Blend Shape) Compute Shader
+// Applies weighted morph target deltas to base mesh vertices.
+// Output: deformed position, normal, tangent for each vertex.
+//
+// Dispatch: (ceil(vertex_count / 256), 1, 1)
+
+layout(local_size_x = 256) in;
+
+// Base mesh vertices (read-only)
+struct BaseVertex {
+    vec4 position;   // xyz=pos, w=unused
+    vec4 normal;     // xyz=normal, w=unused
+    vec4 tangent;    // xyz=tangent, w=sign
+};
+layout(std430, binding = 0) readonly buffer BaseVertices {
+    BaseVertex base_vertices[];
+};
+
+// Morph target deltas (read-only)
+// Layout: target_count × vertex_count entries, interleaved per-target
+struct MorphDelta {
+    vec4 delta_pos;    // xyz=position delta, w=unused
+    vec4 delta_normal; // xyz=normal delta, w=unused
+};
+layout(std430, binding = 1) readonly buffer MorphDeltas {
+    MorphDelta morph_deltas[];
+};
+
+// Morph target weights (read-only)
+layout(std430, binding = 2) readonly buffer MorphWeights {
+    float morph_weights[];  // one weight per target
+};
+
+// Output deformed vertices (write)
+struct DeformedVertex {
+    vec4 position;
+    vec4 normal;
+    vec4 tangent;
+};
+layout(std430, binding = 3) writeonly buffer DeformedVertices {
+    DeformedVertex deformed_vertices[];
+};
+
+layout(push_constant) uniform MorphParams {
+    int u_vertex_count;
+    int u_target_count;
+};
+
+void main() {
+    uint vid = gl_GlobalInvocationID.x;
+    if (vid >= uint(u_vertex_count)) return;
+
+    // Start from base vertex
+    vec3 pos = base_vertices[vid].position.xyz;
+    vec3 nrm = base_vertices[vid].normal.xyz;
+    vec4 tan = base_vertices[vid].tangent;
+
+    // Accumulate weighted deltas from all active morph targets
+    for (int t = 0; t < u_target_count; ++t) {
+        float w = morph_weights[t];
+        if (abs(w) < 0.0001) continue;
+
+        uint delta_idx = uint(t) * uint(u_vertex_count) + vid;
+        pos += morph_deltas[delta_idx].delta_pos.xyz * w;
+        nrm += morph_deltas[delta_idx].delta_normal.xyz * w;
+    }
+
+    // Normalize the deformed normal
+    nrm = normalize(nrm);
+
+    // Write output
+    deformed_vertices[vid].position = vec4(pos, 1.0);
+    deformed_vertices[vid].normal = vec4(nrm, 0.0);
+    deformed_vertices[vid].tangent = tan;  // tangent unchanged (could be extended)
+}

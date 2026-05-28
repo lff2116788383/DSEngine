@@ -3057,5 +3057,64 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
     ctx_.ddgi_visibility_atlas = res.visibility_atlas;
 }
 
+// ============================================================
+// SSSBlurPass — Separable Subsurface Scattering
+// ============================================================
+
+void SSSBlurPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto sss_output = graph.DeclareResource("sss_output");
+
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassWrite(pass, sss_output);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
+    // SSS blur: two-pass separable Gaussian on scene color, masked by alpha (SSS strength)
+    if (ctx_.render_targets.sss_temp == 0 || ctx_.render_targets.scene == 0) return;
+
+    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.scene);
+    if (scene_color_tex == 0 || depth_tex == 0) return;
+
+    const float sss_width = 11.0f;
+    const float depth_falloff = 500.0f;
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+
+    // Pass 1: Horizontal blur → sss_temp
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.sss_temp, glm::vec4(0.0f), true});
+    {
+        auto req = PostProcessRequest("sss_blur", scene_color_tex, {
+            1.0f, 0.0f,
+            static_cast<float>(Screen::width()),
+            static_cast<float>(Screen::height()),
+            sss_width,
+            depth_falloff
+        });
+        req.Tex(2, depth_tex);
+        cmd_buffer.DrawPostProcess(std::move(req));
+    }
+    cmd_buffer.EndRenderPass();
+
+    // Pass 2: Vertical blur → back to scene RT
+    const unsigned int sss_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.sss_temp);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+    {
+        auto req = PostProcessRequest("sss_blur", sss_temp_tex, {
+            0.0f, 1.0f,
+            static_cast<float>(Screen::width()),
+            static_cast<float>(Screen::height()),
+            sss_width,
+            depth_falloff
+        });
+        req.Tex(2, depth_tex);
+        cmd_buffer.DrawPostProcess(std::move(req));
+    }
+    cmd_buffer.EndRenderPass();
+}
+
 } // namespace render
 } // namespace dse

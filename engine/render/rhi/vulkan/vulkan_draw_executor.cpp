@@ -2743,6 +2743,7 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"light_shaft",       &ShaderManagerBase::light_shaft_shader_handle},
         {"atmosphere_transmittance_lut", &ShaderManagerBase::atmosphere_transmittance_lut_shader_handle},
         {"atmosphere_sky",    &ShaderManagerBase::atmosphere_sky_shader_handle},
+        {"sss_blur",          &ShaderManagerBase::sss_blur_shader_handle},
     };
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
     {

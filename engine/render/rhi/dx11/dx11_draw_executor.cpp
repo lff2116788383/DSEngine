@@ -2034,6 +2034,29 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
         return;
     }
 
+    // SSS Blur 专用路径（6 float: direction.xy, screen_size.xy, sss_width, depth_falloff）
+    if (effect_name == "sss_blur" && shader_mgr.sss_blur_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 6) {
+            struct { float dir_x, dir_y, sw, sh, sss_width, depth_falloff, _p0, _p1; } sp{
+                params[0], params[1], params[2], params[3], params[4], params[5], 0, 0};
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, &sp, sizeof(sp));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.sss_blur_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
     // ui_overlay: 需要 alpha 混合
     if (effect_name == "ui_overlay") {
         PipelineStateDesc ui_pp_desc;

@@ -393,6 +393,17 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Separable Subsurface Scattering Pass ----
+class SSSBlurPass : public IRenderPass {
+public:
+    explicit SSSBlurPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "sss_blur_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 } // namespace render
 } // namespace dse
 

@@ -55,6 +55,8 @@
 #include "embed/light_shaft_frag.gen.h"
 #include "embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "embed/atmosphere_sky_frag.gen.h"
+#include "embed/sss_blur_frag.gen.h"
+#include "embed/eye_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
@@ -593,6 +595,13 @@ void VulkanShaderManager::InitBuiltinPBRShader() {
             }
         }
     }
+
+    eye_shader_handle_ = CreateProgramFromSpirv(
+        kpbr_vert_spv, kpbr_vert_spv_size,
+        keye_frag_spv, keye_frag_spv_size);
+    if (eye_shader_handle_) {
+        DEBUG_LOG_INFO("[Vulkan] Eye shader created: handle={}", eye_shader_handle_);
+    }
 }
 
 void VulkanShaderManager::InitSkyboxShader() {
@@ -723,6 +732,7 @@ void VulkanShaderManager::InitPostProcessShader() {
     light_shaft_shader_handle_ = create_pp_spv(generated_shaders::klight_shaft_frag_spv, generated_shaders::klight_shaft_frag_spv_size, "Light Shaft");
     atmosphere_transmittance_lut_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_transmittance_lut_frag_spv, generated_shaders::katmosphere_transmittance_lut_frag_spv_size, "Atmosphere Transmittance LUT");
     atmosphere_sky_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_sky_frag_spv, generated_shaders::katmosphere_sky_frag_spv_size, "Atmosphere Sky");
+    sss_blur_shader_handle_ = create_pp_spv(generated_shaders::ksss_blur_frag_spv, generated_shaders::ksss_blur_frag_spv_size, "SSS Blur");
 }
 
 // ============================================================================

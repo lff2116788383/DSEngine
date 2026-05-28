@@ -295,6 +295,7 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<WaterPass>(r, {"water"});
         RegisterBuiltin<BloomPass>(r, {"bloom"});
         RegisterBuiltin<SSAOPass>(r, {"ssao"});
+        RegisterBuiltin<SSSBlurPass>(r, {"sss_blur"});
         RegisterBuiltin<ContactShadowPass>(r, {"contact_shadow"});
         RegisterBuiltin<AutoExposurePass>(r, {"auto_exposure"});
         RegisterBuiltin<MotionVectorPass>(r, {"motion_vector"});

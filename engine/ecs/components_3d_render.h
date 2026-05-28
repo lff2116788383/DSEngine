@@ -526,6 +526,60 @@ struct GIProbeVolumeComponent {
     bool needs_reinit_ = true;
 };
 
+// ============================================================
+// Morph Target (Blend Shape) Component
+// ============================================================
+
+struct MorphTargetDelta {
+    glm::vec3 delta_position;
+    float _pad0;
+    glm::vec3 delta_normal;
+    float _pad1;
+};
+
+struct MorphTargetData {
+    std::string name;
+    std::vector<MorphTargetDelta> deltas;  ///< per-vertex deltas, count == vertex_count
+};
+
+struct MorphTargetComponent {
+    bool enabled = true;
+    std::vector<MorphTargetData> targets;      ///< all morph targets for this mesh
+    std::vector<float> weights;                ///< current weight for each target [0,1]
+    int vertex_count = 0;                      ///< base mesh vertex count
+
+    // GPU runtime state (managed by MorphTargetSystem)
+    render::BufferHandle gpu_base_buffer;      ///< SSBO: base vertex data
+    render::BufferHandle gpu_delta_buffer;     ///< SSBO: all target deltas (interleaved)
+    render::BufferHandle gpu_weight_buffer;    ///< SSBO: weight array
+    render::BufferHandle gpu_output_buffer;    ///< SSBO: deformed vertex output
+    bool gpu_dirty = true;                     ///< needs re-upload
+
+    float GetWeight(const std::string& name) const {
+        for (size_t i = 0; i < targets.size(); ++i) {
+            if (targets[i].name == name) return weights[i];
+        }
+        return 0.0f;
+    }
+
+    void SetWeight(const std::string& name, float w) {
+        for (size_t i = 0; i < targets.size(); ++i) {
+            if (targets[i].name == name) {
+                weights[i] = w;
+                gpu_dirty = true;
+                return;
+            }
+        }
+    }
+
+    void SetWeightByIndex(int index, float w) {
+        if (index >= 0 && index < static_cast<int>(weights.size())) {
+            weights[index] = w;
+            gpu_dirty = true;
+        }
+    }
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_RENDER_H

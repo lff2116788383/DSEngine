@@ -66,6 +66,8 @@ public:
     unsigned int gpu_driven_shadow_shader_handle() const { return gpu_driven_shadow_shader_handle_; }
     unsigned int atmosphere_transmittance_lut_shader_handle() const { return atmosphere_transmittance_lut_shader_handle_; }
     unsigned int atmosphere_sky_shader_handle() const { return atmosphere_sky_shader_handle_; }
+    unsigned int sss_blur_shader_handle() const { return sss_blur_shader_handle_; }
+    unsigned int eye_shader_handle() const { return eye_shader_handle_; }
 
     // --- 统计计数 ---
     std::size_t programs_created() const { return programs_created_; }
@@ -117,6 +119,8 @@ protected:
     unsigned int gpu_driven_shadow_shader_handle_ = 0;
     unsigned int atmosphere_transmittance_lut_shader_handle_ = 0;
     unsigned int atmosphere_sky_shader_handle_ = 0;
+    unsigned int sss_blur_shader_handle_ = 0;
+    unsigned int eye_shader_handle_ = 0;
 
     // --- 计数器 ---
     std::size_t programs_created_ = 0;

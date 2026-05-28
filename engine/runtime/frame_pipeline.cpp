@@ -929,6 +929,8 @@ void FramePipeline::InitResolutionDependentRTs() {
         render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.wboit_reveal_rt == 0)
         render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    if (render_resources_.pp_sss_temp_rt == 0)
+        render_resources_.pp_sss_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.gbuffer_rt == 0) {
         RenderTargetDesc gbuf_desc;
         gbuf_desc.width = render_width; gbuf_desc.height = render_height;
@@ -1564,6 +1566,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.cloud  = render_resources_.pp_cloud_rt;
     render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
+    render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
     render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
     render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     if (render_resources_.rsm_render_target != 0) {

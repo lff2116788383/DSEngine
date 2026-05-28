@@ -48,6 +48,8 @@
 #include "engine/render/shaders/generated/embed/light_shaft_frag.gen.h"
 #include "engine/render/shaders/generated/embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "engine/render/shaders/generated/embed/atmosphere_sky_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sss_blur_frag.gen.h"
+#include "engine/render/shaders/generated/embed/eye_frag.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
 
 // Reflection metadata for automated InputLayout creation
@@ -390,6 +392,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         }
     }
 
+    // ---- Eye 着色器 (DXBC: PBR VS + Eye PS) ----
+    eye_shader_handle_ = CreateProgramFromDXBC(
+        kpbr_vert_dxbc, kpbr_vert_dxbc_size,
+        keye_frag_dxbc, keye_frag_dxbc_size);
+    if (eye_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Eye shader created (DXBC): {}", eye_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> eye_layout;
+        CreateInputLayoutFromReflection(kpbr_vert_reflection, eye_layout);
+        AppendInstanceModelInputLayout(eye_layout);
+        CreateInputLayoutForShader(eye_shader_handle_, eye_layout.data(),
+                                   static_cast<int>(eye_layout.size()));
+    }
+
     // ---- 天空盒着色器 (DXBC) ----
     skybox_shader_handle_ = CreateProgramFromDXBC(
         kskybox_vert_dxbc, kskybox_vert_dxbc_size,
@@ -518,6 +534,9 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     light_shaft_shader_handle_ = create_pp_dxbc(klight_shaft_frag_dxbc, klight_shaft_frag_dxbc_size, "light_shaft");
     atmosphere_transmittance_lut_shader_handle_ = create_pp_dxbc(katmosphere_transmittance_lut_frag_dxbc, katmosphere_transmittance_lut_frag_dxbc_size, "atmosphere_transmittance_lut");
     atmosphere_sky_shader_handle_ = create_pp_hlsl(katmosphere_sky_frag_hlsl, "atmosphere_sky");
+    sss_blur_shader_handle_ = (ksss_blur_frag_dxbc_size > 0)
+        ? create_pp_dxbc(ksss_blur_frag_dxbc, ksss_blur_frag_dxbc_size, "sss_blur")
+        : create_pp_hlsl(ksss_blur_frag_hlsl, "sss_blur");
 
     pulse();
     // ---- GBuffer 着色器（复用 PBR VS DXBC + GBuffer PS DXBC）----

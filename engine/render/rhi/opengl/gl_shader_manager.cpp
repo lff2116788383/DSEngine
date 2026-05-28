@@ -48,6 +48,8 @@
 #include "embed/wboit_composite_frag.gen.h"
 #include "embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "embed/atmosphere_sky_frag.gen.h"
+#include "embed/sss_blur_frag.gen.h"
+#include "embed/eye_frag.gen.h"
 #include "embed/lum_compute_frag.gen.h"
 #include "embed/lum_adapt_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
@@ -319,6 +321,12 @@ void GLShaderManager::InitBuiltinPBRShader() {
     }
     programs_created_ += 1;
     CachePBRLocations();
+
+    eye_shader_handle_ = CompileProgram(kpbr_vert_glsl430, keye_frag_glsl430);
+    if (eye_shader_handle_) {
+        programs_created_ += 1;
+        DEBUG_LOG_INFO("[GL] Eye shader created: {}", eye_shader_handle_);
+    }
 
     if (supports_ssbo_) {
         InitGPUDrivenPBRShader();
@@ -611,6 +619,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl430;
     else if (effect_name == "atmosphere_transmittance_lut") fs = katmosphere_transmittance_lut_frag_glsl430;
     else if (effect_name == "atmosphere_sky")        fs = katmosphere_sky_frag_glsl430;
+    else if (effect_name == "sss_blur")               fs = ksss_blur_frag_glsl430;
     else return 0;
 
     unsigned int shader = CompileProgram(kpostprocess_vert_glsl430, fs);
@@ -638,6 +647,7 @@ void GLShaderManager::WarmupAllPostProcessShaders() {
         "decal", "water", "wboit_composite", "lum_compute", "lum_adapt",
         "bloom_blur_h", "bloom_blur_v", "copy",
         "atmosphere_transmittance_lut", "atmosphere_sky",
+        "sss_blur",
     };
     for (const char* name : kAllPPEffects) {
         GetOrCreateGenPPShader(name);
@@ -774,6 +784,11 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(shadow_shader_handle_);
         programs_destroyed_ += 1;
         shadow_shader_handle_ = 0;
+    }
+    if (eye_shader_handle_ != 0) {
+        glDeleteProgram(eye_shader_handle_);
+        programs_destroyed_ += 1;
+        eye_shader_handle_ = 0;
     }
     for (auto& [name, handle] : pp_shaders_) {
         if (handle != 0) {

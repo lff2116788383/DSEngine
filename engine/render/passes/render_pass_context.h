@@ -93,6 +93,7 @@ struct RenderPassContext {
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
         unsigned int hiz_texture = 0;       // Hi-Z depth mipmap (R32F, RHI handle)
+        unsigned int sss_temp = 0;          // Separable SSS blur intermediate RT (RGBA16F)
     } render_targets;
 
     /// Hi-Z Occlusion Culling 状态

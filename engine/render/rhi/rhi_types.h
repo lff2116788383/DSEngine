@@ -189,7 +189,7 @@ struct MeshDrawItem {
     int order_in_layer = 0;
 
     bool lighting_enabled = false;
-    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon/Cel, 5=Watercolor
+    int shading_mode = 0;  ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon/Cel, 5=Watercolor, 6=FaceSDF
     glm::vec3 material_albedo = glm::vec3(1.0f);
     float material_metallic = 0.0f;
     float material_roughness = 1.0f;

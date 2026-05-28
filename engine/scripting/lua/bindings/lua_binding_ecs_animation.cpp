@@ -8,6 +8,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/animation.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/animation_state_machine.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -698,6 +699,102 @@ int L_EcsRemoveBoneAttachment(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// Morph Target (Blend Shape)
+// ============================================================
+
+// ecs.add_morph_target_component(entity)
+int L_EcsAddMorphTargetComponent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    world->registry().emplace_or_replace<dse::MorphTargetComponent>(e);
+    return 0;
+}
+
+// ecs.morph_add_target(entity, name, {deltas})
+// deltas = flat array: {dx,dy,dz, dnx,dny,dnz, dx,dy,dz, dnx,dny,dnz, ...}
+int L_EcsMorphAddTarget(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
+    if (!comp) return 0;
+    const char* name = luaL_checkstring(L, 2);
+    luaL_checktype(L, 3, LUA_TTABLE);
+    int len = static_cast<int>(lua_rawlen(L, 3));
+    int vert_count = len / 6;
+
+    dse::MorphTargetData target;
+    target.name = name;
+    target.deltas.resize(vert_count);
+    for (int i = 0; i < vert_count; ++i) {
+        int base = i * 6;
+        lua_rawgeti(L, 3, base + 1); target.deltas[i].delta_position.x = static_cast<float>(lua_tonumber(L, -1));
+        lua_rawgeti(L, 3, base + 2); target.deltas[i].delta_position.y = static_cast<float>(lua_tonumber(L, -1));
+        lua_rawgeti(L, 3, base + 3); target.deltas[i].delta_position.z = static_cast<float>(lua_tonumber(L, -1));
+        lua_rawgeti(L, 3, base + 4); target.deltas[i].delta_normal.x = static_cast<float>(lua_tonumber(L, -1));
+        lua_rawgeti(L, 3, base + 5); target.deltas[i].delta_normal.y = static_cast<float>(lua_tonumber(L, -1));
+        lua_rawgeti(L, 3, base + 6); target.deltas[i].delta_normal.z = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 6);
+        target.deltas[i]._pad0 = 0.0f;
+        target.deltas[i]._pad1 = 0.0f;
+    }
+    comp->targets.push_back(std::move(target));
+    comp->weights.push_back(0.0f);
+    if (comp->vertex_count == 0) comp->vertex_count = vert_count;
+    comp->gpu_dirty = true;
+    return 0;
+}
+
+// ecs.morph_set_weight(entity, name, weight)
+int L_EcsMorphSetWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
+    if (!comp) return 0;
+    const char* name = luaL_checkstring(L, 2);
+    float w = helper::CheckFloat(L, 3);
+    comp->SetWeight(name, w);
+    return 0;
+}
+
+// ecs.morph_set_weight_index(entity, index, weight)  (0-based)
+int L_EcsMorphSetWeightIndex(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
+    if (!comp) return 0;
+    int idx = static_cast<int>(luaL_checkinteger(L, 2));
+    float w = helper::CheckFloat(L, 3);
+    comp->SetWeightByIndex(idx, w);
+    return 0;
+}
+
+// ecs.morph_get_weight(entity, name) -> number
+int L_EcsMorphGetWeight(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0.0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
+    if (!comp) { lua_pushnumber(L, 0.0); return 1; }
+    const char* name = luaL_checkstring(L, 2);
+    lua_pushnumber(L, comp->GetWeight(name));
+    return 1;
+}
+
+// ecs.morph_get_target_count(entity) -> int
+int L_EcsMorphGetTargetCount(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushinteger(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
+    lua_pushinteger(L, comp ? static_cast<int>(comp->targets.size()) : 0);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -750,6 +847,13 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"set_bone_attachment_target",       L_EcsSetBoneAttachmentTarget},
         {"get_bone_world_position",          L_EcsGetBoneWorldPosition},
         {"remove_bone_attachment",           L_EcsRemoveBoneAttachment},
+        // Morph Target (Blend Shape)
+        {"add_morph_target_component",       L_EcsAddMorphTargetComponent},
+        {"morph_add_target",                 L_EcsMorphAddTarget},
+        {"morph_set_weight",                 L_EcsMorphSetWeight},
+        {"morph_set_weight_index",           L_EcsMorphSetWeightIndex},
+        {"morph_get_weight",                 L_EcsMorphGetWeight},
+        {"morph_get_target_count",           L_EcsMorphGetTargetCount},
     });
 }
 

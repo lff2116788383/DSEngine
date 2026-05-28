@@ -29,6 +29,8 @@ struct RenderPipelineResources {
     unsigned int wboit_accum_rt = 0;      // WBOIT accumulation (RGBA16F)
     unsigned int wboit_reveal_rt = 0;     // WBOIT revealage (RGBA16F)
 
+    unsigned int pp_sss_temp_rt = 0;        // SSS blur intermediate (RGBA16F)
+
     unsigned int gbuffer_rt = 0;            // GBuffer MRT (3 color + depth)
     unsigned int deferred_lighting_rt = 0;   // Deferred lighting output
 
@@ -104,6 +106,7 @@ struct RenderPipelineResources {
         pp_cloud_rt = 0;
         wboit_accum_rt = 0;
         wboit_reveal_rt = 0;
+        pp_sss_temp_rt = 0;
         gbuffer_rt = 0;
         deferred_lighting_rt = 0;
         pp_lum_temp_rt = 0;

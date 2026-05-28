@@ -187,6 +187,12 @@ static constexpr PPUniformEntry kVolumetricCloudBindings[] = {
     {"_286.u_up_z",             UType::Float, 26}, {"_286.u_fwd_x",          UType::Float, 27},
     {"_286.u_fwd_y",            UType::Float, 28}, {"_286.u_fwd_z",          UType::Float, 29},
 };
+static constexpr PPUniformEntry kSssBlurBindings[] = {
+    {"_56.u_direction",     UType::Float2, 0},
+    {"_56.u_screen_size",   UType::Float2, 2},
+    {"_56.u_sss_width",     UType::Float,  4},
+    {"_56.u_depth_falloff", UType::Float,  5},
+};
 static constexpr PPUniformEntry kAtmTransmittanceLutBindings[] = {
     {"_17.u_planet_radius",     UType::Float, 0},
     {"_17.u_atmosphere_height", UType::Float, 1},
@@ -449,6 +455,8 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         // --- 大气天空 ---
         {"atmosphere_transmittance_lut", {kAtmTransmittanceLutBindings, (int)std::size(kAtmTransmittanceLutBindings), 8, nullptr, false}},
         {"atmosphere_sky",   {kAtmSkyBindings, (int)std::size(kAtmSkyBindings), 36, nullptr, false}},
+        // --- SSS ---
+        {"sss_blur",         {kSssBlurBindings, (int)std::size(kSssBlurBindings), 6, nullptr, false}},
     };
     return table;
 }

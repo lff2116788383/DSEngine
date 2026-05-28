@@ -655,6 +655,50 @@ void main() {
         return;
     }
 
+    // Face SDF shading mode (light_params.w == 6.0)
+    // Uses a precomputed SDF texture to create artist-controllable face shadow boundaries.
+    // The SDF is sampled using the light direction projected onto the face tangent plane.
+    if (light_params.w == 6.0) {
+        vec3 L = normalize(-u_light_direction);
+        vec3 V_face = normalize(u_camera_pos - vFragPos);
+
+        // Face tangent plane: TBN[0] = right, TBN[1] = up (from vertex data)
+        vec3 face_right = normalize(vTBN[0]);
+        vec3 face_up = normalize(vTBN[1]);
+
+        // Project light direction onto face plane to get SDF sample coordinates
+        float light_dot_right = dot(L, face_right);
+        float light_dot_up = dot(L, face_up);
+
+        // SDF UV: remap light_dot_right from [-1,1] to [0,1]
+        // Flip X based on which side of the face the light is on
+        float sdf_u = light_dot_right * 0.5 + 0.5;
+        float sdf_v = vTexCoord.y;  // Use original V for vertical position
+
+        // Sample the face SDF map (grayscale: 0=shadow, 1=lit)
+        float sdf_value = texture(u_texture, vec2(sdf_u, sdf_v)).r;
+
+        // Smooth threshold based on light angle
+        float threshold = 0.5;
+        float softness = u_toon_shadow_softness > 0.0 ? u_toon_shadow_softness : 0.05;
+        float face_lit = smoothstep(threshold - softness, threshold + softness, sdf_value);
+
+        // Apply directional shadow
+        float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
+
+        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 shadowColor = baseColor * vec3(u_toon_shadow_color);
+        vec3 color = mix(shadowColor, baseColor * u_light_color * u_light_intensity, face_lit);
+        color *= (1.0 - shadow * 0.5);
+
+        // Rim light
+        float rim = pow(1.0 - max(dot(N, V_face), 0.0), 4.0) * u_toon_rim_strength;
+        color += u_light_color * rim;
+
+        OutputFragment(color, texColor.a * vColor.a);
+        return;
+    }
+
     // Half-Lambert STATIC shading mode (KF default_pixel_shader, light_params.w == 3.0)
     if (light_params.w == 3.0) {
         vec3 L = normalize(-u_light_direction);
@@ -832,5 +876,7 @@ void main() {
     }
     vec3 color = ambient + Lo + surface_emissive;
 
-    OutputFragment(color, texColor.a * vColor.a);
+    // SSS mask: encode sss_strength into alpha for screen-space SSS post-process
+    float alpha_out = (u_sss_strength > 0.0) ? u_sss_strength : texColor.a * vColor.a;
+    OutputFragment(color, alpha_out);
 }
