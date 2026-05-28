@@ -120,6 +120,9 @@ public:
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
+    /// 初始化 UI 视觉效果着色器（圆角/渐变/模糊）
+    void InitUIEffectsShader();
+
     /// 初始化阴影深度着色器
     void InitShadowShader();
 

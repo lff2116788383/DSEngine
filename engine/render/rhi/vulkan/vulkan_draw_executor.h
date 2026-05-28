@@ -304,6 +304,8 @@ private:
     VkBuffer sprite_ibo_ = VK_NULL_HANDLE;
     VkDeviceMemory sprite_vbo_mem_ = VK_NULL_HANDLE;
     VkDeviceMemory sprite_ibo_mem_ = VK_NULL_HANDLE;
+    VkBuffer vfx_ubo_ = VK_NULL_HANDLE;
+    VkDeviceMemory vfx_ubo_mem_ = VK_NULL_HANDLE;
 
     VkBuffer mesh_vbo_ = VK_NULL_HANDLE;
     VkBuffer mesh_ibo_ = VK_NULL_HANDLE;

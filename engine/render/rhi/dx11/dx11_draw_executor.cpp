@@ -74,6 +74,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
     sprite_push_cb_        = CreateConstantBuffer(128); // [model(64B) | vp(64B)] for sprite.vert
     sdf_ps_cb_             = CreateConstantBuffer(144); // [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
+    vfx_ps_cb_             = CreateConstantBuffer(64);  // [gradient_start | gradient_end | rect_size_and_radius | blur_params]
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
@@ -166,6 +167,7 @@ void DX11DrawExecutor::Shutdown() {
 
     sprite_push_cb_.Reset();
     sdf_ps_cb_.Reset();
+    vfx_ps_cb_.Reset();
     sprite_quad_vbo_.Reset();
     sprite_quad_ibo_.Reset();
     mesh_dynamic_vbo_.Reset();
@@ -518,7 +520,10 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
     const auto* sprite_program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
     if (!sprite_program) return;
     const auto* sdf_program = shader_mgr.GetProgram(shader_mgr.text_sdf_shader_handle());
+    const auto* vfx_program = shader_mgr.GetProgram(shader_mgr.ui_effects_shader_handle());
     bool using_sdf = false;
+    bool using_vfx = false;
+    SpriteVisualEffect cur_vfx;
 
     dc->VSSetShader(sprite_program->vertex_shader.Get(), nullptr, 0);
     dc->PSSetShader(sprite_program->pixel_shader.Get(), nullptr, 0);
@@ -563,13 +568,17 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
 
         // SDF shader 切换 + 参数更新
         bool want_sdf = (cur_variant == kSdfVariantKey) && sdf_program;
-        if (want_sdf != using_sdf) {
+        bool want_vfx = cur_vfx.enabled && vfx_program && !want_sdf;
+        if (want_sdf != using_sdf || want_vfx != using_vfx) {
             if (want_sdf) {
                 dc->PSSetShader(sdf_program->pixel_shader.Get(), nullptr, 0);
+            } else if (want_vfx) {
+                dc->PSSetShader(vfx_program->pixel_shader.Get(), nullptr, 0);
             } else {
                 dc->PSSetShader(sprite_program->pixel_shader.Get(), nullptr, 0);
             }
             using_sdf = want_sdf;
+            using_vfx = want_vfx;
         }
         if (using_sdf) {
             struct SdfPSConstants {
@@ -582,6 +591,21 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
             sdf_pc.o = cur_sdf_params.z; sdf_pc.sh = cur_sdf_params.w;
             UpdateConstantBuffer(sdf_ps_cb_.Get(), &sdf_pc, sizeof(sdf_pc));
             ID3D11Buffer* ps_cb = sdf_ps_cb_.Get();
+            dc->PSSetConstantBuffers(0, 1, &ps_cb);
+        }
+        if (using_vfx) {
+            struct VfxPSConstants {
+                glm::vec4 gradient_start;
+                glm::vec4 gradient_end;
+                glm::vec4 rect_size_and_radius;
+                glm::vec4 blur_params;
+            } vfx_pc;
+            vfx_pc.gradient_start = cur_vfx.gradient_start;
+            vfx_pc.gradient_end = cur_vfx.gradient_end;
+            vfx_pc.rect_size_and_radius = {cur_vfx.rect_size.x, cur_vfx.rect_size.y, cur_vfx.corner_radius, cur_vfx.gradient_direction};
+            vfx_pc.blur_params = {cur_vfx.blur_radius, cur_vfx.blur_intensity, 0.0f, 0.0f};
+            UpdateConstantBuffer(vfx_ps_cb_.Get(), &vfx_pc, sizeof(vfx_pc));
+            ID3D11Buffer* ps_cb = vfx_ps_cb_.Get();
             dc->PSSetConstantBuffers(0, 1, &ps_cb);
         }
 
@@ -603,18 +627,19 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         batch_verts.clear();
     };
 
-    // TODO(P3): UIVisualEffect shader 集成 — 当前 DX11 后端对 visual_effect.enabled 的 item
-    //           使用默认 sprite shader 渲染（无圆角/渐变/模糊），待 ui_effects HLSL pipeline 补全。
     for (const auto& item : items) {
         glm::vec4 item_sdf = {item.sdf_threshold, item.sdf_smoothing, item.sdf_outline_width, item.sdf_shadow_softness};
+        bool vfx_changed = (item.visual_effect.enabled != cur_vfx.enabled);
         if (item.texture_handle != cur_tex_handle ||
             item.shader_variant_key != cur_variant ||
             std::memcmp(&item_sdf, &cur_sdf_params, sizeof(glm::vec4)) != 0 ||
+            vfx_changed ||
             static_cast<int>(batch_verts.size()) / (4 * FLOATS_PER_VERT) >= DX11_MAX_BATCH_SPRITES) {
             flush_batch();
             cur_tex_handle = item.texture_handle;
             cur_variant = item.shader_variant_key;
             cur_sdf_params = item_sdf;
+            cur_vfx = item.visual_effect;
         }
 
         float u_min = item.uv.x, v_min = item.uv.y;

@@ -180,6 +180,12 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                       indices.size() * sizeof(uint16_t), indices.data());
     }
 
+    // --- VFX UBO ring buffer (256B aligned × 64 slots = 16KB, for ui_effects PS params) ---
+    CreateVulkanBuffer(device, physical_device, 256 * 64,
+                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       vfx_ubo_, vfx_ubo_mem_);
+
     // --- 3D 网格 VBO/IBO ---
     // 多 pass 每帧累积写入，需要足够大的缓冲区
     const VkDeviceSize mesh_vbo_size = 64 * 1024 * 1024;  // 64 MB
@@ -421,6 +427,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
 
     destroy_buffer(sprite_vbo_, sprite_vbo_mem_);
     destroy_buffer(sprite_ibo_, sprite_ibo_mem_);
+    destroy_buffer(vfx_ubo_, vfx_ubo_mem_);
     destroy_buffer(mesh_vbo_, mesh_vbo_mem_);
     destroy_buffer(mesh_ibo_, mesh_ibo_mem_);
     destroy_buffer(instance_vbo_, instance_vbo_mem_);
@@ -2100,7 +2107,31 @@ void VulkanDrawExecutor::DrawSpriteBatch(
             current_color_attachment_count_,
             false);
     }
+
+    // VFX pipeline（惰性创建）
+    shader_mgr.InitUIEffectsShader();
+    const VulkanShaderProgram* vfx_program = shader_mgr.GetProgram(shader_mgr.ui_effects_shader_handle());
+    VkPipeline vfx_pipeline = VK_NULL_HANDLE;
+    if (vfx_program) {
+        vfx_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+            sprite_state, vfx_program, active_rp,
+            { VkVertexInputBindingDescription{0, 32, VK_VERTEX_INPUT_RATE_VERTEX} },
+            {
+                {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+                {1, 0, VK_FORMAT_R32G32_SFLOAT, 8},
+                {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+            },
+            context_->swapchain_extent(),
+            current_msaa_samples_,
+            current_color_attachment_count_,
+            false);
+    }
     bool using_sdf = false;
+    bool using_vfx = false;
+    SpriteVisualEffect cur_vfx;
+    VkDeviceSize vfx_ubo_offset = 0;
+    static constexpr VkDeviceSize VFX_UBO_SLOT_SIZE = 256; // alignment-safe slot
+    static constexpr VkDeviceSize VFX_UBO_CAPACITY = VFX_UBO_SLOT_SIZE * 64;
 
     // VP 矩阵通过 push constants 传递（避免 per_frame_ubo_ 被后续 pass 覆盖）
     const glm::mat4 sprite_vp = projection * view;
@@ -2129,20 +2160,26 @@ void VulkanDrawExecutor::DrawSpriteBatch(
 
         // pipeline 切换
         bool want_sdf = (cur_variant == kSdfVariantKey) && (sdf_pipeline != VK_NULL_HANDLE);
-        if (want_sdf != using_sdf) {
-            vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              want_sdf ? sdf_pipeline : sprite_pipeline);
+        bool want_vfx = cur_vfx.enabled && (vfx_pipeline != VK_NULL_HANDLE) && !want_sdf;
+        if (want_sdf != using_sdf || want_vfx != using_vfx) {
+            VkPipeline target_pipeline = sprite_pipeline;
+            if (want_sdf) target_pipeline = sdf_pipeline;
+            else if (want_vfx) target_pipeline = vfx_pipeline;
+            vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, target_pipeline);
             using_sdf = want_sdf;
+            using_vfx = want_vfx;
         }
 
         // push constants: identity model + VP
-        const VulkanShaderProgram* active_program = using_sdf ? sdf_program : sprite_program;
+        const VulkanShaderProgram* active_program = using_sdf ? sdf_program : (using_vfx ? vfx_program : sprite_program);
         struct { glm::mat4 model; glm::mat4 vp; } push_data;
         push_data.model = glm::mat4(1.0f);
         push_data.vp = sprite_vp;
+        // VFX pipeline layout 的 push constant range 仅覆盖 VERTEX stage
+        VkShaderStageFlags pc_stages = using_vfx ? VK_SHADER_STAGE_VERTEX_BIT
+                                                 : (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         vkCmdPushConstants(cmd_buf, active_program->pipeline_layout,
-                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                           0, sizeof(push_data), &push_data);
+                           pc_stages, 0, sizeof(push_data), &push_data);
 
         if (using_sdf) {
             struct { float t, s, o, sh; } sdf_params = {cur_sdf_params.x, cur_sdf_params.y, cur_sdf_params.z, cur_sdf_params.w};
@@ -2151,9 +2188,73 @@ void VulkanDrawExecutor::DrawSpriteBatch(
                                128, sizeof(sdf_params), &sdf_params);
         }
 
-        // descriptor set（纹理）
-        AllocateAndUpdateParticleDescriptorSets(cmd_buf, active_program,
-                                                 cur_tex, resource_mgr);
+        // descriptor set（纹理 + VFX UBO ring buffer）
+        if (using_vfx) {
+            struct VfxUBOData {
+                glm::vec4 gradient_start;
+                glm::vec4 gradient_end;
+                glm::vec4 rect_size_and_radius;
+                glm::vec4 blur_params;
+            } vfx_data;
+            vfx_data.gradient_start = cur_vfx.gradient_start;
+            vfx_data.gradient_end = cur_vfx.gradient_end;
+            vfx_data.rect_size_and_radius = {cur_vfx.rect_size.x, cur_vfx.rect_size.y, cur_vfx.corner_radius, cur_vfx.gradient_direction};
+            vfx_data.blur_params = {cur_vfx.blur_radius, cur_vfx.blur_intensity, 0.0f, 0.0f};
+
+            // ring buffer: 写入当前 slot，避免覆盖前一 batch 的数据
+            VkDeviceSize cur_slot_offset = vfx_ubo_offset % VFX_UBO_CAPACITY;
+            WriteToBuffer(context_->device(), vfx_ubo_mem_, cur_slot_offset, sizeof(vfx_data), &vfx_data);
+
+            // 分配 descriptor sets 并写入 set 2 binding 0 (VFX UBO at slot offset)
+            if (!active_program->descriptor_set_layouts.empty()) {
+                auto vk_device = context_->device();
+                uint32_t set_count = static_cast<uint32_t>(active_program->descriptor_set_layouts.size());
+                std::vector<VkDescriptorSet> sets(set_count, VK_NULL_HANDLE);
+                for (uint32_t s = 0; s < set_count; ++s)
+                    sets[s] = resource_mgr.AllocateDescriptorSet(active_program->descriptor_set_layouts[s]);
+                std::vector<VkWriteDescriptorSet> writes;
+                // set 2 binding 0: VFX UBO (with per-batch offset)
+                VkDescriptorBufferInfo vfx_buf_info{};
+                vfx_buf_info.buffer = vfx_ubo_;
+                vfx_buf_info.offset = cur_slot_offset;
+                vfx_buf_info.range = 64;
+                if (set_count > 2 && sets[2] != VK_NULL_HANDLE) {
+                    VkWriteDescriptorSet w{};
+                    w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    w.dstSet = sets[2]; w.dstBinding = 0;
+                    w.descriptorCount = 1;
+                    w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    w.pBufferInfo = &vfx_buf_info;
+                    writes.push_back(w);
+                }
+                // set 2 binding 1: 纹理
+                VkDescriptorImageInfo img_info{};
+                unsigned int tex_h = (cur_tex != 0) ? cur_tex : white_texture_handle_;
+                const VulkanTexture* tex = resource_mgr.GetTexture(tex_h);
+                if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
+                if (tex && set_count > 2 && sets[2] != VK_NULL_HANDLE) {
+                    img_info.sampler = resource_mgr.default_sampler();
+                    img_info.imageView = tex->image_view;
+                    img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    VkWriteDescriptorSet w{};
+                    w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    w.dstSet = sets[2]; w.dstBinding = 1;
+                    w.descriptorCount = 1;
+                    w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    w.pImageInfo = &img_info;
+                    writes.push_back(w);
+                }
+                if (!writes.empty())
+                    vkUpdateDescriptorSets(vk_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+                vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        active_program->pipeline_layout, 0,
+                                        set_count, sets.data(), 0, nullptr);
+            }
+            vfx_ubo_offset += VFX_UBO_SLOT_SIZE;
+        } else {
+            AllocateAndUpdateParticleDescriptorSets(cmd_buf, active_program,
+                                                     cur_tex, resource_mgr);
+        }
 
         VkDeviceSize vbo_offsets[] = {vbo_write_offset};
         vkCmdBindVertexBuffers(cmd_buf, 0, 1, &sprite_vbo_, vbo_offsets);
@@ -2169,18 +2270,19 @@ void VulkanDrawExecutor::DrawSpriteBatch(
         batch_verts.clear();
     };
 
-    // TODO(P3): UIVisualEffect shader 集成 — 当前 Vulkan 后端对 visual_effect.enabled 的 item
-    //           使用默认 sprite shader 渲染（无圆角/渐变/模糊），待 ui_effects pipeline 创建后补全。
     for (const auto& item : items) {
         glm::vec4 item_sdf = {item.sdf_threshold, item.sdf_smoothing, item.sdf_outline_width, item.sdf_shadow_softness};
+        bool vfx_changed = (item.visual_effect.enabled != cur_vfx.enabled);
         if (item.texture_handle != cur_tex ||
             item.shader_variant_key != cur_variant ||
             std::memcmp(&item_sdf, &cur_sdf_params, sizeof(glm::vec4)) != 0 ||
+            vfx_changed ||
             batch_verts.size() / 4 >= MAX_SPRITES) {
             flush_batch();
             cur_tex = item.texture_handle;
             cur_variant = item.shader_variant_key;
             cur_sdf_params = item_sdf;
+            cur_vfx = item.visual_effect;
         }
 
         float u_min = item.uv.x, v_min = item.uv.y;

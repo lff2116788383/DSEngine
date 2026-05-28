@@ -53,6 +53,7 @@
 #include "engine/render/shaders/generated/embed/eye_frag.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
 #include "engine/render/shaders/generated/embed/text_sdf_frag.gen.h"
+#include "engine/render/shaders/generated/embed/ui_effects_frag.gen.h"
 
 // Reflection metadata for automated InputLayout creation
 #include "engine/render/shaders/generated/embed/pbr_vert_reflect.gen.h"
@@ -146,6 +147,7 @@ void DX11ShaderManager::Shutdown() {
     particle_shader_handle_ = 0;
     sprite_shader_handle_ = 0;
     text_sdf_shader_handle_ = 0;
+    ui_effects_shader_handle_ = 0;
     postprocess_shader_handle_ = 0;
     shadow_shader_handle_ = 0;
     bloom_composite_shader_handle_ = 0;
@@ -361,6 +363,18 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(ksprite_vert_reflection, sdf_layout);
         CreateInputLayoutForShader(text_sdf_shader_handle_, sdf_layout.data(),
                                    static_cast<int>(sdf_layout.size()));
+    }
+
+    ui_effects_shader_handle_ = CreateProgramFromDXBC(
+        ksprite_vert_dxbc, ksprite_vert_dxbc_size,
+        kui_effects_frag_dxbc, kui_effects_frag_dxbc_size);
+    if (ui_effects_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin UI effects shader created (DXBC): {}", ui_effects_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> vfx_layout;
+        CreateInputLayoutFromReflection(ksprite_vert_reflection, vfx_layout);
+        CreateInputLayoutForShader(ui_effects_shader_handle_, vfx_layout.data(),
+                                   static_cast<int>(vfx_layout.size()));
     }
 
     pulse();

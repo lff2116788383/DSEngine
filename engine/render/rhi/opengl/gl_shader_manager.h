@@ -192,7 +192,6 @@ public:
         int blur_params = -1;
     };
     void InitUIEffectsShader();
-    unsigned int ui_effects_shader_handle() const { return ui_effects_shader_handle_; }
     const UIEffectsLocations& ui_effects_locations() const { return ui_effects_locations_; }
 
     // --- 阴影深度着色器 ---
@@ -238,7 +237,6 @@ private:
     int gpu_driven_shadow_skinned_loc_ = -1;
     ShadowShaderLocations shadow_locations_;
     TextSdfLocations text_sdf_locations_;
-    unsigned int ui_effects_shader_handle_ = 0;
     UIEffectsLocations ui_effects_locations_;
 };
 

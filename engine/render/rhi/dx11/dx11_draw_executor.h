@@ -268,6 +268,7 @@ private:
     ComPtr<ID3D11Buffer> sprite_quad_ibo_;
     ComPtr<ID3D11Buffer> sprite_push_cb_;   // 128B: [model(64B) | vp(64B)] for sprite.vert
     ComPtr<ID3D11Buffer> sdf_ps_cb_;        // 144B: [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
+    ComPtr<ID3D11Buffer> vfx_ps_cb_;        // 64B: [gradient_start(16) | gradient_end(16) | rect_size_and_radius(16) | blur_params(16)] for ui_effects.frag
 
     // 网格（动态，按需扩容）
     ComPtr<ID3D11Buffer> mesh_dynamic_vbo_;

@@ -70,6 +70,7 @@ public:
     unsigned int weather_particle_shader_handle() const { return weather_particle_shader_handle_; }
     unsigned int eye_shader_handle() const { return eye_shader_handle_; }
     unsigned int text_sdf_shader_handle() const { return text_sdf_shader_handle_; }
+    unsigned int ui_effects_shader_handle() const { return ui_effects_shader_handle_; }
 
     // --- 统计计数 ---
     std::size_t programs_created() const { return programs_created_; }
@@ -125,6 +126,7 @@ protected:
     unsigned int weather_particle_shader_handle_ = 0;
     unsigned int eye_shader_handle_ = 0;
     unsigned int text_sdf_shader_handle_ = 0;
+    unsigned int ui_effects_shader_handle_ = 0;
 
     // --- 计数器 ---
     std::size_t programs_created_ = 0;
