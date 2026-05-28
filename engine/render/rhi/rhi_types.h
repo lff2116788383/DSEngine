@@ -168,6 +168,11 @@ struct SpriteDrawItem {
     int sorting_layer = 0;
     int order_in_layer = 0;
     SpriteVisualEffect visual_effect;
+    // SDF 文本着色器参数（仅 shader_variant_key == TEXT_SDF 时生效）
+    float sdf_threshold = 0.5f;
+    float sdf_smoothing = 0.1f;
+    float sdf_outline_width = 0.0f;
+    float sdf_shadow_softness = 0.0f;
 };
 
 /// 批量渲染顶点格式

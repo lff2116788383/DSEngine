@@ -542,6 +542,7 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
 
     unsigned int cur_tex_handle = items[0].texture_handle;
     unsigned int cur_variant = items[0].shader_variant_key;
+    glm::vec4 cur_sdf_params = {items[0].sdf_threshold, items[0].sdf_smoothing, items[0].sdf_outline_width, items[0].sdf_shadow_softness};
 
     static const glm::vec4 quad_pos[4] = {
         {-0.5f, -0.5f, 0.0f, 1.0f}, { 0.5f, -0.5f, 0.0f, 1.0f},
@@ -560,25 +561,28 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         UINT stride = 32, offset = 0;
         dc->IASetVertexBuffers(0, 1, sprite_quad_vbo_.GetAddressOf(), &stride, &offset);
 
-        // SDF shader 切换
+        // SDF shader 切换 + 参数更新
         bool want_sdf = (cur_variant == kSdfVariantKey) && sdf_program;
         if (want_sdf != using_sdf) {
             if (want_sdf) {
                 dc->PSSetShader(sdf_program->pixel_shader.Get(), nullptr, 0);
-                struct SdfPSConstants {
-                    glm::mat4 model; glm::mat4 vp_padding;
-                    float t, s, o, sh;
-                } sdf_pc;
-                sdf_pc.model = glm::mat4(1.0f);
-                sdf_pc.vp_padding = vp;
-                sdf_pc.t = 0.5f; sdf_pc.s = 0.1f; sdf_pc.o = 0.0f; sdf_pc.sh = 0.0f;
-                UpdateConstantBuffer(sdf_ps_cb_.Get(), &sdf_pc, sizeof(sdf_pc));
-                ID3D11Buffer* ps_cb = sdf_ps_cb_.Get();
-                dc->PSSetConstantBuffers(0, 1, &ps_cb);
             } else {
                 dc->PSSetShader(sprite_program->pixel_shader.Get(), nullptr, 0);
             }
             using_sdf = want_sdf;
+        }
+        if (using_sdf) {
+            struct SdfPSConstants {
+                glm::mat4 model; glm::mat4 vp_padding;
+                float t, s, o, sh;
+            } sdf_pc;
+            sdf_pc.model = glm::mat4(1.0f);
+            sdf_pc.vp_padding = vp;
+            sdf_pc.t = cur_sdf_params.x; sdf_pc.s = cur_sdf_params.y;
+            sdf_pc.o = cur_sdf_params.z; sdf_pc.sh = cur_sdf_params.w;
+            UpdateConstantBuffer(sdf_ps_cb_.Get(), &sdf_pc, sizeof(sdf_pc));
+            ID3D11Buffer* ps_cb = sdf_ps_cb_.Get();
+            dc->PSSetConstantBuffers(0, 1, &ps_cb);
         }
 
         // 绑定纹理
@@ -602,12 +606,15 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
     // TODO(P3): UIVisualEffect shader 集成 — 当前 DX11 后端对 visual_effect.enabled 的 item
     //           使用默认 sprite shader 渲染（无圆角/渐变/模糊），待 ui_effects HLSL pipeline 补全。
     for (const auto& item : items) {
+        glm::vec4 item_sdf = {item.sdf_threshold, item.sdf_smoothing, item.sdf_outline_width, item.sdf_shadow_softness};
         if (item.texture_handle != cur_tex_handle ||
             item.shader_variant_key != cur_variant ||
+            std::memcmp(&item_sdf, &cur_sdf_params, sizeof(glm::vec4)) != 0 ||
             static_cast<int>(batch_verts.size()) / (4 * FLOATS_PER_VERT) >= DX11_MAX_BATCH_SPRITES) {
             flush_batch();
             cur_tex_handle = item.texture_handle;
             cur_variant = item.shader_variant_key;
+            cur_sdf_params = item_sdf;
         }
 
         float u_min = item.uv.x, v_min = item.uv.y;

@@ -27,6 +27,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <unordered_map>
 
@@ -2116,6 +2117,7 @@ void VulkanDrawExecutor::DrawSpriteBatch(
 
     unsigned int cur_tex = items[0].texture_handle;
     unsigned int cur_variant = items[0].shader_variant_key;
+    glm::vec4 cur_sdf_params = {items[0].sdf_threshold, items[0].sdf_smoothing, items[0].sdf_outline_width, items[0].sdf_shadow_softness};
     VkDeviceSize vbo_write_offset = 0;
 
     auto flush_batch = [&]() {
@@ -2143,7 +2145,7 @@ void VulkanDrawExecutor::DrawSpriteBatch(
                            0, sizeof(push_data), &push_data);
 
         if (using_sdf) {
-            struct { float t, s, o, sh; } sdf_params = {0.5f, 0.1f, 0.0f, 0.0f};
+            struct { float t, s, o, sh; } sdf_params = {cur_sdf_params.x, cur_sdf_params.y, cur_sdf_params.z, cur_sdf_params.w};
             vkCmdPushConstants(cmd_buf, active_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT,
                                128, sizeof(sdf_params), &sdf_params);
@@ -2170,12 +2172,15 @@ void VulkanDrawExecutor::DrawSpriteBatch(
     // TODO(P3): UIVisualEffect shader 集成 — 当前 Vulkan 后端对 visual_effect.enabled 的 item
     //           使用默认 sprite shader 渲染（无圆角/渐变/模糊），待 ui_effects pipeline 创建后补全。
     for (const auto& item : items) {
+        glm::vec4 item_sdf = {item.sdf_threshold, item.sdf_smoothing, item.sdf_outline_width, item.sdf_shadow_softness};
         if (item.texture_handle != cur_tex ||
             item.shader_variant_key != cur_variant ||
+            std::memcmp(&item_sdf, &cur_sdf_params, sizeof(glm::vec4)) != 0 ||
             batch_verts.size() / 4 >= MAX_SPRITES) {
             flush_batch();
             cur_tex = item.texture_handle;
             cur_variant = item.shader_variant_key;
+            cur_sdf_params = item_sdf;
         }
 
         float u_min = item.uv.x, v_min = item.uv.y;

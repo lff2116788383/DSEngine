@@ -32,6 +32,8 @@ constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
 constexpr size_t MAX_SPRITE_INDICES = MAX_SPRITES * 6;
 constexpr size_t MAX_MESH_VERTICES = 131072;
 constexpr size_t MAX_MESH_INDICES = 262144;
+static const unsigned int kAdditiveVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("SPRITE_ADDITIVE"));
+static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
 
 namespace dse {
 namespace render {
@@ -538,11 +540,12 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     unsigned int current_material_instance = items[0].material_instance_id;
     unsigned int current_shader_variant = items[0].shader_variant_key;
     unsigned int current_blend_mode = items[0].blend_mode;
-    const unsigned int additive_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("SPRITE_ADDITIVE"));
-    const unsigned int sdf_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
+    const unsigned int& additive_variant_key = kAdditiveVariantKey;
+    const unsigned int& sdf_variant_key = kSdfVariantKey;
     bool using_sdf_shader = false;
     bool using_vfx_shader = false;
     SpriteVisualEffect current_vfx;
+    glm::vec4 cur_sdf_params = {items[0].sdf_threshold, items[0].sdf_smoothing, items[0].sdf_outline_width, items[0].sdf_shadow_softness};
 
     auto apply_blend = [&](unsigned int blend_mode, unsigned int shader_variant_key) {
         glEnable(GL_BLEND);
@@ -568,20 +571,24 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
             update_buffer_fn_(vbo_handle_, 0, batch_vertices.size() * sizeof(BatchVertex), batch_vertices.data(), false);
         }
 
-        // SDF shader 切换
+        // SDF shader 切换 + 参数更新
         bool want_sdf = (current_shader_variant == sdf_variant_key);
-        if (want_sdf && !using_sdf_shader) {
-            shader_mgr.InitTextSdfShader();
-            if (shader_mgr.text_sdf_shader_handle() != 0) {
-                glUseProgram(shader_mgr.text_sdf_shader_handle());
+        if (want_sdf) {
+            if (!using_sdf_shader) {
+                shader_mgr.InitTextSdfShader();
+                if (shader_mgr.text_sdf_shader_handle() != 0) {
+                    glUseProgram(shader_mgr.text_sdf_shader_handle());
+                    ubo_mgr.BindAll();
+                    using_sdf_shader = true;
+                }
+            }
+            if (using_sdf_shader) {
                 const auto& sdf_loc = shader_mgr.text_sdf_locations();
                 if (sdf_loc.texture >= 0) glUniform1i(sdf_loc.texture, slots.albedo);
-                if (sdf_loc.sdf_threshold >= 0) glUniform1f(sdf_loc.sdf_threshold, 0.5f);
-                if (sdf_loc.sdf_smoothing >= 0) glUniform1f(sdf_loc.sdf_smoothing, 0.1f);
-                if (sdf_loc.outline_width >= 0) glUniform1f(sdf_loc.outline_width, 0.0f);
-                if (sdf_loc.shadow_softness >= 0) glUniform1f(sdf_loc.shadow_softness, 0.0f);
-                ubo_mgr.BindAll();
-                using_sdf_shader = true;
+                if (sdf_loc.sdf_threshold >= 0) glUniform1f(sdf_loc.sdf_threshold, cur_sdf_params.x);
+                if (sdf_loc.sdf_smoothing >= 0) glUniform1f(sdf_loc.sdf_smoothing, cur_sdf_params.y);
+                if (sdf_loc.outline_width >= 0) glUniform1f(sdf_loc.outline_width, cur_sdf_params.z);
+                if (sdf_loc.shadow_softness >= 0) glUniform1f(sdf_loc.shadow_softness, cur_sdf_params.w);
             }
         } else if (!want_sdf && using_sdf_shader) {
             glUseProgram(shader_mgr.pbr_shader_handle());
@@ -651,11 +658,13 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     for (const auto& item : items) {
         unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
         bool vfx_changed = (item.visual_effect.enabled != current_vfx.enabled);
+        glm::vec4 item_sdf = {item.sdf_threshold, item.sdf_smoothing, item.sdf_outline_width, item.sdf_shadow_softness};
         if (tex != current_texture ||
             item.material_instance_id != current_material_instance ||
             item.shader_variant_key != current_shader_variant ||
             item.blend_mode != current_blend_mode ||
             vfx_changed ||
+            std::memcmp(&item_sdf, &cur_sdf_params, sizeof(glm::vec4)) != 0 ||
             batch_vertices.size() + 4 > MAX_SPRITE_VERTICES) {
             flush_batch();
             current_texture = tex;
@@ -663,6 +672,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
             current_shader_variant = item.shader_variant_key;
             current_blend_mode = item.blend_mode;
             current_vfx = item.visual_effect;
+            cur_sdf_params = item_sdf;
         }
 
         glm::vec2 uvs[4];
