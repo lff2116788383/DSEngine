@@ -1305,6 +1305,147 @@ int L_UiLoadFromFile(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// UIEventPropagationComponent 绑定
+// ============================================================
+
+int L_UiAddEventPropagation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& ep = world->registry().emplace_or_replace<UIEventPropagationComponent>(e);
+    ep.bubbles_click = lua_gettop(L) >= 2 ? lua_toboolean(L, 2) != 0 : true;
+    ep.bubbles_hover = lua_gettop(L) >= 3 ? lua_toboolean(L, 3) != 0 : false;
+    return 0;
+}
+
+int L_UiStopPropagation(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIEventPropagationComponent>(e)) return 0;
+    world->registry().get<UIEventPropagationComponent>(e).stop_propagation = true;
+    return 0;
+}
+
+// ============================================================
+// UIVisualEffectComponent 绑定
+// ============================================================
+
+int L_UiAddVisualEffect(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    world->registry().emplace_or_replace<UIVisualEffectComponent>(e);
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+int L_UiSetCornerRadius(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIVisualEffectComponent>(e)) return 0;
+    world->registry().get<UIVisualEffectComponent>(e).corner_radius = static_cast<float>(luaL_checknumber(L, 2));
+    return 0;
+}
+
+int L_UiSetGradient(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIVisualEffectComponent>(e)) return 0;
+    auto& vfx = world->registry().get<UIVisualEffectComponent>(e);
+    vfx.gradient_color_start = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+    vfx.gradient_color_end = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 6)), static_cast<float>(luaL_checknumber(L, 7)),
+        static_cast<float>(luaL_checknumber(L, 8)), static_cast<float>(luaL_optnumber(L, 9, 1.0)));
+    int dir = static_cast<int>(luaL_optinteger(L, 10, 1));
+    vfx.gradient_direction = (dir >= 0 && dir <= 2) ? static_cast<UIGradientDirection>(dir) : UIGradientDirection::Vertical;
+    return 0;
+}
+
+int L_UiSetBlur(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIVisualEffectComponent>(e)) return 0;
+    auto& vfx = world->registry().get<UIVisualEffectComponent>(e);
+    vfx.blur_radius = static_cast<float>(luaL_checknumber(L, 2));
+    vfx.blur_intensity = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    return 0;
+}
+
+// ============================================================
+// UIVirtualScrollComponent 绑定
+// ============================================================
+
+int L_UiAddVirtualScroll(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& vs = world->registry().emplace_or_replace<UIVirtualScrollComponent>(e);
+    vs.total_item_count = static_cast<int>(luaL_checkinteger(L, 2));
+    vs.item_height = static_cast<float>(luaL_optnumber(L, 3, 50.0));
+    if (!world->registry().all_of<UIScrollViewComponent>(e)) {
+        world->registry().emplace<UIScrollViewComponent>(e);
+    }
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+int L_UiSetVirtualScrollCount(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIVirtualScrollComponent>(e)) return 0;
+    auto& vs = world->registry().get<UIVirtualScrollComponent>(e);
+    vs.total_item_count = static_cast<int>(luaL_checkinteger(L, 2));
+    vs.dirty = true;
+    return 0;
+}
+
+int L_UiDestroyVirtualScroll(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIVirtualScrollComponent>(e)) return 0;
+    auto& vs = world->registry().get<UIVirtualScrollComponent>(e);
+    for (auto pool_e : vs.pool_entities) {
+        if (world->registry().valid(pool_e)) {
+            world->registry().destroy(pool_e);
+        }
+    }
+    vs.pool_entities.clear();
+    vs.pool_size = 0;
+    world->registry().remove<UIVirtualScrollComponent>(e);
+    return 0;
+}
+
+int L_UiGetVirtualScrollRange(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIVirtualScrollComponent>(e)) {
+        auto& vs = world->registry().get<UIVirtualScrollComponent>(e);
+        lua_pushinteger(L, vs.visible_start_index);
+        lua_pushinteger(L, vs.visible_end_index);
+    } else {
+        lua_pushinteger(L, 0);
+        lua_pushinteger(L, 0);
+    }
+    return 2;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -1405,6 +1546,19 @@ void RegisterUiBindings(lua_State* L) {
     // UI 序列化
     set_fn("load_from_json", L_UiLoadFromJson);
     set_fn("load_from_file", L_UiLoadFromFile);
+    // UIEventPropagationComponent
+    set_fn("add_event_propagation", L_UiAddEventPropagation);
+    set_fn("stop_propagation", L_UiStopPropagation);
+    // UIVisualEffectComponent
+    set_fn("add_visual_effect", L_UiAddVisualEffect);
+    set_fn("set_corner_radius", L_UiSetCornerRadius);
+    set_fn("set_gradient", L_UiSetGradient);
+    set_fn("set_blur", L_UiSetBlur);
+    // UIVirtualScrollComponent
+    set_fn("add_virtual_scroll", L_UiAddVirtualScroll);
+    set_fn("set_virtual_scroll_count", L_UiSetVirtualScrollCount);
+    set_fn("get_virtual_scroll_range", L_UiGetVirtualScrollRange);
+    set_fn("destroy_virtual_scroll", L_UiDestroyVirtualScroll);
 }
 
 }

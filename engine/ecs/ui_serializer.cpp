@@ -214,6 +214,29 @@ void ParseFocusNavigable(entt::registry& reg, entt::entity e, const rapidjson::V
     if (c.HasMember("focus_tint")) fn.focus_tint = ReadVec4(c["focus_tint"]);
 }
 
+void ParseEventPropagation(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {
+    auto& ep = reg.emplace_or_replace<UIEventPropagationComponent>(e);
+    ep.bubbles_click = ReadBool(c, "bubbles_click", true);
+    ep.bubbles_hover = ReadBool(c, "bubbles_hover", false);
+}
+
+void ParseVisualEffect(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {
+    auto& vfx = reg.emplace_or_replace<UIVisualEffectComponent>(e);
+    vfx.corner_radius = ReadFloat(c, "corner_radius", 0.0f);
+    if (c.HasMember("gradient_color_start")) vfx.gradient_color_start = ReadVec4(c["gradient_color_start"]);
+    if (c.HasMember("gradient_color_end")) vfx.gradient_color_end = ReadVec4(c["gradient_color_end"]);
+    int dir = ReadInt(c, "gradient_direction", 1);
+    vfx.gradient_direction = (dir >= 0 && dir <= 2) ? static_cast<UIGradientDirection>(dir) : UIGradientDirection::Vertical;
+    vfx.blur_radius = ReadFloat(c, "blur_radius", 0.0f);
+    vfx.blur_intensity = ReadFloat(c, "blur_intensity", 1.0f);
+}
+
+void ParseVirtualScroll(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {
+    auto& vs = reg.emplace_or_replace<UIVirtualScrollComponent>(e);
+    vs.total_item_count = ReadInt(c, "total_item_count", 0);
+    vs.item_height = ReadFloat(c, "item_height", 50.0f);
+}
+
 void ParseAnchor(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {
     auto& anchor = reg.emplace_or_replace<UIAnchorComponent>(e);
     anchor.anchor = ReadInt(c, "anchor", 5);
@@ -246,6 +269,9 @@ void ParseEntityComponents(entt::registry& reg, entt::entity e, const rapidjson:
     if (components.HasMember("UIDropdown")) ParseDropdown(reg, e, components["UIDropdown"]);
     if (components.HasMember("UIFilledImage")) ParseFilledImage(reg, e, components["UIFilledImage"]);
     if (components.HasMember("UIFocusNavigable")) ParseFocusNavigable(reg, e, components["UIFocusNavigable"]);
+    if (components.HasMember("UIEventPropagation")) ParseEventPropagation(reg, e, components["UIEventPropagation"]);
+    if (components.HasMember("UIVisualEffect")) ParseVisualEffect(reg, e, components["UIVisualEffect"]);
+    if (components.HasMember("UIVirtualScroll")) ParseVirtualScroll(reg, e, components["UIVirtualScroll"]);
     if (components.HasMember("UIAnchor")) ParseAnchor(reg, e, components["UIAnchor"]);
     if (components.HasMember("UIAnimation")) ParseAnimation(reg, e, components["UIAnimation"]);
 }

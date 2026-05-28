@@ -570,6 +570,46 @@ TEST(UISerializerTest, DropdownSerialization) {
     EXPECT_FLOAT_EQ(dd.item_height, 30.0f);
 }
 
+TEST(UISerializerTest, EventPropagationSerialization) {
+    dse::UISerializer serializer;
+    entt::registry reg;
+    const char* json = R"({
+        "entities": [{
+            "id": 1,
+            "components": {
+                "UIRenderer": {},
+                "UIEventPropagation": { "bubbles_click": true, "bubbles_hover": true }
+            }
+        }]
+    })";
+    auto entities = serializer.LoadFromJson(reg, json);
+    ASSERT_EQ(entities.size(), 1u);
+    ASSERT_TRUE(reg.all_of<UIEventPropagationComponent>(entities[0]));
+    auto& ep = reg.get<UIEventPropagationComponent>(entities[0]);
+    EXPECT_TRUE(ep.bubbles_click);
+    EXPECT_TRUE(ep.bubbles_hover);
+}
+
+TEST(UISerializerTest, VisualEffectSerialization) {
+    dse::UISerializer serializer;
+    entt::registry reg;
+    const char* json = R"({
+        "entities": [{
+            "id": 1,
+            "components": {
+                "UIRenderer": {},
+                "UIVisualEffect": { "corner_radius": 12.0, "blur_radius": 5.0 }
+            }
+        }]
+    })";
+    auto entities = serializer.LoadFromJson(reg, json);
+    ASSERT_EQ(entities.size(), 1u);
+    ASSERT_TRUE(reg.all_of<UIVisualEffectComponent>(entities[0]));
+    auto& vfx = reg.get<UIVisualEffectComponent>(entities[0]);
+    EXPECT_FLOAT_EQ(vfx.corner_radius, 12.0f);
+    EXPECT_FLOAT_EQ(vfx.blur_radius, 5.0f);
+}
+
 TEST(UISerializerTest, FilledImageSerialization) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -596,4 +636,122 @@ TEST(UISerializerTest, FilledImageSerialization) {
     EXPECT_NEAR(fi.fill_amount, 0.75f, 0.01f);
     EXPECT_EQ(fi.fill_method, UIFillMethod::Radial360);
     EXPECT_FALSE(fi.clockwise);
+}
+
+// ============================================================
+// P3: UIEventPropagationComponent tests
+// ============================================================
+
+TEST(UIEventPropagationComponentTest, DefaultValues) {
+    UIEventPropagationComponent ep;
+    EXPECT_TRUE(ep.bubbles_click);
+    EXPECT_FALSE(ep.bubbles_hover);
+    EXPECT_FALSE(ep.stop_propagation);
+}
+
+TEST(UISystemTest, EventBubblesToParent) {
+    UISystem sys;
+    entt::registry reg;
+
+    auto parent = MakeFullScreenUI(reg);
+    bool parent_clicked = false;
+    reg.get<UIRendererComponent>(parent).on_click = [&](entt::entity) { parent_clicked = true; };
+
+    auto child = MakeFullScreenUI(reg);
+    auto& child_ui = reg.get<UIRendererComponent>(child);
+    child_ui.order = 10;
+    reg.emplace<ParentComponent>(child).parent = parent;
+    auto& ep = reg.emplace<UIEventPropagationComponent>(child);
+    ep.bubbles_click = true;
+    reg.emplace<UIEventPropagationComponent>(parent).bubbles_click = true;
+
+    const glm::vec2 screen(1920, 1080);
+    const glm::vec2 center(960, 540);
+    sys.Update(reg, 0.016f, screen, center, true);
+    sys.Update(reg, 0.016f, screen, center, false);
+
+    EXPECT_TRUE(parent_clicked);
+}
+
+TEST(UISystemTest, StopPropagationBlocksBubble) {
+    UISystem sys;
+    entt::registry reg;
+
+    auto parent = MakeFullScreenUI(reg);
+    bool parent_clicked = false;
+    reg.get<UIRendererComponent>(parent).on_click = [&](entt::entity) { parent_clicked = true; };
+
+    auto child = MakeFullScreenUI(reg);
+    auto& child_ui = reg.get<UIRendererComponent>(child);
+    child_ui.order = 10;
+    reg.emplace<ParentComponent>(child).parent = parent;
+    auto& ep = reg.emplace<UIEventPropagationComponent>(child);
+    ep.bubbles_click = true;
+    ep.stop_propagation = true;
+
+    const glm::vec2 screen(1920, 1080);
+    const glm::vec2 center(960, 540);
+    sys.Update(reg, 0.016f, screen, center, true);
+    sys.Update(reg, 0.016f, screen, center, false);
+
+    EXPECT_FALSE(parent_clicked);
+}
+
+// ============================================================
+// P3: UIVisualEffectComponent tests
+// ============================================================
+
+TEST(UIVisualEffectComponentTest, DefaultValues) {
+    UIVisualEffectComponent vfx;
+    EXPECT_FLOAT_EQ(vfx.corner_radius, 0.0f);
+    EXPECT_FLOAT_EQ(vfx.blur_radius, 0.0f);
+    EXPECT_FLOAT_EQ(vfx.blur_intensity, 1.0f);
+    EXPECT_EQ(vfx.gradient_direction, UIGradientDirection::Vertical);
+}
+
+// ============================================================
+// P3: UIVirtualScrollComponent tests
+// ============================================================
+
+TEST(UIVirtualScrollComponentTest, DefaultValues) {
+    UIVirtualScrollComponent vs;
+    EXPECT_EQ(vs.total_item_count, 0);
+    EXPECT_FLOAT_EQ(vs.item_height, 50.0f);
+    EXPECT_EQ(vs.visible_start_index, 0);
+    EXPECT_EQ(vs.visible_end_index, 0);
+    EXPECT_TRUE(vs.pool_entities.empty());
+    EXPECT_TRUE(vs.dirty);
+}
+
+TEST(UISystemTest, VirtualScrollCreatesPoolEntities) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    auto& sv = reg.emplace<UIScrollViewComponent>(e);
+    sv.content_size = glm::vec2(1920, 10000);
+    sv.viewport_size = glm::vec2(1920, 500);
+    sv.vertical = true;
+    auto& vs = reg.emplace<UIVirtualScrollComponent>(e);
+    vs.total_item_count = 200;
+    vs.item_height = 50.0f;
+    int bind_call_count = 0;
+    vs.on_bind_item = [&](entt::entity, int) { bind_call_count++; };
+
+    const glm::vec2 screen(1920, 1080);
+    sys.Update(reg, 0.016f, screen, glm::vec2(0), false);
+
+    EXPECT_GT(static_cast<int>(vs.pool_entities.size()), 0);
+    EXPECT_GT(bind_call_count, 0);
+    EXPECT_EQ(vs.visible_start_index, 0);
+    EXPECT_GT(vs.visible_end_index, 0);
+}
+
+TEST(UISystemTest, VirtualScrollNoCrash) {
+    UISystem sys;
+    entt::registry reg;
+    auto e = MakeFullScreenUI(reg);
+    reg.emplace<UIScrollViewComponent>(e);
+    reg.emplace<UIVirtualScrollComponent>(e);
+    const glm::vec2 screen(1920, 1080);
+    sys.Update(reg, 0.016f, screen, glm::vec2(0), false);
 }

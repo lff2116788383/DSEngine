@@ -131,6 +131,16 @@ private:
      */
     void UpdateFocusNavigation(entt::registry& registry);
 
+    /**
+     * @brief 更新虚拟滚动：计算可见区间、池化 Entity 的绑定
+     */
+    void UpdateVirtualScroll(entt::registry& registry);
+
+    /**
+     * @brief 沿 ParentComponent 链向上传播事件
+     */
+    void BubbleClickEvent(entt::registry& registry, entt::entity source);
+
     bool was_mouse_down_ = false;
     entt::entity focused_entity_ = entt::null;
     bool prev_gp_nav_up_ = false;

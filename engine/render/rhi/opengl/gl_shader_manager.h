@@ -183,6 +183,18 @@ public:
     void InitTextSdfShader();
     const TextSdfLocations& text_sdf_locations() const { return text_sdf_locations_; }
 
+    // --- UI 视觉效果着色器 ---
+    struct UIEffectsLocations {
+        int texture = -1;
+        int gradient_start = -1;
+        int gradient_end = -1;
+        int rect_size_and_radius = -1;
+        int blur_params = -1;
+    };
+    void InitUIEffectsShader();
+    unsigned int ui_effects_shader_handle() const { return ui_effects_shader_handle_; }
+    const UIEffectsLocations& ui_effects_locations() const { return ui_effects_locations_; }
+
     // --- 阴影深度着色器 ---
     void InitShadowShader();
 
@@ -226,6 +238,8 @@ private:
     int gpu_driven_shadow_skinned_loc_ = -1;
     ShadowShaderLocations shadow_locations_;
     TextSdfLocations text_sdf_locations_;
+    unsigned int ui_effects_shader_handle_ = 0;
+    UIEffectsLocations ui_effects_locations_;
 };
 
 } // namespace render

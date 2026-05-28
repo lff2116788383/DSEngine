@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file gl_draw_executor.cpp
  * @brief GLDrawExecutor 实现 - 绘制执行器
  */
@@ -541,6 +541,8 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     const unsigned int additive_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("SPRITE_ADDITIVE"));
     const unsigned int sdf_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
     bool using_sdf_shader = false;
+    bool using_vfx_shader = false;
+    SpriteVisualEffect current_vfx;
 
     auto apply_blend = [&](unsigned int blend_mode, unsigned int shader_variant_key) {
         glEnable(GL_BLEND);
@@ -594,6 +596,35 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
             using_sdf_shader = false;
         }
 
+        if (current_vfx.enabled && !using_vfx_shader && !using_sdf_shader) {
+            shader_mgr.InitUIEffectsShader();
+            if (shader_mgr.ui_effects_shader_handle() != 0) {
+                glUseProgram(shader_mgr.ui_effects_shader_handle());
+                ubo_mgr.BindAll();
+                using_vfx_shader = true;
+            }
+        } else if (!current_vfx.enabled && using_vfx_shader) {
+            glUseProgram(shader_mgr.pbr_shader_handle());
+            glUniform1i(loc.texture, slots.albedo);
+            if (loc.model >= 0) {
+                const glm::mat4 identity(1.0f);
+                glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(identity));
+            }
+            if (loc.skinned >= 0) glUniform1i(loc.skinned, 0);
+            if (loc.morph_enabled >= 0) glUniform1i(loc.morph_enabled, 0);
+            ubo_mgr.BindAll();
+            using_vfx_shader = false;
+        }
+
+        if (using_vfx_shader) {
+            const auto& vfx_loc = shader_mgr.ui_effects_locations();
+            if (vfx_loc.gradient_start >= 0) glUniform4fv(vfx_loc.gradient_start, 1, &current_vfx.gradient_start[0]);
+            if (vfx_loc.gradient_end >= 0) glUniform4fv(vfx_loc.gradient_end, 1, &current_vfx.gradient_end[0]);
+            if (vfx_loc.rect_size_and_radius >= 0) glUniform4f(vfx_loc.rect_size_and_radius,
+                current_vfx.rect_size.x, current_vfx.rect_size.y, current_vfx.corner_radius, current_vfx.gradient_direction);
+            if (vfx_loc.blur_params >= 0) glUniform4f(vfx_loc.blur_params, current_vfx.blur_radius, current_vfx.blur_intensity, 0.0f, 0.0f);
+        }
+
         apply_blend(current_blend_mode, current_shader_variant);
         glActiveTexture(GL_TEXTURE0 + slots.albedo);
         glBindTexture(GL_TEXTURE_2D, current_texture);
@@ -619,16 +650,19 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
 
     for (const auto& item : items) {
         unsigned int tex = item.texture_handle == 0 ? white_texture_handle_ : item.texture_handle;
+        bool vfx_changed = (item.visual_effect.enabled != current_vfx.enabled);
         if (tex != current_texture ||
             item.material_instance_id != current_material_instance ||
             item.shader_variant_key != current_shader_variant ||
             item.blend_mode != current_blend_mode ||
+            vfx_changed ||
             batch_vertices.size() + 4 > MAX_SPRITE_VERTICES) {
             flush_batch();
             current_texture = tex;
             current_material_instance = item.material_instance_id;
             current_shader_variant = item.shader_variant_key;
             current_blend_mode = item.blend_mode;
+            current_vfx = item.visual_effect;
         }
 
         glm::vec2 uvs[4];

@@ -492,4 +492,48 @@ struct UIFocusNavigableComponent {
     glm::vec4 focus_tint = glm::vec4(1.0f, 0.9f, 0.4f, 1.0f); ///< 聚焦时的高亮染色
 };
 
+// ============================================================
+// P3: 事件冒泡 (Event Propagation)
+// ============================================================
+
+struct UIEventPropagationComponent {
+    bool bubbles_click = true;                           ///< click 事件是否向父级冒泡
+    bool bubbles_hover = false;                          ///< hover 事件是否向父级冒泡
+    bool stop_propagation = false;                       ///< 运行时标记：拦截冒泡
+};
+
+// ============================================================
+// P3: 圆角/渐变/模糊效果 (UI Visual Effects)
+// ============================================================
+
+enum class UIGradientDirection {
+    Horizontal = 0,
+    Vertical = 1,
+    Diagonal = 2
+};
+
+struct UIVisualEffectComponent {
+    float corner_radius = 0.0f;                          ///< 圆角半径（像素），0 = 无圆角
+    glm::vec4 gradient_color_start = glm::vec4(1.0f);   ///< 渐变起始颜色
+    glm::vec4 gradient_color_end = glm::vec4(1.0f);     ///< 渐变结束颜色
+    UIGradientDirection gradient_direction = UIGradientDirection::Vertical; ///< 渐变方向
+    float blur_radius = 0.0f;                            ///< 模糊半径（像素），0 = 无模糊
+    float blur_intensity = 1.0f;                         ///< 模糊强度 [0, 1]
+};
+
+// ============================================================
+// P3: 虚拟滚动 + Entity 池化 (Virtual Scroll)
+// ============================================================
+
+struct UIVirtualScrollComponent {
+    int total_item_count = 0;                            ///< 数据源总项数
+    float item_height = 50.0f;                           ///< 每项高度（固定高度模式）
+    int visible_start_index = 0;                         ///< 当前可见起始索引（运行时计算）
+    int visible_end_index = 0;                           ///< 当前可见结束索引（运行时计算）
+    int pool_size = 0;                                   ///< 实际创建的 Entity 池大小（运行时）
+    std::vector<Entity> pool_entities;                   ///< Entity 池（循环复用）
+    std::function<void(Entity, int)> on_bind_item;       ///< 绑定回调 (pooled_entity, data_index)
+    bool dirty = true;                                   ///< 数据变化标记
+};
+
 #endif // DSE_ECS_COMPONENTS_2D_UI_H

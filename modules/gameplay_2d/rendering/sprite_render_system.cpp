@@ -167,6 +167,20 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
 
         const unsigned int sdf_key = ui.use_sdf_shader ? kSdfVariantKey : 0;
 
+        SpriteVisualEffect vfx_data;
+        auto* vfx = world.registry().try_get<UIVisualEffectComponent>(entity);
+        if (vfx && (vfx->corner_radius > 0.0f || vfx->blur_radius > 0.0f ||
+                    vfx->gradient_color_start != glm::vec4(1.0f) || vfx->gradient_color_end != glm::vec4(1.0f))) {
+            vfx_data.enabled = true;
+            vfx_data.corner_radius = vfx->corner_radius;
+            vfx_data.gradient_start = vfx->gradient_color_start;
+            vfx_data.gradient_end = vfx->gradient_color_end;
+            vfx_data.gradient_direction = static_cast<float>(static_cast<int>(vfx->gradient_direction));
+            vfx_data.blur_radius = vfx->blur_radius;
+            vfx_data.blur_intensity = vfx->blur_intensity;
+            vfx_data.rect_size = ui.size;
+        }
+
         if (ui.nine_slice_enabled) {
             SpriteDrawItem base_item;
             base_item.texture_handle = ui.texture_handle;
@@ -174,6 +188,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             base_item.sorting_layer = 1000;
             base_item.order_in_layer = ui.order;
             base_item.shader_variant_key = sdf_key;
+            base_item.visual_effect = vfx_data;
             Expand9SliceItems(base_item, final_pos, ui.size, ui.uv, ui.nine_slice_border, ui.nine_slice_src_size, items);
         } else {
             SpriteDrawItem item;
@@ -184,6 +199,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             item.sorting_layer = 1000;
             item.order_in_layer = ui.order;
             item.shader_variant_key = sdf_key;
+            item.visual_effect = vfx_data;
             items.push_back(item);
         }
     }

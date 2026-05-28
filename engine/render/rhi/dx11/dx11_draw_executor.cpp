@@ -599,6 +599,8 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         batch_verts.clear();
     };
 
+    // TODO(P3): UIVisualEffect shader 集成 — 当前 DX11 后端对 visual_effect.enabled 的 item
+    //           使用默认 sprite shader 渲染（无圆角/渐变/模糊），待 ui_effects HLSL pipeline 补全。
     for (const auto& item : items) {
         if (item.texture_handle != cur_tex_handle ||
             item.shader_variant_key != cur_variant ||

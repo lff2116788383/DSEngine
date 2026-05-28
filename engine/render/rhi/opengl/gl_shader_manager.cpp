@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file gl_shader_manager.cpp
  * @brief GLShaderManager 瀹炵幇 - 鐫€鑹插櫒绠＄悊鍣?
  */
@@ -579,6 +579,30 @@ void GLShaderManager::InitTextSdfShader() {
     text_sdf_locations_.sdf_smoothing = glGetUniformLocation(text_sdf_shader_handle_, "u_sdf_smoothing");
     text_sdf_locations_.outline_width = glGetUniformLocation(text_sdf_shader_handle_, "u_outline_width");
     text_sdf_locations_.shadow_softness = glGetUniformLocation(text_sdf_shader_handle_, "u_shadow_softness");
+}
+
+// ============================================================
+// UI 视觉效果着色器
+// ============================================================
+
+void GLShaderManager::InitUIEffectsShader() {
+    if (ui_effects_shader_handle_ != 0) return;
+    unsigned int prog = GetOrCreateGenPPShader("ui_effects");
+    if (prog == 0) {
+        using namespace dse::render::generated_shaders;
+        const char* vert = ksprite_vert_glsl430;
+        const char* frag = nullptr;
+        (void)vert;
+        (void)frag;
+        DEBUG_LOG_WARN("GLShaderManager: ui_effects gen.h shader not available — visual effects disabled");
+        return;
+    }
+    ui_effects_shader_handle_ = prog;
+    ui_effects_locations_.texture = glGetUniformLocation(prog, "u_texture");
+    ui_effects_locations_.gradient_start = glGetUniformLocation(prog, "u_gradient_start");
+    ui_effects_locations_.gradient_end = glGetUniformLocation(prog, "u_gradient_end");
+    ui_effects_locations_.rect_size_and_radius = glGetUniformLocation(prog, "u_rect_size_and_radius");
+    ui_effects_locations_.blur_params = glGetUniformLocation(prog, "u_blur_params");
 }
 
 // ============================================================

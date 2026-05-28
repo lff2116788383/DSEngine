@@ -74,6 +74,7 @@ void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& scree
     UpdateTextInputs(registry, dt);
     UpdateDropdowns(registry, dt, mouse_pos, is_mouse_down);
     UpdateFocusNavigation(registry);
+    UpdateVirtualScroll(registry);
     HandleEvents(registry, dt, mouse_pos, is_mouse_down);
     was_mouse_down_ = is_mouse_down;
 }
@@ -502,6 +503,7 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
                         }
                     }
                     dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
+                    BubbleClickEvent(registry, entity);
                 }
             }
         } else if (!is_mouse_down) {
@@ -968,6 +970,110 @@ void UISystem::UpdateFocusNavigation(entt::registry& registry) {
     if (focused_entity_ != entt::null && registry.valid(focused_entity_)) {
         auto& focus = registry.get<UIFocusNavigableComponent>(focused_entity_);
         focus.is_focused = true;
+    }
+}
+
+// ============================================================
+// 事件冒泡
+// ============================================================
+void UISystem::BubbleClickEvent(entt::registry& registry, entt::entity source) {
+    auto* propagation = registry.try_get<UIEventPropagationComponent>(source);
+    if (!propagation || !propagation->bubbles_click) return;
+    if (propagation->stop_propagation) {
+        propagation->stop_propagation = false;
+        return;
+    }
+
+    entt::entity current = source;
+    for (int depth = 0; depth < 32; ++depth) {
+        auto* parent_comp = registry.try_get<ParentComponent>(current);
+        if (!parent_comp || parent_comp->parent == entt::null) break;
+        entt::entity parent = parent_comp->parent;
+        if (!registry.valid(parent)) break;
+
+        auto* parent_prop = registry.try_get<UIEventPropagationComponent>(parent);
+        auto* parent_ui = registry.try_get<UIRendererComponent>(parent);
+
+        if (parent_ui) {
+            if (parent_ui->on_click) parent_ui->on_click(source);
+            auto* parent_btn = registry.try_get<UIButtonComponent>(parent);
+            if (parent_btn && parent_btn->on_click) parent_btn->on_click(source);
+            dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(parent));
+        }
+
+        if (parent_prop && parent_prop->stop_propagation) {
+            parent_prop->stop_propagation = false;
+            break;
+        }
+        if (!parent_prop || !parent_prop->bubbles_click) break;
+
+        current = parent;
+    }
+}
+
+// ============================================================
+// 虚拟滚动 + Entity 池化
+// ============================================================
+void UISystem::UpdateVirtualScroll(entt::registry& registry) {
+    std::vector<entt::entity> vs_entities;
+    {
+        auto view = registry.view<UIVirtualScrollComponent, UIScrollViewComponent, UIRendererComponent>();
+        for (auto entity : view) {
+            vs_entities.push_back(entity);
+        }
+    }
+
+    for (auto entity : vs_entities) {
+        if (!registry.valid(entity)) continue;
+        auto& vs = registry.get<UIVirtualScrollComponent>(entity);
+        auto& sv = registry.get<UIScrollViewComponent>(entity);
+        auto& ui = registry.get<UIRendererComponent>(entity);
+        if (!ui.visible) continue;
+        if (vs.total_item_count <= 0 || vs.item_height <= 0.0f) continue;
+
+        float viewport_height = sv.viewport_size.y > 0 ? sv.viewport_size.y : ui.size.y;
+        int visible_count = static_cast<int>(std::ceil(viewport_height / vs.item_height)) + 1;
+        int start_index = static_cast<int>(std::floor(sv.scroll_offset.y / vs.item_height));
+        start_index = std::max(0, std::min(start_index, vs.total_item_count - 1));
+        int end_index = std::min(start_index + visible_count, vs.total_item_count);
+
+        bool range_changed = (start_index != vs.visible_start_index || end_index != vs.visible_end_index || vs.dirty);
+        vs.visible_start_index = start_index;
+        vs.visible_end_index = end_index;
+
+        int required_pool = visible_count;
+        if (static_cast<int>(vs.pool_entities.size()) < required_pool) {
+            int old_size = static_cast<int>(vs.pool_entities.size());
+            vs.pool_entities.resize(required_pool);
+            for (int i = old_size; i < required_pool; ++i) {
+                entt::entity pool_e = registry.create();
+                auto& pool_ui = registry.emplace<UIRendererComponent>(pool_e);
+                pool_ui.visible = false;
+                pool_ui.interactable = true;
+                registry.emplace<ParentComponent>(pool_e).parent = entity;
+                vs.pool_entities[i] = pool_e;
+            }
+            vs.pool_size = required_pool;
+        }
+
+        if (range_changed && vs.on_bind_item) {
+            for (int i = 0; i < required_pool; ++i) {
+                int data_idx = start_index + i;
+                entt::entity pool_e = vs.pool_entities[i];
+                auto& pool_ui = registry.get<UIRendererComponent>(pool_e);
+                if (data_idx < end_index) {
+                    pool_ui.visible = true;
+                    pool_ui.position = glm::vec2(0.0f, data_idx * vs.item_height - sv.scroll_offset.y);
+                    pool_ui.size = glm::vec2(ui.size.x, vs.item_height);
+                    vs.on_bind_item(pool_e, data_idx);
+                } else {
+                    pool_ui.visible = false;
+                }
+            }
+            vs.dirty = false;
+        }
+
+        sv.content_size.y = vs.total_item_count * vs.item_height;
     }
 }
 

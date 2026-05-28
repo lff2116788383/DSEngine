@@ -146,6 +146,17 @@ struct RenderTargetReadback {
 // ============================================================
 
 /// 2D 精灵绘制项
+struct SpriteVisualEffect {
+    bool enabled = false;
+    float corner_radius = 0.0f;
+    float gradient_direction = 1.0f;
+    float blur_radius = 0.0f;
+    float blur_intensity = 1.0f;
+    glm::vec2 rect_size = glm::vec2(0.0f);
+    glm::vec4 gradient_start = glm::vec4(1.0f);
+    glm::vec4 gradient_end = glm::vec4(1.0f);
+};
+
 struct SpriteDrawItem {
     unsigned int texture_handle = 0;
     unsigned int material_instance_id = 0;
@@ -156,6 +167,7 @@ struct SpriteDrawItem {
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     int sorting_layer = 0;
     int order_in_layer = 0;
+    SpriteVisualEffect visual_effect;
 };
 
 /// 批量渲染顶点格式
