@@ -8,6 +8,7 @@
 #include "engine/base/debug.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
+#include "engine/input/input.h"
 #include "engine/render/font/font_service.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -71,6 +72,8 @@ void UISystem::Update(entt::registry& registry, float dt, const glm::vec2& scree
     UpdateToggles(registry, dt);
     UpdateScrollViews(registry, dt, mouse_pos, is_mouse_down);
     UpdateTextInputs(registry, dt);
+    UpdateDropdowns(registry, dt, mouse_pos, is_mouse_down);
+    UpdateFocusNavigation(registry);
     HandleEvents(registry, dt, mouse_pos, is_mouse_down);
     was_mouse_down_ = is_mouse_down;
 }
@@ -474,28 +477,32 @@ void UISystem::HandleEvents(entt::registry& registry, float dt, const glm::vec2&
             } else if (!is_mouse_down && ui.is_pressed) {
                 DEBUG_LOG_TRACE("[UISystem::HandleEvents] entity={} click transition", static_cast<unsigned int>(entity));
                 ui.is_pressed = false;
-                if (ui.on_click) ui.on_click(entity);
-                if (button && button->on_click) button->on_click(entity);
-                // Toggle 点击切换
-                if (auto* toggle = registry.try_get<UIToggleComponent>(entity)) {
-                    toggle->is_on = !toggle->is_on;
-                    toggle->transition_progress = 0.0f;
-                    if (toggle->on_value_changed) toggle->on_value_changed(entity, toggle->is_on);
-                    // 互斥组：同组其他 toggle 关闭
-                    if (toggle->is_on && toggle->group >= 0) {
-                        auto toggle_view = registry.view<UIToggleComponent>();
-                        for (auto other : toggle_view) {
-                            if (other == entity) continue;
-                            auto& other_toggle = toggle_view.get<UIToggleComponent>(other);
-                            if (other_toggle.group == toggle->group && other_toggle.is_on) {
-                                other_toggle.is_on = false;
-                                other_toggle.transition_progress = 0.0f;
-                                if (other_toggle.on_value_changed) other_toggle.on_value_changed(other, false);
+                const bool dropdown_swallows = [&]() {
+                    auto* dropdown = registry.try_get<UIDropdownComponent>(entity);
+                    return dropdown && dropdown->is_open;
+                }();
+                if (!dropdown_swallows) {
+                    if (ui.on_click) ui.on_click(entity);
+                    if (button && button->on_click) button->on_click(entity);
+                    if (auto* toggle = registry.try_get<UIToggleComponent>(entity)) {
+                        toggle->is_on = !toggle->is_on;
+                        toggle->transition_progress = 0.0f;
+                        if (toggle->on_value_changed) toggle->on_value_changed(entity, toggle->is_on);
+                        if (toggle->is_on && toggle->group >= 0) {
+                            auto toggle_view = registry.view<UIToggleComponent>();
+                            for (auto other : toggle_view) {
+                                if (other == entity) continue;
+                                auto& other_toggle = toggle_view.get<UIToggleComponent>(other);
+                                if (other_toggle.group == toggle->group && other_toggle.is_on) {
+                                    other_toggle.is_on = false;
+                                    other_toggle.transition_progress = 0.0f;
+                                    if (other_toggle.on_value_changed) other_toggle.on_value_changed(other, false);
+                                }
                             }
                         }
                     }
+                    dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
                 }
-                dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(entity));
             }
         } else if (!is_mouse_down) {
             if (ui.is_pressed) {
@@ -762,6 +769,205 @@ void UISystem::UpdateTextInputs(entt::registry& registry, float dt) {
             input.cursor_blink_timer -= input.cursor_blink_rate;
             input.cursor_visible = !input.cursor_visible;
         }
+    }
+}
+
+// ============================================================
+// UIDropdownComponent 交互
+// ============================================================
+void UISystem::UpdateDropdowns(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down) {
+    (void)dt;
+    const bool just_pressed = is_mouse_down && !was_mouse_down_;
+
+    auto view = registry.view<UIDropdownComponent, UIRendererComponent>();
+    for (auto entity : view) {
+        auto& dd = view.get<UIDropdownComponent>(entity);
+        auto& ui = view.get<UIRendererComponent>(entity);
+        if (!ui.visible || !ui.interactable) continue;
+
+        const glm::vec3 pos(ui.runtime_model[3]);
+        const glm::vec3 scale(glm::length(glm::vec3(ui.runtime_model[0])),
+                              glm::length(glm::vec3(ui.runtime_model[1])), 1.0f);
+
+        if (dd.is_open) {
+            const int visible_count = std::min(dd.max_visible_items, static_cast<int>(dd.options.size()));
+            const float list_height = visible_count * dd.item_height;
+            const float list_top = pos.y + scale.y;
+
+            dd.hovered_index = -1;
+            if (mouse_pos.x >= pos.x && mouse_pos.x <= pos.x + scale.x &&
+                mouse_pos.y >= list_top && mouse_pos.y < list_top + list_height) {
+                int idx = static_cast<int>((mouse_pos.y - list_top + dd.scroll_offset) / dd.item_height);
+                if (idx >= 0 && idx < static_cast<int>(dd.options.size())) {
+                    dd.hovered_index = idx;
+                }
+            }
+
+            if (just_pressed) {
+                if (dd.hovered_index >= 0) {
+                    int old_index = dd.selected_index;
+                    dd.selected_index = dd.hovered_index;
+                    dd.is_open = false;
+                    dd.hovered_index = -1;
+                    if (dd.selected_index != old_index && dd.on_value_changed) {
+                        dd.on_value_changed(entity, dd.selected_index, dd.GetSelectedValue());
+                    }
+                } else {
+                    dd.is_open = false;
+                    dd.hovered_index = -1;
+                }
+            }
+        } else {
+            if (just_pressed && IsPointInsideUIRect(registry, entity, mouse_pos)) {
+                dd.is_open = true;
+                dd.scroll_offset = 0.0f;
+                dd.hovered_index = -1;
+            }
+        }
+    }
+}
+
+// ============================================================
+// UIFocusNavigableComponent 焦点导航
+// ============================================================
+void UISystem::UpdateFocusNavigation(entt::registry& registry) {
+    constexpr unsigned short kKeyTab = 258;
+    constexpr unsigned short kKeyLeftShift = 340;
+    constexpr unsigned short kKeyUp = 265;
+    constexpr unsigned short kKeyDown = 264;
+    constexpr unsigned short kKeyLeft = 263;
+    constexpr unsigned short kKeyRight = 262;
+    constexpr unsigned short kKeyEnter = 257;
+    constexpr unsigned short kKeySpace = 32;
+    constexpr float kAxisThreshold = 0.5f;
+
+    auto view = registry.view<UIFocusNavigableComponent, UIRendererComponent>();
+    if (view.size_hint() == 0) return;
+
+    if (focused_entity_ != entt::null && !registry.valid(focused_entity_)) {
+        focused_entity_ = entt::null;
+    }
+    if (focused_entity_ != entt::null && !registry.all_of<UIFocusNavigableComponent>(focused_entity_)) {
+        focused_entity_ = entt::null;
+    }
+
+    const bool tab_down = Input::GetKeyDown(kKeyTab);
+    const bool shift_held = Input::GetKey(kKeyLeftShift);
+    const bool up_down = Input::GetKeyDown(kKeyUp);
+    const bool down_down = Input::GetKeyDown(kKeyDown);
+    const bool left_down = Input::GetKeyDown(kKeyLeft);
+    const bool right_down = Input::GetKeyDown(kKeyRight);
+    const bool confirm = Input::GetKeyDown(kKeyEnter) || Input::GetKeyDown(kKeySpace);
+
+    bool gp_nav_up = false, gp_nav_down = false, gp_nav_left = false, gp_nav_right = false;
+    if (Input::IsGamepadConnected(0)) {
+        float gp_axis_x = Input::GetGamepadAxis(0, 0);
+        float gp_axis_y = Input::GetGamepadAxis(0, 1);
+        bool cur_up = gp_axis_y < -kAxisThreshold;
+        bool cur_down = gp_axis_y > kAxisThreshold;
+        bool cur_left = gp_axis_x < -kAxisThreshold;
+        bool cur_right = gp_axis_x > kAxisThreshold;
+        gp_nav_up = cur_up && !prev_gp_nav_up_;
+        gp_nav_down = cur_down && !prev_gp_nav_down_;
+        gp_nav_left = cur_left && !prev_gp_nav_left_;
+        gp_nav_right = cur_right && !prev_gp_nav_right_;
+        prev_gp_nav_up_ = cur_up;
+        prev_gp_nav_down_ = cur_down;
+        prev_gp_nav_left_ = cur_left;
+        prev_gp_nav_right_ = cur_right;
+    } else {
+        prev_gp_nav_up_ = prev_gp_nav_down_ = prev_gp_nav_left_ = prev_gp_nav_right_ = false;
+    }
+
+    bool want_next = tab_down && !shift_held;
+    bool want_prev = tab_down && shift_held;
+    bool want_up = up_down || gp_nav_up;
+    bool want_down = down_down || gp_nav_down;
+    bool want_left = left_down || gp_nav_left;
+    bool want_right = right_down || gp_nav_right;
+
+    if (!want_next && !want_prev && !want_up && !want_down && !want_left && !want_right && !confirm) {
+        if (focused_entity_ != entt::null && registry.valid(focused_entity_)) {
+            auto& focus = registry.get<UIFocusNavigableComponent>(focused_entity_);
+            focus.is_focused = true;
+        }
+        return;
+    }
+
+    for (auto entity : view) {
+        auto& focus = view.get<UIFocusNavigableComponent>(entity);
+        focus.is_focused = false;
+    }
+
+    if (focused_entity_ == entt::null) {
+        entt::entity best = entt::null;
+        int best_tab = std::numeric_limits<int>::max();
+        for (auto entity : view) {
+            auto& focus = view.get<UIFocusNavigableComponent>(entity);
+            auto& ui = view.get<UIRendererComponent>(entity);
+            if (!ui.visible || !ui.interactable) continue;
+            if (focus.tab_index < best_tab) {
+                best_tab = focus.tab_index;
+                best = entity;
+            }
+        }
+        focused_entity_ = best;
+    } else if (confirm) {
+        auto& ui = registry.get<UIRendererComponent>(focused_entity_);
+        if (ui.on_click) ui.on_click(focused_entity_);
+        auto* button = registry.try_get<UIButtonComponent>(focused_entity_);
+        if (button && button->on_click) button->on_click(focused_entity_);
+        if (auto* toggle = registry.try_get<UIToggleComponent>(focused_entity_)) {
+            toggle->is_on = !toggle->is_on;
+            toggle->transition_progress = 0.0f;
+            if (toggle->on_value_changed) toggle->on_value_changed(focused_entity_, toggle->is_on);
+        }
+        dse::core::EventBus::Instance().Publish<dse::core::UiClickEvent>(static_cast<std::uint32_t>(focused_entity_));
+    } else {
+        auto& cur_focus = registry.get<UIFocusNavigableComponent>(focused_entity_);
+        entt::entity nav_target = entt::null;
+
+        if (want_up && cur_focus.nav_up != entt::null) nav_target = cur_focus.nav_up;
+        else if (want_down && cur_focus.nav_down != entt::null) nav_target = cur_focus.nav_down;
+        else if (want_left && cur_focus.nav_left != entt::null) nav_target = cur_focus.nav_left;
+        else if (want_right && cur_focus.nav_right != entt::null) nav_target = cur_focus.nav_right;
+
+        if (nav_target != entt::null && registry.valid(nav_target) &&
+            registry.all_of<UIFocusNavigableComponent, UIRendererComponent>(nav_target)) {
+            auto& target_ui = registry.get<UIRendererComponent>(nav_target);
+            if (target_ui.visible && target_ui.interactable) {
+                focused_entity_ = nav_target;
+            }
+        } else if (want_next || want_prev || ((want_up || want_down) && nav_target == entt::null)) {
+            std::vector<std::pair<int, entt::entity>> sorted;
+            for (auto entity : view) {
+                auto& ui = view.get<UIRendererComponent>(entity);
+                if (!ui.visible || !ui.interactable) continue;
+                auto& f = view.get<UIFocusNavigableComponent>(entity);
+                sorted.push_back({f.tab_index, entity});
+            }
+            std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            });
+            if (!sorted.empty()) {
+                int cur_pos = -1;
+                for (int i = 0; i < static_cast<int>(sorted.size()); ++i) {
+                    if (sorted[i].second == focused_entity_) { cur_pos = i; break; }
+                }
+                int next_pos;
+                if (want_prev || want_up) {
+                    next_pos = (cur_pos <= 0) ? static_cast<int>(sorted.size()) - 1 : cur_pos - 1;
+                } else {
+                    next_pos = (cur_pos >= static_cast<int>(sorted.size()) - 1) ? 0 : cur_pos + 1;
+                }
+                focused_entity_ = sorted[next_pos].second;
+            }
+        }
+    }
+
+    if (focused_entity_ != entt::null && registry.valid(focused_entity_)) {
+        auto& focus = registry.get<UIFocusNavigableComponent>(focused_entity_);
+        focus.is_focused = true;
     }
 }
 

@@ -121,7 +121,22 @@ private:
      */
     void UpdateTextInputs(entt::registry& registry, float dt);
 
+    /**
+     * @brief 更新下拉菜单的展开/收起与选项点击
+     */
+    void UpdateDropdowns(entt::registry& registry, float dt, const glm::vec2& mouse_pos, bool is_mouse_down);
+
+    /**
+     * @brief 更新焦点导航系统（Tab / 方向键 / 手柄）
+     */
+    void UpdateFocusNavigation(entt::registry& registry);
+
     bool was_mouse_down_ = false;
+    entt::entity focused_entity_ = entt::null;
+    bool prev_gp_nav_up_ = false;
+    bool prev_gp_nav_down_ = false;
+    bool prev_gp_nav_left_ = false;
+    bool prev_gp_nav_right_ = false;
 };
 
 } // namespace gameplay2d

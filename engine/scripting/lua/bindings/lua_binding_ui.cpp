@@ -6,6 +6,7 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/ecs/ui.h"
+#include "engine/ecs/ui_serializer.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -1057,6 +1058,253 @@ int L_UiGetProgress(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// UIDropdownComponent 绑定
+// ============================================================
+
+// ui.add_dropdown(entity, item_height, max_visible_items)
+int L_UiAddDropdown(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& dd = world->registry().emplace_or_replace<UIDropdownComponent>(e);
+    dd.item_height = static_cast<float>(luaL_optnumber(L, 2, 40.0));
+    dd.max_visible_items = static_cast<int>(luaL_optinteger(L, 3, 5));
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.dropdown_add_option(entity, text, value)
+int L_UiDropdownAddOption(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIDropdownComponent>(e)) return 0;
+    auto& dd = world->registry().get<UIDropdownComponent>(e);
+    UIDropdownOption opt;
+    opt.text = luaL_checkstring(L, 2);
+    opt.value = luaL_optstring(L, 3, opt.text.c_str());
+    dd.options.push_back(std::move(opt));
+    return 0;
+}
+
+// ui.dropdown_clear_options(entity)
+int L_UiDropdownClearOptions(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIDropdownComponent>(e)) return 0;
+    world->registry().get<UIDropdownComponent>(e).options.clear();
+    return 0;
+}
+
+// ui.set_dropdown_index(entity, index)
+int L_UiSetDropdownIndex(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIDropdownComponent>(e)) return 0;
+    world->registry().get<UIDropdownComponent>(e).selected_index = static_cast<int>(luaL_checkinteger(L, 2));
+    return 0;
+}
+
+// ui.get_dropdown_index(entity) → index
+int L_UiGetDropdownIndex(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushinteger(L, -1); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIDropdownComponent>(e)) {
+        lua_pushinteger(L, world->registry().get<UIDropdownComponent>(e).selected_index);
+    } else {
+        lua_pushinteger(L, -1);
+    }
+    return 1;
+}
+
+// ui.get_dropdown_value(entity) → string
+int L_UiGetDropdownValue(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushstring(L, ""); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIDropdownComponent>(e)) {
+        lua_pushstring(L, world->registry().get<UIDropdownComponent>(e).GetSelectedValue().c_str());
+    } else {
+        lua_pushstring(L, "");
+    }
+    return 1;
+}
+
+// ui.set_dropdown_open(entity, open)
+int L_UiSetDropdownOpen(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIDropdownComponent>(e)) return 0;
+    world->registry().get<UIDropdownComponent>(e).is_open = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+
+// ============================================================
+// UIFilledImageComponent 绑定
+// ============================================================
+
+// ui.add_filled_image(entity, fill_amount, fill_method, fill_origin, clockwise)
+int L_UiAddFilledImage(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& fi = world->registry().emplace_or_replace<UIFilledImageComponent>(e);
+    fi.fill_amount = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    int method = static_cast<int>(luaL_optinteger(L, 3, 0));
+    fi.fill_method = (method >= 0 && method <= 4) ? static_cast<UIFillMethod>(method) : UIFillMethod::Horizontal;
+    int origin = static_cast<int>(luaL_optinteger(L, 4, 0));
+    fi.fill_origin = (origin >= 0 && origin <= 4) ? static_cast<UIFillOrigin>(origin) : UIFillOrigin::Left;
+    fi.clockwise = lua_gettop(L) >= 5 ? lua_toboolean(L, 5) != 0 : true;
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_fill_amount(entity, amount)
+int L_UiSetFillAmount(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIFilledImageComponent>(e)) return 0;
+    world->registry().get<UIFilledImageComponent>(e).fill_amount =
+        static_cast<float>(luaL_checknumber(L, 2));
+    return 0;
+}
+
+// ui.get_fill_amount(entity) → float
+int L_UiGetFillAmount(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIFilledImageComponent>(e)) {
+        lua_pushnumber(L, world->registry().get<UIFilledImageComponent>(e).fill_amount);
+    } else {
+        lua_pushnumber(L, 0);
+    }
+    return 1;
+}
+
+// ui.set_fill_method(entity, method, origin, clockwise)
+int L_UiSetFillMethod(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIFilledImageComponent>(e)) return 0;
+    auto& fi = world->registry().get<UIFilledImageComponent>(e);
+    int m = static_cast<int>(luaL_checkinteger(L, 2));
+    fi.fill_method = (m >= 0 && m <= 4) ? static_cast<UIFillMethod>(m) : UIFillMethod::Horizontal;
+    if (!lua_isnoneornil(L, 3)) {
+        int o = static_cast<int>(luaL_checkinteger(L, 3));
+        fi.fill_origin = (o >= 0 && o <= 4) ? static_cast<UIFillOrigin>(o) : UIFillOrigin::Left;
+    }
+    if (!lua_isnoneornil(L, 4)) fi.clockwise = lua_toboolean(L, 4) != 0;
+    return 0;
+}
+
+// ============================================================
+// UIFocusNavigableComponent 绑定
+// ============================================================
+
+// ui.add_focus_navigable(entity, tab_index)
+int L_UiAddFocusNavigable(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& fn = world->registry().emplace_or_replace<UIFocusNavigableComponent>(e);
+    fn.tab_index = static_cast<int>(luaL_optinteger(L, 2, 0));
+    if (!world->registry().all_of<UIRendererComponent>(e)) {
+        world->registry().emplace<UIRendererComponent>(e);
+    }
+    return 0;
+}
+
+// ui.set_focus_nav(entity, up, down, left, right)
+int L_UiSetFocusNav(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIFocusNavigableComponent>(e)) return 0;
+    auto& fn = world->registry().get<UIFocusNavigableComponent>(e);
+    if (!lua_isnoneornil(L, 2)) fn.nav_up = LuaEntityFromInteger(luaL_checkinteger(L, 2));
+    if (!lua_isnoneornil(L, 3)) fn.nav_down = LuaEntityFromInteger(luaL_checkinteger(L, 3));
+    if (!lua_isnoneornil(L, 4)) fn.nav_left = LuaEntityFromInteger(luaL_checkinteger(L, 4));
+    if (!lua_isnoneornil(L, 5)) fn.nav_right = LuaEntityFromInteger(luaL_checkinteger(L, 5));
+    return 0;
+}
+
+// ui.is_focused(entity) → bool
+int L_UiIsFocused(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UIFocusNavigableComponent>(e)) {
+        lua_pushboolean(L, world->registry().get<UIFocusNavigableComponent>(e).is_focused ? 1 : 0);
+    } else {
+        lua_pushboolean(L, 0);
+    }
+    return 1;
+}
+
+// ui.set_focus_tint(entity, r, g, b, a)
+int L_UiSetFocusTint(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIFocusNavigableComponent>(e)) return 0;
+    auto& fn = world->registry().get<UIFocusNavigableComponent>(e);
+    fn.focus_tint = glm::vec4(
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+    return 0;
+}
+
+// ============================================================
+// UI 序列化绑定
+// ============================================================
+
+// ui.load_from_json(json_string) → table of entity ids
+int L_UiLoadFromJson(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_newtable(L); return 1; }
+    const char* json_str = luaL_checkstring(L, 1);
+    dse::UISerializer serializer;
+    auto entities = serializer.LoadFromJson(world->registry(), json_str);
+    lua_newtable(L);
+    for (int i = 0; i < static_cast<int>(entities.size()); ++i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(entities[i]));
+        lua_rawseti(L, -2, i + 1);
+    }
+    return 1;
+}
+
+// ui.load_from_file(file_path) → table of entity ids
+int L_UiLoadFromFile(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_newtable(L); return 1; }
+    const char* file_path = luaL_checkstring(L, 1);
+    dse::UISerializer serializer;
+    auto entities = serializer.LoadFromFile(world->registry(), file_path);
+    lua_newtable(L);
+    for (int i = 0; i < static_cast<int>(entities.size()); ++i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(entities[i]));
+        lua_rawseti(L, -2, i + 1);
+    }
+    return 1;
+}
+
 void RegisterUiBindings(lua_State* L) {
     auto set_fn = [L](const char* name, lua_CFunction fn) {
         lua_pushcfunction(L, fn);
@@ -1136,6 +1384,27 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("add_progress_bar", L_UiAddProgressBar);
     set_fn("set_progress", L_UiSetProgress);
     set_fn("get_progress", L_UiGetProgress);
+    // UIDropdownComponent
+    set_fn("add_dropdown", L_UiAddDropdown);
+    set_fn("dropdown_add_option", L_UiDropdownAddOption);
+    set_fn("dropdown_clear_options", L_UiDropdownClearOptions);
+    set_fn("set_dropdown_index", L_UiSetDropdownIndex);
+    set_fn("get_dropdown_index", L_UiGetDropdownIndex);
+    set_fn("get_dropdown_value", L_UiGetDropdownValue);
+    set_fn("set_dropdown_open", L_UiSetDropdownOpen);
+    // UIFilledImageComponent
+    set_fn("add_filled_image", L_UiAddFilledImage);
+    set_fn("set_fill_amount", L_UiSetFillAmount);
+    set_fn("get_fill_amount", L_UiGetFillAmount);
+    set_fn("set_fill_method", L_UiSetFillMethod);
+    // UIFocusNavigableComponent
+    set_fn("add_focus_navigable", L_UiAddFocusNavigable);
+    set_fn("set_focus_nav", L_UiSetFocusNav);
+    set_fn("is_focused", L_UiIsFocused);
+    set_fn("set_focus_tint", L_UiSetFocusTint);
+    // UI 序列化
+    set_fn("load_from_json", L_UiLoadFromJson);
+    set_fn("load_from_file", L_UiLoadFromFile);
 }
 
 }

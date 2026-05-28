@@ -7,12 +7,6 @@
 #include "engine/platform/screen.h"
 #include <cmath>
 
-// Screen 的静态成员在 screen.cpp 中定义，但 WINDOWS_EXPORT_ALL_SYMBOLS 不导出数据符号，
-// 因此在测试中重新提供定义，避免 LNK2001。
-int Screen::width_ = 0;
-int Screen::height_ = 0;
-float Screen::aspect_ratio_ = 0.0f;
-
 class ScreenTest : public ::testing::Test {
 protected:
     void SetUp() override { Screen::Reset(); }

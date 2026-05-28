@@ -414,4 +414,82 @@ struct UIProgressBarComponent {
     }
 };
 
+// ============================================================
+// P2: 下拉菜单 (Dropdown)
+// ============================================================
+
+struct UIDropdownOption {
+    std::string text;
+    std::string value;
+};
+
+struct UIDropdownComponent {
+    std::vector<UIDropdownOption> options;                ///< 选项列表
+    int selected_index = -1;                             ///< 当前选中索引 (-1 = 未选中)
+    bool is_open = false;                                ///< 下拉列表是否展开
+    float item_height = 40.0f;                           ///< 每项高度（像素）
+    int max_visible_items = 5;                           ///< 最大可见项数（超出时可滚动）
+    glm::vec4 normal_color = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);     ///< 常态背景色
+    glm::vec4 hover_color = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);      ///< 悬停项背景色
+    glm::vec4 selected_color = glm::vec4(0.2f, 0.5f, 0.8f, 1.0f);   ///< 选中项背景色
+    glm::vec4 text_color = glm::vec4(1.0f);              ///< 文本颜色
+    float scroll_offset = 0.0f;                          ///< 列表内部滚动偏移
+    int hovered_index = -1;                              ///< 当前悬停项索引
+
+    std::function<void(Entity, int, const std::string&)> on_value_changed; ///< 选择变更回调(entity, index, value)
+
+    std::string GetSelectedText() const {
+        if (selected_index >= 0 && selected_index < static_cast<int>(options.size()))
+            return options[selected_index].text;
+        return "";
+    }
+
+    std::string GetSelectedValue() const {
+        if (selected_index >= 0 && selected_index < static_cast<int>(options.size()))
+            return options[selected_index].value;
+        return "";
+    }
+};
+
+// ============================================================
+// P2: 填充图片 (Filled Image)
+// ============================================================
+
+enum class UIFillMethod {
+    Horizontal = 0,
+    Vertical = 1,
+    Radial360 = 2,
+    Radial180 = 3,
+    Radial90 = 4
+};
+
+enum class UIFillOrigin {
+    Left = 0,
+    Right = 1,
+    Bottom = 2,
+    Top = 3,
+    Center = 4
+};
+
+struct UIFilledImageComponent {
+    float fill_amount = 1.0f;                            ///< 填充量 [0, 1]
+    UIFillMethod fill_method = UIFillMethod::Horizontal; ///< 填充方式
+    UIFillOrigin fill_origin = UIFillOrigin::Left;       ///< 填充起点
+    bool clockwise = true;                               ///< 径向填充方向（仅 Radial 模式有效）
+};
+
+// ============================================================
+// P2: 焦点导航 (Focus Navigation)
+// ============================================================
+
+struct UIFocusNavigableComponent {
+    int tab_index = 0;                                   ///< Tab 顺序索引（越小越先聚焦）
+    Entity nav_up = entt::null;                          ///< 向上导航目标（手动指定）
+    Entity nav_down = entt::null;                        ///< 向下导航目标
+    Entity nav_left = entt::null;                        ///< 向左导航目标
+    Entity nav_right = entt::null;                       ///< 向右导航目标
+    bool is_focused = false;                             ///< 当前是否拥有焦点
+    glm::vec4 focus_tint = glm::vec4(1.0f, 0.9f, 0.4f, 1.0f); ///< 聚焦时的高亮染色
+};
+
 #endif // DSE_ECS_COMPONENTS_2D_UI_H
