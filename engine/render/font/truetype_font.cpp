@@ -19,6 +19,44 @@
 namespace dse {
 namespace render {
 
+namespace {
+/// 从 UTF-8 字符串解码下一个码点，i 为当前偏移，解码后推进 i
+int DecodeUtf8(const std::string& text, size_t& i) {
+    int cp = static_cast<unsigned char>(text[i]);
+    if ((cp & 0x80) == 0) {
+        ++i;
+    } else if ((cp & 0xE0) == 0xC0 && i + 1 < text.size()) {
+        cp = ((cp & 0x1F) << 6) | (static_cast<unsigned char>(text[i + 1]) & 0x3F);
+        i += 2;
+    } else if ((cp & 0xF0) == 0xE0 && i + 2 < text.size()) {
+        cp = ((cp & 0x0F) << 12)
+           | ((static_cast<unsigned char>(text[i + 1]) & 0x3F) << 6)
+           | (static_cast<unsigned char>(text[i + 2]) & 0x3F);
+        i += 3;
+    } else if ((cp & 0xF8) == 0xF0 && i + 3 < text.size()) {
+        cp = ((cp & 0x07) << 18)
+           | ((static_cast<unsigned char>(text[i + 1]) & 0x3F) << 12)
+           | ((static_cast<unsigned char>(text[i + 2]) & 0x3F) << 6)
+           | (static_cast<unsigned char>(text[i + 3]) & 0x3F);
+        i += 4;
+    } else {
+        ++i;
+        return -1;
+    }
+    return cp;
+}
+
+/// CJK 字符可在字符前/后断行
+bool IsCJKCodepoint(int cp) {
+    return (cp >= 0x4E00 && cp <= 0x9FFF)   // CJK Unified
+        || (cp >= 0x3400 && cp <= 0x4DBF)   // CJK Extension A
+        || (cp >= 0x3000 && cp <= 0x303F)   // CJK Punctuation
+        || (cp >= 0xFF00 && cp <= 0xFFEF)   // Fullwidth Forms
+        || (cp >= 0x3040 && cp <= 0x309F)   // Hiragana
+        || (cp >= 0x30A0 && cp <= 0x30FF);  // Katakana
+}
+} // anonymous namespace
+
 bool TrueTypeFont::LoadFromFile(const std::string& ttf_path, const FontAtlasConfig& config) {
     std::ifstream file(ttf_path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
@@ -202,27 +240,8 @@ std::vector<TrueTypeFont::CharLayout> TrueTypeFont::LayoutText(const std::string
     std::vector<CharLayout> result;
     float cursor_x = 0.0f;
     for (size_t i = 0; i < text.size(); ) {
-        int cp = static_cast<unsigned char>(text[i]);
-        if ((cp & 0x80) == 0) {
-            ++i;
-        } else if ((cp & 0xE0) == 0xC0 && i + 1 < text.size()) {
-            cp = ((cp & 0x1F) << 6) | (static_cast<unsigned char>(text[i + 1]) & 0x3F);
-            i += 2;
-        } else if ((cp & 0xF0) == 0xE0 && i + 2 < text.size()) {
-            cp = ((cp & 0x0F) << 12)
-               | ((static_cast<unsigned char>(text[i + 1]) & 0x3F) << 6)
-               | (static_cast<unsigned char>(text[i + 2]) & 0x3F);
-            i += 3;
-        } else if ((cp & 0xF8) == 0xF0 && i + 3 < text.size()) {
-            cp = ((cp & 0x07) << 18)
-               | ((static_cast<unsigned char>(text[i + 1]) & 0x3F) << 12)
-               | ((static_cast<unsigned char>(text[i + 2]) & 0x3F) << 6)
-               | (static_cast<unsigned char>(text[i + 3]) & 0x3F);
-            i += 4;
-        } else {
-            ++i;
-            continue;
-        }
+        int cp = DecodeUtf8(text, i);
+        if (cp < 0) continue;
 
         CharLayout cl;
         cl.codepoint = cp;
@@ -235,6 +254,185 @@ std::vector<TrueTypeFont::CharLayout> TrueTypeFont::LayoutText(const std::string
 
         result.push_back(cl);
     }
+    return result;
+}
+
+TrueTypeFont::LayoutResult TrueTypeFont::LayoutTextEx(
+    const std::string& text, const LayoutParams& params) const {
+
+    LayoutResult result;
+    if (text.empty() || !IsValid()) return result;
+
+    const float line_h = line_height_ + params.line_spacing_extra;
+    const float max_w = params.max_width;
+    const bool wrap = (max_w > 0.0f) && (params.overflow == 0);
+    const bool truncate = (max_w > 0.0f) && (params.overflow == 1);
+    const bool ellipsis = (max_w > 0.0f) && (params.overflow == 2);
+
+    // Phase 1: 解码所有码点
+    struct CodepointInfo {
+        int codepoint;
+        float advance;
+    };
+    std::vector<CodepointInfo> codepoints;
+    for (size_t i = 0; i < text.size(); ) {
+        int cp = DecodeUtf8(text, i);
+        if (cp < 0) continue;
+        float adv = 0.0f;
+        if (auto* gm = GetGlyph(cp)) adv = gm->advance_x;
+        codepoints.push_back({cp, adv});
+    }
+
+    // 省略号宽度
+    float ellipsis_w = 0.0f;
+    if (ellipsis) {
+        if (auto* dot = GetGlyph('.')) {
+            ellipsis_w = dot->advance_x * 3.0f;
+        }
+    }
+
+    // Phase 2: 按行分割
+    struct LineInfo {
+        size_t start;       // codepoints 索引
+        size_t count;
+        float width;
+        bool truncated;
+    };
+    std::vector<LineInfo> lines;
+    float cursor_x = 0.0f;
+    size_t line_start = 0;
+    size_t last_break_pos = 0;      // 上一个可断行点
+    float width_at_break = 0.0f;
+
+    for (size_t idx = 0; idx < codepoints.size(); ++idx) {
+        int cp = codepoints[idx].codepoint;
+        float adv = codepoints[idx].advance;
+
+        // 换行符
+        if (cp == '\n') {
+            lines.push_back({line_start, idx - line_start, cursor_x, false});
+            line_start = idx + 1;
+            cursor_x = 0.0f;
+            last_break_pos = line_start;
+            width_at_break = 0.0f;
+            continue;
+        }
+
+        // 记录可断行点（空格后/CJK 字符前）
+        if (cp == ' ' || cp == '\t') {
+            last_break_pos = idx + 1;
+            width_at_break = cursor_x + adv;
+        } else if (IsCJKCodepoint(cp)) {
+            last_break_pos = idx;
+            width_at_break = cursor_x;
+        }
+
+        float new_x = cursor_x + adv;
+
+        // 需要换行?
+        if (max_w > 0.0f && new_x > max_w && idx > line_start) {
+            if (wrap) {
+                // 行数限制
+                if (params.max_lines > 0 && static_cast<int>(lines.size()) + 1 >= params.max_lines) {
+                    // 最后一行截断到 max_w
+                    lines.push_back({line_start, idx - line_start, cursor_x, true});
+                    line_start = codepoints.size(); // 停止
+                    break;
+                }
+
+                // 回退到断行点
+                if (last_break_pos > line_start) {
+                    lines.push_back({line_start, last_break_pos - line_start, width_at_break, false});
+                    line_start = last_break_pos;
+                    // 跳过断行点处的空格
+                    while (line_start < codepoints.size() && codepoints[line_start].codepoint == ' ') {
+                        ++line_start;
+                    }
+                    idx = line_start > 0 ? line_start - 1 : 0; // for 循环 ++idx
+                } else {
+                    // 无断行点，强制在当前字符前断行
+                    lines.push_back({line_start, idx - line_start, cursor_x, false});
+                    line_start = idx;
+                    idx = idx > 0 ? idx - 1 : 0;
+                }
+                cursor_x = 0.0f;
+                last_break_pos = line_start;
+                width_at_break = 0.0f;
+                continue;
+            } else if (truncate) {
+                lines.push_back({line_start, idx - line_start, cursor_x, true});
+                line_start = codepoints.size();
+                break;
+            } else if (ellipsis) {
+                // 回退直到能放下省略号
+                float line_w = cursor_x;
+                size_t end = idx;
+                while (end > line_start && line_w + ellipsis_w > max_w) {
+                    --end;
+                    line_w -= codepoints[end].advance;
+                }
+                lines.push_back({line_start, end - line_start, line_w, true});
+                line_start = codepoints.size();
+                break;
+            }
+        }
+
+        cursor_x = new_x;
+    }
+
+    // 最后一行
+    if (line_start < codepoints.size()) {
+        lines.push_back({line_start, codepoints.size() - line_start, cursor_x, false});
+    }
+    // 空文本至少 1 行
+    if (lines.empty()) {
+        lines.push_back({0, 0, 0.0f, false});
+    }
+
+    // Phase 3: 生成 CharLayout 并应用对齐
+    result.line_count = static_cast<int>(lines.size());
+    float max_line_w = 0.0f;
+
+    for (int line_idx = 0; line_idx < static_cast<int>(lines.size()); ++line_idx) {
+        auto& line = lines[line_idx];
+        max_line_w = std::fmax(max_line_w, line.width);
+
+        // 对齐偏移
+        float align_offset = 0.0f;
+        if (max_w > 0.0f) {
+            float remaining = max_w - line.width;
+            if (params.align == 1) align_offset = remaining * 0.5f;       // 居中
+            else if (params.align == 2) align_offset = remaining;          // 右对齐
+        }
+
+        float cx = align_offset;
+        float cy = static_cast<float>(line_idx) * line_h;
+
+        for (size_t j = 0; j < line.count; ++j) {
+            auto& cpi = codepoints[line.start + j];
+            CharLayout cl;
+            cl.codepoint = cpi.codepoint;
+            cl.x = cx;
+            cl.y = cy;
+            cx += cpi.advance;
+            result.chars.push_back(cl);
+        }
+
+        // 省略号: 如果该行被截断且为省略号模式
+        if (line.truncated && ellipsis) {
+            for (int d = 0; d < 3; ++d) {
+                CharLayout dot;
+                dot.codepoint = '.';
+                dot.x = cx;
+                dot.y = cy;
+                if (auto* gm = GetGlyph('.')) cx += gm->advance_x;
+                result.chars.push_back(dot);
+            }
+        }
+    }
+
+    result.total_width = max_w > 0.0f ? max_w : max_line_w;
+    result.total_height = static_cast<float>(result.line_count) * line_h;
     return result;
 }
 

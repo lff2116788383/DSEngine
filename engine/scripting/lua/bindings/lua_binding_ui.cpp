@@ -178,6 +178,23 @@ int L_UiAddTtfLabel(lua_State* L) {
     return 0;
 }
 
+// dse.ui.set_label_layout(entity, max_width [, align [, overflow [, max_lines [, line_spacing]]]])
+int L_UiSetLabelLayout(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (world->registry().valid(e) && world->registry().all_of<UILabelComponent>(e)) {
+        auto& label = world->registry().get<UILabelComponent>(e);
+        label.max_width = static_cast<float>(luaL_checknumber(L, 2));
+        label.text_align = static_cast<int>(luaL_optinteger(L, 3, 0));
+        label.overflow_mode = static_cast<int>(luaL_optinteger(L, 4, 0));
+        label.max_lines = static_cast<int>(luaL_optinteger(L, 5, 0));
+        label.line_spacing_extra = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+        label.dirty = true;
+    }
+    return 0;
+}
+
 // dse.ui.set_label_font(entity, font_id [, font_size])
 int L_UiSetLabelFont(lua_State* L) {
     World* world = GetWorld();
@@ -573,6 +590,64 @@ int L_UiSetCanvasScaler(lua_State* L) {
     if (!lua_isnoneornil(L, 3)) scaler.reference_resolution.y = static_cast<float>(luaL_checknumber(L, 3));
     if (!lua_isnoneornil(L, 4)) scaler.scale_factor = static_cast<float>(luaL_checknumber(L, 4));
     if (!lua_isnoneornil(L, 5)) scaler.match_width_or_height = (lua_toboolean(L, 5) != 0);
+    return 0;
+}
+
+// ============================================================
+// UIBoxLayoutComponent 绑定
+// ============================================================
+
+// ui.add_box_layout(entity, vertical, spacing [, pad_x, pad_y, align_main, align_cross, reverse])
+int L_UiAddBoxLayout(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& box = world->registry().emplace_or_replace<UIBoxLayoutComponent>(e);
+    box.vertical = lua_toboolean(L, 2) != 0;
+    box.spacing = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    box.padding.x = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    box.padding.y = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    box.align_main = static_cast<int>(luaL_optinteger(L, 6, 0));
+    box.align_cross = static_cast<int>(luaL_optinteger(L, 7, 0));
+    box.reverse = lua_gettop(L) >= 8 ? lua_toboolean(L, 8) != 0 : false;
+    return 0;
+}
+
+// ui.set_box_layout(entity, vertical, spacing, pad_x, pad_y, align_main, align_cross, reverse)
+int L_UiSetBoxLayout(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<UIBoxLayoutComponent>(e)) return 0;
+    auto& box = world->registry().get<UIBoxLayoutComponent>(e);
+    if (!lua_isnoneornil(L, 2)) box.vertical = lua_toboolean(L, 2) != 0;
+    if (!lua_isnoneornil(L, 3)) box.spacing = static_cast<float>(luaL_checknumber(L, 3));
+    if (!lua_isnoneornil(L, 4)) box.padding.x = static_cast<float>(luaL_checknumber(L, 4));
+    if (!lua_isnoneornil(L, 5)) box.padding.y = static_cast<float>(luaL_checknumber(L, 5));
+    if (!lua_isnoneornil(L, 6)) box.align_main = static_cast<int>(luaL_checkinteger(L, 6));
+    if (!lua_isnoneornil(L, 7)) box.align_cross = static_cast<int>(luaL_checkinteger(L, 7));
+    if (!lua_isnoneornil(L, 8)) box.reverse = lua_toboolean(L, 8) != 0;
+    return 0;
+}
+
+// ============================================================
+// UIContentSizeFitterComponent 绑定
+// ============================================================
+
+// ui.add_content_size_fitter(entity, fit_w, fit_h [, min_w, min_h, max_w, max_h])
+int L_UiAddContentSizeFitter(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e)) return 0;
+    auto& fitter = world->registry().emplace_or_replace<UIContentSizeFitterComponent>(e);
+    fitter.fit_width = static_cast<int>(luaL_optinteger(L, 2, 0));
+    fitter.fit_height = static_cast<int>(luaL_optinteger(L, 3, 0));
+    fitter.min_size.x = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    fitter.min_size.y = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    fitter.max_size.x = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    fitter.max_size.y = static_cast<float>(luaL_optnumber(L, 7, 0.0));
     return 0;
 }
 
@@ -994,6 +1069,7 @@ void RegisterUiBindings(lua_State* L) {
     set_fn("add_ttf_label", L_UiAddTtfLabel);
     set_fn("set_label_text", L_UiSetLabelText);
     set_fn("set_label_font", L_UiSetLabelFont);
+    set_fn("set_label_layout", L_UiSetLabelLayout);
     set_fn("set_label_number", L_UiSetLabelNumber);
     set_fn("add_panel", L_UiAddPanel);
     set_fn("add_button", L_UiAddButton);
@@ -1021,6 +1097,11 @@ void RegisterUiBindings(lua_State* L) {
     // UICanvasScalerComponent
     set_fn("add_canvas_scaler", L_UiAddCanvasScaler);
     set_fn("set_canvas_scaler", L_UiSetCanvasScaler);
+    // UIBoxLayoutComponent
+    set_fn("add_box_layout", L_UiAddBoxLayout);
+    set_fn("set_box_layout", L_UiSetBoxLayout);
+    // UIContentSizeFitterComponent
+    set_fn("add_content_size_fitter", L_UiAddContentSizeFitter);
     // UIAnimationComponent
     set_fn("add_ui_animation", L_UiAddAnimation);
     set_fn("animate_position", L_UiAnimatePosition);

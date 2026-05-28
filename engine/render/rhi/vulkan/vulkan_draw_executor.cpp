@@ -39,6 +39,7 @@ constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
 constexpr size_t MAX_SPRITE_INDICES = MAX_SPRITES * 6;
 constexpr size_t MAX_MESH_VERTICES = 131072;
 constexpr size_t MAX_MESH_INDICES = 262144;
+static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
 
 // ============================================================================
 // 辅助：创建 VkBuffer + VkDeviceMemory
@@ -161,6 +162,22 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                        sprite_ibo_, sprite_ibo_mem_);
+
+    // 预填充 sprite IBO（quad 索引）
+    {
+        std::vector<uint16_t> indices(MAX_SPRITE_INDICES);
+        for (size_t i = 0; i < MAX_SPRITES; ++i) {
+            uint16_t base = static_cast<uint16_t>(i * 4);
+            indices[i * 6 + 0] = base + 0;
+            indices[i * 6 + 1] = base + 1;
+            indices[i * 6 + 2] = base + 2;
+            indices[i * 6 + 3] = base + 0;
+            indices[i * 6 + 4] = base + 2;
+            indices[i * 6 + 5] = base + 3;
+        }
+        WriteToBuffer(device, sprite_ibo_mem_, 0,
+                      indices.size() * sizeof(uint16_t), indices.data());
+    }
 
     // --- 3D 网格 VBO/IBO ---
     // 多 pass 每帧累积写入，需要足够大的缓冲区
@@ -2065,24 +2082,100 @@ void VulkanDrawExecutor::DrawSpriteBatch(
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline);
 
+    // SDF pipeline（惰性创建）
+    const VulkanShaderProgram* sdf_program = shader_mgr.GetProgram(shader_mgr.text_sdf_shader_handle());
+    VkPipeline sdf_pipeline = VK_NULL_HANDLE;
+    if (sdf_program) {
+        sdf_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+            sprite_state, sdf_program, active_rp,
+            { VkVertexInputBindingDescription{0, 32, VK_VERTEX_INPUT_RATE_VERTEX} },
+            {
+                {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+                {1, 0, VK_FORMAT_R32G32_SFLOAT, 8},
+                {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+            },
+            context_->swapchain_extent(),
+            current_msaa_samples_,
+            current_color_attachment_count_,
+            false);
+    }
+    bool using_sdf = false;
+
     // VP 矩阵通过 push constants 传递（避免 per_frame_ubo_ 被后续 pass 覆盖）
     const glm::mat4 sprite_vp = projection * view;
 
-    // 逐精灵组绘制（按纹理分组批处理可优化，当前逐个绘制）
-    // 精灵顶点格式：vec2 pos, vec2 uv, vec4 color
-    struct SpriteVertex {
-        float pos[2];
-        float uv[2];
-        float color[4];
+    // 合批：model 预乘到顶点，push constants 使用 identity model
+    static const glm::vec4 quad_pos[4] = {
+        {-0.5f, -0.5f, 0.0f, 1.0f}, { 0.5f, -0.5f, 0.0f, 1.0f},
+        { 0.5f,  0.5f, 0.0f, 1.0f}, {-0.5f,  0.5f, 0.0f, 1.0f}
     };
 
-    int sprite_idx = 0;
-    VkDeviceSize sprite_vbo_offset = 0;
+    struct SpriteVertex { float pos[2]; float uv[2]; float color[4]; };
+    std::vector<SpriteVertex> batch_verts;
+    batch_verts.reserve(std::min(items.size(), MAX_SPRITES) * 4);
+
+    unsigned int cur_tex = items[0].texture_handle;
+    unsigned int cur_variant = items[0].shader_variant_key;
+    VkDeviceSize vbo_write_offset = 0;
+
+    auto flush_batch = [&]() {
+        if (batch_verts.empty()) return;
+        int quad_count = static_cast<int>(batch_verts.size()) / 4;
+
+        WriteToBuffer(context_->device(), sprite_vbo_mem_, vbo_write_offset,
+                      batch_verts.size() * sizeof(SpriteVertex), batch_verts.data());
+
+        // pipeline 切换
+        bool want_sdf = (cur_variant == kSdfVariantKey) && (sdf_pipeline != VK_NULL_HANDLE);
+        if (want_sdf != using_sdf) {
+            vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              want_sdf ? sdf_pipeline : sprite_pipeline);
+            using_sdf = want_sdf;
+        }
+
+        // push constants: identity model + VP
+        const VulkanShaderProgram* active_program = using_sdf ? sdf_program : sprite_program;
+        struct { glm::mat4 model; glm::mat4 vp; } push_data;
+        push_data.model = glm::mat4(1.0f);
+        push_data.vp = sprite_vp;
+        vkCmdPushConstants(cmd_buf, active_program->pipeline_layout,
+                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, sizeof(push_data), &push_data);
+
+        if (using_sdf) {
+            struct { float t, s, o, sh; } sdf_params = {0.5f, 0.1f, 0.0f, 0.0f};
+            vkCmdPushConstants(cmd_buf, active_program->pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT,
+                               128, sizeof(sdf_params), &sdf_params);
+        }
+
+        // descriptor set（纹理）
+        AllocateAndUpdateParticleDescriptorSets(cmd_buf, active_program,
+                                                 cur_tex, resource_mgr);
+
+        VkDeviceSize vbo_offsets[] = {vbo_write_offset};
+        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &sprite_vbo_, vbo_offsets);
+        vkCmdBindIndexBuffer(cmd_buf, sprite_ibo_, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(cmd_buf, static_cast<uint32_t>(quad_count * 6), 1, 0, 0, 0);
+
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.sprite_count += quad_count;
+        if (quad_count > global_state_.current_frame_stats.max_batch_sprites)
+            global_state_.current_frame_stats.max_batch_sprites = quad_count;
+
+        vbo_write_offset += batch_verts.size() * sizeof(SpriteVertex);
+        batch_verts.clear();
+    };
 
     for (const auto& item : items) {
-        sprite_idx++;
+        if (item.texture_handle != cur_tex ||
+            item.shader_variant_key != cur_variant ||
+            batch_verts.size() / 4 >= MAX_SPRITES) {
+            flush_batch();
+            cur_tex = item.texture_handle;
+            cur_variant = item.shader_variant_key;
+        }
 
-        // UV 解释逻辑与 OpenGL/DX11 DrawBatch 保持一致
         float u_min = item.uv.x, v_min = item.uv.y;
         float u_max, v_max;
         if (item.uv.z > 0.0f && item.uv.w > 0.0f) {
@@ -2092,49 +2185,15 @@ void VulkanDrawExecutor::DrawSpriteBatch(
         } else {
             u_min = 0.0f; v_min = 0.0f; u_max = 1.0f; v_max = 1.0f;
         }
-
-        // NeedsTextureYFlip=true → 纹理已 Y-flip 加载，UV 直接使用
+        float uvs[4][2] = {{u_min,v_min},{u_max,v_min},{u_max,v_max},{u_min,v_max}};
         float r = item.color.r, g = item.color.g, b = item.color.b, a = item.color.a;
-        SpriteVertex vertices[4] = {
-            {{-0.5f, -0.5f}, {u_min, v_min}, {r, g, b, a}},  // BL
-            {{ 0.5f, -0.5f}, {u_max, v_min}, {r, g, b, a}},  // BR
-            {{ 0.5f,  0.5f}, {u_max, v_max}, {r, g, b, a}},  // TR
-            {{-0.5f,  0.5f}, {u_min, v_max}, {r, g, b, a}},  // TL
-        };
 
-        uint16_t indices[6] = {0, 1, 2, 0, 2, 3};
-
-        // 上传顶点到累积偏移
-        VkDeviceSize cur_vbo_offset = sprite_vbo_offset;
-        WriteToBuffer(context_->device(), sprite_vbo_mem_, sprite_vbo_offset, sizeof(vertices), vertices);
-        sprite_vbo_offset += sizeof(vertices);
-        if (sprite_idx == 1) {
-            WriteToBuffer(context_->device(), sprite_ibo_mem_, 0, sizeof(indices), indices);
+        for (int i = 0; i < 4; ++i) {
+            glm::vec4 wp = item.model * quad_pos[i];
+            batch_verts.push_back({{wp.x, wp.y}, {uvs[i][0], uvs[i][1]}, {r, g, b, a}});
         }
-
-        // Push constants: model + VP（128 bytes）— 使用实际 model 矩阵
-        struct { glm::mat4 model; glm::mat4 vp; } push_data;
-        push_data.model = item.model;
-        push_data.vp = sprite_vp;
-        vkCmdPushConstants(cmd_buf, sprite_program->pipeline_layout,
-                           VK_SHADER_STAGE_VERTEX_BIT,
-                           0, sizeof(push_data), &push_data);
-
-        // 分配并绑定 DescriptorSet
-        AllocateAndUpdateParticleDescriptorSets(cmd_buf, sprite_program,
-                                                 item.texture_handle, resource_mgr);
-
-        // 绑定 VBO + IBO
-        VkDeviceSize vbo_offsets[] = {cur_vbo_offset};
-        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &sprite_vbo_, vbo_offsets);
-        vkCmdBindIndexBuffer(cmd_buf, sprite_ibo_, 0, VK_INDEX_TYPE_UINT16);
-
-        vkCmdDrawIndexed(cmd_buf, 6, 1, 0, 0, 0);
-
-        global_state_.current_frame_stats.draw_calls++;
     }
-
-    global_state_.current_frame_stats.sprite_count += static_cast<int>(items.size());
+    flush_batch();
 }
 
 // ============================================================================

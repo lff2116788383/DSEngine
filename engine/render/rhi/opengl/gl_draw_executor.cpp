@@ -539,6 +539,8 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     unsigned int current_shader_variant = items[0].shader_variant_key;
     unsigned int current_blend_mode = items[0].blend_mode;
     const unsigned int additive_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("SPRITE_ADDITIVE"));
+    const unsigned int sdf_variant_key = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
+    bool using_sdf_shader = false;
 
     auto apply_blend = [&](unsigned int blend_mode, unsigned int shader_variant_key) {
         glEnable(GL_BLEND);
@@ -562,6 +564,34 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
 
         if (update_buffer_fn_) {
             update_buffer_fn_(vbo_handle_, 0, batch_vertices.size() * sizeof(BatchVertex), batch_vertices.data(), false);
+        }
+
+        // SDF shader 切换
+        bool want_sdf = (current_shader_variant == sdf_variant_key);
+        if (want_sdf && !using_sdf_shader) {
+            shader_mgr.InitTextSdfShader();
+            if (shader_mgr.text_sdf_shader_handle() != 0) {
+                glUseProgram(shader_mgr.text_sdf_shader_handle());
+                const auto& sdf_loc = shader_mgr.text_sdf_locations();
+                if (sdf_loc.texture >= 0) glUniform1i(sdf_loc.texture, slots.albedo);
+                if (sdf_loc.sdf_threshold >= 0) glUniform1f(sdf_loc.sdf_threshold, 0.5f);
+                if (sdf_loc.sdf_smoothing >= 0) glUniform1f(sdf_loc.sdf_smoothing, 0.1f);
+                if (sdf_loc.outline_width >= 0) glUniform1f(sdf_loc.outline_width, 0.0f);
+                if (sdf_loc.shadow_softness >= 0) glUniform1f(sdf_loc.shadow_softness, 0.0f);
+                ubo_mgr.BindAll();
+                using_sdf_shader = true;
+            }
+        } else if (!want_sdf && using_sdf_shader) {
+            glUseProgram(shader_mgr.pbr_shader_handle());
+            glUniform1i(loc.texture, slots.albedo);
+            if (loc.model >= 0) {
+                const glm::mat4 identity(1.0f);
+                glUniformMatrix4fv(loc.model, 1, GL_FALSE, glm::value_ptr(identity));
+            }
+            if (loc.skinned >= 0) glUniform1i(loc.skinned, 0);
+            if (loc.morph_enabled >= 0) glUniform1i(loc.morph_enabled, 0);
+            ubo_mgr.BindAll();
+            using_sdf_shader = false;
         }
 
         apply_blend(current_blend_mode, current_shader_variant);

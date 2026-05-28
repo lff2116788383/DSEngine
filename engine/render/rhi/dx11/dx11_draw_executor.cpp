@@ -13,6 +13,9 @@
 #include "engine/render/shaders/generated/embed/hair_vert.gen.h"
 #include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 
+static constexpr int DX11_MAX_BATCH_SPRITES = 4096;
+static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
+
 #include <cstring>
 #include <algorithm>
 #include <cmath>
@@ -70,6 +73,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_scene_cb_ = CreateConstantBuffer(sizeof(DX11PerSceneCB));
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
     sprite_push_cb_        = CreateConstantBuffer(128); // [model(64B) | vp(64B)] for sprite.vert
+    sdf_ps_cb_             = CreateConstantBuffer(144); // [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));
     per_spot_matrices_cb_  = CreateConstantBuffer(sizeof(DX11SpotMatricesCB));
@@ -161,6 +165,7 @@ void DX11DrawExecutor::Shutdown() {
     terrain_params_cb_.Reset();
 
     sprite_push_cb_.Reset();
+    sdf_ps_cb_.Reset();
     sprite_quad_vbo_.Reset();
     sprite_quad_ibo_.Reset();
     mesh_dynamic_vbo_.Reset();
@@ -200,25 +205,34 @@ void DX11DrawExecutor::Shutdown() {
 void DX11DrawExecutor::InitGeometryBuffers() {
     ID3D11Device* device = context_->device();
 
-    // ---- 精灵四边形 VBO（动态）4 顶点 × 32字节 ----
+    // ---- 精灵合批 VBO（动态）MAX_BATCH_SPRITES × 4 顶点 × 32B ----
     {
         D3D11_BUFFER_DESC bd{};
-        bd.ByteWidth = 4 * 32; // float2 pos + float2 uv + float4 color = 32B per vertex
+        bd.ByteWidth = DX11_MAX_BATCH_SPRITES * 4 * 32;
         bd.Usage = D3D11_USAGE_DYNAMIC;
         bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
         bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         device->CreateBuffer(&bd, nullptr, sprite_quad_vbo_.GetAddressOf());
     }
 
-    // ---- 精灵四边形 IBO（静态）6 索引 ----
+    // ---- 精灵合批 IBO（静态）预生成 quad 索引 ----
     {
-        unsigned short indices[] = {0, 1, 2, 0, 2, 3};
+        std::vector<uint16_t> indices(DX11_MAX_BATCH_SPRITES * 6);
+        for (int i = 0; i < DX11_MAX_BATCH_SPRITES; ++i) {
+            uint16_t base = static_cast<uint16_t>(i * 4);
+            indices[i * 6 + 0] = base + 0;
+            indices[i * 6 + 1] = base + 1;
+            indices[i * 6 + 2] = base + 2;
+            indices[i * 6 + 3] = base + 0;
+            indices[i * 6 + 4] = base + 2;
+            indices[i * 6 + 5] = base + 3;
+        }
         D3D11_BUFFER_DESC bd{};
-        bd.ByteWidth = sizeof(indices);
+        bd.ByteWidth = static_cast<UINT>(indices.size() * sizeof(uint16_t));
         bd.Usage = D3D11_USAGE_IMMUTABLE;
         bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
         D3D11_SUBRESOURCE_DATA init{};
-        init.pSysMem = indices;
+        init.pSysMem = indices.data();
         device->CreateBuffer(&bd, &init, sprite_quad_ibo_.GetAddressOf());
     }
 
@@ -498,31 +512,102 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
     if (items.empty()) return;
     ID3D11DeviceContext* dc = context_->device_context();
 
-    // sprite.vert HLSL 的 cbuffer PushConstants 布局:
-    //   pc_u_model : packoffset(c0)  -- 64 bytes
-    //   pc_u_vp    : packoffset(c4)  -- 64 bytes
-    // 因此需要一个合并 CB: [model(64B) | vp(64B)] 绑定到 b0
-    struct SpritePushConstants {
-        glm::mat4 model;
-        glm::mat4 vp;
-    };
     const glm::mat4 vp = projection * view;
+    struct SpritePushConstants { glm::mat4 model; glm::mat4 vp; };
 
-    // 绑定 sprite 着色器
-    const auto* program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
-    if (!program) return;
-    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
-    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+    const auto* sprite_program = shader_mgr.GetProgram(shader_mgr.sprite_shader_handle());
+    if (!sprite_program) return;
+    const auto* sdf_program = shader_mgr.GetProgram(shader_mgr.text_sdf_shader_handle());
+    bool using_sdf = false;
 
-    // 绑定 InputLayout + 图元拓扑 + IBO
-    auto* layout = shader_mgr.GetInputLayout(shader_mgr.sprite_shader_handle());
-    if (layout) dc->IASetInputLayout(layout);
+    dc->VSSetShader(sprite_program->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(sprite_program->pixel_shader.Get(), nullptr, 0);
+    auto* input_layout = shader_mgr.GetInputLayout(shader_mgr.sprite_shader_handle());
+    if (input_layout) dc->IASetInputLayout(input_layout);
     dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     dc->IASetIndexBuffer(sprite_quad_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
 
+    // 合批用 identity model——顶点已预乘 model 矩阵
+    SpritePushConstants pc_identity;
+    pc_identity.model = glm::mat4(1.0f);
+    pc_identity.vp = vp;
+    UpdateConstantBuffer(sprite_push_cb_.Get(), &pc_identity, sizeof(pc_identity));
+    ID3D11Buffer* vs_cb = sprite_push_cb_.Get();
+    dc->VSSetConstantBuffers(0, 1, &vs_cb);
+
+    // 合批顶点缓存（float2 pos + float2 uv + float4 color = 8 floats = 32B）
+    static constexpr int FLOATS_PER_VERT = 8;
+    std::vector<float> batch_verts;
+    batch_verts.reserve(DX11_MAX_BATCH_SPRITES * 4 * FLOATS_PER_VERT);
+
+    unsigned int cur_tex_handle = items[0].texture_handle;
+    unsigned int cur_variant = items[0].shader_variant_key;
+
+    static const glm::vec4 quad_pos[4] = {
+        {-0.5f, -0.5f, 0.0f, 1.0f}, { 0.5f, -0.5f, 0.0f, 1.0f},
+        { 0.5f,  0.5f, 0.0f, 1.0f}, {-0.5f,  0.5f, 0.0f, 1.0f}
+    };
+
+    auto flush_batch = [&]() {
+        if (batch_verts.empty()) return;
+        int quad_count = static_cast<int>(batch_verts.size()) / (4 * FLOATS_PER_VERT);
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        HRESULT hr = dc->Map(sprite_quad_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (SUCCEEDED(hr)) {
+            memcpy(mapped.pData, batch_verts.data(), batch_verts.size() * sizeof(float));
+            dc->Unmap(sprite_quad_vbo_.Get(), 0);
+        }
+        UINT stride = 32, offset = 0;
+        dc->IASetVertexBuffers(0, 1, sprite_quad_vbo_.GetAddressOf(), &stride, &offset);
+
+        // SDF shader 切换
+        bool want_sdf = (cur_variant == kSdfVariantKey) && sdf_program;
+        if (want_sdf != using_sdf) {
+            if (want_sdf) {
+                dc->PSSetShader(sdf_program->pixel_shader.Get(), nullptr, 0);
+                struct SdfPSConstants {
+                    glm::mat4 model; glm::mat4 vp_padding;
+                    float t, s, o, sh;
+                } sdf_pc;
+                sdf_pc.model = glm::mat4(1.0f);
+                sdf_pc.vp_padding = vp;
+                sdf_pc.t = 0.5f; sdf_pc.s = 0.1f; sdf_pc.o = 0.0f; sdf_pc.sh = 0.0f;
+                UpdateConstantBuffer(sdf_ps_cb_.Get(), &sdf_pc, sizeof(sdf_pc));
+                ID3D11Buffer* ps_cb = sdf_ps_cb_.Get();
+                dc->PSSetConstantBuffers(0, 1, &ps_cb);
+            } else {
+                dc->PSSetShader(sprite_program->pixel_shader.Get(), nullptr, 0);
+            }
+            using_sdf = want_sdf;
+        }
+
+        // 绑定纹理
+        const auto* tex = (cur_tex_handle != 0) ? resource_mgr.GetTexture(cur_tex_handle) : nullptr;
+        if (tex) {
+            dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
+            dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
+        } else if (white_texture_srv_) {
+            dc->PSSetShaderResources(0, 1, white_texture_srv_.GetAddressOf());
+            dc->PSSetSamplers(0, 1, white_texture_sampler_.GetAddressOf());
+        }
+
+        dc->DrawIndexed(static_cast<UINT>(quad_count * 6), 0, 0);
+        global_state_.current_frame_stats.draw_calls++;
+        global_state_.current_frame_stats.sprite_count += quad_count;
+        if (quad_count > global_state_.current_frame_stats.max_batch_sprites)
+            global_state_.current_frame_stats.max_batch_sprites = quad_count;
+        batch_verts.clear();
+    };
+
     for (const auto& item : items) {
-        // 构建精灵四边形顶点: float2 pos + float2 uv + float4 color = 32B
-        // UV 解释逻辑与 OpenGL DrawBatch 保持一致
+        if (item.texture_handle != cur_tex_handle ||
+            item.shader_variant_key != cur_variant ||
+            static_cast<int>(batch_verts.size()) / (4 * FLOATS_PER_VERT) >= DX11_MAX_BATCH_SPRITES) {
+            flush_batch();
+            cur_tex_handle = item.texture_handle;
+            cur_variant = item.shader_variant_key;
+        }
+
         float u_min = item.uv.x, v_min = item.uv.y;
         float u_max, v_max;
         if (item.uv.z > 0.0f && item.uv.w > 0.0f) {
@@ -532,51 +617,22 @@ void DX11DrawExecutor::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
         } else {
             u_min = 0.0f; v_min = 0.0f; u_max = 1.0f; v_max = 1.0f;
         }
+        float uvs[4][2] = {{u_min,v_min},{u_max,v_min},{u_max,v_max},{u_min,v_max}};
         float r = item.color.r, g = item.color.g, b = item.color.b, a = item.color.a;
-        // V 方向与 OpenGL 一致: BL=(u_min, v_min), TR=(u_max, v_max)
-        float verts[4 * 8] = {
-            -0.5f, -0.5f, u_min, v_min, r, g, b, a,
-             0.5f, -0.5f, u_max, v_min, r, g, b, a,
-             0.5f,  0.5f, u_max, v_max, r, g, b, a,
-            -0.5f,  0.5f, u_min, v_max, r, g, b, a,
-        };
 
-        // 上传动态 VBO
-        D3D11_MAPPED_SUBRESOURCE mapped{};
-        HRESULT hr = dc->Map(sprite_quad_vbo_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr)) {
-            memcpy(mapped.pData, verts, sizeof(verts));
-            dc->Unmap(sprite_quad_vbo_.Get(), 0);
+        for (int i = 0; i < 4; ++i) {
+            glm::vec4 wp = item.model * quad_pos[i];
+            batch_verts.push_back(wp.x);
+            batch_verts.push_back(wp.y);
+            batch_verts.push_back(uvs[i][0]);
+            batch_verts.push_back(uvs[i][1]);
+            batch_verts.push_back(r);
+            batch_verts.push_back(g);
+            batch_verts.push_back(b);
+            batch_verts.push_back(a);
         }
-
-        UINT stride = 32;
-        UINT offset = 0;
-        dc->IASetVertexBuffers(0, 1, sprite_quad_vbo_.GetAddressOf(), &stride, &offset);
-
-        // 更新合并 CB: [model | vp] 匹配 sprite.vert PushConstants 布局
-        SpritePushConstants pc;
-        pc.model = item.model;
-        pc.vp = vp;
-        UpdateConstantBuffer(sprite_push_cb_.Get(), &pc, sizeof(pc));
-
-        // 绑定到 b0（shader 只使用 b0 的 PushConstants）
-        ID3D11Buffer* cb = sprite_push_cb_.Get();
-        dc->VSSetConstantBuffers(0, 1, &cb);
-
-        // 绑定纹理（handle=0 时使用白色 fallback，与 OpenGL 一致）
-        const auto* tex = (item.texture_handle != 0) ? resource_mgr.GetTexture(item.texture_handle) : nullptr;
-        if (tex) {
-            dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
-        } else if (white_texture_srv_) {
-            dc->PSSetShaderResources(0, 1, white_texture_srv_.GetAddressOf());
-            dc->PSSetSamplers(0, 1, white_texture_sampler_.GetAddressOf());
-        }
-
-        dc->DrawIndexed(6, 0, 0);
-        global_state_.current_frame_stats.draw_calls++;
-        global_state_.current_frame_stats.sprite_count++;
     }
+    flush_batch();
 }
 
 void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,

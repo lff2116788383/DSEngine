@@ -182,6 +182,7 @@ void VulkanRhiDevice::EnsureInitialized() {
     shader_mgr_.InitSkyboxShader();
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitTextSdfShader();
     shader_mgr_.InitShadowShader();
     shader_mgr_.InitGPUDrivenPBRShader();
     shader_mgr_.InitGPUDrivenShadowShader();
@@ -221,6 +222,7 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     shader_mgr_.InitSkyboxShader();
     shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
+    shader_mgr_.InitTextSdfShader();
     shader_mgr_.InitShadowShader();
     shader_mgr_.InitGPUDrivenPBRShader();
     shader_mgr_.InitGPUDrivenShadowShader();

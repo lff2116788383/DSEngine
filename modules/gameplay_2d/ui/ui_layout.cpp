@@ -1,6 +1,7 @@
 #include "modules/gameplay_2d/ui/ui_layout.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace dse {
 namespace gameplay2d {
@@ -189,6 +190,156 @@ void UILayoutSystem::UpdateGridLayout(
     }
 }
 
+void UILayoutSystem::UpdateBoxLayout(
+    entt::registry& registry,
+    entt::entity parent,
+    float scale_factor
+) const {
+    if (!registry.all_of<UIBoxLayoutComponent>(parent)) return;
+    const auto& box = registry.get<UIBoxLayoutComponent>(parent);
+
+    // 收集子实体
+    std::vector<entt::entity> children;
+    auto parent_view = registry.view<ParentComponent>();
+    for (auto entity : parent_view) {
+        const auto& pc = parent_view.get<ParentComponent>(entity);
+        if (pc.parent == parent && registry.all_of<UIRendererComponent>(entity)) {
+            auto& child_ui = registry.get<UIRendererComponent>(entity);
+            if (child_ui.visible) {
+                children.push_back(entity);
+            }
+        }
+    }
+
+    std::sort(children.begin(), children.end(), [](entt::entity a, entt::entity b) {
+        return static_cast<uint32_t>(a) < static_cast<uint32_t>(b);
+    });
+
+    if (box.reverse) {
+        std::reverse(children.begin(), children.end());
+    }
+
+    if (children.empty()) return;
+
+    const int main_axis = box.vertical ? 1 : 0;
+    const int cross_axis = box.vertical ? 0 : 1;
+
+    glm::vec2 parent_pos(0.0f);
+    glm::vec2 parent_size(0.0f);
+    if (registry.all_of<UIRendererComponent>(parent)) {
+        auto& parent_ui = registry.get<UIRendererComponent>(parent);
+        parent_pos = parent_ui.position;
+        parent_size = parent_ui.size;
+    }
+
+    const float scaled_spacing = box.spacing * scale_factor;
+    const glm::vec2 scaled_padding = box.padding * scale_factor;
+
+    // 计算子元素在主轴方向的总大小
+    float total_main_size = 0.0f;
+    for (size_t i = 0; i < children.size(); ++i) {
+        auto& child_ui = registry.get<UIRendererComponent>(children[i]);
+        float child_main = child_ui.size[main_axis] * child_ui.scale;
+        total_main_size += child_main;
+        if (i > 0) total_main_size += scaled_spacing;
+    }
+
+    // 主轴可用空间和起始偏移
+    float available_main = parent_size[main_axis] - scaled_padding[main_axis == 0 ? 0 : 1] * 2.0f;
+    float main_offset = scaled_padding[main_axis == 0 ? 0 : 1];
+
+    switch (box.align_main) {
+        case 0: break;  // 起始
+        case 1: main_offset += (available_main - total_main_size) * 0.5f; break; // 居中
+        case 2: main_offset += available_main - total_main_size; break;          // 尾部
+        default: break; // 两端均布在下面处理
+    }
+
+    float even_gap = 0.0f;
+    if (box.align_main == 3 && children.size() > 1) {
+        float items_total = 0.0f;
+        for (auto child : children) {
+            auto& child_ui = registry.get<UIRendererComponent>(child);
+            items_total += child_ui.size[main_axis] * child_ui.scale;
+        }
+        even_gap = (available_main - items_total) / static_cast<float>(children.size() - 1);
+    }
+
+    float cursor = main_offset;
+    for (auto child : children) {
+        auto& child_ui = registry.get<UIRendererComponent>(child);
+        float child_main = child_ui.size[main_axis] * child_ui.scale;
+        float child_cross = child_ui.size[cross_axis] * child_ui.scale;
+
+        // 交叉轴对齐
+        float cross_offset = scaled_padding[cross_axis == 0 ? 0 : 1];
+        float available_cross = parent_size[cross_axis] - scaled_padding[cross_axis == 0 ? 0 : 1] * 2.0f;
+
+        switch (box.align_cross) {
+            case 0: break; // 起始
+            case 1: cross_offset += (available_cross - child_cross) * 0.5f; break; // 居中
+            case 2: cross_offset += available_cross - child_cross; break;          // 尾部
+            case 3: // 拉伸
+                child_ui.size[cross_axis] = available_cross / child_ui.scale;
+                break;
+        }
+
+        glm::vec2 pos = parent_pos;
+        pos[main_axis] += cursor;
+        pos[cross_axis] += cross_offset;
+        child_ui.position = pos;
+
+        cursor += child_main + (box.align_main == 3 ? even_gap : scaled_spacing);
+    }
+}
+
+void UILayoutSystem::UpdateContentSizeFitter(
+    entt::registry& registry,
+    entt::entity entity
+) const {
+    if (!registry.all_of<UIContentSizeFitterComponent, UIRendererComponent>(entity)) return;
+    const auto& fitter = registry.get<UIContentSizeFitterComponent>(entity);
+    auto& ui = registry.get<UIRendererComponent>(entity);
+
+    if (fitter.fit_width == 0 && fitter.fit_height == 0) return;
+
+    // 收集子实体包围盒
+    float max_x = 0.0f;
+    float max_y = 0.0f;
+    auto parent_view = registry.view<ParentComponent, UIRendererComponent>();
+    for (auto child : parent_view) {
+        const auto& pc = parent_view.get<ParentComponent>(child);
+        if (pc.parent != entity) continue;
+        const auto& child_ui = parent_view.get<UIRendererComponent>(child);
+        if (!child_ui.visible) continue;
+
+        float right = (child_ui.position.x - ui.position.x) + child_ui.size.x * child_ui.scale;
+        float bottom = (child_ui.position.y - ui.position.y) + child_ui.size.y * child_ui.scale;
+        max_x = std::fmax(max_x, right);
+        max_y = std::fmax(max_y, bottom);
+    }
+
+    // 也考虑 BoxLayout 的 padding
+    if (registry.all_of<UIBoxLayoutComponent>(entity)) {
+        const auto& box = registry.get<UIBoxLayoutComponent>(entity);
+        max_x += box.padding.x;
+        max_y += box.padding.y;
+    }
+
+    glm::vec2 new_size = ui.size;
+    if (fitter.fit_width > 0) {
+        new_size.x = max_x;
+        if (fitter.min_size.x > 0.0f) new_size.x = std::fmax(new_size.x, fitter.min_size.x);
+        if (fitter.max_size.x > 0.0f) new_size.x = std::fmin(new_size.x, fitter.max_size.x);
+    }
+    if (fitter.fit_height > 0) {
+        new_size.y = max_y;
+        if (fitter.min_size.y > 0.0f) new_size.y = std::fmax(new_size.y, fitter.min_size.y);
+        if (fitter.max_size.y > 0.0f) new_size.y = std::fmin(new_size.y, fitter.max_size.y);
+    }
+    ui.size = new_size;
+}
+
 void UILayoutSystem::Update(entt::registry& registry, const glm::vec2& screen_size) {
     float global_scale = 1.0f;
 
@@ -233,6 +384,18 @@ void UILayoutSystem::Update(entt::registry& registry, const glm::vec2& screen_si
         grid_data.alignment = static_cast<GridLayoutAlignment>(grid_comp.alignment);
 
         UpdateGridLayout(registry, entity, grid_data, parent_pos, global_scale);
+    }
+
+    // Box Layout (HBox / VBox)
+    auto box_view = registry.view<UIBoxLayoutComponent>();
+    for (auto entity : box_view) {
+        UpdateBoxLayout(registry, entity, global_scale);
+    }
+
+    // Content Size Fitter (在 BoxLayout 之后，读取子元素排列结果)
+    auto fitter_view = registry.view<UIContentSizeFitterComponent>();
+    for (auto entity : fitter_view) {
+        UpdateContentSizeFitter(registry, entity);
     }
 }
 

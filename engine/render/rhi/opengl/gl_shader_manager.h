@@ -172,6 +172,17 @@ public:
     // --- 精灵着色器 ---
     void InitSpriteShader();
 
+    // --- SDF 文本着色器 ---
+    struct TextSdfLocations {
+        int texture = -1;
+        int sdf_threshold = -1;
+        int sdf_smoothing = -1;
+        int outline_width = -1;
+        int shadow_softness = -1;
+    };
+    void InitTextSdfShader();
+    const TextSdfLocations& text_sdf_locations() const { return text_sdf_locations_; }
+
     // --- 阴影深度着色器 ---
     void InitShadowShader();
 
@@ -214,6 +225,7 @@ private:
     int gpu_driven_pbr_morph_loc_   = -1;
     int gpu_driven_shadow_skinned_loc_ = -1;
     ShadowShaderLocations shadow_locations_;
+    TextSdfLocations text_sdf_locations_;
 };
 
 } // namespace render

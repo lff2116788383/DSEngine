@@ -105,17 +105,34 @@ public:
      */
     float MeasureTextWidth(const std::string& text) const;
 
-    /**
-     * @brief 计算文本的逐字符布局位置
-     * @param text UTF-8 文本
-     * @return 每个字符的位置 (x, y) 和对应的 GlyphMetrics 索引
-     */
     struct CharLayout {
         float x = 0.0f;
         float y = 0.0f;
         int codepoint = 0;
     };
+
+    /// 排版参数
+    struct LayoutParams {
+        float max_width = 0.0f;         ///< 最大宽度 (0=不限制)
+        int align = 0;                  ///< 0=左, 1=居中, 2=右
+        int overflow = 0;               ///< 0=换行, 1=截断, 2=省略号
+        int max_lines = 0;             ///< 最大行数 (0=不限制)
+        float line_spacing_extra = 0.0f;///< 额外行间距
+    };
+
+    /// 排版结果
+    struct LayoutResult {
+        std::vector<CharLayout> chars;
+        float total_width = 0.0f;      ///< 实际渲染宽度 (最宽行)
+        float total_height = 0.0f;     ///< 实际渲染高度
+        int line_count = 0;            ///< 总行数
+    };
+
+    /// 单行布局（向后兼容）
     std::vector<CharLayout> LayoutText(const std::string& text) const;
+
+    /// 带排版参数的多行布局
+    LayoutResult LayoutTextEx(const std::string& text, const LayoutParams& params) const;
 
     /// 直接设置度量（供 FontService SDF 路径使用，避免双重解析）
     void SetMetrics(float font_size, float ascent, float descent, float line_height,

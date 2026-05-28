@@ -117,6 +117,9 @@ public:
     /// 初始化 2D 精灵着色器
     void InitSpriteShader();
 
+    /// 初始化 SDF 文本着色器
+    void InitTextSdfShader();
+
     /// 初始化阴影深度着色器
     void InitShadowShader();
 

@@ -8,12 +8,15 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D u_texture;
 
 // SDF 参数通过 push constant 传入
+// 注意: u_vp 占位与 sprite.vert 的 push constant 布局对齐 (offset 64-127)
+// SDF 参数从 offset 128 开始，避免与 VS 的 VP 矩阵冲突
 layout(push_constant) uniform PushConstants {
-    mat4 u_model;
-    float u_sdf_threshold;    // 边缘阈值 (默认 0.5)
-    float u_sdf_smoothing;    // 平滑宽度 (默认 0.1)
-    float u_outline_width;    // 描边宽度 (0 = 无描边)
-    float u_shadow_softness;  // 阴影柔软度 (0 = 无阴影)
+    mat4 u_model;             // offset 0   — 与 sprite.vert 共享
+    mat4 u_vp;                // offset 64  — 占位，FS 不使用
+    float u_sdf_threshold;    // offset 128 — 边缘阈值 (默认 0.5)
+    float u_sdf_smoothing;    // offset 132 — 平滑宽度 (默认 0.1)
+    float u_outline_width;    // offset 136 — 描边宽度 (0 = 无描边)
+    float u_shadow_softness;  // offset 140 — 阴影柔软度 (0 = 无阴影)
 } pc;
 
 void main() {

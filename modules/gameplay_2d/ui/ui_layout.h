@@ -74,6 +74,17 @@ public:
         float scale_factor
     ) const;
 
+    void UpdateBoxLayout(
+        entt::registry& registry,
+        entt::entity parent,
+        float scale_factor
+    ) const;
+
+    void UpdateContentSizeFitter(
+        entt::registry& registry,
+        entt::entity entity
+    ) const;
+
     void Update(entt::registry& registry, const glm::vec2& screen_size);
 };
 

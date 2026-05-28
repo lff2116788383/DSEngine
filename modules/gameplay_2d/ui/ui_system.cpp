@@ -184,12 +184,21 @@ void UISystem::SyncLabels(entt::registry& registry) {
             if (!fi) fi = font_service ? font_service->GetDefaultFont() : nullptr;
 
             if (fi && fi->font.IsValid() && fi->gpu_texture_handle != 0) {
-                auto layouts = fi->font.LayoutText(label.text);
                 const float scale = (label.font_size > 0.0f && fi->font.GetFontSize() > 0.0f)
                     ? label.font_size / fi->font.GetFontSize() : 1.0f;
 
-                for (size_t idx = 0; idx < layouts.size(); ++idx) {
-                    auto& cl = layouts[idx];
+                // 构建排版参数
+                dse::render::TrueTypeFont::LayoutParams lp;
+                lp.max_width = label.max_width > 0.0f ? label.max_width / scale : 0.0f;
+                lp.align = label.text_align;
+                lp.overflow = label.overflow_mode;
+                lp.max_lines = label.max_lines;
+                lp.line_spacing_extra = label.line_spacing_extra / scale;
+
+                auto layout = fi->font.LayoutTextEx(label.text, lp);
+
+                for (size_t idx = 0; idx < layout.chars.size(); ++idx) {
+                    auto& cl = layout.chars[idx];
                     const auto* gm = fi->font.GetGlyph(cl.codepoint);
                     if (!gm || gm->width < 0.01f) continue;
 
@@ -212,6 +221,7 @@ void UISystem::SyncLabels(entt::registry& registry) {
                     glyph_ui.position = pos;
                     glyph_ui.order = order;
                     glyph_ui.uv = gm->uv;
+                    glyph_ui.use_sdf_shader = label.use_sdf;
                     label.runtime_glyph_entities.push_back(glyph_entity);
                 }
 

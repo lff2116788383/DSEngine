@@ -57,6 +57,9 @@ struct UIRendererComponent {
     glm::vec2 nine_slice_src_size = glm::vec2(0.0f);     ///< 源精灵像素尺寸 (src_w, src_h)；> 0 时角块屏幕尺寸固定为 border × src_size
                                                          ///< = (0,0) 时退为等比模式：角块随 widget 缩放（适用于均匀缩放的按钮/图标）
 
+    // SDF text rendering
+    bool use_sdf_shader = false;                         ///< 是否使用 SDF 文本着色器渲染此元素
+
     // Runtime computed layout
     glm::mat4 runtime_model = glm::mat4(1.0f);           ///< 运行时计算出的绝对变换矩阵
 };
@@ -109,6 +112,13 @@ struct UILabelComponent {
     std::string font_id;                                 ///< FontService 中的字体 ID（非空时启用 TTF 路径）
     float font_size = 32.0f;                             ///< 渲染字号（像素）
     bool use_sdf = true;                                 ///< 使用 SDF 渲染（抗锯齿+缩放）
+
+    // --- 文本排版 ---
+    float max_width = 0.0f;                              ///< 最大宽度（像素，0=不限制，>0 启用自动换行）
+    int text_align = 0;                                  ///< 对齐方式 (0=左对齐, 1=居中, 2=右对齐)
+    int overflow_mode = 0;                               ///< 溢出模式 (0=换行, 1=截断, 2=省略号)
+    int max_lines = 0;                                   ///< 最大行数（0=不限制）
+    float line_spacing_extra = 0.0f;                     ///< 额外行间距（像素）
 };
 
 /**
@@ -180,6 +190,34 @@ struct UICanvasScalerComponent {
     glm::vec2 reference_resolution = glm::vec2(1920.0f, 1080.0f);  ///< 参考分辨率
     float scale_factor = 1.0f;                                      ///< 缩放因子
     bool match_width_or_height = true;                              ///< true=宽高平均, false=仅宽度
+};
+
+// ============================================================
+// 弹性布局 (HBox / VBox / ContentSizeFitter)
+// ============================================================
+
+/**
+ * @struct UIBoxLayoutComponent
+ * @brief 线性盒子布局组件 (水平/垂直)，自动排列子元素
+ */
+struct UIBoxLayoutComponent {
+    bool vertical = false;                               ///< false=水平(HBox), true=垂直(VBox)
+    float spacing = 0.0f;                                ///< 子元素间距（像素）
+    glm::vec2 padding = glm::vec2(0.0f);                  ///< 内边距 (x=左右, y=上下)
+    int align_main = 0;                                  ///< 主轴对齐 (0=起始, 1=居中, 2=尾部, 3=两端均布)
+    int align_cross = 0;                                 ///< 交叉轴对齐 (0=起始, 1=居中, 2=尾部, 3=拉伸)
+    bool reverse = false;                                ///< 是否反向排列
+};
+
+/**
+ * @struct UIContentSizeFitterComponent
+ * @brief 内容尺寸适配器，根据子元素自动调整自身大小
+ */
+struct UIContentSizeFitterComponent {
+    int fit_width = 0;                                   ///< 宽度适配 (0=不适配, 1=最小尺寸, 2=首选尺寸)
+    int fit_height = 0;                                  ///< 高度适配 (0=不适配, 1=最小尺寸, 2=首选尺寸)
+    glm::vec2 min_size = glm::vec2(0.0f);                 ///< 最小约束
+    glm::vec2 max_size = glm::vec2(0.0f);                 ///< 最大约束 (0=不限制)
 };
 
 /**

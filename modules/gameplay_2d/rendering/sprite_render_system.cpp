@@ -123,6 +123,7 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
 }
 
 void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
+    static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
     std::vector<SpriteDrawItem> items;
     auto view = world.registry().view<UIRendererComponent>();
     
@@ -164,12 +165,15 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             else if (ui.is_hovered) final_color *= 1.2f;
         }
 
+        const unsigned int sdf_key = ui.use_sdf_shader ? kSdfVariantKey : 0;
+
         if (ui.nine_slice_enabled) {
             SpriteDrawItem base_item;
             base_item.texture_handle = ui.texture_handle;
             base_item.color = final_color;
             base_item.sorting_layer = 1000;
             base_item.order_in_layer = ui.order;
+            base_item.shader_variant_key = sdf_key;
             Expand9SliceItems(base_item, final_pos, ui.size, ui.uv, ui.nine_slice_border, ui.nine_slice_src_size, items);
         } else {
             SpriteDrawItem item;
@@ -179,6 +183,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             item.uv = ui.uv;
             item.sorting_layer = 1000;
             item.order_in_layer = ui.order;
+            item.shader_variant_key = sdf_key;
             items.push_back(item);
         }
     }
@@ -190,6 +195,9 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
     std::sort(items.begin(), items.end(), [](const SpriteDrawItem& a, const SpriteDrawItem& b) {
         if (a.order_in_layer != b.order_in_layer) {
             return a.order_in_layer < b.order_in_layer;
+        }
+        if (a.shader_variant_key != b.shader_variant_key) {
+            return a.shader_variant_key < b.shader_variant_key;
         }
         return a.texture_handle < b.texture_handle;
     });

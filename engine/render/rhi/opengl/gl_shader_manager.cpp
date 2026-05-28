@@ -58,6 +58,7 @@
 #include "embed/sprite_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
+#include "embed/text_sdf_frag.gen.h"
 
 // GPU-Driven PBR 变体（预编译，无运行时 string patch）
 #include "embed/pbr_gpu_driven_vert.gen.h"
@@ -557,6 +558,30 @@ void GLShaderManager::InitSpriteShader() {
 }
 
 // ============================================================
+// SDF 文本着色器
+// ============================================================
+
+void GLShaderManager::InitTextSdfShader() {
+    if (text_sdf_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    text_sdf_shader_handle_ = CompileProgram(ksprite_vert_glsl430, ktext_sdf_frag_glsl430);
+    if (text_sdf_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: SDF text shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(text_sdf_shader_handle_, ksprite_vert_reflection);
+
+    text_sdf_locations_.texture = glGetUniformLocation(text_sdf_shader_handle_, "u_texture");
+    text_sdf_locations_.sdf_threshold = glGetUniformLocation(text_sdf_shader_handle_, "u_sdf_threshold");
+    text_sdf_locations_.sdf_smoothing = glGetUniformLocation(text_sdf_shader_handle_, "u_sdf_smoothing");
+    text_sdf_locations_.outline_width = glGetUniformLocation(text_sdf_shader_handle_, "u_outline_width");
+    text_sdf_locations_.shadow_softness = glGetUniformLocation(text_sdf_shader_handle_, "u_shadow_softness");
+}
+
+// ============================================================
 // 闃村奖娣卞害鐫€鑹插櫒
 // ============================================================
 
@@ -794,6 +819,11 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(eye_shader_handle_);
         programs_destroyed_ += 1;
         eye_shader_handle_ = 0;
+    }
+    if (text_sdf_shader_handle_ != 0) {
+        glDeleteProgram(text_sdf_shader_handle_);
+        programs_destroyed_ += 1;
+        text_sdf_shader_handle_ = 0;
     }
     for (auto& [name, handle] : pp_shaders_) {
         if (handle != 0) {

@@ -64,6 +64,7 @@
 #include "embed/pbr_gpu_driven_vert.gen.h"
 #include "embed/pbr_gpu_driven_frag.gen.h"
 #include "embed/shadow_gpu_driven_vert.gen.h"
+#include "embed/text_sdf_frag.gen.h"
 
 // Reflection metadata for automated descriptor layout
 #include "embed/pbr_vert_reflect.gen.h"
@@ -638,6 +639,18 @@ void VulkanShaderManager::InitSpriteShader() {
         DEBUG_LOG_ERROR("Vulkan sprite shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan sprite shader created: handle={}", sprite_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitTextSdfShader() {
+    using namespace dse::render::generated_shaders;
+    text_sdf_shader_handle_ = CreateProgramFromSpirv(
+        ksprite_vert_spv, ksprite_vert_spv_size,
+        ktext_sdf_frag_spv, ktext_sdf_frag_spv_size);
+    if (text_sdf_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan SDF text shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan SDF text shader created: handle={}", text_sdf_shader_handle_);
     }
 }
 
