@@ -269,6 +269,19 @@ struct RenderThinSnapshot {
         float ambient_strength = 0.3f;
     } volumetric_cloud;
 
+    // ── 天气系统（WeatherComponent）──
+    struct Weather {
+        bool valid = false;
+        int type = 0;                   ///< 0=None, 1=Rain, 2=Snow
+        float intensity = 0.5f;
+        float wind_x = 0.0f;
+        float wind_z = 0.0f;
+        float spawn_radius = 25.0f;
+        float spawn_height = 18.0f;
+        int max_particles = 2000;
+        glm::vec4 color{0.65f, 0.75f, 0.85f, 0.55f};
+    } weather;
+
     // ── DDGI 运行时配置（从 GIProbeVolumeComponent 读取）──
     struct DDGIConfig {
         bool enabled = false;
@@ -300,6 +313,7 @@ struct RenderThinSnapshot {
         decal_count = 0;
         light_probe_sh = LightProbeSH{};
         volumetric_cloud = VolumetricCloud{};
+        weather = Weather{};
         ddgi_config = DDGIConfig{};
     }
 };

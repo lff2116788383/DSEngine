@@ -23,6 +23,7 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_weather.h"
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
@@ -349,6 +350,10 @@ bool FramePipeline::Init() {
     asset_manager.StartFileWatcher();
     if (Screen::width() <= 0 || Screen::height() <= 0) {
         Screen::set_width_height(1280, 720);
+    }
+    if (const char* env_scale = std::getenv("DSE_RENDER_SCALE")) {
+        float s = static_cast<float>(std::atof(env_scale));
+        if (s > 0.0f) Screen::set_render_scale(s);
     }
     InitResolutionDependentRTs();
 
@@ -864,8 +869,10 @@ void FramePipeline::Shutdown() {
 
 void FramePipeline::InitResolutionDependentRTs() {
     if (!runtime_context_.rhi_device) return;
-    const int render_width  = Screen::width()  > 0 ? Screen::width()  : 1280;
-    const int render_height = Screen::height() > 0 ? Screen::height() : 720;
+    const int display_width  = Screen::width()  > 0 ? Screen::width()  : 1280;
+    const int display_height = Screen::height() > 0 ? Screen::height() : 720;
+    const int render_width  = Screen::render_width()  > 0 ? Screen::render_width()  : display_width;
+    const int render_height = Screen::render_height() > 0 ? Screen::render_height() : display_height;
 
     if (render_resources_.main_render_target == 0) {
         RenderTargetDesc main_rt_desc{};
@@ -885,7 +892,7 @@ void FramePipeline::InitResolutionDependentRTs() {
         render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget(scene_desc);
     }
     if (render_resources_.ui_render_target == 0) {
-        render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false});
+        render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({display_width, display_height, true, false});
     }
     if (render_resources_.prez_render_target == 0) {
         render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true});
@@ -1159,6 +1166,9 @@ void FramePipeline::RunRenderInternal() {
         runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
     }
 
+    // 全局湿度同步到 RHI
+    runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
+
     // TAA: 预检测 ECS 组件，提前设置 taa_active，ForwardScenePass 需要在场景渲染前知道是否应用 jitter
     render_pass_context_.taa_active = false;
     if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
@@ -1176,6 +1186,19 @@ void FramePipeline::RunRenderInternal() {
 
     // 每帧更新 Auto Exposure 所需的 delta_time
     render_pass_context_.delta_time = Time::delta_time();
+
+    // 全局湿度：从 ECS WeatherComponent 直接读取（雨 → wetness = intensity）
+    render_pass_context_.global_wetness = 0.0f;
+    if (runtime_context_.world) {
+        auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
+        for (auto e : wv) {
+            auto& wc = wv.get<dse::WeatherComponent>(e);
+            if (wc.enabled && wc.type == dse::WeatherType::Rain) {
+                render_pass_context_.global_wetness = wc.intensity;
+                break;
+            }
+        }
+    }
 
     // DDGI: 检测 GIProbeVolumeComponent，按需初始化/更新系统
     render_pass_context_.ddgi_active = false;
@@ -2355,6 +2378,26 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
+    // ── 9b. Weather ──
+    {
+        auto view = reg.view<dse::WeatherComponent>();
+        for (auto e : view) {
+            auto& wc = view.get<dse::WeatherComponent>(e);
+            if (!wc.enabled) continue;
+            auto& w = snap.weather;
+            w.valid = true;
+            w.type = static_cast<int>(wc.type);
+            w.intensity = wc.intensity;
+            w.wind_x = wc.wind_x;
+            w.wind_z = wc.wind_z;
+            w.spawn_radius = wc.spawn_radius;
+            w.spawn_height = wc.spawn_height;
+            w.max_particles = wc.max_particles;
+            w.color = (wc.type == dse::WeatherType::Rain) ? wc.rain_color : wc.snow_color;
+            break;
+        }
+    }
+
     // ── 10. Light Probe SH（距离加权混合最近两个 probe）──
     {
         glm::vec3 cam_pos = snap.camera_3d.position;
@@ -2586,6 +2629,19 @@ void FramePipeline::PrepareRenderFrame() {
 
     render_pass_context_.delta_time = Time::delta_time();
 
+    // 全局湿度：从 ECS WeatherComponent 直接读取（雨 → wetness = intensity）
+    render_pass_context_.global_wetness = 0.0f;
+    if (runtime_context_.world) {
+        auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
+        for (auto e : wv) {
+            auto& wc = wv.get<dse::WeatherComponent>(e);
+            if (wc.enabled && wc.type == dse::WeatherType::Rain) {
+                render_pass_context_.global_wetness = wc.intensity;
+                break;
+            }
+        }
+    }
+
     // 捕获快照 + 翻转双缓冲
     CaptureThinSnapshot();
     FlipSnapshotIndex();
@@ -2615,6 +2671,9 @@ void FramePipeline::ExecuteRenderFrame() {
         glm::vec4 zero_sh[9] = {};
         runtime_context_.rhi_device->SetGlobalLightProbeSH(zero_sh, false);
     }
+
+    // 全局湿度同步到 RHI（渲染线程路径）
+    runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
 
     // DDGI: 从快照配置初始化/重配置 + 同步到 RHI 全局状态
     render_pass_context_.ddgi_active = false;

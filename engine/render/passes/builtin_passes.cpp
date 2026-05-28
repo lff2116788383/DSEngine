@@ -3116,5 +3116,103 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 }
 
+// ============================================================
+// WeatherPass — Screen-Space Weather Particles (rain / snow)
+// ============================================================
+
+void WeatherPass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto prez_depth  = graph.DeclareResource("prez_depth");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassRead(pass, prez_depth);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
+    const auto& snap = *ctx_.snapshot;
+    if (!snap.weather.valid || snap.weather.type == 0 || snap.weather.intensity < 0.001f) return;
+
+    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (depth_tex == 0) return;
+    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+
+    glm::vec3 cam_pos(0.0f);
+    float cam_fov  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
+    float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    glm::vec3 cam_fwd = snap.camera_3d.forward;
+
+    if (ctx_.editor_mode && ctx_.use_editor_camera) {
+        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
+        cam_fwd = -glm::normalize(glm::vec3(glm::inverse(ctx_.editor_view)[2]));
+    } else if (!snap.camera_3d.valid) {
+        return;
+    }
+
+    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+    float tan_fov_y = std::tan(glm::radians(cam_fov) * 0.5f);
+    float current_time = Time::TimeSinceStartup();
+
+    const auto& w = snap.weather;
+    std::vector<float> params(24);
+    params[0]  = current_time;
+    params[1]  = w.intensity;
+    params[2]  = w.wind_x;
+    params[3]  = w.wind_z;
+    params[4]  = static_cast<float>(w.type);
+    params[5]  = w.color.r;
+    params[6]  = w.color.g;
+    params[7]  = w.color.b;
+    params[8]  = w.color.a;
+    params[9]  = cam_pos.x;
+    params[10] = cam_pos.y;
+    params[11] = cam_pos.z;
+    params[12] = cam_near;
+    params[13] = cam_far;
+    params[14] = w.spawn_radius;
+    params[15] = w.spawn_height;
+    params[16] = static_cast<float>(Screen::width());
+    params[17] = static_cast<float>(Screen::height());
+    params[18] = cam_fwd.x;
+    params[19] = cam_fwd.y;
+    params[20] = cam_fwd.z;
+    params[21] = tan_fov_y;
+    params[22] = aspect;
+    params[23] = w.intensity;  // wetness = rain intensity
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+    cmd_buffer.DrawPostProcess(PostProcessRequest{"weather_particle", scene_tex, params}.Tex(2, depth_tex));
+    cmd_buffer.EndRenderPass();
+}
+
+// ============================================================
+// FoliagePass — Vegetation Wind Bending + Character Interaction
+// ============================================================
+
+void FoliagePass::Setup(RenderGraph& graph) {
+    auto scene_color = graph.DeclareResource("scene_color");
+    auto pass = graph.AddPass(GetName());
+    graph.PassRead(pass, scene_color);
+    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
+}
+
+void FoliagePass::Execute(CommandBuffer& cmd_buffer) {
+    // FoliagePass delegates to RenderScene foliage_callbacks
+    // Actual vegetation rendering is handled by the module's foliage system
+    if (!ctx_.render_scene) return;
+    const auto& callbacks = ctx_.render_scene->foliage_callbacks;
+    if (callbacks.empty()) return;
+
+    cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
+    dse::render::RenderScenePassContext pass_ctx{};
+    for (const auto& cb : callbacks) {
+        cb(cmd_buffer, pass_ctx);
+    }
+    cmd_buffer.EndRenderPass();
+}
+
 } // namespace render
 } // namespace dse

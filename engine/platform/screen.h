@@ -30,6 +30,11 @@ public:
      */
     static int height(){return height_;}
 
+    static int render_width()  { return static_cast<int>(width_  * render_scale_); }
+    static int render_height() { return static_cast<int>(height_ * render_scale_); }
+    static float render_scale() { return render_scale_; }
+    static void set_render_scale(float s) { render_scale_ = (s < 0.25f) ? 0.25f : (s > 1.0f ? 1.0f : s); }
+
     /**
      * @brief 获取屏幕宽高比 (width / height)
      * @return 宽高比例的浮点数值
@@ -60,7 +65,7 @@ public:
      *
      * 将宽高和宽高比恢复为 0，等价于进程刚启动的初始状态。
      */
-    static void Reset() { width_ = 0; height_ = 0; aspect_ratio_ = 0.0f; }
+    static void Reset() { width_ = 0; height_ = 0; aspect_ratio_ = 0.0f; render_scale_ = 1.0f; }
 
 private:
     /**
@@ -71,6 +76,7 @@ private:
     static int width_;
     static int height_;
     static float aspect_ratio_;//宽高比
+    static float render_scale_;
 };
 
 

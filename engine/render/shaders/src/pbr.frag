@@ -748,6 +748,14 @@ void main() {
         metallic = mix(metallic, 0.0, snow_factor);
     }
 
+    // ── Wet surface: darkens albedo, reduces roughness ──
+    float wetness = camera_pos.w;  // global_wetness packed in camera_pos.w
+    if (wetness > 0.001) {
+        float wet_factor = clamp(wetness * max(N.y, 0.0), 0.0, 1.0);
+        surface_albedo *= mix(1.0, 0.6, wet_factor);
+        roughness = mix(roughness, roughness * 0.3, wet_factor);
+    }
+
     vec3 V = normalize(u_camera_pos - vFragPos);
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, surface_albedo, metallic);

@@ -64,6 +64,9 @@ struct DrawExecutorGlobalState {
     unsigned int gbuffer_texture[kMaxGBufferTextures] = {};
     bool gbuffer_rendering_mode = false;  ///< true: DrawMeshBatch 使用 GBuffer shader
 
+    // --- 全局湿度（天气系统驱动 PBR 湿表面效果） ---
+    float global_wetness = 0.0f;
+
     // --- 编辑器场景视图模式 ---
     bool force_unlit = false;     ///< Unlit 模式: shader 跳过光照计算
     bool overdraw_mode = false;   ///< Overdraw 模式: 固定颜色叠加输出

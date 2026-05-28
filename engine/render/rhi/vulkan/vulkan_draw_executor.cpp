@@ -473,7 +473,7 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
 
     // 从 view 矩阵的逆矩阵提取相机世界位置（与 OpenGL 一致）
     glm::mat4 inv_view = glm::inverse(view);
-    ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
+    ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
 
     if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
@@ -2744,6 +2744,7 @@ void VulkanDrawExecutor::DrawPostProcess(
         {"atmosphere_transmittance_lut", &ShaderManagerBase::atmosphere_transmittance_lut_shader_handle},
         {"atmosphere_sky",    &ShaderManagerBase::atmosphere_sky_shader_handle},
         {"sss_blur",          &ShaderManagerBase::sss_blur_shader_handle},
+        {"weather_particle",  &ShaderManagerBase::weather_particle_shader_handle},
     };
     unsigned int selected_shader_handle = shader_mgr.postprocess_shader_handle();
     {

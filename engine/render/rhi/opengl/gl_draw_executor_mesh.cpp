@@ -224,7 +224,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     PerFrameUBO per_frame;
     per_frame.vp = vp;
     per_frame.view = view;
-    per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
+    per_frame.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
     ubo_mgr.UploadPerFrame(per_frame);
 
     // PerScene UBO 需要在 for 循环中 shading_mode 变更时引用，声明在此

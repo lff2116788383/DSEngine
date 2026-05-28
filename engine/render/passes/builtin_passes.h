@@ -404,6 +404,34 @@ private:
     RenderPassContext& ctx_;
 };
 
+// ---- Weather Particle Pass ----
+class WeatherPass : public IRenderPass {
+public:
+    explicit WeatherPass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "weather_pass"; }
+private:
+    RenderPassContext& ctx_;
+    struct Particle {
+        glm::vec3 position;
+        float life;
+    };
+    std::vector<Particle> particles_;
+    float last_time_ = 0.0f;
+};
+
+// ---- Vegetation / Foliage Pass ----
+class FoliagePass : public IRenderPass {
+public:
+    explicit FoliagePass(RenderPassContext& ctx) : ctx_(ctx) {}
+    void Setup(RenderGraph& graph) override;
+    void Execute(CommandBuffer& cmd_buffer) override;
+    const char* GetName() const override { return "foliage_pass"; }
+private:
+    RenderPassContext& ctx_;
+};
+
 } // namespace render
 } // namespace dse
 

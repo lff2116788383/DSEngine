@@ -56,6 +56,7 @@
 #include "embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "embed/atmosphere_sky_frag.gen.h"
 #include "embed/sss_blur_frag.gen.h"
+#include "embed/weather_particle_frag.gen.h"
 #include "embed/eye_frag.gen.h"
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
@@ -733,6 +734,7 @@ void VulkanShaderManager::InitPostProcessShader() {
     atmosphere_transmittance_lut_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_transmittance_lut_frag_spv, generated_shaders::katmosphere_transmittance_lut_frag_spv_size, "Atmosphere Transmittance LUT");
     atmosphere_sky_shader_handle_ = create_pp_spv(generated_shaders::katmosphere_sky_frag_spv, generated_shaders::katmosphere_sky_frag_spv_size, "Atmosphere Sky");
     sss_blur_shader_handle_ = create_pp_spv(generated_shaders::ksss_blur_frag_spv, generated_shaders::ksss_blur_frag_spv_size, "SSS Blur");
+    weather_particle_shader_handle_ = create_pp_spv(generated_shaders::kweather_particle_frag_spv, generated_shaders::kweather_particle_frag_spv_size, "Weather Particle");
 }
 
 // ============================================================================

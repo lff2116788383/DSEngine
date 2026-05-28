@@ -49,6 +49,7 @@
 #include "engine/render/shaders/generated/embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "engine/render/shaders/generated/embed/atmosphere_sky_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sss_blur_frag.gen.h"
+#include "engine/render/shaders/generated/embed/weather_particle_frag.gen.h"
 #include "engine/render/shaders/generated/embed/eye_frag.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
 
@@ -537,6 +538,9 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     sss_blur_shader_handle_ = (ksss_blur_frag_dxbc_size > 0)
         ? create_pp_dxbc(ksss_blur_frag_dxbc, ksss_blur_frag_dxbc_size, "sss_blur")
         : create_pp_hlsl(ksss_blur_frag_hlsl, "sss_blur");
+    weather_particle_shader_handle_ = (kweather_particle_frag_dxbc_size > 0)
+        ? create_pp_dxbc(kweather_particle_frag_dxbc, kweather_particle_frag_dxbc_size, "weather_particle")
+        : create_pp_hlsl(kweather_particle_frag_hlsl, "weather_particle");
 
     pulse();
     // ---- GBuffer 着色器（复用 PBR VS DXBC + GBuffer PS DXBC）----

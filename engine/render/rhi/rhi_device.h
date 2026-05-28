@@ -268,6 +268,9 @@ public:
                                      grid_resolution, irradiance_texels, gi_intensity, normal_bias);
     }
 
+    // --- 全局湿度 ---
+    void SetGlobalWetness(float wetness) { global_render_state_.global_wetness = wetness; }
+
     // --- GBuffer / Deferred 管线状态 ---
     void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) { global_render_state_.SetGBufferTexture(index, texture_handle); }
     void SetGBufferRenderingMode(bool enabled) { global_render_state_.gbuffer_rendering_mode = enabled; }

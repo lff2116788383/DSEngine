@@ -49,6 +49,7 @@
 #include "embed/atmosphere_transmittance_lut_frag.gen.h"
 #include "embed/atmosphere_sky_frag.gen.h"
 #include "embed/sss_blur_frag.gen.h"
+#include "embed/weather_particle_frag.gen.h"
 #include "embed/eye_frag.gen.h"
 #include "embed/lum_compute_frag.gen.h"
 #include "embed/lum_adapt_frag.gen.h"
@@ -620,6 +621,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
     else if (effect_name == "atmosphere_transmittance_lut") fs = katmosphere_transmittance_lut_frag_glsl430;
     else if (effect_name == "atmosphere_sky")        fs = katmosphere_sky_frag_glsl430;
     else if (effect_name == "sss_blur")               fs = ksss_blur_frag_glsl430;
+    else if (effect_name == "weather_particle")        fs = kweather_particle_frag_glsl430;
     else return 0;
 
     unsigned int shader = CompileProgram(kpostprocess_vert_glsl430, fs);
@@ -648,6 +650,7 @@ void GLShaderManager::WarmupAllPostProcessShaders() {
         "bloom_blur_h", "bloom_blur_v", "copy",
         "atmosphere_transmittance_lut", "atmosphere_sky",
         "sss_blur",
+        "weather_particle",
     };
     for (const char* name : kAllPPEffects) {
         GetOrCreateGenPPShader(name);

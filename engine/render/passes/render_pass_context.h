@@ -178,6 +178,9 @@ struct RenderPassContext {
     std::function<void(World&, CommandBuffer&)> render_meshes;
     std::function<void(World&, CommandBuffer&, int wboit_mode)> render_transparent_meshes;
 
+    /// 全局湿度（由天气系统驱动，影响 PBR 表面）
+    float global_wetness = 0.0f;
+
     /// DDGI 系统（FramePipeline 持有生命周期，Pass 通过指针访问）
     gi::DDGISystem* ddgi_system = nullptr;
 

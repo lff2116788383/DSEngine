@@ -595,7 +595,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     frame_data.view = view;
     {
         glm::mat4 inv_view = glm::inverse(view);
-        frame_data.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], 0.0f);
+        frame_data.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
     }
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 
@@ -2052,6 +2052,29 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
             if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
         }
         draw_dedicated_pp(shader_mgr.sss_blur_shader_handle());
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        dc->PSSetShaderResources(1, 1, &null_srv);
+        return;
+    }
+
+    // Weather Particle 专用路径（24 float push constant）
+    if (effect_name == "weather_particle" && shader_mgr.weather_particle_shader_handle()) {
+        ensure_pp_params_cb();
+        if (pp_params_cb_ && params.size() >= 24) {
+            float cb[24];
+            for (int i = 0; i < 24; ++i) cb[i] = params[i];
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, cb, sizeof(cb));
+                dc->Unmap(pp_params_cb_.Get(), 0);
+            }
+            dc->PSSetConstantBuffers(0, 1, pp_params_cb_.GetAddressOf());
+        }
+        {
+            const auto* depth_tex = resource_mgr.GetTexture(request.FindTex(2));
+            if (depth_tex) dc->PSSetShaderResources(1, 1, depth_tex->srv.GetAddressOf());
+        }
+        draw_dedicated_pp(shader_mgr.weather_particle_shader_handle());
         ID3D11ShaderResourceView* null_srv = nullptr;
         dc->PSSetShaderResources(1, 1, &null_srv);
         return;

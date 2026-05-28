@@ -187,6 +187,32 @@ static constexpr PPUniformEntry kVolumetricCloudBindings[] = {
     {"_286.u_up_z",             UType::Float, 26}, {"_286.u_fwd_x",          UType::Float, 27},
     {"_286.u_fwd_y",            UType::Float, 28}, {"_286.u_fwd_z",          UType::Float, 29},
 };
+static constexpr PPUniformEntry kWeatherParticleBindings[] = {
+    {"_37.u_time",          UType::Float, 0},
+    {"_37.u_intensity",     UType::Float, 1},
+    {"_37.u_wind_x",        UType::Float, 2},
+    {"_37.u_wind_z",        UType::Float, 3},
+    {"_37.u_type",          UType::Float, 4},
+    {"_37.u_color_r",       UType::Float, 5},
+    {"_37.u_color_g",       UType::Float, 6},
+    {"_37.u_color_b",       UType::Float, 7},
+    {"_37.u_color_a",       UType::Float, 8},
+    {"_37.u_cam_pos_x",     UType::Float, 9},
+    {"_37.u_cam_pos_y",     UType::Float, 10},
+    {"_37.u_cam_pos_z",     UType::Float, 11},
+    {"_37.u_near",          UType::Float, 12},
+    {"_37.u_far",           UType::Float, 13},
+    {"_37.u_spawn_radius",  UType::Float, 14},
+    {"_37.u_spawn_height",  UType::Float, 15},
+    {"_37.u_screen_w",      UType::Float, 16},
+    {"_37.u_screen_h",      UType::Float, 17},
+    {"_37.u_fwd_x",         UType::Float, 18},
+    {"_37.u_fwd_y",         UType::Float, 19},
+    {"_37.u_fwd_z",         UType::Float, 20},
+    {"_37.u_tan_fov_y",     UType::Float, 21},
+    {"_37.u_aspect",        UType::Float, 22},
+    {"_37.u_wetness",       UType::Float, 23},
+};
 static constexpr PPUniformEntry kSssBlurBindings[] = {
     {"_56.u_direction",     UType::Float2, 0},
     {"_56.u_screen_size",   UType::Float2, 2},
@@ -457,6 +483,7 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         {"atmosphere_sky",   {kAtmSkyBindings, (int)std::size(kAtmSkyBindings), 36, nullptr, false}},
         // --- SSS ---
         {"sss_blur",         {kSssBlurBindings, (int)std::size(kSssBlurBindings), 6, nullptr, false}},
+        {"weather_particle", {kWeatherParticleBindings, (int)std::size(kWeatherParticleBindings), 24, nullptr, false}},
     };
     return table;
 }
