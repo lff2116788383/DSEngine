@@ -246,6 +246,9 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     for (int i = 0; i < 3; ++i) {
         per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
     }
+    for (int i = 0; i < 3; ++i) {
+        per_scene.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
+    }
     ubo_mgr.UploadPerScene(per_scene);
 
     // === LightProbeData UBO：SH 球谐系数 ===
