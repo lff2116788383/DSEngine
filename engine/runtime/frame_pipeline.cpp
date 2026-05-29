@@ -776,6 +776,7 @@ void FramePipeline::Shutdown() {
         nav_mesh_system_initialized_ = false;
     }
 #endif
+    gpu_skinning_system_.Shutdown();
     cluster_grid_.Shutdown();
     light_buffer_.Shutdown();
     light_probe_system_.Shutdown();

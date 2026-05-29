@@ -28,11 +28,6 @@ int L_AssetsLoadTexture(lua_State* L) {
 int L_AppSetDataRoot(lua_State* L) {
     const char* data_root = luaL_checkstring(L, 1);
     auto& asset_manager = GetAssetManager();
-    // 如果 DSE_DATA_ROOT 环境变量已设置，优先使用它，不让 Lua 覆盖
-    if (const char* env = std::getenv("DSE_DATA_ROOT"); env && env[0] != '\0') {
-        DEBUG_LOG_INFO("Data root from DSE_DATA_ROOT env takes precedence, ignoring lua set_data_root(\"{}\")", data_root);
-        return 0;
-    }
     asset_manager.ConfigureDataRoot(data_root);
     DEBUG_LOG_INFO("Data root updated from lua: {}", asset_manager.GetDataRoot());
     return 0;

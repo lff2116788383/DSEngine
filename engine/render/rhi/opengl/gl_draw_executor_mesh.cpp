@@ -410,6 +410,13 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
     const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
     const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
+
+    // 缠绕修复后三角形为 CCW，shadow pass 使用 CullFace::Front (peter-panning)。
+    // 将 front face 切换为 CW 使得 CullFace::Front 剔除不存在的 CW 面，CCW 面正常渲染。
+    const bool shadow_front_face_flip = shadow_cull_active;
+    if (shadow_front_face_flip) {
+        glFrontFace(GL_CW);
+    }
     float shadow_cull_limit = 0.0f;
     float shadow_ortho_size = 0.0f;
     size_t shadow_instance_budget = SIZE_MAX;
@@ -846,6 +853,69 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadMorphWeights(mw_ubo);
         }
 
+        // --- DIAG: skinned mesh draw diagnostics ---
+        {
+            static int diag_skinned = 0;
+            if (item.skinned && diag_skinned < 60) {
+                ++diag_skinned;
+                GLboolean cull_on = glIsEnabled(GL_CULL_FACE);
+                GLint cull_mode = 0; glGetIntegerv(GL_CULL_FACE_MODE, &cull_mode);
+                GLint front_face = 0; glGetIntegerv(GL_FRONT_FACE, &front_face);
+                GLboolean depth_test_on = glIsEnabled(GL_DEPTH_TEST);
+                GLboolean depth_write_on = GL_TRUE; glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_write_on);
+                GLint depth_func = 0; glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+                const auto* bone_list = &item.bone_matrices;
+                if (bone_list->empty() && !item.bone_palette.empty()) {
+                    bone_list = &item.bone_palette[0];
+                }
+                float b0_diag = 0.0f;
+                glm::vec3 b0_t(0.0f);
+                if (!bone_list->empty()) {
+                    b0_diag = (*bone_list)[0][0][0];
+                    b0_t = glm::vec3((*bone_list)[0][3]);
+                }
+                const BatchVertex* vd = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+                const size_t vc = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
+                const size_t ic = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
+                glm::vec4 v_color(0.0f);
+                glm::vec3 v_normal(0.0f);
+                glm::vec2 v_uv(0.0f);
+                glm::vec4 v_weights(0.0f);
+                glm::vec4 v_joints(0.0f);
+                if (vd && vc > 0) {
+                    v_color = vd[0].color;
+                    v_normal = vd[0].normal;
+                    v_uv = vd[0].uv;
+                    v_weights = vd[0].weights;
+                    v_joints = vd[0].joints;
+                }
+                DEBUG_LOG_INFO("[DIAG-SkinDraw] depth={} ortho={} shadow_cull={} instanced={} inst_count={} "
+                    "cull={} cull_mode={} front_face={} depth_test={} depth_write={} depth_func={} "
+                    "bones={} palettes={} b0={} b0_t=({},{},{}) bone_offset={} "
+                    "shading={} lit={} recv_shadow={} shadow_strength={} light_dir=({},{},{}) ambient={} intensity={} "
+                    "tex={} normal_tex={} mr_tex={} ds={} mat=({},{},{}) metal={} rough={} ao={} "
+                    "vtx={} idx={} v0_color=({},{},{},{}) v0_n=({},{},{}) v0_uv=({},{}) v0_w=({},{},{},{}) v0_j=({},{},{},{})",
+                    (int)is_depth_only_pass_, (int)is_ortho, (int)shadow_cull_active, (int)skinned_instanced,
+                    item.instance_transforms.size(),
+                    (int)cull_on, cull_mode, front_face, (int)depth_test_on, (int)depth_write_on, depth_func,
+                    bone_list->size(), item.bone_palette.size(), b0_diag, b0_t.x, b0_t.y, b0_t.z,
+                    item.skinned ? bone_offsets[item_idx] : 0,
+                    item.shading_mode, item.lighting_enabled ? 1 : 0, item.receive_shadow ? 1 : 0,
+                    item.shadow_strength, item.light_direction.x, item.light_direction.y, item.light_direction.z,
+                    item.ambient_intensity, item.light_intensity,
+                    item.texture_handle, item.normal_map_handle, item.metallic_roughness_map_handle,
+                    item.material_double_sided ? 1 : 0,
+                    item.material_albedo.r, item.material_albedo.g, item.material_albedo.b,
+                    item.material_metallic, item.material_roughness, item.material_ao,
+                    vc, ic,
+                    v_color.r, v_color.g, v_color.b, v_color.a,
+                    v_normal.x, v_normal.y, v_normal.z,
+                    v_uv.x, v_uv.y,
+                    v_weights.x, v_weights.y, v_weights.z, v_weights.w,
+                    v_joints.x, v_joints.y, v_joints.z, v_joints.w);
+            }
+        }
+
         // GPU Instancing 标记
         const bool is_instanced = item.instance_transforms.size() > 1;
         {
@@ -1103,6 +1173,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                        center_rgba[0], center_rgba[1], center_rgba[2], center_rgba[3]);
         ++vse1522_depth_diag_frames;
 #endif // DSE_VSE_1522_DIAG
+    }
+
+    // 恢复 front face 为默认 CCW
+    if (shadow_front_face_flip) {
+        glFrontFace(GL_CCW);
     }
 
 }

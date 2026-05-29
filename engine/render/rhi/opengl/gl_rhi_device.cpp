@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file rhi_device.cpp
  * @brief 渲染硬件接口(RHI)抽象层 - OpenGLRhiDevice 协调器实现
  *

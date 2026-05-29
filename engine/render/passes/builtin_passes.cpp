@@ -604,6 +604,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
 
+
         if (use_gpu_indirect) {
             glm::vec3 gpu_light_dir   = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
             glm::vec3 gpu_light_color = glm::vec3(1.0f, 1.0f, 1.0f);

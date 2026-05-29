@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <rapidjson/document.h>
 
@@ -551,6 +552,10 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                             }
                             mesh_renderer.temp_indices.push_back(resolved_index);
                         }
+                    }
+                    // KF Z-flip 后三角形缠绕从 CCW 变为 CW，需要反转恢复正确的前面判定
+                    for (size_t ti = 0; ti + 2 < mesh_renderer.temp_indices.size(); ti += 3) {
+                        std::swap(mesh_renderer.temp_indices[ti + 1], mesh_renderer.temp_indices[ti + 2]);
                     }
                     update_bounding_box(mesh_renderer.temp_vertices, mesh_renderer.dmesh_vertex_stride);
                     return;
@@ -1135,6 +1140,28 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
                 continue;
             }
             size_t vertex_count = mesh_renderer.temp_vertices.size() / stride;
+
+            // --- DIAG: mesh vertex data info (one-shot per mesh_path) ---
+            {
+                static std::unordered_set<std::string> diag_logged_paths;
+                if (item.skinned && diag_logged_paths.find(mesh_renderer.mesh_path) == diag_logged_paths.end()) {
+                    diag_logged_paths.insert(mesh_renderer.mesh_path);
+                    float vc_r = 0, vc_g = 0, vc_b = 0, vc_a = 0;
+                    if (stride >= 24 && vertex_count > 0) {
+                        vc_r = mesh_renderer.temp_vertices[20];
+                        vc_g = mesh_renderer.temp_vertices[21];
+                        vc_b = mesh_renderer.temp_vertices[22];
+                        vc_a = mesh_renderer.temp_vertices[23];
+                    }
+                    DEBUG_LOG_INFO("[DIAG-MeshVtx] path={} stride={} vtx={} idx={} skinned={} "
+                        "item_color=({},{},{},{}) dmesh_vc0=({},{},{},{})",
+                        mesh_renderer.mesh_path, stride, vertex_count, mesh_renderer.temp_indices.size(),
+                        (int)item.skinned,
+                        item.color.r, item.color.g, item.color.b, item.color.a,
+                        vc_r, vc_g, vc_b, vc_a);
+                }
+            }
+
             std::vector<glm::vec3> local_positions(vertex_count);
             for (size_t i = 0; i < vertex_count; ++i) {
                 local_positions[i] = glm::vec3(
@@ -1389,6 +1416,70 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         const bool has_vertex_data = (!item.vertices.empty() && !item.indices.empty())
             || (item.shared_vertex_ptr && item.shared_index_ptr);
         if (has_vertex_data) {
+            {
+                static int diag_submit_count = 0;
+                if (item.skinned && diag_submit_count < 40) {
+                    ++diag_submit_count;
+                    const BatchVertex* vertex_data = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+                    const size_t vertex_count = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
+                    const size_t index_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
+                    glm::vec4 v_color(0.0f);
+                    glm::vec3 v_normal(0.0f);
+                    glm::vec2 v_uv(0.0f);
+                    glm::vec4 v_weights(0.0f);
+                    glm::vec4 v_joints(0.0f);
+                    if (vertex_data && vertex_count > 0) {
+                        v_color = vertex_data[0].color;
+                        v_normal = vertex_data[0].normal;
+                        v_uv = vertex_data[0].uv;
+                        v_weights = vertex_data[0].weights;
+                        v_joints = vertex_data[0].joints;
+                    }
+                    const auto* bone_list = &item.bone_matrices;
+                    if (bone_list->empty() && !item.bone_palette.empty()) {
+                        bone_list = &item.bone_palette[0];
+                    }
+                    float b0 = 0.0f;
+                    glm::vec3 bone_t_min(std::numeric_limits<float>::max());
+                    glm::vec3 bone_t_max(std::numeric_limits<float>::lowest());
+                    if (!bone_list->empty()) {
+                        b0 = (*bone_list)[0][0][0];
+                        const size_t bone_sample_count = std::min(bone_list->size(), static_cast<size_t>(8));
+                        for (size_t bi = 0; bi < bone_sample_count; ++bi) {
+                            const glm::vec3 t((*bone_list)[bi][3]);
+                            bone_t_min = glm::min(bone_t_min, t);
+                            bone_t_max = glm::max(bone_t_max, t);
+                        }
+                    } else {
+                        bone_t_min = glm::vec3(0.0f);
+                        bone_t_max = glm::vec3(0.0f);
+                    }
+                    DEBUG_LOG_INFO("[DIAG-MeshSubmit] entity={} path={} shared={} vtx={} idx={} stride={} "
+                        "shading={} lit={} recv_shadow={} shadow_strength={} light_dir=({},{},{}) ambient={} intensity={} "
+                        "tex={} normal_tex={} mr_tex={} color=({},{},{},{}) mat=({},{},{}) metal={} rough={} ao={} ds={} "
+                        "v0_color=({},{},{},{}) v0_n=({},{},{}) v0_uv=({},{}) v0_w=({},{},{},{}) v0_j=({},{},{},{}) "
+                        "bones={} palettes={} b0={} bone_t_min=({},{},{}) bone_t_max=({},{},{}) bounds_min=({},{},{}) bounds_max=({},{},{})",
+                        static_cast<unsigned int>(entity), mesh_renderer.mesh_path, item.shared_vertex_ptr ? 1 : 0,
+                        vertex_count, index_count, mesh_renderer.dmesh_vertex_stride,
+                        item.shading_mode, item.lighting_enabled ? 1 : 0, item.receive_shadow ? 1 : 0,
+                        item.shadow_strength, item.light_direction.x, item.light_direction.y, item.light_direction.z,
+                        item.ambient_intensity, item.light_intensity,
+                        item.texture_handle, item.normal_map_handle, item.metallic_roughness_map_handle,
+                        item.color.r, item.color.g, item.color.b, item.color.a,
+                        item.material_albedo.r, item.material_albedo.g, item.material_albedo.b,
+                        item.material_metallic, item.material_roughness, item.material_ao, item.material_double_sided ? 1 : 0,
+                        v_color.r, v_color.g, v_color.b, v_color.a,
+                        v_normal.x, v_normal.y, v_normal.z,
+                        v_uv.x, v_uv.y,
+                        v_weights.x, v_weights.y, v_weights.z, v_weights.w,
+                        v_joints.x, v_joints.y, v_joints.z, v_joints.w,
+                        bone_list->size(), item.bone_palette.size(), b0,
+                        bone_t_min.x, bone_t_min.y, bone_t_min.z,
+                        bone_t_max.x, bone_t_max.y, bone_t_max.z,
+                        item.debug_world_bounds_min.x, item.debug_world_bounds_min.y, item.debug_world_bounds_min.z,
+                        item.debug_world_bounds_max.x, item.debug_world_bounds_max.y, item.debug_world_bounds_max.z);
+                }
+            }
             if (mesh_renderer.is_static && !static_batches_built_) {
                 static_batch_builder_.Add(item);
             } else {
@@ -1460,6 +1551,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
     cached_transparent_items_ = transparent_items_;
     scene.cpu_meshes.transparent.insert(scene.cpu_meshes.transparent.end(), cached_transparent_items_.begin(), cached_transparent_items_.end());
     batch_cache_dirty_ = false;
+
 }
 
 void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode) {
