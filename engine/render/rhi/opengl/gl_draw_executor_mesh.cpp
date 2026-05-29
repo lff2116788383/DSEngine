@@ -758,7 +758,16 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
             ubo_mgr.UploadSpotLightData(sld_ubo);
         }
 
-        // CSM 阴影贴图（sampler2DShadow 需要硬件混合比较）绑定
+        // CSM 阴影贴图绑定
+        // Atlas 模式: 单个 shadow_atlas 纹理 (sampler2DShadow, 硬件比较)
+        if (loc.shadow_atlas != -1 && global_state_.shadow_map[0] != 0) {
+            glActiveTexture(GL_TEXTURE0 + slots.shadow_base);
+            glBindTexture(GL_TEXTURE_2D, global_state_.shadow_map[0]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+            glUniform1i(loc.shadow_atlas, slots.shadow_base);
+        }
+        // 兼容旧 per-cascade 独立纹理路径 (u_shadow_maps[0..2])
         for (int i = 0; i < 3; ++i) {
             if (loc.shadow_map[i] != -1) {
                 glActiveTexture(GL_TEXTURE0 + slots.shadow_base + i);

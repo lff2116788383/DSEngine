@@ -429,6 +429,7 @@ void GLShaderManager::CachePBRLocations() {
     loc.metallic_roughness_map = glGetUniformLocation(h, "u_metallic_roughness_map");
     loc.emissive_map = glGetUniformLocation(h, "u_emissive_map");
     loc.occlusion_map = glGetUniformLocation(h, "u_occlusion_map");
+    loc.shadow_atlas = glGetUniformLocation(h, "u_shadow_atlas");
     for (int i = 0; i < 3; ++i) {
         std::string sm_name = "u_shadow_maps[" + std::to_string(i) + "]";
         loc.shadow_map[i] = glGetUniformLocation(h, sm_name.c_str());

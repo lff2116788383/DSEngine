@@ -41,6 +41,7 @@ struct PBRShaderLocations {
     int emissive_map = -1;
     int occlusion_map = -1;
     int shadow_map[3] = {-1, -1, -1};
+    int shadow_atlas = -1;  ///< u_shadow_atlas (sampler2DShadow, CSM atlas 模式)
     int spot_shadow_map[4] = {-1, -1, -1, -1};
     int point_shadow_map[4] = {-1, -1, -1, -1};
 
