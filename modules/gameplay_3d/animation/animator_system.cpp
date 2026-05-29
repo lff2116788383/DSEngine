@@ -511,10 +511,40 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
         if (animator.lock_root_motion || animator.extract_root_motion) {
             int hips_idx = -1;
             if (!bone_name_to_index.empty()) {
-                for (const auto& [name, idx] : bone_name_to_index) {
-                    if (name.find("Hips") != std::string::npos && idx >= 0 && idx < static_cast<int>(bone_count)) {
-                        hips_idx = idx;
+                // Check common root-motion bone names (case-insensitive substring match)
+                static const char* kRootMotionBoneNames[] = {
+                    "Hips", "hips", "Pelvis", "pelvis", "Root", "root",
+                    "mixamorig:Hips", "Bip01", "Bip001"
+                };
+                for (const char* candidate : kRootMotionBoneNames) {
+                    auto it = bone_name_to_index.find(candidate);
+                    if (it != bone_name_to_index.end() && it->second >= 0 && it->second < static_cast<int>(bone_count)) {
+                        hips_idx = it->second;
                         break;
+                    }
+                }
+                // Fallback: substring search for common patterns
+                if (hips_idx < 0) {
+                    for (const auto& [name, idx] : bone_name_to_index) {
+                        if (idx < 0 || idx >= static_cast<int>(bone_count)) continue;
+                        if (name.find("Hips") != std::string::npos ||
+                            name.find("hips") != std::string::npos ||
+                            name.find("Pelvis") != std::string::npos ||
+                            name.find("pelvis") != std::string::npos) {
+                            hips_idx = idx;
+                            break;
+                        }
+                    }
+                }
+                // Last resort: first child of skeleton root
+                if (hips_idx < 0) {
+                    for (uint32_t i = 0; i < bone_count; ++i) {
+                        int pi = cache.parent_indices[i];
+                        if (pi >= 0 && pi < static_cast<int>(bone_count) &&
+                            cache.parent_indices[pi] < 0) {
+                            hips_idx = static_cast<int>(i);
+                            break;
+                        }
                     }
                 }
             }

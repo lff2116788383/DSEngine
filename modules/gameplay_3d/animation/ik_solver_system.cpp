@@ -54,11 +54,13 @@ bool BuildChainIndices(IKChainConfig& chain, const Animator3DComponent::Skeletal
     return true;
 }
 
-// LookAt IK: rotate a single bone to face target
+// LookAt IK: rotate a single bone to face target.
+// bind_local_rotation: the bone's bind-pose local rotation, used to derive its rest forward direction.
 void SolveLookAt(
     const glm::vec3& bone_world_pos,
     const glm::vec3& target,
     const glm::mat4& parent_global,
+    const glm::quat& bind_local_rotation,
     glm::quat& out_local_rotation,
     float weight)
 {
@@ -71,11 +73,23 @@ void SolveLookAt(
     glm::mat3 inv_parent_rot = glm::transpose(glm::mat3(parent_global));
     glm::vec3 dir_local = glm::normalize(inv_parent_rot * dir_world);
 
-    // Compute rotation from default forward (-Z) to target direction
-    glm::vec3 forward(0.0f, 0.0f, -1.0f);
-    glm::quat target_rot = glm::rotation(forward, dir_local);
+    // Derive the bone's rest forward from its bind-pose rotation (apply bind rot to -Z)
+    glm::vec3 bind_forward = glm::normalize(bind_local_rotation * glm::vec3(0.0f, 0.0f, -1.0f));
 
-    // Blend between original rotation and look-at rotation (NOT cumulative)
+    // Compute rotation from bind forward to target direction
+    float dot_val = glm::dot(bind_forward, dir_local);
+    glm::quat target_rot;
+    if (dot_val < -0.9999f) {
+        // Nearly opposite: use an arbitrary perpendicular axis
+        glm::vec3 perp = (std::abs(bind_forward.x) < 0.9f)
+            ? glm::cross(glm::vec3(1, 0, 0), bind_forward)
+            : glm::cross(glm::vec3(0, 1, 0), bind_forward);
+        target_rot = glm::angleAxis(glm::pi<float>(), glm::normalize(perp));
+    } else {
+        target_rot = glm::rotation(bind_forward, dir_local);
+    }
+
+    // Blend between original rotation and look-at rotation
     out_local_rotation = glm::slerp(out_local_rotation, target_rot, weight);
     out_local_rotation = glm::normalize(out_local_rotation);
 }
@@ -119,7 +133,21 @@ void SolveCCD(
             float tgt_len = glm::length(to_target);
             if (tgt_len < 1e-6f) continue;
 
-            glm::quat delta_rot     = glm::rotation(to_tip / tip_len, to_target / tgt_len);
+            glm::vec3 from_dir = to_tip / tip_len;
+            glm::vec3 to_dir   = to_target / tgt_len;
+            float dot_val = glm::dot(from_dir, to_dir);
+            glm::quat delta_rot;
+            if (dot_val > 0.9999f) {
+                continue; // Already aligned, skip this bone
+            } else if (dot_val < -0.9999f) {
+                // Nearly opposite: use perpendicular axis
+                glm::vec3 perp = (std::abs(from_dir.x) < 0.9f)
+                    ? glm::normalize(glm::cross(glm::vec3(1, 0, 0), from_dir))
+                    : glm::normalize(glm::cross(glm::vec3(0, 1, 0), from_dir));
+                delta_rot = glm::angleAxis(glm::pi<float>(), perp);
+            } else {
+                delta_rot = glm::rotation(from_dir, to_dir);
+            }
             glm::quat bone_world    = glm::normalize(glm::quat_cast(glm::mat3(globals[bone_idx])));
             glm::quat parent_world  = glm::normalize(glm::quat_cast(glm::mat3(globals[parent_idx])));
             glm::quat new_local     = glm::inverse(parent_world) * (delta_rot * bone_world);
@@ -188,7 +216,8 @@ void IKSolverSystem::Update(World& world, float delta_time) {
                 glm::mat4 parent_global = (parent_idx >= 0 && parent_idx < static_cast<int>(cache.bone_count))
                     ? globals[parent_idx] : glm::mat4(1.0f);
 
-                SolveLookAt(bone_pos, target, parent_global, animator.pose_buffer.rotations[bone_idx], chain.weight);
+                glm::quat bind_local_rot = glm::quat_cast(cache.local_bind_poses[bone_idx]);
+                SolveLookAt(bone_pos, target, parent_global, bind_local_rot, animator.pose_buffer.rotations[bone_idx], chain.weight);
                 animator.pose_buffer.touched[bone_idx] = true;
 
             } else if (chain.type == IKChainType::CCD) {

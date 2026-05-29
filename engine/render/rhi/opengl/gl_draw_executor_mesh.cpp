@@ -411,12 +411,6 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     const bool is_ortho = std::abs(projection[3][3] - 1.0f) < 0.01f;
     const bool shadow_cull_active = is_depth_only_pass_ && is_ortho;
 
-    // 缠绕修复后三角形为 CCW，shadow pass 使用 CullFace::Front (peter-panning)。
-    // 将 front face 切换为 CW 使得 CullFace::Front 剔除不存在的 CW 面，CCW 面正常渲染。
-    const bool shadow_front_face_flip = shadow_cull_active;
-    if (shadow_front_face_flip) {
-        glFrontFace(GL_CW);
-    }
     float shadow_cull_limit = 0.0f;
     float shadow_ortho_size = 0.0f;
     size_t shadow_instance_budget = SIZE_MAX;
@@ -957,20 +951,40 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         const size_t idx_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
 
         // === Static Mesh VBO 缓存查找 ===
-        // 如果 shared_vertex_ptr 可用，尝试使用持久化 VAO（零上传）
+        // 使用 (vtx_count, idx_count, 首顶点位置 hash) 作为稳定 cache key，
+        // 避免裸指针 ABA 问题（vector 重分配后地址复用导致命中错误 VAO）
         const StaticMeshEntry* static_entry = nullptr;
         if (vtx_data && idx_data && vtx_count > 0 && idx_count > 0) {
-            const void* cache_key = item.shared_vertex_ptr ? static_cast<const void*>(item.shared_vertex_ptr)
-                                                           : static_cast<const void*>(item.vertices.data());
-            if (cache_key) {
-                auto cache_it = static_mesh_cache_.find(cache_key);
-                if (cache_it != static_mesh_cache_.end()) {
-                    static_entry = &cache_it->second;
-                } else {
-                    auto entry = CreateStaticMeshVAO(vtx_data, vtx_count, idx_data, idx_count);
-                    auto [it, _] = static_mesh_cache_.emplace(cache_key, entry);
-                    static_entry = &it->second;
+            // 稳定 key: shared_vertex_ptr 本身是持久的（来自 MeshRendererComponent），可安全用作 key
+            // 非 shared 路径: 用 (vtx_count + idx_count + 首顶点位置 hash) 构造稳定 key
+            const void* cache_key = nullptr;
+            uint64_t synthetic_key = 0;
+            if (item.shared_vertex_ptr) {
+                cache_key = static_cast<const void*>(item.shared_vertex_ptr);
+            } else {
+                // 构造基于内容的稳定 key（不依赖指针地址）
+                synthetic_key = static_cast<uint64_t>(vtx_count) * 2654435761ULL
+                              ^ static_cast<uint64_t>(idx_count) * 40503ULL;
+                if (vtx_count > 0) {
+                    // 混入首顶点的位置作为区分（同 vtx/idx count 的不同 mesh）
+                    uint32_t pos_bits[3];
+                    std::memcpy(pos_bits, &vtx_data[0].pos, sizeof(pos_bits));
+                    synthetic_key ^= (static_cast<uint64_t>(pos_bits[0]) << 32) | pos_bits[1];
+                    synthetic_key ^= static_cast<uint64_t>(pos_bits[2]) * 11400714819323198485ULL;
                 }
+                cache_key = reinterpret_cast<const void*>(static_cast<uintptr_t>(synthetic_key));
+                // 避免 nullptr key
+                if (!cache_key) cache_key = reinterpret_cast<const void*>(static_cast<uintptr_t>(1));
+            }
+            auto cache_it = static_mesh_cache_.find(cache_key);
+            if (cache_it != static_mesh_cache_.end()
+                && cache_it->second.vtx_count == vtx_count
+                && cache_it->second.idx_count == idx_count) {
+                static_entry = &cache_it->second;
+            } else {
+                auto entry = CreateStaticMeshVAO(vtx_data, vtx_count, idx_data, idx_count);
+                static_mesh_cache_[cache_key] = entry;
+                static_entry = &static_mesh_cache_[cache_key];
             }
         }
 
@@ -1173,11 +1187,6 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                        center_rgba[0], center_rgba[1], center_rgba[2], center_rgba[3]);
         ++vse1522_depth_diag_frames;
 #endif // DSE_VSE_1522_DIAG
-    }
-
-    // 恢复 front face 为默认 CCW
-    if (shadow_front_face_flip) {
-        glFrontFace(GL_CCW);
     }
 
 }

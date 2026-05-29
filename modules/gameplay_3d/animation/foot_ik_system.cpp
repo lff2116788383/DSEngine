@@ -191,11 +191,11 @@ void FootIKSystem::Update(World& world, float delta_time) {
                     float pelvis_drop = min_foot_delta;
                     if (pelvis_drop < -foot_ik.max_pelvis_offset) pelvis_drop = -foot_ik.max_pelvis_offset;
 
-                    // Convert world-space Y offset to model-space
-                    glm::mat4 inv_world = glm::inverse(entity_world_matrix);
-                    glm::vec3 local_offset = glm::vec3(inv_world * glm::vec4(0.0f, pelvis_drop, 0.0f, 0.0f));
+                    // Convert world-space Y offset to model-space, accounting for rotation but not scale
+                    glm::mat3 world_rot = glm::mat3_cast(transform.rotation);
+                    glm::vec3 local_down = glm::transpose(world_rot) * glm::vec3(0.0f, pelvis_drop, 0.0f);
 
-                    animator.pose_buffer.positions[root_idx] += local_offset * foot_ik.pelvis_weight;
+                    animator.pose_buffer.positions[root_idx] += local_down * foot_ik.pelvis_weight;
                     animator.pose_buffer.touched[root_idx] = true;
                 }
             }

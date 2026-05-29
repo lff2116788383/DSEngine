@@ -128,6 +128,13 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+
+        // TAA jitter 必须与 ForwardScenePass 一致，否则 PreZ 深度与主 pass 不匹配导致闪烁
+        if (ctx_.taa_active) {
+            projection[2][0] += ctx_.taa_jitter.x * 2.0f;
+            projection[2][1] += ctx_.taa_jitter.y * 2.0f;
+        }
+
         cmd_buffer.SetCamera(snap.camera_3d.view, projection);
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.prez);
 
@@ -2172,7 +2179,7 @@ void main() {
     float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
     mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
 
-    float test_depth = nearest_z * 0.5 + 0.5;
+    float test_depth = nearest_z * 0.5 + 0.5 - 0.005;
     vec2 uv_center = (uv_min + uv_max) * 0.5;
     float hiz_depth = textureLod(u_hiz_texture, uv_center, mip_level).r;
     float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
@@ -2301,7 +2308,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
     mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
 
-    float test_depth = nearest_z;
+    float test_depth = nearest_z - 0.005;
     float2 uv_center = (uv_min + uv_max) * 0.5;
     float hiz_depth = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
     float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);
@@ -2389,7 +2396,7 @@ void main() {
     mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
 
     // Convert depth from NDC [-1,1] to [0,1] for comparison
-    float test_depth = nearest_z * 0.5 + 0.5;
+    float test_depth = nearest_z * 0.5 + 0.5 - 0.005;
 
     // Sample Hi-Z at the center of the projected AABB
     vec2 uv_center = (uv_min + uv_max) * 0.5;
@@ -2658,7 +2665,7 @@ void main() {
     float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
     mip_level = clamp(mip_level, 0.0, float(u_mip_count - 1));
 
-    float test_depth = nearest_z * 0.5 + 0.5;
+    float test_depth = nearest_z * 0.5 + 0.5 - 0.005;
 
     // Sample Hi-Z (5-tap conservative)
     vec2 uv_center = (uv_min + uv_max) * 0.5;
@@ -2771,7 +2778,7 @@ void main() {
     float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
     mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
 
-    float test_depth = nearest_z * 0.5 + 0.5;
+    float test_depth = nearest_z * 0.5 + 0.5 - 0.005;
     vec2 uv_center = (uv_min + uv_max) * 0.5;
     float hiz_c  = textureLod(u_hiz_texture, uv_center, mip_level).r;
     float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
@@ -2871,7 +2878,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float mip_level = max_dim > 0.0f ? ceil(log2(max_dim)) : 0.0f;
     mip_level = clamp(mip_level, 0.0f, (float)(u_mip_count - 1));
 
-    float test_depth = nearest_z * 0.5f + 0.5f;
+    float test_depth = nearest_z * 0.5f + 0.5f - 0.005f;
     float2 uv_center = (uv_min + uv_max) * 0.5f;
     float hiz_c  = u_hiz_texture.SampleLevel(LinearSampler, uv_center, mip_level);
     float hiz_tl = u_hiz_texture.SampleLevel(LinearSampler, uv_min, mip_level);

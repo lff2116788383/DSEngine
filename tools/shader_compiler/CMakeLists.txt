@@ -26,6 +26,7 @@ add_executable(dse_shader_compiler shader_compiler.cpp)
 
 target_include_directories(dse_shader_compiler PRIVATE
     ${DSE_GLSLANG_INCLUDE_DIR}
+    ${DSE_GLSLANG_INCLUDE_DIR}/StandAlone
     ${DSE_SPIRV_CROSS_INCLUDE_DIR}
 )
 

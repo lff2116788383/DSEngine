@@ -553,10 +553,6 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                             mesh_renderer.temp_indices.push_back(resolved_index);
                         }
                     }
-                    // KF Z-flip 后三角形缠绕从 CCW 变为 CW，需要反转恢复正确的前面判定
-                    for (size_t ti = 0; ti + 2 < mesh_renderer.temp_indices.size(); ti += 3) {
-                        std::swap(mesh_renderer.temp_indices[ti + 1], mesh_renderer.temp_indices[ti + 2]);
-                    }
                     update_bounding_box(mesh_renderer.temp_vertices, mesh_renderer.dmesh_vertex_stride);
                     return;
                 }

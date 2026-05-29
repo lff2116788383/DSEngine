@@ -15,6 +15,7 @@
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
+#include <StandAlone/DirStackFileIncluder.h>
 
 #include <spirv_glsl.hpp>
 #include <spirv_hlsl.hpp>
@@ -102,7 +103,8 @@ static std::string SanitizeIdentifier(const std::string& name) {
 static bool CompileToSpirv(const std::string& source, EShLanguage stage,
                            const std::string& filename,
                            std::vector<uint32_t>& spirv_out,
-                           const std::string& preamble = "") {
+                           const std::string& preamble = "",
+                           const std::vector<std::string>& include_dirs = {}) {
     const char* src_cstr = source.c_str();
     const char* names[] = { filename.c_str() };
 
@@ -116,8 +118,14 @@ static bool CompileToSpirv(const std::string& source, EShLanguage stage,
     shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
     shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
 
+    // Include 支持: 设置 DirStackFileIncluder 以解析 #include 指令
+    DirStackFileIncluder includer;
+    for (const auto& dir : include_dirs) {
+        includer.pushExternalLocalDirectory(dir);
+    }
+
     const TBuiltInResource* resources = GetDefaultResources();
-    if (!shader.parse(resources, 100, false, EShMsgDefault)) {
+    if (!shader.parse(resources, 100, false, EShMsgDefault, includer)) {
         std::cerr << "[ERROR] glslang parse failed: " << filename << "\n";
         std::cerr << shader.getInfoLog() << "\n";
         return false;
@@ -1285,7 +1293,8 @@ int main(int argc, char* argv[]) {
 
         // Compile to SPIR-V
         std::vector<uint32_t> spirv;
-        if (!CompileToSpirv(source, stage, filepath.filename().string(), spirv)) {
+        std::vector<std::string> inc_dirs = { filepath.parent_path().string() };
+        if (!CompileToSpirv(source, stage, filepath.filename().string(), spirv, "", inc_dirs)) {
             std::cerr << "FAILED (glslang)\n";
             error_count++;
             continue;
@@ -1402,7 +1411,7 @@ int main(int argc, char* argv[]) {
 
                     std::vector<uint32_t> v_spirv;
                     if (!CompileToSpirv(source, stage, filepath.filename().string(),
-                                        v_spirv, variant_preamble)) {
+                                        v_spirv, variant_preamble, inc_dirs)) {
                         std::cerr << "FAILED (glslang)\n";
                         error_count++;
                         continue;
