@@ -13,6 +13,10 @@
 #include <set>
 #include <string>
 
+#include <filesystem>
+#include <fstream>
+#include <vector>
+
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <windows.h>
@@ -46,6 +50,7 @@ bool VulkanContext::Init(void* window_handle, int width, int height, bool enable
     if (!CreateSurface(window_handle)) return false;
     if (!PickPhysicalDevice()) return false;
     if (!CreateLogicalDevice()) return false;
+    if (!CreatePipelineCache()) return false;
     if (!CreateSwapchain(width, height)) return false;
     if (!CreateSyncObjects()) return false;
 
@@ -65,6 +70,8 @@ void VulkanContext::Shutdown() {
 
     vkDeviceWaitIdle(device_);
 
+    SavePipelineCache();
+
     // 同步对象
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         if (render_finished_semaphores_[i] != VK_NULL_HANDLE)
@@ -82,6 +89,10 @@ void VulkanContext::Shutdown() {
         surface_ = VK_NULL_HANDLE;
     }
     if (device_ != VK_NULL_HANDLE) {
+        if (pipeline_cache_ != VK_NULL_HANDLE) {
+            vkDestroyPipelineCache(device_, pipeline_cache_, nullptr);
+            pipeline_cache_ = VK_NULL_HANDLE;
+        }
         vkDestroyDevice(device_, nullptr);
         device_ = VK_NULL_HANDLE;
     }
@@ -788,6 +799,65 @@ bool VulkanContext::CreateSyncObjects() {
         }
     }
     return true;
+}
+
+// ============================================================
+// Pipeline Cache
+// ============================================================
+
+bool VulkanContext::CreatePipelineCache() {
+    static const char* kCachePath = "bin/cache/vulkan_pipeline_cache.bin";
+
+    // 尝试从磁盘加载已有缓存
+    std::ifstream cache_file(kCachePath, std::ios::binary | std::ios::ate);
+    if (cache_file.is_open()) {
+        size_t file_size = static_cast<size_t>(cache_file.tellg());
+        if (file_size > 0) {
+            std::vector<uint8_t> cache_data(file_size);
+            cache_file.seekg(0);
+            cache_file.read(reinterpret_cast<char*>(cache_data.data()), file_size);
+            cache_file.close();
+
+            VkPipelineCacheCreateInfo ci{};
+            ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+            ci.initialDataSize = file_size;
+            ci.pInitialData = cache_data.data();
+            if (vkCreatePipelineCache(device_, &ci, nullptr, &pipeline_cache_) == VK_SUCCESS) {
+                DEBUG_LOG_INFO("[Vulkan] Pipeline cache loaded: {} bytes", file_size);
+                return true;
+            }
+        }
+    }
+
+    // 无缓存或加载失败 — 创建空缓存
+    VkPipelineCacheCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    if (vkCreatePipelineCache(device_, &ci, nullptr, &pipeline_cache_) != VK_SUCCESS) {
+        DEBUG_LOG_WARN("[Vulkan] Failed to create pipeline cache");
+        pipeline_cache_ = VK_NULL_HANDLE;
+        return false;
+    }
+    DEBUG_LOG_INFO("[Vulkan] Pipeline cache created (empty)");
+    return true;
+}
+
+void VulkanContext::SavePipelineCache() {
+    if (pipeline_cache_ == VK_NULL_HANDLE || device_ == VK_NULL_HANDLE) return;
+
+    size_t cache_size = 0;
+    if (vkGetPipelineCacheData(device_, pipeline_cache_, &cache_size, nullptr) != VK_SUCCESS || cache_size == 0)
+        return;
+
+    std::vector<uint8_t> cache_data(cache_size);
+    if (vkGetPipelineCacheData(device_, pipeline_cache_, &cache_size, cache_data.data()) != VK_SUCCESS)
+        return;
+
+    std::filesystem::create_directories("bin/cache");
+    std::ofstream cache_file("bin/cache/vulkan_pipeline_cache.bin", std::ios::binary);
+    if (cache_file.is_open()) {
+        cache_file.write(reinterpret_cast<const char*>(cache_data.data()), cache_size);
+        DEBUG_LOG_INFO("[Vulkan] Pipeline cache saved: {} bytes", cache_size);
+    }
 }
 
 } // namespace render

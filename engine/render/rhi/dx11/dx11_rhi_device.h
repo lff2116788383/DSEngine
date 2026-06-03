@@ -21,6 +21,8 @@
 #include "engine/render/rhi/dx11/dx11_draw_executor.h"
 
 #include <memory>
+#include <string>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -121,7 +123,6 @@ public:
     unsigned int CreateComputeWriteTexture2D(int width, int height) override;
 
     // --- 内部辅助 ---
-    void AppendComputeParam(const void* data, size_t size);
     void FlushComputeParamsCB();
     void ClearComputeParams();
 
@@ -244,6 +245,15 @@ private:
     std::vector<uint8_t>           compute_params_staging_;
     ComPtr<ID3D11Buffer>           compute_params_cb_;
     size_t                         compute_params_cb_capacity_ = 0;
+
+    /// Compute Shader uniform name→offset 映射表
+    /// key = (shader_handle << 32) | hash(name)
+    /// 每个 dispatch 周期清空，确认为同一 shader 的参数布局一致
+    std::unordered_map<uint64_t, size_t> compute_uniform_offsets_;
+    size_t compute_uniform_next_offset_ = 0;
+
+    /// 获取或创建指定 shader+name 组合在 cbuffer 中的偏移
+    size_t GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size);
 
     bool initialized_ = false;
     bool vsync_enabled_ = true;   ///< 受 DSE_VSYNC 环境变量控制

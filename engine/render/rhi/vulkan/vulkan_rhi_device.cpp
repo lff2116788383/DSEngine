@@ -783,6 +783,8 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
     }
     // Dispatch 后清空状态缓存，避免跨 dispatch 累积
     compute_push_constants_.clear();
+    compute_uniform_offsets_.clear();
+    compute_uniform_next_offset_ = 0;
     pending_compute_images_.clear();
     pending_compute_samplers_.clear();
 
@@ -1075,64 +1077,67 @@ unsigned int VulkanRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
     return it != hiz_impl_->textures.end() ? handle : 0;
 }
 
-// Push constant 辅助：确保缓冲区足够大，写入数据到指定偏移
 static void EnsurePushConstantCapacity(std::vector<uint8_t>& buf, size_t offset, size_t write_size) {
     size_t needed = offset + write_size;
     if (buf.size() < needed) buf.resize(needed, 0);
 }
 
+size_t VulkanRhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size) {
+    uint64_t key = (static_cast<uint64_t>(shader) << 32) |
+                   (static_cast<uint32_t>(std::hash<std::string>{}(name)));
+    auto it = compute_uniform_offsets_.find(key);
+    if (it != compute_uniform_offsets_.end()) {
+        return it->second;
+    }
+    // 16-byte 对齐（Vulkan push constant 布局要求）
+    size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);
+    compute_uniform_offsets_[key] = offset;
+    compute_uniform_next_offset_ = offset + data_size;
+    return offset;
+}
+
 void VulkanRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
-    (void)shader; (void)name;
-    // Vulkan compute uniform 通过 push constant 传递，后续可扩展为 name→offset 映射
-    // 当前简化：顺序追加到 push constant buffer
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(int));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(int));
     memcpy(compute_push_constants_.data() + offset, &value, sizeof(int));
 }
 void VulkanRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
-    (void)shader; (void)name;
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(float));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(float));
     memcpy(compute_push_constants_.data() + offset, &value, sizeof(float));
 }
 void VulkanRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
-    (void)shader; (void)name;
     int data[2] = { x, y };
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
-    (void)shader; (void)name;
     float data[2] = { x, y };
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
-    (void)shader; (void)name;
     float data[3] = { x, y, z };
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
-    (void)shader; (void)name;
     int data[3] = { x, y, z };
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
-    (void)shader; (void)name;
     float data[4] = { x, y, z, w };
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
 void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    (void)shader; (void)name;
-    size_t offset = compute_push_constants_.size();
+    size_t offset = GetOrCreateUniformOffset(shader, name, 64);
     EnsurePushConstantCapacity(compute_push_constants_, offset, 64);
     memcpy(compute_push_constants_.data() + offset, data, 64);
 }
@@ -1217,23 +1222,15 @@ std::shared_ptr<CommandBuffer> VulkanRhiDevice::CreateCommandBuffer() {
     auto cmd = std::make_shared<VulkanCommandBuffer>();
     cmd->SetDevice(this);
 
-    // 分配 VkCommandBuffer
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = resource_mgr_.command_pool();
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
+    // 从命令缓冲池获取（避免逐帧 vkAllocateCommandBuffers 开销）
+    VkCommandBuffer vk_cmd = resource_mgr_.AcquireCommandBuffer();
+    cmd->SetVkCommandBuffer(vk_cmd);
 
-    VkCommandBuffer vk_cmd;
-    if (vkAllocateCommandBuffers(context_.device(), &alloc_info, &vk_cmd) == VK_SUCCESS) {
-        cmd->SetVkCommandBuffer(vk_cmd);
-
-        // 立即开始录制
-        VkCommandBufferBeginInfo begin_info{};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(vk_cmd, &begin_info);
-    }
+    // 立即开始录制
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(vk_cmd, &begin_info);
 
     return cmd;
 }
@@ -1289,6 +1286,11 @@ void VulkanRhiDevice::EndFrame() {
 
     context_.AdvanceFrame();
     // 合并 DrawExecutor 统计到 device 层
+    // 归还本帧命令缓冲到池（AdvanceFrame 已通过 fence 保证 GPU 完成）
+    for (auto& cb : pending_command_buffers_) {
+        resource_mgr_.ReleaseCommandBuffer(cb);
+    }
+    pending_command_buffers_.clear();
     const auto& ex_stats = draw_executor_.last_frame_stats();
     last_frame_stats_ = {};
     last_frame_stats_.draw_calls = ex_stats.draw_calls;

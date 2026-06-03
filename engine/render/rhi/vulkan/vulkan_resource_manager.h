@@ -160,6 +160,14 @@ public:
     /// 创建 DescriptorPool（在 Init 中自动调用）
     bool CreateDescriptorPool();
 
+    // --- 命令缓冲池 ---
+    /// 从池中获取可复用的 VkCommandBuffer（池空时创建新缓冲）
+    VkCommandBuffer AcquireCommandBuffer();
+    /// 归还命令缓冲到池中（reset 后复用）
+    void ReleaseCommandBuffer(VkCommandBuffer cmd);
+    /// 销毁池中所有空闲命令缓冲
+    void ClearCommandBufferPool();
+
     // --- 句柄生成 ---
     unsigned int AllocateTextureHandle();
     unsigned int AllocateRenderTargetHandle();
@@ -186,6 +194,9 @@ private:
 
     // 命令池
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
+
+    /// 命令缓冲池（避免逐帧 vkAllocateCommandBuffers）
+    std::vector<VkCommandBuffer> free_cmd_buffers_;
 
     // 默认采样器（linear clamp，供 Compute Shader 使用）
     VkSampler default_sampler_ = VK_NULL_HANDLE;

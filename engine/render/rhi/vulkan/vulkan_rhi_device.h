@@ -22,6 +22,8 @@
 
 #include <vulkan/vulkan.h>
 #include <memory>
+#include <string>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -252,6 +254,15 @@ private:
 
     /// Compute push constant 缓冲（用于 SetComputeUniform* 系列）
     std::vector<uint8_t> compute_push_constants_;
+
+    /// Compute Shader uniform name→offset 映射表
+    /// key = (shader_handle << 32) | hash(name)
+    /// 每个 dispatch 周期清空，确认为同一 shader 的参数布局一致
+    std::unordered_map<uint64_t, size_t> compute_uniform_offsets_;
+    size_t compute_uniform_next_offset_ = 0;
+
+    /// 获取或创建指定 shader+name 组合在 push constant 缓冲中的偏移
+    size_t GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size);
 
     /// Pending compute image 绑定 (binding → texture_handle)
     struct ComputeImageBinding {

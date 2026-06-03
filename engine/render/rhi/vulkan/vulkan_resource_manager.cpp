@@ -147,6 +147,9 @@ void VulkanResourceManager::Shutdown() {
         shadow_comparison_sampler_ = VK_NULL_HANDLE;
     }
 
+    // 先清空命令缓冲池，再销毁命令池
+    ClearCommandBufferPool();
+
     if (command_pool_ != VK_NULL_HANDLE) {
         vkDestroyCommandPool(device_, command_pool_, nullptr);
         command_pool_ = VK_NULL_HANDLE;
@@ -202,6 +205,36 @@ void VulkanResourceManager::EndSingleTimeCommands(VkCommandBuffer command_buffer
 void VulkanResourceManager::ResetCommandPool() {
     if (device_ == VK_NULL_HANDLE || command_pool_ == VK_NULL_HANDLE) return;
     vkResetCommandPool(device_, command_pool_, 0);
+}
+
+VkCommandBuffer VulkanResourceManager::AcquireCommandBuffer() {
+    if (!free_cmd_buffers_.empty()) {
+        VkCommandBuffer cmd = free_cmd_buffers_.back();
+        free_cmd_buffers_.pop_back();
+        vkResetCommandBuffer(cmd, 0);
+        return cmd;
+    }
+    // 池空 — 分配新命令缓冲
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandPool = command_pool_;
+    alloc_info.commandBufferCount = 1;
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(device_, &alloc_info, &cmd);
+    return cmd;
+}
+
+void VulkanResourceManager::ReleaseCommandBuffer(VkCommandBuffer cmd) {
+    if (cmd == VK_NULL_HANDLE) return;
+    free_cmd_buffers_.push_back(cmd);
+}
+
+void VulkanResourceManager::ClearCommandBufferPool() {
+    if (!free_cmd_buffers_.empty()) {
+        vkFreeCommandBuffers(device_, command_pool_, static_cast<uint32_t>(free_cmd_buffers_.size()), free_cmd_buffers_.data());
+        free_cmd_buffers_.clear();
+    }
 }
 
 // ============================================================

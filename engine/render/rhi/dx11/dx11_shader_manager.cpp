@@ -630,6 +630,13 @@ const DX11ComputeProgram* DX11ShaderManager::GetComputeProgram(unsigned int hand
     return it != compute_programs_.end() ? &it->second : nullptr;
 }
 
+void DX11ShaderManager::DeleteComputeProgram(unsigned int handle) {
+    auto it = compute_programs_.find(handle);
+    if (it != compute_programs_.end()) {
+        compute_programs_.erase(it);
+    }
+}
+
 // ============================================================================
 // GPU-Driven PBR Shader
 // ============================================================================

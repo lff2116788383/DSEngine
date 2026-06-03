@@ -3368,7 +3368,7 @@ void VulkanDrawExecutor::DrawHairStrands(
         ci.renderPass = active_rp;
         ci.subpass = 0;
 
-        VkResult result = vkCreateGraphicsPipelines(context_->device(), VK_NULL_HANDLE, 1, &ci, nullptr, &hair_pipeline_);
+        VkResult result = vkCreateGraphicsPipelines(context_->device(), context_->pipeline_cache(), 1, &ci, nullptr, &hair_pipeline_);
         if (result != VK_SUCCESS) {
             DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to create hair pipeline: {}", static_cast<int>(result));
             hair_pipeline_ = VK_NULL_HANDLE;
@@ -3698,10 +3698,10 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     frame_ubo.camera_pos = glm::vec4(camera_pos, 0.0f);
     if (per_frame_ubo_offset_ + sizeof(VulkanPerFrameUBO) > per_frame_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
-    } else {
+        return;
+    }
         WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
                       per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
-    }
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
     // PerScene UBO
@@ -3720,11 +3720,11 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     }
     if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
-    } else {
+        return;
+    }
         WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
                       per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
-    }
-    per_scene_ubo_offset_ += kUboSlotAlignment;
+        per_scene_ubo_offset_ += kUboSlotAlignment;
 
     if (resource_mgr_) {
         cached_gpu_driven_program_ = pbr_program;

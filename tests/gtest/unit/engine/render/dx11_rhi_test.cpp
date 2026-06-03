@@ -566,4 +566,27 @@ TEST(DX11RhiDeviceTest, CreateVertexArray返回递增非零句柄) {
     EXPECT_NE(h1.raw(), h2.raw());
 }
 
+// ============================================================
+// Compute Uniform — name→offset 映射（无 GPU 验证路径安全+不崩溃）
+// ============================================================
+
+TEST(DX11RhiDeviceTest, ComputeUniform未初始化不崩溃) {
+    DX11RhiDevice device;
+    device.SetComputeUniformInt  (1, "u_count", 42);
+    device.SetComputeUniformFloat(1, "u_value", 3.14f);
+    device.SetComputeUniformVec2i(1, "u_off",  10, 20);
+    device.SetComputeUniformVec3 (1, "u_pos",  1.f, 2.f, 3.f);
+    device.SetComputeUniformVec4 (1, "u_color", 0.f, 0.f, 1.f, 1.f);
+    float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    device.SetComputeUniformMat4 (1, "u_mvp",  identity);
+    device.ClearComputeParams();
+}
+
+TEST(DX11RhiDeviceTest, ComputeUniform同名参数不崩溃) {
+    DX11RhiDevice device;
+    device.SetComputeUniformInt(1, "u_count", 42);
+    device.SetComputeUniformInt(1, "u_count", 99);  // 同名重写
+    device.ClearComputeParams();
+}
+
 #endif // DSE_ENABLE_D3D11

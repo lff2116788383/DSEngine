@@ -826,7 +826,7 @@ unsigned int VulkanShaderManager::CreateComputeProgram(const std::string& comp_s
     cp_ci.stage.module = prog.comp_module;
     cp_ci.stage.pName  = "main";
     cp_ci.layout       = prog.pipeline_layout;
-    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+    if (vkCreateComputePipelines(device, context_->pipeline_cache(), 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
         vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
         vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
         vkDestroyShaderModule(device, prog.comp_module, nullptr);
@@ -903,7 +903,7 @@ unsigned int VulkanShaderManager::CreateComputeProgramSSBO(
     cp_ci.stage.module = prog.comp_module;
     cp_ci.stage.pName  = "main";
     cp_ci.layout       = prog.pipeline_layout;
-    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+    if (vkCreateComputePipelines(device, context_->pipeline_cache(), 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
         vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
         vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
         vkDestroyShaderModule(device, prog.comp_module, nullptr);
@@ -973,7 +973,7 @@ unsigned int VulkanShaderManager::CreateComputeProgramFromSpirv(
     cp_ci.stage.module = prog.comp_module;
     cp_ci.stage.pName  = "main";
     cp_ci.layout       = prog.pipeline_layout;
-    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+    if (vkCreateComputePipelines(device, context_->pipeline_cache(), 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
         vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
         vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
         vkDestroyShaderModule(device, prog.comp_module, nullptr);
@@ -1071,7 +1071,7 @@ unsigned int VulkanShaderManager::CreateComputeProgramFull(
     cp_ci.stage.module = prog.comp_module;
     cp_ci.stage.pName  = "main";
     cp_ci.layout       = prog.pipeline_layout;
-    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
+    if (vkCreateComputePipelines(device, context_->pipeline_cache(), 1, &cp_ci, nullptr, &prog.pipeline) != VK_SUCCESS) {
         vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
         vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
         vkDestroyShaderModule(device, prog.comp_module, nullptr);

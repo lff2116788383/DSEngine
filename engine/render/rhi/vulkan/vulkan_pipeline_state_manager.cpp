@@ -283,7 +283,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     pipeline_ci.subpass = 0;
 
     VkPipeline pipeline;
-    VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &pipeline);
+    VkResult result = vkCreateGraphicsPipelines(device, context_->pipeline_cache(), 1, &pipeline_ci, nullptr, &pipeline);
     if (result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create graphics pipeline: {}", static_cast<int>(result));
         return VK_NULL_HANDLE;

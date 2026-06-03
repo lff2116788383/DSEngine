@@ -108,6 +108,10 @@ public:
     VkSemaphore image_available_semaphore() const { return image_available_semaphores_[current_frame_]; }
     VkSemaphore render_finished_semaphore() const { return render_finished_semaphores_[current_frame_]; }
     VkFence in_flight_fence() const { return in_flight_fences_[current_frame_]; }
+
+    /// Pipeline Cache（跨启动复用管线编译结果）
+    VkPipelineCache pipeline_cache() const { return pipeline_cache_; }
+
     uint32_t current_frame() const { return current_frame_; }
     bool hdr_enabled() const { return hdr_enabled_; }
 
@@ -155,6 +159,10 @@ private:
     bool CreateSwapchainFramebuffers();
     void CleanupSwapchain();
 
+    // --- Pipeline Cache ---
+    bool CreatePipelineCache();
+    void SavePipelineCache();
+
     // --- 同步 ---
     bool CreateSyncObjects();
 
@@ -185,6 +193,9 @@ private:
     std::vector<VkFence> in_flight_fences_;
     uint32_t current_frame_ = 0;
     uint32_t current_image_index_ = 0;
+
+    /// Pipeline Cache — 跨启动复用管线编译结果
+    VkPipelineCache pipeline_cache_ = VK_NULL_HANDLE;
 
     bool enable_validation_ = false;
     bool hdr_enabled_ = false;

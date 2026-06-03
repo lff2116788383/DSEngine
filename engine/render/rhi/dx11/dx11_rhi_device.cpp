@@ -436,8 +436,8 @@ unsigned int DX11RhiDevice::CreateComputeShader(const std::string& source) {
 }
 
 void DX11RhiDevice::DeleteComputeShader(unsigned int handle) {
-    // shader_mgr_ 的 Shutdown 会清理，此处仅占位
-    (void)handle;
+    // 委托给 shader_mgr_ 实际销毁 ID3D11ComputeShader 资源
+    shader_mgr_.DeleteComputeProgram(handle);
 }
 
 void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
@@ -498,20 +498,37 @@ void DX11RhiDevice::TransitionRenderTarget(unsigned int rt_handle,
     (void)rt_handle;
     if (from == to) return;
 
-    // D3D11 runtime 自动追踪 resource hazard，不需要显式 barrier。
-    // 唯一需要处理的是：从 UAV 状态离开时，解绑 UAV 以避免
-    // D3D11 WARNING: Resource still bound as UAV 的调试警告。
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+
+    // D3D11 运行时自动追踪 resource hazard，但以下场景需主动解绑：
+    // 1. UAV → 非UAV: 解绑 CS UAV，避免 "still bound as UAV" 警告
+    // 2. 非UAV → UAV: 解绑 SRV，避免 "still bound as SRV" 警告
+
+    if (to == ResourceState::UnorderedAccess && from != ResourceState::UnorderedAccess) {
+        // 进入 UAV 前解绑 CS SRV（避免同 resource 同时绑定为 SRV+UAV）
+            ID3D11ShaderResourceView* null_srv = nullptr;
+            dc->CSSetShaderResources(0, 1, &null_srv);
+    }
+
     if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
-        ID3D11DeviceContext* dc = context_.device_context();
-        if (dc) {
             ID3D11UnorderedAccessView* null_uav = nullptr;
             dc->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
-        }
     }
 }
 
 void DX11RhiDevice::ComputeMemoryBarrier() {
-    // D3D11 不需要显式 memory barrier — resource hazard tracking 由运行时自动处理
+    // D3D11 驱动自动追踪 resource hazard，但 CS UAV 写入后若
+    // 同一 resource 随后被 PS 作为 SRV 读取，调试层会报警告。
+    // 主动解绑 CS 阶段的 UAV 和 SRV 以避免跨管线阶段 hazard。
+    if (!initialized_) return;
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) return;
+    static ID3D11UnorderedAccessView* null_uavs[8] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    dc->CSSetUnorderedAccessViews(0, 8, null_uavs, nullptr);
+    static ID3D11ShaderResourceView* null_srvs[8] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    dc->CSSetShaderResources(0, 8, null_srvs);
+    bound_ssbos_.clear();
 }
 
 void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
@@ -715,11 +732,20 @@ unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
     return it != hiz_impl_->textures.end() ? handle : 0;
 }
 
-void DX11RhiDevice::AppendComputeParam(const void* data, size_t bytes) {
-    size_t off = compute_params_staging_.size();
-    compute_params_staging_.resize(off + bytes);
-    memcpy(compute_params_staging_.data() + off, data, bytes);
+size_t DX11RhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size) {
+    uint64_t key = (static_cast<uint64_t>(shader) << 32) |
+                   (static_cast<uint32_t>(std::hash<std::string>{}(name)));
+    auto it = compute_uniform_offsets_.find(key);
+    if (it != compute_uniform_offsets_.end()) {
+        return it->second;
+    }
+    // 16-byte 对齐（HLSL cbuffer 对齐要求）
+    size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);
+    compute_uniform_offsets_[key] = offset;
+    compute_uniform_next_offset_ = offset + data_size;
+    return offset;
 }
+
 void DX11RhiDevice::FlushComputeParamsCB() {
     if (compute_params_staging_.empty()) return;
     ID3D11Device* dev = context_.device();
@@ -745,33 +771,62 @@ void DX11RhiDevice::FlushComputeParamsCB() {
     ID3D11Buffer* cb = compute_params_cb_.Get();
     dc->CSSetConstantBuffers(0, 1, &cb);
 }
+
 void DX11RhiDevice::ClearComputeParams() {
     compute_params_staging_.clear();
+    compute_uniform_offsets_.clear();
+    compute_uniform_next_offset_ = 0;
+}
+
+static void EnsureStagingCapacity(std::vector<uint8_t>& buf, size_t offset, size_t write_size) {
+    size_t needed = offset + write_size;
+    if (buf.size() < needed) buf.resize(needed, 0);
 }
 
 void DX11RhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int v) {
-    (void)shader; (void)name; AppendComputeParam(&v, sizeof(v));
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(int));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(int));
+    memcpy(compute_params_staging_.data() + off, &v, sizeof(int));
 }
 void DX11RhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float v) {
-    (void)shader; (void)name; AppendComputeParam(&v, sizeof(v));
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(float));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(float));
+    memcpy(compute_params_staging_.data() + off, &v, sizeof(float));
 }
 void DX11RhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
-    (void)shader; (void)name; int d[2]{x,y}; AppendComputeParam(d, sizeof(d));
+    int d[2]{x,y};
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
+    memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
-    (void)shader; (void)name; float d[2]{x,y}; AppendComputeParam(d, sizeof(d));
+    float d[2]{x,y};
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
+    memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
-    (void)shader; (void)name; float d[3]{x,y,z}; AppendComputeParam(d, sizeof(d));
+    float d[3]{x,y,z};
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
+    memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
-    (void)shader; (void)name; int d[3]{x,y,z}; AppendComputeParam(d, sizeof(d));
+    int d[3]{x,y,z};
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
+    memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
-    (void)shader; (void)name; float d[4]{x,y,z,w}; AppendComputeParam(d, sizeof(d));
+    float d[4]{x,y,z,w};
+    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
+    memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
 void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    (void)shader; (void)name; AppendComputeParam(data, 64);
+    size_t off = GetOrCreateUniformOffset(shader, name, 64);
+    EnsureStagingCapacity(compute_params_staging_, off, 64);
+    memcpy(compute_params_staging_.data() + off, data, 64);
 }
 void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
     if (!initialized_ || !dst || size == 0) return;
