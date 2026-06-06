@@ -805,26 +805,59 @@ bool VulkanContext::CreateSyncObjects() {
 // Pipeline Cache
 // ============================================================
 
+/// Pipeline cache 文件头，用于校验驱动兼容性
+struct PipelineCacheFileHeader {
+    uint32_t magic = 0x44534543;        // "DSEC"
+    uint32_t header_size = sizeof(PipelineCacheFileHeader);
+    uint32_t vendor_id = 0;
+    uint32_t device_id = 0;
+    uint8_t  pipeline_cache_uuid[VK_UUID_SIZE] = {};
+};
+
+static std::filesystem::path GetPipelineCachePath() {
+    // 使用可执行文件同级目录下的 cache 子目录，避免依赖 CWD
+    std::error_code ec;
+    auto exe_path = std::filesystem::current_path(ec);  // fallback to cwd
+    return exe_path / "bin" / "cache" / "vulkan_pipeline_cache.bin";
+}
+
 bool VulkanContext::CreatePipelineCache() {
-    static const char* kCachePath = "bin/cache/vulkan_pipeline_cache.bin";
+    auto cache_path = GetPipelineCachePath();
+
+    // 获取当前物理设备属性用于校验
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(physical_device_, &props);
 
     // 尝试从磁盘加载已有缓存
-    std::ifstream cache_file(kCachePath, std::ios::binary | std::ios::ate);
+    std::ifstream cache_file(cache_path, std::ios::binary | std::ios::ate);
     if (cache_file.is_open()) {
         size_t file_size = static_cast<size_t>(cache_file.tellg());
-        if (file_size > 0) {
-            std::vector<uint8_t> cache_data(file_size);
+        if (file_size > sizeof(PipelineCacheFileHeader)) {
+            std::vector<uint8_t> file_data(file_size);
             cache_file.seekg(0);
-            cache_file.read(reinterpret_cast<char*>(cache_data.data()), file_size);
+            cache_file.read(reinterpret_cast<char*>(file_data.data()), file_size);
             cache_file.close();
 
-            VkPipelineCacheCreateInfo ci{};
-            ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-            ci.initialDataSize = file_size;
-            ci.pInitialData = cache_data.data();
-            if (vkCreatePipelineCache(device_, &ci, nullptr, &pipeline_cache_) == VK_SUCCESS) {
-                DEBUG_LOG_INFO("[Vulkan] Pipeline cache loaded: {} bytes", file_size);
-                return true;
+            // 校验文件头：驱动 UUID / vendor / device 必须匹配
+            auto* header = reinterpret_cast<const PipelineCacheFileHeader*>(file_data.data());
+            bool compatible = (header->magic == 0x44534543) &&
+                              (header->vendor_id == props.vendorID) &&
+                              (header->device_id == props.deviceID) &&
+                              (memcmp(header->pipeline_cache_uuid, props.pipelineCacheUUID, VK_UUID_SIZE) == 0);
+
+            if (compatible) {
+                size_t cache_offset = sizeof(PipelineCacheFileHeader);
+                size_t cache_size = file_size - cache_offset;
+                VkPipelineCacheCreateInfo ci{};
+                ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+                ci.initialDataSize = cache_size;
+                ci.pInitialData = file_data.data() + cache_offset;
+                if (vkCreatePipelineCache(device_, &ci, nullptr, &pipeline_cache_) == VK_SUCCESS) {
+                    DEBUG_LOG_INFO("[Vulkan] Pipeline cache loaded: {} bytes", cache_size);
+                    return true;
+                }
+            } else {
+                DEBUG_LOG_INFO("[Vulkan] Pipeline cache invalidated (driver/device mismatch), rebuilding");
             }
         }
     }
@@ -852,13 +885,28 @@ void VulkanContext::SavePipelineCache() {
     if (vkGetPipelineCacheData(device_, pipeline_cache_, &cache_size, cache_data.data()) != VK_SUCCESS)
         return;
 
-    std::filesystem::create_directories("bin/cache");
-    std::ofstream cache_file("bin/cache/vulkan_pipeline_cache.bin", std::ios::binary);
-    if (cache_file.is_open()) {
-        cache_file.write(reinterpret_cast<const char*>(cache_data.data()), cache_size);
-        DEBUG_LOG_INFO("[Vulkan] Pipeline cache saved: {} bytes", cache_size);
+    // 获取当前设备属性写入文件头
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(physical_device_, &props);
+
+    PipelineCacheFileHeader header{};
+    header.vendor_id = props.vendorID;
+    header.device_id = props.deviceID;
+    memcpy(header.pipeline_cache_uuid, props.pipelineCacheUUID, VK_UUID_SIZE);
+
+    auto cache_path = GetPipelineCachePath();
+    std::error_code ec;
+    std::filesystem::create_directories(cache_path.parent_path(), ec);
+    std::ofstream out_file(cache_path, std::ios::binary);
+    if (out_file.is_open()) {
+        out_file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        out_file.write(reinterpret_cast<const char*>(cache_data.data()), cache_size);
+        DEBUG_LOG_INFO("[Vulkan] Pipeline cache saved: {} bytes (+ {} header)", cache_size, sizeof(header));
+    } else {
+        DEBUG_LOG_WARN("[Vulkan] Failed to save pipeline cache to: {}", cache_path.string());
     }
 }
 
 } // namespace render
 } // namespace dse
+

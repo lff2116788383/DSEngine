@@ -507,13 +507,14 @@ void DX11RhiDevice::TransitionRenderTarget(unsigned int rt_handle,
 
     if (to == ResourceState::UnorderedAccess && from != ResourceState::UnorderedAccess) {
         // 进入 UAV 前解绑 CS SRV（避免同 resource 同时绑定为 SRV+UAV）
-            ID3D11ShaderResourceView* null_srv = nullptr;
-            dc->CSSetShaderResources(0, 1, &null_srv);
+        static ID3D11ShaderResourceView* null_srvs[8] = {};
+        dc->CSSetShaderResources(0, 8, null_srvs);
     }
 
     if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
-            ID3D11UnorderedAccessView* null_uav = nullptr;
-            dc->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+        // 离开 UAV 后解绑 CS UAV，避免 "still bound as UAV" 调试警告
+        static ID3D11UnorderedAccessView* null_uavs[8] = {};
+        dc->CSSetUnorderedAccessViews(0, 8, null_uavs, nullptr);
     }
 }
 
@@ -733,15 +734,14 @@ unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
 }
 
 size_t DX11RhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size) {
-    uint64_t key = (static_cast<uint64_t>(shader) << 32) |
-                   (static_cast<uint32_t>(std::hash<std::string>{}(name)));
-    auto it = compute_uniform_offsets_.find(key);
-    if (it != compute_uniform_offsets_.end()) {
+    auto& layout = compute_uniform_layouts_[shader];
+    auto it = layout.name_to_offset.find(name);
+    if (it != layout.name_to_offset.end()) {
         return it->second;
     }
     // 16-byte 对齐（HLSL cbuffer 对齐要求）
     size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);
-    compute_uniform_offsets_[key] = offset;
+    layout.name_to_offset[name] = offset;
     compute_uniform_next_offset_ = offset + data_size;
     return offset;
 }
@@ -774,7 +774,7 @@ void DX11RhiDevice::FlushComputeParamsCB() {
 
 void DX11RhiDevice::ClearComputeParams() {
     compute_params_staging_.clear();
-    compute_uniform_offsets_.clear();
+    compute_uniform_layouts_.clear();
     compute_uniform_next_offset_ = 0;
 }
 
@@ -1284,3 +1284,4 @@ void DX11RhiDevice::SetOverdrawMode(bool enable) {
 
 } // namespace render
 } // namespace dse
+

@@ -3700,8 +3700,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
         DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_FRAME_UBO OVERFLOW: offset={} capacity={}", per_frame_ubo_offset_, per_frame_ubo_capacity_);
         return;
     }
-        WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
-                      per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
+    WriteToBuffer(context_->device(), per_frame_ubo_mem_[current_frame_index_],
+                  per_frame_ubo_offset_, sizeof(VulkanPerFrameUBO), &frame_ubo);
     per_frame_ubo_offset_ += kUboSlotAlignment;
 
     // PerScene UBO
@@ -3722,9 +3722,9 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
         DEBUG_LOG_ERROR("[Vulkan] GPU_DRIVEN PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
         return;
     }
-        WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
-                      per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
-        per_scene_ubo_offset_ += kUboSlotAlignment;
+    WriteToBuffer(context_->device(), per_scene_ubo_mem_[current_frame_index_],
+                  per_scene_ubo_offset_, sizeof(VulkanPerSceneUBO), &scene_ubo);
+    per_scene_ubo_offset_ += kUboSlotAlignment;
 
     if (resource_mgr_) {
         cached_gpu_driven_program_ = pbr_program;
@@ -4133,3 +4133,4 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
 
 } // namespace render
 } // namespace dse
+

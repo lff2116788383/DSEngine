@@ -246,10 +246,11 @@ private:
     ComPtr<ID3D11Buffer>           compute_params_cb_;
     size_t                         compute_params_cb_capacity_ = 0;
 
-    /// Compute Shader uniform name→offset 映射表
-    /// key = (shader_handle << 32) | hash(name)
-    /// 每个 dispatch 周期清空，确认为同一 shader 的参数布局一致
-    std::unordered_map<uint64_t, size_t> compute_uniform_offsets_;
+    /// Compute Shader uniform name→offset 映射表（按 shader 分组，避免哈希碰撞）
+    struct ComputeUniformLayout {
+        std::unordered_map<std::string, size_t> name_to_offset;
+    };
+    std::unordered_map<unsigned int, ComputeUniformLayout> compute_uniform_layouts_;
     size_t compute_uniform_next_offset_ = 0;
 
     /// 获取或创建指定 shader+name 组合在 cbuffer 中的偏移
@@ -286,3 +287,4 @@ private:
 } // namespace dse
 
 #endif // DSE_RENDER_DX11_RHI_DEVICE_H
+

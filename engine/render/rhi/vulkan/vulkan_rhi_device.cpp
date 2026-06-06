@@ -783,7 +783,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
     }
     // Dispatch 后清空状态缓存，避免跨 dispatch 累积
     compute_push_constants_.clear();
-    compute_uniform_offsets_.clear();
+    compute_uniform_layouts_.clear();
     compute_uniform_next_offset_ = 0;
     pending_compute_images_.clear();
     pending_compute_samplers_.clear();
@@ -1083,15 +1083,14 @@ static void EnsurePushConstantCapacity(std::vector<uint8_t>& buf, size_t offset,
 }
 
 size_t VulkanRhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size) {
-    uint64_t key = (static_cast<uint64_t>(shader) << 32) |
-                   (static_cast<uint32_t>(std::hash<std::string>{}(name)));
-    auto it = compute_uniform_offsets_.find(key);
-    if (it != compute_uniform_offsets_.end()) {
+    auto& layout = compute_uniform_layouts_[shader];
+    auto it = layout.name_to_offset.find(name);
+    if (it != layout.name_to_offset.end()) {
         return it->second;
     }
     // 16-byte 对齐（Vulkan push constant 布局要求）
     size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);
-    compute_uniform_offsets_[key] = offset;
+    layout.name_to_offset[name] = offset;
     compute_uniform_next_offset_ = offset + data_size;
     return offset;
 }
@@ -1262,11 +1261,14 @@ void VulkanRhiDevice::EndFrame() {
 
     // 提交本帧所有录制的命令缓冲 + present
     VkResult present_result = VK_SUCCESS;
-    if (!pending_command_buffers_.empty()) {
-        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", pending_command_buffers_.size());
-        present_result = context_.PresentFrame(pending_command_buffers_);
+    // 保存本帧命令缓冲列表，用于提交后归还到池
+    std::vector<VkCommandBuffer> frame_cmd_buffers = std::move(pending_command_buffers_);
+    pending_command_buffers_.clear();
+
+    if (!frame_cmd_buffers.empty()) {
+        DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame ({} cmd bufs)", frame_cmd_buffers.size());
+        present_result = context_.PresentFrame(frame_cmd_buffers);
         DEBUG_LOG_TRACE("[Vulkan] EndFrame: PresentFrame result={}", static_cast<int>(present_result));
-        pending_command_buffers_.clear();
     } else {
         auto clear_cmd = CreateCommandBuffer();
         if (clear_cmd) {
@@ -1275,8 +1277,9 @@ void VulkanRhiDevice::EndFrame() {
             Submit(clear_cmd);
         }
         if (!pending_command_buffers_.empty()) {
-            present_result = context_.PresentFrame(pending_command_buffers_);
+            frame_cmd_buffers = std::move(pending_command_buffers_);
             pending_command_buffers_.clear();
+            present_result = context_.PresentFrame(frame_cmd_buffers);
         }
     }
     if (present_result == VK_ERROR_OUT_OF_DATE_KHR ||
@@ -1285,12 +1288,10 @@ void VulkanRhiDevice::EndFrame() {
     }
 
     context_.AdvanceFrame();
-    // 合并 DrawExecutor 统计到 device 层
     // 归还本帧命令缓冲到池（AdvanceFrame 已通过 fence 保证 GPU 完成）
-    for (auto& cb : pending_command_buffers_) {
+    for (auto& cb : frame_cmd_buffers) {
         resource_mgr_.ReleaseCommandBuffer(cb);
     }
-    pending_command_buffers_.clear();
     const auto& ex_stats = draw_executor_.last_frame_stats();
     last_frame_stats_ = {};
     last_frame_stats_.draw_calls = ex_stats.draw_calls;
@@ -1495,3 +1496,4 @@ void VulkanRhiDevice::OnWindowResized(int width, int height) {
 
 } // namespace render
 } // namespace dse
+

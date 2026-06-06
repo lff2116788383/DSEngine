@@ -418,3 +418,4 @@ VkRenderPass VulkanPipelineStateManager::GetOrCreateRenderPass(
 
 } // namespace render
 } // namespace dse
+

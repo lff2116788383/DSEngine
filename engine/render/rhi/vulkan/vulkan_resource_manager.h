@@ -230,3 +230,4 @@ private:
 } // namespace dse
 
 #endif // DSE_RENDER_VULKAN_RESOURCE_MANAGER_H
+

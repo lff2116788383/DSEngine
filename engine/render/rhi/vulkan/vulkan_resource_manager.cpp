@@ -1664,3 +1664,4 @@ VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayo
 
 } // namespace render
 } // namespace dse
+
