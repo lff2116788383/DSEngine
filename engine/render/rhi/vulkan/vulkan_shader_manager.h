@@ -166,6 +166,9 @@ public:
     /// 查询 Compute 程序
     const VulkanComputeProgram* GetComputeProgram(unsigned int handle) const;
 
+    /// 销毁 Compute 程序（释放 pipeline/layout/module）
+    void DeleteComputeProgram(unsigned int handle);
+
     // 内置着色器句柄访问器、计数器继承自 ShaderManagerBase
 
 private:

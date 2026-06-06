@@ -610,7 +610,7 @@ unsigned int VulkanRhiDevice::CreateComputeShader(const std::string& source) {
 }
 
 void VulkanRhiDevice::DeleteComputeShader(unsigned int handle) {
-    (void)handle;
+    shader_mgr_.DeleteComputeProgram(handle);
 }
 
 void VulkanRhiDevice::BeginComputePass() {

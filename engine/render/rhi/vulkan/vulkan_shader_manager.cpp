@@ -1136,5 +1136,25 @@ const VulkanComputeProgram* VulkanShaderManager::GetComputeProgram(unsigned int 
     return it != compute_programs_.end() ? &it->second : nullptr;
 }
 
+void VulkanShaderManager::DeleteComputeProgram(unsigned int handle) {
+    auto it = compute_programs_.find(handle);
+    if (it == compute_programs_.end()) return;
+
+    VkDevice device = context_ ? context_->device() : VK_NULL_HANDLE;
+    if (device == VK_NULL_HANDLE) return;
+
+    auto& prog = it->second;
+    if (prog.pipeline != VK_NULL_HANDLE)
+        vkDestroyPipeline(device, prog.pipeline, nullptr);
+    if (prog.pipeline_layout != VK_NULL_HANDLE)
+        vkDestroyPipelineLayout(device, prog.pipeline_layout, nullptr);
+    if (prog.descriptor_set_layout != VK_NULL_HANDLE)
+        vkDestroyDescriptorSetLayout(device, prog.descriptor_set_layout, nullptr);
+    if (prog.comp_module != VK_NULL_HANDLE)
+        vkDestroyShaderModule(device, prog.comp_module, nullptr);
+
+    compute_programs_.erase(it);
+}
+
 } // namespace render
 } // namespace dse
