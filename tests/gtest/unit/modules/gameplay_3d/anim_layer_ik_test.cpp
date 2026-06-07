@@ -186,6 +186,7 @@ TEST(AnimClipEvalTest, ComputeBoneGlobals_SimpleChain) {
     Animator3DComponent::SkeletalCache cache;
     cache.bone_count = 3;
     cache.parent_indices = {-1, 0, 1};
+    cache.topo_order = {0, 1, 2};
     cache.local_bind_poses = {
         glm::mat4(1.0f), // Root
         glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)), // Child of root
@@ -210,6 +211,7 @@ TEST(AnimClipEvalTest, ComputeChainPositions) {
     Animator3DComponent::SkeletalCache cache;
     cache.bone_count = 3;
     cache.parent_indices = {-1, 0, 1};
+    cache.topo_order = {0, 1, 2};
     cache.local_bind_poses = {
         glm::mat4(1.0f),
         glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)),

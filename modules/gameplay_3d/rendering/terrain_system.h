@@ -3,6 +3,7 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/ecs/components_3d_terrain_tile.h"
 #include <glm/glm.hpp>
 
 namespace dse {
@@ -22,6 +23,14 @@ public:
 private:
     void RebuildTerrain(TerrainComponent& terrain);
     void DestroyTerrainGPU(TerrainComponent& terrain);
+
+    // Tiled terrain
+    void UpdateTiles(World& world);
+    void RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset);
+    void BuildTileMesh(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tile_x, int tile_z);
+    void DestroyTileMeshGPU(TerrainTileData& tile);
+    void GenerateProceduralTile(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tx, int tz);
+    void ShutdownTiles(World& world);
 
     RhiDevice* rhi_ = nullptr;
 };

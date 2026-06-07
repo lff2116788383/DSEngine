@@ -86,6 +86,7 @@ void NavMeshSystem::Shutdown() {
 void NavMeshSystem::ReleaseNavMesh() {
     if (nav_query_) { dtFreeNavMeshQuery(nav_query_); nav_query_ = nullptr; }
     if (nav_mesh_)  { dtFreeNavMesh(nav_mesh_);       nav_mesh_  = nullptr; }
+    tiled_mode_ = false;
 }
 
 bool NavMeshSystem::IsReady() const {
@@ -464,6 +465,268 @@ bool NavMeshSystem::LoadNavMesh(const std::string& path) {
 // ============================================================
 void NavMeshSystem::RebaseOrigin(const glm::vec3& offset) {
     accumulated_offset_ += offset;
+}
+
+// ============================================================
+// Tiled NavMesh
+// ============================================================
+
+bool NavMeshSystem::BuildTile(int tx, int tz,
+                              const float* tile_bmin, const float* tile_bmax,
+                              const float* verts, int nverts,
+                              const int* tris, int ntris,
+                              const NavMeshBuildConfig& cfg) {
+    SilentContext ctx;
+
+    rcConfig rcfg{};
+    rcfg.cs                     = cfg.cell_size;
+    rcfg.ch                     = cfg.cell_height;
+    rcfg.walkableSlopeAngle     = cfg.agent_max_slope;
+    rcfg.walkableHeight         = (int)ceilf(cfg.agent_height / cfg.cell_height);
+    rcfg.walkableClimb          = (int)floorf(cfg.agent_max_climb / cfg.cell_height);
+    rcfg.walkableRadius         = (int)ceilf(cfg.agent_radius / cfg.cell_size);
+    rcfg.maxEdgeLen             = (int)(cfg.edge_max_len / cfg.cell_size);
+    rcfg.maxSimplificationError = cfg.edge_max_error;
+    rcfg.minRegionArea          = (int)rcSqr(cfg.region_min_size);
+    rcfg.mergeRegionArea        = (int)rcSqr(cfg.region_merge_size);
+    rcfg.maxVertsPerPoly        = cfg.verts_per_poly;
+    rcfg.detailSampleDist       = cfg.detail_sample_dist < 0.9f ? 0.0f : cfg.cell_size * cfg.detail_sample_dist;
+    rcfg.detailSampleMaxError   = cfg.cell_height * cfg.detail_sample_max_error;
+
+    // Expand tile bounds by border to avoid seam artifacts
+    const int border_size = rcfg.walkableRadius + 3;
+    rcfg.borderSize = border_size;
+    const float border_expand = border_size * cfg.cell_size;
+
+    rcfg.bmin[0] = tile_bmin[0] - border_expand;
+    rcfg.bmin[1] = tile_bmin[1];
+    rcfg.bmin[2] = tile_bmin[2] - border_expand;
+    rcfg.bmax[0] = tile_bmax[0] + border_expand;
+    rcfg.bmax[1] = tile_bmax[1];
+    rcfg.bmax[2] = tile_bmax[2] + border_expand;
+    rcCalcGridSize(rcfg.bmin, rcfg.bmax, rcfg.cs, &rcfg.width, &rcfg.height);
+
+    // 1. Heightfield
+    HeightfieldPtr solid(rcAllocHeightfield());
+    if (!solid || !rcCreateHeightfield(&ctx, *solid, rcfg.width, rcfg.height,
+                                        rcfg.bmin, rcfg.bmax, rcfg.cs, rcfg.ch)) {
+        return false;
+    }
+
+    std::vector<unsigned char> areas(ntris, 0);
+    rcMarkWalkableTriangles(&ctx, rcfg.walkableSlopeAngle, verts, nverts,
+                            tris, ntris, areas.data());
+    if (!rcRasterizeTriangles(&ctx, verts, nverts, tris, areas.data(), ntris,
+                              *solid, rcfg.walkableClimb)) {
+        return false;
+    }
+
+    // 2. Filter
+    rcFilterLowHangingWalkableObstacles(&ctx, rcfg.walkableClimb, *solid);
+    rcFilterLedgeSpans(&ctx, rcfg.walkableHeight, rcfg.walkableClimb, *solid);
+    rcFilterWalkableLowHeightSpans(&ctx, rcfg.walkableHeight, *solid);
+
+    // 3. Compact heightfield
+    CompactHFPtr chf(rcAllocCompactHeightfield());
+    if (!chf || !rcBuildCompactHeightfield(&ctx, rcfg.walkableHeight,
+                                            rcfg.walkableClimb, *solid, *chf)) {
+        return false;
+    }
+    solid.reset();
+
+    if (!rcErodeWalkableArea(&ctx, rcfg.walkableRadius, *chf)) {
+        return false;
+    }
+
+    if (!rcBuildDistanceField(&ctx, *chf) ||
+        !rcBuildRegions(&ctx, *chf, rcfg.borderSize, rcfg.minRegionArea, rcfg.mergeRegionArea)) {
+        return false;
+    }
+
+    // 4. Contours
+    ContourSetPtr cset(rcAllocContourSet());
+    if (!cset || !rcBuildContours(&ctx, *chf, rcfg.maxSimplificationError,
+                                   rcfg.maxEdgeLen, *cset)) {
+        return false;
+    }
+
+    // 5. PolyMesh
+    PolyMeshPtr pmesh(rcAllocPolyMesh());
+    if (!pmesh || !rcBuildPolyMesh(&ctx, *cset, rcfg.maxVertsPerPoly, *pmesh)) {
+        return false;
+    }
+
+    PolyMeshDetPtr dmesh(rcAllocPolyMeshDetail());
+    if (!dmesh || !rcBuildPolyMeshDetail(&ctx, *pmesh, *chf,
+                                          rcfg.detailSampleDist,
+                                          rcfg.detailSampleMaxError, *dmesh)) {
+        return false;
+    }
+
+    if (pmesh->npolys == 0) {
+        return true; // empty tile is fine
+    }
+
+    for (int i = 0; i < pmesh->npolys; ++i) {
+        if (pmesh->areas[i] == RC_WALKABLE_AREA) {
+            pmesh->flags[i] = 0x01;
+        }
+    }
+
+    // 6. Detour tile data
+    dtNavMeshCreateParams params{};
+    params.verts            = pmesh->verts;
+    params.vertCount        = pmesh->nverts;
+    params.polys            = pmesh->polys;
+    params.polyAreas        = pmesh->areas;
+    params.polyFlags        = pmesh->flags;
+    params.polyCount        = pmesh->npolys;
+    params.nvp              = pmesh->nvp;
+    params.detailMeshes     = dmesh->meshes;
+    params.detailVerts      = dmesh->verts;
+    params.detailVertsCount = dmesh->nverts;
+    params.detailTris       = dmesh->tris;
+    params.detailTriCount   = dmesh->ntris;
+    params.walkableHeight   = cfg.agent_height;
+    params.walkableRadius   = cfg.agent_radius;
+    params.walkableClimb    = cfg.agent_max_climb;
+    memcpy(params.bmin, pmesh->bmin, sizeof(params.bmin));
+    memcpy(params.bmax, pmesh->bmax, sizeof(params.bmax));
+    params.cs               = rcfg.cs;
+    params.ch               = rcfg.ch;
+    params.buildBvTree      = true;
+    params.tileX            = tx;
+    params.tileY            = tz;
+    params.tileLayer        = 0;
+
+    unsigned char* nav_data = nullptr;
+    int nav_data_size = 0;
+    if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size)) {
+        return false;
+    }
+
+    dtStatus status = nav_mesh_->addTile(nav_data, nav_data_size, DT_TILE_FREE_DATA, 0, nullptr);
+    if (dtStatusFailed(status)) {
+        dtFree(nav_data);
+        return false;
+    }
+    return true;
+}
+
+bool NavMeshSystem::BakeTiledFromTriangles(const float* verts, int nverts,
+                                            const int* tris, int ntris,
+                                            float tile_size,
+                                            const NavMeshBuildConfig& cfg) {
+    if (!initialized_) {
+        DEBUG_LOG_ERROR("[NavMesh] BakeTiledFromTriangles called before Init()");
+        return false;
+    }
+    if (!ValidateInput(verts, nverts, tris, ntris)) return false;
+
+    ReleaseNavMesh();
+    tiled_mode_ = true;
+    tile_size_ = tile_size;
+    tiled_cfg_ = cfg;
+
+    // Calculate overall bounds
+    float bmin[3], bmax[3];
+    rcCalcBounds(verts, nverts, bmin, bmax);
+    memcpy(bmin_, bmin, sizeof(bmin_));
+
+    // Calculate tile grid dimensions
+    const int tw = (int)((bmax[0] - bmin[0]) / tile_size) + 1;
+    const int th = (int)((bmax[2] - bmin[2]) / tile_size) + 1;
+
+    DEBUG_LOG_INFO("[NavMesh] tiled bake: verts={}, tris={}, tiles={}x{}, tile_size={}",
+                   nverts, ntris, tw, th, tile_size);
+
+    // Initialize multi-tile navmesh
+    dtNavMeshParams navParams;
+    memset(&navParams, 0, sizeof(navParams));
+    navParams.orig[0] = bmin[0];
+    navParams.orig[1] = bmin[1];
+    navParams.orig[2] = bmin[2];
+    navParams.tileWidth = tile_size;
+    navParams.tileHeight = tile_size;
+    navParams.maxTiles = tw * th;
+    navParams.maxPolys = tw * th * 256;
+
+    nav_mesh_ = dtAllocNavMesh();
+    if (!nav_mesh_ || dtStatusFailed(nav_mesh_->init(&navParams))) {
+        DEBUG_LOG_ERROR("[NavMesh] dtNavMesh multi-tile init failed");
+        ReleaseNavMesh();
+        return false;
+    }
+
+    // Build each tile
+    int built = 0;
+    for (int tz = 0; tz < th; ++tz) {
+        for (int tx = 0; tx < tw; ++tx) {
+            float tile_bmin[3], tile_bmax[3];
+            tile_bmin[0] = bmin[0] + tx * tile_size;
+            tile_bmin[1] = bmin[1];
+            tile_bmin[2] = bmin[2] + tz * tile_size;
+            tile_bmax[0] = bmin[0] + (tx + 1) * tile_size;
+            tile_bmax[1] = bmax[1];
+            tile_bmax[2] = bmin[2] + (tz + 1) * tile_size;
+
+            if (BuildTile(tx, tz, tile_bmin, tile_bmax, verts, nverts, tris, ntris, cfg)) {
+                ++built;
+            }
+        }
+    }
+
+    // Initialize query
+    nav_query_ = dtAllocNavMeshQuery();
+    if (!nav_query_ || dtStatusFailed(nav_query_->init(nav_mesh_, 2048))) {
+        DEBUG_LOG_ERROR("[NavMesh] dtNavMeshQuery::init failed (tiled)");
+        ReleaseNavMesh();
+        return false;
+    }
+
+    DEBUG_LOG_INFO("[NavMesh] tiled bake OK: {}/{} tiles built", built, tw * th);
+    return true;
+}
+
+bool NavMeshSystem::RebakeTileAt(float world_x, float world_z,
+                                  const float* verts, int nverts,
+                                  const int* tris, int ntris,
+                                  const NavMeshBuildConfig& cfg) {
+    if (!tiled_mode_ || !nav_mesh_) {
+        DEBUG_LOG_ERROR("[NavMesh] RebakeTileAt: not in tiled mode");
+        return false;
+    }
+
+    const int tx = (int)((world_x - bmin_[0]) / tile_size_);
+    const int tz = (int)((world_z - bmin_[2]) / tile_size_);
+
+    // Remove existing tile(s) at this location
+    RemoveTile(tx, tz);
+
+    // Calculate tile bounds
+    float tile_bmin[3], tile_bmax[3];
+    tile_bmin[0] = bmin_[0] + tx * tile_size_;
+    tile_bmin[1] = bmin_[1];
+    tile_bmin[2] = bmin_[2] + tz * tile_size_;
+    tile_bmax[0] = bmin_[0] + (tx + 1) * tile_size_;
+    tile_bmax[1] = bmin_[1] + 1000.0f; // large Y range
+    tile_bmax[2] = bmin_[2] + (tz + 1) * tile_size_;
+
+    bool ok = BuildTile(tx, tz, tile_bmin, tile_bmax, verts, nverts, tris, ntris, cfg);
+
+    // Reinit query to pick up changes
+    if (nav_query_) {
+        nav_query_->init(nav_mesh_, 2048);
+    }
+    return ok;
+}
+
+void NavMeshSystem::RemoveTile(int tx, int tz) {
+    if (!nav_mesh_) return;
+    dtTileRef ref = nav_mesh_->getTileRefAt(tx, tz, 0);
+    if (ref) {
+        nav_mesh_->removeTile(ref, nullptr, nullptr);
+    }
 }
 
 } // namespace dse::navigation

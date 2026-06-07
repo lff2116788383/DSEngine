@@ -13,5 +13,8 @@
 #include "engine/ecs/components_3d_fracture.h"
 #include "engine/ecs/components_3d_weather.h"
 #include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_terrain_tile.h"
+#include "engine/ecs/components_3d_navmesh.h"
+#include "engine/ecs/components_3d_tree.h"
 
 #endif // DSE_COMPONENTS_3D_H

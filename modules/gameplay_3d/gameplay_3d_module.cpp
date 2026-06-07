@@ -21,6 +21,8 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 #endif
     terrain_system_.Init(rhi_device);
     grass_system_.Init(rhi_device);
+    tree_system_.Init(rhi_device);
+    tree_system_.SetAssetManager(asset_manager);
     hair_system_.Init(rhi_device);
     mesh_render_system_.SetAssetManager(asset_manager);
     lod_system_.SetAssetManager(asset_manager);
@@ -136,6 +138,7 @@ void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
 #endif
     fluid_system_.Update(world, delta_time);
     grass_system_.Update(world, delta_time);
+    tree_system_.Update(world, delta_time);
 
     // Hair: extract camera pos for LOD
     {
@@ -171,6 +174,7 @@ void Gameplay3DModule::OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
     grass_system_.Render(world, cmd_buffer);
+    tree_system_.Render(world, cmd_buffer);
 }
 
 void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) {
@@ -180,12 +184,14 @@ void Gameplay3DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, i
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
     grass_system_.RenderShadow(world, cmd_buffer);
+    tree_system_.RenderShadow(world, cmd_buffer);
 }
 
 void Gameplay3DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
     terrain_system_.Render(world, cmd_buffer);
     mesh_render_system_.Render(world, cmd_buffer);
     grass_system_.Render(world, cmd_buffer);
+    tree_system_.Render(world, cmd_buffer);
 
     auto p_view = world.registry().view<dse::ParticleSystem3DComponent>();
     std::vector<Particle3DDrawItem> p_items;
@@ -258,15 +264,18 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
     scene.prez_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
         terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
         grass_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
+        tree_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
     });
     scene.shadow_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
         terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
         grass_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
+        tree_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
     });
     scene.opaque_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
         World& callback_world = *world_ptr;
         terrain_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
         grass_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
+        tree_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
 
         auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
         std::vector<Particle3DDrawItem> p_items;
@@ -315,6 +324,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
 
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
+    tree_system_.Shutdown(world);
     hair_system_.Shutdown(world);
     weather_system_.Shutdown(world);
     snow_cover_system_.Shutdown(world);

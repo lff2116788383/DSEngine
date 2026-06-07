@@ -124,14 +124,49 @@ public:
     void RebaseOrigin(const glm::vec3& offset);
     const glm::vec3& accumulated_offset() const { return accumulated_offset_; }
 
+    // ---- Tiled NavMesh ----
+
+    /// Build a tiled navmesh from triangles (supports incremental tile updates)
+    bool BakeTiledFromTriangles(const float* verts, int nverts,
+                                const int* tris, int ntris,
+                                float tile_size,
+                                const NavMeshBuildConfig& cfg = {});
+
+    /// Rebuild a single tile at world position
+    bool RebakeTileAt(float world_x, float world_z,
+                      const float* verts, int nverts,
+                      const int* tris, int ntris,
+                      const NavMeshBuildConfig& cfg = {});
+
+    /// Remove tile at grid coordinate
+    void RemoveTile(int tx, int tz);
+
+    /// Check if using tiled mode
+    bool IsTiled() const { return tiled_mode_; }
+
+    float tile_size() const { return tile_size_; }
+
 private:
     void ReleaseNavMesh();
+
+    /// Build a single tile and add it to nav_mesh_
+    bool BuildTile(int tx, int tz,
+                   const float* tile_bmin, const float* tile_bmax,
+                   const float* verts, int nverts,
+                   const int* tris, int ntris,
+                   const NavMeshBuildConfig& cfg);
 
     dtNavMesh*      nav_mesh_  = nullptr;
     dtNavMeshQuery* nav_query_ = nullptr;
     dtQueryFilter*  filter_    = nullptr;
     bool initialized_ = false;
     glm::vec3 accumulated_offset_{0.0f};
+
+    // Tiled mode state
+    bool tiled_mode_ = false;
+    float tile_size_ = 48.0f;
+    float bmin_[3] = {};
+    NavMeshBuildConfig tiled_cfg_;
 };
 
 } // namespace dse::navigation
