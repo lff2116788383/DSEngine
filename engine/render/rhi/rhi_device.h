@@ -24,6 +24,7 @@
 #include "engine/render/rhi/rhi_storage_buffer.h"
 #include "engine/render/rhi/rhi_gpu_driven.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/rhi/rhi_gpu_timer.h"
 #include "engine/render/rhi/draw_executor_common.h"
 
 namespace dse {
@@ -73,7 +74,7 @@ public:
  * 阴影/光源全局状态接口：所有后端（OpenGL、Vulkan）均实现相同的阴影贴图与光源矩阵绑定，
  * 消除上层代码对具体后端的 dynamic_cast 依赖。
  */
-class RhiDevice : public IRhiCompute, public IRhiStorageBuffer, public IRhiGpuDriven {
+class RhiDevice : public IRhiCompute, public IRhiStorageBuffer, public IRhiGpuDriven, public IRhiGpuTimer {
 public:
     virtual ~RhiDevice() = default;
 

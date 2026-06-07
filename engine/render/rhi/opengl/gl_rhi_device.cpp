@@ -271,6 +271,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
         [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index); },
         [this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { UpdateBuffer(handle, offset, size, data, is_index); }
     );
+
+    gpu_timer_.Init();
 }
 
 void OpenGLRhiDevice::Shutdown() {
@@ -320,6 +322,8 @@ void OpenGLRhiDevice::Shutdown() {
     resource_mgr_.ledger().pipeline_states_destroyed += state_mgr_.pipeline_state_count();
     state_mgr_.Shutdown();
 
+    gpu_timer_.Shutdown();
+
     LogResourceLedger();
     initialized_ = false;
 }
@@ -328,11 +332,13 @@ void OpenGLRhiDevice::Shutdown() {
 
 void OpenGLRhiDevice::BeginFrame() {
     EnsureInitialized();
+    gpu_timer_.ResetGpuTimers();
     draw_executor_.BeginFrame();
 }
 
 void OpenGLRhiDevice::EndFrame() {
     draw_executor_.EndFrame();
+    gpu_timer_.ResolveGpuTimers();
 }
 
 const RenderStats& OpenGLRhiDevice::LastFrameStats() const {

@@ -34,6 +34,7 @@ void VulkanCommandBuffer::SetDevice(VulkanRhiDevice* device) {
 void VulkanCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->SetActiveRenderCommandBuffer(vk_command_buffer_);
+    device_->FlushPendingGpuTimerReset(vk_command_buffer_);
     device_->draw_executor().BeginRenderPass(
         vk_command_buffer_, render_pass,
         device_->resource_mgr(), device_->state_mgr());
@@ -234,6 +235,9 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     // 5. 初始化几何缓冲区和 UBO
     draw_executor_.InitGeometryBuffers(&context_, &resource_mgr_);
 
+    // 6. GPU Timestamp Query
+    gpu_timer_.Init(&context_);
+
     initialized_ = true;
     DEBUG_LOG_INFO("[Vulkan] RhiDevice initialized with all subsystems");
     return true;
@@ -258,6 +262,7 @@ void VulkanRhiDevice::Shutdown() {
     }
 
     // 按依赖逆序关闭子系统
+    gpu_timer_.Shutdown();
     draw_executor_.ShutdownGeometryBuffers();
     shader_mgr_.Shutdown();
     state_mgr_.Shutdown();
@@ -312,6 +317,8 @@ void VulkanRhiDevice::BeginFrame() {
     }
 
     resource_mgr_.ResetDescriptorPool(context_.current_frame());
+
+    gpu_timer_.ResetGpuTimers();
 }
 
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
@@ -1304,6 +1311,18 @@ void VulkanRhiDevice::EndFrame() {
     last_frame_stats_.instanced_mesh_count = ex_stats.instanced_mesh_count;
     last_frame_stats_.particle_count = ex_stats.particle_count;
     last_frame_stats_.max_batch_sprites = ex_stats.max_batch_sprites;
+
+    // GPU Timestamp Query: 收集上一帧结果
+    gpu_timer_.ResolveGpuTimers();
+}
+
+void VulkanRhiDevice::ResetGpuTimers() {
+    if (!initialized_) return;
+    gpu_timer_.ResetGpuTimers();
+}
+
+void VulkanRhiDevice::FlushPendingGpuTimerReset(VkCommandBuffer cmd) {
+    gpu_timer_.FlushPendingQueryPoolReset(cmd);
 }
 
 const RenderStats& VulkanRhiDevice::LastFrameStats() const {

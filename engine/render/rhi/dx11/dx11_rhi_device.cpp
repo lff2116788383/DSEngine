@@ -192,6 +192,10 @@ bool DX11RhiDevice::InitD3D11(void* window_handle, int width, int height, bool e
         static_cast<unsigned int>(shader_mgr_.pbr_texture_slots().ssbo_base));
 
     initialized_ = true;
+
+    // GPU Timestamp Query
+    gpu_timer_.Init(&context_);
+
     DEBUG_LOG_INFO("[D3D11] RhiDevice initialized (all subsystems ready)");
     return true;
 }
@@ -224,6 +228,7 @@ void DX11RhiDevice::Shutdown() {
     external_shader_programs_.clear();
 
     shader_mgr_.Shutdown();
+    gpu_timer_.Shutdown();
     resource_mgr_.Shutdown();
     context_.Shutdown();
 
@@ -235,6 +240,9 @@ void DX11RhiDevice::BeginFrame() {
     current_frame_stats_ = RenderStats{};
     resource_mgr_.FlushPendingUploads();
     draw_executor_.BeginFrame();
+
+    // GPU Timestamp Query: 推进帧 index 并开启本帧 disjoint
+    gpu_timer_.ResetGpuTimers();
 
     // 清除后备缓冲区
     ID3D11DeviceContext* dc = context_.device_context();
@@ -391,6 +399,9 @@ void DX11RhiDevice::EndFrame() {
 
     draw_executor_.EndFrame();
     last_frame_stats_ = current_frame_stats_;
+
+    // GPU Timestamp Query: 结束本帧 disjoint 并收集上一帧结果
+    gpu_timer_.ResolveGpuTimers();
 
     // Present 由 PresentFrame() 单独调用，不在 EndFrame 内执行
     // 这使 render 计时不包含 Present 延迟，与 OpenGL 行为一致

@@ -110,10 +110,13 @@ TEST(ProjectionCorrectionTest, DX11_ProjectionCorrection_ZRemapOnly) {
     EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
 }
 
-TEST(ProjectionCorrectionTest, DX11_ShadowSampleCorrection_Identity) {
+TEST(ProjectionCorrectionTest, DX11_ShadowSampleCorrection_YFlip) {
     DX11RhiDevice dev;
     glm::mat4 sc = dev.GetShadowSampleCorrection();
-    ExpectMatNear(sc, glm::mat4(1.0f));
+    EXPECT_FLOAT_EQ(sc[0][0], 1.0f);
+    EXPECT_FLOAT_EQ(sc[1][1], -1.0f);  // Y-flip: DX11 纹理 V=0 在顶部
+    EXPECT_FLOAT_EQ(sc[2][2], 1.0f);
+    EXPECT_FLOAT_EQ(sc[3][3], 1.0f);
 }
 
 TEST(ProjectionCorrectionTest, DX11_NeedsReadbackYFlip_False) {

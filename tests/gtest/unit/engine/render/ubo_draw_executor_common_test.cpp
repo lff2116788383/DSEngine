@@ -21,8 +21,8 @@ using namespace dse::render;
 // UBO 结构体大小与默认值
 // ============================================================
 
-TEST(UBOTypesTest, PerFrameUBO大小144) {
-    EXPECT_EQ(sizeof(PerFrameUBO), 144u);
+TEST(UBOTypesTest, PerFrameUBO大小176) {
+    EXPECT_EQ(sizeof(PerFrameUBO), 176u);
 }
 
 TEST(UBOTypesTest, PerSceneUBO大小304) {

@@ -15,6 +15,7 @@
 #include "engine/render/rhi/opengl/gl_shader_manager.h"
 #include "engine/render/rhi/opengl/gl_draw_executor.h"
 #include "engine/render/rhi/opengl/ubo_manager.h"
+#include "engine/render/rhi/opengl/gl_gpu_timer.h"
 #include <unordered_set>
 #include <unordered_map>
 #include <memory>
@@ -200,12 +201,26 @@ private:
     struct HiZImpl;
     std::unique_ptr<HiZImpl> hiz_impl_;
 
+    /// GPU Timestamp Query 子系统
+    GLGpuTimer gpu_timer_;
+
     /// Indirect draw buffer 管理
     std::unordered_map<unsigned int, unsigned int> indirect_buffers_; ///< handle → GL buffer ID
     unsigned int next_indirect_handle_ = 600000;
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
+
+public:
+    // --- IRhiGpuTimer 接口 ---
+    bool SupportsGpuTimer() const override { return gpu_timer_.SupportsGpuTimer(); }
+    GpuTimerId GetOrCreateGpuTimer(const std::string& name) override { return gpu_timer_.GetOrCreateGpuTimer(name); }
+    void BeginGpuTimer(GpuTimerId id) override { gpu_timer_.BeginGpuTimer(id); }
+    void EndGpuTimer(GpuTimerId id) override { gpu_timer_.EndGpuTimer(id); }
+    float GetGpuTimerResultMs(GpuTimerId id) const override { return gpu_timer_.GetGpuTimerResultMs(id); }
+    void ResetGpuTimers() override { gpu_timer_.ResetGpuTimers(); }
+    void ResolveGpuTimers() override { gpu_timer_.ResolveGpuTimers(); }
+    std::vector<GpuTimerEntry> GetAllGpuTimerResults() const override { return gpu_timer_.GetAllGpuTimerResults(); }
 };
 
 } // namespace render

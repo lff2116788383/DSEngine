@@ -27,6 +27,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "engine/render/rhi/vulkan/vulkan_gpu_timer.h"
+
 namespace dse {
 namespace render {
 
@@ -176,6 +178,7 @@ public:
 
     void SetActiveRenderCommandBuffer(VkCommandBuffer cmd) { active_render_cmd_ = cmd; }
     void ClearActiveRenderCommandBuffer() { active_render_cmd_ = VK_NULL_HANDLE; }
+    void FlushPendingGpuTimerReset(VkCommandBuffer cmd);
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
@@ -290,6 +293,20 @@ private:
     // Hi-Z pimpl（避免 WINDOWS_EXPORT_ALL_SYMBOLS LNK2001）
     struct HiZImpl;
     std::unique_ptr<HiZImpl> hiz_impl_;
+
+    /// GPU Timestamp Query 子系统
+    VulkanGpuTimer gpu_timer_;
+
+public:
+    // --- IRhiGpuTimer 接口 ---
+    bool SupportsGpuTimer() const override { return gpu_timer_.SupportsGpuTimer(); }
+    GpuTimerId GetOrCreateGpuTimer(const std::string& name) override { return gpu_timer_.GetOrCreateGpuTimer(name); }
+    void BeginGpuTimer(GpuTimerId id) override { gpu_timer_.BeginGpuTimer(id, active_render_cmd_); }
+    void EndGpuTimer(GpuTimerId id) override { gpu_timer_.EndGpuTimer(id, active_render_cmd_); }
+    float GetGpuTimerResultMs(GpuTimerId id) const override { return gpu_timer_.GetGpuTimerResultMs(id); }
+    void ResetGpuTimers() override;
+    void ResolveGpuTimers() override { gpu_timer_.ResolveGpuTimers(); }
+    std::vector<GpuTimerEntry> GetAllGpuTimerResults() const override { return gpu_timer_.GetAllGpuTimerResults(); }
 };
 
 } // namespace render

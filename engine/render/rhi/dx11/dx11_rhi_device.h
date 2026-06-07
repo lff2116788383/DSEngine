@@ -26,6 +26,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "engine/render/rhi/dx11/dx11_gpu_timer.h"
+
 namespace dse {
 namespace render {
 
@@ -281,6 +283,20 @@ private:
         std::vector<uint8_t> result;       // 上一帧读回的结果
     };
     AsyncReadback async_readback_;
+
+    /// GPU Timestamp Query 子系统
+    DX11GpuTimer gpu_timer_;
+
+public:
+    // --- IRhiGpuTimer 接口 ---
+    bool SupportsGpuTimer() const override { return gpu_timer_.SupportsGpuTimer(); }
+    GpuTimerId GetOrCreateGpuTimer(const std::string& name) override { return gpu_timer_.GetOrCreateGpuTimer(name); }
+    void BeginGpuTimer(GpuTimerId id) override { gpu_timer_.BeginGpuTimer(id); }
+    void EndGpuTimer(GpuTimerId id) override { gpu_timer_.EndGpuTimer(id); }
+    float GetGpuTimerResultMs(GpuTimerId id) const override { return gpu_timer_.GetGpuTimerResultMs(id); }
+    void ResetGpuTimers() override { gpu_timer_.ResetGpuTimers(); }
+    void ResolveGpuTimers() override { gpu_timer_.ResolveGpuTimers(); }
+    std::vector<GpuTimerEntry> GetAllGpuTimerResults() const override { return gpu_timer_.GetAllGpuTimerResults(); }
 };
 
 } // namespace render
